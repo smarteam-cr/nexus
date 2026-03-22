@@ -1,0 +1,267 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* ─── React Flow: handles (puntos de conexión) ───────────────────────── */
+/* Ocultos por defecto; visibles al hacer hover sobre el nodo o durante
+   una conexión activa. NUNCA usar display:none — RF necesita dimensiones. */
+.react-flow__node .react-flow__handle {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.react-flow__node:hover .react-flow__handle,
+.react-flow__node.selected .react-flow__handle,
+.react-flow__node .react-flow__handle.valid {
+  opacity: 1;
+}
+/* Cuando hay una conexión en progreso, mostrar todos los handles */
+.react-flow--connecting .react-flow__handle {
+  opacity: 1;
+}
+
+/* ─── Type scale ──────────────────────────────────────────────────────────────── */
+/*
+ * Escala semántica. Un solo lugar para ajustar todo.
+ *
+ * text-2xs  → metadata, timestamps, labels uppercase   (~10-11px)
+ * text-xs   → secondary info, badges, small buttons    (~12px)
+ * text-sm   → body, most UI text                       (~14px)
+ * text-base → body destacado, inputs                   (~16px)
+ * text-lg+  → headings (hereda defaults de Tailwind)
+ */
+@theme {
+  --text-2xs: 0.6875rem;        /* 11px equiv */
+  --text-2xs--line-height: 1rem;
+
+  /* ── Brand color tokens ───────────────────────────────────────────────────── */
+  /*                                                                             */
+  /*  Para cambiar la paleta de la app entera, edita solo estas 2 líneas.       */
+  /*                                                                             */
+  /*  Tailwind v4 genera automáticamente:                                       */
+  /*    bg-brand, text-brand, border-brand  (y variantes /10 /20 /50 etc.)     */
+  /*    bg-brand-light, text-brand-light, border-brand-light                    */
+  /*                                                                             */
+  --color-brand:       #ef4444;  /* hoy: red-500 — bordes, tints, texto acento */
+  --color-brand-light: #f87171;  /* hoy: red-400 — hover / texto sobre oscuro */
+  --color-brand-soft:  #ffbdbd;  /* rojo suave — fill de botones, badges, números */
+  --color-brand-dark:  #b91c1c;  /* red-700 — texto sobre brand-soft */
+}
+
+html {
+  font-size: 1.15em;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────── */
+/* ── Semantic color tokens ───────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Neutral base */
+  --background:   #030712;   /* gray-950  — fondo global */
+  --foreground:   #f9fafb;   /* gray-50   — texto base */
+
+  /* Primary — acciones principales, brand */
+  --color-primary:         #ef4444;  /* red-500 */
+  --color-primary-hover:   #f87171;  /* red-400 */
+  --color-primary-fg:      #ffffff;  /* texto sobre primary */
+
+  /* Secondary — IA, insights, acciones secundarias */
+  --color-secondary:       #8b5cf6;  /* purple-500 */
+  --color-secondary-hover: #a78bfa;  /* purple-400 */
+  --color-secondary-fg:    #ffffff;
+
+  /* Destructive — eliminar, acciones de peligro */
+  --color-destructive:       #dc2626;  /* red-600  — botón sólido */
+  --color-destructive-hover: #ef4444;  /* red-500  */
+  --color-destructive-fg:    #ffffff;
+  --color-destructive-muted: #ef444420; /* fondo sutil para badges/alerts */
+
+  /* Success */
+  --color-success:         #22c55e;  /* green-500 */
+  --color-success-fg:      #ffffff;
+
+  /* Info */
+  --color-info:            #3b82f6;  /* blue-500 */
+  --color-info-fg:         #ffffff;
+
+  /* Warning */
+  --color-warning:         #f59e0b;  /* amber-500 */
+  --color-warning-fg:      #ffffff;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────── */
+/* ── Light theme overrides ───────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────── */
+html.light {
+  --background: #ffffff;
+  --foreground: #111827;
+}
+
+/* ── Backgrounds (neutrals) ── */
+html.light .bg-gray-950 { background-color: #ffffff !important; }
+html.light .bg-gray-900 { background-color: #ffffff !important; }
+html.light .bg-gray-800 { background-color: #f3f4f6 !important; }
+html.light .bg-gray-700 { background-color: #e5e7eb !important; }
+
+/* ── Borders ── */
+html.light .border-gray-800 { border-color: #e5e7eb !important; }
+html.light .border-gray-700 { border-color: #e5e7eb !important; }
+html.light .border-gray-600 { border-color: #e5e7eb !important; }
+html.light .border-dashed    { border-color: #d1d5db !important; }
+
+/* ── Text (neutrals) ── */
+html.light .text-white    { color: #111827 !important; }
+html.light .text-gray-100 { color: #1f2937 !important; }
+html.light .text-gray-200 { color: #374151 !important; }
+html.light .text-gray-300 { color: #4b5563 !important; }
+html.light .text-gray-400 { color: #6b7280 !important; }
+html.light .text-gray-500 { color: #9ca3af !important; }
+html.light .text-gray-600 { color: #9ca3af !important; }
+
+/*
+ * ── Colored buttons: text-white must stay white on solid color backgrounds ──
+ *
+ * El override global `.text-white { color: #111827 }` rompe los botones con
+ * fondo de color (eg. bg-orange-500 text-white → rojo/naranja + texto negro).
+ * Los selectores compuestos (sin espacio) seleccionan el MISMO elemento que
+ * tiene ambas clases simultáneamente, restaurando el blanco solo en ese caso.
+ */
+html.light .bg-red-500.text-white,
+html.light .bg-red-400.text-white,
+html.light .bg-red-600.text-white,
+html.light .bg-purple-600.text-white,
+html.light .bg-purple-500.text-white,
+html.light .bg-green-500.text-white,
+html.light .bg-green-600.text-white,
+html.light .bg-blue-600.text-white,
+html.light .bg-blue-500.text-white,
+html.light .bg-brand-soft.text-white,
+html.light .bg-brand.text-white,
+html.light .bg-brand-light.text-white { color: #ffffff !important; }
+
+/* ── Hover backgrounds (neutrals) ── */
+html.light .hover\:bg-gray-900:hover     { background-color: #f9fafb !important; }
+html.light .hover\:bg-gray-800:hover     { background-color: #f3f4f6 !important; }
+html.light .hover\:bg-gray-800\/70:hover { background-color: #f3f4f6 !important; }
+html.light .hover\:bg-gray-700:hover     { background-color: #e5e7eb !important; }
+
+/* ── Hover text ── */
+html.light .hover\:text-white:hover      { color: #111827 !important; }
+html.light .hover\:text-gray-300:hover   { color: #374151 !important; }
+html.light .hover\:text-gray-400:hover   { color: #6b7280 !important; }
+
+/* ── Hover borders ── */
+html.light .hover\:border-gray-700:hover { border-color: #d1d5db !important; }
+
+/* ── Inputs / Textareas ── */
+html.light input,
+html.light textarea {
+  background-color: #f9fafb !important;
+  color: #111827 !important;
+  border-color: #e5e7eb !important;
+}
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* ── Focus ring ── */
+html.light .focus\:border-red-500:focus { border-color: #ef4444 !important; }
+
+/* ── Cards: subtle shadow in light mode ── */
+html.light .rounded-xl.border,
+html.light .rounded-2xl.border {
+  box-shadow: 0 1px 3px 0 rgba(0,0,0,0.06), 0 1px 2px -1px rgba(0,0,0,0.04) !important;
+}
+
+/* ── Opacity variants (bg-gray-XXX/YY) — no cubiertos por los overrides base ── */
+html.light .bg-gray-950\/50,
+html.light .bg-gray-950\/40,
+html.light .bg-gray-950\/30 { background-color: #ffffff !important; }
+html.light .bg-gray-900\/50,
+html.light .bg-gray-900\/40,
+html.light .bg-gray-900\/30 { background-color: #ffffff !important; }
+html.light .bg-gray-800\/80,
+html.light .bg-gray-800\/70,
+html.light .bg-gray-800\/60,
+html.light .bg-gray-800\/50 { background-color: #f3f4f6 !important; }
+
+/* ── Border opacity variants ── */
+html.light .border-gray-800\/80,
+html.light .border-gray-800\/60,
+html.light .border-gray-700\/50 { border-color: #e5e7eb !important; }
+
+/* ── Hover opacity variants (ej. hover:bg-gray-800/60) ── */
+html.light .hover\:bg-gray-800\/60:hover { background-color: #f3f4f6 !important; }
+html.light .hover\:bg-gray-800\/50:hover { background-color: #f3f4f6 !important; }
+html.light .hover\:bg-gray-900\/40:hover { background-color: #f9fafb !important; }
+html.light .hover\:bg-gray-900\/60:hover { background-color: #f3f4f6 !important; }
+
+/* ── Divide color (divide-y divide-gray-800) ── */
+html.light .divide-gray-800 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e5e7eb !important;
+}
+
+/* ── Prose-invert: en light mode fuerza colores oscuros aunque prose-invert esté activo ── */
+html.light .prose-invert {
+  --tw-prose-body:          #374151;
+  --tw-prose-headings:      #111827;
+  --tw-prose-lead:          #4b5563;
+  --tw-prose-links:         #111827;
+  --tw-prose-bold:          #111827;
+  --tw-prose-counters:      #6b7280;
+  --tw-prose-bullets:       #9ca3af;
+  --tw-prose-hr:            #e5e7eb;
+  --tw-prose-quotes:        #111827;
+  --tw-prose-quote-borders: #e5e7eb;
+  --tw-prose-captions:      #6b7280;
+  --tw-prose-code:          #111827;
+  --tw-prose-pre-code:      #e5e7eb;
+  --tw-prose-pre-bg:        #1f2937;
+  --tw-prose-th-borders:    #d1d5db;
+  --tw-prose-td-borders:    #e5e7eb;
+}
+
+/* ── Sidebar active item ── */
+html.light aside .bg-gray-800 {
+  background-color: #f0f0f0 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────── */
+/* ── Skeleton shimmer animation ─────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+/* Dark mode shimmer (default) */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #1f2937 0%,
+    #374151 40%,
+    #4b5563 50%,
+    #374151 60%,
+    #1f2937 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* Light mode shimmer — más contraste para tarjetas bg-white */
+html.light .skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #d1d5db 0%,
+    #e5e7eb 40%,
+    #f9fafb 50%,
+    #e5e7eb 60%,
+    #d1d5db 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}

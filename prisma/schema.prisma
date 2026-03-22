@@ -1,0 +1,420 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum ImplementationStatus {
+  PLANNING
+  READY
+  EXECUTING
+  DONE
+  PAUSED
+}
+
+enum ExecutionStatus {
+  SUCCESS
+  FAILED
+  MANUAL_REQUIRED
+  SKIPPED
+}
+
+enum DocumentType {
+  CALL_TRANSCRIPT
+  BRIEF
+  FREE_TEXT
+  URL
+}
+
+enum AgentStatus {
+  ACTIVE
+  DRAFT
+}
+
+enum AgentRunStatus {
+  PENDING
+  RUNNING
+  DONE
+  ERROR
+  ARCHIVED
+}
+
+enum AgentOutputType {
+  CARDS
+  STREAM
+  FLOWCHART
+  CARDS_AND_FLOWCHARTS
+}
+
+enum AgentScope {
+  CLIENT
+  GLOBAL
+}
+
+enum CardSource {
+  AGENT    // Generada íntegramente por el agente
+  HUMAN    // Creada manualmente por el consultor
+  MODIFIED // Generada por el agente y luego editada por el consultor
+}
+
+// ─── Client (nueva entidad raíz) ──────────────────────────────────────────────
+
+model Client {
+  id               String  @id @default(cuid())
+  name             String
+  company          String?
+  industry         String?
+  notes            String? @db.Text
+  hubspotCompanyId String? // ID de la empresa vinculada en HubSpot CRM
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hubspotAccount  HubspotAccount?
+  audits          Audit[]
+  implementations Implementation[]
+  knowledge       Knowledge[]
+  documents       ClientDocument[]
+  stageNotes      StageNote[]
+  agentRuns       AgentRun[]
+  contextCards    ClientContextCard[]
+  projects        Project[]
+}
+
+// ─── Project ──────────────────────────────────────────────────────────────────
+
+model Project {
+  id               String  @id @default(cuid())
+  clientId         String
+  client           Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name             String
+  status           String  @default("active") // active | paused | completed
+  serviceType      String? // loop_marketing | loop_sales | loop_service | proyecto_temporal
+  hubspotDealId    String? // ID del deal de HubSpot asociado a este proyecto
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stageNotes   StageNote[]
+  contextCards ClientContextCard[]
+  documents    ClientDocument[]
+  agentRuns    AgentRun[]
+}
+
+// Notas/contenido guardadas por etapa y paso dentro del workspace de un cliente
+model StageNote {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage     Int      // 1 = Diagnóstico | 2 = MVP | 3 = Adopción
+  step      Int      // número de paso dentro de la etapa (1-indexed)
+  content   String   @db.Text @default("")
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, stage, step])
+}
+
+// Documentos adjuntos al workspace de un cliente (transcripciones, briefs, URLs, etc.)
+model ClientDocument {
+  id        String       @id @default(cuid())
+  clientId  String
+  client    Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage     Int?         // null = global (tab Documentos), 1 o 2 o 3 = etapa específica
+  step      Int?         // paso específico (opcional)
+  title     String
+  type      DocumentType
+  content   String?      @db.Text // para FREE_TEXT / CALL_TRANSCRIPT pegado
+  url       String?               // para URL y Fireflies links
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Cards de contexto del cliente (sección editable sobre la relación comercial, dolor, etc.)
+model ClientContextCard {
+  id         String    @id @default(cuid())
+  clientId   String
+  client     Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId  String?
+  project    Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // null = card manual/legacy; set = generada por un AgentRun específico
+  agentRunId String?
+  agentRun   AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  title      String
+  content    String    @db.Text @default("")
+  order      Int       @default(0)
+  source     CardSource @default(HUMAN)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Cards de un mismo run no pueden tener el mismo título
+  @@unique([agentRunId, title])
+  @@index([clientId, agentRunId])
+  @@index([agentRunId])
+}
+
+// ─── HubspotAccount (ahora hijo de Client) ───────────────────────────────────
+
+model HubspotAccount {
+  id              String   @id @default(cuid())
+  isSystem        Boolean  @default(false) // true = cuenta del sistema (Dinterweb), false = cuenta de cliente
+  clientId        String?  @unique // nullable en transición — se hará NOT NULL en Fase 5
+  client          Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  hubspotPortalId String   @unique
+  hubName         String?
+  accessToken     String
+  refreshToken    String
+  expiresAt       DateTime
+  portalSnapshot   Json?
+  portalSnapshotAt DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relaciones legacy (se eliminan en Fase 5 una vez migrada toda la data)
+  implementations Implementation[]
+  audits          Audit[]
+  knowledge       Knowledge[]
+}
+
+// ─── Knowledge ────────────────────────────────────────────────────────────────
+
+model Knowledge {
+  id        String         @id @default(cuid())
+  accountId String
+  account   HubspotAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  clientId  String?        // se poblará en migración de datos (Fase 5)
+  client    Client?        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title     String
+  content   String         @db.Text
+  category  String         @default("general")
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+// ─── Audit ────────────────────────────────────────────────────────────────────
+
+model Audit {
+  id        String         @id @default(cuid())
+  accountId String?        // nullable en transición (Fase 3 lo migra a clientId)
+  account   HubspotAccount? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  clientId  String?        // nuevo FK a Client (se poblará en Fase 3)
+  client    Client?        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name      String
+  data      Json?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+// ─── Implementation ───────────────────────────────────────────────────────────
+
+model Implementation {
+  id        String               @id @default(cuid())
+  accountId String?              // nullable en transición (Fase 4 lo migra a clientId)
+  account   HubspotAccount?      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  clientId  String?              // nuevo FK a Client (se poblará en Fase 4)
+  client    Client?              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name      String
+  status    ImplementationStatus @default(PLANNING)
+  archived  Boolean              @default(false)
+  plan      Json?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  messages   Message[]
+  executions ExecutionLog[]
+}
+
+// ─── Message ──────────────────────────────────────────────────────────────────
+
+model Message {
+  id               String         @id @default(cuid())
+  implementationId String
+  implementation   Implementation @relation(fields: [implementationId], references: [id], onDelete: Cascade)
+  role             String
+  content          String         @db.Text
+  createdAt        DateTime       @default(now())
+}
+
+// ─── Agent ────────────────────────────────────────────────────────────────────
+
+model Agent {
+  id                     String          @id @default(cuid())
+  name                   String
+  description            String?
+  systemPrompt           String          @db.Text
+  additionalInstructions String?         @db.Text
+  status                 AgentStatus     @default(DRAFT)
+  // Etapas asociadas: [] = aplica a todas, [1] = solo Etapa 1, [1,2] = ambas
+  associatedStages       Int[]
+  associatedStep         Int?
+  sectionLabel           String?         // Bloque visual dentro de la subetapa (ej. "Contexto del cliente")
+  outputType             AgentOutputType @default(CARDS)
+  scope                  AgentScope      @default(CLIENT)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  runs AgentRun[]
+
+  @@index([associatedStep])
+}
+
+model AgentRun {
+  id          String         @id @default(cuid())
+  agentId     String?
+  agent       Agent?         @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  clientId    String
+  client      Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage       Int?
+  step        Int?
+  stepLabel    String?        // nombre legible de la subetapa (ej. "Análisis inicial")
+  sectionLabel String?        // sección dentro de la subetapa (ej. "Contexto del cliente")
+  serviceType  String?        // tipo de servicio al momento de la ejecución
+  status      AgentRunStatus @default(PENDING)
+  output      String?        @db.Text // JSON raw de Claude (backup)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cards ClientContextCard[]
+
+  @@index([status])
+}
+
+// ─── TeamMember ───────────────────────────────────────────────────────────────
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      String?  // e.g. "Ventas", "Marketing"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── ExecutionLog ─────────────────────────────────────────────────────────────
+
+model ExecutionLog {
+  id               String          @id @default(cuid())
+  implementationId String
+  implementation   Implementation  @relation(fields: [implementationId], references: [id], onDelete: Cascade)
+  action           String
+  resource         String
+  status           ExecutionStatus
+  details          Json
+  createdAt        DateTime        @default(now())
+}
+
+// ============================================
+// KNOWLEDGE BASE — Documentos de conocimiento
+// ============================================
+
+enum KnowledgeType {
+  PROCESS       // Procesos operativos (cómo ejecutar una fase, cadencia semanal, etc.)
+  METHODOLOGY   // Metodologías (Inbound, Loop Framework, gestión del cambio)
+  HUBSPOT_SPEC  // Features y specs de HubSpot (releases, capacidades, limitaciones)
+  BEST_PRACTICE // Mejores prácticas descubiertas en proyectos anteriores
+  TEMPLATE      // Plantillas reutilizables (agendas, estructuras de informes, etc.)
+}
+
+enum KnowledgeStatus {
+  DRAFT     // En borrador, no visible para agentes
+  PUBLISHED // Activo, los agentes lo consultan
+  ARCHIVED  // Obsoleto, no se consulta pero se conserva
+}
+
+enum TagCategory {
+  SERVICE      // Servicio: loop_marketing, loop_sales, loop_service, proyecto_temporal
+  STAGE        // Etapa: diagnostico, mvp, adopcion
+  SUBSTAGE     // Subetapa: analisis_inicial, funnel, mapeo, kickoff, piloto, escalamiento, etc.
+  DOMAIN       // Dominio funcional: marketing, sales, service, cross_department
+  HUBSPOT_AREA // Área de HubSpot: crm, automation, reporting, breeze, workflows, pipelines
+  TOPIC        // Tema libre: gestion_cambio, liderazgo, onboarding, data_quality, etc.
+}
+
+model KnowledgeDocument {
+  id      String          @id @default(cuid())
+  type    KnowledgeType
+  status  KnowledgeStatus @default(DRAFT)
+
+  title   String
+  summary String?   // Resumen corto para listados y contexto rápido de agentes
+  content String    @db.Text // Contenido completo en Markdown
+
+  version Int @default(1)
+
+  // Autoría (sin modelo User — usamos email de sesión)
+  createdByEmail String?
+  updatedByEmail String?
+
+  tags       KnowledgeTag[]
+  embeddings KnowledgeEmbedding[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, status])
+  @@index([createdAt])
+}
+
+// ============================================
+// SISTEMA DE TAGS — Taxonomía para filtrado
+// ============================================
+
+model KnowledgeTag {
+  id       String      @id @default(cuid())
+  category TagCategory
+  value    String      // Ej: "loop_marketing"
+  label    String      // Ej: "Loop Marketing"
+
+  documents KnowledgeDocument[]
+
+  @@unique([category, value])
+  @@index([category])
+}
+
+// ============================================
+// EMBEDDINGS — Para búsqueda semántica futura
+// ============================================
+
+model KnowledgeEmbedding {
+  id         String            @id @default(cuid())
+  documentId String
+  document   KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  chunkIndex Int    @default(0)
+  chunkText  String @db.Text
+
+  // El vector se agrega vía SQL directo en Supabase (pgvector, 1024 dims)
+  // ALTER TABLE "KnowledgeEmbedding" ADD COLUMN embedding vector(1024);
+
+  createdAt DateTime @default(now())
+
+  @@index([documentId])
+}
+
+// ── FirefliesSession — caché local de sesiones de Fireflies ──────────────────
+
+model FirefliesSession {
+  id           String   @id
+  title        String
+  date         DateTime
+  duration     Float    @default(0)
+  participants String[]
+  summary      Json?
+  transcript   String?  @db.Text
+  syncedAt     DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
