@@ -89,8 +89,8 @@ export default function Sidebar({ clients, onToggle, isOpen = true }: SidebarPro
       </div>
 
       {/* ── Nav principal ── */}
-      <nav className="flex-1 flex flex-col py-3 overflow-hidden">
-        <div className={`space-y-0.5 mb-3 ${isOpen ? "px-3" : "px-2"}`}>
+      <nav className="flex-1 flex flex-col py-3 overflow-y-auto">
+        <div className={`flex-shrink-0 space-y-0.5 mb-3 ${isOpen ? "px-3" : "px-2"}`}>
           <NavItem
             href="/clients"
             active={pathname.startsWith("/clients")}
@@ -159,14 +159,13 @@ export default function Sidebar({ clients, onToggle, isOpen = true }: SidebarPro
           />
         </div>
 
-        {/* ── Clientes recientes (solo cuando expandido) ── */}
         {isOpen && clients.length > 0 && (
-          <>
+          <div className="flex flex-col" style={{ minHeight: 150 }}>
             <div className="border-t border-gray-800/60 mx-3 mb-2" />
             <p className="px-6 pb-1.5 text-2xs font-semibold text-gray-600 uppercase tracking-widest">
               Clientes recientes
             </p>
-            <div className="flex-1 overflow-y-auto px-3 space-y-0.5">
+            <div className="flex-1 min-h-0 overflow-y-auto px-3 space-y-0.5">
               {clients.slice(0, 8).map((client) => {
                 const isActive = pathname.startsWith(`/clients/${client.id}`);
                 return (
@@ -195,12 +194,11 @@ export default function Sidebar({ clients, onToggle, isOpen = true }: SidebarPro
                 </Link>
               )}
             </div>
-          </>
+          </div>
         )}
 
-        <div className="flex-1" />
-
-        {/* ── Settings + Logout ── */}
+        {/* ── Settings + Logout (fijo al fondo) ── */}
+        <div className="flex-shrink-0">
         <div className="border-t border-gray-800/60 mx-3 mt-2 mb-2" />
         <div className={`space-y-0.5 ${isOpen ? "px-3" : "px-2"}`}>
           <NavItem
@@ -230,6 +228,7 @@ export default function Sidebar({ clients, onToggle, isOpen = true }: SidebarPro
               {isOpen && "Cerrar sesión"}
             </button>
           </form>
+        </div>
         </div>
       </nav>
     </aside>

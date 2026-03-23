@@ -102,6 +102,7 @@ function FlowchartInner({
 
   const rfInstance     = useRef<ReactFlowInstance | null>(null);
   const pendingFitView = useRef(false);
+  const forceLayoutRef = useRef(false);
 
   // Refs para acceso síncrono al estado sin stale closures
   const nodesRef = useRef<Node[]>([]);
@@ -225,7 +226,7 @@ function FlowchartInner({
       }));
 
       pendingFitView.current = true;
-      if (hasSavedPositions) {
+      if (hasSavedPositions && !forceLayoutRef.current) {
         setNodes(rawNodes);
         setEdges(rawEdges);
       } else {
@@ -238,6 +239,7 @@ function FlowchartInner({
           setEdges(rawEdges);
         }
       }
+      forceLayoutRef.current = false;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [data, setNodes, setEdges, captureSnapshot]
@@ -565,7 +567,7 @@ function FlowchartInner({
         </button>
 
         <button
-          onClick={() => { setDirection("TB"); buildGraph("TB"); }}
+          onClick={() => { forceLayoutRef.current = true; setDirection("TB"); setIsDirty(true); }}
           title="Flujo vertical"
           className={`p-1.5 rounded-lg border text-xs transition-colors ${
             direction === "TB" ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
@@ -577,7 +579,7 @@ function FlowchartInner({
         </button>
 
         <button
-          onClick={() => { setDirection("LR"); buildGraph("LR"); }}
+          onClick={() => { forceLayoutRef.current = true; setDirection("LR"); setIsDirty(true); }}
           title="Flujo horizontal"
           className={`p-1.5 rounded-lg border text-xs transition-colors ${
             direction === "LR" ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"

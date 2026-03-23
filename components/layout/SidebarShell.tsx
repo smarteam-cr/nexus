@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 
 interface ClientSummary {
@@ -18,8 +19,14 @@ interface Props {
 const STORAGE_KEY = "sidebar_open";
 
 export default function SidebarShell({ clients, children }: Props) {
+  const pathname = usePathname();
+  // Auto-colapsar sidebar en vista detalle de cliente
+  const isClientDetail = /^\/clients\/[^/]+\/(projects|stage|documents|settings)/.test(pathname);
+
   // Leer preferencia guardada (default: abierto)
   const [open, setOpen] = useState(true);
+  // En vista de cliente, sidebar inicia colapsada pero el usuario puede expandir manualmente
+  const [clientDetailOverride, setClientDetailOverride] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -28,24 +35,36 @@ export default function SidebarShell({ clients, children }: Props) {
     setMounted(true);
   }, []);
 
+  // Reset override cuando cambia entre vista cliente y otras
+  useEffect(() => {
+    setClientDetailOverride(false);
+  }, [isClientDetail]);
+
   const toggle = () => {
-    setOpen((prev) => {
-      const next = !prev;
-      localStorage.setItem(STORAGE_KEY, String(next));
-      return next;
-    });
+    if (isClientDetail) {
+      setClientDetailOverride((prev) => !prev);
+    } else {
+      setOpen((prev) => {
+        const next = !prev;
+        localStorage.setItem(STORAGE_KEY, String(next));
+        return next;
+      });
+    }
   };
+
+  // En vista detalle: colapsado por defecto, expandible con toggle manual
+  const effectiveOpen = isClientDetail ? clientDetailOverride : open;
 
   return (
     <div className="flex min-h-screen">
       {/* ── Sidebar con transición ── */}
       <div
         className={`flex-shrink-0 transition-all duration-200 ease-in-out overflow-hidden ${
-          open ? "w-56" : "w-14"
+          effectiveOpen ? "w-56" : "w-14"
         }`}
-        style={{ visibility: mounted ? "visible" : "hidden" }}
+        style={!isClientDetail && !mounted ? { visibility: "hidden" } : undefined}
       >
-        <Sidebar clients={clients} onToggle={toggle} isOpen={open} />
+        <Sidebar clients={clients} onToggle={toggle} isOpen={effectiveOpen} />
       </div>
 
       {/* ── Contenido ── */}

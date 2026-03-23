@@ -902,7 +902,7 @@ function CardSourceBadge({ source }: { source: ContextCard["source"] }) {
 // ── Card individual ────────────────────────────────────────────────────────────
 
 // Número de líneas de contenido antes de colapsar la card
-const COLLAPSE_THRESHOLD = 8;
+const COLLAPSE_THRESHOLD = 3;
 
 function ContextCardItem({
   card,
@@ -1113,7 +1113,7 @@ function renderInline(text: string): React.ReactNode {
 
 // ── Renderizador de contenido con soporte básico de bullets ───────────────────
 
-const MAX_VISIBLE_LINES = 8;
+const MAX_VISIBLE_LINES = 2;
 
 function CardContent({
   content,
@@ -1136,7 +1136,7 @@ function CardContent({
     );
   }
 
-  const allLines = content.split("\n");
+  const allLines = content.split("\n").filter((l) => l.trim());
   const lines = collapsed ? allLines.slice(0, MAX_VISIBLE_LINES) : allLines;
 
   return (
@@ -1152,27 +1152,19 @@ function CardContent({
           return (
             <div key={i} className="flex items-start gap-2">
               <span className="flex-shrink-0 mt-[7px] w-1.5 h-1.5 rounded-full bg-gray-400" />
-              <span className="text-xs text-gray-600 leading-relaxed">
+              <span className={`text-xs text-gray-600 leading-relaxed ${collapsed ? "line-clamp-1" : ""}`}>
                 {renderInline(bulletMatch[1])}
               </span>
             </div>
           );
         }
-        // Línea en blanco
-        if (!line.trim()) {
-          return <div key={i} className="h-2" />;
-        }
         // Texto normal
         return (
-          <p key={i} className="text-xs text-gray-600 leading-relaxed">
+          <p key={i} className={`text-xs text-gray-600 leading-relaxed ${collapsed ? "line-clamp-1" : ""}`}>
             {renderInline(line)}
           </p>
         );
       })}
-      {/* Degradado cuando está colapsado */}
-      {collapsed && allLines.length > MAX_VISIBLE_LINES && (
-        <div className="h-6 bg-gradient-to-t from-white to-transparent -mt-4 pointer-events-none" />
-      )}
     </div>
   );
 }

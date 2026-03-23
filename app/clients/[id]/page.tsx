@@ -25,16 +25,29 @@ export default async function ClientPage({
   const projects = await prisma.project.findMany({
     where: { clientId: id },
     orderBy: { createdAt: "asc" },
-    include: {
+    select: {
+      id: true,
+      clientId: true,
+      name: true,
+      status: true,
+      serviceType: true,
+      hubspotDealId: true,
+      currentStage: true,
+      currentStep: true,
+      createdAt: true,
+      updatedAt: true,
       _count: {
         select: { stageNotes: true, contextCards: true, documents: true },
       },
     },
   });
 
-  // Si solo hay un proyecto, ir directo a él
+  // Si solo hay un proyecto, ir directo a la última subetapa visitada
   if (projects.length === 1) {
-    redirect(`/clients/${id}/projects/${projects[0].id}/stage/1`);
+    const p = projects[0];
+    const stage = p.currentStage ?? 1;
+    const step = p.currentStep ?? 0;
+    redirect(`/clients/${id}/projects/${p.id}/stage/${stage}?step=${step}`);
   }
 
   return <ProjectsClient clientId={id} initialProjects={projects} />;

@@ -1,7 +1,6 @@
 import { requireConsultantSession } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import ProjectStageTabs from "./StageTabs";
 
 export default async function ProjectLayout({
   children,
@@ -24,10 +23,5 @@ export default async function ProjectLayout({
   });
   if (!project) notFound();
 
-  return (
-    <>
-      <ProjectStageTabs clientId={id} projectId={projectId} />
-      <div className="flex-1">{children}</div>
-    </>
-  );
+  return <div className="flex-1 flex flex-col">{children}</div>;
 }

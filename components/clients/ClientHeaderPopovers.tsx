@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import ClientDocuments from "./ClientDocuments";
 import ClientDealInfo from "./ClientDealInfo";
+import ClientSessionCards from "./ClientSessionCards";
+import { getStageSteps } from "@/lib/steps";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -42,9 +44,12 @@ interface Props {
   hubspotCompanyId: string | null;
   hubName: string | null;
   hubspotPortalId: string | null;
+  serviceType?: string | null;
+  domain?: string;
+  company?: string;
 }
 
-type PopoverType = "documentos" | "empresa" | "deal" | null;
+type PopoverType = "documentos" | "empresa" | "deal" | "sesiones" | null;
 
 // ── Mapeos legibles ───────────────────────────────────────────────────────────
 
@@ -104,8 +109,10 @@ const INDUSTRY_LABELS: Record<string, string> = {
 
 export default function ClientHeaderPopovers({
   clientId, hasHubspot, hubspotCompanyId, hubName, hubspotPortalId,
+  serviceType, domain, company,
 }: Props) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [open, setOpen] = useState<PopoverType>(null);
   const [docCount, setDocCount] = useState<number | null>(null);
   const [hubDetails, setHubDetails] = useState<HubspotDetails | null>(null);
@@ -115,9 +122,23 @@ export default function ClientHeaderPopovers({
   // Segunda apertura = instantánea, sin re-fetch.
   const [mountedDocs, setMountedDocs] = useState(false);
   const [mountedDeal, setMountedDeal] = useState(false);
+  const [mountedSessions, setMountedSessions] = useState(false);
 
   const projectIdMatch = pathname.match(/\/projects\/([^/]+)/);
   const currentProjectId = projectIdMatch?.[1] ?? null;
+
+  // Derivar keywords y preselectRole del step actual (para filtrar sesiones)
+  const stageMatch = pathname.match(/\/stage\/(\d+)/);
+  const currentStageNum = stageMatch ? parseInt(stageMatch[1]) : null;
+  const currentStepIndex = parseInt(searchParams.get("step") ?? "0");
+  const currentStepDef = (() => {
+    if (!currentStageNum || !serviceType) return null;
+    const stageSteps = getStageSteps(serviceType);
+    const steps = stageSteps[currentStageNum];
+    if (!steps) return null;
+    const idx = Math.max(0, Math.min(steps.length - 1, currentStepIndex));
+    return steps[idx] ?? null;
+  })();
   const hasHubspotData = hasHubspot || !!hubspotCompanyId;
 
   // Fetch detalles HubSpot al montar
@@ -155,61 +176,68 @@ export default function ClientHeaderPopovers({
     setOpen((prev) => (prev === type ? null : type));
     if (type === "documentos") setMountedDocs(true);
     if (type === "deal") setMountedDeal(true);
+    if (type === "sesiones") setMountedSessions(true);
   };
 
   return (
-    <div ref={wrapperRef} className="relative flex items-center gap-1">
-      {/* ── Botones del header ── */}
+    <div ref={wrapperRef} className="relative">
+      {/* ── Botón único: Contexto ── */}
+      <button
+        onClick={() => { const def = currentProjectId ? "sesiones" : "empresa"; setOpen(open ? null : def); if (!open && def === "sesiones") setMountedSessions(true); }}
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+          open
+            ? "text-white bg-gray-800 border-gray-700"
+            : "text-gray-400 hover:text-gray-200 border-gray-800 hover:border-gray-700 hover:bg-gray-800/50"
+        }`}
+      >
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Contexto
+      </button>
 
-      {/* Documentos (solo dentro de un proyecto) */}
-      {currentProjectId && (
-        <PopoverButton
-          active={open === "documentos"}
-          onClick={() => toggle("documentos")}
-          icon="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-          label={docCount ? `Documentos (${docCount})` : "Documentos"}
-        />
-      )}
-
-      {/* Empresa */}
-      <PopoverButton
-        active={open === "empresa"}
-        onClick={() => toggle("empresa")}
-        icon="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-        label="Empresa"
-      />
-
-      {/* Deal (solo dentro de un proyecto) */}
-      {currentProjectId && (
-        <PopoverButton
-          active={open === "deal"}
-          onClick={() => toggle("deal")}
-          icon="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
-          label="Deal"
-        />
-      )}
-
-      {/* ── Panel popover ── */}
+      {/* ── Drawer lateral derecho ── */}
       {open && (
-        <div className="absolute right-0 top-[calc(100%+8px)] w-[520px] max-h-[80vh] overflow-y-auto bg-gray-900 border border-gray-700/80 rounded-2xl shadow-2xl z-50">
-          {/* Header del panel */}
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-800">
-            <p className="text-xs font-semibold text-white capitalize">
-              {open === "documentos" && "Documentos"}
-              {open === "empresa" && "Empresa"}
-              {open === "deal" && "Deal"}
-            </p>
-            <button
-              onClick={() => setOpen(null)}
-              className="p-1 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(null)} />
 
-          <div className="p-5">
+          <div className="fixed right-0 top-0 h-full w-[480px] bg-gray-900 border-l border-gray-700/80 shadow-2xl z-50 flex flex-col animate-in slide-in-from-right duration-200">
+            {/* Header con tabs */}
+            <div className="flex-shrink-0 border-b border-gray-800">
+              <div className="flex items-center justify-between px-5 pt-4 pb-0">
+                <div className="flex items-center gap-1">
+                  {currentProjectId && (
+                    <TabButton active={open === "sesiones"} onClick={() => toggle("sesiones")}>
+                      Sesiones
+                    </TabButton>
+                  )}
+                  {currentProjectId && (
+                    <TabButton active={open === "documentos"} onClick={() => toggle("documentos")}>
+                      {docCount ? `Docs (${docCount})` : "Docs"}
+                    </TabButton>
+                  )}
+                  {currentProjectId && (
+                    <TabButton active={open === "deal"} onClick={() => toggle("deal")}>
+                      Deal
+                    </TabButton>
+                  )}
+                  <TabButton active={open === "empresa"} onClick={() => toggle("empresa")}>
+                    Empresa
+                  </TabButton>
+                </div>
+                <button
+                  onClick={() => setOpen(null)}
+                  className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+          <div className="flex-1 overflow-y-auto p-5">
             {/* ── Documentos — lazy-mount, keep-alive ── */}
             {mountedDocs && currentProjectId && (
               <div className={open === "documentos" ? "" : "hidden"}>
@@ -297,6 +325,19 @@ export default function ClientHeaderPopovers({
               </div>
             )}
 
+            {/* ── Sesiones — re-mount on step change for fresh keywords ── */}
+            {open === "sesiones" && currentProjectId && (
+              <ClientSessionCards
+                key={`sessions-${currentStageNum}-${currentStepIndex}`}
+                clientId={clientId}
+                domain={domain}
+                company={company}
+                filterMode="name"
+                defaultTags={currentStepDef?.keywords?.length ? currentStepDef.keywords : undefined}
+                preselectRole={currentStepDef?.preselectRole}
+              />
+            )}
+
             {/* ── Deal — lazy-mount, keep-alive ── */}
             {mountedDeal && currentProjectId && (
               <div className={open === "deal" ? "" : "hidden"}>
@@ -309,41 +350,32 @@ export default function ClientHeaderPopovers({
               </div>
             )}
           </div>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-// ── Sub-componentes ───────────────────────────────────────────────────────────
+// ── Sub-componentes ───────────────────────────────────────────────────────
 
-function PopoverButton({
-  active, onClick, icon, label,
+function TabButton({
+  active, onClick, children,
 }: {
   active: boolean;
   onClick: () => void;
-  icon: string;
-  label: string;
+  children: React.ReactNode;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+      className={`px-3 py-2.5 text-xs font-medium transition-colors border-b-2 ${
         active
-          ? "bg-gray-700 text-white border border-gray-600"
-          : "text-gray-400 hover:text-gray-200 hover:bg-gray-800 border border-transparent"
+          ? "text-white border-brand"
+          : "text-gray-500 hover:text-gray-300 border-transparent"
       }`}
     >
-      <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
-      </svg>
-      {label}
-      <svg
-        className={`w-2.5 h-2.5 transition-transform ${active ? "rotate-180" : ""}`}
-        fill="none" viewBox="0 0 24 24" stroke="currentColor"
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-      </svg>
+      {children}
     </button>
   );
 }
