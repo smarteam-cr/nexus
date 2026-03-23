@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
-import {
-  extractTitleTerms,
-  extractDomain,
-  extractEmail,
-  tokenizeTitle,
-} from "@/lib/fireflies/sync";
+import { extractTitleTerms } from "@/lib/utils/matching";
+import { extractEmail, tokenizeTitle } from "@/lib/fireflies/sync";
+import { getEnrichmentWithTTL } from "@/lib/matching/enrichment";
+import { sessionMatchesAnyClient } from "@/lib/matching/cascade";
+import type { EnrichedClientMatcher } from "@/lib/matching/cascade";
 
 const FIREFLIES_GRAPHQL = "https://api.fireflies.ai/graphql";
 
@@ -16,24 +15,6 @@ type RawTranscript = {
   date: number;
   participants: string[];
 };
-
-interface ClientMatcher {
-  titleTerms: string[];
-  domain: string | null;
-}
-
-function sessionMatchesAnyClient(t: RawTranscript, matchers: ClientMatcher[]): boolean {
-  const titleTokens = tokenizeTitle(t.title ?? "");
-  for (const m of matchers) {
-    if (m.titleTerms.length > 0 && m.titleTerms.every((term) => titleTokens.has(term))) {
-      return true;
-    }
-    if (m.domain && t.participants.some((p) => extractEmail(p).endsWith(`@${m.domain}`))) {
-      return true;
-    }
-  }
-  return false;
-}
 
 export const GET = withAuth(async () => {
   const apiKey = process.env.FIREFLIES_API_KEY;
@@ -45,17 +26,27 @@ export const GET = withAuth(async () => {
     return NextResponse.json({ newSessions: [], needsSync: true });
   }
 
-  // Construir matchers de clientes actuales
+  // Cargar clientes y enriquecer con TTL cache (5 min)
   const clients = await prisma.client.findMany({
-    select: { name: true, company: true },
+    select: {
+      id: true,
+      name: true,
+      company: true,
+      hubspotCompanyId: true,
+      hubspotAccount: { select: { id: true } },
+    },
   });
 
-  const matchers: ClientMatcher[] = clients
+  const enrichmentMap = await getEnrichmentWithTTL(clients);
+
+  const matchers: EnrichedClientMatcher[] = clients
     .map((c) => ({
+      clientId: c.id,
+      name: c.name,
       titleTerms: c.name ? extractTitleTerms(c.name) : [],
-      domain: c.company ? extractDomain(c.company) : null,
+      enriched: enrichmentMap.get(c.id) ?? { domains: new Set<string>(), companyContactEmails: new Set<string>(), dealContactEmails: new Set<string>() },
     }))
-    .filter((m) => m.titleTerms.length > 0 || m.domain !== null);
+    .filter((m) => m.titleTerms.length > 0 || m.enriched.domains.size > 0 || m.enriched.companyContactEmails.size > 0);
 
   // Fetch primera página de Fireflies
   let firstPage: RawTranscript[] = [];
@@ -83,11 +74,12 @@ export const GET = withAuth(async () => {
   );
 
   // Sesiones nuevas que coincidan con algún cliente
+  const asRaw = firstPage.map((t) => ({ ...t, duration: 0 })); // add duration for type compat
   const newSessions = firstPage
     .filter(
-      (t) =>
+      (t, i) =>
         !existingIds.has(t.id) &&
-        (matchers.length === 0 || sessionMatchesAnyClient(t, matchers))
+        (matchers.length === 0 || sessionMatchesAnyClient(asRaw[i], matchers))
     )
     .map((t) => ({
       id: t.id,

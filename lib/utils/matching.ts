@@ -35,3 +35,14 @@ export function extractDomain(company: string): string | null {
   } catch { /* URL inválida */ }
   return null;
 }
+
+/** Extrae dominios de múltiples fuentes (client.company, HS domain, HS website) */
+export function extractDomains(sources: (string | null | undefined)[]): Set<string> {
+  const domains = new Set<string>();
+  for (const s of sources) {
+    if (!s) continue;
+    const d = extractDomain(s);
+    if (d) domains.add(d);
+  }
+  return domains;
+}

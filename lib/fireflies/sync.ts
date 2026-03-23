@@ -3,7 +3,7 @@
  *
  * Lógica central de sincronización de sesiones Fireflies → DB.
  * Solo sincroniza sesiones que coincidan con al menos un cliente registrado
- * (por título o por dominio de email de participantes).
+ * usando cascade matching (título + dominio + contactos empresa + contactos deal).
  *
  * Se importa desde:
  *   - app/api/integrations/fireflies/sync/route.ts  (botón manual)
@@ -12,6 +12,9 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { normalize, extractTitleTerms, extractDomain } from "@/lib/utils/matching";
+import { createEnrichmentCache } from "@/lib/matching/enrichment";
+import { sessionMatchesAnyClient } from "@/lib/matching/cascade";
+import type { EnrichedClientMatcher } from "@/lib/matching/cascade";
 
 // Re-exportar para compatibilidad con importadores existentes
 export { extractTitleTerms, extractDomain };
@@ -53,30 +56,6 @@ export function extractEmail(p: string): string {
   return p.toLowerCase().trim();
 }
 
-// ── Matcher multi-cliente ─────────────────────────────────────────────────────
-
-interface ClientMatcher {
-  name: string;
-  titleTerms: string[];
-  domain: string | null;
-}
-
-export function sessionMatchesAnyClient(
-  t: RawTranscript,
-  matchers: ClientMatcher[]
-): boolean {
-  const titleTokens = tokenizeTitle(t.title ?? "");
-  for (const m of matchers) {
-    if (m.titleTerms.length > 0 && m.titleTerms.every((term) => titleTokens.has(term))) {
-      return true;
-    }
-    if (m.domain && t.participants.some((p) => extractEmail(p).endsWith(`@${m.domain}`))) {
-      return true;
-    }
-  }
-  return false;
-}
-
 // ── Fireflies: fetch de una página ───────────────────────────────────────────
 
 async function fetchPage(apiKey: string, skip: number): Promise<RawTranscript[]> {
@@ -100,43 +79,57 @@ async function fetchPage(apiKey: string, skip: number): Promise<RawTranscript[]>
 
 /**
  * Sincroniza sesiones de Fireflies filtrando solo las que pertenecen
- * a clientes registrados en la DB.
- *
- * Optimizaciones:
- *  - Carga todos los IDs existentes en un Set al inicio (1 query, no N).
- *  - Usa createMany por batch en vez de upserts individuales.
+ * a clientes registrados en la DB. Usa cascade matching con HubSpot.
  *
  * @param extraMatchers  Matchers adicionales (ej: cliente recién creado).
  */
 export async function syncFirefliesSessions(
-  extraMatchers: ClientMatcher[] = []
+  extraMatchers: EnrichedClientMatcher[] = []
 ): Promise<SyncResult> {
   const apiKey = process.env.FIREFLIES_API_KEY;
   if (!apiKey) return { synced: 0, alreadyExisted: 0, total: 0 };
 
   // Cargar clientes actuales de la DB
   const clients = await prisma.client.findMany({
-    select: { name: true, company: true },
+    select: {
+      id: true,
+      name: true,
+      company: true,
+      hubspotCompanyId: true,
+      hubspotAccount: { select: { id: true } },
+    },
   });
 
-  const dbMatchers: ClientMatcher[] = clients
-    .map((c) => ({
-      name: c.name,
-      titleTerms: c.name ? extractTitleTerms(c.name) : [],
-      domain: c.company ? extractDomain(c.company) : null,
-    }))
-    .filter((m) => m.titleTerms.length > 0 || m.domain !== null);
+  // Enriquecer clientes con datos de HubSpot (batches de 5 para rate limit)
+  const enrichCache = createEnrichmentCache();
+  const ENRICH_BATCH = 5;
+  const dbMatchers: EnrichedClientMatcher[] = [];
+
+  for (let i = 0; i < clients.length; i += ENRICH_BATCH) {
+    const batch = clients.slice(i, i + ENRICH_BATCH);
+    const enriched = await Promise.all(
+      batch.map((c) => enrichCache.get(c.id, c))
+    );
+    for (let j = 0; j < batch.length; j++) {
+      const c = batch[j];
+      const titleTerms = c.name ? extractTitleTerms(c.name) : [];
+      const e = enriched[j];
+      if (titleTerms.length > 0 || e.domains.size > 0 || e.companyContactEmails.size > 0) {
+        dbMatchers.push({ clientId: c.id, name: c.name, titleTerms, enriched: e });
+      }
+    }
+  }
 
   // Combinar con matchers extra (p.ej. cliente recién creado)
   const matchers = [...dbMatchers, ...extraMatchers].filter(
-    (m) => m.titleTerms.length > 0 || m.domain !== null
+    (m) => m.titleTerms.length > 0 || m.enriched.domains.size > 0 || m.enriched.companyContactEmails.size > 0
   );
 
   if (matchers.length === 0) return { synced: 0, alreadyExisted: 0, total: 0 };
 
   console.log(
     `[fireflies/sync] Buscando sesiones para ${matchers.length} clientes:`,
-    matchers.map((m) => `${m.name} (domain=${m.domain ?? "—"})`).join(" | ")
+    matchers.map((m) => `${m.name} (domains=${[...m.enriched.domains].join(",") || "—"}, contacts=${m.enriched.companyContactEmails.size})`).join(" | ")
   );
 
   // Cargar todos los IDs ya en DB de una sola vez → Set para lookup O(1)
@@ -144,11 +137,9 @@ export async function syncFirefliesSessions(
     (await prisma.firefliesSession.findMany({ select: { id: true } })).map((s) => s.id)
   );
 
-  // Páginas en paralelo por batch. Delay reducido porque DB ya no es el cuello.
+  // Páginas en paralelo por batch
   const BATCH = 3;
   const INTER_BATCH_DELAY = 200;
-  // Stop early: si N batches consecutivos no producen sesiones nuevas,
-  // Fireflies ya nos devolvió todo lo reciente → paramos.
   const MAX_EMPTY_BATCHES = 2;
 
   let skip = 0;
@@ -160,12 +151,10 @@ export async function syncFirefliesSessions(
   while (hasMore) {
     if (skip > 0) await new Promise((r) => setTimeout(r, INTER_BATCH_DELAY));
 
-    // Fetch 3 páginas en paralelo
     const pages = await Promise.all(
       Array.from({ length: BATCH }, (_, i) => fetchPage(apiKey, skip + i * 50))
     );
 
-    // Filtrar sesiones relevantes y nuevas de este batch
     const toInsert: RawTranscript[] = [];
     let batchAlreadyExisted = 0;
 
@@ -176,7 +165,7 @@ export async function syncFirefliesSessions(
           batchAlreadyExisted++;
         } else {
           toInsert.push(t);
-          existingIds.add(t.id); // evitar duplicados dentro del mismo sync
+          existingIds.add(t.id);
         }
       }
 
@@ -188,7 +177,6 @@ export async function syncFirefliesSessions(
 
     alreadyExisted += batchAlreadyExisted;
 
-    // Insertar todas las nuevas del batch en una sola operación
     if (toInsert.length > 0) {
       const { count } = await prisma.firefliesSession.createMany({
         data: toInsert.map((t) => ({
@@ -201,17 +189,14 @@ export async function syncFirefliesSessions(
         skipDuplicates: true,
       });
       synced += count;
-      emptyBatches = 0; // resetear contador al encontrar sesiones nuevas
+      emptyBatches = 0;
     } else if (batchAlreadyExisted > 0) {
-      // Hubo sesiones coincidentes pero todas ya estaban → zona conocida
       emptyBatches++;
       if (emptyBatches >= MAX_EMPTY_BATCHES) {
         console.log(`[fireflies/sync] Stop early: ${emptyBatches} batches sin sesiones nuevas (skip=${skip})`);
         break;
       }
     }
-    // Si el batch no tuvo ninguna sesión coincidente (toInsert=0, batchAlreadyExisted=0),
-    // no contamos como "empty" porque puede haber más sesiones relevantes adelante.
 
     if (hasMore) skip += BATCH * 50;
   }

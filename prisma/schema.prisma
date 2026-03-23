@@ -417,6 +417,7 @@ model FirefliesSession {
   participants String[]
   summary      Json?
   transcript   String?  @db.Text
+  enrichedAt   DateTime?          // cuándo se trajo transcript/summary (null = pendiente)
   syncedAt     DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

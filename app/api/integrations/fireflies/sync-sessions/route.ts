@@ -105,6 +105,7 @@ export const POST = withAuth(async (req: NextRequest) => {
         participants: detail.participants,
         summary: detail.summary ?? undefined,
         transcript: detail.transcript,
+        enrichedAt: new Date(),
       },
       create: {
         id: detail.id,
@@ -114,6 +115,7 @@ export const POST = withAuth(async (req: NextRequest) => {
         participants: detail.participants,
         summary: detail.summary ?? undefined,
         transcript: detail.transcript,
+        enrichedAt: new Date(),
       },
     });
     synced++;
