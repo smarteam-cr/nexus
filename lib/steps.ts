@@ -27,10 +27,7 @@ export const STEPS_LOOP_MARKETING: ServiceStageSteps = {
     { label: "Análisis inicial",                   shortLabel: "Análisis inicial",   type: { kind: "context-only" },  keywords: [], preselectRole: "Ventas" },
     { label: "Kickoff",                            shortLabel: "Kickoff",            type: { kind: "context-only" }, keywords: ["kickoff", "kick off"] },
     { label: "Entrevistas y focus groups",         shortLabel: "Entrevistas",        type: { kind: "documents" },     keywords: ["entrevista", "focus group"] },
-    { label: "Mapeo de proceso, rutina y estructura", shortLabel: "Mapeo",           type: { kind: "note", placeholder: "Proceso de marketing actual, rutina del equipo, organigrama, tecnología utilizada y auditoría del CRM..." }, keywords: ["mapeo", "proceso", "rutina"] },
-    { label: "Análisis de datos",                  shortLabel: "Datos",              type: { kind: "portal" },        keywords: ["datos", "data", "disponibilidad"] },
-    { label: "Análisis del funnel de marketing",   shortLabel: "Funnel",             type: { kind: "portal" },        keywords: ["funnel", "embudo", "marketing"] },
-    { label: "Informe de diagnóstico",             shortLabel: "Diagnóstico",        type: { kind: "note", placeholder: "Informe de diagnóstico: hallazgos clave, ubicación en la escala de rendimiento (ordenamiento / velocidad / efectividad) y factores explicativos..." }, keywords: ["diagnóstico", "informe"] },
+    { label: "Entregable de diagnóstico",          shortLabel: "Entregable",         type: { kind: "context-only" },  keywords: ["diagnóstico", "entregable", "mapeo", "datos", "funnel", "informe"] },
   ],
   2: [
     { label: "Rediseño del proceso (Inbound Marketing)", shortLabel: "Proceso",      type: { kind: "note", placeholder: "Proceso de marketing rediseñado con Inbound Marketing. Incluye arquitectura base del CRM necesaria para ejecutarlo..." }, keywords: ["proceso", "inbound", "marketing"] },
@@ -53,10 +50,7 @@ export const STEPS_LOOP_SALES: ServiceStageSteps = {
     { label: "Análisis inicial",                     shortLabel: "Análisis inicial", type: { kind: "context-only" },  keywords: [], preselectRole: "Ventas" },
     { label: "Kickoff",                              shortLabel: "Kickoff",          type: { kind: "context-only" }, keywords: ["kickoff", "kick off"] },
     { label: "Entrevistas y focus groups",           shortLabel: "Entrevistas",      type: { kind: "documents" },     keywords: ["entrevista", "focus group"] },
-    { label: "Mapeo de proceso comercial, rutina y estructura", shortLabel: "Mapeo", type: { kind: "note", placeholder: "Proceso comercial actual, rutina del equipo de ventas, organigrama, tecnología utilizada y auditoría del pipeline en el CRM..." }, keywords: ["mapeo", "proceso", "rutina", "comercial"] },
-    { label: "Análisis de datos comerciales",        shortLabel: "Datos",            type: { kind: "portal" },        keywords: ["datos", "data"] },
-    { label: "Análisis del funnel de ventas",        shortLabel: "Funnel",           type: { kind: "portal" },        keywords: ["funnel", "ventas", "embudo"] },
-    { label: "Informe de diagnóstico comercial",     shortLabel: "Diagnóstico",      type: { kind: "note", placeholder: "Informe de diagnóstico comercial: cómo vende el cliente hoy, escala de rendimiento y factores explicativos..." }, keywords: ["diagnóstico", "informe"] },
+    { label: "Entregable de diagnóstico",            shortLabel: "Entregable",       type: { kind: "context-only" },  keywords: ["diagnóstico", "entregable", "mapeo", "datos", "funnel", "informe"] },
   ],
   2: [
     { label: "Rediseño del proceso (Inbound Sales)", shortLabel: "Proceso",          type: { kind: "note", placeholder: "Proceso comercial rediseñado con Inbound Sales. Incluye arquitectura base del CRM necesaria..." }, keywords: ["proceso", "inbound", "sales"] },
@@ -81,10 +75,7 @@ export const STEPS_LOOP_SERVICE: ServiceStageSteps = {
     { label: "Análisis inicial",                          shortLabel: "Análisis inicial", type: { kind: "context-only" },  keywords: [], preselectRole: "Ventas" },
     { label: "Kickoff",                                   shortLabel: "Kickoff",          type: { kind: "context-only" }, keywords: ["kickoff", "kick off"] },
     { label: "Entrevistas y focus groups",                shortLabel: "Entrevistas",      type: { kind: "documents" },     keywords: ["entrevista", "focus group"] },
-    { label: "Mapeo de proceso de servicio, rutina y estructura", shortLabel: "Mapeo",    type: { kind: "note", placeholder: "Proceso de servicio al cliente actual, rutina de ejecutivos, organigrama, tecnología y auditoría del CRM..." }, keywords: ["mapeo", "proceso", "rutina", "servicio"] },
-    { label: "Análisis de datos de servicio",             shortLabel: "Datos",            type: { kind: "portal" },        keywords: ["datos", "data"] },
-    { label: "Análisis de conversión cliente-promotor",   shortLabel: "Conversión",       type: { kind: "portal" },        keywords: ["conversión", "promotor", "nps", "satisfacción"] },
-    { label: "Informe de diagnóstico de servicio",        shortLabel: "Diagnóstico",      type: { kind: "note", placeholder: "Cómo opera el servicio al cliente hoy, escala de rendimiento y factores del sistema que explican los resultados actuales..." }, keywords: ["diagnóstico", "informe"] },
+    { label: "Entregable de diagnóstico",                 shortLabel: "Entregable",       type: { kind: "context-only" },  keywords: ["diagnóstico", "entregable", "mapeo", "datos", "funnel", "informe"] },
   ],
   2: [
     { label: "Rediseño del proceso (Inbound Service)", shortLabel: "Proceso",          type: { kind: "note", placeholder: "Proceso de servicio al cliente rediseñado con Inbound Service. Incluye arquitectura base del CRM..." }, keywords: ["proceso", "inbound", "service"] },
@@ -108,8 +99,7 @@ export const STEPS_PROYECTO_TEMPORAL: ServiceStageSteps = {
   1: [
     { label: "Análisis inicial",          shortLabel: "Análisis inicial", type: { kind: "context-only" },  keywords: [], preselectRole: "Ventas" },
     { label: "Entrevistas",               shortLabel: "Entrevistas",      type: { kind: "documents" },     keywords: ["entrevista"] },
-    { label: "Mapeo del proceso",         shortLabel: "Mapeo",            type: { kind: "note", placeholder: "Mapeo del proceso específico que el proyecto afecta, estado actual y oportunidades identificadas..." }, keywords: ["mapeo", "proceso"] },
-    { label: "Informe de diagnóstico",    shortLabel: "Diagnóstico",      type: { kind: "note", placeholder: "Hallazgos del diagnóstico y recomendaciones para el diseño de la solución..." }, keywords: ["diagnóstico", "informe"] },
+    { label: "Entregable de diagnóstico", shortLabel: "Entregable",       type: { kind: "context-only" },  keywords: ["diagnóstico", "entregable", "mapeo", "informe"] },
   ],
   2: [
     { label: "Diseño de la solución",  shortLabel: "Diseño",         type: { kind: "note", placeholder: "Diseño técnico y funcional de lo que se va a construir o configurar en HubSpot..." }, keywords: ["diseño", "solución"] },

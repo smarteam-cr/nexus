@@ -8,6 +8,7 @@ import ServiceMapHeader from "@/components/clients/ServiceMapHeader";
 import CanvasToggleShell from "@/components/clients/CanvasToggleShell";
 import CanvasToggleButtons from "@/components/clients/CanvasToggleButtons";
 import CanvasOverlay from "@/components/clients/CanvasOverlay";
+import ProjectTags from "@/components/clients/ProjectTags";
 import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
 
 // Obtiene el nombre de la empresa desde la cuenta del cliente o del sistema
@@ -140,6 +141,8 @@ export default async function ClientLayout({
               />
               {/* Canvas toggle buttons */}
               <CanvasToggleButtons />
+              {/* Project tags (Hub badges) */}
+              <ProjectTags />
             </div>
           </div>
 

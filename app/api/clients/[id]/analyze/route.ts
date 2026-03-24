@@ -239,6 +239,7 @@ export const GET = withAuth(async (_req: NextRequest, { params }: Params) => {
     const candidates = await prisma.agent.findMany({
       where: {
         status: "ACTIVE",
+        agentType: "SECTION", // Solo agentes de sección, no canvas transversales
         outputType: { in: ["CARDS", "FLOWCHART", "CARDS_AND_FLOWCHARTS"] },
         OR: [
           { associatedStages: { isEmpty: true } },
@@ -708,7 +709,8 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
 
   // Agente de subetapa no-primero: tiene step específico asignado y no es el paso 1.
   // Los agentes globales/wildcard (associatedStep === null) no participan en la cadena.
-  const isStepChained = agent.associatedStep !== null && bodyStep > 1;
+  // Encadenar si el agente tiene step específico y no es el primero (step 0)
+  const isStepChained = agent.associatedStep !== null && bodyStep > 0;
 
   // Para todos los agentes encadenados: priorizar enriquecimiento humano del CSE.
   // El user message incluirá cards del step anterior etiquetadas con su fuente.
@@ -737,27 +739,30 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   // al pool del cliente aunque no estén vinculadas a un run específico.
   let prevStepHumanCards: { title: string; content: string; source: string }[] = [];
   if (isStepChained) {
-    const prevRun = await prisma.agentRun.findFirst({
+    // Encadenamiento acumulativo: traer la última ejecución DONE de CADA step anterior
+    const prevRuns = await prisma.agentRun.findMany({
       where: {
         clientId,
         ...(bodyProjectId ? { projectId: bodyProjectId } : {}),
         stage: bodyStage,
-        step: bodyStep - 1,
+        step: { lt: bodyStep },
         status: "DONE",
       },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, stepLabel: true },
+      orderBy: [{ step: "asc" }, { createdAt: "desc" }],
+      distinct: ["step"],
+      select: { id: true, step: true, stepLabel: true },
     });
-    if (prevRun) {
-      prevStepLabel = prevRun.stepLabel;
+
+    if (prevRuns.length > 0) {
+      prevStepLabel = prevRuns.map((r) => r.stepLabel ?? `Step ${r.step}`).join(" → ");
+      const runIds = prevRuns.map((r) => r.id);
       prevStepCards = await prisma.clientContextCard.findMany({
-        where: { agentRunId: prevRun.id },
+        where: { agentRunId: { in: runIds } },
         orderBy: { order: "asc" },
         select: { title: true, content: true, source: true },
       });
     }
-    // Cards creadas manualmente por el CSE (sin agentRunId): anotaciones propias
-    // que no pertenecen a ningún run pero enriquecen el contexto.
+    // Cards creadas manualmente por el CSE (sin agentRunId)
     prevStepHumanCards = await prisma.clientContextCard.findMany({
       where: { clientId, agentRunId: null, source: "HUMAN" },
       orderBy: { createdAt: "asc" },
@@ -981,7 +986,41 @@ Analiza toda la información anterior y completa las secciones de contexto del c
   });
   void savedCards;
 
-  // ── 14. Retornar las cards recién creadas + metadata del run ─────────────────
+  // ── 14. Auto-generar project tags ────────────────────────────────────────────
+  if (bodyProjectId) {
+    try {
+      const proj = await prisma.project.findUnique({
+        where: { id: bodyProjectId },
+        select: { tags: true, serviceType: true },
+      });
+      const currentTags = proj?.tags ?? [];
+
+      // Mapear serviceType a Hub tag si no existe ya
+      const SERVICE_TO_HUB: Record<string, string> = {
+        loop_marketing: "Marketing Hub",
+        loop_sales: "Sales Hub",
+        loop_service: "Service Hub",
+      };
+      const hubTag = proj?.serviceType ? SERVICE_TO_HUB[proj.serviceType] : undefined;
+
+      // Merge: tags del agente (si los devolvió) + hub tag del serviceType
+      const agentTags = (analysisJson!.tags && Array.isArray(analysisJson!.tags))
+        ? analysisJson!.tags.map((t: string) => t.trim()).filter(Boolean)
+        : [];
+      const allNewTags = [...agentTags];
+      if (hubTag) allNewTags.push(hubTag);
+
+      const merged = [...new Set([...currentTags, ...allNewTags])];
+      if (merged.length !== currentTags.length) {
+        await prisma.project.update({
+          where: { id: bodyProjectId },
+          data: { tags: merged },
+        });
+      }
+    } catch { /* no-op */ }
+  }
+
+  // ── 15. Retornar las cards recién creadas + metadata del run ─────────────────
   const runCards = await prisma.clientContextCard.findMany({
     where: { agentRunId: run.id },
     orderBy: { order: "asc" },

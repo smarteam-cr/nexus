@@ -4,8 +4,17 @@ import { useState, useEffect, useCallback } from "react";
 import type { ProjectCanvas } from "@/lib/canvas/template";
 import { PROJECT_CANVAS_LABELS } from "@/lib/canvas/template";
 
+type Confidence = "confirmed" | "inferred" | "empty";
+
+const CONFIDENCE_STYLES: Record<Confidence, { dot: string; border: string; bg: string; label: string }> = {
+  confirmed: { dot: "bg-green-500", border: "border-gray-100", bg: "bg-white", label: "Confirmado" },
+  inferred:  { dot: "bg-amber-400", border: "border-amber-200", bg: "bg-amber-50/50", label: "Por confirmar" },
+  empty:     { dot: "bg-gray-300", border: "border-dashed border-gray-200", bg: "bg-white", label: "Sin datos" },
+};
+
 export default function ProjectCanvasPanel({ projectId }: { projectId: string }) {
   const [canvas, setCanvas] = useState<ProjectCanvas | null>(null);
+  const [confidence, setConfidence] = useState<Record<string, Confidence>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -16,6 +25,7 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
       const res = await fetch(`/api/projects/${projectId}/canvas`);
       const data = await res.json();
       setCanvas(data.canvas);
+      setConfidence(data.confidence ?? {});
     } catch { /* ignore */ }
     setLoading(false);
   }, [projectId]);
@@ -45,274 +55,204 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
       const res = await fetch(`/api/projects/${projectId}/canvas`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ canvas: { [section]: value } }),
+        body: JSON.stringify({ canvas: { [section]: value }, confidence: { [section]: "confirmed" } }),
       });
       const data = await res.json();
       if (data.canvas) setCanvas(data.canvas);
+      if (data.confidence) setConfidence(data.confidence);
     } catch { /* ignore */ }
     setSaving(false);
   };
 
   if (loading) {
     return (
-      <div className="p-5 space-y-3">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-16 bg-gray-800/50 rounded-lg animate-pulse" />
-        ))}
+      <div className="max-w-5xl mx-auto px-6 py-8">
+        <div className="columns-2 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="break-inside-avoid mb-4 h-32 bg-gray-50 rounded-2xl animate-pulse" />
+          ))}
+        </div>
       </div>
     );
   }
 
-  if (!canvas) return <p className="p-5 text-sm text-gray-500">Error al cargar el canvas.</p>;
+  if (!canvas) return <p className="p-5 text-sm text-gray-400">Error al cargar el canvas.</p>;
 
   const sections = Object.keys(canvas) as (keyof ProjectCanvas)[];
-  const filledCount = sections.filter((k) => {
-    const v = canvas[k];
-    if (Array.isArray(v)) return v.length > 0;
-    if (typeof v === "object" && v !== null) return Object.values(v).some((val) => typeof val === "string" ? val.trim() : Array.isArray(val) ? val.length > 0 : true);
-    return false;
-  }).length;
+  const filledCount = sections.filter((k) => !checkEmpty(canvas[k])).length;
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+    <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-white">Canvas de proyecto</h2>
-          <p className="text-xs text-gray-500 mt-0.5">Conocimiento del caso de uso actual</p>
+          <h2 className="text-xl font-bold text-gray-900">Canvas de caso de uso</h2>
+          <p className="text-sm text-gray-400 mt-0.5">Estado actual del proyecto</p>
         </div>
-        <div className="flex items-center gap-3 text-xs text-gray-500">
+        <div className="flex items-center gap-3">
           <button
             onClick={refreshCanvas}
             disabled={refreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand/10 border border-brand/20 text-brand-light hover:bg-brand/20 transition-colors disabled:opacity-50 text-xs font-medium"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand/10 border border-brand/20 text-brand hover:bg-brand/20 transition-colors disabled:opacity-50 text-xs font-medium"
           >
             <svg className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             {refreshing ? "Actualizando..." : "Actualizar con IA"}
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-24 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-              <div className="h-full bg-brand rounded-full transition-all" style={{ width: `${(filledCount / sections.length) * 100}%` }} />
-            </div>
-            <span>{filledCount}/{sections.length}</span>
-          </div>
-          {saving && <span className="text-gray-600">Guardando...</span>}
+          <span className="text-xs text-gray-400">{filledCount}/{sections.length}</span>
+          {saving && <span className="text-xs text-gray-400">Guardando...</span>}
         </div>
       </div>
 
       {refreshError && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs">
           <span>{refreshError}</span>
-          <button onClick={() => setRefreshError(null)} className="ml-auto text-red-400/60 hover:text-red-400">&times;</button>
+          <button onClick={() => setRefreshError(null)} className="ml-auto text-red-400 hover:text-red-600">&times;</button>
         </div>
       )}
 
-      {/* Canvas cards grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {sections.map((key) => (
-          <CanvasCard
-            key={key}
-            label={PROJECT_CANVAS_LABELS[key] ?? key}
-            value={canvas[key]}
-            onSave={(val) => saveSection(key, val)}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Card renderer (always open) ──────────────────────────────────────────────
-
-function CanvasCard({
-  label,
-  value,
-  onSave,
-}: {
-  label: string;
-  value: unknown;
-  onSave: (val: unknown) => void;
-}) {
-  const isEmpty = checkEmpty(value);
-
-  return (
-    <div className={`rounded-xl border p-5 space-y-3 transition-colors ${
-      isEmpty ? "border-gray-800 bg-gray-900/30" : "border-gray-700 bg-gray-900/60"
-    }`}>
-      <div className="flex items-center gap-2">
-        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isEmpty ? "bg-gray-600" : "bg-green-500"}`} />
-        <h3 className="text-sm font-semibold text-gray-200">{label}</h3>
-      </div>
-
-      {Array.isArray(value) ? (
-        <ArrayEditor items={value} onSave={onSave} />
-      ) : typeof value === "object" && value !== null ? (
-        <ObjectField obj={value as Record<string, unknown>} onSave={onSave} />
-      ) : (
-        <StringEditor value={String(value ?? "")} onSave={onSave} />
-      )}
-    </div>
-  );
-}
-
-function ObjectField({ obj, onSave }: { obj: Record<string, unknown>; onSave: (val: unknown) => void }) {
-  const [local, setLocal] = useState(obj);
-
-  const handleBlur = () => {
-    if (JSON.stringify(local) !== JSON.stringify(obj)) onSave(local);
-  };
-
-  return (
-    <div className="space-y-2">
-      {Object.entries(local).map(([k, v]) => {
-        if (Array.isArray(v)) {
-          return (
-            <div key={k}>
-              <label className="text-xs text-gray-500 capitalize">{k.replace(/_/g, " ")}</label>
-              <TagsEditor
-                tags={v as string[]}
-                onSave={(newTags) => {
-                  const updated = { ...local, [k]: newTags };
-                  setLocal(updated);
-                  onSave(updated);
-                }}
-              />
-            </div>
-          );
-        }
-        return (
-          <div key={k}>
-            <label className="text-xs text-gray-500 capitalize">{k.replace(/_/g, " ")}</label>
-            <input
-              value={String(v ?? "")}
-              onChange={(e) => setLocal({ ...local, [k]: e.target.value })}
-              onBlur={handleBlur}
-              className="w-full mt-0.5 px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:border-brand/50"
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function StringEditor({ value, onSave }: { value: string; onSave: (val: unknown) => void }) {
-  const [local, setLocal] = useState(value);
-  return (
-    <input
-      value={local}
-      onChange={(e) => setLocal(e.target.value)}
-      onBlur={() => { if (local !== value) onSave(local); }}
-      className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:border-brand/50"
-    />
-  );
-}
-
-function ArrayEditor({ items, onSave }: { items: unknown[]; onSave: (val: unknown) => void }) {
-  if (items.length === 0 || typeof items[0] === "string") {
-    return <TagsEditor tags={items as string[]} onSave={onSave} />;
-  }
-
-  const [local, setLocal] = useState(items as Record<string, unknown>[]);
-
-  const handleChange = (idx: number, field: string, value: string) => {
-    const updated = [...local];
-    updated[idx] = { ...updated[idx], [field]: value };
-    setLocal(updated);
-  };
-
-  const handleBlur = () => {
-    if (JSON.stringify(local) !== JSON.stringify(items)) onSave(local);
-  };
-
-  const addItem = () => {
-    const template = items[0]
-      ? Object.fromEntries(Object.keys(items[0] as object).map((k) => [k, Array.isArray((items[0] as Record<string, unknown>)[k]) ? [] : ""]))
-      : { nombre: "" };
-    setLocal([...local, template as Record<string, unknown>]);
-  };
-
-  return (
-    <div className="space-y-3">
-      {local.map((item, idx) => (
-        <div key={idx} className="p-2 bg-gray-800/50 rounded-lg space-y-1.5">
-          {Object.entries(item).map(([k, v]) =>
-            Array.isArray(v) ? (
-              <div key={k}>
-                <label className="text-xs text-gray-500 capitalize">{k.replace(/_/g, " ")}</label>
-                <TagsEditor
-                  tags={v as string[]}
-                  onSave={(newTags) => {
-                    handleChange(idx, k, newTags as unknown as string);
-                    const updated = [...local];
-                    updated[idx] = { ...updated[idx], [k]: newTags };
-                    setLocal(updated);
-                    onSave(updated);
-                  }}
-                />
-              </div>
-            ) : (
-              <div key={k}>
-                <label className="text-xs text-gray-500 capitalize">{k.replace(/_/g, " ")}</label>
-                <input
-                  value={String(v ?? "")}
-                  onChange={(e) => handleChange(idx, k, e.target.value)}
-                  onBlur={handleBlur}
-                  className="w-full mt-0.5 px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-300 focus:outline-none focus:border-brand/50"
-                />
-              </div>
-            )
-          )}
-        </div>
-      ))}
-      <button onClick={addItem} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
-        + Agregar
-      </button>
-    </div>
-  );
-}
-
-function TagsEditor({ tags, onSave }: { tags: string[]; onSave: (val: unknown) => void }) {
-  const [local, setLocal] = useState(tags);
-  const [input, setInput] = useState("");
-
-  const add = () => {
-    if (!input.trim()) return;
-    const updated = [...local, input.trim()];
-    setLocal(updated);
-    setInput("");
-    onSave(updated);
-  };
-
-  const remove = (idx: number) => {
-    const updated = local.filter((_, i) => i !== idx);
-    setLocal(updated);
-    onSave(updated);
-  };
-
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        {local.map((tag, i) => (
-          <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-800 rounded text-xs text-gray-300">
-            {tag}
-            <button onClick={() => remove(i)} className="text-gray-500 hover:text-gray-300">×</button>
+      {/* Legends */}
+      <div className="flex items-center gap-4 text-xs text-gray-400">
+        {(Object.entries(CONFIDENCE_STYLES) as [Confidence, typeof CONFIDENCE_STYLES[Confidence]][]).map(([key, style]) => (
+          <span key={key} className="flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-full ${style.dot}`} />
+            {style.label}
           </span>
         ))}
       </div>
-      <div className="flex gap-1.5">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && add()}
-          placeholder="Agregar..."
-          className="flex-1 px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded text-gray-300 focus:outline-none focus:border-brand/50"
-        />
-        <button onClick={add} className="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded text-gray-300">+</button>
+
+      {/* Canvas masonry grid */}
+      <div className="columns-1 md:columns-2 gap-4">
+        {sections.map((key) => {
+          const isEmpty = checkEmpty(canvas[key]);
+          const conf: Confidence = isEmpty ? "empty" : (confidence[key] as Confidence) ?? "inferred";
+          const style = CONFIDENCE_STYLES[conf];
+
+          return (
+            <div
+              key={key}
+              className={`break-inside-avoid mb-4 rounded-2xl ${isEmpty ? "border-2" : "border"} ${style.border} ${style.bg} p-5 transition-all`}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
+                <h3 className="text-sm font-semibold text-gray-800">{PROJECT_CANVAS_LABELS[key] ?? key}</h3>
+                {conf === "inferred" && (
+                  <button
+                    onClick={() => saveSection(key, canvas[key])}
+                    className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200 hover:bg-green-100 transition-colors"
+                  >
+                    Confirmar
+                  </button>
+                )}
+              </div>
+
+              {isEmpty ? (
+                <p className="text-sm text-gray-300 italic">Sin datos aún</p>
+              ) : (
+                <CanvasValue value={canvas[key]} sectionKey={key} onSave={(val) => saveSection(key, val)} />
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
+  );
+}
+
+// ── Render values ───────────────────────────────────────────────────────────
+
+function CanvasValue({ value, sectionKey, onSave }: { value: unknown; sectionKey: string; onSave: (val: unknown) => void }) {
+  if (typeof value === "string") {
+    return <EditableText value={value} onSave={(v) => onSave(v)} />;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <p className="text-sm text-gray-300 italic">Sin datos</p>;
+
+    // String array
+    const hasObjects = value.some((i) => typeof i === "object" && i !== null);
+    if (!hasObjects) {
+      return (
+        <ul className="space-y-1">
+          {value.map((item, i) => (
+            <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+              <span className="text-brand mt-1">•</span>
+              <span>{String(item)}</span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+
+    // Object array (procesos, stakeholders)
+    return (
+      <div className="space-y-3">
+        {value.filter((i) => typeof i === "object" && i !== null).map((item, i) => (
+          <div key={i} className="text-sm text-gray-600 space-y-0.5 pb-2 border-b border-gray-100 last:border-0 last:pb-0">
+            {Object.entries(item as Record<string, unknown>).map(([k, v]) => (
+              <p key={k}>
+                <span className="font-medium text-gray-500 capitalize">{k.replace(/_/g, " ")}:</span>{" "}
+                {Array.isArray(v) ? (v as string[]).join(", ") : String(v ?? "")}
+              </p>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (typeof value === "object" && value !== null) {
+    return (
+      <div className="space-y-2">
+        {Object.entries(value as Record<string, unknown>).map(([k, v]) => (
+          <div key={k}>
+            <p className="text-xs text-gray-400 capitalize mb-0.5">{k.replace(/_/g, " ")}</p>
+            {Array.isArray(v) ? (
+              <ul className="space-y-0.5">
+                {(v as string[]).map((item, i) => (
+                  <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+                    <span className="text-brand mt-1">•</span>
+                    <span>{String(item)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-700">{String(v ?? "—")}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function EditableText({ value, onSave }: { value: string; onSave: (val: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [local, setLocal] = useState(value);
+
+  if (!editing) {
+    return (
+      <p
+        className="text-sm text-gray-700 cursor-pointer hover:text-gray-900 transition-colors"
+        onClick={() => setEditing(true)}
+      >
+        {value || <span className="italic text-gray-300">Click para editar</span>}
+      </p>
+    );
+  }
+
+  return (
+    <textarea
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={() => { if (local !== value) onSave(local); setEditing(false); }}
+      autoFocus
+      rows={3}
+      className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/20 resize-none"
+    />
   );
 }
 
@@ -320,7 +260,7 @@ function checkEmpty(value: unknown): boolean {
   if (Array.isArray(value)) return value.length === 0;
   if (typeof value === "object" && value !== null) {
     return Object.values(value).every((v) =>
-      typeof v === "string" ? !v.trim() : Array.isArray(v) ? v.length === 0 : false
+      typeof v === "string" ? !v.trim() : Array.isArray(v) ? v.length === 0 : typeof v === "object" && v !== null ? checkEmpty(v) : false
     );
   }
   if (typeof value === "string") return !value.trim();

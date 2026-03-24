@@ -11,8 +11,7 @@ import {
   BarChart2,
   Zap,
 } from "lucide-react";
-import StageNoteEditor from "@/components/clients/StageNoteEditor";
-import ClientDocuments from "@/components/clients/ClientDocuments";
+// StageNoteEditor y ClientDocuments removidos — anotaciones van en cards (tag CSE), docs en sidebar
 import StepSections from "@/components/clients/StepSections";
 import NewAuditButtonClient from "@/app/clients/[id]/stage/[stageNum]/NewAuditButtonClient";
 import NewImplementationButton from "@/app/clients/[id]/stage/[stageNum]/NewImplementationButton";
@@ -174,26 +173,11 @@ async function StepContent({
     return null;
   }
 
-  if (type.kind === "note") {
-    return (
-      <StageNoteEditor
-        clientId={clientId}
-        stage={stage}
-        step={step}
-        placeholder={type.placeholder}
-      />
-    );
-  }
-
-  if (type.kind === "documents") {
-    return (
-      <div className="space-y-4 max-w-2xl">
-        <p className="text-sm text-gray-400">
-          Adjunta URLs de sesiones de Fireflies, transcripciones, briefs o cualquier documento relevante.
-        </p>
-        <ClientDocuments clientId={clientId} projectId={projectId} stage={stage} step={step} />
-      </div>
-    );
+  // note y documents ya no se renderizan aquí:
+  // - Anotaciones manuales se hacen con el tag CSE en las cards
+  // - Documentos están en la barra lateral (Contexto > Docs)
+  if (type.kind === "note" || type.kind === "documents") {
+    return null;
   }
 
   if (type.kind === "audit") {

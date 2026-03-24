@@ -271,8 +271,8 @@ export default function ClientContextCards({
 
         {/* Acciones del header */}
         <div className="flex items-center gap-1">
-          {/* Botón re-ejecutar agente (solo cuando ya hay contenido) */}
-          {agentAvailable && !analyzing && hasContent && (
+          {/* Botón ejecutar / re-ejecutar agente */}
+          {agentAvailable && !analyzing && (
             <button
               onClick={handleAnalyze}
               className="flex items-center gap-1 text-xs text-gray-500 hover:text-brand-light transition-colors px-2 py-1 rounded hover:bg-brand/5"
@@ -281,11 +281,20 @@ export default function ClientContextCards({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              Re-ejecutar
+              {hasContent ? "Re-ejecutar" : `Ejecutar: ${agentName ?? "Agente"}`}
             </button>
           )}
-          {/* Botón agregar anotación (solo para agentes CARDS o sin agente) */}
-          {!addingCard && agentOutputType !== "FLOWCHART" && (
+          {analyzing && (
+            <span className="flex items-center gap-1 text-xs text-brand-light px-2 py-1">
+              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Ejecutando…
+            </span>
+          )}
+          {/* Botón agregar anotación (solo cuando ya hay contenido y es tipo CARDS) */}
+          {!addingCard && hasContent && agentOutputType !== "FLOWCHART" && (
             <button
               onClick={() => setAddingCard(true)}
               className="flex items-center gap-1 text-xs text-gray-500 hover:text-brand-light transition-colors px-2 py-1 rounded hover:bg-brand/5"
@@ -314,8 +323,8 @@ export default function ClientContextCards({
         </div>
       )}
 
-      {/* ── Skeleton: carga inicial O mientras analiza (solo para CARDS) ── */}
-      {(analyzing || loadingRuns) && agentOutputType !== "FLOWCHART" && agentOutputType !== "CARDS_AND_FLOWCHARTS" && (
+      {/* ── Skeleton unificado: cualquier tipo de output ── */}
+      {(analyzing || loadingRuns) && (
         <div className="columns-1 sm:columns-2 xl:columns-3 gap-4">
           {([
             { tw: "40%",  lines: ["100%","85%","75%","100%","70%","90%","100%","60%"] },
@@ -342,17 +351,6 @@ export default function ClientContextCards({
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* ── Skeleton FLOWCHART / CARDS_AND_FLOWCHARTS: mientras analiza ── */}
-      {analyzing && (agentOutputType === "FLOWCHART" || agentOutputType === "CARDS_AND_FLOWCHARTS") && (
-        <div className="w-full rounded-2xl bg-gray-950 border border-gray-800 flex flex-col items-center justify-center gap-3" style={{ height: 520 }}>
-          <svg className="w-6 h-6 text-brand/60 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          <p className="text-xs text-gray-500">Generando diagrama de flujo…</p>
         </div>
       )}
 
@@ -471,57 +469,13 @@ export default function ClientContextCards({
         </div>
       )}
 
-      {/* ── Empty state (carga terminada, sin contenido, sin análisis) ── */}
-      {!analyzing && !loadingRuns && !hasContent && !addingCard && (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          {/* Ícono */}
-          <div className="w-14 h-14 rounded-2xl bg-gray-950 border border-gray-800 flex items-center justify-center mb-5">
-            <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-          </div>
-
-          <p className="text-lg font-semibold text-gray-300 mb-1">
-            Sin ejecuciones previas
-          </p>
-          <p className="text-sm text-gray-600 max-w-xs mb-6 leading-relaxed">
-            {agentAvailable && (agentOutputType === "FLOWCHART" || agentOutputType === "CARDS_AND_FLOWCHARTS")
-              ? "Ejecuta el agente para generar el diagnóstico de procesos con diagramas de flujo."
-              : agentAvailable
-              ? "Ejecuta el agente para que analice las sesiones, notas y documentos del cliente y genere el contexto automáticamente."
-              : "Agrega el contexto del cliente de forma manual."}
-          </p>
-
-          {agentAvailable && (
-            <button
-              onClick={handleAnalyze}
-              disabled={analyzing}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand text-white text-sm font-medium hover:bg-brand-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              Ejecutar agente
-            </button>
-          )}
-
-          {analyzeError && (
-            <div className="mt-4 max-w-sm px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs leading-relaxed flex items-start gap-2">
-              <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              {analyzeError}
-            </div>
-          )}
-
-          <button
-            onClick={() => setAddingCard(true)}
-            className="mt-3 text-xs text-gray-600 hover:text-gray-400 transition-colors"
-          >
-            {agentAvailable ? "O agrega el contexto manualmente" : "Agregar contexto manualmente"}
-          </button>
+      {/* ── Error de ejecución ── */}
+      {analyzeError && (
+        <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs leading-relaxed flex items-start gap-2">
+          <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          {analyzeError}
         </div>
       )}
 
@@ -625,7 +579,7 @@ export default function ClientContextCards({
 
 
       {/* ── Histórico de ejecuciones ── */}
-      {!loadingRuns && runs.length > 0 && (
+      {!loadingRuns && runs.length > 1 && (
         <div className="mt-4 pt-3 border-t border-gray-800/50 flex items-center gap-2">
           <span className="text-2xs font-semibold text-gray-500 uppercase tracking-wider shrink-0">
             Histórico

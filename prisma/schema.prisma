@@ -107,6 +107,7 @@ model Project {
   currentStage     Int     @default(1) // Última etapa visitada/modificada (1-3)
   currentStep      Int     @default(0) // Último paso visitado/modificado dentro de la etapa (0-indexed)
   canvas           Json?   // Project Canvas — conocimiento específico del caso de uso
+  tags             String[] @default([]) // Tags generales del proyecto (e.g. "Marketing Hub", "Sales Hub")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

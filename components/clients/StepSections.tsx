@@ -83,8 +83,7 @@ export default function StepSections({
         />
       ))}
 
-      {/* Anotaciones manuales del cliente (HUMAN sin agentRunId) */}
-      <ManualAnnotationsPanel clientId={clientId} projectId={projectId} />
+      {/* Anotaciones manuales removidas — se usan cards con tag CSE en su lugar */}
     </div>
   );
 }
