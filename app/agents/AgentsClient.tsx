@@ -10,12 +10,19 @@ interface Agent {
   name: string;
   description: string | null;
   status: "ACTIVE" | "DRAFT";
+  agentType: "SECTION" | "CANVAS_PROJECT" | "CANVAS_CLIENT";
   associatedStages: number[];
   createdAt: Date;
   _count: { runs: number };
 }
 
 const STAGE_LABELS: Record<number, string> = { 1: "Diagnóstico", 2: "MVP", 3: "Adopción" };
+
+const TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  SECTION: { label: "Subetapa", color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
+  CANVAS_PROJECT: { label: "Transversal · Proyecto", color: "text-purple-400 bg-purple-500/10 border-purple-500/20" },
+  CANVAS_CLIENT: { label: "Transversal · Empresa", color: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
+};
 
 export default function AgentsClient({ agents }: { agents: Agent[] }) {
   const router = useRouter();
@@ -96,6 +103,9 @@ export default function AgentsClient({ agents }: { agents: Agent[] }) {
                   <Badge variant={agent.status === "ACTIVE" ? "success" : "default"} size="xs">
                     {agent.status === "ACTIVE" ? "Activo" : "Borrador"}
                   </Badge>
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${TYPE_LABELS[agent.agentType]?.color ?? TYPE_LABELS.SECTION.color}`}>
+                    {TYPE_LABELS[agent.agentType]?.label ?? "Subetapa"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-3 mt-0.5">
                   {agent.description && (

@@ -5,6 +5,9 @@ import Link from "next/link";
 import AppShell from "@/components/layout/AppShell";
 import ClientHeaderPopovers from "@/components/clients/ClientHeaderPopovers";
 import ServiceMapHeader from "@/components/clients/ServiceMapHeader";
+import CanvasToggleShell from "@/components/clients/CanvasToggleShell";
+import CanvasToggleButtons from "@/components/clients/CanvasToggleButtons";
+import CanvasOverlay from "@/components/clients/CanvasOverlay";
 import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
 
 // Obtiene el nombre de la empresa desde la cuenta del cliente o del sistema
@@ -89,6 +92,7 @@ export default async function ClientLayout({
 
   return (
     <AppShell>
+      <CanvasToggleShell clientId={id}>
       <div className="flex-1 flex flex-col min-h-screen">
         {/* Header del cliente */}
         <header className="flex-shrink-0 border-b border-gray-800 px-4 py-3 flex items-center justify-between gap-4">
@@ -134,6 +138,8 @@ export default async function ClientLayout({
                 hasHubspot={!!client.hubspotAccount}
                 serviceType={activeProject?.serviceType ?? null}
               />
+              {/* Canvas toggle buttons */}
+              <CanvasToggleButtons />
             </div>
           </div>
 
@@ -162,8 +168,12 @@ export default async function ClientLayout({
           </div>
         </header>
 
-        <div className="flex-1">{children}</div>
+        <div className="flex-1 relative">
+          <CanvasOverlay clientId={id} />
+          {children}
+        </div>
       </div>
+      </CanvasToggleShell>
     </AppShell>
   );
 }

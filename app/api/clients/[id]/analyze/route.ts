@@ -4,6 +4,9 @@ import { withAuth, apiError } from "@/lib/api";
 import { dataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
 import { normalize, extractTitleTerms, extractDomain } from "@/lib/utils/matching";
+import { EMPTY_CLIENT_CANVAS, EMPTY_PROJECT_CANVAS } from "@/lib/canvas/template";
+import type { ClientCanvas, ProjectCanvas } from "@/lib/canvas/template";
+import { updateCanvasAsync } from "@/lib/canvas/update-agent";
 
 const FIREFLIES_GRAPHQL = "https://api.fireflies.ai/graphql";
 
@@ -323,7 +326,7 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   // ── 1. Cargar datos del cliente ──────────────────────────────────────────────
   const client = await prisma.client.findUnique({
     where: { id: clientId },
-    select: { name: true, company: true, industry: true, notes: true, hubspotCompanyId: true },
+    select: { name: true, company: true, industry: true, notes: true, hubspotCompanyId: true, canvas: true },
   });
   if (!client) return apiError("not_found", 404);
 
@@ -380,7 +383,10 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   }
 
   if (!agent) {
-    return NextResponse.json({ agent: null, cards: [], run: null }, { status: 200 });
+    return NextResponse.json(
+      { agent: null, cards: [], run: null, error: "NO_AGENT_CONFIGURED" },
+      { status: 200 }
+    );
   }
 
   // ── 3. Cargar notas, documentos, cards y deal en paralelo ────────────────────
@@ -403,7 +409,7 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
       }),
       // Buscar el deal asociado al proyecto (si hay projectId)
       bodyProjectId
-        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true } })
+        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true, canvas: true } })
         : Promise.resolve(null),
     ]);
 
@@ -715,6 +721,10 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
       "En caso de conflicto entre lo que dicen las transcripciones/documentos y una card marcada con ⚠️, prevalece siempre la card del CSE.";
   }
 
+  // ── 9c. Canvas: cargar para contexto ──────────────────────────────────────────
+  const clientCanvas = (client.canvas as ClientCanvas | null) ?? EMPTY_CLIENT_CANVAS;
+  const projectCanvas = (dealProject?.canvas as ProjectCanvas | null) ?? EMPTY_PROJECT_CANVAS;
+
   // ── 10. Construir user message unificado ──────────────────────────────────────
   // Siempre incluir serviceType si está disponible (aunque no haya deal en HubSpot)
   const serviceTypeLabel = dealProject?.serviceType ?? null;
@@ -760,9 +770,15 @@ Industria: ${client.industry ?? "No especificada"}
 Notas base: ${client.notes ?? "Sin notas"}
 ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}` : ""}
 
-${prevStepCards.length > 0 || prevStepHumanCards.length > 0 ? `=== ANÁLISIS DE LA SUBETAPA ANTERIOR${prevStepLabel ? ` (${prevStepLabel})` : ""} ===
-Úsalo como punto de partida y profundiza con la información adicional de las secciones siguientes.
-IMPORTANTE: Las cards marcadas con [MODIFICADO POR CSE] o [CREADO POR CSE] contienen enriquecimiento humano experto — deben tener MÁXIMA PRIORIDAD y nunca ser ignoradas ni contradichas por el análisis del agente.
+${bodyProjectId ? `=== CANVAS DE EMPRESA (conocimiento compartido del cliente) ===
+Úsalo como base. Contenido existente = conocimiento validado. Campos vacíos = oportunidad de llenar.
+${JSON.stringify(clientCanvas, null, 2)}
+
+=== CANVAS DEL PROYECTO (conocimiento del caso de uso actual) ===
+${JSON.stringify(projectCanvas, null, 2)}
+
+` : ""}${prevStepCards.length > 0 || prevStepHumanCards.length > 0 ? `=== ANÁLISIS DE LA SUBETAPA ANTERIOR${prevStepLabel ? ` (${prevStepLabel})` : ""} ===
+Cards del paso anterior para referencia:
 
 ${[
   ...prevStepCards.map((c) => {
@@ -850,9 +866,19 @@ Analiza toda la información anterior y completa las secciones de contexto del c
         }
       }
     }
-  } catch (e) {
+  } catch (e: unknown) {
     console.error("[analyze] Claude error:", e);
-    return NextResponse.json({ error: "claude_error" }, { status: 500 });
+    const msg = e instanceof Error ? e.message : String(e);
+    const isCredits = msg.includes("credit balance") || msg.includes("too low");
+    return NextResponse.json(
+      {
+        error: isCredits ? "NO_CREDITS" : "CLAUDE_ERROR",
+        message: isCredits
+          ? "Sin créditos en la API de Anthropic. Recarga en console.anthropic.com → Billing."
+          : "Error al ejecutar el agente. Intenta de nuevo.",
+      },
+      { status: 500 }
+    );
   }
 
   // Validar según outputType
@@ -888,6 +914,13 @@ Analiza toda la información anterior y completa las secciones de contexto del c
       output:       JSON.stringify(analysisJson),
     },
   });
+
+  // ── 12b. Disparar agente de canvas post-ejecución (fire-and-forget) ──────────
+  if (bodyProjectId && analysisJson?.cards?.length) {
+    updateCanvasAsync(clientId, bodyProjectId, run.id, analysisJson.cards).catch((e) =>
+      console.error("[canvas-update] Error:", e)
+    );
+  }
 
   // ── 13. Si es FLOWCHART, devolver directo (sin ClientContextCard) ─────────────
   if (isFlowchart) {

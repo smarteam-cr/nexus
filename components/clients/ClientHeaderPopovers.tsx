@@ -276,44 +276,22 @@ export default function ClientHeaderPopovers({
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {/* Datos de empresa */}
                     {hubDetails?.hubspotCompany && (
                       <CompanyDataSection company={hubDetails.hubspotCompany} />
                     )}
-
-                    {/* Chips del portal */}
                     <div>
                       <p className="text-2xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Portal</p>
                       <div className="flex flex-wrap gap-1.5">
-                        {hubDetails?.source === "system" && (
-                          <InfoChip label="Fuente" value="cuenta Dinterweb" />
-                        )}
-                        {(hubDetails?.hubName ?? hubName) && (
-                          <InfoChip label="Hub" value={hubDetails?.hubName ?? hubName!} />
-                        )}
-                        {(hubDetails?.hubspotPortalId ?? hubspotPortalId) && (
-                          <InfoChip label="Portal" value={`#${hubDetails?.hubspotPortalId ?? hubspotPortalId}`} mono />
-                        )}
-                        {hubDetails?.timeZone && (
-                          <InfoChip label="TZ" value={hubDetails.timeZone} />
-                        )}
-                        {hubDetails?.companyCurrency && (
-                          <InfoChip label="Moneda" value={hubDetails.companyCurrency} />
-                        )}
-                        {hubDetails?.dataHostingLocation && (
-                          <InfoChip label="Región" value={hubDetails.dataHostingLocation.toUpperCase()} />
-                        )}
+                        {hubDetails?.source === "system" && <InfoChip label="Fuente" value="cuenta Dinterweb" />}
+                        {(hubDetails?.hubName ?? hubName) && <InfoChip label="Hub" value={hubDetails?.hubName ?? hubName!} />}
+                        {(hubDetails?.hubspotPortalId ?? hubspotPortalId) && <InfoChip label="Portal" value={`#${hubDetails?.hubspotPortalId ?? hubspotPortalId}`} mono />}
+                        {hubDetails?.timeZone && <InfoChip label="TZ" value={hubDetails.timeZone} />}
+                        {hubDetails?.companyCurrency && <InfoChip label="Moneda" value={hubDetails.companyCurrency} />}
+                        {hubDetails?.dataHostingLocation && <InfoChip label="Región" value={hubDetails.dataHostingLocation.toUpperCase()} />}
                       </div>
                     </div>
-
-                    {/* Link empresa */}
                     {hubDetails?.hubspotCompanyUrl && (
-                      <a
-                        href={hubDetails.hubspotCompanyUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
-                      >
+                      <a href={hubDetails.hubspotCompanyUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors">
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                         </svg>

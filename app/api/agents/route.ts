@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
     sectionLabel,
     outputType,
     scope,
+    agentType,
   } = body;
 
   if (!name?.trim() || !systemPrompt?.trim()) {
@@ -78,6 +79,7 @@ export async function POST(request: NextRequest) {
       sectionLabel:     sectionLabel?.trim() || null,
       outputType:       outputType ?? "CARDS",
       scope:            scope ?? "CLIENT",
+      agentType:        agentType ?? "SECTION",
     },
   });
 
