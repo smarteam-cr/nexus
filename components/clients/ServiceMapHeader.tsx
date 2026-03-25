@@ -12,7 +12,7 @@ interface Props {
 
 /**
  * Wrapper client-side del ServiceMap que lee stage/step de la URL.
- * Se renderiza solo cuando estamos dentro de una ruta de stage.
+ * Se muestra siempre que hay un projectId (tanto en canvas como en stage).
  */
 export default function ServiceMapHeader({ clientId, hasHubspot, serviceType }: Props) {
   const params = useParams();
@@ -21,24 +21,29 @@ export default function ServiceMapHeader({ clientId, hasHubspot, serviceType }: 
   const projectId = params?.projectId as string | undefined;
   const stageNum = params?.stageNum as string | undefined;
 
-  // Solo mostrar si estamos en una ruta de stage
-  if (!projectId || !stageNum) return null;
+  if (!projectId) return null;
 
-  const stage = parseInt(stageNum);
-  if (![1, 2, 3].includes(stage)) return null;
-
+  // Si estamos en una ruta de stage, usar esos valores; sino defaults
+  const stage = stageNum ? parseInt(stageNum) : null;
   const stepParam = searchParams?.get("step") ?? "0";
   const stepIndex = Math.max(0, parseInt(stepParam));
 
   const stageSteps = getStageSteps(serviceType);
-  const steps = stageSteps[stage]?.filter(
-    (s) => !(stage === 1 && s.type.kind === "audit" && !hasHubspot)
-  ) ?? [];
 
-  const safeStepIndex = Math.min(stepIndex, steps.length - 1);
-  const currentStep = steps[safeStepIndex];
+  // Para el label del step actual (si estamos en un stage)
+  let currentStepLabel = "Mapa del servicio";
+  let safeStepIndex = 0;
+  let safeStage = 1;
 
-  if (!currentStep) return null;
+  if (stage && [1, 2, 3].includes(stage)) {
+    safeStage = stage;
+    const steps = stageSteps[stage]?.filter(
+      (s) => !(stage === 1 && s.type.kind === "audit" && !hasHubspot)
+    ) ?? [];
+    safeStepIndex = Math.min(stepIndex, steps.length - 1);
+    const currentStep = steps[safeStepIndex];
+    if (currentStep) currentStepLabel = currentStep.shortLabel;
+  }
 
   return (
     <>
@@ -47,9 +52,9 @@ export default function ServiceMapHeader({ clientId, hasHubspot, serviceType }: 
         clientId={clientId}
         projectId={projectId}
         serviceType={serviceType}
-        currentStage={stage}
+        currentStage={safeStage}
         currentStep={safeStepIndex}
-        currentStepLabel={currentStep.shortLabel}
+        currentStepLabel={stage ? currentStepLabel : "Mapa del servicio"}
         hasHubspot={hasHubspot}
       />
     </>

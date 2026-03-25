@@ -59,7 +59,7 @@ export async function updateCanvasAsync(
   // Construir system prompt combinando los prompts de ambos agentes de la BD
   const projectPromptPart = projectAgent
     ? `${projectAgent.systemPrompt}${projectAgent.additionalInstructions ? "\n\n" + projectAgent.additionalInstructions : ""}`
-    : `Extrae información para actualizar el canvas de proyecto con secciones: procesos, dolores_oportunidades, diagnostico, plan, ejecucion.`;
+    : `Extrae información para actualizar el canvas de servicio con secciones: procesos, stakeholders_proyecto, hallazgos_dolores, hipotesis_recomendaciones, alcance_plan, ejecucion.`;
 
   const clientPromptPart = clientAgent
     ? `${clientAgent.systemPrompt}${clientAgent.additionalInstructions ? "\n\n" + clientAgent.additionalInstructions : ""}`

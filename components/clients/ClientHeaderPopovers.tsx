@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import ClientDocuments from "./ClientDocuments";
 import ClientDealInfo from "./ClientDealInfo";
 import ClientSessionCards from "./ClientSessionCards";
+import ClientCanvasPanel from "./ClientCanvasPanel";
 import { getStageSteps } from "@/lib/steps";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -250,57 +251,9 @@ export default function ClientHeaderPopovers({
               </div>
             )}
 
-            {/* ── Empresa (HubSpot) ── */}
+            {/* ── Empresa (Canvas) ── */}
             {open === "empresa" && (
-              <div className="space-y-4">
-                {!hasHubspotData ? (
-                  <div className="space-y-3">
-                    <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-gray-800 text-gray-400 border border-gray-700 w-fit">
-                      <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
-                      No conectado
-                    </span>
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                      Conecta HubSpot para acceder a datos del portal y análisis.
-                    </p>
-                    <a
-                      href={`/clients/${clientId}/settings`}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand/10 border border-brand/30 text-brand-light hover:bg-brand/20 text-xs font-medium transition-colors"
-                    >
-                      Conectar HubSpot
-                    </a>
-                  </div>
-                ) : loadingHub ? (
-                  <div className="flex items-center gap-2 text-xs text-gray-500 py-2">
-                    <div className="w-3 h-3 border border-gray-600 border-t-transparent rounded-full animate-spin" />
-                    Cargando datos de empresa...
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {hubDetails?.hubspotCompany && (
-                      <CompanyDataSection company={hubDetails.hubspotCompany} />
-                    )}
-                    <div>
-                      <p className="text-2xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Portal</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {hubDetails?.source === "system" && <InfoChip label="Fuente" value="cuenta Dinterweb" />}
-                        {(hubDetails?.hubName ?? hubName) && <InfoChip label="Hub" value={hubDetails?.hubName ?? hubName!} />}
-                        {(hubDetails?.hubspotPortalId ?? hubspotPortalId) && <InfoChip label="Portal" value={`#${hubDetails?.hubspotPortalId ?? hubspotPortalId}`} mono />}
-                        {hubDetails?.timeZone && <InfoChip label="TZ" value={hubDetails.timeZone} />}
-                        {hubDetails?.companyCurrency && <InfoChip label="Moneda" value={hubDetails.companyCurrency} />}
-                        {hubDetails?.dataHostingLocation && <InfoChip label="Región" value={hubDetails.dataHostingLocation.toUpperCase()} />}
-                      </div>
-                    </div>
-                    {hubDetails?.hubspotCompanyUrl && (
-                      <a href={hubDetails.hubspotCompanyUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                        Ver empresa en HubSpot
-                      </a>
-                    )}
-                  </div>
-                )}
-              </div>
+              <ClientCanvasPanel clientId={clientId} embedded />
             )}
 
             {/* ── Sesiones — re-mount on step change for fresh keywords ── */}

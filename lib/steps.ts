@@ -24,8 +24,7 @@ export type ServiceStageSteps = Record<number, StepDef[]>;
 
 export const STEPS_LOOP_MARKETING: ServiceStageSteps = {
   1: [
-    { label: "Análisis inicial",                   shortLabel: "Análisis inicial",   type: { kind: "context-only" },  keywords: [], preselectRole: "Ventas" },
-    { label: "Kickoff",                            shortLabel: "Kickoff",            type: { kind: "context-only" }, keywords: ["kickoff", "kick off"] },
+    { label: "Análisis inicial",                   shortLabel: "Análisis inicial",   type: { kind: "context-only" },  keywords: ["kickoff", "kick off"], preselectRole: "Ventas" },
     { label: "Entrevistas y focus groups",         shortLabel: "Entrevistas",        type: { kind: "documents" },     keywords: ["entrevista", "focus group"] },
     { label: "Entregable de diagnóstico",          shortLabel: "Entregable",         type: { kind: "context-only" },  keywords: ["diagnóstico", "entregable", "mapeo", "datos", "funnel", "informe"] },
   ],
@@ -34,9 +33,6 @@ export const STEPS_LOOP_MARKETING: ServiceStageSteps = {
     { label: "Rediseño de la rutina (Loop Marketing)",   shortLabel: "Rutina",       type: { kind: "note", placeholder: "Rutina de los ejecutivos de marketing basada en Loop Marketing. Incluye arquitectura base del CRM..." }, keywords: ["rutina", "loop"] },
     { label: "Políticas y ciclo de vida",                shortLabel: "Políticas",    type: { kind: "note", placeholder: "Definición de etapas del ciclo de vida y políticas de uso del CRM acordadas con el cliente..." }, keywords: ["políticas", "ciclo de vida"] },
     { label: "Diseño completo (entrega y aprobación)",   shortLabel: "Diseño",       type: { kind: "documents" },     keywords: ["diseño", "aprobación"] },
-    { label: "Plan de piloto y escalamiento",             shortLabel: "Plan piloto", type: { kind: "note", placeholder: "Plan y cronograma de piloto y escalamiento: Champions, features habilitados, duración de olas, campaña de marketing..." }, keywords: ["plan", "piloto", "escalamiento"] },
-    { label: "Habilitación de CRM",                      shortLabel: "CRM",         type: { kind: "implementation" }, keywords: ["crm", "habilitación"] },
-    { label: "Entrenamiento del grupo piloto",            shortLabel: "Entrenamiento", type: { kind: "documents" },   keywords: ["entrenamiento", "onboarding", "capacitación"] },
   ],
   3: [
     { label: "Piloto",             shortLabel: "Piloto",      type: { kind: "note", placeholder: "Seguimiento del piloto: kick off, stand ups, informe de adopción semanal, ajustes de CRM y sesiones con liderazgo..." }, keywords: ["piloto", "kick off", "stand up"] },
@@ -47,8 +43,7 @@ export const STEPS_LOOP_MARKETING: ServiceStageSteps = {
 
 export const STEPS_LOOP_SALES: ServiceStageSteps = {
   1: [
-    { label: "Análisis inicial",                     shortLabel: "Análisis inicial", type: { kind: "context-only" },  keywords: [], preselectRole: "Ventas" },
-    { label: "Kickoff",                              shortLabel: "Kickoff",          type: { kind: "context-only" }, keywords: ["kickoff", "kick off"] },
+    { label: "Análisis inicial",                     shortLabel: "Análisis inicial", type: { kind: "context-only" },  keywords: ["kickoff", "kick off"], preselectRole: "Ventas" },
     { label: "Entrevistas y focus groups",           shortLabel: "Entrevistas",      type: { kind: "documents" },     keywords: ["entrevista", "focus group"] },
     { label: "Entregable de diagnóstico",            shortLabel: "Entregable",       type: { kind: "context-only" },  keywords: ["diagnóstico", "entregable", "mapeo", "datos", "funnel", "informe"] },
   ],
@@ -57,9 +52,6 @@ export const STEPS_LOOP_SALES: ServiceStageSteps = {
     { label: "Rediseño de la rutina (Loop Sales)",   shortLabel: "Rutina",           type: { kind: "note", placeholder: "Rutina de los ejecutivos de ventas basada en Loop Sales. Incluye arquitectura base del CRM..." }, keywords: ["rutina", "loop"] },
     { label: "Políticas y ciclo de vida",            shortLabel: "Políticas",        type: { kind: "note", placeholder: "Etapas del ciclo de vida, políticas de uso del CRM, protocolos de uso y reglas del juego del equipo comercial..." }, keywords: ["políticas", "ciclo de vida", "reglas"] },
     { label: "Diseño completo (entrega y aprobación)", shortLabel: "Diseño",         type: { kind: "documents" },     keywords: ["diseño", "aprobación"] },
-    { label: "Plan de piloto y escalamiento",        shortLabel: "Plan piloto",      type: { kind: "note", placeholder: "Plan de piloto con protocolos, reglas del juego, indicadores de éxito, mecanismos de feedback y plan de escalamiento en olas..." }, keywords: ["plan", "piloto", "escalamiento"] },
-    { label: "Habilitación de CRM",                  shortLabel: "CRM",             type: { kind: "implementation" }, keywords: ["crm", "habilitación"] },
-    { label: "Entrenamiento del grupo piloto",        shortLabel: "Entrenamiento",   type: { kind: "documents" },     keywords: ["entrenamiento", "onboarding"] },
   ],
   3: [
     { label: "Piloto",                          shortLabel: "Piloto",        type: { kind: "note", placeholder: "Piloto de ventas: kick off, stand ups, informe de adopción semanal, sesión con liderazgo y ajustes de CRM..." }, keywords: ["piloto", "kick off"] },
@@ -72,8 +64,7 @@ export const STEPS_LOOP_SALES: ServiceStageSteps = {
 
 export const STEPS_LOOP_SERVICE: ServiceStageSteps = {
   1: [
-    { label: "Análisis inicial",                          shortLabel: "Análisis inicial", type: { kind: "context-only" },  keywords: [], preselectRole: "Ventas" },
-    { label: "Kickoff",                                   shortLabel: "Kickoff",          type: { kind: "context-only" }, keywords: ["kickoff", "kick off"] },
+    { label: "Análisis inicial",                          shortLabel: "Análisis inicial", type: { kind: "context-only" },  keywords: ["kickoff", "kick off"], preselectRole: "Ventas" },
     { label: "Entrevistas y focus groups",                shortLabel: "Entrevistas",      type: { kind: "documents" },     keywords: ["entrevista", "focus group"] },
     { label: "Entregable de diagnóstico",                 shortLabel: "Entregable",       type: { kind: "context-only" },  keywords: ["diagnóstico", "entregable", "mapeo", "datos", "funnel", "informe"] },
   ],
@@ -82,9 +73,6 @@ export const STEPS_LOOP_SERVICE: ServiceStageSteps = {
     { label: "Rediseño de la rutina (Loop Service)",   shortLabel: "Rutina",           type: { kind: "note", placeholder: "Rutina de los ejecutivos de servicio basada en Loop Service. Incluye arquitectura base del CRM..." }, keywords: ["rutina", "loop"] },
     { label: "Políticas y ciclo de vida",              shortLabel: "Políticas",        type: { kind: "note", placeholder: "Etapas del ciclo de vida (incluye Service Qualified Lead si aplica), políticas de uso del CRM, SLAs y reglas del juego..." }, keywords: ["políticas", "ciclo de vida", "sql", "service qualified"] },
     { label: "Diseño completo (entrega y aprobación)", shortLabel: "Diseño",           type: { kind: "documents" },     keywords: ["diseño", "aprobación"] },
-    { label: "Plan de piloto y escalamiento",          shortLabel: "Plan piloto",      type: { kind: "note", placeholder: "Plan de piloto con protocolos, indicadores de éxito, mecanismos de feedback y plan de escalamiento en olas..." }, keywords: ["plan", "piloto", "escalamiento"] },
-    { label: "Habilitación de CRM",                    shortLabel: "CRM",             type: { kind: "implementation" }, keywords: ["crm", "habilitación", "ticketing", "sla"] },
-    { label: "Entrenamiento del grupo piloto",          shortLabel: "Entrenamiento",   type: { kind: "documents" },     keywords: ["entrenamiento", "onboarding"] },
   ],
   3: [
     { label: "Piloto",                          shortLabel: "Piloto",       type: { kind: "note", placeholder: "Piloto de servicio: kick off, stand ups, informe de adopción semanal, sesión con liderazgo y ajustes de CRM..." }, keywords: ["piloto", "kick off"] },
@@ -130,6 +118,6 @@ export function getStageSteps(serviceType: string | null | undefined): ServiceSt
 
 export const STAGE_LABELS: Record<number, string> = {
   1: "Diagnóstico",
-  2: "MVP",
+  2: "Planificación",
   3: "Adopción",
 };

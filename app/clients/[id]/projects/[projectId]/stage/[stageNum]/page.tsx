@@ -18,6 +18,7 @@ import NewImplementationButton from "@/app/clients/[id]/stage/[stageNum]/NewImpl
 import AuditReAnalyzeButton from "@/components/agents/AuditReAnalyzeButton";
 import AuditDetailClient from "@/app/audits/[id]/AuditDetailClient";
 import TrackCurrentStep from "@/components/clients/TrackCurrentStep";
+import StageOverlay from "@/components/clients/StageOverlay";
 import type { LifecycleSnapshot, OwnerAssignmentStats, AuditInsight } from "@/lib/hubspot/portal-analyzer";
 import { getStageSteps, STAGE_LABELS } from "@/lib/steps";
 import type { StepKind, StepType } from "@/lib/steps";
@@ -96,17 +97,17 @@ export default async function ProjectStagePage({
     ]);
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 57px)" }}>
+    <StageOverlay stepLabel={currentStep.label}>
       <TrackCurrentStep projectId={projectId} stage={stage} step={stepIndex} />
       {/* ── Action bar (solo si hay acciones) ──────────────────────────── */}
       {currentStep.type.kind === "audit" && latestAudit && (
-        <div className="flex-shrink-0 px-6 py-2 border-b border-gray-800 flex items-center justify-end">
+        <div className="flex-shrink-0 px-6 py-2 border-b border-gray-200 flex items-center justify-end">
           <AuditReAnalyzeButton auditId={latestAudit.id} />
         </div>
       )}
 
       {/* ── Content ─────────────────────────────────────────────────────── */}
-      <div className={`flex-1 min-h-0 ${currentStep.type.kind === "audit" ? "flex flex-col overflow-hidden" : "overflow-y-auto p-6"}`}>
+      <div className={`${currentStep.type.kind === "audit" ? "flex flex-col flex-1 overflow-hidden" : "p-6"}`}>
         {currentStep.type.kind !== "audit" && currentStep.type.kind !== "portal" && (
           <StepSections
             key={`sections-step-${stepIndex}`}
@@ -119,7 +120,6 @@ export default async function ProjectStagePage({
           />
         )}
 
-        {/* 3. Step content (note editor / docs / implementation / etc.) */}
         <StepContent
           type={currentStep.type}
           clientId={id}
@@ -130,7 +130,7 @@ export default async function ProjectStagePage({
           latestAuditId={latestAudit?.id ?? null}
         />
       </div>
-    </div>
+    </StageOverlay>
   );
 }
 

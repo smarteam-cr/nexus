@@ -32,7 +32,7 @@ export const EMPTY_CLIENT_CANVAS: ClientCanvas = {
   contexto_comercial: { canal_adquisicion: "", relacion_previa: "", motivacion_compra: "" },
 };
 
-// ─── Project Canvas (nivel caso de uso, específico por proyecto) ─────────────
+// ─── Project Canvas (Canvas de servicio — nivel caso de uso) ─────────────────
 
 export interface ProjectCanvas {
   procesos: Array<{
@@ -41,34 +41,43 @@ export interface ProjectCanvas {
     dolores: string[];
     owner: string;
   }>;
-  dolores_oportunidades: {
+  stakeholders_proyecto: Array<{
+    nombre: string;
+    rol: string;
+    influencia: string; // alta | media | baja
+    notas: string;
+  }>;
+  hallazgos_dolores: {
     dolor_principal: string;
     riesgos: string[];
     quick_wins: string[];
+    hallazgos_entrevistas: string[];
   };
-  diagnostico: {
-    hipotesis: string[];
-    expectativas: string[];
-    hallazgos_clave: string[];
+  hipotesis_recomendaciones: {
+    hipotesis_validadas: string[];
+    hipotesis_pendientes: string[];
+    recomendaciones: string[];
   };
-  plan: {
+  alcance_plan: {
     objetivos_piloto: string[];
     kpis: string[];
     roadmap: string[];
+    acuerdos: string[];
   };
   ejecucion: {
     implementaciones: string[];
     metricas_adopcion: string[];
-    resultados: string[];
+    resultados_vs_plan: string[];
   };
 }
 
 export const EMPTY_PROJECT_CANVAS: ProjectCanvas = {
   procesos: [],
-  dolores_oportunidades: { dolor_principal: "", riesgos: [], quick_wins: [] },
-  diagnostico: { hipotesis: [], expectativas: [], hallazgos_clave: [] },
-  plan: { objetivos_piloto: [], kpis: [], roadmap: [] },
-  ejecucion: { implementaciones: [], metricas_adopcion: [], resultados: [] },
+  stakeholders_proyecto: [],
+  hallazgos_dolores: { dolor_principal: "", riesgos: [], quick_wins: [], hallazgos_entrevistas: [] },
+  hipotesis_recomendaciones: { hipotesis_validadas: [], hipotesis_pendientes: [], recomendaciones: [] },
+  alcance_plan: { objetivos_piloto: [], kpis: [], roadmap: [], acuerdos: [] },
+  ejecucion: { implementaciones: [], metricas_adopcion: [], resultados_vs_plan: [] },
 };
 
 // ─── Labels en español para la UI ────────────────────────────────────────────
@@ -82,9 +91,10 @@ export const CLIENT_CANVAS_LABELS: Record<keyof ClientCanvas, string> = {
 };
 
 export const PROJECT_CANVAS_LABELS: Record<keyof ProjectCanvas, string> = {
-  procesos: "Procesos mapeados",
-  dolores_oportunidades: "Dolores y oportunidades",
-  diagnostico: "Diagnóstico",
-  plan: "Plan del piloto",
-  ejecucion: "Ejecución y resultados",
+  procesos: "Procesos",
+  stakeholders_proyecto: "Stakeholders del proyecto",
+  hallazgos_dolores: "Hallazgos y dolores",
+  hipotesis_recomendaciones: "Hipótesis y recomendaciones",
+  alcance_plan: "Alcance y plan",
+  ejecucion: "Ejecución",
 };

@@ -42,12 +42,9 @@ export default async function ClientPage({
     },
   });
 
-  // Si solo hay un proyecto, ir directo a la última subetapa visitada
+  // Si solo hay un proyecto, ir directo al canvas del proyecto
   if (projects.length === 1) {
-    const p = projects[0];
-    const stage = p.currentStage ?? 1;
-    const step = p.currentStep ?? 0;
-    redirect(`/clients/${id}/projects/${p.id}/stage/${stage}?step=${step}`);
+    redirect(`/clients/${id}/projects/${projects[0].id}`);
   }
 
   return <ProjectsClient clientId={id} initialProjects={projects} />;

@@ -86,7 +86,7 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Canvas de caso de uso</h2>
+          <h2 className="text-xl font-bold text-gray-900">Canvas de servicio</h2>
           <p className="text-sm text-gray-400 mt-0.5">Estado actual del proyecto</p>
         </div>
         <div className="flex items-center gap-3">

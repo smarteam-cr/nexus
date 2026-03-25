@@ -20,7 +20,7 @@ const CONFIDENCE_STYLES: Record<Confidence, { dot: string; border: string; bg: s
   empty:     { dot: "bg-gray-300", border: "border-dashed border-gray-200", bg: "bg-white", label: "Sin datos" },
 };
 
-export default function ClientCanvasPanel({ clientId }: { clientId: string }) {
+export default function ClientCanvasPanel({ clientId, embedded }: { clientId: string; embedded?: boolean }) {
   const [canvas, setCanvas] = useState<ClientCanvas | null>(null);
   const [confidence, setConfidence] = useState<Record<string, Confidence>>({});
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -109,28 +109,45 @@ export default function ClientCanvasPanel({ clientId }: { clientId: string }) {
   const filledCount = sections.filter((k) => !checkEmpty(canvas[k])).length;
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+    <div className={embedded ? "space-y-4" : "max-w-5xl mx-auto px-6 py-8 space-y-6"}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Canvas de empresa</h2>
-          <p className="text-sm text-gray-400 mt-0.5">Conocimiento compartido entre proyectos</p>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Canvas de empresa</h2>
+            <p className="text-sm text-gray-400 mt-0.5">Conocimiento compartido entre proyectos</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={refreshCanvas}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand/10 border border-brand/20 text-brand hover:bg-brand/20 transition-colors disabled:opacity-50 text-xs font-medium"
+            >
+              <svg className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {refreshing ? "Actualizando..." : "Actualizar con IA"}
+            </button>
+            <span className="text-xs text-gray-400">{filledCount}/{sections.length}</span>
+            {saving && <span className="text-xs text-gray-400">Guardando...</span>}
+          </div>
         </div>
-        <div className="flex items-center gap-3">
+      )}
+      {embedded && (
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-400">{filledCount}/{sections.length} campos</span>
           <button
             onClick={refreshCanvas}
             disabled={refreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand/10 border border-brand/20 text-brand hover:bg-brand/20 transition-colors disabled:opacity-50 text-xs font-medium"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-100 border border-gray-200 text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50 text-xs font-medium"
           >
-            <svg className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             {refreshing ? "Actualizando..." : "Actualizar con IA"}
           </button>
-          <span className="text-xs text-gray-400">{filledCount}/{sections.length}</span>
-          {saving && <span className="text-xs text-gray-400">Guardando...</span>}
         </div>
-      </div>
+      )}
 
       {refreshError && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs">
