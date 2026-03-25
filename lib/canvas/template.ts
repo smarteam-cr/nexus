@@ -49,6 +49,10 @@ export interface ProjectCanvas {
   }>;
   hallazgos_dolores: {
     dolor_principal: string;
+    que_no_funciona: string[];
+    fricciones: string[];
+    que_esperan_resolver: string[];
+    estado_emocional: string; // Percepción emocional del cliente inferida de transcripciones
     riesgos: string[];
     quick_wins: string[];
     hallazgos_entrevistas: string[];
@@ -58,26 +62,43 @@ export interface ProjectCanvas {
     hipotesis_pendientes: string[];
     recomendaciones: string[];
   };
-  alcance_plan: {
-    objetivos_piloto: string[];
+  plan_implementacion: {
+    que_se_va_a_hacer: string[];
+    orden_y_fases: string[];
+    tiempos: string[];
     kpis: string[];
-    roadmap: string[];
     acuerdos: string[];
   };
-  ejecucion: {
-    implementaciones: string[];
-    metricas_adopcion: string[];
-    resultados_vs_plan: string[];
+  feedback_optimizaciones: Array<{
+    fecha: string;
+    comentario: string;
+    accion: string;
+    estado: string; // pendiente | en_progreso | completado
+  }>;
+  estado_proyecto: {
+    etapa_actual: string;
+    subetapa_actual: string;
+    progreso: string; // porcentaje o descripción cualitativa
   };
 }
 
 export const EMPTY_PROJECT_CANVAS: ProjectCanvas = {
   procesos: [],
   stakeholders_proyecto: [],
-  hallazgos_dolores: { dolor_principal: "", riesgos: [], quick_wins: [], hallazgos_entrevistas: [] },
+  hallazgos_dolores: {
+    dolor_principal: "",
+    que_no_funciona: [],
+    fricciones: [],
+    que_esperan_resolver: [],
+    estado_emocional: "",
+    riesgos: [],
+    quick_wins: [],
+    hallazgos_entrevistas: [],
+  },
   hipotesis_recomendaciones: { hipotesis_validadas: [], hipotesis_pendientes: [], recomendaciones: [] },
-  alcance_plan: { objetivos_piloto: [], kpis: [], roadmap: [], acuerdos: [] },
-  ejecucion: { implementaciones: [], metricas_adopcion: [], resultados_vs_plan: [] },
+  plan_implementacion: { que_se_va_a_hacer: [], orden_y_fases: [], tiempos: [], kpis: [], acuerdos: [] },
+  feedback_optimizaciones: [],
+  estado_proyecto: { etapa_actual: "", subetapa_actual: "", progreso: "" },
 };
 
 // ─── Labels en español para la UI ────────────────────────────────────────────
@@ -91,10 +112,11 @@ export const CLIENT_CANVAS_LABELS: Record<keyof ClientCanvas, string> = {
 };
 
 export const PROJECT_CANVAS_LABELS: Record<keyof ProjectCanvas, string> = {
-  procesos: "Procesos",
-  stakeholders_proyecto: "Stakeholders del proyecto",
+  procesos: "Procesos involucrados",
+  stakeholders_proyecto: "Stakeholders y estructura organizacional",
   hallazgos_dolores: "Hallazgos y dolores",
   hipotesis_recomendaciones: "Hipótesis y recomendaciones",
-  alcance_plan: "Alcance y plan",
-  ejecucion: "Ejecución",
+  plan_implementacion: "Plan de implementación",
+  feedback_optimizaciones: "Feedback y optimizaciones",
+  estado_proyecto: "Estado del proyecto",
 };

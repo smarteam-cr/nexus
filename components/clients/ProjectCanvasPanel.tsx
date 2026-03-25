@@ -78,8 +78,10 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
 
   if (!canvas) return <p className="p-5 text-sm text-gray-400">Error al cargar el canvas.</p>;
 
-  const sections = Object.keys(canvas) as (keyof ProjectCanvas)[];
-  const filledCount = sections.filter((k) => !checkEmpty(canvas[k])).length;
+  const allSections = Object.keys(canvas) as (keyof ProjectCanvas)[];
+  // Estado del proyecto se renderiza arriba, no en el masonry
+  const sections = allSections.filter((k) => k !== "estado_proyecto");
+  const filledCount = allSections.filter((k) => !checkEmpty(canvas[k])).length;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
@@ -87,7 +89,23 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Canvas de servicio</h2>
-          <p className="text-sm text-gray-400 mt-0.5">Estado actual del proyecto</p>
+          {canvas.estado_proyecto && !checkEmpty(canvas.estado_proyecto) ? (
+            <div className="flex items-center gap-3 mt-1.5">
+              <span className="text-xs font-medium text-brand bg-brand/10 px-2 py-0.5 rounded-full border border-brand/20">
+                {canvas.estado_proyecto.etapa_actual || "—"}
+              </span>
+              <span className="text-xs text-gray-500">
+                {canvas.estado_proyecto.subetapa_actual || ""}
+              </span>
+              {canvas.estado_proyecto.progreso && (
+                <span className="text-xs text-gray-400">
+                  · {canvas.estado_proyecto.progreso}
+                </span>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 mt-0.5">Estado actual del proyecto</p>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <button

@@ -56,7 +56,7 @@ export default function Sidebar({ clients, onToggle, isOpen = true }: SidebarPro
     <aside className="w-full bg-gray-950 border-r border-gray-800 flex flex-col min-h-screen sticky top-0 h-screen">
 
       {/* ── Brand ── */}
-      <div className={`py-3 border-b border-gray-800 flex-shrink-0 flex items-center ${isOpen ? "px-4 justify-between" : "justify-center"}`}>
+      <div className={`h-14 border-b border-gray-800 flex-shrink-0 flex items-center ${isOpen ? "px-4 justify-between" : "justify-center"}`}>
         {isOpen ? (
           <>
             <Link href="/clients" className="flex items-center gap-2.5 min-w-0">

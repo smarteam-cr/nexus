@@ -15,8 +15,17 @@ export async function GET(
   });
   if (!project) return NextResponse.json({ error: "not found" }, { status: 404 });
 
+  // Merge con el template: incluir nuevas secciones, excluir keys obsoletas
+  const stored = (project.canvas as Record<string, unknown> | null) ?? {};
+  const templateKeys = new Set(Object.keys(EMPTY_PROJECT_CANVAS));
+  const cleaned: Record<string, unknown> = {};
+  for (const key of templateKeys) {
+    cleaned[key] = key in stored ? stored[key] : (EMPTY_PROJECT_CANVAS as Record<string, unknown>)[key];
+  }
+  const canvas = cleaned as ProjectCanvas;
+
   return NextResponse.json({
-    canvas: (project.canvas as ProjectCanvas | null) ?? EMPTY_PROJECT_CANVAS,
+    canvas,
     updatedAt: project.updatedAt.toISOString(),
   });
 }
@@ -38,7 +47,9 @@ export async function PUT(
   });
   if (!project) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const current = (project.canvas as ProjectCanvas | null) ?? { ...EMPTY_PROJECT_CANVAS };
+  // Merge con template para que nuevas secciones sean aceptadas
+  const stored = (project.canvas as ProjectCanvas | null) ?? {};
+  const current = { ...EMPTY_PROJECT_CANVAS, ...stored } as ProjectCanvas;
   const validated = validateCanvasKeys(EMPTY_PROJECT_CANVAS, updates);
   const merged = deepMergeCanvas(current, validated);
 
