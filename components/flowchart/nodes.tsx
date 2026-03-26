@@ -30,7 +30,7 @@ function makeHandleStyle(color: string): React.CSSProperties {
 
 // ── EditableText ──────────────────────────────────────────────────────────────
 
-function EditableText({
+export function EditableText({
   value,
   field,
   onLabelChange,
@@ -152,12 +152,11 @@ export function ProcessNode({ data }: { data: NodeData }) {
             multiline
             className="text-xs font-semibold text-gray-800 leading-snug block w-full"
           />
-          {(data.sublabel !== undefined || data.onLabelChange) && (
+          {data.sublabel && (
             <EditableText
-              value={data.sublabel ?? ""}
+              value={data.sublabel}
               field="sublabel"
               onLabelChange={data.onLabelChange}
-              placeholder="Subtítulo..."
               className="text-2xs text-gray-400 leading-snug block w-full"
             />
           )}
@@ -199,13 +198,12 @@ export function DecisionNode({ data }: { data: NodeData }) {
           className="text-xs font-semibold text-violet-800 leading-snug block w-full"
         />
       </div>
-      {(data.sublabel !== undefined || data.onLabelChange) && (
+      {data.sublabel && (
         <div className="ml-5 mt-1">
           <EditableText
-            value={data.sublabel ?? ""}
+            value={data.sublabel}
             field="sublabel"
             onLabelChange={data.onLabelChange}
-            placeholder="Subtítulo..."
             className="text-2xs text-violet-500 leading-snug block w-full"
           />
         </div>

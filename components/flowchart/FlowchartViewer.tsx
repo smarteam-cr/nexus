@@ -19,7 +19,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { getLayoutedElements } from "@/lib/flowchart/layout";
+import { getLayoutedElements, getNodeDims } from "@/lib/flowchart/layout";
 import {
   StartEndNode,
   ProcessNode,
@@ -27,6 +27,18 @@ import {
   PainNode,
   AnnotationNode,
 } from "./nodes";
+import {
+  PipelineTitleNode,
+  ColumnBackgroundNode,
+  PipelineStageNode,
+  TriggerNode,
+  ActionNode,
+  FollowUpNode,
+  OutcomePositiveNode,
+  OutcomeNegativeNode,
+  LifecycleChangeNode,
+  LeadStatusNode,
+} from "./pipeline-nodes";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -35,10 +47,13 @@ export interface FlowchartData {
   description?: string;
   nodes: Array<{
     id: string;
-    type: "start" | "end" | "process" | "decision" | "pain" | "annotation";
+    type: string;
     label: string;
     sublabel?: string;
     owner?: string;
+    detail?: string;
+    icon?: string;
+    pipelineName?: string;
     position?: { x: number; y: number };
   }>;
   edges: Array<{
@@ -59,12 +74,24 @@ interface HistoryEntry {
 }
 
 const NODE_TYPES = {
-  start:      StartEndNode,
-  end:        StartEndNode,
-  process:    ProcessNode,
-  decision:   DecisionNode,
-  pain:       PainNode,
-  annotation: AnnotationNode,
+  // Clásicos
+  start:              StartEndNode,
+  end:                StartEndNode,
+  process:            ProcessNode,
+  decision:           DecisionNode,
+  pain:               PainNode,
+  annotation:         AnnotationNode,
+  // Pipeline
+  pipeline_title:     PipelineTitleNode,
+  column_background:  ColumnBackgroundNode,
+  pipeline_stage:     PipelineStageNode,
+  trigger:            TriggerNode,
+  action:             ActionNode,
+  follow_up:          FollowUpNode,
+  outcome_positive:   OutcomePositiveNode,
+  outcome_negative:   OutcomeNegativeNode,
+  lifecycle_change:   LifecycleChangeNode,
+  lead_status:        LeadStatusNode,
 };
 
 const ADD_NODE_OPTIONS: { type: FlowchartData["nodes"][0]["type"]; label: string; color: string }[] = [
@@ -206,12 +233,18 @@ function FlowchartInner({
           label:         n.label,
           sublabel:      n.sublabel,
           owner:         n.owner,
+          detail:        n.detail,
+          icon:          n.icon,
+          pipelineName:  n.pipelineName,
           variant:       n.type,
           onLabelChange: makeOnLabelChange(n.id),
         },
       }));
 
-      const rawEdges: Edge[] = data.edges.map((e, i) => ({
+      const rawEdges: Edge[] = data.edges.map((e, i) => {
+        const color = edgeColor(e.edgeType);
+        const isDashed = e.edgeType === "yes" || e.edgeType === "no";
+        return {
         id:           e.id ?? `e${i}`,
         source:       e.source,
         target:       e.target,
@@ -219,11 +252,21 @@ function FlowchartInner({
         targetHandle: e.targetHandle,
         label:        e.label,
         type:         "smoothstep",
-        markerEnd:    { type: MarkerType.ArrowClosed, color: edgeColor(e.edgeType) },
-        style:        { stroke: edgeColor(e.edgeType), strokeWidth: 1.5 },
-        labelStyle:   { fontSize: 10, fontWeight: 600, fill: edgeColor(e.edgeType) },
+        markerEnd:    { type: MarkerType.ArrowClosed, color },
+        style:        { stroke: color, strokeWidth: 1.5, ...(isDashed ? { strokeDasharray: "6 3" } : {}) },
+        labelStyle:   { fontSize: 10, fontWeight: 600, fill: color },
         labelBgStyle: { fill: "white", fillOpacity: 0.85 },
-      }));
+        };
+      });
+
+      // Inyectar onLabelChange a nodos de sistema (títulos de pipeline, etc.)
+      const injectEditHandlers = (layoutNodes: Node[]) =>
+        layoutNodes.map((n) => {
+          if (n.id.startsWith("__pipeline_title")) {
+            return { ...n, data: { ...n.data, onLabelChange: makeOnLabelChange(n.id) } };
+          }
+          return n;
+        });
 
       pendingFitView.current = true;
       if (hasSavedPositions && !forceLayoutRef.current) {
@@ -232,7 +275,7 @@ function FlowchartInner({
       } else {
         try {
           const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, dir);
-          setNodes(ln);
+          setNodes(injectEditHandlers(ln));
           setEdges(le);
         } catch {
           setNodes(rawNodes);
@@ -369,7 +412,10 @@ function FlowchartInner({
     return true;
   }, [captureSnapshot]);
 
-  // ── Snapshot al inicio del drag ───────────────────────────────────────────
+  // ── Snap-to-align (guías magnéticas) ─────────────────────────────────────
+  const SNAP_THRESHOLD = 8; // px de tolerancia para snap
+  const [guidelines, setGuidelines] = useState<Array<{ x?: number; y?: number }>>([]);
+
   const onNodeDragStart = useCallback(() => {
     undoStack.current.push(captureSnapshot());
     if (undoStack.current.length > 50) undoStack.current.shift();
@@ -378,7 +424,81 @@ function FlowchartInner({
     setCanRedo(false);
   }, [captureSnapshot]);
 
-  const onNodeDragStop = useCallback(() => { setIsDirty(true); }, []);
+  const onNodeDrag = useCallback(
+    (_: unknown, draggedNode: Node) => {
+      const guides: Array<{ x?: number; y?: number }> = [];
+      const dragDims = getNodeDims(draggedNode.type ?? "process");
+      const dragCX = draggedNode.position.x + dragDims.width / 2;
+      const dragCY = draggedNode.position.y + dragDims.height / 2;
+      const dragLeft = draggedNode.position.x;
+      const dragRight = draggedNode.position.x + dragDims.width;
+      const dragTop = draggedNode.position.y;
+      const dragBottom = draggedNode.position.y + dragDims.height;
+
+      let snapX: number | null = null;
+      let snapY: number | null = null;
+
+      for (const other of nodes) {
+        if (other.id === draggedNode.id || other.id.startsWith("__")) continue;
+        const otherDims = getNodeDims(other.type ?? "process");
+        const otherCX = other.position.x + otherDims.width / 2;
+        const otherCY = other.position.y + otherDims.height / 2;
+        const otherLeft = other.position.x;
+        const otherRight = other.position.x + otherDims.width;
+        const otherTop = other.position.y;
+        const otherBottom = other.position.y + otherDims.height;
+
+        // Vertical alignment (X axis)
+        if (Math.abs(dragCX - otherCX) < SNAP_THRESHOLD) {
+          guides.push({ x: otherCX });
+          snapX = otherCX - dragDims.width / 2;
+        } else if (Math.abs(dragLeft - otherLeft) < SNAP_THRESHOLD) {
+          guides.push({ x: otherLeft });
+          snapX = otherLeft;
+        } else if (Math.abs(dragRight - otherRight) < SNAP_THRESHOLD) {
+          guides.push({ x: otherRight });
+          snapX = otherRight - dragDims.width;
+        }
+
+        // Horizontal alignment (Y axis)
+        if (Math.abs(dragCY - otherCY) < SNAP_THRESHOLD) {
+          guides.push({ y: otherCY });
+          snapY = otherCY - dragDims.height / 2;
+        } else if (Math.abs(dragTop - otherTop) < SNAP_THRESHOLD) {
+          guides.push({ y: otherTop });
+          snapY = otherTop;
+        } else if (Math.abs(dragBottom - otherBottom) < SNAP_THRESHOLD) {
+          guides.push({ y: otherBottom });
+          snapY = otherBottom - dragDims.height;
+        }
+      }
+
+      setGuidelines(guides);
+
+      // Snap the node position
+      if (snapX !== null || snapY !== null) {
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.id === draggedNode.id
+              ? {
+                  ...n,
+                  position: {
+                    x: snapX ?? n.position.x,
+                    y: snapY ?? n.position.y,
+                  },
+                }
+              : n
+          )
+        );
+      }
+    },
+    [nodes, setNodes]
+  );
+
+  const onNodeDragStop = useCallback(() => {
+    setIsDirty(true);
+    setGuidelines([]);
+  }, []);
 
   // ── Agregar nodo desde el panel ───────────────────────────────────────────
   const addNode = useCallback(
@@ -430,13 +550,16 @@ function FlowchartInner({
     (): FlowchartData => ({
       title:       data.title,
       description: data.description,
-      nodes: nodes.map((n) => ({
-        id:       n.id,
-        type:     n.type as FlowchartData["nodes"][0]["type"],
-        label:    (n.data.label    as string) ?? "",
-        sublabel: (n.data.sublabel as string | undefined) || undefined,
-        owner:    (n.data.owner    as string | undefined) || undefined,
-        position: n.position,
+      nodes: nodes.filter((n) => !n.id.startsWith("__bg_col_") && !n.id.startsWith("__pipeline_")).map((n) => ({
+        id:           n.id,
+        type:         n.type as string,
+        label:        (n.data.label        as string) ?? "",
+        sublabel:     (n.data.sublabel     as string | undefined) || undefined,
+        owner:        (n.data.owner        as string | undefined) || undefined,
+        detail:       (n.data.detail       as string | undefined) || undefined,
+        icon:         (n.data.icon         as string | undefined) || undefined,
+        pipelineName: (n.data.pipelineName as string | undefined) || undefined,
+        position:     n.position,
       })),
       edges: edges.map((e) => ({
         id:           e.id,
@@ -601,6 +724,7 @@ function FlowchartInner({
         onConnectEnd={onConnectEnd}
         onBeforeDelete={onBeforeDelete}
         onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onInit={(instance) => { rfInstance.current = instance; }}
         nodeTypes={NODE_TYPES}
@@ -621,6 +745,9 @@ function FlowchartInner({
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#e2e8f0" />
         <Controls showInteractive={false} className="!bg-white !border-gray-200 !shadow-sm !rounded-xl" />
+
+        {/* Guías de alineación */}
+        {guidelines.length > 0 && <SnapGuidelines guidelines={guidelines} />}
       </ReactFlow>
 
       {/* Leyenda */}
@@ -679,6 +806,39 @@ function edgeColor(type?: string) {
   if (type === "yes") return "#22c55e";
   if (type === "no")  return "#ef4444";
   return "#94a3b8";
+}
+
+// ── Guías de alineación (snap) ────────────────────────────────────────────────
+// Renderiza líneas dentro del viewport de React Flow usando useReactFlow para
+// convertir coordenadas del flow a coordenadas de pantalla.
+
+function SnapGuidelines({ guidelines }: { guidelines: Array<{ x?: number; y?: number }> }) {
+  const { getViewport } = useReactFlow();
+  const { x: tx, y: ty, zoom } = getViewport();
+
+  return (
+    <div
+      style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 1000, overflow: "hidden" }}
+    >
+      <svg width="100%" height="100%">
+        {guidelines.map((g, i) => {
+          if (g.x !== undefined) {
+            const screenX = g.x * zoom + tx;
+            return (
+              <line key={`gx${i}`} x1={screenX} y1={0} x2={screenX} y2="100%" stroke="#cbd5e1" strokeWidth={1} strokeDasharray="4 3" opacity={0.8} />
+            );
+          }
+          if (g.y !== undefined) {
+            const screenY = g.y * zoom + ty;
+            return (
+              <line key={`gy${i}`} x1={0} y1={screenY} x2="100%" y2={screenY} stroke="#cbd5e1" strokeWidth={1} strokeDasharray="4 3" opacity={0.8} />
+            );
+          }
+          return null;
+        })}
+      </svg>
+    </div>
+  );
 }
 
 function LegendItem({ color, label }: { color: string; label: string }) {
