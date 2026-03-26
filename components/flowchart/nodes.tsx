@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { Handle, Position } from "@xyflow/react";
+import { Handle, Position, NodeResizer } from "@xyflow/react";
 
 // ── Tipos compartidos ─────────────────────────────────────────────────────────
 
@@ -37,6 +37,7 @@ export function EditableText({
   className = "",
   placeholder,
   multiline = false,
+  style,
 }: {
   value: string;
   field: "label" | "sublabel" | "owner";
@@ -44,6 +45,7 @@ export function EditableText({
   className?: string;
   placeholder?: string;
   multiline?: boolean;
+  style?: React.CSSProperties;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft]     = useState(value);
@@ -59,7 +61,7 @@ export function EditableText({
     else setDraft(value);
   };
 
-  if (!onLabelChange) return <span className={className}>{value}</span>;
+  if (!onLabelChange) return <span className={className} style={style}>{value}</span>;
 
   if (editing) {
     const base = "nodrag nowheel w-full bg-white border border-blue-400 rounded px-1 py-0.5 outline-none ring-1 ring-blue-300 leading-snug";
@@ -96,6 +98,7 @@ export function EditableText({
       onDoubleClick={(e) => { e.stopPropagation(); setDraft(value); setEditing(true); }}
       title="Doble clic para editar"
       className={`cursor-text select-text group-hover/node:underline group-hover/node:decoration-dashed group-hover/node:decoration-gray-300 ${className}`}
+      style={style}
     >
       {value || <span className="italic text-gray-300">{placeholder}</span>}
     </span>
@@ -274,5 +277,41 @@ export function AnnotationNode({ data }: { data: NodeData }) {
         />
       </div>
     </div>
+  );
+}
+
+// ── Nodo de texto libre (sin fondo, sin bordes) ──────────────────────────────
+
+export function TextNode({ data, selected }: { data: NodeData & { fontSize?: number }; selected?: boolean }) {
+  const [fontSize, setFontSize] = useState(data.fontSize ?? 14);
+
+  return (
+    <>
+      <NodeResizer
+        isVisible={selected ?? false}
+        minWidth={60}
+        minHeight={20}
+        lineStyle={{ borderColor: "#cbd5e1", borderWidth: 1 }}
+        handleStyle={{ width: 7, height: 7, borderRadius: 2, background: "#94a3b8", border: "1px solid white" }}
+        onResize={(_event, params) => {
+          const newSize = Math.max(10, Math.min(64, params.height * 0.55));
+          setFontSize(newSize);
+        }}
+      />
+      <div className="group/node px-1 py-0.5 w-full h-full flex items-center">
+        <Handle type="source" position={Position.Top}    id="t" style={{ opacity: 0, width: 6, height: 6 }} />
+        <Handle type="source" position={Position.Right}  id="r" style={{ opacity: 0, width: 6, height: 6 }} />
+        <Handle type="source" position={Position.Bottom} id="b" style={{ opacity: 0, width: 6, height: 6 }} />
+        <Handle type="source" position={Position.Left}   id="l" style={{ opacity: 0, width: 6, height: 6 }} />
+        <EditableText
+          value={data.label}
+          field="label"
+          onLabelChange={data.onLabelChange}
+          multiline
+          className="text-gray-700 leading-snug block w-full"
+          style={{ fontSize }}
+        />
+      </div>
+    </>
   );
 }

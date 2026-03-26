@@ -18,6 +18,27 @@
   opacity: 1;
 }
 
+/* ─── React Flow: selección de nodos ──────────────────────────────────── */
+.react-flow__node.selected > div,
+.react-flow__node.selected > div > div {
+  box-shadow: 0 0 0 2px #3b82f6, 0 4px 12px rgba(59, 130, 246, 0.25) !important;
+  border-radius: 12px;
+}
+/* Evitar doble shadow en nodos simples */
+.react-flow__node.selected > div > div {
+  box-shadow: none !important;
+}
+.react-flow__node.selected {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+.react-flow__selectionpane .react-flow__selection {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1.5px dashed #3b82f6;
+  border-radius: 4px;
+}
+
 /* ─── Type scale ──────────────────────────────────────────────────────────────── */
 /*
  * Escala semántica. Un solo lugar para ajustar todo.

@@ -11,10 +11,11 @@ const NODE_DIMS: Record<string, { width: number; height: number }> = {
   decision:           { width: 200, height: 80  },
   pain:               { width: 240, height: 80  },
   annotation:         { width: 220, height: 64  },
+  text:               { width: 160, height: 32  },
   // Nodos de pipeline
   pipeline_stage:     { width: 300, height: 80  },
   column_background:  { width: 340, height: 400 },
-  pipeline_title:     { width: 800, height: 36  },
+  pipeline_title:     { width: 800, height: 48  },
   trigger:            { width: 260, height: 48  },
   action:             { width: 280, height: 90  },
   follow_up:          { width: 240, height: 52  },
@@ -43,7 +44,7 @@ export function getLayoutedElements(
   );
 
   if (hasPipelineNodes) {
-    return getPipelineLayout(nodes, edges);
+    return getPipelineLayout(nodes, edges, direction);
   }
 
   return getDagreLayout(nodes, edges, direction);
@@ -100,13 +101,14 @@ function getDagreLayout(
 
 function getPipelineLayout(
   nodes: Node[],
-  edges: Edge[]
+  edges: Edge[],
+  direction: "TB" | "LR" = "LR"
 ): { nodes: Node[]; edges: Edge[] } {
   const MAIN_COL_WIDTH = 340;   // ancho del carril principal (camino feliz)
   const SIDE_COL_WIDTH = 280;   // ancho del carril lateral (camino negativo)
-  const STAGE_GAP = 100;        // gap horizontal entre etapas completas
+  const STAGE_GAP = direction === "LR" ? 100 : 60;  // gap entre etapas
   const ROW_GAP = 56;           // gap vertical entre nodos
-  const SIDE_OFFSET_X = 30;     // offset X del carril lateral respecto al borde derecho del principal
+  const SIDE_OFFSET_X = 30;     // offset X del carril lateral
   const START_X = 40;
   const START_Y = 80;
   const CONTENT_PADDING = 20;
@@ -128,7 +130,13 @@ function getPipelineLayout(
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
   // ── Negative types: nodos que van al carril lateral ──
-  const NEGATIVE_TYPES = new Set(["outcome_negative", "lifecycle_change", "lead_status"]);
+  const NEGATIVE_TYPES = new Set(["outcome_negative", "lifecycle_change", "lead_status", "pain", "annotation"]);
+
+  // ── Build reverse edge map (target → source) for pain alignment ──
+  const inEdges = new Map<string, string>();
+  edges.forEach((e) => {
+    if (!inEdges.has(e.target)) inEdges.set(e.target, e.source);
+  });
 
   // ── Assign nodes to stages via BFS, tracking main vs side lane ──
   type LaneInfo = { col: number; lane: "main" | "side" };
@@ -201,14 +209,19 @@ function getPipelineLayout(
   // ── Position nodes ──
   const positionedNodes: Node[] = [];
   const columnHeights = new Map<number, number>();
+  let accumulatedY = START_Y; // For TB mode: tracks where the next stage starts
 
   for (let col = 0; col < stageNodes.length; col++) {
-    const stageX = START_X + col * (MAIN_COL_WIDTH + SIDE_COL_WIDTH + SIDE_OFFSET_X + STAGE_GAP);
+    // LR: stages go left-to-right. TB: stages stack top-to-bottom
+    const stageX = direction === "LR"
+      ? START_X + col * (MAIN_COL_WIDTH + SIDE_COL_WIDTH + SIDE_OFFSET_X + STAGE_GAP)
+      : START_X;
     const sideX = stageX + MAIN_COL_WIDTH + SIDE_OFFSET_X;
+    const stageStartY = direction === "LR" ? START_Y : accumulatedY;
 
     // Position main lane nodes
     const mainNodes = stageMainNodes.get(col) ?? [];
-    let mainY = START_Y + CONTENT_PADDING;
+    let mainY = stageStartY + CONTENT_PADDING;
     for (const node of mainNodes) {
       const dims = getNodeDims(node.type ?? "process");
       const x = stageX + CONTENT_PADDING + (MAIN_COL_WIDTH - CONTENT_PADDING * 2 - dims.width) / 2;
@@ -217,61 +230,125 @@ function getPipelineLayout(
       mainY += dims.height + ROW_GAP + gap;
     }
 
-    // Position side lane nodes — start at the Y of the first decision in main lane
+    // Position side lane nodes
+    // Two types: lateral (pain/annotation → align with parent Y) and chain (outcome/lifecycle/lead_status → stack sequentially)
     const sideNodes = stageSideNodes.get(col) ?? [];
     if (sideNodes.length > 0) {
-      // Find Y of the first decision node or the node that connects to side
-      const firstDecision = mainNodes.find((n) => n.type === "decision");
-      const decisionPos = firstDecision
-        ? positionedNodes.find((n) => n.id === firstDecision.id)?.position
-        : null;
-      let sideY = decisionPos ? decisionPos.y + getNodeDims("decision").height + ROW_GAP : START_Y + CONTENT_PADDING + 200;
+      const LATERAL_TYPES = new Set(["pain", "annotation"]);
 
-      for (const node of sideNodes) {
-        const dims = getNodeDims(node.type ?? "process");
-        const x = sideX + (SIDE_COL_WIDTH - dims.width) / 2;
-        positionedNodes.push({ ...node, position: { x, y: sideY } });
-        sideY += dims.height + ROW_GAP;
+      // Build a map of ALL positioned nodes for Y lookup (both main and already-positioned side)
+      const posMap = new Map<string, { x: number; y: number }>();
+      positionedNodes.forEach((n) => posMap.set(n.id, n.position));
+
+      // Separate lateral nodes from chain nodes
+      const lateralNodes = sideNodes.filter((n) => LATERAL_TYPES.has(n.type ?? ""));
+      const chainNodes = sideNodes.filter((n) => !LATERAL_TYPES.has(n.type ?? ""));
+
+      // Track used Y ranges in side lane to avoid overlaps
+      const usedSideRanges: Array<{ top: number; bottom: number }> = [];
+
+      // 1. Position chain nodes FIRST (outcome_negative → lifecycle → lead_status)
+      //    These have a predictable position: below the decision that feeds them
+      if (chainNodes.length > 0) {
+        const firstChainSource = inEdges.get(chainNodes[0]?.id ?? "");
+        const firstChainSourcePos = firstChainSource ? posMap.get(firstChainSource) : null;
+        const firstChainSourceDims = firstChainSource
+          ? getNodeDims(nodeMap.get(firstChainSource)?.type ?? "process")
+          : { height: 80 };
+        let chainY = firstChainSourcePos
+          ? firstChainSourcePos.y + firstChainSourceDims.height + ROW_GAP
+          : mainY;
+
+        for (const node of chainNodes) {
+          const dims = getNodeDims(node.type ?? "process");
+          const x = sideX + (SIDE_COL_WIDTH - dims.width) / 2;
+          positionedNodes.push({ ...node, position: { x, y: chainY } });
+          posMap.set(node.id, { x, y: chainY });
+          usedSideRanges.push({ top: chainY, bottom: chainY + dims.height });
+          chainY += dims.height + ROW_GAP;
+        }
       }
 
-      const maxSide = sideY;
+      // 2. Position lateral nodes (pain/annotation) — aligned with source Y, avoiding chain ranges
+      for (const node of lateralNodes) {
+        const dims = getNodeDims(node.type ?? "process");
+        const x = sideX + (SIDE_COL_WIDTH - dims.width) / 2;
+
+        const sourceId = inEdges.get(node.id);
+        const sourcePos = sourceId ? posMap.get(sourceId) : null;
+        const desiredY = sourcePos ? sourcePos.y : stageStartY + CONTENT_PADDING + 200;
+
+        // Find safe Y that doesn't overlap with chain or other laterals
+        let safeY = desiredY;
+        let attempts = 0;
+        while (attempts < 30) {
+          const overlaps = usedSideRanges.some(
+            (r) => safeY < r.bottom + ROW_GAP / 2 && safeY + dims.height > r.top - ROW_GAP / 2
+          );
+          if (!overlaps) break;
+          // Try above first (move up), then below
+          if (attempts % 2 === 0) {
+            safeY = desiredY - (Math.floor(attempts / 2) + 1) * (dims.height + ROW_GAP);
+            if (safeY < START_Y) safeY = desiredY + (Math.floor(attempts / 2) + 1) * (dims.height + ROW_GAP);
+          } else {
+            safeY = desiredY + (Math.floor(attempts / 2) + 1) * (dims.height + ROW_GAP);
+          }
+          attempts++;
+        }
+
+        positionedNodes.push({ ...node, position: { x, y: safeY } });
+        posMap.set(node.id, { x, y: safeY });
+        usedSideRanges.push({ top: safeY, bottom: safeY + dims.height });
+      }
+
+      const maxSide = usedSideRanges.length > 0
+        ? Math.max(...usedSideRanges.map((r) => r.bottom + ROW_GAP))
+        : 0;
       const currentMax = columnHeights.get(col) ?? 0;
       if (maxSide > currentMax) columnHeights.set(col, maxSide);
     }
 
     const currentMax = columnHeights.get(col) ?? 0;
     if (mainY > currentMax) columnHeights.set(col, mainY);
+
+    // For TB mode: advance accumulatedY past this stage's content
+    if (direction === "TB") {
+      const stageHeight = Math.max(mainY, columnHeights.get(col) ?? 0) - stageStartY;
+      accumulatedY = stageStartY + stageHeight + STAGE_GAP;
+    }
   }
 
   // ── Background nodes ──
   const maxHeight = Math.max(...Array.from(columnHeights.values()), 400);
   const bgNodes: Node[] = [];
 
-  // Pipeline title
+  // Pipeline title — auto-width based on text
   const pipelineName = stageNodes[0]?.data?.pipelineName as string | undefined;
   if (pipelineName) {
-    const totalWidth = stageNodes.length * (MAIN_COL_WIDTH + SIDE_COL_WIDTH + SIDE_OFFSET_X + STAGE_GAP) - STAGE_GAP;
     bgNodes.push({
       id: "__pipeline_title",
       type: "pipeline_title",
       position: { x: START_X, y: 10 },
-      data: { label: pipelineName, width: totalWidth },
+      data: { label: pipelineName },
       style: { zIndex: 0 },
     });
   }
 
-  // Column backgrounds (main lane only — side lane is open)
-  for (let col = 0; col < stageNodes.length; col++) {
-    const bgX = START_X + col * (MAIN_COL_WIDTH + SIDE_COL_WIDTH + SIDE_OFFSET_X + STAGE_GAP);
-    bgNodes.push({
-      id: `__bg_col_${col}`,
-      type: "column_background",
-      position: { x: bgX, y: START_Y },
-      data: { label: "", width: MAIN_COL_WIDTH, height: maxHeight - START_Y + CONTENT_PADDING },
-      style: { zIndex: -1 },
-      selectable: false,
-      draggable: false,
-    });
+  // Column backgrounds — skip in TB mode (stages already visually separated by vertical gap)
+  if (direction === "LR") {
+    const maxHeight = Math.max(...Array.from(columnHeights.values()), 400);
+    for (let col = 0; col < stageNodes.length; col++) {
+      const bgX = START_X + col * (MAIN_COL_WIDTH + SIDE_COL_WIDTH + SIDE_OFFSET_X + STAGE_GAP);
+      bgNodes.push({
+        id: `__bg_col_${col}`,
+        type: "column_background",
+        position: { x: bgX, y: START_Y },
+        data: { label: "", width: MAIN_COL_WIDTH, height: maxHeight - START_Y + CONTENT_PADDING },
+        style: { zIndex: -1 },
+        selectable: false,
+        draggable: false,
+      });
+    }
   }
 
   return { nodes: [...bgNodes, ...positionedNodes], edges };

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Handle, Position, NodeResizer } from "@xyflow/react";
 import { EditableText } from "./nodes";
 
@@ -31,28 +32,31 @@ function h(color: string): React.CSSProperties {
 
 // ── PipelineTitleNode ─────────────────────────────────────────────────────────
 
-export function PipelineTitleNode({ data, selected }: { data: NodeData & { width?: number }; selected?: boolean }) {
+export function PipelineTitleNode({ data, selected }: { data: NodeData & { width?: number; fontSize?: number }; selected?: boolean }) {
+  const [fontSize, setFontSize] = useState(data.fontSize ?? 18);
+
   return (
     <>
       <NodeResizer
         isVisible={selected ?? false}
         minWidth={200}
-        minHeight={30}
+        minHeight={32}
         lineStyle={{ borderColor: "#cbd5e1", borderWidth: 1 }}
         handleStyle={{ width: 8, height: 8, borderRadius: 2, background: "#94a3b8", border: "1px solid white" }}
+        onResize={(_event, params) => {
+          const newSize = Math.max(12, Math.min(48, params.height * 0.6));
+          setFontSize(newSize);
+        }}
       />
-      <div
-        style={{ width: "100%", height: "100%" }}
-        className="group/node flex items-center gap-2"
-      >
-        <div className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0" />
+      <div className="group/node flex items-center gap-3 whitespace-nowrap px-2 py-1 w-full h-full">
+        <div className="rounded-full bg-green-500 flex-shrink-0" style={{ width: Math.max(10, fontSize * 0.7), height: Math.max(10, fontSize * 0.7) }} />
         <EditableText
           value={data.label}
           field="label"
           onLabelChange={data.onLabelChange}
-          className="text-sm font-bold text-gray-700 uppercase tracking-wider"
+          className="font-bold text-gray-700 uppercase tracking-wider"
+          style={{ fontSize }}
         />
-        <div className="flex-1 h-px bg-gray-200" />
       </div>
     </>
   );
