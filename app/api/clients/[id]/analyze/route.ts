@@ -639,8 +639,29 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
         !s.participants.some((p) => salesEmails.has(p.toLowerCase()))
       );
 
-      // Transcripciones de CS (máx 6)
-      const topCS = csSessions.sort((a, b) => b.date - a.date).slice(0, 6);
+      // ── Sesiones de CS: lógica diferenciada por agente ──────────────────────
+      const isInterviewPrepAgent = bodyAgentId === "agent-entrevistas-prep";
+
+      let topCS: RawTranscript[];
+      if (isInterviewPrepAgent) {
+        // Para "Preparación de entrevistas": ordenar por fecha ASC, saltar la
+        // primera sesión (kickoff o la más antigua), tomar las 10 siguientes.
+        // Si hay una sesión con "kickoff" / "kick-off" en el título, esa se omite;
+        // si no, se omite simplemente la más antigua.
+        const sortedAsc = [...csSessions].sort((a, b) => a.date - b.date);
+        const kickoffIdx = sortedAsc.findIndex((s) =>
+          /kick.?off/i.test(s.title ?? "")
+        );
+        const skipIdx = kickoffIdx !== -1 ? kickoffIdx : 0;
+        topCS = [
+          ...sortedAsc.slice(0, skipIdx),          // sesiones anteriores al kickoff (raro, pero seguro)
+          ...sortedAsc.slice(skipIdx + 1),          // sesiones después del kickoff
+        ].slice(0, 10);
+      } else {
+        // Comportamiento genérico: 6 sesiones más recientes
+        topCS = [...csSessions].sort((a, b) => b.date - a.date).slice(0, 6);
+      }
+
       if (topCS.length > 0) {
         const contents = await Promise.all(
           topCS.map((s) => fetchTranscriptContent(apiKey, s.id, s.title))
@@ -648,8 +669,8 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
         firefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
       }
 
-      // Transcripciones de ventas (máx 4)
-      const topSales = salesSessions.sort((a, b) => b.date - a.date).slice(0, 4);
+      // Transcripciones de ventas (máx 4) — igual para todos los agentes
+      const topSales = [...salesSessions].sort((a, b) => b.date - a.date).slice(0, 4);
       if (topSales.length > 0) {
         const contents = await Promise.all(
           topSales.map((s) => fetchTranscriptContent(apiKey, s.id, s.title))
@@ -735,8 +756,9 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     : "";
 
   // ── 9. Tipo de output del agente ──────────────────────────────────────────────
-  const isFlowchart         = agent.outputType === "FLOWCHART";
+  const isFlowchart          = agent.outputType === "FLOWCHART";
   const isCardsAndFlowcharts = agent.outputType === "CARDS_AND_FLOWCHARTS";
+  const isCardsAndCharts     = agent.outputType === "CARDS_AND_CHARTS";
 
   // ── 9b. System prompt efectivo ────────────────────────────────────────────────
   let effectiveSystemPrompt = agent.additionalInstructions
@@ -920,7 +942,10 @@ ${[
     return `${tag} **${c.title}:**\n${c.content}`;
   }),
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
-].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS ===\n${docsContent.slice(0, 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas de Dinterweb. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, 4000)}\n\n` : ""}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
+].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${!isCardsAndFlowcharts && !isCardsAndCharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS ===\n${docsContent.slice(0, 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas de Dinterweb. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, 4000)}\n\n` : ""}${firefliesContent ? (bodyAgentId === "agent-entrevistas-prep"
+  ? `=== SESIONES POST-KICKOFF (hasta 10 sesiones, ordenadas del más antiguo al más reciente) ===\nEstas son las sesiones del equipo de Customer Success DESPUÉS del Kick-off. Identifica cuáles son de exploración con trabajadores del cliente y cuáles no, según los criterios de tu prompt.\n${firefliesContent.slice(0, 8000)}\n\n`
+  : `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n`)
+: ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 11. Llamar a Claude ───────────────────────────────────────────────────────
@@ -1099,6 +1124,67 @@ Analiza toda la información anterior y completa las secciones de contexto del c
   const defaultSection = bodyProjectId
     ? (GROUP_TO_SECTION[agent.agentGroup ?? ""] ?? "procesos")
     : null;
+
+  // ── 13b2. Si es CARDS_AND_CHARTS, guardar cards TEXT + cards CHART ──────────────
+  if (isCardsAndCharts) {
+    try {
+      const validCards = (analysisJson!.cards ?? []).filter(
+        (card: { title?: string; content?: string }) => card.title?.trim()
+      );
+      if (validCards.length > 0) {
+        await prisma.clientContextCard.createMany({
+          data: validCards.map((card: { title: string; content: string; canvasSection?: string }, i: number) => ({
+            clientId,
+            projectId:     bodyProjectId,
+            agentRunId:    run.id,
+            title:         card.title.trim(),
+            content:       card.content ?? "",
+            order:         i,
+            source:        "AGENT" as const,
+            cardType:      "TEXT" as const,
+            canvasSection: card.canvasSection ?? defaultSection,
+            canvasStatus:  "draft",
+            canvasOrder:   i,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      const charts: Array<{ title?: string; description?: string; chartConfig: unknown }> =
+        analysisJson!.charts ?? [];
+      if (charts.length > 0) {
+        await prisma.clientContextCard.createMany({
+          data: charts.map((ch, i) => ({
+            clientId,
+            projectId:     bodyProjectId,
+            agentRunId:    run.id,
+            title:         ch.title?.trim() || `Gráfico ${i + 1}`,
+            content:       ch.description ?? "",
+            order:         validCards.length + i,
+            source:        "AGENT" as const,
+            cardType:      "CHART" as const,
+            chartConfig:   ch.chartConfig as object,
+            canvasSection: defaultSection ?? "hipotesis_recomendaciones",
+            canvasStatus:  "draft",
+            canvasOrder:   validCards.length + i,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      const runCards = await prisma.clientContextCard.findMany({
+        where: { agentRunId: run.id },
+        orderBy: { order: "asc" },
+      });
+      return NextResponse.json({
+        cards: runCards,
+        run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
+      });
+    } catch (cacErr) {
+      console.error("[analyze CAC] Error saving cards/charts:", cacErr);
+      return NextResponse.json({ error: "Error guardando charts", detail: String(cacErr) }, { status: 500 });
+    }
+  }
 
   // ── 13b. Si es CARDS_AND_FLOWCHARTS, guardar cards de texto + cards FLOWCHART ─
   if (isCardsAndFlowcharts) {

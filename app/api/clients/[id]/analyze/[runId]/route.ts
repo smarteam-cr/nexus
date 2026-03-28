@@ -12,7 +12,7 @@ export const GET = withAuth(async (_req: NextRequest, { params }: Params) => {
     select: {
       id: true, status: true, createdAt: true, stepLabel: true, serviceType: true, output: true,
       agent: { select: { name: true, outputType: true } },
-      cards: { orderBy: { order: "asc" }, select: { id: true, title: true, content: true, order: true, source: true, cardType: true, diagramData: true } },
+      cards: { orderBy: { order: "asc" }, select: { id: true, title: true, content: true, order: true, source: true, cardType: true, diagramData: true, chartConfig: true } },
     },
   });
 
@@ -47,6 +47,16 @@ export const GET = withAuth(async (_req: NextRequest, { params }: Params) => {
       agentName: run.agent?.name ?? null, outputType,
       cards: run.cards,
       flowcharts,
+    });
+  }
+
+  // ── CARDS_AND_CHARTS: cards TEXT + cards CHART (chartConfig) desde DB ─────────
+  if (outputType === "CARDS_AND_CHARTS") {
+    return NextResponse.json({
+      id: run.id, status: run.status, createdAt: run.createdAt,
+      stepLabel: run.stepLabel, serviceType: run.serviceType,
+      agentName: run.agent?.name ?? null, outputType,
+      cards: run.cards, // incluye cardType TEXT y CHART (con chartConfig)
     });
   }
 

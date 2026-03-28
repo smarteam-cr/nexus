@@ -57,6 +57,7 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
   const [dragCardId, setDragCardId] = useState<string | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<{ sectionKey: string; index: number } | null>(null);
   const dragCounterRef = useRef(0);
+  const dragCardHeightRef = useRef<number>(72); // altura capturada al inicio del drag
   const [processingSession, setProcessingSession] = useState(false);
   const [sessionResult, setSessionResult] = useState<{ cards: CanvasCard[]; sessionTitle: string } | null>(null);
   const [unprocessedSessions, setUnprocessedSessions] = useState(0);
@@ -156,9 +157,9 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
     setDragCardId(cardId);
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", cardId);
-    // Make the drag ghost slightly transparent
     if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.style.opacity = "0.5";
+      dragCardHeightRef.current = e.currentTarget.offsetHeight;
+      e.currentTarget.style.opacity = "0.4";
     }
   };
 
@@ -173,8 +174,12 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
 
   const handleDragOverCard = (e: React.DragEvent, sectionKey: string, index: number) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
-    setDragOverTarget({ sectionKey, index });
+    // Detectar si el cursor está en la mitad superior o inferior de la card
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const isBottomHalf = e.clientY > rect.top + rect.height / 2;
+    setDragOverTarget({ sectionKey, index: isBottomHalf ? index + 1 : index });
   };
 
   const handleDragOverSection = (e: React.DragEvent, sectionKey: string) => {
@@ -189,6 +194,9 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
     e.preventDefault();
     const cardId = e.dataTransfer.getData("text/plain") || dragCardId;
     if (!cardId) return;
+
+    // Usar la posición del placeholder visible, no el índice del contenedor
+    const targetIndex = dragOverTarget?.index ?? index;
 
     setDragCardId(null);
     setDragOverTarget(null);
@@ -210,7 +218,7 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
       // Insert at new position
       const targetSection = next.find((s) => s.key === sectionKey);
       if (targetSection) {
-        targetSection.cards.splice(index, 0, movedCard);
+        targetSection.cards.splice(targetIndex, 0, movedCard);
       }
       return next;
     });
@@ -219,7 +227,7 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
     await fetch(`/api/projects/${projectId}/canvas-cards`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cardId, toSection: sectionKey, toIndex: index }),
+      body: JSON.stringify({ cardId, toSection: sectionKey, toIndex: targetIndex }),
     }).catch(() => fetchCanvasCards()); // Rollback on error
   };
 
@@ -477,12 +485,16 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
                   ) : (
                     <div className="space-y-2">
                       {section.cards.map((card, idx) => {
-                        const isDropTarget = dragOverTarget?.sectionKey === section.key && dragOverTarget?.index === idx;
+                        const isDropBefore = dragOverTarget?.sectionKey === section.key && dragOverTarget?.index === idx;
+                        const showPlaceholder = isDropBefore && dragCardId !== card.id;
                         return (
                           <div key={card.id}>
-                            {/* Drop indicator line */}
-                            {isDropTarget && dragCardId !== card.id && (
-                              <div className="h-0.5 bg-brand rounded-full mx-2 mb-1" />
+                            {/* Placeholder que desplaza las demás cards */}
+                            {showPlaceholder && (
+                              <div
+                                className="rounded-xl border-2 border-dashed border-brand/50 bg-brand/5 mb-2 transition-all duration-150"
+                                style={{ height: dragCardHeightRef.current }}
+                              />
                             )}
                             <CanvasCardItem
                               card={card}
@@ -500,9 +512,12 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
                           </div>
                         );
                       })}
-                      {/* Drop target at end */}
+                      {/* Placeholder al final de la sección */}
                       {dragCardId && dragOverTarget?.sectionKey === section.key && dragOverTarget?.index === section.cards.length && (
-                        <div className="h-0.5 bg-brand rounded-full mx-2 mt-1" />
+                        <div
+                          className="rounded-xl border-2 border-dashed border-brand/50 bg-brand/5 transition-all duration-150"
+                          style={{ height: dragCardHeightRef.current }}
+                        />
                       )}
                     </div>
                   )}

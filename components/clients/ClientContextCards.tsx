@@ -5,6 +5,19 @@ import dynamic from "next/dynamic";
 import type { FlowchartData } from "@/components/flowchart/FlowchartViewer";
 import SendToCanvasMenu from "./SendToCanvasMenu";
 
+// Importar EChartRenderer dinámicamente (depende de window)
+const EChartRenderer = dynamic(
+  () => import("@/components/charts/EChartRenderer"),
+  {
+    loading: () => (
+      <div className="h-[480px] flex items-center justify-center text-sm text-gray-400 animate-pulse rounded-2xl bg-gray-50">
+        Cargando gráfico…
+      </div>
+    ),
+    ssr: false,
+  }
+);
+
 // Importar FlowchartViewer dinámicamente (depende de @xyflow/react que es client-only)
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer"),
@@ -26,6 +39,7 @@ interface ContextCard {
   source: "AGENT" | "HUMAN" | "MODIFIED";
   cardType?: "TEXT" | "FLOWCHART" | "CHART";
   diagramData?: unknown;
+  chartConfig?: unknown;
   createdAt: string;
   updatedAt: string;
 }
@@ -49,7 +63,7 @@ interface Props {
   sectionLabel?: string;
   agentId?: string;
   agentName?: string;
-  agentOutputType?: "CARDS" | "FLOWCHART" | "CARDS_AND_FLOWCHARTS" | null;
+  agentOutputType?: "CARDS" | "FLOWCHART" | "CARDS_AND_FLOWCHARTS" | "CARDS_AND_CHARTS" | null;
   initialLastRun?: AnalysisRun | null;
   initialRuns?: AnalysisRun[];
 }
@@ -482,6 +496,36 @@ export default function ClientContextCards({
         </div>
       )}
 
+      {/* ── CARDS_AND_CHARTS: cards de texto + gráficos ECharts ── */}
+      {!analyzing && agentOutputType === "CARDS_AND_CHARTS" && runCards.length > 0 && (
+        <div className="space-y-6">
+          {/* Cards de texto */}
+          {runCards.filter((c) => c.cardType !== "CHART").length > 0 && (
+            <div className="columns-1 sm:columns-2 xl:columns-3 gap-4 [column-fill:_balance]">
+              {runCards.filter((c) => c.cardType !== "CHART").map((card) => (
+                <ContextCardItem
+                  key={card.id}
+                  card={card}
+                  clientId={clientId}
+                  projectId={projectId}
+                  onUpdate={handleUpdateRunCard}
+                  onDelete={() => handleDeleteRunCard(card.id)}
+                />
+              ))}
+            </div>
+          )}
+          {/* Gráficos ECharts */}
+          {runCards.filter((c) => c.cardType === "CHART").map((card) => (
+            <EChartRenderer
+              key={card.id}
+              option={card.chartConfig}
+              title={card.title}
+              description={card.content || undefined}
+            />
+          ))}
+        </div>
+      )}
+
       {/* ── Error de ejecución ── */}
       {analyzeError && (
         <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs leading-relaxed flex items-start gap-2">
@@ -493,7 +537,7 @@ export default function ClientContextCards({
       )}
 
       {/* ── Masonry grid (CARDS o sin agente) ── */}
-      {!analyzing && !loadingRuns && agentOutputType !== "FLOWCHART" && agentOutputType !== "CARDS_AND_FLOWCHARTS" && (runCards.length > 0 || addingCard) && (
+      {!analyzing && !loadingRuns && agentOutputType !== "FLOWCHART" && agentOutputType !== "CARDS_AND_FLOWCHARTS" && agentOutputType !== "CARDS_AND_CHARTS" && (runCards.length > 0 || addingCard) && (
         <div className="columns-1 sm:columns-2 xl:columns-3 gap-4 [column-fill:_balance]">
           {runCards.map((card) => (
             <ContextCardItem
