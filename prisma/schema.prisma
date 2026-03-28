@@ -49,6 +49,7 @@ enum AgentOutputType {
   STREAM
   FLOWCHART
   CARDS_AND_FLOWCHARTS
+  CARDS_AND_CHARTS
 }
 
 enum AgentScope {

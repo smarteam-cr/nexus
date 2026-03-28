@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import ReactMarkdown from "react-markdown";
 import SendToCanvasMenu from "./SendToCanvasMenu";
 import ProjectGPS from "./ProjectGPS";
+import SectionDiscoveryModal from "./SectionDiscoveryModal";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
@@ -57,6 +58,8 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
   const [dragCardId, setDragCardId] = useState<string | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<{ sectionKey: string; index: number } | null>(null);
   const dragCounterRef = useRef(0);
+  const [modalSectionKey, setModalSectionKey] = useState<string | null>(null);
+  const [modalHighlightCardId, setModalHighlightCardId] = useState<string | null>(null);
   const [processingSession, setProcessingSession] = useState(false);
   const [sessionResult, setSessionResult] = useState<{ cards: CanvasCard[]; sessionTitle: string } | null>(null);
   const [unprocessedSessions, setUnprocessedSessions] = useState(0);
@@ -496,6 +499,10 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
                               onRejectDraft={() => handleDraftAction(card.id, "reject")}
                               isUpdate={!!card.parentCardId && card.canvasStatus === "draft"}
                               onDiagramSave={fetchCanvasCards}
+                              onTitleClick={() => {
+                                setModalSectionKey(section.key);
+                                setModalHighlightCardId(card.id);
+                              }}
                             />
                           </div>
                         );
@@ -512,6 +519,23 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
           );
         })}
       </div>
+
+      {/* Section Discovery Modal */}
+      {modalSectionKey && (
+        <SectionDiscoveryModal
+          sectionKey={modalSectionKey}
+          sections={sections}
+          highlightCardId={modalHighlightCardId}
+          clientId={clientId}
+          projectId={projectId}
+          onClose={() => { setModalSectionKey(null); setModalHighlightCardId(null); }}
+          onAcceptDraft={(id) => handleDraftAction(id, "accept")}
+          onRejectDraft={(id) => handleDraftAction(id, "reject")}
+          onRemoveCard={removeFromCanvas}
+          onCardCreated={fetchCanvasCards}
+          onDiagramSave={fetchCanvasCards}
+        />
+      )}
     </div>
   );
 }
@@ -530,6 +554,7 @@ function CanvasCardItem({
   onRejectDraft,
   isUpdate,
   onDiagramSave,
+  onTitleClick,
 }: {
   card: CanvasCard;
   clientId: string;
@@ -542,6 +567,7 @@ function CanvasCardItem({
   onRejectDraft?: () => void;
   isUpdate?: boolean;
   onDiagramSave?: () => void;
+  onTitleClick?: () => void;
 }) {
   const isDraft = card.canvasStatus === "draft";
   const isUpdateDraft = isDraft && isUpdate;
@@ -666,7 +692,7 @@ function CanvasCardItem({
             className={`px-4 py-2 border-b flex items-center gap-2 cursor-grab active:cursor-grabbing ${isDraft ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-100"}`}
           >
             <DragHandle />
-            <h4 className="text-sm font-semibold text-gray-800 flex-1">{card.title}</h4>
+            <h4 className="text-sm font-semibold text-gray-800 flex-1 cursor-pointer hover:text-brand transition-colors" onClick={onTitleClick}>{card.title}</h4>
             {isDraft && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isUpdateDraft ? "text-blue-600 bg-blue-100" : "text-amber-600 bg-amber-100"}`}>{isUpdateDraft ? "UPDATE" : "BORRADOR"}</span>}
             {isDraft ? (
               <>
@@ -727,7 +753,7 @@ function CanvasCardItem({
     >
       <div className="flex items-center gap-2 mb-2">
         <DragHandle />
-        <h4 className="text-sm font-semibold text-gray-800 flex-1">{card.title}</h4>
+        <h4 className="text-sm font-semibold text-gray-800 flex-1 cursor-pointer hover:text-brand transition-colors" onClick={onTitleClick}>{card.title}</h4>
         {isDraft && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isUpdateDraft ? "text-blue-600 bg-blue-100" : "text-amber-600 bg-amber-100"}`}>{isUpdateDraft ? "UPDATE" : "BORRADOR"}</span>}
         {isDraft ? (
           <>

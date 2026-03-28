@@ -27,12 +27,31 @@ export type CanvasSection = {
   }>;
 };
 
+const CARD_SELECT = {
+  id: true,
+  title: true,
+  content: true,
+  cardType: true,
+  canvasSection: true,
+  canvasOrder: true,
+  canvasStatus: true,
+  diagramData: true,
+  source: true,
+  publishedToClient: true,
+  publishedContent: true,
+  parentCardId: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
 // GET: obtener cards del canvas agrupados por sección
+// ?include=suggestions → también devuelve cards off-canvas de agentes (sugerencias)
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
+  const includeSuggestions = new URL(_req.url).searchParams.get("include") === "suggestions";
 
   const cards = await prisma.clientContextCard.findMany({
     where: {
@@ -43,22 +62,7 @@ export async function GET(
       { canvasOrder: "asc" },
       { createdAt: "asc" },
     ],
-    select: {
-      id: true,
-      title: true,
-      content: true,
-      cardType: true,
-      canvasSection: true,
-      canvasOrder: true,
-      canvasStatus: true,
-      diagramData: true,
-      source: true,
-      publishedToClient: true,
-      publishedContent: true,
-      parentCardId: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+    select: CARD_SELECT,
   });
 
   // Agrupar por sección
@@ -80,7 +84,30 @@ export async function GET(
     })),
   }));
 
-  return NextResponse.json({ sections });
+  // Sugerencias: cards off-canvas de agentes (canvasSection = null, agentRunId set)
+  let suggestions: Array<typeof cards[number] & { agentName?: string }> = [];
+  if (includeSuggestions) {
+    const offCanvas = await prisma.clientContextCard.findMany({
+      where: {
+        projectId,
+        canvasSection: null,
+        agentRunId: { not: null },
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        ...CARD_SELECT,
+        agentRun: { select: { agent: { select: { name: true } } } },
+      },
+    });
+    suggestions = offCanvas.map((c) => ({
+      ...c,
+      agentName: c.agentRun?.agent?.name ?? undefined,
+      createdAt: c.createdAt.toISOString() as unknown as Date,
+      updatedAt: c.updatedAt.toISOString() as unknown as Date,
+    }));
+  }
+
+  return NextResponse.json({ sections, ...(includeSuggestions ? { suggestions: suggestions.map(s => ({ ...s, createdAt: typeof s.createdAt === 'string' ? s.createdAt : s.createdAt.toISOString(), updatedAt: typeof s.updatedAt === 'string' ? s.updatedAt : s.updatedAt.toISOString() })) } : {}) });
 }
 
 // PUT: reordenar cards dentro/entre secciones

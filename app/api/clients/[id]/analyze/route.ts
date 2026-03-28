@@ -927,6 +927,7 @@ Analiza toda la información anterior y completa las secciones de contexto del c
   const maxTokens = isCardsAndFlowcharts ? 16000 : 8192;
   let analysisJson: {
     cards?: { title: string; content: string }[];
+    suggestions?: Array<{ title?: string; content?: string; type?: string; suggestedSection?: string }>;
     nodes?: unknown[]; edges?: unknown[]; title?: string;
     flowcharts?: Array<{ title?: string; description?: string; nodes: unknown[]; edges: unknown[] }>;
   } | null = null;
@@ -1243,6 +1244,36 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     skipDuplicates: true,
   });
   void savedCards;
+
+  // ── 13d. Guardar suggestions (cards exploratorias off-canvas) ──────────────
+  const suggestions = (analysisJson as { suggestions?: Array<{ title?: string; content?: string; type?: string; suggestedSection?: string; relatedCard?: string }> })?.suggestions ?? [];
+  if (suggestions.length > 0) {
+    const validSuggestions = suggestions.filter((s) => s.title?.trim());
+    if (validSuggestions.length > 0) {
+      await prisma.clientContextCard.createMany({
+        data: validSuggestions.map((s, i) => ({
+          clientId,
+          projectId:     bodyProjectId,
+          agentRunId:    run.id,
+          title:         s.title!.trim(),
+          content:       s.content ?? "",
+          order:         cardDataList.length + i,
+          source:        "AGENT" as const,
+          cardType:      "TEXT" as const,
+          canvasSection: null,       // OFF-CANVAS: no va al canvas automáticamente
+          canvasStatus:  "confirmed",
+          canvasOrder:   null,
+          // Metadata: tipo de suggestion, card relacionada, sección sugerida
+          diagramData:   {
+            suggestionType:    s.type ?? "hypothesis",
+            relatedCard:       s.relatedCard ?? null,
+            suggestedSection:  s.suggestedSection ?? null,
+          },
+        })),
+        skipDuplicates: true,
+      });
+    }
+  }
 
   // ── 14. Auto-generar project tags (solo desde serviceType, NO desde respuesta del agente) ──
   if (bodyProjectId) {
