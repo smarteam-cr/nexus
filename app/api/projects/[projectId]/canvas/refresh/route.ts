@@ -4,7 +4,9 @@ import { updateCanvasAsync } from "@/lib/canvas/update-agent";
 
 /**
  * POST /api/projects/{projectId}/canvas/refresh
- * Recopila todas las cards del proyecto y re-ejecuta el agente de canvas.
+ * Recopila todas las cards del proyecto y ejecuta el agente de canvas de EMPRESA.
+ * NOTA: Ya NO actualiza el canvas de proyecto (Project.canvas JSON está desactivado).
+ * Solo genera CanvasSuggestion para el canvas de empresa (Client.canvas).
  */
 export async function POST(
   _req: NextRequest,

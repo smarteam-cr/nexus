@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import ClientDocuments from "./ClientDocuments";
+// ClientDocuments removido — ahora se usa DocumentUpload con Supabase Storage
 import ClientDealInfo from "./ClientDealInfo";
 import ClientSessionCards from "./ClientSessionCards";
 import ClientCanvasPanel from "./ClientCanvasPanel";
+import DocumentUpload from "./DocumentUpload";
 import { getStageSteps } from "@/lib/steps";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -48,9 +49,10 @@ interface Props {
   serviceType?: string | null;
   domain?: string;
   company?: string;
+  workspaceProjectId?: string | null;
 }
 
-type PopoverType = "documentos" | "empresa" | "deal" | "sesiones" | null;
+type PopoverType = "documentos" | "deal" | "sesiones" | null;
 
 // ── Mapeos legibles ───────────────────────────────────────────────────────────
 
@@ -110,12 +112,12 @@ const INDUSTRY_LABELS: Record<string, string> = {
 
 export default function ClientHeaderPopovers({
   clientId, hasHubspot, hubspotCompanyId, hubName, hubspotPortalId,
-  serviceType, domain, company,
+  serviceType, domain, company, workspaceProjectId,
 }: Props) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState<PopoverType>(null);
-  const [docCount, setDocCount] = useState<number | null>(null);
+  // docCount removido — ya no se usa con DocumentUpload
   const [hubDetails, setHubDetails] = useState<HubspotDetails | null>(null);
   const [loadingHub, setLoadingHub] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -125,8 +127,9 @@ export default function ClientHeaderPopovers({
   const [mountedDeal, setMountedDeal] = useState(false);
   const [mountedSessions, setMountedSessions] = useState(false);
 
-  const projectIdMatch = pathname.match(/\/projects\/([^/]+)/);
-  const currentProjectId = projectIdMatch?.[1] ?? null;
+  // Try URL first (for stage overlay routes), fallback to prop
+  const projectIdFromUrl = pathname.match(/\/projects\/([^/]+)/)?.[1] ?? null;
+  const currentProjectId = projectIdFromUrl || workspaceProjectId || null;
 
   // Derivar keywords y preselectRole del step actual (para filtrar sesiones)
   const stageMatch = pathname.match(/\/stage\/(\d+)/);
@@ -184,7 +187,7 @@ export default function ClientHeaderPopovers({
     <div ref={wrapperRef} className="relative">
       {/* ── Botón único: Contexto ── */}
       <button
-        onClick={() => { const def = currentProjectId ? "sesiones" : "empresa"; setOpen(open ? null : def); if (!open && def === "sesiones") setMountedSessions(true); }}
+        onClick={() => { setOpen(open ? null : "documentos"); if (!open) setMountedDocs(true); }}
         className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
           open
             ? "text-white bg-gray-800 border-gray-700"
@@ -209,13 +212,13 @@ export default function ClientHeaderPopovers({
               <div className="flex items-center justify-between px-5 pt-4 pb-0">
                 <div className="flex items-center gap-1">
                   {currentProjectId && (
-                    <TabButton active={open === "sesiones"} onClick={() => toggle("sesiones")}>
-                      Sesiones
+                    <TabButton active={open === "documentos"} onClick={() => toggle("documentos")}>
+                      Docs
                     </TabButton>
                   )}
                   {currentProjectId && (
-                    <TabButton active={open === "documentos"} onClick={() => toggle("documentos")}>
-                      {docCount ? `Docs (${docCount})` : "Docs"}
+                    <TabButton active={open === "sesiones"} onClick={() => toggle("sesiones")}>
+                      Sesiones
                     </TabButton>
                   )}
                   {currentProjectId && (
@@ -223,9 +226,6 @@ export default function ClientHeaderPopovers({
                       Deal
                     </TabButton>
                   )}
-                  <TabButton active={open === "empresa"} onClick={() => toggle("empresa")}>
-                    Empresa
-                  </TabButton>
                 </div>
                 <button
                   onClick={() => setOpen(null)}
@@ -242,18 +242,12 @@ export default function ClientHeaderPopovers({
             {/* ── Documentos — lazy-mount, keep-alive ── */}
             {mountedDocs && currentProjectId && (
               <div className={open === "documentos" ? "" : "hidden"}>
-                <ClientDocuments
-                  clientId={clientId}
-                  projectId={currentProjectId}
-                  global
-                  onCountChange={setDocCount}
-                />
+                {currentProjectId ? (
+                  <DocumentUpload projectId={currentProjectId} />
+                ) : (
+                  <p className="text-sm text-gray-400 py-4">Selecciona un proyecto para ver documentos</p>
+                )}
               </div>
-            )}
-
-            {/* ── Empresa (Canvas) ── */}
-            {open === "empresa" && (
-              <ClientCanvasPanel clientId={clientId} embedded />
             )}
 
             {/* ── Sesiones — re-mount on step change for fresh keywords ── */}

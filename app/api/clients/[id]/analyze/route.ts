@@ -4,8 +4,8 @@ import { withAuth, apiError } from "@/lib/api";
 import { dataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
 import { normalize, extractTitleTerms, extractDomain } from "@/lib/utils/matching";
-import { EMPTY_CLIENT_CANVAS, EMPTY_PROJECT_CANVAS } from "@/lib/canvas/template";
-import type { ClientCanvas, ProjectCanvas } from "@/lib/canvas/template";
+import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
+import type { ClientCanvas } from "@/lib/canvas/template";
 import { updateCanvasAsync } from "@/lib/canvas/update-agent";
 
 const FIREFLIES_GRAPHQL = "https://api.fireflies.ai/graphql";
@@ -403,14 +403,20 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
         select: { stage: true, step: true, content: true },
       }),
       prisma.clientDocument.findMany({
-        where: { clientId, NOT: { content: null } },
-        select: { stage: true, step: true, title: true, content: true, type: true },
+        where: {
+          clientId,
+          OR: [
+            { content: { not: null } }, // Docs with text content
+            { type: "FILE" },            // All FILE docs (even without extracted text)
+          ],
+        },
+        select: { stage: true, step: true, title: true, content: true, type: true, fileName: true, fileSize: true, mimeType: true },
         orderBy: { createdAt: "desc" },
-        take: 15,
+        take: 20,
       }),
       // Buscar el deal asociado al proyecto (si hay projectId)
       bodyProjectId
-        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true, canvas: true } })
+        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true } })
         : Promise.resolve(null),
     ]);
 
@@ -576,7 +582,15 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   }
 
   // ── 4. Buscar y traer transcripciones de Fireflies ────────────────────────────
+  // Cargar emails del equipo de ventas para etiquetar transcripciones
+  const salesTeam = await prisma.teamMember.findMany({
+    where: { role: "Ventas" },
+    select: { email: true, name: true },
+  });
+  const salesEmails = new Set(salesTeam.map((m) => m.email.toLowerCase()));
+
   let firefliesContent = "";
+  let salesFirefliesContent = "";
   const apiKey = process.env.FIREFLIES_API_KEY;
   if (apiKey) {
     try {
@@ -617,12 +631,30 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
         }
       }
 
-      const top8 = matchingSessions.sort((a, b) => b.date - a.date).slice(0, 8);
-      if (top8.length > 0) {
+      // Separar sesiones de ventas vs CS/kickoff por participantes
+      const salesSessions = matchingSessions.filter((s) =>
+        s.participants.some((p) => salesEmails.has(p.toLowerCase()))
+      );
+      const csSessions = matchingSessions.filter((s) =>
+        !s.participants.some((p) => salesEmails.has(p.toLowerCase()))
+      );
+
+      // Transcripciones de CS (máx 6)
+      const topCS = csSessions.sort((a, b) => b.date - a.date).slice(0, 6);
+      if (topCS.length > 0) {
         const contents = await Promise.all(
-          top8.map((s) => fetchTranscriptContent(apiKey, s.id, s.title))
+          topCS.map((s) => fetchTranscriptContent(apiKey, s.id, s.title))
         );
         firefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
+      }
+
+      // Transcripciones de ventas (máx 4)
+      const topSales = salesSessions.sort((a, b) => b.date - a.date).slice(0, 4);
+      if (topSales.length > 0) {
+        const contents = await Promise.all(
+          topSales.map((s) => fetchTranscriptContent(apiKey, s.id, s.title))
+        );
+        salesFirefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
       }
     } catch (e) {
       console.error("[analyze] Fireflies error:", e);
@@ -680,8 +712,18 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
 
   // ── 7. Construir contexto de documentos adjuntos ──────────────────────────────
   const docsContent = clientDocuments
-    .filter((d) => d.content?.trim())
-    .map((d) => `[Doc: ${d.title}]\n${d.content}`)
+    .map((d) => {
+      if (d.content?.trim()) {
+        return `[Doc: ${d.title}]\n${d.content}`;
+      }
+      // FILE documents without extracted content — mention their existence
+      if (d.type === "FILE") {
+        const meta = [d.fileName, d.mimeType, d.fileSize ? `${(d.fileSize / 1024).toFixed(0)}KB` : null].filter(Boolean).join(" · ");
+        return `[Archivo adjunto: ${d.title}] (${meta}) — sin texto extraído`;
+      }
+      return null;
+    })
+    .filter(Boolean)
     .join("\n\n");
 
   // ── 8. Construir contexto previo de las cards ────────────────────────────────
@@ -723,9 +765,66 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
       "En caso de conflicto entre lo que dicen las transcripciones/documentos y una card marcada con ⚠️, prevalece siempre la card del CSE.";
   }
 
+  // Instrucción de prioridad del canvas de proyecto
+  effectiveSystemPrompt +=
+    "\n\n---\nPRIORIDAD DEL CANVAS: La sección 'CANVAS DEL PROYECTO' contiene información que el consultor revisó y validó. " +
+    "Si hay contradicciones entre el canvas y otras fuentes (transcripciones, ejecuciones anteriores, datos del CRM), " +
+    "PRIORIZA SIEMPRE lo que dice el canvas. El canvas es la fuente de verdad del proyecto.";
+
   // ── 9c. Canvas: cargar para contexto ──────────────────────────────────────────
   const clientCanvas = (client.canvas as ClientCanvas | null) ?? EMPTY_CLIENT_CANVAS;
-  const projectCanvas = (dealProject?.canvas as ProjectCanvas | null) ?? EMPTY_PROJECT_CANVAS;
+
+  // Canvas de proyecto: ahora se lee desde ClientContextCard en vez de Project.canvas JSON
+  let projectCanvasText = "";
+  if (bodyProjectId) {
+    const canvasCards = await prisma.clientContextCard.findMany({
+      where: { projectId: bodyProjectId, canvasSection: { not: null } },
+      orderBy: [{ canvasSection: "asc" }, { canvasOrder: "asc" }],
+      select: { title: true, content: true, canvasSection: true, cardType: true },
+    });
+
+    if (canvasCards.length > 0) {
+      const sectionLabels: Record<string, string> = {
+        objetivo_alcance: "Objetivo y alcance",
+        hipotesis_recomendaciones: "Hipótesis y recomendaciones",
+        procesos: "Procesos",
+        plan_implementacion: "Plan de implementación",
+        documentos: "Documentos del cliente",
+      };
+      const grouped = new Map<string, typeof canvasCards>();
+      canvasCards.forEach((c) => {
+        const s = c.canvasSection!;
+        if (!grouped.has(s)) grouped.set(s, []);
+        grouped.get(s)!.push(c);
+      });
+      const parts: string[] = [];
+      for (const [sectionKey, cards] of grouped.entries()) {
+        const label = sectionLabels[sectionKey] ?? sectionKey;
+        parts.push(`[Sección: ${label}]`);
+        for (const c of cards) {
+          if (c.cardType === "FLOWCHART") {
+            parts.push(`- Card: "${c.title}" → (diagrama de proceso)`);
+          } else {
+            parts.push(`- Card: "${c.title}" → ${c.content.slice(0, 500)}`);
+          }
+        }
+      }
+      projectCanvasText = parts.join("\n");
+    }
+  }
+
+  // Set de IDs de cards que ya están en el canvas (para excluir del step chaining)
+  const canvasCardIds = new Set<string>();
+  if (bodyProjectId) {
+    const idsInCanvas = await prisma.clientContextCard.findMany({
+      where: { projectId: bodyProjectId, canvasSection: { not: null } },
+      select: { id: true, parentCardId: true },
+    });
+    idsInCanvas.forEach((c) => {
+      canvasCardIds.add(c.id);
+      if (c.parentCardId) canvasCardIds.add(c.parentCardId); // Excluir también el original
+    });
+  }
 
   // ── 10. Construir user message unificado ──────────────────────────────────────
   // Siempre incluir serviceType si está disponible (aunque no haya deal en HubSpot)
@@ -739,35 +838,45 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   // al pool del cliente aunque no estén vinculadas a un run específico.
   let prevStepHumanCards: { title: string; content: string; source: string }[] = [];
   if (isStepChained) {
-    // Encadenamiento acumulativo: traer la última ejecución DONE de CADA step anterior
+    // Encadenamiento por grupo temático: traer runs de agentes con groupOrder menor
+    // Fallback a stage/step si el agente no tiene groupOrder
+    const currentGroupOrder = agent?.groupOrder ?? 0;
     const prevRuns = await prisma.agentRun.findMany({
       where: {
         clientId,
         ...(bodyProjectId ? { projectId: bodyProjectId } : {}),
-        stage: bodyStage,
-        step: { lt: bodyStep },
         status: "DONE",
+        agent: currentGroupOrder > 0
+          ? { groupOrder: { lt: currentGroupOrder } }
+          : { associatedStep: { lt: bodyStep } },
       },
-      orderBy: [{ step: "asc" }, { createdAt: "desc" }],
-      distinct: ["step"],
-      select: { id: true, step: true, stepLabel: true },
+      orderBy: [{ createdAt: "desc" }],
+      distinct: ["agentId"],
+      select: { id: true, step: true, stepLabel: true, agent: { select: { name: true } } },
     });
 
     if (prevRuns.length > 0) {
-      prevStepLabel = prevRuns.map((r) => r.stepLabel ?? `Step ${r.step}`).join(" → ");
+      prevStepLabel = prevRuns.map((r) => r.agent?.name ?? r.stepLabel ?? `Step ${r.step}`).join(" → ");
       const runIds = prevRuns.map((r) => r.id);
-      prevStepCards = await prisma.clientContextCard.findMany({
+      const allPrevCards = await prisma.clientContextCard.findMany({
         where: { agentRunId: { in: runIds } },
         orderBy: { order: "asc" },
-        select: { title: true, content: true, source: true },
+        select: { id: true, title: true, content: true, source: true },
       });
+      // Excluir cards que ya están en el canvas (se reciben por la vía del canvas)
+      prevStepCards = allPrevCards
+        .filter((c) => !canvasCardIds.has(c.id))
+        .map(({ title, content, source }) => ({ title, content, source }));
     }
-    // Cards creadas manualmente por el CSE (sin agentRunId)
-    prevStepHumanCards = await prisma.clientContextCard.findMany({
+    // Cards creadas manualmente por el CSE (sin agentRunId), excluyendo las del canvas
+    const allHumanCards = await prisma.clientContextCard.findMany({
       where: { clientId, agentRunId: null, source: "HUMAN" },
       orderBy: { createdAt: "asc" },
-      select: { title: true, content: true, source: true },
+      select: { id: true, title: true, content: true, source: true },
     });
+    prevStepHumanCards = allHumanCards
+      .filter((c) => !canvasCardIds.has(c.id))
+      .map(({ title, content, source }) => ({ title, content, source }));
   }
 
   const userMessage = `Empresa: ${companyName}
@@ -775,12 +884,32 @@ Industria: ${client.industry ?? "No especificada"}
 Notas base: ${client.notes ?? "Sin notas"}
 ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}` : ""}
 
-${bodyProjectId ? `=== CANVAS DE EMPRESA (conocimiento compartido del cliente) ===
+${(() => {
+  const escala = (clientCanvas as Record<string, unknown>)?.escala_rendimiento as { general?: number; por_hub?: { marketing?: number; sales?: number; service?: number }; objetivo?: number } | undefined;
+  if (!escala || (escala.general ?? 0) === 0) return "";
+  const hubLines = [];
+  if (escala.por_hub?.marketing) hubLines.push(`  - Marketing Hub: nivel ${escala.por_hub.marketing}/4`);
+  if (escala.por_hub?.sales) hubLines.push(`  - Sales Hub: nivel ${escala.por_hub.sales}/4`);
+  if (escala.por_hub?.service) hubLines.push(`  - Service Hub: nivel ${escala.por_hub.service}/4`);
+  return `=== ESCALA DE RENDIMIENTO DEL CLIENTE ===
+⚠️ IMPORTANTE: El cliente está en NIVEL ${escala.general}/4 de madurez.
+${hubLines.join("\n")}
+${escala.objetivo ? `Meta: llegar a nivel ${escala.objetivo}/4.` : ""}
+
+Calibra tus recomendaciones a este nivel:
+- NO propongas soluciones de nivel ${Math.min((escala.general ?? 0) + 2, 4)} a un cliente en nivel ${escala.general}.
+- La meta es avanzar AL SIGUIENTE nivel, no saltar dos o tres niveles.
+- Referencia: Nivel 0=Deficiente, 1=Básico, 2=Estructurado, 3=Optimizado, 4=Inteligente.
+
+`;
+})()}${bodyProjectId ? `=== CANVAS DE EMPRESA (conocimiento compartido del cliente) ===
 Úsalo como base. Contenido existente = conocimiento validado. Campos vacíos = oportunidad de llenar.
 ${JSON.stringify(clientCanvas, null, 2)}
 
-=== CANVAS DEL PROYECTO (conocimiento del caso de uso actual) ===
-${JSON.stringify(projectCanvas, null, 2)}
+${projectCanvasText ? `=== CANVAS DEL PROYECTO (información validada por el consultor — PRIORIDAD MÁXIMA) ===
+La siguiente información fue revisada y validada por el consultor. Si hay contradicciones entre el canvas y otras fuentes (transcripciones, ejecuciones anteriores), PRIORIZA lo que dice el canvas.
+
+${projectCanvasText}` : "=== CANVAS DEL PROYECTO ===\n(Sin información validada aún)"}
 
 ` : ""}${prevStepCards.length > 0 || prevStepHumanCards.length > 0 ? `=== ANÁLISIS DE LA SUBETAPA ANTERIOR${prevStepLabel ? ` (${prevStepLabel})` : ""} ===
 Cards del paso anterior para referencia:
@@ -791,7 +920,7 @@ ${[
     return `${tag} **${c.title}:**\n${c.content}`;
   }),
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
-].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS ===\n${docsContent.slice(0, 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${firefliesContent ? `=== TRANSCRIPCIONES DE SESIONES (Fireflies) ===\n${firefliesContent.slice(0, 5000)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
+].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS ===\n${docsContent.slice(0, 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas de Dinterweb. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, 4000)}\n\n` : ""}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 11. Llamar a Claude ───────────────────────────────────────────────────────
@@ -892,11 +1021,9 @@ Analiza toda la información anterior y completa las secciones de contexto del c
       return NextResponse.json({ error: "invalid_flowchart_response" }, { status: 500 });
     }
   } else if (isCardsAndFlowcharts) {
-    if (!analysisJson?.cards?.length) {
-      return NextResponse.json({ error: "invalid_response_cards" }, { status: 500 });
-    }
-    if (!analysisJson?.flowcharts?.length) {
-      return NextResponse.json({ error: "invalid_response_flowcharts" }, { status: 500 });
+    // Cards son opcionales (el agente puede generar solo flowcharts)
+    if (!analysisJson?.flowcharts?.length && !analysisJson?.cards?.length) {
+      return NextResponse.json({ error: "invalid_response_empty" }, { status: 500 });
     }
   } else {
     if (!analysisJson?.cards?.length) {
@@ -927,66 +1054,197 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     );
   }
 
-  // ── 13. Si es FLOWCHART, devolver directo (sin ClientContextCard) ─────────────
+  // ── 13. Si es FLOWCHART, crear ClientContextCard tipo FLOWCHART ──────────────
   if (isFlowchart) {
-    return NextResponse.json({
-      flowchart: analysisJson,
-      run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
-    });
-  }
+    // analysisJson puede tener un solo flowchart o un array de flowcharts
+    const flowcharts: Array<{ title?: string; description?: string; nodes: unknown[]; edges: unknown[] }> =
+      analysisJson?.flowcharts ?? (analysisJson?.nodes ? [analysisJson] : []);
 
-  // ── 13b. Si es CARDS_AND_FLOWCHARTS, guardar cards Y flowcharts ───────────────
-  if (isCardsAndFlowcharts) {
-    const validCards = (analysisJson!.cards ?? []).filter(
-      (card: { title?: string; content?: string }) => card.title?.trim()
-    );
-    await prisma.clientContextCard.createMany({
-      data: validCards.map((card: { title: string; content: string }, i: number) => ({
-        clientId,
-        projectId:   bodyProjectId,
-        agentRunId:  run.id,
-        title:       card.title.trim(),
-        content:     card.content ?? "",
-        order:       i,
-        source:      "AGENT" as const,
-      })),
-      skipDuplicates: true,
-    });
-    // Guardar los flowcharts en el output del run
-    await prisma.agentRun.update({
-      where: { id: run.id },
-      data: { output: JSON.stringify({ flowcharts: analysisJson!.flowcharts }) },
-    });
+    if (flowcharts.length > 0) {
+      await prisma.clientContextCard.createMany({
+        data: flowcharts.map((fc: { title?: string; description?: string; nodes: unknown[]; edges: unknown[] }, i: number) => ({
+          clientId,
+          projectId:   bodyProjectId,
+          agentRunId:  run.id,
+          title:       fc.title?.trim() || "Diagrama de proceso",
+          content:     fc.description ?? "",
+          order:       i,
+          source:      "AGENT" as const,
+          cardType:    "FLOWCHART" as const,
+          diagramData: { nodes: fc.nodes, edges: fc.edges },
+        })),
+        skipDuplicates: true,
+      });
+    }
+
     const runCards = await prisma.clientContextCard.findMany({
       where: { agentRunId: run.id },
       orderBy: { order: "asc" },
     });
     return NextResponse.json({
       cards: runCards,
-      flowcharts: analysisJson!.flowcharts,
+      flowchart: analysisJson,
       run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
     });
   }
 
+  // Mapeo de grupo del agente → sección por defecto del canvas
+  const GROUP_TO_SECTION: Record<string, string> = {
+    preparacion:   "procesos",
+    diagnostico:   "hipotesis_recomendaciones",
+    planificacion: "plan_implementacion",
+    ejecucion:     "plan_implementacion",
+    adopcion:      "plan_implementacion",
+  };
+  const defaultSection = bodyProjectId
+    ? (GROUP_TO_SECTION[agent.agentGroup ?? ""] ?? "procesos")
+    : null;
+
+  // ── 13b. Si es CARDS_AND_FLOWCHARTS, guardar cards de texto + cards FLOWCHART ─
+  if (isCardsAndFlowcharts) {
+    try {
+    const validCards = (analysisJson!.cards ?? []).filter(
+      (card: { title?: string; content?: string }) => card.title?.trim()
+    );
+
+    // Crear cards de texto (con canvasSection si la tienen)
+    if (validCards.length > 0) {
+      await prisma.clientContextCard.createMany({
+        data: validCards.map((card: { title: string; content: string; canvasSection?: string }, i: number) => ({
+          clientId,
+          projectId:   bodyProjectId,
+          agentRunId:  run.id,
+          title:       card.title.trim(),
+          content:     card.content ?? "",
+          order:       i,
+          source:      "AGENT" as const,
+          cardType:    "TEXT" as const,
+          canvasSection: card.canvasSection ?? defaultSection,
+          canvasStatus:  "draft",
+          canvasOrder:   i,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Crear cards FLOWCHART (una por cada flowchart generado) → siempre en "procesos"
+    const flowcharts = analysisJson!.flowcharts ?? [];
+    console.log(`[analyze CAF] Saving ${flowcharts.length} flowcharts, projectId=${bodyProjectId}, clientId=${clientId}`);
+    if (flowcharts.length > 0) {
+      await prisma.clientContextCard.createMany({
+        data: flowcharts.map((fc: { title?: string; description?: string; nodes: unknown[]; edges: unknown[] }, i: number) => ({
+          clientId,
+          projectId:     bodyProjectId,
+          agentRunId:    run.id,
+          title:         fc.title?.trim() || "Diagrama de proceso",
+          content:       fc.description ?? "",
+          order:         validCards.length + i,
+          source:        "AGENT" as const,
+          cardType:      "FLOWCHART" as const,
+          diagramData:   { nodes: fc.nodes, edges: fc.edges },
+          canvasSection: "procesos",
+          canvasStatus:  "draft",
+          canvasOrder:   validCards.length + i,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Guardar los flowcharts en AgentRun.output como backup
+    await prisma.agentRun.update({
+      where: { id: run.id },
+      data: { output: JSON.stringify({ flowcharts }) },
+    });
+
+    const runCards = await prisma.clientContextCard.findMany({
+      where: { agentRunId: run.id },
+      orderBy: { order: "asc" },
+    });
+    return NextResponse.json({
+      cards: runCards,
+      flowcharts,
+      run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
+    });
+    } catch (cafErr) {
+      console.error("[analyze CAF] Error saving cards/flowcharts:", cafErr);
+      return NextResponse.json({ error: "Error guardando flowcharts", detail: String(cafErr) }, { status: 500 });
+    }
+  }
+
   // ── 13c. Si es CARDS, guardar ClientContextCard vinculadas al run ─────────────
+  // Leer secciones y cards existentes del canvas para auto-matching y detección de updates
+  let canvasSections: string[] = [];
+  let existingCanvasCards: Array<{ id: string; title: string; canvasSection: string }> = [];
+  if (bodyProjectId) {
+    const existingCards = await prisma.clientContextCard.findMany({
+      where: { projectId: bodyProjectId, canvasSection: { not: null } },
+      select: { id: true, title: true, canvasSection: true },
+    });
+    canvasSections = [...new Set(existingCards.map((c) => c.canvasSection!))];
+    existingCanvasCards = existingCards as Array<{ id: string; title: string; canvasSection: string }>;
+  }
+
+  // Secciones estándar del canvas de proyecto
+  const STANDARD_SECTIONS: Record<string, string> = {
+    objetivo_alcance: "objetivo_alcance",
+    hipotesis_recomendaciones: "hipotesis_recomendaciones",
+    procesos: "procesos",
+    plan_implementacion: "plan_implementacion",
+  };
+  const allKnownSections = [...Object.keys(STANDARD_SECTIONS), ...canvasSections];
+
   const validCards = (analysisJson!.cards ?? []).filter(
     (card: { title?: string; content?: string }) => card.title?.trim()
   );
-  const savedCards = await prisma.clientContextCard.createMany({
-    data: validCards.map((card: { title: string; content: string }, i: number) => ({
+
+  // Para cada card, determinar si va al canvas como draft y si es un update
+  const cardDataList = validCards.map((card: { title: string; content: string; canvasSection?: string }, i: number) => {
+    let section: string | null = null;
+
+    // 1. Si el agente sugirió una sección explícita
+    if (card.canvasSection && (allKnownSections.includes(card.canvasSection) || STANDARD_SECTIONS[card.canvasSection])) {
+      section = card.canvasSection;
+    }
+
+    // 2. Fallback: asignar sección por defecto según grupo del agente
+    if (!section && defaultSection) {
+      section = defaultSection;
+    }
+
+    // 3. Detectar si es un update de una card existente (mismo título en misma sección)
+    let parentCardId: string | null = null;
+    if (section) {
+      const existing = existingCanvasCards.find(
+        (c) => c.canvasSection === section &&
+               c.title.toLowerCase().trim() === card.title.trim().toLowerCase()
+      );
+      if (existing) {
+        parentCardId = existing.id; // Link como update de la card existente
+      }
+    }
+
+    return {
       clientId,
-      projectId:   bodyProjectId,
-      agentRunId:  run.id,
-      title:       card.title.trim(),
-      content:     card.content ?? "",
-      order:       i,
-      source:      "AGENT" as const,
-    })),
+      projectId:     bodyProjectId,
+      agentRunId:    run.id,
+      title:         card.title.trim(),
+      content:       card.content ?? "",
+      parentCardId,
+      order:         i,
+      source:        "AGENT" as const,
+      canvasSection: section,
+      canvasStatus:  section ? "draft" : "confirmed",
+      canvasOrder:   section ? i : null,
+    };
+  });
+
+  const savedCards = await prisma.clientContextCard.createMany({
+    data: cardDataList,
     skipDuplicates: true,
   });
   void savedCards;
 
-  // ── 14. Auto-generar project tags ────────────────────────────────────────────
+  // ── 14. Auto-generar project tags (solo desde serviceType, NO desde respuesta del agente) ──
   if (bodyProjectId) {
     try {
       const proj = await prisma.project.findUnique({
@@ -995,7 +1253,7 @@ Analiza toda la información anterior y completa las secciones de contexto del c
       });
       const currentTags = proj?.tags ?? [];
 
-      // Mapear serviceType a Hub tag si no existe ya
+      // Solo usar serviceType → Hub tag. Tags del agente se ignoran.
       const SERVICE_TO_HUB: Record<string, string> = {
         loop_marketing: "Marketing Hub",
         loop_sales: "Sales Hub",
@@ -1003,18 +1261,10 @@ Analiza toda la información anterior y completa las secciones de contexto del c
       };
       const hubTag = proj?.serviceType ? SERVICE_TO_HUB[proj.serviceType] : undefined;
 
-      // Merge: tags del agente (si los devolvió) + hub tag del serviceType
-      const agentTags = (analysisJson!.tags && Array.isArray(analysisJson!.tags))
-        ? analysisJson!.tags.map((t: string) => t.trim()).filter(Boolean)
-        : [];
-      const allNewTags = [...agentTags];
-      if (hubTag) allNewTags.push(hubTag);
-
-      const merged = [...new Set([...currentTags, ...allNewTags])];
-      if (merged.length !== currentTags.length) {
+      if (hubTag && !currentTags.includes(hubTag)) {
         await prisma.project.update({
           where: { id: bodyProjectId },
-          data: { tags: merged },
+          data: { tags: [hubTag] },
         });
       }
     } catch { /* no-op */ }

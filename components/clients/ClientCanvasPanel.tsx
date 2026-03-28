@@ -3,12 +3,15 @@
 import { useState, useEffect, useCallback } from "react";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { CLIENT_CANVAS_LABELS } from "@/lib/canvas/template";
+import HubBadge from "@/components/ui/HubBadge";
+import ProjectTypeBadge from "@/components/ui/ProjectTypeBadge";
 
 interface Suggestion {
   id: string;
   section: string;
   current: unknown;
   suggested: unknown;
+  sourceLabel: string | null;
   createdAt: string;
 }
 
@@ -174,12 +177,28 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
           </p>
           {suggestions.map((s) => (
             <div key={s.id} className="p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
-              <p className="text-xs font-medium text-amber-700">
-                {CLIENT_CANVAS_LABELS[s.section as keyof ClientCanvas] ?? s.section}
-              </p>
-              <pre className="text-xs text-gray-600 whitespace-pre-wrap max-h-32 overflow-y-auto">
-                {typeof s.suggested === "string" ? s.suggested : JSON.stringify(s.suggested, null, 2)}
-              </pre>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-amber-700">
+                  {CLIENT_CANVAS_LABELS[s.section as keyof ClientCanvas] ?? s.section}
+                </p>
+                {s.sourceLabel && (
+                  <span className="text-[9px] text-amber-500 bg-amber-100 px-2 py-0.5 rounded-full">
+                    {s.sourceLabel}
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-gray-600 whitespace-pre-wrap max-h-32 overflow-y-auto">
+                {typeof s.suggested === "string"
+                  ? s.suggested
+                  : typeof s.suggested === "object" && s.suggested !== null
+                  ? Object.entries(s.suggested as Record<string, unknown>).map(([k, v]) => (
+                      <p key={k}>
+                        <span className="font-medium text-gray-500 capitalize">{k.replace(/_/g, " ")}:</span>{" "}
+                        {String(v ?? "")}
+                      </p>
+                    ))
+                  : JSON.stringify(s.suggested)}
+              </div>
               <div className="flex gap-2">
                 <button onClick={() => handleSuggestion(s.id, "accept")} className="px-3 py-1 text-xs font-medium rounded-lg bg-green-600 hover:bg-green-500 text-white transition-colors">Aprobar</button>
                 <button onClick={() => handleSuggestion(s.id, "reject")} className="px-3 py-1 text-xs font-medium rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-600 transition-colors">Rechazar</button>
@@ -223,6 +242,8 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
           );
         })}
       </div>
+
+      {/* Proyectos activos movido a WorkspaceClient — fuera del canvas de empresa */}
     </div>
   );
 }
@@ -230,6 +251,58 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
 // ── Render values matching existing card style ──────────────────────────────
 
 function CanvasValue({ value, sectionKey, onSave }: { value: unknown; sectionKey: string; onSave: (val: unknown) => void }) {
+  // ── Specialized renderers ──
+  if (sectionKey === "escala_rendimiento") {
+    return <EscalaRendimiento value={value as ClientCanvas["escala_rendimiento"]} onSave={onSave} />;
+  }
+
+  if (sectionKey === "retos_estrategicos") {
+    const items = value as ClientCanvas["retos_estrategicos"];
+    if (!items?.length) return <p className="text-sm text-gray-300 italic">Sin datos</p>;
+    return (
+      <div className="space-y-2">
+        {items.map((r, i) => (
+          <div key={i} className="flex items-start gap-2 text-sm">
+            <span className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${r.estado === "validado" ? "bg-green-500" : "bg-amber-400"}`} />
+            <div className="flex-1">
+              <p className="text-gray-700">{r.descripcion}</p>
+              <p className="text-[10px] text-gray-400">{r.fuente} · {r.estado === "validado" ? "Validado" : "Por validar"}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (sectionKey === "oportunidades_futuras") {
+    const items = value as ClientCanvas["oportunidades_futuras"];
+    if (!items?.length) return <p className="text-sm text-gray-300 italic">Sin datos</p>;
+    const estadoColors: Record<string, string> = {
+      identificada: "bg-gray-100 text-gray-600",
+      propuesta: "bg-blue-50 text-blue-600",
+      aceptada: "bg-green-50 text-green-600",
+      descartada: "bg-red-50 text-red-500",
+    };
+    return (
+      <div className="space-y-2">
+        {items.map((o, i) => (
+          <div key={i} className="flex items-start gap-2 text-sm">
+            <span className="text-brand mt-1">•</span>
+            <div className="flex-1">
+              <p className="text-gray-700">{o.descripcion}</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200 font-medium">{o.hub}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${estadoColors[o.estado] ?? "bg-gray-100 text-gray-500"}`}>{o.estado}</span>
+                <span className="text-[10px] text-gray-400">Nivel {o.escala_nivel}/4</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // ── Generic renderers ──
   if (typeof value === "string") {
     return <EditableText value={value} onSave={(v) => onSave(v)} />;
   }
@@ -237,7 +310,6 @@ function CanvasValue({ value, sectionKey, onSave }: { value: unknown; sectionKey
   if (Array.isArray(value)) {
     if (value.length === 0) return <p className="text-sm text-gray-300 italic">Sin datos</p>;
 
-    // String array (herramientas)
     if (typeof value[0] === "string") {
       return (
         <ul className="space-y-1">
@@ -251,7 +323,6 @@ function CanvasValue({ value, sectionKey, onSave }: { value: unknown; sectionKey
       );
     }
 
-    // Object array (stakeholders)
     return (
       <div className="space-y-3">
         {value.map((item, i) => (
@@ -284,6 +355,67 @@ function CanvasValue({ value, sectionKey, onSave }: { value: unknown; sectionKey
   return null;
 }
 
+// ── Escala de rendimiento ────────────────────────────────────────────────────
+
+function EscalaRendimiento({ value, onSave }: { value: ClientCanvas["escala_rendimiento"]; onSave: (val: unknown) => void }) {
+  const v = value ?? { general: 0, por_hub: { marketing: 0, sales: 0, service: 0 }, objetivo: 0 };
+
+  const updateHub = (hub: "marketing" | "sales" | "service", level: number) => {
+    const newPorHub = { ...v.por_hub, [hub]: level };
+    const activeHubs = [newPorHub.marketing, newPorHub.sales, newPorHub.service].filter((l) => l > 0);
+    const newGeneral = activeHubs.length > 0 ? Math.round(activeHubs.reduce((a, b) => a + b, 0) / activeHubs.length) : 0;
+    onSave({ ...v, por_hub: newPorHub, general: newGeneral });
+  };
+
+  const updateObjetivo = (objetivo: number) => {
+    onSave({ ...v, objetivo });
+  };
+
+  const LevelSelector = ({ label, level, color, onChange }: { label: string; level: number; color: string; onChange: (n: number) => void }) => (
+    <div className="flex items-center gap-2">
+      <span className="text-[11px] text-gray-500 w-20 flex-shrink-0">{label}</span>
+      <div className="flex-1 flex items-center gap-1">
+        {[0, 1, 2, 3, 4].map((n) => (
+          <button
+            key={n}
+            onClick={() => onChange(n)}
+            className={`w-8 h-6 rounded text-[10px] font-semibold transition-colors ${
+              n <= level ? color : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+            }`}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+      <span className="text-[11px] font-semibold text-gray-600 w-6 text-right">{level}/4</span>
+    </div>
+  );
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center gap-3 mb-3">
+        <span className="text-2xl font-bold text-gray-900">{v.general}</span>
+        <span className="text-sm text-gray-400">/4 general</span>
+        <div className="flex items-center gap-1 ml-auto">
+          <span className="text-[10px] text-gray-400">Meta:</span>
+          <select
+            value={v.objetivo}
+            onChange={(e) => updateObjetivo(Number(e.target.value))}
+            className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-200 font-medium focus:outline-none"
+          >
+            {[0, 1, 2, 3, 4].map((n) => (
+              <option key={n} value={n}>{n}/4</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <LevelSelector label="Marketing" level={v.por_hub?.marketing ?? 0} color="bg-orange-400 text-white" onChange={(n) => updateHub("marketing", n)} />
+      <LevelSelector label="Sales" level={v.por_hub?.sales ?? 0} color="bg-blue-400 text-white" onChange={(n) => updateHub("sales", n)} />
+      <LevelSelector label="Service" level={v.por_hub?.service ?? 0} color="bg-green-400 text-white" onChange={(n) => updateHub("service", n)} />
+    </div>
+  );
+}
+
 function EditableText({ value, onSave }: { value: string; onSave: (val: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [local, setLocal] = useState(value);
@@ -311,11 +443,128 @@ function EditableText({ value, onSave }: { value: string; onSave: (val: string) 
   );
 }
 
+// ── Proyectos activos (dinámico) ─────────────────────────────────────────────
+
+interface ProjectInfo {
+  id: string;
+  name: string;
+  status: string;
+  projectType: string | null;
+  serviceType: string | null;
+  tags: string[];
+  currentStage: number;
+  currentStep: number;
+}
+
+const STAGE_NAMES: Record<number, string> = { 1: "Diagnóstico", 2: "Planificación", 3: "Adopción" };
+
+export function ProjectosActivos({ clientId }: { clientId: string }) {
+  const [projects, setProjects] = useState<ProjectInfo[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const fetchProjects = () => {
+    fetch(`/api/clients/${clientId}`)
+      .then((r) => r.json())
+      .then((data) => setProjects(data.projects ?? []))
+      .catch(() => {});
+  };
+
+  useEffect(() => { fetchProjects(); }, [clientId]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/sync-services`, { method: "POST" });
+      const data = await res.json();
+      if (data.error) {
+        setSyncResult(`Error: ${data.error}`);
+      } else {
+        const parts = [];
+        if (data.created) parts.push(`${data.created} creados`);
+        if (data.updated) parts.push(`${data.updated} actualizados`);
+        if (data.skipped) parts.push(`${data.skipped} inactivos`);
+        setSyncResult(parts.length ? parts.join(", ") : `${data.found} servicios encontrados, sin cambios`);
+        fetchProjects();
+      }
+    } catch {
+      setSyncResult("Error de conexión");
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncResult(null), 5000);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+        <h3 className="text-sm font-semibold text-gray-800">Proyectos activos</h3>
+        {projects.length > 0 && (
+          <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+            {projects.length}
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          {syncResult && (
+            <span className="text-[10px] text-green-600 animate-in fade-in">{syncResult}</span>
+          )}
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
+            title="Sincronizar servicios desde HubSpot"
+          >
+            <svg className={`w-3 h-3 ${syncing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {syncing ? "Sincronizando..." : "Sync HubSpot"}
+          </button>
+        </div>
+      </div>
+
+      {projects.length === 0 ? (
+        <div className="text-center py-4">
+          <p className="text-xs text-gray-400">Sin proyectos</p>
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="mt-2 px-3 py-1.5 text-xs text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+          >
+            Sincronizar servicios desde HubSpot
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {projects.map((p) => (
+            <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800 truncate">{p.name}</p>
+                <p className="text-[10px] text-gray-400">
+                  Etapa {p.currentStage}: {STAGE_NAMES[p.currentStage] ?? `Etapa ${p.currentStage}`}
+                </p>
+              </div>
+              <ProjectTypeBadge projectType={p.projectType} size="xs" />
+              <HubBadge tags={p.tags} serviceType={p.serviceType} size="xs" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function checkEmpty(value: unknown): boolean {
   if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === "number") return value === 0;
   if (typeof value === "object" && value !== null) {
     return Object.values(value).every((v) =>
-      typeof v === "string" ? !v.trim() : Array.isArray(v) ? v.length === 0 : false
+      typeof v === "string" ? !v.trim()
+      : typeof v === "number" ? v === 0
+      : Array.isArray(v) ? v.length === 0
+      : typeof v === "object" && v !== null ? checkEmpty(v)
+      : true
     );
   }
   if (typeof value === "string") return !value.trim();

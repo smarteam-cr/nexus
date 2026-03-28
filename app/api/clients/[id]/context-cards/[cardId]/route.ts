@@ -14,6 +14,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
       title?: string;
       content?: string;
       order?: number;
+      diagramData?: unknown;
     };
 
     // Si la card fue generada por el agente y se está editando, marcarla como MODIFIED
@@ -29,6 +30,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
         ...(body.title !== undefined ? { title: body.title.trim() } : {}),
         ...(body.content !== undefined ? { content: body.content } : {}),
         ...(body.order !== undefined ? { order: body.order } : {}),
+        ...(body.diagramData !== undefined ? { diagramData: body.diagramData as object } : {}),
         ...sourceUpdate,
       },
     });

@@ -65,13 +65,9 @@ export async function updateCanvasAsync(
     ? `${clientAgent.systemPrompt}${clientAgent.additionalInstructions ? "\n\n" + clientAgent.additionalInstructions : ""}`
     : `Extrae información para sugerir actualizaciones al canvas de empresa con secciones: perfil, stakeholders, madurez, herramientas, contexto_comercial.`;
 
-  const systemPrompt = `Tu tarea: analiza las cards y extrae información relevante para actualizar DOS canvas.
+  const systemPrompt = `Tu tarea: analiza las cards generadas por agentes y extrae información relevante para SUGERIR actualizaciones al canvas de empresa.
 
-=== AGENTE DE CANVAS DE PROYECTO ===
-${projectPromptPart}
-
-Estructura actual del canvas de proyecto:
-${JSON.stringify(EMPTY_PROJECT_CANVAS, null, 2)}
+NOTA: El canvas de proyecto ya NO se actualiza automáticamente. El consultor decide manualmente qué cards enviar al canvas de proyecto. Solo genera sugerencias para el canvas de EMPRESA.
 
 === AGENTE DE CANVAS DE EMPRESA ===
 ${clientPromptPart}
@@ -79,7 +75,7 @@ ${clientPromptPart}
 Estructura actual del canvas de empresa:
 ${JSON.stringify(EMPTY_CLIENT_CANVAS, null, 2)}
 
-REGLAS GLOBALES:
+REGLAS:
 - Solo incluye secciones donde las cards tienen información CONCRETA y nueva.
 - Para arrays, devuelve el array COMPLETO (no parcial).
 - Si el canvas ya tiene contenido, ENRIQUÉCELO, no lo reemplaces con menos info.
@@ -88,15 +84,11 @@ REGLAS GLOBALES:
 
 Responde SOLO con JSON válido:
 {
-  "project_canvas_updates": { ... },
   "client_canvas_suggestions": { ... }
 }`;
 
   const userMessage = `=== CANVAS ACTUAL DE EMPRESA ===
 ${JSON.stringify(clientCanvas, null, 2)}
-
-=== CANVAS ACTUAL DE PROYECTO ===
-${JSON.stringify(projectCanvas, null, 2)}
 
 === CARDS GENERADAS POR EL AGENTE ===
 ${cardsText}
@@ -139,17 +131,10 @@ Extrae la información relevante de las cards para actualizar ambos canvas.`;
       }
     }
 
-    // Project canvas: merge directo
-    if (result.project_canvas_updates && Object.keys(result.project_canvas_updates).length > 0) {
-      const validated = validateCanvasKeys(EMPTY_PROJECT_CANVAS, result.project_canvas_updates as Record<string, unknown>);
-      if (Object.keys(validated).length > 0) {
-        const merged = deepMergeCanvas(projectCanvas, validated);
-        await prisma.project.update({
-          where: { id: projectId },
-          data: { canvas: merged as object },
-        });
-      }
-    }
+    // Project canvas: DESACTIVADO — el canvas de proyecto ahora se construye desde
+    // ClientContextCard con canvasSection. El CSE decide manualmente qué enviar al canvas.
+    // El merge directo contradice el principio de que el consultor es el curador.
+    // if (result.project_canvas_updates) { ... }
 
     // Client canvas: crear sugerencias para aprobación
     if (result.client_canvas_suggestions && Object.keys(result.client_canvas_suggestions).length > 0) {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 import type { FlowchartData } from "@/components/flowchart/FlowchartViewer";
+import SendToCanvasMenu from "./SendToCanvasMenu";
 
 // Importar FlowchartViewer dinámicamente (depende de @xyflow/react que es client-only)
 const FlowchartViewer = dynamic(
@@ -23,6 +24,8 @@ interface ContextCard {
   content: string;
   order: number;
   source: "AGENT" | "HUMAN" | "MODIFIED";
+  cardType?: "TEXT" | "FLOWCHART" | "CHART";
+  diagramData?: unknown;
   createdAt: string;
   updatedAt: string;
 }
@@ -152,6 +155,7 @@ export default function ClientContextCards({
           sessionKeywords: stepKeywords ?? [],
           sectionLabel:    sectionLabel ?? null,
           agentId:         agentId ?? null,
+          projectId:       projectId ?? null,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -374,13 +378,14 @@ export default function ClientContextCards({
       {/* ── CARDS_AND_FLOWCHARTS: cards del run + diagramas ── */}
       {!analyzing && agentOutputType === "CARDS_AND_FLOWCHARTS" && (runCards.length > 0 || flowcharts.length > 0 || addingCard) && (
         <div>
-          {/* Cards del run (editables) */}
+          {/* Cards de texto del run (editables) */}
           <div className="columns-1 sm:columns-2 xl:columns-3 gap-4 [column-fill:_balance] mb-8">
-            {runCards.map((card) => (
+            {runCards.filter((c) => c.cardType !== "FLOWCHART" && c.cardType !== "CHART").map((card) => (
               <ContextCardItem
                 key={card.id}
                 card={card}
                 clientId={clientId}
+                projectId={projectId}
                 onUpdate={handleUpdateRunCard}
                 onDelete={() => handleDeleteRunCard(card.id)}
               />
@@ -446,24 +451,32 @@ export default function ClientContextCards({
                 </span>
               </div>
               {/* Todos los flowcharts apilados */}
-              {flowcharts.map((fc, idx) => (
-                <div key={idx}>
-                  {fc.title && (
-                    <p className="text-xs font-semibold text-gray-400 mb-1">
-                      {idx + 1}. {fc.title}
-                    </p>
-                  )}
-                  {fc.description && (
-                    <p className="text-xs text-gray-600 mb-3 leading-relaxed">
-                      {fc.description}
-                    </p>
-                  )}
-                  <FlowchartViewer
-                    data={fc}
-                    onSave={(updated) => handleSaveFlowchart(updated, idx)}
-                  />
-                </div>
-              ))}
+              {flowcharts.map((fc, idx) => {
+                // Find the matching FLOWCHART card for this diagram (by title or order)
+                const flowchartCards = runCards.filter((c) => c.cardType === "FLOWCHART");
+                const matchingCard = flowchartCards[idx];
+                return (
+                  <div key={idx}>
+                    <div className="flex items-center justify-between mb-1">
+                      {fc.title && (
+                        <p className="text-xs font-semibold text-gray-400">
+                          {idx + 1}. {fc.title}
+                        </p>
+                      )}
+                      {/* SendToCanvasMenu removed — flowcharts auto-populate canvas as drafts */}
+                    </div>
+                    {fc.description && (
+                      <p className="text-xs text-gray-600 mb-3 leading-relaxed">
+                        {fc.description}
+                      </p>
+                    )}
+                    <FlowchartViewer
+                      data={fc}
+                      onSave={(updated) => handleSaveFlowchart(updated, idx)}
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -487,6 +500,7 @@ export default function ClientContextCards({
               key={card.id}
               card={card}
               clientId={clientId}
+              projectId={projectId}
               onUpdate={handleUpdateRunCard}
               onDelete={() => handleDeleteRunCard(card.id)}
             />
@@ -897,11 +911,13 @@ const COLLAPSE_THRESHOLD = 3;
 function ContextCardItem({
   card,
   clientId,
+  projectId,
   onUpdate,
   onDelete,
 }: {
   card: ContextCard;
   clientId: string;
+  projectId?: string;
   onUpdate: (card: ContextCard) => void;
   onDelete: () => void;
 }) {
@@ -1004,6 +1020,7 @@ function ContextCardItem({
               />
             </svg>
           </button>
+          {/* SendToCanvasMenu removed — cards auto-populate canvas as drafts */}
           <button
             onClick={onDelete}
             title="Eliminar"

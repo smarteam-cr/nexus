@@ -1,87 +1,283 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import type { ProjectCanvas } from "@/lib/canvas/template";
-import { PROJECT_CANVAS_LABELS } from "@/lib/canvas/template";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useParams } from "next/navigation";
+import dynamic from "next/dynamic";
+import ReactMarkdown from "react-markdown";
+import SendToCanvasMenu from "./SendToCanvasMenu";
+import ProjectGPS from "./ProjectGPS";
 
-type Confidence = "confirmed" | "inferred" | "empty";
+const FlowchartViewer = dynamic(
+  () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
+  { ssr: false, loading: () => <div className="h-64 bg-gray-50 rounded-xl animate-pulse" /> }
+);
 
-const CONFIDENCE_STYLES: Record<Confidence, { dot: string; border: string; bg: string; label: string }> = {
-  confirmed: { dot: "bg-green-500", border: "border-gray-100", bg: "bg-white", label: "Confirmado" },
-  inferred:  { dot: "bg-amber-400", border: "border-amber-200", bg: "bg-amber-50/50", label: "Por confirmar" },
-  empty:     { dot: "bg-gray-300", border: "border-dashed border-gray-200", bg: "bg-white", label: "Sin datos" },
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface CanvasCard {
+  id: string;
+  title: string;
+  content: string;
+  cardType: "TEXT" | "FLOWCHART" | "CHART";
+  canvasOrder: number | null;
+  canvasStatus: "draft" | "confirmed";
+  diagramData: unknown;
+  source: "AGENT" | "HUMAN" | "MODIFIED";
+  parentCardId: string | null;
+  publishedToClient: boolean;
+  publishedContent: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface CanvasSection {
+  key: string;
+  label: string;
+  cards: CanvasCard[];
+}
+
+const SECTION_ICONS: Record<string, string> = {
+  objetivo_alcance: "🎯",
+  hipotesis_recomendaciones: "💡",
+  procesos: "⚙️",
+  plan_implementacion: "📋",
 };
 
-export default function ProjectCanvasPanel({ projectId }: { projectId: string }) {
-  const [canvas, setCanvas] = useState<ProjectCanvas | null>(null);
-  const [confidence, setConfidence] = useState<Record<string, Confidence>>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
+// ── Component ────────────────────────────────────────────────────────────────
 
-  const fetchCanvas = useCallback(async () => {
+export default function ProjectCanvasPanel({ projectId }: { projectId: string }) {
+  const params = useParams();
+  const clientId = params?.id as string;
+  const [sections, setSections] = useState<CanvasSection[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [dragCardId, setDragCardId] = useState<string | null>(null);
+  const [dragOverTarget, setDragOverTarget] = useState<{ sectionKey: string; index: number } | null>(null);
+  const dragCounterRef = useRef(0);
+  const [processingSession, setProcessingSession] = useState(false);
+  const [sessionResult, setSessionResult] = useState<{ cards: CanvasCard[]; sessionTitle: string } | null>(null);
+  const [unprocessedSessions, setUnprocessedSessions] = useState(0);
+
+  // Check share token
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/share`)
+      .then((r) => r.json())
+      .then((d) => setShareToken(d.shareToken ?? null))
+      .catch(() => {});
+  }, [projectId]);
+
+  const generateShareToken = async () => {
+    const res = await fetch(`/api/projects/${projectId}/share`, { method: "POST" });
+    const data = await res.json();
+    setShareToken(data.shareToken);
+  };
+
+  const revokeShareToken = async () => {
+    await fetch(`/api/projects/${projectId}/share`, { method: "DELETE" });
+    setShareToken(null);
+    setShareMenuOpen(false);
+  };
+
+  const copyShareUrl = () => {
+    if (!shareToken) return;
+    const url = `${window.location.origin}/share/${shareToken}`;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Check for unprocessed sessions
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/process-session`)
+      .then((r) => r.json())
+      .then((d) => setUnprocessedSessions(d.unprocessed ?? 0))
+      .catch(() => {});
+  }, [projectId]);
+
+  const processSession = async () => {
+    setProcessingSession(true);
+    setSessionResult(null);
     try {
-      const res = await fetch(`/api/projects/${projectId}/canvas`);
+      const res = await fetch(`/api/projects/${projectId}/process-session`, { method: "POST" });
       const data = await res.json();
-      setCanvas(data.canvas);
-      setConfidence(data.confidence ?? {});
+      if (data.cards?.length > 0) {
+        setSessionResult({ cards: data.cards, sessionTitle: data.sessionTitle });
+        setUnprocessedSessions((p) => Math.max(0, p - data.sessionsProcessed));
+      }
+    } catch { /* ignore */ }
+    setProcessingSession(false);
+  };
+
+  const fetchCanvasCards = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/canvas-cards`);
+      const data = await res.json();
+      setSections(data.sections ?? []);
     } catch { /* ignore */ }
     setLoading(false);
   }, [projectId]);
 
-  useEffect(() => { fetchCanvas(); }, [fetchCanvas]);
+  useEffect(() => { fetchCanvasCards(); }, [fetchCanvasCards]);
 
-  const refreshCanvas = async () => {
-    setRefreshing(true);
-    setRefreshError(null);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/canvas/refresh`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
-        setRefreshError(data.error ?? "Error al actualizar");
-      } else {
-        await fetchCanvas();
-      }
-    } catch {
-      setRefreshError("Error de conexión");
+  // Polling: check for new drafts every 5s (auto-populated by agents)
+  const lastDraftCount = useRef(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch(`/api/projects/${projectId}/canvas-cards`)
+        .then((r) => r.json())
+        .then((data) => {
+          const allCards = (data.sections ?? []).flatMap((s: { cards: Array<{ canvasStatus: string }> }) => s.cards);
+          const newDrafts = allCards.filter((c: { canvasStatus: string }) => c.canvasStatus === "draft").length;
+          if (newDrafts > lastDraftCount.current) {
+            fetchCanvasCards(); // Refresh UI with new drafts
+          }
+          lastDraftCount.current = newDrafts;
+        })
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [projectId, fetchCanvasCards]);
+
+  const toggleSection = (key: string) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  // ── Drag & Drop handlers ─────────────────────────────────────────────────
+
+  const handleDragStart = (e: React.DragEvent, cardId: string) => {
+    setDragCardId(cardId);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", cardId);
+    // Make the drag ghost slightly transparent
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = "0.5";
     }
-    setRefreshing(false);
   };
 
-  const saveSection = async (section: string, value: unknown) => {
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/canvas`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ canvas: { [section]: value }, confidence: { [section]: "confirmed" } }),
-      });
-      const data = await res.json();
-      if (data.canvas) setCanvas(data.canvas);
-      if (data.confidence) setConfidence(data.confidence);
-    } catch { /* ignore */ }
-    setSaving(false);
+  const handleDragEnd = (e: React.DragEvent) => {
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = "1";
+    }
+    setDragCardId(null);
+    setDragOverTarget(null);
+    dragCounterRef.current = 0;
   };
+
+  const handleDragOverCard = (e: React.DragEvent, sectionKey: string, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverTarget({ sectionKey, index });
+  };
+
+  const handleDragOverSection = (e: React.DragEvent, sectionKey: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    // If dragging over empty section or below all cards
+    const section = sections.find((s) => s.key === sectionKey);
+    setDragOverTarget({ sectionKey, index: section?.cards.length ?? 0 });
+  };
+
+  const handleDrop = async (e: React.DragEvent, sectionKey: string, index: number) => {
+    e.preventDefault();
+    const cardId = e.dataTransfer.getData("text/plain") || dragCardId;
+    if (!cardId) return;
+
+    setDragCardId(null);
+    setDragOverTarget(null);
+
+    // Optimistic update
+    setSections((prev) => {
+      const next = prev.map((s) => ({ ...s, cards: [...s.cards] }));
+      // Find and remove the card from its current section
+      let movedCard: CanvasCard | null = null;
+      for (const s of next) {
+        const idx = s.cards.findIndex((c) => c.id === cardId);
+        if (idx !== -1) {
+          movedCard = s.cards[idx];
+          s.cards.splice(idx, 1);
+          break;
+        }
+      }
+      if (!movedCard) return prev;
+      // Insert at new position
+      const targetSection = next.find((s) => s.key === sectionKey);
+      if (targetSection) {
+        targetSection.cards.splice(index, 0, movedCard);
+      }
+      return next;
+    });
+
+    // Persist to server
+    await fetch(`/api/projects/${projectId}/canvas-cards`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardId, toSection: sectionKey, toIndex: index }),
+    }).catch(() => fetchCanvasCards()); // Rollback on error
+  };
+
+  const removeFromCanvas = async (cardId: string) => {
+    // Optimistic update
+    setSections((prev) =>
+      prev.map((s) => ({ ...s, cards: s.cards.filter((c) => c.id !== cardId) }))
+    );
+
+    await fetch(`/api/projects/${projectId}/canvas-cards`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardId }),
+    }).catch(() => fetchCanvasCards());
+  };
+
+  // Accept/reject draft cards
+  const handleDraftAction = async (cardId: string, action: "accept" | "reject") => {
+    if (action === "accept") {
+      // Optimistic: change status to confirmed
+      setSections((prev) =>
+        prev.map((s) => ({
+          ...s,
+          cards: s.cards.map((c) =>
+            c.id === cardId ? { ...c, canvasStatus: "confirmed" as const } : c
+          ),
+        }))
+      );
+    } else {
+      // Optimistic: remove from canvas
+      setSections((prev) =>
+        prev.map((s) => ({ ...s, cards: s.cards.filter((c) => c.id !== cardId) }))
+      );
+    }
+
+    await fetch(`/api/cards/${cardId}/canvas-status`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    }).catch(() => fetchCanvasCards());
+  };
+
+  // Count drafts for notification
+  const draftCount = sections.reduce(
+    (sum, s) => sum + s.cards.filter((c) => c.canvasStatus === "draft").length, 0
+  );
+
+  const totalCards = sections.reduce((sum, s) => sum + s.cards.length, 0);
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-8">
-        <div className="columns-2 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="break-inside-avoid mb-4 h-32 bg-gray-50 rounded-2xl animate-pulse" />
-          ))}
-        </div>
+      <div className="max-w-5xl mx-auto px-6 py-8 space-y-4">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-24 bg-gray-50 rounded-2xl animate-pulse" />
+        ))}
       </div>
     );
   }
-
-  if (!canvas) return <p className="p-5 text-sm text-gray-400">Error al cargar el canvas.</p>;
-
-  const allSections = Object.keys(canvas) as (keyof ProjectCanvas)[];
-  // Estado del proyecto se renderiza arriba, no en el masonry
-  const sections = allSections.filter((k) => k !== "estado_proyecto");
-  const filledCount = allSections.filter((k) => !checkEmpty(canvas[k])).length;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
@@ -89,86 +285,228 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Canvas de servicio</h2>
-          {canvas.estado_proyecto && !checkEmpty(canvas.estado_proyecto) ? (
-            <div className="flex items-center gap-3 mt-1.5">
-              <span className="text-xs font-medium text-brand bg-brand/10 px-2 py-0.5 rounded-full border border-brand/20">
-                {canvas.estado_proyecto.etapa_actual || "—"}
-              </span>
-              <span className="text-xs text-gray-500">
-                {canvas.estado_proyecto.subetapa_actual || ""}
-              </span>
-              {canvas.estado_proyecto.progreso && (
-                <span className="text-xs text-gray-400">
-                  · {canvas.estado_proyecto.progreso}
-                </span>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400 mt-0.5">Estado actual del proyecto</p>
-          )}
+          <p className="text-sm text-gray-400 mt-0.5">
+            {totalCards > 0
+              ? `${totalCards} card${totalCards !== 1 ? "s" : ""} en el canvas`
+              : "Ejecuta agentes y envía resultados aquí"}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Share button */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                if (!shareToken) generateShareToken();
+                else setShareMenuOpen(!shareMenuOpen);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                shareToken
+                  ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                  : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+              {shareToken ? "Compartido" : "Compartir"}
+            </button>
+            {shareMenuOpen && shareToken && (
+              <div className="absolute top-full right-0 mt-1 z-50 w-72 bg-white border border-gray-200 rounded-xl shadow-xl p-3 space-y-2">
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Link para el cliente</p>
+                <div className="flex items-center gap-1">
+                  <input
+                    readOnly
+                    value={`${typeof window !== "undefined" ? window.location.origin : ""}/share/${shareToken}`}
+                    className="flex-1 px-2 py-1.5 text-[11px] bg-gray-50 border border-gray-200 rounded-lg text-gray-600 truncate"
+                  />
+                  <button
+                    onClick={copyShareUrl}
+                    className="px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-brand text-white hover:bg-brand/90 transition-colors flex-shrink-0"
+                  >
+                    {copied ? "✓" : "Copiar"}
+                  </button>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                  <button
+                    onClick={revokeShareToken}
+                    className="text-[10px] text-red-500 hover:text-red-700 transition-colors"
+                  >
+                    Revocar acceso
+                  </button>
+                  <button
+                    onClick={() => { generateShareToken(); }}
+                    className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    Regenerar link
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
-            onClick={refreshCanvas}
-            disabled={refreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand/10 border border-brand/20 text-brand hover:bg-brand/20 transition-colors disabled:opacity-50 text-xs font-medium"
+            onClick={processSession}
+            disabled={processingSession || unprocessedSessions === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors disabled:opacity-50 bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300"
           >
-            <svg className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            <svg className={`w-3.5 h-3.5 ${processingSession ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
             </svg>
-            {refreshing ? "Actualizando..." : "Actualizar con IA"}
+            {processingSession ? "Procesando..." : "Procesar sesión"}
+            {unprocessedSessions > 0 && !processingSession && (
+              <span className="w-4 h-4 flex items-center justify-center rounded-full bg-brand text-white text-[9px] font-bold">
+                {unprocessedSessions}
+              </span>
+            )}
           </button>
-          <span className="text-xs text-gray-400">{filledCount}/{sections.length}</span>
-          {saving && <span className="text-xs text-gray-400">Guardando...</span>}
         </div>
       </div>
 
-      {refreshError && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs">
-          <span>{refreshError}</span>
-          <button onClick={() => setRefreshError(null)} className="ml-auto text-red-400 hover:text-red-600">&times;</button>
+      {/* Session processing results */}
+      {sessionResult && (
+        <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-violet-700">
+              Sesión procesada: {sessionResult.sessionTitle}
+            </p>
+            <button
+              onClick={() => setSessionResult(null)}
+              className="text-violet-400 hover:text-violet-600 text-xs"
+            >
+              Cerrar
+            </button>
+          </div>
+          <p className="text-[10px] text-violet-500">
+            {sessionResult.cards.length} card{sessionResult.cards.length !== 1 ? "s" : ""} generados — usa el botón &quot;Canvas&quot; en cada card para enviarlo al canvas
+          </p>
+          <div className="space-y-2">
+            {sessionResult.cards.map((card) => (
+              <div key={card.id} className="rounded-xl border border-violet-100 bg-white p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <h4 className="text-sm font-semibold text-gray-800">{card.title}</h4>
+                  <SendToCanvasMenu cardId={card.id} />
+                </div>
+                <div className="text-xs text-gray-600 leading-relaxed prose prose-xs prose-gray max-w-none">
+                  <ReactMarkdown>{card.content}</ReactMarkdown>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Legends */}
-      <div className="flex items-center gap-4 text-xs text-gray-400">
-        {(Object.entries(CONFIDENCE_STYLES) as [Confidence, typeof CONFIDENCE_STYLES[Confidence]][]).map(([key, style]) => (
-          <span key={key} className="flex items-center gap-1.5">
-            <span className={`w-2 h-2 rounded-full ${style.dot}`} />
-            {style.label}
-          </span>
-        ))}
-      </div>
+      {/* GPS del proyecto */}
+      <ProjectGPS projectId={projectId} />
 
-      {/* Canvas masonry grid */}
-      <div className="columns-1 md:columns-2 gap-4">
-        {sections.map((key) => {
-          const isEmpty = checkEmpty(canvas[key]);
-          const conf: Confidence = isEmpty ? "empty" : (confidence[key] as Confidence) ?? "inferred";
-          const style = CONFIDENCE_STYLES[conf];
+      {/* Banner de borradores pendientes */}
+      {draftCount > 0 && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800">
+          <svg className="w-4 h-4 flex-shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-sm font-medium">
+            {draftCount} {draftCount === 1 ? "card nuevo" : "cards nuevos"} del agente — revisa y acepta o rechaza
+          </span>
+          <button
+            onClick={() => {
+              // Accept all drafts
+              sections.forEach((s) => s.cards.forEach((c) => {
+                if (c.canvasStatus === "draft") handleDraftAction(c.id, "accept");
+              }));
+            }}
+            className="ml-auto text-xs font-semibold text-amber-700 hover:text-amber-900 px-2 py-1 rounded hover:bg-amber-100"
+          >
+            Aceptar todos
+          </button>
+        </div>
+      )}
+
+      {/* Secciones — layout masonry 2 columnas */}
+      <div className="columns-1 lg:columns-2 gap-4 space-y-4">
+        {sections.map((section) => {
+          const isCollapsed = collapsedSections.has(section.key);
+          const isEmpty = section.cards.length === 0;
+          const isDragTarget = dragCardId && dragOverTarget?.sectionKey === section.key;
 
           return (
             <div
-              key={key}
-              className={`break-inside-avoid mb-4 rounded-2xl ${isEmpty ? "border-2" : "border"} ${style.border} ${style.bg} p-5 transition-all`}
+              key={section.key}
+              className={`rounded-2xl border transition-all break-inside-avoid mb-4 ${
+                isDragTarget
+                  ? "border-brand/40 bg-brand/5 shadow-md"
+                  : isEmpty
+                  ? "border-dashed border-gray-200 bg-white"
+                  : "border-gray-100 bg-white shadow-sm"
+              }`}
+              onDragOver={(e) => handleDragOverSection(e, section.key)}
+              onDrop={(e) => handleDrop(e, section.key, section.cards.length)}
             >
-              <div className="flex items-center gap-2 mb-3">
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
-                <h3 className="text-sm font-semibold text-gray-800">{PROJECT_CANVAS_LABELS[key] ?? key}</h3>
-                {conf === "inferred" && (
-                  <button
-                    onClick={() => saveSection(key, canvas[key])}
-                    className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200 hover:bg-green-100 transition-colors"
-                  >
-                    Confirmar
-                  </button>
+              {/* Section header */}
+              <button
+                onClick={() => toggleSection(section.key)}
+                className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-gray-50/50 transition-colors rounded-t-2xl"
+              >
+                <span className="text-base">{SECTION_ICONS[section.key] ?? "📌"}</span>
+                <h3 className="text-base font-bold text-gray-900 flex-1">{section.label}</h3>
+                {!isEmpty && (
+                  <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                    {section.cards.length}
+                  </span>
                 )}
-              </div>
+                <svg
+                  className={`w-4 h-4 text-gray-400 transition-transform ${isCollapsed ? "" : "rotate-180"}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
 
-              {isEmpty ? (
-                <p className="text-sm text-gray-300 italic">Sin datos aún</p>
-              ) : (
-                <CanvasValue value={canvas[key]} sectionKey={key} onSave={(val) => saveSection(key, val)} />
+              {/* Section content */}
+              {!isCollapsed && (
+                <div className="px-5 pb-4">
+                  {isEmpty && !isDragTarget ? (
+                    <p className="text-sm text-gray-300 italic py-2">
+                      Sin cards — ejecuta agentes y envía resultados aquí
+                    </p>
+                  ) : isEmpty && isDragTarget ? (
+                    <div className="py-4 border-2 border-dashed border-brand/30 rounded-xl flex items-center justify-center">
+                      <p className="text-sm text-brand/60">Soltar aquí</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {section.cards.map((card, idx) => {
+                        const isDropTarget = dragOverTarget?.sectionKey === section.key && dragOverTarget?.index === idx;
+                        return (
+                          <div key={card.id}>
+                            {/* Drop indicator line */}
+                            {isDropTarget && dragCardId !== card.id && (
+                              <div className="h-0.5 bg-brand rounded-full mx-2 mb-1" />
+                            )}
+                            <CanvasCardItem
+                              card={card}
+                              clientId={clientId}
+                              isDragging={dragCardId === card.id}
+                              onDragStart={(e) => handleDragStart(e, card.id)}
+                              onDragEnd={handleDragEnd}
+                              onDragOver={(e) => handleDragOverCard(e, section.key, idx)}
+                              onRemove={() => removeFromCanvas(card.id)}
+                              onAcceptDraft={() => handleDraftAction(card.id, "accept")}
+                              onRejectDraft={() => handleDraftAction(card.id, "reject")}
+                              isUpdate={!!card.parentCardId && card.canvasStatus === "draft"}
+                              onDiagramSave={fetchCanvasCards}
+                            />
+                          </div>
+                        );
+                      })}
+                      {/* Drop target at end */}
+                      {dragCardId && dragOverTarget?.sectionKey === section.key && dragOverTarget?.index === section.cards.length && (
+                        <div className="h-0.5 bg-brand rounded-full mx-2 mt-1" />
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           );
@@ -178,109 +516,245 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
   );
 }
 
-// ── Render values ───────────────────────────────────────────────────────────
+// ── Card item ────────────────────────────────────────────────────────────────
 
-function CanvasValue({ value, sectionKey, onSave }: { value: unknown; sectionKey: string; onSave: (val: unknown) => void }) {
-  if (typeof value === "string") {
-    return <EditableText value={value} onSave={(v) => onSave(v)} />;
-  }
+function CanvasCardItem({
+  card,
+  clientId,
+  isDragging,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onRemove,
+  onAcceptDraft,
+  onRejectDraft,
+  isUpdate,
+  onDiagramSave,
+}: {
+  card: CanvasCard;
+  clientId: string;
+  isDragging: boolean;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: (e: React.DragEvent) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onRemove: () => void;
+  onAcceptDraft?: () => void;
+  onRejectDraft?: () => void;
+  isUpdate?: boolean;
+  onDiagramSave?: () => void;
+}) {
+  const isDraft = card.canvasStatus === "draft";
+  const isUpdateDraft = isDraft && isUpdate;
+  const [published, setPublished] = useState(card.publishedToClient);
+  const [showPublishedEditor, setShowPublishedEditor] = useState(false);
+  const [pubContent, setPubContent] = useState(card.publishedContent ?? "");
+  const [savingPub, setSavingPub] = useState(false);
 
-  if (Array.isArray(value)) {
-    if (value.length === 0) return <p className="text-sm text-gray-300 italic">Sin datos</p>;
+  const togglePublish = async () => {
+    const next = !published;
+    setPublished(next);
+    await fetch(`/api/cards/${card.id}/publish`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ published: next }),
+    }).catch(() => setPublished(!next));
+  };
 
-    // String array
-    const hasObjects = value.some((i) => typeof i === "object" && i !== null);
-    if (!hasObjects) {
-      return (
-        <ul className="space-y-1">
-          {value.map((item, i) => (
-            <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
-              <span className="text-brand mt-1">•</span>
-              <span>{String(item)}</span>
-            </li>
-          ))}
-        </ul>
-      );
-    }
+  const savePublishedContent = async () => {
+    setSavingPub(true);
+    await fetch(`/api/cards/${card.id}/publish`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publishedContent: pubContent }),
+    }).catch(() => {});
+    setSavingPub(false);
+    setShowPublishedEditor(false);
+  };
 
-    // Object array (procesos, stakeholders)
-    return (
-      <div className="space-y-3">
-        {value.filter((i) => typeof i === "object" && i !== null).map((item, i) => (
-          <div key={i} className="text-sm text-gray-600 space-y-0.5 pb-2 border-b border-gray-100 last:border-0 last:pb-0">
-            {Object.entries(item as Record<string, unknown>).map(([k, v]) => (
-              <p key={k}>
-                <span className="font-medium text-gray-500 capitalize">{k.replace(/_/g, " ")}:</span>{" "}
-                {Array.isArray(v) ? (v as string[]).join(", ") : String(v ?? "")}
-              </p>
-            ))}
-          </div>
-        ))}
+  const DragHandle = () => (
+    <svg className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
+      <circle cx="5" cy="3" r="1.5" /><circle cx="11" cy="3" r="1.5" />
+      <circle cx="5" cy="8" r="1.5" /><circle cx="11" cy="8" r="1.5" />
+      <circle cx="5" cy="13" r="1.5" /><circle cx="11" cy="13" r="1.5" />
+    </svg>
+  );
+
+  const PublishButton = () => (
+    <button
+      onClick={togglePublish}
+      className={`p-1 rounded transition-colors ${
+        published
+          ? "text-green-500 bg-green-50 hover:bg-green-100"
+          : "text-gray-300 hover:text-gray-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100"
+      }`}
+      title={published ? "Visible para cliente — clic para ocultar" : "Publicar para cliente"}
+    >
+      <svg className="w-3.5 h-3.5" fill={published ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={published ? 0 : 2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+      </svg>
+    </button>
+  );
+
+  const RemoveButton = () => (
+    <button
+      onClick={onRemove}
+      className="p-1 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+      title="Quitar del canvas"
+    >
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </button>
+  );
+
+  const PublishedBadge = () => published ? (
+    <span
+      className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200 font-medium cursor-pointer hover:bg-green-100"
+      onClick={() => setShowPublishedEditor(!showPublishedEditor)}
+      title="Clic para editar versión del cliente"
+    >
+      👁 Cliente
+    </span>
+  ) : null;
+
+  const PublishedContentEditor = () => published && showPublishedEditor ? (
+    <div className="mt-2 p-3 rounded-lg bg-green-50 border border-green-200 space-y-2">
+      <p className="text-[10px] font-semibold text-green-700 uppercase tracking-wider">
+        Versión para el cliente
+      </p>
+      <textarea
+        value={pubContent}
+        onChange={(e) => setPubContent(e.target.value)}
+        placeholder="Escribe una versión suavizada del contenido... (vacío = se usa el original)"
+        rows={3}
+        className="w-full px-3 py-2 text-xs bg-white border border-green-200 rounded-lg text-gray-700 focus:outline-none focus:border-green-400 resize-none"
+      />
+      <div className="flex gap-2">
+        <button
+          onClick={savePublishedContent}
+          disabled={savingPub}
+          className="px-3 py-1 text-[10px] font-medium rounded-lg bg-green-600 hover:bg-green-500 text-white transition-colors disabled:opacity-50"
+        >
+          {savingPub ? "Guardando..." : "Guardar"}
+        </button>
+        <button
+          onClick={() => setShowPublishedEditor(false)}
+          className="px-3 py-1 text-[10px] font-medium rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+        >
+          Cancelar
+        </button>
       </div>
-    );
-  }
+    </div>
+  ) : null;
 
-  if (typeof value === "object" && value !== null) {
-    return (
-      <div className="space-y-2">
-        {Object.entries(value as Record<string, unknown>).map(([k, v]) => (
-          <div key={k}>
-            <p className="text-xs text-gray-400 capitalize mb-0.5">{k.replace(/_/g, " ")}</p>
-            {Array.isArray(v) ? (
-              <ul className="space-y-0.5">
-                {(v as string[]).map((item, i) => (
-                  <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
-                    <span className="text-brand mt-1">•</span>
-                    <span>{String(item)}</span>
-                  </li>
-                ))}
-              </ul>
+  // FLOWCHART card
+  if (card.cardType === "FLOWCHART" && card.diagramData) {
+    const diagram = card.diagramData as { nodes?: unknown[]; edges?: unknown[] };
+    if (diagram.nodes && diagram.edges) {
+      return (
+        <div
+          onDragOver={onDragOver}
+          className={`rounded-xl border overflow-hidden group transition-opacity ${
+            isDraft ? "border-amber-300 border-dashed bg-amber-50/30" : published ? "border-green-200" : "border-gray-100"
+          } ${isDragging ? "opacity-40" : ""}`}
+        >
+          <div
+            draggable
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            className={`px-4 py-2 border-b flex items-center gap-2 cursor-grab active:cursor-grabbing ${isDraft ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-100"}`}
+          >
+            <DragHandle />
+            <h4 className="text-sm font-semibold text-gray-800 flex-1">{card.title}</h4>
+            {isDraft && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isUpdateDraft ? "text-blue-600 bg-blue-100" : "text-amber-600 bg-amber-100"}`}>{isUpdateDraft ? "UPDATE" : "BORRADOR"}</span>}
+            {isDraft ? (
+              <>
+                <button onClick={onAcceptDraft} className="p-1 rounded text-green-600 hover:bg-green-50" title="Aceptar"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg></button>
+                <button onClick={onRejectDraft} className="p-1 rounded text-red-500 hover:bg-red-50" title="Rechazar"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+              </>
             ) : (
-              <p className="text-sm text-gray-700">{String(v ?? "—")}</p>
+              <>
+                <PublishedBadge />
+                <PublishButton />
+                <RemoveButton />
+              </>
             )}
           </div>
-        ))}
-      </div>
-    );
+          {card.content && (
+            <div className="px-4 py-2 text-xs text-gray-600 leading-relaxed prose prose-xs prose-gray max-w-none border-b border-gray-100">
+              <ReactMarkdown>{card.content}</ReactMarkdown>
+            </div>
+          )}
+          <div className="h-[350px]">
+            <FlowchartViewer
+              data={{
+                title: card.title,
+                description: card.content,
+                nodes: diagram.nodes as Array<{ id: string; type: string; label: string; sublabel?: string; owner?: string; detail?: string; icon?: string; pipelineName?: string; position?: { x: number; y: number } }>,
+                edges: diagram.edges as Array<{ id?: string; source: string; target: string; label?: string; edgeType?: "yes" | "no" | "default"; sourceHandle?: string; targetHandle?: string; strokeColor?: string; dashed?: boolean }>,
+              }}
+              onSave={async (updated) => {
+                await fetch(`/api/clients/${clientId}/context-cards/${card.id}`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    diagramData: { nodes: updated.nodes, edges: updated.edges },
+                    title: updated.title ?? card.title,
+                    content: updated.description ?? card.content,
+                  }),
+                });
+                onDiagramSave?.();
+              }}
+            />
+          </div>
+          <PublishedContentEditor />
+        </div>
+      );
+    }
   }
 
-  return null;
-}
-
-function EditableText({ value, onSave }: { value: string; onSave: (val: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [local, setLocal] = useState(value);
-
-  if (!editing) {
-    return (
-      <p
-        className="text-sm text-gray-700 cursor-pointer hover:text-gray-900 transition-colors"
-        onClick={() => setEditing(true)}
-      >
-        {value || <span className="italic text-gray-300">Click para editar</span>}
-      </p>
-    );
-  }
-
+  // TEXT card
   return (
-    <textarea
-      value={local}
-      onChange={(e) => setLocal(e.target.value)}
-      onBlur={() => { if (local !== value) onSave(local); setEditing(false); }}
-      autoFocus
-      rows={3}
-      className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/20 resize-none"
-    />
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      className={`rounded-xl border p-4 hover:border-gray-200 transition-all group cursor-grab active:cursor-grabbing ${
+        isDraft ? "border-amber-300 border-dashed bg-amber-50/30" : published ? "border-green-200 bg-green-50/30" : "border-gray-100"
+      } ${isDragging ? "opacity-40" : ""}`}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <DragHandle />
+        <h4 className="text-sm font-semibold text-gray-800 flex-1">{card.title}</h4>
+        {isDraft && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isUpdateDraft ? "text-blue-600 bg-blue-100" : "text-amber-600 bg-amber-100"}`}>{isUpdateDraft ? "UPDATE" : "BORRADOR"}</span>}
+        {isDraft ? (
+          <>
+            <button onClick={onAcceptDraft} className="p-1 rounded text-green-600 hover:bg-green-50" title="Aceptar"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg></button>
+            <button onClick={onRejectDraft} className="p-1 rounded text-red-500 hover:bg-red-50" title="Rechazar"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+          </>
+        ) : (
+          <>
+            {card.source === "AGENT" && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-500 border border-violet-100 font-medium">
+                Agente
+              </span>
+            )}
+            <PublishedBadge />
+            <PublishButton />
+            <RemoveButton />
+          </>
+        )}
+      </div>
+      {card.content ? (
+        <div className="text-sm text-gray-600 leading-relaxed prose prose-sm prose-gray max-w-none">
+          <ReactMarkdown>{card.content}</ReactMarkdown>
+        </div>
+      ) : (
+        <p className="text-sm text-gray-300 italic">Sin contenido</p>
+      )}
+      <PublishedContentEditor />
+    </div>
   );
-}
-
-function checkEmpty(value: unknown): boolean {
-  if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === "object" && value !== null) {
-    return Object.values(value).every((v) =>
-      typeof v === "string" ? !v.trim() : Array.isArray(v) ? v.length === 0 : typeof v === "object" && v !== null ? checkEmpty(v) : false
-    );
-  }
-  if (typeof value === "string") return !value.trim();
-  return true;
 }

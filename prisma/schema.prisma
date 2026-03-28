@@ -28,6 +28,7 @@ enum DocumentType {
   BRIEF
   FREE_TEXT
   URL
+  FILE
 }
 
 enum AgentStatus {
@@ -56,15 +57,27 @@ enum AgentScope {
 }
 
 enum AgentType {
-  SECTION        // Agente de subetapa — genera cards/flowcharts para una sección
-  CANVAS_PROJECT // Agente transversal — actualiza canvas de proyecto
-  CANVAS_CLIENT  // Agente transversal — actualiza canvas de empresa
+  SECTION           // Agente de subetapa — genera cards/flowcharts para una sección
+  CANVAS_PROJECT    // Agente transversal — actualiza canvas de proyecto
+  CANVAS_CLIENT     // Agente transversal — actualiza canvas de empresa
+  SESSION_PROCESSOR // Agente de procesamiento de sesión — lee Fireflies y genera cards
+}
+
+enum ProjectType {
+  BASE_IMPLEMENTATION // Implementación base — activación de herramientas, superficial y general
+  USE_CASE            // Caso de uso — específico y profundo, resolución de un reto particular
 }
 
 enum CardSource {
   AGENT    // Generada íntegramente por el agente
   HUMAN    // Creada manualmente por el consultor
   MODIFIED // Generada por el agente y luego editada por el consultor
+}
+
+enum CardType {
+  TEXT      // Card de texto (default)
+  FLOWCHART // Diagrama de React Flow (nodos + edges guardados en diagramData)
+  CHART     // Gráfico de ECharts (configuración en chartConfig)
 }
 
 // ─── Client (nueva entidad raíz) ──────────────────────────────────────────────
@@ -102,12 +115,21 @@ model Project {
   client           Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
   name             String
   status           String  @default("active") // active | paused | completed
+  projectType      ProjectType @default(USE_CASE) // Tipo de proyecto: implementación base o caso de uso
   serviceType      String? // loop_marketing | loop_sales | loop_service | proyecto_temporal
   hubspotDealId    String? // ID del deal de HubSpot asociado a este proyecto
+  hubspotServiceId String? @unique // ID del objeto Service en HubSpot (para sync)
   currentStage     Int     @default(1) // Última etapa visitada/modificada (1-3)
   currentStep      Int     @default(0) // Último paso visitado/modificado dentro de la etapa (0-indexed)
-  canvas           Json?   // Project Canvas — conocimiento específico del caso de uso
+  canvas           Json?   // DEPRECATED — ya no se lee para renderizar el canvas
   tags             String[] @default([]) // Tags generales del proyecto (e.g. "Marketing Hub", "Sales Hub")
+  shareToken       String?  @unique     // Token para vista pública del cliente
+
+  // GPS del proyecto
+  nextSessionDate    DateTime? // Próxima sesión agendada
+  nextSessionNote    String?   // Nota breve sobre la próxima sesión
+  lastSessionSummary String?   @db.Text // Resumen de la última sesión procesada
+  pendingItems       Json?     // Array de { text: string, done: boolean }
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -145,8 +167,11 @@ model ClientDocument {
   step      Int?         // paso específico (opcional)
   title     String
   type      DocumentType
-  content   String?      @db.Text // para FREE_TEXT / CALL_TRANSCRIPT pegado
-  url       String?               // para URL y Fireflies links
+  content   String?      @db.Text // para FREE_TEXT / CALL_TRANSCRIPT pegado / texto extraído de FILE
+  url       String?               // para URL, Fireflies links, o Supabase Storage URL
+  fileName  String?               // nombre original del archivo (para FILE)
+  fileSize  Int?                  // tamaño en bytes (para FILE)
+  mimeType  String?               // tipo MIME (para FILE)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -166,6 +191,25 @@ model ClientContextCard {
   content    String    @db.Text @default("")
   order      Int       @default(0)
   source     CardSource @default(HUMAN)
+  cardType   CardType   @default(TEXT)
+
+  // Canvas integration
+  canvasSection String?  // Sección del canvas donde vive (null = no está en canvas)
+  canvasOrder   Int?     // Orden dentro de la sección del canvas (para drag & drop)
+  canvasStatus  String   @default("confirmed") // "draft" = auto-poblado por agente, pendiente de revisión; "confirmed" = aceptado por CSE
+
+  // Card hierarchy (para clones al enviar al canvas)
+  parentCardId  String?
+  parentCard    ClientContextCard?  @relation("CardClones", fields: [parentCardId], references: [id], onDelete: SetNull)
+  clones        ClientContextCard[] @relation("CardClones")
+
+  // Datos estructurados por tipo
+  diagramData   Json?    // Para FLOWCHART: { nodes: [...], edges: [...] }
+  chartConfig   Json?    // Para CHART: configuración de ECharts
+
+  // Vista del cliente
+  publishedToClient Boolean @default(false) // Si true, visible en la vista externa del cliente
+  publishedContent  String? @db.Text        // Versión alternativa del contenido para el cliente (lenguaje suavizado)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -174,6 +218,8 @@ model ClientContextCard {
   @@unique([agentRunId, title])
   @@index([clientId, agentRunId])
   @@index([agentRunId])
+  @@index([canvasSection])
+  @@index([parentCardId])
 }
 
 // ─── HubspotAccount (ahora hijo de Client) ───────────────────────────────────
@@ -274,6 +320,10 @@ model Agent {
   outputType             AgentOutputType @default(CARDS)
   scope                  AgentScope      @default(CLIENT)
   agentType              AgentType       @default(SECTION)
+  defaultCanvasSection   String?         // Sección del canvas de proyecto sugerida al enviar cards (ej. "procesos")
+  // Agrupación por propósito (reemplaza stages/steps para la UI)
+  agentGroup             String?         // preparacion | diagnostico | planificacion | ejecucion | adopcion
+  groupOrder             Int             @default(0) // Orden del grupo: 0=preparacion, 1=diagnostico, 2=planificacion, 3=ejecucion, 4=adopcion
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -442,9 +492,13 @@ model CanvasSuggestion {
   client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   agentRunId String?
   section    String   // key del canvas: "perfil", "stakeholders", etc.
+  field      String?  // campo específico dentro de la sección (para sugerencias granulares)
   current    Json?    // valor actual de la sección al momento de la sugerencia
   suggested  Json     // valor sugerido por el agente
+  suggestedValue String? @db.Text // valor sugerido como texto (alternativa a JSON)
   status     String   @default("pending") // pending | accepted | rejected
+  source     String?  // de dónde viene: "run:ID", "fireflies:TITLE", "manual"
+  sourceLabel String? // label legible: "Análisis inicial · 24 mar", "Sesión kickoff UCI"
   createdAt  DateTime @default(now())
 
   @@index([clientId, status])

@@ -4,11 +4,16 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FolderOpen, Plus, ChevronRight, Clock } from "lucide-react";
+import HubBadge from "@/components/ui/HubBadge";
+import ProjectTypeBadge from "@/components/ui/ProjectTypeBadge";
 
 interface Project {
   id: string;
   name: string;
   status: string;
+  projectType?: string | null;
+  serviceType?: string | null;
+  tags?: string[];
   createdAt: Date | string;
   _count: { stageNotes: number; contextCards: number; documents: number };
 }
@@ -175,6 +180,10 @@ export default function ProjectsClient({ clientId, initialProjects }: Props) {
                     </span>
                   ))}
                 </div>
+
+                {/* Type + Hub badges */}
+                <ProjectTypeBadge projectType={project.projectType} size="xs" />
+                <HubBadge tags={project.tags} serviceType={project.serviceType} size="xs" />
 
                 {/* Status badge */}
                 <span className={`flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full border ${STATUS_COLORS[project.status] ?? STATUS_COLORS.active}`}>

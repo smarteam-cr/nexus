@@ -49,7 +49,19 @@ export async function POST(
     select: { canvas: true },
   });
   const current = (client?.canvas as ClientCanvas | null) ?? { ...EMPTY_CLIENT_CANVAS };
-  const sectionUpdate = { [suggestion.section]: suggestion.suggested } as Partial<ClientCanvas>;
+
+  // Si la sección es un array y la sugerencia es un solo item, append en vez de reemplazar
+  const sectionKey = suggestion.section as keyof ClientCanvas;
+  const currentSectionValue = current[sectionKey];
+  let sectionUpdate: Partial<ClientCanvas>;
+
+  if (Array.isArray(currentSectionValue) && !Array.isArray(suggestion.suggested)) {
+    // Append single item to existing array
+    sectionUpdate = { [sectionKey]: [...currentSectionValue, suggestion.suggested] } as Partial<ClientCanvas>;
+  } else {
+    sectionUpdate = { [sectionKey]: suggestion.suggested } as Partial<ClientCanvas>;
+  }
+
   const merged = deepMergeCanvas(current, sectionUpdate);
 
   await Promise.all([

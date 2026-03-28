@@ -1,7 +1,7 @@
 import { requireConsultantSession } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import ProjectsClient from "./ProjectsClient";
+import WorkspaceClient from "./WorkspaceClient";
 
 export default async function ClientPage({
   params,
@@ -27,25 +27,13 @@ export default async function ClientPage({
     orderBy: { createdAt: "asc" },
     select: {
       id: true,
-      clientId: true,
       name: true,
       status: true,
+      projectType: true,
       serviceType: true,
-      hubspotDealId: true,
-      currentStage: true,
-      currentStep: true,
-      createdAt: true,
-      updatedAt: true,
-      _count: {
-        select: { stageNotes: true, contextCards: true, documents: true },
-      },
+      tags: true,
     },
   });
 
-  // Si solo hay un proyecto, ir directo al canvas del proyecto
-  if (projects.length === 1) {
-    redirect(`/clients/${id}/projects/${projects[0].id}`);
-  }
-
-  return <ProjectsClient clientId={id} initialProjects={projects} />;
+  return <WorkspaceClient clientId={id} projects={projects} />;
 }

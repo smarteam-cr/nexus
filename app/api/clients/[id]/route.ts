@@ -18,6 +18,10 @@ export async function GET(
     where: { id },
     include: {
       hubspotAccount: { select: { id: true, hubName: true, hubspotPortalId: true } },
+      projects: {
+        orderBy: { createdAt: "asc" },
+        select: { id: true, name: true, status: true, projectType: true, serviceType: true, tags: true, currentStage: true, currentStep: true },
+      },
       _count: { select: { audits: true, implementations: true, documents: true } },
     },
   });

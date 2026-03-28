@@ -22,6 +22,26 @@ export interface ClientCanvas {
     relacion_previa: string;
     motivacion_compra: string;
   };
+  retos_estrategicos: Array<{
+    descripcion: string;
+    estado: "validado" | "por_validar";
+    fuente: string;
+  }>;
+  escala_rendimiento: {
+    general: number; // 0-4
+    por_hub: {
+      marketing: number;
+      sales: number;
+      service: number;
+    };
+    objetivo: number; // meta del cliente
+  };
+  oportunidades_futuras: Array<{
+    descripcion: string;
+    hub: string;
+    escala_nivel: number; // 0-4
+    estado: string; // identificada | propuesta | aceptada | descartada
+  }>;
 }
 
 export const EMPTY_CLIENT_CANVAS: ClientCanvas = {
@@ -30,6 +50,13 @@ export const EMPTY_CLIENT_CANVAS: ClientCanvas = {
   madurez: { marketing: "", ventas: "", servicio: "" },
   herramientas: [],
   contexto_comercial: { canal_adquisicion: "", relacion_previa: "", motivacion_compra: "" },
+  retos_estrategicos: [],
+  escala_rendimiento: {
+    general: 0,
+    por_hub: { marketing: 0, sales: 0, service: 0 },
+    objetivo: 0,
+  },
+  oportunidades_futuras: [],
 };
 
 // ─── Project Canvas (Canvas de servicio — nivel caso de uso) ─────────────────
@@ -44,7 +71,7 @@ export interface ProjectCanvas {
   stakeholders_proyecto: Array<{
     nombre: string;
     rol: string;
-    influencia: string; // alta | media | baja
+    influencia: string;
     notas: string;
   }>;
   hallazgos_dolores: {
@@ -52,7 +79,7 @@ export interface ProjectCanvas {
     que_no_funciona: string[];
     fricciones: string[];
     que_esperan_resolver: string[];
-    estado_emocional: string; // Percepción emocional del cliente inferida de transcripciones
+    estado_emocional: string;
     riesgos: string[];
     quick_wins: string[];
     hallazgos_entrevistas: string[];
@@ -73,12 +100,12 @@ export interface ProjectCanvas {
     fecha: string;
     comentario: string;
     accion: string;
-    estado: string; // pendiente | en_progreso | completado
+    estado: string;
   }>;
   estado_proyecto: {
     etapa_actual: string;
     subetapa_actual: string;
-    progreso: string; // porcentaje o descripción cualitativa
+    progreso: string;
   };
 }
 
@@ -109,6 +136,9 @@ export const CLIENT_CANVAS_LABELS: Record<keyof ClientCanvas, string> = {
   madurez: "Madurez tecnológica",
   herramientas: "Herramientas actuales",
   contexto_comercial: "Contexto comercial",
+  retos_estrategicos: "Retos estratégicos",
+  escala_rendimiento: "Escala de rendimiento",
+  oportunidades_futuras: "Oportunidades futuras",
 };
 
 export const PROJECT_CANVAS_LABELS: Record<keyof ProjectCanvas, string> = {

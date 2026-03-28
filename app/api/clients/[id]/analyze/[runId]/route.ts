@@ -12,7 +12,7 @@ export const GET = withAuth(async (_req: NextRequest, { params }: Params) => {
     select: {
       id: true, status: true, createdAt: true, stepLabel: true, serviceType: true, output: true,
       agent: { select: { name: true, outputType: true } },
-      cards: { orderBy: { order: "asc" }, select: { id: true, title: true, content: true, order: true, source: true } },
+      cards: { orderBy: { order: "asc" }, select: { id: true, title: true, content: true, order: true, source: true, cardType: true, diagramData: true } },
     },
   });
 

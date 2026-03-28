@@ -947,12 +947,19 @@ function FlowchartInner({
     }
   }, [onSave, saving, getCurrentData]);
 
-  // Escape en fullscreen
+  // Escape en fullscreen + fitView al entrar
   useEffect(() => {
     if (!isFullscreen) return;
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") setIsFullscreen(false); };
     window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
+    // Centrar diagrama al entrar a fullscreen (esperar al resize del container)
+    const timer = setTimeout(() => {
+      rfInstance.current?.fitView({ padding: 0.15, duration: 300 });
+    }, 100);
+    return () => {
+      window.removeEventListener("keydown", h);
+      clearTimeout(timer);
+    };
   }, [isFullscreen]);
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -1073,9 +1080,9 @@ function FlowchartInner({
         nodesDraggable={isFullscreen}
         nodesConnectable={isFullscreen}
         elementsSelectable={isFullscreen}
-        defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
-        fitViewOptions={{ padding: 0.2, minZoom: 0.4 }}
-        minZoom={0.2}
+        fitView
+        fitViewOptions={{ padding: 0.08, minZoom: 0.1, maxZoom: isFullscreen ? 1.5 : 0.8 }}
+        minZoom={0.1}
         maxZoom={isFullscreen ? 2 : 0.8}
         panOnScroll={isFullscreen}
         panOnScrollSpeed={0.8}
@@ -1189,7 +1196,7 @@ function FlowchartInner({
   }
 
   return (
-    <div className="relative w-full" style={{ height: 600 }}>
+    <div className="relative w-full h-full" style={{ minHeight: 300 }}>
       {flowContent}
     </div>
   );
