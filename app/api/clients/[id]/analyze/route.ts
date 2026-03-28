@@ -1151,6 +1151,35 @@ Analiza toda la información anterior y completa las secciones de contexto del c
       });
     }
 
+    // Guardar suggestions off-canvas (si las hay)
+    const cafSuggestions = (analysisJson as { suggestions?: Array<{ title?: string; content?: string; type?: string; suggestedSection?: string; relatedCard?: string }> })?.suggestions ?? [];
+    if (cafSuggestions.length > 0) {
+      const validCafSuggestions = cafSuggestions.filter((s) => s.title?.trim());
+      if (validCafSuggestions.length > 0) {
+        await prisma.clientContextCard.createMany({
+          data: validCafSuggestions.map((s, i) => ({
+            clientId,
+            projectId:     bodyProjectId,
+            agentRunId:    run.id,
+            title:         s.title!.trim(),
+            content:       s.content ?? "",
+            order:         validCards.length + flowcharts.length + i,
+            source:        "AGENT" as const,
+            cardType:      "TEXT" as const,
+            canvasSection: null,
+            canvasStatus:  "confirmed",
+            canvasOrder:   null,
+            diagramData:   {
+              suggestionType:   s.type ?? "hypothesis",
+              relatedCard:      s.relatedCard ?? null,
+              suggestedSection: s.suggestedSection ?? "procesos",
+            },
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+
     // Guardar los flowcharts en AgentRun.output como backup
     await prisma.agentRun.update({
       where: { id: run.id },

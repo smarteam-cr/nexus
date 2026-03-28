@@ -176,6 +176,7 @@ export default function AgentPanel({ clientId, projectId: propProjectId }: Props
                     onExecute={handleExecuteAgent}
                     hasProject={!!projectId}
                     runningAgentId={runningAgentId}
+                    elapsed={elapsed}
                   />
                 ))
               )}
@@ -193,12 +194,14 @@ function GroupSection({
   onExecute,
   hasProject,
   runningAgentId,
+  elapsed,
 }: {
   group: AgentGroupDef;
   agents: AgentSummary[];
   onExecute: (agent: AgentSummary) => void;
   hasProject: boolean;
   runningAgentId: string | null;
+  elapsed: number;
 }) {
   return (
     <div>
