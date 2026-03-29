@@ -1089,7 +1089,7 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     });
   }
 
-  // Mapeo de grupo del agente → sección por defecto del canvas
+  // Mapeo de grupo del agente → sección por defecto del canvas de resumen
   const GROUP_TO_SECTION: Record<string, string> = {
     preparacion:   "procesos",
     diagnostico:   "hipotesis_recomendaciones",
@@ -1100,6 +1100,22 @@ Analiza toda la información anterior y completa las secciones de contexto del c
   const defaultSection = bodyProjectId
     ? (GROUP_TO_SECTION[agent.agentGroup ?? ""] ?? "procesos")
     : null;
+
+  // Resolver canvasId para agentes que apuntan a un canvas específico
+  const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
+    diagnostico: "Diagnóstico",
+    planificacion: "Planificación",
+    ejecucion: "Ejecución",
+    adopcion: "Adopción",
+  };
+  let targetCanvasId: string | null = null;
+  if (bodyProjectId && agent.agentGroup && AGENT_GROUP_TO_CANVAS[agent.agentGroup]) {
+    const targetCanvas = await prisma.projectCanvas.findFirst({
+      where: { projectId: bodyProjectId, name: AGENT_GROUP_TO_CANVAS[agent.agentGroup] },
+      select: { id: true },
+    });
+    if (targetCanvas) targetCanvasId = targetCanvas.id;
+  }
 
   // ── 13b. Si es CARDS_AND_FLOWCHARTS, guardar cards de texto + cards FLOWCHART ─
   if (isCardsAndFlowcharts) {
@@ -1120,6 +1136,7 @@ Analiza toda la información anterior y completa las secciones de contexto del c
           order:       i,
           source:      "AGENT" as const,
           cardType:    "TEXT" as const,
+          canvasId:    targetCanvasId,
           canvasSection: card.canvasSection ?? defaultSection,
           canvasStatus:  "draft",
           canvasOrder:   i,
@@ -1214,14 +1231,24 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     existingCanvasCards = existingCards as Array<{ id: string; title: string; canvasSection: string }>;
   }
 
-  // Secciones estándar del canvas de proyecto
+  // Secciones estándar del canvas de proyecto (resumen)
   const STANDARD_SECTIONS: Record<string, string> = {
     objetivo_alcance: "objetivo_alcance",
     hipotesis_recomendaciones: "hipotesis_recomendaciones",
     procesos: "procesos",
     plan_implementacion: "plan_implementacion",
   };
-  const allKnownSections = [...Object.keys(STANDARD_SECTIONS), ...canvasSections];
+  // Si hay un canvas target, incluir sus secciones como válidas
+  let targetCanvasSections: string[] = [];
+  if (targetCanvasId) {
+    const tc = await prisma.projectCanvas.findUnique({
+      where: { id: targetCanvasId },
+      select: { sections: true },
+    });
+    const secs = (tc?.sections ?? []) as Array<{ key: string }>;
+    targetCanvasSections = secs.map((s) => s.key);
+  }
+  const allKnownSections = [...Object.keys(STANDARD_SECTIONS), ...canvasSections, ...targetCanvasSections];
 
   const validCards = (analysisJson!.cards ?? []).filter(
     (card: { title?: string; content?: string }) => card.title?.trim()
@@ -1262,6 +1289,7 @@ Analiza toda la información anterior y completa las secciones de contexto del c
       parentCardId,
       order:         i,
       source:        "AGENT" as const,
+      canvasId:      targetCanvasId,
       canvasSection: section,
       canvasStatus:  section ? "draft" : "confirmed",
       canvasOrder:   section ? i : null,

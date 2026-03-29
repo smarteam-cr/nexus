@@ -409,7 +409,6 @@ export default function ProjectCanvasPanel({
                       }`}
                     >
                       {c.name}
-                      {c.isDefault && <span className="ml-2 text-[10px] text-gray-400">(predeterminado)</span>}
                     </button>
                   ))}
                   <div className="border-t border-gray-100 mt-1 pt-1">
