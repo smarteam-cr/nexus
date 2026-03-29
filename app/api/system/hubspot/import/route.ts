@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireConsultantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemAccessToken } from "@/lib/hubspot/client";
+import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 
 // Propiedad HubSpot que marca a un contacto/empresa como cliente Implementor
 const IMPLEMENTOR_PROPERTY = "implementor";
@@ -128,12 +129,13 @@ export async function POST() {
       });
 
       // Crear proyecto principal automáticamente
-      await prisma.project.create({
+      const newProject = await prisma.project.create({
         data: {
           clientId: newClient.id,
           name: "Proyecto principal",
         },
       });
+      await createDefaultCanvases(newProject.id);
 
       created++;
     }

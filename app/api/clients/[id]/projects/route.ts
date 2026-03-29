@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireConsultantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db/prisma";
+import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 
 export async function GET(
   _req: NextRequest,
@@ -48,6 +49,8 @@ export async function POST(
       status: "active",
     },
   });
+
+  await createDefaultCanvases(project.id);
 
   return NextResponse.json({ project }, { status: 201 });
 }

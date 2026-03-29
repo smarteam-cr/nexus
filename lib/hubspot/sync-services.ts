@@ -1,5 +1,6 @@
 import { getSystemHubspotClient } from "./client";
 import { prisma } from "@/lib/db/prisma";
+import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 
 // ── Mapeo de servicio_contratado → serviceType + projectType ─────────────────
 
@@ -230,7 +231,7 @@ export async function syncServicesForClient(clientId: string): Promise<SyncResul
       result.updated++;
     } else {
       // Create
-      await prisma.project.create({
+      const newProject = await prisma.project.create({
         data: {
           clientId,
           name: svcName,
@@ -241,6 +242,7 @@ export async function syncServicesForClient(clientId: string): Promise<SyncResul
           status: "active",
         },
       });
+      await createDefaultCanvases(newProject.id);
       result.created++;
     }
   }

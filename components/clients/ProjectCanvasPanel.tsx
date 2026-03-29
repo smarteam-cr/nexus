@@ -387,7 +387,7 @@ export default function ProjectCanvasPanel({
                 onClick={() => setCanvasDropdownOpen(!canvasDropdownOpen)}
                 className="flex items-center gap-2 text-xl font-bold text-gray-900 hover:text-gray-700 transition-colors"
               >
-                {activeCanvas?.name ?? "Canvas de servicio"}
+                {activeCanvas?.name ?? "Resumen del servicio"}
                 <svg className={`w-4 h-4 text-gray-400 transition-transform ${canvasDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
