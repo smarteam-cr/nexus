@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 
-// Secciones del canvas de proyecto en orden
-const CANVAS_SECTIONS = [
+// Secciones fijas del canvas default ("Canvas de servicio")
+const DEFAULT_SECTIONS = [
   { key: "objetivo_alcance", label: "Objetivo y alcance" },
   { key: "hipotesis_recomendaciones", label: "Hipótesis y recomendaciones" },
   { key: "procesos", label: "Procesos" },
@@ -44,19 +44,61 @@ const CARD_SELECT = {
   updatedAt: true,
 } as const;
 
+// Resolve sections for a canvas: default uses hardcoded, custom uses DB sections
+async function getSectionsForCanvas(canvasId: string | null, projectId: string) {
+  if (!canvasId) {
+    // Default canvas — find it and check
+    const defaultCanvas = await prisma.projectCanvas.findFirst({
+      where: { projectId, isDefault: true },
+    });
+    if (defaultCanvas) {
+      return { sections: DEFAULT_SECTIONS.map((s) => ({ ...s })), isDefault: true, resolvedCanvasId: defaultCanvas.id };
+    }
+    return { sections: DEFAULT_SECTIONS.map((s) => ({ ...s })), isDefault: true, resolvedCanvasId: null };
+  }
+
+  const canvas = await prisma.projectCanvas.findUnique({
+    where: { id: canvasId },
+    select: { isDefault: true, sections: true },
+  });
+
+  if (!canvas) {
+    return { sections: DEFAULT_SECTIONS.map((s) => ({ ...s })), isDefault: true, resolvedCanvasId: null };
+  }
+
+  if (canvas.isDefault) {
+    return { sections: DEFAULT_SECTIONS.map((s) => ({ ...s })), isDefault: true, resolvedCanvasId: canvasId };
+  }
+
+  // Custom canvas — sections from DB
+  const dbSections = (canvas.sections ?? []) as Array<{ key: string; label: string }>;
+  return { sections: dbSections, isDefault: false, resolvedCanvasId: canvasId };
+}
+
 // GET: obtener cards del canvas agrupados por sección
-// ?include=suggestions → también devuelve cards off-canvas de agentes (sugerencias)
+// ?canvasId=xxx → canvas específico (null/omitted = default)
+// ?include=suggestions → también devuelve cards off-canvas de agentes
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const includeSuggestions = new URL(_req.url).searchParams.get("include") === "suggestions";
+  const url = new URL(_req.url);
+  const canvasIdParam = url.searchParams.get("canvasId");
+  const includeSuggestions = url.searchParams.get("include") === "suggestions";
+
+  const { sections: sectionDefs, isDefault, resolvedCanvasId } = await getSectionsForCanvas(canvasIdParam, projectId);
+
+  // Filter cards: for default canvas, canvasId IS NULL; for custom, canvasId = id
+  const canvasFilter = isDefault && !canvasIdParam
+    ? { canvasId: null }
+    : { canvasId: resolvedCanvasId };
 
   const cards = await prisma.clientContextCard.findMany({
     where: {
       projectId,
       canvasSection: { not: null },
+      ...canvasFilter,
     },
     orderBy: [
       { canvasOrder: "asc" },
@@ -74,7 +116,7 @@ export async function GET(
   });
 
   // Construir respuesta con todas las secciones (incluso vacías)
-  const sections: CanvasSection[] = CANVAS_SECTIONS.map(({ key, label }) => ({
+  const sections: CanvasSection[] = sectionDefs.map(({ key, label }) => ({
     key,
     label,
     cards: (cardsBySection.get(key) ?? []).map((c) => ({
@@ -84,13 +126,14 @@ export async function GET(
     })),
   }));
 
-  // Sugerencias: cards off-canvas de agentes (canvasSection = null, agentRunId set)
+  // Sugerencias: cards off-canvas de agentes (solo para default canvas)
   let suggestions: Array<typeof cards[number] & { agentName?: string }> = [];
-  if (includeSuggestions) {
+  if (includeSuggestions && isDefault) {
     const offCanvas = await prisma.clientContextCard.findMany({
       where: {
         projectId,
         canvasSection: null,
+        canvasId: null,
         agentRunId: { not: null },
       },
       orderBy: { createdAt: "desc" },
@@ -107,7 +150,17 @@ export async function GET(
     }));
   }
 
-  return NextResponse.json({ sections, ...(includeSuggestions ? { suggestions: suggestions.map(s => ({ ...s, createdAt: typeof s.createdAt === 'string' ? s.createdAt : s.createdAt.toISOString(), updatedAt: typeof s.updatedAt === 'string' ? s.updatedAt : s.updatedAt.toISOString() })) } : {}) });
+  return NextResponse.json({
+    sections,
+    isDefault,
+    ...(includeSuggestions ? {
+      suggestions: suggestions.map(s => ({
+        ...s,
+        createdAt: typeof s.createdAt === 'string' ? s.createdAt : s.createdAt.toISOString(),
+        updatedAt: typeof s.updatedAt === 'string' ? s.updatedAt : s.updatedAt.toISOString(),
+      }))
+    } : {}),
+  });
 }
 
 // PUT: reordenar cards dentro/entre secciones
@@ -122,7 +175,6 @@ export async function PUT(
     return NextResponse.json({ error: "cardId, toSection, toIndex required" }, { status: 400 });
   }
 
-  // Verificar que el card pertenece al proyecto
   const card = await prisma.clientContextCard.findFirst({
     where: { id: cardId, projectId, canvasSection: { not: null } },
   });
@@ -132,12 +184,12 @@ export async function PUT(
   }
 
   const fromSection = card.canvasSection!;
+  const canvasIdFilter = card.canvasId ?? undefined;
   const isSameSection = fromSection === toSection;
 
   if (isSameSection) {
-    // Reordenar dentro de la misma sección
     const sectionCards = await prisma.clientContextCard.findMany({
-      where: { projectId, canvasSection: toSection },
+      where: { projectId, canvasSection: toSection, canvasId: canvasIdFilter ?? null },
       orderBy: [{ canvasOrder: "asc" }, { createdAt: "asc" }],
       select: { id: true },
     });
@@ -154,10 +206,8 @@ export async function PUT(
       )
     );
   } else {
-    // Mover a otra sección
-    // 1. Reordenar sección origen (sin el card)
     const fromCards = await prisma.clientContextCard.findMany({
-      where: { projectId, canvasSection: fromSection },
+      where: { projectId, canvasSection: fromSection, canvasId: canvasIdFilter ?? null },
       orderBy: [{ canvasOrder: "asc" }, { createdAt: "asc" }],
       select: { id: true },
     });
@@ -168,9 +218,8 @@ export async function PUT(
       )
     );
 
-    // 2. Insertar en sección destino
     const toCards = await prisma.clientContextCard.findMany({
-      where: { projectId, canvasSection: toSection },
+      where: { projectId, canvasSection: toSection, canvasId: canvasIdFilter ?? null },
       orderBy: [{ canvasOrder: "asc" }, { createdAt: "asc" }],
       select: { id: true },
     });

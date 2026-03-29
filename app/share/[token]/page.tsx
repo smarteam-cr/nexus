@@ -1,11 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import dynamic from "next/dynamic";
-
-const FlowchartViewer = dynamic(
-  () => import("@/components/flowchart/FlowchartViewer"),
-  { ssr: false, loading: () => <div className="h-64 bg-gray-50 rounded-xl animate-pulse" /> }
-);
+import { SharedFlowchart } from "./SharedFlowchart";
 
 const SECTION_LABELS: Record<string, string> = {
   objetivo_alcance: "Objetivo y alcance",
@@ -165,7 +160,7 @@ function SharedCard({
             )}
           </div>
           <div className="h-[500px]">
-            <FlowchartViewer
+            <SharedFlowchart
               data={{
                 title: card.title,
                 description: displayContent,

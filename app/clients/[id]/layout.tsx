@@ -6,6 +6,7 @@ import AppShell from "@/components/layout/AppShell";
 import WorkspaceShell from "@/components/clients/WorkspaceShell";
 import WorkspaceHeaderPopovers from "@/components/clients/WorkspaceHeaderPopovers";
 import HeaderAgentButton from "@/components/clients/HeaderAgentButton";
+
 import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
 
 // Obtiene el nombre de la empresa desde la cuenta del cliente o del sistema

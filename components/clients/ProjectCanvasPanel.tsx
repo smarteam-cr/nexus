@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 import SendToCanvasMenu from "./SendToCanvasMenu";
 import ProjectGPS from "./ProjectGPS";
 import SectionDiscoveryModal from "./SectionDiscoveryModal";
+import HubBadge from "@/components/ui/HubBadge";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
@@ -44,9 +45,26 @@ const SECTION_ICONS: Record<string, string> = {
   plan_implementacion: "📋",
 };
 
+// ── Canvas types ────────────────────────────────────────────────────────────
+
+interface CanvasMeta {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  sections: Array<{ key: string; label: string }>;
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function ProjectCanvasPanel({ projectId }: { projectId: string }) {
+export default function ProjectCanvasPanel({
+  projectId,
+  tags,
+  serviceType,
+}: {
+  projectId: string;
+  tags?: string[];
+  serviceType?: string | null;
+}) {
   const params = useParams();
   const clientId = params?.id as string;
   const [sections, setSections] = useState<CanvasSection[]>([]);
@@ -63,6 +81,78 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
   const [processingSession, setProcessingSession] = useState(false);
   const [sessionResult, setSessionResult] = useState<{ cards: CanvasCard[]; sessionTitle: string } | null>(null);
   const [unprocessedSessions, setUnprocessedSessions] = useState(0);
+
+  // Multi-canvas state
+  const [canvases, setCanvases] = useState<CanvasMeta[]>([]);
+  const [activeCanvasId, setActiveCanvasId] = useState<string | null>(null);
+  const [canvasDropdownOpen, setCanvasDropdownOpen] = useState(false);
+  const [creatingCanvas, setCreatingCanvas] = useState(false);
+  const [newCanvasName, setNewCanvasName] = useState("");
+  const [addingSectionName, setAddingSectionName] = useState<string | null>(null);
+  const canvasDropdownRef = useRef<HTMLDivElement>(null);
+
+  const activeCanvas = canvases.find((c) => c.id === activeCanvasId) ?? canvases.find((c) => c.isDefault) ?? null;
+  const isDefaultCanvas = activeCanvas?.isDefault ?? true;
+
+  // Fetch canvases
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/canvases`)
+      .then((r) => r.json())
+      .then((d) => {
+        const list = d.canvases ?? [];
+        setCanvases(list);
+        if (!activeCanvasId && list.length > 0) {
+          setActiveCanvasId(list[0].id); // default is first
+        }
+      })
+      .catch(() => {});
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (canvasDropdownRef.current && !canvasDropdownRef.current.contains(e.target as Node)) {
+        setCanvasDropdownOpen(false);
+        setCreatingCanvas(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const createCanvas = async () => {
+    if (!newCanvasName.trim()) return;
+    const res = await fetch(`/api/projects/${projectId}/canvases`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newCanvasName.trim() }),
+    });
+    const canvas = await res.json();
+    setCanvases((prev) => [...prev, canvas]);
+    setActiveCanvasId(canvas.id);
+    setNewCanvasName("");
+    setCreatingCanvas(false);
+    setCanvasDropdownOpen(false);
+  };
+
+  const addSection = async () => {
+    if (!addingSectionName?.trim() || !activeCanvasId) return;
+    const label = addingSectionName.trim();
+    const key = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+    const canvas = canvases.find((c) => c.id === activeCanvasId);
+    if (!canvas) return;
+    const updatedSections = [...(canvas.sections ?? []), { key, label }];
+    await fetch(`/api/projects/${projectId}/canvases/${activeCanvasId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sections: updatedSections }),
+    });
+    setCanvases((prev) =>
+      prev.map((c) => (c.id === activeCanvasId ? { ...c, sections: updatedSections } : c))
+    );
+    setAddingSectionName(null);
+    fetchCanvasCards();
+  };
 
   // Check share token
   useEffect(() => {
@@ -114,20 +204,23 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
     setProcessingSession(false);
   };
 
+  const canvasQueryParam = activeCanvasId && !isDefaultCanvas ? `?canvasId=${activeCanvasId}` : "";
+
   const fetchCanvasCards = useCallback(async () => {
     try {
-      const res = await fetch(`/api/projects/${projectId}/canvas-cards`);
+      const res = await fetch(`/api/projects/${projectId}/canvas-cards${canvasQueryParam}`);
       const data = await res.json();
       setSections(data.sections ?? []);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [projectId]);
+  }, [projectId, canvasQueryParam]);
 
   useEffect(() => { fetchCanvasCards(); }, [fetchCanvasCards]);
 
-  // Polling: check for new drafts every 5s (auto-populated by agents)
+  // Polling: check for new drafts every 5s (only for default canvas)
   const lastDraftCount = useRef(0);
   useEffect(() => {
+    if (!isDefaultCanvas) return;
     const interval = setInterval(() => {
       fetch(`/api/projects/${projectId}/canvas-cards`)
         .then((r) => r.json())
@@ -135,14 +228,14 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
           const allCards = (data.sections ?? []).flatMap((s: { cards: Array<{ canvasStatus: string }> }) => s.cards);
           const newDrafts = allCards.filter((c: { canvasStatus: string }) => c.canvasStatus === "draft").length;
           if (newDrafts > lastDraftCount.current) {
-            fetchCanvasCards(); // Refresh UI with new drafts
+            fetchCanvasCards();
           }
           lastDraftCount.current = newDrafts;
         })
         .catch(() => {});
     }, 5000);
     return () => clearInterval(interval);
-  }, [projectId, fetchCanvasCards]);
+  }, [projectId, fetchCanvasCards, isDefaultCanvas]);
 
   const toggleSection = (key: string) => {
     setCollapsedSections((prev) => {
@@ -274,7 +367,7 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-4">
+      <div className="px-6 py-8 space-y-4">
         {[1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="h-24 bg-gray-50 rounded-2xl animate-pulse" />
         ))}
@@ -283,11 +376,72 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+    <div className="px-6 py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Canvas de servicio</h2>
+          <div className="flex items-center gap-3">
+            {/* Canvas selector dropdown */}
+            <div className="relative" ref={canvasDropdownRef}>
+              <button
+                onClick={() => setCanvasDropdownOpen(!canvasDropdownOpen)}
+                className="flex items-center gap-2 text-xl font-bold text-gray-900 hover:text-gray-700 transition-colors"
+              >
+                {activeCanvas?.name ?? "Canvas de servicio"}
+                <svg className={`w-4 h-4 text-gray-400 transition-transform ${canvasDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {canvasDropdownOpen && (
+                <div className="absolute left-0 top-full mt-1 z-50 w-64 bg-white border border-gray-200 rounded-xl shadow-xl py-1">
+                  {canvases.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        setActiveCanvasId(c.id);
+                        setCanvasDropdownOpen(false);
+                        setLoading(true);
+                      }}
+                      className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                        c.id === activeCanvasId
+                          ? "bg-brand/5 text-brand font-semibold"
+                          : "text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {c.name}
+                      {c.isDefault && <span className="ml-2 text-[10px] text-gray-400">(predeterminado)</span>}
+                    </button>
+                  ))}
+                  <div className="border-t border-gray-100 mt-1 pt-1">
+                    {creatingCanvas ? (
+                      <div className="px-4 py-2 flex items-center gap-2">
+                        <input
+                          autoFocus
+                          value={newCanvasName}
+                          onChange={(e) => setNewCanvasName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") createCanvas(); if (e.key === "Escape") setCreatingCanvas(false); }}
+                          placeholder="Nombre del canvas"
+                          className="flex-1 px-2 py-1 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand"
+                        />
+                        <button onClick={createCanvas} className="text-xs font-medium text-brand hover:text-brand/80">Crear</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setCreatingCanvas(true)}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 flex items-center gap-2"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Nuevo canvas
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            {isDefaultCanvas && <HubBadge tags={tags} serviceType={serviceType} size="sm" />}
+          </div>
           <p className="text-sm text-gray-400 mt-0.5">
             {totalCards > 0
               ? `${totalCards} card${totalCards !== 1 ? "s" : ""} en el canvas`
@@ -398,8 +552,8 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
         </div>
       )}
 
-      {/* GPS del proyecto */}
-      <ProjectGPS projectId={projectId} />
+      {/* GPS del proyecto — solo en canvas default */}
+      {isDefaultCanvas && <ProjectGPS projectId={projectId} />}
 
       {/* Banner de borradores pendientes */}
       {draftCount > 0 && (
@@ -519,6 +673,36 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
           );
         })}
       </div>
+
+      {/* Add section button — only for custom canvases */}
+      {!isDefaultCanvas && (
+        <div className="mt-2">
+          {addingSectionName !== null ? (
+            <div className="flex items-center gap-2 max-w-sm">
+              <input
+                autoFocus
+                value={addingSectionName}
+                onChange={(e) => setAddingSectionName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") addSection(); if (e.key === "Escape") setAddingSectionName(null); }}
+                placeholder="Nombre de la sección"
+                className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand"
+              />
+              <button onClick={addSection} className="text-xs font-medium text-brand hover:text-brand/80 px-2 py-1.5">Agregar</button>
+              <button onClick={() => setAddingSectionName(null)} className="text-xs text-gray-400 hover:text-gray-600 px-1">Cancelar</button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setAddingSectionName("")}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-xl border border-dashed border-gray-200 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Nueva sección
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Section Discovery Modal */}
       {modalSectionKey && (

@@ -94,7 +94,8 @@ model Client {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  canvas          Json?   // Client Canvas — conocimiento a nivel empresa
+  canvas           Json?   // Client Canvas — conocimiento a nivel empresa
+  canvasConfidence Json?   // { section: "confirmed" | "inferred" } per section
 
   hubspotAccount    HubspotAccount?
   audits            Audit[]
@@ -139,6 +140,23 @@ model Project {
   contextCards ClientContextCard[]
   documents    ClientDocument[]
   agentRuns    AgentRun[]
+  canvases     ProjectCanvas[]
+}
+
+// Canvas dentro de un proyecto (default = "Canvas de servicio", custom = secciones libres)
+model ProjectCanvas {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  isDefault Boolean  @default(false)
+  sections  Json     @default("[]") // Array de { key: string, label: string }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cards     ClientContextCard[]
+
+  @@index([projectId])
 }
 
 // Notas/contenido guardadas por etapa y paso dentro del workspace de un cliente
@@ -195,6 +213,8 @@ model ClientContextCard {
   cardType   CardType   @default(TEXT)
 
   // Canvas integration
+  canvasId      String?  // null = canvas default del proyecto
+  canvas        ProjectCanvas? @relation(fields: [canvasId], references: [id], onDelete: SetNull)
   canvasSection String?  // Sección del canvas donde vive (null = no está en canvas)
   canvasOrder   Int?     // Orden dentro de la sección del canvas (para drag & drop)
   canvasStatus  String   @default("confirmed") // "draft" = auto-poblado por agente, pendiente de revisión; "confirmed" = aceptado por CSE
@@ -219,6 +239,7 @@ model ClientContextCard {
   @@unique([agentRunId, title])
   @@index([clientId, agentRunId])
   @@index([agentRunId])
+  @@index([canvasId])
   @@index([canvasSection])
   @@index([parentCardId])
 }

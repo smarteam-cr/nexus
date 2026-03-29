@@ -1,10 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { getStageSteps, STAGE_LABELS } from "@/lib/steps";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
 
 interface PendingItem {
   text: string;
   done: boolean;
+}
+
+// Resolve HubSpot pipeline stage ID → human-readable label
+async function fetchHubspotStageLabel(serviceId: string): Promise<string | null> {
+  try {
+    const hs = await getSystemHubspotClient();
+    const res = await hs.apiRequest({
+      method: "GET",
+      path: `/crm/v3/objects/services/${serviceId}?properties=hs_pipeline,hs_pipeline_stage`,
+    });
+    const data = (await res.json()) as {
+      properties?: { hs_pipeline?: string; hs_pipeline_stage?: string };
+    };
+    const pipelineId = data.properties?.hs_pipeline;
+    const stageId = data.properties?.hs_pipeline_stage;
+    if (!pipelineId || !stageId) return null;
+
+    // Fetch pipeline stages to resolve the label
+    const pipelineRes = await hs.apiRequest({
+      method: "GET",
+      path: `/crm/v3/pipelines/services/${pipelineId}/stages`,
+    });
+    const pipelineData = (await pipelineRes.json()) as {
+      results?: Array<{ id: string; label: string }>;
+    };
+    const stage = pipelineData.results?.find((s) => s.id === stageId);
+    return stage?.label ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // GET: obtener datos del GPS del proyecto
@@ -23,23 +54,32 @@ export async function GET(
       currentStage: true,
       currentStep: true,
       serviceType: true,
+      hubspotServiceId: true,
     },
   });
 
   if (!project) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  // Derivar estado actual (etapa + subetapa)
-  const stageSteps = getStageSteps(project.serviceType);
-  const stageLabel = STAGE_LABELS[project.currentStage] ?? `Etapa ${project.currentStage}`;
-  const steps = stageSteps[project.currentStage] ?? [];
-  const stepLabel = steps[project.currentStep]?.label ?? `Paso ${project.currentStep + 1}`;
+  // Try to get live stage from HubSpot first
+  let currentState: string;
+  if (project.hubspotServiceId) {
+    const hsLabel = await fetchHubspotStageLabel(project.hubspotServiceId);
+    currentState = hsLabel ?? "Sin etapa";
+  } else {
+    // Fallback: derive from internal stage/step
+    const stageSteps = getStageSteps(project.serviceType);
+    const stageLabel = STAGE_LABELS[project.currentStage] ?? `Etapa ${project.currentStage}`;
+    const steps = stageSteps[project.currentStage] ?? [];
+    const stepLabel = steps[project.currentStep]?.label ?? `Paso ${project.currentStep + 1}`;
+    currentState = `${stageLabel} → ${stepLabel}`;
+  }
 
   return NextResponse.json({
     nextSessionDate: project.nextSessionDate?.toISOString() ?? null,
     nextSessionNote: project.nextSessionNote ?? null,
     lastSessionSummary: project.lastSessionSummary ?? null,
     pendingItems: (project.pendingItems as PendingItem[] | null) ?? [],
-    currentState: `${stageLabel} → ${stepLabel}`,
+    currentState,
   });
 }
 
