@@ -46,7 +46,7 @@ export async function POST(
   // Accept: merge suggested value into client canvas
   const client = await prisma.client.findUnique({
     where: { id },
-    select: { canvas: true },
+    select: { canvas: true, canvasConfidence: true },
   });
   const current = (client?.canvas as ClientCanvas | null) ?? { ...EMPTY_CLIENT_CANVAS };
 
@@ -64,10 +64,14 @@ export async function POST(
 
   const merged = deepMergeCanvas(current, sectionUpdate);
 
+  // Update confidence for accepted section
+  const currentConfidence = (client?.canvasConfidence as Record<string, string> | null) ?? {};
+  const mergedConfidence = { ...currentConfidence, [sectionKey]: "confirmed" };
+
   await Promise.all([
     prisma.client.update({
       where: { id },
-      data: { canvas: merged as object },
+      data: { canvas: merged as object, canvasConfidence: mergedConfidence as object },
     }),
     prisma.canvasSuggestion.update({
       where: { id: suggestionId },
@@ -75,5 +79,5 @@ export async function POST(
     }),
   ]);
 
-  return NextResponse.json({ ok: true, canvas: merged });
+  return NextResponse.json({ ok: true, canvas: merged, confidence: mergedConfidence });
 }
