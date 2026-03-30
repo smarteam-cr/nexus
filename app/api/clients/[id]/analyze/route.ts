@@ -7,6 +7,8 @@ import { normalize, extractTitleTerms, extractDomain } from "@/lib/utils/matchin
 import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { updateCanvasAsync } from "@/lib/canvas/update-agent";
+import { getOutputFormatInstructions } from "@/lib/canvas/agent-output-schema";
+import { postProcessCards } from "@/lib/canvas/post-process";
 
 const FIREFLIES_GRAPHQL = "https://api.fireflies.ai/graphql";
 
@@ -738,6 +740,22 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   const isFlowchart         = agent.outputType === "FLOWCHART";
   const isCardsAndFlowcharts = agent.outputType === "CARDS_AND_FLOWCHARTS";
 
+  // ── 9a2. Resolver canvas destino para agentes no-default ────────────────────
+  const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
+    diagnostico: "Diagnóstico",
+    planificacion: "Planificación",
+    ejecucion: "Ejecución",
+    adopcion: "Adopción",
+  };
+  let targetCanvasId: string | null = null;
+  if (bodyProjectId && agent.agentGroup && AGENT_GROUP_TO_CANVAS[agent.agentGroup]) {
+    const targetCanvas = await prisma.projectCanvas.findFirst({
+      where: { projectId: bodyProjectId, name: AGENT_GROUP_TO_CANVAS[agent.agentGroup] },
+      select: { id: true },
+    });
+    if (targetCanvas) targetCanvasId = targetCanvas.id;
+  }
+
   // ── 9b. System prompt efectivo ────────────────────────────────────────────────
   let effectiveSystemPrompt = agent.additionalInstructions
     ? `${agent.systemPrompt}\n\n${agent.additionalInstructions}`
@@ -770,6 +788,18 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     "\n\n---\nPRIORIDAD DEL CANVAS: La sección 'CANVAS DEL PROYECTO' contiene información que el consultor revisó y validó. " +
     "Si hay contradicciones entre el canvas y otras fuentes (transcripciones, ejecuciones anteriores, datos del CRM), " +
     "PRIORIZA SIEMPRE lo que dice el canvas. El canvas es la fuente de verdad del proyecto.";
+
+  // Inyectar reglas de formato para agentes que apuntan a canvases no-default
+  if (targetCanvasId) {
+    const tc = await prisma.projectCanvas.findUnique({
+      where: { id: targetCanvasId },
+      select: { sections: true },
+    });
+    const targetSections = (tc?.sections ?? []) as Array<{ key: string; label: string }>;
+    if (targetSections.length > 0) {
+      effectiveSystemPrompt += getOutputFormatInstructions({ targetSections });
+    }
+  }
 
   // ── 9c. Canvas: cargar para contexto ──────────────────────────────────────────
   const clientCanvas = (client.canvas as ClientCanvas | null) ?? EMPTY_CLIENT_CANVAS;
@@ -924,7 +954,7 @@ ${[
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 11. Llamar a Claude ───────────────────────────────────────────────────────
-  const maxTokens = isCardsAndFlowcharts ? 16000 : 8192;
+  const maxTokens = 16000;
   let analysisJson: {
     cards?: { title: string; content: string }[];
     suggestions?: Array<{ title?: string; content?: string; type?: string; suggestedSection?: string }>;
@@ -1101,20 +1131,23 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     ? (GROUP_TO_SECTION[agent.agentGroup ?? ""] ?? "procesos")
     : null;
 
-  // Resolver canvasId para agentes que apuntan a un canvas específico
-  const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
-    diagnostico: "Diagnóstico",
-    planificacion: "Planificación",
-    ejecucion: "Ejecución",
-    adopcion: "Adopción",
-  };
-  let targetCanvasId: string | null = null;
-  if (bodyProjectId && agent.agentGroup && AGENT_GROUP_TO_CANVAS[agent.agentGroup]) {
-    const targetCanvas = await prisma.projectCanvas.findFirst({
-      where: { projectId: bodyProjectId, name: AGENT_GROUP_TO_CANVAS[agent.agentGroup] },
-      select: { id: true },
+  // Build section labels map for post-processing (non-default canvases only)
+  let targetSectionLabels: Record<string, string> = {};
+  if (targetCanvasId) {
+    const tc = await prisma.projectCanvas.findUnique({
+      where: { id: targetCanvasId },
+      select: { sections: true },
     });
-    if (targetCanvas) targetCanvasId = targetCanvas.id;
+    const secs = (tc?.sections ?? []) as Array<{ key: string; label: string }>;
+    targetSectionLabels = Object.fromEntries(secs.map((s) => [s.key, s.label]));
+  }
+
+  // Post-process cards if targeting a non-default canvas
+  if (targetCanvasId && analysisJson?.cards) {
+    analysisJson.cards = postProcessCards(
+      analysisJson.cards as Array<{ title: string; content: string; canvasSection?: string }>,
+      { sectionLabels: targetSectionLabels }
+    );
   }
 
   // ── 13b. Si es CARDS_AND_FLOWCHARTS, guardar cards de texto + cards FLOWCHART ─

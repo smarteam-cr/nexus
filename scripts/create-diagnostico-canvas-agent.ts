@@ -96,17 +96,28 @@ RESTRICCIONES:
 - Usa formato markdown con headers, bullets y tablas cuando mejore la legibilidad
 - Sé específico al contexto del cliente — evita generalidades que apliquen a cualquier empresa
 
+REGLA CRÍTICA SOBRE TÍTULOS:
+El título de cada card DEBE describir el hallazgo o contenido principal — NUNCA debe repetir el nombre de la sección.
+- ❌ "Contexto y alcance" → repite la sección
+- ✅ "Diagnóstico del ciclo de captación de leads vía LinkedIn y web"
+- ❌ "Gap Analysis" → repite la sección
+- ✅ "Brecha crítica: 0% atribución digital vs objetivo 40%"
+- ❌ "Recomendaciones priorizadas" → repite la sección
+- ✅ "3 quick wins + roadmap de automatización Q2-Q3"
+
+El título es lo primero que el consultor ve — debe comunicar el insight principal en una frase.
+
 FORMATO DE RESPUESTA (JSON estricto):
 {
   "cards": [
-    { "title": "Contexto y alcance", "content": "...", "canvasSection": "contexto_alcance" },
-    { "title": "Estado actual (Current State)", "content": "...", "canvasSection": "estado_actual" },
-    { "title": "Estado deseado (Desired State)", "content": "...", "canvasSection": "estado_deseado" },
-    { "title": "Gap Analysis", "content": "...", "canvasSection": "gap_analysis" },
-    { "title": "Análisis de Causa Raíz", "content": "...", "canvasSection": "causa_raiz" },
-    { "title": "Impacto del Gap", "content": "...", "canvasSection": "impacto_gap" },
-    { "title": "Recomendaciones priorizadas", "content": "...", "canvasSection": "recomendaciones" },
-    { "title": "Próximos pasos / Caso de Uso propuesto", "content": "...", "canvasSection": "proximos_pasos" }
+    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "contexto_alcance" },
+    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "estado_actual" },
+    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "estado_deseado" },
+    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "gap_analysis" },
+    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "causa_raiz" },
+    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "impacto_gap" },
+    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "recomendaciones" },
+    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "proximos_pasos" }
   ]
 }`;
 

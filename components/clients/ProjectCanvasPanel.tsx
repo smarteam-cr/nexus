@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import ReactMarkdown from "react-markdown";
 import SendToCanvasMenu from "./SendToCanvasMenu";
@@ -67,6 +67,9 @@ export default function ProjectCanvasPanel({
 }) {
   const params = useParams();
   const clientId = params?.id as string;
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const canvasFromUrl = searchParams.get("canvas");
   const [sections, setSections] = useState<CanvasSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [shareToken, setShareToken] = useState<string | null>(null);
@@ -94,7 +97,21 @@ export default function ProjectCanvasPanel({
   const activeCanvas = canvases.find((c) => c.id === activeCanvasId) ?? canvases.find((c) => c.isDefault) ?? null;
   const isDefaultCanvas = activeCanvas?.isDefault ?? true;
 
-  // Fetch canvases
+  // Update URL when canvas changes (no page reload)
+  const switchCanvas = useCallback((canvasId: string) => {
+    setActiveCanvasId(canvasId);
+    setLoading(true);
+    const url = new URL(window.location.href);
+    const target = canvases.find((c) => c.id === canvasId);
+    if (target?.isDefault) {
+      url.searchParams.delete("canvas");
+    } else {
+      url.searchParams.set("canvas", canvasId);
+    }
+    router.replace(url.pathname + url.search, { scroll: false });
+  }, [canvases, router]);
+
+  // Fetch canvases — restore from URL param if present
   useEffect(() => {
     fetch(`/api/projects/${projectId}/canvases`)
       .then((r) => r.json())
@@ -102,7 +119,8 @@ export default function ProjectCanvasPanel({
         const list = d.canvases ?? [];
         setCanvases(list);
         if (!activeCanvasId && list.length > 0) {
-          setActiveCanvasId(list[0].id); // default is first
+          const fromUrl = canvasFromUrl ? list.find((c: CanvasMeta) => c.id === canvasFromUrl) : null;
+          setActiveCanvasId(fromUrl ? fromUrl.id : list[0].id);
         }
       })
       .catch(() => {});
@@ -128,11 +146,17 @@ export default function ProjectCanvasPanel({
       body: JSON.stringify({ name: newCanvasName.trim() }),
     });
     const canvas = await res.json();
-    setCanvases((prev) => [...prev, canvas]);
-    setActiveCanvasId(canvas.id);
+    const updated = [...canvases, canvas];
+    setCanvases(updated);
     setNewCanvasName("");
     setCreatingCanvas(false);
     setCanvasDropdownOpen(false);
+    // Use direct URL update since canvases state hasn't settled yet
+    setActiveCanvasId(canvas.id);
+    setLoading(true);
+    const url = new URL(window.location.href);
+    url.searchParams.set("canvas", canvas.id);
+    router.replace(url.pathname + url.search, { scroll: false });
   };
 
   const addSection = async () => {
@@ -204,38 +228,44 @@ export default function ProjectCanvasPanel({
     setProcessingSession(false);
   };
 
-  const canvasQueryParam = activeCanvasId && !isDefaultCanvas ? `?canvasId=${activeCanvasId}` : "";
-
   const fetchCanvasCards = useCallback(async () => {
+    if (!activeCanvasId) return;
+    const param = isDefaultCanvas ? "" : `?canvasId=${activeCanvasId}`;
     try {
-      const res = await fetch(`/api/projects/${projectId}/canvas-cards${canvasQueryParam}`);
+      const res = await fetch(`/api/projects/${projectId}/canvas-cards${param}`);
       const data = await res.json();
       setSections(data.sections ?? []);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [projectId, canvasQueryParam]);
+  }, [projectId, activeCanvasId, isDefaultCanvas]);
 
-  useEffect(() => { fetchCanvasCards(); }, [fetchCanvasCards]);
-
-  // Polling: check for new drafts every 5s (only for default canvas)
-  const lastDraftCount = useRef(0);
+  const canvasesLoaded = canvases.length > 0;
   useEffect(() => {
-    if (!isDefaultCanvas) return;
+    if (canvasesLoaded) fetchCanvasCards();
+  }, [fetchCanvasCards, canvasesLoaded]);
+
+  // Polling: check for new drafts every 5s
+  const lastDraftCount = useRef(0);
+  const fetchRef = useRef(fetchCanvasCards);
+  fetchRef.current = fetchCanvasCards;
+  useEffect(() => {
+    if (!activeCanvasId) return;
+    const param = isDefaultCanvas ? "" : `?canvasId=${activeCanvasId}`;
     const interval = setInterval(() => {
-      fetch(`/api/projects/${projectId}/canvas-cards`)
+      fetch(`/api/projects/${projectId}/canvas-cards${param}`)
         .then((r) => r.json())
         .then((data) => {
           const allCards = (data.sections ?? []).flatMap((s: { cards: Array<{ canvasStatus: string }> }) => s.cards);
           const newDrafts = allCards.filter((c: { canvasStatus: string }) => c.canvasStatus === "draft").length;
           if (newDrafts > lastDraftCount.current) {
-            fetchCanvasCards();
+            fetchRef.current();
           }
           lastDraftCount.current = newDrafts;
         })
         .catch(() => {});
     }, 5000);
     return () => clearInterval(interval);
-  }, [projectId, fetchCanvasCards, isDefaultCanvas]);
+  }, [projectId, activeCanvasId, isDefaultCanvas]);
 
   const toggleSection = (key: string) => {
     setCollapsedSections((prev) => {
@@ -398,9 +428,8 @@ export default function ProjectCanvasPanel({
                     <button
                       key={c.id}
                       onClick={() => {
-                        setActiveCanvasId(c.id);
+                        switchCanvas(c.id);
                         setCanvasDropdownOpen(false);
-                        setLoading(true);
                       }}
                       className={`w-full text-left px-4 py-2 text-sm transition-colors ${
                         c.id === activeCanvasId
