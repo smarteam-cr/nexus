@@ -7,7 +7,8 @@ import { normalize, extractTitleTerms, extractDomain } from "@/lib/utils/matchin
 import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { updateCanvasAsync } from "@/lib/canvas/update-agent";
-import { getOutputFormatInstructions } from "@/lib/canvas/agent-output-schema";
+import { getOutputFormatInstructions, getBlockOutputFormatInstructions } from "@/lib/canvas/agent-output-schema";
+import { DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN, type BlockType } from "@/lib/canvas/block-types";
 import { postProcessCards } from "@/lib/canvas/post-process";
 
 const FIREFLIES_GRAPHQL = "https://api.fireflies.ai/graphql";
@@ -790,14 +791,19 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     "PRIORIZA SIEMPRE lo que dice el canvas. El canvas es la fuente de verdad del proyecto.";
 
   // Inyectar reglas de formato para agentes que apuntan a canvases no-default
+  const useBlockFormat = targetCanvasId && agent.id === "agent-diagnostico-canvas";
   if (targetCanvasId) {
-    const tc = await prisma.projectCanvas.findUnique({
-      where: { id: targetCanvasId },
-      select: { sections: true },
+    const tcSections = await prisma.canvasSection.findMany({
+      where: { canvasId: targetCanvasId },
+      orderBy: { order: "asc" },
+      select: { key: true, label: true },
     });
-    const targetSections = (tc?.sections ?? []) as Array<{ key: string; label: string }>;
-    if (targetSections.length > 0) {
-      effectiveSystemPrompt += getOutputFormatInstructions({ targetSections });
+    if (tcSections.length > 0) {
+      if (useBlockFormat) {
+        effectiveSystemPrompt += getBlockOutputFormatInstructions({ targetSections: tcSections });
+      } else {
+        effectiveSystemPrompt += getOutputFormatInstructions({ targetSections: tcSections });
+      }
     }
   }
 
@@ -1011,6 +1017,24 @@ Analiza toda la información anterior y completa las secciones de contexto del c
               console.error("[analyze CAF] Reparación fallida — JSON irrecuperable");
             }
           }
+        } else if (useBlockFormat) {
+          // Recuperación para block format (sections + blocks)
+          console.warn(`[analyze blocks] JSON.parse falló (stop_reason=${stopReason}), intentando reparación...`);
+          const repaired = repairTruncatedJson(jsonMatch[0]);
+          if (repaired) {
+            try {
+              analysisJson = JSON.parse(repaired);
+              if (analysisJson?.sections) {
+                // Filter sections with at least one block that has content
+                analysisJson.sections = analysisJson.sections.filter(
+                  (s: { blocks?: Array<{ type?: string }> }) => s.blocks?.length > 0
+                );
+                console.log(`[analyze blocks] Reparado: ${analysisJson.sections.length} secciones válidas`);
+              }
+            } catch {
+              console.error("[analyze blocks] Reparación fallida");
+            }
+          }
         } else if (!isFlowchart) {
           // Recuperación parcial para CARDS
           const partialCards: { title: string; content: string }[] = [];
@@ -1055,6 +1079,10 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     // Cards son opcionales (el agente puede generar solo flowcharts)
     if (!analysisJson?.flowcharts?.length && !analysisJson?.cards?.length) {
       return NextResponse.json({ error: "invalid_response_empty" }, { status: 500 });
+    }
+  } else if (useBlockFormat) {
+    if (!analysisJson?.sections?.length) {
+      return NextResponse.json({ error: "invalid_block_response" }, { status: 500 });
     }
   } else {
     if (!analysisJson?.cards?.length) {
@@ -1148,6 +1176,74 @@ Analiza toda la información anterior y completa las secciones de contexto del c
       analysisJson.cards as Array<{ title: string; content: string; canvasSection?: string }>,
       { sectionLabels: targetSectionLabels }
     );
+  }
+
+  // ── 13a2. Si es block format, guardar CanvasBlock records ─────────────────────
+  const isBlockFormat = useBlockFormat && analysisJson?.sections && Array.isArray(analysisJson.sections);
+  if (isBlockFormat && targetCanvasId) {
+    // Resolve CanvasSection IDs
+    const dbSections = await prisma.canvasSection.findMany({
+      where: { canvasId: targetCanvasId },
+      select: { id: true, key: true },
+    });
+    const sectionMap = new Map(dbSections.map((s) => [s.key, s.id]));
+
+    let totalBlocks = 0;
+    const outputSections = analysisJson.sections as Array<{
+      key: string;
+      blocks: Array<{ type: string; content?: string; data?: unknown }>;
+    }>;
+
+    for (const section of outputSections) {
+      const sectionId = sectionMap.get(section.key);
+      if (!sectionId || !section.blocks?.length) continue;
+
+      // Clear existing draft blocks in this section from previous runs
+      await prisma.canvasBlock.deleteMany({
+        where: { sectionId, status: "DRAFT", source: "AGENT" },
+      });
+
+      await prisma.canvasBlock.createMany({
+        data: section.blocks.map((block, i) => {
+          const bt = (block.type?.toLowerCase() ?? "text") as BlockType;
+          // Conservative rowSpan — user can resize if needed
+          const contentLen = (block.content ?? "").length;
+          const tableRows = (block.data as { rows?: unknown[] } | null)?.rows?.length ?? 0;
+          let rowSpan: number;
+          if (bt === "heading") rowSpan = 1;
+          else if (bt === "metric") rowSpan = 1;
+          else if (bt === "table") rowSpan = Math.max(2, Math.ceil((tableRows + 1) * 35 / 125));
+          else if (bt === "flowchart") rowSpan = 3;
+          else rowSpan = Math.max(1, Math.ceil(contentLen / 800));
+          return {
+            sectionId,
+            blockType: (bt.toUpperCase()) as "TEXT" | "HEADING" | "TABLE" | "METRIC" | "CALLOUT" | "CARD" | "FLOWCHART" | "CHART" | "IMAGE",
+            content: block.content ?? null,
+            data: block.data ?? undefined,
+            order: i,
+            colSpan: DEFAULT_COL_SPAN[bt] ?? 4,
+            rowSpan,
+            source: "AGENT" as const,
+            status: "DRAFT" as const,
+            agentRunId: run.id,
+          };
+        }),
+      });
+      totalBlocks += section.blocks.length;
+    }
+
+    console.log(`[analyze blocks] Saved ${totalBlocks} blocks across ${outputSections.length} sections`);
+
+    const savedBlocks = await prisma.canvasBlock.findMany({
+      where: { agentRunId: run.id },
+      orderBy: { order: "asc" },
+    });
+
+    return NextResponse.json({
+      blocks: savedBlocks,
+      format: "blocks",
+      run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
+    });
   }
 
   // ── 13b. Si es CARDS_AND_FLOWCHARTS, guardar cards de texto + cards FLOWCHART ─

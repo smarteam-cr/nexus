@@ -66,14 +66,34 @@ export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
   adopcion: "Adopción",
 };
 
-/** Create all standard canvases for a project. Call after project creation. */
+/** Create all standard canvases for a project with CanvasSection records. */
 export async function createDefaultCanvases(projectId: string) {
+  // Create all canvases
   await prisma.projectCanvas.createMany({
     data: DEFAULT_PROJECT_CANVASES.map((c) => ({
       projectId,
       name: c.name,
       isDefault: c.isDefault,
-      sections: c.sections,
+      sections: c.sections, // Keep JSON for backward compat
     })),
   });
+
+  // Create CanvasSection records for non-default canvases
+  const createdCanvases = await prisma.projectCanvas.findMany({
+    where: { projectId, isDefault: false },
+    select: { id: true, name: true },
+  });
+
+  for (const canvas of createdCanvases) {
+    const def = DEFAULT_PROJECT_CANVASES.find((d) => d.name === canvas.name);
+    if (!def?.sections.length) continue;
+    await prisma.canvasSection.createMany({
+      data: def.sections.map((s, i) => ({
+        canvasId: canvas.id,
+        key: s.key,
+        label: s.label,
+        order: i,
+      })),
+    });
+  }
 }

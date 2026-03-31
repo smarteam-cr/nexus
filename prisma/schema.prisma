@@ -81,6 +81,30 @@ enum CardType {
   CHART     // Gráfico de ECharts (configuración en chartConfig)
 }
 
+// ─── Block system (canvases no-default) ─────────────────────────────────────
+
+enum BlockType {
+  TEXT
+  HEADING
+  TABLE
+  METRIC
+  CALLOUT
+  CARD
+  FLOWCHART
+  CHART
+  IMAGE
+}
+
+enum BlockSource {
+  AGENT
+  HUMAN
+}
+
+enum BlockStatus {
+  DRAFT
+  CONFIRMED
+}
+
 // ─── Client (nueva entidad raíz) ──────────────────────────────────────────────
 
 model Client {
@@ -154,9 +178,49 @@ model ProjectCanvas {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  cards     ClientContextCard[]
+  cards           ClientContextCard[]
+  canvasSections  CanvasSection[]
 
   @@index([projectId])
+}
+
+// Sección de un canvas no-default (entidad de primer nivel)
+model CanvasSection {
+  id        String   @id @default(cuid())
+  canvasId  String
+  canvas    ProjectCanvas @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+  key       String
+  label     String
+  order     Int      @default(0)
+  layout    Json?    // RGL layout: [{ i: blockId, x, y, w, h }]
+  createdAt DateTime @default(now())
+
+  blocks    CanvasBlock[]
+
+  @@unique([canvasId, key])
+  @@index([canvasId])
+}
+
+// Bloque de contenido dentro de una sección (text, heading, table, metric, callout, etc.)
+model CanvasBlock {
+  id         String      @id @default(cuid())
+  sectionId  String
+  section    CanvasSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  blockType  BlockType   @default(TEXT)
+  content    String?     @db.Text
+  data       Json?
+  order      Int         @default(0)
+  colSpan    Int         @default(4) // 1-4 columns width
+  colStart   Int?        // 1-4 column start position (null = auto)
+  rowSpan    Int         @default(4) // height in grid rows
+  source     BlockSource @default(AGENT)
+  status     BlockStatus @default(DRAFT)
+  agentRunId String?
+  agentRun   AgentRun?   @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  createdAt  DateTime    @default(now())
+
+  @@index([sectionId])
+  @@index([agentRunId])
 }
 
 // Notas/contenido guardadas por etapa y paso dentro del workspace de un cliente
@@ -374,7 +438,8 @@ model AgentRun {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  cards ClientContextCard[]
+  cards  ClientContextCard[]
+  blocks CanvasBlock[]
 
   @@index([status])
 }

@@ -99,6 +99,32 @@ export type CanvasBlock =
   | ChartBlock
   | ImageBlock;
 
+// ── Default column spans per block type (4-column grid) ─────────────────────
+
+export const DEFAULT_COL_SPAN: Record<BlockType, number> = {
+  text: 4,
+  heading: 4,
+  table: 4,
+  metric: 1,
+  callout: 4,
+  card: 2,
+  flowchart: 4,
+  chart: 4,
+  image: 2,
+};
+
+export const DEFAULT_ROW_SPAN: Record<BlockType, number> = {
+  text: 6,
+  heading: 2,
+  table: 8,
+  metric: 3,
+  callout: 4,
+  card: 6,
+  flowchart: 10,
+  chart: 8,
+  image: 6,
+};
+
 // ── Validators ──────────────────────────────────────────────────────────────
 
 export function isValidBlockType(type: string): type is BlockType {

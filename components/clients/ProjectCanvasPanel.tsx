@@ -8,6 +8,7 @@ import SendToCanvasMenu from "./SendToCanvasMenu";
 import ProjectGPS from "./ProjectGPS";
 import SectionDiscoveryModal from "./SectionDiscoveryModal";
 import HubBadge from "@/components/ui/HubBadge";
+import SectionBlockList from "@/components/canvas/SectionBlockList";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
@@ -228,11 +229,11 @@ export default function ProjectCanvasPanel({
     setProcessingSession(false);
   };
 
+  // Card fetch + polling only for default canvas (non-default uses SectionBlockList)
   const fetchCanvasCards = useCallback(async () => {
-    if (!activeCanvasId) return;
-    const param = isDefaultCanvas ? "" : `?canvasId=${activeCanvasId}`;
+    if (!activeCanvasId || !isDefaultCanvas) return;
     try {
-      const res = await fetch(`/api/projects/${projectId}/canvas-cards${param}`);
+      const res = await fetch(`/api/projects/${projectId}/canvas-cards`);
       const data = await res.json();
       setSections(data.sections ?? []);
     } catch { /* ignore */ }
@@ -241,18 +242,17 @@ export default function ProjectCanvasPanel({
 
   const canvasesLoaded = canvases.length > 0;
   useEffect(() => {
-    if (canvasesLoaded) fetchCanvasCards();
-  }, [fetchCanvasCards, canvasesLoaded]);
+    if (canvasesLoaded && isDefaultCanvas) fetchCanvasCards();
+    if (canvasesLoaded && !isDefaultCanvas) setLoading(false);
+  }, [fetchCanvasCards, canvasesLoaded, isDefaultCanvas]);
 
-  // Polling: check for new drafts every 5s
   const lastDraftCount = useRef(0);
   const fetchRef = useRef(fetchCanvasCards);
   fetchRef.current = fetchCanvasCards;
   useEffect(() => {
-    if (!activeCanvasId) return;
-    const param = isDefaultCanvas ? "" : `?canvasId=${activeCanvasId}`;
+    if (!activeCanvasId || !isDefaultCanvas) return;
     const interval = setInterval(() => {
-      fetch(`/api/projects/${projectId}/canvas-cards${param}`)
+      fetch(`/api/projects/${projectId}/canvas-cards`)
         .then((r) => r.json())
         .then((data) => {
           const allCards = (data.sections ?? []).flatMap((s: { cards: Array<{ canvasStatus: string }> }) => s.cards);
@@ -470,13 +470,15 @@ export default function ProjectCanvasPanel({
             </div>
             {isDefaultCanvas && <HubBadge tags={tags} serviceType={serviceType} size="sm" />}
           </div>
-          <p className="text-sm text-gray-400 mt-0.5">
-            {totalCards > 0
-              ? `${totalCards} card${totalCards !== 1 ? "s" : ""} en el canvas`
-              : "Ejecuta agentes y envía resultados aquí"}
-          </p>
+          {isDefaultCanvas && (
+            <p className="text-sm text-gray-400 mt-0.5">
+              {totalCards > 0
+                ? `${totalCards} card${totalCards !== 1 ? "s" : ""} en el canvas`
+                : "Ejecuta agentes y envía resultados aquí"}
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+        {isDefaultCanvas && (<div className="flex items-center gap-2">
           {/* Share button */}
           <div className="relative">
             <button
@@ -544,11 +546,11 @@ export default function ProjectCanvasPanel({
               </span>
             )}
           </button>
-        </div>
+        </div>)}
       </div>
 
-      {/* Session processing results */}
-      {sessionResult && (
+      {/* Session processing results — default canvas only */}
+      {isDefaultCanvas && sessionResult && (
         <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-violet-700">
@@ -580,9 +582,16 @@ export default function ProjectCanvasPanel({
         </div>
       )}
 
-      {/* GPS del proyecto — solo en canvas default */}
+      {/* Non-default canvases: render blocks via SectionBlockList */}
+      {!isDefaultCanvas && activeCanvasId && (
+        <SectionBlockList projectId={projectId} canvasId={activeCanvasId} />
+      )}
+
+      {/* Default canvas: GPS + cards */}
       {isDefaultCanvas && <ProjectGPS projectId={projectId} />}
 
+      {/* ── Default canvas content (cards-based) ── */}
+      {isDefaultCanvas && (<>
       {/* Banner de borradores pendientes */}
       {draftCount > 0 && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800">
@@ -702,36 +711,6 @@ export default function ProjectCanvasPanel({
         })}
       </div>
 
-      {/* Add section button — only for custom canvases */}
-      {!isDefaultCanvas && (
-        <div className="mt-2">
-          {addingSectionName !== null ? (
-            <div className="flex items-center gap-2 max-w-sm">
-              <input
-                autoFocus
-                value={addingSectionName}
-                onChange={(e) => setAddingSectionName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") addSection(); if (e.key === "Escape") setAddingSectionName(null); }}
-                placeholder="Nombre de la sección"
-                className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand"
-              />
-              <button onClick={addSection} className="text-xs font-medium text-brand hover:text-brand/80 px-2 py-1.5">Agregar</button>
-              <button onClick={() => setAddingSectionName(null)} className="text-xs text-gray-400 hover:text-gray-600 px-1">Cancelar</button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setAddingSectionName("")}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-xl border border-dashed border-gray-200 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Nueva sección
-            </button>
-          )}
-        </div>
-      )}
-
       {/* Section Discovery Modal */}
       {modalSectionKey && (
         <SectionDiscoveryModal
@@ -748,6 +727,7 @@ export default function ProjectCanvasPanel({
           onDiagramSave={fetchCanvasCards}
         />
       )}
+      </>)}
     </div>
   );
 }

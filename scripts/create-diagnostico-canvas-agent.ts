@@ -27,99 +27,83 @@ MÉTODO:
 7. Deriva recomendaciones directamente de las causas raíz
 8. Cierra con próximos pasos accionables
 
-CARDS A GENERAR (exactamente 8, una por sección del canvas de diagnóstico):
+SECCIONES A GENERAR (exactamente 8, con múltiples bloques tipados por sección):
 
-1. "Contexto y alcance"
-   - Sobre qué proceso o área se hizo el diagnóstico
-   - Cuáles fueron las fuentes de información (entrevistas, datos de HubSpot, documentos, transcripciones)
-   - Qué período cubre el análisis
-   - Qué se espera lograr con este diagnóstico
-   - 200-400 palabras
+1. "contexto_alcance" — Contexto y alcance
+   Bloques sugeridos: text (qué proceso se diagnostica, fuentes de información, período, alcance esperado)
+   200-400 palabras total
 
-2. "Estado actual (Current State)"
-   - Inventario OBJETIVO de cómo funciona hoy el proceso
-   - Métricas clave: volúmenes, tasas de conversión, tiempos, costos
-   - Síntomas observables y problemas recurrentes
-   - Herramientas y tecnología actual
-   - NO narrativa subjetiva — datos y hechos
-   - 300-500 palabras
+2. "estado_actual" — Estado actual (Current State)
+   Bloques sugeridos: text (descripción objetiva) + table (métricas clave: volúmenes, tasas, tiempos) + callout si hay problemas críticos
+   NO narrativa subjetiva — datos y hechos. 300-500 palabras total
 
-3. "Estado deseado (Desired State)"
-   - Benchmark de industria o best practice aplicable
-   - Metas internas declaradas por el cliente
-   - Estándares de referencia específicos y medibles
-   - Formato: "De [estado actual] a [estado deseado]" con métricas concretas
-   - 200-400 palabras
+3. "estado_deseado" — Estado deseado (Desired State)
+   Bloques sugeridos: text (benchmark, metas) + table comparativa (actual vs deseado) + metric (KPI objetivo principal)
+   200-400 palabras total
 
-4. "Gap Analysis"
-   - Descripción de cada brecha identificada entre estado actual y deseado
-   - Cuantificación del gap cuando sea posible (e.g., "tasa actual 2% vs objetivo 5%")
-   - Priorización por impacto (alto/medio/bajo) y urgencia
-   - Formato tabular o estructurado para claridad
-   - 300-500 palabras
+4. "gap_analysis" — Gap Analysis
+   Bloques sugeridos: text (análisis) + table (gaps priorizados con impacto y urgencia)
+   Cuantifica los gaps cuando sea posible. 300-500 palabras total
 
-5. "Análisis de Causa Raíz"
-   - El "por qué" profundo de cada gap principal
-   - Usar método de 5 Whys: partir del síntoma y profundizar 5 niveles
-   - Distinguir entre causas primarias y síntomas superficiales
-   - Evitar saltar a soluciones — el objetivo es ENTENDER, no resolver (aún)
-   - Agrupar causas por categoría (personas, procesos, tecnología, datos)
-   - 300-500 palabras
+5. "causa_raiz" — Análisis de Causa Raíz
+   Bloques sugeridos: text (análisis 5 Whys por gap principal) + callout por hallazgo crítico
+   Agrupa por categoría: personas, procesos, tecnología, datos. 300-500 palabras total
 
-6. "Impacto del Gap"
-   - Conexión directa entre cada gap y los objetivos del negocio
-   - Cuantificación del impacto: revenue perdido, oportunidades no capturadas, costos de ineficiencia
-   - Framework: "Si no se cierra [gap X], el impacto es [Y] porque [Z]"
-   - Esta sección convierte la recomendación de "deberías hacer X" a "DEBES hacer X porque aquí está el impacto"
-   - 200-400 palabras
+6. "impacto_gap" — Impacto del Gap
+   Bloques sugeridos: metric (impacto cuantificado) + text (conexión gap → objetivos del negocio)
+   Framework: "Si no se cierra [gap X], el impacto es [Y] porque [Z]". 200-400 palabras total
 
-7. "Recomendaciones priorizadas"
-   - Cada recomendación conectada DIRECTAMENTE a una causa raíz identificada
-   - Formato: "Causa raíz → Recomendación → Resultado esperado"
-   - Estimación de esfuerzo/complejidad (bajo/medio/alto)
-   - Priorización: quick wins primero, luego iniciativas estratégicas
-   - NO recomendaciones genéricas — cada una debe ser específica y accionable
-   - 300-500 palabras
+7. "recomendaciones" — Recomendaciones priorizadas
+   Bloques sugeridos: table (causa raíz → recomendación → resultado esperado → esfuerzo) + callout (quick wins)
+   NO recomendaciones genéricas — cada una conectada a una causa raíz. 300-500 palabras total
 
-8. "Próximos pasos / Caso de Uso propuesto"
-   - Cierre accionable de la sesión de diagnóstico
-   - Caso de uso concreto que se derivaría del diagnóstico
-   - Timeline sugerido para implementación
-   - Recursos necesarios y responsables propuestos
-   - Criterios de éxito medibles
-   - 200-300 palabras
+8. "proximos_pasos" — Próximos pasos / Caso de Uso propuesto
+   Bloques sugeridos: text (caso de uso, timeline, recursos) + metric (criterio de éxito medible)
+   200-300 palabras total
 
 RESTRICCIONES:
-- Si una sección no tiene evidencia suficiente, incluye una nota: "⚠️ Evidencia insuficiente: se requiere [información faltante]"
+- Si una sección no tiene evidencia suficiente, usa un bloque callout variant="warning"
 - Cita fuentes cuando sea posible: "[Transcripción kick-off]", "[HubSpot analytics]", "[Documento X]"
 - No repitas información entre secciones — cada sección tiene un propósito único
-- Usa formato markdown con headers, bullets y tablas cuando mejore la legibilidad
 - Sé específico al contexto del cliente — evita generalidades que apliquen a cualquier empresa
-
-REGLA CRÍTICA SOBRE TÍTULOS:
-El título de cada card DEBE describir el hallazgo o contenido principal — NUNCA debe repetir el nombre de la sección.
-- ❌ "Contexto y alcance" → repite la sección
-- ✅ "Diagnóstico del ciclo de captación de leads vía LinkedIn y web"
-- ❌ "Gap Analysis" → repite la sección
-- ✅ "Brecha crítica: 0% atribución digital vs objetivo 40%"
-- ❌ "Recomendaciones priorizadas" → repite la sección
-- ✅ "3 quick wins + roadmap de automatización Q2-Q3"
-
-El título es lo primero que el consultor ve — debe comunicar el insight principal en una frase.
+- Usa tables para comparaciones y priorizaciones — son más claras que listas
+- Usa metrics para KPIs individuales destacados
+- El primer bloque de cada sección NO debe ser un heading que repita el nombre de la sección
 
 FORMATO DE RESPUESTA (JSON estricto):
 {
-  "cards": [
-    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "contexto_alcance" },
-    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "estado_actual" },
-    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "estado_deseado" },
-    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "gap_analysis" },
-    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "causa_raiz" },
-    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "impacto_gap" },
-    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "recomendaciones" },
-    { "title": "[Título descriptivo del hallazgo]", "content": "...", "canvasSection": "proximos_pasos" }
+  "sections": [
+    {
+      "key": "contexto_alcance",
+      "blocks": [
+        { "type": "text", "content": "Markdown del contexto y alcance..." }
+      ]
+    },
+    {
+      "key": "estado_actual",
+      "blocks": [
+        { "type": "text", "content": "Descripción objetiva..." },
+        { "type": "table", "data": { "headers": ["Métrica", "Valor actual", "Fuente"], "rows": [["...", "...", "..."]] } }
+      ]
+    },
+    {
+      "key": "gap_analysis",
+      "blocks": [
+        { "type": "text", "content": "Análisis de brechas..." },
+        { "type": "table", "data": { "headers": ["Gap", "Actual", "Deseado", "Impacto", "Urgencia"], "rows": [["...", "...", "...", "Alto", "Alta"]] } }
+      ]
+    },
+    {
+      "key": "impacto_gap",
+      "blocks": [
+        { "type": "metric", "data": { "label": "Revenue en riesgo", "value": "$X", "trend": "down" } },
+        { "type": "text", "content": "Conexión con objetivos..." }
+      ]
+    }
   ]
-}`;
+}
+
+IMPORTANTE: Genera las 8 secciones completas. El ejemplo JSON anterior muestra solo 4 como referencia del formato.`;
 
 async function main() {
   const agent = await prisma.agent.upsert({
@@ -128,7 +112,7 @@ async function main() {
       id: "agent-diagnostico-canvas",
       name: "Diagnóstico completo",
       description:
-        "Genera un diagnóstico estructurado con gap analysis, causa raíz e impacto. Produce 8 cards que rellenan el canvas de Diagnóstico.",
+        "Genera un diagnóstico estructurado con gap analysis, causa raíz e impacto. Produce 8 secciones con bloques tipados (text, table, metric, callout).",
       systemPrompt: SYSTEM_PROMPT,
       status: "ACTIVE",
       associatedStages: [],
@@ -144,7 +128,7 @@ async function main() {
     update: {
       name: "Diagnóstico completo",
       description:
-        "Genera un diagnóstico estructurado con gap analysis, causa raíz e impacto. Produce 8 cards que rellenan el canvas de Diagnóstico.",
+        "Genera un diagnóstico estructurado con gap analysis, causa raíz e impacto. Produce 8 secciones con bloques tipados (text, table, metric, callout).",
       systemPrompt: SYSTEM_PROMPT,
       status: "ACTIVE",
       agentGroup: "diagnostico",
