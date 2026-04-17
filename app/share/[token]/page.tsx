@@ -121,7 +121,7 @@ export default async function SharedProjectPage({
       <footer className="border-t border-gray-200 bg-white mt-16">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <p className="text-xs text-gray-400">
-            Powered by <span className="font-semibold text-gray-600">Nexus</span> · Dinterweb
+            Powered by <span className="font-semibold text-gray-600">Nexus</span>
           </p>
           <p className="text-xs text-gray-300">
             Actualizado: {new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}

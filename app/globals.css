@@ -61,10 +61,10 @@
   /*    bg-brand, text-brand, border-brand  (y variantes /10 /20 /50 etc.)     */
   /*    bg-brand-light, text-brand-light, border-brand-light                    */
   /*                                                                             */
-  --color-brand:       #ef4444;  /* hoy: red-500 — bordes, tints, texto acento */
-  --color-brand-light: #f87171;  /* hoy: red-400 — hover / texto sobre oscuro */
-  --color-brand-soft:  #ffbdbd;  /* rojo suave — fill de botones, badges, números */
-  --color-brand-dark:  #b91c1c;  /* red-700 — texto sobre brand-soft */
+  --color-brand:       #3b82f6;  /* blue-500 — bordes, tints, texto acento */
+  --color-brand-light: #60a5fa;  /* blue-400 — hover / texto sobre oscuro */
+  --color-brand-soft:  #bfdbfe;  /* blue-200 — fill de botones, badges, números */
+  --color-brand-dark:  #1d4ed8;  /* blue-700 — texto sobre brand-soft */
 }
 
 html {
@@ -80,8 +80,8 @@ html {
   --foreground:   #f9fafb;   /* gray-50   — texto base */
 
   /* Primary — acciones principales, brand */
-  --color-primary:         #ef4444;  /* red-500 */
-  --color-primary-hover:   #f87171;  /* red-400 */
+  --color-primary:         #3b82f6;  /* blue-500 */
+  --color-primary-hover:   #60a5fa;  /* blue-400 */
   --color-primary-fg:      #ffffff;  /* texto sobre primary */
 
   /* Secondary — IA, insights, acciones secundarias */
@@ -190,7 +190,7 @@ html.light textarea::placeholder {
 }
 
 /* ── Focus ring ── */
-html.light .focus\:border-red-500:focus { border-color: #ef4444 !important; }
+html.light .focus\:border-blue-500:focus { border-color: #3b82f6 !important; }
 
 /* ── Cards: subtle shadow in light mode ── */
 html.light .rounded-xl.border,

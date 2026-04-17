@@ -38,6 +38,15 @@ export async function GET(request: NextRequest) {
     const portalInfo = await getPortalInfo(tokens.access_token);
 
     if (isSystemLogin) {
+      // Eliminar otras cuentas del sistema que no sean este portal
+      // (evita duplicados cuando se reconecta con un portal distinto)
+      await prisma.hubspotAccount.deleteMany({
+        where: {
+          isSystem: true,
+          NOT: { hubspotPortalId: String(portalInfo.hub_id) },
+        },
+      });
+
       const account = await prisma.hubspotAccount.upsert({
         where: { hubspotPortalId: String(portalInfo.hub_id) },
         create: {

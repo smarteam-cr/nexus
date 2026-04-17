@@ -4,8 +4,8 @@ import { prisma } from "@/lib/db/prisma";
 import { getSystemAccessToken } from "@/lib/hubspot/client";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 
-// Propiedad HubSpot que marca a un contacto/empresa como cliente Implementor
-const IMPLEMENTOR_PROPERTY = "implementor";
+// Propiedad HubSpot que marca a un contacto/empresa como cliente Nexus
+const IMPLEMENTOR_PROPERTY = "nexus";
 
 interface HubspotCompanyResult {
   id: string;
@@ -13,7 +13,7 @@ interface HubspotCompanyResult {
     name?: string | null;
     domain?: string | null;
     industry?: string | null;
-    implementor?: string | null;
+    nexus?: string | null;
   };
 }
 
