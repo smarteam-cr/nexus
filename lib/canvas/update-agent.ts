@@ -141,6 +141,15 @@ Extrae la información relevante de las cards para actualizar ambos canvas.`;
       const validated = validateCanvasKeys(EMPTY_CLIENT_CANVAS, result.client_canvas_suggestions as Record<string, unknown>);
       const entries = Object.entries(validated);
       if (entries.length > 0) {
+        // Limpiar sugerencias pendientes anteriores para las mismas secciones (evitar duplicados)
+        await prisma.canvasSuggestion.deleteMany({
+          where: {
+            clientId,
+            status: "pending",
+            section: { in: entries.map(([s]) => s) },
+          },
+        });
+
         await prisma.canvasSuggestion.createMany({
           data: entries.map(([section, suggested]) => ({
             clientId,

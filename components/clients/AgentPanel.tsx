@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AGENT_GROUPS, type AgentGroupDef } from "@/lib/agent-groups";
 import { useWorkspace } from "./WorkspaceContext";
 
@@ -31,7 +31,21 @@ export default function AgentPanel({ clientId, projectId: propProjectId }: Props
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [runningAgentId, setRunningAgentId] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  // Timer while agent runs
+  useEffect(() => {
+    if (runningAgentId) {
+      setElapsed(0);
+      timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [runningAgentId]);
 
   useEffect(() => {
     if (!open) return;
@@ -71,11 +85,14 @@ export default function AgentPanel({ clientId, projectId: propProjectId }: Props
       if (!res.ok) {
         setToast({ message: data.error ?? "Error al ejecutar el agente", type: "error" });
       } else {
-        const cardCount = data.cards?.length ?? 0;
+        const allCards = data.cards ?? [];
+        const canvasCards = allCards.filter((c: { canvasSection?: string }) => c.canvasSection);
+        const suggestionCards = allCards.filter((c: { canvasSection?: string }) => !c.canvasSection);
         const flowchartCount = (data.flowcharts?.length ?? 0) + (data.flowchart ? 1 : 0);
         const parts = [];
-        if (cardCount > 0) parts.push(`${cardCount} card${cardCount !== 1 ? "s" : ""}`);
+        if (canvasCards.length > 0) parts.push(`${canvasCards.length} card${canvasCards.length !== 1 ? "s" : ""}`);
         if (flowchartCount > 0) parts.push(`${flowchartCount} diagrama${flowchartCount !== 1 ? "s" : ""}`);
+        if (suggestionCards.length > 0) parts.push(`${suggestionCards.length} sugerencia${suggestionCards.length !== 1 ? "s" : ""}`);
         setToast({
           message: `${agent.name} completado — ${parts.join(" + ") || "sin resultados"}`,
           type: "success",
@@ -114,7 +131,7 @@ export default function AgentPanel({ clientId, projectId: propProjectId }: Props
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
         )}
-        {runningAgentId ? "Ejecutando..." : "Agentes"}
+        {runningAgentId ? `${Math.floor(elapsed / 60)}:${(elapsed % 60).toString().padStart(2, "0")}` : "Agentes"}
       </button>
 
       {/* Toast notification */}
@@ -159,6 +176,7 @@ export default function AgentPanel({ clientId, projectId: propProjectId }: Props
                     onExecute={handleExecuteAgent}
                     hasProject={!!projectId}
                     runningAgentId={runningAgentId}
+                    elapsed={elapsed}
                   />
                 ))
               )}
@@ -176,12 +194,14 @@ function GroupSection({
   onExecute,
   hasProject,
   runningAgentId,
+  elapsed,
 }: {
   group: AgentGroupDef;
   agents: AgentSummary[];
   onExecute: (agent: AgentSummary) => void;
   hasProject: boolean;
   runningAgentId: string | null;
+  elapsed: number;
 }) {
   return (
     <div>
@@ -233,7 +253,7 @@ function GroupSection({
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{agent.name}</p>
                   {isRunning ? (
-                    <p className="text-[11px] text-amber-600 font-medium">Ejecutando...</p>
+                    <p className="text-[11px] text-amber-600 font-medium">Ejecutando... {Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, "0")}</p>
                   ) : agent.description ? (
                     <p className="text-[11px] text-gray-400 truncate">{agent.description}</p>
                   ) : null}

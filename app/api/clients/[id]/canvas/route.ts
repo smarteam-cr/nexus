@@ -11,12 +11,13 @@ export async function GET(
   const { id } = await params;
   const client = await prisma.client.findUnique({
     where: { id },
-    select: { canvas: true, updatedAt: true },
+    select: { canvas: true, canvasConfidence: true, updatedAt: true },
   });
   if (!client) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   return NextResponse.json({
     canvas: (client.canvas as ClientCanvas | null) ?? EMPTY_CLIENT_CANVAS,
+    confidence: (client.canvasConfidence as Record<string, string> | null) ?? {},
     updatedAt: client.updatedAt.toISOString(),
   });
 }
@@ -26,7 +27,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { canvas: updates } = await req.json();
+  const { canvas: updates, confidence: confidenceUpdates } = await req.json();
 
   if (!updates || typeof updates !== "object") {
     return NextResponse.json({ error: "canvas object required" }, { status: 400 });
@@ -34,7 +35,7 @@ export async function PUT(
 
   const client = await prisma.client.findUnique({
     where: { id },
-    select: { canvas: true },
+    select: { canvas: true, canvasConfidence: true },
   });
   if (!client) return NextResponse.json({ error: "not found" }, { status: 404 });
 
@@ -42,14 +43,21 @@ export async function PUT(
   const validated = validateCanvasKeys(EMPTY_CLIENT_CANVAS, updates);
   const merged = deepMergeCanvas(current, validated);
 
+  // Merge confidence
+  const currentConfidence = (client.canvasConfidence as Record<string, string> | null) ?? {};
+  const mergedConfidence = confidenceUpdates
+    ? { ...currentConfidence, ...confidenceUpdates }
+    : currentConfidence;
+
   const updated = await prisma.client.update({
     where: { id },
-    data: { canvas: merged as object },
-    select: { canvas: true, updatedAt: true },
+    data: { canvas: merged as object, canvasConfidence: mergedConfidence as object },
+    select: { canvas: true, canvasConfidence: true, updatedAt: true },
   });
 
   return NextResponse.json({
     canvas: updated.canvas,
+    confidence: updated.canvasConfidence ?? {},
     updatedAt: updated.updatedAt.toISOString(),
   });
 }

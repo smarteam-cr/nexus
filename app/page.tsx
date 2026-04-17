@@ -32,7 +32,7 @@ export default async function HomePage() {
               Nexus
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Acceso exclusivo para consultores de Dinterweb
+              Acceso exclusivo para consultores
             </p>
           </div>
         </div>
@@ -46,7 +46,7 @@ export default async function HomePage() {
         </a>
 
         <p className="text-center text-xs text-gray-600">
-          Solo el portal de Dinterweb puede acceder a este workspace.
+          Solo consultores autorizados pueden acceder a este workspace.
         </p>
       </div>
     </main>

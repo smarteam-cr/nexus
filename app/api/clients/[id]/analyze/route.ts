@@ -7,6 +7,9 @@ import { normalize, extractTitleTerms, extractDomain } from "@/lib/utils/matchin
 import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { updateCanvasAsync } from "@/lib/canvas/update-agent";
+import { getOutputFormatInstructions, getBlockOutputFormatInstructions } from "@/lib/canvas/agent-output-schema";
+import { DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN, type BlockType } from "@/lib/canvas/block-types";
+import { postProcessCards } from "@/lib/canvas/post-process";
 
 const FIREFLIES_GRAPHQL = "https://api.fireflies.ai/graphql";
 
@@ -639,29 +642,8 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
         !s.participants.some((p) => salesEmails.has(p.toLowerCase()))
       );
 
-      // ── Sesiones de CS: lógica diferenciada por agente ──────────────────────
-      const isInterviewPrepAgent = bodyAgentId === "agent-entrevistas-prep";
-
-      let topCS: RawTranscript[];
-      if (isInterviewPrepAgent) {
-        // Para "Preparación de entrevistas": ordenar por fecha ASC, saltar la
-        // primera sesión (kickoff o la más antigua), tomar las 10 siguientes.
-        // Si hay una sesión con "kickoff" / "kick-off" en el título, esa se omite;
-        // si no, se omite simplemente la más antigua.
-        const sortedAsc = [...csSessions].sort((a, b) => a.date - b.date);
-        const kickoffIdx = sortedAsc.findIndex((s) =>
-          /kick.?off/i.test(s.title ?? "")
-        );
-        const skipIdx = kickoffIdx !== -1 ? kickoffIdx : 0;
-        topCS = [
-          ...sortedAsc.slice(0, skipIdx),          // sesiones anteriores al kickoff (raro, pero seguro)
-          ...sortedAsc.slice(skipIdx + 1),          // sesiones después del kickoff
-        ].slice(0, 10);
-      } else {
-        // Comportamiento genérico: 6 sesiones más recientes
-        topCS = [...csSessions].sort((a, b) => b.date - a.date).slice(0, 6);
-      }
-
+      // Transcripciones de CS (máx 6)
+      const topCS = csSessions.sort((a, b) => b.date - a.date).slice(0, 6);
       if (topCS.length > 0) {
         const contents = await Promise.all(
           topCS.map((s) => fetchTranscriptContent(apiKey, s.id, s.title))
@@ -669,8 +651,8 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
         firefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
       }
 
-      // Transcripciones de ventas (máx 4) — igual para todos los agentes
-      const topSales = [...salesSessions].sort((a, b) => b.date - a.date).slice(0, 4);
+      // Transcripciones de ventas (máx 4)
+      const topSales = salesSessions.sort((a, b) => b.date - a.date).slice(0, 4);
       if (topSales.length > 0) {
         const contents = await Promise.all(
           topSales.map((s) => fetchTranscriptContent(apiKey, s.id, s.title))
@@ -756,9 +738,24 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     : "";
 
   // ── 9. Tipo de output del agente ──────────────────────────────────────────────
-  const isFlowchart          = agent.outputType === "FLOWCHART";
+  const isFlowchart         = agent.outputType === "FLOWCHART";
   const isCardsAndFlowcharts = agent.outputType === "CARDS_AND_FLOWCHARTS";
-  const isCardsAndCharts     = agent.outputType === "CARDS_AND_CHARTS";
+
+  // ── 9a2. Resolver canvas destino para agentes no-default ────────────────────
+  const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
+    diagnostico: "Diagnóstico",
+    planificacion: "Planificación",
+    ejecucion: "Ejecución",
+    adopcion: "Adopción",
+  };
+  let targetCanvasId: string | null = null;
+  if (bodyProjectId && agent.agentGroup && AGENT_GROUP_TO_CANVAS[agent.agentGroup]) {
+    const targetCanvas = await prisma.projectCanvas.findFirst({
+      where: { projectId: bodyProjectId, name: AGENT_GROUP_TO_CANVAS[agent.agentGroup] },
+      select: { id: true },
+    });
+    if (targetCanvas) targetCanvasId = targetCanvas.id;
+  }
 
   // ── 9b. System prompt efectivo ────────────────────────────────────────────────
   let effectiveSystemPrompt = agent.additionalInstructions
@@ -792,6 +789,23 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     "\n\n---\nPRIORIDAD DEL CANVAS: La sección 'CANVAS DEL PROYECTO' contiene información que el consultor revisó y validó. " +
     "Si hay contradicciones entre el canvas y otras fuentes (transcripciones, ejecuciones anteriores, datos del CRM), " +
     "PRIORIZA SIEMPRE lo que dice el canvas. El canvas es la fuente de verdad del proyecto.";
+
+  // Inyectar reglas de formato para agentes que apuntan a canvases no-default
+  const useBlockFormat = targetCanvasId && agent.id === "agent-diagnostico-canvas";
+  if (targetCanvasId) {
+    const tcSections = await prisma.canvasSection.findMany({
+      where: { canvasId: targetCanvasId },
+      orderBy: { order: "asc" },
+      select: { key: true, label: true },
+    });
+    if (tcSections.length > 0) {
+      if (useBlockFormat) {
+        effectiveSystemPrompt += getBlockOutputFormatInstructions({ targetSections: tcSections });
+      } else {
+        effectiveSystemPrompt += getOutputFormatInstructions({ targetSections: tcSections });
+      }
+    }
+  }
 
   // ── 9c. Canvas: cargar para contexto ──────────────────────────────────────────
   const clientCanvas = (client.canvas as ClientCanvas | null) ?? EMPTY_CLIENT_CANVAS;
@@ -942,16 +956,14 @@ ${[
     return `${tag} **${c.title}:**\n${c.content}`;
   }),
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
-].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${!isCardsAndFlowcharts && !isCardsAndCharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS ===\n${docsContent.slice(0, 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas de Dinterweb. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, 4000)}\n\n` : ""}${firefliesContent ? (bodyAgentId === "agent-entrevistas-prep"
-  ? `=== SESIONES POST-KICKOFF (hasta 10 sesiones, ordenadas del más antiguo al más reciente) ===\nEstas son las sesiones del equipo de Customer Success DESPUÉS del Kick-off. Identifica cuáles son de exploración con trabajadores del cliente y cuáles no, según los criterios de tu prompt.\n${firefliesContent.slice(0, 8000)}\n\n`
-  : `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n`)
-: ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
+].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS ===\n${docsContent.slice(0, 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas de Dinterweb. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, 4000)}\n\n` : ""}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 11. Llamar a Claude ───────────────────────────────────────────────────────
-  const maxTokens = isCardsAndFlowcharts ? 16000 : 8192;
+  const maxTokens = 16000;
   let analysisJson: {
     cards?: { title: string; content: string }[];
+    suggestions?: Array<{ title?: string; content?: string; type?: string; suggestedSection?: string }>;
     nodes?: unknown[]; edges?: unknown[]; title?: string;
     flowcharts?: Array<{ title?: string; description?: string; nodes: unknown[]; edges: unknown[] }>;
   } | null = null;
@@ -1005,6 +1017,24 @@ Analiza toda la información anterior y completa las secciones de contexto del c
               console.error("[analyze CAF] Reparación fallida — JSON irrecuperable");
             }
           }
+        } else if (useBlockFormat) {
+          // Recuperación para block format (sections + blocks)
+          console.warn(`[analyze blocks] JSON.parse falló (stop_reason=${stopReason}), intentando reparación...`);
+          const repaired = repairTruncatedJson(jsonMatch[0]);
+          if (repaired) {
+            try {
+              analysisJson = JSON.parse(repaired);
+              if (analysisJson?.sections) {
+                // Filter sections with at least one block that has content
+                analysisJson.sections = analysisJson.sections.filter(
+                  (s: { blocks?: Array<{ type?: string }> }) => s.blocks?.length > 0
+                );
+                console.log(`[analyze blocks] Reparado: ${analysisJson.sections.length} secciones válidas`);
+              }
+            } catch {
+              console.error("[analyze blocks] Reparación fallida");
+            }
+          }
         } else if (!isFlowchart) {
           // Recuperación parcial para CARDS
           const partialCards: { title: string; content: string }[] = [];
@@ -1049,6 +1079,10 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     // Cards son opcionales (el agente puede generar solo flowcharts)
     if (!analysisJson?.flowcharts?.length && !analysisJson?.cards?.length) {
       return NextResponse.json({ error: "invalid_response_empty" }, { status: 500 });
+    }
+  } else if (useBlockFormat) {
+    if (!analysisJson?.sections?.length) {
+      return NextResponse.json({ error: "invalid_block_response" }, { status: 500 });
     }
   } else {
     if (!analysisJson?.cards?.length) {
@@ -1113,7 +1147,7 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     });
   }
 
-  // Mapeo de grupo del agente → sección por defecto del canvas
+  // Mapeo de grupo del agente → sección por defecto del canvas de resumen
   const GROUP_TO_SECTION: Record<string, string> = {
     preparacion:   "procesos",
     diagnostico:   "hipotesis_recomendaciones",
@@ -1125,65 +1159,91 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     ? (GROUP_TO_SECTION[agent.agentGroup ?? ""] ?? "procesos")
     : null;
 
-  // ── 13b2. Si es CARDS_AND_CHARTS, guardar cards TEXT + cards CHART ──────────────
-  if (isCardsAndCharts) {
-    try {
-      const validCards = (analysisJson!.cards ?? []).filter(
-        (card: { title?: string; content?: string }) => card.title?.trim()
-      );
-      if (validCards.length > 0) {
-        await prisma.clientContextCard.createMany({
-          data: validCards.map((card: { title: string; content: string; canvasSection?: string }, i: number) => ({
-            clientId,
-            projectId:     bodyProjectId,
-            agentRunId:    run.id,
-            title:         card.title.trim(),
-            content:       card.content ?? "",
-            order:         i,
-            source:        "AGENT" as const,
-            cardType:      "TEXT" as const,
-            canvasSection: card.canvasSection ?? defaultSection,
-            canvasStatus:  "draft",
-            canvasOrder:   i,
-          })),
-          skipDuplicates: true,
-        });
-      }
+  // Build section labels map for post-processing (non-default canvases only)
+  let targetSectionLabels: Record<string, string> = {};
+  if (targetCanvasId) {
+    const tc = await prisma.projectCanvas.findUnique({
+      where: { id: targetCanvasId },
+      select: { sections: true },
+    });
+    const secs = (tc?.sections ?? []) as Array<{ key: string; label: string }>;
+    targetSectionLabels = Object.fromEntries(secs.map((s) => [s.key, s.label]));
+  }
 
-      const charts: Array<{ title?: string; description?: string; chartConfig: unknown }> =
-        analysisJson!.charts ?? [];
-      if (charts.length > 0) {
-        await prisma.clientContextCard.createMany({
-          data: charts.map((ch, i) => ({
-            clientId,
-            projectId:     bodyProjectId,
-            agentRunId:    run.id,
-            title:         ch.title?.trim() || `Gráfico ${i + 1}`,
-            content:       ch.description ?? "",
-            order:         validCards.length + i,
-            source:        "AGENT" as const,
-            cardType:      "CHART" as const,
-            chartConfig:   ch.chartConfig as object,
-            canvasSection: defaultSection ?? "hipotesis_recomendaciones",
-            canvasStatus:  "draft",
-            canvasOrder:   validCards.length + i,
-          })),
-          skipDuplicates: true,
-        });
-      }
+  // Post-process cards if targeting a non-default canvas
+  if (targetCanvasId && analysisJson?.cards) {
+    analysisJson.cards = postProcessCards(
+      analysisJson.cards as Array<{ title: string; content: string; canvasSection?: string }>,
+      { sectionLabels: targetSectionLabels }
+    );
+  }
 
-      const runCards = await prisma.clientContextCard.findMany({
-        where: { agentRunId: run.id },
-        orderBy: { order: "asc" },
+  // ── 13a2. Si es block format, guardar CanvasBlock records ─────────────────────
+  const isBlockFormat = useBlockFormat && analysisJson?.sections && Array.isArray(analysisJson.sections);
+  if (isBlockFormat && targetCanvasId) {
+    // Resolve CanvasSection IDs
+    const dbSections = await prisma.canvasSection.findMany({
+      where: { canvasId: targetCanvasId },
+      select: { id: true, key: true },
+    });
+    const sectionMap = new Map(dbSections.map((s) => [s.key, s.id]));
+
+    let totalBlocks = 0;
+    const outputSections = analysisJson.sections as Array<{
+      key: string;
+      blocks: Array<{ type: string; content?: string; data?: unknown }>;
+    }>;
+
+    for (const section of outputSections) {
+      const sectionId = sectionMap.get(section.key);
+      if (!sectionId || !section.blocks?.length) continue;
+
+      // Clear existing draft blocks in this section from previous runs
+      await prisma.canvasBlock.deleteMany({
+        where: { sectionId, status: "DRAFT", source: "AGENT" },
       });
-      return NextResponse.json({
-        cards: runCards,
-        run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
+
+      await prisma.canvasBlock.createMany({
+        data: section.blocks.map((block, i) => {
+          const bt = (block.type?.toLowerCase() ?? "text") as BlockType;
+          // Conservative rowSpan — user can resize if needed
+          const contentLen = (block.content ?? "").length;
+          const tableRows = (block.data as { rows?: unknown[] } | null)?.rows?.length ?? 0;
+          let rowSpan: number;
+          if (bt === "heading") rowSpan = 1;
+          else if (bt === "metric") rowSpan = 1;
+          else if (bt === "table") rowSpan = Math.max(2, Math.ceil((tableRows + 1) * 35 / 125));
+          else if (bt === "flowchart") rowSpan = 3;
+          else rowSpan = Math.max(1, Math.ceil(contentLen / 800));
+          return {
+            sectionId,
+            blockType: (bt.toUpperCase()) as "TEXT" | "HEADING" | "TABLE" | "METRIC" | "CALLOUT" | "CARD" | "FLOWCHART" | "CHART" | "IMAGE",
+            content: block.content ?? null,
+            data: block.data ?? undefined,
+            order: i,
+            colSpan: DEFAULT_COL_SPAN[bt] ?? 4,
+            rowSpan,
+            source: "AGENT" as const,
+            status: "DRAFT" as const,
+            agentRunId: run.id,
+          };
+        }),
       });
-    } catch (cacErr) {
-      console.error("[analyze CAC] Error saving cards/charts:", cacErr);
-      return NextResponse.json({ error: "Error guardando charts", detail: String(cacErr) }, { status: 500 });
+      totalBlocks += section.blocks.length;
     }
+
+    console.log(`[analyze blocks] Saved ${totalBlocks} blocks across ${outputSections.length} sections`);
+
+    const savedBlocks = await prisma.canvasBlock.findMany({
+      where: { agentRunId: run.id },
+      orderBy: { order: "asc" },
+    });
+
+    return NextResponse.json({
+      blocks: savedBlocks,
+      format: "blocks",
+      run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
+    });
   }
 
   // ── 13b. Si es CARDS_AND_FLOWCHARTS, guardar cards de texto + cards FLOWCHART ─
@@ -1205,6 +1265,7 @@ Analiza toda la información anterior y completa las secciones de contexto del c
           order:       i,
           source:      "AGENT" as const,
           cardType:    "TEXT" as const,
+          canvasId:    targetCanvasId,
           canvasSection: card.canvasSection ?? defaultSection,
           canvasStatus:  "draft",
           canvasOrder:   i,
@@ -1234,6 +1295,35 @@ Analiza toda la información anterior y completa las secciones de contexto del c
         })),
         skipDuplicates: true,
       });
+    }
+
+    // Guardar suggestions off-canvas (si las hay)
+    const cafSuggestions = (analysisJson as { suggestions?: Array<{ title?: string; content?: string; type?: string; suggestedSection?: string; relatedCard?: string }> })?.suggestions ?? [];
+    if (cafSuggestions.length > 0) {
+      const validCafSuggestions = cafSuggestions.filter((s) => s.title?.trim());
+      if (validCafSuggestions.length > 0) {
+        await prisma.clientContextCard.createMany({
+          data: validCafSuggestions.map((s, i) => ({
+            clientId,
+            projectId:     bodyProjectId,
+            agentRunId:    run.id,
+            title:         s.title!.trim(),
+            content:       s.content ?? "",
+            order:         validCards.length + flowcharts.length + i,
+            source:        "AGENT" as const,
+            cardType:      "TEXT" as const,
+            canvasSection: null,
+            canvasStatus:  "confirmed",
+            canvasOrder:   null,
+            diagramData:   {
+              suggestionType:   s.type ?? "hypothesis",
+              relatedCard:      s.relatedCard ?? null,
+              suggestedSection: s.suggestedSection ?? "procesos",
+            },
+          })),
+          skipDuplicates: true,
+        });
+      }
     }
 
     // Guardar los flowcharts en AgentRun.output como backup
@@ -1270,14 +1360,24 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     existingCanvasCards = existingCards as Array<{ id: string; title: string; canvasSection: string }>;
   }
 
-  // Secciones estándar del canvas de proyecto
+  // Secciones estándar del canvas de proyecto (resumen)
   const STANDARD_SECTIONS: Record<string, string> = {
     objetivo_alcance: "objetivo_alcance",
     hipotesis_recomendaciones: "hipotesis_recomendaciones",
     procesos: "procesos",
     plan_implementacion: "plan_implementacion",
   };
-  const allKnownSections = [...Object.keys(STANDARD_SECTIONS), ...canvasSections];
+  // Si hay un canvas target, incluir sus secciones como válidas
+  let targetCanvasSections: string[] = [];
+  if (targetCanvasId) {
+    const tc = await prisma.projectCanvas.findUnique({
+      where: { id: targetCanvasId },
+      select: { sections: true },
+    });
+    const secs = (tc?.sections ?? []) as Array<{ key: string }>;
+    targetCanvasSections = secs.map((s) => s.key);
+  }
+  const allKnownSections = [...Object.keys(STANDARD_SECTIONS), ...canvasSections, ...targetCanvasSections];
 
   const validCards = (analysisJson!.cards ?? []).filter(
     (card: { title?: string; content?: string }) => card.title?.trim()
@@ -1318,6 +1418,7 @@ Analiza toda la información anterior y completa las secciones de contexto del c
       parentCardId,
       order:         i,
       source:        "AGENT" as const,
+      canvasId:      targetCanvasId,
       canvasSection: section,
       canvasStatus:  section ? "draft" : "confirmed",
       canvasOrder:   section ? i : null,
@@ -1329,6 +1430,36 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     skipDuplicates: true,
   });
   void savedCards;
+
+  // ── 13d. Guardar suggestions (cards exploratorias off-canvas) ──────────────
+  const suggestions = (analysisJson as { suggestions?: Array<{ title?: string; content?: string; type?: string; suggestedSection?: string; relatedCard?: string }> })?.suggestions ?? [];
+  if (suggestions.length > 0) {
+    const validSuggestions = suggestions.filter((s) => s.title?.trim());
+    if (validSuggestions.length > 0) {
+      await prisma.clientContextCard.createMany({
+        data: validSuggestions.map((s, i) => ({
+          clientId,
+          projectId:     bodyProjectId,
+          agentRunId:    run.id,
+          title:         s.title!.trim(),
+          content:       s.content ?? "",
+          order:         cardDataList.length + i,
+          source:        "AGENT" as const,
+          cardType:      "TEXT" as const,
+          canvasSection: null,       // OFF-CANVAS: no va al canvas automáticamente
+          canvasStatus:  "confirmed",
+          canvasOrder:   null,
+          // Metadata: tipo de suggestion, card relacionada, sección sugerida
+          diagramData:   {
+            suggestionType:    s.type ?? "hypothesis",
+            relatedCard:       s.relatedCard ?? null,
+            suggestedSection:  s.suggestedSection ?? null,
+          },
+        })),
+        skipDuplicates: true,
+      });
+    }
+  }
 
   // ── 14. Auto-generar project tags (solo desde serviceType, NO desde respuesta del agente) ──
   if (bodyProjectId) {

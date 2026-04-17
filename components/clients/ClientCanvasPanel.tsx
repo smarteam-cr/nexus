@@ -83,6 +83,7 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
 
   const handleSuggestion = async (suggestionId: string, action: "accept" | "reject") => {
     try {
+      const suggestion = suggestions.find((s) => s.id === suggestionId);
       const res = await fetch(`/api/clients/${clientId}/canvas/suggestions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -90,6 +91,7 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
       });
       const data = await res.json();
       if (data.canvas) setCanvas(data.canvas);
+      if (data.confidence) setConfidence(data.confidence);
       setSuggestions((prev) => prev.filter((s) => s.id !== suggestionId));
     } catch { /* ignore */ }
   };
@@ -112,12 +114,12 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
   const filledCount = sections.filter((k) => !checkEmpty(canvas[k])).length;
 
   return (
-    <div className={embedded ? "space-y-4" : "max-w-5xl mx-auto px-6 py-8 space-y-6"}>
+    <div className={embedded ? "p-5 space-y-4" : "max-w-5xl mx-auto px-6 py-8 space-y-6"}>
       {/* Header */}
       {!embedded && (
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Canvas de empresa</h2>
+            <h2 className="text-xl font-bold text-gray-900">Estrategia</h2>
             <p className="text-sm text-gray-400 mt-0.5">Conocimiento compartido entre proyectos</p>
           </div>
           <div className="flex items-center gap-3">
@@ -169,52 +171,70 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
         ))}
       </div>
 
-      {/* Suggestions */}
+      {/* Suggestions banner */}
       {suggestions.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider">
-            {suggestions.length} sugerencia{suggestions.length > 1 ? "s" : ""} pendiente{suggestions.length > 1 ? "s" : ""}
-          </p>
-          {suggestions.map((s) => (
-            <div key={s.id} className="p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-amber-700">
-                  {CLIENT_CANVAS_LABELS[s.section as keyof ClientCanvas] ?? s.section}
-                </p>
-                {s.sourceLabel && (
-                  <span className="text-[9px] text-amber-500 bg-amber-100 px-2 py-0.5 rounded-full">
-                    {s.sourceLabel}
-                  </span>
-                )}
-              </div>
-              <div className="text-xs text-gray-600 whitespace-pre-wrap max-h-32 overflow-y-auto">
-                {typeof s.suggested === "string"
-                  ? s.suggested
-                  : typeof s.suggested === "object" && s.suggested !== null
-                  ? Object.entries(s.suggested as Record<string, unknown>).map(([k, v]) => (
-                      <p key={k}>
-                        <span className="font-medium text-gray-500 capitalize">{k.replace(/_/g, " ")}:</span>{" "}
-                        {String(v ?? "")}
-                      </p>
-                    ))
-                  : JSON.stringify(s.suggested)}
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => handleSuggestion(s.id, "accept")} className="px-3 py-1 text-xs font-medium rounded-lg bg-green-600 hover:bg-green-500 text-white transition-colors">Aprobar</button>
-                <button onClick={() => handleSuggestion(s.id, "reject")} className="px-3 py-1 text-xs font-medium rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-600 transition-colors">Rechazar</button>
-              </div>
-            </div>
-          ))}
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200">
+          <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          <span className="text-xs text-amber-800">
+            <strong>{suggestions.length}</strong> {suggestions.length === 1 ? "sugerencia nueva" : "sugerencias nuevas"} del agente — revisa y acepta o rechaza
+          </span>
+          <button
+            onClick={() => suggestions.forEach((s) => handleSuggestion(s.id, "accept"))}
+            className="ml-auto px-2.5 py-1 text-[10px] font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+          >
+            Aceptar todos
+          </button>
         </div>
       )}
 
-      {/* Canvas masonry grid */}
+      {/* Unified masonry grid — drafts and confirmed cards together in section order */}
       <div className="columns-1 md:columns-2 gap-4">
         {sections.map((key) => {
+          const suggestion = suggestions.find((s) => s.section === key);
           const isEmpty = checkEmpty(canvas[key]);
           const conf: Confidence = isEmpty ? "empty" : (confidence[key] as Confidence) ?? "inferred";
           const style = CONFIDENCE_STYLES[conf];
 
+          // If there's a pending suggestion for this section, render as draft card
+          if (suggestion) {
+            return (
+              <div key={key} className="break-inside-avoid mb-4 rounded-xl border border-dashed border-amber-300 bg-amber-50/30 overflow-hidden">
+                <div className="px-4 py-2.5 flex items-center gap-2">
+                  <h4 className="text-sm font-semibold text-gray-800 flex-1 leading-tight">
+                    {CLIENT_CANVAS_LABELS[key as keyof ClientCanvas] ?? key}
+                  </h4>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-amber-600 bg-amber-100 flex-shrink-0">
+                    BORRADOR
+                  </span>
+                  {suggestion.sourceLabel && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-500 border border-violet-100 font-medium flex-shrink-0 truncate max-w-[100px]">
+                      {suggestion.sourceLabel}
+                    </span>
+                  )}
+                  <button onClick={() => handleSuggestion(suggestion.id, "accept")} className="p-1 rounded text-green-600 hover:bg-green-50 flex-shrink-0" title="Aceptar">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                  </button>
+                  <button onClick={() => handleSuggestion(suggestion.id, "reject")} className="p-1 rounded text-red-500 hover:bg-red-50 flex-shrink-0" title="Rechazar">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                <div className="px-4 py-3 border-t border-amber-200/50">
+                  <CanvasValue
+                    value={suggestion.suggested}
+                    sectionKey={key}
+                    onSave={(val) => {
+                      handleSuggestion(suggestion.id, "accept");
+                      saveSection(key, val);
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          }
+
+          // Regular confirmed/empty section
           return (
             <div
               key={key}
@@ -223,10 +243,15 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
               <div className="flex items-center gap-2 mb-3">
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
                 <h3 className="text-sm font-semibold text-gray-800">{CLIENT_CANVAS_LABELS[key] ?? key}</h3>
+                {conf === "confirmed" && (
+                  <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200 font-medium">
+                    Confirmada
+                  </span>
+                )}
                 {conf === "inferred" && (
                   <button
                     onClick={() => saveSection(key, canvas[key])}
-                    className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200 hover:bg-green-100 transition-colors"
+                    className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100 transition-colors"
                   >
                     Confirmar
                   </button>

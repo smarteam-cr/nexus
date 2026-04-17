@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import ReactMarkdown from "react-markdown";
 import SendToCanvasMenu from "./SendToCanvasMenu";
 import ProjectGPS from "./ProjectGPS";
+import SectionDiscoveryModal from "./SectionDiscoveryModal";
+import HubBadge from "@/components/ui/HubBadge";
+import SectionBlockList from "@/components/canvas/SectionBlockList";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
@@ -43,11 +46,31 @@ const SECTION_ICONS: Record<string, string> = {
   plan_implementacion: "📋",
 };
 
+// ── Canvas types ────────────────────────────────────────────────────────────
+
+interface CanvasMeta {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  sections: Array<{ key: string; label: string }>;
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function ProjectCanvasPanel({ projectId }: { projectId: string }) {
+export default function ProjectCanvasPanel({
+  projectId,
+  tags,
+  serviceType,
+}: {
+  projectId: string;
+  tags?: string[];
+  serviceType?: string | null;
+}) {
   const params = useParams();
   const clientId = params?.id as string;
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const canvasFromUrl = searchParams.get("canvas");
   const [sections, setSections] = useState<CanvasSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [shareToken, setShareToken] = useState<string | null>(null);
@@ -57,10 +80,104 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
   const [dragCardId, setDragCardId] = useState<string | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<{ sectionKey: string; index: number } | null>(null);
   const dragCounterRef = useRef(0);
-  const dragCardHeightRef = useRef<number>(72); // altura capturada al inicio del drag
+  const [modalSectionKey, setModalSectionKey] = useState<string | null>(null);
+  const [modalHighlightCardId, setModalHighlightCardId] = useState<string | null>(null);
   const [processingSession, setProcessingSession] = useState(false);
   const [sessionResult, setSessionResult] = useState<{ cards: CanvasCard[]; sessionTitle: string } | null>(null);
   const [unprocessedSessions, setUnprocessedSessions] = useState(0);
+
+  // Multi-canvas state
+  const [canvases, setCanvases] = useState<CanvasMeta[]>([]);
+  const [activeCanvasId, setActiveCanvasId] = useState<string | null>(null);
+  const [canvasDropdownOpen, setCanvasDropdownOpen] = useState(false);
+  const [creatingCanvas, setCreatingCanvas] = useState(false);
+  const [newCanvasName, setNewCanvasName] = useState("");
+  const [addingSectionName, setAddingSectionName] = useState<string | null>(null);
+  const canvasDropdownRef = useRef<HTMLDivElement>(null);
+
+  const activeCanvas = canvases.find((c) => c.id === activeCanvasId) ?? canvases.find((c) => c.isDefault) ?? null;
+  const isDefaultCanvas = activeCanvas?.isDefault ?? true;
+
+  // Update URL when canvas changes (no page reload)
+  const switchCanvas = useCallback((canvasId: string) => {
+    setActiveCanvasId(canvasId);
+    setLoading(true);
+    const url = new URL(window.location.href);
+    const target = canvases.find((c) => c.id === canvasId);
+    if (target?.isDefault) {
+      url.searchParams.delete("canvas");
+    } else {
+      url.searchParams.set("canvas", canvasId);
+    }
+    router.replace(url.pathname + url.search, { scroll: false });
+  }, [canvases, router]);
+
+  // Fetch canvases — restore from URL param if present
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/canvases`)
+      .then((r) => r.json())
+      .then((d) => {
+        const list = d.canvases ?? [];
+        setCanvases(list);
+        if (!activeCanvasId && list.length > 0) {
+          const fromUrl = canvasFromUrl ? list.find((c: CanvasMeta) => c.id === canvasFromUrl) : null;
+          setActiveCanvasId(fromUrl ? fromUrl.id : list[0].id);
+        }
+      })
+      .catch(() => {});
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (canvasDropdownRef.current && !canvasDropdownRef.current.contains(e.target as Node)) {
+        setCanvasDropdownOpen(false);
+        setCreatingCanvas(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const createCanvas = async () => {
+    if (!newCanvasName.trim()) return;
+    const res = await fetch(`/api/projects/${projectId}/canvases`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newCanvasName.trim() }),
+    });
+    const canvas = await res.json();
+    const updated = [...canvases, canvas];
+    setCanvases(updated);
+    setNewCanvasName("");
+    setCreatingCanvas(false);
+    setCanvasDropdownOpen(false);
+    // Use direct URL update since canvases state hasn't settled yet
+    setActiveCanvasId(canvas.id);
+    setLoading(true);
+    const url = new URL(window.location.href);
+    url.searchParams.set("canvas", canvas.id);
+    router.replace(url.pathname + url.search, { scroll: false });
+  };
+
+  const addSection = async () => {
+    if (!addingSectionName?.trim() || !activeCanvasId) return;
+    const label = addingSectionName.trim();
+    const key = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+    const canvas = canvases.find((c) => c.id === activeCanvasId);
+    if (!canvas) return;
+    const updatedSections = [...(canvas.sections ?? []), { key, label }];
+    await fetch(`/api/projects/${projectId}/canvases/${activeCanvasId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sections: updatedSections }),
+    });
+    setCanvases((prev) =>
+      prev.map((c) => (c.id === activeCanvasId ? { ...c, sections: updatedSections } : c))
+    );
+    setAddingSectionName(null);
+    fetchCanvasCards();
+  };
 
   // Check share token
   useEffect(() => {
@@ -112,20 +229,28 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
     setProcessingSession(false);
   };
 
+  // Card fetch + polling only for default canvas (non-default uses SectionBlockList)
   const fetchCanvasCards = useCallback(async () => {
+    if (!activeCanvasId || !isDefaultCanvas) return;
     try {
       const res = await fetch(`/api/projects/${projectId}/canvas-cards`);
       const data = await res.json();
       setSections(data.sections ?? []);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [projectId]);
+  }, [projectId, activeCanvasId, isDefaultCanvas]);
 
-  useEffect(() => { fetchCanvasCards(); }, [fetchCanvasCards]);
-
-  // Polling: check for new drafts every 5s (auto-populated by agents)
-  const lastDraftCount = useRef(0);
+  const canvasesLoaded = canvases.length > 0;
   useEffect(() => {
+    if (canvasesLoaded && isDefaultCanvas) fetchCanvasCards();
+    if (canvasesLoaded && !isDefaultCanvas) setLoading(false);
+  }, [fetchCanvasCards, canvasesLoaded, isDefaultCanvas]);
+
+  const lastDraftCount = useRef(0);
+  const fetchRef = useRef(fetchCanvasCards);
+  fetchRef.current = fetchCanvasCards;
+  useEffect(() => {
+    if (!activeCanvasId || !isDefaultCanvas) return;
     const interval = setInterval(() => {
       fetch(`/api/projects/${projectId}/canvas-cards`)
         .then((r) => r.json())
@@ -133,14 +258,14 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
           const allCards = (data.sections ?? []).flatMap((s: { cards: Array<{ canvasStatus: string }> }) => s.cards);
           const newDrafts = allCards.filter((c: { canvasStatus: string }) => c.canvasStatus === "draft").length;
           if (newDrafts > lastDraftCount.current) {
-            fetchCanvasCards(); // Refresh UI with new drafts
+            fetchRef.current();
           }
           lastDraftCount.current = newDrafts;
         })
         .catch(() => {});
     }, 5000);
     return () => clearInterval(interval);
-  }, [projectId, fetchCanvasCards]);
+  }, [projectId, activeCanvasId, isDefaultCanvas]);
 
   const toggleSection = (key: string) => {
     setCollapsedSections((prev) => {
@@ -157,9 +282,9 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
     setDragCardId(cardId);
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", cardId);
+    // Make the drag ghost slightly transparent
     if (e.currentTarget instanceof HTMLElement) {
-      dragCardHeightRef.current = e.currentTarget.offsetHeight;
-      e.currentTarget.style.opacity = "0.4";
+      e.currentTarget.style.opacity = "0.5";
     }
   };
 
@@ -174,12 +299,8 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
 
   const handleDragOverCard = (e: React.DragEvent, sectionKey: string, index: number) => {
     e.preventDefault();
-    e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
-    // Detectar si el cursor está en la mitad superior o inferior de la card
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const isBottomHalf = e.clientY > rect.top + rect.height / 2;
-    setDragOverTarget({ sectionKey, index: isBottomHalf ? index + 1 : index });
+    setDragOverTarget({ sectionKey, index });
   };
 
   const handleDragOverSection = (e: React.DragEvent, sectionKey: string) => {
@@ -194,9 +315,6 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
     e.preventDefault();
     const cardId = e.dataTransfer.getData("text/plain") || dragCardId;
     if (!cardId) return;
-
-    // Usar la posición del placeholder visible, no el índice del contenedor
-    const targetIndex = dragOverTarget?.index ?? index;
 
     setDragCardId(null);
     setDragOverTarget(null);
@@ -218,7 +336,7 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
       // Insert at new position
       const targetSection = next.find((s) => s.key === sectionKey);
       if (targetSection) {
-        targetSection.cards.splice(targetIndex, 0, movedCard);
+        targetSection.cards.splice(index, 0, movedCard);
       }
       return next;
     });
@@ -227,7 +345,7 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
     await fetch(`/api/projects/${projectId}/canvas-cards`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cardId, toSection: sectionKey, toIndex: targetIndex }),
+      body: JSON.stringify({ cardId, toSection: sectionKey, toIndex: index }),
     }).catch(() => fetchCanvasCards()); // Rollback on error
   };
 
@@ -279,7 +397,7 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-4">
+      <div className="px-6 py-8 space-y-4">
         {[1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="h-24 bg-gray-50 rounded-2xl animate-pulse" />
         ))}
@@ -288,18 +406,79 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+    <div className="px-6 py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Canvas de servicio</h2>
-          <p className="text-sm text-gray-400 mt-0.5">
-            {totalCards > 0
-              ? `${totalCards} card${totalCards !== 1 ? "s" : ""} en el canvas`
-              : "Ejecuta agentes y envía resultados aquí"}
-          </p>
+          <div className="flex items-center gap-3">
+            {/* Canvas selector dropdown */}
+            <div className="relative" ref={canvasDropdownRef}>
+              <button
+                onClick={() => setCanvasDropdownOpen(!canvasDropdownOpen)}
+                className="flex items-center gap-2 text-xl font-bold text-gray-900 hover:text-gray-700 transition-colors"
+              >
+                {activeCanvas?.name ?? "Resumen del servicio"}
+                <svg className={`w-4 h-4 text-gray-400 transition-transform ${canvasDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {canvasDropdownOpen && (
+                <div className="absolute left-0 top-full mt-1 z-50 w-64 bg-white border border-gray-200 rounded-xl shadow-xl py-1">
+                  {canvases.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        switchCanvas(c.id);
+                        setCanvasDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                        c.id === activeCanvasId
+                          ? "bg-brand/5 text-brand font-semibold"
+                          : "text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                  <div className="border-t border-gray-100 mt-1 pt-1">
+                    {creatingCanvas ? (
+                      <div className="px-4 py-2 flex items-center gap-2">
+                        <input
+                          autoFocus
+                          value={newCanvasName}
+                          onChange={(e) => setNewCanvasName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") createCanvas(); if (e.key === "Escape") setCreatingCanvas(false); }}
+                          placeholder="Nombre del canvas"
+                          className="flex-1 px-2 py-1 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand"
+                        />
+                        <button onClick={createCanvas} className="text-xs font-medium text-brand hover:text-brand/80">Crear</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setCreatingCanvas(true)}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 flex items-center gap-2"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Nuevo canvas
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            {isDefaultCanvas && <HubBadge tags={tags} serviceType={serviceType} size="sm" />}
+          </div>
+          {isDefaultCanvas && (
+            <p className="text-sm text-gray-400 mt-0.5">
+              {totalCards > 0
+                ? `${totalCards} card${totalCards !== 1 ? "s" : ""} en el canvas`
+                : "Ejecuta agentes y envía resultados aquí"}
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+        {isDefaultCanvas && (<div className="flex items-center gap-2">
           {/* Share button */}
           <div className="relative">
             <button
@@ -367,11 +546,11 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
               </span>
             )}
           </button>
-        </div>
+        </div>)}
       </div>
 
-      {/* Session processing results */}
-      {sessionResult && (
+      {/* Session processing results — default canvas only */}
+      {isDefaultCanvas && sessionResult && (
         <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-violet-700">
@@ -403,9 +582,16 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
         </div>
       )}
 
-      {/* GPS del proyecto */}
-      <ProjectGPS projectId={projectId} />
+      {/* Non-default canvases: render blocks via SectionBlockList */}
+      {!isDefaultCanvas && activeCanvasId && (
+        <SectionBlockList projectId={projectId} canvasId={activeCanvasId} />
+      )}
 
+      {/* Default canvas: GPS + cards */}
+      {isDefaultCanvas && <ProjectGPS projectId={projectId} />}
+
+      {/* ── Default canvas content (cards-based) ── */}
+      {isDefaultCanvas && (<>
       {/* Banner de borradores pendientes */}
       {draftCount > 0 && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800">
@@ -485,16 +671,12 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
                   ) : (
                     <div className="space-y-2">
                       {section.cards.map((card, idx) => {
-                        const isDropBefore = dragOverTarget?.sectionKey === section.key && dragOverTarget?.index === idx;
-                        const showPlaceholder = isDropBefore && dragCardId !== card.id;
+                        const isDropTarget = dragOverTarget?.sectionKey === section.key && dragOverTarget?.index === idx;
                         return (
                           <div key={card.id}>
-                            {/* Placeholder que desplaza las demás cards */}
-                            {showPlaceholder && (
-                              <div
-                                className="rounded-xl border-2 border-dashed border-brand/50 bg-brand/5 mb-2 transition-all duration-150"
-                                style={{ height: dragCardHeightRef.current }}
-                              />
+                            {/* Drop indicator line */}
+                            {isDropTarget && dragCardId !== card.id && (
+                              <div className="h-0.5 bg-brand rounded-full mx-2 mb-1" />
                             )}
                             <CanvasCardItem
                               card={card}
@@ -508,16 +690,17 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
                               onRejectDraft={() => handleDraftAction(card.id, "reject")}
                               isUpdate={!!card.parentCardId && card.canvasStatus === "draft"}
                               onDiagramSave={fetchCanvasCards}
+                              onTitleClick={() => {
+                                setModalSectionKey(section.key);
+                                setModalHighlightCardId(card.id);
+                              }}
                             />
                           </div>
                         );
                       })}
-                      {/* Placeholder al final de la sección */}
+                      {/* Drop target at end */}
                       {dragCardId && dragOverTarget?.sectionKey === section.key && dragOverTarget?.index === section.cards.length && (
-                        <div
-                          className="rounded-xl border-2 border-dashed border-brand/50 bg-brand/5 transition-all duration-150"
-                          style={{ height: dragCardHeightRef.current }}
-                        />
+                        <div className="h-0.5 bg-brand rounded-full mx-2 mt-1" />
                       )}
                     </div>
                   )}
@@ -527,6 +710,24 @@ export default function ProjectCanvasPanel({ projectId }: { projectId: string })
           );
         })}
       </div>
+
+      {/* Section Discovery Modal */}
+      {modalSectionKey && (
+        <SectionDiscoveryModal
+          sectionKey={modalSectionKey}
+          sections={sections}
+          highlightCardId={modalHighlightCardId}
+          clientId={clientId}
+          projectId={projectId}
+          onClose={() => { setModalSectionKey(null); setModalHighlightCardId(null); }}
+          onAcceptDraft={(id) => handleDraftAction(id, "accept")}
+          onRejectDraft={(id) => handleDraftAction(id, "reject")}
+          onRemoveCard={removeFromCanvas}
+          onCardCreated={fetchCanvasCards}
+          onDiagramSave={fetchCanvasCards}
+        />
+      )}
+      </>)}
     </div>
   );
 }
@@ -545,6 +746,7 @@ function CanvasCardItem({
   onRejectDraft,
   isUpdate,
   onDiagramSave,
+  onTitleClick,
 }: {
   card: CanvasCard;
   clientId: string;
@@ -557,6 +759,7 @@ function CanvasCardItem({
   onRejectDraft?: () => void;
   isUpdate?: boolean;
   onDiagramSave?: () => void;
+  onTitleClick?: () => void;
 }) {
   const isDraft = card.canvasStatus === "draft";
   const isUpdateDraft = isDraft && isUpdate;
@@ -681,7 +884,7 @@ function CanvasCardItem({
             className={`px-4 py-2 border-b flex items-center gap-2 cursor-grab active:cursor-grabbing ${isDraft ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-100"}`}
           >
             <DragHandle />
-            <h4 className="text-sm font-semibold text-gray-800 flex-1">{card.title}</h4>
+            <h4 className="text-sm font-semibold text-gray-800 flex-1 cursor-pointer hover:text-brand transition-colors" onClick={onTitleClick}>{card.title}</h4>
             {isDraft && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isUpdateDraft ? "text-blue-600 bg-blue-100" : "text-amber-600 bg-amber-100"}`}>{isUpdateDraft ? "UPDATE" : "BORRADOR"}</span>}
             {isDraft ? (
               <>
@@ -742,7 +945,7 @@ function CanvasCardItem({
     >
       <div className="flex items-center gap-2 mb-2">
         <DragHandle />
-        <h4 className="text-sm font-semibold text-gray-800 flex-1">{card.title}</h4>
+        <h4 className="text-sm font-semibold text-gray-800 flex-1 cursor-pointer hover:text-brand transition-colors" onClick={onTitleClick}>{card.title}</h4>
         {isDraft && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isUpdateDraft ? "text-blue-600 bg-blue-100" : "text-amber-600 bg-amber-100"}`}>{isUpdateDraft ? "UPDATE" : "BORRADOR"}</span>}
         {isDraft ? (
           <>
