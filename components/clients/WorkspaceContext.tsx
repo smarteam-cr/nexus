@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 
 interface AgentModalState {
   stage: number;
@@ -34,6 +34,14 @@ export function WorkspaceProvider({
 }) {
   const [activeProjectId, setActiveProjectId] = useState(initialProjectId);
   const [agentModal, setAgentModal] = useState<AgentModalState | null>(null);
+
+  // Cuando el initialProjectId cambia (ej: después de un router.refresh() post-sync),
+  // seleccionar automáticamente el primer proyecto si no hay ninguno activo.
+  useEffect(() => {
+    if (initialProjectId && !activeProjectId) {
+      setActiveProjectId(initialProjectId);
+    }
+  }, [initialProjectId]);
 
   const openAgentModal = useCallback((state: AgentModalState) => {
     setAgentModal(state);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { CLIENT_CANVAS_LABELS } from "@/lib/canvas/template";
 import HubBadge from "@/components/ui/HubBadge";
@@ -487,6 +488,7 @@ export function ProjectosActivos({ clientId }: { clientId: string }) {
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const router = useRouter();
 
   const fetchProjects = () => {
     fetch(`/api/clients/${clientId}`)
@@ -503,15 +505,19 @@ export function ProjectosActivos({ clientId }: { clientId: string }) {
     try {
       const res = await fetch(`/api/clients/${clientId}/sync-services`, { method: "POST" });
       const data = await res.json();
+      if (data.debug?.length) console.debug("[sync-projects]", data.debug);
       if (data.error) {
         setSyncResult(`Error: ${data.error}`);
+      } else if (data.errors?.length) {
+        setSyncResult(`Error: ${data.errors[0]}`);
       } else {
         const parts = [];
         if (data.created) parts.push(`${data.created} creados`);
         if (data.updated) parts.push(`${data.updated} actualizados`);
         if (data.skipped) parts.push(`${data.skipped} inactivos`);
-        setSyncResult(parts.length ? parts.join(", ") : `${data.found} servicios encontrados, sin cambios`);
+        setSyncResult(parts.length ? parts.join(", ") : `${data.found} proyectos encontrados, sin cambios`);
         fetchProjects();
+        router.refresh(); // Actualiza los tabs del workspace (server component)
       }
     } catch {
       setSyncResult("Error de conexión");
@@ -539,7 +545,7 @@ export function ProjectosActivos({ clientId }: { clientId: string }) {
             onClick={handleSync}
             disabled={syncing}
             className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
-            title="Sincronizar servicios desde HubSpot"
+            title="Sincronizar proyectos desde HubSpot"
           >
             <svg className={`w-3 h-3 ${syncing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -557,7 +563,7 @@ export function ProjectosActivos({ clientId }: { clientId: string }) {
             disabled={syncing}
             className="mt-2 px-3 py-1.5 text-xs text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
           >
-            Sincronizar servicios desde HubSpot
+            Sincronizar proyectos desde HubSpot
           </button>
         </div>
       ) : (

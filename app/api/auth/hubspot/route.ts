@@ -32,6 +32,9 @@ const HUBSPOT_SCOPES = [
   "automation",
   "automation.sequences.read",
   "automation.sequences.enrollments.write",
+  // ── Projects ────────────────────────────────────────────────
+  "crm.objects.projects.read",
+  "crm.schemas.projects.read",
   // ── Settings / Users ────────────────────────────────────────
   "settings.users.read",
 ].join(" ");

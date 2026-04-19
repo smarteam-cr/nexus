@@ -1,9 +1,10 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
 import ClientCanvasPanel from "@/components/clients/ClientCanvasPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
-
 
 const STRATEGY_TAB_ID = "__strategy__";
 
@@ -14,6 +15,7 @@ interface ProjectSummary {
   projectType?: string | null;
   serviceType?: string | null;
   tags?: string[];
+  hubspotServiceId?: string | null;
 }
 
 // ── Main workspace component ─────────────────────────────────────────────────
@@ -21,10 +23,35 @@ interface ProjectSummary {
 export default function WorkspaceClient({
   clientId,
   projects,
+  hasHubspot,
 }: {
   clientId: string;
   projects: ProjectSummary[];
+  hasHubspot: boolean;
 }) {
+  const router = useRouter();
+  const syncedRef = useRef(false);
+
+  // Sincronización automática al entrar al cliente (silenciosa, en background)
+  useEffect(() => {
+    console.log("[workspace] hasHubspot:", hasHubspot, "clientId:", clientId);
+    if (!hasHubspot || syncedRef.current) return;
+    syncedRef.current = true;
+
+    fetch(`/api/clients/${clientId}/sync-services`, { method: "POST" })
+      .then((r) => r.json())
+      .then((data) => {
+        console.log("[auto-sync-projects] result:", data);
+        if (data.debug?.length) console.log("[auto-sync-projects] debug:", data.debug);
+        if (data.errors?.length) console.warn("[auto-sync-projects] errors:", data.errors);
+        // Solo refrescar si hubo cambios reales
+        if (data.created || data.updated) {
+          router.refresh();
+        }
+      })
+      .catch((e) => console.error("[auto-sync-projects] fetch error:", e));
+  }, [clientId, hasHubspot]);
+
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 57px)" }}>
       <div className="flex-1 overflow-y-auto">
@@ -36,7 +63,13 @@ export default function WorkspaceClient({
 
 // ── Project Section (tabs + canvas) ──────────────────────────────────────────
 
-function ProjectSection({ clientId, projects }: { clientId: string; projects: ProjectSummary[] }) {
+function ProjectSection({
+  clientId,
+  projects,
+}: {
+  clientId: string;
+  projects: ProjectSummary[];
+}) {
   const { activeProjectId, setActiveProjectId } = useWorkspace();
 
   const isStrategy = activeProjectId === STRATEGY_TAB_ID;
@@ -85,12 +118,12 @@ function ProjectSection({ clientId, projects }: { clientId: string; projects: Pr
         <div className="px-6 py-4">
           <ClientCanvasPanel clientId={clientId} embedded />
         </div>
-      ) : activeProjectId ? (
+      ) : activeProjectId && activeProject ? (
         <ProjectCanvasPanel
           key={activeProjectId}
           projectId={activeProjectId}
-          tags={activeProject?.tags}
-          serviceType={activeProject?.serviceType}
+          tags={activeProject.tags}
+          serviceType={activeProject.serviceType}
         />
       ) : null}
     </div>
