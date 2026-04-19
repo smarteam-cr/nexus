@@ -28,6 +28,8 @@
     "dagre": "^0.8.5",
     "echarts": "^6.0.0",
     "echarts-for-react": "^3.0.6",
+    "google-auth-library": "^10.6.2",
+    "googleapis": "^171.4.0",
     "jose": "^6.2.0",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.577.0",

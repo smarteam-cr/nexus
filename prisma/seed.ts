@@ -700,9 +700,31 @@ Responde SOLO con JSON válido:
   console.log(`\nAgents seeded: ${count}`);
 }
 
+async function seedTeamMembers() {
+  const members = [
+    { email: "msalas@smarteamcr.com",  name: "M. Salas",  role: "Ventas" },
+    { email: "apinzon@smarteamcr.com", name: "A. Pinzón", role: "Ventas" },
+  ];
+
+  for (const m of members) {
+    await prisma.teamMember.upsert({
+      where: { email: m.email },
+      update: { name: m.name, role: m.role },
+      create: { email: m.email, name: m.name, role: m.role },
+    });
+    console.log(`  ✓ ${m.name} (${m.email})`);
+  }
+
+  const count = await prisma.teamMember.count({ where: { role: "Ventas" } });
+  console.log(`\nTeam members Ventas: ${count}`);
+}
+
 async function main() {
   console.log("Seeding agents...");
   await seedAgents();
+
+  console.log("\nSeeding team members...");
+  await seedTeamMembers();
 }
 
 main()

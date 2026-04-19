@@ -69,12 +69,12 @@ export default function ServiceMap({
       {/* Trigger: breadcrumb showing current position */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors border border-gray-800 hover:border-gray-700"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors border border-gray-200 hover:border-gray-300"
       >
-        <Map className="w-3.5 h-3.5 text-gray-500" />
-        <span className="text-gray-500">Etapa {currentStage}:</span>
-        <span>{currentStepLabel}</span>
-        <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform ${open ? "rotate-180" : ""}`} />
+        <Map className="w-3.5 h-3.5 text-gray-400" />
+        <span className="text-gray-400">Etapa {currentStage}:</span>
+        <span className="text-gray-700">{currentStepLabel}</span>
+        <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {/* Dropdown drawer */}

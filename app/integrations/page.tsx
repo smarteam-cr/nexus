@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import AppShell from "@/components/layout/AppShell";
 import HubspotSystemCard from "./HubspotSystemCard";
 import FirefliesSyncButton from "./FirefliesSyncButton";
+import GoogleMeetCard from "./GoogleMeetCard";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -19,6 +20,11 @@ interface HubspotStatus {
   hubName?: string | null;
   hubspotPortalId?: string | null;
   updatedAt?: string;
+}
+
+interface GoogleStatus {
+  connected: boolean;
+  adminEmail: string | null;
 }
 
 // ── Fetch del estado de Fireflies (server-side) ───────────────────────────────
@@ -44,6 +50,32 @@ async function getFirefliesStatus(): Promise<FirefliesStatus> {
     return res.json();
   } catch {
     return { connected: false, reason: "network_error" };
+  }
+}
+
+// ── Fetch del estado de Google Meet (server-side) ────────────────────────────
+
+async function getGoogleStatus(): Promise<GoogleStatus> {
+  try {
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get("consultant_session");
+
+    const res = await fetch(
+      `${process.env.APP_URL}/api/integrations/google/status`,
+      {
+        headers: {
+          Cookie: sessionCookie
+            ? `consultant_session=${sessionCookie.value}`
+            : "",
+        },
+        cache: "no-store",
+      }
+    );
+
+    if (!res.ok) return { connected: false, adminEmail: null };
+    return res.json();
+  } catch {
+    return { connected: false, adminEmail: null };
   }
 }
 
@@ -79,10 +111,12 @@ export default async function IntegrationsPage({
   }
 
   const { hs_connected } = await searchParams;
-  const [fireflies, hubspot, firefliesCount] = await Promise.all([
+  const [fireflies, hubspot, google, firefliesCount, googleMeetCount] = await Promise.all([
     getFirefliesStatus(),
     getHubspotSystemStatus(),
-    prisma.firefliesSession.count(),
+    getGoogleStatus(),
+    prisma.firefliesSession.count({ where: { source: "fireflies" } }),
+    prisma.firefliesSession.count({ where: { source: "google_meet" } }),
   ]);
 
   return (
@@ -105,6 +139,13 @@ export default async function IntegrationsPage({
           />
 
           <FirefliesCard status={fireflies} sessionCount={firefliesCount} />
+
+          {/* Google Meet / Gemini */}
+          <GoogleMeetCard
+            connected={google.connected}
+            adminEmail={google.adminEmail}
+            sessionCount={googleMeetCount}
+          />
         </div>
       </div>
     </AppShell>

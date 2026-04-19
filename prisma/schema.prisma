@@ -556,19 +556,23 @@ model KnowledgeEmbedding {
   @@index([documentId])
 }
 
-// ── FirefliesSession — caché local de sesiones de Fireflies ──────────────────
+// ── FirefliesSession — caché local de sesiones de Fireflies y Google Meet ─────
 
 model FirefliesSession {
-  id           String   @id
-  title        String
-  date         DateTime
-  duration     Float    @default(0)
-  participants String[]
-  summary      Json?
-  transcript   String?  @db.Text
-  enrichedAt   DateTime?          // cuándo se trajo transcript/summary (null = pendiente)
-  syncedAt     DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String    @id
+  title          String
+  date           DateTime
+  duration       Float     @default(0)
+  participants   String[]
+  summary        Json?
+  transcript     String?   @db.Text
+  enrichedAt     DateTime?           // cuándo se trajo transcript/summary (null = pendiente)
+  syncedAt       DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  source         String    @default("fireflies") // "fireflies" | "google_meet"
+  googleDocId    String?               // ID del Google Doc de la reunión (Meet)
+  googleEventId  String?               // ID del evento de Google Calendar (Meet)
+  organizerEmail String?               // Email del organizador (para impersonación en enriquecimiento)
 }
 
 // ─── Canvas Suggestions (aprobación de cambios al Client Canvas) ─────────────

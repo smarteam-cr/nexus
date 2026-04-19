@@ -18,13 +18,19 @@ export async function POST(
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  // Recopilar contexto
-  const [client, recentRuns, recentCards, sessions] = await Promise.all([
-    prisma.client.findUnique({
-      where: { id: clientId },
-      select: { canvas: true, name: true, company: true },
-    }),
+  // Recopilar contexto — primero el cliente para usar su nombre en filtros
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { canvas: true, name: true, company: true },
+  });
 
+  // Tokens del nombre del cliente para filtrar sesiones (≥3 chars)
+  const clientTokens = (client?.name ?? "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length >= 3);
+
+  const [recentRuns, recentCards, allRecentSessions] = await Promise.all([
     // AgentRuns recientes con sus cards
     prisma.agentRun.findMany({
       where: {
@@ -54,17 +60,26 @@ export async function POST(
       take: 10,
     }),
 
-    // Fireflies sessions recientes
+    // Sesiones (Fireflies + Meet) recientes enriquecidas
     prisma.firefliesSession.findMany({
       where: {
-        clientId,
         date: { gte: thirtyDaysAgo },
+        enrichedAt: { not: null },
       },
       select: { title: true, summary: true, date: true },
       orderBy: { date: "desc" },
-      take: 10,
+      take: 100,
     }),
   ]);
+
+  // Filtrar sesiones por nombre del cliente en el título
+  const sessions =
+    clientTokens.length > 0
+      ? allRecentSessions.filter((s) => {
+          const t = s.title.toLowerCase();
+          return clientTokens.some((tok) => t.includes(tok));
+        })
+      : allRecentSessions.slice(0, 10);
 
   if (!client) {
     return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });

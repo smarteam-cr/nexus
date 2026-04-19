@@ -33,6 +33,9 @@ export default function SidebarShell({ clients, children }: Props) {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved !== null) setOpen(saved === "true");
     setMounted(true);
+
+    // Auto-sync Google Meet en background (cooldown 20 min en servidor)
+    fetch("/api/integrations/google/auto-sync", { method: "POST" }).catch(() => {});
   }, []);
 
   // Reset override cuando cambia entre vista cliente y otras

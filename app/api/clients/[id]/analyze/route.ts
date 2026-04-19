@@ -60,22 +60,26 @@ async function searchFirefliesFromDB(
           title: { contains: term, mode: "insensitive" as const },
         })),
       },
-      select: { id: true, title: true, date: true, participants: true },
+      select: { id: true, title: true, date: true, participants: true, organizerEmail: true },
       orderBy: { date: "desc" },
-      take: 20,
+      take: 50,
     });
 
     const filtered = domainFilter
       ? sessions.filter((s) =>
-          s.participants.some((p) => p.toLowerCase().includes(`@${domainFilter}`))
+          s.participants.some((p) => p.toLowerCase().includes(`@${domainFilter}`)) ||
+          s.organizerEmail?.toLowerCase().includes(`@${domainFilter}`)
         )
       : sessions;
 
     return filtered.map((s) => ({
       id: s.id,
       title: s.title,
-      date: s.date.getTime(), // Fireflies API usa timestamps en ms
-      participants: s.participants,
+      date: s.date.getTime(),
+      // Incluir organizerEmail en participants para que el filtro de ventas lo detecte
+      participants: s.organizerEmail
+        ? [...new Set([...s.participants, s.organizerEmail])]
+        : s.participants,
     }));
   } catch {
     return [];
@@ -584,7 +588,7 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     // No es bloqueante — continúa sin los datos del deal
   }
 
-  // ── 4. Buscar y traer transcripciones de Fireflies ────────────────────────────
+  // ── 4. Buscar y traer transcripciones (Fireflies + Google Meet) ──────────────
   // Cargar emails del equipo de ventas para etiquetar transcripciones
   const salesTeam = await prisma.teamMember.findMany({
     where: { role: "Ventas" },
@@ -594,74 +598,77 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
 
   let firefliesContent = "";
   let salesFirefliesContent = "";
-  const apiKey = process.env.FIREFLIES_API_KEY;
-  if (apiKey) {
-    try {
-      let matchingSessions: RawTranscript[] = [];
+  const apiKey = process.env.FIREFLIES_API_KEY ?? null;
 
-      // ── 4a. Intentar primero desde la caché DB (evita llamadas innecesarias a la API) ──
-      const dbSessions = await searchFirefliesFromDB(sessionKeywords, titleTerms, domainFilter);
+  try {
+    let matchingSessions: RawTranscript[] = [];
 
-      if (dbSessions.length > 0) {
-        // Tenemos coincidencias en la caché local — no llamamos a la API
-        matchingSessions = dbSessions;
-      } else {
-        // ── 4b. Fallback: buscar en la API de Fireflies (caché vacía o sin coincidencias) ──
-        if (sessionKeywords.length > 0) {
-          const keywordTerms = sessionKeywords.map((k) =>
-            k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-          );
-          matchingSessions = await fetchMatchingTranscripts(apiKey, (t) => {
-            const titleNorm = (t.title ?? "")
-              .toLowerCase()
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "");
-            return keywordTerms.some((kw) => titleNorm.includes(kw));
-          }, 10);
-          matchingSessions = matchingSessions.slice(0, 10);
-        }
+    // ── 4a. Siempre buscar primero en DB (Fireflies + Meet) ──────────────────
+    const dbSessions = await searchFirefliesFromDB(sessionKeywords, titleTerms, domainFilter);
 
-        if (matchingSessions.length === 0 && titleTerms.length > 0) {
-          matchingSessions = await fetchMatchingTranscripts(apiKey, (t) => {
-            const titleNorm = normalize(t.title ?? "");
-            const byTitle = titleTerms.some((term) => titleNorm.includes(term));
-            const byDomain = domainFilter
-              ? t.participants.some((p) => p.toLowerCase().includes(`@${domainFilter}`))
-              : false;
-            return byTitle || byDomain;
-          }, 20);
-          matchingSessions = matchingSessions.slice(0, 20);
-        }
+    if (dbSessions.length > 0) {
+      matchingSessions = dbSessions;
+    } else if (apiKey) {
+      // ── 4b. Fallback a Fireflies API solo si no hay resultados en DB ────────
+      if (sessionKeywords.length > 0) {
+        const keywordTerms = sessionKeywords.map((k) =>
+          k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        );
+        matchingSessions = await fetchMatchingTranscripts(apiKey, (t) => {
+          const titleNorm = (t.title ?? "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+          return keywordTerms.some((kw) => titleNorm.includes(kw));
+        }, 10);
+        matchingSessions = matchingSessions.slice(0, 10);
       }
 
-      // Separar sesiones de ventas vs CS/kickoff por participantes
-      const salesSessions = matchingSessions.filter((s) =>
-        s.participants.some((p) => salesEmails.has(p.toLowerCase()))
-      );
-      const csSessions = matchingSessions.filter((s) =>
-        !s.participants.some((p) => salesEmails.has(p.toLowerCase()))
-      );
+      if (matchingSessions.length === 0 && titleTerms.length > 0) {
+        matchingSessions = await fetchMatchingTranscripts(apiKey, (t) => {
+          const titleNorm = normalize(t.title ?? "");
+          const byTitle = titleTerms.some((term) => titleNorm.includes(term));
+          const byDomain = domainFilter
+            ? t.participants.some((p) => p.toLowerCase().includes(`@${domainFilter}`))
+            : false;
+          return byTitle || byDomain;
+        }, 20);
+        matchingSessions = matchingSessions.slice(0, 20);
+      }
+    }
 
-      // Transcripciones de CS (máx 6)
+    // Separar sesiones de ventas vs CS/kickoff por participantes u organizador
+    const salesSessions = matchingSessions.filter((s) =>
+      s.participants.some((p) => salesEmails.has(p.toLowerCase()))
+    );
+    const csSessions = matchingSessions.filter((s) =>
+      !s.participants.some((p) => salesEmails.has(p.toLowerCase()))
+    );
+
+    // Análisis inicial: solo usa meets de ventas (no CS/kickoff)
+    const isAnalisisInicial = agent.id === "cmmla1g1x00005wijix3qnr7u";
+
+    // Transcripciones de CS (máx 6) — solo para agentes que NO son Análisis inicial
+    if (!isAnalisisInicial) {
       const topCS = csSessions.sort((a, b) => b.date - a.date).slice(0, 6);
       if (topCS.length > 0) {
         const contents = await Promise.all(
-          topCS.map((s) => fetchTranscriptContent(apiKey, s.id, s.title))
+          topCS.map((s) => fetchTranscriptContent(apiKey ?? "", s.id, s.title))
         );
         firefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
       }
-
-      // Transcripciones de ventas (máx 4)
-      const topSales = salesSessions.sort((a, b) => b.date - a.date).slice(0, 4);
-      if (topSales.length > 0) {
-        const contents = await Promise.all(
-          topSales.map((s) => fetchTranscriptContent(apiKey, s.id, s.title))
-        );
-        salesFirefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
-      }
-    } catch (e) {
-      console.error("[analyze] Fireflies error:", e);
     }
+
+    // Transcripciones de ventas (máx 6)
+    const topSales = salesSessions.sort((a, b) => b.date - a.date).slice(0, 6);
+    if (topSales.length > 0) {
+      const contents = await Promise.all(
+        topSales.map((s) => fetchTranscriptContent(apiKey ?? "", s.id, s.title))
+      );
+      salesFirefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
+    }
+  } catch (e) {
+    console.error("[analyze] Sessions error:", e);
   }
 
   // ── 5. Fetch notas del Data Lake ──────────────────────────────────────────────
@@ -805,6 +812,16 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
         effectiveSystemPrompt += getOutputFormatInstructions({ targetSections: tcSections });
       }
     }
+  } else if (bodyProjectId && agent.outputType === "CARDS") {
+    // Para agentes CARDS apuntando al canvas por defecto: inyectar secciones del canvas
+    // para que el agente distribuya sus cards correctamente con canvasSection.
+    const defaultCanvasSections = [
+      { key: "objetivo_alcance", label: "Objetivo y alcance" },
+      { key: "hipotesis_recomendaciones", label: "Hipótesis y recomendaciones" },
+      { key: "procesos", label: "Procesos" },
+      { key: "plan_implementacion", label: "Plan de implementación" },
+    ];
+    effectiveSystemPrompt += getOutputFormatInstructions({ targetSections: defaultCanvasSections });
   }
 
   // ── 9c. Canvas: cargar para contexto ──────────────────────────────────────────
@@ -956,7 +973,7 @@ ${[
     return `${tag} **${c.title}:**\n${c.content}`;
   }),
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
-].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS ===\n${docsContent.slice(0, 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas de Dinterweb. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, 4000)}\n\n` : ""}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
+].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS ===\n${docsContent.slice(0, 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, 4000)}\n\n` : ""}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 11. Llamar a Claude ───────────────────────────────────────────────────────
