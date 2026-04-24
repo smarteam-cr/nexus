@@ -362,75 +362,111 @@ function parseTranscript(raw: string): TranscriptBlock[] {
 }
 
 // ── Parser de Gemini Notes ────────────────────────────────────────────────────
-// Formato del texto almacenado en summary.overview para sesiones Google Meet:
-// "[metadata line]\nResumen □[overview]□ Detalles □[section1 content (ts). section2 content (ts). ...]"
+// Formato real almacenado en summary.overview para Google Meet:
+// "[metadata]Resumen □[overview]□□[titulo1]□[contenido1]□□[titulo2]□[contenido2]□ Detalles □[detalles...]"
+//
+// Clave: □□ separa secciones, □ separa título de contenido dentro de una sección.
 
-// Regex sin flag /g para detección segura (evitar bug de .test() stateful con /g)
+// Detección sin flag /g (evitar bug de .test() stateful con global regex)
 const HAS_BOX_CHARS = /[□☐■▪▸►\u25A1\u2610]/;
-// Regex con /g solo para split/replace, no para .test()
-const BOX_SPLIT_RE  = /[□☐■▪▸►•◦‣⁃✓✗→\u25A1\u2610\u25AA\u25AB]+/g;
 
 function stripTimestamps(s: string): string {
   return s.replace(/\s*\(\d{1,2}:\d{2}:\d{2}\)/g, "").replace(/\s{2,}/g, " ").trim();
 }
 
+interface GeminiSection {
+  title: string | null;
+  content: string;
+}
+
 interface GeminiParsed {
-  overview: string | null;
-  details: string[];  // sub-párrafos del bloque "Detalles"
+  sections: GeminiSection[];   // secciones del bloque "Resumen" (overview + sub-secciones)
+  details: string[];           // párrafos del bloque "Detalles"
 }
 
 function parseGeminiNotes(raw: string): GeminiParsed {
-  // 1. Strip metadata: todo lo anterior al primer "Resumen" o al primer □
-  //    La línea "Invitados Archivos adjuntos Registros de la reunión" viene del header del doc
-  let text = raw
-    .replace(/[\s\S]*?Registros de la reunión\s*/, "")  // quitar header del doc
-    .replace(/^\s*Resumen\s*/i, "")                 // quitar etiqueta "Resumen"
-    .trim();
-  if (!text) text = raw.trim(); // fallback si el pattern no matcheó
+  // 1. Saltear todo hasta el primer □ — ese es el verdadero inicio del contenido.
+  //    Antes del primer □ hay metadata del doc ("Invitados Archivos adjuntos...") y la
+  //    etiqueta "Resumen", que no queremos mostrar.
+  const BOX_RE = /[□☐■▪▸►•◦‣⁃✓✗→\u25A1\u2610\u25AA\u25AB]/;
+  const firstBox = raw.search(BOX_RE);
+  if (firstBox < 0) {
+    // Sin caracteres □ — párrafos normales (fallback)
+    return {
+      sections: raw.split(/\n\n+/).filter(Boolean).map(p => ({ title: null, content: p.trim() })),
+      details: [],
+    };
+  }
+  const text = raw.slice(firstBox); // empieza desde el primer □, inclusive
 
-  // 2. Dividir en chunks usando □ como separador
-  const chunks = text.split(BOX_SPLIT_RE).map((c) => c.trim()).filter(Boolean);
+  // 2. Split en chunks usando uno o más □ como separador
+  const chunks = text
+    .split(/[□☐■▪▸►•◦‣⁃✓✗→\u25A1\u2610\u25AA\u25AB]+/)
+    .map((c) => c.trim())
+    .filter(Boolean);
 
-  let overview: string | null = null;
+  // 3. Procesar chunks
+  const sections: GeminiSection[] = [];
   const details: string[] = [];
   let inDetails = false;
+  let i = 0;
 
-  for (const chunk of chunks) {
-    // Etiquetas de sección — ignorar como separadores
-    if (/^(Detalles|Resumen|Notas|Gemini)$/i.test(chunk)) {
-      if (/^Detalles$/i.test(chunk)) inDetails = true;
+  while (i < chunks.length) {
+    const chunk = chunks[i];
+    const next = chunks[i + 1];
+
+    // Etiqueta "Detalles" → cambiar modo
+    if (/^Detalles$/i.test(chunk)) {
+      inDetails = true;
+      i++;
+      continue;
+    }
+
+    // Ignorar otras etiquetas conocidas
+    if (/^(Resumen|Notas|Gemini)$/i.test(chunk)) {
+      i++;
       continue;
     }
 
     if (inDetails) {
-      // El bloque de Detalles tiene sub-temas separados por "(HH:MM:SS). "
-      // Dividir ahí para obtener párrafos individuales
+      // Bloque de Detalles: dividir por "(HH:MM:SS). " para obtener sub-párrafos
       const subParas = chunk
         .split(/\(\d{1,2}:\d{2}:\d{2}\)\.\s+/)
         .map((s) => stripTimestamps(s))
-        .filter((s) => s.length > 20);
-
-      // Si no hay timestamps como separadores, tratar como un solo párrafo
-      if (subParas.length === 0) {
-        const cleaned = stripTimestamps(chunk);
-        if (cleaned.length > 20) details.push(cleaned);
-      } else {
+        .filter((s) => s.length > 15);
+      if (subParas.length > 0) {
         details.push(...subParas);
+      } else {
+        const cleaned = stripTimestamps(chunk);
+        if (cleaned.length > 15) details.push(cleaned);
       }
+      i++;
     } else {
-      // Primer bloque de contenido = overview
-      if (!overview) {
-        overview = stripTimestamps(chunk);
+      // Heurística: chunk corto sin puntuación final + siguiente chunk más largo = título
+      const isTitle =
+        chunk.length < 80 &&
+        !/[.!?]$/.test(chunk) &&
+        !!next &&
+        next.length > chunk.length &&
+        !/^(Detalles|Resumen|Notas)$/i.test(next);
+
+      if (isTitle && next) {
+        sections.push({ title: chunk, content: stripTimestamps(next) });
+        i += 2;
+      } else {
+        const cleaned = stripTimestamps(chunk);
+        if (cleaned.length > 10) sections.push({ title: null, content: cleaned });
+        i++;
       }
     }
   }
 
-  return { overview, details };
+  return { sections, details };
 }
 
 // ── Componentes de renderizado ────────────────────────────────────────────────
 
-// AI summary (tiene sections[] estructuradas)
+// AI summary (tiene sections[] generadas por Claude)
 function AISummaryOverview({ overview, sections }: { overview?: string; sections?: SummarySection[] }) {
   return (
     <div className="space-y-5">
@@ -438,7 +474,7 @@ function AISummaryOverview({ overview, sections }: { overview?: string; sections
         <p className="text-sm text-gray-300 leading-relaxed">{overview}</p>
       )}
       {sections && sections.length > 0 && (
-        <div className="space-y-4 pt-1">
+        <div className="space-y-5 pt-1">
           {sections.map((s, i) => (
             <div key={i} className="space-y-1.5">
               <h3 className="text-[11px] font-semibold text-brand-light uppercase tracking-widest">
@@ -453,20 +489,27 @@ function AISummaryOverview({ overview, sections }: { overview?: string; sections
   );
 }
 
-// Gemini Notes overview (texto crudo con □ separadores y timestamps)
+// Gemini Notes overview — renderiza las secciones parseadas del texto crudo
 function GeminiNotesOverview({ text }: { text: string }) {
-  const { overview, details } = useMemo(() => parseGeminiNotes(text), [text]);
+  const { sections, details } = useMemo(() => parseGeminiNotes(text), [text]);
 
   return (
     <div className="space-y-5">
-      {/* Párrafo ejecutivo del resumen */}
-      {overview && (
-        <p className="text-sm text-gray-300 leading-relaxed">{overview}</p>
-      )}
+      {/* Secciones del bloque Resumen */}
+      {sections.map((s, i) => (
+        <div key={i} className={s.title ? "space-y-1.5" : ""}>
+          {s.title && (
+            <h3 className="text-[11px] font-semibold text-brand-light uppercase tracking-widest">
+              {s.title}
+            </h3>
+          )}
+          <p className="text-sm text-gray-300 leading-relaxed">{s.content}</p>
+        </div>
+      ))}
 
-      {/* Detalle por sub-temas */}
+      {/* Bloque Detalles */}
       {details.length > 0 && (
-        <div className="space-y-3 pt-2 border-t border-gray-800/50">
+        <div className="space-y-3 pt-3 border-t border-gray-800/50">
           <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest">Detalles</p>
           <div className="space-y-3">
             {details.map((para, i) => (
