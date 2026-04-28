@@ -91,8 +91,8 @@ export default function ProjectGPS({ projectId }: { projectId: string }) {
   const pendingCount = data.pendingItems.filter((i) => !i.done).length;
 
   return (
-    <div className="mb-6 bg-white border border-gray-100 rounded-xl overflow-hidden">
-      <div className="grid grid-cols-4 divide-x divide-gray-100">
+    <div className="mb-6 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="grid grid-cols-4 divide-x divide-gray-800">
         {/* Próxima sesión */}
         <div className="p-4">
           <div className="flex items-center gap-1.5 mb-2">
@@ -112,7 +112,7 @@ export default function ProjectGPS({ projectId }: { projectId: string }) {
                   setData({ ...data, nextSessionDate: val });
                   saveField("nextSessionDate", val);
                 }}
-                className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-blue-400"
+                className="w-full text-xs border border-gray-700 rounded px-2 py-1 focus:outline-none focus:border-brand bg-gray-800 text-gray-200"
               />
               <input
                 defaultValue={data.nextSessionNote ?? ""}
@@ -121,11 +121,11 @@ export default function ProjectGPS({ projectId }: { projectId: string }) {
                   setData({ ...data, nextSessionNote: e.target.value });
                   debouncedSave("nextSessionNote", e.target.value);
                 }}
-                className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-blue-400"
+                className="w-full text-xs border border-gray-700 rounded px-2 py-1 focus:outline-none focus:border-brand bg-gray-800 text-gray-200"
               />
               <button
                 onClick={() => setEditingSession(false)}
-                className="text-[10px] text-blue-500 hover:text-blue-700"
+                className="text-[10px] text-brand hover:text-brand/80"
               >
                 Listo
               </button>
@@ -137,7 +137,7 @@ export default function ProjectGPS({ projectId }: { projectId: string }) {
             >
               {nextDate ? (
                 <div>
-                  <p className={`text-sm font-medium ${isUpcoming ? "text-gray-900" : "text-red-500"}`}>
+                  <p className={`text-sm font-medium ${isUpcoming ? "text-white" : "text-red-400"}`}>
                     {formatDate(nextDate)}
                   </p>
                   {data.nextSessionNote && (
@@ -174,7 +174,7 @@ export default function ProjectGPS({ projectId }: { projectId: string }) {
                 }}
                 className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-blue-400 resize-none"
               />
-              <button onClick={() => setEditingSummary(false)} className="text-[10px] text-blue-500 hover:text-blue-700">
+              <button onClick={() => setEditingSummary(false)} className="text-[10px] text-brand hover:text-brand/80">
                 Listo
               </button>
             </div>
@@ -184,7 +184,7 @@ export default function ProjectGPS({ projectId }: { projectId: string }) {
               className="text-left w-full"
             >
               {data.lastSessionSummary ? (
-                <p className="text-xs text-gray-600 line-clamp-3">{data.lastSessionSummary}</p>
+                <p className="text-xs text-gray-300 line-clamp-3">{data.lastSessionSummary}</p>
               ) : (
                 <p className="text-xs text-gray-300 hover:text-gray-400 transition-colors">Sin sesiones procesadas</p>
               )}
@@ -200,7 +200,7 @@ export default function ProjectGPS({ projectId }: { projectId: string }) {
             </svg>
             <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Estado actual</span>
           </div>
-          <p className="text-sm font-medium text-gray-900">{data.currentState}</p>
+          <p className="text-sm font-medium text-white">{data.currentState}</p>
         </div>
 
         {/* Pendientes */}
@@ -221,7 +221,7 @@ export default function ProjectGPS({ projectId }: { projectId: string }) {
                 <button
                   onClick={() => toggleItem(i)}
                   className={`mt-0.5 w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
-                    item.done ? "bg-green-500 border-green-500" : "border-gray-300 hover:border-gray-400"
+                    item.done ? "bg-green-500 border-green-500" : "border-gray-600 hover:border-gray-500"
                   }`}
                 >
                   {item.done && (
@@ -230,7 +230,7 @@ export default function ProjectGPS({ projectId }: { projectId: string }) {
                     </svg>
                   )}
                 </button>
-                <span className={`text-xs flex-1 ${item.done ? "line-through text-gray-300" : "text-gray-600"}`}>
+                <span className={`text-xs flex-1 ${item.done ? "line-through text-gray-500" : "text-gray-300"}`}>
                   {item.text}
                 </span>
                 <button

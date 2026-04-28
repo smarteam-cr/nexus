@@ -174,11 +174,11 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
 
       {/* Suggestions banner */}
       {suggestions.length > 0 && (
-        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200">
-          <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-amber-900/20 border border-amber-700/50">
+          <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
-          <span className="text-xs text-amber-800">
+          <span className="text-xs text-amber-300">
             <strong>{suggestions.length}</strong> {suggestions.length === 1 ? "sugerencia nueva" : "sugerencias nuevas"} del agente — revisa y acepta o rechaza
           </span>
           <button
@@ -201,27 +201,27 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
           // If there's a pending suggestion for this section, render as draft card
           if (suggestion) {
             return (
-              <div key={key} className="break-inside-avoid mb-4 rounded-xl border border-dashed border-amber-300 bg-amber-50/30 overflow-hidden">
+              <div key={key} className="break-inside-avoid mb-4 rounded-xl border border-dashed border-amber-700/50 bg-amber-900/10 overflow-hidden">
                 <div className="px-4 py-2.5 flex items-center gap-2">
-                  <h4 className="text-sm font-semibold text-gray-800 flex-1 leading-tight">
+                  <h4 className="text-sm font-semibold text-white flex-1 leading-tight">
                     {CLIENT_CANVAS_LABELS[key as keyof ClientCanvas] ?? key}
                   </h4>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-amber-600 bg-amber-100 flex-shrink-0">
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-amber-400 bg-amber-900/30 flex-shrink-0">
                     BORRADOR
                   </span>
                   {suggestion.sourceLabel && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-500 border border-violet-100 font-medium flex-shrink-0 truncate max-w-[100px]">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-900/20 text-violet-400 border border-violet-700/30 font-medium flex-shrink-0 truncate max-w-[100px]">
                       {suggestion.sourceLabel}
                     </span>
                   )}
-                  <button onClick={() => handleSuggestion(suggestion.id, "accept")} className="p-1 rounded text-green-600 hover:bg-green-50 flex-shrink-0" title="Aceptar">
+                  <button onClick={() => handleSuggestion(suggestion.id, "accept")} className="p-1 rounded text-green-400 hover:bg-green-900/20 flex-shrink-0" title="Aceptar">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                   </button>
-                  <button onClick={() => handleSuggestion(suggestion.id, "reject")} className="p-1 rounded text-red-500 hover:bg-red-50 flex-shrink-0" title="Rechazar">
+                  <button onClick={() => handleSuggestion(suggestion.id, "reject")} className="p-1 rounded text-red-400 hover:bg-red-900/20 flex-shrink-0" title="Rechazar">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
-                <div className="px-4 py-3 border-t border-amber-200/50">
+                <div className="px-4 py-3 border-t border-amber-700/30">
                   <CanvasValue
                     value={suggestion.suggested}
                     sectionKey={key}
@@ -245,14 +245,14 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
                 <h3 className="text-sm font-semibold text-white">{CLIENT_CANVAS_LABELS[key] ?? key}</h3>
                 {conf === "confirmed" && (
-                  <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200 font-medium">
+                  <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-green-900/20 text-green-400 border border-green-700/40 font-medium">
                     Confirmada
                   </span>
                 )}
                 {conf === "inferred" && (
                   <button
                     onClick={() => saveSection(key, canvas[key])}
-                    className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100 transition-colors"
+                    className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-amber-900/20 text-amber-400 border border-amber-700/40 hover:bg-amber-900/30 transition-colors"
                   >
                     Confirmar
                   </button>
@@ -528,23 +528,23 @@ export function ProjectosActivos({ clientId }: { clientId: string }) {
   };
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5 shadow-sm">
       <div className="flex items-center gap-2 mb-3">
         <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
-        <h3 className="text-sm font-semibold text-gray-800">Proyectos activos</h3>
+        <h3 className="text-sm font-semibold text-white">Proyectos activos</h3>
         {projects.length > 0 && (
-          <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+          <span className="text-[10px] text-gray-400 bg-gray-800 px-2 py-0.5 rounded-full">
             {projects.length}
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
           {syncResult && (
-            <span className="text-[10px] text-green-600 animate-in fade-in">{syncResult}</span>
+            <span className="text-[10px] text-green-400 animate-in fade-in">{syncResult}</span>
           )}
           <button
             onClick={handleSync}
             disabled={syncing}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] text-gray-400 hover:text-gray-300 hover:bg-gray-800 transition-colors disabled:opacity-50"
             title="Sincronizar proyectos desde HubSpot"
           >
             <svg className={`w-3 h-3 ${syncing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -561,7 +561,7 @@ export function ProjectosActivos({ clientId }: { clientId: string }) {
           <button
             onClick={handleSync}
             disabled={syncing}
-            className="mt-2 px-3 py-1.5 text-xs text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+            className="mt-2 px-3 py-1.5 text-xs text-blue-400 bg-blue-900/20 rounded-lg hover:bg-blue-900/30 transition-colors"
           >
             Sincronizar proyectos desde HubSpot
           </button>
@@ -569,9 +569,9 @@ export function ProjectosActivos({ clientId }: { clientId: string }) {
       ) : (
         <div className="space-y-2">
           {projects.map((p) => (
-            <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+            <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800 truncate">{p.name}</p>
+                <p className="text-sm font-medium text-white truncate">{p.name}</p>
                 <p className="text-[10px] text-gray-400">
                   Etapa {p.currentStage}: {STAGE_NAMES[p.currentStage] ?? `Etapa ${p.currentStage}`}
                 </p>

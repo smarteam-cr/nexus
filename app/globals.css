@@ -226,6 +226,41 @@ html.light .divide-gray-800 > :not([hidden]) ~ :not([hidden]) {
   border-color: #e5e7eb !important;
 }
 
+/* ── Amber / Warning ── */
+html.light .bg-amber-900\/20  { background-color: #fffbeb !important; }
+html.light .bg-amber-900\/10  { background-color: #fff8e1 !important; }
+html.light .bg-amber-900\/30  { background-color: #fef3c7 !important; }
+html.light .border-amber-700\/50 { border-color: #fde68a !important; }
+html.light .border-amber-700\/30 { border-color: #fef3c7 !important; }
+html.light .text-amber-300    { color: #92400e !important; }
+html.light .text-amber-400    { color: #b45309 !important; }
+html.light .hover\:bg-amber-900\/30:hover { background-color: #fef3c7 !important; }
+
+/* ── Green / Success ── */
+html.light .bg-green-900\/10  { background-color: #f0fdf4 !important; }
+html.light .bg-green-900\/20  { background-color: #dcfce7 !important; }
+html.light .bg-green-900\/30  { background-color: #bbf7d0 !important; }
+html.light .border-green-700\/50 { border-color: #86efac !important; }
+html.light .border-green-700\/40 { border-color: #86efac !important; }
+html.light .text-green-400    { color: #16a34a !important; }
+
+/* ── Red / Danger ── */
+html.light .bg-red-900\/20    { background-color: #fff1f2 !important; }
+html.light .bg-red-900\/30    { background-color: #ffe4e6 !important; }
+html.light .hover\:bg-red-900\/20:hover { background-color: #fee2e2 !important; }
+html.light .hover\:bg-red-900\/30:hover { background-color: #ffe4e6 !important; }
+html.light .text-red-400      { color: #dc2626 !important; }
+
+/* ── Violet / Agent ── */
+html.light .bg-violet-900\/30 { background-color: #f5f3ff !important; }
+html.light .bg-violet-900\/20 { background-color: #f5f3ff !important; }
+html.light .border-violet-700\/30 { border-color: #ddd6fe !important; }
+html.light .text-violet-400   { color: #7c3aed !important; }
+
+/* ── Blue ── */
+html.light .bg-blue-900\/30   { background-color: #eff6ff !important; }
+html.light .text-blue-400     { color: #1d4ed8 !important; }
+
 /* ── Prose-invert: en light mode fuerza colores oscuros aunque prose-invert esté activo ── */
 html.light .prose-invert {
   --tw-prose-body:          #374151;

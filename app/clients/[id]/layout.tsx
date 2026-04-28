@@ -94,7 +94,7 @@ export default async function ClientLayout({
       <WorkspaceShell clientId={id} initialProjectId="__strategy__">
         <div className="flex-1 flex flex-col min-h-screen">
         {/* Header del cliente */}
-        <header className="flex-shrink-0 border-b border-gray-200 px-4 h-14 flex items-center justify-between gap-4">
+        <header className="flex-shrink-0 border-b border-gray-800 px-4 h-14 flex items-center justify-between gap-4">
           {/* Left: back + nombre del cliente + HS status */}
           <div className="flex items-center gap-3 min-w-0">
             <Link
@@ -106,9 +106,9 @@ export default async function ClientLayout({
               </svg>
               Clientes
             </Link>
-            <div className="w-px h-4 bg-gray-200 flex-shrink-0" />
+            <div className="w-px h-4 bg-gray-700 flex-shrink-0" />
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-sm font-semibold text-gray-900 truncate">{client.name}</span>
+              <span className="text-sm font-semibold text-white truncate">{client.name}</span>
               {displayCompany && displayCompany !== client.name && (
                 <>
                   <span className="text-gray-300 text-xs">·</span>
@@ -117,17 +117,17 @@ export default async function ClientLayout({
               )}
               {/* HubSpot status badge */}
               {client.hubspotAccount ? (
-                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-green-50 text-green-600 border border-green-200 flex-shrink-0" title={client.hubspotAccount.hubName ?? "HubSpot conectado"}>
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-green-900/20 text-green-400 border border-green-700/40 flex-shrink-0" title={client.hubspotAccount.hubName ?? "HubSpot conectado"}>
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
                   HS
                 </span>
               ) : (
                 <Link
                   href={`/clients/${id}/settings`}
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-gray-50 text-gray-400 border border-gray-200 hover:text-gray-600 hover:border-gray-300 transition-colors flex-shrink-0"
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-gray-800 text-gray-400 border border-gray-700 hover:text-gray-300 hover:border-gray-600 transition-colors flex-shrink-0"
                   title="Conectar HubSpot del cliente"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-600" />
                   HS
                 </Link>
               )}
