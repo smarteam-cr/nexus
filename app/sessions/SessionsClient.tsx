@@ -933,20 +933,20 @@ function SessionDetail({
             {generatingSummary && !hasSummary && (
               <div className="space-y-6 pt-2">
                 <div className="space-y-2">
-                  <div className="h-2.5 w-16 rounded-full bg-gray-800 animate-pulse" />
-                  <div className="h-3.5 rounded-full bg-gray-800/80 animate-pulse" style={{ width: "92%" }} />
-                  <div className="h-3.5 rounded-full bg-gray-800/80 animate-pulse" style={{ width: "78%" }} />
-                  <div className="h-3.5 rounded-full bg-gray-800/60 animate-pulse" style={{ width: "85%" }} />
+                  <div className="h-2.5 w-16 rounded-full skeleton-shimmer" />
+                  <div className="h-3.5 rounded-full skeleton-shimmer" style={{ width: "92%" }} />
+                  <div className="h-3.5 rounded-full skeleton-shimmer" style={{ width: "78%" }} />
+                  <div className="h-3.5 rounded-full skeleton-shimmer" style={{ width: "85%" }} />
                 </div>
                 <div className="space-y-2">
-                  <div className="h-2.5 w-24 rounded-full bg-gray-800 animate-pulse" />
-                  <div className="h-3.5 rounded-full bg-gray-800/80 animate-pulse" style={{ width: "88%" }} />
-                  <div className="h-3.5 rounded-full bg-gray-800/60 animate-pulse" style={{ width: "70%" }} />
+                  <div className="h-2.5 w-24 rounded-full skeleton-shimmer" />
+                  <div className="h-3.5 rounded-full skeleton-shimmer" style={{ width: "88%" }} />
+                  <div className="h-3.5 rounded-full skeleton-shimmer" style={{ width: "70%" }} />
                 </div>
                 <div className="space-y-2">
-                  <div className="h-2.5 w-20 rounded-full bg-gray-800 animate-pulse" />
-                  <div className="h-3.5 rounded-full bg-gray-800/80 animate-pulse" style={{ width: "95%" }} />
-                  <div className="h-3.5 rounded-full bg-gray-800/60 animate-pulse" style={{ width: "60%" }} />
+                  <div className="h-2.5 w-20 rounded-full skeleton-shimmer" />
+                  <div className="h-3.5 rounded-full skeleton-shimmer" style={{ width: "95%" }} />
+                  <div className="h-3.5 rounded-full skeleton-shimmer" style={{ width: "60%" }} />
                 </div>
                 <p className="text-[11px] text-gray-700 flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 border border-gray-700 border-t-brand/50 rounded-full animate-spin inline-block" />
@@ -1098,7 +1098,7 @@ function SessionDetail({
             {transcriptLoading ? (
               <div className="space-y-3">
                 {[90, 75, 85, 60, 80, 70, 88].map((w, i) => (
-                  <div key={i} className="h-3.5 rounded-full bg-gray-800 animate-pulse" style={{ width: `${w}%` }} />
+                  <div key={i} className="h-3.5 rounded-full skeleton-shimmer" style={{ width: `${w}%` }} />
                 ))}
               </div>
             ) : transcript ? (

@@ -102,7 +102,7 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
       <div className="max-w-5xl mx-auto px-6 py-8">
         <div className="columns-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="break-inside-avoid mb-4 h-32 bg-gray-50 rounded-2xl animate-pulse" />
+            <div key={i} className="break-inside-avoid mb-4 h-32 rounded-2xl skeleton-shimmer" />
           ))}
         </div>
       </div>

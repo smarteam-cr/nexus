@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer"),
-  { ssr: false, loading: () => <div className="h-64 bg-gray-50 rounded-xl animate-pulse" /> }
+  { ssr: false, loading: () => <div className="h-64 rounded-xl skeleton-shimmer" /> }
 );
 
 export function SharedFlowchart({ data }: { data: Parameters<typeof FlowchartViewer>[0]["data"] }) {

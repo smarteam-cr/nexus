@@ -12,7 +12,7 @@ import SectionBlockList from "@/components/canvas/SectionBlockList";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
-  { ssr: false, loading: () => <div className="h-64 bg-gray-50 rounded-xl animate-pulse" /> }
+  { ssr: false, loading: () => <div className="h-64 rounded-xl skeleton-shimmer" /> }
 );
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -399,7 +399,7 @@ export default function ProjectCanvasPanel({
     return (
       <div className="px-6 py-8 space-y-4">
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="h-24 bg-gray-50 rounded-2xl animate-pulse" />
+          <div key={i} className="h-24 rounded-2xl skeleton-shimmer" />
         ))}
       </div>
     );

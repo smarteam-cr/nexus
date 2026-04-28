@@ -6,10 +6,8 @@ import dynamic from "next/dynamic";
 const ReactECharts = dynamic(() => import("echarts-for-react"), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center bg-gray-50 rounded-xl animate-pulse"
-      style={{ height: 480 }}>
-      <span className="text-sm text-gray-400">Cargando gráfico…</span>
-    </div>
+    <div className="flex items-center justify-center rounded-xl skeleton-shimmer"
+      style={{ height: 480 }} />
   ),
 });
 

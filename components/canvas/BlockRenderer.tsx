@@ -6,7 +6,7 @@ import ReactMarkdown from "react-markdown";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
-  { ssr: false, loading: () => <div className="h-64 bg-gray-50 rounded-xl animate-pulse" /> }
+  { ssr: false, loading: () => <div className="h-64 rounded-xl skeleton-shimmer" /> }
 );
 
 // ── Types ────────────────────────────────────────────────────────────────────

@@ -265,7 +265,7 @@ export default function SectionBlockList({
   if (loading) {
     return (
       <div className="space-y-4">
-        {[1, 2, 3].map((i) => (<div key={i} className="h-32 bg-gray-50 rounded-2xl animate-pulse" />))}
+        {[1, 2, 3].map((i) => (<div key={i} className="h-32 rounded-2xl skeleton-shimmer" />))}
       </div>
     );
   }

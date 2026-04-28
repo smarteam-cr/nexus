@@ -10,7 +10,7 @@ const EChartRenderer = dynamic(
   () => import("@/components/charts/EChartRenderer"),
   {
     loading: () => (
-      <div className="h-[480px] flex items-center justify-center text-sm text-gray-400 animate-pulse rounded-2xl bg-gray-50">
+      <div className="h-[480px] flex items-center justify-center text-sm text-gray-400 rounded-2xl skeleton-shimmer">
         Cargando gráfico…
       </div>
     ),

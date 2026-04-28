@@ -35,26 +35,21 @@ export default function WorkspaceClient({
 
   // Sincronización automática al entrar al cliente (silenciosa, en background)
   useEffect(() => {
-    console.log("[workspace] hasHubspot:", hasHubspot, "clientId:", clientId);
     if (!hasHubspot || syncedRef.current) return;
     syncedRef.current = true;
 
     fetch(`/api/clients/${clientId}/sync-services`, { method: "POST" })
       .then((r) => r.json())
       .then((data) => {
-        console.log("[auto-sync-projects] result:", data);
-        if (data.debug?.length) console.log("[auto-sync-projects] debug:", data.debug);
-        if (data.errors?.length) console.warn("[auto-sync-projects] errors:", data.errors);
-        // Solo refrescar si hubo cambios reales
         if (data.created || data.updated) {
           router.refresh();
         }
       })
-      .catch((e) => console.error("[auto-sync-projects] fetch error:", e));
+      .catch(() => {});
   }, [clientId, hasHubspot]);
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 57px)" }}>
+    <div className="flex flex-col bg-white" style={{ height: "calc(100vh - 57px)" }}>
       <div className="flex-1 overflow-y-auto">
         <ProjectSection clientId={clientId} projects={projects} />
       </div>

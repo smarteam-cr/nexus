@@ -91,7 +91,7 @@ export default async function ClientLayout({
 
   return (
     <AppShell>
-      <WorkspaceShell clientId={id} initialProjectId={defaultProjectId}>
+      <WorkspaceShell clientId={id} initialProjectId="__strategy__">
         <div className="flex-1 flex flex-col min-h-screen">
         {/* Header del cliente */}
         <header className="flex-shrink-0 border-b border-gray-200 px-4 h-14 flex items-center justify-between gap-4">

@@ -69,7 +69,7 @@ export default function ProjectGPS({ projectId }: { projectId: string }) {
     saveField("pendingItems", items);
   };
 
-  if (!data) return <div className="h-20 bg-gray-50 rounded-xl animate-pulse mb-6" />;
+  if (!data) return <div className="h-20 rounded-xl skeleton-shimmer mb-6" />;
 
   const nextDate = data.nextSessionDate ? new Date(data.nextSessionDate) : null;
   const isUpcoming = nextDate && nextDate > new Date();
