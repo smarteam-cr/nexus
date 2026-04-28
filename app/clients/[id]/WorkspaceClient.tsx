@@ -49,7 +49,7 @@ export default function WorkspaceClient({
   }, [clientId, hasHubspot]);
 
   return (
-    <div className="flex flex-col bg-white" style={{ height: "calc(100vh - 57px)" }}>
+    <div className="flex flex-col workspace-light" style={{ height: "calc(100vh - 57px)" }}>
       <div className="flex-1 overflow-y-auto">
         <ProjectSection clientId={clientId} projects={projects} />
       </div>
