@@ -114,6 +114,17 @@ export default function Sidebar({ clients, onToggle, isOpen = true }: SidebarPro
             }
           />
           <NavItem
+            href="/audits"
+            active={pathname.startsWith("/audits")}
+            isOpen={isOpen}
+            label="Auditoría"
+            icon={
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+            }
+          />
+          <NavItem
             href="/agents"
             active={pathname.startsWith("/agents")}
             isOpen={isOpen}
@@ -121,6 +132,17 @@ export default function Sidebar({ clients, onToggle, isOpen = true }: SidebarPro
             icon={
               <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            }
+          />
+          <NavItem
+            href="/sessions"
+            active={pathname.startsWith("/sessions")}
+            isOpen={isOpen}
+            label="Sesiones"
+            icon={
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
             }
           />

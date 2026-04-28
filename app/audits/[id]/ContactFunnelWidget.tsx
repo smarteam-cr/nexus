@@ -27,18 +27,17 @@ interface Props {
 }
 
 export default function ContactFunnelWidget({ contacts, totalContacts }: Props) {
-  // Filtrar solo etapas del embudo con datos
-  const funnelInputs = FUNNEL_ORDER
-    .map((s) => {
-      const found = contacts.find((c) => c.value === s.value);
-      return {
-        value: s.value,
-        label: s.label,
-        count: found?.count ?? 0,
-        color: STAGE_COLORS[s.value] ?? "#6b7280",
-      };
-    })
-    .filter((s) => s.count > 0);
+  // Todas las etapas del embudo en orden, incluyendo las que tienen 0
+  const funnelInputs = FUNNEL_ORDER.map((s) => {
+    const found = contacts.find((c) => c.value === s.value);
+    return {
+      value: s.value,
+      label: s.label,
+      count: found?.count ?? 0,
+      color: STAGE_COLORS[s.value] ?? "#6b7280",
+    };
+  });
+  const stagesWithData = funnelInputs.filter((s) => s.count > 0).length;
 
   const { steps, overallConversionPct } = computeFunnel(funnelInputs, totalContacts);
 
@@ -81,7 +80,7 @@ export default function ContactFunnelWidget({ contacts, totalContacts }: Props) 
     {
       label: "ETAPAS CON DATOS",
       sub: "en el embudo de contactos",
-      value: String(funnelInputs.length),
+      value: String(stagesWithData),
     },
   ];
 

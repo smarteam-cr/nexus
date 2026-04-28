@@ -1,5 +1,5 @@
 import { requireConsultantSession } from "@/lib/auth";
-import { redirect, notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import AppShell from "@/components/layout/AppShell";
 import AuditDetailClient from "./AuditDetailClient";
@@ -30,12 +30,6 @@ export default async function AuditDetailPage({
 
   if (!audit) notFound();
 
-  // Redirigir al workspace del cliente si hay clientId
-  if (audit.clientId) {
-    redirect(`/clients/${audit.clientId}/stage/1/audit/${audit.id}`);
-  }
-
-  // Fallback: auditorías legacy sin clientId se muestran aquí
   const data = audit.data as unknown as LifecycleSnapshot | null;
   const lifecycleStats = data?.lifecycleStats;
 

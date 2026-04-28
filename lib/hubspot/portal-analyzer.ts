@@ -483,8 +483,8 @@ async function fetchLifecycleStats(
   const lifecycleWorkflows = await detectLifecycleWorkflows(token, stageValues);
 
   return {
-    contacts: contactCounts.filter((s) => s.count > 0),
-    companies: companyCounts.filter((s) => s.count > 0),
+    contacts: contactCounts,
+    companies: companyCounts,
     totalContacts,
     totalCompanies,
     totalDeals,

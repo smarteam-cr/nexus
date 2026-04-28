@@ -25,17 +25,16 @@ interface Props {
 }
 
 export default function CompanyFunnelWidget({ companies, totalCompanies }: Props) {
-  const funnelInputs = FUNNEL_ORDER
-    .map((s) => {
-      const found = companies.find((c) => c.value === s.value);
-      return {
-        value: s.value,
-        label: s.label,
-        count: found?.count ?? 0,
-        color: STAGE_COLORS[s.value] ?? "#6b7280",
-      };
-    })
-    .filter((s) => s.count > 0);
+  const funnelInputs = FUNNEL_ORDER.map((s) => {
+    const found = companies.find((c) => c.value === s.value);
+    return {
+      value: s.value,
+      label: s.label,
+      count: found?.count ?? 0,
+      color: STAGE_COLORS[s.value] ?? "#6b7280",
+    };
+  });
+  const stagesWithData = funnelInputs.filter((s) => s.count > 0).length;
 
   const { steps, overallConversionPct } = computeFunnel(funnelInputs, totalCompanies);
 
@@ -76,7 +75,7 @@ export default function CompanyFunnelWidget({ companies, totalCompanies }: Props
     {
       label: "ETAPAS CON DATOS",
       sub: "en el embudo de empresas",
-      value: String(funnelInputs.length),
+      value: String(stagesWithData),
     },
   ];
 

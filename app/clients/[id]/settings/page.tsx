@@ -15,6 +15,7 @@ interface Client {
   company: string | null;
   industry: string | null;
   notes: string | null;
+  emailDomains: string[];
   hubspotAccount: HubspotAccount | null;
 }
 
@@ -32,6 +33,7 @@ export default function ClientSettingsPage() {
   // Edición de datos del cliente
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
+  const [emailDomains, setEmailDomains] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -45,6 +47,7 @@ export default function ClientSettingsPage() {
       setClient(data);
       setName(data.name);
       setCompany(data.company ?? "");
+      setEmailDomains((data.emailDomains ?? []).join(", "));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -67,10 +70,15 @@ export default function ClientSettingsPage() {
     setSaving(true);
     setSaveSuccess(false);
     try {
+      const parsedDomains = emailDomains
+        .split(/[\s,]+/)
+        .map((d) => d.trim().toLowerCase().replace(/^@/, ""))
+        .filter(Boolean);
+
       const res = await fetch(`/api/clients/${clientId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, company }),
+        body: JSON.stringify({ name, company, emailDomains: parsedDomains }),
       });
       if (!res.ok) throw new Error("Error al guardar");
       setSaveSuccess(true);
@@ -165,6 +173,23 @@ export default function ClientSettingsPage() {
                 className="w-full px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/30 transition-colors"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">
+              Dominios de email{" "}
+              <span className="text-gray-600 font-normal">(para matching automático de sesiones)</span>
+            </label>
+            <input
+              type="text"
+              value={emailDomains}
+              onChange={(e) => setEmailDomains(e.target.value)}
+              placeholder="ej. ice.go.cr, kolbi.cr"
+              className="w-full px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/30 transition-colors"
+            />
+            <p className="text-xs text-gray-600 mt-1">
+              Separados por coma. Las sesiones donde participe alguien de estos dominios se asignarán automáticamente a este cliente.
+            </p>
           </div>
 
           <div className="flex items-center gap-3 pt-1">

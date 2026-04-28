@@ -11,8 +11,9 @@ interface Props {
 export default function GoogleMeetCard({ connected, adminEmail, sessionCount }: Props) {
   const [syncing, setSyncing] = useState(false);
   const [enriching, setEnriching] = useState(false);
+  const [reEnriching, setReEnriching] = useState(false);
   const [syncResult, setSyncResult] = useState<{ synced: number; total: number } | null>(null);
-  const [enrichResult, setEnrichResult] = useState<{ enriched: number } | null>(null);
+  const [enrichResult, setEnrichResult] = useState<{ enriched: number; label?: string } | null>(null);
   const [syncError, setSyncError] = useState(false);
   const [enrichError, setEnrichError] = useState(false);
   const [count, setCount] = useState(sessionCount);
@@ -34,19 +35,29 @@ export default function GoogleMeetCard({ connected, adminEmail, sessionCount }: 
     }
   }
 
-  async function handleEnrich() {
-    setEnriching(true);
+  async function handleEnrich(mode: "normal" | "force" | "all" = "normal") {
+    if (mode !== "normal") setReEnriching(true);
+    else setEnriching(true);
     setEnrichError(false);
     setEnrichResult(null);
     try {
-      const res = await fetch("/api/integrations/google/enrich", { method: "POST" });
+      const url =
+        mode === "all"   ? "/api/integrations/google/enrich?force=all" :
+        mode === "force" ? "/api/integrations/google/enrich?force=true" :
+                           "/api/integrations/google/enrich";
+      const res = await fetch(url, { method: "POST" });
       if (!res.ok) throw new Error("enrich_failed");
       const data = (await res.json()) as { enriched: number; skipped: number; errors: number };
-      setEnrichResult({ enriched: data.enriched });
+      const label =
+        mode === "all"   ? "re-enriquecidas (todas)" :
+        mode === "force" ? "re-enriquecidas (sin transcript)" :
+                           "enriquecidas";
+      setEnrichResult({ enriched: data.enriched, label });
     } catch {
       setEnrichError(true);
     } finally {
-      setEnriching(false);
+      if (mode !== "normal") setReEnriching(false);
+      else setEnriching(false);
     }
   }
 
@@ -88,12 +99,15 @@ export default function GoogleMeetCard({ connected, adminEmail, sessionCount }: 
               count={count}
               syncing={syncing}
               enriching={enriching}
+              reEnriching={reEnriching}
               syncResult={syncResult}
               enrichResult={enrichResult}
               syncError={syncError}
               enrichError={enrichError}
               onSync={handleSync}
-              onEnrich={handleEnrich}
+              onEnrich={() => handleEnrich("normal")}
+              onReEnrich={() => handleEnrich("force")}
+              onReEnrichAll={() => handleEnrich("all")}
             />
           ) : (
             <DisconnectedState />
@@ -111,23 +125,29 @@ function ConnectedState({
   count,
   syncing,
   enriching,
+  reEnriching,
   syncResult,
   enrichResult,
   syncError,
   enrichError,
   onSync,
   onEnrich,
+  onReEnrich,
+  onReEnrichAll,
 }: {
   adminEmail: string;
   count: number;
   syncing: boolean;
   enriching: boolean;
+  reEnriching: boolean;
   syncResult: { synced: number; total: number } | null;
-  enrichResult: { enriched: number } | null;
+  enrichResult: { enriched: number; label?: string } | null;
   syncError: boolean;
   enrichError: boolean;
   onSync: () => void;
   onEnrich: () => void;
+  onReEnrich: () => void;
+  onReEnrichAll: () => void;
 }) {
   return (
     <div className="space-y-2">
@@ -180,9 +200,9 @@ function ConnectedState({
       {syncError && !syncing && (
         <span className="text-xs text-red-400 block">Error al sincronizar. Intenta de nuevo.</span>
       )}
-      {enrichResult && !enriching && (
+      {enrichResult && !enriching && !reEnriching && (
         <span className="text-xs text-blue-400 block">
-          {enrichResult.enriched} sesiones enriquecidas con transcript/notas
+          {enrichResult.enriched} sesiones {enrichResult.label ?? "enriquecidas"} con transcript/notas
         </span>
       )}
       {enrichError && !enriching && (
@@ -220,10 +240,10 @@ function ConnectedState({
           )}
         </button>
 
-        {/* Enrich */}
+        {/* Enrich nuevos */}
         <button
           onClick={onEnrich}
-          disabled={syncing || enriching}
+          disabled={syncing || enriching || reEnriching}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-medium hover:bg-purple-500/20 disabled:opacity-50 transition-colors"
         >
           {enriching ? (
@@ -244,9 +264,47 @@ function ConnectedState({
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                 />
               </svg>
-              Enriquecer transcripts
+              Enriquecer nuevas
             </>
           )}
+        </button>
+
+        {/* Re-enriquecer sin transcript — resetea solo las que tienen transcript=null */}
+        <button
+          onClick={onReEnrich}
+          disabled={syncing || enriching || reEnriching}
+          title="Resetea solo sesiones sin transcript y las vuelve a procesar"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-medium hover:bg-orange-500/20 disabled:opacity-50 transition-colors"
+        >
+          {reEnriching ? (
+            <>
+              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              Re-enriqueciendo…
+            </>
+          ) : (
+            <>
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Re-enriquecer sin transcript
+            </>
+          )}
+        </button>
+
+        {/* Re-enriquecer todo — resetea absolutamente todas las sesiones */}
+        <button
+          onClick={onReEnrichAll}
+          disabled={syncing || enriching || reEnriching}
+          title="Resetea TODAS las sesiones y las re-procesa (lento)"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/20 disabled:opacity-50 transition-colors"
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Re-enriquecer todo
         </button>
       </div>
     </div>

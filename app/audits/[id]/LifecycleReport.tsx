@@ -254,7 +254,7 @@ function LifecycleChart({ title, data, total }: LifecycleChartProps) {
       count: found?.count ?? 0,
       color: getStageColor(stageValue, idx),
     };
-  }).filter((s) => s.count > 0);
+  });
 
   const customBars: ChartBar[] = data
     .filter((d) => !STAGE_ORDER.includes(d.value))

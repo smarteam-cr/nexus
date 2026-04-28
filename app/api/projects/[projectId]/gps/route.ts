@@ -8,25 +8,46 @@ interface PendingItem {
   done: boolean;
 }
 
+// Slugs del objeto Proyectos en HubSpot (mismos que usa sync-services)
+const PROJECT_SLUGS = ["projects", "PROJECT", "0-18", "0-49"];
+
 // Resolve HubSpot pipeline stage ID → human-readable label
 async function fetchHubspotStageLabel(serviceId: string): Promise<string | null> {
   try {
     const hs = await getSystemHubspotClient();
-    const res = await hs.apiRequest({
-      method: "GET",
-      path: `/crm/v3/objects/services/${serviceId}?properties=hs_pipeline,hs_pipeline_stage`,
-    });
-    const data = (await res.json()) as {
-      properties?: { hs_pipeline?: string; hs_pipeline_stage?: string };
-    };
-    const pipelineId = data.properties?.hs_pipeline;
-    const stageId = data.properties?.hs_pipeline_stage;
-    if (!pipelineId || !stageId) return null;
 
-    // Fetch pipeline stages to resolve the label
+    // Probar cada slug hasta encontrar el objeto
+    let pipelineId: string | null = null;
+    let stageId: string | null = null;
+    let workingSlug: string | null = null;
+
+    for (const slug of PROJECT_SLUGS) {
+      try {
+        const res = await hs.apiRequest({
+          method: "GET",
+          path: `/crm/v3/objects/${slug}/${serviceId}?properties=hs_pipeline,hs_pipeline_stage`,
+        });
+        const data = (await res.json()) as {
+          id?: string;
+          properties?: { hs_pipeline?: string; hs_pipeline_stage?: string };
+          status?: string;
+        };
+        if (data.status === "error" || !data.id) continue;
+        pipelineId = data.properties?.hs_pipeline ?? null;
+        stageId = data.properties?.hs_pipeline_stage ?? null;
+        workingSlug = slug;
+        break;
+      } catch {
+        continue;
+      }
+    }
+
+    if (!pipelineId || !stageId || !workingSlug) return null;
+
+    // Resolver el label del stage consultando el pipeline
     const pipelineRes = await hs.apiRequest({
       method: "GET",
-      path: `/crm/v3/pipelines/services/${pipelineId}/stages`,
+      path: `/crm/v3/pipelines/${workingSlug}/${pipelineId}/stages`,
     });
     const pipelineData = (await pipelineRes.json()) as {
       results?: Array<{ id: string; label: string }>;

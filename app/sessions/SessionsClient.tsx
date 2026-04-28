@@ -362,120 +362,185 @@ function parseTranscript(raw: string): TranscriptBlock[] {
 }
 
 // ── Parser de Gemini Notes ────────────────────────────────────────────────────
-// Formato real almacenado en summary.overview para Google Meet:
-// "[metadata]Resumen □[overview]□□[titulo1]□[contenido1]□□[titulo2]□[contenido2]□ Detalles □[detalles...]"
-//
-// Clave: □□ separa secciones, □ separa título de contenido dentro de una sección.
-
-// Detección sin flag /g (evitar bug de .test() stateful con global regex)
-const HAS_BOX_CHARS = /[□☐■▪▸►\u25A1\u2610]/;
+// Formato: "[metadata]Resumen [SEP][overview][SEP][SEP][titulo][SEP][contenido]... Detalles [SEP][detalles]"
+// El carácter separador varía (□, ☐, u otros) — lo descubrimos dinámicamente.
 
 function stripTimestamps(s: string): string {
   return s.replace(/\s*\(\d{1,2}:\d{2}:\d{2}\)/g, "").replace(/\s{2,}/g, " ").trim();
 }
 
+// Escapa un carácter para usarlo dentro de una clase de caracteres en regex
+function escapeForCharClass(c: string): string {
+  return c.replace(/[\]\\^-]/g, "\\$&");
+}
+
 interface GeminiSection {
   title: string | null;
   content: string;
+  isActionSection?: boolean; // true cuando el título es "próximos pasos" o similar
 }
 
 interface GeminiParsed {
-  sections: GeminiSection[];   // secciones del bloque "Resumen" (overview + sub-secciones)
-  details: string[];           // párrafos del bloque "Detalles"
+  sections: GeminiSection[];
+  actionItems: string[]; // extraídos de la sección "pasos siguientes recomendados"
+  details: string[];
 }
 
+// Regex para identificar secciones de próximos pasos en Gemini Notes
+const GEMINI_ACTION_RE = /pasos\s+siguientes|próximos\s+pasos|next\s+steps|acciones\s+(a\s+seguir|recomendadas?)/i;
+
 function parseGeminiNotes(raw: string): GeminiParsed {
-  // 1. Saltear todo hasta el primer □ — ese es el verdadero inicio del contenido.
-  //    Antes del primer □ hay metadata del doc ("Invitados Archivos adjuntos...") y la
-  //    etiqueta "Resumen", que no queremos mostrar.
-  const BOX_RE = /[□☐■▪▸►•◦‣⁃✓✗→\u25A1\u2610\u25AA\u25AB]/;
-  const firstBox = raw.search(BOX_RE);
-  if (firstBox < 0) {
-    // Sin caracteres □ — párrafos normales (fallback)
+  const EMPTY: GeminiParsed = { sections: [], actionItems: [], details: [] };
+
+  // 1. Localizar la palabra "Resumen" — siempre presente en Gemini Notes
+  const resumenIdx = raw.indexOf("Resumen");
+  if (resumenIdx < 0) return EMPTY;
+
+  // 2. El carácter inmediatamente después de "Resumen " es el separador real del doc.
+  //    Saltamos espacios/saltos de línea entre "Resumen" y el separador.
+  let sepIdx = resumenIdx + "Resumen".length;
+  while (sepIdx < raw.length && (raw[sepIdx] === " " || raw[sepIdx] === "\n" || raw[sepIdx] === "\r")) {
+    sepIdx++;
+  }
+  if (sepIdx >= raw.length) return EMPTY;
+
+  const SEP = raw[sepIdx]; // carácter separador real de este documento
+
+  // 3. Si el SEP no es un carácter especial no-texto (letra o dígito), caemos
+  //    en modo párrafo: dividir por doble salto de línea a partir de "Resumen".
+  const isSepSpecial = /[^\w\sáéíóúüñÁÉÍÓÚÜÑ.,;:!?'"()\-]/.test(SEP);
+  if (!isSepSpecial) {
+    const contentText = raw.slice(resumenIdx + "Resumen".length).trim();
+    const paragraphs = contentText.split(/\n\n+/).map((p) => p.trim()).filter((p) => p.length > 20);
     return {
-      sections: raw.split(/\n\n+/).filter(Boolean).map(p => ({ title: null, content: p.trim() })),
+      sections: paragraphs.map((p) => ({ title: null, content: stripTimestamps(p) })),
+      actionItems: [],
       details: [],
     };
   }
-  const text = raw.slice(firstBox); // empieza desde el primer □, inclusive
 
-  // 2. Split en chunks usando uno o más □ como separador
-  const chunks = text
-    .split(/[□☐■▪▸►•◦‣⁃✓✗→\u25A1\u2610\u25AA\u25AB]+/)
-    .map((c) => c.trim())
-    .filter(Boolean);
+  // Construir regex que matchea uno o más de ese carácter
+  const SEP_RE = new RegExp("[" + escapeForCharClass(SEP) + "]+");
 
-  // 3. Procesar chunks
+  // 4. Tomar el texto desde el separador (inclusive) — descarta el metadata anterior
+  const text = raw.slice(sepIdx);
+
+  // 5. Dividir en chunks
+  const rawChunks = text.split(SEP_RE).map((c) => c.trim()).filter(Boolean);
+
+  // 6. Procesar chunks
   const sections: GeminiSection[] = [];
+  const actionItems: string[] = [];
   const details: string[] = [];
   let inDetails = false;
-  let i = 0;
+  let inActionItems = false;
 
-  while (i < chunks.length) {
-    const chunk = chunks[i];
-    const next = chunks[i + 1];
+  for (let i = 0; i < rawChunks.length; i++) {
+    const chunk = rawChunks[i];
+    const next  = rawChunks[i + 1];
 
-    // Etiqueta "Detalles" → cambiar modo
-    if (/^Detalles$/i.test(chunk)) {
-      inDetails = true;
-      i++;
-      continue;
-    }
+    // Etiquetas de sección conocidas — cambiar modo
+    if (/^Detalles$/i.test(chunk))               { inDetails = true; inActionItems = false; continue; }
+    if (/^(Resumen|Notas|Gemini)$/i.test(chunk)) { inActionItems = false; continue; }
 
-    // Ignorar otras etiquetas conocidas
-    if (/^(Resumen|Notas|Gemini)$/i.test(chunk)) {
-      i++;
-      continue;
-    }
-
+    // ── Modo "Detalles" ───────────────────────────────────────────────────────
     if (inDetails) {
-      // Bloque de Detalles: dividir por "(HH:MM:SS). " para obtener sub-párrafos
       const subParas = chunk
         .split(/\(\d{1,2}:\d{2}:\d{2}\)\.\s+/)
-        .map((s) => stripTimestamps(s))
+        .map(stripTimestamps)
         .filter((s) => s.length > 15);
-      if (subParas.length > 0) {
-        details.push(...subParas);
-      } else {
-        const cleaned = stripTimestamps(chunk);
-        if (cleaned.length > 15) details.push(cleaned);
-      }
-      i++;
-    } else {
-      // Heurística: chunk corto sin puntuación final + siguiente chunk más largo = título
-      const isTitle =
-        chunk.length < 80 &&
-        !/[.!?]$/.test(chunk) &&
-        !!next &&
-        next.length > chunk.length &&
-        !/^(Detalles|Resumen|Notas)$/i.test(next);
+      details.push(...(subParas.length ? subParas : [stripTimestamps(chunk)].filter((s) => s.length > 15)));
+      continue;
+    }
 
-      if (isTitle && next) {
-        sections.push({ title: chunk, content: stripTimestamps(next) });
-        i += 2;
-      } else {
-        const cleaned = stripTimestamps(chunk);
-        if (cleaned.length > 10) sections.push({ title: null, content: cleaned });
-        i++;
+    // ── Modo "Action items" ───────────────────────────────────────────────────
+    // Iniciado cuando se detectó la etiqueta "Pasos siguientes recomendados"
+    if (inActionItems) {
+      const cleaned = stripTimestamps(chunk);
+      if (cleaned.length > 5) actionItems.push(cleaned);
+      continue;
+    }
+
+    // ── Detección de sección de próximos pasos ────────────────────────────────
+    // Si el chunk es la etiqueta de "pasos siguientes", activar modo action items.
+    // Puede aparecer como chunk solo ("Pasos siguientes recomendados") O como
+    // primera línea de un chunk con newline ("Pasos siguientes\nGracy cc confirmará…")
+    const isActionLabel = GEMINI_ACTION_RE.test(chunk);
+    if (isActionLabel) {
+      inActionItems = true;
+      // Verificar si el contenido de los pasos está en el mismo chunk (tras un newline)
+      const nlIdx = chunk.indexOf("\n");
+      if (nlIdx > 0) {
+        const rest = chunk.slice(nlIdx + 1).trim();
+        if (rest.length > 10) actionItems.push(stripTimestamps(rest));
+      }
+      // Si el siguiente chunk no es una etiqueta, lo agregaremos en la próxima iteración
+      continue;
+    }
+
+    // ── Heurística para secciones normales ────────────────────────────────────
+
+    // CASO A: El chunk contiene un salto de línea — la primera línea es el título
+    //         y el resto el contenido (formato "Título\nContenido del tema…").
+    const nlIdx = chunk.indexOf("\n");
+    if (nlIdx > 0 && nlIdx < 80) {
+      const firstLine = chunk.slice(0, nlIdx).trim();
+      const rest      = chunk.slice(nlIdx + 1).trim();
+      if (
+        firstLine.length > 0 &&
+        rest.length > firstLine.length &&
+        !/[.!?]$/.test(firstLine) &&
+        !/^(Detalles|Resumen|Notas)$/i.test(firstLine)
+      ) {
+        sections.push({ title: firstLine, content: stripTimestamps(rest) });
+        continue;
       }
     }
+
+    // CASO B: Chunk corto sin puntuación final, seguido de chunk más largo
+    //         (y el siguiente no es una etiqueta de sección).
+    const isTitle =
+      chunk.length < 80 &&
+      !/[.!?]$/.test(chunk) &&
+      !!next &&
+      next.length > chunk.length &&
+      !/^(Detalles|Resumen|Notas)$/i.test(next) &&
+      !GEMINI_ACTION_RE.test(next);
+
+    if (isTitle && next) {
+      sections.push({ title: chunk, content: stripTimestamps(next) });
+      i++; // consumir el siguiente como contenido
+      continue;
+    }
+
+    // CASO C: Chunk de contenido sin título identificable.
+    const cleaned = stripTimestamps(chunk);
+    if (cleaned.length > 10) sections.push({ title: null, content: cleaned });
   }
 
-  return { sections, details };
+  return { sections, actionItems, details };
 }
 
 // ── Componentes de renderizado ────────────────────────────────────────────────
 
-// AI summary (tiene sections[] generadas por Claude)
+// Títulos de sección que corresponden a "próximos pasos" y ya se muestran
+// en la sección de action_items — evitar que aparezcan duplicados dentro del overview.
+const ACTION_SECTION_RE = /próximos\s+pasos|next\s+steps|pasos\s+siguientes|acciones|action\s+items|tareas\s+pendientes|to[\s-]do/i;
+
+// AI summary (sections[] generadas por Claude)
 function AISummaryOverview({ overview, sections }: { overview?: string; sections?: SummarySection[] }) {
+  // Filtrar secciones cuyo título sea equivalente a "próximos pasos" para evitar
+  // duplicación con el bloque de action_items que se muestra debajo del overview.
+  const contentSections = sections?.filter((s) => !ACTION_SECTION_RE.test(s.title));
+
   return (
     <div className="space-y-5">
       {overview && (
         <p className="text-sm text-gray-300 leading-relaxed">{overview}</p>
       )}
-      {sections && sections.length > 0 && (
+      {contentSections && contentSections.length > 0 && (
         <div className="space-y-5 pt-1">
-          {sections.map((s, i) => (
+          {contentSections.map((s, i) => (
             <div key={i} className="space-y-1.5">
               <h3 className="text-[11px] font-semibold text-brand-light uppercase tracking-widest">
                 {s.title}
@@ -489,28 +554,56 @@ function AISummaryOverview({ overview, sections }: { overview?: string; sections
   );
 }
 
-// Gemini Notes overview — renderiza las secciones parseadas del texto crudo
+// Gemini Notes overview — secciones + action items + detalles parseados
 function GeminiNotesOverview({ text }: { text: string }) {
-  const { sections, details } = useMemo(() => parseGeminiNotes(text), [text]);
+  const { sections, actionItems, details } = useMemo(() => parseGeminiNotes(text), [text]);
 
   return (
-    <div className="space-y-5">
-      {/* Secciones del bloque Resumen */}
-      {sections.map((s, i) => (
-        <div key={i} className={s.title ? "space-y-1.5" : ""}>
-          {s.title && (
-            <h3 className="text-[11px] font-semibold text-brand-light uppercase tracking-widest">
-              {s.title}
-            </h3>
-          )}
-          <p className="text-sm text-gray-300 leading-relaxed">{s.content}</p>
+    <div className="space-y-6">
+      {/* Secciones temáticas del resumen */}
+      {sections.length > 0 && (
+        <div className="space-y-4">
+          {sections.map((s, i) => (
+            <div key={i} className={s.title ? "space-y-1.5" : ""}>
+              {s.title && (
+                <h3 className="text-[11px] font-semibold text-brand-light uppercase tracking-widest">
+                  {s.title}
+                </h3>
+              )}
+              {s.content && (
+                <p className="text-sm text-gray-300 leading-relaxed">{s.content}</p>
+              )}
+            </div>
+          ))}
         </div>
-      ))}
+      )}
 
-      {/* Bloque Detalles */}
+      {/* Próximos pasos extraídos de Gemini Notes */}
+      {actionItems.length > 0 && (
+        <div className="pt-1 border-t border-gray-800/40">
+          <SectionLabel icon={
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          }>Próximos pasos</SectionLabel>
+          <ul className="list-disc list-outside pl-4 space-y-1.5 marker:text-gray-500">
+            {actionItems.map((item, i) => (
+              <li key={i} className="text-sm text-gray-300 leading-relaxed pl-1">
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Detalles con timestamps */}
       {details.length > 0 && (
-        <div className="space-y-3 pt-3 border-t border-gray-800/50">
-          <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest">Detalles</p>
+        <div className="pt-1 border-t border-gray-800/50">
+          <SectionLabel icon={
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h10" />
+            </svg>
+          }>Detalles</SectionLabel>
           <div className="space-y-3">
             {details.map((para, i) => (
               <div key={i} className="pl-3 border-l-2 border-gray-800">
@@ -524,11 +617,18 @@ function GeminiNotesOverview({ text }: { text: string }) {
   );
 }
 
-// Selector automático según el origen del resumen
+// Selector automático según origen del resumen
 function FormattedOverview({ summary }: { summary: SessionSummary }) {
   const hasAISections = (summary.sections?.length ?? 0) > 0;
-  // Usar regex sin /g para .test() — evitar bug de lastIndex stateful
-  const hasGeminiBox = !!summary.overview && HAS_BOX_CHARS.test(summary.overview);
+  // Detectar Gemini Notes: texto crudo largo (> 400 chars) que contiene la cabecera "Resumen"
+  // típica del tab de notas de Google Meet.  Los resúmenes generados por IA siempre tienen
+  // sections[] (hasAISections = true) así que entran por la rama anterior.
+  const isGeminiNotes =
+    !hasAISections &&
+    !!summary.overview &&
+    summary.overview.length > 400 &&
+    summary.overview.includes("Resumen");
+  const hasGeminiBox = isGeminiNotes;
 
   if (hasAISections) {
     return <AISummaryOverview overview={summary.overview} sections={summary.sections} />;
@@ -859,7 +959,7 @@ function SessionDetail({
             {(session.teamMembers.length > 0 || externalParticipants.length > 0) && (
               <section>
                 <SectionLabel icon={
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                 }>Participantes</SectionLabel>
@@ -893,7 +993,7 @@ function SessionDetail({
             {liveSummary?.overview ? (
               <section>
                 <SectionLabel icon={
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 }>Resumen de la reunión</SectionLabel>
@@ -940,17 +1040,14 @@ function SessionDetail({
             {liveSummary?.action_items && liveSummary.action_items.length > 0 && (
               <section>
                 <SectionLabel icon={
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                   </svg>
                 }>Próximos pasos</SectionLabel>
-                <ul className="space-y-2">
+                <ul className="list-disc list-outside pl-4 space-y-1.5 marker:text-gray-500">
                   {liveSummary!.action_items!.map((item, i) => (
-                    <li key={i} className="flex items-start gap-3 px-4 py-3 rounded-xl bg-gray-900/60 border border-gray-800 hover:border-gray-700 transition-colors group">
-                      <div className="mt-0.5 w-5 h-5 rounded-full border-2 border-brand/40 group-hover:border-brand/60 flex items-center justify-center flex-shrink-0 transition-colors">
-                        <div className="w-2 h-2 rounded-full bg-brand/50 group-hover:bg-brand/70 transition-colors" />
-                      </div>
-                      <span className="text-sm text-gray-300 leading-relaxed">{item}</span>
+                    <li key={i} className="text-sm text-gray-300 leading-relaxed pl-1">
+                      {item}
                     </li>
                   ))}
                 </ul>
@@ -961,7 +1058,7 @@ function SessionDetail({
             {liveSummary?.keywords && liveSummary.keywords.length > 0 && (
               <section>
                 <SectionLabel icon={
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                   </svg>
                 }>Temas clave</SectionLabel>
@@ -1046,9 +1143,9 @@ function TabButton({ active, onClick, disabled = false, children }: {
 
 function SectionLabel({ children, icon }: { children: React.ReactNode; icon?: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-1.5 mb-3">
-      {icon && <span className="text-gray-700">{icon}</span>}
-      <p className="text-[11px] font-semibold text-gray-600 uppercase tracking-widest">
+    <div className="flex items-center gap-2 mb-4">
+      {icon && <span className="text-gray-500">{icon}</span>}
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
         {children}
       </p>
     </div>

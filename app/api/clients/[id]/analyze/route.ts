@@ -451,20 +451,22 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
       ? await getHubspotClient(hsAccount.id)
       : await getSystemHubspotClient();
 
-    let dealId = dealProject?.hubspotDealId ?? null;
+    // Recolectar todos los deal IDs: el del proyecto + todos los de la empresa
+    const allDealIds = new Set<string>();
+    if (dealProject?.hubspotDealId) allDealIds.add(dealProject.hubspotDealId);
 
-    // Si no hay deal guardado en el proyecto, buscar por empresa
-    if (!dealId && client.hubspotCompanyId) {
+    if (client.hubspotCompanyId) {
       const assocRes = await hsClient.apiRequest({
         method: "GET",
-        path: `/crm/v3/objects/companies/${client.hubspotCompanyId}/associations/deals?limit=10`,
+        path: `/crm/v3/objects/companies/${client.hubspotCompanyId}/associations/deals?limit=50`,
       });
       if (assocRes.status === 200) {
         const assocData = (await assocRes.json()) as { results?: { id: string }[] };
-        // Tomar el primer deal (más reciente)
-        dealId = assocData.results?.[0]?.id ?? null;
+        (assocData.results ?? []).forEach((r) => allDealIds.add(r.id));
       }
     }
+
+    const dealId = allDealIds.size > 0 ? [...allDealIds][0] : null; // para compatibilidad hacia abajo
 
     // ── Fetch datos de adquisición de la empresa (en paralelo con deal) ──────────
     if (client.hubspotCompanyId) {
@@ -528,60 +530,144 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
       }
     }
 
-    if (dealId) {
-      // Fetch deal + line items en paralelo
-      const [dealRes, liRes] = await Promise.all([
-        hsClient.apiRequest({
-          method: "GET",
-          path: `/crm/v3/objects/deals/${dealId}?properties=dealname,amount,closedate,description`,
-        }),
-        hsClient.apiRequest({
-          method: "GET",
-          path: `/crm/v3/objects/deals/${dealId}/associations/line_items?limit=50`,
-        }),
-      ]);
+    // ── Fetch todos los deals en paralelo ────────────────────────────────────────
+    if (allDealIds.size > 0) {
+      const dealIds = [...allDealIds];
 
-      const dealData = dealRes.status === 200
-        ? (await dealRes.json()) as { properties?: { dealname?: string; amount?: string; closedate?: string; description?: string } }
-        : null;
+      // Función helper para obtener notas de un objeto HubSpot (deal o company)
+      const fetchHubspotNotes = async (objectType: string, objectId: string): Promise<string[]> => {
+        try {
+          const notesAssocRes = await hsClient.apiRequest({
+            method: "GET",
+            path: `/crm/v3/objects/${objectType}/${objectId}/associations/notes?limit=50`,
+          });
+          if (notesAssocRes.status !== 200) return [];
+          const notesAssoc = (await notesAssocRes.json()) as { results?: { id: string }[] };
+          const noteIds = (notesAssoc.results ?? []).map((r) => r.id);
+          if (noteIds.length === 0) return [];
 
-      const liAssoc = liRes.status === 200
-        ? (await liRes.json()) as { results?: { id: string }[] }
-        : null;
-      const liIds = (liAssoc?.results ?? []).map((r) => r.id);
-
-      let lineItemsText = "";
-      if (liIds.length > 0) {
-        const liDetail = await hsClient.apiRequest({
-          method: "POST",
-          path: "/crm/v3/objects/line_items/batch/read",
-          body: {
-            inputs: liIds.map((id) => ({ id })),
-            properties: ["name", "quantity", "price", "amount", "hs_sku", "description"],
-          },
-        });
-        if (liDetail.status === 200) {
-          const liData = (await liDetail.json()) as {
-            results?: { properties: { name?: string; quantity?: string; price?: string; amount?: string; hs_sku?: string; description?: string } }[]
+          const notesBatch = await hsClient.apiRequest({
+            method: "POST",
+            path: "/crm/v3/objects/notes/batch/read",
+            body: {
+              inputs: noteIds.map((id) => ({ id })),
+              properties: ["hs_note_body", "hs_timestamp", "hs_attachment_ids"],
+            },
+          });
+          if (notesBatch.status !== 200) return [];
+          const notesData = (await notesBatch.json()) as {
+            results?: { properties: { hs_note_body?: string; hs_timestamp?: string } }[]
           };
-          lineItemsText = (liData.results ?? [])
-            .map((li) => {
-              const p = li.properties;
-              const parts = [`- **${p.name ?? "Sin nombre"}**`];
-              if (p.hs_sku) parts.push(`SKU: ${p.hs_sku}`);
-              if (p.quantity && p.quantity !== "1") parts.push(`Cantidad: ${p.quantity}`);
-              if (p.amount ?? p.price) parts.push(`Precio: $${parseFloat(p.amount ?? p.price ?? "0").toLocaleString()}`);
-              if (p.description?.trim()) parts.push(`Descripción: ${p.description.trim()}`);
-              return parts.join(" | ");
+          return (notesData.results ?? [])
+            .filter((n) => n.properties.hs_note_body?.trim())
+            .sort((a, b) => {
+              const ta = new Date(a.properties.hs_timestamp ?? 0).getTime();
+              const tb = new Date(b.properties.hs_timestamp ?? 0).getTime();
+              return tb - ta; // más recientes primero
             })
-            .join("\n");
+            .map((n) => {
+              const date = n.properties.hs_timestamp
+                ? new Date(n.properties.hs_timestamp).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })
+                : null;
+              return date ? `[${date}] ${n.properties.hs_note_body!.trim()}` : n.properties.hs_note_body!.trim();
+            });
+        } catch {
+          return [];
         }
+      };
+
+      // Fetch todos los deals + sus notas en paralelo
+      const dealsData = await Promise.all(
+        dealIds.map(async (dId) => {
+          const [dealRes, liRes, dealNotes] = await Promise.all([
+            hsClient.apiRequest({
+              method: "GET",
+              path: `/crm/v3/objects/deals/${dId}?properties=dealname,amount,closedate,dealstage,description,hs_is_closed_won,pipeline`,
+            }),
+            hsClient.apiRequest({
+              method: "GET",
+              path: `/crm/v3/objects/deals/${dId}/associations/line_items?limit=50`,
+            }),
+            fetchHubspotNotes("deals", dId),
+          ]);
+
+          const deal = dealRes.status === 200
+            ? (await dealRes.json()) as { properties?: { dealname?: string; amount?: string; closedate?: string; dealstage?: string; description?: string; hs_is_closed_won?: string } }
+            : null;
+
+          const liAssoc = liRes.status === 200
+            ? (await liRes.json()) as { results?: { id: string }[] }
+            : null;
+          const liIds = (liAssoc?.results ?? []).map((r) => r.id);
+
+          let lineItemsText = "";
+          if (liIds.length > 0) {
+            const liDetail = await hsClient.apiRequest({
+              method: "POST",
+              path: "/crm/v3/objects/line_items/batch/read",
+              body: {
+                inputs: liIds.map((id) => ({ id })),
+                properties: ["name", "quantity", "price", "amount", "hs_sku", "description"],
+              },
+            });
+            if (liDetail.status === 200) {
+              const liData = (await liDetail.json()) as {
+                results?: { properties: { name?: string; quantity?: string; price?: string; amount?: string; hs_sku?: string; description?: string } }[]
+              };
+              lineItemsText = (liData.results ?? [])
+                .map((li) => {
+                  const p = li.properties;
+                  const parts = [`- **${p.name ?? "Sin nombre"}**`];
+                  if (p.hs_sku) parts.push(`SKU: ${p.hs_sku}`);
+                  if (p.quantity && p.quantity !== "1") parts.push(`Cantidad: ${p.quantity}`);
+                  if (p.amount ?? p.price) parts.push(`Precio: $${parseFloat(p.amount ?? p.price ?? "0").toLocaleString()}`);
+                  if (p.description?.trim()) parts.push(`Descripción: ${p.description.trim()}`);
+                  return parts.join(" | ");
+                })
+                .join("\n");
+            }
+          }
+
+          return { deal, lineItemsText, dealNotes, id: dId };
+        })
+      );
+
+      // Fetch notas de la empresa (en paralelo con todo lo anterior)
+      const companyNotes = client.hubspotCompanyId
+        ? await fetchHubspotNotes("companies", client.hubspotCompanyId)
+        : [];
+
+      // Construir el bloque de deals
+      const dealBlocks = dealsData
+        .filter((d) => d.deal?.properties?.dealname)
+        .map((d, i) => {
+          const p = d.deal!.properties!;
+          const name = p.dealname ?? `Deal ${d.id}`;
+          const amount = p.amount ? `$${parseFloat(p.amount).toLocaleString()}` : null;
+          const closeDate = p.closedate
+            ? new Date(p.closedate).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })
+            : null;
+          const stage = p.dealstage ?? null;
+          const isWon = p.hs_is_closed_won === "true";
+
+          const lines = [`**Deal ${i + 1}: ${name}**${amount ? ` (${amount})` : ""}${stage ? ` — Etapa: ${stage}` : ""}${closeDate ? ` — Cierre: ${closeDate}` : ""}${isWon ? " ✓ Ganado" : ""}`];
+          if (p.description?.trim()) lines.push(`Descripción: ${p.description.trim()}`);
+          if (d.lineItemsText) lines.push(`Productos:\n${d.lineItemsText}`);
+          if (d.dealNotes.length > 0) {
+            lines.push(`Notas del deal (${d.dealNotes.length}):\n${d.dealNotes.slice(0, 10).map((n) => `  • ${n}`).join("\n")}`);
+          }
+          return lines.join("\n");
+        });
+
+      if (dealBlocks.length > 0) {
+        dealContent = `## Deals en HubSpot (${dealBlocks.length} total)\n\n` + dealBlocks.join("\n\n---\n\n");
       }
 
-      const dealName = dealData?.properties?.dealname ?? `Deal ${dealId}`;
-      const dealAmount = dealData?.properties?.amount ? `$${parseFloat(dealData.properties.amount).toLocaleString()}` : null;
-      dealContent = `Nombre del deal (servicio contratado): ${dealName}${dealAmount ? ` (${dealAmount})` : ""}\n` +
-        (lineItemsText ? `Productos incluidos:\n${lineItemsText}` : "Sin productos adicionales registrados en HubSpot (el nombre del deal indica el servicio vendido).");
+      // Agregar notas de la empresa al dealContent
+      if (companyNotes.length > 0) {
+        dealContent += `\n\n## Notas de la empresa en HubSpot (${companyNotes.length})\n` +
+          companyNotes.slice(0, 15).map((n) => `• ${n}`).join("\n");
+      }
     }
   } catch (e) {
     console.error("[analyze] HubSpot deal error:", e);

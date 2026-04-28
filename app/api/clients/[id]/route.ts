@@ -54,6 +54,11 @@ export async function PATCH(
       ...(data.company !== undefined && { company: data.company?.trim() || null }),
       ...(data.industry !== undefined && { industry: data.industry?.trim() || null }),
       ...(data.notes !== undefined && { notes: data.notes?.trim() || null }),
+      ...(data.emailDomains !== undefined && {
+        emailDomains: (data.emailDomains as string[])
+          .map((d: string) => d.trim().toLowerCase().replace(/^@/, ""))
+          .filter(Boolean),
+      }),
     },
   });
 

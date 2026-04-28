@@ -15,7 +15,18 @@ export default async function AgentsPage() {
 
   const agents = await prisma.agent.findMany({
     orderBy: { createdAt: "desc" },
-    include: { _count: { select: { runs: true } } },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      status: true,
+      scope: true,
+      agentType: true,
+      outputType: true,
+      associatedStages: true,
+      createdAt: true,
+      _count: { select: { runs: true } },
+    },
   });
 
   return (

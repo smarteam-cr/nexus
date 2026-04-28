@@ -1,6 +1,7 @@
 ﻿import { requireConsultantSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
+import ThemeToggle from "@/components/layout/ThemeToggle";
 
 export default async function SettingsPage() {
   try {
@@ -45,6 +46,24 @@ export default async function SettingsPage() {
                 Cerrar sesión
               </button>
             </form>
+          </div>
+        </div>
+
+        {/* Apariencia */}
+        <div className="p-5 rounded-xl bg-gray-900 border border-gray-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center">
+                <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-white font-medium">Apariencia</p>
+                <p className="text-gray-500 text-sm">Alternar entre modo oscuro y claro</p>
+              </div>
+            </div>
+            <ThemeToggle />
           </div>
         </div>
 

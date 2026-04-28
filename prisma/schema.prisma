@@ -50,6 +50,7 @@ enum AgentOutputType {
   FLOWCHART
   CARDS_AND_FLOWCHARTS
   CARDS_AND_CHARTS
+  AUDIT_REPORT
 }
 
 enum AgentScope {
@@ -108,12 +109,13 @@ enum BlockStatus {
 // ─── Client (nueva entidad raíz) ──────────────────────────────────────────────
 
 model Client {
-  id               String  @id @default(cuid())
+  id               String   @id @default(cuid())
   name             String
   company          String?
   industry         String?
-  notes            String? @db.Text
-  hubspotCompanyId String? // ID de la empresa vinculada en HubSpot CRM
+  notes            String?  @db.Text
+  hubspotCompanyId String?  // ID de la empresa vinculada en HubSpot CRM
+  emailDomains     String[] // dominios de email para matching automático de sesiones (ej: "ice.go.cr")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -573,6 +575,7 @@ model FirefliesSession {
   googleDocId    String?               // ID del Google Doc de la reunión (Meet)
   googleEventId  String?               // ID del evento de Google Calendar (Meet)
   organizerEmail String?               // Email del organizador (para impersonación en enriquecimiento)
+  manualClientId String?               // override manual del matching automático de cliente
 }
 
 // ─── Canvas Suggestions (aprobación de cambios al Client Canvas) ─────────────

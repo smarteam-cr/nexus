@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
 import ClientCanvasPanel from "@/components/clients/ClientCanvasPanel";
@@ -17,6 +17,7 @@ interface ProjectSummary {
   tags?: string[];
   hubspotServiceId?: string | null;
 }
+
 
 // ── Main workspace component ─────────────────────────────────────────────────
 

@@ -194,10 +194,19 @@ ${formatBreakdown(enrichment.companies.byIndustry, companiesTotal)}`
   }`
       : "";
 
-    // 9. Construye el prompt
-    const prompt = `Eres un consultor senior de RevOps especializado en implementaciones HubSpot CRM con más de 10 años de experiencia en empresas B2B. Tu misión es analizar con rigor los datos de esta auditoría de portal HubSpot y generar insights profundos, específicos y accionables que un equipo de RevOps pueda implementar hoy.
+    // 9. Obtiene el system prompt del agente de auditoría
+    const auditAgent = await prisma.agent.findUnique({
+      where: { id: "agent-audit-portal" },
+      select: { systemPrompt: true },
+    });
 
-═══ REGLAS DE INTERPRETACIÓN (BASE DE CONOCIMIENTOS DE LA EMPRESA) ═══
+    const systemPrompt =
+      auditAgent?.systemPrompt ??
+      // Fallback en caso de que el agente no exista en la BD
+      `Eres un consultor senior de RevOps especializado en implementaciones HubSpot CRM con más de 10 años de experiencia en empresas B2B. Tu misión es analizar con rigor los datos de esta auditoría de portal HubSpot y generar insights profundos, específicos y accionables que un equipo de RevOps pueda implementar hoy.`;
+
+    // 10. Construye el mensaje del usuario (knowledge + datos + plantilla JSON)
+    const userMessage = `═══ REGLAS DE INTERPRETACIÓN (BASE DE CONOCIMIENTOS DE LA EMPRESA) ═══
 Estas reglas son criterios propietarios del equipo. APLÍCALOS cuando los datos los activen:
 
 ${knowledgeSection}
@@ -222,57 +231,6 @@ WORKFLOWS ACTIVOS RELACIONADOS CON CICLO DE VIDA (${stats.lifecycleWorkflows.len
 ${stats.lifecycleWorkflows.length > 0 ? stats.lifecycleWorkflows.map((w) => `  - ${w}`).join("\n") : "  - Ninguno detectado"}
 ${enrichmentSection}
 ${ownerSection}
-
-═══ METODOLOGÍA OBLIGATORIA: VALIDACIÓN CRUZADA ═══
-Los mejores insights se obtienen cruzando datos de distintas secciones. Para cada widget, aplica:
-
-PARA "stats" (volumen general):
-  - Compara ratio negocios/contactos con el benchmark B2B (~5-10%). ¿El portal tiene demasiados contactos para pocos negocios?
-  - Cruza con % contactos activos en 30 días: si es bajo, hay un problema de base de datos stale
-  - Compara negocios con empresas que tienen deals: ¿son consistentes?
-
-PARA "contacts_lifecycle":
-  - Si hay alta concentración en MQL: cruza con lead status "IN_PROGRESS" — si es bajo, los MQLs no se están trabajando activamente → confirma hipótesis de calificación laxa
-  - Si hay muchos contactos sin etapa: cruza con % sin conversiones → si son muchos también, son contactos de baja calidad (posiblemente importados)
-  - Compara la fuente de origen dominante con la etapa dominante: ej. mucho DIRECT_TRAFFIC + muchos leads sin etapa = datos de origen desconocido
-  - Cruza número de workflows con distribución de etapas: sin workflows + étapas no cambian = proceso manual
-
-PARA "companies_lifecycle":
-  - Compara % empresas en etapa Cliente vs % empresas con fecha de conversión (hs_date_entered_customer) — si divergen mucho, hay reclasificaciones manuales sin fecha real
-  - Cruza % empresas sin negocio vs % empresas en etapas "Oportunidad" o "Cliente": empresas en etapas avanzadas sin deals = datos inconsistentes
-  - Compara distribución de industrias con la segmentación esperada del negocio
-
-PARA "lifecycle_workflows":
-  - Si 0 workflows: cruza con % lead status asignado — si también es bajo, el proceso de conversión es 100% manual y frágil
-  - Si hay workflows: ¿son suficientes para las etapas existentes? Cada etapa principal debería tener al menos 1 workflow de entrada/salida
-  - Cruza con % contactos activos: si hay workflows pero baja actividad, pueden estar mal configurados o filtrados
-
-PARA "contacts_funnel" (embudo de conversión de contactos):
-  - Analiza las tasas de conversión entre etapas — una caída brusca en una etapa específica indica un cuello de botella
-  - Compara la tasa Lead→Cliente con el benchmark B2B (típicamente 1-3%)
-  - Si la conversión Lead→MQL es alta pero MQL→SQL es baja, el proceso de calificación es demasiado laxo
-  - Cruza con workflows activos: sin automatización, las tasas de avance de etapa suelen ser bajas
-
-PARA "companies_funnel" (embudo de conversión de empresas):
-  - Analiza el ratio empresas-cliente vs total — indica la madurez del pipeline
-  - Si hay pocas empresas en etapas intermedias (MQL, SQL) pero muchas en cliente, el proceso de calificación no se aplica a empresas
-  - Compara la conversión de empresas con la de contactos: si una es mucho más alta, hay inconsistencia en la calificación
-
-PARA "owner_assignment" (asignación de propietarios — solo si hay datos):
-  - Si el % sin propietario es alto (>20%): es un problema de higiene crítico — contactos sin dueño no pueden trabajarse activamente
-  - La cobertura de asignación en 12 meses (asignados/creados) revela si los nuevos contactos se están distribuyendo de forma sistemática
-  - Si hay pocos propietarios activos pero muchos contactos, puede haber sobrecarga de trabajo en el equipo de ventas
-  - Un top 1 propietario con >50% de los contactos sugiere una distribución muy desequilibrada (riesgo de retención)
-
-═══ CRITERIOS DE CALIDAD PARA CADA INSIGHT ═══
-- title: MÁXIMO 6 palabras. Titular del hallazgo principal, específico y concreto (ej: "Alta concentración en MQL sin trabajar", "Ratio negocios-contactos por encima del benchmark"). NO uses el nombre del widget como título.
-- comment: MÁXIMO 80 palabras. Directo, denso en datos. Sin introducciones ni cierres.
-- recommendations: exactamente 3 items. Cada uno MÁXIMO 20 palabras. Acción concreta de HubSpot.
-- Menciona al menos 2 números o porcentajes del portal (nunca respuestas genéricas)
-- Si aplica una regla de la base de conocimientos, intégrala de forma natural en el texto — NUNCA copies ni menciones su etiqueta de categoría (como "lifecycle", "workflows", etc.) ni su número de lista. Solo usa el contenido de la regla.
-- Cuando hagas validación cruzada, sé conciso: una frase explicando la correlación
-- severity estricto: "critical" solo si hay un problema sistémico real, no por defecto
-- Escribe en español profesional y fluido
 
 Responde ÚNICAMENTE con el JSON (sin texto previo, sin markdown, sin bloques de código):
 [
@@ -320,17 +278,18 @@ Responde ÚNICAMENTE con el JSON (sin texto previo, sin markdown, sin bloques de
   }${ownerWidgetEntry}
 ]`;
 
-    // 10. Llama a Claude
+    // 11. Llama a Claude con system prompt separado
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 8000,
-      messages: [{ role: "user", content: prompt }],
+      system: systemPrompt,
+      messages: [{ role: "user", content: userMessage }],
     });
 
     const rawText =
       message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
 
-    // 11. Parsea y valida la respuesta JSON
+    // 12. Parsea y valida la respuesta JSON
     let parsedInsights: AuditInsight[];
     try {
       // Extrae el bloque [...] de la respuesta (tolerante a texto previo o markdown)
@@ -377,7 +336,7 @@ Responde ÚNICAMENTE con el JSON (sin texto previo, sin markdown, sin bloques de
       );
     }
 
-    // 12. Guarda los insights en el audit.data
+    // 13. Guarda los insights en el audit.data
     const insights: AuditInsights = {
       generatedAt: new Date().toISOString(),
       insights: parsedInsights,
