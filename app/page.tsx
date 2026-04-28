@@ -40,7 +40,7 @@ export default async function HomePage() {
         {/* Botón HubSpot */}
         <a
           href="/api/auth/hubspot?system=1"
-          className="flex items-center justify-center gap-3 w-full px-6 py-3.5 rounded-xl bg-brand hover:bg-brand-light text-white font-semibold text-sm transition-colors shadow-lg shadow-brand/20"
+          className="flex items-center justify-center gap-3 w-full px-6 py-3.5 rounded-xl bg-brand hover:bg-brand-light text-white font-semibold text-sm transition-colors shadow-lg shadow-brand/20 text-center"
         >
           Continuar con HubSpot
         </a>

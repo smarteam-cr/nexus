@@ -1,6 +1,7 @@
 import { requireConsultantSession } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
+import { ensureStrategyProject } from "@/lib/canvas/strategy-project";
 import WorkspaceClient from "./WorkspaceClient";
 
 export default async function ClientPage({
@@ -44,11 +45,22 @@ export default async function ClientPage({
 
   const hasHubspot = !!hubspotAccount || !!client.hubspotCompanyId;
 
-  // Solo mostrar proyectos activos con datos reales de HubSpot.
-  // Proyectos "inactive" son fantasmas sin propiedades (nombre = "Proyecto {id}") o cerrados en HS.
+  // Solo mostrar proyectos activos con datos reales. Excluir el proyecto de estrategia
+  // (__strategy__) que se gestiona aparte y nunca va como tab regular.
   const visibleProjects = hasHubspot
-    ? projects.filter((p) => p.hubspotServiceId && p.status === "active")
-    : projects.filter((p) => p.status === "active");
+    ? projects.filter((p) => p.hubspotServiceId && p.status === "active" && p.serviceType !== "__strategy__")
+    : projects.filter((p) => p.status === "active" && p.serviceType !== "__strategy__");
 
-  return <WorkspaceClient clientId={id} projects={visibleProjects} hasHubspot={hasHubspot} />;
+  // Garantizar que el proyecto de estrategia existe (se crea al primer acceso)
+  const strategyRef = await ensureStrategyProject(id);
+
+  return (
+    <WorkspaceClient
+      clientId={id}
+      projects={visibleProjects}
+      hasHubspot={hasHubspot}
+      strategyProjectId={strategyRef.projectId}
+      strategyCanvasId={strategyRef.canvasId}
+    />
+  );
 }

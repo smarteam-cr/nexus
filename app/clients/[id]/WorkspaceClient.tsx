@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
-import ClientCanvasPanel from "@/components/clients/ClientCanvasPanel";
+import StrategyCanvasPanel from "@/components/clients/StrategyCanvasPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 
 const STRATEGY_TAB_ID = "__strategy__";
@@ -18,17 +18,20 @@ interface ProjectSummary {
   hubspotServiceId?: string | null;
 }
 
-
 // ── Main workspace component ─────────────────────────────────────────────────
 
 export default function WorkspaceClient({
   clientId,
   projects,
   hasHubspot,
+  strategyProjectId,
+  strategyCanvasId,
 }: {
   clientId: string;
   projects: ProjectSummary[];
   hasHubspot: boolean;
+  strategyProjectId: string;
+  strategyCanvasId: string;
 }) {
   const router = useRouter();
   const syncedRef = useRef(false);
@@ -51,7 +54,12 @@ export default function WorkspaceClient({
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 57px)" }}>
       <div className="flex-1 overflow-y-auto">
-        <ProjectSection clientId={clientId} projects={projects} />
+        <ProjectSection
+          clientId={clientId}
+          projects={projects}
+          strategyProjectId={strategyProjectId}
+          strategyCanvasId={strategyCanvasId}
+        />
       </div>
     </div>
   );
@@ -62,9 +70,13 @@ export default function WorkspaceClient({
 function ProjectSection({
   clientId,
   projects,
+  strategyProjectId,
+  strategyCanvasId,
 }: {
   clientId: string;
   projects: ProjectSummary[];
+  strategyProjectId: string;
+  strategyCanvasId: string;
 }) {
   const { activeProjectId, setActiveProjectId } = useWorkspace();
 
@@ -93,7 +105,7 @@ function ProjectSection({
           );
         })}
 
-        {/* Estrategia tab — always last */}
+        {/* Estrategia tab — siempre al final */}
         <button
           onClick={() => setActiveProjectId(STRATEGY_TAB_ID)}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
@@ -111,9 +123,11 @@ function ProjectSection({
 
       {/* Content */}
       {isStrategy ? (
-        <div className="px-6 py-4">
-          <ClientCanvasPanel clientId={clientId} embedded />
-        </div>
+        <StrategyCanvasPanel
+          key={STRATEGY_TAB_ID}
+          projectId={strategyProjectId}
+          canvasId={strategyCanvasId}
+        />
       ) : activeProjectId && activeProject ? (
         <ProjectCanvasPanel
           key={activeProjectId}
