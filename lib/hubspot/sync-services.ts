@@ -353,9 +353,11 @@ export async function syncServicesForClient(clientId: string): Promise<SyncResul
           where: { id: ghost.id },
           data: { status: "inactive" },
         });
+        result.updated++; // dispara router.refresh() en WorkspaceClient
         result.debug!.push(`Ocultando proyecto fantasma: ${ghost.name} (${project.id})`);
+      } else {
+        result.skipped++;
       }
-      result.skipped++;
       continue;
     }
 
@@ -365,15 +367,16 @@ export async function syncServicesForClient(clientId: string): Promise<SyncResul
       rawStatus.includes("completado") || rawStatus.includes("cancelado") ||
       rawStatus.includes("cerrado")
     )) {
-      // Si existía en DB activo → ocultar
       const finished = await prisma.project.findUnique({ where: { hubspotServiceId: project.id } });
       if (finished && finished.status === "active") {
         await prisma.project.update({
           where: { id: finished.id },
           data: { status: "inactive" },
         });
+        result.updated++; // dispara router.refresh() en WorkspaceClient
+      } else {
+        result.skipped++;
       }
-      result.skipped++;
       continue;
     }
 

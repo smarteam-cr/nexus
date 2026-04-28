@@ -1,6 +1,7 @@
 import { requireConsultantSession } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
+import { syncServicesForClient } from "@/lib/hubspot/sync-services";
 import WorkspaceClient from "./WorkspaceClient";
 
 export default async function ClientPage({
@@ -46,11 +47,22 @@ export default async function ClientPage({
   // Caso 2: está en el portal del sistema → tiene hubspotCompanyId
   const hasHubspot = !!hubspotAccount || !!client.hubspotCompanyId;
 
-  // Mostrar solo proyectos activos. Si tiene HubSpot, además filtrar los sincronizados.
-  // Proyectos "inactive" son fantasmas sin propiedades o proyectos cerrados en HS.
-  const visibleProjects = hasHubspot
-    ? projects.filter((p) => p.hubspotServiceId && p.status === "active")
+  // Sync server-side antes de renderizar: limpia fantasmas y actualiza estados
+  // antes de que el cliente vea las tabs — evita el flash de tabs inválidas.
+  if (hasHubspot) {
+    await syncServicesForClient(id).catch(() => {});
+  }
+
+  // Re-leer proyectos post-sync para tener el estado actualizado
+  const syncedProjects = hasHubspot
+    ? await prisma.project.findMany({
+        where: { clientId: id, status: "active", hubspotServiceId: { not: null } },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, name: true, status: true, projectType: true, serviceType: true, tags: true, hubspotServiceId: true },
+      })
     : projects.filter((p) => p.status === "active");
+
+  const visibleProjects = syncedProjects;
 
   return <WorkspaceClient clientId={id} projects={visibleProjects} hasHubspot={hasHubspot} />;
 }
