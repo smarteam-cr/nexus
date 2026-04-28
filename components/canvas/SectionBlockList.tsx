@@ -304,14 +304,14 @@ export default function SectionBlockList({
 
         return (
           <div key={section.id}
-            className={`rounded-2xl border transition-all ${isEmpty ? "border-dashed border-gray-200 bg-white" : "border-gray-100 bg-white shadow-sm"}`}>
+            className={`rounded-2xl border transition-all ${isEmpty ? "border-dashed border-gray-700 bg-gray-900" : "border-gray-800 bg-gray-900 shadow-sm"}`}>
 
             <button onClick={() => toggleSection(section.key)}
-              className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-gray-50/50 transition-colors rounded-t-2xl">
+              className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-gray-800/50 transition-colors rounded-t-2xl">
               <span className="text-base">📌</span>
-              <h3 className="text-base font-bold text-gray-900 flex-1">{section.label}</h3>
+              <h3 className="text-base font-bold text-white flex-1">{section.label}</h3>
               {!isEmpty && (
-                <span className="text-[10px] font-medium text-gray-400 bg-gray-100 rounded-full w-5 h-5 flex items-center justify-center">
+                <span className="text-[10px] font-medium text-gray-400 bg-gray-800 rounded-full w-5 h-5 flex items-center justify-center">
                   {section.blocks.length}
                 </span>
               )}

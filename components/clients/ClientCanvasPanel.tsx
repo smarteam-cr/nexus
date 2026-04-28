@@ -19,9 +19,9 @@ interface Suggestion {
 type Confidence = "confirmed" | "inferred" | "empty";
 
 const CONFIDENCE_STYLES: Record<Confidence, { dot: string; border: string; bg: string; label: string }> = {
-  confirmed: { dot: "bg-green-500", border: "border-gray-100", bg: "bg-white", label: "Confirmado" },
-  inferred:  { dot: "bg-amber-400", border: "border-amber-200", bg: "bg-amber-50/50", label: "Por confirmar" },
-  empty:     { dot: "bg-gray-300", border: "border-dashed border-gray-200", bg: "bg-white", label: "Sin datos" },
+  confirmed: { dot: "bg-green-500", border: "border-gray-800", bg: "bg-gray-900", label: "Confirmado" },
+  inferred:  { dot: "bg-amber-400", border: "border-amber-700/50", bg: "bg-gray-900", label: "Por confirmar" },
+  empty:     { dot: "bg-gray-600", border: "border-dashed border-gray-700", bg: "bg-gray-900", label: "Sin datos" },
 };
 
 export default function ClientCanvasPanel({ clientId, embedded }: { clientId: string; embedded?: boolean }) {
@@ -145,7 +145,7 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
           <button
             onClick={refreshCanvas}
             disabled={refreshing}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-100 border border-gray-200 text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50 text-xs font-medium"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700 transition-colors disabled:opacity-50 text-xs font-medium"
           >
             <svg className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -243,7 +243,7 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
             >
               <div className="flex items-center gap-2 mb-3">
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
-                <h3 className="text-sm font-semibold text-gray-800">{CLIENT_CANVAS_LABELS[key] ?? key}</h3>
+                <h3 className="text-sm font-semibold text-white">{CLIENT_CANVAS_LABELS[key] ?? key}</h3>
                 {conf === "confirmed" && (
                   <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200 font-medium">
                     Confirmada
