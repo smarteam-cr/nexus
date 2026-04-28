@@ -336,16 +336,43 @@ export async function syncServicesForClient(clientId: string): Promise<SyncResul
   for (const project of projects) {
     const props = project.properties;
 
-    const projectName =
-      props.nombre_del_proyecto ||
-      props.hs_name ||
-      `Proyecto ${project.id}`;
+    const realName = props.nombre_del_proyecto || props.hs_name || null;
+    const projectName = realName ?? `Proyecto ${project.id}`;
 
-    // Saltear proyectos terminados/cancelados
     const rawStatus = (props.hs_status || props.estatus_del_proyecto || "").toLowerCase().trim();
-    if (rawStatus && (rawStatus === "completed" || rawStatus === "cancelled" ||
-        rawStatus.includes("completado") || rawStatus.includes("cancelado") ||
-        rawStatus.includes("cerrado"))) {
+
+    // ── Proyectos sin propiedades legibles (fallback de último recurso) ────────
+    // Si no hay nombre real ni estado, HubSpot no pudo devolver los datos.
+    // Si ya existe en DB con nombre fantasma → ocultarlo (inactive).
+    // Si no existe → no crear tab vacío.
+    const hasRealProps = !!(realName || rawStatus);
+    if (!hasRealProps) {
+      const ghost = await prisma.project.findUnique({ where: { hubspotServiceId: project.id } });
+      if (ghost && ghost.status === "active") {
+        await prisma.project.update({
+          where: { id: ghost.id },
+          data: { status: "inactive" },
+        });
+        result.debug!.push(`Ocultando proyecto fantasma: ${ghost.name} (${project.id})`);
+      }
+      result.skipped++;
+      continue;
+    }
+
+    // ── Saltear proyectos terminados/cancelados ────────────────────────────────
+    if (rawStatus && (
+      rawStatus === "completed" || rawStatus === "cancelled" ||
+      rawStatus.includes("completado") || rawStatus.includes("cancelado") ||
+      rawStatus.includes("cerrado")
+    )) {
+      // Si existía en DB activo → ocultar
+      const finished = await prisma.project.findUnique({ where: { hubspotServiceId: project.id } });
+      if (finished && finished.status === "active") {
+        await prisma.project.update({
+          where: { id: finished.id },
+          data: { status: "inactive" },
+        });
+      }
       result.skipped++;
       continue;
     }
@@ -369,6 +396,7 @@ export async function syncServicesForClient(clientId: string): Promise<SyncResul
           serviceType: mapping.serviceType,
           projectType: mapping.projectType,
           tags: mapping.hubTag ? [mapping.hubTag] : [],
+          status: "active",
         },
       });
       result.updated++;

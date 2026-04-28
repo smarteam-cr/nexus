@@ -46,11 +46,11 @@ export default async function ClientPage({
   // Caso 2: está en el portal del sistema → tiene hubspotCompanyId
   const hasHubspot = !!hubspotAccount || !!client.hubspotCompanyId;
 
-  // Si el cliente tiene HubSpot, mostrar solo proyectos sincronizados desde allí.
-  // Si no tiene HubSpot, mostrar todos (proyectos manuales).
+  // Mostrar solo proyectos activos. Si tiene HubSpot, además filtrar los sincronizados.
+  // Proyectos "inactive" son fantasmas sin propiedades o proyectos cerrados en HS.
   const visibleProjects = hasHubspot
-    ? projects.filter((p) => p.hubspotServiceId)
-    : projects;
+    ? projects.filter((p) => p.hubspotServiceId && p.status === "active")
+    : projects.filter((p) => p.status === "active");
 
   return <WorkspaceClient clientId={id} projects={visibleProjects} hasHubspot={hasHubspot} />;
 }
