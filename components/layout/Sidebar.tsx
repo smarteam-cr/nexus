@@ -147,6 +147,17 @@ export default function Sidebar({ clients, onToggle, isOpen = true }: SidebarPro
             }
           />
           <NavItem
+            href="/sales"
+            active={pathname.startsWith("/sales")}
+            isOpen={isOpen}
+            label="Análisis de ventas"
+            icon={
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+            }
+          />
+          <NavItem
             href="/knowledge"
             active={pathname.startsWith("/knowledge")}
             isOpen={isOpen}
