@@ -10,6 +10,7 @@ import { updateCanvasAsync } from "@/lib/canvas/update-agent";
 import { getOutputFormatInstructions, getBlockOutputFormatInstructions } from "@/lib/canvas/agent-output-schema";
 import { DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN, type BlockType } from "@/lib/canvas/block-types";
 import { postProcessCards } from "@/lib/canvas/post-process";
+import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 
 const FIREFLIES_GRAPHQL = "https://api.fireflies.ai/graphql";
 
@@ -42,8 +43,18 @@ type RawSession = { id: string; title: string; date: number; participants: strin
 type RawTranscript = RawSession;
 
 /**
- * Busca sesiones de Fireflies en la caché local (FirefliesSession) antes de
- * tocar la API. Devuelve un array vacío si no hay coincidencias en DB.
+ * Busca sesiones de Fireflies/Google Meet en la caché local (FirefliesSession).
+ *
+ * Lógica de matching: una sesión cuenta como relevante si CUALQUIERA de estas
+ * condiciones es verdadera (OR):
+ *   1. El título contiene alguno de los terms del nombre del cliente
+ *      (cubre sesiones internas tipo "Hand Off | WHEREX" o "Kickoff Wherex").
+ *   2. Algún participante u organizador es del dominio del cliente
+ *      (cubre sesiones externas aunque el título no lo mencione).
+ *
+ * Antes solo aceptaba sesiones con title-match Y domain-match, lo cual
+ * descartaba sesiones internas del equipo de Smarteam que mencionaban al
+ * cliente. Eso ahora se incluye.
  */
 async function searchFirefliesFromDB(
   sessionKeywords: string[],
@@ -52,25 +63,44 @@ async function searchFirefliesFromDB(
 ): Promise<RawSession[]> {
   try {
     const terms = [...new Set([...sessionKeywords, ...titleTerms])].filter(Boolean);
-    if (terms.length === 0) return [];
+    if (terms.length === 0 && !domainFilter) return [];
+
+    // Query: traer sesiones que matcheen por título O por dominio.
+    // Postgres maneja bien este OR; limit razonable para no traer toda la DB.
+    const orConditions: Array<Record<string, unknown>> = [];
+
+    // Title-match (incluye sesiones internas con el nombre del cliente)
+    for (const term of terms) {
+      orConditions.push({ title: { contains: term, mode: "insensitive" as const } });
+    }
+
+    // Domain-match (sesiones externas aunque el título no mencione al cliente)
+    if (domainFilter) {
+      orConditions.push({ participants: { has: `@${domainFilter}` } });
+      // `has` requiere match exacto del item del array. Como participants son
+      // emails completos, usamos `hasSome` con un patrón no es soportado;
+      // mejor un raw query, pero como fallback traemos amplio y filtramos en JS.
+    }
 
     const sessions = await prisma.firefliesSession.findMany({
-      where: {
-        OR: terms.map((term) => ({
-          title: { contains: term, mode: "insensitive" as const },
-        })),
-      },
+      where: orConditions.length > 0 ? { OR: orConditions } : undefined,
       select: { id: true, title: true, date: true, participants: true, organizerEmail: true },
       orderBy: { date: "desc" },
-      take: 50,
+      take: 100,
     });
 
-    const filtered = domainFilter
-      ? sessions.filter((s) =>
-          s.participants.some((p) => p.toLowerCase().includes(`@${domainFilter}`)) ||
-          s.organizerEmail?.toLowerCase().includes(`@${domainFilter}`)
-        )
-      : sessions;
+    // Filtro en JS para garantizar el matching (title contains O domain en participants/organizer)
+    const filtered = sessions.filter((s) => {
+      const titleLower = (s.title ?? "").toLowerCase();
+      const byTitle = terms.some((t) => titleLower.includes(t.toLowerCase()));
+      if (byTitle) return true;
+      if (!domainFilter) return false;
+      const domainPattern = `@${domainFilter}`;
+      const byDomain =
+        s.participants.some((p) => p.toLowerCase().includes(domainPattern)) ||
+        (s.organizerEmail?.toLowerCase().includes(domainPattern) ?? false);
+      return byDomain;
+    });
 
     return filtered.map((s) => ({
       id: s.id,
@@ -675,12 +705,40 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   }
 
   // ── 4. Buscar y traer transcripciones (Fireflies + Google Meet) ──────────────
-  // Cargar emails del equipo de ventas para etiquetar transcripciones
+  // Cargar emails del equipo de ventas para etiquetar transcripciones.
+  // OJO: en seed el role es "Sales" (no "Ventas") — antes esta query devolvía
+  // vacío y TODAS las sesiones caían en "CS" por defecto.
   const salesTeam = await prisma.teamMember.findMany({
-    where: { role: "Ventas" },
+    where: { role: { in: ["Sales", "Ventas"] } },
     select: { email: true, name: true },
   });
   const salesEmails = new Set(salesTeam.map((m) => m.email.toLowerCase()));
+
+  // Helper: si una sesión NO tiene transcript, devolver al menos su metadata
+  // (título, fecha, participantes) para que el agente sepa que la reunión
+  // existió aunque no haya contenido narrativo todavía.
+  const buildFallbackMetadata = async (s: RawTranscript): Promise<string> => {
+    const dateStr = new Date(s.date).toLocaleDateString("es-ES", {
+      day: "2-digit", month: "long", year: "numeric",
+    });
+    const participants = s.participants.length > 0
+      ? s.participants.slice(0, 10).join(", ")
+      : "(sin participantes registrados)";
+    return [
+      `[Reunión sin transcript disponible — solo metadata]`,
+      `Título: ${s.title}`,
+      `Fecha: ${dateStr}`,
+      `Participantes: ${participants}`,
+      `Nota: el transcript de esta reunión aún no fue sincronizado o no se generó. Úsalo solo como señal de que el cliente tuvo actividad en esa fecha, sin asumir contenido narrativo.`,
+    ].join("\n");
+  };
+
+  // Wrapper: intenta transcript real, si es null devuelve fallback con metadata
+  const fetchOrFallback = async (s: RawTranscript): Promise<string> => {
+    const content = await fetchTranscriptContent(apiKey ?? "", s.id, s.title);
+    if (content?.trim()) return content;
+    return buildFallbackMetadata(s);
+  };
 
   let firefliesContent = "";
   let salesFirefliesContent = "";
@@ -723,7 +781,10 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
       }
     }
 
-    // Separar sesiones de ventas vs CS/kickoff por participantes u organizador
+    // Separar sesiones de ventas vs CS/kickoff por participantes u organizador.
+    // Sales = al menos UN participante es del equipo de Sales.
+    // CS = todos los participantes son no-sales (típicamente handoffs, kickoffs,
+    // sesiones de implementación, etc).
     const salesSessions = matchingSessions.filter((s) =>
       s.participants.some((p) => salesEmails.has(p.toLowerCase()))
     );
@@ -731,26 +792,22 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
       !s.participants.some((p) => salesEmails.has(p.toLowerCase()))
     );
 
-    // Análisis inicial: solo usa meets de ventas (no CS/kickoff)
-    const isAnalisisInicial = agent.id === "cmmla1g1x00005wijix3qnr7u";
-
-    // Transcripciones de CS (máx 6) — solo para agentes que NO son Análisis inicial
-    if (!isAnalisisInicial) {
-      const topCS = csSessions.sort((a, b) => b.date - a.date).slice(0, 6);
-      if (topCS.length > 0) {
-        const contents = await Promise.all(
-          topCS.map((s) => fetchTranscriptContent(apiKey ?? "", s.id, s.title))
-        );
-        firefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
-      }
+    // Transcripciones de CS / Kickoff / Handoff (máx 6).
+    // Antes solo se procesaban para agentes != "Análisis inicial", pero eso
+    // dejaba a este agente sin ver handoffs ni kickoffs que mencionan al
+    // cliente. Ahora TODOS los agentes ven CS sessions matched al cliente.
+    const topCS = csSessions.sort((a, b) => b.date - a.date).slice(0, 6);
+    if (topCS.length > 0) {
+      const contents = await Promise.all(topCS.map((s) => fetchOrFallback(s)));
+      firefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
     }
 
-    // Transcripciones de ventas (máx 6)
+    // Transcripciones de ventas (máx 6).
+    // Si no hay transcript, se inyecta metadata (título, fecha, participantes)
+    // para que el agente sepa al menos que la reunión existió.
     const topSales = salesSessions.sort((a, b) => b.date - a.date).slice(0, 6);
     if (topSales.length > 0) {
-      const contents = await Promise.all(
-        topSales.map((s) => fetchTranscriptContent(apiKey ?? "", s.id, s.title))
-      );
+      const contents = await Promise.all(topSales.map((s) => fetchOrFallback(s)));
       salesFirefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
     }
   } catch (e) {
@@ -777,25 +834,41 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     console.error("[analyze] Data Lake error:", e);
   }
 
-  // ── Knowledge base (documentos PUBLISHED) ─────────────────────────────────
+  // ── Knowledge base (PUBLISHED + pineados al agente) ──────────────────────
   let knowledgeBaseContent = "";
   try {
-    const knowledgeDocs = await prisma.knowledgeDocument.findMany({
-      where: { status: "PUBLISHED" },
+    // 1. Pineados al agente: completos, al inicio, marcados como REFERENCIA PRINCIPAL
+    const pinnedIds = agent.pinnedKnowledgeIds ?? [];
+    const pinnedDocs = pinnedIds.length > 0
+      ? await prisma.knowledgeDocument.findMany({
+          where: { id: { in: pinnedIds }, status: "PUBLISHED" },
+          select: { id: true, type: true, title: true, summary: true, content: true },
+        })
+      : [];
+
+    // 2. Top 15 PUBLISHED por updatedAt, excluyendo los ya pineados, truncados como antes
+    const topDocs = await prisma.knowledgeDocument.findMany({
+      where: { status: "PUBLISHED", id: { notIn: pinnedIds } },
       select: { type: true, title: true, summary: true, content: true },
       orderBy: { updatedAt: "desc" },
       take: 15,
     });
-    if (knowledgeDocs.length > 0) {
-      knowledgeBaseContent = knowledgeDocs
-        .map(doc => {
-          const parts = [`### [${doc.type}] ${doc.title}`];
-          if (doc.summary?.trim()) parts.push(`**Resumen:** ${doc.summary.trim()}`);
-          parts.push(doc.content.trim().slice(0, 1500));
-          return parts.join("\n");
-        })
-        .join("\n\n---\n\n");
-    }
+
+    const pinnedBlock = pinnedDocs.map(doc => {
+      const parts = [`### [REFERENCIA PRINCIPAL — ${doc.type}] ${doc.title}`];
+      if (doc.summary?.trim()) parts.push(`**Resumen:** ${doc.summary.trim()}`);
+      parts.push(doc.content.trim()); // sin truncar
+      return parts.join("\n");
+    });
+
+    const topBlock = topDocs.map(doc => {
+      const parts = [`### [${doc.type}] ${doc.title}`];
+      if (doc.summary?.trim()) parts.push(`**Resumen:** ${doc.summary.trim()}`);
+      parts.push(doc.content.trim().slice(0, 1500));
+      return parts.join("\n");
+    });
+
+    knowledgeBaseContent = [...pinnedBlock, ...topBlock].join("\n\n---\n\n");
   } catch (e) {
     console.error("[analyze] Knowledge base error:", e);
   }
@@ -1069,6 +1142,9 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     suggestions?: Array<{ title?: string; content?: string; type?: string; suggestedSection?: string }>;
     nodes?: unknown[]; edges?: unknown[]; title?: string;
     flowcharts?: Array<{ title?: string; description?: string; nodes: unknown[]; edges: unknown[] }>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sections?: any[];
+    pendingItems?: Array<{ text?: string; source?: string }>;
   } | null = null;
 
   try {
@@ -1439,9 +1515,25 @@ Analiza toda la información anterior y completa las secciones de contexto del c
       where: { agentRunId: run.id },
       orderBy: { order: "asc" },
     });
+
+    // Mergear pendingItems del agente (CARDS_AND_FLOWCHARTS path)
+    let pendingMergedCAF = { added: 0, skipped: 0, total: 0 };
+    try {
+      pendingMergedCAF = await mergePendingItemsToProject(
+        bodyProjectId,
+        (analysisJson?.pendingItems ?? []).map((it) => ({
+          text: it?.text ?? "",
+          source: it?.source || agent.name,
+        })),
+      );
+    } catch (e) {
+      console.error("[analyze CAF] mergePendingItems error:", e);
+    }
+
     return NextResponse.json({
       cards: runCards,
       flowcharts,
+      pendingMerged: pendingMergedCAF,
       run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
     });
     } catch (cafErr) {
@@ -1590,6 +1682,22 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     } catch { /* no-op */ }
   }
 
+  // ── 14b. Mergear pendingItems del agente al Project.pendingItems[] ─────────
+  // El agente puede devolver además de "cards" un campo "pendingItems" con
+  // acciones concretas detectadas en el análisis. Se mergean idempotentemente.
+  let pendingMerged = { added: 0, skipped: 0, total: 0 };
+  try {
+    pendingMerged = await mergePendingItemsToProject(
+      bodyProjectId,
+      (analysisJson?.pendingItems ?? []).map((it) => ({
+        text: it?.text ?? "",
+        source: it?.source || agent.name,
+      })),
+    );
+  } catch (e) {
+    console.error("[analyze] mergePendingItems error:", e);
+  }
+
   // ── 15. Retornar las cards recién creadas + metadata del run ─────────────────
   const runCards = await prisma.clientContextCard.findMany({
     where: { agentRunId: run.id },
@@ -1598,6 +1706,7 @@ Analiza toda la información anterior y completa las secciones de contexto del c
 
   return NextResponse.json({
     cards: runCards,
+    pendingMerged,
     run: {
       id:        run.id,
       createdAt: run.createdAt,

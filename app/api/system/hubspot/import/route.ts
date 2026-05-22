@@ -3,6 +3,7 @@ import { requireConsultantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemAccessToken } from "@/lib/hubspot/client";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
+import { revalidateClientsSidebar } from "@/lib/cache/clients";
 
 // Propiedad HubSpot que marca a un contacto/empresa como cliente Nexus
 const IMPLEMENTOR_PROPERTY = "nexus";
@@ -139,6 +140,11 @@ export async function POST() {
 
       created++;
     }
+  }
+
+  // Invalidar sidebar — pueden haber nuevos clientes o cambios de industry
+  if (created > 0 || updated > 0) {
+    revalidateClientsSidebar();
   }
 
   return NextResponse.json({

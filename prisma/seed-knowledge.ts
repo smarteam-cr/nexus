@@ -112,7 +112,7 @@ El objetivo no es evaluar si el cliente usa bien HubSpot, sino identificar qué 
 | Automatización | Ir a propiedades clave (ej. Lifecycle Stage) y ver "Used in" para detectar Workflows. ¿Existe un flujo lógico o desconectado? |
 | Lead Hand-off | Buscar el workflow que envía el lead a Ventas. Si no existe, el traspaso es manual y propenso a error. |
 | Campañas | ¿Se usan para medir la atribución global? ¿Para acelerar el lanzamiento de nuevas iniciativas? |
-| Uso de IA | Validar desde Client Partner en portal de Dinterweb y en registros de reutilización/personalización con IA. |
+| Uso de IA | Validar desde Client Partner en portal de Smarteam y en registros de reutilización/personalización con IA. |
 
 ### 4.3 Efectividad (Data e Impacto)
 

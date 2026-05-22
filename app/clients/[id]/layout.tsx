@@ -65,6 +65,25 @@ export default async function ClientLayout({
   });
   const defaultProjectId = firstProject?.id ?? null;
 
+  // ── Determinar pestaña inicial ──────────────────────────────────────────
+  // Regla: si el cliente tiene un único proyecto activo (no estrategia),
+  // entrar directamente a ese proyecto. Si tiene 0 o 2+, entrar a Estrategia.
+  // El filtro debe coincidir con `visibleProjects` de page.tsx para que el
+  // tab seleccionado realmente exista en el rail.
+  const hasHubspot = !!client.hubspotAccount || !!client.hubspotCompanyId;
+  const activeProjects = await prisma.project.findMany({
+    where: {
+      clientId: id,
+      status: "active",
+      serviceType: { not: "__strategy__" },
+      ...(hasHubspot ? { hubspotServiceId: { not: null } } : {}),
+    },
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const initialProjectId =
+    activeProjects.length === 1 ? activeProjects[0].id : "__strategy__";
+
   // Nombre de empresa live desde HubSpot
   let hsCompanyName: string | null = null;
   if (client.hubspotCompanyId) {
@@ -91,7 +110,7 @@ export default async function ClientLayout({
 
   return (
     <AppShell>
-      <WorkspaceShell clientId={id} initialProjectId="__strategy__">
+      <WorkspaceShell clientId={id} initialProjectId={initialProjectId}>
         <div className="flex-1 flex flex-col min-h-screen">
         {/* Header del cliente */}
         <header className="flex-shrink-0 border-b border-gray-800 px-4 h-14 flex items-center justify-between gap-4">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireConsultantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db/prisma";
+import { revalidateClientsSidebar } from "@/lib/cache/clients";
 
 // GET /api/clients/[id]
 export async function GET(
@@ -62,6 +63,11 @@ export async function PATCH(
     },
   });
 
+  // Si cambió name o company, el sidebar muestra outdated → invalidar
+  if (data.name !== undefined || data.company !== undefined) {
+    revalidateClientsSidebar();
+  }
+
   return NextResponse.json(client);
 }
 
@@ -78,6 +84,9 @@ export async function DELETE(
 
   const { id } = await params;
   await prisma.client.delete({ where: { id } });
+
+  // Invalidar sidebar — el cliente ya no debe aparecer
+  revalidateClientsSidebar();
 
   return NextResponse.json({ ok: true });
 }

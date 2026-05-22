@@ -3,7 +3,7 @@ import { getSystemHubspotClient, getHubspotClient } from "@/lib/hubspot/client";
 import { prisma } from "@/lib/db/prisma";
 
 /**
- * GET /api/clients/[id]/sync-services/debug
+ * GET /api/clients/[id]/sync-projects/debug
  * Endpoint temporal de diagnóstico — muestra exactamente qué devuelve HubSpot
  * para los proyectos asociados a la empresa del cliente.
  */

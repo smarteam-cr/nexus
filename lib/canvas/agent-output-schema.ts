@@ -17,6 +17,19 @@ REGLAS DE FORMATO DE OUTPUT (OBLIGATORIAS):
 3. Usa formato markdown estándar: **negrita** para métricas clave, listas con -, tablas con |.
 4. Cada card debe ser autocontenida — comprensible sin necesidad de leer las demás.
 5. Si no hay evidencia suficiente para una sección, indícalo explícitamente: "⚠️ Evidencia insuficiente: se requiere [información faltante]".
+
+PENDIENTES (CAMPO ADICIONAL OBLIGATORIO si hay acciones concretas):
+Además del array "cards", incluye un array "pendingItems" con acciones concretas y accionables identificadas durante el análisis (compromisos, próximos pasos, tareas pendientes del consultor o del cliente). Cada item es un objeto con la forma:
+{ "text": "<acción concreta y verificable>", "source": "<sub-tópico opcional, ej: 'Diagnóstico CRM'>" }
+
+Reglas para pendientes:
+- Cada "text" debe ser UNA acción atómica y verificable, no una descripción ("Confirmar fecha de demo con María", no "Hay que ver lo de la demo").
+- NO repitas pendientes que ya parecen evidentes en el contexto previo del cliente (revisá si ya existen en el contexto).
+- Si no detectás ninguna acción nueva accionable, devuelve "pendingItems": [].
+- Máximo 5 pendientes por ejecución.
+
+FORMATO JSON COMPLETO:
+{ "cards": [...], "pendingItems": [...] }
 `;
 
 /**

@@ -478,7 +478,22 @@ export default function ProjectCanvasPanel({
             </p>
           )}
         </div>
-        {isDefaultCanvas && (<div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          {/* Export PDF — siempre disponible (default y custom canvas) */}
+          <a
+            href={`/print/canvas/${clientId}/${isDefaultCanvas ? "default" : (activeCanvasId ?? "default")}?print=1&projectId=${projectId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800 hover:border-gray-700"
+            title="Abre una vista imprimible para guardar como PDF"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Exportar PDF
+          </a>
+
+          {isDefaultCanvas && (<>
           {/* Share button */}
           <div className="relative">
             <button
@@ -546,7 +561,8 @@ export default function ProjectCanvasPanel({
               </span>
             )}
           </button>
-        </div>)}
+          </>)}
+        </div>
       </div>
 
       {/* Session processing results — default canvas only */}

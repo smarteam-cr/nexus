@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { KnowledgeType, KnowledgeStatus, TagCategory } from "@prisma/client";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -344,10 +346,12 @@ function DocCard({
           {doc.summary || doc.content.slice(0, 180)}
         </p>
 
-        {/* Contenido expandido */}
+        {/* Contenido expandido — markdown renderizado */}
         {expanded && (
-          <div className="mt-2 pt-2 border-t border-gray-800">
-            <pre className="text-xs text-gray-400 whitespace-pre-wrap leading-relaxed font-sans">{doc.content}</pre>
+          <div className="mt-3 pt-3 border-t border-gray-800">
+            <div className="knowledge-markdown text-sm text-gray-300 leading-relaxed max-h-[60vh] overflow-y-auto pr-1">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.content}</ReactMarkdown>
+            </div>
           </div>
         )}
 

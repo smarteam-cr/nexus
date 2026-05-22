@@ -18,9 +18,10 @@ export interface ProspectGroup {
   domain: string;
   companyName: string;
   sessionCount: number;
+  analyzableCount: number; // sesiones con transcript
   reps: string[];
   lastSessionDate: string;
-  sessions: { id: string; title: string; date: string }[];
+  sessions: { id: string; title: string; date: string; hasTranscript: boolean }[];
 }
 
 export default async function SalesPage() {
@@ -32,11 +33,10 @@ export default async function SalesPage() {
 
   const sessions = await prisma.firefliesSession.findMany({
     where: {
-      transcript: { not: null },
       participants: { hasSome: [...SALES_EMAILS] },
     },
     orderBy: { date: "desc" },
-    select: { id: true, title: true, date: true, participants: true, duration: true },
+    select: { id: true, title: true, date: true, participants: true, duration: true, transcript: true },
   });
 
   // Agrupar por dominio externo
@@ -66,6 +66,7 @@ export default async function SalesPage() {
         domain,
         companyName,
         sessionCount: 0,
+        analyzableCount: 0,
         reps: [],
         lastSessionDate: s.date.toISOString(),
         sessions: [],
@@ -73,8 +74,10 @@ export default async function SalesPage() {
     }
 
     const group = groupMap.get(domain)!;
+    const hasTranscript = !!s.transcript;
     group.sessionCount++;
-    group.sessions.push({ id: s.id, title: s.title, date: s.date.toISOString() });
+    if (hasTranscript) group.analyzableCount++;
+    group.sessions.push({ id: s.id, title: s.title, date: s.date.toISOString(), hasTranscript });
 
     // Agregar reps únicos
     for (const rep of repsPresent) {

@@ -3,8 +3,19 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import AppShell from "@/components/layout/AppShell";
 import SessionsClient from "./SessionsClient";
+import {
+  categorizeSessions,
+  buildInternalDomainsSet,
+  collectExternalDomains,
+  type SessionGroup,
+} from "@/lib/sessions/categorize";
+import { cachedSearchCompaniesByDomains } from "@/lib/hubspot/companies";
+import { getTeamMembers } from "@/lib/cache/team";
+import { getSessionCategories } from "@/lib/cache/session-categories";
 
-export const dynamic = "force-dynamic";
+// ISR: re-validamos cada 30s. Mutaciones críticas pueden llamar revalidatePath("/sessions")
+// si necesitan reflejarse inmediato.
+export const revalidate = 30;
 
 export default async function SessionsPage() {
   try {
@@ -13,9 +24,16 @@ export default async function SessionsPage() {
     redirect("/");
   }
 
-  const [sessions, clients, teamMembers] = await Promise.all([
+  // ── 1. Cargar data base ────────────────────────────────────────────────────
+  // Traemos TODAS las sesiones (incluso sin transcript) para mostrar empresas
+  // con conteo total. La query secundaria nos dice cuáles tienen transcript
+  // para construir el `hasTranscript` flag por sesión sin traer el blob.
+  // teamMembers + categories vienen del cache (cambian poco, TTL 10 min).
+  // sessions/transcriptIds/clients son live para reflejar cambios al instante.
+  const now = new Date();
+  const [sessions, transcriptIds, clients, teamMembers, categories] = await Promise.all([
     prisma.firefliesSession.findMany({
-      where: { date: { lt: new Date() }, transcript: { not: null } },
+      where: { date: { lt: now } },
       orderBy: { date: "desc" },
       select: {
         id: true,
@@ -27,71 +45,59 @@ export default async function SessionsPage() {
         summary: true,
         enrichedAt: true,
         manualClientId: true,
-        // No cargamos el transcript aquí (lazy load en detalle) — solo filtramos por not null arriba
       },
+    }),
+    prisma.firefliesSession.findMany({
+      where: { date: { lt: now }, transcript: { not: null } },
+      select: { id: true },
     }),
     prisma.client.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, company: true, emailDomains: true },
     }),
-    prisma.teamMember.findMany({
-      select: { id: true, name: true, email: true, role: true },
-    }),
+    getTeamMembers(),       // cacheado
+    getSessionCategories(), // cacheado
   ]);
 
-  function normalize(s: string) {
-    return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  // Set para lookup O(1) — ¿esta sesión tiene transcript?
+  const withTranscriptSet = new Set(transcriptIds.map((t) => t.id));
+
+  // ── 2. Pre-cálculos para categorización ────────────────────────────────────
+  const internalDomains = buildInternalDomainsSet(categories);
+  const externalDomains = collectExternalDomains(sessions, internalDomains);
+
+  // ── 3. Lookup en HubSpot Companies por dominio (una sola llamada batched) ──
+  // Si falla, seguimos con cache vacío — las sesiones caerán a "orphan" o
+  // matcheen por otras vías. No bloqueamos la página por un error de HubSpot.
+  let hubspotCompaniesByDomain = new Map();
+  if (externalDomains.length > 0) {
+    try {
+      hubspotCompaniesByDomain = await cachedSearchCompaniesByDomains(externalDomains);
+    } catch (err) {
+      console.error(
+        "[sessions/page] Error buscando companies en HubSpot, continuando sin enriquecimiento:",
+        err instanceof Error ? err.message : err
+      );
+    }
   }
 
-  // Índice email → member para lookup O(1)
+  // ── 4. Lookup team member por email para identificar internos del equipo ──
   const memberByEmail = new Map(teamMembers.map((m) => [m.email.toLowerCase(), m]));
 
-  const sessionsWithMeta = sessions.map((s) => {
-    // Palabras del título como Set para matching exacto por palabra (evita falsos positivos
-    // por substrings como "del" dentro de "modelo" o "ice" dentro de "service")
-    const titleWords = new Set(
-      normalize(s.title).split(/[\s|&,.()\[\]!?*\-_]+/).filter(Boolean)
-    );
+  // ── 5. Categorizar todas las sesiones ──────────────────────────────────────
+  const categorized = categorizeSessions(sessions, {
+    clients,
+    categories,
+    hubspotCompaniesByDomain,
+    internalDomains,
+  });
 
-    // Dominios de los participantes de esta sesión
-    const participantDomains = new Set(
-      s.participants
-        .map((e) => e.split("@")[1]?.toLowerCase())
-        .filter(Boolean) as string[]
-    );
-
-    // Matching de cliente — prioridad: manual > dominio > título
-    let matchedClient = s.manualClientId
-      ? clients.find((c) => c.id === s.manualClientId)
-      : undefined;
-
-    if (!matchedClient) {
-      matchedClient = clients.find((c) => {
-        // 1. Email domain matching (más confiable)
-        if (c.emailDomains.length > 0) {
-          if (c.emailDomains.some((d) => participantDomains.has(d.toLowerCase()))) return true;
-        }
-        // 2. Title matching — palabras de 4+ chars para evitar palabras comunes ("del",
-        //    "los", "con", "por"…). La empresa se divide también por "." para que
-        //    "kolbi.cr" dé la palabra "kolbi" en vez de "kolbi.cr".
-        //    Usamos Set para matching exacto de palabra, no substring.
-        const nameParts = normalize(c.name).split(/\s+/).filter((p) => p.length >= 4);
-        const compParts = c.company
-          ? normalize(c.company).split(/[\s.\-_]+/).filter((p) => p.length >= 4)
-          : [];
-        return (
-          nameParts.some((p) => titleWords.has(p)) ||
-          compParts.some((p) => titleWords.has(p))
-        );
-      });
-    }
-
-    // Matching de equipo por emails de participantes
+  // ── 6. Enriquecer con team members + group ─────────────────────────────────
+  const sessionsWithMeta = categorized.map((s) => {
     const matchedMembers = s.participants
       .map((email) => memberByEmail.get(email.toLowerCase()))
       .filter((m): m is NonNullable<typeof m> => m !== undefined);
 
-    // Roles únicos presentes en la sesión
     const roles = [...new Set(matchedMembers.map((m) => m.role).filter(Boolean))] as string[];
 
     return {
@@ -101,19 +107,38 @@ export default async function SessionsPage() {
       duration: s.duration,
       participants: s.participants,
       source: s.source,
-      hasTranscript: true, // filtrado por transcript not null en la query
+      hasTranscript: withTranscriptSet.has(s.id),
       summary: s.summary as { keywords?: string[]; overview?: string; action_items?: string[] } | null,
       enrichedAt: s.enrichedAt?.toISOString() ?? null,
-      clientId: matchedClient?.id ?? null,
       manualClientId: s.manualClientId,
+      group: s.group,
+      // Legacy fields conservados para compatibilidad con la UI actual mientras refactor:
+      clientId: s.group.kind === "client" ? s.group.id : null,
       teamMembers: matchedMembers.map((m) => ({ name: m.name, email: m.email, role: m.role })),
       teamRoles: roles,
     };
   });
 
+  // ── 7. Empresas HubSpot únicas (para sidebar) ──────────────────────────────
+  const hubspotCompanies = [...hubspotCompaniesByDomain.values()];
+
+  // ── 8. Preparar teamMembers ligeros para el panel de análisis ─────────────
+  // Solo email + role — los necesita AnalysisPanel para el filtro multi-select
+  // de roles (Sales/CSE/PM/etc).
+  const teamMembersLite = teamMembers.map((m) => ({ email: m.email, role: m.role }));
+
   return (
     <AppShell>
-      <SessionsClient sessions={sessionsWithMeta} clients={clients} />
+      <SessionsClient
+        sessions={sessionsWithMeta}
+        clients={clients}
+        categories={categories}
+        hubspotCompanies={hubspotCompanies}
+        teamMembers={teamMembersLite}
+      />
     </AppShell>
   );
 }
+
+// Re-export para que SessionsClient pueda tipear sus props
+export type { SessionGroup };

@@ -4,7 +4,9 @@ import { prisma } from "@/lib/db/prisma";
 import AppShell from "@/components/layout/AppShell";
 import AgentsClient from "./AgentsClient";
 
-export const dynamic = "force-dynamic";
+// ISR 60s para la lista de agentes. Mutaciones (crear/editar/eliminar) deben
+// llamar revalidatePath("/agents").
+export const revalidate = 60;
 
 export default async function AgentsPage() {
   try {

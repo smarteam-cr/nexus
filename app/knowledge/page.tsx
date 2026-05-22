@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import KnowledgeClient from "./KnowledgeClient";
 
-export const dynamic = "force-dynamic";
+// Listado de conocimientos — ISR 2 min. Upload/delete deben llamar
+// revalidatePath("/knowledge").
+export const revalidate = 120;
 
 export default async function KnowledgePage() {
   try {

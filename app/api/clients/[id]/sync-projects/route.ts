@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { syncServicesForClient } from "@/lib/hubspot/sync-services";
+import { syncProjectsForClient } from "@/lib/hubspot/sync-projects";
 
 export async function POST(
   _req: NextRequest,
@@ -8,7 +8,7 @@ export async function POST(
   const { id } = await params;
 
   try {
-    const result = await syncServicesForClient(id);
+    const result = await syncProjectsForClient(id);
     return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json(

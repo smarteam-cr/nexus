@@ -1,6 +1,10 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { normalize, type SessionGroup } from "@/lib/sessions/categorize";
+import type { HubspotCompanyLite } from "@/lib/hubspot/companies";
+import AnalysisPanel from "./AnalysisPanel";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -32,8 +36,11 @@ interface Session {
   hasTranscript: boolean;
   summary: SessionSummary | null;
   enrichedAt: string | null;
+  /** @deprecated mantenido por compatibilidad; usar group.kind === 'client' */
   clientId: string | null;
   manualClientId: string | null;
+  /** Clasificación de la sesión (Client / HubspotCompany / Category / Orphan) */
+  group: SessionGroup;
   teamMembers: SessionTeamMember[];
   teamRoles: string[];
 }
@@ -44,9 +51,59 @@ interface Client {
   company: string | null;
 }
 
+interface CategoryLite {
+  id: string;
+  name: string;
+  slug: string;
+  domains: string[];
+  kind: string;
+  color: string | null;
+}
+
+interface TeamMemberLite {
+  email: string;
+  role: string | null;
+}
+
 interface Props {
   sessions: Session[];
   clients: Client[];
+  categories: CategoryLite[];
+  hubspotCompanies: HubspotCompanyLite[];
+  teamMembers: TeamMemberLite[];
+}
+
+// Identificador compuesto del grupo seleccionado en la sidebar
+type SelectedGroupKey = { kind: SessionGroup["kind"]; id: string } | null;
+
+// Modo del panel derecho — sessions (default) o analysis (Fase 9)
+type ViewMode = "sessions" | "analysis";
+
+const VALID_GROUP_KINDS = new Set<SessionGroup["kind"]>([
+  "client", "hubspotCompany", "category", "orphan",
+]);
+
+function groupKey(g: SessionGroup): string {
+  if (g.kind === "orphan") return `orphan:${g.domain ?? g.label}`;
+  return `${g.kind}:${g.id}`;
+}
+
+/** Convierte un SelectedGroupKey a string para query param (?g=...). */
+function groupToParam(g: SelectedGroupKey): string | null {
+  if (!g) return null;
+  return `${g.kind}:${encodeURIComponent(g.id)}`;
+}
+
+/** Parsea query param ?g=... a SelectedGroupKey. Tolerante a IDs inválidos. */
+function paramToGroup(param: string | null): SelectedGroupKey {
+  if (!param) return null;
+  const idx = param.indexOf(":");
+  if (idx === -1) return null;
+  const kind = param.slice(0, idx) as SessionGroup["kind"];
+  if (!VALID_GROUP_KINDS.has(kind)) return null;
+  const id = decodeURIComponent(param.slice(idx + 1));
+  if (!id) return null;
+  return { kind, id };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -774,6 +831,7 @@ function SessionDetail({
   const [transcript, setTranscript] = useState<string | null>(null);
   const [transcriptLoading, setTranscriptLoading] = useState(true);
   const [reEnriching, setReEnriching] = useState(false);
+  const [reEnrichMsg, setReEnrichMsg] = useState<string | null>(null);
   const [generatingSummary, setGeneratingSummary] = useState(false);
   const [liveSummary, setLiveSummary] = useState<SessionSummary | null>(session.summary);
 
@@ -783,11 +841,18 @@ function SessionDetail({
   }, [session.id, session.summary]);
 
   // Cargar transcript lazy. Si no hay summary, auto-generar con IA al recibirlo.
+  // Skip el fetch si la sesión no tiene transcript registrado (caso Fase 7).
   useEffect(() => {
-    let cancelled = false;
     setTranscript(null);
-    setTranscriptLoading(true);
     setTab("resumen");
+
+    if (!session.hasTranscript) {
+      setTranscriptLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setTranscriptLoading(true);
 
     fetch(`/api/sessions/${session.id}`)
       .then((r) => r.json())
@@ -819,11 +884,25 @@ function SessionDetail({
 
   async function handleReEnrich() {
     setReEnriching(true);
+    setReEnrichMsg(null);
     try {
       const res = await fetch(`/api/sessions/${session.id}/enrich`, { method: "POST" });
-      const data = await res.json() as { transcript?: string | null; summary?: SessionSummary | null };
+      const data = await res.json() as {
+        transcript?: string | null;
+        summary?: SessionSummary | null;
+        found?: boolean;
+      };
       setTranscript(data.transcript ?? null);
       if (data.summary) setLiveSummary(data.summary);
+
+      // Feedback al usuario: si Drive todavía no tiene el Doc
+      if (!data.transcript && !data.summary) {
+        setReEnrichMsg(
+          "Aún no encontramos transcript ni resumen en Google Drive. Si la reunión es reciente, Google puede tardar algunos minutos en generar las notas. Probá de nuevo en un rato.",
+        );
+      }
+    } catch {
+      setReEnrichMsg("Error de red al buscar transcript. Probá de nuevo.");
     } finally {
       setReEnriching(false);
     }
@@ -1103,12 +1182,55 @@ function SessionDetail({
               </div>
             ) : transcript ? (
               <FormattedTranscript text={transcript} />
+            ) : !session.hasTranscript ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center max-w-md mx-auto">
+                <svg className="w-8 h-8 text-gray-700 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p className="text-sm text-gray-400">Esta sesión aún no tiene transcript.</p>
+                <p className="text-xs text-gray-600 mt-2 leading-relaxed">
+                  Si la sesión usó Google Meet con grabación, el transcript suele estar disponible algunas horas después.
+                  Si usás Fireflies, validá que el bot haya asistido a la reunión.
+                </p>
+                <button
+                  onClick={handleReEnrich}
+                  disabled={reEnriching}
+                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand hover:bg-brand/90 text-white text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {reEnriching ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Buscando…
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Buscar transcript ahora
+                    </>
+                  )}
+                </button>
+                {reEnrichMsg && (
+                  <p className="mt-3 text-xs text-amber-400 max-w-sm leading-relaxed">{reEnrichMsg}</p>
+                )}
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <p className="text-sm text-gray-600">Sin transcript disponible.</p>
-                <p className="text-xs text-gray-700 mt-1">
-                  Usá &quot;Re-enriquecer&quot; para intentar obtenerlo desde Google Drive.
-                </p>
+                <button
+                  onClick={handleReEnrich}
+                  disabled={reEnriching}
+                  className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium transition-colors disabled:opacity-50"
+                >
+                  {reEnriching ? "Buscando…" : "Re-enriquecer desde Drive"}
+                </button>
+                {reEnrichMsg && (
+                  <p className="mt-3 text-xs text-amber-400 max-w-sm leading-relaxed">{reEnrichMsg}</p>
+                )}
               </div>
             )}
           </div>
@@ -1159,6 +1281,14 @@ function SidebarSessionItem({ session, isActive, onClick }: {
   isActive: boolean;
   onClick: () => void;
 }) {
+  // Resumen disponible aunque no haya transcript (caso común: Google Meet
+  // procesado por Breeze/Gemini con notas pero sin transcript full)
+  const hasSummary = !!(
+    session.summary?.overview ||
+    session.summary?.keywords?.length ||
+    session.summary?.action_items?.length
+  );
+
   return (
     <button
       onClick={onClick}
@@ -1179,6 +1309,27 @@ function SidebarSessionItem({ session, isActive, onClick }: {
             <span>{formatDuration(session.duration)}</span>
           </>
         )}
+        {session.hasTranscript ? (
+          <span
+            title="Esta sesión tiene transcript"
+            className="ml-auto flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20"
+          >
+            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+            Transcript
+          </span>
+        ) : hasSummary ? (
+          <span
+            title="Esta sesión tiene resumen pero no transcript"
+            className="ml-auto flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20"
+          >
+            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Resumen
+          </span>
+        ) : null}
       </div>
       {session.teamRoles.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1.5">
@@ -1193,48 +1344,211 @@ function SidebarSessionItem({ session, isActive, onClick }: {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
-const ORPHAN_ID = "__orphan__";
-
-export default function SessionsClient({ sessions: initialSessions, clients }: Props) {
+export default function SessionsClient({
+  sessions: initialSessions,
+  clients,
+  categories,
+  hubspotCompanies,
+  teamMembers,
+}: Props) {
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
-  // null = mostrando lista de clientes; string = cliente seleccionado
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
 
-  const countByClient = useMemo(() => {
-    const map: Record<string, number> = { [ORPHAN_ID]: 0 };
-    for (const s of sessions) {
-      if (s.clientId) map[s.clientId] = (map[s.clientId] ?? 0) + 1;
-      else map[ORPHAN_ID]++;
+  // ── Auto-sync silencioso de Google Meet ────────────────────────────────────
+  // Dispara sync + enrich en background al cargar la página. El endpoint tiene
+  // cooldown 20min en memoria, así que recargas seguidas no spamean.
+  // Fire-and-forget: la UI no espera respuesta. Si hay nuevas sesiones o
+  // transcripts, aparecen tras un router.refresh() del usuario (o reload).
+  useEffect(() => {
+    fetch("/api/integrations/google/auto-sync", { method: "POST" }).catch(() => {});
+  }, []);
+
+  // ── URL sync (Fase 8): hidratar selección desde ?g=...&s=... ───────────────
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Hidratación inicial: leemos los params UNA vez al montar.
+  // Si hay `s` pero no `g`, derivamos `g` desde el group de la sesión.
+  const [selectedGroup, setSelectedGroup] = useState<SelectedGroupKey>(() => {
+    const gParam = searchParams.get("g");
+    const sParam = searchParams.get("s");
+    const fromG = paramToGroup(gParam);
+    if (fromG) return fromG;
+    if (sParam) {
+      const s = initialSessions.find((x) => x.id === sParam);
+      if (s) {
+        if (s.group.kind === "orphan") {
+          return { kind: "orphan", id: s.group.domain ?? s.group.label };
+        }
+        return { kind: s.group.kind, id: s.group.id };
+      }
     }
-    return map;
+    return null;
+  });
+
+  const [selectedSession, setSelectedSession] = useState<Session | null>(() => {
+    const sParam = searchParams.get("s");
+    if (!sParam) return null;
+    return initialSessions.find((x) => x.id === sParam) ?? null;
+  });
+
+  // ── Hub de análisis (Fase 9) ─────────────────────────────────────────────
+  // viewMode: 'sessions' (default) o 'analysis' — qué muestra el panel derecho
+  // currentAnalysisRunId: id del AgentRun abierto (sincronizado con AnalysisPanel)
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const v = searchParams.get("view");
+    return v === "analysis" ? "analysis" : "sessions";
+  });
+
+  const [currentAnalysisRunId, setCurrentAnalysisRunId] = useState<string | null>(() => {
+    return searchParams.get("analysis");
+  });
+
+  // ── Búsqueda en sidebar (Fase 6) ─────────────────────────────────────────
+  const [query, setQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Auto-focus del input la primera vez que se monta el componente
+  useEffect(() => {
+    searchInputRef.current?.focus();
+  }, []);
+
+  // ── URL sync (Fases 8 + 9): state → URL via router.replace ────────────────
+  // Mantiene la URL alineada con la selección actual. Usa `replace` para no
+  // inflar el back-stack del browser con cada click interno.
+  // Params:
+  //   ?g=client:xxx           — grupo seleccionado (Fase 8)
+  //   ?s=sessionId            — sesión abierta en el panel derecho (Fase 8)
+  //   ?view=analysis          — tab "Análisis" activo (Fase 9)
+  //   ?analysis=runId         — AgentRun abierto en AnalysisPanel (Fase 9)
+  useEffect(() => {
+    const params = new URLSearchParams();
+    const gParam = groupToParam(selectedGroup);
+    if (gParam) params.set("g", gParam);
+    if (selectedSession) params.set("s", selectedSession.id);
+    if (viewMode === "analysis") params.set("view", "analysis");
+    if (currentAnalysisRunId) params.set("analysis", currentAnalysisRunId);
+    const qs = params.toString();
+    const next = qs ? `${pathname}?${qs}` : pathname;
+    // Solo navegar si la URL realmente cambia (evita loops y noise)
+    const current = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+    if (next !== current) {
+      router.replace(next, { scroll: false });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGroup, selectedSession, viewMode, currentAnalysisRunId]);
+
+  // Query normalizada (lowercase + sin acentos), trim
+  const normalizedQuery = useMemo(() => normalize(query).trim(), [query]);
+  const hasQuery = normalizedQuery.length > 0;
+
+  /** Predicado helper: ¿algún texto de la lista matchea la query? */
+  function matchesQuery(...candidates: (string | null | undefined)[]): boolean {
+    if (!hasQuery) return true;
+    for (const c of candidates) {
+      if (!c) continue;
+      if (normalize(c).includes(normalizedQuery)) return true;
+    }
+    return false;
+  }
+
+  // Listas pre-agrupadas para la sidebar.
+  // Cada entry guarda contador dual: total y withTranscript.
+  const groupedSidebar = useMemo(() => {
+    type CountPair = { total: number; withTranscript: number };
+    const init = (): CountPair => ({ total: 0, withTranscript: 0 });
+    const bump = (m: Map<string, CountPair>, k: string, hasTr: boolean) => {
+      const e = m.get(k) ?? init();
+      e.total += 1;
+      if (hasTr) e.withTranscript += 1;
+      m.set(k, e);
+    };
+
+    const byClient = new Map<string, CountPair>();
+    const byHubspotCompany = new Map<string, CountPair>();
+    const byCategory = new Map<string, CountPair>();
+    const orphans = new Map<string, { label: string; total: number; withTranscript: number; domain?: string }>();
+
+    for (const s of sessions) {
+      const g = s.group;
+      const hasTr = s.hasTranscript;
+      if (g.kind === "client") bump(byClient, g.id, hasTr);
+      else if (g.kind === "hubspotCompany") bump(byHubspotCompany, g.id, hasTr);
+      else if (g.kind === "category") bump(byCategory, g.id, hasTr);
+      else if (g.kind === "orphan") {
+        const key = g.domain ?? g.label;
+        const existing = orphans.get(key);
+        if (existing) {
+          existing.total += 1;
+          if (hasTr) existing.withTranscript += 1;
+        } else {
+          orphans.set(key, { label: g.label, total: 1, withTranscript: hasTr ? 1 : 0, domain: g.domain });
+        }
+      }
+    }
+
+    return { byClient, byHubspotCompany, byCategory, orphans };
   }, [sessions]);
 
   const sidebarSessions = useMemo(() => {
-    if (selectedClientId === null) return [];
-    if (selectedClientId === ORPHAN_ID) return sessions.filter((s) => !s.clientId);
-    return sessions.filter((s) => s.clientId === selectedClientId);
-  }, [sessions, selectedClientId]);
+    if (selectedGroup === null) return [];
+    const target = `${selectedGroup.kind}:${selectedGroup.id}`;
+    return sessions.filter((s) => groupKey(s.group) === target);
+  }, [sessions, selectedGroup]);
 
-  const selectedClient = selectedClientId && selectedClientId !== ORPHAN_ID
-    ? clients.find((c) => c.id === selectedClientId) ?? null
-    : null;
+  // Cliente seleccionado (solo si el grupo es de tipo client)
+  const selectedClient = useMemo(() => {
+    if (selectedGroup?.kind !== "client") return null;
+    return clients.find((c) => c.id === selectedGroup.id) ?? null;
+  }, [selectedGroup, clients]);
 
-  function handleClientClick(id: string) {
-    setSelectedClientId(id);
+  // Label del grupo activo para el header
+  const selectedGroupLabel = useMemo(() => {
+    if (!selectedGroup) return "";
+    if (selectedGroup.kind === "client") {
+      return clients.find((c) => c.id === selectedGroup.id)?.name ?? "Cliente";
+    }
+    if (selectedGroup.kind === "hubspotCompany") {
+      return hubspotCompanies.find((co) => co.id === selectedGroup.id)?.name ?? "Empresa HubSpot";
+    }
+    if (selectedGroup.kind === "category") {
+      return categories.find((c) => c.id === selectedGroup.id)?.name ?? "Categoría";
+    }
+    return selectedGroup.id;
+  }, [selectedGroup, clients, hubspotCompanies, categories]);
+
+  function handleGroupClick(kind: SessionGroup["kind"], id: string) {
+    // Al cambiar de grupo, reseteamos run abierto (es de otro client) y
+    // volvemos a tab "sessions" por defecto.
+    setSelectedGroup({ kind, id });
     setSelectedSession(null);
+    setCurrentAnalysisRunId(null);
+    setViewMode("sessions");
   }
 
   function handleBack() {
-    setSelectedClientId(null);
+    setSelectedGroup(null);
     setSelectedSession(null);
+    setCurrentAnalysisRunId(null);
+    setViewMode("sessions");
+  }
+
+  /** Click en una sesión: forzamos viewMode='sessions' para que se vea el detalle. */
+  function handleSessionClick(s: Session) {
+    setSelectedSession(s);
+    setViewMode("sessions");
   }
 
   function handleClientChanged(sessionId: string, clientId: string | null) {
     setSessions((prev) =>
-      prev.map((s) =>
-        s.id === sessionId ? { ...s, clientId, manualClientId: clientId } : s
-      )
+      prev.map((s) => {
+        if (s.id !== sessionId) return s;
+        const newClient = clientId ? clients.find((c) => c.id === clientId) : null;
+        const newGroup: SessionGroup = newClient
+          ? { kind: "client", id: newClient.id, label: newClient.name, company: newClient.company }
+          : s.group; // si quitan el override, el group se recalcularía en server-side; aquí mantenemos
+        return { ...s, clientId, manualClientId: clientId, group: newGroup };
+      })
     );
     setSelectedSession((prev) =>
       prev?.id === sessionId ? { ...prev, clientId, manualClientId: clientId } : prev
@@ -1247,43 +1561,196 @@ export default function SessionsClient({ sessions: initialSessions, clients }: P
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
       <aside className="w-72 flex-shrink-0 border-r border-gray-800 flex flex-col overflow-hidden">
 
-        {selectedClientId === null ? (
-          /* ── Vista: lista de clientes ───────────────────────────────────── */
-          <div className="flex flex-col flex-1 overflow-y-auto py-3">
-            <p className="px-4 pb-2 text-xs font-semibold text-gray-600 uppercase tracking-widest">
-              Clientes
-            </p>
+        {selectedGroup === null ? (
+          /* ── Vista: lista agrupada (4 secciones) ────────────────────────── */
+          <div className="flex flex-col flex-1 min-h-0">
 
-            {clients.map((c) => {
-              const count = countByClient[c.id] ?? 0;
-              if (count === 0) return null;
-              return (
-                <ClientListItem
-                  key={c.id}
-                  label={c.name}
-                  sublabel={c.company ?? undefined}
-                  count={count}
-                  onClick={() => handleClientClick(c.id)}
+            {/* ── Buscador (Fase 6) ────────────────────────────────────────── */}
+            <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b border-gray-800">
+              <div className="relative">
+                <svg
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-600 pointer-events-none"
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z" />
+                </svg>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setQuery("");
+                  }}
+                  aria-label="Buscar"
+                  placeholder="Buscar cliente, empresa o dominio…"
+                  className="w-full pl-8 pr-7 py-1.5 text-xs bg-gray-900 border border-gray-800 rounded-md text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-gray-700"
                 />
-              );
-            })}
+                {hasQuery && (
+                  <button
+                    onClick={() => { setQuery(""); searchInputRef.current?.focus(); }}
+                    aria-label="Limpiar búsqueda"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-600 hover:text-gray-300 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
 
-            {(countByClient[ORPHAN_ID] ?? 0) > 0 && (
-              <>
-                <div className="mx-4 my-2 border-t border-gray-800/60" />
-                <ClientListItem
-                  label="Sin cliente"
-                  count={countByClient[ORPHAN_ID] ?? 0}
-                  onClick={() => handleClientClick(ORPHAN_ID)}
-                  muted
-                />
-              </>
-            )}
+            {/* ── Listado scrollable (4 secciones) ─────────────────────────── */}
+            <div className="flex flex-col flex-1 overflow-y-auto py-3">
+
+              {(() => {
+                const ZERO = { total: 0, withTranscript: 0 };
+
+                // ── 1. Clientes Nexus (ordenados DESC por total + filtro) ──
+                const clientsList = clients
+                  .filter((c) => (groupedSidebar.byClient.get(c.id)?.total ?? 0) > 0)
+                  .filter((c) => matchesQuery(c.name, c.company))
+                  .map((c) => ({ c, counts: groupedSidebar.byClient.get(c.id) ?? ZERO }))
+                  .sort((a, b) => (b.counts.total - a.counts.total) || a.c.name.localeCompare(b.c.name));
+
+                // ── 2. Empresas HubSpot ───────────────────────────────────
+                const companiesList = hubspotCompanies
+                  .filter((co) => (groupedSidebar.byHubspotCompany.get(co.id)?.total ?? 0) > 0)
+                  .filter((co) => matchesQuery(co.name, co.domain))
+                  .map((co) => ({ co, counts: groupedSidebar.byHubspotCompany.get(co.id) ?? ZERO }))
+                  .sort((a, b) => (b.counts.total - a.counts.total) || a.co.name.localeCompare(b.co.name));
+
+                // ── 3. Categorías ─────────────────────────────────────────
+                const categoriesList = categories
+                  .filter((cat) => (groupedSidebar.byCategory.get(cat.id)?.total ?? 0) > 0)
+                  .filter((cat) => matchesQuery(cat.name, ...cat.domains))
+                  .map((cat) => ({ cat, counts: groupedSidebar.byCategory.get(cat.id) ?? ZERO }))
+                  .sort((a, b) => (b.counts.total - a.counts.total) || a.cat.name.localeCompare(b.cat.name));
+
+                // ── 4. Orphans ────────────────────────────────────────────
+                const orphansList = [...groupedSidebar.orphans.entries()]
+                  .filter(([, entry]) => matchesQuery(entry.label, entry.domain))
+                  .sort(([keyA, a], [keyB, b]) => (b.total - a.total) || keyA.localeCompare(keyB));
+
+                const totalResults =
+                  clientsList.length + companiesList.length + categoriesList.length + orphansList.length;
+
+                // Sin resultados global → mensaje único
+                if (hasQuery && totalResults === 0) {
+                  return (
+                    <p className="px-4 py-8 text-xs text-gray-600 text-center">
+                      Sin resultados para “<span className="text-gray-400">{query}</span>”
+                    </p>
+                  );
+                }
+
+                return (
+                  <>
+                    {/* Clientes Nexus */}
+                    {clientsList.length > 0 && (
+                      <>
+                        <p className="px-4 pb-2 text-xs font-semibold text-gray-600 uppercase tracking-widest">
+                          Clientes Nexus
+                        </p>
+                        {clientsList.map(({ c, counts }) => (
+                          <ClientListItem
+                            key={c.id}
+                            label={c.name}
+                            sublabel={c.company ?? undefined}
+                            total={counts.total}
+                            withTranscript={counts.withTranscript}
+                            onClick={() => handleGroupClick("client", c.id)}
+                          />
+                        ))}
+                      </>
+                    )}
+
+                    {/* Empresas HubSpot */}
+                    {companiesList.length > 0 && (
+                      <>
+                        {clientsList.length > 0 && <div className="mx-4 my-2 border-t border-gray-800/60" />}
+                        <p className="px-4 pb-2 pt-1 text-xs font-semibold text-gray-600 uppercase tracking-widest">
+                          Empresas HubSpot
+                        </p>
+                        {companiesList.map(({ co, counts }) => (
+                          <ClientListItem
+                            key={co.id}
+                            label={co.name}
+                            sublabel={co.domain}
+                            total={counts.total}
+                            withTranscript={counts.withTranscript}
+                            onClick={() => handleGroupClick("hubspotCompany", co.id)}
+                          />
+                        ))}
+                      </>
+                    )}
+
+                    {/* Categorías — siempre se muestra el header con link "Administrar"
+                        si NO hay query activa (para que el user pueda llegar a la admin).
+                        Si hay query y no hay categorías matching, se oculta. */}
+                    {(categoriesList.length > 0 || !hasQuery) && (
+                      <>
+                        {(clientsList.length > 0 || companiesList.length > 0) && <div className="mx-4 my-2 border-t border-gray-800/60" />}
+                        <div className="px-4 pb-2 pt-1 flex items-center justify-between">
+                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-widest">
+                            Categorías
+                          </p>
+                          <a
+                            href="/sessions/categories"
+                            className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors"
+                            title="Administrar categorías de dominios"
+                          >
+                            Administrar
+                          </a>
+                        </div>
+                        {categoriesList.length === 0 ? (
+                          <p className="px-4 py-2 text-xs text-gray-700 italic">
+                            Sin categorías activas
+                          </p>
+                        ) : (
+                          categoriesList.map(({ cat, counts }) => (
+                            <CategoryListItem
+                              key={cat.id}
+                              label={cat.name}
+                              kind={cat.kind}
+                              color={cat.color ?? undefined}
+                              total={counts.total}
+                              withTranscript={counts.withTranscript}
+                              onClick={() => handleGroupClick("category", cat.id)}
+                            />
+                          ))
+                        )}
+                      </>
+                    )}
+
+                    {/* Sin clasificar */}
+                    {orphansList.length > 0 && (
+                      <>
+                        <div className="mx-4 my-2 border-t border-gray-800/60" />
+                        <p className="px-4 pb-2 pt-1 text-xs font-semibold text-gray-600 uppercase tracking-widest">
+                          Sin clasificar
+                        </p>
+                        {orphansList.map(([key, entry]) => (
+                          <ClientListItem
+                            key={key}
+                            label={entry.label}
+                            total={entry.total}
+                            withTranscript={entry.withTranscript}
+                            onClick={() => handleGroupClick("orphan", key)}
+                            muted
+                          />
+                        ))}
+                      </>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
           </div>
         ) : (
-          /* ── Vista: sesiones del cliente ────────────────────────────────── */
+          /* ── Vista: sesiones del grupo seleccionado ──────────────────── */
           <>
-            {/* Header con back + nombre del cliente */}
+            {/* Header con back + label del grupo */}
             <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b border-gray-800">
               <button
                 onClick={handleBack}
@@ -1292,13 +1759,26 @@ export default function SessionsClient({ sessions: initialSessions, clients }: P
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-                Clientes
+                Volver
               </button>
               <p className="text-sm font-semibold text-white truncate">
-                {selectedClient?.name ?? "Sin cliente"}
+                {selectedGroupLabel}
               </p>
               <p className="text-xs text-gray-600">
-                {sidebarSessions.length} sesión{sidebarSessions.length !== 1 ? "es" : ""}
+                {(() => {
+                  const total = sidebarSessions.length;
+                  const withTr = sidebarSessions.filter((s) => s.hasTranscript).length;
+                  const noun = total === 1 ? "sesión" : "sesiones";
+                  return withTr === total
+                    ? `${total} ${noun}`
+                    : `${total} ${noun} · ${withTr} con transcript`;
+                })()}
+                {selectedGroup?.kind === "hubspotCompany" && (
+                  <span className="text-gray-700 ml-1">· HubSpot Company</span>
+                )}
+                {selectedGroup?.kind === "category" && (
+                  <span className="text-gray-700 ml-1">· Categoría</span>
+                )}
               </p>
             </div>
 
@@ -1312,7 +1792,7 @@ export default function SessionsClient({ sessions: initialSessions, clients }: P
                     key={s.id}
                     session={s}
                     isActive={selectedSession?.id === s.id}
-                    onClick={() => setSelectedSession(s)}
+                    onClick={() => handleSessionClick(s)}
                   />
                 ))
               )}
@@ -1323,42 +1803,174 @@ export default function SessionsClient({ sessions: initialSessions, clients }: P
 
       {/* ── Área principal ──────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
-        {selectedSession ? (
-          <SessionDetail
-            session={selectedSession}
-            clients={clients}
-            onClose={() => setSelectedSession(null)}
-            onClientChanged={handleClientChanged}
-          />
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-gray-900 border border-gray-800 flex items-center justify-center">
-              <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                {selectedClientId === null
-                  ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                  : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                }
-              </svg>
-            </div>
-            <p className="text-sm text-gray-600">
-              {selectedClientId === null
-                ? "Seleccioná un cliente para ver sus sesiones"
-                : "Seleccioná una sesión para ver el transcript"
-              }
-            </p>
+
+        {/* ── Tabs Sesiones / Análisis (visibles cuando hay grupo seleccionado) ── */}
+        {selectedGroup !== null && (
+          <div className="flex-shrink-0 border-b border-gray-800 px-5 flex items-center gap-1">
+            <PanelTab
+              active={viewMode === "sessions"}
+              onClick={() => setViewMode("sessions")}
+            >
+              <span className="flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14-7H5a2 2 0 00-2 2v14l4-4h12a2 2 0 002-2V6a2 2 0 00-2-2z" />
+                </svg>
+                Sesiones
+              </span>
+            </PanelTab>
+            <PanelTab
+              active={viewMode === "analysis"}
+              onClick={() => setViewMode("analysis")}
+            >
+              <span className="flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Análisis
+                {selectedGroup.kind !== "client" && (
+                  <span className="text-[9px] text-gray-700 normal-case font-normal">
+                    (solo Clients)
+                  </span>
+                )}
+              </span>
+            </PanelTab>
           </div>
         )}
+
+        {/* ── Contenido del panel según viewMode ──────────────────────────────── */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {viewMode === "analysis" && selectedGroup !== null ? (
+            selectedGroup.kind === "client" && selectedClient ? (
+              <AnalysisPanel
+                key={selectedClient.id}
+                clientId={selectedClient.id}
+                clientName={selectedClient.name}
+                clientSessions={sidebarSessions.map((s) => ({
+                  id: s.id,
+                  title: s.title,
+                  date: s.date,
+                  participants: s.participants,
+                  hasTranscript: s.hasTranscript,
+                  summary: s.summary,
+                }))}
+                teamMembers={teamMembers}
+                initialRunId={currentAnalysisRunId}
+                onRunChange={setCurrentAnalysisRunId}
+              />
+            ) : (
+              <NonClientAnalysisPlaceholder kind={selectedGroup.kind} />
+            )
+          ) : selectedSession ? (
+            <SessionDetail
+              session={selectedSession}
+              clients={clients}
+              onClose={() => setSelectedSession(null)}
+              onClientChanged={handleClientChanged}
+            />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-center gap-2 p-6">
+              <div className="w-10 h-10 rounded-xl bg-gray-900 border border-gray-800 flex items-center justify-center">
+                <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  {selectedGroup === null
+                    ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  }
+                </svg>
+              </div>
+              <p className="text-sm text-gray-600">
+                {selectedGroup === null
+                  ? "Seleccioná un cliente, empresa o categoría para ver sus sesiones"
+                  : "Seleccioná una sesión para ver el transcript"
+                }
+              </p>
+
+              {/* CTA: invitar a usar el tab Análisis (solo para Clients) */}
+              {selectedGroup !== null && selectedGroup.kind === "client" && (
+                <button
+                  onClick={() => setViewMode("analysis")}
+                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-brand/30 bg-brand/10 hover:bg-brand/20 text-xs text-brand-light font-medium transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Analizar este cliente con IA
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+// ── Tab para el panel derecho (Sesiones / Análisis) ─────────────────────────
+
+function PanelTab({ active, onClick, children }: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+        active
+          ? "border-brand text-white"
+          : "border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-800"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Placeholder cuando el grupo no es Client (no se puede analizar) ──────────
+
+function NonClientAnalysisPlaceholder({ kind }: { kind: SessionGroup["kind"] }) {
+  const labels: Record<string, string> = {
+    hubspotCompany: "empresa de HubSpot",
+    category:       "categoría",
+    orphan:         "grupo sin clasificar",
+  };
+  const label = labels[kind] ?? "grupo";
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 p-6 max-w-md mx-auto">
+      <div className="w-12 h-12 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center">
+        <svg className="w-6 h-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      </div>
+      <div className="space-y-1.5">
+        <p className="text-sm font-medium text-white">
+          Esta {label} no es Client de Nexus
+        </p>
+        <p className="text-xs text-gray-500 leading-relaxed">
+          El hub de análisis solo opera sobre Clients de Nexus. Promové primero esta {label} a Client
+          para poder generar análisis de ventas o servicio sobre sus sesiones.
+        </p>
+      </div>
+      <button
+        disabled
+        title="Próximamente: promover empresa HubSpot a Client de Nexus."
+        className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-800 bg-gray-900/40 text-xs text-gray-600 cursor-not-allowed"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+        Promover a Client · próximamente
+      </button>
     </div>
   );
 }
 
 // ── Item de cliente en sidebar ────────────────────────────────────────────────
 
-function ClientListItem({ label, sublabel, count, onClick, muted = false }: {
+function ClientListItem({ label, sublabel, total, withTranscript, onClick, muted = false }: {
   label: string;
   sublabel?: string;
-  count: number;
+  total: number;
+  withTranscript: number;
   onClick: () => void;
   muted?: boolean;
 }) {
@@ -1376,7 +1988,78 @@ function ClientListItem({ label, sublabel, count, onClick, muted = false }: {
         {sublabel && <p className="text-xs text-gray-600 truncate">{sublabel}</p>}
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
-        <span className="text-xs text-gray-700 group-hover:text-gray-500 transition-colors">{count}</span>
+        <CountBadge total={total} withTranscript={withTranscript} />
+        <svg className="w-3 h-3 text-gray-700 group-hover:text-gray-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+    </button>
+  );
+}
+
+// ── Badge de contador dual (X / Y) o simple (Y) ──────────────────────────────
+
+function CountBadge({ total, withTranscript }: { total: number; withTranscript: number }) {
+  // Si todas tienen transcript, mostrar solo el total (sin ruido).
+  if (withTranscript === total) {
+    return (
+      <span className="text-xs text-gray-700 group-hover:text-gray-500 transition-colors">
+        {total}
+      </span>
+    );
+  }
+  // Caso mixto: contador dual con tooltip.
+  return (
+    <span
+      title={`${withTranscript} sesión${withTranscript === 1 ? "" : "es"} con transcript de ${total} totales`}
+      className="text-xs text-gray-700 group-hover:text-gray-500 transition-colors tabular-nums"
+    >
+      <span className="text-green-600/80 group-hover:text-green-500/90">{withTranscript}</span>
+      <span className="text-gray-800 group-hover:text-gray-600 mx-0.5">/</span>
+      <span>{total}</span>
+    </span>
+  );
+}
+
+// ── Item de categoría en sidebar (con dot de color) ──────────────────────────
+
+function CategoryListItem({ label, kind, color, total, withTranscript, onClick }: {
+  label: string;
+  kind: string;
+  color?: string;
+  total: number;
+  withTranscript: number;
+  onClick: () => void;
+}) {
+  // Color por defecto según kind
+  const dotColor = color
+    ? color
+    : kind === "internal"
+    ? "#94A3B8"
+    : kind === "partner"
+    ? "#F59E0B"
+    : "#6366F1";
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left transition-colors rounded-lg mx-1 group text-gray-300 hover:text-white hover:bg-gray-900"
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <span
+          className="flex-shrink-0 w-2 h-2 rounded-full"
+          style={{ backgroundColor: dotColor }}
+          aria-hidden="true"
+        />
+        <p className="text-sm truncate">{label}</p>
+        {kind !== "custom" && (
+          <span className="text-[10px] text-gray-600 uppercase tracking-wider flex-shrink-0">
+            {kind}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <CountBadge total={total} withTranscript={withTranscript} />
         <svg className="w-3 h-3 text-gray-700 group-hover:text-gray-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>

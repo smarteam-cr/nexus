@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { FlowchartData } from "@/components/flowchart/FlowchartViewer";
 import SendToCanvasMenu from "./SendToCanvasMenu";
 
@@ -822,20 +824,7 @@ function HistoryModal({
                   {cards.map((card, i) => (
                     <div key={i} className="break-inside-avoid mb-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
                       <p className="text-xs font-bold text-gray-800 mb-2">{card.title}</p>
-                      <div className="space-y-1">
-                        {card.content.split("\n").filter(Boolean).map((line, j) => {
-                          const bullet = line.match(/^[\*\-]\s+(.+)$/);
-                          if (bullet) {
-                            return (
-                              <div key={j} className="flex items-start gap-1.5">
-                                <span className="shrink-0 mt-[6px] w-1 h-1 rounded-full bg-gray-400" />
-                                <span className="text-xs text-gray-600 leading-relaxed">{renderInline(bullet[1])}</span>
-                              </div>
-                            );
-                          }
-                          return <p key={j} className="text-xs text-gray-600 leading-relaxed">{renderInline(line)}</p>;
-                        })}
-                      </div>
+                      <MarkdownContent text={card.content} />
                       {card.source && (
                         <div className="mt-3 pt-2 border-t border-gray-200/60">
                           <CardSourceBadge source={card.source} />
@@ -867,24 +856,7 @@ function HistoryModal({
               {cards.map((card, i) => (
                 <div key={i} className="break-inside-avoid mb-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
                   <p className="text-xs font-bold text-gray-800 mb-2">{card.title}</p>
-                  <div className="space-y-1">
-                    {card.content.split("\n").filter(Boolean).map((line, j) => {
-                      const bullet = line.match(/^[\*\-]\s+(.+)$/);
-                      if (bullet) {
-                        return (
-                          <div key={j} className="flex items-start gap-1.5">
-                            <span className="shrink-0 mt-[6px] w-1 h-1 rounded-full bg-gray-400" />
-                            <span className="text-xs text-gray-600 leading-relaxed">{renderInline(bullet[1])}</span>
-                          </div>
-                        );
-                      }
-                      return (
-                        <p key={j} className="text-xs text-gray-600 leading-relaxed">
-                          {renderInline(line)}
-                        </p>
-                      );
-                    })}
-                  </div>
+                  <MarkdownContent text={card.content} />
                   {card.source && (
                     <div className="mt-3 pt-2 border-t border-gray-200/60">
                       <CardSourceBadge source={card.source} />
@@ -1138,7 +1110,8 @@ function ContextCardItem({
   );
 }
 
-// ── Inline markdown: convierte **bold** en <strong> ───────────────────────────
+// ── Inline markdown (legacy, lo seguimos usando en HistoryModal para una vista
+//    compacta por línea sin parser completo) ─────────────────────────────────
 
 function renderInline(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*|__[^_]+__)/);
@@ -1162,7 +1135,10 @@ function renderInline(text: string): React.ReactNode {
   );
 }
 
-// ── Renderizador de contenido con soporte básico de bullets ───────────────────
+// ── Renderizador de contenido con markdown completo (GFM) ─────────────────────
+// Soporta: tablas, bullets, bold, italic, links, code, headings, blockquotes.
+// Reemplaza al parser custom anterior que solo entendía bullets + **bold**
+// (las tablas se renderizaban como texto plano con pipes visibles).
 
 const MAX_VISIBLE_LINES = 2;
 
@@ -1187,35 +1163,90 @@ function CardContent({
     );
   }
 
-  const allLines = content.split("\n").filter((l) => l.trim());
-  const lines = collapsed ? allLines.slice(0, MAX_VISIBLE_LINES) : allLines;
+  // Modo colapsado: mostrar solo las primeras N líneas como preview de texto
+  // plano (sin parser markdown, para que el clamp funcione visualmente).
+  if (collapsed) {
+    const preview = content
+      .split("\n")
+      .filter((l) => l.trim())
+      .slice(0, MAX_VISIBLE_LINES)
+      .join("\n");
+    return (
+      <div
+        className="cursor-text space-y-1"
+        onClick={onClick}
+        title="Clic para editar"
+      >
+        {preview.split("\n").map((line, i) => (
+          <p key={i} className="text-xs text-gray-600 leading-relaxed line-clamp-1">
+            {renderInline(line.replace(/^[\*\-]\s+/, ""))}
+          </p>
+        ))}
+      </div>
+    );
+  }
 
+  // Modo expandido: markdown completo con prose + tablas GFM.
   return (
     <div
-      className="cursor-text space-y-1"
+      className="cursor-text"
       onClick={onClick}
       title="Clic para editar"
     >
-      {lines.map((line, i) => {
-        // Bullet point: "* texto" o "- texto"
-        const bulletMatch = line.match(/^[\*\-]\s+(.+)$/);
-        if (bulletMatch) {
-          return (
-            <div key={i} className="flex items-start gap-2">
-              <span className="flex-shrink-0 mt-[7px] w-1.5 h-1.5 rounded-full bg-gray-400" />
-              <span className={`text-xs text-gray-600 leading-relaxed ${collapsed ? "line-clamp-1" : ""}`}>
-                {renderInline(bulletMatch[1])}
-              </span>
+      <MarkdownContent text={content} />
+    </div>
+  );
+}
+
+/** Render de markdown con clases Tailwind acotadas al estilo de las cards. */
+function MarkdownContent({ text }: { text: string }) {
+  return (
+    <div className="prose prose-sm max-w-none
+      prose-p:text-xs prose-p:leading-relaxed prose-p:text-gray-600 prose-p:my-1
+      prose-strong:text-gray-800 prose-strong:font-semibold
+      prose-em:text-gray-600
+      prose-a:text-brand prose-a:no-underline hover:prose-a:underline
+      prose-ul:my-1 prose-ul:pl-4 prose-ul:list-disc prose-ul:marker:text-gray-400
+      prose-ol:my-1 prose-ol:pl-4 prose-ol:list-decimal prose-ol:marker:text-gray-400
+      prose-li:text-xs prose-li:text-gray-600 prose-li:my-0 prose-li:leading-relaxed
+      prose-headings:text-gray-800 prose-headings:font-semibold prose-headings:mt-2 prose-headings:mb-1
+      prose-h1:text-sm prose-h2:text-sm prose-h3:text-xs prose-h4:text-xs
+      prose-code:text-[11px] prose-code:bg-gray-100 prose-code:text-gray-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:before:content-none prose-code:after:content-none
+      prose-blockquote:border-l-2 prose-blockquote:border-gray-200 prose-blockquote:pl-3 prose-blockquote:text-gray-500 prose-blockquote:not-italic
+      prose-hr:my-3 prose-hr:border-gray-100">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          // Tablas: estilo compacto, scroll horizontal si no caben.
+          table: ({ children }) => (
+            <div className="my-2 -mx-1 overflow-x-auto">
+              <table className="w-full border-collapse text-[11px] text-gray-700">
+                {children}
+              </table>
             </div>
-          );
-        }
-        // Texto normal
-        return (
-          <p key={i} className={`text-xs text-gray-600 leading-relaxed ${collapsed ? "line-clamp-1" : ""}`}>
-            {renderInline(line)}
-          </p>
-        );
-      })}
+          ),
+          thead: ({ children }) => (
+            <thead className="border-b border-gray-200 bg-gray-50/60">
+              {children}
+            </thead>
+          ),
+          th: ({ children }) => (
+            <th className="px-2 py-1.5 text-left font-semibold text-gray-700 align-top">
+              {children}
+            </th>
+          ),
+          td: ({ children }) => (
+            <td className="px-2 py-1.5 align-top border-t border-gray-100 text-gray-600">
+              {children}
+            </td>
+          ),
+          tr: ({ children }) => (
+            <tr className="even:bg-gray-50/40">{children}</tr>
+          ),
+        }}
+      >
+        {text}
+      </ReactMarkdown>
     </div>
   );
 }

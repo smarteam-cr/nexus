@@ -503,7 +503,7 @@ export function ProjectosActivos({ clientId }: { clientId: string }) {
     setSyncing(true);
     setSyncResult(null);
     try {
-      const res = await fetch(`/api/clients/${clientId}/sync-services`, { method: "POST" });
+      const res = await fetch(`/api/clients/${clientId}/sync-projects`, { method: "POST" });
       const data = await res.json();
       if (data.debug?.length) console.debug("[sync-projects]", data.debug);
       if (data.error) {

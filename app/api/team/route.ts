@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { withAuth, apiError } from "@/lib/api";
+import { revalidateTeamMembers } from "@/lib/cache/team";
 
 // GET /api/team
 export const GET = withAuth(async () => {
@@ -18,6 +19,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     const member = await prisma.teamMember.create({
       data: { name: name.trim(), email: email.trim().toLowerCase(), role: role?.trim() || null },
     });
+    revalidateTeamMembers();
     return NextResponse.json({ member }, { status: 201 });
   } catch (err: unknown) {
     if ((err as { code?: string }).code === "P2002") return apiError("El correo ya está registrado", 409);

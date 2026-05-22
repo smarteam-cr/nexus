@@ -16,6 +16,21 @@ interface SidebarProps {
   isOpen?: boolean;
 }
 
+/**
+ * Lleva la vista "hasta arriba" del sitio. Cubre tanto el scroll de `window`
+ * como los contenedores internos con overflow (ej. el canvas del cliente,
+ * la lista de sesiones) — scrollea cualquier elemento que esté desplazado.
+ */
+function scrollSiteToTop() {
+  if (typeof window === "undefined") return;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  document
+    .querySelectorAll<HTMLElement>("div, main, section, article, aside")
+    .forEach((el) => {
+      if (el.scrollTop > 0) el.scrollTo({ top: 0, behavior: "smooth" });
+    });
+}
+
 // ── Ítem de navegación principal ─────────────────────────────────────────────
 function NavItem({
   href,
@@ -59,7 +74,11 @@ export default function Sidebar({ clients, onToggle, isOpen = true }: SidebarPro
       <div className={`h-14 border-b border-gray-800 flex-shrink-0 flex items-center ${isOpen ? "px-4 justify-between" : "justify-center"}`}>
         {isOpen ? (
           <>
-            <Link href="/clients" className="flex items-center gap-2.5 min-w-0">
+            <Link
+              href="/clients"
+              onClick={scrollSiteToTop}
+              className="flex items-center gap-2.5 min-w-0"
+            >
               <BrandIcon />
               <span className="text-sm font-semibold text-white leading-tight truncate">
                 Nexus
@@ -143,17 +162,6 @@ export default function Sidebar({ clients, onToggle, isOpen = true }: SidebarPro
             icon={
               <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            }
-          />
-          <NavItem
-            href="/sales"
-            active={pathname.startsWith("/sales")}
-            isOpen={isOpen}
-            label="Análisis de ventas"
-            icon={
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
             }
           />

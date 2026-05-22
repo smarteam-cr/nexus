@@ -17,6 +17,7 @@ interface AgentData {
   sectionLabel: string | null;
   outputType: "CARDS" | "STREAM" | "FLOWCHART" | "CARDS_AND_FLOWCHARTS";
   scope: "CLIENT" | "GLOBAL";
+  pinnedKnowledgeIds?: string[];
 }
 
 interface AgentForm {

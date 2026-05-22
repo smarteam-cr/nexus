@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireConsultantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db/prisma";
+import { revalidateClientsSidebar } from "@/lib/cache/clients";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -105,6 +106,9 @@ export async function POST(request: NextRequest) {
       },
     });
   }
+
+  // Invalidar cache del sidebar — el nuevo cliente debe aparecer
+  revalidateClientsSidebar();
 
   return NextResponse.json({ clientId: client.id }, { status: 201 });
 }

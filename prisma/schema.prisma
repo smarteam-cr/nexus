@@ -159,6 +159,13 @@ model Project {
   lastSessionSummary String?   @db.Text // Resumen de la última sesión procesada
   pendingItems       Json?     // Array de { text: string, done: boolean }
 
+  // Propiedades sincronizadas desde HubSpot (objeto Service)
+  hubspotOwnerId      String?   // hubspot_owner_id (ID del owner en HubSpot)
+  hubspotOwnerName    String?   // Nombre del owner (CSE encargado) resuelto desde /owners/{id}
+  hubspotOwnerEmail   String?   // Email del owner
+  hubspotCreatedAt    DateTime? // hs_createdate del servicio en HubSpot
+  hubspotPipelineName String?   // Nombre del pipeline resuelto desde hs_pipeline
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -314,7 +321,7 @@ model ClientContextCard {
 
 model HubspotAccount {
   id              String   @id @default(cuid())
-  isSystem        Boolean  @default(false) // true = cuenta del sistema (Dinterweb), false = cuenta de cliente
+  isSystem        Boolean  @default(false) // true = cuenta del sistema (Smarteam), false = cuenta de cliente
   clientId        String?  @unique // nullable en transición — se hará NOT NULL en Fase 5
   client          Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
   hubspotPortalId String   @unique
@@ -412,6 +419,8 @@ model Agent {
   // Agrupación por propósito (reemplaza stages/steps para la UI)
   agentGroup             String?         // preparacion | diagnostico | planificacion | ejecucion | adopcion
   groupOrder             Int             @default(0) // Orden del grupo: 0=preparacion, 1=diagnostico, 2=planificacion, 3=ejecucion, 4=adopcion
+  // IDs de KnowledgeDocument inyectados sin truncar al prompt del agente (referencia principal)
+  pinnedKnowledgeIds     String[]        @default([])
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -437,6 +446,11 @@ model AgentRun {
   status      AgentRunStatus @default(PENDING)
   output      String?        @db.Text // JSON raw de Claude (backup)
 
+  // ── Análisis contextuales desde /sessions (Fase 9) ──────────────────────────
+  sourceSessionIds String[] @default([])         // ids de FirefliesSession usados como input
+  filters          Json?                         // snapshot de filtros: { from, to, teamRoles[], onlyWithContent }
+  agentSlug        String?                       // identificador estable: "sales-analysis" | "service-analysis"
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -444,6 +458,7 @@ model AgentRun {
   blocks CanvasBlock[]
 
   @@index([status])
+  @@index([clientId, agentSlug, createdAt])
 }
 
 // ─── TeamMember ───────────────────────────────────────────────────────────────
@@ -576,6 +591,13 @@ model FirefliesSession {
   googleEventId  String?               // ID del evento de Google Calendar (Meet)
   organizerEmail String?               // Email del organizador (para impersonación en enriquecimiento)
   manualClientId String?               // override manual del matching automático de cliente
+
+  // Índices para los queries principales:
+  //   /sessions: findMany({ where: { date: { lt: now } }, orderBy: { date: desc } })
+  //   override manual: filtros por manualClientId al matchear sesiones
+  // Sin esto, Postgres hace seq scan + sort en cada render.
+  @@index([date(sort: Desc)])
+  @@index([manualClientId])
 }
 
 // ─── Canvas Suggestions (aprobación de cambios al Client Canvas) ─────────────
@@ -596,4 +618,22 @@ model CanvasSuggestion {
   createdAt  DateTime @default(now())
 
   @@index([clientId, status])
+}
+
+// ─── SessionCategory — agrupación administrable de sesiones por dominio ──────
+// Sirve para categorizar sesiones de Google Meet / Fireflies por el dominio
+// de sus participantes (ej: "Interna" = @smarteamcr.com, "Partner HubSpot" = @hubspot.com).
+// Los matching de Client.emailDomains tienen prioridad — esto categoriza el RESTO.
+
+model SessionCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique              // "Interna", "Partner HubSpot", "Partner AtomChat"
+  slug      String   @unique              // "interna", "partner-hubspot" (URL-safe)
+  domains   String[]                      // ["smarteamcr.com"], ["hubspot.com", "hubspotcr.com"]
+  kind      String   @default("custom")   // "internal" | "partner" | "custom" — semántica para UI/orden
+  color     String?                       // hex (#94A3B8) para tag visual en sidebar
+  order     Int      @default(0)          // orden de aparición en sidebar
+  isDefault Boolean  @default(false)      // las default no se pueden eliminar (sí editar)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

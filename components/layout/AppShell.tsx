@@ -1,6 +1,6 @@
 import { getConsultantSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db/prisma";
+import { getClientsForSidebar } from "@/lib/cache/clients";
 import SidebarShell from "./SidebarShell";
 
 export default async function AppShell({
@@ -11,15 +11,9 @@ export default async function AppShell({
   const authenticated = await getConsultantSession();
   if (!authenticated) redirect("/");
 
-  const clients = await prisma.client.findMany({
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      company: true,
-      hubspotAccount: { select: { id: true, hubName: true } },
-    },
-  });
+  // Cacheado (ver lib/cache/clients.ts). Mutaciones de Client llaman
+  // revalidateTag("clients-sidebar") para invalidar.
+  const clients = await getClientsForSidebar();
 
   return <SidebarShell clients={clients}>{children}</SidebarShell>;
 }

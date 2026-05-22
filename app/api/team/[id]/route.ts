@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { withAuth, apiError } from "@/lib/api";
+import { revalidateTeamMembers } from "@/lib/cache/team";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -16,6 +17,7 @@ export const PUT = withAuth(async (req: NextRequest, { params }: Params) => {
       where: { id },
       data: { name: name.trim(), email: email.trim().toLowerCase(), role: role?.trim() || null },
     });
+    revalidateTeamMembers();
     return NextResponse.json({ member });
   } catch (err: unknown) {
     const code = (err as { code?: string }).code;
@@ -30,6 +32,7 @@ export const DELETE = withAuth(async (_req: NextRequest, { params }: Params) => 
   const { id } = await params;
   try {
     await prisma.teamMember.delete({ where: { id } });
+    revalidateTeamMembers();
     return NextResponse.json({ ok: true });
   } catch {
     return apiError("No encontrado", 404);

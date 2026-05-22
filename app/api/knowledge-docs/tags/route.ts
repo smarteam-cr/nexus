@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { requireConsultantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db/prisma";
 
-export const dynamic = "force-dynamic";
+// Tags cambian raramente. ISR 10 min. Cuando se cree un tag nuevo,
+// el endpoint creador debe llamar revalidatePath("/api/knowledge-docs/tags").
+export const revalidate = 600;
 
 export async function GET() {
   try {

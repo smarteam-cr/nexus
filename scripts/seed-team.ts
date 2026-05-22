@@ -9,16 +9,16 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter } as Parameters<typeof PrismaClient>[0]);
 
 const TEAM = [
-  { name: "Fidel Castro Chaves",  email: "fcastro@dinterweb.com",    role: "Ventas" },
-  { name: "Iván Rodriguez",       email: "irodriguez@dinterweb.com",  role: "Ventas" },
-  { name: "Danilo González",      email: "dgonzalez@dinterweb.com",   role: "Ventas" },
-  { name: "Sarahí Castañeda",     email: "scastaneda@dinterweb.com",  role: "Ventas" },
-  { name: "Alexander Vanegas",    email: "avanegas@dinterweb.com",    role: "Ventas" },
-  { name: "Carolina Muñoz",       email: "cmunoz@dinterweb.com",      role: "CSE" },
-  { name: "Ximena Rivera",        email: "xrivera@dinterweb.com",     role: "CSE" },
-  { name: "Nataly Morales",       email: "nmorales@dinterweb.com",    role: "CSE" },
-  { name: "Guillermo Osorio",     email: "gosorio@dinterweb.com",     role: "CSE" },
-  { name: "María Sánchez",        email: "msanchez@dinterweb.com",    role: "CSE" },
+  { name: "Fidel Castro Chaves",  email: "fcastro@smarteamcr.com",    role: "Ventas" },
+  { name: "Iván Rodriguez",       email: "irodriguez@smarteamcr.com",  role: "Ventas" },
+  { name: "Danilo González",      email: "dgonzalez@smarteamcr.com",   role: "Ventas" },
+  { name: "Sarahí Castañeda",     email: "scastaneda@smarteamcr.com",  role: "Ventas" },
+  { name: "Alexander Vanegas",    email: "avanegas@smarteamcr.com",    role: "Ventas" },
+  { name: "Carolina Muñoz",       email: "cmunoz@smarteamcr.com",      role: "CSE" },
+  { name: "Ximena Rivera",        email: "xrivera@smarteamcr.com",     role: "CSE" },
+  { name: "Nataly Morales",       email: "nmorales@smarteamcr.com",    role: "CSE" },
+  { name: "Guillermo Osorio",     email: "gosorio@smarteamcr.com",     role: "CSE" },
+  { name: "María Sánchez",        email: "msanchez@smarteamcr.com",    role: "CSE" },
 ];
 
 async function main() {

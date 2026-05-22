@@ -207,7 +207,7 @@ Pipeline: pipeline_stage, trigger, action, follow_up, outcome_positive, outcome_
 - Muestra publishedContent si existe, sino content
 - Flowcharts en modo solo lectura
 - Header: nombre proyecto, nombre cliente, Hub badges
-- Footer: "Powered by Nexus · Dinterweb"
+- Footer: "Powered by Nexus · Smarteam"
 
 ### Gestión del token
 - POST /api/projects/[id]/share — genera token

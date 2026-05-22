@@ -45,12 +45,74 @@ const PROJECT_PROPERTIES = [
   "estatus_del_proyecto",
   "tipo_de_servicio",
   "account_manager",
+  // Para meta info del proyecto que se muestra en el GPS
+  "hubspot_owner_id",
+  "hs_createdate",
+  "hs_pipeline",
+  "cls_encargado",        // propiedad custom (si existe en el portal)
 ];
 
 // ── Slugs del objeto Proyectos a probar en orden ─────────────────────────────
 // "projects" y "PROJECT" funcionan en HubSpot estándar; "0-18" y "0-49" son fallbacks
 const ASSOCIATION_SLUGS = ["projects", "PROJECT", "0-18", "0-49"];
 const READ_SLUGS = ["projects", "PROJECT", "0-18", "0-49"];
+
+// ── Helpers para resolver owner y pipeline ──────────────────────────────────
+
+// Cache en memoria por proceso para evitar fetches repetidos durante un sync
+const ownerCache = new Map<string, { name: string | null; email: string | null }>();
+const pipelineNameCache = new Map<string, string | null>();
+
+async function resolveOwner(
+  hs: Client,
+  ownerId: string | null | undefined,
+): Promise<{ name: string | null; email: string | null }> {
+  if (!ownerId) return { name: null, email: null };
+  if (ownerCache.has(ownerId)) return ownerCache.get(ownerId)!;
+  try {
+    const res = await hs.apiRequest({
+      method: "GET",
+      path: `/crm/v3/owners/${ownerId}`,
+    });
+    const data = (await res.json()) as {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      id?: string;
+    };
+    const name = [data.firstName, data.lastName].filter(Boolean).join(" ").trim() || null;
+    const result = { name, email: data.email ?? null };
+    ownerCache.set(ownerId, result);
+    return result;
+  } catch {
+    const result = { name: null, email: null };
+    ownerCache.set(ownerId, result);
+    return result;
+  }
+}
+
+async function resolvePipelineName(
+  hs: Client,
+  pipelineId: string | null | undefined,
+  workingSlug: string,
+): Promise<string | null> {
+  if (!pipelineId) return null;
+  const cacheKey = `${workingSlug}:${pipelineId}`;
+  if (pipelineNameCache.has(cacheKey)) return pipelineNameCache.get(cacheKey)!;
+  try {
+    const res = await hs.apiRequest({
+      method: "GET",
+      path: `/crm/v3/pipelines/${workingSlug}/${pipelineId}`,
+    });
+    const data = (await res.json()) as { label?: string };
+    const label = data.label ?? null;
+    pipelineNameCache.set(cacheKey, label);
+    return label;
+  } catch {
+    pipelineNameCache.set(cacheKey, null);
+    return null;
+  }
+}
 
 // ── Sync principal ───────────────────────────────────────────────────────────
 
@@ -63,7 +125,7 @@ export interface SyncResult {
   debug?: string[];
 }
 
-export async function syncServicesForClient(clientId: string): Promise<SyncResult> {
+export async function syncProjectsForClient(clientId: string): Promise<SyncResult> {
   const result: SyncResult = { found: 0, created: 0, updated: 0, skipped: 0, errors: [], debug: [] };
 
   // 1. Obtener client + HubspotAccount (query directa para evitar quirks del relation lookup)
@@ -85,7 +147,7 @@ export async function syncServicesForClient(clientId: string): Promise<SyncResul
 
   // 2. Obtener HubSpot client:
   //    Caso A: cliente tiene su propio portal HubSpot → usar su cuenta
-  //    Caso B: cliente está en el portal del sistema (Dinterweb) → usar cuenta del sistema
+  //    Caso B: cliente está en el portal del sistema (Smarteam) → usar cuenta del sistema
   let hsClient: Client;
   const usingSystemAccount = !hubspotAccount;
 
@@ -101,7 +163,7 @@ export async function syncServicesForClient(clientId: string): Promise<SyncResul
     // Caso B: usar sistema
     try {
       hsClient = await getSystemHubspotClient();
-      result.debug!.push("✓ Usando cuenta HubSpot del sistema (Dinterweb)");
+      result.debug!.push("✓ Usando cuenta HubSpot del sistema (Smarteam)");
     } catch (e) {
       result.errors.push(`Error al obtener HubSpot client del sistema: ${(e as Error).message}`);
       return result;
@@ -383,6 +445,25 @@ export async function syncServicesForClient(clientId: string): Promise<SyncResul
     const servicioContratado = props.servicio_contratado || props.tipo_de_servicio || projectName;
     const mapping = inferServiceMapping(servicioContratado);
 
+    // ── Resolver owner (CSE encargado) ────────────────────────────────────
+    // Priorizar propiedad custom "cls_encargado" (string libre, normalmente nombre)
+    // sobre el owner estándar de HubSpot.
+    const clsRaw = (props.cls_encargado ?? "").trim();
+    const hubOwnerId = (props.hubspot_owner_id ?? "").trim() || null;
+    const ownerInfo = await resolveOwner(hsClient, hubOwnerId);
+    const ownerName = clsRaw || ownerInfo.name;
+    const ownerEmail = ownerInfo.email;
+
+    // ── Resolver pipeline name ─────────────────────────────────────────────
+    const pipelineId = (props.hs_pipeline ?? "").trim() || null;
+    const readSlugForPipeline = workingAssocSlug ?? "projects";
+    const pipelineName = await resolvePipelineName(hsClient, pipelineId, readSlugForPipeline);
+
+    // ── Parsear fecha de creación ──────────────────────────────────────────
+    const createdAtRaw = (props.hs_createdate ?? "").trim();
+    const hubCreatedAt = createdAtRaw ? new Date(createdAtRaw) : null;
+    const hubCreatedAtValid = hubCreatedAt && !isNaN(hubCreatedAt.getTime()) ? hubCreatedAt : null;
+
     // Buscar existente por hubspotServiceId o por nombre (evitar duplicados)
     const existing =
       (await prisma.project.findUnique({ where: { hubspotServiceId: project.id } })) ??
@@ -400,6 +481,11 @@ export async function syncServicesForClient(clientId: string): Promise<SyncResul
           projectType: mapping.projectType,
           tags: mapping.hubTag ? [mapping.hubTag] : [],
           status: "active",
+          hubspotOwnerId:      hubOwnerId,
+          hubspotOwnerName:    ownerName,
+          hubspotOwnerEmail:   ownerEmail,
+          hubspotCreatedAt:    hubCreatedAtValid,
+          hubspotPipelineName: pipelineName,
         },
       });
       result.updated++;
@@ -412,6 +498,11 @@ export async function syncServicesForClient(clientId: string): Promise<SyncResul
           serviceType: mapping.serviceType,
           projectType: mapping.projectType,
           tags: mapping.hubTag ? [mapping.hubTag] : [],
+          hubspotOwnerId:      hubOwnerId,
+          hubspotOwnerName:    ownerName,
+          hubspotOwnerEmail:   ownerEmail,
+          hubspotCreatedAt:    hubCreatedAtValid,
+          hubspotPipelineName: pipelineName,
           status: "active",
         },
       });

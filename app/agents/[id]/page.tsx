@@ -4,7 +4,9 @@ import { prisma } from "@/lib/db/prisma";
 import AppShell from "@/components/layout/AppShell";
 import AgentFormClient from "./AgentFormClient";
 
-export const dynamic = "force-dynamic";
+// Detalle de agente — ISR 30s. PATCH/DELETE deben llamar
+// revalidatePath(`/agents/${id}`) para reflejar cambios inmediatos.
+export const revalidate = 30;
 
 export default async function AgentFormPage({
   params,
@@ -28,7 +30,8 @@ export default async function AgentFormPage({
 
   return (
     <AppShell>
-      <AgentFormClient agentId={id} initialData={initialData} />
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <AgentFormClient agentId={id} initialData={initialData as any} />
     </AppShell>
   );
 }

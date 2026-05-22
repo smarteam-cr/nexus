@@ -1,7 +1,7 @@
 import { Client } from "@hubspot/api-client";
 import { prisma } from "@/lib/db/prisma";
 
-// ── Cuenta del sistema (Dinterweb) ────────────────────────────────────────────
+// ── Cuenta del sistema (Smarteam) ─────────────────────────────────────────────
 
 export async function getSystemHubspotClient(): Promise<Client> {
   const account = await prisma.hubspotAccount.findFirst({

@@ -1,7 +1,7 @@
 /**
  * seed-demo.ts
  *
- * Crea (o regenera) el cliente demo "Dinterweb" con:
+ * Crea (o regenera) el cliente demo "Demo Agency" con:
  *   - Notas de etapa 1 (pasos 1, 2, 4, 6, 8)
  *   - Notas de etapa 2 (pasos 1, 2, 3, 4)
  *   - 4 documentos de ejemplo
@@ -10,7 +10,7 @@
  * Uso:
  *   npx tsx --env-file=.env scripts/seed-demo.ts
  *
- * Si ya existe un cliente llamado "Dinterweb" lo borra primero (limpieza total).
+ * Si ya existe un cliente llamado "Demo Agency" lo borra primero (limpieza total).
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -29,18 +29,18 @@ async function main() {
 
   // ── 1. Limpiar cliente anterior ─────────────────────────────────────────────
   const existing = await prisma.client.findFirst({
-    where: { name: "Dinterweb" },
+    where: { name: "Demo Agency" },
   });
   if (existing) {
     await prisma.client.delete({ where: { id: existing.id } });
-    console.log("🗑  Cliente anterior 'Dinterweb' eliminado.");
+    console.log("🗑  Cliente anterior 'Demo Agency' eliminado.");
   }
 
   // ── 2. Crear cliente ─────────────────────────────────────────────────────────
   const client = await prisma.client.create({
     data: {
-      name: "Dinterweb",
-      company: "Dinterweb",
+      name: "Demo Agency",
+      company: "Demo Agency",
       industry: "Agencia de Marketing Digital",
       notes:
         "Cliente estratégico. Agencia con equipo de ventas de 6 personas. Proceso de ventas largo (60-90 días). Usan HubSpot desde 2021 pero sin adopción real. Objetivo: construir rutina comercial con datos.",
@@ -53,7 +53,7 @@ async function main() {
     {
       stage: 1,
       step: 1,
-      content: `## Análisis Preliminar — Dinterweb
+      content: `## Análisis Preliminar — Demo Agency
 
 **Empresa:** Agencia de marketing digital con +8 años en el mercado.
 **Tamaño:** 6 personas en comercial, 20 en total.
@@ -151,7 +151,7 @@ Propuesta formal → Follow-up estructurado → Cierre
       content: `## Informe de Diagnóstico — Borrador
 
 ### Resumen Ejecutivo
-Dinterweb tiene una brecha significativa entre su proceso comercial declarado y el que se ejecuta en la práctica. El CRM existe pero no está adoptado como herramienta de trabajo real.
+Demo Agency tiene una brecha significativa entre su proceso comercial declarado y el que se ejecuta en la práctica. El CRM existe pero no está adoptado como herramienta de trabajo real.
 
 ### Hallazgos Principales
 1. **Adopción baja (3/10):** Solo 2 de 6 vendedores registran actividades consistentemente.
@@ -302,11 +302,11 @@ Con la implementación correcta: tasa de cierre 22% → 30% en 90 días.`,
     {
       stage: 1,
       step: null,
-      title: "Brief inicial — Dinterweb",
+      title: "Brief inicial — Demo Agency",
       type: "BRIEF" as const,
-      content: `Cliente: Dinterweb — Agencia de Marketing Digital
+      content: `Cliente: Demo Agency — Agencia de Marketing Digital
 Contacto: Andrea Gómez (Gerente Comercial)
-Email: andrea@dinterweb.com
+Email: andrea@demoagency.com
 
 Problema declarado:
 "Tenemos HubSpot hace 3 años pero nadie lo usa bien. Necesitamos que el equipo adopte el CRM y que podamos hacer forecast real."
@@ -346,14 +346,14 @@ JP: Si me quita trabajo en vez de dármelo, claro. Pero ahora mismo me da más t
       step: 4,
       title: "Focus Group — Grabación sesión",
       type: "URL" as const,
-      url: "https://app.fireflies.ai/view/demo-dinterweb-focus-group",
+      url: "https://app.fireflies.ai/view/demo-demoagency-focus-group",
     },
     {
       stage: 2,
       step: 5,
-      title: "Guía de onboarding HubSpot — Equipo Dinterweb",
+      title: "Guía de onboarding HubSpot — Equipo Demo Agency",
       type: "FREE_TEXT" as const,
-      content: `# Guía Rápida: HubSpot para el Equipo Dinterweb
+      content: `# Guía Rápida: HubSpot para el Equipo Demo Agency
 
 ## ¿Qué necesito hacer cada día? (5 min)
 
@@ -451,7 +451,7 @@ Expectativa no declarada: que el proceso sea "fácil" para el equipo. Tienen mie
     {
       order: 5,
       title: "Dominio y datos de la empresa",
-      content: `* Portal HubSpot: dinterweb.hubspot.com
+      content: `* Portal HubSpot: demoagency.hubspot.com
 * Contactos en CRM: ~1,200 (muchos desactualizados)
 * Negocios activos: 34 (solo 8 con actividad en últimos 30 días)
 * Propiedades personalizadas existentes: 12 (mayoría sin uso)

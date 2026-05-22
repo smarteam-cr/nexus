@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireConsultantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db/prisma";
 import { syncFirefliesSessions, extractTitleTerms, extractDomain } from "@/lib/fireflies/sync";
+import { revalidateClientsSidebar } from "@/lib/cache/clients";
 
 // GET /api/clients — Listar todos los clientes
 export async function GET() {
@@ -44,6 +45,9 @@ export async function POST(request: NextRequest) {
       notes: notes?.trim() || null,
     },
   });
+
+  // Invalidar cache del sidebar (AppShell)
+  revalidateClientsSidebar();
 
   // Disparar sync de Fireflies en background para el nuevo cliente.
   // Pasamos los datos del cliente como matcher extra porque el cliente

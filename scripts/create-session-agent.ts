@@ -43,7 +43,7 @@ CARDS A GENERAR (solo las que tengan contenido — no generes cards vacíos):
 4. "Compromisos y tareas"
    - Acciones concretas que alguien se comprometió a hacer
    - Formato: tarea + responsable + plazo (si se mencionó)
-   - Incluir tanto compromisos del cliente como del equipo Dinterweb
+   - Incluir tanto compromisos del cliente como del equipo Smarteam
    - Máximo 200 palabras
 
 5. "Sugerencias para canvas de empresa"

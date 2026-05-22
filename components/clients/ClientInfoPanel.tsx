@@ -234,7 +234,7 @@ export default function ClientInfoPanel({
                 {hubDetails?.source === "system" && (
                   <span className="flex items-center gap-1 px-2 py-1 rounded bg-gray-800 border border-gray-700 text-xs">
                     <span className="text-gray-500">Fuente:</span>
-                    <span className="text-gray-400">cuenta Dinterweb</span>
+                    <span className="text-gray-400">cuenta Smarteam</span>
                   </span>
                 )}
                 {(hubDetails?.hubName ?? hubName) && (

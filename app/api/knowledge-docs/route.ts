@@ -3,7 +3,9 @@ import { requireConsultantSession } from "@/lib/auth";
 import { prisma } from "@/lib/db/prisma";
 import { KnowledgeStatus, KnowledgeType, TagCategory } from "@prisma/client";
 
-export const dynamic = "force-dynamic";
+// GET cacheable con ISR 60s. POST (mutación) es siempre dynamic.
+// Tras un POST, llamar revalidatePath("/knowledge") y revalidateTag si aplica.
+export const revalidate = 60;
 
 // GET /api/knowledge-docs — listar documentos con filtros opcionales
 export async function GET(req: NextRequest) {

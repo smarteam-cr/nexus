@@ -41,7 +41,7 @@ export default function WorkspaceClient({
     if (!hasHubspot || syncedRef.current) return;
     syncedRef.current = true;
 
-    fetch(`/api/clients/${clientId}/sync-services`, { method: "POST" })
+    fetch(`/api/clients/${clientId}/sync-projects`, { method: "POST" })
       .then((r) => r.json())
       .then((data) => {
         if (data.created || data.updated) {
@@ -50,6 +50,13 @@ export default function WorkspaceClient({
       })
       .catch(() => {});
   }, [clientId, hasHubspot]);
+
+  // Auto-sync de Google Meet en background — descubre transcripts/Docs nuevos
+  // sin que el usuario tenga que disparar nada. El endpoint tiene cooldown
+  // de 20 min, así que no spamea si recargás múltiples clientes seguidos.
+  useEffect(() => {
+    fetch("/api/integrations/google/auto-sync", { method: "POST" }).catch(() => {});
+  }, []);
 
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 57px)" }}>
