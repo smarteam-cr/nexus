@@ -1,6 +1,6 @@
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { anthropic } from "@/lib/anthropic";
 
 // Etiquetas de los pasos (para dar contexto al agente)
@@ -25,16 +25,10 @@ const STEP_LABELS: Record<string, Record<number, string>> = {
   },
 };
 
-export async function POST(
-  request: NextRequest,
+export const POST = withAuth(async (
+  request,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+) => {
   const { id: agentId } = await params;
   const body = await request.json();
   const { clientId, stage, step } = body as {
@@ -199,4 +193,4 @@ export async function POST(
       "X-Agent-Run-Id": run.id,
     },
   });
-}
+});

@@ -1,13 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
-export async function POST(
-  _req: NextRequest,
+export const POST = withAuth(async (
+  _req,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   try {
-    await requireConsultantSession();
     const { id } = await params;
 
     // Verificar que el cliente existe
@@ -38,4 +37,4 @@ export async function POST(
     }
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

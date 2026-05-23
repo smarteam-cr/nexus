@@ -2,8 +2,15 @@ import { requireConsultantSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import AppShell from "@/components/layout/AppShell";
-import ClientsGrid from "./ClientsGrid";
+import { PageHeader } from "@/components/ui";
+import { getTeamMembers } from "@/lib/cache/team";
+import { computeLastMeetingDates } from "@/lib/clients/meeting-dates";
+import ClientsGrid, { type ClientRow } from "./ClientsGrid";
 import ICPSection from "./ICPSection";
+
+// ISR 60s — la página cruza sesiones × equipo para las fechas de reunión;
+// no es necesario recalcular en cada request.
+export const revalidate = 60;
 
 export default async function ClientsPage() {
   try {
@@ -12,33 +19,72 @@ export default async function ClientsPage() {
     redirect("/");
   }
 
-  const clients = await prisma.client.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      hubspotAccount: {
-        select: { id: true, hubName: true, hubspotPortalId: true },
+  const now = new Date();
+
+  const [clients, sessions, categories, teamMembers] = await Promise.all([
+    prisma.client.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        company: true,
+        emailDomains: true,
+        hubspotCompanyId: true,
+        createdAt: true,
+        hubspotAccount: { select: { hubName: true } },
+        projects: { select: { hubspotOwnerName: true } },
+        _count: { select: { projects: true } },
       },
-      _count: {
-        select: { audits: true, implementations: true, documents: true },
-      },
-    },
+    }),
+    prisma.firefliesSession.findMany({
+      where: { date: { lt: now } },
+      orderBy: { date: "desc" },
+      select: { date: true, participants: true, manualClientId: true, title: true },
+    }),
+    prisma.sessionCategory.findMany({
+      select: { id: true, name: true, slug: true, domains: true, kind: true, color: true },
+    }),
+    getTeamMembers(),
+  ]);
+
+  // Fechas de última reunión (ventas / CSE) calculadas en memoria — sin schema nuevo.
+  const meetingDates = computeLastMeetingDates({ sessions, clients, categories, teamMembers });
+
+  const rows: ClientRow[] = clients.map((c) => {
+    const md = meetingDates.get(c.id);
+    const cseNames = [
+      ...new Set(
+        c.projects
+          .map((p) => p.hubspotOwnerName)
+          .filter((n): n is string => !!n && n.trim().length > 0)
+      ),
+    ];
+    return {
+      id: c.id,
+      name: c.name,
+      company: c.company,
+      createdAt: c.createdAt.toISOString(),
+      hasHubspot: !!c.hubspotAccount || !!c.hubspotCompanyId,
+      cseNames,
+      lastSalesMeeting: md?.sales ? md.sales.toISOString() : null,
+      lastCseMeeting: md?.cse ? md.cse.toISOString() : null,
+      projectCount: c._count.projects,
+    };
   });
 
   return (
     <AppShell>
-      <div className="p-6 max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-xl font-semibold text-white">Clientes</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              {clients.length === 0
-                ? "Sin clientes aún"
-                : `${clients.length} cliente${clients.length !== 1 ? "s" : ""}`}
-            </p>
-          </div>
-        </div>
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <PageHeader
+          title="Clientes"
+          description={
+            rows.length === 0
+              ? "Sin clientes aún"
+              : `${rows.length} cliente${rows.length !== 1 ? "s" : ""}`
+          }
+        />
 
-        <ClientsGrid clients={clients} />
+        <ClientsGrid clients={rows} />
         <ICPSection />
       </div>
     </AppShell>

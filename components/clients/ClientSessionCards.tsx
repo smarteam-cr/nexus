@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { X } from "lucide-react";
+import { Skeleton } from "@/components/ui";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -617,17 +618,17 @@ function SessionsSkeleton() {
   return (
     <div className="mb-5">
       <div className="flex items-center gap-1.5 mb-2.5">
-        <div className="w-16 h-2.5 bg-gray-800 rounded animate-pulse" />
+        <Skeleton className="w-16 h-2.5" />
       </div>
       <div className="flex gap-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="flex-shrink-0 w-[160px] rounded-xl bg-gray-900 border border-gray-800 overflow-hidden animate-pulse">
-            <div className="w-full h-[90px] bg-gray-800" />
+          <div key={i} className="flex-shrink-0 w-[160px] rounded-xl bg-gray-900 border border-gray-800 overflow-hidden">
+            <Skeleton className="w-full h-[90px] rounded-none" delay={i * 60} />
             <div className="px-3 py-2.5 space-y-1.5">
-              <div className="h-2.5 bg-gray-800 rounded w-4/5" />
-              <div className="h-2 bg-gray-800 rounded w-1/2" />
+              <Skeleton className="h-2.5 w-4/5" delay={i * 60} />
+              <Skeleton className="h-2 w-1/2" delay={i * 60} />
               <div className="flex gap-0.5 mt-1">
-                {[1, 2].map((j) => <div key={j} className="w-5 h-5 rounded-full bg-gray-800" />)}
+                {[1, 2].map((j) => <Skeleton key={j} className="w-5 h-5" rounded="full" delay={i * 60} />)}
               </div>
             </div>
           </div>

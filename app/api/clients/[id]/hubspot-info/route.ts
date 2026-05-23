@@ -1,8 +1,8 @@
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
 import { Client } from "@hubspot/api-client";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 // ── Propiedades de empresa a obtener de HubSpot ──────────────────────────────
 
@@ -47,16 +47,10 @@ interface SearchResult {
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export async function GET(
-  _request: NextRequest,
+export const GET = withAuth(async (
+  _request,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+) => {
   const { id: clientId } = await params;
 
   const client = await prisma.client.findUnique({
@@ -79,7 +73,7 @@ export async function GET(
   }
 
   return NextResponse.json({ connected: false });
-}
+});
 
 // ── Con cuenta del cliente ────────────────────────────────────────────────────
 

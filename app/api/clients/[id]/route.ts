@@ -1,19 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 
 // GET /api/clients/[id]
-export async function GET(
-  _request: NextRequest,
+export const GET = withAuth(async (
+  _request,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+) => {
   const { id } = await params;
   const client = await prisma.client.findUnique({
     where: { id },
@@ -32,19 +26,13 @@ export async function GET(
   }
 
   return NextResponse.json(client);
-}
+});
 
 // PATCH /api/clients/[id]
-export async function PATCH(
-  request: NextRequest,
+export const PATCH = withAuth(async (
+  request,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+) => {
   const { id } = await params;
   const data = await request.json();
 
@@ -69,19 +57,13 @@ export async function PATCH(
   }
 
   return NextResponse.json(client);
-}
+});
 
 // DELETE /api/clients/[id]
-export async function DELETE(
-  _request: NextRequest,
+export const DELETE = withAuth(async (
+  _request,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+) => {
   const { id } = await params;
   await prisma.client.delete({ where: { id } });
 
@@ -89,4 +71,4 @@ export async function DELETE(
   revalidateClientsSidebar();
 
   return NextResponse.json({ ok: true });
-}
+});

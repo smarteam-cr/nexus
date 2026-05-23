@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ConfirmDialog } from "@/components/ui";
 
 interface ApiTask {
   action?: string;
@@ -333,87 +334,20 @@ export default function ImplementationsList({ implementations }: Props) {
         ))}
       </div>
 
-      {/* Modal de confirmación */}
-      {toDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => !deleting && setToDelete(null)}
-          />
-
-          {/* Card */}
-          <div className="relative z-10 w-full max-w-sm mx-4 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6">
-            {/* Ícono */}
-            <div className="w-11 h-11 rounded-xl bg-brand/10 border border-brand/20 flex items-center justify-center mb-4">
-              <svg
-                className="w-5 h-5 text-brand-light"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                />
-              </svg>
-            </div>
-
-            <h2 className="text-white font-semibold text-base mb-1">
-              Eliminar implementación
-            </h2>
-            <p className="text-gray-400 text-sm mb-6">
-              ¿Seguro que quieres eliminar{" "}
-              <span className="text-white font-medium">{toDelete.name}</span>?
-              Esta acción no se puede deshacer.
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setToDelete(null)}
-                disabled={deleting}
-                className="flex-1 px-4 py-2.5 rounded-lg border border-gray-700 text-gray-300 text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="flex-1 px-4 py-2.5 rounded-lg bg-brand/20 border border-brand/30 text-brand-light hover:bg-brand/30 text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {deleting ? (
-                  <>
-                    <svg
-                      className="w-3.5 h-3.5 animate-spin"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v8z"
-                      />
-                    </svg>
-                    Eliminando…
-                  </>
-                ) : (
-                  "Eliminar"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Confirmación de borrado */}
+      <ConfirmDialog
+        open={!!toDelete}
+        onConfirm={handleDelete}
+        onCancel={() => setToDelete(null)}
+        loading={deleting}
+        title="¿Eliminar implementación?"
+        description={
+          toDelete
+            ? `"${toDelete.name}" se eliminará permanentemente. Esta acción no se puede deshacer.`
+            : undefined
+        }
+        confirmLabel="Eliminar"
+      />
     </>
   );
 }

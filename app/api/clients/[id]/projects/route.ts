@@ -1,14 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 
-export async function GET(
-  _req: NextRequest,
+export const GET = withAuth(async (
+  _req,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try { await requireConsultantSession(); } catch { return NextResponse.json({ error: "unauthorized" }, { status: 401 }); }
-
+) => {
   const { id: clientId } = await params;
 
   const projects = await prisma.project.findMany({
@@ -27,14 +25,12 @@ export async function GET(
   });
 
   return NextResponse.json({ projects });
-}
+});
 
-export async function POST(
-  req: NextRequest,
+export const POST = withAuth(async (
+  req,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try { await requireConsultantSession(); } catch { return NextResponse.json({ error: "unauthorized" }, { status: 401 }); }
-
+) => {
   const { id: clientId } = await params;
   const body = await req.json() as { name?: string };
 
@@ -53,4 +49,4 @@ export async function POST(
   await createDefaultCanvases(project.id);
 
   return NextResponse.json({ project }, { status: 201 });
-}
+});

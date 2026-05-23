@@ -1,12 +1,10 @@
-import { NextRequest } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { readAccountState } from "@/lib/hubspot/reader";
 import { streamPlanningChat, extractPlanFromMessage } from "@/lib/ai/planning-agent";
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request) => {
   try {
-    await requireConsultantSession();
     const { implementationId, message } = await request.json() as {
       implementationId: string;
       message: string;
@@ -125,4 +123,4 @@ export async function POST(request: NextRequest) {
     }
     return new Response(message, { status: 500 });
   }
-}
+});

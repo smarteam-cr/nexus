@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Skeleton } from "@/components/ui";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -145,18 +146,18 @@ function FindingsSkeleton() {
   return (
     <div className="mb-5">
       <div className="flex items-center gap-1.5 mb-2.5">
-        <div className="w-24 h-2.5 bg-gray-800 rounded animate-pulse" />
+        <Skeleton className="w-24 h-2.5" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
         {[1, 2, 3].map((i) => (
           <div
             key={i}
-            className="rounded-xl bg-gray-900 border border-gray-800 px-4 py-3 space-y-2 animate-pulse"
+            className="rounded-xl bg-gray-900 border border-gray-800 px-4 py-3 space-y-2"
           >
-            <div className="h-2 bg-gray-800 rounded w-1/3" />
-            <div className="h-2 bg-gray-800 rounded w-full" />
-            <div className="h-2 bg-gray-800 rounded w-4/5" />
-            <div className="h-2 bg-gray-800 rounded w-3/5" />
+            <Skeleton className="h-2 w-1/3" delay={i * 60} />
+            <Skeleton className="h-2 w-full" delay={i * 60} />
+            <Skeleton className="h-2 w-4/5" delay={i * 60} />
+            <Skeleton className="h-2 w-3/5" delay={i * 60} />
           </div>
         ))}
       </div>

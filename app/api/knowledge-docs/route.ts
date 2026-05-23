@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { KnowledgeStatus, KnowledgeType, TagCategory } from "@prisma/client";
 
@@ -8,13 +8,7 @@ import { KnowledgeStatus, KnowledgeType, TagCategory } from "@prisma/client";
 export const revalidate = 60;
 
 // GET /api/knowledge-docs — listar documentos con filtros opcionales
-export async function GET(req: NextRequest) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
+export const GET = withAuth(async (req) => {
   const { searchParams } = new URL(req.url);
   const type   = searchParams.get("type")   as KnowledgeType   | null;
   const status = searchParams.get("status") as KnowledgeStatus | null;
@@ -31,16 +25,10 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json(docs);
-}
+});
 
 // POST /api/knowledge-docs — crear documento
-export async function POST(req: NextRequest) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
+export const POST = withAuth(async (req) => {
   const body = (await req.json()) as {
     type?: string;
     status?: string;
@@ -82,4 +70,4 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json(doc, { status: 201 });
-}
+});

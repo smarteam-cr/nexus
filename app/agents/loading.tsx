@@ -1,37 +1,19 @@
 /**
- * Loading skeleton para /agents.
- * Lista de agentes con avatar + título + descripción.
+ * Loading skeleton para /agents — tabla de agentes.
  */
+
+import { Skeleton, TableSkeleton } from "@/components/ui";
 
 export default function AgentsLoading() {
   return (
-    <div className="flex-1 px-8 py-6">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="space-y-1.5">
-          <div className="h-7 w-32 rounded skeleton-shimmer" />
-          <div className="h-2.5 w-56 rounded skeleton-shimmer" />
-        </div>
-        <div className="h-9 w-32 rounded-lg skeleton-shimmer" />
+    <div className="max-w-6xl mx-auto px-6 py-8">
+      {/* PageHeader */}
+      <div className="mb-6 space-y-2">
+        <Skeleton className="h-6 w-36" />
+        <Skeleton className="h-3 w-80 max-w-full" />
       </div>
 
-      {/* Lista */}
-      <div className="space-y-2 max-w-3xl">
-        {[...Array(6)].map((_, i) => (
-          <div
-            key={i}
-            className="flex items-center gap-4 rounded-xl border border-gray-100 bg-white p-4"
-            style={{ animationDelay: `${i * 0.05}s` }}
-          >
-            <div className="w-10 h-10 rounded-lg skeleton-shimmer flex-shrink-0" />
-            <div className="flex-1 space-y-2">
-              <div className="h-3.5 rounded skeleton-shimmer" style={{ width: "40%" }} />
-              <div className="h-2.5 rounded skeleton-shimmer" style={{ width: "65%" }} />
-            </div>
-            <div className="h-6 w-16 rounded-full skeleton-shimmer flex-shrink-0" />
-          </div>
-        ))}
-      </div>
+      <TableSkeleton columns={6} rows={8} toolbar />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui";
 
 export default function NewAuditButton() {
   const router = useRouter();
@@ -27,34 +28,20 @@ export default function NewAuditButton() {
   };
 
   return (
-    <>
-      <button
-        onClick={handleCreate}
-        disabled={loading}
-        className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-      >
-        {loading ? (
-          <>
-            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Capturando datos...
-          </>
-        ) : (
-          <>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Nueva auditoría
-          </>
+    <div className="relative flex-shrink-0">
+      <Button variant="primary" size="md" loading={loading} onClick={handleCreate}>
+        {!loading && (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
         )}
-      </button>
+        {loading ? "Capturando datos…" : "Nueva auditoría"}
+      </Button>
       {error && (
-        <p className="absolute top-full right-0 mt-1 text-xs text-red-500 whitespace-nowrap">
+        <p className="absolute top-full right-0 mt-1 text-xs text-red-400 whitespace-nowrap">
           {error}
         </p>
       )}
-    </>
+    </div>
   );
 }

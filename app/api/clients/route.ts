@@ -1,17 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { syncFirefliesSessions, extractTitleTerms, extractDomain } from "@/lib/fireflies/sync";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 
 // GET /api/clients — Listar todos los clientes
-export async function GET() {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withAuth(async () => {
   const clients = await prisma.client.findMany({
     orderBy: { createdAt: "desc" },
     include: {
@@ -21,16 +15,10 @@ export async function GET() {
   });
 
   return NextResponse.json(clients);
-}
+});
 
 // POST /api/clients — Crear cliente
-export async function POST(request: NextRequest) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = withAuth(async (request) => {
   const { name, company, industry, notes } = await request.json();
 
   if (!name?.trim()) {
@@ -68,4 +56,4 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json(client, { status: 201 });
-}
+});

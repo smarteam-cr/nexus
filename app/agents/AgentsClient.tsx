@@ -3,7 +3,17 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button, Badge, Card, buttonVariants } from "@/components/ui";
+import {
+  Button,
+  Badge,
+  Card,
+  buttonVariants,
+  ConfirmDialog,
+  EmptyState,
+  PageHeader,
+  Table,
+  type TableColumn,
+} from "@/components/ui";
 
 interface Agent {
   id: string;
@@ -36,188 +46,190 @@ const OUTPUT_LABELS: Record<string, { label: string; color: string }> = {
   STREAM:             { label: "Stream",        color: "text-green-400 bg-green-500/10 border-green-500/20" },
 };
 
-function AgentRow({
-  agent,
-  onDelete,
-  deletingId,
-}: {
-  agent: Agent;
-  onDelete: (id: string, name: string) => void;
-  deletingId: string | null;
-}) {
-  const typeTag = TYPE_LABELS[agent.agentType];
-  const outputTag = OUTPUT_LABELS[agent.outputType];
-
-  return (
-    <div className="flex items-center gap-4 px-4 py-3.5 rounded-xl bg-gray-900 border border-gray-800 hover:border-gray-700 transition-colors group">
-      {/* Ícono */}
-      <Card.Icon color={agent.scope === "GLOBAL" ? "gray" : "brand"} className="w-9 h-9">
-        {agent.scope === "GLOBAL" ? (
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-          </svg>
-        ) : (
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
-        )}
-      </Card.Icon>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-medium text-white truncate">{agent.name}</p>
-          <Badge variant={agent.status === "ACTIVE" ? "success" : "default"} size="xs">
-            {agent.status === "ACTIVE" ? "Activo" : "Borrador"}
-          </Badge>
-          {typeTag && (
-            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${typeTag.color}`}>
-              {typeTag.label}
-            </span>
-          )}
-          {outputTag && (
-            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${outputTag.color}`}>
-              {outputTag.label}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3 mt-0.5">
-          {agent.description && (
-            <p className="text-xs text-gray-500 truncate">{agent.description}</p>
-          )}
-          {agent.scope === "CLIENT" && (
-            <span className="text-xs text-gray-600 flex-shrink-0">
-              {agent.associatedStages.length === 0
-                ? "Todas las etapas"
-                : agent.associatedStages.map((s) => STAGE_LABELS[s] ?? `Etapa ${s}`).join(", ")}
-            </span>
-          )}
-          <span className="text-xs text-gray-700 flex-shrink-0">
-            {agent._count.runs} {agent._count.runs === 1 ? "ejecución" : "ejecuciones"}
-          </span>
-        </div>
-      </div>
-
-      {/* Acciones */}
-      <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Link
-          href={`/agents/${agent.id}`}
-          className={buttonVariants({ variant: "secondary", size: "sm" })}
-        >
-          Editar
-        </Link>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => onDelete(agent.id, agent.name)}
-          loading={deletingId === agent.id}
-        >
-          {deletingId !== agent.id && "Eliminar"}
-        </Button>
-      </div>
-    </div>
-  );
-}
+const TAG_CLASS = "inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap";
 
 export default function AgentsClient({ agents }: { agents: Agent[] }) {
   const router = useRouter();
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<{ id: string; name: string } | null>(null);
 
-  async function handleDelete(id: string, name: string) {
-    if (!confirm(`¿Eliminar el agente "${name}"? Esta acción no se puede deshacer.`)) return;
-    setDeletingId(id);
-    try {
-      await fetch(`/api/agents/${id}`, { method: "DELETE" });
-      router.refresh();
-    } finally {
-      setDeletingId(null);
-    }
+  async function handleDelete() {
+    if (!confirmTarget) return;
+    await fetch(`/api/agents/${confirmTarget.id}`, { method: "DELETE" });
+    setConfirmTarget(null);
+    router.refresh();
   }
 
-  const clientAgents = agents.filter((a) => a.scope === "CLIENT");
-  const globalAgents = agents.filter((a) => a.scope === "GLOBAL");
+  const columns: TableColumn<Agent>[] = [
+    {
+      key: "agent",
+      header: "Agente",
+      sortValue: (a) => a.name,
+      render: (a) => (
+        <Table.IdentityCell
+          leading={
+            <Card.Icon color={a.scope === "GLOBAL" ? "gray" : "brand"}>
+              {a.scope === "GLOBAL" ? (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              )}
+            </Card.Icon>
+          }
+          primary={a.name}
+          secondary={a.description ?? undefined}
+        />
+      ),
+    },
+    {
+      key: "status",
+      header: "Estado",
+      sortValue: (a) => a.status,
+      width: "w-28",
+      render: (a) => (
+        <Badge variant={a.status === "ACTIVE" ? "success" : "default"} size="xs">
+          {a.status === "ACTIVE" ? "Activo" : "Borrador"}
+        </Badge>
+      ),
+    },
+    {
+      key: "type",
+      header: "Tipo",
+      sortValue: (a) => a.agentType,
+      width: "w-44",
+      hideOnMobile: true,
+      render: (a) => {
+        const t = TYPE_LABELS[a.agentType];
+        return t ? (
+          <span className={`${TAG_CLASS} ${t.color}`}>{t.label}</span>
+        ) : (
+          <span className="text-gray-600">—</span>
+        );
+      },
+    },
+    {
+      key: "output",
+      header: "Salida",
+      sortValue: (a) => a.outputType,
+      width: "w-40",
+      hideOnMobile: true,
+      render: (a) => {
+        const o = OUTPUT_LABELS[a.outputType];
+        return o ? (
+          <span className={`${TAG_CLASS} ${o.color}`}>{o.label}</span>
+        ) : (
+          <span className="text-gray-600">—</span>
+        );
+      },
+    },
+    {
+      key: "scope",
+      header: "Alcance",
+      sortValue: (a) => a.scope,
+      width: "w-44",
+      hideOnMobile: true,
+      render: (a) =>
+        a.scope === "GLOBAL" ? (
+          <span className="text-gray-400">Portal</span>
+        ) : (
+          <span className="text-gray-400">
+            Cliente
+            <span className="text-gray-600">
+              {" · "}
+              {a.associatedStages.length === 0
+                ? "Todas las etapas"
+                : a.associatedStages.map((s) => STAGE_LABELS[s] ?? `Etapa ${s}`).join(", ")}
+            </span>
+          </span>
+        ),
+    },
+    {
+      key: "runs",
+      header: "Ejecuciones",
+      sortValue: (a) => a._count.runs,
+      align: "right",
+      width: "w-28",
+      render: (a) => <span className="tabular-nums text-gray-400">{a._count.runs}</span>,
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      width: "w-24",
+      render: (a) => (
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmTarget({ id: a.id, name: a.name });
+          }}
+        >
+          Eliminar
+        </Button>
+      ),
+    },
+  ];
 
   return (
-    <div className="flex-1 px-8 py-8 max-w-3xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-white">Agentes IA</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Configura agentes para automatizar pasos del proceso de consultoría
-          </p>
-        </div>
-        <Link
-          href="/agents/new"
-          className={buttonVariants({ variant: "primary", size: "md" })}
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nuevo agente
-        </Link>
-      </div>
+    <div className="max-w-6xl mx-auto px-6 py-8">
+      <PageHeader
+        title="Agentes IA"
+        description="Configura agentes para automatizar pasos del proceso de consultoría"
+      />
 
-      {/* Agentes de portal (globales) */}
-      {globalAgents.length > 0 && (
-        <div className="mb-6">
-          <p className="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-2">
-            Portal
-          </p>
-          <div className="space-y-2">
-            {globalAgents.map((agent) => (
-              <AgentRow
-                key={agent.id}
-                agent={agent}
-                onDelete={handleDelete}
-                deletingId={deletingId}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Agentes de cliente */}
-      {(clientAgents.length > 0 || globalAgents.length > 0) && clientAgents.length > 0 && (
-        <div>
-          {globalAgents.length > 0 && (
-            <p className="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-2">
-              Clientes
-            </p>
-          )}
-          <div className="space-y-2">
-            {clientAgents.map((agent) => (
-              <AgentRow
-                key={agent.id}
-                agent={agent}
-                onDelete={handleDelete}
-                deletingId={deletingId}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Lista vacía */}
-      {agents.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center mb-4">
-            <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      {agents.length === 0 ? (
+        <EmptyState
+          icon={
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
-          </div>
-          <p className="text-white font-medium">Sin agentes aún</p>
-          <p className="text-gray-500 text-sm mt-1 max-w-xs">
-            Crea tu primer agente para automatizar pasos del proceso de consultoría con IA
-          </p>
-          <Link
-            href="/agents/new"
-            className={buttonVariants({ variant: "primary", size: "md" }) + " mt-4"}
-          >
-            Crear agente
-          </Link>
-        </div>
+          }
+          title="Sin agentes aún"
+          description="Crea tu primer agente para automatizar pasos del proceso de consultoría con IA."
+          action={
+            <Link href="/agents/new" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+              Crear agente
+            </Link>
+          }
+        />
+      ) : (
+        <Table
+          columns={columns}
+          rows={agents}
+          rowKey={(a) => a.id}
+          onRowClick={(a) => router.push(`/agents/${a.id}`)}
+          search={{
+            placeholder: "Buscar agentes…",
+            getText: (a) => `${a.name} ${a.description ?? ""}`,
+          }}
+          initialSort={{ key: "agent", dir: "asc" }}
+          action={
+            <Link href="/agents/new" className={buttonVariants({ variant: "primary", size: "md" })}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Nuevo agente
+            </Link>
+          }
+        />
       )}
+
+      <ConfirmDialog
+        open={!!confirmTarget}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmTarget(null)}
+        title="¿Eliminar agente?"
+        description={
+          confirmTarget
+            ? `"${confirmTarget.name}" se eliminará permanentemente. Esta acción no se puede deshacer.`
+            : undefined
+        }
+        confirmLabel="Eliminar"
+      />
     </div>
   );
 }

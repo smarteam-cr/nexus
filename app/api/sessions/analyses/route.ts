@@ -7,17 +7,11 @@
  * Solo trae metadata — las cards se cargan lazy via /api/sessions/analyses/[runId].
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
-export async function GET(req: NextRequest) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
+export const GET = withAuth(async (req) => {
   const clientId = req.nextUrl.searchParams.get("clientId");
   if (!clientId) {
     return NextResponse.json({ error: "clientId requerido" }, { status: 400 });
@@ -55,4 +49,4 @@ export async function GET(req: NextRequest) {
   }));
 
   return NextResponse.json(summary);
-}
+});

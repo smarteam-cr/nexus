@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
-export async function GET() {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withAuth(async () => {
   const account = await prisma.hubspotAccount.findFirst({
     where: { isSystem: true },
     select: {
@@ -32,4 +26,4 @@ export async function GET() {
     expiresAt: account.expiresAt,
     updatedAt: account.updatedAt,
   });
-}
+});

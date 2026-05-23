@@ -8,6 +8,8 @@
  * pinta este shell apenas el usuario hace click — no espera al SSR completo.
  */
 
+import { Skeleton, Spinner } from "@/components/ui";
+
 export default function SessionsLoading() {
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -15,24 +17,15 @@ export default function SessionsLoading() {
       <aside className="w-72 flex-shrink-0 border-r border-gray-800 flex flex-col overflow-hidden">
         {/* Buscador */}
         <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b border-gray-800">
-          <div className="h-8 rounded-md skeleton-shimmer" />
+          <Skeleton className="h-8" />
         </div>
         {/* Items por sección */}
         <div className="flex flex-col flex-1 overflow-hidden py-3 px-2 space-y-4">
-          {[
-            { header: 32, items: [40, 40, 40, 40, 40] },
-            { header: 32, items: [40, 40, 40] },
-            { header: 32, items: [40, 40] },
-            { header: 32, items: [40, 40, 40, 40] },
-          ].map((section, i) => (
+          {[[0, 1, 2, 3, 4], [0, 1, 2], [0, 1], [0, 1, 2, 3]].map((items, i) => (
             <div key={i} className="space-y-1.5">
-              <div className="h-2.5 w-28 ml-2 rounded skeleton-shimmer" style={{ animationDelay: `${i * 0.05}s` }} />
-              {section.items.map((h, j) => (
-                <div
-                  key={j}
-                  className="h-9 rounded-lg skeleton-shimmer"
-                  style={{ animationDelay: `${(i * 0.05 + j * 0.03).toFixed(2)}s` }}
-                />
+              <Skeleton className="h-2.5 w-28 ml-2" delay={i * 50} />
+              {items.map((j) => (
+                <Skeleton key={j} className="h-9" rounded="lg" delay={i * 50 + j * 30} />
               ))}
             </div>
           ))}
@@ -41,7 +34,7 @@ export default function SessionsLoading() {
 
       {/* Panel derecho — placeholder discreto */}
       <div className="flex-1 flex flex-col items-center justify-center text-gray-600 text-sm gap-3">
-        <span className="w-5 h-5 border-2 border-gray-700 border-t-brand/60 rounded-full animate-spin" />
+        <Spinner size="lg" color="border-brand/60" />
         <span>Cargando sesiones…</span>
       </div>
     </div>

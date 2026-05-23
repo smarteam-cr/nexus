@@ -1,12 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_req: NextRequest, { params }: Params) {
+export const GET = withAuth(async (_req, { params }: Params) => {
   try {
-    await requireConsultantSession();
     const { id } = await params;
     const entry = await prisma.knowledge.findUnique({ where: { id } });
     if (!entry) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
@@ -15,11 +14,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 401 });
   }
-}
+});
 
-export async function PUT(request: NextRequest, { params }: Params) {
+export const PUT = withAuth(async (request, { params }: Params) => {
   try {
-    await requireConsultantSession();
     const { id } = await params;
     const { title, content, category } = (await request.json()) as {
       title?: string;
@@ -45,11 +43,10 @@ export async function PUT(request: NextRequest, { params }: Params) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export const DELETE = withAuth(async (_req, { params }: Params) => {
   try {
-    await requireConsultantSession();
     const { id } = await params;
     await prisma.knowledge.delete({ where: { id } });
     return NextResponse.json({ ok: true });
@@ -57,4 +54,4 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

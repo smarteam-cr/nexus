@@ -17,7 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { buildAnalysisContext, type AnalysisFilters } from "@/lib/sessions/analysis-context";
@@ -34,14 +34,7 @@ interface RequestBody {
   filters?: AnalysisFilters;
 }
 
-export async function POST(req: NextRequest) {
-  // ── Auth ──
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
+export const POST = withAuth(async (req) => {
   // ── Parse body ──
   let body: RequestBody;
   try {
@@ -199,4 +192,4 @@ export async function POST(req: NextRequest) {
     cardCount: parsed.cards.length,
     sourceSessionCount: ctx.count,
   });
-}
+});

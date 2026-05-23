@@ -1,13 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
-export async function GET(
-  _request: NextRequest,
+export const GET = withAuth(async (
+  _request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   try {
-    await requireConsultantSession();
     const { id } = await params;
 
     const implementation = await prisma.implementation.findUnique({
@@ -27,14 +26,13 @@ export async function GET(
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});
 
-export async function PATCH(
-  request: NextRequest,
+export const PATCH = withAuth(async (
+  request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   try {
-    await requireConsultantSession();
     const { id } = await params;
     const body = await request.json() as { status?: string; plan?: object; name?: string };
 
@@ -52,14 +50,13 @@ export async function PATCH(
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(
-  _request: NextRequest,
+export const DELETE = withAuth(async (
+  _request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   try {
-    await requireConsultantSession();
     const { id } = await params;
 
     await prisma.implementation.delete({ where: { id } });
@@ -69,4 +66,4 @@ export async function DELETE(
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

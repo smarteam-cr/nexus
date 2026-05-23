@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 
@@ -21,13 +21,7 @@ interface HsCompany {
 // Crea un nuevo cliente a partir de un HubSpot Private App Token.
 // No requiere OAuth ni redirects de browser.
 
-export async function POST(request: NextRequest) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = withAuth(async (request) => {
   let token: string;
   try {
     const body = await request.json();
@@ -111,7 +105,7 @@ export async function POST(request: NextRequest) {
   revalidateClientsSidebar();
 
   return NextResponse.json({ clientId: client.id }, { status: 201 });
-}
+});
 
 // ── Buscar empresa principal del portal ───────────────────────────────────────
 // Ordena por fecha de creación ASC → la más antigua suele ser la empresa dueña.

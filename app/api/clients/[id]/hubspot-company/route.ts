@@ -1,18 +1,12 @@
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 /** PUT — guarda el hubspotCompanyId elegido por el usuario */
-export async function PUT(
-  request: NextRequest,
+export const PUT = withAuth(async (
+  request,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+) => {
   const { id: clientId } = await params;
   const body = await request.json() as { hubspotCompanyId: string | null };
 
@@ -23,4 +17,4 @@ export async function PUT(
   });
 
   return NextResponse.json(updated);
-}
+});

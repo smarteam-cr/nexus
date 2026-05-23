@@ -1,13 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
-export async function PATCH(
-  req: NextRequest,
+export const PATCH = withAuth(async (
+  req,
   { params }: { params: Promise<{ id: string; projectId: string }> }
-) {
-  try { await requireConsultantSession(); } catch { return NextResponse.json({ error: "unauthorized" }, { status: 401 }); }
-
+) => {
   const { projectId } = await params;
   const body = await req.json() as { name?: string; status?: string; serviceType?: string; hubspotDealId?: string | null };
 
@@ -23,17 +21,15 @@ export async function PATCH(
   });
 
   return NextResponse.json({ project });
-}
+});
 
-export async function DELETE(
-  _req: NextRequest,
+export const DELETE = withAuth(async (
+  _req,
   { params }: { params: Promise<{ id: string; projectId: string }> }
-) {
-  try { await requireConsultantSession(); } catch { return NextResponse.json({ error: "unauthorized" }, { status: 401 }); }
-
+) => {
   const { projectId } = await params;
 
   await prisma.project.delete({ where: { id: projectId } });
 
   return NextResponse.json({ ok: true });
-}
+});

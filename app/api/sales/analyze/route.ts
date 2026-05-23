@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 
@@ -66,13 +66,7 @@ Reglas para pendientes:
 FORMATO JSON COMPLETO:
 { "cards": [...], "pendingItems": [...] }`;
 
-export async function POST(req: NextRequest) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
+export const POST = withAuth(async (req) => {
   let sessionIds: string[];
   try {
     const body = await req.json() as { sessionIds?: string[] };
@@ -222,4 +216,4 @@ export async function POST(req: NextRequest) {
     .slice(0, 5);
 
   return NextResponse.json({ cards: parsed.cards, pendingItems });
-}
+});

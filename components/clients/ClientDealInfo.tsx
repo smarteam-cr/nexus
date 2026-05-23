@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { Skeleton } from "@/components/ui";
 
 interface LineItem {
   id: string;
@@ -195,11 +196,11 @@ export default function ClientDealInfo({ clientId, projectId, savedServiceType, 
 
             {/* Line items */}
             {(changingDeal) && (
-              <div className="px-4 py-4 space-y-2 animate-pulse">
+              <div className="px-4 py-4 space-y-2">
                 {[1, 2, 3].map((i) => (
                   <div key={i} className="flex gap-3">
-                    <div className="h-2.5 bg-gray-100 rounded w-2/3" />
-                    <div className="h-2.5 bg-gray-100 rounded w-16 ml-auto" />
+                    <Skeleton className="h-2.5 w-2/3" delay={i * 60} />
+                    <Skeleton className="h-2.5 w-16 ml-auto" delay={i * 60} />
                   </div>
                 ))}
               </div>
@@ -265,10 +266,10 @@ export default function ClientDealInfo({ clientId, projectId, savedServiceType, 
     <div>
       {/* ── Skeleton cargando ─────────────────────────────────────────────── */}
       {(loadingDeal || changingDeal) && (
-        <div className="space-y-1.5 animate-pulse">
-          <div className="h-3 bg-gray-800 rounded w-2/3" />
-          <div className="h-3 bg-gray-800 rounded w-1/2" />
-          <div className="h-3 bg-gray-800 rounded w-3/4" />
+        <div className="space-y-1.5">
+          <Skeleton className="h-3 w-2/3" />
+          <Skeleton className="h-3 w-1/2" delay={60} />
+          <Skeleton className="h-3 w-3/4" delay={120} />
         </div>
       )}
 

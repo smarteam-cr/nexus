@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { buildPortalSnapshot, PortalSnapshot } from "@/lib/hubspot/portal-analyzer";
 
 /** GET → devuelve snapshot desde DB (o lo construye si no existe) */
-export async function GET() {
+export const GET = withAuth(async () => {
   try {
-    await requireConsultantSession();
-
     // En transición: usar la primera cuenta HubSpot disponible
     const account = await prisma.hubspotAccount.findFirst({
       select: { id: true, portalSnapshot: true, portalSnapshotAt: true },
@@ -40,13 +38,11 @@ export async function GET() {
     }
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});
 
 /** POST → fuerza re-fetch, guarda en DB */
-export async function POST() {
+export const POST = withAuth(async () => {
   try {
-    await requireConsultantSession();
-
     const account = await prisma.hubspotAccount.findFirst({
       select: { id: true },
     });
@@ -68,4 +64,4 @@ export async function POST() {
     }
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

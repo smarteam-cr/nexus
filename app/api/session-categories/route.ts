@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { revalidateSessionCategories } from "@/lib/cache/session-categories";
 
@@ -9,30 +9,18 @@ type Kind = (typeof KIND_OPTIONS)[number];
 // ── GET /api/session-categories ──────────────────────────────────────────────
 // Lista todas las categorías, ordenadas por `order` ascendente.
 
-export async function GET() {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withAuth(async () => {
   const categories = await prisma.sessionCategory.findMany({
     orderBy: { order: "asc" },
   });
 
   return NextResponse.json(categories);
-}
+});
 
 // ── POST /api/session-categories ─────────────────────────────────────────────
 // Crea una nueva categoría. Valida slug único + dominios mínimos.
 
-export async function POST(request: NextRequest) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = withAuth(async (request) => {
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
@@ -83,4 +71,4 @@ export async function POST(request: NextRequest) {
 
   revalidateSessionCategories();
   return NextResponse.json(created, { status: 201 });
-}
+});

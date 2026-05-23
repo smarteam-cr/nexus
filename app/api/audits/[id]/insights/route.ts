@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { anthropic } from "@/lib/anthropic";
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import type {
   LifecycleSnapshot,
@@ -66,9 +66,8 @@ ${topOwners || "  (sin datos)"}`;
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
-export async function POST(_req: NextRequest, { params }: Params) {
+export const POST = withAuth(async (_req, { params }: Params) => {
   try {
-    await requireConsultantSession();
     const { id } = await params;
 
     // 1. Carga la auditoría
@@ -353,4 +352,4 @@ Responde ÚNICAMENTE con el JSON (sin texto previo, sin markdown, sin bloques de
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

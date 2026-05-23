@@ -1,6 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  Modal,
+  ConfirmDialog,
+  Button,
+  Input,
+  Select,
+  Badge,
+  Avatar,
+  EmptyState,
+  Table,
+  TableSkeleton,
+  type TableColumn,
+} from "@/components/ui";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -21,66 +34,6 @@ interface FormState {
 const EMPTY_FORM: FormState = { name: "", email: "", role: "" };
 
 const ROLES = ["Sales", "CSE", "Development", "PM", "RevOps", "Admin"];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function initials(name: string) {
-  return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-}
-
-const AVATAR_COLORS = [
-  "bg-blue-500/20 text-blue-300",
-  "bg-purple-500/20 text-purple-300",
-  "bg-emerald-500/20 text-emerald-300",
-  "bg-brand/20 text-brand-light",
-  "bg-rose-500/20 text-rose-300",
-  "bg-cyan-500/20 text-cyan-300",
-];
-
-function avatarColor(id: string) {
-  return AVATAR_COLORS[id.charCodeAt(0) % AVATAR_COLORS.length];
-}
-
-// ── Fila de miembro ───────────────────────────────────────────────────────────
-
-function MemberRow({
-  m,
-  onEdit,
-  onDelete,
-}: {
-  m: TeamMember;
-  onEdit: (m: TeamMember) => void;
-  onDelete: (id: string) => void;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900/50 px-4 py-3 group hover:border-gray-700 transition-colors">
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${avatarColor(m.id)}`}>
-        {initials(m.name)}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-white truncate">{m.name}</p>
-        <p className="text-xs text-gray-500 truncate">{m.email}</p>
-      </div>
-      {m.role && (
-        <span className="hidden sm:block text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-800 text-gray-500 border border-gray-700 flex-shrink-0">
-          {m.role}
-        </span>
-      )}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-        <button onClick={() => onEdit(m)} title="Editar" className="p-1.5 rounded-md text-gray-500 hover:text-white hover:bg-gray-800 transition-colors">
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-        </button>
-        <button onClick={() => onDelete(m.id)} title="Eliminar" className="p-1.5 rounded-md text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
@@ -112,14 +65,14 @@ export default function TeamManager() {
   const tabs = useMemo(() => {
     const present = new Set(members.map((m) => m.role).filter(Boolean));
     const ordered = ROLES.filter((r) => present.has(r));
-    // Roles fuera del orden canónico al final
     const extra = [...present].filter((r) => r && !ROLES.includes(r)) as string[];
     return ["Todos", ...ordered, ...extra];
   }, [members]);
 
-  const filtered = useMemo(() =>
-    activeTab === "Todos" ? members : members.filter((m) => m.role === activeTab),
-  [members, activeTab]);
+  const filtered = useMemo(
+    () => (activeTab === "Todos" ? members : members.filter((m) => m.role === activeTab)),
+    [members, activeTab]
+  );
 
   function openCreate() {
     setEditId(null);
@@ -158,7 +111,10 @@ export default function TeamManager() {
         body: JSON.stringify(form),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Error al guardar."); return; }
+      if (!res.ok) {
+        setError(data.error ?? "Error al guardar.");
+        return;
+      }
       await load();
       cancel();
     } finally {
@@ -173,158 +129,186 @@ export default function TeamManager() {
     await load();
   }
 
-  return (
-    <div className="space-y-4">
+  const deletingMember = members.find((m) => m.id === deleteId);
 
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-400">
-          {members.length} {members.length === 1 ? "miembro" : "miembros"}
-        </p>
-        {!showForm && (
+  // ── Columnas de la tabla ──────────────────────────────────────────────────────
+  const columns: TableColumn<TeamMember>[] = [
+    {
+      key: "member",
+      header: "Miembro",
+      sortValue: (m) => m.name,
+      render: (m) => (
+        <Table.IdentityCell
+          leading={<Avatar name={m.name} colorSeed={m.id} size="sm" />}
+          primary={m.name}
+          secondary={m.email}
+        />
+      ),
+    },
+    {
+      key: "role",
+      header: "Rol",
+      sortValue: (m) => m.role,
+      width: "w-44",
+      render: (m) =>
+        m.role ? (
+          <Badge variant="default" size="xs">{m.role}</Badge>
+        ) : (
+          <span className="text-gray-600">—</span>
+        ),
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      width: "w-24",
+      render: (m) => (
+        <div className="flex items-center justify-end gap-1">
           <button
-            onClick={openCreate}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand hover:opacity-90 text-white text-sm font-medium transition-opacity"
+            onClick={() => openEdit(m)}
+            title="Editar"
+            className="p-1.5 rounded-md text-gray-500 hover:text-white hover:bg-gray-800 transition-colors"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
-            Agregar miembro
           </button>
-        )}
-      </div>
+          <button
+            onClick={() => setDeleteId(m.id)}
+            title="Eliminar"
+            className="p-1.5 rounded-md text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
+      ),
+    },
+  ];
 
-      {/* ── Formulario inline ── */}
-      {showForm && (
-        <div className="rounded-xl border border-gray-700 bg-gray-900 p-4 space-y-3">
-          <p className="text-sm font-medium text-white">
-            {editId ? "Editar miembro" : "Nuevo miembro"}
-          </p>
+  // Tabs de rol — viajan al slot `filters` del toolbar de la tabla.
+  const roleTabs = tabs.map((tab) => {
+    const count =
+      tab === "Todos" ? members.length : members.filter((m) => m.role === tab).length;
+    const isActive = activeTab === tab;
+    return (
+      <button
+        key={tab}
+        onClick={() => setActiveTab(tab)}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+          isActive
+            ? "bg-gray-700 text-white"
+            : "bg-gray-900 text-gray-400 border border-gray-800 hover:text-white hover:border-gray-700"
+        }`}
+      >
+        {tab}
+        <span className={`text-xs tabular-nums ${isActive ? "text-gray-400" : "text-gray-600"}`}>
+          {count}
+        </span>
+      </button>
+    );
+  });
+
+  return (
+    <div className="space-y-4">
+      {loading ? (
+        <TableSkeleton columns={3} rows={5} toolbar />
+      ) : members.length === 0 ? (
+        <EmptyState
+          variant="dashed"
+          title="Aún no hay miembros del equipo"
+          description="Agregá a las personas que participan en las sesiones y proyectos."
+          action={
+            <Button variant="ghost" size="sm" onClick={openCreate}>
+              Agregar el primero
+            </Button>
+          }
+        />
+      ) : (
+        <Table
+          columns={columns}
+          rows={filtered}
+          rowKey={(m) => m.id}
+          search={{ placeholder: "Buscar miembro…", getText: (m) => `${m.name} ${m.email}` }}
+          initialSort={{ key: "member", dir: "asc" }}
+          filters={roleTabs}
+          action={
+            <Button variant="primary" size="sm" onClick={openCreate}>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              Agregar miembro
+            </Button>
+          }
+        />
+      )}
+
+      {/* ── Modal crear / editar ── */}
+      <Modal
+        open={showForm}
+        onClose={cancel}
+        title={editId ? "Editar miembro" : "Nuevo miembro"}
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" size="md" onClick={cancel} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button variant="primary" size="md" loading={saving} onClick={save}>
+              {editId ? "Guardar cambios" : "Crear miembro"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs text-gray-400">Nombre completo *</label>
-              <input
+              <Input
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="Ej: María López"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand/50 transition-colors"
               />
             </div>
             <div className="space-y-1">
               <label className="text-xs text-gray-400">Correo *</label>
-              <input
+              <Input
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                 placeholder="Ej: mlopez@empresa.com"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand/50 transition-colors"
               />
             </div>
           </div>
           <div className="space-y-1">
-            <label className="text-xs text-gray-400">Rol / Área <span className="text-gray-600">(opcional)</span></label>
-            <select
+            <label className="text-xs text-gray-400">
+              Rol / Área <span className="text-gray-600">(opcional)</span>
+            </label>
+            <Select
               value={form.role}
               onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50 transition-colors"
             >
               <option value="">Sin rol</option>
               {ROLES.map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
-            </select>
+            </Select>
           </div>
           {error && <p className="text-xs text-red-400">{error}</p>}
-          <div className="flex items-center gap-2 pt-1">
-            <button
-              onClick={save}
-              disabled={saving}
-              className="px-4 py-1.5 rounded-lg bg-brand hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium transition-opacity"
-            >
-              {saving ? "Guardando…" : editId ? "Guardar cambios" : "Crear miembro"}
-            </button>
-            <button onClick={cancel} className="px-4 py-1.5 rounded-lg text-gray-400 hover:text-white text-sm transition-colors">
-              Cancelar
-            </button>
-          </div>
         </div>
-      )}
+      </Modal>
 
-      {/* ── Tabs de rol ── */}
-      {!loading && members.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {tabs.map((tab) => {
-            const count = tab === "Todos" ? members.length : members.filter((m) => m.role === tab).length;
-            const isActive = activeTab === tab;
-            return (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  isActive
-                    ? "bg-gray-700 text-white"
-                    : "bg-gray-900 text-gray-400 border border-gray-800 hover:text-white hover:border-gray-700"
-                }`}
-              >
-                {tab}
-                <span className={`text-xs tabular-nums ${isActive ? "text-gray-400" : "text-gray-600"}`}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── Lista ── */}
-      {loading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-14 rounded-xl bg-gray-900 animate-pulse border border-gray-800" />
-          ))}
-        </div>
-      ) : members.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-800 p-10 text-center">
-          <p className="text-sm text-gray-600">Aún no hay miembros del equipo.</p>
-          <button onClick={openCreate} className="mt-2 text-sm text-brand-light hover:opacity-80 transition-opacity">
-            Agregar el primero
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          {filtered.map((m) => (
-            <MemberRow key={m.id} m={m} onEdit={openEdit} onDelete={setDeleteId} />
-          ))}
-        </div>
-      )}
-
-      {/* ── Modal eliminación ── */}
-      {deleteId && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-5 max-w-sm w-full space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-white">¿Eliminar miembro?</p>
-                <p className="text-xs text-gray-500 mt-0.5">{members.find((m) => m.id === deleteId)?.name}</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={confirmDelete} className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-400 text-white text-sm font-medium transition-colors">
-                Eliminar
-              </button>
-              <button onClick={() => setDeleteId(null)} className="flex-1 py-2 rounded-lg border border-gray-700 text-gray-300 hover:text-white text-sm transition-colors">
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── Confirmación de borrado ── */}
+      <ConfirmDialog
+        open={!!deleteId}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteId(null)}
+        title="¿Eliminar miembro?"
+        description={deletingMember?.name}
+        confirmLabel="Eliminar"
+      />
     </div>
   );
 }

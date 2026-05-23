@@ -1,16 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
 type Params = { params: Promise<{ id: string; docId: string }> };
 
 // DELETE /api/clients/[id]/documents/[docId]
-export async function DELETE(
-  _req: NextRequest,
+export const DELETE = withAuth(async (
+  _req,
   { params }: Params
-) {
+) => {
   try {
-    await requireConsultantSession();
     const { docId } = await params;
 
     await prisma.clientDocument.delete({ where: { id: docId } });
@@ -21,4 +20,4 @@ export async function DELETE(
     if (message === "Unauthorized") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

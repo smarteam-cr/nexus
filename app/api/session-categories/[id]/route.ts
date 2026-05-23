@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { revalidateSessionCategories } from "@/lib/cache/session-categories";
 
@@ -14,13 +14,7 @@ interface RouteCtx {
 // Actualiza una categoría. Campos parciales permitidos.
 // El campo `isDefault` NO se puede modificar desde aquí (lo controla el sistema).
 
-export async function PATCH(request: NextRequest, ctx: RouteCtx) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const PATCH = withAuth(async (request, ctx: RouteCtx) => {
   const { id } = await ctx.params;
 
   const existing = await prisma.sessionCategory.findUnique({ where: { id } });
@@ -90,18 +84,12 @@ export async function PATCH(request: NextRequest, ctx: RouteCtx) {
 
   revalidateSessionCategories();
   return NextResponse.json(updated);
-}
+});
 
 // ── DELETE /api/session-categories/[id] ──────────────────────────────────────
 // Elimina una categoría. Rechaza si es isDefault=true.
 
-export async function DELETE(_request: NextRequest, ctx: RouteCtx) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const DELETE = withAuth(async (_request, ctx: RouteCtx) => {
   const { id } = await ctx.params;
 
   const existing = await prisma.sessionCategory.findUnique({ where: { id } });
@@ -119,4 +107,4 @@ export async function DELETE(_request: NextRequest, ctx: RouteCtx) {
   await prisma.sessionCategory.delete({ where: { id } });
   revalidateSessionCategories();
   return NextResponse.json({ ok: true });
-}
+});

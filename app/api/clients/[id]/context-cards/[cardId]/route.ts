@@ -1,14 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
 type Params = { params: Promise<{ id: string; cardId: string }> };
 
 // PUT /api/clients/[id]/context-cards/[cardId]
 // Body: { title?, content?, order? }
-export async function PUT(request: NextRequest, { params }: Params) {
+export const PUT = withAuth(async (request, { params }: Params) => {
   try {
-    await requireConsultantSession();
     const { id, cardId } = await params;
     const body = (await request.json()) as {
       title?: string;
@@ -41,12 +40,11 @@ export async function PUT(request: NextRequest, { params }: Params) {
     if (message === "Unauthorized") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});
 
 // DELETE /api/clients/[id]/context-cards/[cardId]
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export const DELETE = withAuth(async (_req, { params }: Params) => {
   try {
-    await requireConsultantSession();
     const { id, cardId } = await params;
 
     await prisma.clientContextCard.delete({
@@ -59,4 +57,4 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     if (message === "Unauthorized") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { DocumentType } from "@prisma/client";
 
@@ -9,9 +9,8 @@ type Params = { params: Promise<{ id: string }> };
 // stage=global → filtra stage IS NULL (documentos de proyecto)
 // sin stage → retorna todos
 // projectId → filtra por proyecto
-export async function GET(request: NextRequest, { params }: Params) {
+export const GET = withAuth(async (request, { params }: Params) => {
   try {
-    await requireConsultantSession();
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const stageParam = searchParams.get("stage");
@@ -45,14 +44,13 @@ export async function GET(request: NextRequest, { params }: Params) {
     if (message === "Unauthorized") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});
 
 // POST /api/clients/[id]/documents
 // Body: { stage?, step?, title, type, content?, url? }
 // stage omitido = documento global del cliente
-export async function POST(request: NextRequest, { params }: Params) {
+export const POST = withAuth(async (request, { params }: Params) => {
   try {
-    await requireConsultantSession();
     const { id } = await params;
     const { stage, step, projectId, title, type, content, url } = (await request.json()) as {
       stage?: number | null;
@@ -87,4 +85,4 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (message === "Unauthorized") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

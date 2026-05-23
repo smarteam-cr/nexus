@@ -1,10 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
-export async function GET() {
+export const GET = withAuth(async () => {
   try {
-    await requireConsultantSession();
     const implementations = await prisma.implementation.findMany({
       where: { archived: false },
       orderBy: { createdAt: "desc" },
@@ -17,11 +16,10 @@ export async function GET() {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 401 });
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request) => {
   try {
-    await requireConsultantSession();
     const { name, clientId } = await request.json() as { name: string; clientId?: string };
 
     const implementation = await prisma.implementation.create({
@@ -37,4 +35,4 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

@@ -5,21 +5,15 @@
  * Usado por la UI del hub para abrir un análisis previo.
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
 interface RouteCtx {
   params: Promise<{ runId: string }>;
 }
 
-export async function GET(_req: NextRequest, ctx: RouteCtx) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
+export const GET = withAuth(async (_req, ctx: RouteCtx) => {
   const { runId } = await ctx.params;
 
   const run = await prisma.agentRun.findUnique({
@@ -62,4 +56,4 @@ export async function GET(_req: NextRequest, ctx: RouteCtx) {
     sourceSessionCount: run.sourceSessionIds.length,
     // Reducimos payload: NO mandamos sourceSessionIds completo en este endpoint
   });
-}
+});

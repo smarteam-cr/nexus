@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemAccessToken } from "@/lib/hubspot/client";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
@@ -20,13 +20,7 @@ interface HubspotCompanyResult {
 
 // POST /api/system/hubspot/import
 // Trae todas las empresas de HubSpot con implementor = true y las crea/actualiza como clientes
-export async function POST() {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = withAuth(async () => {
   let accessToken: string;
   try {
     accessToken = await getSystemAccessToken();
@@ -153,4 +147,4 @@ export async function POST() {
     created,
     updated,
   });
-}
+});

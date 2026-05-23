@@ -1,14 +1,8 @@
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-export async function GET(request: NextRequest) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const stageParam = searchParams.get("stage");
 
@@ -28,15 +22,9 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json(agents);
-}
+});
 
-export async function POST(request: NextRequest) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = withAuth(async (request) => {
   const body = await request.json();
   const {
     name,
@@ -84,4 +72,4 @@ export async function POST(request: NextRequest) {
   });
 
   return NextResponse.json(agent, { status: 201 });
-}
+});

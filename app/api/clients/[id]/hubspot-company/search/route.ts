@@ -1,7 +1,7 @@
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { getHubspotClient } from "@/lib/hubspot/client";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 interface HsCompany {
   id: string;
@@ -21,16 +21,10 @@ interface SearchResult {
   total: number;
 }
 
-export async function GET(
-  request: NextRequest,
+export const GET = withAuth(async (
+  request,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+) => {
   const { id: clientId } = await params;
   const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
 
@@ -106,4 +100,4 @@ export async function GET(
     console.error("HubSpot company search error:", e);
     return NextResponse.json({ error: "Search failed" }, { status: 500 });
   }
-}
+});

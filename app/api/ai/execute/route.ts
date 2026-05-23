@@ -1,11 +1,9 @@
-import { NextRequest } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { executeTask, type ApiTask } from "@/lib/hubspot/executor";
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request) => {
   try {
-    await requireConsultantSession();
     const { implementationId } = await request.json() as { implementationId: string };
 
     const implementation = await prisma.implementation.findUnique({
@@ -136,4 +134,4 @@ export async function POST(request: NextRequest) {
     }
     return new Response(message, { status: 500 });
   }
-}
+});

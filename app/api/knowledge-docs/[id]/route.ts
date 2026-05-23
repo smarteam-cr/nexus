@@ -1,19 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireConsultantSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { KnowledgeStatus, KnowledgeType, TagCategory } from "@prisma/client";
 
 // GET /api/knowledge-docs/[id]
-export async function GET(
-  _req: NextRequest,
+export const GET = withAuth(async (
+  _req,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
+) => {
   const { id } = await params;
   const doc = await prisma.knowledgeDocument.findUnique({
     where: { id },
@@ -22,19 +16,13 @@ export async function GET(
 
   if (!doc) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   return NextResponse.json(doc);
-}
+});
 
 // PUT /api/knowledge-docs/[id]
-export async function PUT(
-  req: NextRequest,
+export const PUT = withAuth(async (
+  req,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
+) => {
   const { id } = await params;
 
   const body = (await req.json()) as {
@@ -79,20 +67,14 @@ export async function PUT(
   });
 
   return NextResponse.json(doc);
-}
+});
 
 // DELETE /api/knowledge-docs/[id]
-export async function DELETE(
-  _req: NextRequest,
+export const DELETE = withAuth(async (
+  _req,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
+) => {
   const { id } = await params;
   await prisma.knowledgeDocument.delete({ where: { id } });
   return NextResponse.json({ ok: true });
-}
+});
