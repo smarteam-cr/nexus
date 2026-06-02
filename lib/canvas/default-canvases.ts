@@ -8,7 +8,7 @@ type CanvasDefinition = {
 
 export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
   {
-    name: "Resumen del servicio",
+    name: "Resumen",
     isDefault: true,
     sections: [], // Usa DEFAULT_SECTIONS hardcoded en canvas-cards API
   },

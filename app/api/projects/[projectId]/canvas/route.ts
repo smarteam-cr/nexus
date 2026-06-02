@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAccessToProject } from "@/lib/auth/api-guards";
 
 // ─── DESACTIVADO ─────────────────────────────────────────────────────────────
 // El canvas de proyecto ahora se construye desde ClientContextCard con canvasSection.
@@ -11,6 +12,9 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   return NextResponse.json({
     canvas: null,
     message: "DEPRECATED: El canvas de proyecto ahora se lee desde /api/projects/" + projectId + "/canvas-cards",

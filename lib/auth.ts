@@ -1,5 +1,5 @@
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
+import { getSupabaseUser } from "@/lib/supabase/server";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -7,26 +7,33 @@ type HubspotAccount = NonNullable<
   Awaited<ReturnType<typeof prisma.hubspotAccount.findUnique>>
 >;
 
-// ─── Auth del consultor ───────────────────────────────────────────────────────
+// ─── Auth del consultor (compat — usar lib/auth/supabase.ts en código nuevo) ──
+//
+// Después del cutover a Supabase Auth, estos helpers son wrappers de compat
+// para los ~40 archivos que aún importan `requireConsultantSession`. La lógica
+// real vive en `lib/auth/supabase.ts` (requireUser / requireInternalUser).
+//
+// El selector "Soy X" (cookie nexus_cse, sentinel __super_admin__) se eliminó
+// — cada usuario es él mismo vía Google OAuth.
 
 /**
- * Verifica si hay una sesión de consultor activa.
- * La sesión se setea al hacer login con CONSULTANT_SECRET.
+ * @deprecated Usar `requireUser()` de `@/lib/auth/supabase` en código nuevo.
+ *
+ * Verifica si hay sesión Supabase Auth válida.
  */
 export async function getConsultantSession(): Promise<boolean> {
-  const cookieStore = await cookies();
-  return cookieStore.get("consultant_session")?.value === "authenticated";
+  const user = await getSupabaseUser();
+  return !!user;
 }
 
 /**
- * Lanza un error si no hay sesión de consultor activa.
- * Usar en Server Components y API routes que requieren autenticación.
+ * @deprecated Usar `requireUser()` de `@/lib/auth/supabase` en código nuevo.
+ *
+ * Lanza un error si no hay sesión. Usar en API routes legacy.
  */
 export async function requireConsultantSession(): Promise<void> {
-  const authenticated = await getConsultantSession();
-  if (!authenticated) {
-    throw new Error("Unauthorized");
-  }
+  const user = await getSupabaseUser();
+  if (!user) throw new Error("Unauthorized");
 }
 
 // ─── HubSpot por cliente ──────────────────────────────────────────────────────
@@ -35,7 +42,7 @@ export async function requireConsultantSession(): Promise<void> {
  * Obtiene la cuenta HubSpot vinculada a un cliente, o null si no tiene.
  */
 export async function getClientHubspotAccount(
-  clientId: string
+  clientId: string,
 ): Promise<HubspotAccount | null> {
   return prisma.hubspotAccount.findUnique({
     where: { clientId },
@@ -47,7 +54,7 @@ export async function getClientHubspotAccount(
  * Lanza un error si el cliente no tiene HubSpot conectado.
  */
 export async function requireClientHubspotAccount(
-  clientId: string
+  clientId: string,
 ): Promise<HubspotAccount> {
   const account = await getClientHubspotAccount(clientId);
   if (!account) {
@@ -56,27 +63,19 @@ export async function requireClientHubspotAccount(
   return account;
 }
 
-// ─── Legacy (deprecated) ──────────────────────────────────────────────────────
+// ─── Legacy stubs (eliminar cuando se borren las páginas /implementation/*) ───
 
 /**
- * @deprecated Usar getClientHubspotAccount(clientId) + requireConsultantSession()
- * Mantenido durante la transición para no romper código existente.
+ * @deprecated Páginas /implementation/* son legacy. Estos stubs evitan errores
+ * de import mientras se eliminan esas rutas. NO usar en código nuevo.
  */
 export async function getSession(): Promise<HubspotAccount | null> {
-  const cookieStore = await cookies();
-  const accountId = cookieStore.get("account_id")?.value;
-  if (!accountId) return null;
-  return prisma.hubspotAccount.findUnique({ where: { id: accountId } });
+  return null;
 }
 
 /**
- * @deprecated Usar requireClientHubspotAccount(clientId) + requireConsultantSession()
- * Mantenido durante la transición para no romper código existente.
+ * @deprecated Igual que getSession — lanza siempre.
  */
 export async function requireSession(): Promise<HubspotAccount> {
-  const session = await getSession();
-  if (!session) {
-    throw new Error("Unauthorized");
-  }
-  return session;
+  throw new Error("Legacy auth flow eliminado — esta página debería borrarse");
 }

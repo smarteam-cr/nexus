@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 type Params = Promise<{ projectId: string; canvasId: string }>;
 
 // PUT: update canvas name or sections
 export async function PUT(req: NextRequest, { params }: { params: Params }) {
-  const { canvasId } = await params;
+  const { projectId, canvasId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   const body = await req.json();
 
   const data: Record<string, unknown> = {};
@@ -27,7 +31,9 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
 
 // DELETE: delete a custom canvas (not default)
 export async function DELETE(_req: NextRequest, { params }: { params: Params }) {
-  const { canvasId } = await params;
+  const { projectId, canvasId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
 
   const canvas = await prisma.projectCanvas.findUnique({
     where: { id: canvasId },

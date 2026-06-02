@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 // GET: list canvases for a project (default first, then by createdAt)
@@ -7,6 +8,9 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   const canvases = await prisma.projectCanvas.findMany({
     where: { projectId },
     orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
@@ -27,6 +31,9 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   const { name } = await req.json();
 
   if (!name?.trim()) {

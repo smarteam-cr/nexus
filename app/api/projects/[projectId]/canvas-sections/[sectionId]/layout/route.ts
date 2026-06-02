@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 type Params = Promise<{ projectId: string; sectionId: string }>;
 
 // PUT: save RGL layout for a section
 export async function PUT(req: NextRequest, { params }: { params: Params }) {
-  const { sectionId } = await params;
+  const { projectId, sectionId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   const { layout } = await req.json();
 
   if (!Array.isArray(layout)) {

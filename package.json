@@ -17,6 +17,7 @@
     "@prisma/adapter-pg": "^7.4.2",
     "@prisma/client": "^7.4.2",
     "@react-pdf/renderer": "^4.3.2",
+    "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.99.1",
     "@tailwindcss/typography": "^0.5.19",
     "@types/dagre": "^0.7.54",

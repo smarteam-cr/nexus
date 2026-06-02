@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -10,8 +11,16 @@ interface ClientSummary {
   hubspotAccount: { id: string; hubName: string | null } | null;
 }
 
+interface UserLite {
+  email: string;
+  name: string;
+  role: string | null;
+  isSuperAdmin: boolean;
+}
+
 interface SidebarProps {
   clients: ClientSummary[];
+  user: UserLite;
   onToggle?: () => void;
   isOpen?: boolean;
 }
@@ -63,8 +72,82 @@ function NavItem({
   );
 }
 
-// ── Componente principal ──────────────────────────────────────────────────────
-export default function Sidebar({ clients, onToggle, isOpen = true }: SidebarProps) {
+// ── Avatar del usuario logueado + menú con "Cerrar sesión" ──────────────────
+// (ex-CseSelector — el selector "Soy X" se eliminó en Fase E; ahora cada
+// persona es ella misma vía Supabase Auth.)
+function UserAvatar({ user, isOpen }: { user: UserLite; isOpen: boolean }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [menuOpen]);
+
+  const initials = user.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("") || user.email[0]?.toUpperCase();
+
+  const avatarBg = user.isSuperAdmin
+    ? "bg-amber-600/20 text-amber-300 border-amber-700/40"
+    : "bg-brand/20 text-brand border-brand/30";
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setMenuOpen((p) => !p)}
+        className={`w-full flex items-center gap-2 ${isOpen ? "px-2 py-1.5" : "p-1.5 justify-center"} rounded-lg hover:bg-gray-800/60 transition-colors text-left`}
+        title={!isOpen ? user.name : undefined}
+      >
+        <div className={`flex-shrink-0 w-7 h-7 rounded-full border flex items-center justify-center text-[10px] font-bold ${avatarBg}`}>
+          {initials}
+        </div>
+        {isOpen && (
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-gray-200 truncate">
+              {user.name}
+            </p>
+            <p className="text-[10px] text-gray-500 truncate">
+              {user.isSuperAdmin ? "Super Admin" : user.role ?? "Miembro"}
+            </p>
+          </div>
+        )}
+        {isOpen && (
+          <svg className={`w-3 h-3 text-gray-600 transition-transform flex-shrink-0 ${menuOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        )}
+      </button>
+
+      {menuOpen && (
+        <div className="absolute left-2 right-2 top-full mt-1 z-50 bg-gray-900 border border-gray-700 rounded-xl shadow-xl py-1.5">
+          <div className="px-3 py-2 border-b border-gray-800">
+            <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
+          </div>
+          <form action="/auth/signout" method="post">
+            <button
+              type="submit"
+              className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-gray-800 transition-colors"
+            >
+              Cerrar sesión
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function Sidebar({ clients, user, onToggle, isOpen = true }: SidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -105,6 +188,11 @@ export default function Sidebar({ clients, onToggle, isOpen = true }: SidebarPro
             </svg>
           </button>
         )}
+      </div>
+
+      {/* ── Avatar del usuario logueado ── */}
+      <div className={`flex-shrink-0 ${isOpen ? "px-2 py-2" : "px-1 py-2"} border-b border-gray-800`}>
+        <UserAvatar user={user} isOpen={isOpen} />
       </div>
 
       {/* ── Nav principal ── */}

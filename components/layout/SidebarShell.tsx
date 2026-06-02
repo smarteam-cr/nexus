@@ -11,14 +11,22 @@ interface ClientSummary {
   hubspotAccount: { id: string; hubName: string | null } | null;
 }
 
+interface UserLite {
+  email: string;
+  name: string;
+  role: string | null;
+  isSuperAdmin: boolean;
+}
+
 interface Props {
   clients: ClientSummary[];
+  user: UserLite;
   children: React.ReactNode;
 }
 
 const STORAGE_KEY = "sidebar_open";
 
-export default function SidebarShell({ clients, children }: Props) {
+export default function SidebarShell({ clients, user, children }: Props) {
   const pathname = usePathname();
   // Auto-colapsar sidebar en vista detalle de cliente
   const isClientDetail = /^\/clients\/[^/]+\/(projects|stage|documents|settings)/.test(pathname);
@@ -67,7 +75,12 @@ export default function SidebarShell({ clients, children }: Props) {
         }`}
         style={!isClientDetail && !mounted ? { visibility: "hidden" } : undefined}
       >
-        <Sidebar clients={clients} onToggle={toggle} isOpen={effectiveOpen} />
+        <Sidebar
+          clients={clients}
+          user={user}
+          onToggle={toggle}
+          isOpen={effectiveOpen}
+        />
       </div>
 
       {/* ── Contenido ── */}

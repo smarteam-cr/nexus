@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
 import { deepMergeCanvas, validateCanvasKeys } from "@/lib/canvas/merge";
@@ -9,6 +10,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const guard = await guardAccessToClient(id);
+  if (guard instanceof NextResponse) return guard;
+
   const client = await prisma.client.findUnique({
     where: { id },
     select: { canvas: true, canvasConfidence: true, updatedAt: true },
@@ -27,6 +31,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const guard = await guardAccessToClient(id);
+  if (guard instanceof NextResponse) return guard;
+
   const { canvas: updates, confidence: confidenceUpdates } = await req.json();
 
   if (!updates || typeof updates !== "object") {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 // GET: sections + blocks for a non-default canvas
@@ -7,6 +8,9 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   const canvasId = new URL(req.url).searchParams.get("canvasId");
 
   if (!canvasId) {
@@ -55,6 +59,9 @@ export async function PUT(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   const { blockId, toSectionId, toIndex } = await req.json();
 
   if (!blockId || !toSectionId || typeof toIndex !== "number") {

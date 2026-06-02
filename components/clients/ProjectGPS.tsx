@@ -1,12 +1,20 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 
 interface PendingItem {
+  id?: string;             // ActionItem.id (nuevo) — undefined si viene del Json viejo
   text: string;
   done: boolean;
   source?: string;
   addedAt?: string;
+  // Nuevos campos del modelo ActionItem
+  ownerEmail?: string | null;
+  dueDate?: string | null; // ISO
+  status?: "PENDING" | "IN_PROGRESS" | "BLOCKED" | "DONE";
+  sessionId?: string | null;
+  sessionTitle?: string | null;
 }
 
 interface NextSessionInfo {
@@ -48,7 +56,7 @@ interface GPSData {
   projectInfo?: ProjectInfo;
 }
 
-export default function ProjectGPS({ projectId }: { projectId: string }) {
+export default function ProjectGPS({ projectId, clientId }: { projectId: string; clientId: string }) {
   const [data, setData] = useState<GPSData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingSession, setEditingSession] = useState(false);
@@ -94,27 +102,60 @@ export default function ProjectGPS({ projectId }: { projectId: string }) {
     saveTimeout.current = setTimeout(() => saveField(field, value), 500);
   }, [saveField]);
 
-  const toggleItem = (index: number) => {
+  const toggleItem = async (index: number) => {
     if (!data) return;
+    const item = data.pendingItems[index];
+    const newDone = !item.done;
+
+    // Optimistic UI
     const items = [...data.pendingItems];
-    items[index] = { ...items[index], done: !items[index].done };
+    items[index] = { ...item, done: newDone, status: newDone ? "DONE" : "PENDING" };
     setData({ ...data, pendingItems: items });
-    saveField("pendingItems", items);
+
+    if (item.id) {
+      await fetch(`/api/action-items/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ done: newDone }),
+      }).catch(() => fetchGPS());
+    }
   };
 
-  const addItem = () => {
+  const addItem = async () => {
     if (!data || !newItemText.trim()) return;
-    const items = [...data.pendingItems, { text: newItemText.trim(), done: false }];
-    setData({ ...data, pendingItems: items });
+    const text = newItemText.trim();
     setNewItemText("");
-    saveField("pendingItems", items);
+    const res = await fetch(`/api/action-items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, clientId, projectId, source: "manual" }),
+    });
+    if (res.ok) {
+      const created = await res.json();
+      const newItem: PendingItem = {
+        id: created.id,
+        text,
+        done: false,
+        source: "manual",
+        ownerEmail: null,
+        dueDate: null,
+        status: "PENDING",
+        sessionId: null,
+        sessionTitle: null,
+      };
+      setData({ ...data, pendingItems: [...data.pendingItems, newItem] });
+    }
   };
 
-  const removeItem = (index: number) => {
+  const removeItem = async (index: number) => {
     if (!data) return;
+    const item = data.pendingItems[index];
+    // Optimistic
     const items = data.pendingItems.filter((_, i) => i !== index);
     setData({ ...data, pendingItems: items });
-    saveField("pendingItems", items);
+    if (item.id) {
+      await fetch(`/api/action-items/${item.id}`, { method: "DELETE" }).catch(() => fetchGPS());
+    }
   };
 
   if (error) {
@@ -418,9 +459,28 @@ export default function ProjectGPS({ projectId }: { projectId: string }) {
                   >
                     {item.text}
                   </span>
-                  {item.source && !item.done && (
-                    <span className="text-[9px] text-gray-600 truncate block">↑ {item.source}</span>
-                  )}
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {item.sessionId && item.sessionTitle && !item.done && (
+                      <Link
+                        href={`/sessions/${item.sessionId}`}
+                        className="text-[9px] text-brand hover:underline truncate"
+                        title={`De la reunión: ${item.sessionTitle}`}
+                      >
+                        ↗ {item.sessionTitle}
+                      </Link>
+                    )}
+                    {item.ownerEmail && !item.done && (
+                      <span className="text-[9px] text-gray-600">@{item.ownerEmail.split("@")[0]}</span>
+                    )}
+                    {item.dueDate && !item.done && (
+                      <span className="text-[9px] text-gray-600">
+                        vence {new Date(item.dueDate).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                      </span>
+                    )}
+                    {!item.sessionId && item.source && !item.done && (
+                      <span className="text-[9px] text-gray-600 truncate">↑ {item.source}</span>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={() => removeItem(i)}

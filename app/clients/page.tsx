@@ -1,29 +1,46 @@
-import { requireConsultantSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import AppShell from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/ui";
 import { getTeamMembers } from "@/lib/cache/team";
 import { computeLastMeetingDates } from "@/lib/clients/meeting-dates";
+import { computeLastInteractionMap } from "@/lib/clients/last-interaction";
+import {
+  requireUser,
+  UnauthorizedError,
+  ForbiddenError,
+} from "@/lib/auth/supabase";
 import ClientsGrid, { type ClientRow } from "./ClientsGrid";
 import ICPSection from "./ICPSection";
 
-// ISR 60s — la página cruza sesiones × equipo para las fechas de reunión;
-// no es necesario recalcular en cada request.
-export const revalidate = 60;
+// Render dinámico — la página depende del usuario logueado (sesión Supabase
+// vía cookies), así que no puede cachearse con ISR como antes.
+export const dynamic = "force-dynamic";
 
 export default async function ClientsPage() {
+  // Identidad del usuario logueado (Supabase Auth + AppUser).
+  let user: Awaited<ReturnType<typeof requireUser>>;
   try {
-    await requireConsultantSession();
-  } catch {
-    redirect("/");
+    user = await requireUser();
+  } catch (e) {
+    if (e instanceof UnauthorizedError) redirect("/");
+    if (e instanceof ForbiddenError) redirect("/");
+    throw e;
   }
+
+  // Shape compatible con el viejo ActiveCse para el ClientsGrid client component.
+  const activeCse = {
+    email: user.email,
+    name: user.teamMember?.name ?? user.email,
+    role: user.teamMember?.roleEnum ?? "Miembro",
+    isSuperAdmin: user.teamMember?.roleEnum === "SUPER_ADMIN",
+  };
 
   const now = new Date();
 
   const [clients, sessions, categories, teamMembers] = await Promise.all([
     prisma.client.findMany({
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "desc" }, // fallback secundario; el orden real se aplica abajo
       select: {
         id: true,
         name: true,
@@ -32,7 +49,7 @@ export default async function ClientsPage() {
         hubspotCompanyId: true,
         createdAt: true,
         hubspotAccount: { select: { hubName: true } },
-        projects: { select: { hubspotOwnerName: true } },
+        projects: { select: { hubspotOwnerName: true, hubspotOwnerEmail: true } },
         _count: { select: { projects: true } },
       },
     }),
@@ -47,11 +64,16 @@ export default async function ClientsPage() {
     getTeamMembers(),
   ]);
 
-  // Fechas de última reunión (ventas / CSE) calculadas en memoria — sin schema nuevo.
+  // Fechas de última reunión (ventas / CSE) — separadas, para mostrar en columnas.
   const meetingDates = computeLastMeetingDates({ sessions, clients, categories, teamMembers });
+
+  // Última interacción real (cualquier fuente: sesión, nota, agent run, próxima sesión).
+  // Esto define el ORDEN de la lista, no el contenido de columnas.
+  const lastInteractionMap = await computeLastInteractionMap(clients);
 
   const rows: ClientRow[] = clients.map((c) => {
     const md = meetingDates.get(c.id);
+    const li = lastInteractionMap.get(c.id);
     const cseNames = [
       ...new Set(
         c.projects
@@ -59,17 +81,48 @@ export default async function ClientsPage() {
           .filter((n): n is string => !!n && n.trim().length > 0)
       ),
     ];
+    const cseEmails = [
+      ...new Set(
+        c.projects
+          .map((p) => p.hubspotOwnerEmail)
+          .filter((e): e is string => !!e && e.trim().length > 0)
+          .map((e) => e.toLowerCase())
+      ),
+    ];
+    // Estado HubSpot — distingue:
+    //   - "connected_account": cliente conectó SU portal HubSpot a Nexus (OAuth) — caso raro
+    //   - "in_crm": cliente existe como Company en el portal HubSpot de Smarteam — caso común
+    //   - "none": ninguno
+    const hubspotStatus: "connected_account" | "in_crm" | "none" = c.hubspotAccount
+      ? "connected_account"
+      : c.hubspotCompanyId
+      ? "in_crm"
+      : "none";
+
     return {
       id: c.id,
       name: c.name,
       company: c.company,
       createdAt: c.createdAt.toISOString(),
-      hasHubspot: !!c.hubspotAccount || !!c.hubspotCompanyId,
+      hubspotStatus,
       cseNames,
+      cseEmails,
       lastSalesMeeting: md?.sales ? md.sales.toISOString() : null,
       lastCseMeeting: md?.cse ? md.cse.toISOString() : null,
+      lastInteractionAt: li?.date.toISOString() ?? null,
+      lastInteractionSource: li?.source ?? null,
+      lastInteractionLabel: li?.label ?? null,
       projectCount: c._count.projects,
     };
+  });
+
+  // Ordenar por última interacción DESC. Los clientes sin ninguna interacción
+  // van al final (ordenados entre sí por createdAt DESC).
+  rows.sort((a, b) => {
+    const aDate = a.lastInteractionAt ? new Date(a.lastInteractionAt).getTime() : 0;
+    const bDate = b.lastInteractionAt ? new Date(b.lastInteractionAt).getTime() : 0;
+    if (aDate !== bDate) return bDate - aDate;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
   return (
@@ -84,7 +137,7 @@ export default async function ClientsPage() {
           }
         />
 
-        <ClientsGrid clients={rows} />
+        <ClientsGrid clients={rows} activeCse={activeCse} />
         <ICPSection />
       </div>
     </AppShell>

@@ -7,6 +7,11 @@
  * las páginas), así que es el query más caliente del proyecto. Con `unstable_cache`
  * lo bajamos a 1 RTT a Supabase cada `revalidate` segundos.
  *
+ * El orden es por **última interacción real** (no por createdAt) — así los
+ * clientes "activos" suben y los dormidos bajan. Reusa el helper
+ * `computeLastInteractionMap` que combina sesiones, notas, agent runs y
+ * próximas sesiones.
+ *
  * Invalidación:
  *   - TTL automático (revalidate)
  *   - Mutaciones de Client deben llamar `revalidateTag("clients-sidebar")`
@@ -15,21 +20,54 @@
 
 import { unstable_cache, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
+import { computeLastInteractionMap } from "@/lib/clients/last-interaction";
 
 /** Tag de cache — usar también en `revalidateTag()` desde mutaciones. */
 export const CLIENTS_SIDEBAR_TAG = "clients-sidebar";
 
 export const getClientsForSidebar = unstable_cache(
   async () => {
-    return prisma.client.findMany({
-      orderBy: { createdAt: "desc" },
+    // 1. Cargar todos los clientes con los campos básicos del sidebar
+    const rows = await prisma.client.findMany({
       select: {
         id: true,
         name: true,
         company: true,
+        emailDomains: true,
         hubspotAccount: { select: { id: true, hubName: true } },
       },
     });
+
+    if (rows.length === 0) return [];
+
+    // 2. Calcular última interacción por cliente (sesiones + notas + runs + next)
+    const interactionMap = await computeLastInteractionMap(
+      rows.map((c) => ({
+        id: c.id,
+        name: c.name,
+        company: c.company,
+        emailDomains: c.emailDomains,
+      })),
+    );
+
+    // 3. Decorar y ordenar: clientes con interacción primero (DESC), sin actividad al final
+    const decorated = rows.map((c) => ({
+      id: c.id,
+      name: c.name,
+      company: c.company,
+      hubspotAccount: c.hubspotAccount,
+      lastInteractionAt: interactionMap.get(c.id)?.date ?? null,
+    }));
+
+    decorated.sort((a, b) => {
+      const at = a.lastInteractionAt?.getTime() ?? 0;
+      const bt = b.lastInteractionAt?.getTime() ?? 0;
+      if (at !== bt) return bt - at;
+      // tiebreaker: alfabético
+      return (a.name ?? "").localeCompare(b.name ?? "");
+    });
+
+    return decorated;
   },
   ["clients-sidebar"],
   { revalidate: 60, tags: [CLIENTS_SIDEBAR_TAG] }

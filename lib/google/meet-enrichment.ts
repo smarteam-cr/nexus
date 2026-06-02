@@ -320,6 +320,20 @@ export async function enrichGoogleMeetSessions(): Promise<EnrichResult> {
               enrichedAt: new Date(),
             },
           });
+
+          // Auto-trigger del Análisis post-sesión: si se obtuvo transcript real
+          // y la sesión se matchea a un cliente, generar minuta DRAFT + acciones
+          // en background. Idempotente (no reemplaza si ya existe minuta).
+          if (content.transcript && content.transcript.trim().length >= 200) {
+            // Import dinámico para evitar ciclo con prisma + helpers
+            const { postProcessSession } = await import("@/lib/sessions/post-process");
+            postProcessSession(s.id).catch((err) => {
+              console.log(
+                `[google/enrich] post-process falló para ${s.id}:`,
+                err instanceof Error ? err.message : err,
+              );
+            });
+          }
         } catch (err) {
           console.log(`[google/enrich] Error sesión ${s.id}:`, err instanceof Error ? err.message : err);
           errors++;
@@ -378,6 +392,17 @@ export async function enrichGoogleMeetSessions(): Promise<EnrichResult> {
               enrichedAt: new Date(),
             },
           });
+
+          // Auto-trigger del Análisis post-sesión (mismo patrón que pasada 1)
+          if (content?.transcript && content.transcript.trim().length >= 200) {
+            const { postProcessSession } = await import("@/lib/sessions/post-process");
+            postProcessSession(s.id).catch((err) => {
+              console.log(
+                `[google/enrich] post-process falló para ${s.id}:`,
+                err instanceof Error ? err.message : err,
+              );
+            });
+          }
         } catch (err) {
           console.log(`[google/enrich] Error sesión ${s.id}:`, err instanceof Error ? err.message : err);
           errors++;
@@ -438,6 +463,19 @@ export async function enrichSingleSession(sessionId: string): Promise<boolean> {
       enrichedAt: new Date(),
     },
   });
+
+  // Auto-trigger del Análisis post-sesión si conseguimos transcript real
+  // (mismo patrón que las pasadas batch del enrich).
+  if (content.transcript && content.transcript.trim().length >= 200) {
+    const { postProcessSession } = await import("@/lib/sessions/post-process");
+    // Background — no esperamos. force: false → no reemplaza si ya hay minute.
+    postProcessSession(sessionId).catch((err) => {
+      console.log(
+        `[google/enrich] post-process falló para ${sessionId}:`,
+        err instanceof Error ? err.message : err,
+      );
+    });
+  }
 
   const found = !!(content.transcript || finalSummary);
   console.log(`[google/enrich] Sesión individual "${session.title}": ${found ? "✓ contenido encontrado" : "sin contenido"}`);

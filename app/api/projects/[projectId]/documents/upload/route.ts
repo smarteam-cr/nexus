@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { supabaseStorage, BUCKET_NAME, MAX_FILE_SIZE, ensureBucket, storagePath } from "@/lib/storage/client";
 
@@ -31,6 +32,8 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
 
   // Verificar que el proyecto existe y obtener clientId
   const project = await prisma.project.findUnique({

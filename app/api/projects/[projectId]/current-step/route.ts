@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { guardAccessToProject } from "@/lib/auth/api-guards";
 
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const { stage, step } = await req.json();
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
 
+  const { stage, step } = await req.json();
   if (typeof stage !== "number" || typeof step !== "number") {
     return NextResponse.json({ error: "stage and step required" }, { status: 400 });
   }

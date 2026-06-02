@@ -7,6 +7,7 @@ import { enrichClient } from "@/lib/matching/enrichment";
 import { sessionMatchesClient } from "@/lib/matching/cascade";
 import type { EnrichedClientMatcher } from "@/lib/matching/cascade";
 import type { RawTranscript } from "@/lib/fireflies/sync";
+import { guardAccessToProject } from "@/lib/auth/api-guards";
 
 interface PendingItem {
   text: string;
@@ -194,6 +195,9 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
@@ -271,18 +275,53 @@ export async function GET(
     createdAtSource: project.hubspotCreatedAt ? "hubspot" : "nexus",
   };
 
+  // ── ActionItems del proyecto (tabla nueva, reemplaza el Json legacy) ─────
+  const actionItems = await prisma.actionItem.findMany({
+    where: { projectId, done: false },
+    orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      text: true,
+      ownerEmail: true,
+      dueDate: true,
+      status: true,
+      done: true,
+      source: true,
+      sessionId: true,
+      session: { select: { id: true, title: true, date: true } },
+    },
+    take: 20,
+  });
+
+  // Para compat hacia atrás: también devolver `pendingItems` con shape antiguo
+  // basado en ActionItems (el GPS UI viejo lee `pendingItems`).
+  const pendingItemsCompat = actionItems.map((a) => ({
+    text: a.text,
+    done: a.done,
+    source: a.source ?? undefined,
+    addedAt: undefined,
+    // Campos extra para que el UI nuevo aproveche si quiere
+    id: a.id,
+    ownerEmail: a.ownerEmail,
+    dueDate: a.dueDate?.toISOString() ?? null,
+    status: a.status,
+    sessionId: a.sessionId,
+    sessionTitle: a.session?.title ?? null,
+  }));
+
   return NextResponse.json({
     // Campos legacy (compatibilidad hacia atrás con el UI actual)
     nextSessionDate: nextSession.date,
     nextSessionNote: nextSession.note,
     lastSessionSummary: lastSession.summary,
-    pendingItems: (project.pendingItems as PendingItem[] | null) ?? [],
+    pendingItems: pendingItemsCompat,
     currentState,
 
     // Campos enriquecidos (nueva API)
     nextSession,
     lastSession,
     projectInfo,
+    actionItems: pendingItemsCompat, // alias semántico
   });
 }
 
@@ -292,6 +331,9 @@ export async function PUT(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   const body = await req.json();
 
   const data: Record<string, unknown> = {};

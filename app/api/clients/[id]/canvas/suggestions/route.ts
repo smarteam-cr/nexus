@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
 import { deepMergeCanvas } from "@/lib/canvas/merge";
@@ -9,6 +10,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const guard = await guardAccessToClient(id);
+  if (guard instanceof NextResponse) return guard;
+
   const suggestions = await prisma.canvasSuggestion.findMany({
     where: { clientId: id, status: "pending" },
     orderBy: { createdAt: "desc" },
@@ -22,6 +26,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const guard = await guardAccessToClient(id);
+  if (guard instanceof NextResponse) return guard;
+
   const { suggestionId, action } = await req.json();
 
   if (!suggestionId || !["accept", "reject"].includes(action)) {

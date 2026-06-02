@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 type Params = Promise<{ projectId: string; sectionId: string }>;
 
 // POST: create a block manually
 export async function POST(req: NextRequest, { params }: { params: Params }) {
-  const { sectionId } = await params;
+  const { projectId, sectionId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   const { blockType, content, data } = await req.json();
 
   const maxOrder = await prisma.canvasBlock.aggregate({
@@ -30,7 +34,10 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
 
 // PUT: update block content/data or accept/reject draft
 export async function PUT(req: NextRequest, { params }: { params: Params }) {
-  const { sectionId } = await params;
+  const { projectId, sectionId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   const body = await req.json();
 
   if (!body.blockId) {
@@ -63,7 +70,10 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
 
 // DELETE: remove a block
 export async function DELETE(req: NextRequest, { params }: { params: Params }) {
-  const { sectionId } = await params;
+  const { projectId, sectionId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   const { blockId } = await req.json();
 
   if (!blockId) {

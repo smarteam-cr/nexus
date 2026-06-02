@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/api";
+import { withClientAccess as withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { DocumentType } from "@prisma/client";
 

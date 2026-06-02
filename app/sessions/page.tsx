@@ -15,7 +15,9 @@ import { getSessionCategories } from "@/lib/cache/session-categories";
 
 // ISR: re-validamos cada 30s. Mutaciones críticas pueden llamar revalidatePath("/sessions")
 // si necesitan reflejarse inmediato.
-export const revalidate = 30;
+// Render dinámico — depende de cookies de Supabase Auth (vía AppShell).
+// Antes era ISR (revalidate = 30) cuando la sesión no dependía de cookies.
+export const dynamic = "force-dynamic";
 
 export default async function SessionsPage() {
   try {
@@ -31,7 +33,7 @@ export default async function SessionsPage() {
   // teamMembers + categories vienen del cache (cambian poco, TTL 10 min).
   // sessions/transcriptIds/clients son live para reflejar cambios al instante.
   const now = new Date();
-  const [sessions, transcriptIds, clients, teamMembers, categories] = await Promise.all([
+  const [sessions, transcriptIds, minutes, sessionProjectLinks, clientsWithActiveProjects, clients, teamMembers, categories] = await Promise.all([
     prisma.firefliesSession.findMany({
       where: { date: { lt: now } },
       orderBy: { date: "desc" },
@@ -51,6 +53,21 @@ export default async function SessionsPage() {
       where: { date: { lt: now }, transcript: { not: null } },
       select: { id: true },
     }),
+    prisma.sessionMinute.findMany({
+      select: { sessionId: true, status: true },
+    }),
+    // F3-D: cuántos proyectos tiene asignados cada sesión (para badge "Sin proyecto")
+    prisma.sessionProject.findMany({
+      select: { sessionId: true },
+    }),
+    // F3-D fix: clientes que tienen al menos 1 proyecto activo (para distinguir
+    // "sesión huérfana de proyecto pero el cliente tiene proyectos" vs
+    // "cliente sin proyectos en general — no es culpa de la sesión").
+    prisma.project.findMany({
+      where: { status: "active", serviceType: { not: "__strategy__" } },
+      select: { clientId: true },
+      distinct: ["clientId"],
+    }),
     prisma.client.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, company: true, emailDomains: true },
@@ -61,6 +78,13 @@ export default async function SessionsPage() {
 
   // Set para lookup O(1) — ¿esta sesión tiene transcript?
   const withTranscriptSet = new Set(transcriptIds.map((t) => t.id));
+  // Map sessionId → MinuteStatus para mostrar badge en sidebar
+  const minuteStatusBySessionId = new Map(minutes.map((m) => [m.sessionId, m.status]));
+  // F3-D: set de sesiones que ya tienen al menos un proyecto asignado
+  const sessionsWithProject = new Set(sessionProjectLinks.map((l) => l.sessionId));
+  // F3-D fix: clientes que tienen proyectos activos (para mostrar badge solo
+  // cuando realmente es una sesión huérfana — no cuando el cliente no tiene proyectos)
+  const clientsWithProjectsSet = new Set(clientsWithActiveProjects.map((p) => p.clientId));
 
   // ── 2. Pre-cálculos para categorización ────────────────────────────────────
   const internalDomains = buildInternalDomainsSet(categories);
@@ -116,6 +140,16 @@ export default async function SessionsPage() {
       clientId: s.group.kind === "client" ? s.group.id : null,
       teamMembers: matchedMembers.map((m) => ({ name: m.name, email: m.email, role: m.role })),
       teamRoles: roles,
+      // F1: status de la minuta post-sesión (DRAFT/REVIEWED/EDITED) o null si nunca se generó
+      minuteStatus: minuteStatusBySessionId.get(s.id) ?? null,
+      // F3-D: ¿tiene proyecto asignado? (para badge "Sin proyecto" cuando está
+      // matched a un cliente pero sin SessionProject row)
+      hasProjectAssigned: sessionsWithProject.has(s.id),
+      // F3-D fix: ¿el cliente matched tiene proyectos activos disponibles?
+      // Si no, no mostramos badge "Sin proyecto" (no es accionable — el cliente
+      // simplemente no tiene proyectos abiertos).
+      clientHasActiveProjects:
+        s.group.kind === "client" ? clientsWithProjectsSet.has(s.group.id) : false,
     };
   });
 

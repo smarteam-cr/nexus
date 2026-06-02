@@ -133,6 +133,9 @@ model Client {
   contextCards      ClientContextCard[]
   projects          Project[]
   canvasSuggestions CanvasSuggestion[]
+  actionItems       ActionItem[]
+  appUsers          AppUser[]              // F2: usuarios externos vinculados (kind=EXTERNAL)
+  assignments       ClientAssignment[]     // F2: overrides manuales CSE↔Cliente
 }
 
 // ─── Project ──────────────────────────────────────────────────────────────────
@@ -174,6 +177,9 @@ model Project {
   documents    ClientDocument[]
   agentRuns    AgentRun[]
   canvases     ProjectCanvas[]
+  actionItems  ActionItem[]
+  sessions     SessionProject[]
+  participantSnapshot ProjectParticipantSnapshot?
 }
 
 // Canvas dentro de un proyecto (default = "Canvas de servicio", custom = secciones libres)
@@ -462,14 +468,89 @@ model AgentRun {
 }
 
 // ─── TeamMember ───────────────────────────────────────────────────────────────
+// Identidad interna del equipo de Smarteam. El email es la llave que cruza
+// con AppUser.email (que a su vez se vincula con auth.users de Supabase Auth).
+// El roleEnum reemplaza al string legacyRole; el viejo se mantiene para
+// auditoría de migración y se elimina cuando estabilice el roleEnum.
 
 model TeamMember {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  role      String?  // e.g. "Ventas", "Marketing"
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  String    @id @default(cuid())
+  name                String
+  email               String    @unique
+  role                String?   // LEGACY — string libre ("CSE"/"PM"/etc). NO usar para nueva lógica de permisos: usar roleEnum. Se elimina en deuda 🟡 cuando todos los consumidores migren.
+  roleEnum            TeamRole  @default(CSE)
+  canViewAllClients   Boolean   @default(false)  // permiso otorgado por ADMIN/SUPER_ADMIN
+  canViewAllExpiresAt DateTime?                  // opcional: caducidad del permiso temporal
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Inversas
+  appUser            AppUser?
+  clientAssignments  ClientAssignment[] @relation("AssignedTo")
+  grantedAssignments ClientAssignment[] @relation("GrantedBy")
+}
+
+enum TeamRole {
+  CSE
+  PM
+  SALES
+  ADMIN
+  SUPER_ADMIN
+}
+
+// ─── AppUser ──────────────────────────────────────────────────────────────────
+// Identidad unificada que vincula auth.users (Supabase Auth) con el modelo
+// de Nexus. Hay dos kinds:
+//   - INTERNAL: equipo de Smarteam. teamMemberId set, clientId null.
+//   - EXTERNAL: cliente final (onboarding). clientId set, teamMemberId null.
+// El authUserId se vincula en el primer login (callback de Google OAuth).
+
+model AppUser {
+  id           String      @id @default(cuid())
+  authUserId   String?     @unique          // FK suave a auth.users.id de Supabase (null hasta primer login)
+  email        String      @unique
+  kind         AppUserKind
+  teamMemberId String?     @unique
+  teamMember   TeamMember? @relation(fields: [teamMemberId], references: [id], onDelete: SetNull)
+  clientId     String?
+  client       Client?     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([email])
+  @@index([authUserId])
+}
+
+enum AppUserKind {
+  INTERNAL
+  EXTERNAL
+}
+
+// ─── ClientAssignment ─────────────────────────────────────────────────────────
+// Overrides manuales bidireccionales para la asignación CSE↔Cliente, en
+// adición al default automático (hubspotOwnerEmail). GRANT da acceso a un
+// CSE a un cliente que no es su owner; REVOKE quita acceso a un CSE que sí
+// es owner (raro). Solo ADMIN/SUPER_ADMIN puede crearlos (grantedById).
+
+model ClientAssignment {
+  id           String         @id @default(cuid())
+  clientId     String
+  client       Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  teamMemberId String
+  teamMember   TeamMember     @relation("AssignedTo", fields: [teamMemberId], references: [id], onDelete: Cascade)
+  kind         AssignmentKind
+  grantedById  String         // FK al TeamMember admin/super que otorgó
+  grantedBy    TeamMember     @relation("GrantedBy", fields: [grantedById], references: [id], onDelete: Restrict)
+  reason       String?        @db.Text
+  createdAt    DateTime       @default(now())
+
+  @@unique([clientId, teamMemberId])
+  @@index([teamMemberId])
+}
+
+enum AssignmentKind {
+  GRANT
+  REVOKE
 }
 
 // ─── ExecutionLog ─────────────────────────────────────────────────────────────
@@ -592,12 +673,139 @@ model FirefliesSession {
   organizerEmail String?               // Email del organizador (para impersonación en enriquecimiento)
   manualClientId String?               // override manual del matching automático de cliente
 
+  // F5: sub-topics detectados por IA (lead-scoring, workflow-builder, etc.).
+  // Lista canónica viva en lib/sessions/topic-vocabulary.ts y se sesga por
+  // serviceType del proyecto primario.
+  detectedTopics String[] @default([])
+
+  // Relaciones del ciclo de reunión (minuta post + acciones derivadas)
+  minute      SessionMinute?
+  actionItems ActionItem[]
+  projects    SessionProject[]
+
   // Índices para los queries principales:
   //   /sessions: findMany({ where: { date: { lt: now } }, orderBy: { date: desc } })
   //   override manual: filtros por manualClientId al matchear sesiones
   // Sin esto, Postgres hace seq scan + sort en cada render.
   @@index([date(sort: Desc)])
   @@index([manualClientId])
+}
+
+// ─── Ciclo de reunión: Minuta + ActionItems ──────────────────────────────────
+// Estos modelos encarnan el flujo del CSE:
+//   1. La reunión sucede (FirefliesSession con transcript)
+//   2. El agente Post-sesión genera SessionMinute (DRAFT) + ActionItems
+//   3. El CSE revisa la minuta (DRAFT → REVIEWED) y trabaja las acciones
+//   4. La siguiente sesión vuelve a iterar
+
+enum MinuteStatus {
+  DRAFT     // generada por agente, esperando revisión del CSE
+  REVIEWED  // CSE la revisó y aceptó sin cambios
+  EDITED    // CSE la editó manualmente (también implica aceptada)
+}
+
+enum ActionStatus {
+  PENDING
+  IN_PROGRESS
+  BLOCKED
+  DONE
+}
+
+model SessionMinute {
+  id        String           @id @default(cuid())
+  sessionId String           @unique
+  session   FirefliesSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // Síntesis estructurada de la reunión
+  summary    String  @db.Text       // resumen ejecutivo (1-2 párrafos)
+  agreements Json?                  // [{ text, source? }]
+  decisions  Json?                  // [{ text, rationale? }]
+  risks      Json?                  // [{ text, severity? "low" | "med" | "high" }]
+  topics     Json?                  // ["bullet 1", "bullet 2"]
+
+  // Estado y trazabilidad
+  status               MinuteStatus @default(DRAFT)
+  generatedByAgentRunId String?     // FK suave (no cascade) al AgentRun que la creó
+  reviewedAt           DateTime?
+  reviewedByEmail      String?      // email del CSE que aceptó/editó
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+model ActionItem {
+  id   String @id @default(cuid())
+  text String @db.Text
+
+  clientId  String
+  client    Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  sessionId String?
+  session   FirefliesSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  // Asignación y plazos
+  ownerEmail String?
+  dueDate    DateTime?
+  status     ActionStatus @default(PENDING)
+  done       Boolean      @default(false)
+
+  // Trazabilidad de origen
+  source                String? // "agent:post-session" | "agent:sales-analysis" | "manual" | "legacy" | "agent:client-analyze"
+  generatedByAgentRunId String? // FK suave al AgentRun que lo creó
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId, done])
+  @@index([projectId, done])
+  @@index([sessionId])
+  @@index([ownerEmail, done])
+  @@index([dueDate])
+}
+
+// ─── SessionProject — pivote N:N entre FirefliesSession y Project ─────────────
+// Una sesión puede tocar múltiples proyectos del mismo cliente (ej. una reunión
+// de "alineación general" que cubre marketing + ventas). isPrimary indica el
+// proyecto principal donde se ve la minuta/cards/acciones por defecto.
+// source: "agent" (clasificador automático) | "manual" (CSE) | "legacy" (migración).
+
+model SessionProject {
+  id        String           @id @default(cuid())
+  sessionId String
+  session   FirefliesSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  isPrimary  Boolean @default(false)
+  source     String  @default("agent") // "agent" | "manual" | "legacy"
+  confidence Float?                    // 0..1, solo si source="agent"
+  rationale  String? @db.Text          // por qué la IA lo asignó
+
+  generatedByAgentRunId String? // FK suave al AgentRun del clasificador
+  createdAt             DateTime @default(now())
+
+  @@unique([sessionId, projectId])
+  @@index([projectId, isPrimary])
+  @@index([sessionId])
+}
+
+// ─── Snapshot del análisis de participantes por proyecto (F5) ─────────────────
+// Generado periódicamente por agent-participants-analyzer. Sobreescribible.
+
+model ProjectParticipantSnapshot {
+  id         String   @id @default(cuid())
+  projectId  String   @unique
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  stats      Json     // { clientSponsorAttendance, lastSeenByRole, averageHeadcount, ... }
+  sessionsAnalyzed Int @default(0)
+  generatedByAgentRunId String?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 // ─── Canvas Suggestions (aprobación de cambios al Client Canvas) ─────────────

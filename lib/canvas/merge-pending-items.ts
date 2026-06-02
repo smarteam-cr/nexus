@@ -1,28 +1,18 @@
 /**
- * Helper para mergear nuevos pendientes (generados por agentes) al array
- * `Project.pendingItems` existente, de forma idempotente.
+ * Helper para crear ActionItems desde pendientes generados por agentes.
  *
- * Estructura del pendingItems en DB (Json):
- *   [{ text: string, done: boolean, source?: string, addedAt?: string }]
- *
- * La deduplicación es por `text` normalizado (trim + lowercase).
+ * Antes este helper escribía a Project.pendingItems (Json). Ahora crea rows
+ * en la tabla ActionItem (modelo del ciclo de reunión, F1 del rediseño).
+ * La firma se mantiene para no romper a los callers — internamente:
+ *   - Resuelve clientId desde projectId
+ *   - Crea 1 ActionItem por cada NewPendingItem nuevo (no duplicado)
+ *   - Deduplicación idempotente por text normalizado + clientId + source
  */
 import { prisma } from "@/lib/db/prisma";
-
-export interface PendingItem {
-  text: string;
-  done: boolean;
-  source?: string;
-  addedAt?: string;
-}
 
 export interface NewPendingItem {
   text: string;
   source?: string;
-}
-
-function normalizeText(t: string): string {
-  return t.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 export interface MergeResult {
@@ -31,10 +21,17 @@ export interface MergeResult {
   total: number;
 }
 
+function normalizeText(t: string): string {
+  return t.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 /**
- * Mergea nuevos items al `Project.pendingItems`. Idempotente: items con el
- * mismo texto normalizado no se duplican. Si `projectId` es null/undefined,
- * o si la lista nueva está vacía, no hace nada (retorna 0/0/total).
+ * Crea ActionItems para los pendientes nuevos. Idempotente por
+ * `text normalizado + clientId + source`. Si `projectId` es null/undefined o
+ * la lista nueva está vacía, no hace nada.
+ *
+ * Devuelve cantidad de items NUEVOS creados, saltados (duplicados/vacíos), y
+ * total actual de ActionItems pendientes (`done=false`) del proyecto.
  */
 export async function mergePendingItemsToProject(
   projectId: string | null | undefined,
@@ -46,25 +43,21 @@ export async function mergePendingItemsToProject(
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { pendingItems: true },
+    select: { id: true, clientId: true },
   });
+  if (!project) return { added: 0, skipped: 0, total: 0 };
 
-  if (!project) {
-    return { added: 0, skipped: 0, total: 0 };
-  }
-
-  // Parse existing items (Json field puede ser null o array)
-  const existing: PendingItem[] = Array.isArray(project.pendingItems)
-    ? (project.pendingItems as unknown as PendingItem[])
-    : [];
-
-  const existingNormalized = new Set(
-    existing.map((it) => normalizeText(it.text ?? ""))
+  // Cargar ActionItems existentes del proyecto para deduplicar
+  const existing = await prisma.actionItem.findMany({
+    where: { projectId },
+    select: { text: true, source: true },
+  });
+  const existingKeys = new Set(
+    existing.map((it) => `${normalizeText(it.text)}::${it.source ?? ""}`),
   );
 
   let added = 0;
   let skipped = 0;
-  const nowIso = new Date().toISOString();
 
   for (const newItem of newItems) {
     const text = (newItem.text ?? "").trim();
@@ -72,32 +65,35 @@ export async function mergePendingItemsToProject(
       skipped++;
       continue;
     }
-    const norm = normalizeText(text);
-    if (existingNormalized.has(norm)) {
+    const source = newItem.source?.trim() || "agent";
+    const key = `${normalizeText(text)}::${source}`;
+    if (existingKeys.has(key)) {
       skipped++;
       continue;
     }
-    existing.push({
-      text,
-      done: false,
-      source: newItem.source?.trim() || undefined,
-      addedAt: nowIso,
+
+    await prisma.actionItem.create({
+      data: {
+        text,
+        clientId: project.clientId,
+        projectId: project.id,
+        source,
+        status: "PENDING",
+        done: false,
+      },
     });
-    existingNormalized.add(norm);
+    existingKeys.add(key);
     added++;
   }
 
-  if (added > 0) {
-    // Cast a unknown intermedio porque Prisma Json no acepta tipos arbitrarios directamente
-    await prisma.project.update({
-      where: { id: projectId },
-      data: { pendingItems: existing as unknown as object },
-    });
-  }
+  // Total actual de ActionItems pendientes del proyecto
+  const total = await prisma.actionItem.count({
+    where: { projectId, done: false },
+  });
 
   console.log(
-    `[merge-pending-items] project=${projectId} added=${added} skipped=${skipped} total=${existing.length}`
+    `[merge-pending-items] project=${projectId} added=${added} skipped=${skipped} totalPending=${total}`,
   );
 
-  return { added, skipped, total: existing.length };
+  return { added, skipped, total };
 }

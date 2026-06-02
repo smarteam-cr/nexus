@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 // Secciones fijas del canvas default ("Canvas de servicio")
@@ -83,6 +84,9 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   const url = new URL(_req.url);
   const canvasIdParam = url.searchParams.get("canvasId");
   const includeSuggestions = url.searchParams.get("include") === "suggestions";
@@ -169,6 +173,9 @@ export async function PUT(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   const { cardId, toSection, toIndex } = await req.json();
 
   if (!cardId || !toSection || typeof toIndex !== "number") {
@@ -244,6 +251,9 @@ export async function DELETE(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
   const { cardId } = await req.json();
 
   if (!cardId) {

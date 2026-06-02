@@ -1,32 +1,61 @@
+/**
+ * middleware.ts
+ *
+ * Gate global de la app. Permite el paso si hay sesión Supabase Auth válida.
+ *
+ * Rutas siempre públicas: la landing, las rutas del flujo de auth Supabase, y
+ * las rutas de OAuth de HubSpot (integración separada de la autenticación de
+ * Nexus — HubSpot OAuth conecta una HubspotAccount, no loguea al usuario).
+ */
 import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_PATHS = ["/", "/api/auth/login", "/api/auth/logout"];
+// Rutas públicas exactas
+const PUBLIC_PATHS = ["/"];
 
-// Prefijos de rutas públicas (OAuth HubSpot)
-const PUBLIC_PREFIXES = ["/api/auth/hubspot", "/api/auth/callback"];
+// Prefijos siempre públicos:
+//   - /api/auth/hubspot/*  → flujo OAuth HubSpot (integración, no auth de usuario)
+//   - /api/auth/callback   → callback OAuth HubSpot
+//   - /auth/*              → rutas de Supabase Auth (google, callback, signout)
+const PUBLIC_PREFIXES = ["/api/auth/hubspot", "/api/auth/callback", "/auth/"];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Rutas públicas exactas
-  if (PUBLIC_PATHS.includes(pathname)) {
-    return NextResponse.next();
+  if (PUBLIC_PATHS.includes(pathname)) return NextResponse.next();
+  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
+
+  // Importante: el middleware tiene que RETORNAR la response que Supabase
+  // pueda haber modificado (token refresh setea cookies nuevas).
+  let response = NextResponse.next({ request });
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnon) {
+    // Sin Supabase configurado no se puede autenticar — redirect a la landing
+    // con error visible para que el deploy se diagnostique rápido.
+    return NextResponse.redirect(new URL("/?error=oauth_init", request.url));
   }
 
-  // Rutas públicas por prefijo
-  if (PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
-    return NextResponse.next();
-  }
+  const supabase = createServerClient(supabaseUrl, supabaseAnon, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          response.cookies.set(name, value, options),
+        );
+      },
+    },
+  });
+  const { data } = await supabase.auth.getUser();
 
-  // Verificar sesión de consultor
-  const session = request.cookies.get("consultant_session");
-  if (session?.value !== "authenticated") {
-    // Redirigir al login
-    const loginUrl = new URL("/", request.url);
-    return NextResponse.redirect(loginUrl);
-  }
+  if (data.user) return response;
 
-  return NextResponse.next();
+  return NextResponse.redirect(new URL("/", request.url));
 }
 
 export const config = {

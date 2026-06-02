@@ -43,6 +43,12 @@ interface Session {
   group: SessionGroup;
   teamMembers: SessionTeamMember[];
   teamRoles: string[];
+  /** F1: estado de la minuta post-sesión. null = nunca se generó. */
+  minuteStatus: "DRAFT" | "REVIEWED" | "EDITED" | null;
+  /** F3-D: true si la sesión tiene al menos un SessionProject asignado. */
+  hasProjectAssigned: boolean;
+  /** F3-D fix: true si el cliente matched tiene proyectos activos disponibles. */
+  clientHasActiveProjects: boolean;
 }
 
 interface Client {
@@ -945,6 +951,16 @@ function SessionDetail({
           </button>
           <div className="w-px h-4 bg-gray-800" />
           <p className="text-sm font-medium text-white truncate flex-1">{session.title}</p>
+          <a
+            href={`/sessions/${session.id}`}
+            className="flex items-center gap-1 text-xs text-brand hover:text-brand/80 transition-colors flex-shrink-0"
+            title="Abrir vista completa de la sesión (minuta + acciones + cards)"
+          >
+            Vista completa
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </a>
           <ClientSelector
             sessionId={session.id}
             currentClientId={session.clientId}
@@ -1289,6 +1305,47 @@ function SidebarSessionItem({ session, isActive, onClick }: {
     session.summary?.action_items?.length
   );
 
+  // F1: badge del estado de la minuta post-sesión
+  const minuteBadge = (() => {
+    if (session.minuteStatus === "REVIEWED" || session.minuteStatus === "EDITED") {
+      return {
+        label: "Minuta ✓",
+        tooltip: "Minuta revisada por un CSE",
+        className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+      };
+    }
+    if (session.minuteStatus === "DRAFT") {
+      return {
+        label: "Borrador",
+        tooltip: "Minuta generada por el agente — pendiente de revisión",
+        className: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+      };
+    }
+    // Solo mostramos "Sin procesar" si hay transcript (señal real de que falta correr el agente)
+    if (session.hasTranscript) {
+      return {
+        label: "Sin minuta",
+        tooltip: "Tiene transcript pero el agente post-sesión aún no la procesó",
+        className: "bg-gray-700/40 text-gray-400 border-gray-700",
+      };
+    }
+    return null;
+  })();
+
+  // F3-D fix: badge "Sin proyecto" solo si el cliente TIENE proyectos activos
+  // pero esta sesión específica todavía no fue asignada a ninguno (acción real
+  // para el CSE). Si el cliente no tiene proyectos abiertos, no es accionable.
+  const isMatchedToClient = session.group.kind === "client";
+  const noProjectBadge =
+    isMatchedToClient && session.clientHasActiveProjects && !session.hasProjectAssigned
+      ? {
+          label: "Sin proyecto",
+          tooltip:
+            "Esta sesión está vinculada a un cliente con proyectos activos pero aún no se asignó a ninguno. Asignala desde la vista de la sesión.",
+          className: "bg-red-500/10 text-red-400 border-red-500/30",
+        }
+      : null;
+
   return (
     <button
       onClick={onClick}
@@ -1331,11 +1388,27 @@ function SidebarSessionItem({ session, isActive, onClick }: {
           </span>
         ) : null}
       </div>
-      {session.teamRoles.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-1.5">
+      {(session.teamRoles.length > 0 || minuteBadge || noProjectBadge) && (
+        <div className="flex flex-wrap items-center gap-1 mt-1.5">
           {session.teamRoles.slice(0, 3).map((role) => (
             <RoleBadge key={role} role={role} />
           ))}
+          {noProjectBadge && (
+            <span
+              title={noProjectBadge.tooltip}
+              className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${noProjectBadge.className}`}
+            >
+              {noProjectBadge.label}
+            </span>
+          )}
+          {minuteBadge && (
+            <span
+              title={minuteBadge.tooltip}
+              className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${minuteBadge.className}`}
+            >
+              {minuteBadge.label}
+            </span>
+          )}
         </div>
       )}
     </button>

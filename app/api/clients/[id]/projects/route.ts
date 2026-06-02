@@ -1,13 +1,15 @@
-import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/api";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
+import { guardAccessToClient } from "@/lib/auth/api-guards";
 
-export const GET = withAuth(async (
-  _req,
-  { params }: { params: Promise<{ id: string }> }
-) => {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const { id: clientId } = await params;
+  const guard = await guardAccessToClient(clientId);
+  if (guard instanceof NextResponse) return guard;
 
   const projects = await prisma.project.findMany({
     where: { clientId },
@@ -25,15 +27,17 @@ export const GET = withAuth(async (
   });
 
   return NextResponse.json({ projects });
-});
+}
 
-export const POST = withAuth(async (
-  req,
-  { params }: { params: Promise<{ id: string }> }
-) => {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const { id: clientId } = await params;
-  const body = await req.json() as { name?: string };
+  const guard = await guardAccessToClient(clientId);
+  if (guard instanceof NextResponse) return guard;
 
+  const body = (await req.json()) as { name?: string };
   if (!body.name?.trim()) {
     return NextResponse.json({ error: "name requerido" }, { status: 400 });
   }
@@ -49,4 +53,4 @@ export const POST = withAuth(async (
   await createDefaultCanvases(project.id);
 
   return NextResponse.json({ project }, { status: 201 });
-});
+}

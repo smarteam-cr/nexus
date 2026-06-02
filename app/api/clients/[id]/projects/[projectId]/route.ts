@@ -1,12 +1,15 @@
-import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/api";
+import { NextRequest, NextResponse } from "next/server";
+import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
-export const PATCH = withAuth(async (
-  req,
+export async function PATCH(
+  req: NextRequest,
   { params }: { params: Promise<{ id: string; projectId: string }> }
-) => {
-  const { projectId } = await params;
+) {
+  const { id, projectId } = await params;
+  const guard = await guardAccessToClient(id);
+  if (guard instanceof NextResponse) return guard;
+
   const body = await req.json() as { name?: string; status?: string; serviceType?: string; hubspotDealId?: string | null };
 
   const data: { name?: string; status?: string; serviceType?: string; hubspotDealId?: string | null } = {};
@@ -21,15 +24,17 @@ export const PATCH = withAuth(async (
   });
 
   return NextResponse.json({ project });
-});
+}
 
-export const DELETE = withAuth(async (
-  _req,
+export async function DELETE(
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string; projectId: string }> }
-) => {
-  const { projectId } = await params;
+) {
+  const { id, projectId } = await params;
+  const guard = await guardAccessToClient(id);
+  if (guard instanceof NextResponse) return guard;
 
   await prisma.project.delete({ where: { id: projectId } });
 
   return NextResponse.json({ ok: true });
-});
+}

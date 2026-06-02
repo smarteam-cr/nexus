@@ -1,14 +1,17 @@
-import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/api";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
+import { guardAccessToClient } from "@/lib/auth/api-guards";
 
 // GET /api/clients/[id]
-export const GET = withAuth(async (
-  _request,
-  { params }: { params: Promise<{ id: string }> }
-) => {
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const { id } = await params;
+  const guard = await guardAccessToClient(id);
+  if (guard instanceof NextResponse) return guard;
+
   const client = await prisma.client.findUnique({
     where: { id },
     include: {
@@ -26,16 +29,18 @@ export const GET = withAuth(async (
   }
 
   return NextResponse.json(client);
-});
+}
 
 // PATCH /api/clients/[id]
-export const PATCH = withAuth(async (
-  request,
-  { params }: { params: Promise<{ id: string }> }
-) => {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const { id } = await params;
-  const data = await request.json();
+  const guard = await guardAccessToClient(id);
+  if (guard instanceof NextResponse) return guard;
 
+  const data = await request.json();
   const client = await prisma.client.update({
     where: { id },
     data: {
@@ -51,24 +56,24 @@ export const PATCH = withAuth(async (
     },
   });
 
-  // Si cambió name o company, el sidebar muestra outdated → invalidar
   if (data.name !== undefined || data.company !== undefined) {
     revalidateClientsSidebar();
   }
 
   return NextResponse.json(client);
-});
+}
 
 // DELETE /api/clients/[id]
-export const DELETE = withAuth(async (
-  _request,
-  { params }: { params: Promise<{ id: string }> }
-) => {
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const { id } = await params;
-  await prisma.client.delete({ where: { id } });
+  const guard = await guardAccessToClient(id);
+  if (guard instanceof NextResponse) return guard;
 
-  // Invalidar sidebar — el cliente ya no debe aparecer
+  await prisma.client.delete({ where: { id } });
   revalidateClientsSidebar();
 
   return NextResponse.json({ ok: true });
-});
+}
