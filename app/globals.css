@@ -261,6 +261,59 @@ html.light .text-violet-400   { color: #7c3aed !important; }
 html.light .bg-blue-900\/30   { background-color: #eff6ff !important; }
 html.light .text-blue-400     { color: #1d4ed8 !important; }
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Opacity variants para colores semánticos (bg-X-500/10, text-X-200/300, etc.)
+ *
+ * Estos overrides existen porque el código se diseña en oscuro usando paletas
+ * tipo `bg-red-500/10 text-red-200` (rojo translúcido + texto rojo muy claro).
+ * En tema oscuro se ve perfecto; en light el fondo queda casi blanco y el
+ * texto claro queda ilegible. Acá los remapeamos a paletas opacas + texto
+ * oscuro que mantienen el sentido semántico en ambos temas.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/* Amber/warning (opacity variants) */
+html.light .bg-amber-500\/10      { background-color: #fffbeb !important; }
+html.light .bg-amber-500\/20      { background-color: #fef3c7 !important; }
+html.light .border-amber-500\/30  { border-color: #fde68a !important; }
+html.light .border-amber-500\/20  { border-color: #fef3c7 !important; }
+html.light .text-amber-200        { color: #78350f !important; }
+
+/* Red/danger (opacity variants) */
+html.light .bg-red-500\/10        { background-color: #fef2f2 !important; }
+html.light .bg-red-500\/20        { background-color: #fee2e2 !important; }
+html.light .border-red-500\/30    { border-color: #fecaca !important; }
+html.light .border-red-500\/20    { border-color: #fee2e2 !important; }
+html.light .text-red-200          { color: #7f1d1d !important; }
+html.light .text-red-300          { color: #991b1b !important; }
+
+/* Emerald/success (opacity variants) */
+html.light .bg-emerald-500\/10    { background-color: #ecfdf5 !important; }
+html.light .bg-emerald-500\/20    { background-color: #d1fae5 !important; }
+html.light .border-emerald-500\/30 { border-color: #a7f3d0 !important; }
+html.light .border-emerald-500\/20 { border-color: #d1fae5 !important; }
+html.light .text-emerald-200      { color: #064e3b !important; }
+html.light .text-emerald-300      { color: #065f46 !important; }
+html.light .text-emerald-400      { color: #059669 !important; }
+
+/* Blue (opacity variants) */
+html.light .bg-blue-500\/10       { background-color: #eff6ff !important; }
+html.light .bg-blue-500\/20       { background-color: #dbeafe !important; }
+html.light .border-blue-500\/30   { border-color: #bfdbfe !important; }
+html.light .border-blue-500\/20   { border-color: #dbeafe !important; }
+html.light .text-blue-300         { color: #1e40af !important; }
+
+/* Orange (hot project badge) */
+html.light .bg-orange-500\/10     { background-color: #fff7ed !important; }
+html.light .border-orange-500\/20 { border-color: #fed7aa !important; }
+html.light .text-orange-400       { color: #c2410c !important; }
+
+/* Brand badges (bg-brand/10, bg-brand/20, etc.) */
+html.light .bg-brand\/5           { background-color: #faf5ff !important; }
+html.light .bg-brand\/10          { background-color: #f5f3ff !important; }
+html.light .bg-brand\/20          { background-color: #ede9fe !important; }
+html.light .border-brand\/30      { border-color: #ddd6fe !important; }
+html.light .border-brand\/20      { border-color: #ede9fe !important; }
+
 /* ── Prose-invert: en light mode fuerza colores oscuros aunque prose-invert esté activo ── */
 html.light .prose-invert {
   --tw-prose-body:          #374151;
