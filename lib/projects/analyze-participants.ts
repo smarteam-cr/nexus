@@ -11,9 +11,20 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
+import {
+  categorizeSession,
+  buildInternalDomainsSet,
+  type CategorizeContext,
+} from "@/lib/sessions/categorize";
+import { classifySessionToProjects } from "@/lib/sessions/classify-session-project";
 
 const AGENT_ID_PARTICIPANTS_ANALYZER = "agent-participants-analyzer";
 const MAX_SESSIONS_TO_ANALYZE = 8;
+/**
+ * Cuántas sesiones matched-pero-huérfanas (sin SessionProject) auto-clasificar
+ * por llamada para no gastar tokens en proyectos con muchas sesiones viejas.
+ */
+const MAX_AUTO_CLASSIFY = 5;
 
 interface AnalyzerOutput {
   stats?: Record<string, unknown>;
@@ -26,6 +37,8 @@ export interface AnalyzeResult {
   snapshotId?: string;
   sessionsAnalyzed?: number;
   alertsCount?: number;
+  /** Cantidad de sesiones huérfanas auto-clasificadas al cliente en este call. */
+  autoClassified?: number;
 }
 
 export async function analyzeProjectParticipants(
@@ -38,7 +51,7 @@ export async function analyzeProjectParticipants(
   if (!project) return { status: "error", reason: "Project not found" };
 
   // Cargar últimas sesiones vinculadas al proyecto
-  const links = await prisma.sessionProject.findMany({
+  let links = await prisma.sessionProject.findMany({
     where: { projectId },
     orderBy: { session: { date: "desc" } },
     take: MAX_SESSIONS_TO_ANALYZE,
@@ -54,11 +67,35 @@ export async function analyzeProjectParticipants(
     },
   });
 
+  // Si no hay nada asignado, intentar auto-clasificar sesiones huérfanas
+  // (matched al cliente vía cascade pero sin SessionProject row).
+  let autoClassified = 0;
+  if (links.length === 0) {
+    autoClassified = await autoClassifyOrphanSessions(project.client.id);
+    if (autoClassified > 0) {
+      // Releer links después de la auto-clasificación
+      links = await prisma.sessionProject.findMany({
+        where: { projectId },
+        orderBy: { session: { date: "desc" } },
+        take: MAX_SESSIONS_TO_ANALYZE,
+        select: {
+          session: {
+            select: { id: true, title: true, date: true, participants: true },
+          },
+        },
+      });
+    }
+  }
+
   if (links.length === 0) {
     return {
       status: "skipped",
-      reason: "Project has no sessions assigned yet",
+      reason:
+        autoClassified === 0
+          ? "Project has no sessions assigned yet (and no orphan sessions found for this client)"
+          : `Auto-classified ${autoClassified} sessions but none ended up on this project — they went to another project of the same client`,
       sessionsAnalyzed: 0,
+      autoClassified,
     };
   }
 
@@ -164,5 +201,84 @@ export async function analyzeProjectParticipants(
     snapshotId: snapshot.id,
     sessionsAnalyzed: links.length,
     alertsCount: (parsed.alerts ?? []).length,
+    autoClassified,
   };
+}
+
+/**
+ * Helper: para un cliente dado, encuentra hasta MAX_AUTO_CLASSIFY sesiones
+ * matched a él vía cascade (`categorizeSession`) que NO tienen aún
+ * `SessionProject` row, y las clasifica vía `classifySessionToProjects`.
+ *
+ * Devuelve cuántas sesiones se pudieron clasificar exitosamente.
+ *
+ * Esto cierra el agujero de UX donde un proyecto creado/poblado antes del
+ * cutover de F2 (SessionProject) queda con sesiones huérfanas y los flujos
+ * dependientes (analyze-participants, meetings tab) responden vacío.
+ */
+async function autoClassifyOrphanSessions(clientId: string): Promise<number> {
+  // 1. Cargar cliente + categorías + todas las sesiones (solo lo mínimo)
+  const [client, categories, allSessions, existingLinks] = await Promise.all([
+    prisma.client.findUnique({
+      where: { id: clientId },
+      select: { id: true, name: true, company: true, emailDomains: true },
+    }),
+    prisma.sessionCategory.findMany({
+      select: { id: true, name: true, slug: true, domains: true, kind: true, color: true },
+    }),
+    prisma.firefliesSession.findMany({
+      select: {
+        id: true,
+        title: true,
+        date: true,
+        participants: true,
+        manualClientId: true,
+      },
+      orderBy: { date: "desc" },
+    }),
+    prisma.sessionProject.findMany({
+      where: { project: { clientId } },
+      select: { sessionId: true },
+    }),
+  ]);
+  if (!client) return 0;
+
+  const alreadyLinkedIds = new Set(existingLinks.map((l) => l.sessionId));
+
+  // 2. Filtrar sesiones matched al cliente vía cascade, que no estén ya linkeadas
+  const ctx: CategorizeContext = {
+    clients: [client],
+    categories,
+    hubspotCompaniesByDomain: new Map(),
+    internalDomains: buildInternalDomainsSet(categories),
+  };
+
+  const orphans = allSessions.filter((s) => {
+    if (alreadyLinkedIds.has(s.id)) return false;
+    const group = categorizeSession(s, ctx);
+    return group.kind === "client" && group.id === clientId;
+  });
+
+  if (orphans.length === 0) return 0;
+
+  // 3. Clasificar las primeras N (máximo MAX_AUTO_CLASSIFY para no gastar tokens)
+  const toClassify = orphans.slice(0, MAX_AUTO_CLASSIFY);
+  let classified = 0;
+  for (const session of toClassify) {
+    try {
+      const result = await classifySessionToProjects(session.id, clientId);
+      if (result.status === "ok" && (result.assignmentsCreated ?? 0) > 0) {
+        classified++;
+      }
+    } catch (e) {
+      console.log(
+        `[analyze-participants] auto-classify falló para sesión ${session.id}: ${(e as Error).message}`,
+      );
+    }
+  }
+
+  console.log(
+    `[analyze-participants] auto-classify cliente=${client.name}: ${classified}/${toClassify.length} sesiones clasificadas`,
+  );
+  return classified;
 }

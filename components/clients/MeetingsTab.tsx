@@ -646,12 +646,54 @@ function ParticipantsSubtab({
   onReload: () => void;
 }) {
   const [running, setRunning] = useState(false);
+  const [feedback, setFeedback] = useState<
+    | { type: "skipped" | "error"; message: string }
+    | null
+  >(null);
 
   async function runAnalysis() {
     setRunning(true);
+    setFeedback(null);
     try {
-      await fetch(`/api/projects/${projectId}/analyze-participants`, { method: "POST" });
-      onReload();
+      const res = await fetch(
+        `/api/projects/${projectId}/analyze-participants`,
+        { method: "POST" },
+      );
+      const body = (await res.json().catch(() => ({}))) as {
+        status?: "ok" | "skipped" | "error";
+        reason?: string;
+        sessionsAnalyzed?: number;
+        autoClassified?: number;
+      };
+
+      if (!res.ok || body.status === "error") {
+        setFeedback({
+          type: "error",
+          message: body.reason ?? `HTTP ${res.status}`,
+        });
+      } else if (body.status === "skipped") {
+        // El backend no pudo analizar — tradúcimos `reason` técnico a algo accionable.
+        const reason = body.reason ?? "Sin información";
+        let friendly = reason;
+        if (reason.includes("no orphan sessions")) {
+          friendly =
+            "Este cliente no tiene ninguna sesión vinculada. Antes de analizar participantes, vinculá al menos una sesión desde /sessions/[id] (tab Meta).";
+        } else if (reason.includes("went to another project")) {
+          friendly = `Se auto-clasificaron ${body.autoClassified ?? "varias"} sesiones del cliente, pero la IA las asignó a otro proyecto del mismo cliente. Revisalas en el sub-tab Historial o asigná manualmente desde /sessions/[id].`;
+        } else if (reason.includes("no sessions assigned")) {
+          friendly =
+            "El proyecto no tiene reuniones asignadas todavía. Asigná al menos una sesión desde /sessions/[id] (tab Meta).";
+        }
+        setFeedback({ type: "skipped", message: friendly });
+      } else {
+        // status: "ok" → recargar datos para mostrar el snapshot recién creado
+        onReload();
+      }
+    } catch (e) {
+      setFeedback({
+        type: "error",
+        message: `Error de red: ${(e as Error).message}`,
+      });
     } finally {
       setRunning(false);
     }
@@ -659,17 +701,33 @@ function ParticipantsSubtab({
 
   if (!snapshot) {
     return (
-      <div className="rounded-2xl border border-dashed border-gray-700 bg-gray-900/50 p-8 text-center space-y-3">
-        <p className="text-sm text-gray-500">
-          Aún no se ha analizado el patrón de participación de este proyecto.
-        </p>
-        <button
-          onClick={runAnalysis}
-          disabled={running}
-          className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand text-white hover:bg-brand/90 disabled:opacity-50"
-        >
-          {running ? "Analizando..." : "Generar análisis ahora"}
-        </button>
+      <div className="space-y-3">
+        <div className="rounded-2xl border border-dashed border-gray-700 bg-gray-900/50 p-8 text-center space-y-3">
+          <p className="text-sm text-gray-500">
+            Aún no se ha analizado el patrón de participación de este proyecto.
+          </p>
+          <button
+            onClick={runAnalysis}
+            disabled={running}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand text-white hover:bg-brand/90 disabled:opacity-50"
+          >
+            {running ? "Analizando..." : "Generar análisis ahora"}
+          </button>
+        </div>
+        {feedback && (
+          <div
+            className={`rounded-xl border p-3 text-sm ${
+              feedback.type === "error"
+                ? "bg-red-500/10 border-red-500/30 text-red-200"
+                : "bg-amber-500/10 border-amber-500/30 text-amber-200"
+            }`}
+          >
+            <p className="font-semibold mb-1">
+              {feedback.type === "error" ? "No se pudo analizar" : "Análisis no aplicable"}
+            </p>
+            <p className="text-xs leading-relaxed opacity-90">{feedback.message}</p>
+          </div>
+        )}
       </div>
     );
   }
