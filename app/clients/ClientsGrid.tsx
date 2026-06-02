@@ -31,9 +31,13 @@ export interface ClientRow {
   cseEmails: string[];          // owners en email para matching contra activeCse
   lastSalesMeeting: string | null; // ISO
   lastCseMeeting: string | null;   // ISO
-  lastInteractionAt: string | null; // ISO — orden principal
-  lastInteractionSource: "session_past" | "session_future" | "note" | "agent_run" | null;
-  lastInteractionLabel: string | null;
+  // Última actividad PASADA — orden principal de la lista
+  lastActivityAt: string | null;
+  lastActivitySource: "session_past" | "note" | "agent_run" | null;
+  lastActivityLabel: string | null;
+  // Próxima reunión FUTURA agendada (columna separada)
+  nextMeetingAt: string | null;
+  nextMeetingLabel: string | null;
   projectCount: number;
 }
 
@@ -50,47 +54,61 @@ function DateCell({ iso }: { iso: string | null }) {
   );
 }
 
-const SOURCE_LABEL: Record<NonNullable<ClientRow["lastInteractionSource"]>, string> = {
-  session_past:   "Última reunión",
-  session_future: "Próxima reunión",
-  note:           "Última nota",
-  agent_run:      "Última ejecución de agente",
+const ACTIVITY_SOURCE_LABEL: Record<NonNullable<ClientRow["lastActivitySource"]>, string> = {
+  session_past: "Última reunión",
+  note:         "Última nota",
+  agent_run:    "Última ejecución de agente",
 };
 
-function LastInteractionCell({ row }: { row: ClientRow }) {
-  if (!row.lastInteractionAt || !row.lastInteractionSource) {
+/** Celda "Última actividad" — solo pasado. Formatea como "hoy/ayer/hace N días/hace N sem/fecha". */
+function LastActivityCell({ row }: { row: ClientRow }) {
+  if (!row.lastActivityAt || !row.lastActivitySource) {
     return <span className="text-gray-600">—</span>;
   }
-  const d = new Date(row.lastInteractionAt);
-  const isFuture = row.lastInteractionSource === "session_future";
-  const diffMs = d.getTime() - Date.now();
-  const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  const d = new Date(row.lastActivityAt);
+  const ago = Math.max(0, Math.round((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24)));
+  const rel =
+    ago === 0  ? "hoy" :
+    ago === 1  ? "ayer" :
+    ago < 7    ? `hace ${ago} días` :
+    ago < 60   ? `hace ${Math.round(ago / 7)} sem` :
+    d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
 
-  let rel: string;
-  if (isFuture) {
-    rel =
-      days === 0   ? "hoy" :
-      days === 1   ? "mañana" :
-      days < 7     ? `en ${days} días` :
-      d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
-  } else {
-    const ago = Math.abs(days);
-    rel =
-      ago === 0    ? "hoy" :
-      ago === 1    ? "ayer" :
-      ago < 7      ? `hace ${ago} días` :
-      ago < 60     ? `hace ${Math.round(ago / 7)} sem` :
-      d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
-  }
-
-  const sourceText = row.lastInteractionLabel
-    ? `${SOURCE_LABEL[row.lastInteractionSource]}: ${row.lastInteractionLabel}`
-    : SOURCE_LABEL[row.lastInteractionSource];
+  const sourceText = row.lastActivityLabel
+    ? `${ACTIVITY_SOURCE_LABEL[row.lastActivitySource]}: ${row.lastActivityLabel}`
+    : ACTIVITY_SOURCE_LABEL[row.lastActivitySource];
 
   return (
     <span
-      className={`whitespace-nowrap ${isFuture ? "text-emerald-400" : "text-gray-300"}`}
+      className="whitespace-nowrap text-gray-300"
       title={`${sourceText} · ${d.toLocaleString("es-ES")}`}
+    >
+      {rel}
+    </span>
+  );
+}
+
+/** Celda "Próxima reunión" — solo futuro. Formatea como "hoy/mañana/en N días/fecha". */
+function NextMeetingCell({ row }: { row: ClientRow }) {
+  if (!row.nextMeetingAt) {
+    return <span className="text-gray-600">—</span>;
+  }
+  const d = new Date(row.nextMeetingAt);
+  const days = Math.max(0, Math.round((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+  const rel =
+    days === 0 ? "hoy" :
+    days === 1 ? "mañana" :
+    days < 7   ? `en ${days} días` :
+    d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+
+  const labelText = row.nextMeetingLabel
+    ? `Próxima: ${row.nextMeetingLabel}`
+    : "Próxima reunión";
+
+  return (
+    <span
+      className="whitespace-nowrap text-emerald-400"
+      title={`${labelText} · ${d.toLocaleString("es-ES")}`}
     >
       {rel}
     </span>
@@ -140,11 +158,18 @@ export default function ClientsGrid({
       ),
     },
     {
-      key: "lastInteraction",
+      key: "lastActivity",
       header: "Última actividad",
-      sortValue: (c) => (c.lastInteractionAt ? new Date(c.lastInteractionAt) : null),
+      sortValue: (c) => (c.lastActivityAt ? new Date(c.lastActivityAt) : null),
       width: "w-32",
-      render: (c) => <LastInteractionCell row={c} />,
+      render: (c) => <LastActivityCell row={c} />,
+    },
+    {
+      key: "nextMeeting",
+      header: "Próxima reunión",
+      sortValue: (c) => (c.nextMeetingAt ? new Date(c.nextMeetingAt) : null),
+      width: "w-32",
+      render: (c) => <NextMeetingCell row={c} />,
     },
     {
       key: "cse",

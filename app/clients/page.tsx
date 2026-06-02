@@ -4,7 +4,7 @@ import AppShell from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/ui";
 import { getTeamMembers } from "@/lib/cache/team";
 import { computeLastMeetingDates } from "@/lib/clients/meeting-dates";
-import { computeLastInteractionMap } from "@/lib/clients/last-interaction";
+import { computeClientActivityMap } from "@/lib/clients/last-interaction";
 import {
   requireUser,
   UnauthorizedError,
@@ -67,13 +67,13 @@ export default async function ClientsPage() {
   // Fechas de última reunión (ventas / CSE) — separadas, para mostrar en columnas.
   const meetingDates = computeLastMeetingDates({ sessions, clients, categories, teamMembers });
 
-  // Última interacción real (cualquier fuente: sesión, nota, agent run, próxima sesión).
-  // Esto define el ORDEN de la lista, no el contenido de columnas.
-  const lastInteractionMap = await computeLastInteractionMap(clients);
+  // Actividad por cliente: lastActivity (pasado) + nextMeeting (futuro).
+  // Cada uno se muestra en su propia columna y el orden se hace por lastActivity.
+  const activityMap = await computeClientActivityMap(clients);
 
   const rows: ClientRow[] = clients.map((c) => {
     const md = meetingDates.get(c.id);
-    const li = lastInteractionMap.get(c.id);
+    const activity = activityMap.get(c.id);
     const cseNames = [
       ...new Set(
         c.projects
@@ -109,18 +109,22 @@ export default async function ClientsPage() {
       cseEmails,
       lastSalesMeeting: md?.sales ? md.sales.toISOString() : null,
       lastCseMeeting: md?.cse ? md.cse.toISOString() : null,
-      lastInteractionAt: li?.date.toISOString() ?? null,
-      lastInteractionSource: li?.source ?? null,
-      lastInteractionLabel: li?.label ?? null,
+      // Última actividad pasada (sesión, nota, agent run)
+      lastActivityAt: activity?.lastActivity?.date.toISOString() ?? null,
+      lastActivitySource: activity?.lastActivity?.source ?? null,
+      lastActivityLabel: activity?.lastActivity?.label ?? null,
+      // Próxima reunión agendada (futura)
+      nextMeetingAt: activity?.nextMeeting?.date.toISOString() ?? null,
+      nextMeetingLabel: activity?.nextMeeting?.label ?? null,
       projectCount: c._count.projects,
     };
   });
 
-  // Ordenar por última interacción DESC. Los clientes sin ninguna interacción
+  // Ordenar por última actividad PASADA DESC. Los clientes sin actividad pasada
   // van al final (ordenados entre sí por createdAt DESC).
   rows.sort((a, b) => {
-    const aDate = a.lastInteractionAt ? new Date(a.lastInteractionAt).getTime() : 0;
-    const bDate = b.lastInteractionAt ? new Date(b.lastInteractionAt).getTime() : 0;
+    const aDate = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
+    const bDate = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
     if (aDate !== bDate) return bDate - aDate;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });

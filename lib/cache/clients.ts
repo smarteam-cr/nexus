@@ -7,10 +7,9 @@
  * las páginas), así que es el query más caliente del proyecto. Con `unstable_cache`
  * lo bajamos a 1 RTT a Supabase cada `revalidate` segundos.
  *
- * El orden es por **última interacción real** (no por createdAt) — así los
+ * El orden es por **última actividad pasada** (no por createdAt) — así los
  * clientes "activos" suben y los dormidos bajan. Reusa el helper
- * `computeLastInteractionMap` que combina sesiones, notas, agent runs y
- * próximas sesiones.
+ * `computeClientActivityMap`.
  *
  * Invalidación:
  *   - TTL automático (revalidate)
@@ -20,7 +19,7 @@
 
 import { unstable_cache, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
-import { computeLastInteractionMap } from "@/lib/clients/last-interaction";
+import { computeClientActivityMap } from "@/lib/clients/last-interaction";
 
 /** Tag de cache — usar también en `revalidateTag()` desde mutaciones. */
 export const CLIENTS_SIDEBAR_TAG = "clients-sidebar";
@@ -40,8 +39,8 @@ export const getClientsForSidebar = unstable_cache(
 
     if (rows.length === 0) return [];
 
-    // 2. Calcular última interacción por cliente (sesiones + notas + runs + next)
-    const interactionMap = await computeLastInteractionMap(
+    // 2. Calcular actividad por cliente (sesiones pasadas + notas + runs)
+    const activityMap = await computeClientActivityMap(
       rows.map((c) => ({
         id: c.id,
         name: c.name,
@@ -50,20 +49,20 @@ export const getClientsForSidebar = unstable_cache(
       })),
     );
 
-    // 3. Decorar y ordenar: clientes con interacción primero (DESC), sin actividad al final
+    // 3. Decorar y ordenar por última actividad PASADA DESC. Los clientes sin
+    //    actividad pasada van al final (ordenados alfabético entre sí).
     const decorated = rows.map((c) => ({
       id: c.id,
       name: c.name,
       company: c.company,
       hubspotAccount: c.hubspotAccount,
-      lastInteractionAt: interactionMap.get(c.id)?.date ?? null,
+      lastActivityAt: activityMap.get(c.id)?.lastActivity?.date ?? null,
     }));
 
     decorated.sort((a, b) => {
-      const at = a.lastInteractionAt?.getTime() ?? 0;
-      const bt = b.lastInteractionAt?.getTime() ?? 0;
+      const at = a.lastActivityAt?.getTime() ?? 0;
+      const bt = b.lastActivityAt?.getTime() ?? 0;
       if (at !== bt) return bt - at;
-      // tiebreaker: alfabético
       return (a.name ?? "").localeCompare(b.name ?? "");
     });
 
