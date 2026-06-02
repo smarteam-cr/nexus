@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { exchangeCodeForTokens, getPortalInfo } from "@/lib/hubspot/client";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
-import { cookies } from "next/headers";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -68,22 +67,10 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      const cookieStore = await cookies();
-      cookieStore.set("consultant_session", "authenticated", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 30,
-        path: "/",
-      });
-      cookieStore.set("account_id", account.id, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 30,
-        path: "/",
-      });
-
+      // Nota: las cookies consultant_session/account_id se eliminaron en el
+      // cutover a Supabase Auth (junio 2026). El usuario que llega acá ya está
+      // logueado vía Google OAuth — este callback solo conecta HubSpot al
+      // sistema, no autentica.
       return NextResponse.redirect(`${process.env.APP_URL}/clients`);
     }
 
@@ -166,15 +153,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const cookieStore = await cookies();
-    cookieStore.set("account_id", account.id, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 30,
-      path: "/",
-    });
-
+    // (Cookie account_id eliminada en cutover a Supabase Auth — junio 2026)
     if (isNewClient && clientId) {
       return NextResponse.redirect(`${process.env.APP_URL}/clients/${clientId}/stage/1`);
     }

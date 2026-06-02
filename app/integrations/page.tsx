@@ -27,21 +27,26 @@ interface GoogleStatus {
   adminEmail: string | null;
 }
 
+// ── Helper: header Cookie forwarding TODAS las cookies del request actual ────
+// Pasa las cookies de sesión Supabase Auth (sb-*) al fetch interno para que el
+// middleware deje pasar la request. Antes pasaba solo la cookie legacy
+// consultant_session (eliminada en cutover a Supabase Auth).
+async function getCookieHeader(): Promise<string> {
+  const cookieStore = await cookies();
+  return cookieStore
+    .getAll()
+    .map((c) => `${c.name}=${c.value}`)
+    .join("; ");
+}
+
 // ── Fetch del estado de Fireflies (server-side) ───────────────────────────────
 
 async function getFirefliesStatus(): Promise<FirefliesStatus> {
   try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("consultant_session");
-
     const res = await fetch(
       `${process.env.APP_URL}/api/integrations/fireflies/status`,
       {
-        headers: {
-          Cookie: sessionCookie
-            ? `consultant_session=${sessionCookie.value}`
-            : "",
-        },
+        headers: { Cookie: await getCookieHeader() },
         cache: "no-store",
       }
     );
@@ -57,17 +62,10 @@ async function getFirefliesStatus(): Promise<FirefliesStatus> {
 
 async function getGoogleStatus(): Promise<GoogleStatus> {
   try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("consultant_session");
-
     const res = await fetch(
       `${process.env.APP_URL}/api/integrations/google/status`,
       {
-        headers: {
-          Cookie: sessionCookie
-            ? `consultant_session=${sessionCookie.value}`
-            : "",
-        },
+        headers: { Cookie: await getCookieHeader() },
         cache: "no-store",
       }
     );
