@@ -295,18 +295,14 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             </svg>
             <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Última sesión</span>
             {lastSession.source === "auto" && autoBadge}
+            <button
+              onClick={() => setMinuteDialogOpen(true)}
+              className="ml-auto text-[10px] font-semibold text-brand hover:text-brand/80 bg-brand/10 hover:bg-brand/20 border border-brand/30 rounded px-1.5 py-0.5 transition-colors"
+              title="Ver minuta generada por la IA"
+            >
+              Ver minuta
+            </button>
           </div>
-
-          {/* CTA prominente: abrir minuta en modal */}
-          <button
-            onClick={() => setMinuteDialogOpen(true)}
-            className="w-full mb-2 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand text-white text-xs font-semibold hover:bg-brand/90 transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Ver minuta
-          </button>
 
           {editingSummary ? (
             <div className="space-y-1.5">
