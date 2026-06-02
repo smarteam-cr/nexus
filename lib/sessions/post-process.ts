@@ -48,7 +48,6 @@ export interface PostProcessResult {
   clientId?: string;
   minuteId?: string;
   actionItemsCreated?: number;
-  cardsCreated?: number;
 }
 
 /**
@@ -58,7 +57,7 @@ export interface PostProcessResult {
  */
 export async function postProcessSession(
   sessionId: string,
-  opts: { force?: boolean; includeCards?: boolean } = {},
+  opts: { force?: boolean } = {},
 ): Promise<PostProcessResult> {
   // 1. Cargar sesión con transcript
   const session = await prisma.firefliesSession.findUnique({
@@ -314,33 +313,15 @@ export async function postProcessSession(
     created++;
   }
 
+  // Refrescar el cache de heat ya que recién creamos un AgentRun.
+  if (project) {
+    const { invalidateProjectHeat } = await import("@/lib/projects/heat");
+    invalidateProjectHeat(project.id);
+  }
+
   console.log(
     `[post-session] ✓ "${session.title}" (cliente=${client.name}) — minuta DRAFT + ${created} action items`,
   );
-
-  // 11. F4-B: Si el proyecto es "hot" (3+ análisis en 30 días) o el caller lo
-  //     pide explícitamente, generar también ClientContextCards de insight.
-  //     Esto evita que el CSE tenga que entrar al tab Cards y apretar "Generar".
-  let cardsCreated = 0;
-  if (project) {
-    const { isProjectHot, invalidateProjectHeat } = await import("@/lib/projects/heat");
-    invalidateProjectHeat(project.id); // recién creamos un AgentRun, refresca cache
-    const hot = await isProjectHot(project.id);
-    if (hot || opts.includeCards) {
-      cardsCreated = await generateInsightCards({
-        sessionId,
-        sessionTitle: session.title,
-        transcript: session.transcript,
-        clientId: client.id,
-        clientName: client.name,
-        projectId: project.id,
-        projectName: project.name,
-        minuteSummary: minuteData.summary,
-        runId: run.id,
-      });
-      console.log(`[post-session] ✓ +${cardsCreated} cards de insight (proyecto hot)`);
-    }
-  }
 
   return {
     status: "ok",
@@ -348,116 +329,5 @@ export async function postProcessSession(
     clientId: client.id,
     minuteId: minute.id,
     actionItemsCreated: created,
-    cardsCreated,
   };
-}
-
-// ─── F4-B: Generación de cards de insight cuando proyecto está hot ──────────
-
-interface InsightCardsInput {
-  sessionId: string;
-  sessionTitle: string;
-  transcript: string;
-  clientId: string;
-  clientName: string;
-  projectId: string;
-  projectName: string;
-  minuteSummary: string;
-  runId: string;
-}
-
-interface InsightOutput {
-  cards?: { title?: string; content?: string }[];
-}
-
-/**
- * Llama a Claude para extraer 2-3 cards de "insight contextual" del proyecto,
- * derivadas del transcript reciente. Estos son hechos persistentes (no acciones
- * ni acuerdos puntuales), tipo "El cliente menciona que su pipeline tiene 14
- * etapas — oportunidad de simplificación" o "Sponsor identificó X como
- * bloqueador estratégico".
- *
- * Las cards se persisten como ClientContextCard ligadas al proyecto + al
- * AgentRun del post-session principal (no creamos un AgentRun separado).
- */
-async function generateInsightCards(input: InsightCardsInput): Promise<number> {
-  const systemPrompt = `Eres un consultor senior de Smarteam. Acabás de leer el transcript de una reunión del proyecto "${input.projectName}" con el cliente "${input.clientName}".
-
-Tu tarea: extraer 2-3 INSIGHTS DE CONTEXTO que valga la pena guardar como tarjetas permanentes del proyecto. NO son acciones (eso ya se extrajo). NO son acuerdos puntuales (eso ya está en la minuta). SON OBSERVACIONES ÚTILES PARA ENTENDER al cliente:
-
-✅ Buenos insights:
-- "El cliente mencionó que su pipeline actual tiene 14 etapas — oportunidad de simplificación en próxima fase"
-- "Stakeholder técnico expresó preocupación por integración con SAP — riesgo recurrente"
-- "El cliente trabaja con metodología ágil de sprints de 2 semanas — alinear nuestras entregas"
-
-❌ Malos insights:
-- "Discutimos workflows" (vago)
-- "Hay que enviar la propuesta" (es acción, no insight)
-
-DEVOLVÉ SOLO JSON:
-{ "cards": [ { "title": "Título corto (máx 80 chars)", "content": "1-3 frases explicando el insight." } ] }
-
-Máximo 3 cards. Si no hay insights nuevos genuinos, devolvé { "cards": [] }. Mejor pocas y de calidad.`;
-
-  let rawText: string;
-  try {
-    const msg = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1500,
-      system: systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content: [
-            `RESUMEN EJECUTIVO YA GENERADO:`,
-            input.minuteSummary,
-            "",
-            `TRANSCRIPT DE LA REUNIÓN "${input.sessionTitle}":`,
-            input.transcript.slice(0, 40000),
-          ].join("\n"),
-        },
-      ],
-    });
-    rawText = (msg.content[0] as { type: string; text: string }).text.trim();
-  } catch (e) {
-    console.log(`[post-session] insight cards skipped (Claude error): ${(e as Error).message}`);
-    return 0;
-  }
-
-  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return 0;
-
-  let parsed: InsightOutput;
-  try {
-    parsed = JSON.parse(jsonMatch[0]) as InsightOutput;
-  } catch {
-    return 0;
-  }
-
-  const cards = (parsed.cards ?? [])
-    .filter((c) => c.title && c.content)
-    .slice(0, 3);
-
-  let created = 0;
-  for (const c of cards) {
-    try {
-      await prisma.clientContextCard.create({
-        data: {
-          clientId: input.clientId,
-          projectId: input.projectId,
-          agentRunId: input.runId,
-          title: c.title!.trim().slice(0, 100),
-          content: c.content!.trim(),
-          source: "AGENT",
-          cardType: "TEXT",
-          canvasStatus: "draft",
-        },
-      });
-      created++;
-    } catch (e) {
-      // Probablemente unique violation (agentRunId + title). Skip.
-      console.log(`[post-session] insight card skipped: ${(e as Error).message}`);
-    }
-  }
-  return created;
 }

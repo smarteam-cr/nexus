@@ -9,7 +9,6 @@ import ProjectGPS from "./ProjectGPS";
 import SectionDiscoveryModal from "./SectionDiscoveryModal";
 import HubBadge from "@/components/ui/HubBadge";
 import SectionBlockList from "@/components/canvas/SectionBlockList";
-import MeetingsTab from "./MeetingsTab";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
@@ -565,9 +564,6 @@ export default function ProjectCanvasPanel({
           </>)}
         </div>
       </div>
-
-      {/* UX-3: MeetingsTab integrado dentro del canvas default, entre header y GPS */}
-      {isDefaultCanvas && <MeetingsTab projectId={projectId} />}
 
       {/* Session processing results — default canvas only */}
       {isDefaultCanvas && sessionResult && (

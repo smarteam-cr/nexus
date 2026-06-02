@@ -1,47 +1,24 @@
 "use client";
 
 /**
- * components/clients/MeetingsTab.tsx
+ * components/clients/MinuteDialog.tsx
  *
- * Tab "Reuniones" del proyecto. Agrupa todo el ciclo de la reunión a nivel
- * proyecto: minuta última, acciones, cards, historial cronológico, participantes.
+ * Dialog modal centrado para la minuta de la última sesión primaria del
+ * proyecto. Reemplaza al ex-MeetingsTab. Dos pestañas:
+ *   - Minuta: summary + acuerdos + decisiones + riesgos + topics
+ *   - Participantes: stats + alertas accionables
  *
- * Sub-tabs:
- *   - lastMinute: minuta de la última sesión primaria + auto-trigger F4-C
- *   - actions: ActionItems del proyecto agrupados por sesión origen
- *   - cards: AgentRuns con cards generadas desde sesiones del proyecto
- *   - history: timeline cronológico de SessionProject
- *   - participants: análisis de participantes (F5-B, placeholder con CTA)
+ * CTA "Ver historial de sesiones →" abre un drawer derecho con SessionHistoryDrawer.
+ *
+ * Si la última sesión tiene transcript pero aún no tiene minuta, se dispara
+ * el auto-trigger del post-process y se muestra un loader animado.
  */
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
+import SessionHistoryDrawer from "./SessionHistoryDrawer";
 
-interface ActionItem {
-  id: string;
-  text: string;
-  ownerEmail: string | null;
-  dueDate: string | null;
-  status: string;
-  done: boolean;
-  source: string | null;
-  sessionId: string | null;
-  session: { id: string; title: string; date: string } | null;
-}
-
-interface CardRun {
-  id: string;
-  createdAt: string;
-  agentName: string;
-  sourceSessionIds: string[];
-  cards: {
-    id: string;
-    title: string;
-    content: string;
-    cardType: string;
-    createdAt: string;
-  }[];
-}
+// ── Tipos ──────────────────────────────────────────────────────────────────
 
 interface HistoryItem {
   sessionId: string;
@@ -85,8 +62,6 @@ interface MeetingsData {
     title: string;
     date: string;
   } | null;
-  actionItems: ActionItem[];
-  cardRuns: CardRun[];
   history: HistoryItem[];
   isHot: boolean;
   hotConfig: { threshold: number; windowDays: number };
@@ -97,13 +72,22 @@ interface MeetingsData {
   } | null;
 }
 
-type SubTab = "lastMinute" | "actions" | "cards" | "history" | "participants";
+type SubTab = "minute" | "participants";
 
-export default function MeetingsTab({ projectId }: { projectId: string }) {
-  const [tab, setTab] = useState<SubTab>("lastMinute");
+// ── Dialog principal ───────────────────────────────────────────────────────
+
+export default function MinuteDialog({
+  projectId,
+  onClose,
+}: {
+  projectId: string;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<SubTab>("minute");
   const [data, setData] = useState<MeetingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -116,22 +100,32 @@ export default function MeetingsTab({ projectId }: { projectId: string }) {
     reload();
   }, [reload]);
 
-  // F4-C: si entramos a "lastMinute" y no hay minuta pero sí hay sesión con
-  // transcript pendiente, disparar generación automática.
+  // Cerrar con ESC
   useEffect(() => {
-    if (tab !== "lastMinute" || !data) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (historyOpen) setHistoryOpen(false);
+        else onClose();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [historyOpen, onClose]);
+
+  // Auto-trigger del post-process si no hay minuta pero sí hay transcript
+  useEffect(() => {
+    if (tab !== "minute" || !data) return;
     if (data.lastMinute) return;
     if (!data.latestSessionWithoutMinute) return;
     if (generating) return;
     autoGenerate(data.latestSessionWithoutMinute.id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, data, generating]);
 
   async function autoGenerate(sessionId: string) {
     setGenerating(true);
     try {
       await fetch(`/api/sessions/${sessionId}/post-process`, { method: "POST" });
-      // Poll cada 3s hasta 60s
       const startedAt = Date.now();
       while (Date.now() - startedAt < 60000) {
         await new Promise((r) => setTimeout(r, 3000));
@@ -149,110 +143,115 @@ export default function MeetingsTab({ projectId }: { projectId: string }) {
     }
   }
 
-  if (loading && !data) {
-    return (
-      <div className="space-y-3 pt-2">
-        <div className="h-4 w-32 rounded-full skeleton-shimmer" />
-        <div className="h-32 rounded-2xl skeleton-shimmer" />
-      </div>
-    );
-  }
-  if (!data) {
-    return (
-      <p className="text-sm text-gray-500">Error al cargar reuniones.</p>
-    );
-  }
-
   return (
-    <div className="space-y-4">
-      {/* Header con badge "Proyecto activo" si hot */}
-      <div className="flex items-center gap-3">
-        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
-          Reuniones del proyecto
-        </h3>
-        {data.isHot && (
-          <span
-            title={`Generación proactiva activa: ${data.hotConfig.threshold}+ análisis en ${data.hotConfig.windowDays} días`}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20 text-[10px] font-semibold"
-          >
-            🔥 Proyecto activo
-          </span>
-        )}
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/60 z-40 animate-in fade-in duration-150"
+        onClick={onClose}
+      />
+
+      {/* Modal centrado */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div
+          className="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col pointer-events-auto animate-in fade-in zoom-in-95 duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header con tabs + cerrar */}
+          <div className="flex-shrink-0 border-b border-gray-800">
+            <div className="flex items-center justify-between px-5 pt-4 pb-0">
+              <div className="flex items-center gap-1">
+                <TabButton active={tab === "minute"} onClick={() => setTab("minute")}>
+                  Minuta
+                </TabButton>
+                <TabButton active={tab === "participants"} onClick={() => setTab("participants")}>
+                  Participantes
+                </TabButton>
+              </div>
+              <div className="flex items-center gap-2">
+                {data && data.history.length > 0 && (
+                  <button
+                    onClick={() => setHistoryOpen(true)}
+                    className="text-xs text-brand hover:text-brand/80 font-medium px-2 py-1 rounded"
+                  >
+                    Ver historial de sesiones →
+                  </button>
+                )}
+                <button
+                  onClick={onClose}
+                  className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+                  aria-label="Cerrar"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Contenido scrollable */}
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            {loading && !data ? (
+              <div className="space-y-3 pt-2">
+                <div className="h-4 w-32 rounded-full skeleton-shimmer" />
+                <div className="h-32 rounded-2xl skeleton-shimmer" />
+              </div>
+            ) : !data ? (
+              <p className="text-sm text-gray-500">Error al cargar datos del proyecto.</p>
+            ) : tab === "minute" ? (
+              <MinuteContent data={data} generating={generating} onReload={reload} />
+            ) : (
+              <ParticipantsContent
+                projectId={projectId}
+                snapshot={data.participantSnapshot}
+                onReload={reload}
+              />
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Sub-tabs */}
-      <div className="flex gap-0 border-b border-gray-800">
-        <SubTabButton active={tab === "lastMinute"} onClick={() => setTab("lastMinute")}>
-          Última minuta
-        </SubTabButton>
-        <SubTabButton active={tab === "actions"} onClick={() => setTab("actions")} count={data.actionItems.length}>
-          Acciones
-        </SubTabButton>
-        <SubTabButton active={tab === "cards"} onClick={() => setTab("cards")} count={data.cardRuns.reduce((s, r) => s + r.cards.length, 0)}>
-          Cards
-        </SubTabButton>
-        <SubTabButton active={tab === "history"} onClick={() => setTab("history")} count={data.history.length}>
-          Historial
-        </SubTabButton>
-        <SubTabButton active={tab === "participants"} onClick={() => setTab("participants")}>
-          Participantes
-        </SubTabButton>
-      </div>
-
-      <div className="pt-2">
-        {tab === "lastMinute" && (
-          <LastMinuteSubtab data={data} generating={generating} onReload={reload} />
-        )}
-        {tab === "actions" && <ActionsSubtab items={data.actionItems} onReload={reload} />}
-        {tab === "cards" && <CardsSubtab runs={data.cardRuns} />}
-        {tab === "history" && <HistorySubtab history={data.history} />}
-        {tab === "participants" && (
-          <ParticipantsSubtab
-            projectId={projectId}
-            snapshot={data.participantSnapshot}
-            onReload={reload}
-          />
-        )}
-      </div>
-    </div>
+      {/* Drawer derecho de Historial — se abre desde el botón */}
+      {historyOpen && data && (
+        <SessionHistoryDrawer
+          clientId={data.project.clientId}
+          history={data.history}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
-// ── SubTabButton ─────────────────────────────────────────────────────────────
+// ── TabButton ──────────────────────────────────────────────────────────────
 
-function SubTabButton({
+function TabButton({
   active,
   onClick,
   children,
-  count,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
-  count?: number;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
         active
           ? "border-brand text-white"
           : "border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-700"
       }`}
     >
       {children}
-      {count !== undefined && count > 0 && (
-        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold bg-gray-800 text-gray-300 rounded-full">
-          {count}
-        </span>
-      )}
     </button>
   );
 }
 
-// ── LastMinute Sub-tab ───────────────────────────────────────────────────────
+// ── Minute content ─────────────────────────────────────────────────────────
 
-function LastMinuteSubtab({
+function MinuteContent({
   data,
   generating,
   onReload,
@@ -262,17 +261,18 @@ function LastMinuteSubtab({
   onReload: () => void;
 }) {
   const [stepIdx, setStepIdx] = useState(0);
+  const steps = [
+    "Analizando transcript...",
+    "Extrayendo acuerdos y decisiones...",
+    "Generando acciones derivadas...",
+  ];
   useEffect(() => {
     if (!generating) return;
-    const steps = ["Analizando transcript...", "Extrayendo acuerdos y decisiones...", "Generando acciones derivadas..."];
-    const interval = setInterval(() => {
-      setStepIdx((i) => (i + 1) % steps.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [generating]);
+    const id = setInterval(() => setStepIdx((i) => (i + 1) % steps.length), 4000);
+    return () => clearInterval(id);
+  }, [generating, steps.length]);
 
   if (generating) {
-    const steps = ["Analizando transcript...", "Extrayendo acuerdos y decisiones...", "Generando acciones derivadas..."];
     return (
       <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-8 text-center space-y-4">
         <div className="flex justify-center">
@@ -294,7 +294,8 @@ function LastMinuteSubtab({
       return (
         <div className="rounded-2xl border border-gray-800 bg-gray-900 p-6 space-y-3">
           <p className="text-sm text-gray-300">
-            Hay una sesión con transcript pendiente de procesar: <strong>{data.latestSessionWithoutMinute.title}</strong>
+            Hay una sesión con transcript pendiente de procesar:{" "}
+            <strong>{data.latestSessionWithoutMinute.title}</strong>
           </p>
           <button
             onClick={onReload}
@@ -330,7 +331,9 @@ function LastMinuteSubtab({
         <div className="min-w-0 flex-1">
           <p className="text-xs text-gray-500">Última sesión procesada</p>
           <h4 className="text-base font-semibold text-white truncate mt-0.5">{lm.sessionTitle}</h4>
-          <p className="text-xs text-gray-500 mt-1">{new Date(lm.sessionDate).toLocaleString("es-CR")}</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {new Date(lm.sessionDate).toLocaleString("es-CR")}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={m.status} />
@@ -389,10 +392,7 @@ function LastMinuteSubtab({
                   ? "bg-amber-500/10 text-amber-300 border-amber-500/30"
                   : "bg-gray-700/40 text-gray-300 border-gray-700";
               return (
-                <li
-                  key={i}
-                  className={`text-sm px-3 py-2 rounded-lg border ${colors}`}
-                >
+                <li key={i} className={`text-sm px-3 py-2 rounded-lg border ${colors}`}>
                   ⚠ {r.text}
                 </li>
               );
@@ -406,7 +406,9 @@ function LastMinuteSubtab({
           <SectionLabel>Temas tratados</SectionLabel>
           <ul className="space-y-1">
             {topics.map((t, i) => (
-              <li key={i} className="text-xs text-gray-400">• {t}</li>
+              <li key={i} className="text-xs text-gray-400">
+                • {t}
+              </li>
             ))}
           </ul>
         </div>
@@ -454,7 +456,9 @@ function StatusBadge({ status }: { status: "DRAFT" | "REVIEWED" | "EDITED" }) {
   };
   const labels = { DRAFT: "BORRADOR", REVIEWED: "REVISADA", EDITED: "EDITADA" };
   return (
-    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${colors[status]}`}>
+    <span
+      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${colors[status]}`}
+    >
       {labels[status]}
     </span>
   );
@@ -468,175 +472,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── Actions Sub-tab ──────────────────────────────────────────────────────────
+// ── Participants content ───────────────────────────────────────────────────
 
-function ActionsSubtab({ items, onReload }: { items: ActionItem[]; onReload: () => void }) {
-  // Agrupar por sesión origen
-  const grouped = new Map<string, { label: string; items: ActionItem[] }>();
-  for (const it of items) {
-    const key = it.sessionId ?? "_manual";
-    const existing = grouped.get(key);
-    if (existing) {
-      existing.items.push(it);
-    } else {
-      grouped.set(key, {
-        label: it.session
-          ? `${it.session.title} · ${new Date(it.session.date).toLocaleDateString("es-CR")}`
-          : "Sin sesión asociada (manual o legacy)",
-        items: [it],
-      });
-    }
-  }
-
-  if (items.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-gray-700 bg-gray-900/50 p-8 text-center">
-        <p className="text-sm text-gray-500">No hay acciones pendientes en este proyecto.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-5">
-      {[...grouped.entries()].map(([key, group]) => (
-        <div key={key}>
-          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
-            {group.label} <span className="text-gray-600">({group.items.length})</span>
-          </p>
-          <ul className="space-y-1.5">
-            {group.items.map((it) => (
-              <li
-                key={it.id}
-                className="flex items-start gap-2 px-3 py-2 rounded-lg border border-gray-800 hover:bg-gray-900"
-              >
-                <input
-                  type="checkbox"
-                  checked={it.done}
-                  onChange={async () => {
-                    await fetch(`/api/action-items/${it.id}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ done: !it.done }),
-                    });
-                    onReload();
-                  }}
-                  className="mt-1 flex-shrink-0"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-200">{it.text}</p>
-                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-500">
-                    <span>{it.status}</span>
-                    {it.ownerEmail && <span>• @{it.ownerEmail}</span>}
-                    {it.dueDate && (
-                      <span>• vence {new Date(it.dueDate).toLocaleDateString("es-CR")}</span>
-                    )}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Cards Sub-tab ────────────────────────────────────────────────────────────
-
-function CardsSubtab({ runs }: { runs: CardRun[] }) {
-  if (runs.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-gray-700 bg-gray-900/50 p-8 text-center">
-        <p className="text-sm text-gray-500">No hay cards generadas por agentes desde sesiones de este proyecto.</p>
-        <p className="text-xs text-gray-600 mt-1">
-          Cuando el proyecto sea "activo" (3+ análisis en 30 días), las cards se generan automáticamente al procesar cada sesión.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-5">
-      {runs.map((run) => (
-        <div key={run.id} className="space-y-2">
-          <div className="flex items-center gap-2">
-            <p className="text-xs font-semibold text-gray-300">{run.agentName}</p>
-            <span className="text-[10px] text-gray-500">
-              {new Date(run.createdAt).toLocaleString("es-CR")}
-            </span>
-          </div>
-          <div className="space-y-2">
-            {run.cards.map((c) => (
-              <div key={c.id} className="rounded-xl border border-gray-800 bg-gray-900 p-3">
-                <p className="text-sm font-semibold text-white mb-1">{c.title}</p>
-                <div className="text-xs text-gray-300 leading-relaxed prose prose-xs prose-invert max-w-none">
-                  <ReactMarkdown>{c.content}</ReactMarkdown>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── History Sub-tab ──────────────────────────────────────────────────────────
-
-function HistorySubtab({ history }: { history: HistoryItem[] }) {
-  if (history.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-gray-700 bg-gray-900/50 p-8 text-center">
-        <p className="text-sm text-gray-500">No hay sesiones asignadas a este proyecto todavía.</p>
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-2">
-      {history.map((h) => (
-        <Link
-          key={h.sessionId}
-          href={`/sessions/${h.sessionId}`}
-          className="block px-3 py-3 rounded-xl border border-gray-800 hover:bg-gray-900 transition-colors"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-white truncate">{h.title}</p>
-                {h.isPrimary && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-brand/20 text-brand">PRIMARIO</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-500">
-                <span>{new Date(h.date).toLocaleString("es-CR")}</span>
-                <span>•</span>
-                <span>{h.participants.length} participantes</span>
-                {h.detectedTopics.length > 0 && (
-                  <>
-                    <span>•</span>
-                    <span className="text-gray-400">{h.detectedTopics.slice(0, 3).join(", ")}</span>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {h.minuteStatus === "DRAFT" && <span className="text-[10px] text-amber-400">📝 Borrador</span>}
-              {(h.minuteStatus === "REVIEWED" || h.minuteStatus === "EDITED") && (
-                <span className="text-[10px] text-emerald-400">✓ Minuta</span>
-              )}
-              {!h.minuteStatus && h.hasTranscript && (
-                <span className="text-[10px] text-gray-500">Sin minuta</span>
-              )}
-            </div>
-          </div>
-        </Link>
-      ))}
-    </div>
-  );
-}
-
-// ── Participants Sub-tab (F5) ────────────────────────────────────────────────
-
-function ParticipantsSubtab({
+function ParticipantsContent({
   projectId,
   snapshot,
   onReload,
@@ -647,8 +485,7 @@ function ParticipantsSubtab({
 }) {
   const [running, setRunning] = useState(false);
   const [feedback, setFeedback] = useState<
-    | { type: "skipped" | "error"; message: string }
-    | null
+    { type: "skipped" | "error"; message: string } | null
   >(null);
 
   async function runAnalysis() {
@@ -665,35 +502,26 @@ function ParticipantsSubtab({
         sessionsAnalyzed?: number;
         autoClassified?: number;
       };
-
       if (!res.ok || body.status === "error") {
-        setFeedback({
-          type: "error",
-          message: body.reason ?? `HTTP ${res.status}`,
-        });
+        setFeedback({ type: "error", message: body.reason ?? `HTTP ${res.status}` });
       } else if (body.status === "skipped") {
-        // El backend no pudo analizar — tradúcimos `reason` técnico a algo accionable.
         const reason = body.reason ?? "Sin información";
         let friendly = reason;
         if (reason.includes("no orphan sessions")) {
           friendly =
             "Este cliente no tiene ninguna sesión vinculada. Antes de analizar participantes, vinculá al menos una sesión desde /sessions/[id] (tab Meta).";
         } else if (reason.includes("went to another project")) {
-          friendly = `Se auto-clasificaron ${body.autoClassified ?? "varias"} sesiones del cliente, pero la IA las asignó a otro proyecto del mismo cliente. Revisalas en el sub-tab Historial o asigná manualmente desde /sessions/[id].`;
+          friendly = `Se auto-clasificaron ${body.autoClassified ?? "varias"} sesiones del cliente, pero la IA las asignó a otro proyecto del mismo cliente.`;
         } else if (reason.includes("no sessions assigned")) {
           friendly =
             "El proyecto no tiene reuniones asignadas todavía. Asigná al menos una sesión desde /sessions/[id] (tab Meta).";
         }
         setFeedback({ type: "skipped", message: friendly });
       } else {
-        // status: "ok" → recargar datos para mostrar el snapshot recién creado
         onReload();
       }
     } catch (e) {
-      setFeedback({
-        type: "error",
-        message: `Error de red: ${(e as Error).message}`,
-      });
+      setFeedback({ type: "error", message: `Error de red: ${(e as Error).message}` });
     } finally {
       setRunning(false);
     }
@@ -777,7 +605,10 @@ function ParticipantsSubtab({
           <SectionLabel>Última participación por rol del cliente</SectionLabel>
           <ul className="space-y-1.5">
             {Object.entries(lastSeenByRole).map(([role, when]) => (
-              <li key={role} className="text-sm text-gray-300 flex items-center justify-between px-3 py-2 rounded border border-gray-800">
+              <li
+                key={role}
+                className="text-sm text-gray-300 flex items-center justify-between px-3 py-2 rounded border border-gray-800"
+              >
                 <span className="font-medium">{role}</span>
                 <span className="text-xs text-gray-500">{when}</span>
               </li>

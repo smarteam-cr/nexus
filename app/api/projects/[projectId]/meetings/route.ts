@@ -137,53 +137,7 @@ export async function GET(
         }
       : null;
 
-  // 3. ActionItems del proyecto, agrupados por sesión origen
-  const actionItems = await prisma.actionItem.findMany({
-    where: { projectId, done: false },
-    orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-    select: {
-      id: true,
-      text: true,
-      ownerEmail: true,
-      dueDate: true,
-      status: true,
-      done: true,
-      source: true,
-      sessionId: true,
-      session: { select: { id: true, title: true, date: true } },
-    },
-    take: 100,
-  });
-
-  // 4. AgentRuns con cards del proyecto
-  const cardRuns = await prisma.agentRun.findMany({
-    where: {
-      projectId,
-      cards: { some: {} },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-    select: {
-      id: true,
-      createdAt: true,
-      stepLabel: true,
-      sourceSessionIds: true,
-      agent: { select: { name: true } },
-      cards: {
-        select: {
-          id: true,
-          title: true,
-          content: true,
-          cardType: true,
-          createdAt: true,
-        },
-        orderBy: { order: "asc" },
-        take: 10,
-      },
-    },
-  });
-
-  // 5. Historial timeline
+  // 3. Historial timeline
   const history = sessionLinks.map((l) => ({
     sessionId: l.session.id,
     title: l.session.title,
@@ -198,7 +152,7 @@ export async function GET(
     minuteStatus: l.session.minute?.status ?? null,
   }));
 
-  // 6. Heat + participant snapshot
+  // 4. Heat + participant snapshot
   const [hot, participantSnapshot] = await Promise.all([
     isProjectHot(projectId),
     prisma.projectParticipantSnapshot.findUnique({
@@ -217,23 +171,6 @@ export async function GET(
     },
     lastMinute,
     latestSessionWithoutMinute,
-    actionItems: actionItems.map((a) => ({
-      ...a,
-      dueDate: a.dueDate?.toISOString() ?? null,
-      session: a.session
-        ? {
-            ...a.session,
-            date: a.session.date.toISOString(),
-          }
-        : null,
-    })),
-    cardRuns: cardRuns.map((r) => ({
-      id: r.id,
-      createdAt: r.createdAt.toISOString(),
-      agentName: r.agent?.name ?? r.stepLabel ?? "Análisis",
-      sourceSessionIds: r.sourceSessionIds,
-      cards: r.cards,
-    })),
     history,
     isHot: hot,
     hotConfig: { threshold: HOT_THRESHOLD, windowDays: HOT_WINDOW_DAYS },

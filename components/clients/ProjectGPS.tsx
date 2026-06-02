@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import MinuteDialog from "./MinuteDialog";
 
 interface PendingItem {
   id?: string;             // ActionItem.id (nuevo) — undefined si viene del Json viejo
@@ -62,6 +63,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   const [editingSession, setEditingSession] = useState(false);
   const [editingSummary, setEditingSummary] = useState(false);
   const [newItemText, setNewItemText] = useState("");
+  const [minuteDialogOpen, setMinuteDialogOpen] = useState(false);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -285,6 +287,80 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
       )}
 
       <div className="grid grid-cols-4 divide-x divide-gray-800">
+        {/* Última sesión (PRIMERA — orden invertido para que lo más fresco esté a la izq) */}
+        <div className="p-4">
+          <div className="flex items-center gap-1.5 mb-2">
+            <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Última sesión</span>
+            {lastSession.source === "auto" && autoBadge}
+          </div>
+
+          {/* CTA prominente: abrir minuta en modal */}
+          <button
+            onClick={() => setMinuteDialogOpen(true)}
+            className="w-full mb-2 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand text-white text-xs font-semibold hover:bg-brand/90 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Ver minuta
+          </button>
+
+          {editingSummary ? (
+            <div className="space-y-1.5">
+              <textarea
+                autoFocus
+                rows={2}
+                defaultValue={data.lastSessionSummary ?? ""}
+                onChange={(e) => {
+                  setData({ ...data, lastSessionSummary: e.target.value });
+                  debouncedSave("lastSessionSummary", e.target.value);
+                }}
+                className="w-full text-xs border border-gray-700 rounded px-2 py-1 focus:outline-none focus:border-brand resize-none bg-gray-800 text-gray-200"
+              />
+              <button onClick={() => setEditingSummary(false)} className="text-[10px] text-brand hover:text-brand/80">
+                Listo
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setEditingSummary(true)}
+              className="text-left w-full"
+            >
+              {lastSession.title || lastSession.summary ? (
+                <div>
+                  {lastSession.title && (
+                    <p className="text-xs font-medium text-gray-200 truncate" title={lastSession.title}>
+                      {lastSession.title}
+                    </p>
+                  )}
+                  {lastDate && (
+                    <p className="text-[10px] text-gray-500 mt-0.5">{formatPastDate(lastDate)}</p>
+                  )}
+                  {lastSession.summary && (
+                    <p className="text-xs text-gray-300 line-clamp-2 mt-1">{lastSession.summary}</p>
+                  )}
+                  {lastSession.googleDocId && (
+                    <a
+                      href={`https://docs.google.com/document/d/${lastSession.googleDocId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[10px] text-brand hover:text-brand/80 mt-1 inline-block"
+                    >
+                      Abrir notas →
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-300 hover:text-gray-400 transition-colors">Sin sesiones procesadas</p>
+              )}
+            </button>
+          )}
+        </div>
+
         {/* Próxima sesión */}
         <div className="p-4">
           <div className="flex items-center gap-1.5 mb-2">
@@ -347,68 +423,6 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
                 <p className="text-xs text-gray-300 group-hover:text-gray-400 transition-colors">
                   Sin sesión agendada
                 </p>
-              )}
-            </button>
-          )}
-        </div>
-
-        {/* Última sesión */}
-        <div className="p-4">
-          <div className="flex items-center gap-1.5 mb-2">
-            <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-            </svg>
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Última sesión</span>
-            {lastSession.source === "auto" && autoBadge}
-          </div>
-          {editingSummary ? (
-            <div className="space-y-1.5">
-              <textarea
-                autoFocus
-                rows={2}
-                defaultValue={data.lastSessionSummary ?? ""}
-                onChange={(e) => {
-                  setData({ ...data, lastSessionSummary: e.target.value });
-                  debouncedSave("lastSessionSummary", e.target.value);
-                }}
-                className="w-full text-xs border border-gray-700 rounded px-2 py-1 focus:outline-none focus:border-brand resize-none bg-gray-800 text-gray-200"
-              />
-              <button onClick={() => setEditingSummary(false)} className="text-[10px] text-brand hover:text-brand/80">
-                Listo
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setEditingSummary(true)}
-              className="text-left w-full"
-            >
-              {lastSession.title || lastSession.summary ? (
-                <div>
-                  {lastSession.title && (
-                    <p className="text-xs font-medium text-gray-200 truncate" title={lastSession.title}>
-                      {lastSession.title}
-                    </p>
-                  )}
-                  {lastDate && (
-                    <p className="text-[10px] text-gray-500 mt-0.5">{formatPastDate(lastDate)}</p>
-                  )}
-                  {lastSession.summary && (
-                    <p className="text-xs text-gray-300 line-clamp-2 mt-1">{lastSession.summary}</p>
-                  )}
-                  {lastSession.googleDocId && (
-                    <a
-                      href={`https://docs.google.com/document/d/${lastSession.googleDocId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-[10px] text-brand hover:text-brand/80 mt-1 inline-block"
-                    >
-                      Abrir notas →
-                    </a>
-                  )}
-                </div>
-              ) : (
-                <p className="text-xs text-gray-300 hover:text-gray-400 transition-colors">Sin sesiones procesadas</p>
               )}
             </button>
           )}
@@ -501,6 +515,14 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
           </form>
         </div>
       </div>
+
+      {/* Dialog modal de la minuta + tab Participantes + CTA Historial */}
+      {minuteDialogOpen && (
+        <MinuteDialog
+          projectId={projectId}
+          onClose={() => setMinuteDialogOpen(false)}
+        />
+      )}
     </div>
   );
 }
