@@ -9,6 +9,7 @@ import ProjectGPS from "./ProjectGPS";
 import SectionDiscoveryModal from "./SectionDiscoveryModal";
 import HubBadge from "@/components/ui/HubBadge";
 import SectionBlockList from "@/components/canvas/SectionBlockList";
+import { ExternalAccessButton } from "./ExternalAccessPanel";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
@@ -545,6 +546,11 @@ export default function ProjectCanvasPanel({
               </div>
             )}
           </div>
+
+          {/* Acceso del cliente externo — feature distinto del "Compartir" de arriba.
+              Compartir = vista pública sin contraseña (cards publicadas).
+              Acceso del cliente = landing del proyecto con token + contraseña. */}
+          <ExternalAccessButton projectId={projectId} />
 
           <button
             onClick={processSession}

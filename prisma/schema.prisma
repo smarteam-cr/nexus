@@ -180,6 +180,33 @@ model Project {
   actionItems  ActionItem[]
   sessions     SessionProject[]
   participantSnapshot ProjectParticipantSnapshot?
+  externalAccess      ProjectExternalAccess?
+}
+
+// ─── ProjectExternalAccess ────────────────────────────────────────────────────
+// Mecanismo de acceso del cliente externo al landing de SU proyecto.
+// Combinación token (URL) + contraseña hasheada (form). Necesita ambos.
+// 1:1 con Project. El CSE genera/regenera/revoca desde el panel del proyecto.
+// La contraseña se devuelve EN PLANO una sola vez al generarla; después solo
+// queda el hash (bcrypt 12 rounds). Si se pierde, hay que regenerar.
+// Coexiste con Project.shareToken (vista pública sin contraseña, feature aparte).
+
+model ProjectExternalAccess {
+  id            String    @id @default(cuid())
+  projectId     String    @unique
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  accessToken   String    @unique           // 64 chars hex (crypto.randomBytes(32))
+  passwordHash  String                       // bcrypt(12 rounds), nunca devolver
+  enabledAt     DateTime  @default(now())
+  revokedAt     DateTime?                    // si != null → acceso bloqueado
+  lastUsedAt    DateTime?                    // se actualiza en cada verify OK
+  createdById   String?                      // FK a TeamMember que generó el acceso (auditoría)
+  createdBy     TeamMember? @relation("ExternalAccessCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([accessToken])
+  @@index([projectId])
 }
 
 // Canvas dentro de un proyecto (default = "Canvas de servicio", custom = secciones libres)
@@ -485,9 +512,10 @@ model TeamMember {
   updatedAt           DateTime  @updatedAt
 
   // Inversas
-  appUser            AppUser?
-  clientAssignments  ClientAssignment[] @relation("AssignedTo")
-  grantedAssignments ClientAssignment[] @relation("GrantedBy")
+  appUser                  AppUser?
+  clientAssignments        ClientAssignment[]      @relation("AssignedTo")
+  grantedAssignments       ClientAssignment[]      @relation("GrantedBy")
+  externalAccessesCreated  ProjectExternalAccess[] @relation("ExternalAccessCreator")
 }
 
 enum TeamRole {

@@ -17,7 +17,26 @@ const PUBLIC_PATHS = ["/"];
 //   - /api/auth/hubspot/*  → flujo OAuth HubSpot (integración, no auth de usuario)
 //   - /api/auth/callback   → callback OAuth HubSpot
 //   - /auth/*              → rutas de Supabase Auth (google, callback, signout)
-const PUBLIC_PREFIXES = ["/api/auth/hubspot", "/api/auth/callback", "/auth/"];
+//   - /share/*             → vista pública de proyecto compartido por token.
+//                            La página hace su propio "auth" buscando por
+//                            shareToken (24 chars hex) y solo expone cards con
+//                            publishedToClient=true. Requiere acceso público
+//                            sin login para que el cliente final pueda abrirla.
+//   - /external/*          → landing del cliente externo (Fase 1 módulo externo).
+//                            La página verifica token+contraseña vía
+//                            /api/external/verify-access. Requiere acceso público
+//                            porque el cliente final no tiene sesión Supabase.
+//   - /api/external/*      → endpoints públicos del cliente externo (verify,
+//                            futuro: lecturas del landing). Cada endpoint hace
+//                            su propia validación (token+pass o JWT externo).
+const PUBLIC_PREFIXES = [
+  "/api/auth/hubspot",
+  "/api/auth/callback",
+  "/auth/",
+  "/share/",
+  "/external/",
+  "/api/external/",
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

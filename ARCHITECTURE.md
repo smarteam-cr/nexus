@@ -182,12 +182,31 @@ Lógica de resolución:
 
 ### 4.5 Row Level Security en Supabase
 
-- **Habilitado obligatoriamente** en todas las tablas que la superficie externa puede leer (cuando se sume onboarding, todas las del módulo externo).
-- Las queries externas usan **el cliente Supabase con JWT del usuario** (no el `service_role`). RLS hace de segunda barrera incluso si un endpoint olvida filtrar.
-- Las queries internas siguen usando Prisma con `DATABASE_URL` privilegiado (que sí bypasea RLS), pero los helpers `requireInternalUser()` + `requireAccessToClient()` son la primera barrera.
-- Tablas con secretos (`HubspotAccount.accessToken`, `refreshToken`) tienen policy DENY explícita para cualquier rol != `service_role`. Esto cubre el caso de error donde alguien expone esa tabla a la app externa por accidente.
+**Estado actual (junio 2026, post-Fase 1 del módulo externo)**: lock-down total.
 
-**Por qué**: hoy la app confía 100% en autenticación y 0% en autorización. Cuando llegue el cliente externo, esa confianza explota — un usuario externo malicioso podría editar el ActionItem de otro cliente con un `curl`. El modelo dual (auth unificada + ownership por HubSpot + override + RLS) cierra el boquete con redundancia.
+**Regla simple**: **TODAS las tablas del schema `public` tienen RLS habilitado** (31 de 31, excepto `_prisma_migrations` que es metadata interna de Prisma y no se expone vía PostgREST). La mayoría sin policies SELECT — con anon/JWT no se lee nada. Solo bypassean los roles `postgres` (que usa Prisma) y `service_role`, ambos con `BYPASSRLS=true`.
+
+**Por qué TODAS y no solo las cliente-visibles**: descubrimos durante la verificación que Supabase, por default, auto-otorga `GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon`. Eso significa que **cualquier tabla sin RLS habilitado es leíble con la publishable key**, que está en el bundle JS del browser y por lo tanto disponible para cualquier persona. Antes del lock-down total, `FirefliesSession` (15.385 transcripts), `TeamMember` (16 emails internos), `AgentRun` (61 outputs IA crudos) y `KnowledgeDocument` (contenido propietario) eran extraíbles con una llamada `supabase.from(t).select('*')` desde cualquier máquina. El plan original había declarado "alcance quirúrgico, solo las 5 tablas de la superficie externa" — eso fue diagnóstico incorrecto. La regla correcta es "RLS en todo, policies SELECT solo donde se necesite acceso externo legítimo".
+
+**Tabla con policy explícita (1)**:
+- `HubspotAccount` tiene `deny_all_non_superuser` AS `RESTRICTIVE FOR ALL TO PUBLIC USING (false)`. Bloquea TODO para cualquier rol no-superuser, incluso si después alguien agrega policies permisivas (las RESTRICTIVE se AND, las PERMISSIVE se OR — `false AND anything = false`). Defensa en profundidad para los tokens OAuth de HubSpot (que hoy están en texto plano — deuda 🟡 #17).
+
+**Cómo conviven RLS y los dos modos de acceso a DB**:
+- **Queries internas** usan Prisma con `DATABASE_URL` privilegiado (rol `postgres` con `BYPASSRLS`). RLS las ignora. Los helpers `requireInternalUser()` + `requireAccessToClient()` son la primera barrera.
+- **Queries externas** (cuando existan) deberán usar el cliente Supabase con JWT del usuario externo (no `service_role`). RLS hace de segunda barrera incluso si un endpoint olvida filtrar.
+- **Las 5 tablas de la superficie externa futura** (`Project`, `Client`, `ClientContextCard`, `ActionItem`, `SessionMinute`) son donde se agregarán policies SELECT cuando se construya el landing — filtros tipo `EXISTS (... project_id = jwt.project_id)`. El resto de las 31 tablas se quedan permanentemente con lock-down (sin policy SELECT) porque el cliente externo nunca debe leerlas.
+
+**Verificación de aislamiento (debe correrse después de tocar policies)**:
+```js
+// Con NEXT_PUBLIC_SUPABASE_ANON_KEY (publishable):
+const supabase = createClient(url, anonKey);
+for (const t of ALL_PUBLIC_TABLES) {
+  const { count } = await supabase.from(t).select('*', { count: 'exact', head: true });
+  console.log(t, count); // Debe ser 0 en TODAS hasta que existan policies SELECT del landing.
+}
+```
+
+**Por qué**: hoy la app confía 100% en autenticación a nivel app y 0% en autorización a nivel DB. Cuando llegue el cliente externo, esa confianza explota — un usuario externo malicioso podría editar el ActionItem de otro cliente con un `curl`. El modelo dual (auth unificada + ownership por HubSpot + override + RLS) cierra el boquete con redundancia. Y mientras tanto, el lock-down total protege contra extracción casual con la publishable key (que NO es un secreto — está en el bundle del cliente).
 
 ---
 
@@ -334,7 +353,7 @@ Nada de lo siguiente puede quedar pendiente cuando se exponga el primer cliente 
 1. ~~**Migrar autenticación a Supabase Auth + `AppUser` + `TeamMember.role`**~~ ✅ **HECHO** (junio 2026 — Fases A-E del plan).
 2. ~~**Implementar `requireAccessToClient(clientId)`** y aplicarlo en los endpoints que el módulo de onboarding va a tocar.~~ ✅ **HECHO** (Fase F del plan — ~30 endpoints protegidos).
 3. ~~**Agregar autenticación a `PUT /api/projects/[projectId]/current-step`**~~ ✅ **HECHO** (Fase F).
-4. **Habilitar RLS en Supabase** para las tablas que la superficie externa va a tocar **y** policy DENY explícita en tablas con secretos (`HubspotAccount.accessToken`, `refreshToken`) para cualquier rol distinto de `service_role`. Segunda barrera por si un endpoint olvida filtrar.
+4. ~~**Habilitar RLS en Supabase** para las tablas que la superficie externa va a tocar **y** policy DENY explícita en tablas con secretos (`HubspotAccount.accessToken`, `refreshToken`) para cualquier rol distinto de `service_role`. Segunda barrera por si un endpoint olvida filtrar.~~ ✅ **HECHO** (junio 2026 — Fase A del plan Fase 1 del módulo externo). Lock-down inicial: RLS en `Project`, `Client`, `ClientContextCard`, `ActionItem`, `SessionMinute`; policy RESTRICTIVE en `HubspotAccount`. Policies SELECT para el cliente externo se agregan cuando se construya el landing.
 5. ~~**Crear `ClientAssignment` + campo `canViewAllClients` en `TeamMember`.**~~ ✅ **HECHO** (Fase A del plan).
 
 ### 🟡 Deuda que conviene cerrar pronto pero no bloquea el onboarding
@@ -367,13 +386,31 @@ No intentes todo a la vez. La secuencia mínima para no atorarte es:
 
 1. ~~**Base de identidad**: Supabase Auth + `AppUser` + `TeamMember.role` + helpers de auth.~~ ✅ **HECHO**.
 2. ~~**Helper `requireAccessToClient`**: implementarlo y aplicarlo solo en los endpoints que el módulo de onboarding va a tocar.~~ ✅ **HECHO**.
-3. ~~**Resto de los 🔴**: tapar `current-step` sin auth, crear `ClientAssignment` + `canViewAllClients`.~~ ✅ **HECHO**. Queda solo **#4 RLS** + DENY de tablas con secretos.
-4. **Cuando esté el #4**: abrir el módulo de onboarding. A partir de acá la deuda 🟡 se ataca según convenga; no detiene el lanzamiento.
+3. ~~**Resto de los 🔴**: tapar `current-step` sin auth, crear `ClientAssignment` + `canViewAllClients`.~~ ✅ **HECHO**.
+4. ~~**RLS** + DENY de tablas con secretos.~~ ✅ **HECHO** (lock-down inicial — junio 2026).
 
-La regla operativa: **no exponer ningún endpoint externo hasta que el ítem #4 (RLS) esté terminado y verificado** (correr el flujo manualmente y confirmar que un usuario sin permiso recibe 403, no datos).
+**Ya no quedan ítems 🔴 sin tachar.** Los cimientos de seguridad están listos para abrir el módulo de onboarding por capas. Próximos planes a encarar (en orden sugerido, cada uno con su propio documento de plan):
+
+a. **Mecanismo de acceso del cliente externo** (token + contraseña por proyecto) — construido en paralelo con el RLS lock-down (Fase 1 del módulo externo, junio 2026). Modelo `ProjectExternalAccess` + endpoints `/api/projects/[id]/external-access` (CSE) + `/api/external/verify-access` (cliente) + página mínima `/external/verify/[token]`. **Listo para enchufar el landing real.**
+b. **Landing real del cliente externo** — pendiente. Decide:
+   - Cómo se mueve el token fuera de la URL (cookie HTTP-only post-verify, header Authorization, magic link a sesión Supabase EXTERNAL).
+   - Qué tablas se exponen y con qué policies SELECT (filtro por `projectId` derivado del JWT/session claim).
+   - Qué UI tiene (cronograma, docs publicados, minutas REVIEWED, etc.).
+c. **Agente de handoff** que arma el contenido publicable del landing (qué cards van a `publishedToClient`, qué cronograma se muestra, etc.).
+d. **Publicación de contenido** desde el panel del CSE al landing (modelo de approval, versioning si hace falta).
+
+La regla operativa para futuro: **no exponer ningún endpoint externo nuevo sin que su tabla destino tenga RLS habilitado con policy SELECT específica** que filtre por el contexto del cliente externo (no por anon abierto).
 
 ---
 
 ## Changelog
 
 - **2026-06-01** — Documento creado. Sección 12 refleja el estado post-migración a Supabase Auth (Fases A-F del plan ejecutadas; queda solo RLS para abrir el módulo externo).
+- **2026-06-02** — Fase 1 del módulo externo COMPLETA (Fases A-E del plan).
+  - **Fase A**: RLS habilitado en `Project`, `Client`, `ClientContextCard`, `ActionItem`, `SessionMinute` (lock-down sin policies SELECT). `HubspotAccount` recibe policy `deny_all_non_superuser` AS `RESTRICTIVE`. Sección 4.5 reescrita con el estado real. Ítem 🔴 #4 marcado ✅ HECHO. Ya no quedan ítems 🔴 sin tachar.
+  - **Fase A.4 (ampliación post-verificación anon)**: la verificación con la publishable key reveló que las otras 25 tablas eran totalmente leíbles por `anon` (Supabase auto-otorga `GRANT SELECT` a `anon` sobre todo `public` en el setup inicial). Por ejemplo, `FirefliesSession` filtraba 15.385 transcripts completos. Ampliación del alcance: RLS habilitado en TODAS las tablas restantes (`Agent`, `AgentRun`, `AppUser`, `Audit`, `CanvasBlock`, `CanvasSection`, `CanvasSuggestion`, `ClientAssignment`, `ClientDocument`, `ExecutionLog`, `FirefliesSession`, `Implementation`, `Knowledge`, `KnowledgeDocument`, `KnowledgeEmbedding`, `KnowledgeTag`, `Message`, `ProjectCanvas`, `ProjectExternalAccess`, `ProjectParticipantSnapshot`, `SessionCategory`, `SessionProject`, `StageNote`, `TeamMember`, `_KnowledgeDocumentToKnowledgeTag`) en transacción atómica. Total: 31/31 tablas de `public` con RLS (`_prisma_migrations` queda como única excepción — metadata Prisma). Re-verificación con publishable key: las 30 tablas verificadas devuelven 0 rows. Regla 4.5 reescrita a "lock-down total + policies SELECT solo donde se necesite acceso externo legítimo".
+  - **Fase B**: modelo `ProjectExternalAccess` (1:1 con Project) agregado al schema con campos `accessToken` (64 hex), `passwordHash` (bcrypt 12 rounds), `enabledAt`, `revokedAt`, `lastUsedAt`, `createdById`. Dependencia `bcrypt` + `@types/bcrypt` instalada.
+  - **Fase C**: `app/api/projects/[projectId]/external-access/route.ts` con POST (genera/regenera, password autogenerada con `crypto.randomInt` + alphabet sin ambiguos, devuelve la password en plano UNA vez), GET (estado sin exponer hash) y DELETE (marca `revokedAt`, no borra). Guarded con `guardAccessToProject`.
+  - **Fase D**: middleware acepta `/external/` y `/api/external/` como públicos. `POST /api/external/verify-access` valida token+pass con rate limit in-memory (5 fallos/5min → 10min bloqueo, 429) y protección anti-timing-leak. Página pública `/external/verify/[token]` con form de password (cero recursos externos: Next.js self-hostea Geist en build, sin CDN ni Google Fonts en runtime). Componente `ExternalAccessButton` agregado al toolbar de `ProjectCanvasPanel` (al lado de "Compartir" legacy — son features distintas).
+  - **Fase E**: TS baseline mantenido en 29 errores. Smoke E2E confirmado: generar acceso → URL + pass → cliente entra en incógnito → password mala denegada → revocar bloquea acceso → regenerar permite entrada nueva. Sección 13 reorganizada para listar los próximos planes del módulo externo (landing real, agente de handoff, publicación).
+  - **Sigue abierto** (intencionalmente, no son 🔴): policies SELECT para el cliente externo (se deciden al diseñar el landing), cifrado de tokens HubSpot (deuda 🟡 #17), token-en-URL como debt de seguridad (mitigado por la contraseña hoy, hay que evaluar mover el token fuera de la URL al construir el landing).
