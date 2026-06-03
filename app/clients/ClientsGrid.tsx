@@ -20,13 +20,6 @@ export interface ClientRow {
   name: string;
   company: string | null;
   createdAt: string;            // ISO
-  /**
-   * Estado HubSpot:
-   * - "connected_account": el cliente conectó SU portal HubSpot a Nexus vía OAuth (raro)
-   * - "in_crm": solo existe como Company en el portal HubSpot de Smarteam (común)
-   * - "none": ninguno
-   */
-  hubspotStatus: "connected_account" | "in_crm" | "none";
   cseNames: string[];           // owners distintos de los proyectos
   cseEmails: string[];          // owners en email para matching contra activeCse
   lastSalesMeeting: string | null; // ISO
@@ -213,40 +206,10 @@ export default function ClientsGrid({
       width: "w-20",
       render: (c) => <span className="tabular-nums text-gray-400">{c.projectCount}</span>,
     },
-    {
-      key: "hubspot",
-      header: "HubSpot",
-      // Orden: portal propio > en CRM > nada
-      sortValue: (c) =>
-        c.hubspotStatus === "connected_account" ? 2 : c.hubspotStatus === "in_crm" ? 1 : 0,
-      width: "w-32",
-      render: (c) => {
-        if (c.hubspotStatus === "connected_account") {
-          return (
-            <Badge
-              variant="success"
-              size="xs"
-              dot
-              title="El cliente conectó su portal HubSpot a Nexus vía OAuth"
-            >
-              Portal propio
-            </Badge>
-          );
-        }
-        if (c.hubspotStatus === "in_crm") {
-          return (
-            <Badge
-              variant="default"
-              size="xs"
-              title="El cliente existe como Company en el portal HubSpot de Smarteam"
-            >
-              En CRM
-            </Badge>
-          );
-        }
-        return <span className="text-gray-700">—</span>;
-      },
-    },
+    // Columna "HubSpot" eliminada — todos los clientes están "En CRM" porque
+    // están en el portal de Smarteam, así que la info era ruido. Si en algún
+    // momento aparece un cliente con su propio Portal OAuth, lo destacamos
+    // en otro lado (ej. badge en el detalle del cliente).
     // Columna "Creado" eliminada — la fecha está en el tooltip de "Última
     // actividad" y la columna ocupaba espacio sin aportar al flujo.
     {

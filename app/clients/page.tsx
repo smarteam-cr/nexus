@@ -46,9 +46,7 @@ export default async function ClientsPage() {
         name: true,
         company: true,
         emailDomains: true,
-        hubspotCompanyId: true,
         createdAt: true,
-        hubspotAccount: { select: { hubName: true } },
         projects: { select: { hubspotOwnerName: true, hubspotOwnerEmail: true } },
         _count: { select: { projects: true } },
       },
@@ -89,22 +87,11 @@ export default async function ClientsPage() {
           .map((e) => e.toLowerCase())
       ),
     ];
-    // Estado HubSpot — distingue:
-    //   - "connected_account": cliente conectó SU portal HubSpot a Nexus (OAuth) — caso raro
-    //   - "in_crm": cliente existe como Company en el portal HubSpot de Smarteam — caso común
-    //   - "none": ninguno
-    const hubspotStatus: "connected_account" | "in_crm" | "none" = c.hubspotAccount
-      ? "connected_account"
-      : c.hubspotCompanyId
-      ? "in_crm"
-      : "none";
-
     return {
       id: c.id,
       name: c.name,
       company: c.company,
       createdAt: c.createdAt.toISOString(),
-      hubspotStatus,
       cseNames,
       cseEmails,
       lastSalesMeeting: md?.sales ? md.sales.toISOString() : null,
