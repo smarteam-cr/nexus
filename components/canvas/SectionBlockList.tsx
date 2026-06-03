@@ -34,11 +34,17 @@ type GridInteraction = {
 export default function SectionBlockList({
   projectId,
   canvasId,
+  onlyKey,
 }: {
   projectId: string;
   canvasId: string;
+  /** Si se especifica, solo renderiza la sección con esa key. Para sub-tabs. */
+  onlyKey?: string;
 }) {
-  const [sections, setSections] = useState<SectionWithBlocks[]>([]);
+  const [allSections, setAllSections] = useState<SectionWithBlocks[]>([]);
+  const sections = onlyKey
+    ? allSections.filter((s) => s.key === onlyKey)
+    : allSections;
   const [loading, setLoading] = useState(true);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [interaction, setInteraction] = useState<GridInteraction | null>(null);
@@ -66,7 +72,7 @@ export default function SectionBlockList({
     try {
       const res = await fetch(`/api/projects/${projectId}/canvas-sections?canvasId=${canvasId}`);
       const data = await res.json();
-      setSections(data.sections ?? []);
+      setAllSections(data.sections ?? []);
     } catch { /* ignore */ }
     setLoading(false);
   }, [projectId, canvasId]);
@@ -102,7 +108,7 @@ export default function SectionBlockList({
 
       if (updates.length > 0) {
         // Optimistic UI update
-        setSections((prev) => {
+        setAllSections((prev) => {
           let next = prev;
           for (const u of updates) {
             next = next.map((s) =>
@@ -199,7 +205,7 @@ export default function SectionBlockList({
         const rowSpan = prev.h;
         const changed = colStart !== (block.colStart ?? startCol + 1) || colSpan !== block.colSpan || rowSpan !== block.rowSpan;
         if (changed) {
-          setSections((ss) => ss.map((s) =>
+          setAllSections((ss) => ss.map((s) =>
             s.id === sectionId
               ? { ...s, blocks: s.blocks.map((b) => b.id === blockId ? { ...b, colSpan, colStart, rowSpan } : b) }
               : s

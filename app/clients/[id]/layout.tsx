@@ -4,7 +4,9 @@ import { prisma } from "@/lib/db/prisma";
 import Link from "next/link";
 import AppShell from "@/components/layout/AppShell";
 import WorkspaceShell from "@/components/clients/WorkspaceShell";
-import WorkspaceHeaderPopovers from "@/components/clients/WorkspaceHeaderPopovers";
+// WorkspaceHeaderPopovers (drawer Contexto con Docs/Sesiones/Deal) — eliminado.
+// Docs y Sesiones se migraron al panel "Información del cliente"; el Deal se
+// descontinuó.
 import HeaderAgentButton from "@/components/clients/HeaderAgentButton";
 
 import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
@@ -153,19 +155,9 @@ export default async function ClientLayout({
             </div>
           </div>
 
-          {/* Right: agentes + contexto + settings */}
+          {/* Right: agentes + settings */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <HeaderAgentButton clientId={id} defaultProjectId={defaultProjectId} />
-            <WorkspaceHeaderPopovers
-              clientId={id}
-              hasHubspot={!!client.hubspotAccount}
-              hubspotCompanyId={client.hubspotCompanyId ?? null}
-              hubName={client.hubspotAccount?.hubName ?? null}
-              hubspotPortalId={client.hubspotAccount?.hubspotPortalId ?? null}
-              serviceType={null}
-              domain={clientDomain}
-              company={client.company ?? undefined}
-            />
             <Link
               href={`/clients/${id}/settings`}
               className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"

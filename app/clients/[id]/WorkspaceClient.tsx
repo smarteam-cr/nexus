@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
-import StrategyCanvasPanel from "@/components/clients/StrategyCanvasPanel";
+import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 
 const STRATEGY_TAB_ID = "__strategy__";
@@ -112,7 +112,9 @@ function ProjectSection({
           );
         })}
 
-        {/* Estrategia tab — siempre al final */}
+        {/* Información del cliente — siempre al final. Internamente sigue siendo
+            el Project con serviceType=__strategy__ (mismo storage; cambia el
+            label visible y el contenido del panel). */}
         <button
           onClick={() => setActiveProjectId(STRATEGY_TAB_ID)}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
@@ -122,15 +124,15 @@ function ProjectSection({
           }`}
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          Estrategia
+          Información del cliente
         </button>
       </div>
 
       {/* Content */}
       {isStrategy ? (
-        <StrategyCanvasPanel
+        <ClientInfoPanel
           key={STRATEGY_TAB_ID}
           projectId={strategyProjectId}
           canvasId={strategyCanvasId}
