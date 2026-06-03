@@ -34,15 +34,23 @@ export interface ClientRow {
   projectCount: number;
 }
 
-function DateCell({ iso }: { iso: string | null }) {
+/** Formatea una fecha pasada en forma relativa (hoy/ayer/hace N días/sem/fecha). */
+function PastDateCell({ iso }: { iso: string | null }) {
   if (!iso) return <span className="text-gray-600">—</span>;
+  const d = new Date(iso);
+  const ago = Math.max(0, Math.round((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24)));
+  const rel =
+    ago === 0  ? "hoy" :
+    ago === 1  ? "ayer" :
+    ago < 7    ? `hace ${ago} días` :
+    ago < 60   ? `hace ${Math.round(ago / 7)} sem` :
+    d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
   return (
-    <span className="text-gray-400 whitespace-nowrap">
-      {new Date(iso).toLocaleDateString("es-ES", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })}
+    <span
+      className="text-gray-400 whitespace-nowrap"
+      title={d.toLocaleString("es-ES")}
+    >
+      {rel}
     </span>
   );
 }
@@ -188,7 +196,7 @@ export default function ClientsGrid({
       sortValue: (c) => (c.lastSalesMeeting ? new Date(c.lastSalesMeeting) : null),
       width: "w-32",
       hideOnMobile: true,
-      render: (c) => <DateCell iso={c.lastSalesMeeting} />,
+      render: (c) => <PastDateCell iso={c.lastSalesMeeting} />,
     },
     {
       key: "cseMeeting",
@@ -196,7 +204,7 @@ export default function ClientsGrid({
       sortValue: (c) => (c.lastCseMeeting ? new Date(c.lastCseMeeting) : null),
       width: "w-32",
       hideOnMobile: true,
-      render: (c) => <DateCell iso={c.lastCseMeeting} />,
+      render: (c) => <PastDateCell iso={c.lastCseMeeting} />,
     },
     {
       key: "projects",
