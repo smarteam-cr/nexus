@@ -57,6 +57,7 @@ export default function DocumentUpload({ projectId }: { projectId: string }) {
   // Estado del input de link de Google
   const [linkUrl, setLinkUrl] = useState("");
   const [addingLink, setAddingLink] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -106,6 +107,7 @@ export default function DocumentUpload({ projectId }: { projectId: string }) {
 
     setAddingLink(true);
     setError(null);
+    setInfo(null);
 
     try {
       const res = await fetch(`/api/projects/${projectId}/documents/link`, {
@@ -118,6 +120,13 @@ export default function DocumentUpload({ projectId }: { projectId: string }) {
         setError(data.error ?? "No se pudo agregar el enlace");
       } else {
         setLinkUrl("");
+        // El backend deduplica por URL: si ya existía, lo actualiza (re-lee
+        // el contenido) en vez de duplicar. Avisamos cuál de los dos pasó.
+        setInfo(
+          data.updated
+            ? "Ese documento ya estaba agregado — se actualizó su contenido."
+            : "Documento agregado.",
+        );
         await fetchDocuments();
       }
     } catch {
@@ -194,6 +203,13 @@ export default function DocumentUpload({ projectId }: { projectId: string }) {
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs">
           <span>{error}</span>
           <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-600">&times;</button>
+        </div>
+      )}
+
+      {info && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs">
+          <span>{info}</span>
+          <button onClick={() => setInfo(null)} className="ml-auto text-amber-400 hover:text-amber-600">&times;</button>
         </div>
       )}
 
