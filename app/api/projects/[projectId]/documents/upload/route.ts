@@ -1,31 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { supabaseStorage, BUCKET_NAME, MAX_FILE_SIZE, ensureBucket, storagePath } from "@/lib/storage/client";
-
-const MAX_EXTRACTED_CHARS = 50000;
-
-async function extractText(buffer: Buffer, mimeType: string): Promise<string | null> {
-  try {
-    // Plain text / CSV
-    if (mimeType === "text/plain" || mimeType === "text/csv") {
-      return new TextDecoder().decode(buffer).slice(0, MAX_EXTRACTED_CHARS);
-    }
-
-    // PDF
-    if (mimeType === "application/pdf") {
-      const pdfParse = (await import("pdf-parse")).default;
-      const result = await pdfParse(buffer, { max: 100 }); // max 100 pages
-      const text = result.text?.trim();
-      if (!text || text.length < 10) return null; // Probably scanned PDF
-      return text.slice(0, MAX_EXTRACTED_CHARS);
-    }
-
-    return null;
-  } catch {
-    return null; // Extraction failed silently (scanned PDF, corrupted, etc.)
-  }
-}
+import { getStorageClient, BUCKET_NAME, MAX_FILE_SIZE, ensureBucket, storagePath } from "@/lib/storage/client";
+import { extractText } from "@/lib/documents/extract-text";
 
 export async function POST(
   req: NextRequest,
@@ -56,6 +33,20 @@ export async function POST(
     return NextResponse.json({ error: `File too large (max ${MAX_FILE_SIZE / 1024 / 1024}MB)` }, { status: 400 });
   }
 
+  // Storage debe estar configurado para subir archivos. Si no, error claro
+  // (en vez de explotar al importar el módulo, como pasaba antes).
+  const storage = getStorageClient();
+  if (!storage) {
+    return NextResponse.json(
+      {
+        error:
+          "El almacenamiento de archivos no está configurado (faltan credenciales de Supabase Storage). " +
+          "Mientras tanto, podés agregar documentos por enlace de Google Drive.",
+      },
+      { status: 503 },
+    );
+  }
+
   // Ensure bucket exists
   await ensureBucket();
 
@@ -63,7 +54,7 @@ export async function POST(
   const path = storagePath(project.clientId, projectId, file.name);
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  const { error: uploadError } = await supabaseStorage.storage
+  const { error: uploadError } = await storage.storage
     .from(BUCKET_NAME)
     .upload(path, buffer, {
       contentType: file.type,

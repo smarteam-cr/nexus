@@ -173,11 +173,39 @@ async function fetchTranscriptContent(apiKey: string, sessionId: string, title: 
 
     if (cached?.summary || cached?.transcript) {
       const parts: string[] = [`### Sesión: ${cached.title || title}`];
-      const s = cached.summary as { keywords?: string[]; overview?: string; action_items?: string } | null;
+      // Shape soportado por dos fuentes:
+      //   - Fireflies: keywords + overview + action_items + shorthand_bullet
+      //   - Google Meet / Gemini Notes: keywords + overview + sections[]
+      //     donde sections = [{ title, content }]
+      const s = cached.summary as {
+        keywords?: string[];
+        overview?: string;
+        action_items?: string;
+        sections?: Array<{ title?: string; content?: string }>;
+      } | null;
       if (s?.keywords?.length) parts.push(`**Temas clave:** ${s.keywords.join(", ")}`);
       if (s?.overview?.trim()) parts.push(`**Resumen:**\n${s.overview.trim().slice(0, 1500)}`);
       if (s?.action_items?.trim()) parts.push(`**Compromisos:**\n${s.action_items.trim().slice(0, 800)}`);
-      if (parts.length === 1 && cached.transcript?.trim()) parts.push(cached.transcript.slice(0, 3000));
+      // Gemini Notes sections — donde vive el detalle real de la reunión
+      // (Presentación del cliente, Dolores, Acuerdos, Próximos pasos, etc.).
+      // SIN esto, el helper devolvía solo el overview genérico de 1-2 líneas.
+      if (Array.isArray(s?.sections) && s!.sections!.length > 0) {
+        const sectionsMd = s!.sections!
+          .filter((sec) => sec?.title?.trim() && sec?.content?.trim())
+          .map((sec) => `**${sec.title!.trim()}:**\n${sec.content!.trim().slice(0, 1200)}`)
+          .join("\n\n");
+        if (sectionsMd) parts.push(sectionsMd);
+      }
+      // Si después de todo el summary terminó pobre (<1500 chars de content
+      // sumando todo excepto el header de sesión), complementar con el
+      // transcript crudo. Esto cubre sesiones donde el summary es muy de alto
+      // nivel y los acuerdos específicos viven en el transcript palabra-por-palabra.
+      const summaryContentLen = parts.slice(1).join("").length;
+      if (summaryContentLen < 1500 && cached.transcript?.trim()) {
+        parts.push(`**Transcript (extracto):**\n${cached.transcript.slice(0, 5000)}`);
+      }
+      // Fallback histórico: si NO había nada de summary y hay transcript, usarlo.
+      if (parts.length === 1 && cached.transcript?.trim()) parts.push(cached.transcript.slice(0, 5000));
       if (parts.length > 1) return parts.join("\n\n");
     }
   } catch {
@@ -705,14 +733,88 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   }
 
   // ── 4. Buscar y traer transcripciones (Fireflies + Google Meet) ──────────────
-  // Cargar emails del equipo de ventas para etiquetar transcripciones.
+  // Cargar TODOS los emails internos del equipo Smarteam — necesarios para:
+  //  - Etiquetar sesiones como "puras de ventas" vs "mixtas" (handoff/kickoff).
+  //  - Distinguir participantes internos vs externos (cliente, HubSpot reps).
+  // Sales = subset con role in ("Sales", "Ventas").
   // OJO: en seed el role es "Sales" (no "Ventas") — antes esta query devolvía
   // vacío y TODAS las sesiones caían en "CS" por defecto.
-  const salesTeam = await prisma.teamMember.findMany({
-    where: { role: { in: ["Sales", "Ventas"] } },
-    select: { email: true, name: true },
+  const allTeam = await prisma.teamMember.findMany({
+    select: { email: true, name: true, role: true },
   });
-  const salesEmails = new Set(salesTeam.map((m) => m.email.toLowerCase()));
+  const internalEmails = new Set(allTeam.map((m) => m.email.toLowerCase()));
+  const salesEmails = new Set(
+    allTeam
+      .filter((m) => m.role === "Sales" || m.role === "Ventas")
+      .map((m) => m.email.toLowerCase()),
+  );
+
+  // ── Filtro especial para el agente Handoff Sales→CS ─────────────────────────
+  // Estrategia híbrida en 3 niveles para decidir qué sesiones son "input válido
+  // para handoff":
+  //
+  //   1. EXCLUDE por título (precedencia máxima): keywords como "kickoff",
+  //      "implementación", "adopción", "review" → la sesión es post-handoff
+  //      o irrelevante. Se excluye AUNQUE tenga participantes de Sales (ej.
+  //      un Kickoff donde Sales aparece para presentar al CSE).
+  //
+  //   2. INCLUDE por título: keywords como "hand off", "discovery", "demo",
+  //      "propuesta", "cierre" → la sesión es claramente pre-venta o handoff.
+  //      Se incluye AUNQUE tenga muchos CSE/PM (caso típico de la sesión
+  //      "Hand Off" mixta — Sales+CSE juntos al momento del traspaso).
+  //
+  //   3. NEUTRO (título no matchea ningún keyword): cae al fallback de
+  //      "al menos un participante de Sales".
+  //
+  // Más filtro temporal: solo últimos 90 días.
+  const isHandoffAgent = agent.agentGroup === "handoff";
+  const HANDOFF_LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000;
+  const handoffCutoffMs = Date.now() - HANDOFF_LOOKBACK_MS;
+
+  // Keywords case-insensitive y sin acentos. Si necesitás agregar tipos de
+  // sesión nuevos, editá estas listas y reiniciá el dev server.
+  const HANDOFF_EXCLUDE_TITLE_KEYWORDS = [
+    "kickoff", "kick-off", "kick off",
+    "implementacion", "implementation",
+    "adopcion", "adoption",
+    "capacitacion", "training",
+    "review", "revision",
+    "retro", "retrospectiva",
+    "sesion semanal", "weekly",
+    "stand up", "standup",
+    "qbr", "business review",
+  ];
+  const HANDOFF_INCLUDE_TITLE_KEYWORDS = [
+    "hand off", "handoff", "hand-off",
+    "traspaso",
+    "discovery", "descubrimiento",
+    "demo", "demostracion",
+    "propuesta", "proposal",
+    "cierre", "closing",
+    "sales call", "llamada de venta", "llamada de ventas",
+    "preventa", "pre-venta", "pre venta",
+    "calificacion", "qualification",
+  ];
+
+  function normalizeTitle(t: string): string {
+    // NFD descompone "ó" en "o" + diacrítico combinante. El regex remueve el
+    // rango U+0300–U+036F (Combining Diacritical Marks) para que el matching
+    // sea insensitive a acentos: "Implementación" → "implementacion".
+    return t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  }
+
+  type HandoffClassification = { include: boolean; reason: string };
+
+  function classifyForHandoff(s: RawTranscript): HandoffClassification {
+    const title = normalizeTitle(s.title || "");
+    const excludeHit = HANDOFF_EXCLUDE_TITLE_KEYWORDS.find((kw) => title.includes(kw));
+    if (excludeHit) return { include: false, reason: `título contiene "${excludeHit}"` };
+    const includeHit = HANDOFF_INCLUDE_TITLE_KEYWORDS.find((kw) => title.includes(kw));
+    if (includeHit) return { include: true, reason: `título contiene "${includeHit}"` };
+    const hasSales = s.participants.some((p) => salesEmails.has(p.toLowerCase()));
+    if (hasSales) return { include: true, reason: "título neutro + al menos un Sales en participantes" };
+    return { include: false, reason: "título neutro + sin Sales en participantes" };
+  }
 
   // Helper: si una sesión NO tiene transcript, devolver al menos su metadata
   // (título, fecha, participantes) para que el agente sepa que la reunión
@@ -781,21 +883,33 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
       }
     }
 
-    // Separar sesiones de ventas vs CS/kickoff por participantes u organizador.
-    // Sales = al menos UN participante es del equipo de Sales.
-    // CS = todos los participantes son no-sales (típicamente handoffs, kickoffs,
-    // sesiones de implementación, etc).
-    const salesSessions = matchingSessions.filter((s) =>
-      s.participants.some((p) => salesEmails.has(p.toLowerCase()))
-    );
-    const csSessions = matchingSessions.filter((s) =>
-      !s.participants.some((p) => salesEmails.has(p.toLowerCase()))
-    );
+    // Separar sesiones según el tipo de agente.
+    let salesSessions: RawTranscript[];
+    let csSessions: RawTranscript[];
 
-    // Transcripciones de CS / Kickoff / Handoff (máx 6).
-    // Antes solo se procesaban para agentes != "Análisis inicial", pero eso
-    // dejaba a este agente sin ver handoffs ni kickoffs que mencionan al
-    // cliente. Ahora TODOS los agentes ven CS sessions matched al cliente.
+    if (isHandoffAgent) {
+      // Handoff: usa la clasificación híbrida (title-based + fallback Sales),
+      // últimos 90 días. NO se le pasan CS-only sessions — sin Sales en la
+      // sala y sin título de venta, esa sesión es post-handoff y confunde
+      // al agente sobre "qué prometió Ventas".
+      salesSessions = matchingSessions.filter(
+        (s) => s.date >= handoffCutoffMs && classifyForHandoff(s).include,
+      );
+      csSessions = []; // intencionalmente vacío
+    } else {
+      // Resto de agentes: lógica clásica.
+      // Sales = al menos UN participante es del equipo de Sales.
+      // CS = todos los participantes son no-sales (típicamente handoffs, kickoffs,
+      // sesiones de implementación, etc).
+      salesSessions = matchingSessions.filter((s) =>
+        s.participants.some((p) => salesEmails.has(p.toLowerCase())),
+      );
+      csSessions = matchingSessions.filter(
+        (s) => !s.participants.some((p) => salesEmails.has(p.toLowerCase())),
+      );
+    }
+
+    // Transcripciones de CS / Kickoff / Handoff (máx 6) — vacío para handoff agent.
     const topCS = csSessions.sort((a, b) => b.date - a.date).slice(0, 6);
     if (topCS.length > 0) {
       const contents = await Promise.all(topCS.map((s) => fetchOrFallback(s)));
@@ -809,6 +923,27 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     if (topSales.length > 0) {
       const contents = await Promise.all(topSales.map((s) => fetchOrFallback(s)));
       salesFirefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
+    }
+
+    if (isHandoffAgent) {
+      console.log(
+        `[analyze handoff] Clasificación (${matchingSessions.length} matched → ${salesSessions.length} incluidas, últimos 90d):`,
+      );
+      for (const s of topSales) {
+        const cls = classifyForHandoff(s);
+        const dateStr = new Date(s.date).toISOString().slice(0, 10);
+        console.log(`  ✓ [${dateStr}] "${s.title}" — ${cls.reason}`);
+      }
+      const excluded = matchingSessions.filter(
+        (s) => !salesSessions.some((sl) => sl.id === s.id),
+      );
+      for (const s of excluded.slice(0, 8)) {
+        const dateStr = new Date(s.date).toISOString().slice(0, 10);
+        const reason = s.date < handoffCutoffMs
+          ? "fuera de 90d"
+          : classifyForHandoff(s).reason;
+        console.log(`  ✗ [${dateStr}] "${s.title}" — ${reason}`);
+      }
     }
   } catch (e) {
     console.error("[analyze] Sessions error:", e);
@@ -1142,7 +1277,7 @@ ${[
     return `${tag} **${c.title}:**\n${c.content}`;
   }),
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
-].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS ===\n${docsContent.slice(0, 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, 4000)}\n\n` : ""}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
+].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, isHandoffAgent ? 12000 : 4000)}\n\n` : ""}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 11. Llamar a Claude ───────────────────────────────────────────────────────

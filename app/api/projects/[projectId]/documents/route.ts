@@ -77,10 +77,10 @@ export async function DELETE(
     return NextResponse.json({ error: "Document not found" }, { status: 404 });
   }
 
-  // Delete from storage if it's a FILE
+  // Delete from storage if it's a FILE (no-op si Storage no está configurado)
   if (doc.type === "FILE" && doc.url) {
-    const { supabaseStorage, BUCKET_NAME } = await import("@/lib/storage/client");
-    await supabaseStorage.storage.from(BUCKET_NAME).remove([doc.url]);
+    const { removeFile } = await import("@/lib/storage/client");
+    await removeFile(doc.url);
   }
 
   await prisma.clientDocument.delete({ where: { id: documentId } });
