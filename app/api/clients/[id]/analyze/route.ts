@@ -908,11 +908,14 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   const isCardsAndFlowcharts = agent.outputType === "CARDS_AND_FLOWCHARTS";
 
   // ── 9a2. Resolver canvas destino para agentes no-default ────────────────────
+  // TODO: deuda 🟡 — este mapping está duplicado en lib/canvas/default-canvases.ts.
+  // Si agregás un agentGroup nuevo, sincronizá los dos. Pendiente de centralización.
   const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
     diagnostico: "Diagnóstico",
     planificacion: "Planificación",
     ejecucion: "Ejecución",
     adopcion: "Adopción",
+    handoff: "Handoff",
   };
   let targetCanvasId: string | null = null;
   if (bodyProjectId && agent.agentGroup && AGENT_GROUP_TO_CANVAS[agent.agentGroup]) {
@@ -956,8 +959,15 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     "Si hay contradicciones entre el canvas y otras fuentes (transcripciones, ejecuciones anteriores, datos del CRM), " +
     "PRIORIZA SIEMPRE lo que dice el canvas. El canvas es la fuente de verdad del proyecto.";
 
-  // Inyectar reglas de formato para agentes que apuntan a canvases no-default
-  const useBlockFormat = targetCanvasId && agent.id === "agent-diagnostico-canvas";
+  // Inyectar reglas de formato para agentes que apuntan a canvases no-default.
+  // Lista de agentes que usan el formato sections+blocks (en lugar de cards).
+  // El render de canvases custom (SectionBlockList) lee CanvasBlock, no
+  // ClientContextCard — por eso estos agentes deben persistir como blocks.
+  const BLOCK_FORMAT_AGENT_IDS = new Set([
+    "agent-diagnostico-canvas",
+    "cmmla1g1x00005wijix3qnr7u", // Handoff Sales→CS (Fase 2 módulo externo)
+  ]);
+  const useBlockFormat = !!targetCanvasId && BLOCK_FORMAT_AGENT_IDS.has(agent.id);
   if (targetCanvasId) {
     const tcSections = await prisma.canvasSection.findMany({
       where: { canvasId: targetCanvasId },
@@ -1413,6 +1423,9 @@ Analiza toda la información anterior y completa las secciones de contexto del c
 
     console.log(`[analyze blocks] Saved ${totalBlocks} blocks across ${outputSections.length} sections`);
 
+    // Persistir el cronograma si el agente lo devolvió (mismo helper que el path de cards)
+    await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id);
+
     const savedBlocks = await prisma.canvasBlock.findMany({
       where: { agentRunId: run.id },
       orderBy: { order: "asc" },
@@ -1698,6 +1711,10 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     console.error("[analyze] mergePendingItems error:", e);
   }
 
+  // ── 14c. Persistir cronograma sugerido por el agente (Fase 2 módulo externo) ─
+  // Se llama desde ambos paths (cards y block format) — ver función helper abajo.
+  await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id);
+
   // ── 15. Retornar las cards recién creadas + metadata del run ─────────────────
   const runCards = await prisma.clientContextCard.findMany({
     where: { agentRunId: run.id },
@@ -1717,3 +1734,76 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     },
   });
 });
+
+// ── Helpers a nivel módulo ────────────────────────────────────────────────────
+
+/**
+ * Persiste el cronograma estructurado (ProjectTimeline + TimelinePhase) si el
+ * agente lo devolvió en su output JSON. Conservador: si ya existe un timeline
+ * para el proyecto, NO pisa (la propuesta nueva queda solo en AgentRun.output
+ * para trazabilidad — el CSE puede borrar manualmente para regenerar).
+ *
+ * Se llama desde DOS paths del POST handler:
+ *   - branch de block format (canvases custom como Handoff Sales→CS)
+ *   - branch de cards (canvas Resumen y similares)
+ *
+ * El cronograma vive a nivel proyecto, independiente del tipo de output del
+ * agente — por eso se factoriza acá.
+ */
+async function persistTimelineFromAgentOutput(
+  bodyProjectId: string | null,
+  analysisJson: unknown,
+  agentRunId: string,
+): Promise<void> {
+  try {
+    const timelineRaw = (analysisJson as { timeline?: { phases?: unknown } } | null)
+      ?.timeline?.phases;
+    if (!bodyProjectId || !Array.isArray(timelineRaw) || timelineRaw.length === 0) return;
+
+    // Validador inline (sin Zod, consistente con el resto del codebase)
+    const validPhases = timelineRaw
+      .filter((p: unknown): p is { name: string; durationWeeks: number; sessionCount?: number; notes?: string } => {
+        if (!p || typeof p !== "object") return false;
+        const obj = p as Record<string, unknown>;
+        return typeof obj.name === "string"
+          && obj.name.trim().length > 0
+          && typeof obj.durationWeeks === "number"
+          && obj.durationWeeks > 0;
+      })
+      .map((p, i) => ({
+        name: p.name.trim(),
+        order: i,
+        durationWeeks: Math.floor(p.durationWeeks),
+        sessionCount: typeof p.sessionCount === "number" && p.sessionCount > 0
+          ? Math.floor(p.sessionCount)
+          : null,
+        notes: typeof p.notes === "string" && p.notes.trim().length > 0
+          ? p.notes.trim()
+          : null,
+        source: "AGENT" as const,
+      }));
+
+    if (validPhases.length === 0) return;
+
+    const existing = await prisma.projectTimeline.findUnique({
+      where: { projectId: bodyProjectId },
+      select: { id: true },
+    });
+    if (existing) {
+      console.log(`[analyze] Skipping timeline: ProjectTimeline ya existe para project ${bodyProjectId}. Propuesta nueva queda en AgentRun.output (${agentRunId}).`);
+      return;
+    }
+
+    await prisma.projectTimeline.create({
+      data: {
+        projectId: bodyProjectId,
+        generatedByAgentRunId: agentRunId,
+        phases: { create: validPhases },
+      },
+    });
+    console.log(`[analyze] ✓ ProjectTimeline creado con ${validPhases.length} fases (AgentRun ${agentRunId})`);
+  } catch (e) {
+    console.error("[analyze] Timeline persist error:", e);
+    // No fallar la respuesta — el handoff principal (cards/blocks) ya quedó persistido.
+  }
+}

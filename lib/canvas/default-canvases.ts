@@ -56,14 +56,35 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
       { key: "mejora_continua", label: "Mejora continua" },
     ],
   },
+  {
+    // Fase 2 del módulo externo: handoff Sales→CS. Cada sección 1:1 con una
+    // card del agente "Handoff Sales→CS" (matching exacto por canvasSection).
+    // Se aplica retroactivamente a proyectos existentes con
+    // scripts/migrate-add-handoff-canvas.ts.
+    name: "Handoff",
+    isDefault: false,
+    sections: [
+      { key: "acuerdos_promesas",    label: "Acuerdos clave y promesas especiales" },
+      { key: "alcance_contratado",   label: "¿Qué vendimos?" },
+      { key: "motivacion_decision",  label: "¿Por qué vendimos? (por qué nos eligieron)" },
+      { key: "dolor_principal",      label: "Dolor principal" },
+      { key: "expectativas",         label: "Expectativas del cliente" },
+      { key: "stakeholders_handoff", label: "Stakeholders clave" },
+      { key: "estado_en_flight",     label: "Proyectos y avances en curso" },
+      { key: "riesgos_banderas",     label: "Riesgos y banderas rojas" },
+    ],
+  },
 ];
 
-/** Map from agentGroup to canvas name for routing cards */
+/** Map from agentGroup to canvas name for routing cards.
+ *  TODO: deuda 🟡 — este mapping está duplicado en app/api/clients/[id]/analyze/route.ts.
+ *  Si agregás un agentGroup nuevo, sincronizá los dos. Pendiente de centralización. */
 export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
   diagnostico: "Diagnóstico",
   planificacion: "Planificación",
   ejecucion: "Ejecución",
   adopcion: "Adopción",
+  handoff: "Handoff",
 };
 
 /** Create all standard canvases for a project with CanvasSection records. */

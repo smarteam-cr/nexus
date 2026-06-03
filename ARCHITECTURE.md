@@ -391,15 +391,21 @@ No intentes todo a la vez. La secuencia mínima para no atorarte es:
 
 **Ya no quedan ítems 🔴 sin tachar.** Los cimientos de seguridad están listos para abrir el módulo de onboarding por capas. Próximos planes a encarar (en orden sugerido, cada uno con su propio documento de plan):
 
-a. **Mecanismo de acceso del cliente externo** (token + contraseña por proyecto) — construido en paralelo con el RLS lock-down (Fase 1 del módulo externo, junio 2026). Modelo `ProjectExternalAccess` + endpoints `/api/projects/[id]/external-access` (CSE) + `/api/external/verify-access` (cliente) + página mínima `/external/verify/[token]`. **Listo para enchufar el landing real.**
-b. **Landing real del cliente externo** — pendiente. Decide:
+a. ~~**Mecanismo de acceso del cliente externo** (token + contraseña por proyecto)~~ ✅ **HECHO** (Fase 1 del módulo externo, junio 2026). Modelo `ProjectExternalAccess` + endpoints `/api/projects/[id]/external-access` (CSE) + `/api/external/verify-access` (cliente) + página mínima `/external/verify/[token]`.
+b. ~~**Agente de handoff Sales→CS + cronograma estructurado**~~ ✅ **HECHO** (Fase 2 del módulo externo, junio 2026). Agente "Análisis inicial" reorientado a "Handoff Sales→CS" con 8 secciones laser-focused (formato block). Canvas "Handoff" agregado a `DEFAULT_PROJECT_CANVASES` + migrado retroactivamente. Modelos `ProjectTimeline` + `TimelinePhase` + enum `TimelinePhaseSource`. Endpoints `GET/PUT/DELETE /api/projects/[id]/timeline`. El agente NUNCA pisa el cronograma existente al re-ejecutarse — la propuesta queda en `AgentRun.output` para trazabilidad.
+c. **Landing real del cliente externo** — pendiente. Decide:
    - Cómo se mueve el token fuera de la URL (cookie HTTP-only post-verify, header Authorization, magic link a sesión Supabase EXTERNAL).
    - Qué tablas se exponen y con qué policies SELECT (filtro por `projectId` derivado del JWT/session claim).
-   - Qué UI tiene (cronograma, docs publicados, minutas REVIEWED, etc.).
-c. **Agente de handoff** que arma el contenido publicable del landing (qué cards van a `publishedToClient`, qué cronograma se muestra, etc.).
-d. **Publicación de contenido** desde el panel del CSE al landing (modelo de approval, versioning si hace falta).
+   - Qué UI tiene (cronograma calculado con `anchorStartDate + sum(durationWeeks)*7d`, cards del Handoff publicadas, docs, minutas REVIEWED).
+d. **Publicación selectiva** desde el panel del CSE al landing (qué bloques del Handoff van al landing, modelo de approval).
 
 La regla operativa para futuro: **no exponer ningún endpoint externo nuevo sin que su tabla destino tenga RLS habilitado con policy SELECT específica** que filtre por el contexto del cliente externo (no por anon abierto).
+
+### ⚠ Recordatorios operativos (lessons learned)
+
+- **Prisma `db push` NO habilita RLS automáticamente** en tablas nuevas. Cada vez que agregás una tabla al schema, corré explícitamente `ALTER TABLE "X" ENABLE ROW LEVEL SECURITY` después del push. Verificá con `SELECT rowsecurity FROM pg_tables WHERE tablename='X'`. Sin esto, anon puede leer la tabla con la publishable key del bundle — abre el agujero que cerramos en Fase 1.
+- **Reiniciar el dev server después de cambios al schema** o de regenerar el cliente Prisma. Si no, el endpoint sigue usando el cliente viejo cacheado y revienta silenciosamente al usar modelos nuevos.
+- **El gate `useBlockFormat` en `analyze/route.ts`** es la llave que decide si un agente escribe `ClientContextCard` (canvas Resumen) o `CanvasBlock` (canvases custom como Diagnóstico/Handoff). Agentes que apuntan a canvases custom DEBEN estar en `BLOCK_FORMAT_AGENT_IDS` y su prompt debe devolver `{ sections: [{ key, blocks: [...] }] }`. Sino sus cards se persisten pero NO se renderizan.
 
 ---
 
@@ -414,3 +420,4 @@ La regla operativa para futuro: **no exponer ningún endpoint externo nuevo sin 
   - **Fase D**: middleware acepta `/external/` y `/api/external/` como públicos. `POST /api/external/verify-access` valida token+pass con rate limit in-memory (5 fallos/5min → 10min bloqueo, 429) y protección anti-timing-leak. Página pública `/external/verify/[token]` con form de password (cero recursos externos: Next.js self-hostea Geist en build, sin CDN ni Google Fonts en runtime). Componente `ExternalAccessButton` agregado al toolbar de `ProjectCanvasPanel` (al lado de "Compartir" legacy — son features distintas).
   - **Fase E**: TS baseline mantenido en 29 errores. Smoke E2E confirmado: generar acceso → URL + pass → cliente entra en incógnito → password mala denegada → revocar bloquea acceso → regenerar permite entrada nueva. Sección 13 reorganizada para listar los próximos planes del módulo externo (landing real, agente de handoff, publicación).
   - **Sigue abierto** (intencionalmente, no son 🔴): policies SELECT para el cliente externo (se deciden al diseñar el landing), cifrado de tokens HubSpot (deuda 🟡 #17), token-en-URL como debt de seguridad (mitigado por la contraseña hoy, hay que evaluar mover el token fuera de la URL al construir el landing).
+- **2026-06-03** — Fase 2 del módulo externo: agente "Análisis inicial" reorientado a **"Handoff Sales→CS"** (id `cmmla1g1x00005wijix3qnr7u` preservado; agentGroup `preparacion`→`handoff`; 9 cards→8 secciones laser-focused; sin `suggestions`). Canvas **"Handoff"** agregado a `DEFAULT_PROJECT_CANVASES` con 8 secciones (`acuerdos_promesas` primero por criticidad), migrado retroactivamente a 109 proyectos. Modelos nuevos: **`ProjectTimeline`** (1:1 con Project, anchorStartDate opcional, FK a AgentRun que lo generó) + **`TimelinePhase`** (name, order, durationWeeks, sessionCount, notes, enum source AGENT/MODIFIED/HUMAN). Endpoints `GET/PUT/DELETE /api/projects/[id]/timeline` con guard + diff bulk transaccional + validador inline. Categoría `🤝 Handoff` agregada como **primera** en `lib/agent-groups.ts` (UI). Agente migrado al **block format** (`useBlockFormat` ahora es un `Set` que incluye al Handoff) — los canvases custom renderizan `CanvasBlock`, no `ClientContextCard`. Helper `persistTimelineFromAgentOutput` extraído para llamarse desde ambos branches del endpoint analyze. El agente **NUNCA pisa el cronograma existente** al re-ejecutarse — la propuesta queda solo en `AgentRun.output`. Ya no quedan ítems 🔴, ya no queda ítem (a)/(b) de los próximos planes externos.

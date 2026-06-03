@@ -12,38 +12,45 @@ export interface AgentGroupDef {
 
 export const AGENT_GROUPS: AgentGroupDef[] = [
   {
+    key: "handoff",
+    label: "Handoff",
+    description: "Traspaso de Ventas a CS al cerrar un deal",
+    order: 0,
+    icon: "🤝",
+  },
+  {
     key: "preparacion",
     label: "Preparación",
     description: "Lo que se hace al arrancar con un cliente",
-    order: 0,
+    order: 1,
     icon: "🔍",
   },
   {
     key: "diagnostico",
     label: "Diagnóstico",
     description: "Lo que se hace para entender al cliente",
-    order: 1,
+    order: 2,
     icon: "🔬",
   },
   {
     key: "planificacion",
     label: "Planificación",
     description: "Diseño de la solución y roadmap",
-    order: 2,
+    order: 3,
     icon: "📐",
   },
   {
     key: "ejecucion",
     label: "Ejecución",
     description: "Implementación y configuración",
-    order: 3,
+    order: 4,
     icon: "⚡",
   },
   {
     key: "adopcion",
     label: "Adopción",
     description: "Entrenamiento, piloto y evolución continua",
-    order: 4,
+    order: 5,
     icon: "🚀",
   },
 ];

@@ -181,6 +181,59 @@ model Project {
   sessions     SessionProject[]
   participantSnapshot ProjectParticipantSnapshot?
   externalAccess      ProjectExternalAccess?
+  timeline            ProjectTimeline?
+}
+
+// ─── ProjectTimeline + TimelinePhase ──────────────────────────────────────────
+// Cronograma estructurado del proyecto (Fase 2 del módulo externo).
+//
+// Lo propone el agente "Handoff Sales→CS" a partir de las transcripciones de
+// ventas (donde típicamente se acuerda la secuencia: "kick-off + arquitectura
+// + 6 sesiones de set up + 6 de onboarding, 10 semanas total"). El CSE lo
+// edita libremente. Las fases tienen duración en SEMANAS, sin fechas concretas
+// — el `anchorStartDate` (opcional) es el ancla; las fechas reales del landing
+// se calculan en runtime como `anchorStartDate + sum(durationWeeks_anteriores) * 7 días`.
+//
+// Patrón de re-ejecución: el agente solo crea el cronograma si NO existe. Si
+// ya hay uno, la nueva propuesta queda en AgentRun.output (trazabilidad) pero
+// no se aplica — para regenerar, el CSE borra explícitamente y vuelve a correr.
+
+model ProjectTimeline {
+  id                    String          @id @default(cuid())
+  projectId             String          @unique
+  project               Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  anchorStartDate       DateTime?       // null hasta que el CSE la fije; cuando exista, define la conversión semanas → fechas
+  lastEditedByHuman     DateTime?       // se actualiza en cada PUT que toca fases (no en el create del agente)
+  generatedByAgentRunId String?         // de qué AgentRun salió la propuesta inicial (trazabilidad)
+  generatedByAgentRun   AgentRun?       @relation(fields: [generatedByAgentRunId], references: [id], onDelete: SetNull)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  phases                TimelinePhase[]
+
+  @@index([projectId])
+}
+
+model TimelinePhase {
+  id            String              @id @default(cuid())
+  timelineId    String
+  timeline      ProjectTimeline     @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  name          String                                  // "Kick-off", "Arquitectura", etc.
+  order         Int                                     // 0-indexed, posición en la secuencia
+  durationWeeks Int                 @default(1)         // 1+
+  sessionCount  Int?                                    // opcional — algunas fases no son por sesiones
+  notes         String?             @db.Text            // texto libre opcional (contexto editable)
+  source        TimelinePhaseSource @default(AGENT)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([timelineId, order])
+}
+
+enum TimelinePhaseSource {
+  AGENT      // generada por la IA, sin tocar humano
+  MODIFIED   // generada por IA, editada por humano (al pasar por PUT con id existente)
+  HUMAN      // creada desde cero por humano (PUT con phase sin id)
 }
 
 // ─── ProjectExternalAccess ────────────────────────────────────────────────────
@@ -450,8 +503,8 @@ model Agent {
   agentType              AgentType       @default(SECTION)
   defaultCanvasSection   String?         // Sección del canvas de proyecto sugerida al enviar cards (ej. "procesos")
   // Agrupación por propósito (reemplaza stages/steps para la UI)
-  agentGroup             String?         // preparacion | diagnostico | planificacion | ejecucion | adopcion
-  groupOrder             Int             @default(0) // Orden del grupo: 0=preparacion, 1=diagnostico, 2=planificacion, 3=ejecucion, 4=adopcion
+  agentGroup             String?         // handoff | preparacion | diagnostico | planificacion | ejecucion | adopcion (ver lib/agent-groups.ts)
+  groupOrder             Int             @default(0) // Orden DENTRO de su grupo (no del grupo). Para chaining: agentes con groupOrder menor se inyectan como contexto a los mayores del mismo grupo.
   // IDs de KnowledgeDocument inyectados sin truncar al prompt del agente (referencia principal)
   pinnedKnowledgeIds     String[]        @default([])
 
@@ -487,8 +540,9 @@ model AgentRun {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  cards  ClientContextCard[]
-  blocks CanvasBlock[]
+  cards              ClientContextCard[]
+  blocks             CanvasBlock[]
+  generatedTimelines ProjectTimeline[]
 
   @@index([status])
   @@index([clientId, agentSlug, createdAt])

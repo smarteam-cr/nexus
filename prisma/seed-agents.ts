@@ -11,6 +11,13 @@ const prisma = new PrismaClient({ adapter });
 
 // ── System prompts ─────────────────────────────────────────────────────────────
 
+/**
+ * @deprecated Junio 2026 — el agente "Análisis inicial" fue reorientado a
+ * "Handoff Sales→CS" en la Fase 2 del módulo externo. Las 9 cards originales
+ * se redujeron a 8 con foco laser-handoff + cronograma estructurado.
+ * Definición actual: scripts/seed-handoff-agent.ts (no este archivo).
+ * Este JSON_SCHEMA queda como referencia histórica.
+ */
 const JSON_SCHEMA = `{
   "cards": [
     { "title": "Contexto relación comercial", "content": "..." },

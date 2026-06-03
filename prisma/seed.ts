@@ -471,6 +471,11 @@ FORMATO (JSON válido, sin markdown):
 }`,
     },
     {
+      // @deprecated Junio 2026 — este agente fue REORIENTADO a "Handoff Sales→CS"
+      // en la Fase 2 del módulo externo. La definición ACTUAL (name, prompt,
+      // agentGroup, defaultCanvasSection) vive en scripts/seed-handoff-agent.ts
+      // y se aplica con `npx tsx scripts/seed-handoff-agent.ts`. Esta entrada
+      // queda como referencia histórica del estado pre-reorientación.
       id: "cmmla1g1x00005wijix3qnr7u",
       name: "Análisis inicial",
       description:
