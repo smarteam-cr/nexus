@@ -11,6 +11,8 @@ import { getOutputFormatInstructions, getBlockOutputFormatInstructions } from "@
 import { DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN, type BlockType } from "@/lib/canvas/block-types";
 import { postProcessCards } from "@/lib/canvas/post-process";
 import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
+import { AGENT_GROUP_TO_CANVAS } from "@/lib/canvas/default-canvases";
+import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -919,15 +921,7 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   const isCardsAndFlowcharts = agent.outputType === "CARDS_AND_FLOWCHARTS";
 
   // ── 9a2. Resolver canvas destino para agentes no-default ────────────────────
-  // TODO: deuda 🟡 — este mapping está duplicado en lib/canvas/default-canvases.ts.
-  // Si agregás un agentGroup nuevo, sincronizá los dos. Pendiente de centralización.
-  const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
-    diagnostico: "Diagnóstico",
-    planificacion: "Planificación",
-    ejecucion: "Ejecución",
-    adopcion: "Adopción",
-    handoff: "Handoff",
-  };
+  // AGENT_GROUP_TO_CANVAS se importa de lib/canvas/default-canvases.ts (fuente única).
   let targetCanvasId: string | null = null;
   if (bodyProjectId && agent.agentGroup && AGENT_GROUP_TO_CANVAS[agent.agentGroup]) {
     const targetCanvas = await prisma.projectCanvas.findFirst({
@@ -977,6 +971,7 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   const BLOCK_FORMAT_AGENT_IDS = new Set([
     "agent-diagnostico-canvas",
     "cmmla1g1x00005wijix3qnr7u", // Handoff Sales→CS (Fase 2 módulo externo)
+    "agent-kickoff-canvas",      // Kickoff landing (Fase A)
   ]);
   const useBlockFormat = !!targetCanvasId && BLOCK_FORMAT_AGENT_IDS.has(agent.id);
   if (targetCanvasId) {
@@ -1112,7 +1107,7 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
       .map(({ title, content, source }) => ({ title, content, source }));
   }
 
-  const userMessage = `Empresa: ${companyName}
+  const baseUserMessage = `Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
 Notas base: ${client.notes ?? "Sin notas"}
 ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}` : ""}
@@ -1155,6 +1150,24 @@ ${[
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
 ].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, isHandoffAgent ? 12000 : 4000)}\n\n` : ""}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
+
+  // ── 10b. Input del agente Kickoff ─────────────────────────────────────────────
+  // El Kickoff NO consume las fuentes crudas (transcripts/docs/deal): su input es
+  // el HANDOFF ya curado (bloques CONFIRMED) + el cronograma. Gateado por id para
+  // no afectar a ningún otro agente (diagnóstico, handoff, etc. quedan intactos).
+  const isKickoffAgent = agent.id === "agent-kickoff-canvas";
+  let userMessage = baseUserMessage;
+  if (isKickoffAgent && bodyProjectId) {
+    const handoffCtx = await loadCanvasContext(bodyProjectId, "Handoff", { onlyConfirmed: true });
+    const timelineCtx = await loadTimelineContext(bodyProjectId);
+    userMessage = `Empresa: ${companyName}
+Industria: ${client.industry ?? "No especificada"}
+${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}
+=== HANDOFF CURADO (bloques confirmados por el CSE — ESTA ES TU ÚNICA FUENTE) ===
+${handoffCtx || "(Sin handoff confirmado todavía. Indicá en cada sección que falta el handoff; no inventes contenido.)"}
+
+${timelineCtx ? `${timelineCtx}\n\n` : ""}Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: tono cliente, sin inflar alcance/objetivos (solo lo respaldado por el handoff), métricas como propuesta de Smarteam si no están explícitas, y NO reproduzcas el cronograma en prosa (la plantilla lo muestra aparte).`;
+  }
 
   // ── 11. Llamar a Claude ───────────────────────────────────────────────────────
   const maxTokens = 16000;

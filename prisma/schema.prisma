@@ -99,6 +99,7 @@ enum BlockType {
 enum BlockSource {
   AGENT
   HUMAN
+  MODIFIED // generado por IA, editado por un humano (CSE)
 }
 
 enum BlockStatus {

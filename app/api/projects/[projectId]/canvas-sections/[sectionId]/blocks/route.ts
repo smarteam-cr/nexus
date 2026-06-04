@@ -60,6 +60,14 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
   if ("colStart" in body) updateData.colStart = body.colStart === null ? null : Math.min(4, Math.max(1, Number(body.colStart)));
   if ("rowSpan" in body) updateData.rowSpan = Math.max(1, Number(body.rowSpan));
 
+  // Si el CSE edita contenido/datos de un bloque generado por IA, marcarlo
+  // MODIFIED (señal para el agente de kickoff: "esto lo tocó un humano, respetalo").
+  // Replica el patrón del PUT de /timeline con TimelinePhase. Cambios de solo
+  // status (aceptar/rechazar) NO tocan source.
+  if (("content" in body || "data" in body) && block.source === "AGENT") {
+    updateData.source = "MODIFIED";
+  }
+
   const updated = await prisma.canvasBlock.update({
     where: { id: body.blockId },
     data: updateData,

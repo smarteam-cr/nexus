@@ -19,6 +19,13 @@ export const AGENT_GROUPS: AgentGroupDef[] = [
     icon: "🤝",
   },
   {
+    key: "kickoff",
+    label: "Kickoff",
+    description: "Landing de arranque para el cliente (a partir del handoff curado)",
+    order: 0.5,
+    icon: "🏁",
+  },
+  {
     key: "preparacion",
     label: "Preparación",
     description: "Lo que se hace al arrancar con un cliente",

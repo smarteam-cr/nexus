@@ -74,17 +74,36 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
       { key: "riesgos_banderas",     label: "Riesgos y banderas rojas" },
     ],
   },
+  {
+    // Kickoff (Fase A): landing de arranque DE CARA AL CLIENTE, generada por el
+    // agente "agent-kickoff-canvas" a partir del Handoff curado (bloques CONFIRMED)
+    // + el cronograma. Subconjunto curado y con tono distinto al Handoff: NO
+    // incluye secciones internas (riesgos, "por qué vendimos", acuerdos de CS).
+    // El cronograma NO es una sección — la plantilla lo pinta desde ProjectTimeline.
+    // Se aplica retroactivamente con scripts/migrate-add-kickoff-canvas.ts.
+    name: "Kickoff",
+    isDefault: false,
+    sections: [
+      { key: "bienvenida",     label: "Bienvenida y contexto" },
+      { key: "objetivos",      label: "Objetivos del proyecto" },
+      { key: "alcance",        label: "Alcance: qué incluye" },
+      { key: "tu_rol",         label: "Lo que necesitamos de tu equipo" },
+      { key: "metricas_exito", label: "Cómo mediremos el éxito" },
+      { key: "proximos_pasos", label: "Próximos pasos" },
+    ],
+  },
 ];
 
-/** Map from agentGroup to canvas name for routing cards.
- *  TODO: deuda 🟡 — este mapping está duplicado en app/api/clients/[id]/analyze/route.ts.
- *  Si agregás un agentGroup nuevo, sincronizá los dos. Pendiente de centralización. */
+/** Map from agentGroup to canvas name for routing cards/blocks.
+ *  Fuente ÚNICA — app/api/clients/[id]/analyze/route.ts la importa de acá
+ *  (antes estaba duplicada; centralizada en Kickoff Fase A). */
 export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
   diagnostico: "Diagnóstico",
   planificacion: "Planificación",
   ejecucion: "Ejecución",
   adopcion: "Adopción",
   handoff: "Handoff",
+  kickoff: "Kickoff",
 };
 
 /** Create all standard canvases for a project with CanvasSection records. */

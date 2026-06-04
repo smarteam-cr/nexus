@@ -100,13 +100,24 @@ export default function BlockRenderer({
           </div>
         </div>
 
-        {/* Toolbar — top right */}
+        {/* Toolbar — top right. Visible siempre para bloques no-AGENT (señal de
+            que un humano los tocó) y en hover/draft/edición para el resto. */}
         <div className={`absolute top-1.5 right-1.5 z-10 flex items-center gap-1.5 transition-opacity ${
-          editing || isDraft ? "opacity-100" : "opacity-0 group-hover/block:opacity-100"
+          editing || isDraft || block.source !== "AGENT" ? "opacity-100" : "opacity-0 group-hover/block:opacity-100"
         }`}>
           <span className="text-[9px] font-medium text-gray-400 bg-white border border-gray-200 px-1.5 py-0.5 rounded shadow-sm">
             {BLOCK_TYPE_LABELS[block.blockType] ?? block.blockType}
           </span>
+          {block.source === "MODIFIED" && (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-violet-600 bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded" title="Editado por un humano sobre la propuesta de la IA">
+              Modificado
+            </span>
+          )}
+          {block.source === "HUMAN" && (
+            <span className="text-[9px] font-medium uppercase tracking-wider text-gray-500 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded" title="Creado manualmente por el CSE">
+              Manual
+            </span>
+          )}
           {isDraft && onAccept && onReject && (
             <>
               <span className="text-[9px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">

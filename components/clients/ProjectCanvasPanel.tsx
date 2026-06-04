@@ -9,6 +9,8 @@ import ProjectGPS from "./ProjectGPS";
 import SectionDiscoveryModal from "./SectionDiscoveryModal";
 import HubBadge from "@/components/ui/HubBadge";
 import SectionBlockList from "@/components/canvas/SectionBlockList";
+import CanvasLinearView from "@/components/canvas/CanvasLinearView";
+import KickoffLanding from "@/components/canvas/KickoffLanding";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 
 const FlowchartViewer = dynamic(
@@ -604,8 +606,18 @@ export default function ProjectCanvasPanel({
         </div>
       )}
 
-      {/* Non-default canvases: render blocks via SectionBlockList */}
-      {!isDefaultCanvas && activeCanvasId && (
+      {/* Handoff: vista lineal (lectura/curación del CSE, sin grilla) */}
+      {!isDefaultCanvas && activeCanvas?.name === "Handoff" && activeCanvasId && (
+        <CanvasLinearView projectId={projectId} canvasId={activeCanvasId} />
+      )}
+
+      {/* Kickoff: landing (Camino C) editable in-situ por el CSE */}
+      {!isDefaultCanvas && activeCanvas?.name === "Kickoff" && activeCanvasId && (
+        <KickoffLanding projectId={projectId} canvasId={activeCanvasId} editable />
+      )}
+
+      {/* Resto de canvases custom: grilla de bloques (Diagnóstico, Planificación, …) */}
+      {!isDefaultCanvas && activeCanvas?.name !== "Handoff" && activeCanvas?.name !== "Kickoff" && activeCanvasId && (
         <SectionBlockList projectId={projectId} canvasId={activeCanvasId} />
       )}
 
