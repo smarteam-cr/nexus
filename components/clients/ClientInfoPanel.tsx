@@ -20,13 +20,14 @@ import { useParams } from "next/navigation";
 import SectionBlockList from "@/components/canvas/SectionBlockList";
 import DocumentUpload from "./DocumentUpload";
 
-type SubTab = "docs" | "stakeholders" | "retos" | "oportunidades";
+type SubTab = "docs" | "stakeholders" | "retos" | "oportunidades" | "procesos";
 
 const TABS: { key: SubTab; label: string }[] = [
   { key: "docs",          label: "Documentos" },
   { key: "stakeholders",  label: "Stakeholders" },
   { key: "retos",         label: "Retos estratégicos" },
   { key: "oportunidades", label: "Oportunidades" },
+  { key: "procesos",      label: "Procesos" },
 ];
 
 export default function ClientInfoPanel({
@@ -101,6 +102,10 @@ export default function ClientInfoPanel({
 
         {tab === "oportunidades" && (
           <SectionBlockList projectId={projectId} canvasId={canvasId} onlyKey="oportunidades" />
+        )}
+
+        {tab === "procesos" && (
+          <SectionBlockList projectId={projectId} canvasId={canvasId} onlyKey="procesos" />
         )}
       </div>
     </div>

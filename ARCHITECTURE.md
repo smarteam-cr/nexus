@@ -377,6 +377,8 @@ Cosas que duelen, pero el módulo externo puede abrirse sin tenerlas resueltas (
 20. **Reconciliar `lib/matching/cascade.ts` vs `lib/sessions/categorize.ts`** (nombres similares, conceptos solapados).
 21. **Rotar la `sb_secret_...` de Supabase Auth** (quedó en transcript de chat al pegarla durante setup). No urgente porque hoy no se usa server-side activamente, pero higiénico.
 22. **Aplicar `requireAccessToClient` al resto de endpoints fuera del onboarding**: `/api/hubspot/*`, `/api/knowledge/*`, `/api/agents/*`, `/api/sales/*`, `/api/audits/*`. Hoy quedan con `requireConsultantSession` (gate por sesión) pero sin ownership.
+23. **Re-apuntar el agente `preparacion` (DEUDA del retiro del Resumen).** El grupo `preparacion` todavía emite `ClientContextCard` a `canvasSection="procesos"` (vía `GROUP_TO_SECTION` en `app/api/clients/[id]/analyze/route.ts`) — un sistema RETIRADO: el canvas Resumen se eliminó y "procesos" ahora vive como `CanvasBlock` en "Información del cliente". Mientras esto no se cierre, **cada corrida de `preparacion` escribe cards que ya no se renderizan en ningún lado**. Cerrar = migrar el agente a block-format y rutear su salida a la sección `procesos` del canvas de Información del cliente (cross-project: el strategy project `__strategy__` del cliente). La data EXISTENTE ya se migró con `scripts/migrate-procesos-to-blocks.ts`.
+24. **Limpiar el subsistema de cards muerto en `ProjectCanvasPanel.tsx`.** Tras el retiro del Resumen, `isResumenCanvas` es siempre false y toda la grilla masonry de cards + las effects de `canvas-cards` + sus handlers quedan como código muerto (gateado y marcado DEPRECATED). Borrarlo junto al endpoint `app/api/projects/[id]/canvas-cards` y `DEFAULT_SECTIONS`. (Relacionado con el ítem 10.)
 
 ---
 

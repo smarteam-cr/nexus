@@ -8,6 +8,7 @@ const CLIENT_INFO_SECTIONS = [
   { key: "stakeholders",       label: "Stakeholders" },
   { key: "retos_estrategicos", label: "Retos Estratégicos" },
   { key: "oportunidades",      label: "Oportunidades" },
+  { key: "procesos",           label: "Procesos" }, // migrado del ex-canvas Resumen
 ];
 
 // Nombre interno del project — se mantiene el sentinel "__strategy__" como
@@ -30,51 +31,54 @@ export interface ClientInfoProjectRef {
 export async function ensureClientInfoProject(clientId: string): Promise<ClientInfoProjectRef> {
   const existing = await prisma.project.findFirst({
     where: { clientId, serviceType: SENTINEL_SERVICE_TYPE },
-    include: { canvases: { take: 1, select: { id: true } } },
+    select: { id: true },
   });
+
+  let projectId: string;
+  let canvasId: string;
 
   if (existing) {
-    const canvasId = existing.canvases[0]?.id;
-    if (canvasId) return { projectId: existing.id, canvasId };
-
-    const canvas = await prisma.projectCanvas.create({
-      data: { projectId: existing.id, name: CANVAS_NAME, isDefault: false },
+    projectId = existing.id;
+    // Buscar el canvas por NOMBRE (no canvases[0]): algunos sentinel arrastran
+    // canvases Handoff/Kickoff de migraciones viejas, y canvases[0] sin orderBy
+    // podría devolver el equivocado y romper las pestañas de Información del cliente.
+    const named = await prisma.projectCanvas.findFirst({
+      where: { projectId: existing.id, name: CANVAS_NAME },
+      select: { id: true },
     });
-    await prisma.canvasSection.createMany({
-      data: CLIENT_INFO_SECTIONS.map((s, i) => ({
-        canvasId: canvas.id,
-        key: s.key,
-        label: s.label,
-        order: i,
-      })),
+    canvasId =
+      named?.id ??
+      (
+        await prisma.projectCanvas.create({
+          data: { projectId: existing.id, name: CANVAS_NAME, isDefault: false },
+        })
+      ).id;
+  } else {
+    const project = await prisma.project.create({
+      data: {
+        clientId,
+        name: PROJECT_NAME,
+        serviceType: SENTINEL_SERVICE_TYPE,
+        projectType: "USE_CASE",
+        status: "active",
+      },
     });
-    return { projectId: existing.id, canvasId: canvas.id };
+    projectId = project.id;
+    canvasId = (
+      await prisma.projectCanvas.create({
+        data: { projectId: project.id, name: CANVAS_NAME, isDefault: false },
+      })
+    ).id;
   }
 
-  const project = await prisma.project.create({
-    data: {
-      clientId,
-      name: PROJECT_NAME,
-      serviceType: SENTINEL_SERVICE_TYPE,
-      projectType: "USE_CASE",
-      status: "active",
-    },
-  });
-
-  const canvas = await prisma.projectCanvas.create({
-    data: { projectId: project.id, name: CANVAS_NAME, isDefault: false },
-  });
-
+  // Asegura TODAS las secciones (idempotente vía @@unique([canvasId, key])): así
+  // los canvases viejos reciben la sección "procesos" en el próximo load.
   await prisma.canvasSection.createMany({
-    data: CLIENT_INFO_SECTIONS.map((s, i) => ({
-      canvasId: canvas.id,
-      key: s.key,
-      label: s.label,
-      order: i,
-    })),
+    data: CLIENT_INFO_SECTIONS.map((s, i) => ({ canvasId, key: s.key, label: s.label, order: i })),
+    skipDuplicates: true,
   });
 
-  return { projectId: project.id, canvasId: canvas.id };
+  return { projectId, canvasId };
 }
 
 // Alias legacy para no romper imports existentes que aún llamen
