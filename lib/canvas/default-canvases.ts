@@ -3,18 +3,55 @@ import { prisma } from "@/lib/db/prisma";
 type CanvasDefinition = {
   name: string;
   isDefault: boolean;
+  order: number;
   sections: Array<{ key: string; label: string }>;
 };
 
+// Orden = flujo real del onboarding: Handoff → Kickoff → Diagnóstico →
+// Planificación → Cronograma. El array ES la fuente del `order`. El ancla/default
+// (isDefault → fallback cuando no hay canvas elegido + no borrable desde la UI) es
+// KICKOFF, no Handoff: Handoff migrará a nivel cliente, así que Kickoff es estable.
 export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
   {
-    name: "Resumen",
+    // Handoff (Fase 2 del módulo externo): traspaso Sales→CS. Primero en el
+    // dropdown (order 0) pero NO es el ancla (Handoff migrará a nivel cliente).
+    // Cada sección 1:1 con una card del agente "Handoff Sales→CS".
+    // Se aplica retroactivamente con scripts/migrate-add-handoff-canvas.ts.
+    name: "Handoff",
+    isDefault: false,
+    order: 0,
+    sections: [
+      { key: "acuerdos_promesas",    label: "Acuerdos clave y promesas especiales" },
+      { key: "alcance_contratado",   label: "¿Qué vendimos?" },
+      { key: "motivacion_decision",  label: "¿Por qué vendimos? (por qué nos eligieron)" },
+      { key: "dolor_principal",      label: "Dolor principal" },
+      { key: "expectativas",         label: "Expectativas del cliente" },
+      { key: "stakeholders_handoff", label: "Stakeholders clave" },
+      { key: "estado_en_flight",     label: "Proyectos y avances en curso" },
+      { key: "riesgos_banderas",     label: "Riesgos y banderas rojas" },
+    ],
+  },
+  {
+    // Kickoff (Fase A): landing de arranque DE CARA AL CLIENTE. El cronograma NO
+    // es una sección — la plantilla lo pinta desde ProjectTimeline. ANCLA/default
+    // del proyecto (isDefault → fallback cuando no hay canvas seleccionado + no
+    // borrable desde la UI). Handoff dejará de ser canvas de proyecto pronto.
+    name: "Kickoff",
     isDefault: true,
-    sections: [], // Usa DEFAULT_SECTIONS hardcoded en canvas-cards API
+    order: 1,
+    sections: [
+      { key: "bienvenida",     label: "Bienvenida y contexto" },
+      { key: "objetivos",      label: "Objetivos del proyecto" },
+      { key: "alcance",        label: "Alcance: qué incluye" },
+      { key: "tu_rol",         label: "Lo que necesitamos de tu equipo" },
+      { key: "metricas_exito", label: "Cómo mediremos el éxito" },
+      { key: "proximos_pasos", label: "Próximos pasos" },
+    ],
   },
   {
     name: "Diagnóstico",
     isDefault: false,
+    order: 2,
     sections: [
       { key: "contexto_alcance", label: "Contexto y alcance" },
       { key: "estado_actual", label: "Estado actual (Current State)" },
@@ -29,6 +66,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
   {
     name: "Planificación",
     isDefault: false,
+    order: 3,
     sections: [
       { key: "arquitectura_solucion", label: "Arquitectura de la solución" },
       { key: "roadmap", label: "Roadmap de implementación" },
@@ -37,60 +75,13 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     ],
   },
   {
-    name: "Ejecución",
+    // Cronograma: editor del ProjectTimeline (fases/semanas/sesiones). NO tiene
+    // CanvasSection — lo respalda ProjectTimeline (fuente única; el Kickoff lo
+    // refleja). Render especial en ProjectCanvasPanel (branch name==="Cronograma").
+    name: "Cronograma",
     isDefault: false,
-    sections: [
-      { key: "configuracion", label: "Configuración y setup" },
-      { key: "desarrollo", label: "Desarrollo y personalización" },
-      { key: "integraciones", label: "Integraciones" },
-      { key: "qa_testing", label: "QA y testing" },
-    ],
-  },
-  {
-    name: "Adopción",
-    isDefault: false,
-    sections: [
-      { key: "capacitacion", label: "Capacitación" },
-      { key: "piloto", label: "Piloto y feedback" },
-      { key: "escalamiento", label: "Escalamiento" },
-      { key: "mejora_continua", label: "Mejora continua" },
-    ],
-  },
-  {
-    // Fase 2 del módulo externo: handoff Sales→CS. Cada sección 1:1 con una
-    // card del agente "Handoff Sales→CS" (matching exacto por canvasSection).
-    // Se aplica retroactivamente a proyectos existentes con
-    // scripts/migrate-add-handoff-canvas.ts.
-    name: "Handoff",
-    isDefault: false,
-    sections: [
-      { key: "acuerdos_promesas",    label: "Acuerdos clave y promesas especiales" },
-      { key: "alcance_contratado",   label: "¿Qué vendimos?" },
-      { key: "motivacion_decision",  label: "¿Por qué vendimos? (por qué nos eligieron)" },
-      { key: "dolor_principal",      label: "Dolor principal" },
-      { key: "expectativas",         label: "Expectativas del cliente" },
-      { key: "stakeholders_handoff", label: "Stakeholders clave" },
-      { key: "estado_en_flight",     label: "Proyectos y avances en curso" },
-      { key: "riesgos_banderas",     label: "Riesgos y banderas rojas" },
-    ],
-  },
-  {
-    // Kickoff (Fase A): landing de arranque DE CARA AL CLIENTE, generada por el
-    // agente "agent-kickoff-canvas" a partir del Handoff curado (bloques CONFIRMED)
-    // + el cronograma. Subconjunto curado y con tono distinto al Handoff: NO
-    // incluye secciones internas (riesgos, "por qué vendimos", acuerdos de CS).
-    // El cronograma NO es una sección — la plantilla lo pinta desde ProjectTimeline.
-    // Se aplica retroactivamente con scripts/migrate-add-kickoff-canvas.ts.
-    name: "Kickoff",
-    isDefault: false,
-    sections: [
-      { key: "bienvenida",     label: "Bienvenida y contexto" },
-      { key: "objetivos",      label: "Objetivos del proyecto" },
-      { key: "alcance",        label: "Alcance: qué incluye" },
-      { key: "tu_rol",         label: "Lo que necesitamos de tu equipo" },
-      { key: "metricas_exito", label: "Cómo mediremos el éxito" },
-      { key: "proximos_pasos", label: "Próximos pasos" },
-    ],
+    order: 4,
+    sections: [],
   },
 ];
 
@@ -100,8 +91,6 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
 export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
   diagnostico: "Diagnóstico",
   planificacion: "Planificación",
-  ejecucion: "Ejecución",
-  adopcion: "Adopción",
   handoff: "Handoff",
   kickoff: "Kickoff",
 };
@@ -114,13 +103,15 @@ export async function createDefaultCanvases(projectId: string) {
       projectId,
       name: c.name,
       isDefault: c.isDefault,
+      order: c.order,
       sections: c.sections, // Keep JSON for backward compat
     })),
   });
 
-  // Create CanvasSection records for non-default canvases
+  // Create CanvasSection records for every canvas that defines sections (incl.
+  // the home canvas Handoff). Canvases sin secciones (Cronograma) no llevan.
   const createdCanvases = await prisma.projectCanvas.findMany({
-    where: { projectId, isDefault: false },
+    where: { projectId },
     select: { id: true, name: true },
   });
 

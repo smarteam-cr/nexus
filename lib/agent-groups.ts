@@ -46,20 +46,6 @@ export const AGENT_GROUPS: AgentGroupDef[] = [
     order: 3,
     icon: "📐",
   },
-  {
-    key: "ejecucion",
-    label: "Ejecución",
-    description: "Implementación y configuración",
-    order: 4,
-    icon: "⚡",
-  },
-  {
-    key: "adopcion",
-    label: "Adopción",
-    description: "Entrenamiento, piloto y evolución continua",
-    order: 5,
-    icon: "🚀",
-  },
 ];
 
 export const GROUP_BY_KEY = Object.fromEntries(

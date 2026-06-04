@@ -13,11 +13,12 @@ export async function GET(
 
   const canvases = await prisma.projectCanvas.findMany({
     where: { projectId },
-    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,
       name: true,
       isDefault: true,
+      order: true,
       sections: true,
       createdAt: true,
     },
