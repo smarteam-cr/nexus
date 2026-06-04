@@ -11,6 +11,7 @@ import HubBadge from "@/components/ui/HubBadge";
 import SectionBlockList from "@/components/canvas/SectionBlockList";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import KickoffLanding from "@/components/canvas/KickoffLanding";
+import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 
 const FlowchartViewer = dynamic(
@@ -98,8 +99,11 @@ export default function ProjectCanvasPanel({
   const [addingSectionName, setAddingSectionName] = useState<string | null>(null);
   const canvasDropdownRef = useRef<HTMLDivElement>(null);
 
-  const activeCanvas = canvases.find((c) => c.id === activeCanvasId) ?? canvases.find((c) => c.isDefault) ?? null;
-  const isDefaultCanvas = activeCanvas?.isDefault ?? true;
+  const activeCanvas = canvases.find((c) => c.id === activeCanvasId) ?? canvases.find((c) => c.isDefault) ?? canvases[0] ?? null;
+  // El render se ramifica por NOMBRE, no por isDefault (Handoff es el "home" pero
+  // NO es el canvas de cards). isResumenCanvas gobierna solo la UI legacy del Resumen
+  // (cards + GPS), que se retira en la fase final.
+  const isResumenCanvas = activeCanvas?.name === "Resumen";
 
   // Update URL when canvas changes (no page reload)
   const switchCanvas = useCallback((canvasId: string) => {
@@ -234,26 +238,26 @@ export default function ProjectCanvasPanel({
 
   // Card fetch + polling only for default canvas (non-default uses SectionBlockList)
   const fetchCanvasCards = useCallback(async () => {
-    if (!activeCanvasId || !isDefaultCanvas) return;
+    if (!activeCanvasId || !isResumenCanvas) return;
     try {
       const res = await fetch(`/api/projects/${projectId}/canvas-cards`);
       const data = await res.json();
       setSections(data.sections ?? []);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [projectId, activeCanvasId, isDefaultCanvas]);
+  }, [projectId, activeCanvasId, isResumenCanvas]);
 
   const canvasesLoaded = canvases.length > 0;
   useEffect(() => {
-    if (canvasesLoaded && isDefaultCanvas) fetchCanvasCards();
-    if (canvasesLoaded && !isDefaultCanvas) setLoading(false);
-  }, [fetchCanvasCards, canvasesLoaded, isDefaultCanvas]);
+    if (canvasesLoaded && isResumenCanvas) fetchCanvasCards();
+    if (canvasesLoaded && !isResumenCanvas) setLoading(false);
+  }, [fetchCanvasCards, canvasesLoaded, isResumenCanvas]);
 
   const lastDraftCount = useRef(0);
   const fetchRef = useRef(fetchCanvasCards);
   fetchRef.current = fetchCanvasCards;
   useEffect(() => {
-    if (!activeCanvasId || !isDefaultCanvas) return;
+    if (!activeCanvasId || !isResumenCanvas) return;
     const interval = setInterval(() => {
       fetch(`/api/projects/${projectId}/canvas-cards`)
         .then((r) => r.json())
@@ -268,7 +272,7 @@ export default function ProjectCanvasPanel({
         .catch(() => {});
     }, 5000);
     return () => clearInterval(interval);
-  }, [projectId, activeCanvasId, isDefaultCanvas]);
+  }, [projectId, activeCanvasId, isResumenCanvas]);
 
   const toggleSection = (key: string) => {
     setCollapsedSections((prev) => {
@@ -410,6 +414,10 @@ export default function ProjectCanvasPanel({
 
   return (
     <div className="px-6 py-8 space-y-6">
+      {/* Widget del proyecto — SIEMPRE visible en la cabecera (antes vivía dentro
+          del canvas Resumen). Última/próxima sesión, estado actual, pendientes. */}
+      <ProjectGPS projectId={projectId} clientId={clientId} />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -471,9 +479,9 @@ export default function ProjectCanvasPanel({
                 </div>
               )}
             </div>
-            {isDefaultCanvas && <HubBadge tags={tags} serviceType={serviceType} size="sm" />}
+            {isResumenCanvas && <HubBadge tags={tags} serviceType={serviceType} size="sm" />}
           </div>
-          {isDefaultCanvas && (
+          {isResumenCanvas && (
             <p className="text-sm text-gray-400 mt-0.5">
               {totalCards > 0
                 ? `${totalCards} card${totalCards !== 1 ? "s" : ""} en el canvas`
@@ -484,7 +492,7 @@ export default function ProjectCanvasPanel({
         <div className="flex items-center gap-2">
           {/* Export PDF — siempre disponible (default y custom canvas) */}
           <a
-            href={`/print/canvas/${clientId}/${isDefaultCanvas ? "default" : (activeCanvasId ?? "default")}?print=1&projectId=${projectId}`}
+            href={`/print/canvas/${clientId}/${isResumenCanvas ? "default" : (activeCanvasId ?? "default")}?print=1&projectId=${projectId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800 hover:border-gray-700"
@@ -496,7 +504,7 @@ export default function ProjectCanvasPanel({
             Exportar PDF
           </a>
 
-          {isDefaultCanvas && (<>
+          {isResumenCanvas && (<>
           {/* Share button */}
           <div className="relative">
             <button
@@ -574,7 +582,7 @@ export default function ProjectCanvasPanel({
       </div>
 
       {/* Session processing results — default canvas only */}
-      {isDefaultCanvas && sessionResult && (
+      {isResumenCanvas && sessionResult && (
         <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-violet-700">
@@ -607,29 +615,38 @@ export default function ProjectCanvasPanel({
       )}
 
       {/* Handoff: vista lineal (lectura/curación del CSE, sin grilla) */}
-      {!isDefaultCanvas && activeCanvas?.name === "Handoff" && activeCanvasId && (
+      {!isResumenCanvas && activeCanvas?.name === "Handoff" && activeCanvasId && (
         <CanvasLinearView projectId={projectId} canvasId={activeCanvasId} />
       )}
 
       {/* Kickoff: landing (Camino C) editable in-situ por el CSE.
           El div rompe el padding del panel (px-6 py-8 space-y-6) para que las
           secciones del landing sean full-bleed dentro del scroll container. */}
-      {!isDefaultCanvas && activeCanvas?.name === "Kickoff" && activeCanvasId && (
+      {!isResumenCanvas && activeCanvas?.name === "Kickoff" && activeCanvasId && (
         <div style={{ margin: "-1.5rem -1.5rem -2rem" }}>
           <KickoffLanding projectId={projectId} canvasId={activeCanvasId} editable />
         </div>
       )}
 
+      {/* Cronograma: editor del ProjectTimeline (fases/semanas/sesiones). Fuente
+          única — el Kickoff lo refleja read-only. */}
+      {activeCanvas?.name === "Cronograma" && (
+        <CronogramaCanvas projectId={projectId} />
+      )}
+
       {/* Resto de canvases custom: grilla de bloques (Diagnóstico, Planificación, …) */}
-      {!isDefaultCanvas && activeCanvas?.name !== "Handoff" && activeCanvas?.name !== "Kickoff" && activeCanvasId && (
+      {!isResumenCanvas && activeCanvas?.name !== "Handoff" && activeCanvas?.name !== "Kickoff" && activeCanvas?.name !== "Cronograma" && activeCanvasId && (
         <SectionBlockList projectId={projectId} canvasId={activeCanvasId} />
       )}
 
-      {/* Default canvas: GPS + cards */}
-      {isDefaultCanvas && <ProjectGPS projectId={projectId} clientId={clientId} />}
-
-      {/* ── Default canvas content (cards-based) ── */}
-      {isDefaultCanvas && (<>
+      {/* ── Resumen — LEGACY / RETIRADO (código muerto) ─────────────────────
+          El canvas "Resumen" se elimina vía scripts/migrate-canvas-reorg.ts, así
+          que `isResumenCanvas` queda SIEMPRE en false y TODO este bloque (grilla
+          masonry de cards + las effects de canvas-cards + sus handlers) queda
+          MUERTO: no se renderiza ni se ejecuta. Se deja gateado para no arriesgar
+          una cirugía grande en este round; la limpieza completa del subsistema de
+          cards en ProjectCanvasPanel queda como FOLLOW-UP. ── */}
+      {isResumenCanvas && (<>
       {/* Banner de borradores pendientes */}
       {draftCount > 0 && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-900/20 border border-amber-700/50 text-amber-300">
