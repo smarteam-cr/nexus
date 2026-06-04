@@ -611,9 +611,13 @@ export default function ProjectCanvasPanel({
         <CanvasLinearView projectId={projectId} canvasId={activeCanvasId} />
       )}
 
-      {/* Kickoff: landing (Camino C) editable in-situ por el CSE */}
+      {/* Kickoff: landing (Camino C) editable in-situ por el CSE.
+          El div rompe el padding del panel (px-6 py-8 space-y-6) para que las
+          secciones del landing sean full-bleed dentro del scroll container. */}
       {!isDefaultCanvas && activeCanvas?.name === "Kickoff" && activeCanvasId && (
-        <KickoffLanding projectId={projectId} canvasId={activeCanvasId} editable />
+        <div style={{ margin: "-1.5rem -1.5rem -2rem" }}>
+          <KickoffLanding projectId={projectId} canvasId={activeCanvasId} editable />
+        </div>
       )}
 
       {/* Resto de canvases custom: grilla de bloques (Diagnóstico, Planificación, …) */}
