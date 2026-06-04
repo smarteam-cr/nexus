@@ -1,8 +1,10 @@
 /**
  * lib/utils/matching.ts
  *
- * Utilidades compartidas de matching de clientes por nombre/dominio.
- * Fuente canónica: lib/fireflies/sync.ts
+ * Utilidades compartidas de matching de clientes/sesiones por nombre, dominio,
+ * email y tokens de título. Fuente canónica única — los helpers tokenizeTitle /
+ * extractEmail y el tipo RawTranscript vivían antes en el extinto
+ * lib/fireflies/sync.ts (integración Fireflies eliminada).
  */
 
 const LEGAL_SUFFIXES = new Set([
@@ -45,4 +47,34 @@ export function extractDomains(sources: (string | null | undefined)[]): Set<stri
     if (d) domains.add(d);
   }
   return domains;
+}
+
+// ── Sesiones: tokens de título + email de participante ──────────────────────
+
+/** Forma cruda de una sesión (título + participantes), usada por el cascade matching. */
+export type RawTranscript = {
+  id: string;
+  title: string;
+  date: number;
+  duration: number;
+  participants: string[];
+};
+
+/** Tokeniza un título en un Set de términos normalizados (>= 2 chars). */
+export function tokenizeTitle(raw: string): Set<string> {
+  return new Set(
+    normalize(raw)
+      .split(/[\s,.|&+()\-_/\\[\]{}:;!?¿¡"']+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length >= 2)
+  );
+}
+
+/** Extrae el email de un participante en formato "Nombre <email>" o "email". */
+export function extractEmail(p: string): string {
+  const angleMatch = p.match(/<([^>]+@[^>]+)>/);
+  if (angleMatch) return angleMatch[1].toLowerCase().trim();
+  const emailMatch = p.match(/[\w.+%-]+@[\w.-]+\.[a-z]{2,}/i);
+  if (emailMatch) return emailMatch[0].toLowerCase().trim();
+  return p.toLowerCase().trim();
 }

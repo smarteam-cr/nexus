@@ -11,9 +11,8 @@
  *     3. Contactos deal: email de participante ∈ contactos HubSpot de los deals
  */
 
-import { normalize, extractTitleTerms } from "@/lib/utils/matching";
-import { tokenizeTitle, extractEmail } from "@/lib/fireflies/sync";
-import type { RawTranscript } from "@/lib/fireflies/sync";
+import { normalize, extractTitleTerms, tokenizeTitle, extractEmail } from "@/lib/utils/matching";
+import type { RawTranscript } from "@/lib/utils/matching";
 import type { EnrichedClientData } from "./enrichment";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────

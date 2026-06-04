@@ -37,7 +37,6 @@ Completa cada variable en `.env`:
 | `ANTHROPIC_API_KEY` | API key de Anthropic |
 | `APP_URL` | URL base de la app (ej: `http://localhost:3000`) |
 | `CONSULTANT_SECRET` | Token de sesión para consultores |
-| `FIREFLIES_API_KEY` | API key de Fireflies.ai |
 | `DATA_LAKE_URL` | URL del Supabase secundario (Data Lake) |
 | `DATA_LAKE_PUBLISHABLE_KEY` | Publishable key del Data Lake |
 | `DATA_LAKE_SECRET_KEY` | Secret key del Data Lake |

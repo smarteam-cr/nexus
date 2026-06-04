@@ -6,7 +6,7 @@ import { normalize, extractTitleTerms } from "@/lib/utils/matching";
 import { enrichClient } from "@/lib/matching/enrichment";
 import { sessionMatchesClient } from "@/lib/matching/cascade";
 import type { EnrichedClientMatcher } from "@/lib/matching/cascade";
-import type { RawTranscript } from "@/lib/fireflies/sync";
+import type { RawTranscript } from "@/lib/utils/matching";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 
 interface PendingItem {

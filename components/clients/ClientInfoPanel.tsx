@@ -7,7 +7,6 @@
  *
  * Sub-tabs horizontales:
  *   - Documentos    → DocumentUpload (Supabase Storage del proyecto strategy)
- *   - Sesiones      → ClientSessionCards (sesiones del cliente filtradas)
  *   - Stakeholders  → SectionBlockList filtrado por key="stakeholders"
  *   - Retos         → idem key="retos_estrategicos"
  *   - Oportunidades → idem key="oportunidades"
@@ -20,13 +19,11 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import SectionBlockList from "@/components/canvas/SectionBlockList";
 import DocumentUpload from "./DocumentUpload";
-import ClientSessionCards from "./ClientSessionCards";
 
-type SubTab = "docs" | "sesiones" | "stakeholders" | "retos" | "oportunidades";
+type SubTab = "docs" | "stakeholders" | "retos" | "oportunidades";
 
 const TABS: { key: SubTab; label: string }[] = [
   { key: "docs",          label: "Documentos" },
-  { key: "sesiones",      label: "Sesiones" },
   { key: "stakeholders",  label: "Stakeholders" },
   { key: "retos",         label: "Retos estratégicos" },
   { key: "oportunidades", label: "Oportunidades" },
@@ -35,11 +32,11 @@ const TABS: { key: SubTab; label: string }[] = [
 export default function ClientInfoPanel({
   projectId,
   canvasId,
-  domain,
-  company,
 }: {
   projectId: string;
   canvasId: string;
+  // domain/company siguen aceptándose por compatibilidad del caller, pero ya no
+  // se usan acá (la sub-pestaña Sesiones que los consumía fue eliminada).
   domain?: string;
   company?: string;
 }) {
@@ -54,7 +51,7 @@ export default function ClientInfoPanel({
         <div>
           <h2 className="text-xl font-bold text-white">Información del cliente</h2>
           <p className="text-sm text-gray-400 mt-0.5">
-            Documentos, sesiones y contexto estratégico del cliente.
+            Documentos y contexto estratégico del cliente.
           </p>
         </div>
         {clientId && (
@@ -93,15 +90,6 @@ export default function ClientInfoPanel({
       {/* Contenido del sub-tab activo */}
       <div className="pt-2">
         {tab === "docs" && <DocumentUpload projectId={projectId} />}
-
-        {tab === "sesiones" && (
-          <ClientSessionCards
-            clientId={clientId}
-            domain={domain}
-            company={company}
-            filterMode="name"
-          />
-        )}
 
         {tab === "stakeholders" && (
           <SectionBlockList projectId={projectId} canvasId={canvasId} onlyKey="stakeholders" />

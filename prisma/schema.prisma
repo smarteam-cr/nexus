@@ -749,7 +749,7 @@ model FirefliesSession {
   enrichedAt     DateTime?           // cuándo se trajo transcript/summary (null = pendiente)
   syncedAt       DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
-  source         String    @default("fireflies") // "fireflies" | "google_meet"
+  source         String    @default("google_meet") // "google_meet" (Fireflies eliminado; "fireflies" solo en filas históricas)
   googleDocId    String?               // ID del Google Doc de la reunión (Meet)
   googleEventId  String?               // ID del evento de Google Calendar (Meet)
   organizerEmail String?               // Email del organizador (para impersonación en enriquecimiento)

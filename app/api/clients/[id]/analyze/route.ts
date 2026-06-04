@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { withAuth, apiError } from "@/lib/api";
 import { dataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
-import { normalize, extractTitleTerms, extractDomain } from "@/lib/utils/matching";
+import { extractTitleTerms, extractDomain } from "@/lib/utils/matching";
 import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { updateCanvasAsync } from "@/lib/canvas/update-agent";
@@ -11,8 +11,6 @@ import { getOutputFormatInstructions, getBlockOutputFormatInstructions } from "@
 import { DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN, type BlockType } from "@/lib/canvas/block-types";
 import { postProcessCards } from "@/lib/canvas/post-process";
 import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
-
-const FIREFLIES_GRAPHQL = "https://api.fireflies.ai/graphql";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -37,7 +35,7 @@ function repairTruncatedJson(s: string): string | null {
   return s + suffix;
 }
 
-// ── Fireflies helpers ─────────────────────────────────────────────────────────
+// ── Sesiones: lectura desde la caché local (FirefliesSession = Fireflies + Meet) ──
 
 type RawSession = { id: string; title: string; date: number; participants: string[] };
 type RawTranscript = RawSession;
@@ -116,54 +114,7 @@ async function searchFirefliesFromDB(
   }
 }
 
-async function fetchFirefliesPage(apiKey: string, skip: number): Promise<RawSession[]> {
-  try {
-    const res = await fetch(FIREFLIES_GRAPHQL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        query: `{ transcripts(limit: 50, skip: ${skip}) { id title date participants } }`,
-      }),
-      cache: "no-store",
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { data?: { transcripts?: RawSession[] } };
-    return data.data?.transcripts ?? [];
-  } catch {
-    return [];
-  }
-}
-
-async function fetchMatchingTranscripts(
-  apiKey: string,
-  matcher: (t: RawTranscript) => boolean,
-  maxPages = 20
-): Promise<RawTranscript[]> {
-  const BATCH = 4;
-  const seen = new Set<string>();
-  const matched: RawTranscript[] = [];
-
-  for (let start = 0; start < maxPages; start += BATCH) {
-    const count = Math.min(BATCH, maxPages - start);
-    const pages = await Promise.all(
-      Array.from({ length: count }, (_, i) => fetchFirefliesPage(apiKey, (start + i) * 50))
-    );
-
-    for (const page of pages) {
-      for (const t of page) {
-        if (seen.has(t.id)) continue;
-        seen.add(t.id);
-        if (matcher(t)) matched.push(t);
-      }
-    }
-
-    if ((pages[pages.length - 1]?.length ?? 0) < 50) break;
-  }
-
-  return matched;
-}
-
-async function fetchTranscriptContent(apiKey: string, sessionId: string, title: string): Promise<string | null> {
+async function fetchTranscriptContent(sessionId: string, title: string): Promise<string | null> {
   // Intentar leer de la caché DB primero
   try {
     const cached = await prisma.firefliesSession.findUnique({
@@ -229,73 +180,9 @@ async function fetchTranscriptContent(apiKey: string, sessionId: string, title: 
     console.error(`[fetchTranscriptContent] Error leyendo transcript de DB (id=${sessionId}):`, dbErr instanceof Error ? dbErr.message : dbErr);
   }
 
-  try {
-    const res = await fetch(FIREFLIES_GRAPHQL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        query: `{
-          transcript(id: "${sessionId}") {
-            title
-            summary { keywords action_items overview shorthand_bullet }
-            sentences { text speaker_name }
-          }
-        }`,
-      }),
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      data?: {
-        transcript?: {
-          title: string;
-          summary?: {
-            keywords?: string[];
-            action_items?: string | null;
-            overview?: string | null;
-            shorthand_bullet?: string | null;
-          } | null;
-          sentences?: { text: string; speaker_name: string }[];
-        };
-      };
-    };
-    const t = data.data?.transcript;
-    if (!t) return null;
-
-    const sessionTitle = t.title || title;
-    const parts: string[] = [`### Sesión: ${sessionTitle}`];
-
-    // Preferir el summary estructurado (más compacto y útil que las sentences raw)
-    const s = t.summary;
-    const hasSummary = s && (
-      (s.keywords?.length ?? 0) > 0 ||
-      s.overview?.trim() ||
-      s.action_items?.trim()
-    );
-
-    if (hasSummary) {
-      if (s!.keywords?.length) {
-        parts.push(`**Temas clave:** ${s!.keywords!.join(", ")}`);
-      }
-      if (s!.overview?.trim()) {
-        parts.push(`**Resumen:**\n${s!.overview!.trim().slice(0, 1500)}`);
-      }
-      if (s!.action_items?.trim()) {
-        parts.push(`**Compromisos:**\n${s!.action_items!.trim().slice(0, 800)}`);
-      }
-    } else {
-      // Fallback: primeras 3000 chars de sentences
-      const text = (t.sentences ?? [])
-        .map((sen) => `${sen.speaker_name}: ${sen.text}`)
-        .join("\n")
-        .slice(0, 3000);
-      if (text.trim()) parts.push(text);
-    }
-
-    return parts.length > 1 ? parts.join("\n\n") : null;
-  } catch {
-    return null;
-  }
+  // Sin fallback a API externa: la fuente de transcripts es exclusivamente la
+  // caché local FirefliesSession (alimentada por el enriquecimiento de Google Meet).
+  return null;
 }
 
 type Params = { params: Promise<{ id: string }> };
@@ -854,14 +741,13 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
 
   // Wrapper: intenta transcript real, si es null devuelve fallback con metadata
   const fetchOrFallback = async (s: RawTranscript): Promise<string> => {
-    const content = await fetchTranscriptContent(apiKey ?? "", s.id, s.title);
+    const content = await fetchTranscriptContent(s.id, s.title);
     if (content?.trim()) return content;
     return buildFallbackMetadata(s);
   };
 
   let firefliesContent = "";
   let salesFirefliesContent = "";
-  const apiKey = process.env.FIREFLIES_API_KEY ?? null;
 
   try {
     let matchingSessions: RawTranscript[] = [];
@@ -871,33 +757,6 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
 
     if (dbSessions.length > 0) {
       matchingSessions = dbSessions;
-    } else if (apiKey) {
-      // ── 4b. Fallback a Fireflies API solo si no hay resultados en DB ────────
-      if (sessionKeywords.length > 0) {
-        const keywordTerms = sessionKeywords.map((k) =>
-          k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        );
-        matchingSessions = await fetchMatchingTranscripts(apiKey, (t) => {
-          const titleNorm = (t.title ?? "")
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "");
-          return keywordTerms.some((kw) => titleNorm.includes(kw));
-        }, 10);
-        matchingSessions = matchingSessions.slice(0, 10);
-      }
-
-      if (matchingSessions.length === 0 && titleTerms.length > 0) {
-        matchingSessions = await fetchMatchingTranscripts(apiKey, (t) => {
-          const titleNorm = normalize(t.title ?? "");
-          const byTitle = titleTerms.some((term) => titleNorm.includes(term));
-          const byDomain = domainFilter
-            ? t.participants.some((p) => p.toLowerCase().includes(`@${domainFilter}`))
-            : false;
-          return byTitle || byDomain;
-        }, 20);
-        matchingSessions = matchingSessions.slice(0, 20);
-      }
     }
 
     // Separar sesiones según el tipo de agente.

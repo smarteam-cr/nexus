@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
-import { syncFirefliesSessions, extractTitleTerms, extractDomain } from "@/lib/fireflies/sync";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 
 // GET /api/clients — Listar todos los clientes
@@ -36,24 +35,6 @@ export const POST = withAuth(async (request) => {
 
   // Invalidar cache del sidebar (AppShell)
   revalidateClientsSidebar();
-
-  // Disparar sync de Fireflies en background para el nuevo cliente.
-  // Pasamos los datos del cliente como matcher extra porque el cliente
-  // recién fue creado y la DB aún puede no reflejarlo en la primera consulta
-  // del sync (race condition mínima, pero lo evitamos así).
-  if (process.env.FIREFLIES_API_KEY) {
-    const extraMatchers = [
-      {
-        name: client.name,
-        titleTerms: extractTitleTerms(client.name),
-        domain: client.company ? extractDomain(client.company) : null,
-      },
-    ].filter((m) => m.titleTerms.length > 0 || m.domain !== null);
-
-    void syncFirefliesSessions(extraMatchers).catch((err) => {
-      console.error("[clients] Error en sync Fireflies background:", err);
-    });
-  }
 
   return NextResponse.json(client, { status: 201 });
 });
