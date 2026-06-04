@@ -34,6 +34,8 @@ export default function CanvasLinearView({
     saveBlock,
     addBlock,
     acceptAll,
+    error,
+    clearError,
   } = useCanvasSections(projectId, canvasId);
 
   if (loading) {
@@ -48,6 +50,14 @@ export default function CanvasLinearView({
 
   return (
     <div className="space-y-5 max-w-3xl">
+      {/* Error de guardado — no silencioso */}
+      {error && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-900/20 border border-red-700/50 text-red-300">
+          <span className="text-sm font-medium flex-1">{error}</span>
+          <button onClick={clearError} className="text-xs font-semibold text-red-200 hover:text-white px-2 py-1 rounded hover:bg-red-800/40">Cerrar</button>
+        </div>
+      )}
+
       {/* Draft banner */}
       {draftCount > 0 && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-900/20 border border-amber-700/50 text-amber-300">

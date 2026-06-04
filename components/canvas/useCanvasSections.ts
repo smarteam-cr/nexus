@@ -13,6 +13,9 @@
  *   PUT    .../blocks  { blockId, content?|data?|status? }                 (editar / aceptar)
  *   DELETE .../blocks  { blockId }                                         (rechazar / eliminar)
  *
+ * Las mutaciones chequean res.ok y exponen `error` — NO tragan el fallo. (Un PUT
+ * que fallaba en silencio fue lo que ocultó el bug de persistencia de edición.)
+ *
  * NO toca SectionBlockList (que sigue sirviendo a Diagnóstico/Planificación/etc.).
  */
 
@@ -28,9 +31,12 @@ export interface SectionWithBlocks {
   blocks: BlockData[];
 }
 
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
 export function useCanvasSections(projectId: string, canvasId: string) {
   const [sections, setSections] = useState<SectionWithBlocks[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const listUrl = `/api/projects/${projectId}/canvas-sections?canvasId=${canvasId}`;
   const blocksUrl = (sectionId: string) =>
@@ -42,7 +48,7 @@ export function useCanvasSections(projectId: string, canvasId: string) {
       const data = await res.json();
       setSections(data.sections ?? []);
     } catch {
-      /* ignore */
+      /* ignore: lectura; el polling reintenta */
     }
     setLoading(false);
   }, [listUrl]);
@@ -72,70 +78,86 @@ export function useCanvasSections(projectId: string, canvasId: string) {
     return () => clearInterval(id);
   }, [listUrl]);
 
+  const clearError = useCallback(() => setError(null), []);
+
+  /**
+   * Ejecuta una mutación contra el endpoint de blocks. Chequea res.ok: si falla,
+   * loggea, setea `error` y devuelve false (NO traga el fallo). Devuelve true si OK.
+   */
+  const mutate = useCallback(
+    async (sectionId: string, init: RequestInit): Promise<boolean> => {
+      try {
+        const res = await fetch(blocksUrl(sectionId), init);
+        if (!res.ok) {
+          let detail = "";
+          try {
+            detail = (await res.json())?.error ?? "";
+          } catch {
+            /* respuesta sin JSON */
+          }
+          console.error(`[useCanvasSections] ${init.method} → ${res.status} ${detail}`);
+          setError("No se pudo guardar el cambio. Reintentá; si persiste, revisá la conexión o avisá al equipo.");
+          return false;
+        }
+        setError(null);
+        return true;
+      } catch (e) {
+        console.error("[useCanvasSections] error de red al guardar", e);
+        setError("Error de conexión al guardar el bloque.");
+        return false;
+      }
+    },
+    [projectId], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   const acceptBlock = useCallback(
     async (sectionId: string, blockId: string) => {
-      await fetch(blocksUrl(sectionId), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blockId, status: "CONFIRMED" }),
-      });
+      await mutate(sectionId, { method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ blockId, status: "CONFIRMED" }) });
       refetch();
     },
-    [projectId, refetch], // eslint-disable-line react-hooks/exhaustive-deps
+    [mutate, refetch],
   );
 
   // Rechazar (borrador) y eliminar (confirmado) usan el MISMO endpoint DELETE.
   const deleteBlock = useCallback(
     async (sectionId: string, blockId: string) => {
-      await fetch(blocksUrl(sectionId), {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blockId }),
-      });
+      await mutate(sectionId, { method: "DELETE", headers: JSON_HEADERS, body: JSON.stringify({ blockId }) });
       refetch();
     },
-    [projectId, refetch], // eslint-disable-line react-hooks/exhaustive-deps
+    [mutate, refetch],
   );
 
+  // Devuelve true si guardó, false si falló. En FALLO no refrescamos: el editor
+  // se queda abierto con el texto del CSE (el caller no debe cerrarlo) para que no
+  // se pierda. Solo en éxito refrescamos para traer el estado canónico del server.
   const saveBlock = useCallback(
-    async (sectionId: string, blockId: string, updates: { content?: string; data?: unknown }) => {
-      await fetch(blocksUrl(sectionId), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blockId, ...updates }),
-      });
-      refetch();
+    async (sectionId: string, blockId: string, updates: { content?: string; data?: unknown }): Promise<boolean> => {
+      const ok = await mutate(sectionId, { method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ blockId, ...updates }) });
+      if (ok) refetch();
+      return ok;
     },
-    [projectId, refetch], // eslint-disable-line react-hooks/exhaustive-deps
+    [mutate, refetch],
   );
 
   const addBlock = useCallback(
     async (sectionId: string, blockType: string = "TEXT", content: string = "") => {
-      await fetch(blocksUrl(sectionId), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blockType, content }),
-      });
+      await mutate(sectionId, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ blockType, content }) });
       refetch();
     },
-    [projectId, refetch], // eslint-disable-line react-hooks/exhaustive-deps
+    [mutate, refetch],
   );
 
   const acceptAll = useCallback(async () => {
-    const promises = sections.flatMap((s) =>
-      s.blocks
-        .filter((b) => b.status === "DRAFT")
-        .map((b) =>
-          fetch(blocksUrl(s.id), {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ blockId: b.id, status: "CONFIRMED" }),
-          }),
-        ),
+    const drafts = sections.flatMap((s) =>
+      s.blocks.filter((b) => b.status === "DRAFT").map((b) => ({ sectionId: s.id, blockId: b.id })),
     );
-    await Promise.all(promises);
+    await Promise.all(
+      drafts.map((d) =>
+        mutate(d.sectionId, { method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ blockId: d.blockId, status: "CONFIRMED" }) }),
+      ),
+    );
     refetch();
-  }, [sections, projectId, refetch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sections, mutate, refetch]);
 
   const draftCount = sections.reduce(
     (n, s) => n + s.blocks.filter((b) => b.status === "DRAFT").length,
@@ -145,6 +167,8 @@ export function useCanvasSections(projectId: string, canvasId: string) {
   return {
     sections,
     loading,
+    error,
+    clearError,
     draftCount,
     refetch,
     acceptBlock,

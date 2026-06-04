@@ -50,16 +50,19 @@ export default function BlockRenderer({
   block: BlockData;
   onAccept?: () => void;
   onReject?: () => void;
-  onSave?: (updates: { content?: string; data?: unknown }) => void;
+  onSave?: (updates: { content?: string; data?: unknown }) => void | boolean | Promise<void | boolean>;
   onDragStart?: (e: React.MouseEvent) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const isDraft = block.status === "DRAFT";
   const mouseDownPos = useRef<{ x: number; y: number } | null>(null);
 
-  const handleSave = (updates: { content?: string; data?: unknown }) => {
-    onSave?.(updates);
-    setEditing(false);
+  const handleSave = async (updates: { content?: string; data?: unknown }) => {
+    const ok = await onSave?.(updates);
+    // Solo cerramos el editor si el guardado NO falló. `false` = falló (PUT 4xx/5xx
+    // o error de red): dejamos el editor abierto con el texto del CSE para que no se
+    // pierda; el banner de error ya avisa. void/true = guardó → cerramos.
+    if (ok !== false) setEditing(false);
   };
 
   return (
