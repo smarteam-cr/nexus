@@ -137,6 +137,7 @@ model Client {
   actionItems       ActionItem[]
   appUsers          AppUser[]              // F2: usuarios externos vinculados (kind=EXTERNAL)
   assignments       ClientAssignment[]     // F2: overrides manuales CSE↔Cliente
+  handoffs          Handoff[]              // entidad Handoff (1:N por cliente, ver model Handoff)
 }
 
 // ─── Project ──────────────────────────────────────────────────────────────────
@@ -183,6 +184,34 @@ model Project {
   participantSnapshot ProjectParticipantSnapshot?
   externalAccess      ProjectExternalAccess?
   timeline            ProjectTimeline?
+  handoff             Handoff?
+}
+
+// ─── Handoff (entidad cliente-level) ──────────────────────────────────────────
+// Un handoff nace cuando se gana un deal: lleva la info de ventas a CS y arranca el
+// proyecto. 1:N bajo el Client (un cliente acumula varios en el tiempo), 1:1 con un
+// Project y con el deal ancla. Su CONTENIDO vive en el canvas "Handoff" del Project
+// (1:1) — no se duplica acá. El sync a HubSpot (crear el record "projects" + propiedad
+// en la company) es aparte y eventual; lo gobierna hubspotSyncStatus.
+model Handoff {
+  id            String  @id @default(cuid())
+  clientId      String
+  client        Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId     String  @unique // 1:1 con el Project (su contenido = canvas "Handoff" del project)
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  hubspotDealId String? @unique // deal ancla de HubSpot (1 handoff por deal)
+
+  // Sync a HubSpot (eventual + reintentable; ver decisión #2 del plan)
+  hubspotProjectId  String? // id del record "projects" creado en HubSpot (post-sync)
+  hubspotSyncStatus String  @default("pending") // pending | synced | failed
+  hubspotSyncError  String? @db.Text
+
+  generatedByAgentRunId String? // trazabilidad de la corrida del agente de handoff
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
 }
 
 // ─── ProjectTimeline + TimelinePhase ──────────────────────────────────────────
