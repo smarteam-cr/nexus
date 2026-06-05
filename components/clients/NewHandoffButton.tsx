@@ -28,6 +28,11 @@ interface Deal {
   isWon: boolean;
 }
 
+interface ProjectOpt {
+  id: string;
+  name: string;
+}
+
 interface Props {
   kind: "existing" | "new";
   clientId?: string;
@@ -65,6 +70,13 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
   const [deals, setDeals] = useState<Deal[] | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
 
+  // Selector de proyecto: adjuntar a uno existente (id del proyecto) o crear uno
+  // nuevo ("__new__") con nombre seteable. Así el handoff + el kickoff quedan en el
+  // MISMO proyecto (evita el cruce: handoff en un proyecto, kickoff en otro).
+  const [projects, setProjects] = useState<ProjectOpt[] | null>(null);
+  const [projectChoice, setProjectChoice] = useState<string>("__new__");
+  const [newProjectName, setNewProjectName] = useState<string>("Onboarding");
+
   const [busy, setBusy] = useState<null | "lookup" | "deals" | "creating" | "agent">(null);
   const [error, setError] = useState<string | null>(null);
   // Si el orquestador devuelve 409 (ya existe un handoff para ese deal), guardamos el
@@ -78,9 +90,32 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
     setExistingClient(null);
     setDeals(null);
     setSelectedDealId(null);
+    setProjects(null);
+    setProjectChoice("__new__");
+    setNewProjectName("Onboarding");
     setBusy(null);
     setError(null);
     setConflictClientId(null);
+  }
+
+  // Carga los proyectos del cliente elegibles para adjuntar el handoff: activos, no
+  // sentinel, visibles como tab (hubspotServiceId) y SIN handoff previo (1:1).
+  async function loadProjects(cid: string) {
+    try {
+      const r = await fetch(`/api/clients/${cid}/projects`);
+      const data = await r.json();
+      const eligible: ProjectOpt[] = (data.projects ?? [])
+        .filter(
+          (p: { status: string; serviceType: string | null; hubspotServiceId: string | null; handoff: { id: string } | null }) =>
+            p.status === "active" && p.serviceType !== "__strategy__" && !!p.hubspotServiceId && !p.handoff,
+        )
+        .map((p: { id: string; name: string }) => ({ id: p.id, name: p.name }));
+      setProjects(eligible);
+      setProjectChoice(eligible[0]?.id ?? "__new__");
+    } catch {
+      setProjects([]);
+      setProjectChoice("__new__");
+    }
   }
 
   async function openDialog() {
@@ -99,6 +134,7 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
       } finally {
         setBusy(null);
       }
+      await loadProjects(clientId);
     }
   }
 
@@ -130,7 +166,14 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
       setResolvedCompany(data.company);
       if (!companyName.trim()) setCompanyName(data.company.name ?? "");
       setDeals((data.deals ?? []) as Deal[]);
-      if (data.existingClientId) setExistingClient({ id: data.existingClientId, name: data.existingClientName });
+      if (data.existingClientId) {
+        setExistingClient({ id: data.existingClientId, name: data.existingClientName });
+        await loadProjects(data.existingClientId);
+      } else {
+        // Cliente nuevo (no existe aún en Nexus): no hay proyectos → se crea uno nuevo.
+        setProjects([]);
+        setProjectChoice("__new__");
+      }
     } catch {
       setError("Error de red en la búsqueda.");
     } finally {
@@ -143,14 +186,20 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
     setConflictClientId(null);
     setBusy("creating");
     try {
+      // Adjuntar a un proyecto existente (targetProjectId) o crear uno nuevo (projectName).
+      const projectFields =
+        projectChoice === "__new__"
+          ? { projectName: newProjectName.trim() || undefined }
+          : { targetProjectId: projectChoice };
       const body =
         kind === "existing"
-          ? { clientId, dealId: selectedDealId ?? undefined }
+          ? { clientId, dealId: selectedDealId ?? undefined, ...projectFields }
           : {
               companyId: resolvedCompany?.id,
               companyName: companyName.trim() || resolvedCompany?.name,
               domain: domain.trim(),
               dealId: selectedDealId ?? undefined,
+              ...projectFields,
             };
 
       const r = await fetch("/api/handoffs", {
@@ -198,6 +247,7 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
       setBusy(null);
       setOpen(false);
       if (kind === "existing") {
+        router.refresh(); // refresca los tabs de proyecto (si se creó uno nuevo, aparece)
         onCreated?.();
       } else {
         router.push(`/clients/${newClientId}`);
@@ -208,8 +258,9 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
     }
   }
 
+  const projectReady = projects !== null && (projectChoice !== "__new__" || newProjectName.trim().length > 0);
   const canCreate =
-    kind === "existing" ? !!clientId && !busy : !!resolvedCompany && !busy;
+    (kind === "existing" ? !!clientId : !!resolvedCompany) && !busy && projectReady;
 
   return (
     <>
@@ -327,6 +378,53 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
                         );
                       })}
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* Selector de proyecto: adjuntar a uno existente o crear uno nuevo.
+                  Asegura que handoff + kickoff queden en el MISMO proyecto. */}
+              {projects !== null && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Proyecto</label>
+                  <div className="space-y-1.5">
+                    {projects.map((p) => {
+                      const active = projectChoice === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => setProjectChoice(p.id)}
+                          className={`w-full text-left rounded-lg border px-3 py-2 text-sm transition-colors ${
+                            active
+                              ? "border-brand bg-brand/10 text-white"
+                              : "border-gray-800 bg-gray-900/40 text-gray-300 hover:border-gray-700"
+                          }`}
+                        >
+                          Adjuntar a: <span className="font-medium">{p.name}</span>
+                        </button>
+                      );
+                    })}
+                    <button
+                      onClick={() => setProjectChoice("__new__")}
+                      className={`w-full text-left rounded-lg border px-3 py-2 text-sm transition-colors ${
+                        projectChoice === "__new__"
+                          ? "border-brand bg-brand/10 text-white"
+                          : "border-gray-800 bg-gray-900/40 text-gray-300 hover:border-gray-700"
+                      }`}
+                    >
+                      + Crear proyecto nuevo
+                    </button>
+                  </div>
+                  {projectChoice === "__new__" && (
+                    <input
+                      value={newProjectName}
+                      onChange={(e) => setNewProjectName(e.target.value)}
+                      placeholder="Nombre del proyecto"
+                      className="mt-2 w-full rounded-lg bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-brand outline-none"
+                    />
+                  )}
+                  {projects.length === 0 && (
+                    <p className="mt-1 text-[11px] text-gray-500">Sin proyectos existentes elegibles — se crea uno nuevo.</p>
                   )}
                 </div>
               )}

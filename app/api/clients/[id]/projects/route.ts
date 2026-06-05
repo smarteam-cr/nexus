@@ -15,6 +15,9 @@ export async function GET(
     where: { clientId },
     orderBy: { createdAt: "asc" },
     include: {
+      // Presencia de handoff: el picker del CTA solo ofrece proyectos sin handoff
+      // (Handoff es 1:1 con Project).
+      handoff: { select: { id: true } },
       _count: {
         select: {
           stageNotes: true,

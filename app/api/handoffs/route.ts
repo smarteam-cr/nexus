@@ -5,6 +5,9 @@ import { createDefaultCanvases, createHandoffCanvas } from "@/lib/canvas/default
 
 interface Body {
   dealId?: string;
+  // Adjuntar el handoff a un proyecto existente (el kickoff vive en el MISMO proyecto):
+  targetProjectId?: string;
+  // Crear un proyecto nuevo con este nombre (si no se adjunta a uno existente):
   projectName?: string;
   // Modo "cliente existente":
   clientId?: string;
@@ -83,32 +86,60 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const projectName = body.projectName?.trim() || "Onboarding";
+  const targetProjectId = body.targetProjectId?.trim() || null;
 
-  // ── 3. Crear Project + canvases + Handoff (atómico en Nexus) ─────────────────
+  // ── 3. Adjuntar a un proyecto existente, o crear uno nuevo (atómico en Nexus) ─
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const project = await tx.project.create({
-        data: { clientId, name: projectName, status: "active", hubspotDealId: dealId },
-        select: { id: true },
-      });
+    let result: { projectId: string; handoffId: string; handoffCanvasId: string };
 
-      // Set de canvases del proyecto (Kickoff/Diag/Plan/Crono) + el canvas Handoff.
-      await createDefaultCanvases(project.id, tx);
-      const handoffCanvasId = await createHandoffCanvas(project.id, tx);
-
-      const handoff = await tx.handoff.create({
-        data: {
-          clientId,
-          projectId: project.id,
-          hubspotDealId: dealId,
-          hubspotSyncStatus: "pending",
+    if (targetProjectId) {
+      // ── ADJUNTAR: el handoff (y por ende el kickoff) viven en un proyecto que ya
+      //    existe → handoff + kickoff quedan en el MISMO proyecto. ───────────────
+      const project = await prisma.project.findUnique({
+        where: { id: targetProjectId },
+        select: {
+          clientId: true,
+          canvases: { where: { name: "Handoff" }, select: { id: true } },
+          handoff: { select: { id: true } },
         },
-        select: { id: true },
       });
-
-      return { projectId: project.id, handoffId: handoff.id, handoffCanvasId };
-    });
+      if (!project || project.clientId !== clientId) {
+        return NextResponse.json({ error: "Proyecto inválido para este cliente" }, { status: 400 });
+      }
+      if (project.handoff) {
+        return NextResponse.json({ error: "Ese proyecto ya tiene un handoff" }, { status: 409 });
+      }
+      result = await prisma.$transaction(async (tx) => {
+        // Crear el canvas Handoff solo si falta (los proyectos sincronizados de
+        // HubSpot no lo traen tras Fase 2).
+        const handoffCanvasId =
+          project.canvases[0]?.id ?? (await createHandoffCanvas(targetProjectId, tx));
+        if (dealId) {
+          await tx.project.update({ where: { id: targetProjectId }, data: { hubspotDealId: dealId } });
+        }
+        const handoff = await tx.handoff.create({
+          data: { clientId, projectId: targetProjectId, hubspotDealId: dealId, hubspotSyncStatus: "pending" },
+          select: { id: true },
+        });
+        return { projectId: targetProjectId, handoffId: handoff.id, handoffCanvasId };
+      });
+    } else {
+      // ── CREAR: proyecto nuevo con nombre seteable (default "Onboarding"). ──────
+      const projectName = body.projectName?.trim() || "Onboarding";
+      result = await prisma.$transaction(async (tx) => {
+        const project = await tx.project.create({
+          data: { clientId, name: projectName, status: "active", hubspotDealId: dealId },
+          select: { id: true },
+        });
+        await createDefaultCanvases(project.id, tx);
+        const handoffCanvasId = await createHandoffCanvas(project.id, tx);
+        const handoff = await tx.handoff.create({
+          data: { clientId, projectId: project.id, hubspotDealId: dealId, hubspotSyncStatus: "pending" },
+          select: { id: true },
+        });
+        return { projectId: project.id, handoffId: handoff.id, handoffCanvasId };
+      });
+    }
 
     return NextResponse.json({ clientId, ...result }, { status: 201 });
   } catch (e) {
