@@ -176,6 +176,18 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
         /* no-op: handoff ya creado */
       }
 
+      // Sincronizar a HubSpot (crear el project en el pipeline CS). Idempotente y
+      // no-op si falta el scope; si falla, queda pending y se reconcilia con retry.
+      try {
+        await fetch("/api/handoffs/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ handoffId: data.handoffId }),
+        });
+      } catch {
+        /* no-op: reconciliable vía /api/handoffs/sync */
+      }
+
       setBusy(null);
       setOpen(false);
       if (kind === "existing") {

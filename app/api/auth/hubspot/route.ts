@@ -34,6 +34,7 @@ const HUBSPOT_SCOPES = [
   "automation.sequences.enrollments.write",
   // ── Projects ────────────────────────────────────────────────
   "crm.objects.projects.read",
+  "crm.objects.projects.write", // Fase 5 fundación: crear el record "projects" del handoff
   "crm.schemas.projects.read",
   // ── Settings / Users ────────────────────────────────────────
   "settings.users.read",
