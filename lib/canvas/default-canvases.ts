@@ -7,38 +7,41 @@ type CanvasDefinition = {
   sections: Array<{ key: string; label: string }>;
 };
 
-// Orden = flujo real del onboarding: Handoff → Kickoff → Diagnóstico →
-// Planificación → Cronograma. El array ES la fuente del `order`. El ancla/default
-// (isDefault → fallback cuando no hay canvas elegido + no borrable desde la UI) es
-// KICKOFF, no Handoff: Handoff migrará a nivel cliente, así que Kickoff es estable.
+// ── Canvas Handoff (traspaso Sales→CS) ────────────────────────────────────────
+// YA NO se crea con createDefaultCanvases: el handoff es una entidad cliente-level
+// (model Handoff) que arranca el proyecto, y su canvas lo monta el FLUJO de
+// creación de handoffs (createHandoffCanvas, Fase 4). Se mantiene la definición
+// acá como fuente ÚNICA de las 8 secciones — el agente "Handoff Sales→CS" escribe
+// en ellas vía AGENT_GROUP_TO_CANVAS. Cada sección 1:1 con una card del agente.
+export const HANDOFF_CANVAS: CanvasDefinition = {
+  name: "Handoff",
+  isDefault: false,
+  order: 0,
+  sections: [
+    { key: "acuerdos_promesas",    label: "Acuerdos clave y promesas especiales" },
+    { key: "alcance_contratado",   label: "¿Qué vendimos?" },
+    { key: "motivacion_decision",  label: "¿Por qué vendimos? (por qué nos eligieron)" },
+    { key: "dolor_principal",      label: "Dolor principal" },
+    { key: "expectativas",         label: "Expectativas del cliente" },
+    { key: "stakeholders_handoff", label: "Stakeholders clave" },
+    { key: "estado_en_flight",     label: "Proyectos y avances en curso" },
+    { key: "riesgos_banderas",     label: "Riesgos y banderas rojas" },
+  ],
+};
+
+// Orden = flujo real del onboarding (SIN Handoff, que migró a entidad cliente-level):
+// Kickoff → Diagnóstico → Planificación → Cronograma. El array ES la fuente del
+// `order`. El ancla/default (isDefault → fallback cuando no hay canvas elegido + no
+// borrable desde la UI) es KICKOFF.
 export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
-  {
-    // Handoff (Fase 2 del módulo externo): traspaso Sales→CS. Primero en el
-    // dropdown (order 0) pero NO es el ancla (Handoff migrará a nivel cliente).
-    // Cada sección 1:1 con una card del agente "Handoff Sales→CS".
-    // Se aplica retroactivamente con scripts/migrate-add-handoff-canvas.ts.
-    name: "Handoff",
-    isDefault: false,
-    order: 0,
-    sections: [
-      { key: "acuerdos_promesas",    label: "Acuerdos clave y promesas especiales" },
-      { key: "alcance_contratado",   label: "¿Qué vendimos?" },
-      { key: "motivacion_decision",  label: "¿Por qué vendimos? (por qué nos eligieron)" },
-      { key: "dolor_principal",      label: "Dolor principal" },
-      { key: "expectativas",         label: "Expectativas del cliente" },
-      { key: "stakeholders_handoff", label: "Stakeholders clave" },
-      { key: "estado_en_flight",     label: "Proyectos y avances en curso" },
-      { key: "riesgos_banderas",     label: "Riesgos y banderas rojas" },
-    ],
-  },
   {
     // Kickoff (Fase A): landing de arranque DE CARA AL CLIENTE. El cronograma NO
     // es una sección — la plantilla lo pinta desde ProjectTimeline. ANCLA/default
     // del proyecto (isDefault → fallback cuando no hay canvas seleccionado + no
-    // borrable desde la UI). Handoff dejará de ser canvas de proyecto pronto.
+    // borrable desde la UI).
     name: "Kickoff",
     isDefault: true,
-    order: 1,
+    order: 0,
     sections: [
       { key: "bienvenida",     label: "Bienvenida y contexto" },
       { key: "objetivos",      label: "Objetivos del proyecto" },
@@ -51,7 +54,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
   {
     name: "Diagnóstico",
     isDefault: false,
-    order: 2,
+    order: 1,
     sections: [
       { key: "contexto_alcance", label: "Contexto y alcance" },
       { key: "estado_actual", label: "Estado actual (Current State)" },
@@ -66,7 +69,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
   {
     name: "Planificación",
     isDefault: false,
-    order: 3,
+    order: 2,
     sections: [
       { key: "arquitectura_solucion", label: "Arquitectura de la solución" },
       { key: "roadmap", label: "Roadmap de implementación" },
@@ -80,14 +83,16 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     // refleja). Render especial en ProjectCanvasPanel (branch name==="Cronograma").
     name: "Cronograma",
     isDefault: false,
-    order: 4,
+    order: 3,
     sections: [],
   },
 ];
 
 /** Map from agentGroup to canvas name for routing cards/blocks.
  *  Fuente ÚNICA — app/api/clients/[id]/analyze/route.ts la importa de acá
- *  (antes estaba duplicada; centralizada en Kickoff Fase A). */
+ *  (antes estaba duplicada; centralizada en Kickoff Fase A).
+ *  `handoff` SE MANTIENE: el agente sigue escribiendo al canvas "Handoff" del
+ *  proyecto, que ahora lo crea el flujo de handoff (createHandoffCanvas). */
 export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
   diagnostico: "Diagnóstico",
   planificacion: "Planificación",
@@ -95,7 +100,8 @@ export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
   kickoff: "Kickoff",
 };
 
-/** Create all standard canvases for a project with CanvasSection records. */
+/** Create all standard canvases for a project with CanvasSection records.
+ *  NO incluye Handoff (es entidad cliente-level; usar createHandoffCanvas). */
 export async function createDefaultCanvases(projectId: string) {
   // Create all canvases
   await prisma.projectCanvas.createMany({
@@ -108,8 +114,8 @@ export async function createDefaultCanvases(projectId: string) {
     })),
   });
 
-  // Create CanvasSection records for every canvas that defines sections (incl.
-  // the home canvas Handoff). Canvases sin secciones (Cronograma) no llevan.
+  // Create CanvasSection records for every canvas that defines sections.
+  // Canvases sin secciones (Cronograma) no llevan.
   const createdCanvases = await prisma.projectCanvas.findMany({
     where: { projectId },
     select: { id: true, name: true },
@@ -127,4 +133,31 @@ export async function createDefaultCanvases(projectId: string) {
       })),
     });
   }
+}
+
+/** Crea el canvas "Handoff" (+8 secciones) para un proyecto. Lo usa el FLUJO de
+ *  creación de handoffs (Fase 4) — el handoff arranca el proyecto y monta su canvas.
+ *  Asume que el proyecto aún no tiene canvas Handoff (proyecto recién creado). */
+export async function createHandoffCanvas(projectId: string): Promise<string> {
+  const canvas = await prisma.projectCanvas.create({
+    data: {
+      projectId,
+      name: HANDOFF_CANVAS.name,
+      isDefault: HANDOFF_CANVAS.isDefault,
+      order: HANDOFF_CANVAS.order,
+      sections: HANDOFF_CANVAS.sections,
+    },
+    select: { id: true },
+  });
+
+  await prisma.canvasSection.createMany({
+    data: HANDOFF_CANVAS.sections.map((s, i) => ({
+      canvasId: canvas.id,
+      key: s.key,
+      label: s.label,
+      order: i,
+    })),
+  });
+
+  return canvas.id;
 }

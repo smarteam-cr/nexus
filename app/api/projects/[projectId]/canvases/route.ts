@@ -11,8 +11,12 @@ export async function GET(
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
+  // Handoff queda FUERA del dropdown del proyecto: es una entidad cliente-level
+  // (model Handoff) que se ve/edita desde la vista de cliente, no como canvas del
+  // proyecto. El canvas sigue existiendo (1:1 con el Project) y loadCanvasContext
+  // lo lee igual para el Kickoff — solo se oculta de este listado.
   const canvases = await prisma.projectCanvas.findMany({
-    where: { projectId },
+    where: { projectId, name: { not: "Handoff" } },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,
