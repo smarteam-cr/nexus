@@ -1,4 +1,9 @@
 import { prisma } from "@/lib/db/prisma";
+import type { Prisma } from "@prisma/client";
+
+// Acepta el cliente global o un cliente de transacción ($transaction) para que la
+// creación de canvases sea atómica con el resto del orquestador (Fase 4 handoff).
+type Db = Prisma.TransactionClient;
 
 type CanvasDefinition = {
   name: string;
@@ -102,9 +107,9 @@ export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
 
 /** Create all standard canvases for a project with CanvasSection records.
  *  NO incluye Handoff (es entidad cliente-level; usar createHandoffCanvas). */
-export async function createDefaultCanvases(projectId: string) {
+export async function createDefaultCanvases(projectId: string, db: Db = prisma) {
   // Create all canvases
-  await prisma.projectCanvas.createMany({
+  await db.projectCanvas.createMany({
     data: DEFAULT_PROJECT_CANVASES.map((c) => ({
       projectId,
       name: c.name,
@@ -116,7 +121,7 @@ export async function createDefaultCanvases(projectId: string) {
 
   // Create CanvasSection records for every canvas that defines sections.
   // Canvases sin secciones (Cronograma) no llevan.
-  const createdCanvases = await prisma.projectCanvas.findMany({
+  const createdCanvases = await db.projectCanvas.findMany({
     where: { projectId },
     select: { id: true, name: true },
   });
@@ -124,7 +129,7 @@ export async function createDefaultCanvases(projectId: string) {
   for (const canvas of createdCanvases) {
     const def = DEFAULT_PROJECT_CANVASES.find((d) => d.name === canvas.name);
     if (!def?.sections.length) continue;
-    await prisma.canvasSection.createMany({
+    await db.canvasSection.createMany({
       data: def.sections.map((s, i) => ({
         canvasId: canvas.id,
         key: s.key,
@@ -138,8 +143,8 @@ export async function createDefaultCanvases(projectId: string) {
 /** Crea el canvas "Handoff" (+8 secciones) para un proyecto. Lo usa el FLUJO de
  *  creación de handoffs (Fase 4) — el handoff arranca el proyecto y monta su canvas.
  *  Asume que el proyecto aún no tiene canvas Handoff (proyecto recién creado). */
-export async function createHandoffCanvas(projectId: string): Promise<string> {
-  const canvas = await prisma.projectCanvas.create({
+export async function createHandoffCanvas(projectId: string, db: Db = prisma): Promise<string> {
+  const canvas = await db.projectCanvas.create({
     data: {
       projectId,
       name: HANDOFF_CANVAS.name,
@@ -150,7 +155,7 @@ export async function createHandoffCanvas(projectId: string): Promise<string> {
     select: { id: true },
   });
 
-  await prisma.canvasSection.createMany({
+  await db.canvasSection.createMany({
     data: HANDOFF_CANVAS.sections.map((s, i) => ({
       canvasId: canvas.id,
       key: s.key,

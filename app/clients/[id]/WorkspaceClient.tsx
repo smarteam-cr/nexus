@@ -24,12 +24,14 @@ interface ProjectSummary {
 
 export default function WorkspaceClient({
   clientId,
+  clientName,
   projects,
   hasHubspot,
   strategyProjectId,
   strategyCanvasId,
 }: {
   clientId: string;
+  clientName: string;
   projects: ProjectSummary[];
   hasHubspot: boolean;
   strategyProjectId: string;
@@ -65,6 +67,7 @@ export default function WorkspaceClient({
       <div className="flex-1 overflow-y-auto">
         <ProjectSection
           clientId={clientId}
+          clientName={clientName}
           projects={projects}
           strategyProjectId={strategyProjectId}
           strategyCanvasId={strategyCanvasId}
@@ -78,11 +81,13 @@ export default function WorkspaceClient({
 
 function ProjectSection({
   clientId,
+  clientName,
   projects,
   strategyProjectId,
   strategyCanvasId,
 }: {
   clientId: string;
+  clientName: string;
   projects: ProjectSummary[];
   strategyProjectId: string;
   strategyCanvasId: string;
@@ -157,7 +162,7 @@ function ProjectSection({
           canvasId={strategyCanvasId}
         />
       ) : isHandoffs ? (
-        <ClientHandoffsPanel key={HANDOFFS_TAB_ID} clientId={clientId} />
+        <ClientHandoffsPanel key={HANDOFFS_TAB_ID} clientId={clientId} clientName={clientName} />
       ) : activeProjectId && activeProject ? (
         <ProjectCanvasPanel
           key={activeProjectId}

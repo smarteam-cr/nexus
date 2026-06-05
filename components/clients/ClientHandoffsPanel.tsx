@@ -9,8 +9,9 @@
  * (model Handoff) aunque su contenido siga en el canvas project-bound.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
+import NewHandoffButton from "@/components/clients/NewHandoffButton";
 
 interface HandoffSummary {
   id: string;
@@ -42,27 +43,28 @@ function fmtDate(iso: string) {
   }
 }
 
-export default function ClientHandoffsPanel({ clientId }: { clientId: string }) {
+export default function ClientHandoffsPanel({ clientId, clientName }: { clientId: string; clientName: string }) {
   const [handoffs, setHandoffs] = useState<HandoffSummary[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    fetch(`/api/clients/${clientId}/handoffs`)
-      .then((r) => (r.ok ? r.json() : { handoffs: [] }))
-      .then((data) => {
-        if (!alive) return;
+  const load = useCallback(
+    async (selectNewest = false) => {
+      try {
+        const r = await fetch(`/api/clients/${clientId}/handoffs`);
+        const data = r.ok ? await r.json() : { handoffs: [] };
         const list: HandoffSummary[] = data.handoffs ?? [];
         setHandoffs(list);
-        setSelectedId((prev) => prev ?? list[0]?.id ?? null);
-      })
-      .catch(() => {
-        if (alive) setHandoffs([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [clientId]);
+        setSelectedId((prev) => (selectNewest ? list[0]?.id ?? null : prev ?? list[0]?.id ?? null));
+      } catch {
+        setHandoffs([]);
+      }
+    },
+    [clientId],
+  );
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   if (handoffs === null) {
     return (
@@ -79,10 +81,18 @@ export default function ClientHandoffsPanel({ clientId }: { clientId: string }) 
       <div className="px-6 py-12 max-w-3xl">
         <div className="rounded-2xl border border-dashed border-gray-700 bg-gray-900/40 px-6 py-10 text-center">
           <h3 className="text-base font-semibold text-white">Todavía no hay handoffs</h3>
-          <p className="mt-2 text-sm text-gray-400 max-w-md mx-auto">
+          <p className="mt-2 mb-5 text-sm text-gray-400 max-w-md mx-auto">
             Un handoff nace cuando se gana un deal: lleva la información de ventas a CS y arranca
             el proyecto en Nexus.
           </p>
+          <div className="flex justify-center">
+            <NewHandoffButton
+              kind="existing"
+              clientId={clientId}
+              clientName={clientName}
+              onCreated={() => load(true)}
+            />
+          </div>
         </div>
       </div>
     );
@@ -93,10 +103,10 @@ export default function ClientHandoffsPanel({ clientId }: { clientId: string }) 
 
   return (
     <div className="px-6 py-8 space-y-6">
-      {/* Selector de handoff (solo si hay más de uno) */}
-      {handoffs.length > 1 && (
-        <div className="flex flex-wrap items-center gap-2 max-w-3xl">
-          {handoffs.map((h) => {
+      {/* Encabezado: selector (si >1) + CTA nuevo handoff */}
+      <div className="flex flex-wrap items-center gap-2 max-w-3xl">
+        {handoffs.length > 1 &&
+          handoffs.map((h) => {
             const isActive = h.id === selected.id;
             return (
               <button
@@ -112,8 +122,15 @@ export default function ClientHandoffsPanel({ clientId }: { clientId: string }) 
               </button>
             );
           })}
+        <div className="ml-auto">
+          <NewHandoffButton
+            kind="existing"
+            clientId={clientId}
+            clientName={clientName}
+            onCreated={() => load(true)}
+          />
         </div>
-      )}
+      </div>
 
       {/* Cabecera del handoff seleccionado */}
       <div className="flex flex-wrap items-center gap-3 max-w-3xl">

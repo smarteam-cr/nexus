@@ -1169,6 +1169,53 @@ ${handoffCtx || "(Sin handoff confirmado todavía. Indicá en cada sección que 
 ${timelineCtx ? `${timelineCtx}\n\n` : ""}Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: tono cliente, sin inflar alcance/objetivos (solo lo respaldado por el handoff), métricas como propuesta de Smarteam si no están explícitas, y NO reproduzcas el cronograma en prosa (la plantilla lo muestra aparte).`;
   }
 
+  // ── 10c. Marco breve de relación previa (solo agente Handoff) ────────────────
+  // Le da al agente conciencia de la relación previa del cliente con Smarteam
+  // (proyectos/handoffs anteriores) ADEMÁS del deal ancla en profundidad. Budget
+  // chico (~2.5k chars) y aditivo — no diluye las fuentes principales.
+  if (isHandoffAgent) {
+    try {
+      const [priorProjects, priorHandoffs] = await Promise.all([
+        prisma.project.findMany({
+          where: {
+            clientId,
+            serviceType: { not: "__strategy__" },
+            ...(bodyProjectId ? { id: { not: bodyProjectId } } : {}),
+          },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+          select: { name: true, status: true, serviceType: true, createdAt: true },
+        }),
+        prisma.handoff.findMany({
+          where: { clientId, ...(bodyProjectId ? { projectId: { not: bodyProjectId } } : {}) },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+          select: { createdAt: true, hubspotDealId: true, project: { select: { name: true } } },
+        }),
+      ]);
+      if (priorProjects.length > 0 || priorHandoffs.length > 0) {
+        const projLines = priorProjects.map(
+          (p) => `- ${p.name}${p.serviceType ? ` (${p.serviceType})` : ""} · ${p.status} · ${p.createdAt.toISOString().slice(0, 10)}`,
+        );
+        const hoLines = priorHandoffs.map(
+          (h) => `- ${h.project.name} · ${h.createdAt.toISOString().slice(0, 10)}${h.hubspotDealId ? ` · deal ${h.hubspotDealId}` : ""}`,
+        );
+        const frame = [
+          "=== RELACIÓN PREVIA DEL CLIENTE CON SMARTEAM (contexto — no lo repitas literal) ===",
+          "Este puede NO ser el primer proyecto del cliente. Usalo solo para no contradecir la historia previa ni duplicar lo ya entregado; el foco de tu análisis sigue siendo el deal ancla y las sesiones de ventas.",
+          priorProjects.length ? `Proyectos previos (${priorProjects.length}):\n${projLines.join("\n")}` : "",
+          priorHandoffs.length ? `Handoffs previos (${priorHandoffs.length}):\n${hoLines.join("\n")}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n")
+          .slice(0, 2500);
+        userMessage = `${userMessage}\n\n${frame}`;
+      }
+    } catch (e) {
+      console.error("[analyze handoff] marco relación previa error:", e);
+    }
+  }
+
   // ── 11. Llamar a Claude ───────────────────────────────────────────────────────
   const maxTokens = 16000;
   let analysisJson: {
