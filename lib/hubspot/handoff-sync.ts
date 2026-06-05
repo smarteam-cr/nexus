@@ -11,12 +11,13 @@ import { prisma } from "@/lib/db/prisma";
  * onboarding en la company. Nexus es la fuente de verdad; HubSpot es un sync
  * EVENTUAL + REINTENTABLE gobernado por Handoff.hubspotSyncStatus.
  *
- * IDEMPOTENCIA (requisito explícito):
- *  - El record "projects" se crea SOLO si Handoff.hubspotProjectId es null. Retry x2
- *    sobre el mismo handoff NO duplica el project.
- *  - La asociación default v4 (PUT) y el flag de company (checkbox) son upsert por
- *    naturaleza → re-aplicarlos no duplica. Se re-aplican en cada sync (robusto ante
- *    fallos parciales) sin riesgo de duplicado.
+ * IDEMPOTENCIA + sin loop con sync-projects (el objeto "projects" 0-970 es el MISMO
+ * que sync-projects gestiona vía Project.hubspotServiceId):
+ *  - Si el Project del handoff ya tiene `hubspotServiceId` → NO se crea otro record;
+ *    se linkea a ese (evita duplicado en HubSpot y el re-import como Project nuevo).
+ *  - Si no lo tiene → se crea UNO y se setea `Project.hubspotServiceId` = ese id para
+ *    que sync-projects lo ACTUALICE en vez de re-importarlo como Project duplicado.
+ *  - Si `Handoff.hubspotProjectId` ya está → skip. Asociación/flag son upsert.
  *
  * GATE: no escribe nada si el token del sistema no tiene `crm.objects.projects.write`
  * (token-info / getPortalInfo).
@@ -46,7 +47,7 @@ export async function hasProjectsWriteScope(): Promise<boolean> {
   }
 }
 
-export type SyncStatus = "synced" | "skipped" | "no_scope" | "failed";
+export type SyncStatus = "synced" | "linked" | "skipped" | "no_scope" | "failed";
 export interface SyncResult {
   handoffId: string;
   status: SyncStatus;
@@ -65,41 +66,54 @@ export async function syncHandoffToHubspot(handoffId: string): Promise<SyncResul
     where: { id: handoffId },
     include: {
       client: { select: { hubspotCompanyId: true, name: true } },
-      project: { select: { name: true } },
+      project: { select: { name: true, hubspotServiceId: true } },
     },
   });
   if (!handoff) return { handoffId, status: "failed", error: "handoff no existe" };
+
+  // Idempotencia dura: ya linkeado/sincronizado → no tocar nada.
+  if (handoff.hubspotProjectId) {
+    return { handoffId, status: "skipped", hubspotProjectId: handoff.hubspotProjectId, created: false };
+  }
 
   if (!(await hasProjectsWriteScope())) {
     return { handoffId, status: "no_scope" };
   }
 
+  const companyId = handoff.client.hubspotCompanyId;
+
   try {
     const hs = await getSystemHubspotClient();
-    const companyId = handoff.client.hubspotCompanyId;
-    let projectId = handoff.hubspotProjectId;
-    let created = false;
 
-    // 1. Crear el record SOLO si no existe (idempotencia dura del project).
-    if (!projectId) {
-      projectId = await createProjectRecord(hs, {
-        name: handoff.project.name || handoff.client.name || "Proyecto",
+    // ── CASO A: el Project del handoff YA tiene record en HubSpot ───────────────
+    // (handoff migrado, o proyecto ya importado por sync-projects). Crear otro 0-970
+    // lo DUPLICA — linkeamos a ese record; no creamos ni cambiamos la etapa (puede
+    // estar más avanzado que "Hand off").
+    if (handoff.project.hubspotServiceId) {
+      const existing = handoff.project.hubspotServiceId;
+      if (companyId && COMPANY_HANDOFF_FLAG_PROPERTY) {
+        await writeCompanyFlag(hs, companyId, COMPANY_HANDOFF_FLAG_PROPERTY);
+      }
+      await prisma.handoff.update({
+        where: { id: handoffId },
+        data: { hubspotProjectId: existing, hubspotSyncStatus: "synced", hubspotSyncError: null },
       });
-      created = true;
-      // Persistir el id de inmediato: si un paso posterior falla, el retry no recrea.
-      await prisma.handoff.update({ where: { id: handoffId }, data: { hubspotProjectId: projectId } });
+      return { handoffId, status: "linked", hubspotProjectId: existing, created: false };
     }
 
-    // 2. Asociación project↔company (default v4, upsert) — idempotente.
-    if (companyId) {
-      await associateDefault(hs, projectId, "companies", companyId);
-    }
-    // 3. Asociación al deal ancla (default v4), si hay.
-    if (handoff.hubspotDealId) {
-      await associateDefault(hs, projectId, "deals", handoff.hubspotDealId);
-    }
-    // 4. Flag de onboarding en la company (checkbox) — idempotente. Solo si está
-    //    confirmada la propiedad (COMPANY_HANDOFF_FLAG_PROPERTY != null).
+    // ── CASO B: no hay record en HubSpot → crear y LINKEAR al Project ───────────
+    // Setear Project.hubspotServiceId = nuevo record para que sync-projects lo
+    // RECONOZCA (update) en vez de re-importarlo como Project nuevo (el bug).
+    const newProjectId = await createProjectRecord(hs, {
+      name: handoff.project.name || handoff.client.name || "Proyecto",
+    });
+    // Link inmediato y secuencial (project primero): si el 2º update fallara, el retry
+    // entra por CASO A (project.hubspotServiceId ya seteado) → linkea, no duplica.
+    await prisma.project.update({ where: { id: handoff.projectId }, data: { hubspotServiceId: newProjectId } });
+    await prisma.handoff.update({ where: { id: handoffId }, data: { hubspotProjectId: newProjectId } });
+
+    if (companyId) await associateDefault(hs, newProjectId, "companies", companyId);
+    if (handoff.hubspotDealId) await associateDefault(hs, newProjectId, "deals", handoff.hubspotDealId);
     if (companyId && COMPANY_HANDOFF_FLAG_PROPERTY) {
       await writeCompanyFlag(hs, companyId, COMPANY_HANDOFF_FLAG_PROPERTY);
     }
@@ -108,7 +122,7 @@ export async function syncHandoffToHubspot(handoffId: string): Promise<SyncResul
       where: { id: handoffId },
       data: { hubspotSyncStatus: "synced", hubspotSyncError: null },
     });
-    return { handoffId, status: created ? "synced" : "skipped", hubspotProjectId: projectId, created };
+    return { handoffId, status: "synced", hubspotProjectId: newProjectId, created: true };
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
     await prisma.handoff.update({

@@ -67,6 +67,9 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
 
   const [busy, setBusy] = useState<null | "lookup" | "deals" | "creating" | "agent">(null);
   const [error, setError] = useState<string | null>(null);
+  // Si el orquestador devuelve 409 (ya existe un handoff para ese deal), guardamos el
+  // clientId del handoff existente para ofrecer un link "Abrir el handoff existente".
+  const [conflictClientId, setConflictClientId] = useState<string | null>(null);
 
   function reset() {
     setCompanyName("");
@@ -77,6 +80,7 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
     setSelectedDealId(null);
     setBusy(null);
     setError(null);
+    setConflictClientId(null);
   }
 
   async function openDialog() {
@@ -136,6 +140,7 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
 
   async function create() {
     setError(null);
+    setConflictClientId(null);
     setBusy("creating");
     try {
       const body =
@@ -156,6 +161,8 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
       const data = await r.json();
       if (!r.ok) {
         setError(data.error ?? "No se pudo crear el handoff.");
+        // 409 = ya existe un handoff para ese deal → ofrecer link al existente.
+        if (r.status === 409 && data.clientId) setConflictClientId(data.clientId as string);
         setBusy(null);
         return;
       }
@@ -325,7 +332,20 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
               )}
 
               {error && (
-                <div className="rounded-lg border border-red-700/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">{error}</div>
+                <div className="rounded-lg border border-red-700/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">
+                  <span>{error}</span>
+                  {conflictClientId && (
+                    <button
+                      onClick={() => {
+                        setOpen(false);
+                        router.push(`/clients/${conflictClientId}`);
+                      }}
+                      className="ml-2 underline font-semibold text-red-200 hover:text-white"
+                    >
+                      Abrir el handoff existente →
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
