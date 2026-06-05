@@ -147,12 +147,15 @@ export function useCanvasSections(projectId: string, canvasId: string) {
       sectionId: string,
       blockId: string,
       instruction: string,
+      // Multi-turno (B.2): si viene, la regen parte de este draft en progreso en vez del
+      // bloque guardado. Sin base = single-turn (idéntico a B.1).
+      base?: { content?: string | null; data?: unknown },
     ): Promise<{ content?: string | null; data?: unknown } | null> => {
       try {
         const res = await fetch(`${blocksUrl(sectionId)}/regenerate`, {
           method: "POST",
           headers: JSON_HEADERS,
-          body: JSON.stringify({ blockId, instruction }),
+          body: JSON.stringify(base ? { blockId, instruction, base } : { blockId, instruction }),
         });
         if (!res.ok) {
           let detail = "";

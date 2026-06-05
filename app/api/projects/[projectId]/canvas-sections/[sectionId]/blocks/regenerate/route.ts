@@ -26,12 +26,21 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
-  const body = (await req.json().catch(() => ({}))) as { blockId?: string; instruction?: string };
+  const body = (await req.json().catch(() => ({}))) as {
+    blockId?: string;
+    instruction?: string;
+    // Multi-turno (B.2): punto de partida de la regen. Si viene, el prompt parte de este
+    // draft en progreso en vez del bloque guardado (encadena "más corto" → "más formal").
+    base?: { content?: string | null; data?: unknown };
+  };
   const blockId = typeof body.blockId === "string" ? body.blockId : "";
   const instruction = typeof body.instruction === "string" ? body.instruction.trim() : "";
   if (!blockId || !instruction) {
     return NextResponse.json({ error: "blockId e instruction requeridos" }, { status: 400 });
   }
+  // Guard mínimo: aceptar base solo si es objeto. Es input no confiable, pero SOLO alimenta
+  // el prompt — el OUTPUT igual pasa por validateBlockPayload y el guardado es un PUT aparte.
+  const base = body.base && typeof body.base === "object" ? body.base : null;
 
   // Cargar el bloque + su sección + canvas (validar pertenencia al proyecto + Kickoff).
   const block = await prisma.canvasBlock.findFirst({
@@ -69,10 +78,13 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     : agent?.systemPrompt ?? "Generás contenido de la landing de kickoff de cara al cliente de Smarteam.";
   const systemPrompt = `${basePrompt}\n\n${getSingleBlockOutputInstructions(block.blockType)}`;
 
+  // Multi-turno: si vino un draft en progreso (base), la regen parte de ESE estado, no del
+  // bloque guardado. El tipo SIEMPRE sale de la DB (base no puede cambiarlo). Sin base →
+  // idéntico a B.1 (single-turn).
   const currentBlock = JSON.stringify({
     type: block.blockType.toLowerCase(),
-    content: block.content ?? undefined,
-    data: block.data ?? undefined,
+    content: (base ? base.content : block.content) ?? undefined,
+    data: (base ? base.data : block.data) ?? undefined,
   });
 
   const userMessage = `Empresa: ${project?.client.name ?? "—"}

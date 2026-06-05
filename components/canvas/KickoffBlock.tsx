@@ -41,53 +41,69 @@ export default function KickoffBlock({
   /** Prosa light-on-dark (para el hero oscuro). */
   invert?: boolean;
   onSave?: (updates: { content?: string; data?: unknown }) => void | boolean | Promise<void | boolean>;
-  /** Regen por IA: devuelve el content/data nuevo (NO escribe; el guardado es onSave→PUT). */
-  onRegenerate?: (instruction: string) => Promise<{ content?: string | null; data?: unknown } | null>;
+  /** Regen por IA: devuelve el content/data nuevo (NO escribe; el guardado es onSave→PUT).
+   *  `base` (multi-turno B.2) = punto de partida; si se pasa, la regen parte de ese draft. */
+  onRegenerate?: (
+    instruction: string,
+    base?: { content?: string | null; data?: unknown },
+  ) => Promise<{ content?: string | null; data?: unknown } | null>;
 }) {
   const [editing, setEditing] = useState(false);
   const [aiPrompting, setAiPrompting] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
-  const [aiDraft, setAiDraft] = useState<{ content?: string | null; data?: unknown } | null>(null);
+  // Multi-turno (B.2): pila de drafts de IA (encadenar + deshacer). "Draft actual" = tope;
+  // si está vacía, el bloque guardado. `liveValue` = lo que está en pantalla ahora (incluye
+  // ediciones a mano) → punto de partida (base) de la próxima regen; null = sin cambios desde
+  // el último draft/bloque.
+  const [draftStack, setDraftStack] = useState<Array<{ content?: string | null; data?: unknown }>>([]);
+  const [liveValue, setLiveValue] = useState<{ content?: string | null; data?: unknown } | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const data = (block.data ?? {}) as Record<string, unknown>;
   const canEdit = editable && !!onSave && EDITABLE_TYPES.includes(block.blockType);
   const canRegen = editable && !!onRegenerate && AI_REGEN_TYPES.includes(block.blockType);
 
-  // ── Editor (manual, o pre-llenado por una regen de IA) ─────────────────────
+  // ── Editor multi-turno (manual, o encadenado por regens de IA) ─────────────
   if (editing && canEdit) {
-    // Cierra el editor SOLO si guardó. Si falla (false) lo deja abierto con el
-    // texto del CSE (el banner de error de KickoffLanding ya avisa).
-    const commit = async (update: { content?: string; data?: unknown }) => {
-      const ok = await onSave!(update);
-      if (ok !== false) {
-        setEditing(false);
-        setAiDraft(null);
-        setAiError(null);
-      }
-    };
-    const cancel = () => {
+    const currentDraft = draftStack.length ? draftStack[draftStack.length - 1] : null;
+    const resetDraft = () => {
       setEditing(false);
-      setAiDraft(null);
+      setDraftStack([]);
+      setLiveValue(null);
       setAiError(null);
     };
-    // Semilla del editor: el draft de IA si existe, si no el contenido actual.
-    const seedContent = aiDraft && typeof aiDraft.content === "string" ? aiDraft.content : block.content ?? "";
-    const seedData = ((aiDraft && aiDraft.data !== undefined ? aiDraft.data : block.data) ?? {}) as Record<string, unknown>;
-    const k = aiDraft ? "ai" : "orig"; // remonta el editor cuando llega el draft de IA
+    // Cierra y limpia SOLO si guardó. Si falla (false) deja el editor con el draft.
+    const commit = async (update: { content?: string; data?: unknown }) => {
+      const ok = await onSave!(update);
+      if (ok !== false) resetDraft();
+    };
+    const cancel = resetDraft;
+    const undo = () => {
+      setDraftStack((s) => s.slice(0, -1)); // pop → remonta (key) → re-siembra del nuevo tope
+      setLiveValue(null);
+      setAiError(null);
+    };
+    // Semilla del editor: el tope de la pila si hay, si no el contenido guardado.
+    const seedContent = currentDraft && typeof currentDraft.content === "string" ? currentDraft.content : block.content ?? "";
+    const seedData = ((currentDraft && currentDraft.data !== undefined ? currentDraft.data : block.data) ?? {}) as Record<string, unknown>;
+    const k = String(draftStack.length); // remonta SOLO al push/undo (no en ediciones a mano)
+
+    // Lo que el CSE ve ahora → base de la próxima regen (fiel a ediciones a mano).
+    const reportContent = (content: string) => setLiveValue({ content });
+    const reportData = (d: unknown) => setLiveValue({ data: d });
 
     let editor: ReactNode;
     switch (block.blockType) {
       case "HEADING":
-        editor = <HeadingEditor key={k} initial={seedContent} onSave={(content) => commit({ content })} onCancel={cancel} />;
+        editor = <HeadingEditor key={k} initial={seedContent} onSave={(content) => commit({ content })} onCancel={cancel} onDraftChange={reportContent} />;
         break;
       case "TABLE":
-        editor = <TableEditor key={k} data={seedData} onSave={(d) => commit({ data: d })} onCancel={cancel} />;
+        editor = <TableEditor key={k} data={seedData} onSave={(d) => commit({ data: d })} onCancel={cancel} onDraftChange={reportData} />;
         break;
       case "METRIC":
-        editor = <MetricEditor key={k} data={seedData} onSave={(d) => commit({ data: d })} onCancel={cancel} />;
+        editor = <MetricEditor key={k} data={seedData} onSave={(d) => commit({ data: d })} onCancel={cancel} onDraftChange={reportData} />;
         break;
       default: // TEXT, CARD, CALLOUT
-        editor = <MarkdownEditor key={k} initial={seedContent} onSave={(content) => commit({ content })} onCancel={cancel} />;
+        editor = <MarkdownEditor key={k} initial={seedContent} onSave={(content) => commit({ content })} onCancel={cancel} onDraftChange={reportContent} />;
     }
 
     return (
@@ -95,17 +111,26 @@ export default function KickoffBlock({
         {canRegen && (
           <AiPromptBox
             busy={aiBusy}
-            seeded={!!aiDraft}
+            seeded={draftStack.length > 0}
             error={aiError}
+            canUndo={draftStack.length > 0}
+            onUndo={undo}
             onRegen={async (instruction) => {
               setAiError(null);
               setAiBusy(true);
-              const r = await onRegenerate!(instruction);
+              // Parte de lo que el CSE ve ahora (ediciones a mano incluidas); si no, del tope;
+              // si tampoco, sin base (primer turno → el endpoint usa el bloque guardado).
+              const base = liveValue ?? currentDraft ?? undefined;
+              const r = await onRegenerate!(instruction, base);
               setAiBusy(false);
-              // Solo pre-llena con un payload válido; si falló, muestra el error y deja
-              // el editor con lo que había (nunca datos rotos).
-              if (r) setAiDraft(r);
-              else setAiError("No se pudo regenerar el bloque. Probá de nuevo o ajustá la instrucción.");
+              // Solo encadena con un payload válido; si falló, muestra el error y deja el
+              // draft en el último estado bueno (nunca datos rotos).
+              if (r) {
+                setLiveValue(null);
+                setDraftStack((s) => [...s, r]);
+              } else {
+                setAiError("No se pudo regenerar el bloque. Probá de nuevo o ajustá la instrucción.");
+              }
             }}
           />
         )}
@@ -114,7 +139,7 @@ export default function KickoffBlock({
     );
   }
 
-  // ── Prompt de IA desde la vista (sin abrir antes el editor manual) ─────────
+  // ── Prompt de IA desde la vista (primer turno; sin abrir antes el editor) ──
   if (aiPrompting && canRegen) {
     return (
       <div onClick={(e) => e.stopPropagation()}>
@@ -130,12 +155,13 @@ export default function KickoffBlock({
           onRegen={async (instruction) => {
             setAiError(null);
             setAiBusy(true);
-            const r = await onRegenerate!(instruction);
+            const r = await onRegenerate!(instruction); // primer turno: sin base (parte del bloque guardado)
             setAiBusy(false);
             // Solo abre el editor pre-llenado con un payload válido; si falló, se queda
             // en el prompt mostrando el error (sin pre-llenar ni romper la UI).
             if (r) {
-              setAiDraft(r);
+              setLiveValue(null);
+              setDraftStack([r]);
               setAiPrompting(false);
               setEditing(true);
             } else {
@@ -351,7 +377,7 @@ function renderView(block: BlockData, data: Record<string, unknown>) {
 
 /** Editor de markdown in-place: textarea que auto-crece (sin scroll ni salto).
  *  Edita el markdown FUENTE (cero round-trip; el markdown crudo se lee bien). */
-function MarkdownEditor({ initial, onSave, onCancel }: { initial: string; onSave: (c: string) => void; onCancel: () => void }) {
+function MarkdownEditor({ initial, onSave, onCancel, onDraftChange }: { initial: string; onSave: (c: string) => void; onCancel: () => void; onDraftChange?: (c: string) => void }) {
   const [value, setValue] = useState(initial);
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -369,7 +395,7 @@ function MarkdownEditor({ initial, onSave, onCancel }: { initial: string; onSave
       <textarea
         ref={ref}
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => { setValue(e.target.value); onDraftChange?.(e.target.value); }}
         onKeyDown={(e) => {
           if (e.key === "Escape") onCancel();
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -387,7 +413,7 @@ function MarkdownEditor({ initial, onSave, onCancel }: { initial: string; onSave
 }
 
 /** Título (HEADING) — texto plano de una línea. */
-function HeadingEditor({ initial, onSave, onCancel }: { initial: string; onSave: (c: string) => void; onCancel: () => void }) {
+function HeadingEditor({ initial, onSave, onCancel, onDraftChange }: { initial: string; onSave: (c: string) => void; onCancel: () => void; onDraftChange?: (c: string) => void }) {
   const [value, setValue] = useState(initial);
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -398,7 +424,7 @@ function HeadingEditor({ initial, onSave, onCancel }: { initial: string; onSave:
       <input
         ref={ref}
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => { setValue(e.target.value); onDraftChange?.(e.target.value); }}
         onKeyDown={(e) => {
           if (e.key === "Escape") onCancel();
           if (e.key === "Enter") {
@@ -418,24 +444,47 @@ function HeadingEditor({ initial, onSave, onCancel }: { initial: string; onSave:
 /** Tabla — grilla de inputs por celda + agregar/quitar filas y columnas
  *  (estructura determinística por botones; el contenido por IA va aparte).
  *  Preserva el resto de `data`. */
-function TableEditor({ data, onSave, onCancel }: { data: Record<string, unknown>; onSave: (d: unknown) => void; onCancel: () => void }) {
+function TableEditor({ data, onSave, onCancel, onDraftChange }: { data: Record<string, unknown>; onSave: (d: unknown) => void; onCancel: () => void; onDraftChange?: (d: unknown) => void }) {
   const [headers, setHeaders] = useState<string[]>(Array.isArray(data.headers) ? (data.headers as string[]) : []);
   const [rows, setRows] = useState<string[][]>(
     Array.isArray(data.rows) ? (data.rows as string[][]).map((r) => [...r]) : [],
   );
-  const setHeader = (i: number, v: string) => setHeaders((h) => h.map((x, j) => (j === i ? v : x)));
-  const setCell = (ri: number, ci: number, v: string) =>
-    setRows((rs) => rs.map((r, j) => (j === ri ? r.map((c, k) => (k === ci ? v : c)) : r)));
+  // Reporta el estado en pantalla → la próxima regen parte de estos ajustes a mano.
+  const report = (h: string[], r: string[][]) => onDraftChange?.({ ...data, headers: h, rows: r });
+  const setHeader = (i: number, v: string) => {
+    const h = headers.map((x, j) => (j === i ? v : x));
+    setHeaders(h);
+    report(h, rows);
+  };
+  const setCell = (ri: number, ci: number, v: string) => {
+    const r = rows.map((row, j) => (j === ri ? row.map((c, k) => (k === ci ? v : c)) : row));
+    setRows(r);
+    report(headers, r);
+  };
   const colCount = headers.length || rows[0]?.length || 1;
-  const addRow = () => setRows((rs) => [...rs, Array.from({ length: colCount }, () => "")]);
-  const removeRow = (ri: number) => setRows((rs) => rs.filter((_, i) => i !== ri));
+  const addRow = () => {
+    const r = [...rows, Array.from({ length: colCount }, () => "")];
+    setRows(r);
+    report(headers, r);
+  };
+  const removeRow = (ri: number) => {
+    const r = rows.filter((_, i) => i !== ri);
+    setRows(r);
+    report(headers, r);
+  };
   const addCol = () => {
-    setHeaders((h) => [...h, ""]);
-    setRows((rs) => rs.map((r) => [...r, ""]));
+    const h = [...headers, ""];
+    const r = rows.map((row) => [...row, ""]);
+    setHeaders(h);
+    setRows(r);
+    report(h, r);
   };
   const removeCol = (ci: number) => {
-    setHeaders((h) => h.filter((_, i) => i !== ci));
-    setRows((rs) => rs.map((r) => r.filter((_, i) => i !== ci)));
+    const h = headers.filter((_, i) => i !== ci);
+    const r = rows.map((row) => row.filter((_, i) => i !== ci));
+    setHeaders(h);
+    setRows(r);
+    report(h, r);
   };
   return (
     <div onClick={(e) => e.stopPropagation()}>
@@ -482,16 +531,17 @@ function TableEditor({ data, onSave, onCancel }: { data: Record<string, unknown>
 }
 
 /** Métrica — campos valor / etiqueta / comparación. Preserva el resto de `data`. */
-function MetricEditor({ data, onSave, onCancel }: { data: Record<string, unknown>; onSave: (d: unknown) => void; onCancel: () => void }) {
+function MetricEditor({ data, onSave, onCancel, onDraftChange }: { data: Record<string, unknown>; onSave: (d: unknown) => void; onCancel: () => void; onDraftChange?: (d: unknown) => void }) {
   const [value, setValue] = useState(typeof data.value === "string" ? data.value : "");
   const [label, setLabel] = useState(typeof data.label === "string" ? data.label : "");
   const [comparison, setComparison] = useState(typeof data.comparison === "string" ? data.comparison : "");
+  const report = (v: string, l: string, c: string) => onDraftChange?.({ ...data, value: v, label: l, comparison: c });
   return (
     <div onClick={(e) => e.stopPropagation()}>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <label className="kl-edit-field"><span>Valor</span><input value={value} onChange={(e) => setValue(e.target.value)} className="kl-edit-cell" /></label>
-        <label className="kl-edit-field"><span>Etiqueta</span><input value={label} onChange={(e) => setLabel(e.target.value)} className="kl-edit-cell" /></label>
-        <label className="kl-edit-field"><span>Comparación (opcional)</span><input value={comparison} onChange={(e) => setComparison(e.target.value)} className="kl-edit-cell" /></label>
+        <label className="kl-edit-field"><span>Valor</span><input value={value} onChange={(e) => { setValue(e.target.value); report(e.target.value, label, comparison); }} className="kl-edit-cell" /></label>
+        <label className="kl-edit-field"><span>Etiqueta</span><input value={label} onChange={(e) => { setLabel(e.target.value); report(value, e.target.value, comparison); }} className="kl-edit-cell" /></label>
+        <label className="kl-edit-field"><span>Comparación (opcional)</span><input value={comparison} onChange={(e) => { setComparison(e.target.value); report(value, label, e.target.value); }} className="kl-edit-cell" /></label>
       </div>
       <EditBar onSave={() => onSave({ ...data, value, label, comparison })} onCancel={onCancel} />
     </div>
@@ -520,6 +570,8 @@ function AiPromptBox({
   seeded,
   autoFocus = false,
   error = null,
+  canUndo = false,
+  onUndo,
   onRegen,
   onCancel,
 }: {
@@ -529,6 +581,9 @@ function AiPromptBox({
   autoFocus?: boolean;
   /** Error del último intento (se muestra inline; el editor NO se pre-llena). */
   error?: string | null;
+  /** Hay al menos un ajuste en la pila → se puede deshacer el último. */
+  canUndo?: boolean;
+  onUndo?: () => void;
   onRegen: (instruction: string) => void | Promise<void>;
   onCancel?: () => void;
 }) {
@@ -561,6 +616,11 @@ function AiPromptBox({
           className="kl-edit-cell"
           style={{ flex: 1 }}
         />
+        {canUndo && onUndo && (
+          <button onClick={onUndo} disabled={busy} title="Deshacer último ajuste" style={{ fontSize: 12, color: "var(--text-secondary)", background: "transparent", border: "none", cursor: busy ? "default" : "pointer" }}>
+            ↶ Deshacer
+          </button>
+        )}
         {onCancel && (
           <button onClick={onCancel} disabled={busy} style={{ fontSize: 12, color: "var(--text-secondary)", background: "transparent", border: "none", cursor: busy ? "default" : "pointer" }}>
             Cancelar

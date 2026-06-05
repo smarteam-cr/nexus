@@ -153,7 +153,7 @@ export default function KickoffLanding({
           {hero && hero.blocks.length > 0 && (
             <div className="reveal" data-stagger="2" style={{ marginTop: 18, maxWidth: 600, marginInline: "auto", fontSize: 17 }}>
               {hero.blocks.map((b) => (
-                <KickoffBlock key={b.id} block={b} editable={editable} invert onSave={(u) => saveBlock(hero.id, b.id, u)} onRegenerate={(instr) => regenerateBlock(hero.id, b.id, instr)} />
+                <KickoffBlock key={b.id} block={b} editable={editable} invert onSave={(u) => saveBlock(hero.id, b.id, u)} onRegenerate={(instr, base) => regenerateBlock(hero.id, b.id, instr, base)} />
               ))}
             </div>
           )}
@@ -197,7 +197,7 @@ export default function KickoffLanding({
                       block={block}
                       editable={editable}
                       onSave={(u) => saveBlock(section.id, block.id, u)}
-                      onRegenerate={(instr) => regenerateBlock(section.id, block.id, instr)}
+                      onRegenerate={(instr, base) => regenerateBlock(section.id, block.id, instr, base)}
                       onAccept={() => acceptBlock(section.id, block.id)}
                       onDelete={() => deleteBlock(section.id, block.id)}
                     />
@@ -266,7 +266,7 @@ function BlockRow({
   block: BlockData;
   editable: boolean;
   onSave: (u: { content?: string; data?: unknown }) => void | boolean | Promise<void | boolean>;
-  onRegenerate?: (instruction: string) => Promise<{ content?: string | null; data?: unknown } | null>;
+  onRegenerate?: (instruction: string, base?: { content?: string | null; data?: unknown }) => Promise<{ content?: string | null; data?: unknown } | null>;
   onAccept: () => void;
   onDelete: () => void;
 }) {
