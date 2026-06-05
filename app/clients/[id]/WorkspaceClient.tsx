@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
+import ClientHandoffsPanel from "@/components/clients/ClientHandoffsPanel";
 
 const STRATEGY_TAB_ID = "__strategy__";
+const HANDOFFS_TAB_ID = "__handoffs__";
 
 interface ProjectSummary {
   id: string;
@@ -88,6 +90,7 @@ function ProjectSection({
   const { activeProjectId, setActiveProjectId } = useWorkspace();
 
   const isStrategy = activeProjectId === STRATEGY_TAB_ID;
+  const isHandoffs = activeProjectId === HANDOFFS_TAB_ID;
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
   return (
@@ -111,6 +114,22 @@ function ProjectSection({
             </button>
           );
         })}
+
+        {/* Handoffs — entidad cliente-level (1:N). El traspaso Sales→CS que arranca
+            cada proyecto; vive a nivel cliente, junto a "Información del cliente". */}
+        <button
+          onClick={() => setActiveProjectId(HANDOFFS_TAB_ID)}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            isHandoffs
+              ? "border-brand text-white"
+              : "border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700"
+          }`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m4 6H4m0 0l4 4m-4-4l4-4" />
+          </svg>
+          Handoffs
+        </button>
 
         {/* Información del cliente — siempre al final. Internamente sigue siendo
             el Project con serviceType=__strategy__ (mismo storage; cambia el
@@ -137,6 +156,8 @@ function ProjectSection({
           projectId={strategyProjectId}
           canvasId={strategyCanvasId}
         />
+      ) : isHandoffs ? (
+        <ClientHandoffsPanel key={HANDOFFS_TAB_ID} clientId={clientId} />
       ) : activeProjectId && activeProject ? (
         <ProjectCanvasPanel
           key={activeProjectId}

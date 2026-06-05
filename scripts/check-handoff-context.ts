@@ -20,6 +20,7 @@ async function main() {
   const handoffs = await prisma.handoff.findMany({
     select: {
       id: true,
+      clientId: true,
       projectId: true,
       hubspotDealId: true,
       hubspotSyncStatus: true,
@@ -48,6 +49,7 @@ async function main() {
     console.log(
       `  ${tag}  canvas OK · ${all.length} bloques (${confirmed} CONFIRMED) · sync=${h.hubspotSyncStatus} · deal=${h.hubspotDealId ?? "-"}`,
     );
+    console.log(`       clientId=${h.clientId}  projectId=${h.projectId}`);
   }
 }
 
