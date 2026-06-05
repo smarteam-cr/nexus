@@ -139,6 +139,43 @@ export function useCanvasSections(projectId: string, canvasId: string) {
     [mutate, refetch],
   );
 
+  // Edición granular por IA: pide al endpoint de regen el content/data nuevo de un
+  // bloque y lo DEVUELVE (no escribe). El guardado real lo hace saveBlock (PUT) — la
+  // misma vía. Devuelve null si falló.
+  const regenerateBlock = useCallback(
+    async (
+      sectionId: string,
+      blockId: string,
+      instruction: string,
+    ): Promise<{ content?: string | null; data?: unknown } | null> => {
+      try {
+        const res = await fetch(`${blocksUrl(sectionId)}/regenerate`, {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ blockId, instruction }),
+        });
+        if (!res.ok) {
+          let detail = "";
+          try {
+            detail = (await res.json())?.error ?? "";
+          } catch {
+            /* sin JSON */
+          }
+          console.error(`[useCanvasSections] regenerate → ${res.status} ${detail}`);
+          setError("No se pudo regenerar el bloque con IA. Reintentá.");
+          return null;
+        }
+        setError(null);
+        return (await res.json()) as { content?: string | null; data?: unknown };
+      } catch (e) {
+        console.error("[useCanvasSections] error de red al regenerar", e);
+        setError("Error de conexión al regenerar el bloque.");
+        return null;
+      }
+    },
+    [projectId], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   const addBlock = useCallback(
     async (sectionId: string, blockType: string = "TEXT", content: string = "") => {
       await mutate(sectionId, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ blockType, content }) });
@@ -175,6 +212,7 @@ export function useCanvasSections(projectId: string, canvasId: string) {
     rejectBlock: deleteBlock,
     deleteBlock,
     saveBlock,
+    regenerateBlock,
     addBlock,
     acceptAll,
   };

@@ -87,6 +87,7 @@ export default function KickoffLanding({
     acceptBlock,
     deleteBlock,
     saveBlock,
+    regenerateBlock,
     addBlock,
     acceptAll,
     error,
@@ -152,7 +153,7 @@ export default function KickoffLanding({
           {hero && hero.blocks.length > 0 && (
             <div className="reveal" data-stagger="2" style={{ marginTop: 18, maxWidth: 600, marginInline: "auto", fontSize: 17 }}>
               {hero.blocks.map((b) => (
-                <KickoffBlock key={b.id} block={b} editable={editable} invert onSave={(u) => saveBlock(hero.id, b.id, u)} />
+                <KickoffBlock key={b.id} block={b} editable={editable} invert onSave={(u) => saveBlock(hero.id, b.id, u)} onRegenerate={(instr) => regenerateBlock(hero.id, b.id, instr)} />
               ))}
             </div>
           )}
@@ -196,6 +197,7 @@ export default function KickoffLanding({
                       block={block}
                       editable={editable}
                       onSave={(u) => saveBlock(section.id, block.id, u)}
+                      onRegenerate={(instr) => regenerateBlock(section.id, block.id, instr)}
                       onAccept={() => acceptBlock(section.id, block.id)}
                       onDelete={() => deleteBlock(section.id, block.id)}
                     />
@@ -257,12 +259,14 @@ function BlockRow({
   block,
   editable,
   onSave,
+  onRegenerate,
   onAccept,
   onDelete,
 }: {
   block: BlockData;
   editable: boolean;
   onSave: (u: { content?: string; data?: unknown }) => void | boolean | Promise<void | boolean>;
+  onRegenerate?: (instruction: string) => Promise<{ content?: string | null; data?: unknown } | null>;
   onAccept: () => void;
   onDelete: () => void;
 }) {
@@ -285,7 +289,7 @@ function BlockRow({
           <IconBtn title="Eliminar bloque" color="#dc2626" onClick={onDelete} path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
         </div>
       )}
-      <KickoffBlock block={block} editable={editable} onSave={onSave} />
+      <KickoffBlock block={block} editable={editable} onSave={onSave} onRegenerate={onRegenerate} />
     </div>
   );
 }

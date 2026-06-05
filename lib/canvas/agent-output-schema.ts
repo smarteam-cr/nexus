@@ -111,3 +111,36 @@ FORMATO JSON DE RESPUESTA:
 }
 `;
 }
+
+// ── Single-block output (edición granular por IA, Fase B) ────────────────────
+// Reusa el MISMO catálogo de tipos que el formato sections+blocks, pero pide UN
+// solo bloque (el endpoint de regen devuelve content/data de ese bloque; el
+// guardado pasa por el PUT). No toca getBlockOutputFormatInstructions.
+const SINGLE_BLOCK_TYPE_RULES: Record<string, string> = {
+  text: `Tipo "text": el contenido va en "content" (markdown: ## y ### subtítulos, **negrita**, listas con -). No uses "data".`,
+  card: `Tipo "card": el contenido va en "content" (markdown).`,
+  heading: `Tipo "heading": el texto del título va en "content"; "data": { "level": 2 } o { "level": 3 }.`,
+  table: `Tipo "table": "data": { "headers": ["Col1","Col2"], "rows": [["v1","v2"]] }. Mantené la MISMA estructura de columnas salvo que la instrucción pida cambiarla.`,
+  metric: `Tipo "metric": "data": { "label": "...", "value": "...", "trend": "up"|"down"|"flat", "comparison": "..." }.`,
+  callout: `Tipo "callout": el cuerpo va en "content"; "data": { "variant": "info"|"warning"|"success"|"error", "title": "opcional" }.`,
+};
+
+/**
+ * Instrucciones de formato para regenerar UN bloque de un tipo dado.
+ * Devuelve el JSON de un único bloque { type, content?, data? }.
+ */
+export function getSingleBlockOutputInstructions(blockType: string): string {
+  const t = (blockType || "text").toLowerCase();
+  const rule = SINGLE_BLOCK_TYPE_RULES[t] ?? SINGLE_BLOCK_TYPE_RULES.text;
+
+  return `
+
+ESTÁS EDITANDO UN SOLO BLOQUE EXISTENTE (tipo "${t}"). Regeneralo siguiendo la instrucción del CSE y MANTENÉ EL MISMO TIPO ("${t}").
+
+REGLA DEL TIPO:
+${rule}
+
+FORMATO JSON DE RESPUESTA (un único bloque, SIN texto fuera del JSON):
+{ "type": "${t}", "content": "<markdown si aplica; omitilo si el tipo usa data>", "data": { } }
+`;
+}

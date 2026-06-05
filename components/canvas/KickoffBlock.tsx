@@ -20,67 +20,172 @@
  * Cada guardado pega al MISMO PUT por blockId (vía onSave→saveBlock).
  */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { BlockData } from "./BlockRenderer";
 
 const EDITABLE_TYPES = ["TEXT", "CARD", "CALLOUT", "HEADING", "TABLE", "METRIC"];
+// Tipos donde la regen por IA tiene sentido (los 3 del plan: texto/métrica/tabla).
+const AI_REGEN_TYPES = ["TEXT", "CARD", "CALLOUT", "TABLE", "METRIC"];
 
 export default function KickoffBlock({
   block,
   editable = false,
   invert = false,
   onSave,
+  onRegenerate,
 }: {
   block: BlockData;
   editable?: boolean;
   /** Prosa light-on-dark (para el hero oscuro). */
   invert?: boolean;
   onSave?: (updates: { content?: string; data?: unknown }) => void | boolean | Promise<void | boolean>;
+  /** Regen por IA: devuelve el content/data nuevo (NO escribe; el guardado es onSave→PUT). */
+  onRegenerate?: (instruction: string) => Promise<{ content?: string | null; data?: unknown } | null>;
 }) {
   const [editing, setEditing] = useState(false);
+  const [aiPrompting, setAiPrompting] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiDraft, setAiDraft] = useState<{ content?: string | null; data?: unknown } | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const data = (block.data ?? {}) as Record<string, unknown>;
   const canEdit = editable && !!onSave && EDITABLE_TYPES.includes(block.blockType);
+  const canRegen = editable && !!onRegenerate && AI_REGEN_TYPES.includes(block.blockType);
 
+  // ── Editor (manual, o pre-llenado por una regen de IA) ─────────────────────
   if (editing && canEdit) {
     // Cierra el editor SOLO si guardó. Si falla (false) lo deja abierto con el
     // texto del CSE (el banner de error de KickoffLanding ya avisa).
     const commit = async (update: { content?: string; data?: unknown }) => {
       const ok = await onSave!(update);
-      if (ok !== false) setEditing(false);
+      if (ok !== false) {
+        setEditing(false);
+        setAiDraft(null);
+        setAiError(null);
+      }
     };
-    const cancel = () => setEditing(false);
+    const cancel = () => {
+      setEditing(false);
+      setAiDraft(null);
+      setAiError(null);
+    };
+    // Semilla del editor: el draft de IA si existe, si no el contenido actual.
+    const seedContent = aiDraft && typeof aiDraft.content === "string" ? aiDraft.content : block.content ?? "";
+    const seedData = ((aiDraft && aiDraft.data !== undefined ? aiDraft.data : block.data) ?? {}) as Record<string, unknown>;
+    const k = aiDraft ? "ai" : "orig"; // remonta el editor cuando llega el draft de IA
+
+    let editor: ReactNode;
     switch (block.blockType) {
       case "HEADING":
-        return <HeadingEditor initial={block.content ?? ""} onSave={(content) => commit({ content })} onCancel={cancel} />;
+        editor = <HeadingEditor key={k} initial={seedContent} onSave={(content) => commit({ content })} onCancel={cancel} />;
+        break;
       case "TABLE":
-        return <TableEditor data={data} onSave={(d) => commit({ data: d })} onCancel={cancel} />;
+        editor = <TableEditor key={k} data={seedData} onSave={(d) => commit({ data: d })} onCancel={cancel} />;
+        break;
       case "METRIC":
-        return <MetricEditor data={data} onSave={(d) => commit({ data: d })} onCancel={cancel} />;
+        editor = <MetricEditor key={k} data={seedData} onSave={(d) => commit({ data: d })} onCancel={cancel} />;
+        break;
       default: // TEXT, CARD, CALLOUT
-        return <MarkdownEditor initial={block.content ?? ""} onSave={(content) => commit({ content })} onCancel={cancel} />;
+        editor = <MarkdownEditor key={k} initial={seedContent} onSave={(content) => commit({ content })} onCancel={cancel} />;
     }
+
+    return (
+      <div onClick={(e) => e.stopPropagation()}>
+        {canRegen && (
+          <AiPromptBox
+            busy={aiBusy}
+            seeded={!!aiDraft}
+            error={aiError}
+            onRegen={async (instruction) => {
+              setAiError(null);
+              setAiBusy(true);
+              const r = await onRegenerate!(instruction);
+              setAiBusy(false);
+              // Solo pre-llena con un payload válido; si falló, muestra el error y deja
+              // el editor con lo que había (nunca datos rotos).
+              if (r) setAiDraft(r);
+              else setAiError("No se pudo regenerar el bloque. Probá de nuevo o ajustá la instrucción.");
+            }}
+          />
+        )}
+        {editor}
+      </div>
+    );
+  }
+
+  // ── Prompt de IA desde la vista (sin abrir antes el editor manual) ─────────
+  if (aiPrompting && canRegen) {
+    return (
+      <div onClick={(e) => e.stopPropagation()}>
+        <AiPromptBox
+          busy={aiBusy}
+          seeded={false}
+          autoFocus
+          error={aiError}
+          onCancel={() => {
+            setAiError(null);
+            setAiPrompting(false);
+          }}
+          onRegen={async (instruction) => {
+            setAiError(null);
+            setAiBusy(true);
+            const r = await onRegenerate!(instruction);
+            setAiBusy(false);
+            // Solo abre el editor pre-llenado con un payload válido; si falló, se queda
+            // en el prompt mostrando el error (sin pre-llenar ni romper la UI).
+            if (r) {
+              setAiDraft(r);
+              setAiPrompting(false);
+              setEditing(true);
+            } else {
+              setAiError("No se pudo regenerar el bloque. Probá de nuevo o ajustá la instrucción.");
+            }
+          }}
+        />
+      </div>
+    );
   }
 
   const view = renderView(block, data);
-  if (!canEdit) return invert ? <div className="kl-invert">{view}</div> : view;
+  if (!canEdit && !canRegen) return invert ? <div className="kl-invert">{view}</div> : view;
 
   return (
     <div
-      role="button"
-      tabIndex={0}
       className={invert ? "kl-invert" : undefined}
-      onClick={() => setEditing(true)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") setEditing(true);
-      }}
-      title="Clic para editar"
-      style={{ cursor: "text", borderRadius: 8, margin: "0 -6px", padding: "0 6px", transition: "background-color 150ms ease" }}
+      style={{ position: "relative", borderRadius: 8, margin: "0 -6px", padding: "0 6px", transition: "background-color 150ms ease" }}
       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--brand-blue-soft)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
-      {view}
+      {canRegen && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setAiError(null);
+            setAiPrompting(true);
+          }}
+          title="Editar con IA"
+          style={{ position: "absolute", top: 2, right: 2, zIndex: 2, fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface, #fff)", color: "var(--brand-blue)", cursor: "pointer", opacity: 0.85 }}
+        >
+          ✨ IA
+        </button>
+      )}
+      {canEdit ? (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setEditing(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") setEditing(true);
+          }}
+          title="Clic para editar"
+          style={{ cursor: "text" }}
+        >
+          {view}
+        </div>
+      ) : (
+        view
+      )}
     </div>
   );
 }
@@ -310,8 +415,9 @@ function HeadingEditor({ initial, onSave, onCancel }: { initial: string; onSave:
   );
 }
 
-/** Tabla — grilla de inputs por celda con dimensiones BLOQUEADas (sin agregar/
- *  quitar filas o columnas; eso es Fase B vía chat). Preserva el resto de `data`. */
+/** Tabla — grilla de inputs por celda + agregar/quitar filas y columnas
+ *  (estructura determinística por botones; el contenido por IA va aparte).
+ *  Preserva el resto de `data`. */
 function TableEditor({ data, onSave, onCancel }: { data: Record<string, unknown>; onSave: (d: unknown) => void; onCancel: () => void }) {
   const [headers, setHeaders] = useState<string[]>(Array.isArray(data.headers) ? (data.headers as string[]) : []);
   const [rows, setRows] = useState<string[][]>(
@@ -320,6 +426,17 @@ function TableEditor({ data, onSave, onCancel }: { data: Record<string, unknown>
   const setHeader = (i: number, v: string) => setHeaders((h) => h.map((x, j) => (j === i ? v : x)));
   const setCell = (ri: number, ci: number, v: string) =>
     setRows((rs) => rs.map((r, j) => (j === ri ? r.map((c, k) => (k === ci ? v : c)) : r)));
+  const colCount = headers.length || rows[0]?.length || 1;
+  const addRow = () => setRows((rs) => [...rs, Array.from({ length: colCount }, () => "")]);
+  const removeRow = (ri: number) => setRows((rs) => rs.filter((_, i) => i !== ri));
+  const addCol = () => {
+    setHeaders((h) => [...h, ""]);
+    setRows((rs) => rs.map((r) => [...r, ""]));
+  };
+  const removeCol = (ci: number) => {
+    setHeaders((h) => h.filter((_, i) => i !== ci));
+    setRows((rs) => rs.map((r) => r.filter((_, i) => i !== ci)));
+  };
   return (
     <div onClick={(e) => e.stopPropagation()}>
       <div style={{ overflowX: "auto" }}>
@@ -329,9 +446,13 @@ function TableEditor({ data, onSave, onCancel }: { data: Record<string, unknown>
               <tr>
                 {headers.map((h, i) => (
                   <th key={i} style={{ padding: 0 }}>
-                    <input value={h} onChange={(e) => setHeader(i, e.target.value)} className="kl-edit-cell" style={{ fontWeight: 600 }} />
+                    <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <input value={h} onChange={(e) => setHeader(i, e.target.value)} className="kl-edit-cell" style={{ fontWeight: 600 }} />
+                      <button onClick={() => removeCol(i)} title="Quitar columna" style={{ color: "var(--text-muted)", background: "transparent", border: "none", cursor: "pointer", fontSize: 15, lineHeight: 1, padding: "0 2px" }}>×</button>
+                    </div>
                   </th>
                 ))}
+                <th style={{ width: 22 }} />
               </tr>
             </thead>
           )}
@@ -343,13 +464,17 @@ function TableEditor({ data, onSave, onCancel }: { data: Record<string, unknown>
                     <input value={c} onChange={(e) => setCell(ri, ci, e.target.value)} className="kl-edit-cell" />
                   </td>
                 ))}
+                <td style={{ padding: 0, width: 22, textAlign: "center" }}>
+                  <button onClick={() => removeRow(ri)} title="Quitar fila" style={{ color: "var(--text-muted)", background: "transparent", border: "none", cursor: "pointer", fontSize: 15, lineHeight: 1 }}>×</button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 8 }}>
-        Editás el contenido de las celdas. Agregar o quitar filas/columnas se le pide al chat (Fase B).
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <button onClick={addRow} style={{ fontSize: 12, color: "var(--brand-blue)", background: "transparent", border: "1px dashed var(--border)", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}>+ Fila</button>
+        <button onClick={addCol} style={{ fontSize: 12, color: "var(--brand-blue)", background: "transparent", border: "1px dashed var(--border)", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}>+ Columna</button>
       </div>
       <EditBar onSave={() => onSave({ ...data, headers, rows })} onCancel={onCancel} />
     </div>
@@ -384,6 +509,72 @@ function EditBar({ onSave, onCancel }: { onSave: () => void; onCancel: () => voi
       <button onClick={onSave} className="btn-primary" style={{ padding: "6px 14px", fontSize: 13 }}>
         Guardar
       </button>
+    </div>
+  );
+}
+
+/** Caja de instrucción para regenerar el bloque por IA (Fase B.1). El resultado
+ *  pre-llena el editor; NO escribe (el guardado lo hace el CSE con Guardar→PUT). */
+function AiPromptBox({
+  busy,
+  seeded,
+  autoFocus = false,
+  error = null,
+  onRegen,
+  onCancel,
+}: {
+  busy: boolean;
+  /** Ya hay un draft de IA cargado (cambia el copy a "Regenerar"/"otro ajuste"). */
+  seeded: boolean;
+  autoFocus?: boolean;
+  /** Error del último intento (se muestra inline; el editor NO se pre-llena). */
+  error?: string | null;
+  onRegen: (instruction: string) => void | Promise<void>;
+  onCancel?: () => void;
+}) {
+  const [instr, setInstr] = useState("");
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (autoFocus) ref.current?.focus();
+  }, [autoFocus]);
+  const go = () => {
+    const v = instr.trim();
+    if (v && !busy) onRegen(v);
+  };
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", padding: 8, borderRadius: 8, background: "var(--brand-blue-soft)", border: `1px solid ${error ? "#dc2626" : "var(--border)"}` }}>
+        <span aria-hidden="true" style={{ fontSize: 13 }}>✨</span>
+        <input
+          ref={ref}
+          value={instr}
+          onChange={(e) => setInstr(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              go();
+            }
+            if (e.key === "Escape") onCancel?.();
+          }}
+          disabled={busy}
+          placeholder={seeded ? "Pedí otro ajuste…" : "Cómo querés reescribir este bloque…"}
+          className="kl-edit-cell"
+          style={{ flex: 1 }}
+        />
+        {onCancel && (
+          <button onClick={onCancel} disabled={busy} style={{ fontSize: 12, color: "var(--text-secondary)", background: "transparent", border: "none", cursor: busy ? "default" : "pointer" }}>
+            Cancelar
+          </button>
+        )}
+        <button onClick={go} disabled={busy || !instr.trim()} className="btn-primary" style={{ padding: "5px 12px", fontSize: 12, opacity: busy || !instr.trim() ? 0.6 : 1 }}>
+          {busy ? "Generando…" : seeded ? "Regenerar" : "Generar"}
+        </button>
+      </div>
+      {error && (
+        <div role="alert" style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>
+          {error}
+        </div>
+      )}
     </div>
   );
 }
