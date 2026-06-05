@@ -31,10 +31,6 @@ const SYNC_BADGE: Record<string, { label: string; cls: string }> = {
   failed: { label: "HubSpot: error", cls: "bg-red-900/30 text-red-300 border-red-700/40" },
 };
 
-function shortName(name: string) {
-  return name.replace(/\s*-\s*[^-]+$/, "").trim() || name;
-}
-
 function fmtDate(iso: string) {
   try {
     return new Date(iso).toLocaleDateString("es-CR", { day: "2-digit", month: "short", year: "numeric" });
@@ -118,7 +114,7 @@ export default function ClientHandoffsPanel({ clientId, clientName }: { clientId
                     : "border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-600"
                 }`}
               >
-                {shortName(h.projectName)} · {fmtDate(h.createdAt)}
+                {h.projectName} · {fmtDate(h.createdAt)}
               </button>
             );
           })}

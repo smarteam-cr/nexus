@@ -104,7 +104,6 @@ function ProjectSection({
       <div className="border-b border-gray-800 px-6 flex items-center gap-1 overflow-x-auto">
         {projects.map((p) => {
           const isActive = p.id === activeProjectId;
-          const shortName = p.name.replace(/\s*-\s*[^-]+$/, "").trim() || p.name;
           return (
             <button
               key={p.id}
@@ -115,7 +114,7 @@ function ProjectSection({
                   : "border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700"
               }`}
             >
-              {shortName}
+              {p.name}
             </button>
           );
         })}
