@@ -20,6 +20,7 @@
 import { google } from "googleapis";
 import { prisma } from "@/lib/db/prisma";
 import { getImpersonatedAuth, listDomainUsers } from "@/lib/google/auth";
+import { buildCategorizeCtx, resolveSessionClientId } from "@/lib/sessions/resolve-client";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -186,16 +187,19 @@ export async function syncGoogleMeetSessions(
   // 2. Cargar sesiones ya en DB (con googleDocId actual) → Map O(1) por eventId.
   //    Necesitamos el googleDocId actual para detectar si apareció uno NUEVO
   //    post-reunión y resetear `enrichedAt: null` para que el enrich lo procese.
-  const existingByEventId = new Map<string, { id: string; googleDocId: string | null }>();
+  const existingByEventId = new Map<string, { id: string; googleDocId: string | null; manualClientId: string | null }>();
   const existingSessions = await prisma.firefliesSession.findMany({
     where: { source: "google_meet" },
-    select: { id: true, googleEventId: true, googleDocId: true },
+    select: { id: true, googleEventId: true, googleDocId: true, manualClientId: true },
   });
   for (const s of existingSessions) {
     if (s.googleEventId) {
-      existingByEventId.set(s.googleEventId, { id: s.id, googleDocId: s.googleDocId });
+      existingByEventId.set(s.googleEventId, { id: s.id, googleDocId: s.googleDocId, manualClientId: s.manualClientId });
     }
   }
+
+  // PERF #1: ctx de categorización una vez por corrida → resolvedClientId inline en cada upsert.
+  const categorizeCtx = await buildCategorizeCtx();
 
   // 3. Procesar usuarios en batches de 5
   let synced = 0;
@@ -238,6 +242,8 @@ export async function syncGoogleMeetSessions(
                 googleDocId: eventDocId,
                 organizerEmail: event.organizerEmail,
                 source: "google_meet",
+                // PERF #1: re-resolver el cliente (honra el override manualClientId existente).
+                resolvedClientId: resolveSessionClientId({ title: event.title, participants: allParticipants, manualClientId: existing.manualClientId }, categorizeCtx),
                 // Si el Doc apareció (o cambió) post-sync inicial, resetear
                 // `enrichedAt: null` para forzar que el enrich lo procese
                 // en la próxima pasada y descargue transcript + summary.
@@ -263,10 +269,12 @@ export async function syncGoogleMeetSessions(
                 googleEventId: event.eventId,
                 googleDocId: eventDocId,
                 organizerEmail: event.organizerEmail,
+                // PERF #1: resolver el cliente al crear (sesión nueva → sin override).
+                resolvedClientId: resolveSessionClientId({ title: event.title, participants: allParticipants, manualClientId: null }, categorizeCtx),
               },
             });
 
-            existingByEventId.set(event.eventId, { id: sessionId, googleDocId: eventDocId });
+            existingByEventId.set(event.eventId, { id: sessionId, googleDocId: eventDocId, manualClientId: null });
             synced++;
           }
         } catch (err) {

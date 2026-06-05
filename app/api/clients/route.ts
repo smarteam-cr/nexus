@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
+import { resolveAllSessions } from "@/lib/sessions/resolve-client";
 
 // GET /api/clients — Listar todos los clientes
 export const GET = withAuth(async () => {
@@ -35,6 +36,8 @@ export const POST = withAuth(async (request) => {
 
   // Invalidar cache del sidebar (AppShell)
   revalidateClientsSidebar();
+  // PERF #1: cliente nuevo puede matchear sesiones existentes → re-resolver en background.
+  void resolveAllSessions().catch(() => {});
 
   return NextResponse.json(client, { status: 201 });
 });

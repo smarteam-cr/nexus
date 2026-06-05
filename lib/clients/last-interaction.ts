@@ -15,11 +15,6 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
-import {
-  categorizeSession,
-  buildInternalDomainsSet,
-  type CategorizeContext,
-} from "@/lib/sessions/categorize";
 import type { Client, SessionCategory } from "@prisma/client";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -70,7 +65,16 @@ export async function computeClientActivityMap(
   const clientIds = clients.map((c) => c.id);
   if (clientIds.length === 0) return new Map();
 
-  const [projects, stageNotesMax, agentRunsMax, allSessions, categories] =
+  // PERF #1: en vez de cargar TODAS las sesiones (~16k) y matchear en JS, leemos el
+  // match materializado (FirefliesSession.resolvedClientId) con dos queries indexadas
+  // distinct-on (índice [resolvedClientId, date desc]):
+  //   - última sesión PASADA por cliente (date<=now → la más reciente)
+  //   - próxima sesión FUTURA por cliente (date>now → la más cercana)
+  // resolvedClientId == el resultado de categorizeSession (verificado: backfill changed=0),
+  // así que el resultado funcional es idéntico al loop anterior.
+  const now = Date.now();
+  const nowDate = new Date(now);
+  const [projects, stageNotesMax, agentRunsMax, pastSessions, futureSessions] =
     await Promise.all([
       prisma.project.findMany({
         where: { clientId: { in: clientIds }, nextSessionDate: { not: null } },
@@ -87,62 +91,26 @@ export async function computeClientActivityMap(
         _max: { createdAt: true },
       }),
       prisma.firefliesSession.findMany({
-        select: {
-          date: true,
-          title: true,
-          participants: true,
-          manualClientId: true,
-        },
-        orderBy: { date: "desc" },
+        where: { resolvedClientId: { in: clientIds }, date: { lte: nowDate } },
+        distinct: ["resolvedClientId"],
+        orderBy: [{ resolvedClientId: "asc" }, { date: "desc" }],
+        select: { resolvedClientId: true, date: true, title: true },
       }),
-      prisma.sessionCategory.findMany({
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          domains: true,
-          kind: true,
-          color: true,
-        },
+      prisma.firefliesSession.findMany({
+        where: { resolvedClientId: { in: clientIds }, date: { gt: nowDate } },
+        distinct: ["resolvedClientId"],
+        orderBy: [{ resolvedClientId: "asc" }, { date: "asc" }],
+        select: { resolvedClientId: true, date: true, title: true },
       }),
     ]);
 
-  const ctx: CategorizeContext = {
-    clients,
-    categories,
-    hubspotCompaniesByDomain: new Map(),
-    internalDomains: buildInternalDomainsSet(categories),
-  };
-
-  // Buscar sesión pasada más reciente + próxima futura más cercana, por cliente
-  const now = Date.now();
   const sessionPastByClient = new Map<string, { date: Date; title: string }>();
+  for (const s of pastSessions) {
+    if (s.resolvedClientId) sessionPastByClient.set(s.resolvedClientId, { date: s.date, title: s.title });
+  }
   const sessionFutureByClient = new Map<string, { date: Date; title: string }>();
-
-  for (const s of allSessions) {
-    const group = categorizeSession(
-      {
-        participants: s.participants,
-        manualClientId: s.manualClientId,
-        title: s.title,
-      },
-      ctx,
-    );
-    if (group.kind !== "client") continue;
-
-    const isPast = s.date.getTime() <= now;
-    if (isPast) {
-      // Las sesiones vienen DESC → la primera es la más reciente
-      if (!sessionPastByClient.has(group.id)) {
-        sessionPastByClient.set(group.id, { date: s.date, title: s.title });
-      }
-    } else {
-      // Para futuras: queremos la MÁS CERCANA (mín en futuro)
-      const current = sessionFutureByClient.get(group.id);
-      if (!current || s.date.getTime() < current.date.getTime()) {
-        sessionFutureByClient.set(group.id, { date: s.date, title: s.title });
-      }
-    }
+  for (const s of futureSessions) {
+    if (s.resolvedClientId) sessionFutureByClient.set(s.resolvedClientId, { date: s.date, title: s.title });
   }
 
   // Indexar stage notes y agent runs por clientId

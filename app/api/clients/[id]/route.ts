@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
+import { resolveAllSessions } from "@/lib/sessions/resolve-client";
 import { guardAccessToClient } from "@/lib/auth/api-guards";
 
 // GET /api/clients/[id]
@@ -59,6 +60,10 @@ export async function PATCH(
   if (data.name !== undefined || data.company !== undefined) {
     revalidateClientsSidebar();
   }
+  // PERF #1: si cambió algo que afecta el match (name/company/emailDomains), re-resolver en background.
+  if (data.name !== undefined || data.company !== undefined || data.emailDomains !== undefined) {
+    void resolveAllSessions().catch(() => {});
+  }
 
   return NextResponse.json(client);
 }
@@ -74,6 +79,8 @@ export async function DELETE(
 
   await prisma.client.delete({ where: { id } });
   revalidateClientsSidebar();
+  // PERF #1: sesiones resueltas al cliente borrado quedan colgadas → re-resolver en background.
+  void resolveAllSessions().catch(() => {});
 
   return NextResponse.json({ ok: true });
 }

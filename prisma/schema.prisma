@@ -785,6 +785,7 @@ model FirefliesSession {
   googleEventId  String?               // ID del evento de Google Calendar (Meet)
   organizerEmail String?               // Email del organizador (para impersonación en enriquecimiento)
   manualClientId String?               // override manual del matching automático de cliente
+  resolvedClientId String?             // PERF #1: cliente resuelto (materializado de categorizeSession) para "última actividad"/bookends sin cargar todas las sesiones. Re-resuelto en write/override/mutación de Client.
 
   // F5: sub-topics detectados por IA (lead-scoring, workflow-builder, etc.).
   // Lista canónica viva en lib/sessions/topic-vocabulary.ts y se sesga por
@@ -802,6 +803,7 @@ model FirefliesSession {
   // Sin esto, Postgres hace seq scan + sort en cada render.
   @@index([date(sort: Desc)])
   @@index([manualClientId])
+  @@index([resolvedClientId, date(sort: Desc)])
 }
 
 // ─── Ciclo de reunión: Minuta + ActionItems ──────────────────────────────────

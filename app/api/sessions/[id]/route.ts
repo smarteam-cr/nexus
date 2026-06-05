@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withAuth, apiError } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
+import { reResolveSession } from "@/lib/sessions/resolve-client";
 
 // GET /api/sessions/[id] — transcript lazy load
 export const GET = withAuth(async (_req, ctx) => {
@@ -25,6 +26,9 @@ export const PATCH = withAuth(async (req, ctx) => {
     data: { manualClientId: body.manualClientId ?? null },
     select: { id: true, manualClientId: true },
   });
+
+  // PERF #1: el override de cliente cambia la resolución → re-resolver esta sesión.
+  await reResolveSession(id);
 
   return NextResponse.json(session);
 });
