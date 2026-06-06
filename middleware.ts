@@ -17,11 +17,6 @@ const PUBLIC_PATHS = ["/"];
 //   - /api/auth/hubspot/*  → flujo OAuth HubSpot (integración, no auth de usuario)
 //   - /api/auth/callback   → callback OAuth HubSpot
 //   - /auth/*              → rutas de Supabase Auth (google, callback, signout)
-//   - /share/*             → vista pública de proyecto compartido por token.
-//                            La página hace su propio "auth" buscando por
-//                            shareToken (24 chars hex) y solo expone cards con
-//                            publishedToClient=true. Requiere acceso público
-//                            sin login para que el cliente final pueda abrirla.
 //   - /external/*          → landing del cliente externo (Fase 1 módulo externo).
 //                            La página verifica token+contraseña vía
 //                            /api/external/verify-access. Requiere acceso público
@@ -33,7 +28,6 @@ const PUBLIC_PREFIXES = [
   "/api/auth/hubspot",
   "/api/auth/callback",
   "/auth/",
-  "/share/",
   "/external/",
   "/api/external/",
 ];

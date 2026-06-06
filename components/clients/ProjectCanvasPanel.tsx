@@ -78,9 +78,6 @@ export default function ProjectCanvasPanel({
   const canvasFromUrl = searchParams.get("canvas");
   const [sections, setSections] = useState<CanvasSection[]>([]);
   const [loading, setLoading] = useState(true);
-  const [shareToken, setShareToken] = useState<string | null>(null);
-  const [shareMenuOpen, setShareMenuOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [dragCardId, setDragCardId] = useState<string | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<{ sectionKey: string; index: number } | null>(null);
@@ -185,34 +182,6 @@ export default function ProjectCanvasPanel({
     );
     setAddingSectionName(null);
     fetchCanvasCards();
-  };
-
-  // Check share token
-  useEffect(() => {
-    fetch(`/api/projects/${projectId}/share`)
-      .then((r) => r.json())
-      .then((d) => setShareToken(d.shareToken ?? null))
-      .catch(() => {});
-  }, [projectId]);
-
-  const generateShareToken = async () => {
-    const res = await fetch(`/api/projects/${projectId}/share`, { method: "POST" });
-    const data = await res.json();
-    setShareToken(data.shareToken);
-  };
-
-  const revokeShareToken = async () => {
-    await fetch(`/api/projects/${projectId}/share`, { method: "DELETE" });
-    setShareToken(null);
-    setShareMenuOpen(false);
-  };
-
-  const copyShareUrl = () => {
-    if (!shareToken) return;
-    const url = `${window.location.origin}/share/${shareToken}`;
-    navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   // Check for unprocessed sessions
@@ -506,61 +475,7 @@ export default function ProjectCanvasPanel({
           </a>
 
           {isResumenCanvas && (<>
-          {/* Share button */}
-          <div className="relative">
-            <button
-              onClick={() => {
-                if (!shareToken) generateShareToken();
-                else setShareMenuOpen(!shareMenuOpen);
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                shareToken
-                  ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
-                  : "bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800"
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-              </svg>
-              {shareToken ? "Compartido" : "Compartir"}
-            </button>
-            {shareMenuOpen && shareToken && (
-              <div className="absolute top-full right-0 mt-1 z-50 w-72 bg-gray-900 border border-gray-800 rounded-xl shadow-xl p-3 space-y-2">
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Link para el cliente</p>
-                <div className="flex items-center gap-1">
-                  <input
-                    readOnly
-                    value={`${typeof window !== "undefined" ? window.location.origin : ""}/share/${shareToken}`}
-                    className="flex-1 px-2 py-1.5 text-[11px] bg-gray-800 border border-gray-700 rounded-lg text-gray-300 truncate"
-                  />
-                  <button
-                    onClick={copyShareUrl}
-                    className="px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-brand text-white hover:bg-brand/90 transition-colors flex-shrink-0"
-                  >
-                    {copied ? "✓" : "Copiar"}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between pt-1 border-t border-gray-800">
-                  <button
-                    onClick={revokeShareToken}
-                    className="text-[10px] text-red-500 hover:text-red-700 transition-colors"
-                  >
-                    Revocar acceso
-                  </button>
-                  <button
-                    onClick={() => { generateShareToken(); }}
-                    className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    Regenerar link
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Acceso del cliente externo — feature distinto del "Compartir" de arriba.
-              Compartir = vista pública sin contraseña (cards publicadas).
-              Acceso del cliente = landing del proyecto con token + contraseña. */}
+          {/* Acceso del cliente externo (token + contraseña → landing del proyecto). */}
           <ExternalAccessButton projectId={projectId} />
 
           <button

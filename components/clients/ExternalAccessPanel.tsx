@@ -4,10 +4,8 @@
  * ExternalAccessButton
  *
  * Botón en el toolbar del proyecto + modal para gestionar el acceso del cliente
- * externo (token revocable + contraseña). Es un feature distinto del botón
- * "Compartir" legacy (shareToken sin contraseña, vista pública informativa):
+ * externo (token revocable + contraseña) al landing del Kickoff:
  *
- *   - "Compartir" → /share/[shareToken] → cards publishedToClient sin auth
  *   - "Acceso del cliente" → /external/verify/[accessToken] → token + pass
  *
  * Flujo:
@@ -251,13 +249,9 @@ function EmptyState({
       </div>
       <div className="rounded-lg bg-gray-800/50 border border-gray-700 p-3 text-xs text-gray-400 space-y-1">
         <p>
-          <span className="font-semibold text-gray-300">Diferente de "Compartir":</span>{" "}
-          Ese link público no pide contraseña y solo muestra cards publicadas.
-        </p>
-        <p>
           <span className="font-semibold text-gray-300">Este acceso:</span>{" "}
           requiere token + contraseña, podés revocarlo o regenerarlo cuando
-          quieras.
+          quieras. El cliente ve el Kickoff publicado en su landing.
         </p>
       </div>
       <button
