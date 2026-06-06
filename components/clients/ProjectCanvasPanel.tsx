@@ -475,9 +475,6 @@ export default function ProjectCanvasPanel({
           </a>
 
           {isResumenCanvas && (<>
-          {/* Acceso del cliente externo (token + contraseña → landing del proyecto). */}
-          <ExternalAccessButton projectId={projectId} />
-
           <button
             onClick={processSession}
             disabled={processingSession || unprocessedSessions === 0}
@@ -540,6 +537,10 @@ export default function ProjectCanvasPanel({
           secciones del landing sean full-bleed dentro del scroll container. */}
       {!isResumenCanvas && activeCanvas?.name === "Kickoff" && activeCanvasId && (
         <>
+          {/* Controles cliente-facing: generar acceso (token+contraseña) + publicar */}
+          <div className="flex justify-end mb-3">
+            <ExternalAccessButton projectId={projectId} />
+          </div>
           <PublishKickoffButton projectId={projectId} />
           <div style={{ margin: "-1.5rem -1.5rem -2rem" }}>
             <KickoffLanding projectId={projectId} canvasId={activeCanvasId} editable />

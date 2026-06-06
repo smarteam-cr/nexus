@@ -32,9 +32,9 @@ export default async function ExternalVerifyPage({
       <div className="w-full max-w-sm">
         {/* Header minimal — sin logo externo, sin links a otros sitios */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gray-900 text-white text-sm font-bold mb-4">
-            N
-          </div>
+          {/* Logo self-hosted (mismo origen) → respeta la regla de cero recursos externos */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-smarteam.png" alt="Smarteam" className="h-9 w-auto mx-auto mb-4" />
           <h1 className="text-lg font-semibold text-gray-900">
             Acceso al proyecto
           </h1>
