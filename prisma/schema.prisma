@@ -164,6 +164,12 @@ model Project {
   lastSessionSummary String?   @db.Text // Resumen de la última sesión procesada
   pendingItems       Json?     // Array de { text: string, done: boolean }
 
+  // Fase C — publish del Kickoff al cliente externo. Acción SEPARADA del acceso:
+  // null = no publicado (el cliente, aunque tenga credenciales, no ve el Kickoff);
+  // fecha = publicado. El chokepoint externo (lib/external/kickoff-view.ts) exige
+  // que esto NO sea null en CADA lectura, así despublicar corta el acceso al instante.
+  kickoffPublishedAt DateTime?
+
   // Propiedades sincronizadas desde HubSpot (objeto Service)
   hubspotOwnerId      String?   // hubspot_owner_id (ID del owner en HubSpot)
   hubspotOwnerName    String?   // Nombre del owner (CSE encargado) resuelto desde /owners/{id}

@@ -13,6 +13,7 @@ import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import KickoffLanding from "@/components/canvas/KickoffLanding";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
+import { PublishKickoffButton } from "./PublishKickoffButton";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
@@ -623,9 +624,12 @@ export default function ProjectCanvasPanel({
           El div rompe el padding del panel (px-6 py-8 space-y-6) para que las
           secciones del landing sean full-bleed dentro del scroll container. */}
       {!isResumenCanvas && activeCanvas?.name === "Kickoff" && activeCanvasId && (
-        <div style={{ margin: "-1.5rem -1.5rem -2rem" }}>
-          <KickoffLanding projectId={projectId} canvasId={activeCanvasId} editable />
-        </div>
+        <>
+          <PublishKickoffButton projectId={projectId} />
+          <div style={{ margin: "-1.5rem -1.5rem -2rem" }}>
+            <KickoffLanding projectId={projectId} canvasId={activeCanvasId} editable />
+          </div>
+        </>
       )}
 
       {/* Cronograma: editor del ProjectTimeline (fases/semanas/sesiones). Fuente
