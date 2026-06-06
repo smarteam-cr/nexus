@@ -23,7 +23,7 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { BlockData } from "./BlockRenderer";
+import type { RenderableBlock } from "@/lib/external/kickoff-view-types";
 
 const EDITABLE_TYPES = ["TEXT", "CARD", "CALLOUT", "HEADING", "TABLE", "METRIC"];
 // Tipos donde la regen por IA tiene sentido (los 3 del plan: texto/métrica/tabla).
@@ -36,7 +36,7 @@ export default function KickoffBlock({
   onSave,
   onRegenerate,
 }: {
-  block: BlockData;
+  block: RenderableBlock;
   editable?: boolean;
   /** Prosa light-on-dark (para el hero oscuro). */
   invert?: boolean;
@@ -269,7 +269,7 @@ function ComparePair({ headers, rows }: { headers: string[]; rows: string[][] })
   );
 }
 
-function renderView(block: BlockData, data: Record<string, unknown>) {
+function renderView(block: RenderableBlock, data: Record<string, unknown>) {
   switch (block.blockType) {
     case "HEADING": {
       const level = (data.level as number) === 3 ? 3 : 2;

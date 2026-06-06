@@ -3,13 +3,15 @@
  *
  * Endpoint público (sin sesión Supabase) que verifica credenciales del cliente
  * externo: token (de la URL) + contraseña (del form). Si ambas son válidas y
- * el acceso no está revocado, devuelve metadata mínima del proyecto. Si no,
- * devuelve 401 con mensaje genérico (no revela si el token existe).
+ * el acceso no está revocado, setea una cookie httpOnly con el token y devuelve
+ * metadata mínima del proyecto. Si no, 401 con mensaje genérico (no revela si el
+ * token existe).
  *
- * Esta fase NO setea ninguna cookie ni JWT — solo valida y reporta. Cuando se
- * construya el landing real, ahí se decidirá cómo "convertir" un verify exitoso
- * en una sesión que el cliente externo use para leer sus datos (cookie HTTP-only,
- * JWT custom, Supabase Auth EXTERNAL, etc.).
+ * Fase C.1: en el éxito setea la cookie httpOnly `nexus_ext_access` (el token) →
+ * la ruta pública /external/kickoff la lee server-side. La cookie NO otorga acceso
+ * por sí sola: cada render re-resuelve el token y re-chequea revokedAt +
+ * kickoffPublishedAt (ver lib/external/kickoff-view.ts). El cliente redirige a
+ * /external/kickoff tras el éxito (el token sale de la URL).
  *
  * Rate limiting in-memory por token: 5 fallos en 5 min → bloqueo de 10 min (429).
  * Es protección mínima contra brute-force online. Para defensa real frente a
@@ -20,6 +22,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/db/prisma";
+import { EXTERNAL_ACCESS_COOKIE } from "@/lib/external/kickoff-view";
 
 // ── Rate limiting in-memory ──────────────────────────────────────────────────
 // Map por accessToken (no por IP — IP es trivial de rotar y queremos atar el
@@ -151,9 +154,26 @@ export async function POST(req: NextRequest) {
     data: { lastUsedAt: new Date() },
   });
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     ok: true,
     projectId: access.project.id,
     projectName: access.project.name,
   });
+
+  // Cookie httpOnly que transporta el token → sale de la URL (sin Referer-leak).
+  // NO otorga acceso por sí sola: la ruta pública re-resuelve el token y re-chequea
+  // revokedAt + kickoffPublishedAt server-side EN CADA render (ver kickoff-view.ts).
+  // Persistente ~30 días; al expirar o al revocar/despublicar, el cliente re-verifica
+  // con el enlace original. `secure` solo en prod (en localhost http no se setearía).
+  res.cookies.set({
+    name: EXTERNAL_ACCESS_COOKIE,
+    value: token,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/external",
+    maxAge: 60 * 60 * 24 * 30, // 30 días
+  });
+
+  return res;
 }

@@ -44,8 +44,11 @@ export function VerifyForm({ token }: { token: string }) {
       const data = await res.json().catch(() => ({}));
 
       if (res.status === 200 && data?.ok) {
-        setState({ kind: "success", projectName: data.projectName ?? "" });
         setPassword("");
+        setState({ kind: "success", projectName: data.projectName ?? "" });
+        // La cookie httpOnly ya la seteó el endpoint. Navegación full (no router.push)
+        // para que el server component /external/kickoff la lea y renderice el Kickoff.
+        window.location.assign("/external/kickoff");
         return;
       }
       if (res.status === 429) {
@@ -76,11 +79,11 @@ export function VerifyForm({ token }: { token: string }) {
               Acceso concedido
             </h2>
             <p className="mt-1 text-sm text-gray-600">
-              Proyecto: <span className="font-medium text-gray-900">{state.projectName}</span>
-            </p>
-            <p className="mt-3 text-xs text-gray-500 leading-relaxed">
-              El landing del proyecto se construirá en una fase próxima. Esta
-              pantalla solo confirma que tus credenciales son válidas.
+              {state.projectName ? (
+                <>Entrando a <span className="font-medium text-gray-900">{state.projectName}</span>…</>
+              ) : (
+                <>Entrando al proyecto…</>
+              )}
             </p>
           </div>
         </div>
