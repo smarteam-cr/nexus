@@ -84,7 +84,10 @@ export const config = {
      * - _next/static (archivos estáticos)
      * - _next/image (optimización de imágenes)
      * - favicon.ico
+     * - assets estáticos de public/ por extensión (png/jpg/svg/fonts/etc.) — si no,
+     *   el gate redirige p.ej. /logo-smarteam.png a login y el cliente externo
+     *   (sin sesión) no puede cargar el logo de marca.
      */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|avif|ico|woff|woff2|ttf|otf)$).*)",
   ],
 };
