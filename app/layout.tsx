@@ -45,7 +45,7 @@ export default function RootLayout({
         {/* Previene flash de tema: aplica clase "light" antes de que React hidrate */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{if(localStorage.getItem('theme')==='light')document.documentElement.classList.add('light');}catch(e){}`,
+            __html: `try{if(localStorage.getItem('theme')!=='dark')document.documentElement.classList.add('light');}catch(e){}`,
           }}
         />
       </head>

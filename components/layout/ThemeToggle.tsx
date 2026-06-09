@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 export default function ThemeToggle() {
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
 
   // Sincroniza el estado inicial con el DOM (que ya fue seteado por el script inline)
   useEffect(() => {
