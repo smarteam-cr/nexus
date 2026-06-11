@@ -262,6 +262,27 @@ html.light .text-violet-400   { color: #7c3aed !important; }
 html.light .bg-blue-900\/30   { background-color: #eff6ff !important; }
 html.light .text-blue-400     { color: #1d4ed8 !important; }
 
+/* ── Timeline/Gantt (D.1) — variantes que faltaban para sky/teal/emerald/blue/red ── */
+html.light .hover\:bg-gray-800\/40:hover { background-color: #f3f4f6 !important; }
+html.light .bg-blue-900\/40,
+html.light .bg-blue-900\/50   { background-color: #dbeafe !important; }
+html.light .border-blue-700\/40,
+html.light .border-blue-700\/50 { border-color: #bfdbfe !important; }
+html.light .bg-sky-900\/30    { background-color: #f0f9ff !important; }
+html.light .text-sky-300      { color: #0369a1 !important; }
+html.light .border-sky-700\/40 { border-color: #bae6fd !important; }
+html.light .bg-teal-900\/30   { background-color: #f0fdfa !important; }
+html.light .text-teal-300     { color: #0f766e !important; }
+html.light .border-teal-700\/40 { border-color: #99f6e4 !important; }
+html.light .bg-emerald-900\/30,
+html.light .bg-emerald-900\/40 { background-color: #ecfdf5 !important; }
+html.light .border-emerald-700\/40,
+html.light .border-emerald-700\/50 { border-color: #a7f3d0 !important; }
+html.light .bg-red-900\/40    { background-color: #fee2e2 !important; }
+html.light .border-red-700\/50 { border-color: #fecaca !important; }
+html.light .text-violet-300   { color: #6d28d9 !important; }
+html.light .border-violet-700\/40 { border-color: #ddd6fe !important; }
+
 /* ────────────────────────────────────────────────────────────────────────────
  * Opacity variants para colores semánticos (bg-X-500/10, text-X-200/300, etc.)
  *
