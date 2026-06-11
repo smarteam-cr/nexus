@@ -548,10 +548,11 @@ export default function ProjectCanvasPanel({
         </>
       )}
 
-      {/* Cronograma: editor del ProjectTimeline (fases/semanas/sesiones). Fuente
-          única — el Kickoff lo refleja read-only. */}
+      {/* Cronograma: Gantt + editor del ProjectTimeline (fases/tareas/semanas).
+          Fuente única — el Kickoff lo refleja read-only. clientId habilita el
+          disparo del agente de detalle (POST /api/clients/[clientId]/analyze). */}
       {activeCanvas?.name === "Cronograma" && (
-        <CronogramaCanvas projectId={projectId} />
+        <CronogramaCanvas projectId={projectId} clientId={clientId} />
       )}
 
       {/* Resto de canvases custom: grilla de bloques (Diagnóstico, Planificación, …) */}
