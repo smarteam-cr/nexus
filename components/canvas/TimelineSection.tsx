@@ -64,9 +64,12 @@ const SUB_LABEL: React.CSSProperties = {
 export default function TimelineSection({
   phases,
   anchor,
+  showHeader = true,
 }: {
   phases: ExternalTimelinePhase[];
   anchor: string | null;
+  /** false = sin eyebrow/título propios (la página standalone pone el suyo). */
+  showHeader?: boolean;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -94,10 +97,14 @@ export default function TimelineSection({
   return (
     <section className="section-light" style={{ padding: SECTION_PAD }}>
       <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
-        <span className="eyebrow reveal">Hoja de ruta</span>
-        <h2 className="font-display display-tight reveal" data-stagger="1" style={{ fontSize: "clamp(24px, 3.4vw, 34px)", color: "var(--text)", lineHeight: 1.15, marginTop: 8, marginBottom: 24 }}>
-          Cronograma del <span className="display-italic" style={{ color: "var(--brand-blue)" }}>proyecto</span>
-        </h2>
+        {showHeader && (
+          <>
+            <span className="eyebrow reveal">Hoja de ruta</span>
+            <h2 className="font-display display-tight reveal" data-stagger="1" style={{ fontSize: "clamp(24px, 3.4vw, 34px)", color: "var(--text)", lineHeight: 1.15, marginTop: 8, marginBottom: 24 }}>
+              Cronograma del <span className="display-italic" style={{ color: "var(--brand-blue)" }}>proyecto</span>
+            </h2>
+          </>
+        )}
 
         {/* Banner de hoy + leyenda de tipos (estructura del Gantt interno) */}
         <div className="reveal" data-stagger="2" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px 16px", marginBottom: 14 }}>

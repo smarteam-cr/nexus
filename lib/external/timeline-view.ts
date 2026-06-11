@@ -24,6 +24,8 @@ import type { ExternalTimelineData } from "./timeline-view-types";
 /** Lo que la página /external/cronograma pasa a su render. */
 export interface ExternalTimelinePage {
   projectName: string;
+  /** Nombre de la EMPRESA cliente — el titular de la página lo lleva. */
+  clientName: string;
   timeline: ExternalTimelineData;
 }
 
@@ -99,5 +101,9 @@ export async function getPublishedTimelineForToken(
   const timeline = await readClientTimeline(access.project.id);
   await touchAccess(access.accessId);
 
-  return { projectName: access.project.name, timeline };
+  return {
+    projectName: access.project.name,
+    clientName: access.project.client.name,
+    timeline,
+  };
 }

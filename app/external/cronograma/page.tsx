@@ -32,7 +32,7 @@ export default async function ExternalCronogramaPage() {
   return (
     <ExternalShell>
       {data ? (
-        <TimelineLanding projectName={data.projectName} timeline={data.timeline} />
+        <TimelineLanding clientName={data.clientName} timeline={data.timeline} />
       ) : (
         <NoAccess />
       )}

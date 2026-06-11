@@ -7,6 +7,10 @@
  * /external/cronograma. Recibe el shape EXTERNO ya resuelto y filtrado por el
  * chokepoint (getPublishedTimelineForToken) — read-only, sin nada interno.
  *
+ * Estructura de la página: titular "Cronograma de proyecto · {cliente}"
+ * arriba, el Gantt (TimelineSection SIN su header propio — el titular de la
+ * página lo reemplaza), y el "Arrancamos el …" DEBAJO del cronograma.
+ *
  * Es el wrapper que cumple los dos requisitos de TimelineSection:
  *   - className="kickoff-landing": scope del design system de landing
  *     (app/kickoff-landing.css — nombre histórico, lo usan ambas superficies).
@@ -19,11 +23,13 @@ import { useReveal } from "@/components/canvas/useLandingMotion";
 import { fmtFull } from "@/lib/timeline/weeks";
 import type { ExternalTimelineData } from "@/lib/external/timeline-view-types";
 
+const MAXW = 1024; // mismo ancho que el Gantt de TimelineSection
+
 export default function TimelineLanding({
-  projectName,
+  clientName,
   timeline,
 }: {
-  projectName: string;
+  clientName: string;
   timeline: ExternalTimelineData;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -33,28 +39,40 @@ export default function TimelineLanding({
 
   return (
     <div ref={rootRef} className="kickoff-landing">
-      {/* Mini-hero: proyecto + fecha de arranque (la marca la pone ExternalShell).
-          Ancho 1024 = el del Gantt de TimelineSection, para que queden alineados. */}
+      {/* Titular de la página (la marca la pone ExternalShell) */}
       <section className="section-light" style={{ padding: "clamp(36px, 5vw, 56px) 24px 0" }}>
-        <div style={{ maxWidth: 1024, margin: "0 auto" }}>
-          <span className="eyebrow reveal">{projectName}</span>
-          <p className="reveal" data-stagger="1" style={{ color: "var(--text-secondary)", fontSize: 14, marginTop: 10, marginBottom: 0 }}>
-            {start ? `Arrancamos el ${fmtFull(start)}.` : "Fecha de arranque por definir."}
-          </p>
+        <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
+          <h1
+            className="font-display display-tight reveal"
+            style={{ fontSize: "clamp(26px, 3.6vw, 38px)", color: "var(--text)", lineHeight: 1.15, margin: 0 }}
+          >
+            Cronograma de proyecto
+            <span style={{ color: "var(--text-muted)", fontWeight: 400, margin: "0 10px" }}>·</span>
+            <span className="display-italic" style={{ color: "var(--brand-blue)" }}>{clientName}</span>
+          </h1>
         </div>
       </section>
 
       {timeline.phases.length > 0 ? (
-        <TimelineSection phases={timeline.phases} anchor={start} />
+        <TimelineSection phases={timeline.phases} anchor={start} showHeader={false} />
       ) : (
-        <section className="section-light" style={{ padding: "32px 24px 72px" }}>
-          <div style={{ maxWidth: 1024, margin: "0 auto" }}>
+        <section className="section-light" style={{ padding: "32px 24px 24px" }}>
+          <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
             <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>
               Estamos preparando el cronograma de tu proyecto — pronto vas a verlo acá.
             </p>
           </div>
         </section>
       )}
+
+      {/* Fecha de arranque — DEBAJO del cronograma */}
+      <section className="section-light" style={{ padding: "0 24px clamp(40px, 6vw, 72px)" }}>
+        <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
+          <p className="reveal" style={{ color: "var(--text-secondary)", fontSize: 14, margin: 0 }}>
+            {start ? `Arrancamos el ${fmtFull(start)}.` : "Fecha de arranque por definir."}
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

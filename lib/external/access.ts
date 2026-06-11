@@ -26,6 +26,8 @@ export interface ActiveAccess {
     name: string;
     kickoffPublishedAt: Date | null;
     timelinePublishedAt: Date | null;
+    /** Nombre de la EMPRESA cliente (Client.name) — para titulares client-facing. */
+    client: { name: string };
   };
 }
 
@@ -51,6 +53,7 @@ export async function resolveActiveAccess(token: string): Promise<ActiveAccess |
           name: true,
           kickoffPublishedAt: true,
           timelinePublishedAt: true,
+          client: { select: { name: true } },
         },
       },
     },
