@@ -361,6 +361,33 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     );
   }
 
+  // ── D.1: fail-fast del agente de detalle de cronograma ──────────────────────
+  // Este agente DETALLA un esqueleto existente (fases con ids). Sin proyecto o
+  // sin timeline con fases no hay nada que detallar — se corta acá, antes de
+  // recolectar fuentes o llamar a Claude.
+  const isTimelineDetailAgent = agent.id === "agent-timeline-detail";
+  if (isTimelineDetailAgent) {
+    if (!bodyProjectId) {
+      return NextResponse.json(
+        { error: "NO_TIMELINE", message: "El agente de detalle necesita un proyecto." },
+        { status: 400 },
+      );
+    }
+    const tl = await prisma.projectTimeline.findUnique({
+      where: { projectId: bodyProjectId },
+      select: { id: true, _count: { select: { phases: true } } },
+    });
+    if (!tl || tl._count.phases === 0) {
+      return NextResponse.json(
+        {
+          error: "NO_TIMELINE",
+          message: "No hay cronograma con fases para detallar. Generá primero el esqueleto (handoff) o crealo a mano en el canvas Cronograma.",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   // ── 3. Cargar notas, documentos, cards y deal en paralelo ────────────────────
   const [existingCardsResult, stageNotesResult, clientDocumentsResult, dealProjectResult] =
     await Promise.allSettled([
@@ -1169,6 +1196,26 @@ ${handoffCtx || "(Sin handoff confirmado todavía. Indicá en cada sección que 
 ${timelineCtx ? `${timelineCtx}\n\n` : ""}Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: tono cliente, sin inflar alcance/objetivos (solo lo respaldado por el handoff), métricas como propuesta de Smarteam si no están explícitas, y NO reproduzcas el cronograma en prosa (la plantilla lo muestra aparte).`;
   }
 
+  // ── 10b'. Input del agente de Detalle de Cronograma (D.1) ────────────────────
+  // Como el Kickoff, NO consume fuentes crudas: su input es el cronograma
+  // EXISTENTE (fases con ids — debe referenciarlas, no crearlas) + el handoff
+  // curado para que las tareas sean del proyecto real. Sin fechas en el
+  // contexto: el agente no las calcula.
+  if (isTimelineDetailAgent && bodyProjectId) {
+    const handoffCtx = await loadCanvasContext(bodyProjectId, "Handoff", { onlyConfirmed: true });
+    const timelineCtx = await loadTimelineContext(bodyProjectId, { includeIds: true });
+    userMessage = `Empresa: ${companyName}
+Industria: ${client.industry ?? "No especificada"}
+${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}
+=== CRONOGRAMA A DETALLAR (fases EXISTENTES — no cambies nombres, duraciones ni orden) ===
+${timelineCtx}
+
+=== HANDOFF CURADO (bloques confirmados por el CSE) ===
+${handoffCtx || '(Sin handoff confirmado. Generá las tareas típicas del tipo de cada fase y marcá CADA una con "porValidar": true. Títulos limpios, sin marcadores.)'}
+
+Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a cada fase y proponé las tareas por semana (weekIndex relativo a la fase, < durationWeeks). Usá los ids EXACTOS del input.`;
+  }
+
   // ── 10c. Marco breve de relación previa (solo agente Handoff) ────────────────
   // Le da al agente conciencia de la relación previa del cliente con Smarteam
   // (proyectos/handoffs anteriores) ADEMÁS del deal ancla en profundidad. Budget
@@ -1226,6 +1273,8 @@ ${timelineCtx ? `${timelineCtx}\n\n` : ""}Generá la landing de kickoff de cara 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     sections?: any[];
     pendingItems?: Array<{ text?: string; source?: string }>;
+    // D.1 — output del agente de detalle de cronograma
+    timelineDetail?: { phases?: unknown[] };
   } | null = null;
 
   try {
@@ -1340,6 +1389,11 @@ ${timelineCtx ? `${timelineCtx}\n\n` : ""}Generá la landing de kickoff de cara 
     if (!analysisJson?.flowcharts?.length && !analysisJson?.cards?.length) {
       return NextResponse.json({ error: "invalid_response_empty" }, { status: 500 });
     }
+  } else if (isTimelineDetailAgent) {
+    // D.1: el agente de detalle emite timelineDetail, no cards/sections.
+    if (!analysisJson?.timelineDetail?.phases?.length) {
+      return NextResponse.json({ error: "invalid_timeline_detail" }, { status: 500 });
+    }
   } else if (useBlockFormat) {
     if (!analysisJson?.sections?.length) {
       return NextResponse.json({ error: "invalid_block_response" }, { status: 500 });
@@ -1365,6 +1419,18 @@ ${timelineCtx ? `${timelineCtx}\n\n` : ""}Generá la landing de kickoff de cara 
       output:       JSON.stringify(analysisJson),
     },
   });
+
+  // ── 12a'. D.1: persistir detalle del cronograma y cortar ────────────────────
+  // El output del agente de detalle no es cards/blocks: se persiste sobre
+  // ProjectTimeline/TimelineTask y se responde acá — no debe pasar por
+  // updateCanvasAsync ni por el path de cards.
+  if (isTimelineDetailAgent) {
+    const detail = await persistTimelineDetailFromAgentOutput(bodyProjectId, analysisJson, run.id);
+    return NextResponse.json({
+      timelineDetail: detail,
+      run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
+    });
+  }
 
   // ── 12b. Disparar agente de canvas post-ejecución (fire-and-forget) ──────────
   if (bodyProjectId && analysisJson?.cards?.length) {
@@ -1877,4 +1943,171 @@ async function persistTimelineFromAgentOutput(
     console.error("[analyze] Timeline persist error:", e);
     // No fallar la respuesta — el handoff principal (cards/blocks) ya quedó persistido.
   }
+}
+
+// ── D.1: persistencia del DETALLE del cronograma ──────────────────────────────
+
+const DETAIL_ACTIVITY_TYPES = [
+  "EXPLORACION",
+  "PLANIFICACION",
+  "CONFIGURACION",
+  "ADOPCION",
+  "SEGUIMIENTO",
+] as const;
+
+/**
+ * La marca "por validar" vive SOLO en la columna needsValidation: si el modelo
+ * desobedece y mete el marcador en el título, se limpia acá — el título cruza
+ * al cliente tal cual cuando el CSE confirma el detalle.
+ */
+function sanitizeTaskTitle(raw: string): string {
+  const cleaned = raw
+    .replace(/^\s*(?:⚠️?\s*)*(?:\[?\s*por\s+validar\s*\]?\s*[:—–-]?\s*)/i, "")
+    .trim();
+  return cleaned || raw.trim();
+}
+
+interface TimelineDetailResult {
+  skipped: boolean;
+  reason?: string;
+  phasesTyped: number;
+  tasksCreated: number;
+  discardedPhaseIds: number;
+}
+
+/**
+ * Persiste el detalle del cronograma (activityType + tareas por semana) emitido
+ * por el agente "agent-timeline-detail". Espejo de persistTimelineFromAgentOutput
+ * pero con tres diferencias deliberadas:
+ *
+ *  - ENRIQUECE in-place el timeline existente: no toca name/duración/orden/anchor
+ *    (las fechas no son suyas — el esqueleto es del handoff/CSE).
+ *  - Corre DENTRO de una transacción: el check de idempotencia y los writes son
+ *    atómicos (un doble click no duplica tareas).
+ *  - Idempotencia espejo de la del esqueleto: si el timeline YA tiene alguna
+ *    tarea → skip total; la propuesta queda en AgentRun.output. Regenerar =
+ *    DELETE /timeline/detail + re-correr.
+ *
+ * Reglas: ids de fase validados contra el set real (alucinados se descartan y
+ * loguean); activityType solo se setea si la fase lo tiene en null (no pisa lo
+ * seteado a mano); weekIndex clampeado a [0, durationWeeks); tasks nacen
+ * AGENT/PENDING con needsValidation desde `porValidar`. NO toca
+ * lastEditedByHuman (señal de edición humana — heurística limpia para D.2).
+ */
+async function persistTimelineDetailFromAgentOutput(
+  bodyProjectId: string | null,
+  analysisJson: unknown,
+  agentRunId: string,
+): Promise<TimelineDetailResult> {
+  const empty: TimelineDetailResult = { skipped: true, phasesTyped: 0, tasksCreated: 0, discardedPhaseIds: 0 };
+  const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)
+    ?.timelineDetail?.phases;
+  if (!bodyProjectId || !Array.isArray(detailRaw) || detailRaw.length === 0) {
+    return { ...empty, reason: "empty_output" };
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const tl = await tx.projectTimeline.findUnique({
+      where: { projectId: bodyProjectId },
+      select: {
+        id: true,
+        phases: {
+          select: {
+            id: true,
+            durationWeeks: true,
+            activityType: true,
+            _count: { select: { tasks: true } },
+          },
+        },
+      },
+    });
+    if (!tl || tl.phases.length === 0) return { ...empty, reason: "no_timeline" };
+
+    // Idempotencia: si ya hay CUALQUIER tarea, no pisar (propuesta en AgentRun.output).
+    const existingTaskCount = tl.phases.reduce((n, p) => n + p._count.tasks, 0);
+    if (existingTaskCount > 0) {
+      console.log(
+        `[analyze] Skipping timeline detail: ya hay ${existingTaskCount} tareas para project ${bodyProjectId}. Propuesta queda en AgentRun.output (${agentRunId}).`,
+      );
+      return { ...empty, reason: "detail_exists" };
+    }
+
+    const phaseById = new Map(tl.phases.map((p) => [p.id, p]));
+    let phasesTyped = 0;
+    let tasksCreated = 0;
+    let discardedPhaseIds = 0;
+
+    for (const raw of detailRaw) {
+      if (!raw || typeof raw !== "object") continue;
+      const ph = raw as Record<string, unknown>;
+      const phaseId = typeof ph.id === "string" ? ph.id : null;
+      const phase = phaseId ? phaseById.get(phaseId) : undefined;
+      if (!phase) {
+        discardedPhaseIds++;
+        console.warn(`[analyze] timeline detail: fase desconocida "${phaseId}" — descartada (anti-alucinación)`);
+        continue;
+      }
+
+      // activityType — UPDATE solo-si-null (no pisa lo seteado a mano por el CSE)
+      const at =
+        typeof ph.activityType === "string" &&
+        (DETAIL_ACTIVITY_TYPES as readonly string[]).includes(ph.activityType)
+          ? (ph.activityType as (typeof DETAIL_ACTIVITY_TYPES)[number])
+          : null;
+      if (at && phase.activityType === null) {
+        await tx.timelinePhase.update({ where: { id: phase.id }, data: { activityType: at } });
+        phasesTyped++;
+      }
+
+      // tasks — clamp de weekIndex, order incremental dentro de cada semana
+      const tasksRaw = Array.isArray(ph.tasks) ? ph.tasks : [];
+      const perWeekCount = new Map<number, number>();
+      const toCreate: Array<{
+        phaseId: string;
+        title: string;
+        weekIndex: number;
+        order: number;
+        notes: string | null;
+        needsValidation: boolean;
+        source: "AGENT";
+        status: "PENDING";
+      }> = [];
+      for (const tRaw of tasksRaw) {
+        if (!tRaw || typeof tRaw !== "object") continue;
+        const t = tRaw as Record<string, unknown>;
+        const titleRaw = typeof t.title === "string" ? t.title.trim() : "";
+        if (!titleRaw) continue;
+        const wRaw =
+          typeof t.weekIndex === "number" && Number.isInteger(t.weekIndex) ? t.weekIndex : 0;
+        const weekIndex = Math.min(Math.max(wRaw, 0), Math.max(phase.durationWeeks - 1, 0));
+        const order = perWeekCount.get(weekIndex) ?? 0;
+        perWeekCount.set(weekIndex, order + 1);
+        toCreate.push({
+          phaseId: phase.id,
+          title: sanitizeTaskTitle(titleRaw),
+          weekIndex,
+          order,
+          notes: typeof t.notes === "string" && t.notes.trim() ? t.notes.trim() : null,
+          needsValidation: t.porValidar === true,
+          source: "AGENT",
+          status: "PENDING",
+        });
+      }
+      if (toCreate.length > 0) {
+        await tx.timelineTask.createMany({ data: toCreate });
+        tasksCreated += toCreate.length;
+      }
+    }
+
+    // Trazabilidad del run que detalló. NO se toca lastEditedByHuman.
+    await tx.projectTimeline.update({
+      where: { id: tl.id },
+      data: { detailGeneratedByAgentRunId: agentRunId },
+    });
+
+    console.log(
+      `[analyze] ✓ Detalle de cronograma: ${tasksCreated} tareas, ${phasesTyped} fases tipadas, ${discardedPhaseIds} ids descartados (AgentRun ${agentRunId})`,
+    );
+    return { skipped: false, phasesTyped, tasksCreated, discardedPhaseIds };
+  });
 }

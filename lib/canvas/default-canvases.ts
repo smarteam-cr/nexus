@@ -103,6 +103,10 @@ export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
   planificacion: "Planificación",
   handoff: "Handoff",
   kickoff: "Kickoff",
+  // D.1: el canvas "Cronograma" no tiene secciones → resolver targetCanvasId acá
+  // evita que analyze inyecte instrucciones de formato cards al prompt del agente
+  // de detalle (la persistencia real va a ProjectTimeline, no a bloques).
+  cronograma: "Cronograma",
 };
 
 /** Create all standard canvases for a project with CanvasSection records.

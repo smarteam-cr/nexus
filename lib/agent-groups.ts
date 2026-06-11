@@ -26,6 +26,13 @@ export const AGENT_GROUPS: AgentGroupDef[] = [
     icon: "🏁",
   },
   {
+    key: "cronograma",
+    label: "Cronograma",
+    description: "Detalle del cronograma: tareas por semana sobre las fases existentes",
+    order: 0.75,
+    icon: "📅",
+  },
+  {
     key: "preparacion",
     label: "Preparación",
     description: "Lo que se hace al arrancar con un cliente",

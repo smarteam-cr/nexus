@@ -99,27 +99,45 @@ export async function loadCanvasContext(
 /**
  * Serializa el cronograma (ProjectTimeline + fases) a texto de solo-lectura.
  * Devuelve "" si no hay timeline o no tiene fases.
+ *
+ * `includeIds` (D.1): expone el id de cada fase + su activityType — lo usa el
+ * agente de detalle de cronograma, que debe referenciar fases EXISTENTES por id
+ * (no puede crear ni renombrar). El kickoff sigue llamando sin ids.
  */
-export async function loadTimelineContext(projectId: string): Promise<string> {
+export async function loadTimelineContext(
+  projectId: string,
+  opts: { includeIds?: boolean } = {},
+): Promise<string> {
   const tl = await prisma.projectTimeline.findUnique({
     where: { projectId },
     select: {
       phases: {
         orderBy: { order: "asc" },
-        select: { name: true, durationWeeks: true, sessionCount: true, notes: true },
+        select: {
+          id: true,
+          name: true,
+          durationWeeks: true,
+          sessionCount: true,
+          notes: true,
+          activityType: true,
+        },
       },
     },
   });
   if (!tl || tl.phases.length === 0) return "";
 
   const lines: string[] = [
-    "CRONOGRAMA (fases en orden — contexto de solo lectura, NO lo reproduzcas como lista en tu output):",
+    opts.includeIds
+      ? "CRONOGRAMA (fases en orden, cada una con su id — usá esos ids EXACTOS en tu output):"
+      : "CRONOGRAMA (fases en orden — contexto de solo lectura, NO lo reproduzcas como lista en tu output):",
   ];
   tl.phases.forEach((p, i) => {
     const bits = [`${i + 1}. ${p.name}`];
     if (p.durationWeeks) bits.push(`${p.durationWeeks} sem`);
     if (p.sessionCount) bits.push(`${p.sessionCount} sesiones`);
+    if (opts.includeIds) bits.push(`tipo: ${p.activityType ?? "(sin asignar)"}`);
     let line = bits.join(" · ");
+    if (opts.includeIds) line = `[id: ${p.id}] ${line}`;
     if (p.notes?.trim()) line += ` — ${p.notes.trim()}`;
     lines.push(line);
   });
