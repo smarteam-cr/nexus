@@ -33,23 +33,7 @@ import type {
   RenderableBlock,
 } from "@/lib/external/kickoff-view-types";
 
-const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-function addWeeks(iso: string, w: number): Date {
-  const d = new Date(iso);
-  d.setDate(d.getDate() + w * 7);
-  return d;
-}
-function fmtDay(d: Date): string {
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
-}
-function fmtFull(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-}
-/** Pluralización simple: plural(1,"sesión","sesiones") → "1 sesión". */
-function plural(n: number, sing: string, plur: string): string {
-  return `${n} ${n === 1 ? sing : plur}`;
-}
+import { fmtFull, plural, computePhaseRanges, fmtPhaseRange } from "@/lib/timeline/weeks";
 
 const MAXW = 760;
 const SECTION_PAD = "clamp(40px, 6vw, 72px) 24px";
@@ -382,12 +366,8 @@ function AddBlock({ onClick }: { onClick: () => void }) {
 function TimelineSection({ phases, anchor }: { phases: KickoffPhase[]; anchor: string | null }) {
   if (!phases.length) return null;
   const sorted = [...phases].sort((a, b) => a.order - b.order);
-  let cum = 0;
-  const rows = sorted.map((p) => {
-    const start = cum;
-    cum += p.durationWeeks || 1;
-    return { p, start, end: cum };
-  });
+  const ranges = computePhaseRanges(sorted);
+  const rows = sorted.map((p, i) => ({ p, ...ranges[i] }));
 
   return (
     <section className="section-light" style={{ padding: SECTION_PAD }}>
@@ -398,9 +378,7 @@ function TimelineSection({ phases, anchor }: { phases: KickoffPhase[]; anchor: s
         </h2>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {rows.map(({ p, start, end }, i) => {
-            const range = anchor
-              ? `${fmtDay(addWeeks(anchor, start))} – ${fmtDay(addWeeks(anchor, end))}`
-              : `Semana ${start + 1}${end > start + 1 ? `–${end}` : ""}`;
+            const range = fmtPhaseRange(anchor, { start, end });
             return (
               <div key={p.id} className="card reveal" data-stagger={Math.min(5, i + 1)} style={{ display: "flex", gap: 18, alignItems: "baseline", padding: "18px 22px" }}>
                 <div className="font-display" style={{ color: "var(--brand-blue)", fontSize: 26, lineHeight: 1, flexShrink: 0, minWidth: 34 }}>

@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { plural, computePhaseRanges, totalWeeks, fmtPhaseRange } from "@/lib/timeline/weeks";
 
 interface Phase {
   id?: string; // las fases existentes traen id; las nuevas no (→ create)
@@ -21,19 +22,6 @@ interface Phase {
   notes: string | null;
   source?: string; // AGENT | MODIFIED | HUMAN (solo display)
   _key: string; // key estable de React
-}
-
-const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-function addWeeks(iso: string, w: number): Date {
-  const d = new Date(iso);
-  d.setDate(d.getDate() + w * 7);
-  return d;
-}
-function fmtDay(d: Date): string {
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
-}
-function plural(n: number, sing: string, plur: string): string {
-  return `${n} ${n === 1 ? sing : plur}`;
 }
 
 const SOURCE_LABEL: Record<string, { label: string; cls: string }> = {
@@ -176,13 +164,9 @@ export default function CronogramaCanvas({ projectId }: { projectId: string }) {
   }
 
   // Rangos de fecha acumulados (si hay anchor).
-  let cum = 0;
-  const rows = phases.map((p) => {
-    const start = cum;
-    cum += p.durationWeeks || 1;
-    return { p, start, end: cum };
-  });
-  const totalWeeks = phases.reduce((n, p) => n + (p.durationWeeks || 0), 0);
+  const ranges = computePhaseRanges(phases);
+  const rows = phases.map((p, i) => ({ p, ...ranges[i] }));
+  const weeksTotal = totalWeeks(phases);
 
   return (
     <div className="space-y-5 max-w-3xl">
@@ -204,7 +188,7 @@ export default function CronogramaCanvas({ projectId }: { projectId: string }) {
           <p className="text-[11px] text-gray-500 mt-1">Opcional. Si la fijás, las fechas de cada fase se calculan solas.</p>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-bold text-white">{plural(totalWeeks, "semana", "semanas")}</div>
+          <div className="text-2xl font-bold text-white">{plural(weeksTotal, "semana", "semanas")}</div>
           <div className="text-[11px] text-gray-400">{plural(phases.length, "fase", "fases")} en total</div>
         </div>
       </div>
@@ -225,9 +209,7 @@ export default function CronogramaCanvas({ projectId }: { projectId: string }) {
       ) : (
         <div className="space-y-3">
           {rows.map(({ p, start, end }, i) => {
-            const range = anchor
-              ? `${fmtDay(addWeeks(anchor, start))} – ${fmtDay(addWeeks(anchor, end))}`
-              : `Semana ${start + 1}${end > start + 1 ? `–${end}` : ""}`;
+            const range = fmtPhaseRange(anchor || null, { start, end });
             const src = p.source ? SOURCE_LABEL[p.source] : null;
             return (
               <div key={p._key} className="rounded-2xl border border-gray-800 bg-gray-900 p-4">
