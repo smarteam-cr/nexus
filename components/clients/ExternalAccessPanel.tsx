@@ -275,18 +275,25 @@ function NewCredentialsView({
   onAcknowledge: () => void;
 }) {
   const [copiedPwd, setCopiedPwd] = useState(false);
-  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedLink, setCopiedLink] = useState<"kickoff" | "cronograma" | null>(null);
 
-  const copy = async (text: string, kind: "pwd" | "url") => {
+  const copy = async (text: string, kind: "pwd" | "kickoff" | "cronograma") => {
     await navigator.clipboard.writeText(text);
     if (kind === "pwd") {
       setCopiedPwd(true);
       setTimeout(() => setCopiedPwd(false), 2000);
     } else {
-      setCopiedUrl(true);
-      setTimeout(() => setCopiedUrl(false), 2000);
+      setCopiedLink(kind);
+      setTimeout(() => setCopiedLink(null), 2000);
     }
   };
+
+  // D.1.5 — un link de ENTRADA por superficie (mismo token, mismo verify):
+  // el ?next decide dónde aterriza el cliente tras verificar (whitelist).
+  const links: Array<{ kind: "kickoff" | "cronograma"; label: string; url: string }> = [
+    { kind: "kickoff", label: "Link Kickoff", url: creds.url },
+    { kind: "cronograma", label: "Link Cronograma", url: `${creds.url}?next=cronograma` },
+  ];
 
   return (
     <div className="space-y-4">
@@ -303,26 +310,28 @@ function NewCredentialsView({
       </div>
 
       <div className="space-y-3">
-        {/* URL */}
-        <div>
-          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-            URL del cliente
-          </label>
-          <div className="flex items-center gap-1">
-            <input
-              readOnly
-              value={creds.url}
-              className="flex-1 px-2 py-1.5 text-[11px] bg-gray-800 border border-gray-700 rounded-lg text-gray-300 font-mono"
-              onFocus={(e) => e.currentTarget.select()}
-            />
-            <button
-              onClick={() => copy(creds.url, "url")}
-              className="px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors flex-shrink-0"
-            >
-              {copiedUrl ? "✓" : "Copiar"}
-            </button>
+        {/* Links de entrada — uno por superficie (kickoff / cronograma) */}
+        {links.map((l) => (
+          <div key={l.kind}>
+            <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+              {l.label}
+            </label>
+            <div className="flex items-center gap-1">
+              <input
+                readOnly
+                value={l.url}
+                className="flex-1 px-2 py-1.5 text-[11px] bg-gray-800 border border-gray-700 rounded-lg text-gray-300 font-mono"
+                onFocus={(e) => e.currentTarget.select()}
+              />
+              <button
+                onClick={() => copy(l.url, l.kind)}
+                className="px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors flex-shrink-0"
+              >
+                {copiedLink === l.kind ? "✓" : "Copiar"}
+              </button>
+            </div>
           </div>
-        </div>
+        ))}
 
         {/* Password */}
         <div>
@@ -401,9 +410,15 @@ function ActiveOrRevokedState({
         </span>
       </div>
 
-      {/* Metadata */}
+      {/* Metadata — un link de entrada por superficie (D.1.5) */}
       <div className="space-y-2 rounded-lg bg-gray-800/50 border border-gray-700 p-3">
-        <MetaRow label="URL" value={state.url ?? "—"} mono copyable />
+        <MetaRow label="Link Kickoff" value={state.url ?? "—"} mono copyable />
+        <MetaRow
+          label="Link Cronograma"
+          value={state.url ? `${state.url}?next=cronograma` : "—"}
+          mono
+          copyable
+        />
         <MetaRow label="Token" value={state.accessToken ?? "—"} mono truncate />
         <MetaRow
           label="Generado"

@@ -22,10 +22,16 @@ export const dynamic = "force-dynamic";
 
 export default async function ExternalVerifyPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ next?: string | string[] }>;
 }) {
   const { token } = await params;
+  // D.1.5 — superficie de destino post-verify (?next=cronograma). Se valida
+  // contra una whitelist en VerifyForm; acá solo se normaliza el shape.
+  const { next } = await searchParams;
+  const nextSurface = typeof next === "string" ? next : undefined;
 
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
@@ -43,7 +49,7 @@ export default async function ExternalVerifyPage({
           </p>
         </div>
 
-        <VerifyForm token={token} />
+        <VerifyForm token={token} next={nextSurface} />
 
         <p className="mt-8 text-xs text-gray-400 text-center">
           Si no recibiste una contraseña, contactá al equipo de Smarteam.

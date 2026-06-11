@@ -25,7 +25,17 @@ type State =
   | { kind: "rateLimited"; retryAfterSeconds: number }
   | { kind: "error" };
 
-export function VerifyForm({ token }: { token: string }) {
+/**
+ * Destino post-verify por superficie (D.1.5) — WHITELIST CERRADA: el param
+ * `next` jamás se interpola en la URL (nada de open redirect). Default kickoff
+ * para los links ya compartidos sin param.
+ */
+const SURFACE_PATHS: Record<string, string> = {
+  kickoff: "/external/kickoff",
+  cronograma: "/external/cronograma",
+};
+
+export function VerifyForm({ token, next }: { token: string; next?: string }) {
   const [password, setPassword] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
 
@@ -46,9 +56,10 @@ export function VerifyForm({ token }: { token: string }) {
       if (res.status === 200 && data?.ok) {
         setPassword("");
         setState({ kind: "success", projectName: data.projectName ?? "" });
-        // La cookie httpOnly ya la seteó el endpoint. Navegación full (no router.push)
-        // para que el server component /external/kickoff la lea y renderice el Kickoff.
-        window.location.assign("/external/kickoff");
+        // La cookie httpOnly ya la seteó el endpoint. Navegación full (no
+        // router.push) para que el server component de destino la lea. El
+        // destino sale de la whitelist según el link que abrió el cliente.
+        window.location.assign(SURFACE_PATHS[next ?? ""] ?? SURFACE_PATHS.kickoff);
         return;
       }
       if (res.status === 429) {
