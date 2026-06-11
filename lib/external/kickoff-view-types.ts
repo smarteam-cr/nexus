@@ -22,6 +22,13 @@ export interface RenderableBlock {
   source?: string;
 }
 
+/** Acción por semana visible para el cliente (D.1). SOLO título + semana —
+ *  status/notes/source/needsValidation son internos y NUNCA cruzan. */
+export interface KickoffTask {
+  title: string;
+  weekIndex: number; // 0-indexed relativo a la fase
+}
+
 export interface KickoffPhase {
   id: string;
   name: string;
@@ -29,6 +36,8 @@ export interface KickoffPhase {
   durationWeeks: number;
   sessionCount: number | null;
   notes: string | null;
+  /** Presente SOLO si el CSE confirmó el detalle (detailConfirmedAt != null). */
+  tasks?: KickoffTask[];
 }
 
 export interface KickoffTimelineData {

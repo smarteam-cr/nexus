@@ -33,7 +33,7 @@ import type {
   RenderableBlock,
 } from "@/lib/external/kickoff-view-types";
 
-import { fmtFull, plural, computePhaseRanges, fmtPhaseRange } from "@/lib/timeline/weeks";
+import { addWeeks, fmtDay, fmtFull, plural, computePhaseRanges, fmtPhaseRange } from "@/lib/timeline/weeks";
 
 const MAXW = 760;
 const SECTION_PAD = "clamp(40px, 6vw, 72px) 24px";
@@ -110,11 +110,31 @@ function KickoffLandingInternal({
     fetch(`/api/projects/${projectId}/timeline`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        setTimeline(
-          d && d.exists
-            ? { exists: true, anchorStartDate: d.anchorStartDate ?? null, phases: d.phases ?? [] }
-            : { exists: false, anchorStartDate: null, phases: [] },
-        );
+        if (!d || !d.exists) {
+          setTimeline({ exists: false, anchorStartDate: null, phases: [] });
+          return;
+        }
+        // Preview FIEL a la superficie externa: las acciones por semana solo se
+        // muestran si el detalle está confirmado (mismo gate que kickoff-view.ts),
+        // y solo título+semana — el detalle completo vive en el canvas Cronograma.
+        const detailConfirmed = !!d.detailConfirmedAt;
+        type RawTask = { title: string; weekIndex: number };
+        type RawPhase = KickoffPhase & { tasks?: RawTask[] };
+        setTimeline({
+          exists: true,
+          anchorStartDate: d.anchorStartDate ?? null,
+          phases: ((d.phases ?? []) as RawPhase[]).map((p) => ({
+            id: p.id,
+            name: p.name,
+            order: p.order,
+            durationWeeks: p.durationWeeks,
+            sessionCount: p.sessionCount,
+            notes: p.notes,
+            ...(detailConfirmed && Array.isArray(p.tasks)
+              ? { tasks: p.tasks.map((t) => ({ title: t.title, weekIndex: t.weekIndex })) }
+              : {}),
+          })),
+        });
       })
       .catch(() => setTimeline({ exists: false, anchorStartDate: null, phases: [] }));
   }, [projectId]);
@@ -392,6 +412,49 @@ function TimelineSection({ phases, anchor }: { phases: KickoffPhase[]; anchor: s
                     {p.sessionCount ? ` · ${plural(p.sessionCount, "sesión", "sesiones")}` : ""}
                   </div>
                   {p.notes?.trim() && <div style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 6 }}>{p.notes}</div>}
+
+                  {/* D.1 — acciones por semana (solo si el CSE confirmó el detalle).
+                      Read-only y sin estados/colores: el cliente ve QUÉ haremos
+                      cada semana, no el tracking interno. */}
+                  {p.tasks && p.tasks.length > 0 && (
+                    <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                      {Array.from({ length: p.durationWeeks }).map((_, relWeek) => {
+                        const weekTasks = p.tasks!.filter((t) => t.weekIndex === relWeek);
+                        if (weekTasks.length === 0) return null;
+                        const absW = start + relWeek;
+                        return (
+                          <div key={relWeek}>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.06em",
+                                color: "var(--text-muted)",
+                                borderBottom: "1px dashed var(--border, #e2e8f0)",
+                                paddingBottom: 3,
+                                marginBottom: 5,
+                              }}
+                            >
+                              Semana {relWeek + 1}
+                              {anchor && (
+                                <span style={{ fontWeight: 600, marginLeft: 6, opacity: 0.75 }}>
+                                  {fmtDay(addWeeks(anchor, absW))} – {fmtDay(addWeeks(anchor, absW + 1))}
+                                </span>
+                              )}
+                            </div>
+                            <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 3 }}>
+                              {weekTasks.map((t, ti) => (
+                                <li key={ti} style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.5 }}>
+                                  {t.title}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             );

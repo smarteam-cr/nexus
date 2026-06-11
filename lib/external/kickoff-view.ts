@@ -82,7 +82,9 @@ export async function getPublishedKickoffForToken(
   const tl = await prisma.projectTimeline.findUnique({
     where: { projectId },
     select: {
+      id: true,
       anchorStartDate: true,
+      detailConfirmedAt: true,
       phases: {
         orderBy: { order: "asc" },
         select: {
@@ -96,6 +98,25 @@ export async function getPublishedKickoffForToken(
       },
     },
   });
+
+  // 5b. D.1 — acciones por semana, SOLO si el CSE confirmó el detalle.
+  // Gate server-side: sin confirmación las tareas ni se consultan — jamás
+  // llegan al JSON del browser. El select es explícito: título + semana,
+  // NUNCA status/notes/source/needsValidation (internos).
+  let tasksByPhase: Map<string, Array<{ title: string; weekIndex: number }>> | null = null;
+  if (tl?.detailConfirmedAt) {
+    const tasks = await prisma.timelineTask.findMany({
+      where: { phase: { timelineId: tl.id } },
+      orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
+      select: { phaseId: true, title: true, weekIndex: true },
+    });
+    tasksByPhase = new Map();
+    for (const t of tasks) {
+      const arr = tasksByPhase.get(t.phaseId) ?? [];
+      arr.push({ title: t.title, weekIndex: t.weekIndex });
+      tasksByPhase.set(t.phaseId, arr);
+    }
+  }
 
   // 6. Marcar uso (no bloquea el render si falla).
   await prisma.projectExternalAccess
@@ -119,7 +140,10 @@ export async function getPublishedKickoffForToken(
     timeline: {
       exists: !!tl,
       anchorStartDate: tl?.anchorStartDate?.toISOString() ?? null,
-      phases: tl?.phases ?? [],
+      phases: (tl?.phases ?? []).map((p) => ({
+        ...p,
+        ...(tasksByPhase ? { tasks: tasksByPhase.get(p.id) ?? [] } : {}),
+      })),
     },
   };
 }
