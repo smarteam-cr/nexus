@@ -78,12 +78,15 @@ interface Props {
 
 // ── Metadata de tipos de actividad (color de barra + chip) ────────────────────
 
+// 5 familias de matiz bien separadas (celeste·púrpura·naranja·verde·magenta).
+// Rojo, amber y gris quedan reservados: vencida / por validar / sin tipo. El
+// azul de marca (chrome interactivo, semana actual) tampoco se usa acá.
 const ACTIVITY_META: Record<string, { label: string; seg: string; chip: string }> = {
   EXPLORACION:   { label: "Exploración",   seg: "bg-sky-500",     chip: "text-sky-300 bg-sky-900/30 border-sky-700/40" },
   PLANIFICACION: { label: "Planificación", seg: "bg-violet-500",  chip: "text-violet-300 bg-violet-900/30 border-violet-700/40" },
-  CONFIGURACION: { label: "Configuración", seg: "bg-blue-600",    chip: "text-blue-300 bg-blue-900/30 border-blue-700/40" },
+  CONFIGURACION: { label: "Configuración", seg: "bg-orange-500",  chip: "text-orange-300 bg-orange-900/30 border-orange-700/40" },
   ADOPCION:      { label: "Adopción",      seg: "bg-emerald-500", chip: "text-emerald-300 bg-emerald-900/30 border-emerald-700/40" },
-  SEGUIMIENTO:   { label: "Seguimiento",   seg: "bg-teal-400",    chip: "text-teal-300 bg-teal-900/30 border-teal-700/40" },
+  SEGUIMIENTO:   { label: "Seguimiento",   seg: "bg-fuchsia-500", chip: "text-fuchsia-300 bg-fuchsia-900/30 border-fuchsia-700/40" },
 };
 const NEUTRAL_SEG = "bg-gray-600";
 

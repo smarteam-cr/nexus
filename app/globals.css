@@ -282,6 +282,13 @@ html.light .bg-red-900\/40    { background-color: #fee2e2 !important; }
 html.light .border-red-700\/50 { border-color: #fecaca !important; }
 html.light .text-violet-300   { color: #6d28d9 !important; }
 html.light .border-violet-700\/40 { border-color: #ddd6fe !important; }
+/* Paleta de tipos de actividad — orange (CONFIGURACION) y fuchsia (SEGUIMIENTO) */
+html.light .bg-orange-900\/30  { background-color: #fff7ed !important; }
+html.light .text-orange-300    { color: #c2410c !important; }
+html.light .border-orange-700\/40 { border-color: #fed7aa !important; }
+html.light .bg-fuchsia-900\/30 { background-color: #fdf4ff !important; }
+html.light .text-fuchsia-300   { color: #a21caf !important; }
+html.light .border-fuchsia-700\/40 { border-color: #f5d0fe !important; }
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Opacity variants para colores semánticos (bg-X-500/10, text-X-200/300, etc.)
