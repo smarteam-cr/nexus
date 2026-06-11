@@ -22,29 +22,18 @@ export interface RenderableBlock {
   source?: string;
 }
 
-/** Acción por semana visible para el cliente (D.1). SOLO título + semana —
- *  status/notes/source/needsValidation son internos y NUNCA cruzan. */
-export interface KickoffTask {
-  title: string;
-  weekIndex: number; // 0-indexed relativo a la fase
-}
+/** Tipos del cronograma externo (D.1.5): viven en timeline-view-types.ts —
+ *  compartidos por las DOS superficies. Acá quedan los alias históricos para
+ *  no churnear a los consumidores del kickoff (KickoffLanding). */
+import type {
+  ExternalTimelineTask,
+  ExternalTimelinePhase,
+  ExternalTimelineData,
+} from "./timeline-view-types";
 
-export interface KickoffPhase {
-  id: string;
-  name: string;
-  order: number;
-  durationWeeks: number;
-  sessionCount: number | null;
-  notes: string | null;
-  /** Presente SOLO si el CSE confirmó el detalle (detailConfirmedAt != null). */
-  tasks?: KickoffTask[];
-}
-
-export interface KickoffTimelineData {
-  exists: boolean;
-  anchorStartDate: string | null;
-  phases: KickoffPhase[];
-}
+export type KickoffTask = ExternalTimelineTask;
+export type KickoffPhase = ExternalTimelinePhase;
+export type KickoffTimelineData = ExternalTimelineData;
 
 export interface KickoffSection {
   id: string;

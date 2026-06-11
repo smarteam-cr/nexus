@@ -1,29 +1,35 @@
 /**
  * lib/external/kickoff-view.ts
  *
- * CHOKEPOINT de seguridad de la superficie externa (Fase C.1). Es el ÚNICO
- * lugar donde un token de cliente se resuelve a datos. Corre SIEMPRE server-side
- * (lo invoca la ruta pública app/external/kickoff/page.tsx en cada render).
+ * CHOKEPOINT de seguridad del KICKOFF externo (Fase C.1). Es el ÚNICO lugar
+ * donde un token de cliente se resuelve a los datos del kickoff. Corre SIEMPRE
+ * server-side (lo invoca la ruta pública app/external/kickoff/page.tsx en cada
+ * render).
  *
  * Modelo de seguridad (las 3 decisiones de Fase C viven acá):
  *   1. El scoping al proyecto NO lo da RLS (Prisma bypassa) — lo da, al 100%,
- *      el filtro token→projectId de esta función. No hay endpoint de datos
- *      público: el read pasa por acá.
+ *      el filtro token→projectId (resolveActiveAccess, lib/external/access.ts).
+ *      No hay endpoint de datos público: el read pasa por acá.
  *   2. Doble check OBLIGATORIO EN CADA LECTURA: acceso no revocado
- *      (revokedAt == null) Y Kickoff publicado (kickoffPublishedAt != null).
- *      Si cualquiera falla → null (denegado). Por eso la cookie de 30 días NO
- *      otorga acceso por sí sola: revocar o despublicar corta el acceso en el
- *      render siguiente aunque la cookie siga viva.
+ *      (revokedAt == null, en el resolver) Y Kickoff publicado
+ *      (kickoffPublishedAt != null, acá). Si cualquiera falla → null (denegado).
+ *      Por eso la cookie de 30 días NO otorga acceso por sí sola: revocar o
+ *      despublicar corta el acceso en el render siguiente.
  *   3. Shape LIMPIO: se devuelven solo bloques CONFIRMED, mapeados a
  *      { id, blockType, content, data } — sin source/status/agentRunId.
+ *
+ * D.1.5 — regla UNIFICADA de publicación del cronograma: la sección de
+ * cronograma embebida en el kickoff se gatea por SU propio flag
+ * (timelinePublishedAt), no por el del kickoff. Kickoff publicado con
+ * cronograma sin publicar → el landing sale SIN sección de cronograma (shape
+ * vacío, idéntico a "no hay cronograma"). La lectura en sí (fases + tareas con
+ * su filtro) vive en readClientTimeline — compartida con /external/cronograma
+ * para que el filtro de seguridad exista en UN solo lugar.
  */
 import { prisma } from "@/lib/db/prisma";
+import { resolveActiveAccess, touchAccess } from "./access";
+import { readClientTimeline } from "./timeline-view";
 import type { KickoffLandingData } from "./kickoff-view-types";
-
-/** Nombre de la cookie httpOnly que transporta el token (lo setea verify-access). */
-export const EXTERNAL_ACCESS_COOKIE = "nexus_ext_access";
-
-const TOKEN_RE = /^[a-f0-9]{64}$/i;
 
 /**
  * Resuelve un token de acceso externo al Kickoff publicado de SU proyecto.
@@ -34,23 +40,12 @@ const TOKEN_RE = /^[a-f0-9]{64}$/i;
 export async function getPublishedKickoffForToken(
   token: string,
 ): Promise<KickoffLandingData | null> {
-  // 0. Forma del token (evita tocar DB con basura).
-  if (!token || !TOKEN_RE.test(token)) return null;
-
-  // 1. token → acceso → proyecto (incluye el flag de publicación).
-  const access = await prisma.projectExternalAccess.findUnique({
-    where: { accessToken: token },
-    select: {
-      id: true,
-      revokedAt: true,
-      project: { select: { id: true, name: true, kickoffPublishedAt: true } },
-    },
-  });
+  // 1-2. token → acceso activo → proyecto (forma + existencia + revokedAt).
+  const access = await resolveActiveAccess(token);
   if (!access) return null;
 
-  // 2. DOBLE CHECK de seguridad (ambos obligatorios, en CADA lectura).
-  if (access.revokedAt) return null; // acceso revocado → gana sobre la cookie
-  if (!access.project.kickoffPublishedAt) return null; // no publicado → gana sobre la cookie
+  // Check de superficie EXPLÍCITO: Kickoff publicado, en CADA lectura.
+  if (!access.project.kickoffPublishedAt) return null;
 
   const projectId = access.project.id;
 
@@ -78,50 +73,16 @@ export async function getPublishedKickoffForToken(
     },
   });
 
-  // 5. Cronograma (read-only; las fechas reales se calculan en el cliente desde anchorStartDate).
-  const tl = await prisma.projectTimeline.findUnique({
-    where: { projectId },
-    select: {
-      id: true,
-      anchorStartDate: true,
-      detailConfirmedAt: true,
-      phases: {
-        orderBy: { order: "asc" },
-        select: {
-          id: true,
-          name: true,
-          order: true,
-          durationWeeks: true,
-          sessionCount: true,
-          notes: true,
-        },
-      },
-    },
-  });
-
-  // 5b. D.1 — acciones por semana, SOLO si el CSE confirmó el detalle.
-  // Gate server-side: sin confirmación las tareas ni se consultan — jamás
-  // llegan al JSON del browser. El select es explícito: título + semana,
-  // NUNCA status/notes/source/needsValidation (internos).
-  let tasksByPhase: Map<string, Array<{ title: string; weekIndex: number }>> | null = null;
-  if (tl?.detailConfirmedAt) {
-    const tasks = await prisma.timelineTask.findMany({
-      where: { phase: { timelineId: tl.id } },
-      orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
-      select: { phaseId: true, title: true, weekIndex: true },
-    });
-    tasksByPhase = new Map();
-    for (const t of tasks) {
-      const arr = tasksByPhase.get(t.phaseId) ?? [];
-      arr.push({ title: t.title, weekIndex: t.weekIndex });
-      tasksByPhase.set(t.phaseId, arr);
-    }
-  }
+  // 5. Cronograma — regla unificada D.1.5: SOLO si timelinePublishedAt != null.
+  // Sin publicar → shape vacío (el landing renderiza como si no hubiera
+  // cronograma). La lectura compartida aplica el filtro de seguridad (tareas
+  // solo {title, weekIndex} y solo con detailConfirmedAt).
+  const timeline = access.project.timelinePublishedAt
+    ? await readClientTimeline(projectId)
+    : { exists: false as const, anchorStartDate: null, phases: [] };
 
   // 6. Marcar uso (no bloquea el render si falla).
-  await prisma.projectExternalAccess
-    .update({ where: { id: access.id }, data: { lastUsedAt: new Date() } })
-    .catch(() => {});
+  await touchAccess(access.accessId);
 
   return {
     projectName: access.project.name,
@@ -137,13 +98,6 @@ export async function getPublishedKickoffForToken(
         data: b.data,
       })),
     })),
-    timeline: {
-      exists: !!tl,
-      anchorStartDate: tl?.anchorStartDate?.toISOString() ?? null,
-      phases: (tl?.phases ?? []).map((p) => ({
-        ...p,
-        ...(tasksByPhase ? { tasks: tasksByPhase.get(p.id) ?? [] } : {}),
-      })),
-    },
+    timeline,
   };
 }

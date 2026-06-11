@@ -16,7 +16,8 @@
 import { cookies } from "next/headers";
 import KickoffLanding from "@/components/canvas/KickoffLanding";
 import ExternalShell from "@/components/external/ExternalShell";
-import { getPublishedKickoffForToken, EXTERNAL_ACCESS_COOKIE } from "@/lib/external/kickoff-view";
+import { getPublishedKickoffForToken } from "@/lib/external/kickoff-view";
+import { EXTERNAL_ACCESS_COOKIE } from "@/lib/external/access";
 
 export const dynamic = "force-dynamic";
 

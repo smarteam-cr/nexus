@@ -22,7 +22,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/db/prisma";
-import { EXTERNAL_ACCESS_COOKIE } from "@/lib/external/kickoff-view";
+import { EXTERNAL_ACCESS_COOKIE } from "@/lib/external/access";
 
 // ── Rate limiting in-memory ──────────────────────────────────────────────────
 // Map por accessToken (no por IP — IP es trivial de rotar y queremos atar el
