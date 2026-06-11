@@ -12,8 +12,11 @@
  *   - Actualización por IA: barra de instrucción → POST /timeline/assist →
  *     PROPUESTA completa (sin persistir) → preview en el mismo Gantt + resumen
  *     de cambios → Aplicar (PUT normal: diffea, preserva estados) / Descartar.
- *   - Estructura de fases (nombre/duración/sesiones/tipo/orden/fecha de
- *     arranque): colapsable debajo del Gantt.
+ *   - ESTRUCTURA de fases (crear/borrar/renombrar/duración/orden/tipo/notas):
+ *     SOLO por la barra de IA — no hay editor de formularios aparte. Dos
+ *     excepciones directas: la fecha de arranque (date input en el banner del
+ *     Gantt, guarda al toque) y el bootstrap con 0 fases (mini-form de primera
+ *     fase en el empty state — sin fases la barra de IA no opera).
  *
  * Generación inicial del detalle: agente "agent-timeline-detail" vía
  * POST /api/clients/[clientId]/analyze. Confirmación (gate de la vista
@@ -24,7 +27,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { plural, computePhaseRanges, totalWeeks, fmtPhaseRange } from "@/lib/timeline/weeks";
+import { plural } from "@/lib/timeline/weeks";
 import { ConfirmDialog } from "@/components/ui";
 import TimelineGantt, { type GanttPhase, type GanttTaskStatus } from "./TimelineGantt";
 
@@ -74,21 +77,6 @@ interface Proposal {
   phases: ProposalPhase[];
 }
 
-const SOURCE_LABEL: Record<string, { label: string; cls: string }> = {
-  AGENT: { label: "IA", cls: "text-blue-300 bg-blue-900/30 border-blue-700/40" },
-  MODIFIED: { label: "Editado", cls: "text-teal-300 bg-teal-900/30 border-teal-700/40" },
-  HUMAN: { label: "Manual", cls: "text-gray-300 bg-gray-800 border-gray-700" },
-};
-
-const ACTIVITY_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: "", label: "Sin tipo" },
-  { value: "EXPLORACION", label: "Exploración" },
-  { value: "PLANIFICACION", label: "Planificación" },
-  { value: "CONFIGURACION", label: "Configuración" },
-  { value: "ADOPCION", label: "Adopción" },
-  { value: "SEGUIMIENTO", label: "Seguimiento" },
-];
-
 interface ServerTask {
   id: string;
   title: string;
@@ -116,7 +104,6 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
   const [phases, setPhases] = useState<Phase[]>([]);
   const [anchor, setAnchor] = useState<string>(""); // yyyy-mm-dd o ""
   const [detailConfirmedAt, setDetailConfirmedAt] = useState<string | null>(null);
-  const [structureOpen, setStructureOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -181,34 +168,10 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
     load();
   }, [load]);
 
-  // ── Edición de fases (estructura) ─────────────────────────────────────────────
-  const updatePhase = (key: string, patch: Partial<Phase>) => {
-    setPhases((ps) => ps.map((p) => (p._key === key ? { ...p, ...patch } : p)));
-    setDirty(true);
-  };
-  const addPhase = () => {
-    setPhases((ps) => [
-      ...ps,
-      { name: "", durationWeeks: 1, sessionCount: null, notes: null, activityType: null, tasks: [], _key: nextKey() },
-    ]);
-    setDirty(true);
-    setStructureOpen(true);
-  };
-  const removePhase = (key: string) => {
-    setPhases((ps) => ps.filter((p) => p._key !== key));
-    setDirty(true);
-  };
-  const move = (key: string, dir: -1 | 1) => {
-    setPhases((ps) => {
-      const i = ps.findIndex((p) => p._key === key);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= ps.length) return ps;
-      const copy = [...ps];
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-      return copy;
-    });
-    setDirty(true);
-  };
+  // ── Bootstrap (estructura SOLO por IA — pero sin fases la barra no opera) ──────
+  const [bootName, setBootName] = useState("");
+  const [bootWeeks, setBootWeeks] = useState(4);
+  const [creatingFirst, setCreatingFirst] = useState(false);
 
   // ── Edición de tareas (inline en el Gantt) ────────────────────────────────────
   const updateTask = (phaseKey: string, taskKey: string, patch: Partial<TaskDraft>) => {
@@ -323,6 +286,42 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
   const setAnchorFromGantt = (ymd: string) => {
     setAnchor(ymd);
     void save(ymd);
+  };
+
+  // Crear la PRIMERA fase desde el empty state (persiste al toque). Las fases
+  // siguientes —y toda la edición de estructura— van por la barra de IA.
+  const createFirstPhase = async () => {
+    const name = bootName.trim();
+    if (!name || creatingFirst) return;
+    const weeks = Math.max(1, bootWeeks || 1);
+    setCreatingFirst(true);
+    setError(null);
+    try {
+      const firstPhase: Phase = {
+        name,
+        durationWeeks: weeks,
+        sessionCount: null,
+        notes: null,
+        activityType: null,
+        tasks: [],
+        _key: nextKey(),
+      };
+      const res = await fetch(`/api/projects/${projectId}/timeline`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPutBody([firstPhase], anchor)),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d?.details?.[0] ?? d?.error ?? "No se pudo crear la fase.");
+      } else {
+        setBootName("");
+        await load();
+      }
+    } catch {
+      setError("Error de conexión al crear la fase.");
+    }
+    setCreatingFirst(false);
   };
 
   // ── Generar detalle inicial con IA ────────────────────────────────────────────
@@ -481,9 +480,6 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
   }
 
   // ── Derivados ─────────────────────────────────────────────────────────────────
-  const ranges = computePhaseRanges(phases);
-  const rows = phases.map((p, i) => ({ p, ...ranges[i] }));
-  const weeksTotal = totalWeeks(phases);
   const totalTasks = phases.reduce((n, p) => n + p.tasks.length, 0);
   const pendingValidation = phases.reduce(
     (n, p) => n + p.tasks.filter((t) => t.needsValidation).length,
@@ -733,8 +729,40 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
 
       {/* ── EL cronograma (Gantt editable; en propuesta → preview read-only) ── */}
       {phases.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-gray-700 px-5 py-8 text-center text-gray-400">
-          <p className="text-sm">Todavía no hay cronograma. Agregá la primera fase en "Estructura de fases".</p>
+        <div className="rounded-2xl border border-dashed border-gray-700 px-5 py-8 text-center text-gray-400 space-y-4">
+          <p className="text-sm">
+            Todavía no hay cronograma. Creá la primera fase — después pedile los cambios a la IA.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            <input
+              value={bootName}
+              onChange={(e) => setBootName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") createFirstPhase();
+              }}
+              placeholder="Nombre de la fase (ej: Kick-off)"
+              disabled={creatingFirst}
+              className="w-64 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 disabled:opacity-60"
+            />
+            <label className="flex items-center gap-1.5 text-xs text-gray-500">
+              <input
+                type="number"
+                min={1}
+                value={bootWeeks}
+                onChange={(e) => setBootWeeks(parseInt(e.target.value, 10) || 1)}
+                disabled={creatingFirst}
+                className="w-14 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-60"
+              />
+              semanas
+            </label>
+            <button
+              onClick={createFirstPhase}
+              disabled={creatingFirst || !bootName.trim()}
+              className="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 px-4 py-1.5 rounded-lg transition-colors"
+            >
+              {creatingFirst ? "Creando…" : "Crear fase"}
+            </button>
+          </div>
         </div>
       ) : proposal && proposalGantt ? (
         <TimelineGantt
@@ -765,143 +793,6 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
           >
             {saving ? "Guardando…" : "Guardar cronograma"}
           </button>
-        </div>
-      )}
-
-      {/* ── Estructura de fases (colapsable — fechas, duraciones, tipos, orden) ── */}
-      {!proposal && (
-        <div className="rounded-2xl border border-gray-800 bg-gray-900/50">
-          <button
-            onClick={() => setStructureOpen((v) => !v)}
-            className="w-full flex items-center gap-2 px-4 py-3 text-left"
-          >
-            <svg
-              className={`w-3.5 h-3.5 text-gray-500 transition-transform ${structureOpen ? "rotate-90" : ""}`}
-              fill="none" viewBox="0 0 24 24" stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-            </svg>
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
-              Estructura de fases
-            </span>
-            <span className="text-[11px] text-gray-600">
-              {plural(phases.length, "fase", "fases")} · {plural(weeksTotal, "semana", "semanas")}
-              {anchor ? "" : " · sin fecha de arranque"}
-            </span>
-          </button>
-
-          {structureOpen && (
-            <div className="px-4 pb-4 space-y-3">
-              {/* Fecha de arranque */}
-              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-800 bg-gray-900 px-4 py-3">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                  Fecha de arranque
-                </label>
-                <input
-                  type="date"
-                  value={anchor}
-                  onChange={(e) => {
-                    setAnchor(e.target.value);
-                    setDirty(true);
-                  }}
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
-                />
-                <p className="text-[11px] text-gray-500">Las fechas de cada fase y semana se calculan desde acá.</p>
-              </div>
-
-              {/* Fases */}
-              {rows.map(({ p, start, end }, i) => {
-                const range = fmtPhaseRange(anchor || null, { start, end });
-                const src = p.source ? SOURCE_LABEL[p.source] : null;
-                return (
-                  <div key={p._key} className="rounded-xl border border-gray-800 bg-gray-900 p-3.5">
-                    <div className="flex items-start gap-3">
-                      <div className="text-lg font-bold text-blue-400 tabular-nums pt-0.5 w-7 flex-shrink-0">
-                        {String(i + 1).padStart(2, "0")}
-                      </div>
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <input
-                            value={p.name}
-                            onChange={(e) => updatePhase(p._key, { name: e.target.value })}
-                            placeholder="Nombre de la fase"
-                            className="flex-1 bg-transparent text-sm font-semibold text-white border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:outline-none pb-0.5"
-                          />
-                          {src && (
-                            <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${src.cls}`}>{src.label}</span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                          <label className="flex items-center gap-1.5 text-gray-400">
-                            <span className="text-xs">Duración</span>
-                            <input
-                              type="number"
-                              min={1}
-                              value={p.durationWeeks}
-                              onChange={(e) => updatePhase(p._key, { durationWeeks: parseInt(e.target.value, 10) || 0 })}
-                              className="w-14 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white focus:outline-none focus:border-blue-500"
-                            />
-                            <span className="text-xs">sem</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 text-gray-400">
-                            <span className="text-xs">Sesiones</span>
-                            <input
-                              type="number"
-                              min={1}
-                              value={p.sessionCount ?? ""}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                updatePhase(p._key, { sessionCount: v === "" ? null : parseInt(v, 10) || 0 });
-                              }}
-                              placeholder="—"
-                              className="w-14 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white focus:outline-none focus:border-blue-500"
-                            />
-                          </label>
-                          <label className="flex items-center gap-1.5 text-gray-400">
-                            <span className="text-xs">Tipo</span>
-                            <select
-                              value={p.activityType ?? ""}
-                              onChange={(e) => updatePhase(p._key, { activityType: e.target.value || null })}
-                              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-xs focus:outline-none focus:border-blue-500"
-                            >
-                              {ACTIVITY_OPTIONS.map((o) => (
-                                <option key={o.value} value={o.value}>{o.label}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <span className="text-xs text-gray-500">{range}</span>
-                          <span className="text-xs text-gray-600">{plural(p.tasks.length, "tarea", "tareas")}</span>
-                        </div>
-                        <textarea
-                          value={p.notes ?? ""}
-                          onChange={(e) => updatePhase(p._key, { notes: e.target.value || null })}
-                          placeholder="Notas de la fase (lenguaje cliente, opcional)"
-                          rows={1}
-                          className="w-full bg-transparent text-sm text-gray-300 border border-gray-800 hover:border-gray-700 focus:border-blue-500 focus:outline-none rounded-lg px-2.5 py-1.5 resize-none"
-                        />
-                      </div>
-                      <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                        <button onClick={() => move(p._key, -1)} disabled={i === 0} title="Subir" className="p-1 rounded text-gray-500 hover:text-white hover:bg-gray-800 disabled:opacity-25 disabled:hover:bg-transparent">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M5 15l7-7 7 7" /></svg>
-                        </button>
-                        <button onClick={() => move(p._key, 1)} disabled={i === rows.length - 1} title="Bajar" className="p-1 rounded text-gray-500 hover:text-white hover:bg-gray-800 disabled:opacity-25 disabled:hover:bg-transparent">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M19 9l-7 7-7-7" /></svg>
-                        </button>
-                        <button onClick={() => removePhase(p._key)} title="Eliminar fase" className="p-1 rounded text-gray-600 hover:text-red-400 hover:bg-red-500/10">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              <button onClick={addPhase} className="flex items-center gap-1.5 text-sm font-medium text-gray-300 hover:text-white border border-dashed border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                Agregar fase
-              </button>
-            </div>
-          )}
         </div>
       )}
 

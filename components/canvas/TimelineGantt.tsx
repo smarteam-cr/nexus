@@ -14,7 +14,9 @@
  *   - toggle de ESTADO por tarea (PENDING→IN_PROGRESS→DONE) — inmediato vía
  *     PATCH (lo maneja el padre con update optimista). Deshabilitado en tareas
  *     sin guardar (sin id).
- *   - sin fecha de arranque: date input inline para fijarla acá mismo.
+ *   - fecha de arranque: date input inline en el banner, SIEMPRE disponible —
+ *     fijarla (label amber cuando falta) o cambiarla (input compacto). Es el
+ *     único campo de estructura con control directo; el resto va por IA.
  *
  * readOnly: para la VISTA PREVIA de una propuesta de la IA (sin handlers).
  *
@@ -154,16 +156,28 @@ export default function TimelineGantt({
             <span className="font-medium text-blue-400/90">· cronograma finalizado</span>
           )}
         </span>
-        {!anchor && onSetAnchor && (
-          <label className="flex items-center gap-2 text-[11px] font-semibold text-amber-300 bg-amber-500/15 border border-amber-500/50 rounded-lg px-3 py-1.5">
-            Fijá la fecha de arranque para ver fechas reales:
-            <input
-              type="date"
-              onChange={(e) => e.target.value && onSetAnchor(e.target.value)}
-              className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500"
-            />
-          </label>
-        )}
+        {onSetAnchor &&
+          (anchor ? (
+            <label className="flex items-center gap-2 text-[11px] font-semibold text-gray-500">
+              Arranque:
+              <input
+                type="date"
+                value={anchor}
+                onChange={(e) => e.target.value && onSetAnchor(e.target.value)}
+                title="Cambiar la fecha de arranque (guarda al instante)"
+                className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500"
+              />
+            </label>
+          ) : (
+            <label className="flex items-center gap-2 text-[11px] font-semibold text-amber-300 bg-amber-500/15 border border-amber-500/50 rounded-lg px-3 py-1.5">
+              Fijá la fecha de arranque para ver fechas reales:
+              <input
+                type="date"
+                onChange={(e) => e.target.value && onSetAnchor(e.target.value)}
+                className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500"
+              />
+            </label>
+          ))}
 
         <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
           {Object.values(ACTIVITY_META).map((m) => (
