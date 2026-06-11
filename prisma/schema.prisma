@@ -242,6 +242,10 @@ model ProjectTimeline {
   lastEditedByHuman     DateTime?       // se actualiza en cada PUT que toca fases (no en el create del agente)
   generatedByAgentRunId String?         // de qué AgentRun salió la propuesta inicial (trazabilidad)
   generatedByAgentRun   AgentRun?       @relation(fields: [generatedByAgentRunId], references: [id], onDelete: SetNull)
+  // D.1 — cronograma detallado:
+  detailConfirmedAt           DateTime? // gate de la vista cliente: las tareas solo cruzan al kickoff externo si != null
+  detailGeneratedByAgentRunId String?   // de qué AgentRun salió el detalle (tareas/tipos) — trazabilidad
+  detailGeneratedByAgentRun   AgentRun? @relation("TimelineDetailGenerator", fields: [detailGeneratedByAgentRunId], references: [id], onDelete: SetNull)
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
 
@@ -251,25 +255,66 @@ model ProjectTimeline {
 }
 
 model TimelinePhase {
-  id            String              @id @default(cuid())
+  id            String                @id @default(cuid())
   timelineId    String
-  timeline      ProjectTimeline     @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  timeline      ProjectTimeline       @relation(fields: [timelineId], references: [id], onDelete: Cascade)
   name          String                                  // "Kick-off", "Arquitectura", etc.
   order         Int                                     // 0-indexed, posición en la secuencia
-  durationWeeks Int                 @default(1)         // 1+
+  durationWeeks Int                   @default(1)       // 1+
   sessionCount  Int?                                    // opcional — algunas fases no son por sesiones
-  notes         String?             @db.Text            // texto libre opcional (contexto editable)
-  source        TimelinePhaseSource @default(AGENT)
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  notes         String?               @db.Text          // texto libre opcional (contexto editable)
+  activityType  TimelineActivityType?                   // D.1: tipo de actividad (nullable — fases pre-D.1 quedan sin tipo, render neutro)
+  source        TimelinePhaseSource   @default(AGENT)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  tasks         TimelineTask[]
 
   @@index([timelineId, order])
+}
+
+// D.1 — tarea de una fase del cronograma. weekIndex es RELATIVO a la fase
+// (0-indexed, rango [0, durationWeeks)); en UI se muestra 1-based.
+// El estado vive separado del contenido a propósito: D.2 podrá regenerar
+// contenido preservando estados humanos por id. Invariante D.1: el agente
+// solo crea PENDING → todo status != PENDING es humano por definición.
+model TimelineTask {
+  id              String              @id @default(cuid())
+  phaseId         String
+  phase           TimelinePhase       @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  title           String
+  weekIndex       Int                                   // 0-indexed, relativo a la fase
+  order           Int                 @default(0)       // orden dentro de la semana
+  status          TimelineTaskStatus  @default(PENDING)
+  notes           String?             @db.Text
+  needsValidation Boolean             @default(false)   // tarea típica inventada por el agente con handoff flaco — el Gantt la grita; NUNCA cruza al cliente
+  source          TimelinePhaseSource @default(AGENT)   // reuso consciente del enum (mismo ciclo AGENT→MODIFIED/HUMAN); renombrarlo = recrear tipo en PG por cero ganancia
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([phaseId, weekIndex, order])
 }
 
 enum TimelinePhaseSource {
   AGENT      // generada por la IA, sin tocar humano
   MODIFIED   // generada por IA, editada por humano (al pasar por PUT con id existente)
   HUMAN      // creada desde cero por humano (PUT con phase sin id)
+}
+
+// D.1 — los 5 tipos de actividad de una implementación (orden de negocio fijo).
+// Mapean a colores/leyenda en el Gantt interno; el cliente no los ve.
+enum TimelineActivityType {
+  EXPLORACION
+  PLANIFICACION
+  CONFIGURACION
+  ADOPCION
+  SEGUIMIENTO
+}
+
+enum TimelineTaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
 }
 
 // ─── ProjectExternalAccess ────────────────────────────────────────────────────
@@ -577,9 +622,10 @@ model AgentRun {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  cards              ClientContextCard[]
-  blocks             CanvasBlock[]
-  generatedTimelines ProjectTimeline[]
+  cards                    ClientContextCard[]
+  blocks                   CanvasBlock[]
+  generatedTimelines       ProjectTimeline[]
+  detailGeneratedTimelines ProjectTimeline[] @relation("TimelineDetailGenerator")
 
   @@index([status])
   @@index([clientId, agentSlug, createdAt])
