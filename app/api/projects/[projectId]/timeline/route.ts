@@ -62,6 +62,9 @@ interface TimelineResponse {
   lastEditedByHuman: string | null;
   generatedByAgentRunId: string | null;
   detailConfirmedAt: string | null;
+  /** D.1.5 — flag de publicación de la superficie externa del cronograma (vive
+   *  en Project). El preview interno del kickoff lo espeja para ser fiel. */
+  timelinePublishedAt: string | null;
   phases: Array<{
     id: string;
     name: string;
@@ -83,6 +86,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
       lastEditedByHuman: true,
       generatedByAgentRunId: true,
       detailConfirmedAt: true,
+      project: { select: { timelinePublishedAt: true } },
       phases: {
         orderBy: { order: "asc" },
         select: {
@@ -118,6 +122,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     lastEditedByHuman: tl.lastEditedByHuman?.toISOString() ?? null,
     generatedByAgentRunId: tl.generatedByAgentRunId,
     detailConfirmedAt: tl.detailConfirmedAt?.toISOString() ?? null,
+    timelinePublishedAt: tl.project.timelinePublishedAt?.toISOString() ?? null,
     phases: tl.phases,
   };
 }

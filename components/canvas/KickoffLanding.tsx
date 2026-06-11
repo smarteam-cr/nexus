@@ -110,13 +110,15 @@ function KickoffLandingInternal({
     fetch(`/api/projects/${projectId}/timeline`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (!d || !d.exists) {
+        // Preview FIEL a la superficie externa (mismos gates que kickoff-view.ts):
+        // D.1.5 — regla unificada: sin timelinePublishedAt el cliente NO ve la
+        // sección de cronograma (ni siquiera con el kickoff publicado) → acá
+        // tampoco se muestra. Y las acciones por semana solo con el detalle
+        // confirmado, solo título+semana — el detalle vive en el canvas Cronograma.
+        if (!d || !d.exists || !d.timelinePublishedAt) {
           setTimeline({ exists: false, anchorStartDate: null, phases: [] });
           return;
         }
-        // Preview FIEL a la superficie externa: las acciones por semana solo se
-        // muestran si el detalle está confirmado (mismo gate que kickoff-view.ts),
-        // y solo título+semana — el detalle completo vive en el canvas Cronograma.
         const detailConfirmed = !!d.detailConfirmedAt;
         type RawTask = { title: string; weekIndex: number };
         type RawPhase = KickoffPhase & { tasks?: RawTask[] };
