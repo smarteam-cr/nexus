@@ -170,6 +170,12 @@ model Project {
   // que esto NO sea null en CADA lectura, así despublicar corta el acceso al instante.
   kickoffPublishedAt DateTime?
 
+  // D.1.5 — publish del CRONOGRAMA al cliente externo. Regla UNIFICADA: gobierna
+  // el cronograma donde sea que aparezca (página /external/cronograma Y la sección
+  // embebida en el kickoff). Independiente de kickoffPublishedAt — una superficie
+  // puede estar publicada sin la otra. Chequeado en CADA lectura por los chokepoints.
+  timelinePublishedAt DateTime?
+
   // Propiedades sincronizadas desde HubSpot (objeto Service)
   hubspotOwnerId      String?   // hubspot_owner_id (ID del owner en HubSpot)
   hubspotOwnerName    String?   // Nombre del owner (CSE encargado) resuelto desde /owners/{id}
