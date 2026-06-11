@@ -184,11 +184,20 @@ export async function PUT(
         select: { id: true },
       });
 
-      // 2. Phases existentes en DB (con sus tasks para el diff anidado)
+      // 2. Phases existentes en DB (con sus tasks para el diff anidado).
+      // Se seleccionan TODOS los campos editables para detectar no-ops: el PUT
+      // manda siempre el árbol completo, y escribir filas sin cambios saturaba
+      // la transacción contra el pooler remoto (P2028 a los 5s con ~30 tareas).
       const existingPhases = await tx.timelinePhase.findMany({
         where: { timelineId: tl.id },
         select: {
           id: true,
+          name: true,
+          order: true,
+          durationWeeks: true,
+          sessionCount: true,
+          notes: true,
+          activityType: true,
           source: true,
           tasks: {
             select: {
@@ -217,28 +226,52 @@ export async function PUT(
         });
       }
 
+      // Tareas nuevas de TODAS las fases — se insertan en un solo createMany
+      // al final (cada create individual era un round trip más al pooler).
+      const tasksToCreate: {
+        phaseId: string;
+        title: string;
+        weekIndex: number;
+        order: number;
+        notes: string | null;
+        source: TimelinePhaseSource;
+        status: TimelineTaskStatus;
+        needsValidation: boolean;
+      }[] = [];
+
       // 4. UPDATE + CREATE de phases (y diff de tasks donde venga el array)
       for (const p of incomingPhases) {
         const existing = p.id ? existingById.get(p.id) : undefined;
 
         let phaseId: string;
         if (p.id && existing) {
-          // UPDATE: source AGENT → MODIFIED si fue editado por humano
-          const newSource: TimelinePhaseSource =
-            existing.source === "AGENT" ? "MODIFIED" : existing.source;
-          await tx.timelinePhase.update({
-            where: { id: p.id },
-            data: {
-              name: p.name,
-              order: p.order,
-              durationWeeks: p.durationWeeks,
-              sessionCount: p.sessionCount,
-              notes: p.notes,
-              // undefined = sin cambio (Prisma ignora undefined)
-              activityType: p.activityType,
-              source: newSource,
-            },
-          });
+          // UPDATE solo si algo cambió — un no-op no escribe ni flipea source
+          // (guardar solo el anchor ya no marca MODIFIED a todas las fases).
+          const phaseChanged =
+            existing.name !== p.name ||
+            existing.order !== p.order ||
+            existing.durationWeeks !== p.durationWeeks ||
+            (existing.sessionCount ?? null) !== (p.sessionCount ?? null) ||
+            (existing.notes ?? null) !== (p.notes ?? null) ||
+            // undefined = "sin cambio" en el body (Prisma también lo ignora)
+            (p.activityType !== undefined && existing.activityType !== p.activityType);
+          if (phaseChanged) {
+            // source AGENT → MODIFIED si fue editado por humano
+            const newSource: TimelinePhaseSource =
+              existing.source === "AGENT" ? "MODIFIED" : existing.source;
+            await tx.timelinePhase.update({
+              where: { id: p.id },
+              data: {
+                name: p.name,
+                order: p.order,
+                durationWeeks: p.durationWeeks,
+                sessionCount: p.sessionCount,
+                notes: p.notes,
+                activityType: p.activityType,
+                source: newSource,
+              },
+            });
+          }
           phaseId = p.id;
         } else {
           // CREATE: phase nueva, source=HUMAN
@@ -284,45 +317,51 @@ export async function PUT(
             });
           }
           if (t.id && existingTask) {
-            // UPDATE: flip AGENT→MODIFIED + limpiar needsValidation SOLO si cambió contenido
+            // UPDATE solo si cambió contenido — el flip AGENT→MODIFIED y la
+            // limpieza de needsValidation acompañan al cambio (humano revisó).
             const contentChanged =
               existingTask.title !== t.title ||
               existingTask.weekIndex !== t.weekIndex ||
               existingTask.order !== t.order ||
               (existingTask.notes ?? null) !== (t.notes ?? null);
-            await tx.timelineTask.update({
-              where: { id: t.id },
-              data: {
-                title: t.title,
-                weekIndex: t.weekIndex,
-                order: t.order,
-                notes: t.notes ?? null,
-                ...(contentChanged
-                  ? {
-                      source: existingTask.source === "AGENT" ? "MODIFIED" : existingTask.source,
-                      needsValidation: false, // humano revisó el contenido
-                    }
-                  : {}),
-              },
-            });
+            if (contentChanged) {
+              await tx.timelineTask.update({
+                where: { id: t.id },
+                data: {
+                  title: t.title,
+                  weekIndex: t.weekIndex,
+                  order: t.order,
+                  notes: t.notes ?? null,
+                  source: existingTask.source === "AGENT" ? "MODIFIED" : existingTask.source,
+                  needsValidation: false, // humano revisó el contenido
+                },
+              });
+            }
           } else {
-            // CREATE: task nueva del CSE
-            await tx.timelineTask.create({
-              data: {
-                phaseId,
-                title: t.title,
-                weekIndex: t.weekIndex,
-                order: t.order,
-                notes: t.notes ?? null,
-                source: "HUMAN",
-                status: "PENDING",
-                needsValidation: false,
-              },
+            // CREATE: task nueva del CSE — se acumula para un único createMany
+            tasksToCreate.push({
+              phaseId,
+              title: t.title,
+              weekIndex: t.weekIndex,
+              order: t.order,
+              notes: t.notes ?? null,
+              source: "HUMAN",
+              status: "PENDING",
+              needsValidation: false,
             });
           }
         }
       }
-    });
+
+      // 5. CREATE batcheado: un solo round trip para todas las tareas nuevas
+      if (tasksToCreate.length > 0) {
+        await tx.timelineTask.createMany({ data: tasksToCreate });
+      }
+    },
+    // Red de seguridad: un re-armado grande (p.ej. aplicar una propuesta de la
+    // IA que toca todas las tareas) sigue siendo secuencial sobre un pooler
+    // remoto — los 5000ms default del interactive transaction quedan cortos.
+    { maxWait: 10000, timeout: 30000 });
   } catch (err) {
     const status = (err as { statusCode?: number })?.statusCode;
     if (status === 400) {
