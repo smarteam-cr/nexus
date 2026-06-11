@@ -4,7 +4,9 @@
  * ExternalAccessButton
  *
  * Botón en el toolbar del proyecto + modal para gestionar el acceso del cliente
- * externo (token revocable + contraseña) al landing del Kickoff:
+ * externo (token revocable + contraseña) a las superficies externas del
+ * proyecto — kickoff y cronograma comparten el MISMO acceso (D.1.5); qué ve el
+ * cliente lo deciden los flags de publicación de cada superficie por separado:
  *
  *   - "Acceso del cliente" → /external/verify/[accessToken] → token + pass
  *

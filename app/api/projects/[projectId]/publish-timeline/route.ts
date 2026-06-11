@@ -1,0 +1,78 @@
+/**
+ * /api/projects/[projectId]/publish-timeline
+ *
+ * Acción de "publicar" el CRONOGRAMA al cliente externo (D.1.5) — SEPARADA del
+ * acceso (token+password) e INDEPENDIENTE del kickoff. Regla unificada: el
+ * flag gobierna el cronograma donde sea que aparezca — la página propia
+ * /external/cronograma Y la sección embebida en el kickoff publicado.
+ *
+ *   GET    → estado actual { published, publishedAt }
+ *   POST   → publicar     (timelinePublishedAt = now)
+ *   DELETE → despublicar  (timelinePublishedAt = null)
+ *
+ * Todos guarded con `guardAccessToProject`. Despublicar corta el acceso del
+ * cliente en el siguiente render (los chokepoints re-chequean el flag en CADA
+ * lectura). Espejo de publish-kickoff.
+ */
+import { NextRequest, NextResponse } from "next/server";
+import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { prisma } from "@/lib/db/prisma";
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> },
+) {
+  const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { timelinePublishedAt: true },
+  });
+  if (!project) {
+    return NextResponse.json({ error: "Proyecto no existe" }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    published: !!project.timelinePublishedAt,
+    publishedAt: project.timelinePublishedAt?.toISOString() ?? null,
+  });
+}
+
+export async function POST(
+  _req: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> },
+) {
+  const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
+  const updated = await prisma.project.update({
+    where: { id: projectId },
+    data: { timelinePublishedAt: new Date() },
+    select: { timelinePublishedAt: true },
+  });
+
+  return NextResponse.json({
+    published: true,
+    publishedAt: updated.timelinePublishedAt?.toISOString() ?? null,
+  });
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> },
+) {
+  const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { timelinePublishedAt: null },
+    select: { id: true },
+  });
+
+  return NextResponse.json({ published: false, publishedAt: null });
+}

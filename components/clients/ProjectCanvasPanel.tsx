@@ -460,6 +460,10 @@ export default function ProjectCanvasPanel({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Acceso del cliente externo (token + contraseña) — PROJECT-LEVEL:
+              las mismas credenciales destraban todas las superficies externas
+              (kickoff, cronograma), por eso vive acá y no en un canvas. */}
+          <ExternalAccessButton projectId={projectId} />
           {/* Export PDF — siempre disponible (default y custom canvas) */}
           <a
             href={`/print/canvas/${clientId}/${isResumenCanvas ? "default" : (activeCanvasId ?? "default")}?print=1&projectId=${projectId}`}
@@ -537,10 +541,8 @@ export default function ProjectCanvasPanel({
           secciones del landing sean full-bleed dentro del scroll container. */}
       {!isResumenCanvas && activeCanvas?.name === "Kickoff" && activeCanvasId && (
         <>
-          {/* Controles cliente-facing: generar acceso (token+contraseña) + publicar */}
-          <div className="flex justify-end mb-3">
-            <ExternalAccessButton projectId={projectId} />
-          </div>
+          {/* Publicar el kickoff (el ACCESO del cliente vive en el toolbar del
+              proyecto — es project-level, compartido por todas las superficies). */}
           <PublishKickoffButton projectId={projectId} />
           <div style={{ margin: "-1.5rem -1.5rem -2rem" }}>
             <KickoffLanding projectId={projectId} canvasId={activeCanvasId} editable />

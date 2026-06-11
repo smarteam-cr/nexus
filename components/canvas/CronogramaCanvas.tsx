@@ -29,6 +29,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { plural } from "@/lib/timeline/weeks";
 import { ConfirmDialog } from "@/components/ui";
+import { PublishSurfaceButton } from "@/components/clients/PublishSurfaceButton";
 import TimelineGantt, { type GanttPhase, type GanttTaskStatus } from "./TimelineGantt";
 
 interface TaskDraft {
@@ -571,6 +572,26 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
 
   return (
     <div className="space-y-4">
+      {/* ── Publicación de la superficie externa (D.1.5) — fuera del gate de
+          tareas: publicar SIN detalle confirmado es válido (el cliente ve las
+          fases solas). La regla es unificada: el flag gobierna la página
+          /external/cronograma Y la sección embebida en el kickoff. ── */}
+      {phases.length > 0 && !proposal && (
+        <PublishSurfaceButton
+          projectId={projectId}
+          endpoint="publish-timeline"
+          copy={{
+            published: "Cronograma publicado al cliente",
+            unpublished: "Cronograma no publicado",
+            publishedHint: detailConfirmedAt
+              ? "El cliente ve las fases y las acciones por semana — en su página propia y dentro del kickoff."
+              : "El cliente ve las FASES (en su página propia y dentro del kickoff). Las acciones por semana aparecen cuando confirmes el detalle.",
+            unpublishedHint:
+              "El cliente no ve el cronograma — ni en su página propia ni dentro del kickoff — aunque tenga el acceso.",
+          }}
+        />
+      )}
+
       {/* ── Cabecera: generar / confirmar / borrar detalle ── */}
       <div className="flex flex-wrap items-center gap-2.5">
         {phases.length > 0 && totalTasks === 0 && !proposal && (
