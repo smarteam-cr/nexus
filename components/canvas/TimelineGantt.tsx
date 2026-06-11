@@ -3,26 +3,32 @@
 /**
  * components/canvas/TimelineGantt.tsx (D.1)
  *
- * Gantt INTERNO del cronograma detallado: grid de semanas con barras por fase
- * coloreadas por tipo de actividad, semana actual resaltada, filas expandibles
- * con las tareas agrupadas por semana y toggle de estado por tarea.
+ * EL cronograma: Gantt de semanas con edición INLINE — no hay vista de edición
+ * aparte. Barras por fase coloreadas por tipo de actividad, fecha de HOY
+ * siempre visible (y la semana actual resaltada si hay fecha de arranque),
+ * filas expandibles con las tareas agrupadas por semana.
  *
- * Solo VISUALIZACIÓN + estado: la estructura (fases/tareas) se edita en la
- * pestaña Editor de CronogramaCanvas. El estado se cambia acá vía
- * PATCH /timeline/tasks/[taskId] (lo maneja el padre con update optimista).
+ * Edición en el mismo Gantt (cuando no es readOnly):
+ *   - título / nota / semana de cada tarea, agregar y eliminar — via callbacks
+ *     del padre (CronogramaCanvas), que acumula dirty y guarda por PUT bulk.
+ *   - toggle de ESTADO por tarea (PENDING→IN_PROGRESS→DONE) — inmediato vía
+ *     PATCH (lo maneja el padre con update optimista). Deshabilitado en tareas
+ *     sin guardar (sin id).
+ *   - sin fecha de arranque: date input inline para fijarla acá mismo.
+ *
+ * readOnly: para la VISTA PREVIA de una propuesta de la IA (sin handlers).
  *
  * Derivados (nunca persistidos): "vencida" = semana absoluta < semana actual y
  * status != DONE; celda atenuada = semana pasada o todas sus tareas DONE.
- *
- * Las tareas needsValidation se GRITAN a propósito (fila amber + badge "POR
- * VALIDAR"): si el CSE confirma sin revisar, esos títulos cruzan al cliente —
- * este tratamiento visual es la barrera. La marca en sí nunca cruza (columna
- * excluida del mapper externo).
+ * Las tareas needsValidation se GRITAN a propósito (fila amber + badge): si el
+ * CSE confirma sin revisar, esos títulos cruzan al cliente — este tratamiento
+ * es la barrera. La marca en sí nunca cruza (columna excluida del mapper externo).
  */
 
 import { useState } from "react";
 import {
   fmtDay,
+  fmtFull,
   addWeeks,
   plural,
   computePhaseRanges,
@@ -33,36 +39,39 @@ import {
   isOverdue,
 } from "@/lib/timeline/weeks";
 
-// ── Tipos (shape del GET /timeline) ───────────────────────────────────────────
+// ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
 
 export type GanttTaskStatus = "PENDING" | "IN_PROGRESS" | "DONE";
 
 export interface GanttTask {
-  id: string;
+  key: string;
+  id?: string;
   title: string;
   weekIndex: number;
-  order: number;
   status: GanttTaskStatus;
   notes: string | null;
   needsValidation: boolean;
-  source: string;
 }
 
 export interface GanttPhase {
-  id: string;
+  key: string;
+  id?: string;
   name: string;
-  order: number;
   durationWeeks: number;
   sessionCount: number | null;
-  notes: string | null;
   activityType: string | null;
   tasks: GanttTask[];
 }
 
 interface Props {
   anchor: string | null; // yyyy-mm-dd o null
-  phases: GanttPhase[];
-  onToggleStatus: (taskId: string, next: GanttTaskStatus) => void;
+  phases: GanttPhase[]; // EN ORDEN
+  readOnly?: boolean; // preview de propuesta IA — sin edición ni toggles
+  onToggleStatus?: (taskId: string, next: GanttTaskStatus) => void;
+  onUpdateTask?: (phaseKey: string, taskKey: string, patch: { title?: string; notes?: string | null; weekIndex?: number }) => void;
+  onAddTask?: (phaseKey: string, weekIndex: number) => void;
+  onRemoveTask?: (phaseKey: string, taskKey: string) => void;
+  onSetAnchor?: (isoDate: string) => void; // yyyy-mm-dd — fijar arranque desde el Gantt
 }
 
 // ── Metadata de tipos de actividad (color de barra + chip) ────────────────────
@@ -86,29 +95,39 @@ const NEXT_STATUS: Record<GanttTaskStatus, GanttTaskStatus> = {
 
 const STATUS_META: Record<GanttTaskStatus, { label: string; cls: string }> = {
   PENDING:     { label: "pendiente", cls: "bg-gray-800 text-gray-400 border-gray-700" },
-  IN_PROGRESS: { label: "en curso",  cls: "bg-blue-900/40 text-blue-300 border-blue-700/50" },
+  IN_PROGRESS: { label: "en curso",  cls: "bg-blue-900/30 text-blue-300 border-blue-700/50" },
   DONE:        { label: "hecho",     cls: "bg-emerald-900/40 text-emerald-300 border-emerald-700/50" },
 };
 const OVERDUE_CLS = "bg-red-900/40 text-red-300 border-red-700/50";
 
 // ── Componente ────────────────────────────────────────────────────────────────
 
-export default function TimelineGantt({ anchor, phases, onToggleStatus }: Props) {
+export default function TimelineGantt({
+  anchor,
+  phases,
+  readOnly = false,
+  onToggleStatus,
+  onUpdateTask,
+  onAddTask,
+  onRemoveTask,
+  onSetAnchor,
+}: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  const sorted = [...phases].sort((a, b) => a.order - b.order);
-  const ranges = computePhaseRanges(sorted);
-  const total = sumWeeks(sorted);
+  const ranges = computePhaseRanges(phases);
+  const total = sumWeeks(phases);
   const curWeek = currentWeekIndex(anchor);
   const curInRange = curWeek !== null && curWeek >= 0 && curWeek < total;
+  const todayIso = new Date().toISOString();
+  const editable = !readOnly && !!onUpdateTask;
 
-  if (sorted.length === 0 || total === 0) return null;
+  if (phases.length === 0 || total === 0) return null;
 
-  const toggleExpand = (id: string) => {
+  const toggleExpand = (key: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -117,28 +136,43 @@ export default function TimelineGantt({ anchor, phases, onToggleStatus }: Props)
 
   return (
     <div className="space-y-3">
-      {/* Leyenda + banner de semana actual */}
+      {/* Fecha de hoy — SIEMPRE visible — + leyenda */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        {Object.values(ACTIVITY_META).map((m) => (
-          <span key={m.label} className="flex items-center gap-1.5">
-            <span className={`w-6 h-1.5 rounded ${m.seg} inline-block`} />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{m.label}</span>
-          </span>
-        ))}
-        <span className="flex items-center gap-1.5">
-          <span className={`w-6 h-1.5 rounded ${NEUTRAL_SEG} inline-block`} />
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600">Sin tipo</span>
-        </span>
-        {curInRange && (
-          <span className="ml-auto flex items-center gap-2 text-xs font-bold text-blue-300 bg-blue-900/30 border border-blue-700/40 rounded-lg px-3 py-1.5">
+        <span className="flex items-center gap-2 text-xs font-bold text-blue-300 bg-blue-900/30 border border-blue-700/40 rounded-lg px-3 py-1.5">
+          {curInRange && (
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-400" />
             </span>
-            Semana actual: S{(curWeek as number) + 1}
-            {anchor && <span className="font-medium text-blue-400/80">· {fmtDay(addWeeks(anchor, curWeek as number))}</span>}
-          </span>
+          )}
+          Hoy: {fmtFull(todayIso)}
+          {curInRange && <span className="font-extrabold">· Semana S{(curWeek as number) + 1}</span>}
+          {anchor && curWeek !== null && curWeek < 0 && (
+            <span className="font-medium text-blue-400/90">· el proyecto arranca el {fmtFull(anchor)}</span>
+          )}
+          {anchor && curWeek !== null && curWeek >= total && (
+            <span className="font-medium text-blue-400/90">· cronograma finalizado</span>
+          )}
+        </span>
+        {!anchor && onSetAnchor && (
+          <label className="flex items-center gap-2 text-[11px] font-semibold text-amber-300 bg-amber-500/15 border border-amber-500/50 rounded-lg px-3 py-1.5">
+            Fijá la fecha de arranque para ver fechas reales:
+            <input
+              type="date"
+              onChange={(e) => e.target.value && onSetAnchor(e.target.value)}
+              className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500"
+            />
+          </label>
         )}
+
+        <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
+          {Object.values(ACTIVITY_META).map((m) => (
+            <span key={m.label} className="flex items-center gap-1.5">
+              <span className={`w-6 h-1.5 rounded ${m.seg} inline-block`} />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{m.label}</span>
+            </span>
+          ))}
+        </span>
       </div>
 
       <div className="rounded-2xl border border-gray-800 bg-gray-900 overflow-x-auto">
@@ -164,16 +198,15 @@ export default function TimelineGantt({ anchor, phases, onToggleStatus }: Props)
 
           {/* Filas de fases */}
           <div className="px-4 py-2 space-y-0.5">
-            {sorted.map((p, i) => {
+            {phases.map((p, i) => {
               const range = ranges[i];
               const meta = p.activityType ? ACTIVITY_META[p.activityType] : null;
-              const isOpen = expanded.has(p.id);
+              const isOpen = expanded.has(p.key);
               const pendingValidation = p.tasks.filter((t) => t.needsValidation).length;
               const hasOverdue = p.tasks.some((t) =>
                 isOverdue(absoluteWeek(range.start, t.weekIndex), curWeek, t.status),
               );
 
-              // Tareas agrupadas por semana relativa (para expandido y para estado de celda)
               const tasksByWeek = new Map<number, GanttTask[]>();
               for (const t of p.tasks) {
                 const arr = tasksByWeek.get(t.weekIndex) ?? [];
@@ -182,10 +215,10 @@ export default function TimelineGantt({ anchor, phases, onToggleStatus }: Props)
               }
 
               return (
-                <div key={p.id}>
+                <div key={p.key}>
                   {/* Fila del grid */}
                   <div
-                    onClick={() => toggleExpand(p.id)}
+                    onClick={() => toggleExpand(p.key)}
                     className="grid gap-1 items-center px-2 py-1.5 -mx-2 rounded-lg cursor-pointer hover:bg-gray-800/50 transition-colors group"
                     style={gridCols}
                   >
@@ -244,72 +277,136 @@ export default function TimelineGantt({ anchor, phases, onToggleStatus }: Props)
                     })}
                   </div>
 
-                  {/* Expandido: tareas por semana */}
+                  {/* Expandido: tareas por semana (edición inline) */}
                   {isOpen && (
                     <div className="ml-7 mr-2 mb-3 mt-1 border-l-2 border-gray-700 pl-4 space-y-3">
-                      {p.tasks.length === 0 ? (
-                        <p className="text-xs text-gray-600 py-1">Sin tareas — agregalas en la pestaña Editor o generá el detalle con IA.</p>
-                      ) : (
-                        Array.from({ length: p.durationWeeks }).map((_, relWeek) => {
-                          const weekTasks = (tasksByWeek.get(relWeek) ?? []).sort((a, b) => a.order - b.order);
-                          if (weekTasks.length === 0) return null;
-                          const absW = absoluteWeek(range.start, relWeek);
-                          return (
-                            <div key={relWeek}>
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 border-b border-dashed border-gray-700 pb-1 mb-1.5">
+                      {Array.from({ length: p.durationWeeks }).map((_, relWeek) => {
+                        const weekTasks = tasksByWeek.get(relWeek) ?? [];
+                        if (weekTasks.length === 0 && !editable) return null;
+                        const absW = absoluteWeek(range.start, relWeek);
+                        return (
+                          <div key={relWeek}>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 border-b border-dashed border-gray-700 pb-1 mb-1.5 flex items-center">
+                              <span>
                                 Semana {relWeek + 1}
                                 <span className="text-gray-600 font-semibold ml-2">
                                   S{absW + 1}
                                   {anchor && ` · ${fmtDay(addWeeks(anchor, absW))} – ${fmtDay(addWeeks(anchor, absW + 1))}`}
                                 </span>
-                              </p>
-                              <div className="space-y-1">
-                                {weekTasks.map((t) => {
-                                  const overdue = isOverdue(absW, curWeek, t.status);
-                                  const sm = STATUS_META[t.status];
-                                  return (
-                                    <div
-                                      key={t.id}
-                                      className={`flex items-start gap-2.5 rounded-lg px-2.5 py-1.5 ${
-                                        t.needsValidation
-                                          ? "bg-amber-500/10 border border-amber-500/40"
-                                          : "hover:bg-gray-800/40"
-                                      }`}
+                              </span>
+                              {editable && onAddTask && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onAddTask(p.key, relWeek); }}
+                                  className="ml-auto flex items-center gap-1 text-[10px] font-semibold text-gray-500 hover:text-gray-300 normal-case tracking-normal transition-colors"
+                                  title="Agregar tarea en esta semana"
+                                >
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" /></svg>
+                                  tarea
+                                </button>
+                              )}
+                            </p>
+                            <div className="space-y-1">
+                              {weekTasks.map((t) => {
+                                const overdue = isOverdue(absW, curWeek, t.status);
+                                const sm = STATUS_META[t.status];
+                                const canToggle = !readOnly && !!onToggleStatus && !!t.id;
+                                return (
+                                  <div
+                                    key={t.key}
+                                    className={`flex items-start gap-2.5 rounded-lg px-2.5 py-1.5 group/task ${
+                                      t.needsValidation
+                                        ? "bg-amber-500/10 border border-amber-500/40"
+                                        : "hover:bg-gray-800/50"
+                                    }`}
+                                  >
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (canToggle) onToggleStatus!(t.id!, NEXT_STATUS[t.status]);
+                                      }}
+                                      disabled={!canToggle}
+                                      title={
+                                        !t.id
+                                          ? "Guardá el cronograma para poder cambiar el estado"
+                                          : "Cambiar estado (pendiente → en curso → hecho)"
+                                      }
+                                      className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded border transition-colors min-w-[66px] text-center mt-0.5 ${
+                                        overdue ? OVERDUE_CLS : sm.cls
+                                      } ${!canToggle ? "opacity-50 cursor-default" : ""}`}
                                     >
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          onToggleStatus(t.id, NEXT_STATUS[t.status]);
-                                        }}
-                                        title="Cambiar estado (pendiente → en curso → hecho)"
-                                        className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded border transition-colors min-w-[66px] text-center ${
-                                          overdue ? OVERDUE_CLS : sm.cls
-                                        }`}
-                                      >
-                                        {overdue ? "vencida" : sm.label}
-                                      </button>
-                                      <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-2">
+                                      {overdue ? "vencida" : sm.label}
+                                    </button>
+
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        {editable ? (
+                                          <input
+                                            value={t.title}
+                                            onChange={(e) => onUpdateTask!(p.key, t.key, { title: e.target.value })}
+                                            onClick={(e) => e.stopPropagation()}
+                                            placeholder="Tarea (visible para el cliente al confirmar)"
+                                            className={`flex-1 min-w-0 bg-transparent text-xs border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:outline-none pb-0.5 ${
+                                              t.status === "DONE" ? "text-gray-500 line-through" : "text-gray-300"
+                                            }`}
+                                          />
+                                        ) : (
                                           <span className={`text-xs ${t.status === "DONE" ? "text-gray-500 line-through" : "text-gray-300"}`}>
                                             {t.title}
                                           </span>
-                                          {t.needsValidation && (
-                                            <span className="text-[9px] font-extrabold uppercase tracking-widest text-amber-300 bg-amber-500/20 border border-amber-500/60 rounded px-1.5 py-0.5 flex-shrink-0">
-                                              Por validar
-                                            </span>
-                                          )}
-                                        </div>
-                                        {t.notes?.trim() && (
-                                          <p className="text-[11px] text-gray-600 mt-0.5">{t.notes}</p>
+                                        )}
+                                        {t.needsValidation && (
+                                          <span className="text-[9px] font-extrabold uppercase tracking-widest text-amber-300 bg-amber-500/20 border border-amber-500/60 rounded px-1.5 py-0.5 flex-shrink-0">
+                                            Por validar
+                                          </span>
                                         )}
                                       </div>
+                                      {editable ? (
+                                        <input
+                                          value={t.notes ?? ""}
+                                          onChange={(e) => onUpdateTask!(p.key, t.key, { notes: e.target.value || null })}
+                                          onClick={(e) => e.stopPropagation()}
+                                          placeholder="Nota (lenguaje cliente, opcional)"
+                                          className="w-full bg-transparent text-[11px] text-gray-500 border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:outline-none mt-0.5"
+                                        />
+                                      ) : (
+                                        t.notes?.trim() && <p className="text-[11px] text-gray-600 mt-0.5">{t.notes}</p>
+                                      )}
                                     </div>
-                                  );
-                                })}
-                              </div>
+
+                                    {editable && (
+                                      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover/task:opacity-100 transition-opacity">
+                                        <select
+                                          value={t.weekIndex}
+                                          onChange={(e) => onUpdateTask!(p.key, t.key, { weekIndex: parseInt(e.target.value, 10) })}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-gray-400 focus:outline-none focus:border-blue-500"
+                                          title="Mover de semana"
+                                        >
+                                          {Array.from({ length: p.durationWeeks }).map((_, w) => (
+                                            <option key={w} value={w}>Sem {w + 1}</option>
+                                          ))}
+                                        </select>
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); onRemoveTask!(p.key, t.key); }}
+                                          title="Eliminar tarea"
+                                          className="p-1 rounded text-gray-600 hover:text-red-400 hover:bg-red-500/10"
+                                        >
+                                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                              {weekTasks.length === 0 && editable && (
+                                <p className="text-[11px] text-gray-700 px-2.5">Sin tareas esta semana.</p>
+                              )}
                             </div>
-                          );
-                        })
+                          </div>
+                        );
+                      })}
+                      {p.tasks.length === 0 && !editable && (
+                        <p className="text-xs text-gray-600 py-1">Sin tareas.</p>
                       )}
                     </div>
                   )}
