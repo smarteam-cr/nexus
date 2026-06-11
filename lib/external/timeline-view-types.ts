@@ -9,7 +9,10 @@
  *
  * CLAVE DE SEGURIDAD: tareas SOLO {title, weekIndex} — status/notes/source/
  * needsValidation son internos y NUNCA cruzan. Las notas DE FASE sí cruzan
- * (by-design D.1: texto en lenguaje cliente). activityType/source de fase NO.
+ * (by-design D.1: texto en lenguaje cliente), y el TIPO DE ACTIVIDAD de la
+ * fase también (by-design D.1.5: el Gantt del cliente colorea y leyenda por
+ * tipo — la taxonomía es presentable: Exploración/Planificación/…). El
+ * `source` de fase NO cruza.
  */
 
 export interface ExternalTimelineTask {
@@ -24,6 +27,8 @@ export interface ExternalTimelinePhase {
   durationWeeks: number;
   sessionCount: number | null;
   notes: string | null;
+  /** Tipo de actividad (EXPLORACION|PLANIFICACION|CONFIGURACION|ADOPCION|SEGUIMIENTO) — colorea el Gantt del cliente. */
+  activityType: string | null;
   /** Presente SOLO si el CSE confirmó el detalle (detailConfirmedAt != null). */
   tasks?: ExternalTimelineTask[];
 }

@@ -133,6 +133,7 @@ function KickoffLandingInternal({
             durationWeeks: p.durationWeeks,
             sessionCount: p.sessionCount,
             notes: p.notes,
+            activityType: p.activityType ?? null,
             ...(detailConfirmed && Array.isArray(p.tasks)
               ? { tasks: p.tasks.map((t) => ({ title: t.title, weekIndex: t.weekIndex })) }
               : {}),

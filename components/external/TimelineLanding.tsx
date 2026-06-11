@@ -33,9 +33,10 @@ export default function TimelineLanding({
 
   return (
     <div ref={rootRef} className="kickoff-landing">
-      {/* Mini-hero: proyecto + fecha de arranque (la marca la pone ExternalShell) */}
+      {/* Mini-hero: proyecto + fecha de arranque (la marca la pone ExternalShell).
+          Ancho 1024 = el del Gantt de TimelineSection, para que queden alineados. */}
       <section className="section-light" style={{ padding: "clamp(36px, 5vw, 56px) 24px 0" }}>
-        <div style={{ maxWidth: 760, margin: "0 auto" }}>
+        <div style={{ maxWidth: 1024, margin: "0 auto" }}>
           <span className="eyebrow reveal">{projectName}</span>
           <p className="reveal" data-stagger="1" style={{ color: "var(--text-secondary)", fontSize: 14, marginTop: 10, marginBottom: 0 }}>
             {start ? `Arrancamos el ${fmtFull(start)}.` : "Fecha de arranque por definir."}
@@ -47,7 +48,7 @@ export default function TimelineLanding({
         <TimelineSection phases={timeline.phases} anchor={start} />
       ) : (
         <section className="section-light" style={{ padding: "32px 24px 72px" }}>
-          <div style={{ maxWidth: 760, margin: "0 auto" }}>
+          <div style={{ maxWidth: 1024, margin: "0 auto" }}>
             <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>
               Estamos preparando el cronograma de tu proyecto — pronto vas a verlo acá.
             </p>

@@ -13,8 +13,9 @@
  *     existencia + revokedAt, vía resolveActiveAccess) + timelinePublishedAt
  *     != null. Cualquiera falla → null (la cookie nunca otorga acceso sola).
  *
- * NUNCA cruzan: status/notes/source/needsValidation de tarea, ni
- * activityType/source de fase. Las notas de FASE sí (lenguaje cliente, D.1).
+ * NUNCA cruzan: status/notes/source/needsValidation de tarea, ni el source de
+ * fase. SÍ cruzan, by-design: las notas de FASE (lenguaje cliente, D.1) y el
+ * activityType (D.1.5 — el Gantt del cliente colorea y arma leyenda por tipo).
  */
 import { prisma } from "@/lib/db/prisma";
 import { resolveActiveAccess, touchAccess } from "./access";
@@ -46,6 +47,7 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
           durationWeeks: true,
           sessionCount: true,
           notes: true,
+          activityType: true,
         },
       },
     },
