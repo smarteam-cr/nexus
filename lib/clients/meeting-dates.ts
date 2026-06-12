@@ -4,94 +4,67 @@
  * Calcula, por cliente, la fecha de la última reunión donde participó alguien
  * del equipo de Ventas y la última donde participó alguien de CSE.
  *
- * No requiere cambios de schema: las sesiones (`FirefliesSession`) no guardan
- * un `clientId`, así que el cliente se resuelve en memoria con la misma cascada
- * determinista que usa el módulo de sesiones (`categorizeSession`).
+ * PERF: igual que lib/clients/last-interaction.ts — usa el match materializado
+ * `FirefliesSession.resolvedClientId` (índice [resolvedClientId, date desc]) en
+ * vez de cargar TODAS las sesiones (~16k) y re-matchear con categorizeSession
+ * en JS. Solo se transfieren las sesiones ya vinculadas a los clientes pedidos.
  */
 
-import {
-  categorizeSession,
-  buildInternalDomainsSet,
-  type CategorizeContext,
-} from "@/lib/sessions/categorize";
-import type { Client, SessionCategory } from "@prisma/client";
+import { prisma } from "@/lib/db/prisma";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
 export interface MeetingDates {
-  /** Última sesión donde participó un TeamMember con role="Sales". */
+  /** Última sesión donde participó un TeamMember de Ventas. */
   sales?: Date;
-  /** Última sesión donde participó un TeamMember con role="CSE". */
+  /** Última sesión donde participó un TeamMember de CSE. */
   cse?: Date;
-}
-
-interface SessionLite {
-  date: Date;
-  participants: string[];
-  manualClientId: string | null;
-  title: string;
 }
 
 interface TeamMemberLite {
   email: string;
+  /** LEGACY string libre ("Sales"/"CSE"/…) — puede venir null. */
   role: string | null;
+  /** Enum nuevo (TeamRole). Se acepta cualquiera de los dos para el match. */
+  roleEnum?: string | null;
 }
-
-type ClientLite = Pick<Client, "id" | "name" | "company" | "emailDomains">;
-type CategoryLite = Pick<
-  SessionCategory,
-  "id" | "name" | "slug" | "domains" | "kind" | "color"
->;
 
 // ── Función principal ──────────────────────────────────────────────────────────
 
 /**
  * Devuelve un Map clientId → { sales?, cse? }.
- *
- * IMPORTANTE: `sessions` debe venir ordenado por fecha DESCENDENTE — así el
- * primer hit por (cliente, rol) ya es la fecha más reciente y no hace falta
- * comparar.
+ * Las sesiones se leen ordenadas por fecha DESC: el primer hit por
+ * (cliente, rol) ya es la fecha más reciente.
  */
-export function computeLastMeetingDates(params: {
-  sessions: SessionLite[];
-  clients: ClientLite[];
-  categories: CategoryLite[];
+export async function computeLastMeetingDates(params: {
+  clientIds: string[];
   teamMembers: TeamMemberLite[];
-}): Map<string, MeetingDates> {
-  const { sessions, clients, categories, teamMembers } = params;
+}): Promise<Map<string, MeetingDates>> {
+  const { clientIds, teamMembers } = params;
+  if (clientIds.length === 0) return new Map();
 
-  // Contexto de matching. hubspotCompaniesByDomain vacío a propósito: omite el
-  // lookup costoso de HubSpot (paso 5), que solo produce resultados no-cliente.
-  const ctx: CategorizeContext = {
-    clients,
-    categories,
-    hubspotCompaniesByDomain: new Map(),
-    internalDomains: buildInternalDomainsSet(categories),
-  };
+  const isSales = (m: TeamMemberLite) => m.roleEnum === "SALES" || m.role === "Sales";
+  const isCse = (m: TeamMemberLite) => m.roleEnum === "CSE" || m.role === "CSE";
 
-  const salesEmails = new Set(
-    teamMembers
-      .filter((m) => m.role === "Sales")
-      .map((m) => m.email.toLowerCase())
-  );
-  const cseEmails = new Set(
-    teamMembers
-      .filter((m) => m.role === "CSE")
-      .map((m) => m.email.toLowerCase())
-  );
+  const salesEmails = new Set(teamMembers.filter(isSales).map((m) => m.email.toLowerCase()));
+  const cseEmails = new Set(teamMembers.filter(isCse).map((m) => m.email.toLowerCase()));
+  if (salesEmails.size === 0 && cseEmails.size === 0) return new Map();
+
+  // Solo sesiones pasadas YA matcheadas a los clientes pedidos — usa el índice
+  // [resolvedClientId, date desc]; no carga títulos ni sesiones huérfanas/internas.
+  const sessions = await prisma.firefliesSession.findMany({
+    where: { resolvedClientId: { in: clientIds }, date: { lte: new Date() } },
+    orderBy: { date: "desc" },
+    select: { resolvedClientId: true, date: true, participants: true },
+  });
 
   const result = new Map<string, MeetingDates>();
 
   for (const s of sessions) {
-    const group = categorizeSession(
-      { participants: s.participants, manualClientId: s.manualClientId, title: s.title },
-      ctx
-    );
-    if (group.kind !== "client") continue;
+    const clientId = s.resolvedClientId;
+    if (!clientId) continue;
 
-    const clientId = group.id;
     const entry = result.get(clientId) ?? {};
-
     // Saltar si ya tenemos ambas fechas para este cliente
     if (entry.sales !== undefined && entry.cse !== undefined) continue;
 

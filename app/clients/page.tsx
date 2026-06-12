@@ -37,9 +37,7 @@ export default async function ClientsPage() {
     isSuperAdmin: user.teamMember?.roleEnum === "SUPER_ADMIN",
   };
 
-  const now = new Date();
-
-  const [clients, sessions, categories, teamMembers] = await Promise.all([
+  const [clients, teamMembers] = await Promise.all([
     prisma.client.findMany({
       orderBy: { createdAt: "desc" }, // fallback secundario; el orden real se aplica abajo
       select: {
@@ -52,23 +50,18 @@ export default async function ClientsPage() {
         _count: { select: { projects: true } },
       },
     }),
-    prisma.firefliesSession.findMany({
-      where: { date: { lt: now } },
-      orderBy: { date: "desc" },
-      select: { date: true, participants: true, manualClientId: true, title: true },
-    }),
-    prisma.sessionCategory.findMany({
-      select: { id: true, name: true, slug: true, domains: true, kind: true, color: true },
-    }),
     getTeamMembers(),
   ]);
 
-  // Fechas de última reunión (ventas / CSE) — separadas, para mostrar en columnas.
-  const meetingDates = computeLastMeetingDates({ sessions, clients, categories, teamMembers });
+  const clientIds = clients.map((c) => c.id);
 
-  // Actividad por cliente: lastActivity (pasado) + nextMeeting (futuro).
-  // Cada uno se muestra en su propia columna y el orden se hace por lastActivity.
-  const activityMap = await computeClientActivityMap(clients);
+  // Fechas de última reunión ventas/CSE + actividad (pasado/futuro) por cliente.
+  // Ambos usan el match materializado FirefliesSession.resolvedClientId — queries
+  // chicas e indexadas, no se cargan las ~16k sesiones en cada render.
+  const [meetingDates, activityMap] = await Promise.all([
+    computeLastMeetingDates({ clientIds, teamMembers }),
+    computeClientActivityMap(clients),
+  ]);
 
   const rows: ClientRow[] = clients.map((c) => {
     const md = meetingDates.get(c.id);
@@ -119,7 +112,7 @@ export default async function ClientsPage() {
 
   return (
     <AppShell>
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="px-6 py-8">
         <PageHeader
           title="Clientes"
           description={
