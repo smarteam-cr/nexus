@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import AppShell from "@/components/layout/AppShell";
 import HubspotSystemCard from "./HubspotSystemCard";
 import GoogleMeetCard from "./GoogleMeetCard";
+import { LogoUploader } from "@/components/ui/LogoUploader";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -82,11 +83,13 @@ export default async function IntegrationsPage({
   }
 
   const { hs_connected } = await searchParams;
-  const [hubspot, google, googleMeetCount] = await Promise.all([
+  const [hubspot, google, googleMeetCount, systemCfg] = await Promise.all([
     getHubspotSystemStatus(),
     getGoogleStatus(),
     prisma.firefliesSession.count({ where: { source: "google_meet" } }),
+    prisma.systemConfig.findUnique({ where: { id: "system" }, select: { smarteamLogoUrl: true } }),
   ]);
+  const smarteamLogoUrl = systemCfg?.smarteamLogoUrl ?? null;
 
   return (
     <AppShell>
@@ -113,6 +116,20 @@ export default async function IntegrationsPage({
             adminEmail={google.adminEmail}
             sessionCount={googleMeetCount}
           />
+
+          {/* Logo de Smarteam — config global de marca (páginas externas) */}
+          <section className="rounded-xl bg-surface border border-line p-5">
+            <h2 className="text-sm font-semibold text-fg mb-1">Logo de Smarteam</h2>
+            <p className="text-xs text-fg-muted mb-4">
+              Se muestra en el encabezado y pie de las páginas externas del cliente (kickoff y cronograma). Si no subís uno, se usa el logo por defecto.
+            </p>
+            <LogoUploader
+              currentUrl={smarteamLogoUrl}
+              endpoint="/api/system/smarteam-logo"
+              label="Logo de Smarteam"
+              hint="PNG, JPG, WebP o SVG · máx 4MB."
+            />
+          </section>
         </div>
       </div>
     </AppShell>
