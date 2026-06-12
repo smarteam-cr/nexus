@@ -106,6 +106,16 @@ function KickoffLandingInternal({
   } = useCanvasSections(projectId, canvasId);
 
   const [timeline, setTimeline] = useState<KickoffTimelineData | null>(null);
+  const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
+
+  // Logo del cliente: mismo chip que la vista externa, también en el preview
+  // interno (así el CSE lo ve sin tener que publicar). Endpoint guarded.
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/client-logo`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setClientLogoUrl(d?.logoUrl ?? null))
+      .catch(() => setClientLogoUrl(null));
+  }, [projectId]);
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}/timeline`)
@@ -160,6 +170,7 @@ function KickoffLandingInternal({
       sections={sections}
       timeline={timeline}
       editable={editable}
+      clientLogoUrl={clientLogoUrl}
       draftCount={draftCount}
       error={error}
       clearError={clearError}

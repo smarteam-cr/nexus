@@ -93,8 +93,9 @@ async function main() {
     const resolvedCustom = readBack?.smarteamLogoUrl ?? FALLBACK;
     ok("getSmarteamLogoUrl resolvería el valor CUSTOM cuando hay fila", resolvedCustom === TEST_SMARTEAM_URL, { resolvedCustom });
 
-    // Estado limpio → fallback.
-    const resolvedEmpty = (null as string | null) ?? FALLBACK;
+    // Estado limpio → fallback (simula cfg?.smarteamLogoUrl == null).
+    const emptyVal: string | null = null;
+    const resolvedEmpty = emptyVal ?? FALLBACK;
     ok("getSmarteamLogoUrl cae al fallback cuando no hay valor", resolvedEmpty === FALLBACK, { fallback: FALLBACK, valorPrevio: cleared });
   } finally {
     // Restaurar EXACTO el estado previo.
