@@ -80,7 +80,7 @@ export function PublishSurfaceButton({
   const isPublished = published === true;
 
   return (
-    <div className={`flex flex-wrap items-center gap-3 rounded-xl border border-gray-800 bg-gray-900/60 px-4 py-3 ${className}`}>
+    <div className={`flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface-muted px-4 py-3 ${className}`}>
       <span
         className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${
           published === null ? "bg-gray-600" : isPublished ? "bg-emerald-400" : "bg-gray-500"
@@ -88,10 +88,10 @@ export function PublishSurfaceButton({
         aria-hidden="true"
       />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-gray-200">
+        <p className="text-sm font-medium text-fg-secondary">
           {published === null ? "Cargando estado…" : isPublished ? copy.published : copy.unpublished}
         </p>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-fg-muted">
           {isPublished ? copy.publishedHint : copy.unpublishedHint}
         </p>
       </div>

@@ -66,6 +66,21 @@
   --color-brand-light: #60a5fa;  /* blue-400 — hover / texto sobre oscuro */
   --color-brand-soft:  #bfdbfe;  /* blue-200 — fill de botones, badges, números */
   --color-brand-dark:  #1d4ed8;  /* blue-700 — texto sobre brand-soft */
+
+  /* ── Tokens semánticos de superficie/texto ───────────────────────────────────
+   *  Resuelven a variables de :root / html.light, así NO dependen de la whitelist
+   *  manual de overrides (que es la causa del bug de "gris-sobre-gris" en claro).
+   *  USAR EN COMPONENTES NUEVOS en vez de bg-gray-900/x:
+   *    bg-surface · bg-surface-muted · bg-surface-hover · border-line
+   *    text-fg · text-fg-secondary · text-fg-muted
+   */
+  --color-surface:        var(--surface);
+  --color-surface-muted:  var(--surface-muted);
+  --color-surface-hover:  var(--surface-hover);
+  --color-line:           var(--line);
+  --color-fg:             var(--foreground);
+  --color-fg-secondary:   var(--fg-secondary);
+  --color-fg-muted:       var(--fg-muted);
 }
 
 html {
@@ -107,6 +122,14 @@ html {
   /* Warning */
   --color-warning:         #f59e0b;  /* amber-500 */
   --color-warning-fg:      #ffffff;
+
+  /* Superficie/texto semánticos — valores OSCUROS (html.light los redefine abajo) */
+  --surface:        #111827;  /* gray-900 — cards/paneles */
+  --surface-muted:  #111827;  /* panel sutil (banners, chips) */
+  --surface-hover:  #1f2937;  /* gray-800 */
+  --line:           #1f2937;  /* gray-800 — bordes sutiles */
+  --fg-secondary:   #e5e7eb;  /* gray-200 — texto secundario */
+  --fg-muted:       #9ca3af;  /* gray-400 — texto atenuado */
 }
 
 body {
@@ -120,6 +143,14 @@ body {
 html.light {
   --background: #ffffff;
   --foreground: #111827;
+
+  /* Superficie/texto semánticos — valores CLAROS */
+  --surface:        #ffffff;
+  --surface-muted:  #f9fafb;  /* gray-50 */
+  --surface-hover:  #f3f4f6;  /* gray-100 */
+  --line:           #e5e7eb;  /* gray-200 */
+  --fg-secondary:   #374151;  /* gray-700 */
+  --fg-muted:       #6b7280;  /* gray-500 */
 }
 
 /* ── Backgrounds (neutrals) ── */
