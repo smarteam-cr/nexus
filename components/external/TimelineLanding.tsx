@@ -27,9 +27,11 @@ const MAXW = 1024; // mismo ancho que el Gantt de TimelineSection
 
 export default function TimelineLanding({
   clientName,
+  clientLogoUrl,
   timeline,
 }: {
   clientName: string;
+  clientLogoUrl: string | null;
   timeline: ExternalTimelineData;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -42,6 +44,17 @@ export default function TimelineLanding({
       {/* Titular de la página (la marca la pone ExternalShell) */}
       <section className="section-light" style={{ padding: "clamp(36px, 5vw, 56px) 24px 0" }}>
         <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
+          {clientLogoUrl && (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={clientLogoUrl}
+                alt={clientName}
+                className="reveal"
+                style={{ height: 40, width: "auto", maxWidth: 180, objectFit: "contain", display: "block", marginBottom: 18 }}
+              />
+            </>
+          )}
           <h1
             className="font-display display-tight reveal"
             style={{ fontSize: "clamp(26px, 3.6vw, 38px)", color: "var(--text)", lineHeight: 1.15, margin: 0 }}

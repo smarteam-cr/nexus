@@ -26,6 +26,8 @@ export interface ExternalTimelinePage {
   projectName: string;
   /** Nombre de la EMPRESA cliente — el titular de la página lo lleva. */
   clientName: string;
+  /** Logo de la EMPRESA cliente (Client.logoUrl, bucket público) o null. */
+  clientLogoUrl: string | null;
   timeline: ExternalTimelineData;
 }
 
@@ -104,6 +106,7 @@ export async function getPublishedTimelineForToken(
   return {
     projectName: access.project.name,
     clientName: access.project.client.name,
+    clientLogoUrl: access.project.client.logoUrl,
     timeline,
   };
 }

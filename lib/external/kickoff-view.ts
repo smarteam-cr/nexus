@@ -86,6 +86,7 @@ export async function getPublishedKickoffForToken(
 
   return {
     projectName: access.project.name,
+    clientLogoUrl: access.project.client.logoUrl,
     sections: sections.map((s) => ({
       id: s.id,
       key: s.key,

@@ -46,6 +46,8 @@ export interface KickoffSection {
 /** Lo que la ruta pública pasa como `data` a <KickoffLanding/>. */
 export interface KickoffLandingData {
   projectName: string;
+  /** Logo de la EMPRESA cliente (Client.logoUrl, bucket público) o null. */
+  clientLogoUrl: string | null;
   sections: KickoffSection[];
   timeline: KickoffTimelineData;
 }

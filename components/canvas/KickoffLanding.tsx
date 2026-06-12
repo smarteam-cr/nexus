@@ -75,7 +75,7 @@ type KickoffLandingProps =
 export default function KickoffLanding(props: KickoffLandingProps) {
   if ("data" in props) {
     // Modo EXTERNO: data ya resuelta server-side, read-only.
-    return <KickoffLandingView sections={props.data.sections} timeline={props.data.timeline} editable={false} />;
+    return <KickoffLandingView sections={props.data.sections} timeline={props.data.timeline} clientLogoUrl={props.data.clientLogoUrl} editable={false} />;
   }
   // Modo INTERNO: hooks + fetch.
   return <KickoffLandingInternal projectId={props.projectId} canvasId={props.canvasId} editable={props.editable} />;
@@ -178,6 +178,7 @@ function KickoffLandingView({
   sections,
   timeline,
   editable,
+  clientLogoUrl = null,
   draftCount = 0,
   error = null,
   clearError,
@@ -191,6 +192,8 @@ function KickoffLandingView({
   sections: KickoffSection[];
   timeline: KickoffTimelineData | null;
   editable: boolean;
+  /** Logo del cliente (solo modo externo); en interno va ausente → null. */
+  clientLogoUrl?: string | null;
 } & LandingHandlers) {
   const rootRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLElement>(null);
@@ -218,6 +221,15 @@ function KickoffLandingView({
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <section ref={heroRef} className="section-dark hero-backdrop" style={{ padding: "clamp(56px, 8vw, 96px) 24px clamp(48px, 6vw, 72px)" }}>
         <div style={{ maxWidth: 820, margin: "0 auto", textAlign: "center" }}>
+          {clientLogoUrl && (
+            <div className="reveal" style={{ display: "flex", justifyContent: "center", marginBottom: 26 }}>
+              {/* Chip blanco para contraste sobre el hero oscuro */}
+              <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#fff", borderRadius: 16, padding: "14px 20px", boxShadow: "0 10px 30px rgba(0,0,0,0.22)" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={clientLogoUrl} alt="" style={{ height: 46, width: "auto", maxWidth: 220, objectFit: "contain", display: "block" }} />
+              </span>
+            </div>
+          )}
           <span className="eyebrow reveal">Kickoff del proyecto</span>
           <h1 className="font-display display-italic display-tight reveal" data-stagger="1" style={{ fontSize: "clamp(34px, 5vw, 56px)", lineHeight: 1.06, color: "var(--dark-text)", marginTop: 16 }}>
             ¡Arranquemos juntos!

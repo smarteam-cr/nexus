@@ -19,6 +19,7 @@ import ExternalShell from "@/components/external/ExternalShell";
 import NoAccess from "@/components/external/NoAccess";
 import TimelineLanding from "@/components/external/TimelineLanding";
 import { getPublishedTimelineForToken } from "@/lib/external/timeline-view";
+import { getSmarteamLogoUrl } from "@/lib/external/smarteam-logo";
 import { EXTERNAL_ACCESS_COOKIE } from "@/lib/external/access";
 
 export const dynamic = "force-dynamic";
@@ -27,12 +28,19 @@ export default async function ExternalCronogramaPage() {
   const cookieStore = await cookies();
   const token = cookieStore.get(EXTERNAL_ACCESS_COOKIE)?.value ?? "";
 
-  const data = token ? await getPublishedTimelineForToken(token) : null;
+  const [data, smarteamLogoUrl] = await Promise.all([
+    token ? getPublishedTimelineForToken(token) : Promise.resolve(null),
+    getSmarteamLogoUrl(),
+  ]);
 
   return (
-    <ExternalShell>
+    <ExternalShell smarteamLogoUrl={smarteamLogoUrl}>
       {data ? (
-        <TimelineLanding clientName={data.clientName} timeline={data.timeline} />
+        <TimelineLanding
+          clientName={data.clientName}
+          clientLogoUrl={data.clientLogoUrl}
+          timeline={data.timeline}
+        />
       ) : (
         <NoAccess />
       )}

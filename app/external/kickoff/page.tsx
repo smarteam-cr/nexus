@@ -18,6 +18,7 @@ import KickoffLanding from "@/components/canvas/KickoffLanding";
 import ExternalShell from "@/components/external/ExternalShell";
 import NoAccess from "@/components/external/NoAccess";
 import { getPublishedKickoffForToken } from "@/lib/external/kickoff-view";
+import { getSmarteamLogoUrl } from "@/lib/external/smarteam-logo";
 import { EXTERNAL_ACCESS_COOKIE } from "@/lib/external/access";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,14 @@ export default async function ExternalKickoffPage() {
   const cookieStore = await cookies();
   const token = cookieStore.get(EXTERNAL_ACCESS_COOKIE)?.value ?? "";
 
-  const data = token ? await getPublishedKickoffForToken(token) : null;
+  const [data, smarteamLogoUrl] = await Promise.all([
+    token ? getPublishedKickoffForToken(token) : Promise.resolve(null),
+    getSmarteamLogoUrl(),
+  ]);
 
-  return <ExternalShell>{data ? <KickoffLanding data={data} /> : <NoAccess />}</ExternalShell>;
+  return (
+    <ExternalShell smarteamLogoUrl={smarteamLogoUrl}>
+      {data ? <KickoffLanding data={data} /> : <NoAccess />}
+    </ExternalShell>
+  );
 }
