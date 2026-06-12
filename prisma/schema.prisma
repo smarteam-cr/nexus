@@ -117,6 +117,7 @@ model Client {
   notes            String?  @db.Text
   hubspotCompanyId String?  // ID de la empresa vinculada en HubSpot CRM
   emailDomains     String[] // dominios de email para matching automático de sesiones (ej: "ice.go.cr")
+  logoUrl          String?  // URL pública del logo del cliente (bucket public-assets) — se muestra en kickoff/cronograma externos
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -138,6 +139,16 @@ model Client {
   appUsers          AppUser[]              // F2: usuarios externos vinculados (kind=EXTERNAL)
   assignments       ClientAssignment[]     // F2: overrides manuales CSE↔Cliente
   handoffs          Handoff[]              // entidad Handoff (1:N por cliente, ver model Handoff)
+}
+
+// ─── SystemConfig (config GLOBAL de Nexus, singleton — no por usuario) ─────────
+// Un solo row (id="system"; se upsert). Hoy guarda el logo de Smarteam
+// configurable (se muestra en el chrome externo, con fallback a /logo-smarteam.png).
+model SystemConfig {
+  id              String   @id @default("system")
+  smarteamLogoUrl String?  // URL pública del logo de Smarteam (bucket public-assets)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 // ─── Project ──────────────────────────────────────────────────────────────────
