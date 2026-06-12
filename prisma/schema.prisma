@@ -347,7 +347,8 @@ model ProjectExternalAccess {
   projectId     String    @unique
   project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   accessToken   String    @unique           // 64 chars hex (crypto.randomBytes(32))
-  passwordHash  String                       // bcrypt(12 rounds), nunca devolver
+  passwordHash  String                       // bcrypt(12 rounds) — lo usa verify-access
+  accessPassword String?                     // texto plano (visible para el CSE en el panel; igual se entrega al cliente en claro). Null en accesos viejos pre-migración.
   enabledAt     DateTime  @default(now())
   revokedAt     DateTime?                    // si != null → acceso bloqueado
   lastUsedAt    DateTime?                    // se actualiza en cada verify OK

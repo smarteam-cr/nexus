@@ -26,6 +26,8 @@ import { prisma } from "@/lib/db/prisma";
 const TOKEN_BYTES = 32;          // 32 bytes hex → 64 chars, 256 bits de entropía
 const PASSWORD_LENGTH = 12;       // 12 chars del alphabet de abajo (~71 bits)
 const BCRYPT_ROUNDS = 12;
+const MIN_PASSWORD_LEN = 8;        // mínimo para contraseñas custom del CSE
+const MAX_PASSWORD_LEN = 64;
 // Alphabet sin caracteres visualmente ambiguos (0/O/I/l/1) para reducir errores
 // de tipeo cuando el cliente copia la password.
 const PASSWORD_ALPHABET =
@@ -60,11 +62,12 @@ function buildVerifyUrl(req: NextRequest, accessToken: string): string {
  * Esto previene passwords débiles ("smarteam2026", "clientex123", etc.) que
  * volverían inútil al rate limiting y al hashing.
  *
- * Si ya existe un acceso para el proyecto, lo sobrescribe (token + hash nuevos,
- * limpia revokedAt y lastUsedAt — efectivamente es una rotación completa).
+ * Si ya existe un acceso para el proyecto, lo sobrescribe (token + pass nuevos,
+ * limpia revokedAt y lastUsedAt — rotación completa: nuevo link + nueva clave).
  *
- * Devuelve la password EN PLANO una sola vez. Después solo queda el hash en DB.
- * Si el CSE la pierde, tiene que regenerar.
+ * La password se guarda en plano (accessPassword) además del hash → el CSE puede
+ * verla/copiarla/regenerarla después en el panel. Para cambiar SOLO la contraseña
+ * sin rotar el token (y sus links), usar PATCH.
  */
 export async function POST(
   req: NextRequest,
@@ -85,11 +88,13 @@ export async function POST(
       projectId,
       accessToken,
       passwordHash,
+      accessPassword: password,
       createdById,
     },
     update: {
       accessToken,
       passwordHash,
+      accessPassword: password,
       enabledAt: new Date(),
       revokedAt: null,
       lastUsedAt: null,
@@ -100,10 +105,74 @@ export async function POST(
 
   return NextResponse.json({
     accessToken: access.accessToken,
-    password, // ← única vez que se devuelve en plano. Después de esto, solo hash.
+    password, // también queda en DB (accessPassword) → visible luego en el panel.
     url: buildVerifyUrl(req, access.accessToken),
     enabledAt: access.enabledAt,
   });
+}
+
+// ── PATCH: cambiar SOLO la contraseña (mismo token / mismos links) ────────────
+
+/**
+ * Cambia la contraseña sin rotar el token. Dos modos:
+ *   - body { password: "..." } → contraseña CUSTOM (la que el CSE eligió/editó).
+ *     Validada: 8–64 chars, sin espacios.
+ *   - body vacío / sin password → REGENERA una aleatoria (12 chars seguros).
+ *
+ * Actualiza accessPassword (plano, visible) + passwordHash (lo usa verify).
+ * Los links del cliente NO cambian — solo la clave para entrar. Útil para el
+ * flujo "el sistema sugiere una, el CSE la edita/regenera antes de entregarla".
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> },
+) {
+  const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
+  let body: { password?: unknown } = {};
+  try {
+    body = await req.json();
+  } catch {
+    body = {};
+  }
+
+  let password: string;
+  if (typeof body.password === "string") {
+    password = body.password.trim();
+    if (password.length < MIN_PASSWORD_LEN || password.length > MAX_PASSWORD_LEN) {
+      return NextResponse.json(
+        { error: `La contraseña debe tener entre ${MIN_PASSWORD_LEN} y ${MAX_PASSWORD_LEN} caracteres.` },
+        { status: 400 },
+      );
+    }
+    if (/\s/.test(password)) {
+      return NextResponse.json({ error: "La contraseña no puede tener espacios." }, { status: 400 });
+    }
+  } else {
+    // Sin password en el body → regenerar una aleatoria.
+    password = generatePassword();
+  }
+
+  const existing = await prisma.projectExternalAccess.findUnique({
+    where: { projectId },
+    select: { id: true },
+  });
+  if (!existing) {
+    return NextResponse.json(
+      { error: "No hay acceso externo para este proyecto. Generá uno primero." },
+      { status: 404 },
+    );
+  }
+
+  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  await prisma.projectExternalAccess.update({
+    where: { projectId },
+    data: { accessPassword: password, passwordHash },
+  });
+
+  return NextResponse.json({ password });
 }
 
 // ── GET: ver estado actual del acceso ────────────────────────────────────────
@@ -128,6 +197,7 @@ export async function GET(
     where: { projectId },
     select: {
       accessToken: true,
+      accessPassword: true,
       enabledAt: true,
       revokedAt: true,
       lastUsedAt: true,
@@ -142,6 +212,9 @@ export async function GET(
   return NextResponse.json({
     exists: true,
     accessToken: access.accessToken,
+    // Texto plano (visible para el CSE). Null en accesos viejos pre-migración →
+    // el panel muestra "regenerá para verla". Nunca se devuelve el passwordHash.
+    accessPassword: access.accessPassword,
     url: buildVerifyUrl(req, access.accessToken),
     enabledAt: access.enabledAt,
     revokedAt: access.revokedAt,
