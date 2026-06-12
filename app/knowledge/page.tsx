@@ -29,7 +29,7 @@ export default async function KnowledgePage() {
   return (
     <AppShell>
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="px-6 py-8">
           <PageHeader
             title="Base de conocimiento"
             description="Metodologías, procesos y specs que los agentes AI consultan para generar recomendaciones contextualizadas."

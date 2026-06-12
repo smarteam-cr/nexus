@@ -59,7 +59,7 @@ export function SearchFilterBar({
 
       {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
 
-      {action && <div className="ml-auto">{action}</div>}
+      {action && <div>{action}</div>}
     </div>
   );
 }

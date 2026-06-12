@@ -35,7 +35,7 @@ export default async function AuditsPage() {
 
   return (
     <AppShell>
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="px-6 py-8">
         <PageHeader
           title="Auditoría del portal"
           description="Snapshots del estado del portal HubSpot de Smarteam con análisis generado por IA."

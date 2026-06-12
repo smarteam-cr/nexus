@@ -146,10 +146,9 @@ export default function ClientsGrid({
       key: "client",
       header: "Cliente",
       sortValue: (c) => c.name,
-      // Width explícito grande: en table-fixed, sin width definido la columna
-      // se aplasta al espacio sobrante y el truncate del IdentityCell la deja
-      // en 1-3 letras. Con w-72 (288px) se ve cómoda y el resto cabe.
-      width: "w-72",
+      // Width explícito: en table-fixed, sin width la columna se aplasta y el
+      // truncate del IdentityCell la deja en 1-3 letras.
+      width: "w-48",
       render: (c) => (
         <Table.IdentityCell
           leading={<Avatar name={c.name} colorSeed={c.id} size="sm" />}
@@ -162,21 +161,21 @@ export default function ClientsGrid({
       key: "lastActivity",
       header: "Última actividad",
       sortValue: (c) => (c.lastActivityAt ? new Date(c.lastActivityAt) : null),
-      width: "w-32",
+      width: "w-36",
       render: (c) => <LastActivityCell row={c} />,
     },
     {
       key: "nextMeeting",
       header: "Próxima reunión",
       sortValue: (c) => (c.nextMeetingAt ? new Date(c.nextMeetingAt) : null),
-      width: "w-32",
+      width: "w-36",
       render: (c) => <NextMeetingCell row={c} />,
     },
     {
       key: "cse",
       header: "CSE encargado",
       sortValue: (c) => c.cseNames[0],
-      width: "w-36",
+      width: "w-32",
       hideOnMobile: true,
       render: (c) =>
         c.cseNames.length === 0 ? (
@@ -192,7 +191,7 @@ export default function ClientsGrid({
     },
     {
       key: "salesMeeting",
-      header: "Últ. reunión ventas",
+      header: "Reunión ventas",
       sortValue: (c) => (c.lastSalesMeeting ? new Date(c.lastSalesMeeting) : null),
       width: "w-32",
       hideOnMobile: true,
@@ -200,9 +199,9 @@ export default function ClientsGrid({
     },
     {
       key: "cseMeeting",
-      header: "Últ. sesión CSE",
+      header: "Sesión CSE",
       sortValue: (c) => (c.lastCseMeeting ? new Date(c.lastCseMeeting) : null),
-      width: "w-32",
+      width: "w-28",
       hideOnMobile: true,
       render: (c) => <PastDateCell iso={c.lastCseMeeting} />,
     },
@@ -210,7 +209,6 @@ export default function ClientsGrid({
       key: "projects",
       header: "Proyectos",
       sortValue: (c) => c.projectCount,
-      align: "right",
       width: "w-20",
       render: (c) => <span className="tabular-nums text-gray-400">{c.projectCount}</span>,
     },

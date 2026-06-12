@@ -151,7 +151,7 @@ export default function AgentsClient({ agents }: { agents: Agent[] }) {
       header: "Ejecuciones",
       sortValue: (a) => a._count.runs,
       align: "right",
-      width: "w-28",
+      width: "w-32",
       render: (a) => <span className="tabular-nums text-gray-400">{a._count.runs}</span>,
     },
     {
@@ -175,7 +175,7 @@ export default function AgentsClient({ agents }: { agents: Agent[] }) {
   ];
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="px-6 py-8">
       <PageHeader
         title="Agentes IA"
         description="Configura agentes para automatizar pasos del proceso de consultoría"

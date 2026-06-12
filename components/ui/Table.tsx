@@ -171,7 +171,7 @@ export function Table<T>({
               <tr className="border-b border-gray-800 bg-gray-800">
                 {columns.map((col) => {
                   const thClass = cn(
-                    "px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-gray-500",
+                    "px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-gray-500 whitespace-nowrap",
                     ALIGN[col.align ?? "left"],
                     col.width,
                     col.hideOnMobile && "hidden sm:table-cell"

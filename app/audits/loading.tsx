@@ -6,7 +6,7 @@ import { Skeleton, TableSkeleton } from "@/components/ui";
 
 export default function AuditsLoading() {
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="px-6 py-8">
       {/* PageHeader */}
       <div className="mb-6 space-y-2">
         <Skeleton className="h-6 w-52" />
