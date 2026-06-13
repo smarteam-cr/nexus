@@ -296,6 +296,8 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   const bodyAgentId: string | null      = body?.agentId      ?? null;
   const sessionKeywords: string[] = Array.isArray(body?.sessionKeywords) ? body.sessionKeywords : [];
   const bodyProjectId: string | null = body?.projectId ?? null;
+  // Señal para confirmar en dev que corre el código nuevo y si llegó async (A2).
+  console.log(`[analyze] POST agentId=${bodyAgentId ?? "—"} async=${body?.async === true} stage=${bodyStage} step=${bodyStep} project=${bodyProjectId ?? "—"}`);
 
   // ── 1. Cargar datos del cliente ──────────────────────────────────────────────
   const client = await prisma.client.findUnique({
