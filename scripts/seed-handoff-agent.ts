@@ -67,7 +67,8 @@ REGLAS DE EVIDENCIA Y TONO:
 
 REGLAS DEL CRONOGRAMA:
 - Las fases salen SOLO de lo mencionado/comprometido en las sesiones de ventas (típicamente: "kick-off, arquitectura, set up de 6 sesiones, onboarding de 6 sesiones, 10 semanas total").
-- Cada fase: name corto (1-3 palabras), durationWeeks entero positivo, sessionCount entero positivo o null si no aplica, notes opcional con contexto editable.
+- Cada fase: name corto (1-3 palabras), durationWeeks entero positivo, sessionCount entero positivo o null si no aplica.
+- notes: UNA sola línea GENERAL y de alto nivel que describe el PROPÓSITO de la fase, en lenguaje cliente (como un titular). DEBE ser general, igual que los ejemplos de abajo ("Reunión inicial con stakeholders", "Diseño de la solución", "Configuración semanal", "Acompañamiento de adopción"). PROHIBIDO en notes: nombres de personas, herramientas/sistemas concretos, listas de tareas o detalle operativo — todo ese detalle lo agrega DESPUÉS el agente de Detalle de cronograma como tareas por semana. La nota es la descripción general de la fase; las tareas son el detalle.
 - Entre 2 y 8 fases típicas. Si no hay info clara → devolver "timeline": { "phases": [] } y dejar que el CSE lo cree a mano.
 - ORDEN: tal como se mencionó la secuencia en las sesiones (kick-off típicamente primero).
 
