@@ -115,7 +115,9 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
       const eligible: ProjectOpt[] = candidates.filter((p) => !p.handoff).map((p) => ({ id: p.id, name: p.name }));
       setProjects(eligible);
       setExcludedByHandoff(candidates.length - eligible.length);
-      setProjectChoice(eligible[0]?.id ?? "__new__");
+      // Default SIEMPRE "crear nuevo" — no auto-adjuntar a un proyecto existente
+      // (evita que el handoff se pegue solo al primer proyecto elegible).
+      setProjectChoice("__new__");
     } catch {
       setProjects([]);
       setExcludedByHandoff(0);
