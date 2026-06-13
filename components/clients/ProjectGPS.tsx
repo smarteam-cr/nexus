@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import MinuteDialog from "./MinuteDialog";
 import ActionItemsDialog from "./ActionItemsDialog";
 import { useWorkspace } from "./WorkspaceContext";
-import { readGpsCache, writeGpsCache, isGpsStale, invalidateGps } from "@/lib/clients/gps-cache";
+import { readGpsCache, writeGpsCache, invalidateGps } from "@/lib/clients/gps-cache";
 
 export interface PendingItem {
   id?: string;             // ActionItem.id (nuevo) — undefined si viene del Json viejo
@@ -100,10 +100,11 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     }
   }, [projectId]);
 
-  // Montaje: SOLO fetch si no hay cache fresco → cambiar de tab no recarga el widget.
+  // Montaje: SOLO fetch si NO hay cache → cambiar de tab o entrar a otro canvas
+  // (kickoff, cronograma…) no recarga el widget. El refresh real lo dispara
+  // gpsRefreshSignal (sesión nueva detectada por el auto-sync de Meet).
   useEffect(() => {
-    const c = readGpsCache<GPSData>(projectId);
-    if (!c || isGpsStale(c.fetchedAt)) fetchGPS();
+    if (!readGpsCache<GPSData>(projectId)) fetchGPS();
   }, [projectId, fetchGPS]);
 
   // Sesión nueva detectada (auto-sync de Meet bumpea la señal) → refetch forzado.
