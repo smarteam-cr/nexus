@@ -82,6 +82,8 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
   // Si el orquestador devuelve 409 (ya existe un handoff para ese deal), guardamos el
   // clientId del handoff existente para ofrecer un link "Abrir el handoff existente".
   const [conflictClientId, setConflictClientId] = useState<string | null>(null);
+  // Proyectos activos no-sentinel excluidos por YA tener handoff (para el mensaje).
+  const [excludedByHandoff, setExcludedByHandoff] = useState(0);
 
   function reset() {
     setCompanyName("");
@@ -96,24 +98,27 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
     setBusy(null);
     setError(null);
     setConflictClientId(null);
+    setExcludedByHandoff(0);
   }
 
-  // Carga los proyectos del cliente elegibles para adjuntar el handoff: activos, no
-  // sentinel, visibles como tab (hubspotServiceId) y SIN handoff previo (1:1).
+  // Carga los proyectos del cliente elegibles para adjuntar el handoff: activos y no
+  // sentinel (__strategy__), SIN handoff previo (relación 1:1). NO exigimos
+  // hubspotServiceId — un proyecto creado en Nexus (sin sync a HubSpot) también es elegible.
   async function loadProjects(cid: string) {
     try {
       const r = await fetch(`/api/clients/${cid}/projects`);
       const data = await r.json();
-      const eligible: ProjectOpt[] = (data.projects ?? [])
-        .filter(
-          (p: { status: string; serviceType: string | null; hubspotServiceId: string | null; handoff: { id: string } | null }) =>
-            p.status === "active" && p.serviceType !== "__strategy__" && !!p.hubspotServiceId && !p.handoff,
-        )
-        .map((p: { id: string; name: string }) => ({ id: p.id, name: p.name }));
+      const all = (data.projects ?? []) as Array<{
+        id: string; name: string; status: string; serviceType: string | null; handoff: { id: string } | null;
+      }>;
+      const candidates = all.filter((p) => p.status === "active" && p.serviceType !== "__strategy__");
+      const eligible: ProjectOpt[] = candidates.filter((p) => !p.handoff).map((p) => ({ id: p.id, name: p.name }));
       setProjects(eligible);
+      setExcludedByHandoff(candidates.length - eligible.length);
       setProjectChoice(eligible[0]?.id ?? "__new__");
     } catch {
       setProjects([]);
+      setExcludedByHandoff(0);
       setProjectChoice("__new__");
     }
   }
@@ -424,7 +429,11 @@ export default function NewHandoffButton({ kind, clientId, clientName, onCreated
                     />
                   )}
                   {projects.length === 0 && (
-                    <p className="mt-1 text-[11px] text-gray-500">Sin proyectos existentes elegibles — se crea uno nuevo.</p>
+                    <p className="mt-1 text-[11px] text-gray-500">
+                      {excludedByHandoff > 0
+                        ? "Los proyectos existentes ya tienen un handoff — se crea uno nuevo (o abrí el handoff existente desde la pestaña Handoffs)."
+                        : "Sin proyectos existentes — se crea uno nuevo."}
+                    </p>
                   )}
                 </div>
               )}
