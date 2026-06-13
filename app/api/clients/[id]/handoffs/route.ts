@@ -38,17 +38,54 @@ export async function GET(
     },
   });
 
-  const handoffs = rows.map((h) => ({
-    id: h.id,
-    projectId: h.projectId,
-    projectName: h.project.name,
-    canvasId: h.project.canvases[0]?.id ?? null,
-    hubspotDealId: h.hubspotDealId,
-    hubspotProjectId: h.hubspotProjectId,
-    hubspotSyncStatus: h.hubspotSyncStatus,
-    hubspotSyncError: h.hubspotSyncError,
-    createdAt: h.createdAt,
-  }));
+  // ── Sesiones de ventas con las que se armó cada handoff (item de validación) ──
+  // Tomamos el último run del agente Handoff por proyecto que tenga sourceSessionIds.
+  const projectIds = rows.map((h) => h.projectId);
+  const runs = projectIds.length
+    ? await prisma.agentRun.findMany({
+        where: {
+          projectId: { in: projectIds },
+          agent: { agentGroup: "handoff" },
+          sourceSessionIds: { isEmpty: false },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { projectId: true, sourceSessionIds: true },
+      })
+    : [];
+  const sessionIdsByProject = new Map<string, string[]>();
+  for (const r of runs) {
+    if (r.projectId && !sessionIdsByProject.has(r.projectId)) {
+      sessionIdsByProject.set(r.projectId, r.sourceSessionIds);
+    }
+  }
+  const allSessionIds = [...new Set([...sessionIdsByProject.values()].flat())];
+  const sessions = allSessionIds.length
+    ? await prisma.firefliesSession.findMany({
+        where: { id: { in: allSessionIds } },
+        select: { id: true, title: true, date: true },
+      })
+    : [];
+  const sessionById = new Map(sessions.map((s) => [s.id, s]));
+
+  const handoffs = rows.map((h) => {
+    const ids = sessionIdsByProject.get(h.projectId) ?? [];
+    const sourceSessions = ids
+      .map((id) => sessionById.get(id))
+      .filter((s): s is NonNullable<typeof s> => !!s)
+      .map((s) => ({ id: s.id, title: s.title ?? "(sin título)", date: s.date.toISOString() }));
+    return {
+      id: h.id,
+      projectId: h.projectId,
+      projectName: h.project.name,
+      canvasId: h.project.canvases[0]?.id ?? null,
+      hubspotDealId: h.hubspotDealId,
+      hubspotProjectId: h.hubspotProjectId,
+      hubspotSyncStatus: h.hubspotSyncStatus,
+      hubspotSyncError: h.hubspotSyncError,
+      createdAt: h.createdAt,
+      sourceSessions,
+    };
+  });
 
   return NextResponse.json({ handoffs });
 }

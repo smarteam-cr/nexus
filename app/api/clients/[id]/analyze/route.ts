@@ -777,6 +777,7 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
 
   let firefliesContent = "";
   let salesFirefliesContent = "";
+  let handoffSourceSessionIds: string[] = []; // ids de sesiones de ventas usadas (handoff)
 
   try {
     let matchingSessions: RawTranscript[] = [];
@@ -829,6 +830,7 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
       const contents = await Promise.all(topSales.map((s) => fetchOrFallback(s)));
       salesFirefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
     }
+    if (isHandoffAgent) handoffSourceSessionIds = topSales.map((s) => s.id);
 
     if (isHandoffAgent) {
       console.log(
@@ -1417,6 +1419,8 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
       serviceType:  dealProject?.serviceType ?? null,
       status:       "DONE",
       output:       JSON.stringify(analysisJson),
+      // Trazabilidad: para el handoff, qué sesiones de ventas se usaron (item de validación).
+      sourceSessionIds: handoffSourceSessionIds,
     },
   });
 
