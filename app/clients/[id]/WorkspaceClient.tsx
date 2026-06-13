@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
+import { invalidateGps } from "@/lib/clients/gps-cache";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 import ClientHandoffsPanel from "@/components/clients/ClientHandoffsPanel";
@@ -39,6 +40,7 @@ export default function WorkspaceClient({
 }) {
   const router = useRouter();
   const syncedRef = useRef(false);
+  const { bumpGpsRefresh } = useWorkspace();
 
   // Sincronización automática al entrar al cliente (silenciosa, en background)
   useEffect(() => {
@@ -58,9 +60,19 @@ export default function WorkspaceClient({
   // Auto-sync de Google Meet en background — descubre transcripts/Docs nuevos
   // sin que el usuario tenga que disparar nada. El endpoint tiene cooldown
   // de 20 min, así que no spamea si recargás múltiples clientes seguidos.
+  // Si descubre sesiones/transcripts nuevos, bumpea la señal para que el GPS se
+  // refresque (única condición de recarga del widget — no recarga al cambiar de tab).
   useEffect(() => {
-    fetch("/api/integrations/google/auto-sync", { method: "POST" }).catch(() => {});
-  }, []);
+    fetch("/api/integrations/google/auto-sync", { method: "POST" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && !d.skipped && ((d.sync?.synced ?? 0) > 0 || (d.enrich?.enriched ?? 0) > 0)) {
+          invalidateGps(); // limpia el cache → el GPS montado refetchea y los no montados también al remontar
+          bumpGpsRefresh();
+        }
+      })
+      .catch(() => {});
+  }, [bumpGpsRefresh]);
 
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 57px)" }}>

@@ -15,6 +15,9 @@ interface WorkspaceContextValue {
   agentModal: AgentModalState | null;
   openAgentModal: (state: AgentModalState) => void;
   closeAgentModal: () => void;
+  /** Contador que bumpea cuando hay que refrescar el GPS (ej: sesión nueva detectada). */
+  gpsRefreshSignal: number;
+  bumpGpsRefresh: () => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue>({
@@ -23,6 +26,8 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
   agentModal: null,
   openAgentModal: () => {},
   closeAgentModal: () => {},
+  gpsRefreshSignal: 0,
+  bumpGpsRefresh: () => {},
 });
 
 export function WorkspaceProvider({
@@ -34,6 +39,7 @@ export function WorkspaceProvider({
 }) {
   const [activeProjectId, setActiveProjectId] = useState(initialProjectId);
   const [agentModal, setAgentModal] = useState<AgentModalState | null>(null);
+  const [gpsRefreshSignal, setGpsRefreshSignal] = useState(0);
 
   // Cuando el initialProjectId cambia (ej: después de un router.refresh() post-sync),
   // seleccionar automáticamente el primer proyecto si no hay ninguno activo.
@@ -51,8 +57,12 @@ export function WorkspaceProvider({
     setAgentModal(null);
   }, []);
 
+  const bumpGpsRefresh = useCallback(() => setGpsRefreshSignal((n) => n + 1), []);
+
   return (
-    <WorkspaceContext.Provider value={{ activeProjectId, setActiveProjectId, agentModal, openAgentModal, closeAgentModal }}>
+    <WorkspaceContext.Provider
+      value={{ activeProjectId, setActiveProjectId, agentModal, openAgentModal, closeAgentModal, gpsRefreshSignal, bumpGpsRefresh }}
+    >
       {children}
     </WorkspaceContext.Provider>
   );
