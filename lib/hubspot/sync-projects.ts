@@ -511,6 +511,22 @@ export async function syncProjectsForClient(clientId: string): Promise<SyncResul
     }
   }
 
+  // ── Reconciliación: ocultar proyectos sincronizados que YA NO están en HubSpot ──
+  // (borrados o desasociados de la empresa). Solo si tenemos un set confiable de
+  // projectIds (>0) — si fuera 0 el flujo ya cortó antes (L276), así un fallo de la
+  // API de HubSpot NO desactiva todo. NUNCA toca proyectos sin hubspotServiceId
+  // (manuales / handoff / sentinel __strategy__): esos no son de HubSpot.
+  if (projectIds.length > 0) {
+    const reconciled = await prisma.project.updateMany({
+      where: { clientId, status: "active", hubspotServiceId: { not: null, notIn: projectIds } },
+      data: { status: "inactive" },
+    });
+    if (reconciled.count > 0) {
+      result.updated += reconciled.count; // dispara router.refresh() en WorkspaceClient
+      result.debug!.push(`Reconciliación: ${reconciled.count} proyecto(s) ya no en HubSpot → inactive`);
+    }
+  }
+
   result.debug!.push(`Sync completo: ${result.created} creados, ${result.updated} actualizados, ${result.skipped} saltados`);
   return result;
 }
