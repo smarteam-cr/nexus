@@ -121,6 +121,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
   const keyCounter = useRef(0);
   const nextKey = () => `new-${keyCounter.current++}`;
+  const autoDetailRanRef = useRef(false); // auto-genera el detalle una vez por montaje
 
   const mapServerPhases = (serverPhases: ServerPhase[]): Phase[] =>
     serverPhases.map((p) => ({
@@ -334,8 +335,11 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
     setCreatingFirst(false);
   };
 
-  // ── Generar detalle inicial con IA ────────────────────────────────────────────
-  const generateDetail = async () => {
+  // ── Generar el detalle del cronograma con IA (tareas por semana) ───────────────
+  // Se dispara AUTOMÁTICAMENTE al abrir si hay fases sin tareas (auto=true →
+  // silencioso si ya existe). También lo invoca "Regenerar detalle".
+  const generateDetail = async (opts?: { auto?: boolean }) => {
+    const auto = opts?.auto ?? false;
     setGenerating(true);
     setError(null);
     try {
@@ -353,22 +357,39 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data?.message ?? data?.error ?? "Error al generar el detalle.");
+        if (!auto) setError(data?.message ?? data?.error ?? "Error al generar el detalle.");
       } else if (data?.timelineDetail?.skipped) {
         const reason = data.timelineDetail.reason;
-        setError(
-          reason === "detail_exists"
-            ? "Ya existe un detalle — borralo ('Borrar detalle') para regenerarlo."
-            : `No se generó el detalle (${reason ?? "salida vacía"}).`,
-        );
+        // En auto no molestamos si ya existe (caso esperado al reabrir) — solo recargamos.
+        if (!auto) {
+          setError(
+            reason === "detail_exists"
+              ? "Ya existe un detalle — usá 'Regenerar detalle' para rehacerlo."
+              : `No se generó el detalle (${reason ?? "salida vacía"}).`,
+          );
+        } else if (reason === "detail_exists") {
+          await load();
+        }
       } else {
         await load();
       }
     } catch {
-      setError("Error de conexión al generar el detalle.");
+      if (!auto) setError("Error de conexión al generar el detalle.");
     }
     setGenerating(false);
   };
+
+  // Auto-generar el detalle al abrir: si hay fases pero todavía no hay tareas, la
+  // IA las crea sin que el CSE lo pida (proceso invisible). Una vez por montaje.
+  useEffect(() => {
+    if (loading || generating || autoDetailRanRef.current) return;
+    const hasPhases = phases.length > 0;
+    const hasTasks = phases.some((p) => p.tasks.length > 0);
+    if (hasPhases && !hasTasks) {
+      autoDetailRanRef.current = true;
+      void generateDetail({ auto: true });
+    }
+  }, [loading, generating, phases]);
 
   // ── Asistente IA: instrucción → propuesta → aplicar/descartar ─────────────────
   const runAssist = async () => {
@@ -448,15 +469,18 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
     setConfirmBusy(false);
   };
 
-  // ── Borrar detalle (conserva esqueleto/anchor/tipos) ──────────────────────────
-  const deleteDetail = async () => {
-    const res = await fetch(`/api/projects/${projectId}/timeline/detail`, { method: "DELETE" });
+  // ── Regenerar detalle: borra las tareas (conserva esqueleto/anchor/tipos) y las
+  // vuelve a crear con IA. Único control manual del flujo auto. ──────────────────
+  const regenerateDetail = async () => {
     setDeleteDetailOpen(false);
+    setError(null);
+    const res = await fetch(`/api/projects/${projectId}/timeline/detail`, { method: "DELETE" });
     if (!res.ok) {
-      setError("No se pudo borrar el detalle.");
+      setError("No se pudo regenerar el detalle.");
       return;
     }
     await load();
+    await generateDetail();
   };
 
   // ── Toggle de estado desde el Gantt (PATCH, optimista) ────────────────────────
@@ -609,31 +633,16 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
         />
       )}
 
-      {/* ── Cabecera: generar / confirmar / borrar detalle ── */}
+      {/* ── Cabecera: estado de generación / confirmar / regenerar ── */}
       <div className="flex flex-wrap items-center gap-2.5">
-        {phases.length > 0 && totalTasks === 0 && !proposal && (
-          <button
-            onClick={generateDetail}
-            disabled={generating}
-            className="flex items-center gap-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-4 py-2 rounded-lg transition-colors"
-          >
-            {generating ? (
-              <>
-                <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                Generando detalle…
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                Generar detalle con IA
-              </>
-            )}
-          </button>
+        {generating && (
+          <span className="flex items-center gap-2 text-sm font-medium text-blue-600">
+            <span className="w-3.5 h-3.5 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
+            Creando tareas internas…
+          </span>
         )}
 
-        {totalTasks > 0 && !proposal && (
+        {totalTasks > 0 && !proposal && !generating && (
           <div className="ml-auto flex flex-wrap items-center gap-2.5">
             {pendingValidation > 0 && (
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-300 bg-amber-500/15 border border-amber-500/50 rounded-lg px-2.5 py-1.5">
@@ -665,10 +674,10 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
             )}
             <button
               onClick={() => setDeleteDetailOpen(true)}
-              className="text-xs font-medium text-gray-500 hover:text-red-400 border border-gray-700 hover:border-red-700/60 rounded-lg px-3 py-1.5 transition-colors"
-              title="Borra todas las tareas (conserva fases, fechas y tipos) para regenerar"
+              className="text-xs font-medium text-gray-500 hover:text-blue-400 border border-gray-700 hover:border-blue-700/60 rounded-lg px-3 py-1.5 transition-colors"
+              title="Borra las tareas actuales y la IA propone unas nuevas"
             >
-              Borrar detalle
+              Regenerar detalle
             </button>
           </div>
         )}
@@ -834,14 +843,14 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
         </div>
       )}
 
-      {/* Confirmación de borrado del detalle */}
+      {/* Confirmación de regeneración del detalle */}
       <ConfirmDialog
         open={deleteDetailOpen}
-        onConfirm={deleteDetail}
+        onConfirm={regenerateDetail}
         onCancel={() => setDeleteDetailOpen(false)}
-        title="¿Borrar el detalle del cronograma?"
-        description="Se borran TODAS las tareas y se quita la confirmación. Las fases, la fecha de arranque y los tipos se conservan — podés regenerar el detalle con IA después."
-        confirmLabel="Borrar detalle"
+        title="¿Regenerar el detalle del cronograma?"
+        description="Se borran las tareas actuales y la IA propone unas nuevas a partir del contexto. Las fases, la fecha de arranque y los tipos se conservan."
+        confirmLabel="Regenerar detalle"
       />
     </div>
   );
