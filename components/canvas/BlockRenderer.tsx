@@ -45,12 +45,14 @@ export default function BlockRenderer({
   onAccept,
   onReject,
   onSave,
+  onDelete,
   onDragStart,
 }: {
   block: BlockData;
   onAccept?: () => void;
   onReject?: () => void;
   onSave?: (updates: { content?: string; data?: unknown }) => void | boolean | Promise<void | boolean>;
+  onDelete?: () => void;
   onDragStart?: (e: React.MouseEvent) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -120,6 +122,14 @@ export default function BlockRenderer({
             <span className="text-[9px] font-medium uppercase tracking-wider text-gray-500 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded" title="Creado manualmente por el CSE">
               Manual
             </span>
+          )}
+          {/* Eliminar — siempre disponible para bloques no-draft (los draft se quitan con Rechazar) */}
+          {onDelete && !isDraft && (
+            <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-0.5 rounded bg-white border border-gray-200 text-gray-400 hover:text-red-600 hover:border-red-300 transition-colors shadow-sm" title="Eliminar bloque">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
           )}
           {isDraft && onAccept && onReject && (
             <>

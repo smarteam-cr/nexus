@@ -94,26 +94,14 @@ export default function CanvasLinearView({
               <p className="text-sm text-gray-400">Sin contenido todavía.</p>
             ) : (
               section.blocks.map((block) => (
-                <div key={block.id} className="group/row flex items-start gap-1.5">
-                  {/* Gutter: eliminar bloque (cualquier estado) */}
-                  <button
-                    onClick={() => deleteBlock(section.id, block.id)}
-                    title="Eliminar bloque"
-                    className="mt-2 flex-shrink-0 p-1 rounded text-gray-600 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover/row:opacity-100 transition-opacity"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <BlockRenderer
-                      block={block}
-                      onAccept={block.status === "DRAFT" ? () => acceptBlock(section.id, block.id) : undefined}
-                      onReject={block.status === "DRAFT" ? () => rejectBlock(section.id, block.id) : undefined}
-                      onSave={(updates) => saveBlock(section.id, block.id, updates)}
-                    />
-                  </div>
-                </div>
+                <BlockRenderer
+                  key={block.id}
+                  block={block}
+                  onAccept={block.status === "DRAFT" ? () => acceptBlock(section.id, block.id) : undefined}
+                  onReject={block.status === "DRAFT" ? () => rejectBlock(section.id, block.id) : undefined}
+                  onDelete={() => deleteBlock(section.id, block.id)}
+                  onSave={(updates) => saveBlock(section.id, block.id, updates)}
+                />
               ))
             )}
 
