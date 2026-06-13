@@ -63,9 +63,11 @@ export async function POST(
   if (guard instanceof NextResponse) return guard;
 
   let instruction = "";
+  let scopePhaseId: string | null = null;
   try {
     const body = await req.json();
     instruction = typeof body?.instruction === "string" ? body.instruction.trim() : "";
+    scopePhaseId = typeof body?.scopePhaseId === "string" ? body.scopePhaseId : null;
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
@@ -109,7 +111,14 @@ export async function POST(
     1,
   );
 
-  const userMessage = `=== CRONOGRAMA ACTUAL ===\n${currentJson}\n\n=== INSTRUCCIÓN DEL CONSULTOR ===\n${instruction}\n\nDevuelve el cronograma completo actualizado en el formato indicado.`;
+  // Si el consultor scopeó una fase, constreñimos el cambio a ESA fase y exigimos
+  // que el resto vuelva idéntico (el saneo posterior igual protege los ids).
+  const scopePhase = scopePhaseId ? tl.phases.find((p) => p.id === scopePhaseId) : null;
+  const scopeClause = scopePhase
+    ? `\n\n=== ALCANCE ===\nEl consultor está editando SOLO la fase id="${scopePhase.id}" ("${scopePhase.name}"). Modificá ÚNICAMENTE esa fase (y solo lo que pida la instrucción). TODAS las demás fases y sus tareas devolvelas IDÉNTICAS: mismos ids, nombres, duraciones, orden, tipos y tareas — no las reordenes ni las toques.`
+    : "";
+
+  const userMessage = `=== CRONOGRAMA ACTUAL ===\n${currentJson}${scopeClause}\n\n=== INSTRUCCIÓN DEL CONSULTOR ===\n${instruction}\n\nDevuelve el cronograma completo actualizado en el formato indicado.`;
 
   let parsedRaw: unknown;
   try {

@@ -74,6 +74,7 @@ interface Props {
   onAddTask?: (phaseKey: string, weekIndex: number) => void;
   onRemoveTask?: (phaseKey: string, taskKey: string) => void;
   onSetAnchor?: (isoDate: string) => void; // yyyy-mm-dd — fijar arranque desde el Gantt
+  onAssistPhase?: (phase: GanttPhase) => void; // abrir el dialog de IA scopeado a esta fase
 }
 
 // ── Metadata de tipos de actividad (color de barra + chip) ────────────────────
@@ -116,6 +117,7 @@ export default function TimelineGantt({
   onAddTask,
   onRemoveTask,
   onSetAnchor,
+  onAssistPhase,
 }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -260,6 +262,16 @@ export default function TimelineGantt({
                         )}
                         {hasOverdue && (
                           <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" title="Tareas vencidas" />
+                        )}
+                        {onAssistPhase && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onAssistPhase(p); }}
+                            className="ml-auto flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-blue-300"
+                            title="Editar esta fase con IA"
+                          >
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+                            IA
+                          </button>
                         )}
                       </div>
                       <span className="ml-[18px] text-[10px] text-gray-600 mt-0.5">

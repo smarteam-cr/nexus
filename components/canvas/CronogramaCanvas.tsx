@@ -31,6 +31,7 @@ import { plural } from "@/lib/timeline/weeks";
 import { ConfirmDialog } from "@/components/ui";
 import { PublishSurfaceButton } from "@/components/clients/PublishSurfaceButton";
 import TimelineGantt, { type GanttPhase, type GanttTaskStatus } from "./TimelineGantt";
+import TimelineAssistDialog from "./TimelineAssistDialog";
 
 interface TaskDraft {
   id?: string;
@@ -113,7 +114,8 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // ── Asistente IA ──
-  const [assistInput, setAssistInput] = useState("");
+  const [assistOpen, setAssistOpen] = useState(false);
+  const [assistScopePhaseId, setAssistScopePhaseId] = useState<string | null>(null);
   const [assisting, setAssisting] = useState(false);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [assistWarnings, setAssistWarnings] = useState<string[]>([]);
@@ -392,16 +394,15 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
   }, [loading, generating, phases]);
 
   // ── Asistente IA: instrucción → propuesta → aplicar/descartar ─────────────────
-  const runAssist = async () => {
-    const instruction = assistInput.trim();
-    if (instruction.length < 4 || assisting) return;
+  const submitAssist = async (instruction: string, scopePhaseId: string | null) => {
+    if (instruction.trim().length < 4 || assisting) return;
     setAssisting(true);
     setError(null);
     try {
       const res = await fetch(`/api/projects/${projectId}/timeline/assist`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction }),
+        body: JSON.stringify({ instruction, scopePhaseId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -415,6 +416,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
       } else {
         setProposal(data.proposal as Proposal);
         setAssistWarnings(Array.isArray(data.warnings) ? data.warnings : []);
+        setAssistOpen(false); // cerrar el dialog; la propuesta se ve en el Gantt (preview)
       }
     } catch {
       setError("Error de conexión con el asistente.");
@@ -438,7 +440,6 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
       } else {
         setProposal(null);
         setAssistWarnings([]);
-        setAssistInput("");
         await load();
       }
     } catch {
@@ -683,35 +684,18 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
         )}
       </div>
 
-      {/* ── Barra del asistente IA (en el cronograma, no aparte) ── */}
+      {/* ── Disparador del asistente IA (abre el dialog; el preview vuelve al Gantt) ── */}
       {phases.length > 0 && !proposal && (
-        <div className="flex items-center gap-2 rounded-2xl border border-gray-800 bg-gray-900 px-3 py-2.5">
-          <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-          </svg>
-          <input
-            value={assistInput}
-            onChange={(e) => setAssistInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") runAssist();
-            }}
-            placeholder='Pedile un cambio al cronograma… ej: "atrasá Setup una semana y agregá tareas de migración de datos"'
-            disabled={assisting}
-            className="flex-1 min-w-0 bg-transparent text-sm text-gray-200 placeholder-gray-600 focus:outline-none disabled:opacity-60"
-          />
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-800 bg-gray-900 px-4 py-2.5">
+          <span className="text-sm text-gray-400">
+            ¿Necesitás ajustar el cronograma? Pedíselo a la IA — vos revisás antes de aplicar.
+          </span>
           <button
-            onClick={runAssist}
-            disabled={assisting || assistInput.trim().length < 4}
-            className="flex items-center gap-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+            onClick={() => { setAssistScopePhaseId(null); setAssistOpen(true); }}
+            className="flex items-center gap-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
           >
-            {assisting ? (
-              <>
-                <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                Pensando…
-              </>
-            ) : (
-              "Actualizar con IA"
-            )}
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+            Pedir cambio con IA
           </button>
         </div>
       )}
@@ -826,6 +810,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
           onAddTask={addTask}
           onRemoveTask={removeTask}
           onSetAnchor={setAnchorFromGantt}
+          onAssistPhase={(phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }}
         />
       )}
 
@@ -851,6 +836,15 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
         title="¿Regenerar el detalle del cronograma?"
         description="Se borran las tareas actuales y la IA propone unas nuevas a partir del contexto. Las fases, la fecha de arranque y los tipos se conservan."
         confirmLabel="Regenerar detalle"
+      />
+
+      <TimelineAssistDialog
+        open={assistOpen}
+        onClose={() => setAssistOpen(false)}
+        phases={phases.map((p) => ({ id: p.id, name: p.name }))}
+        initialScopePhaseId={assistScopePhaseId}
+        onSubmit={submitAssist}
+        loading={assisting}
       />
     </div>
   );
