@@ -202,6 +202,8 @@ export async function GET(
       revokedAt: true,
       lastUsedAt: true,
       createdBy: { select: { name: true, email: true } },
+      // Flags de publicación por superficie → el panel marca qué link ya sirve.
+      project: { select: { kickoffPublishedAt: true, timelinePublishedAt: true } },
     },
   });
 
@@ -220,6 +222,9 @@ export async function GET(
     revokedAt: access.revokedAt,
     lastUsedAt: access.lastUsedAt,
     createdBy: access.createdBy,
+    // Publicación por superficie (D.1.5): kickoff y cronograma se publican aparte.
+    kickoffPublished: !!access.project.kickoffPublishedAt,
+    timelinePublished: !!access.project.timelinePublishedAt,
   });
 }
 

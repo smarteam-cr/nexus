@@ -118,6 +118,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [assistWarnings, setAssistWarnings] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
+  const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
   const keyCounter = useRef(0);
   const nextKey = () => `new-${keyCounter.current++}`;
 
@@ -168,6 +169,14 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
   useEffect(() => {
     load();
   }, [load]);
+
+  // Logo del cliente — mismo branding que ve el cliente, también del lado de Nexus.
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/client-logo`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setClientLogoUrl(d?.logoUrl ?? null))
+      .catch(() => setClientLogoUrl(null));
+  }, [projectId]);
 
   // ── Bootstrap (estructura SOLO por IA — pero sin fases la barra no opera) ──────
   const [bootName, setBootName] = useState("");
@@ -572,6 +581,14 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
 
   return (
     <div className="space-y-4">
+      {/* Logo del cliente — paridad con el preview del kickoff (lado Nexus). */}
+      {clientLogoUrl && (
+        <div className="flex items-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={clientLogoUrl} alt="Logo del cliente" className="h-9 w-auto max-w-[180px] object-contain" />
+        </div>
+      )}
+
       {/* ── Publicación de la superficie externa (D.1.5) — fuera del gate de
           tareas: publicar SIN detalle confirmado es válido (el cliente ve las
           fases solas). La regla es unificada: el flag gobierna la página

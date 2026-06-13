@@ -28,6 +28,8 @@ interface AccessState {
   revokedAt?: string | null;
   lastUsedAt?: string | null;
   createdBy?: { name: string; email: string } | null;
+  kickoffPublished?: boolean;
+  timelinePublished?: boolean;
 }
 
 // Alphabet sin caracteres ambiguos (igual que el server) para las sugerencias
@@ -260,8 +262,8 @@ function ManageView({
   // ?next decide dónde aterriza el cliente tras verificar (whitelist).
   const links = state.url
     ? [
-        { kind: "kickoff" as const, label: "Link Kickoff", url: state.url },
-        { kind: "cronograma" as const, label: "Link Cronograma", url: `${state.url}?next=cronograma` },
+        { kind: "kickoff" as const, label: "Link Kickoff", url: state.url, published: !!state.kickoffPublished },
+        { kind: "cronograma" as const, label: "Link Cronograma", url: `${state.url}?next=cronograma`, published: !!state.timelinePublished },
       ]
     : [];
 
@@ -298,7 +300,7 @@ function ManageView({
           {/* Links de entrada — uno por superficie (kickoff / cronograma) */}
           <div className="space-y-3">
             {links.map((l) => (
-              <LinkRow key={l.kind} label={l.label} url={l.url} />
+              <LinkRow key={l.kind} label={l.label} url={l.url} published={l.published} />
             ))}
           </div>
 
@@ -462,7 +464,7 @@ function PasswordEditor({
 
 // ── Helpers de fila ────────────────────────────────────────────────────────────
 
-function LinkRow({ label, url }: { label: string; url: string }) {
+function LinkRow({ label, url, published }: { label: string; url: string; published: boolean }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     await navigator.clipboard.writeText(url);
@@ -471,9 +473,18 @@ function LinkRow({ label, url }: { label: string; url: string }) {
   };
   return (
     <div>
-      <label className="block text-[10px] font-semibold text-fg-muted uppercase tracking-wider mb-1.5">
-        {label}
-      </label>
+      <div className="flex items-center gap-2 mb-1.5">
+        <label className="text-[10px] font-semibold text-fg-muted uppercase tracking-wider">{label}</label>
+        <span
+          className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+            published
+              ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+              : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+          }`}
+        >
+          {published ? "publicado" : "sin publicar"}
+        </span>
+      </div>
       <div className="flex items-center gap-1">
         <input
           readOnly
@@ -488,6 +499,11 @@ function LinkRow({ label, url }: { label: string; url: string }) {
           {copied ? "✓" : "Copiar"}
         </button>
       </div>
+      {!published && (
+        <p className="text-[10px] text-amber-600 mt-1">
+          El cliente verá &quot;no disponible&quot; hasta que publiques esta superficie.
+        </p>
+      )}
     </div>
   );
 }
