@@ -13,6 +13,7 @@ import { postProcessCards } from "@/lib/canvas/post-process";
 import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS } from "@/lib/canvas/default-canvases";
 import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
+import { syncFlowchartsToProcesos } from "@/lib/canvas/sync-procesos-blocks";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -286,6 +287,7 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     agentId?: string;
     sessionKeywords?: string[];
     projectId?: string;
+    async?: boolean; // A2: si true → run en background + polling (agentes pesados)
   };
   const bodyStage: number        = typeof body?.stage === "number" ? body.stage : 1;
   const bodyStep: number         = typeof body?.step  === "number" ? body.step  : 0;
@@ -387,6 +389,13 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
       );
     }
   }
+
+  // ── A2: el trabajo real (contexto → LLM → persistencia) va en un closure para
+  // poder ejecutarlo síncrono (modo normal) o detached (modo async). Captura todo
+  // el scope de arriba (body, agent, client, etc.) — sin threading de variables.
+  // existingRunId != null → modo async: el AgentRun ya existe (RUNNING); en vez de
+  // crear uno nuevo al final, se actualiza ese.
+  const runAnalysisWork = async (existingRunId: string | null): Promise<NextResponse> => {
 
   // ── 3. Cargar notas, documentos, cards y deal en paralelo ────────────────────
   const [existingCardsResult, stageNotesResult, clientDocumentsResult, dealProjectResult] =
@@ -1407,22 +1416,35 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   }
 
   // ── 12. Guardar AgentRun ─────────────────────────────────────────────────────
-  const run = await prisma.agentRun.create({
-    data: {
-      agentId:      agent.id,
-      clientId,
-      projectId:    bodyProjectId,
-      stage:        bodyStage,
-      step:         bodyStep,
-      stepLabel:    bodyStepLabel,
-      sectionLabel: bodySectionLabel ?? agent.sectionLabel ?? null,
-      serviceType:  dealProject?.serviceType ?? null,
-      status:       "DONE",
-      output:       JSON.stringify(analysisJson),
-      // Trazabilidad: para el handoff, qué sesiones de ventas se usaron (item de validación).
-      sourceSessionIds: handoffSourceSessionIds,
-    },
-  });
+  // Modo async (existingRunId): el run ya existe RUNNING → se actualiza con el
+  // output SIN tocar status (lo pasa a DONE el wrapper detached al final, para que
+  // el polling no vea DONE antes de que se persistan las cards/blocks).
+  // Modo síncrono: se crea ya en DONE (comportamiento de siempre).
+  const run = existingRunId
+    ? await prisma.agentRun.update({
+        where: { id: existingRunId },
+        data: {
+          output:           JSON.stringify(analysisJson),
+          sourceSessionIds: handoffSourceSessionIds,
+          serviceType:      dealProject?.serviceType ?? null,
+        },
+      })
+    : await prisma.agentRun.create({
+        data: {
+          agentId:      agent.id,
+          clientId,
+          projectId:    bodyProjectId,
+          stage:        bodyStage,
+          step:         bodyStep,
+          stepLabel:    bodyStepLabel,
+          sectionLabel: bodySectionLabel ?? agent.sectionLabel ?? null,
+          serviceType:  dealProject?.serviceType ?? null,
+          status:       "DONE",
+          output:       JSON.stringify(analysisJson),
+          // Trazabilidad: para el handoff, qué sesiones de ventas se usaron (item de validación).
+          sourceSessionIds: handoffSourceSessionIds,
+        },
+      });
 
   // ── 12a'. D.1: persistir detalle del cronograma y cortar ────────────────────
   // El output del agente de detalle no es cards/blocks: se persiste sobre
@@ -1628,6 +1650,19 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
         })),
         skipDuplicates: true,
       });
+    }
+
+    // B: además de las cards legacy, crear los bloques FLOWCHART en la sección
+    // "Procesos" del canvas "Información del cliente" — que es DONDE los lee esa
+    // pestaña (SectionBlockList → CanvasBlock). Sin esto los flowcharts no aparecían
+    // ahí (solo quedaban como cards legacy del proyecto de servicio).
+    if (flowcharts.length > 0) {
+      try {
+        const nBlocks = await syncFlowchartsToProcesos(clientId, flowcharts);
+        console.log(`[analyze CAF] syncFlowchartsToProcesos → ${nBlocks} bloque(s) en Procesos`);
+      } catch (e) {
+        console.error("[analyze CAF] syncFlowchartsToProcesos error:", e);
+      }
     }
 
     // Guardar suggestions off-canvas (si las hay)
@@ -1874,6 +1909,47 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
       agent:     { name: agent.name },
     },
   });
+  }; // ← fin de runAnalysisWork
+
+  // ── A2: despacho síncrono vs background ──────────────────────────────────────
+  // Modo async (agentes pesados, p.ej. mapeo/diagnóstico CARDS_AND_FLOWCHARTS): se
+  // crea el AgentRun en RUNNING, se devuelve { runId } al instante y el trabajo
+  // corre detached (en dev el proceso sigue vivo y lo completa aunque el cliente no
+  // sostenga la conexión → adiós "Error de conexión" a los 3 min). El cliente trackea
+  // por polling al GET [runId]; el status pasa a DONE/ERROR recién al final.
+  if (body.async === true) {
+    const pre = await prisma.agentRun.create({
+      data: {
+        agentId:      agent.id,
+        clientId,
+        projectId:    bodyProjectId,
+        stage:        bodyStage,
+        step:         bodyStep,
+        stepLabel:    bodyStepLabel,
+        sectionLabel: bodySectionLabel ?? agent.sectionLabel ?? null,
+        status:       "RUNNING",
+        output:       "{}",
+      },
+    });
+    void (async () => {
+      try {
+        const res = await runAnalysisWork(pre.id);
+        await prisma.agentRun
+          .update({ where: { id: pre.id }, data: { status: res.status >= 400 ? "ERROR" : "DONE" } })
+          .catch(() => {});
+      } catch (e) {
+        await prisma.agentRun
+          .update({
+            where: { id: pre.id },
+            data: { status: "ERROR", output: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) },
+          })
+          .catch(() => {});
+      }
+    })();
+    return NextResponse.json({ runId: pre.id, status: "RUNNING", async: true });
+  }
+
+  return runAnalysisWork(null);
 });
 
 // ── Helpers a nivel módulo ────────────────────────────────────────────────────

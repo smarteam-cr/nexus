@@ -160,6 +160,10 @@ export default function ClientContextCards({
   const handleAnalyze = useCallback(async () => {
     setAnalyzing(true);
     setAnalyzeError(null);
+    // Los agentes que generan diagramas (CARDS_AND_FLOWCHARTS) tardan minutos: corren
+    // en background (async) y los trackeamos por polling, así la conexión no se cae a
+    // mitad de camino (era la causa del "Error de conexión" a los ~3 min).
+    const useAsync = agentOutputType === "CARDS_AND_FLOWCHARTS";
     try {
       const res = await fetch(`/api/clients/${clientId}/analyze`, {
         method: "POST",
@@ -172,6 +176,7 @@ export default function ClientContextCards({
           sectionLabel:    sectionLabel ?? null,
           agentId:         agentId ?? null,
           projectId:       projectId ?? null,
+          async:           useAsync,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -186,6 +191,46 @@ export default function ClientContextCards({
         return;
       }
 
+      // ── Modo async: el server devolvió { runId, status: "RUNNING" }. Polleamos el
+      //    run hasta DONE/ERROR (cada 3 s, máx ~6 min). `analyzing` sigue en true. ──
+      if (useAsync && data.runId) {
+        const runId: string = data.runId;
+        for (let i = 0; i < 120; i++) {
+          await new Promise((r) => setTimeout(r, 3000));
+          let rd: {
+            status?: string; id?: string; createdAt?: string; agentName?: string | null;
+            cards?: ContextCard[]; flowcharts?: FlowchartData[];
+          } = {};
+          try {
+            rd = await fetch(`/api/clients/${clientId}/analyze/${runId}`).then((r) => r.json());
+          } catch {
+            continue; // fallo puntual de red al pollear → reintentar
+          }
+          if (rd.status === "DONE") {
+            if (rd.cards?.length)      setRunCards(rd.cards);
+            if (rd.flowcharts?.length) setFlowcharts(rd.flowcharts);
+            const finishedRun: AnalysisRun = {
+              id:        rd.id ?? runId,
+              createdAt: rd.createdAt ?? new Date().toISOString(),
+              status:    "DONE",
+              step:      stepIndex ?? null,
+              agent:     rd.agentName ? { name: rd.agentName } : (agentName ? { name: agentName } : null),
+            };
+            setLastRun(finishedRun);
+            setRuns((prev) => [finishedRun, ...prev.filter((r) => r.id !== finishedRun.id)]);
+            return;
+          }
+          if (rd.status === "ERROR") {
+            setAnalyzeError("El agente falló durante la ejecución. Reintentá.");
+            return;
+          }
+          // RUNNING / PENDING → seguir polleando
+        }
+        setAnalyzeError("El agente está tardando más de lo normal. Revisá en unos minutos.");
+        return;
+      }
+
+      // ── Modo síncrono (resto de agentes): el resultado viene en la respuesta ──
       if (Array.isArray(data.cards) && data.cards.length > 0) {
         setRunCards(data.cards);
       }
@@ -200,7 +245,7 @@ export default function ClientContextCards({
     } finally {
       setAnalyzing(false);
     }
-  }, [clientId, stage, stepLabel, stepKeywords, stepIndex, sectionLabel, agentId]);
+  }, [clientId, stage, stepLabel, stepKeywords, stepIndex, sectionLabel, agentId, agentName, agentOutputType, projectId]);
 
   // ── Añadir card manual ────────────────────────────────────────────────────────
   const handleAddCard = async () => {
