@@ -40,7 +40,7 @@ export default function CanvasLinearView({
 
   if (loading) {
     return (
-      <div className="space-y-4 max-w-3xl">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {[1, 2, 3].map((i) => (
           <div key={i} className="h-32 rounded-2xl skeleton-shimmer" />
         ))}
@@ -49,7 +49,7 @@ export default function CanvasLinearView({
   }
 
   return (
-    <div className="space-y-5 max-w-3xl">
+    <div className="space-y-5">
       {/* Error de guardado — no silencioso */}
       {error && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-900/20 border border-red-700/50 text-red-300">
@@ -76,7 +76,8 @@ export default function CanvasLinearView({
         </div>
       )}
 
-      {/* Sections */}
+      {/* Sections — 2 por fila en pantallas anchas; cada sección es una card */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
       {sections.map((section) => (
         <section key={section.id} className="rounded-2xl border border-gray-800 bg-gray-900 shadow-sm">
           <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-800">
@@ -129,6 +130,7 @@ export default function CanvasLinearView({
           </div>
         </section>
       ))}
+      </div>
     </div>
   );
 }
