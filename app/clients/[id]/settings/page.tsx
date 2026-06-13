@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { LogoUploader } from "@/components/ui/LogoUploader";
 
 interface HubspotAccount {
   id: string;
@@ -214,19 +213,7 @@ export default function ClientSettingsPage() {
         </form>
       </section>
 
-      {/* Sección: Logo del cliente */}
-      <section className="rounded-xl bg-surface border border-line p-5">
-        <h2 className="text-sm font-semibold text-fg mb-1">Logo del cliente</h2>
-        <p className="text-xs text-fg-muted mb-4">
-          Se muestra en las páginas que ve el cliente (kickoff y cronograma).
-        </p>
-        <LogoUploader
-          currentUrl={client?.logoUrl ?? null}
-          endpoint={`/api/clients/${clientId}/logo`}
-          label="Logo del cliente"
-          hint="PNG, JPG, WebP o SVG · máx 4MB."
-        />
-      </section>
+      {/* El logo del cliente se gestiona en el tab "Información del cliente" → Marca. */}
 
       {/* Sección: HubSpot */}
       <section className="rounded-xl bg-gray-900 border border-gray-800 p-5">

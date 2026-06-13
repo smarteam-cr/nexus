@@ -96,9 +96,9 @@ export default async function IntegrationsPage({
       <div className="flex-1 overflow-y-auto px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-xl font-bold text-white mb-1">Integraciones</h1>
-          <p className="text-sm text-gray-500">
-            Conecta herramientas externas para enriquecer el workspace.
+          <h1 className="text-xl font-bold text-fg mb-1">Configuración general</h1>
+          <p className="text-sm text-fg-muted">
+            Marca e integraciones de Nexus — configuración global, compartida por todos los clientes.
           </p>
         </div>
 

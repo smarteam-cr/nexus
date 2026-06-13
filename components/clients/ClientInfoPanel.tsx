@@ -15,12 +15,13 @@
  * los nombres de UI y las secciones del canvas se reducen a 3 (las otras 2
  * — handoff_ventas y perfil_cliente — se eliminaron en la migración).
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import SectionBlockList from "@/components/canvas/SectionBlockList";
 import DocumentUpload from "./DocumentUpload";
+import { LogoUploader } from "@/components/ui/LogoUploader";
 
-type SubTab = "docs" | "stakeholders" | "retos" | "oportunidades" | "procesos";
+type SubTab = "docs" | "stakeholders" | "retos" | "oportunidades" | "procesos" | "marca";
 
 const TABS: { key: SubTab; label: string }[] = [
   { key: "docs",          label: "Documentos" },
@@ -28,6 +29,7 @@ const TABS: { key: SubTab; label: string }[] = [
   { key: "retos",         label: "Retos estratégicos" },
   { key: "oportunidades", label: "Oportunidades" },
   { key: "procesos",      label: "Procesos" },
+  { key: "marca",         label: "Marca" },
 ];
 
 export default function ClientInfoPanel({
@@ -107,7 +109,41 @@ export default function ClientInfoPanel({
         {tab === "procesos" && (
           <SectionBlockList projectId={projectId} canvasId={canvasId} onlyKey="procesos" />
         )}
+
+        {tab === "marca" && <ClientLogoSection clientId={clientId} projectId={projectId} />}
       </div>
     </div>
+  );
+}
+
+// ── Logo del cliente (sub-tab "Marca") ────────────────────────────────────────
+
+function ClientLogoSection({ clientId, projectId }: { clientId: string; projectId: string }) {
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/client-logo`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setLogoUrl(d?.logoUrl ?? null))
+      .catch(() => setLogoUrl(null))
+      .finally(() => setLoading(false));
+  }, [projectId]);
+
+  if (loading) return <div className="h-28 rounded-xl skeleton-shimmer max-w-md" />;
+
+  return (
+    <section className="rounded-xl bg-surface border border-line p-5 max-w-md">
+      <h3 className="text-sm font-semibold text-fg mb-1">Logo del cliente</h3>
+      <p className="text-xs text-fg-muted mb-4">
+        Aparece en las páginas que ve el cliente (kickoff y cronograma) y en este workspace.
+      </p>
+      <LogoUploader
+        currentUrl={logoUrl}
+        endpoint={`/api/clients/${clientId}/logo`}
+        label="Logo del cliente"
+        hint="PNG, JPG, WebP o SVG · máx 4MB."
+      />
+    </section>
   );
 }
