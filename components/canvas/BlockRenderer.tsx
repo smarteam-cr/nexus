@@ -46,6 +46,7 @@ export default function BlockRenderer({
   onReject,
   onSave,
   onDelete,
+  isDeleting,
   onDragStart,
 }: {
   block: BlockData;
@@ -53,6 +54,7 @@ export default function BlockRenderer({
   onReject?: () => void;
   onSave?: (updates: { content?: string; data?: unknown }) => void | boolean | Promise<void | boolean>;
   onDelete?: () => void;
+  isDeleting?: boolean;
   onDragStart?: (e: React.MouseEvent) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -68,15 +70,17 @@ export default function BlockRenderer({
   };
 
   return (
-    <div className="group/block relative">
+    <div className={`group/block relative ${isDeleting ? "pointer-events-none" : ""}`}>
       <div
         onMouseDown={(e) => { mouseDownPos.current = { x: e.clientX, y: e.clientY }; }}
-        className={`rounded-lg transition-all bg-white ${
-          editing
-            ? "border border-brand/40 bg-brand/5 p-3 ring-1 ring-brand/20"
+        className={`rounded-lg transition-all ${
+          isDeleting
+            ? "border-2 border-red-300 bg-red-50/60 p-3 opacity-60 animate-pulse"
+            : editing
+            ? "bg-white border border-brand/40 bg-brand/5 p-3 ring-1 ring-brand/20"
             : isDraft
-            ? "border border-amber-200 bg-amber-50/30 p-3"
-            : "border border-transparent p-3 cursor-text"
+            ? "bg-white border border-amber-200 bg-amber-50/30 p-3"
+            : "bg-white border border-transparent p-3 cursor-text"
         }`}
         onClick={(e) => {
           if (!editing && onSave && block.blockType !== "FLOWCHART" && block.blockType !== "CHART") {

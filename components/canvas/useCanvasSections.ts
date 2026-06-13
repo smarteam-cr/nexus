@@ -120,9 +120,10 @@ export function useCanvasSections(projectId: string, canvasId: string) {
 
   // Rechazar (borrador) y eliminar (confirmado) usan el MISMO endpoint DELETE.
   const deleteBlock = useCallback(
-    async (sectionId: string, blockId: string) => {
-      await mutate(sectionId, { method: "DELETE", headers: JSON_HEADERS, body: JSON.stringify({ blockId }) });
-      refetch();
+    async (sectionId: string, blockId: string): Promise<boolean> => {
+      const ok = await mutate(sectionId, { method: "DELETE", headers: JSON_HEADERS, body: JSON.stringify({ blockId }) });
+      if (ok) refetch();
+      return ok;
     },
     [mutate, refetch],
   );
@@ -187,6 +188,24 @@ export function useCanvasSections(projectId: string, canvasId: string) {
     [mutate, refetch],
   );
 
+  // Recrea un bloque borrado (undo): POST con su tipo + contenido + data. Vuelve como
+  // HUMAN/CONFIRMED al final de la sección (nuevo id). Devuelve true si guardó.
+  const restoreBlock = useCallback(
+    async (
+      sectionId: string,
+      block: { blockType: string; content: string | null; data: unknown },
+    ): Promise<boolean> => {
+      const ok = await mutate(sectionId, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ blockType: block.blockType, content: block.content ?? "", data: block.data ?? undefined }),
+      });
+      if (ok) refetch();
+      return ok;
+    },
+    [mutate, refetch],
+  );
+
   const acceptAll = useCallback(async () => {
     const drafts = sections.flatMap((s) =>
       s.blocks.filter((b) => b.status === "DRAFT").map((b) => ({ sectionId: s.id, blockId: b.id })),
@@ -217,6 +236,7 @@ export function useCanvasSections(projectId: string, canvasId: string) {
     saveBlock,
     regenerateBlock,
     addBlock,
+    restoreBlock,
     acceptAll,
   };
 }

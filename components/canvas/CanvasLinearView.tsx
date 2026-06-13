@@ -14,8 +14,21 @@
  * NO toca SectionBlockList (la grilla sigue sirviendo a los demás canvases).
  */
 
-import BlockRenderer from "./BlockRenderer";
+import { useState, useRef, useCallback, useEffect } from "react";
+import BlockRenderer, { type BlockData } from "./BlockRenderer";
 import { useCanvasSections } from "./useCanvasSections";
+
+/** Un bloque "tiene contenido" si su texto o su data traen algo (no un manual vacío). */
+function blockHasContent(block: BlockData): boolean {
+  if (block.content && block.content.trim().length > 0) return true;
+  const d = block.data;
+  if (d && typeof d === "object") {
+    return Object.values(d as Record<string, unknown>).some((v) =>
+      Array.isArray(v) ? v.length > 0 : v != null && v !== "",
+    );
+  }
+  return false;
+}
 
 export default function CanvasLinearView({
   projectId,
@@ -36,7 +49,44 @@ export default function CanvasLinearView({
     acceptAll,
     error,
     clearError,
+    restoreBlock,
   } = useCanvasSections(projectId, canvasId);
+
+  // Borrado con feedback: estado "bloqueado" (color + animación) mientras se borra,
+  // y un toast flotante para deshacer (~10s) si el bloque borrado tenía contenido.
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [undo, setUndo] = useState<{ sectionId: string; block: BlockData } | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (undoTimer.current) clearTimeout(undoTimer.current); }, []);
+
+  const dismissUndo = useCallback(() => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndo(null);
+  }, []);
+
+  const handleDelete = useCallback(
+    async (sectionId: string, block: BlockData) => {
+      setDeletingIds((s) => new Set(s).add(block.id));
+      await new Promise<void>((r) => setTimeout(r, 350)); // que el estado "bloqueado" se vea
+      const ok = await deleteBlock(sectionId, block.id);
+      setDeletingIds((s) => { const n = new Set(s); n.delete(block.id); return n; });
+      if (!ok) return; // el banner de error ya avisa; el bloque sigue ahí
+      if (blockHasContent(block)) {
+        if (undoTimer.current) clearTimeout(undoTimer.current);
+        setUndo({ sectionId, block });
+        undoTimer.current = setTimeout(() => setUndo(null), 10000);
+      }
+    },
+    [deleteBlock],
+  );
+
+  const handleUndo = useCallback(async () => {
+    if (!undo) return;
+    const u = undo;
+    dismissUndo();
+    await restoreBlock(u.sectionId, u.block);
+  }, [undo, restoreBlock, dismissUndo]);
 
   if (loading) {
     return (
@@ -49,6 +99,7 @@ export default function CanvasLinearView({
   }
 
   return (
+    <>
     <div className="space-y-5">
       {/* Error de guardado — no silencioso */}
       {error && (
@@ -99,7 +150,8 @@ export default function CanvasLinearView({
                   block={block}
                   onAccept={block.status === "DRAFT" ? () => acceptBlock(section.id, block.id) : undefined}
                   onReject={block.status === "DRAFT" ? () => rejectBlock(section.id, block.id) : undefined}
-                  onDelete={() => deleteBlock(section.id, block.id)}
+                  onDelete={() => handleDelete(section.id, block)}
+                  isDeleting={deletingIds.has(block.id)}
                   onSave={(updates) => saveBlock(section.id, block.id, updates)}
                 />
               ))
@@ -120,5 +172,17 @@ export default function CanvasLinearView({
       ))}
       </div>
     </div>
+
+    {/* Toast flotante: deshacer borrado (~10s) — solo aparece para bloques con contenido */}
+    {undo && (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 rounded-xl bg-surface border border-line shadow-xl px-4 py-3" role="status">
+        <span className="text-sm text-fg">Bloque eliminado</span>
+        <button onClick={handleUndo} className="text-sm font-semibold text-brand hover:text-brand-dark transition-colors">Deshacer</button>
+        <button onClick={dismissUndo} title="Cerrar" className="text-fg-muted hover:text-fg transition-colors">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+    )}
+    </>
   );
 }
