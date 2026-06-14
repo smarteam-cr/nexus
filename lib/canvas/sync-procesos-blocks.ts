@@ -82,7 +82,11 @@ export async function syncFlowchartsToProcesos(
         sectionId,
         blockType: "FLOWCHART",
         content: fc.title?.trim() || "Diagrama de proceso",
-        data: { nodes: fc.nodes, edges: fc.edges } as object,
+        data: {
+          nodes: fc.nodes,
+          edges: fc.edges,
+          ...(fc.description?.trim() ? { description: fc.description.trim() } : {}),
+        } as object,
         order: order++,
         source: "AGENT",
         status: "DRAFT",

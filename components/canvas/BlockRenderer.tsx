@@ -333,7 +333,7 @@ function renderBlock(block: BlockData) {
     case "TABLE": return <TableBlockView data={block.data as { headers?: string[]; rows?: string[][] } | null} />;
     case "METRIC": return <MetricBlockView data={block.data as { label?: string; value?: string; trend?: string; comparison?: string } | null} />;
     case "CALLOUT": return <CalloutBlockView content={block.content ?? ""} data={block.data as { variant?: string; title?: string } | null} />;
-    case "FLOWCHART": return <FlowchartBlockView data={block.data as { nodes?: unknown[]; edges?: unknown[] } | null} />;
+    case "FLOWCHART": return <FlowchartBlockView data={block.data as { nodes?: unknown[]; edges?: unknown[]; description?: string } | null} title={block.content} />;
     case "CHART": return <TextBlockView content={block.content ?? "[Gráfico — próximamente]"} />;
     case "IMAGE": return <ImageBlockView data={block.data as { url?: string; alt?: string; caption?: string } | null} />;
     default: return <TextBlockView content={block.content ?? ""} />;
@@ -392,11 +392,21 @@ function CalloutBlockView({ content, data }: { content: string; data: { variant?
   );
 }
 
-function FlowchartBlockView({ data }: { data: { nodes?: unknown[]; edges?: unknown[] } | null }) {
+function FlowchartBlockView({ data, title }: { data: { nodes?: unknown[]; edges?: unknown[]; description?: string } | null; title?: string | null }) {
   if (!data?.nodes?.length) return null;
+  const heading = title?.trim() ?? "";
+  const desc = typeof data.description === "string" ? data.description.trim() : "";
   return (
-    <div className="h-[400px] rounded-xl border border-gray-200 overflow-hidden my-2">
-      <FlowchartViewer data={{ title: "", description: "", nodes: data.nodes as Array<{ id: string; type: string; label: string; position?: { x: number; y: number } }>, edges: data.edges as Array<{ id?: string; source: string; target: string; label?: string }> }} />
+    <div className="my-2">
+      {(heading || desc) && (
+        <div className="mb-2">
+          {heading && <p className="text-sm font-bold text-gray-800">{heading}</p>}
+          {desc && <p className="text-xs text-gray-600 leading-relaxed mt-0.5">{desc}</p>}
+        </div>
+      )}
+      <div className="h-[400px] rounded-xl border border-gray-200 overflow-hidden">
+        <FlowchartViewer data={{ title: "", description: "", nodes: data.nodes as Array<{ id: string; type: string; label: string; position?: { x: number; y: number } }>, edges: data.edges as Array<{ id?: string; source: string; target: string; label?: string }> }} />
+      </div>
     </div>
   );
 }

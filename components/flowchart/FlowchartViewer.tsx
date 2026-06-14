@@ -441,21 +441,29 @@ function FlowchartInner({
           );
         };
 
-      const rawNodes: Node[] = data.nodes.map((n) => ({
-        id:       n.id,
-        type:     n.type,
-        position: hasSavedPositions ? (n.position ?? { x: 0, y: 0 }) : { x: 0, y: 0 },
-        data: {
-          label:         n.label,
-          sublabel:      n.sublabel,
-          owner:         n.owner,
-          detail:        n.detail,
-          icon:          n.icon,
-          pipelineName:  n.pipelineName,
-          variant:       n.type,
-          onLabelChange: makeOnLabelChange(n.id),
-        },
-      }));
+      const rawNodes: Node[] = data.nodes.map((n) => {
+        // Tolerar nodos en formato react-flow ANIDADO ({ data: { label, … } }) además del
+        // plano ({ label, … }): los flowcharts del agente vienen anidados → sin esto los
+        // labels salen vacíos (placeholders "Detalle…"/"Descripción…").
+        const nd = (n as unknown as {
+          data?: { label?: string; sublabel?: string; owner?: string; detail?: string; icon?: string; pipelineName?: string };
+        }).data;
+        return {
+          id:       n.id,
+          type:     n.type,
+          position: hasSavedPositions ? (n.position ?? { x: 0, y: 0 }) : { x: 0, y: 0 },
+          data: {
+            label:         n.label ?? nd?.label,
+            sublabel:      n.sublabel ?? nd?.sublabel,
+            owner:         n.owner ?? nd?.owner,
+            detail:        n.detail ?? nd?.detail,
+            icon:          n.icon ?? nd?.icon,
+            pipelineName:  n.pipelineName ?? nd?.pipelineName,
+            variant:       n.type,
+            onLabelChange: makeOnLabelChange(n.id),
+          },
+        };
+      });
 
       // Build a lookup of node types for smart handle assignment
       const nodeTypeMap = new Map(data.nodes.map((n) => [n.id, n.type]));

@@ -146,8 +146,8 @@ export default function CanvasLinearView({
         </div>
       )}
 
-      {/* Sections — 2 por fila en pantallas anchas; cada sección es una card */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+      {/* Sections — onlyKey: una sección a ancho completo; si no, 2 por fila */}
+      <div className={onlyKey ? "space-y-5" : "grid grid-cols-1 lg:grid-cols-2 gap-5 items-start"}>
       {sections.map((section) => (
         <section key={section.id} className="rounded-2xl border border-gray-800 bg-gray-900 shadow-sm">
           <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-800">
