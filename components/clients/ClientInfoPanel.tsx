@@ -21,14 +21,13 @@ import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import DocumentUpload from "./DocumentUpload";
 import { LogoUploader } from "@/components/ui/LogoUploader";
 
-type SubTab = "docs" | "stakeholders" | "retos" | "oportunidades" | "procesos" | "marca";
+type SubTab = "docs" | "stakeholders" | "retos" | "oportunidades" | "marca";
 
 const TABS: { key: SubTab; label: string }[] = [
   { key: "docs",          label: "Documentos" },
   { key: "stakeholders",  label: "Stakeholders" },
   { key: "retos",         label: "Retos estratégicos" },
   { key: "oportunidades", label: "Oportunidades" },
-  { key: "procesos",      label: "Procesos" },
   { key: "marca",         label: "Marca" },
 ];
 
@@ -104,10 +103,6 @@ export default function ClientInfoPanel({
 
         {tab === "oportunidades" && (
           <CanvasLinearView projectId={projectId} canvasId={canvasId} onlyKey="oportunidades" />
-        )}
-
-        {tab === "procesos" && (
-          <CanvasLinearView projectId={projectId} canvasId={canvasId} onlyKey="procesos" />
         )}
 
         {tab === "marca" && <ClientLogoSection clientId={clientId} projectId={projectId} />}

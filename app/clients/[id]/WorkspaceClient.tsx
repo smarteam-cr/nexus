@@ -7,9 +7,11 @@ import { invalidateGps } from "@/lib/clients/gps-cache";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 import ClientHandoffsPanel from "@/components/clients/ClientHandoffsPanel";
+import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
 
 const STRATEGY_TAB_ID = "__strategy__";
 const HANDOFFS_TAB_ID = "__handoffs__";
+const PROCESOS_TAB_ID = "__procesos__";
 
 interface ProjectSummary {
   id: string;
@@ -108,6 +110,7 @@ function ProjectSection({
 
   const isStrategy = activeProjectId === STRATEGY_TAB_ID;
   const isHandoffs = activeProjectId === HANDOFFS_TAB_ID;
+  const isProcesos = activeProjectId === PROCESOS_TAB_ID;
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
   return (
@@ -147,6 +150,22 @@ function ProjectSection({
           Handoffs
         </button>
 
+        {/* Procesos — pestaña top-level del cliente. Muestra la sección "procesos"
+            del canvas de Información del cliente (mismo storage, superficie dedicada). */}
+        <button
+          onClick={() => setActiveProjectId(PROCESOS_TAB_ID)}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            isProcesos
+              ? "border-brand text-white"
+              : "border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700"
+          }`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
+          </svg>
+          Procesos
+        </button>
+
         {/* Información del cliente — siempre al final. Internamente sigue siendo
             el Project con serviceType=__strategy__ (mismo storage; cambia el
             label visible y el contenido del panel). */}
@@ -169,6 +188,12 @@ function ProjectSection({
       {isStrategy ? (
         <ClientInfoPanel
           key={STRATEGY_TAB_ID}
+          projectId={strategyProjectId}
+          canvasId={strategyCanvasId}
+        />
+      ) : isProcesos ? (
+        <ClientProcesosPanel
+          key={PROCESOS_TAB_ID}
           projectId={strategyProjectId}
           canvasId={strategyCanvasId}
         />
