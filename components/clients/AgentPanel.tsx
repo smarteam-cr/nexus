@@ -84,7 +84,7 @@ export default function AgentPanel({ clientId, projectId: propProjectId }: Props
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setToast({ message: data.error ?? "Error al ejecutar el agente", type: "error" });
+        setToast({ message: data.message ?? data.error ?? "Error al ejecutar el agente", type: "error" });
       } else if (data.runId) {
         // Corre en background (agente pesado, p.ej. mapeo CARDS_AND_FLOWCHARTS):
         // polleamos hasta DONE/ERROR. El botón sigue en "Ejecutando… m:ss" mientras tanto.

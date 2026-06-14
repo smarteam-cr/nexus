@@ -416,6 +416,22 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     }
   }
 
+  // ── Kickoff: el handoff es su única fuente. Sin handoff GENERADO (≥1 bloque en el
+  //    canvas Handoff) no hay nada de qué partir → cortar antes de correr, en vez de
+  //    generar bloques placeholder "Falta el handoff". No se exige que esté aceptado:
+  //    el kickoff es interno y usa el handoff aunque esté en borrador.
+  if (agent.id === "agent-kickoff-canvas" && bodyProjectId) {
+    const handoffBlockCount = await prisma.canvasBlock.count({
+      where: { section: { canvas: { projectId: bodyProjectId, name: "Handoff" } } },
+    });
+    if (handoffBlockCount === 0) {
+      return NextResponse.json(
+        { error: "NO_HANDOFF", message: "Este proyecto no tiene handoff generado. Generá el handoff antes de correr el kickoff." },
+        { status: 400 },
+      );
+    }
+  }
+
   // ── A2: el trabajo real (contexto → LLM → persistencia) va en un closure para
   // poder ejecutarlo síncrono (modo normal) o detached (modo async). Captura todo
   // el scope de arriba (body, agent, client, etc.) — sin threading de variables.
@@ -1267,13 +1283,16 @@ Analiza toda la información anterior y completa las secciones de contexto del c
   const isKickoffAgent = agent.id === "agent-kickoff-canvas";
   let userMessage = baseUserMessage;
   if (isKickoffAgent && bodyProjectId) {
-    const handoffCtx = await loadCanvasContext(bodyProjectId, "Handoff", { onlyConfirmed: true });
+    // El kickoff es interno: usa el handoff GENERADO aunque esté en borrador (no se
+    // exige aceptación). El guard de arriba ya cortó si no hay handoff, así que el
+    // fallback de abajo es una red de seguridad inalcanzable en la práctica.
+    const handoffCtx = await loadCanvasContext(bodyProjectId, "Handoff", { onlyConfirmed: false });
     const timelineCtx = await loadTimelineContext(bodyProjectId);
     userMessage = `Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
 ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}
-=== HANDOFF CURADO (bloques confirmados por el CSE — ESTA ES TU ÚNICA FUENTE) ===
-${handoffCtx || "(Sin handoff confirmado todavía. Indicá en cada sección que falta el handoff; no inventes contenido.)"}
+=== HANDOFF DEL PROYECTO (ESTA ES TU ÚNICA FUENTE) ===
+${handoffCtx || "(Sin handoff todavía. Indicá en cada sección que falta el handoff; no inventes contenido.)"}
 
 ${timelineCtx ? `${timelineCtx}\n\n` : ""}Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: tono cliente, sin inflar alcance/objetivos (solo lo respaldado por el handoff), métricas como propuesta de Smarteam si no están explícitas, y NO reproduzcas el cronograma en prosa (la plantilla lo muestra aparte).`;
   }

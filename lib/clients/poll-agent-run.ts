@@ -50,12 +50,17 @@ export function summarizeRun(d: {
   cards?: Array<{ cardType?: string }>;
   flowcharts?: unknown[];
   flowchart?: unknown;
+  blocks?: unknown[];
 }): string {
   const allCards = d.cards ?? [];
   const textCards = allCards.filter((c) => c.cardType !== "FLOWCHART" && c.cardType !== "CHART");
   const flowchartCount = (d.flowcharts?.length ?? 0) + (d.flowchart ? 1 : 0);
+  // Agentes en block-format (Kickoff, Handoff, Diagnóstico) devuelven `blocks`, no `cards`.
+  // Sin contarlos, el toast decía "sin resultados" aunque hubiera generado bloques.
+  const blockCount = d.blocks?.length ?? 0;
   const parts: string[] = [];
   if (textCards.length > 0) parts.push(`${textCards.length} card${textCards.length !== 1 ? "s" : ""}`);
+  if (blockCount > 0) parts.push(`${blockCount} bloque${blockCount !== 1 ? "s" : ""}`);
   if (flowchartCount > 0) parts.push(`${flowchartCount} diagrama${flowchartCount !== 1 ? "s" : ""}`);
   return parts.join(" + ") || "sin resultados";
 }
