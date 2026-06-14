@@ -1305,14 +1305,27 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   } | null = null;
 
   try {
-    const msg = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: maxTokens,
-      // temperature 0 para CARDS_AND_FLOWCHARTS: salidas más deterministas entre ejecuciones
-      ...(isCardsAndFlowcharts ? { temperature: 0 } : {}),
-      system: effectiveSystemPrompt,
-      messages: [{ role: "user", content: userMessage }],
-    });
+    // CARDS_AND_FLOWCHARTS usa max_tokens alto (32k) → el SDK de Anthropic EXIGE
+    // streaming para requests que podrían tardar >10 min en no-streaming ("Streaming
+    // is required for operations that may take longer than 10 minutes"). .stream()
+    // .finalMessage() acumula y devuelve el mismo Message. temperature 0 = salidas
+    // deterministas entre ejecuciones.
+    const msg = isCardsAndFlowcharts
+      ? await anthropic.messages
+          .stream({
+            model: "claude-sonnet-4-6",
+            max_tokens: maxTokens,
+            temperature: 0,
+            system: effectiveSystemPrompt,
+            messages: [{ role: "user", content: userMessage }],
+          })
+          .finalMessage()
+      : await anthropic.messages.create({
+          model: "claude-sonnet-4-6",
+          max_tokens: maxTokens,
+          system: effectiveSystemPrompt,
+          messages: [{ role: "user", content: userMessage }],
+        });
 
     const stopReason = msg.stop_reason;
     const raw = (msg.content[0] as { type: string; text: string }).text.trim();
