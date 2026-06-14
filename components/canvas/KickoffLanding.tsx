@@ -265,15 +265,21 @@ function KickoffLandingView({
             ¡Arranquemos juntos!
           </h1>
           {hero && hero.blocks.length > 0 && (
-            <div className="reveal" data-stagger="2" style={{ marginTop: 18, maxWidth: 600, marginInline: "auto", fontSize: 17 }}>
+            <div className="reveal" data-stagger="2" style={{ marginTop: 18, maxWidth: 600, marginInline: "auto", fontSize: 17, display: "flex", flexDirection: "column", gap: editable ? 14 : 6 }}>
               {hero.blocks.map((b) => (
-                <KickoffBlock
+                // BlockRow (no KickoffBlock pelado) → el hero gana el mismo chrome de edición
+                // que el cuerpo: editar inline, ✨IA, aceptar y BORRAR por bloque. invert =
+                // prosa clara sobre el hero oscuro. En vista cliente (editable=false) BlockRow
+                // no pinta controles → idéntico al render anterior.
+                <BlockRow
                   key={b.id}
                   block={b}
                   editable={editable}
                   invert
                   onSave={saveBlock ? (u) => saveBlock(hero.id, b.id, u) : undefined}
                   onRegenerate={regenerateBlock ? (instr, base) => regenerateBlock(hero.id, b.id, instr, base) : undefined}
+                  onAccept={acceptBlock ? () => acceptBlock(hero.id, b.id) : undefined}
+                  onDelete={deleteBlock ? () => deleteBlock(hero.id, b.id) : undefined}
                 />
               ))}
             </div>
@@ -369,6 +375,7 @@ function IconBtn({ title, color, onClick, path }: { title: string; color: string
 function BlockRow({
   block,
   editable,
+  invert = false,
   onSave,
   onRegenerate,
   onAccept,
@@ -376,6 +383,8 @@ function BlockRow({
 }: {
   block: RenderableBlock;
   editable: boolean;
+  /** Prosa light-on-dark (hero oscuro) — se reenvía a KickoffBlock. */
+  invert?: boolean;
   onSave?: (u: { content?: string; data?: unknown }) => void | boolean | Promise<void | boolean>;
   onRegenerate?: (instruction: string, base?: { content?: string | null; data?: unknown }) => Promise<{ content?: string | null; data?: unknown } | null>;
   onAccept?: () => void;
@@ -400,7 +409,7 @@ function BlockRow({
           <IconBtn title="Eliminar bloque" color="#dc2626" onClick={() => onDelete?.()} path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
         </div>
       )}
-      <KickoffBlock block={block} editable={editable} onSave={onSave} onRegenerate={onRegenerate} />
+      <KickoffBlock block={block} editable={editable} invert={invert} onSave={onSave} onRegenerate={onRegenerate} />
     </div>
   );
 }
