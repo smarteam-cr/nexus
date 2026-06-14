@@ -33,24 +33,43 @@ function blockHasContent(block: BlockData): boolean {
 export default function CanvasLinearView({
   projectId,
   canvasId,
+  onlyKey,
 }: {
   projectId: string;
   canvasId: string;
+  // Si viene, renderiza SOLO esa sección (sub-tabs de "Información del cliente").
+  onlyKey?: string;
 }) {
   const {
-    sections,
+    sections: allSections,
     loading,
-    draftCount,
     acceptBlock,
     rejectBlock,
     deleteBlock,
     saveBlock,
     addBlock,
-    acceptAll,
+    acceptAll: hookAcceptAll,
     error,
     clearError,
     restoreBlock,
   } = useCanvasSections(projectId, canvasId);
+
+  // Con onlyKey filtramos a una sección; draftCount y "Aceptar todos" se acotan a lo
+  // visible (igual que SectionBlockList) para no contar/aceptar otras secciones.
+  const sections = onlyKey ? allSections.filter((s) => s.key === onlyKey) : allSections;
+  const draftCount = sections.reduce(
+    (n, s) => n + s.blocks.filter((b) => b.status === "DRAFT").length,
+    0,
+  );
+  const acceptAll = onlyKey
+    ? async () => {
+        await Promise.all(
+          sections.flatMap((s) =>
+            s.blocks.filter((b) => b.status === "DRAFT").map((b) => acceptBlock(s.id, b.id)),
+          ),
+        );
+      }
+    : hookAcceptAll;
 
   // Borrado con feedback: estado "bloqueado" (color + animación) mientras se borra,
   // y un toast flotante para deshacer (~10s) si el bloque borrado tenía contenido.
@@ -90,7 +109,7 @@ export default function CanvasLinearView({
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className={onlyKey ? "space-y-4" : "grid grid-cols-1 lg:grid-cols-2 gap-4"}>
         {[1, 2, 3].map((i) => (
           <div key={i} className="h-32 rounded-2xl skeleton-shimmer" />
         ))}

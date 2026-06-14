@@ -17,7 +17,7 @@
  */
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import SectionBlockList from "@/components/canvas/SectionBlockList";
+import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import DocumentUpload from "./DocumentUpload";
 import { LogoUploader } from "@/components/ui/LogoUploader";
 
@@ -95,19 +95,19 @@ export default function ClientInfoPanel({
         {tab === "docs" && <DocumentUpload projectId={projectId} />}
 
         {tab === "stakeholders" && (
-          <SectionBlockList projectId={projectId} canvasId={canvasId} onlyKey="stakeholders" />
+          <CanvasLinearView projectId={projectId} canvasId={canvasId} onlyKey="stakeholders" />
         )}
 
         {tab === "retos" && (
-          <SectionBlockList projectId={projectId} canvasId={canvasId} onlyKey="retos_estrategicos" />
+          <CanvasLinearView projectId={projectId} canvasId={canvasId} onlyKey="retos_estrategicos" />
         )}
 
         {tab === "oportunidades" && (
-          <SectionBlockList projectId={projectId} canvasId={canvasId} onlyKey="oportunidades" />
+          <CanvasLinearView projectId={projectId} canvasId={canvasId} onlyKey="oportunidades" />
         )}
 
         {tab === "procesos" && (
-          <SectionBlockList projectId={projectId} canvasId={canvasId} onlyKey="procesos" />
+          <CanvasLinearView projectId={projectId} canvasId={canvasId} onlyKey="procesos" />
         )}
 
         {tab === "marca" && <ClientLogoSection clientId={clientId} projectId={projectId} />}
