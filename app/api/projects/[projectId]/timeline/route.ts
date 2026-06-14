@@ -33,6 +33,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { Prisma } from "@prisma/client";
 import type {
   TimelinePhaseSource,
   TimelineActivityType,
@@ -41,7 +42,7 @@ import type {
 
 // Validador + tipos del body compartidos con POST /timeline/assist (la IA
 // emite exactamente este shape para que aplicar su propuesta sea un PUT normal).
-import { validateTimelinePayload } from "@/lib/timeline/validate";
+import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
 
 // ── Helpers de respuesta ─────────────────────────────────────────────────────
 
@@ -65,6 +66,11 @@ interface TimelineResponse {
   /** D.1.5 — flag de publicación de la superficie externa del cronograma (vive
    *  en Project). El preview interno del kickoff lo espeja para ser fiel. */
   timelinePublishedAt: string | null;
+  /** Propuesta pendiente de re-generación del agente (re-run con timeline ya existente).
+   *  Shape del PUT (fases id-aware, sin `tasks`); null = sin propuesta. El canvas la
+   *  muestra como vista previa aplicable. Se limpia al aplicar (PUT) o descartar (DELETE). */
+  pendingProposal: PutBody | null;
+  pendingProposalRunId: string | null;
   phases: Array<{
     id: string;
     name: string;
@@ -86,6 +92,8 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
       lastEditedByHuman: true,
       generatedByAgentRunId: true,
       detailConfirmedAt: true,
+      pendingProposal: true,
+      pendingProposalRunId: true,
       project: { select: { timelinePublishedAt: true } },
       phases: {
         orderBy: { order: "asc" },
@@ -123,6 +131,8 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     generatedByAgentRunId: tl.generatedByAgentRunId,
     detailConfirmedAt: tl.detailConfirmedAt?.toISOString() ?? null,
     timelinePublishedAt: tl.project.timelinePublishedAt?.toISOString() ?? null,
+    pendingProposal: (tl.pendingProposal as PutBody | null) ?? null,
+    pendingProposalRunId: tl.pendingProposalRunId,
     phases: tl.phases,
   };
 }
@@ -185,6 +195,10 @@ export async function PUT(
         update: {
           anchorStartDate: anchorDate,
           lastEditedByHuman: now,
+          // Aplicar la propuesta (o cualquier guardado humano) invalida la propuesta
+          // pendiente: ya quedó reflejada o el humano editó algo distinto.
+          pendingProposal: Prisma.DbNull,
+          pendingProposalRunId: null,
         },
         select: { id: true },
       });

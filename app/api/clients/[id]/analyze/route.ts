@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { withAuth, apiError } from "@/lib/api";
 import { dataLake } from "@/lib/data-lake/client";
@@ -2099,12 +2100,103 @@ async function persistTimelineFromAgentOutput(
 
     if (validPhases.length === 0) return;
 
+    // Si YA existe un cronograma NO se pisa (protege ediciones + progreso de tareas).
+    // En vez de descartar la propuesta nueva, se reconcilia contra las fases actuales y
+    // se guarda como `pendingProposal` (shape del PUT) para que el canvas la muestre como
+    // vista previa aplicable. Reconciliación: cada fase propuesta toma el id de la fase
+    // existente que matchea (por nombre normalizado; si no, por posición) → al aplicar, el
+    // PUT la ACTUALIZA en vez de recrear. Se OMITE `tasks` en TODAS las fases → el PUT no
+    // toca las tareas (preserva detalle y estados). Las fases existentes no matcheadas se
+    // re-emiten idénticas (modo aditivo: el re-run nunca borra fases con progreso).
     const existing = await prisma.projectTimeline.findUnique({
       where: { projectId: bodyProjectId },
-      select: { id: true },
+      select: {
+        anchorStartDate: true,
+        phases: {
+          orderBy: { order: "asc" },
+          select: { id: true, name: true, durationWeeks: true, sessionCount: true, notes: true, activityType: true },
+        },
+      },
     });
     if (existing) {
-      console.log(`[analyze] Skipping timeline: ProjectTimeline ya existe para project ${bodyProjectId}. Propuesta nueva queda en AgentRun.output (${agentRunId}).`);
+      const norm = (s: string) => s.trim().toLowerCase();
+      const byName = new Map<string, (typeof existing.phases)[number]>();
+      for (const ph of existing.phases) if (!byName.has(norm(ph.name))) byName.set(norm(ph.name), ph);
+      const consumed = new Set<string>();
+
+      type ProposalPhase = {
+        id?: string;
+        name: string;
+        order: number;
+        durationWeeks: number;
+        sessionCount: number | null;
+        notes: string | null;
+        activityType?: string | null;
+      };
+      const proposedPhases: ProposalPhase[] = [];
+
+      // 1) Fases propuestas por el agente (en su orden), matcheadas a existentes por
+      //    nombre normalizado y, si no, por posición. Las matcheadas llevan su id +
+      //    el activityType existente (mejora el preview; no-op al aplicar).
+      validPhases.forEach((p, i) => {
+        let match: (typeof existing.phases)[number] | undefined = byName.get(norm(p.name));
+        if (match && consumed.has(match.id)) match = undefined;
+        if (!match) {
+          const positional = existing.phases[i];
+          if (positional && !consumed.has(positional.id)) match = positional;
+        }
+        if (match) {
+          consumed.add(match.id);
+          proposedPhases.push({
+            id: match.id,
+            name: p.name,
+            order: i,
+            durationWeeks: p.durationWeeks,
+            sessionCount: p.sessionCount,
+            notes: p.notes,
+            activityType: match.activityType,
+          });
+        } else {
+          proposedPhases.push({
+            name: p.name,
+            order: i,
+            durationWeeks: p.durationWeeks,
+            sessionCount: p.sessionCount,
+            notes: p.notes,
+          });
+        }
+      });
+
+      // 2) Fases existentes NO matcheadas → re-emitir idénticas (nunca borrar).
+      let nextOrder = proposedPhases.length;
+      for (const ph of existing.phases) {
+        if (consumed.has(ph.id)) continue;
+        proposedPhases.push({
+          id: ph.id,
+          name: ph.name,
+          order: nextOrder++,
+          durationWeeks: ph.durationWeeks,
+          sessionCount: ph.sessionCount,
+          notes: ph.notes,
+          activityType: ph.activityType,
+        });
+      }
+
+      const pendingProposal = {
+        anchorStartDate: existing.anchorStartDate?.toISOString() ?? null,
+        phases: proposedPhases,
+      };
+
+      await prisma.projectTimeline.update({
+        where: { projectId: bodyProjectId },
+        data: {
+          pendingProposal: pendingProposal as Prisma.InputJsonValue,
+          pendingProposalRunId: agentRunId,
+        },
+      });
+      console.log(
+        `[analyze] ✓ pendingProposal guardada (${proposedPhases.length} fases; ${validPhases.length} propuestas por el agente) para project ${bodyProjectId} (run ${agentRunId}).`,
+      );
       return;
     }
 

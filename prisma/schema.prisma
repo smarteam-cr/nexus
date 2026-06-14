@@ -263,6 +263,12 @@ model ProjectTimeline {
   detailConfirmedAt           DateTime? // gate de la vista cliente: las tareas solo cruzan al kickoff externo si != null
   detailGeneratedByAgentRunId String?   // de qué AgentRun salió el detalle (tareas/tipos) — trazabilidad
   detailGeneratedByAgentRun   AgentRun? @relation("TimelineDetailGenerator", fields: [detailGeneratedByAgentRunId], references: [id], onDelete: SetNull)
+  // Re-generación en proyectos en curso: cuando el agente re-deriva un cronograma y YA existe uno,
+  // la propuesta NO se aplica (protege ediciones/progreso) — se guarda acá, reconciliada al shape del
+  // PUT (fases con id existente cuando matchean, SIN `tasks` para preservar el detalle), y el canvas
+  // la muestra como vista previa aplicable. null = sin propuesta pendiente. Se limpia al aplicar/descartar.
+  pendingProposal       Json?
+  pendingProposalRunId  String?         // AgentRun del que salió la propuesta pendiente (trazabilidad)
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
 

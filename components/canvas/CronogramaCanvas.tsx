@@ -156,6 +156,12 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
         setPhases(mapServerPhases(data.phases ?? []));
         setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
         setDetailConfirmedAt(data.detailConfirmedAt ?? null);
+        // Propuesta de re-generación del agente (re-run con cronograma ya existente):
+        // se muestra como vista previa aplicable, reusando el mismo banner que el assist.
+        // No pisa una propuesta de assist en curso (prev tiene prioridad).
+        setProposal((prev) =>
+          prev ?? (data.pendingProposal ? (data.pendingProposal as Proposal) : null),
+        );
       } else {
         setPhases([]);
         setAnchor("");
@@ -448,7 +454,15 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
     setApplying(false);
   };
 
-  const discardProposal = () => {
+  const discardProposal = async () => {
+    // Si la propuesta vino del agente (re-run), está persistida en pendingProposal →
+    // limpiarla en el server para que no reaparezca al recargar. La de assist es solo en
+    // memoria (el DELETE es no-op inofensivo). El estado local se limpia pase lo que pase.
+    try {
+      await fetch(`/api/projects/${projectId}/timeline/proposal`, { method: "DELETE" });
+    } catch {
+      /* limpiar local igual */
+    }
     setProposal(null);
     setAssistWarnings([]);
   };
