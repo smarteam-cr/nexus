@@ -14,6 +14,7 @@ import KickoffLanding from "@/components/canvas/KickoffLanding";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import { PublishKickoffButton } from "./PublishKickoffButton";
+import ProjectHandoffSection from "./ProjectHandoffSection";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
@@ -387,6 +388,9 @@ export default function ProjectCanvasPanel({
       {/* Widget del proyecto — SIEMPRE visible en la cabecera (antes vivía dentro
           del canvas Resumen). Última/próxima sesión, estado actual, pendientes. */}
       <ProjectGPS projectId={projectId} clientId={clientId} />
+
+      {/* Handoff por-proyecto — sección dedicada siempre visible (estado + generar + doc). */}
+      <ProjectHandoffSection projectId={projectId} clientId={clientId} />
 
       {/* Header */}
       <div className="flex items-center justify-between">

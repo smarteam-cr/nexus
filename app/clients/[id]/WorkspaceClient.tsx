@@ -6,11 +6,9 @@ import { useWorkspace } from "@/components/clients/WorkspaceContext";
 import { invalidateGps } from "@/lib/clients/gps-cache";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
-import ClientHandoffsPanel from "@/components/clients/ClientHandoffsPanel";
 import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
 
 const STRATEGY_TAB_ID = "__strategy__";
-const HANDOFFS_TAB_ID = "__handoffs__";
 const PROCESOS_TAB_ID = "__procesos__";
 
 interface ProjectSummary {
@@ -27,14 +25,12 @@ interface ProjectSummary {
 
 export default function WorkspaceClient({
   clientId,
-  clientName,
   projects,
   hasHubspot,
   strategyProjectId,
   strategyCanvasId,
 }: {
   clientId: string;
-  clientName: string;
   projects: ProjectSummary[];
   hasHubspot: boolean;
   strategyProjectId: string;
@@ -81,7 +77,6 @@ export default function WorkspaceClient({
       <div className="flex-1 overflow-y-auto">
         <ProjectSection
           clientId={clientId}
-          clientName={clientName}
           projects={projects}
           strategyProjectId={strategyProjectId}
           strategyCanvasId={strategyCanvasId}
@@ -95,13 +90,11 @@ export default function WorkspaceClient({
 
 function ProjectSection({
   clientId,
-  clientName,
   projects,
   strategyProjectId,
   strategyCanvasId,
 }: {
   clientId: string;
-  clientName: string;
   projects: ProjectSummary[];
   strategyProjectId: string;
   strategyCanvasId: string;
@@ -109,7 +102,6 @@ function ProjectSection({
   const { activeProjectId, setActiveProjectId } = useWorkspace();
 
   const isStrategy = activeProjectId === STRATEGY_TAB_ID;
-  const isHandoffs = activeProjectId === HANDOFFS_TAB_ID;
   const isProcesos = activeProjectId === PROCESOS_TAB_ID;
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
@@ -133,22 +125,6 @@ function ProjectSection({
             </button>
           );
         })}
-
-        {/* Handoffs — entidad cliente-level (1:N). El traspaso Sales→CS que arranca
-            cada proyecto; vive a nivel cliente, junto a "Información del cliente". */}
-        <button
-          onClick={() => setActiveProjectId(HANDOFFS_TAB_ID)}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-            isHandoffs
-              ? "border-brand text-white"
-              : "border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700"
-          }`}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m4 6H4m0 0l4 4m-4-4l4-4" />
-          </svg>
-          Handoffs
-        </button>
 
         {/* Procesos — pestaña top-level del cliente. Muestra la sección "procesos"
             del canvas de Información del cliente (mismo storage, superficie dedicada). */}
@@ -197,8 +173,6 @@ function ProjectSection({
           projectId={strategyProjectId}
           canvasId={strategyCanvasId}
         />
-      ) : isHandoffs ? (
-        <ClientHandoffsPanel key={HANDOFFS_TAB_ID} clientId={clientId} clientName={clientName} />
       ) : activeProjectId && activeProject ? (
         <ProjectCanvasPanel
           key={activeProjectId}

@@ -403,6 +403,18 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     }
   }
 
+  // ── Handoff scopeado al proyecto: sin sesiones clasificadas a ESTE proyecto no
+  //    hay nada que investigar → cortar antes de crear el run (sin fallback client-wide).
+  if (agent.agentGroup === "handoff" && bodyProjectId) {
+    const projSessionCount = await prisma.sessionProject.count({ where: { projectId: bodyProjectId } });
+    if (projSessionCount === 0) {
+      return NextResponse.json(
+        { error: "NO_PROJECT_SESSIONS", message: "Este proyecto no tiene sesiones clasificadas. Clasificá sesiones al proyecto antes de generar el handoff." },
+        { status: 400 },
+      );
+    }
+  }
+
   // ── A2: el trabajo real (contexto → LLM → persistencia) va en un closure para
   // poder ejecutarlo síncrono (modo normal) o detached (modo async). Captura todo
   // el scope de arriba (body, agent, client, etc.) — sin threading de variables.
@@ -809,6 +821,18 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
 
     if (dbSessions.length > 0) {
       matchingSessions = dbSessions;
+    }
+
+    // Handoff scopeado al proyecto: solo sesiones vinculadas a ESTE proyecto
+    // (SessionProject). Sin esto, el handoff tomaba sesiones de ventas de TODO el
+    // cliente; ahora cada handoff investiga su propio proyecto.
+    if (isHandoffAgent && bodyProjectId) {
+      const links = await prisma.sessionProject.findMany({
+        where: { projectId: bodyProjectId },
+        select: { sessionId: true },
+      });
+      const projIds = new Set(links.map((l) => l.sessionId));
+      matchingSessions = matchingSessions.filter((s) => projIds.has(s.id));
     }
 
     // Separar sesiones según el tipo de agente.

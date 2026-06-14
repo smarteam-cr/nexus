@@ -57,7 +57,6 @@ export default async function ClientPage({
   return (
     <WorkspaceClient
       clientId={id}
-      clientName={client.name}
       projects={visibleProjects}
       hasHubspot={hasHubspot}
       strategyProjectId={strategyRef.projectId}

@@ -12,7 +12,6 @@ import {
 } from "@/lib/auth/supabase";
 import ClientsGrid, { type ClientRow } from "./ClientsGrid";
 import ICPSection from "./ICPSection";
-import NewHandoffButton from "@/components/clients/NewHandoffButton";
 
 // Render dinámico — la página depende del usuario logueado (sesión Supabase
 // vía cookies), así que no puede cachearse con ISR como antes.
@@ -120,7 +119,6 @@ export default async function ClientsPage() {
               ? "Sin clientes aún"
               : `${rows.length} cliente${rows.length !== 1 ? "s" : ""}`
           }
-          action={<NewHandoffButton kind="new" />}
         />
 
         <ClientsGrid clients={rows} activeCse={activeCse} />
