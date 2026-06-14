@@ -1277,7 +1277,10 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   }
 
   // ── 11. Llamar a Claude ───────────────────────────────────────────────────────
-  const maxTokens = 16000;
+  // CARDS_AND_FLOWCHARTS genera varios diagramas grandes (8-15 nodos c/u) + cards;
+  // con 16k la salida se trunca (stop_reason=max_tokens) → JSON irrecuperable →
+  // invalid_response → run fallido. Más techo evita la truncación.
+  const maxTokens = isCardsAndFlowcharts ? 32000 : 16000;
   let analysisJson: {
     cards?: { title: string; content: string }[];
     suggestions?: Array<{ title?: string; content?: string; type?: string; suggestedSection?: string }>;
@@ -1913,45 +1916,56 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   });
   }; // ← fin de runAnalysisWork
 
-  // ── A2: despacho síncrono vs background ──────────────────────────────────────
-  // Modo async (agentes pesados, p.ej. mapeo/diagnóstico CARDS_AND_FLOWCHARTS): se
-  // crea el AgentRun en RUNNING, se devuelve { runId } al instante y el trabajo
-  // corre detached (en dev el proceso sigue vivo y lo completa aunque el cliente no
-  // sostenga la conexión → adiós "Error de conexión" a los 3 min). El cliente trackea
-  // por polling al GET [runId]; el status pasa a DONE/ERROR recién al final.
-  if (body.async === true) {
-    const pre = await prisma.agentRun.create({
-      data: {
-        agentId:      agent.id,
-        clientId,
-        projectId:    bodyProjectId,
-        stage:        bodyStage,
-        step:         bodyStep,
-        stepLabel:    bodyStepLabel,
-        sectionLabel: bodySectionLabel ?? agent.sectionLabel ?? null,
-        status:       "RUNNING",
-        output:       "{}",
-      },
-    });
+  // ── A2: el AgentRun se crea SIEMPRE upfront (RUNNING), ANTES del LLM, para que un
+  // fallo nunca quede sin rastro (antes el run se creaba después del LLM → cualquier
+  // error previo dejaba 0 registros e invisible). El status pasa a DONE/ERROR recién
+  // acá al final, tras persistir cards/blocks → el polling nunca ve DONE antes de tiempo.
+  const pre = await prisma.agentRun.create({
+    data: {
+      agentId:      agent.id,
+      clientId,
+      projectId:    bodyProjectId,
+      stage:        bodyStage,
+      step:         bodyStep,
+      stepLabel:    bodyStepLabel,
+      sectionLabel: bodySectionLabel ?? agent.sectionLabel ?? null,
+      status:       "RUNNING",
+      output:       "{}",
+    },
+  });
+
+  const markDone = (res: NextResponse) =>
+    prisma.agentRun
+      .update({ where: { id: pre.id }, data: { status: res.status >= 400 ? "ERROR" : "DONE" } })
+      .catch(() => {});
+  const markError = (e: unknown) =>
+    prisma.agentRun
+      .update({ where: { id: pre.id }, data: { status: "ERROR", output: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) } })
+      .catch(() => {});
+
+  // Background para agentes pesados (CARDS_AND_FLOWCHARTS) o cuando el cliente lo pide:
+  // el trabajo corre detached (en dev el proceso sigue vivo y lo completa aunque el
+  // cliente no sostenga la conexión → adiós "Error de conexión" a los 3 min). El cliente
+  // trackea por polling al GET [runId]. Funciona desde CUALQUIER disparador (pop-up de
+  // agentes, tarjeta, sub-paso) — NO depende del flag async del cliente.
+  const runDetached = body?.async === true || agent.outputType === "CARDS_AND_FLOWCHARTS";
+  if (runDetached) {
     void (async () => {
-      try {
-        const res = await runAnalysisWork(pre.id);
-        await prisma.agentRun
-          .update({ where: { id: pre.id }, data: { status: res.status >= 400 ? "ERROR" : "DONE" } })
-          .catch(() => {});
-      } catch (e) {
-        await prisma.agentRun
-          .update({
-            where: { id: pre.id },
-            data: { status: "ERROR", output: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) },
-          })
-          .catch(() => {});
-      }
+      try { await markDone(await runAnalysisWork(pre.id)); }
+      catch (e) { await markError(e); }
     })();
     return NextResponse.json({ runId: pre.id, status: "RUNNING", async: true });
   }
 
-  return runAnalysisWork(null);
+  // Síncrono (agentes livianos): se espera el resultado y se devuelve tal cual.
+  try {
+    const res = await runAnalysisWork(pre.id);
+    await markDone(res);
+    return res;
+  } catch (e) {
+    await markError(e);
+    return NextResponse.json({ error: "AGENT_ERROR", message: "Error al ejecutar el agente. Intenta de nuevo.", runId: pre.id }, { status: 500 });
+  }
 });
 
 // ── Helpers a nivel módulo ────────────────────────────────────────────────────

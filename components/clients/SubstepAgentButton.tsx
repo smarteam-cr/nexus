@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { pollAgentRun } from "@/lib/clients/poll-agent-run";
 
 interface Props {
   clientId: string;
@@ -88,7 +89,18 @@ export default function SubstepAgentButton({ clientId, projectId, stage, stepInd
           projectId,
         }),
       });
-      const data = res.ok ? await res.json().catch(() => ({})) : {};
+      let data = res.ok ? await res.json().catch(() => ({})) : {};
+      // Si el agente corre en background (pesado, p.ej. mapeo), el server devuelve
+      // { runId }: polleamos hasta DONE/ERROR y reconstruimos el payload del evento.
+      if (res.ok && data.runId) {
+        const result = await pollAgentRun(clientId, data.runId);
+        data = {
+          cards: result.cards ?? [],
+          flowchart: result.flowchart ?? null,
+          flowcharts: result.flowcharts ?? null,
+          run: result.status === "DONE" ? { id: result.id, createdAt: result.createdAt } : null,
+        };
+      }
       // analyze-done desactiva running=false y actualiza lastRunAt via el listener
       window.dispatchEvent(
         new CustomEvent("analyze-done", {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { AGENT_GROUPS, type AgentGroupDef } from "@/lib/agent-groups";
+import { pollAgentRun, summarizeRun } from "@/lib/clients/poll-agent-run";
 import { useWorkspace } from "./WorkspaceContext";
 
 interface AgentSummary {
@@ -80,23 +81,23 @@ export default function AgentPanel({ clientId, projectId: propProjectId }: Props
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setToast({ message: data.error ?? "Error al ejecutar el agente", type: "error" });
+      } else if (data.runId) {
+        // Corre en background (agente pesado, p.ej. mapeo CARDS_AND_FLOWCHARTS):
+        // polleamos hasta DONE/ERROR. El botón sigue en "Ejecutando… m:ss" mientras tanto.
+        const result = await pollAgentRun(clientId, data.runId);
+        if (result.status === "DONE") {
+          setToast({ message: `${agent.name} completado — ${summarizeRun(result)}`, type: "success" });
+        } else if (result.status === "ERROR") {
+          setToast({ message: `${agent.name} falló durante la ejecución`, type: "error" });
+        } else {
+          setToast({ message: `${agent.name} sigue corriendo — revisá en unos minutos`, type: "error" });
+        }
       } else {
-        const allCards = data.cards ?? [];
-        const canvasCards = allCards.filter((c: { canvasSection?: string }) => c.canvasSection);
-        const suggestionCards = allCards.filter((c: { canvasSection?: string }) => !c.canvasSection);
-        const flowchartCount = (data.flowcharts?.length ?? 0) + (data.flowchart ? 1 : 0);
-        const parts = [];
-        if (canvasCards.length > 0) parts.push(`${canvasCards.length} card${canvasCards.length !== 1 ? "s" : ""}`);
-        if (flowchartCount > 0) parts.push(`${flowchartCount} diagrama${flowchartCount !== 1 ? "s" : ""}`);
-        if (suggestionCards.length > 0) parts.push(`${suggestionCards.length} sugerencia${suggestionCards.length !== 1 ? "s" : ""}`);
-        setToast({
-          message: `${agent.name} completado — ${parts.join(" + ") || "sin resultados"}`,
-          type: "success",
-        });
+        setToast({ message: `${agent.name} completado — ${summarizeRun(data)}`, type: "success" });
       }
     } catch {
       setToast({ message: "Error de conexión", type: "error" });
