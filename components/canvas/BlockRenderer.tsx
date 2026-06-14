@@ -92,22 +92,26 @@ export default function BlockRenderer({
           mouseDownPos.current = null;
         }}
       >
-        {/* Drag handle — top left, on hover */}
-        <div className={`absolute top-1.5 left-1.5 z-10 transition-opacity ${
-          editing ? "opacity-0" : "opacity-0 group-hover/block:opacity-100"
-        }`}>
-          <div
-            className="p-0.5 rounded bg-white border border-gray-200 shadow-sm cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
-            title="Mover bloque"
-            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onDragStart?.(e); }}
-          >
-            <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
-              <circle cx="5" cy="3" r="1.5" /><circle cx="11" cy="3" r="1.5" />
-              <circle cx="5" cy="8" r="1.5" /><circle cx="11" cy="8" r="1.5" />
-              <circle cx="5" cy="13" r="1.5" /><circle cx="11" cy="13" r="1.5" />
-            </svg>
+        {/* Drag handle — SOLO si el contenedor soporta arrastre (la grilla pasa
+            onDragStart). En la vista lineal (Procesos/Handoff) no se pasa → no se
+            muestra (vestigio del grid viejo: ya no se arrastra). */}
+        {onDragStart && (
+          <div className={`absolute top-1.5 left-1.5 z-10 transition-opacity ${
+            editing ? "opacity-0" : "opacity-0 group-hover/block:opacity-100"
+          }`}>
+            <div
+              className="p-0.5 rounded bg-white border border-gray-200 shadow-sm cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+              title="Mover bloque"
+              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onDragStart?.(e); }}
+            >
+              <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
+                <circle cx="5" cy="3" r="1.5" /><circle cx="11" cy="3" r="1.5" />
+                <circle cx="5" cy="8" r="1.5" /><circle cx="11" cy="8" r="1.5" />
+                <circle cx="5" cy="13" r="1.5" /><circle cx="11" cy="13" r="1.5" />
+              </svg>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Toolbar — top right. Visible siempre para bloques no-AGENT (señal de
             que un humano los tocó) y en hover/draft/edición para el resto. */}
