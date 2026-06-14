@@ -816,34 +816,60 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   try {
     let matchingSessions: RawTranscript[] = [];
 
-    // ── 4a. Siempre buscar primero en DB (Fireflies + Meet) ──────────────────
-    const dbSessions = await searchFirefliesFromDB(sessionKeywords, titleTerms, domainFilter);
-
-    if (dbSessions.length > 0) {
-      matchingSessions = dbSessions;
-    }
-
-    // Handoff scopeado al proyecto: solo sesiones vinculadas a ESTE proyecto
-    // (SessionProject). Sin esto, el handoff tomaba sesiones de ventas de TODO el
-    // cliente; ahora cada handoff investiga su propio proyecto.
+    // ── 4a. Fuente de sesiones ────────────────────────────────────────────────
+    // Handoff scopeado al proyecto: la fuente son EXACTAMENTE las sesiones
+    // vinculadas a ESTE proyecto (SessionProject), traídas directo por id. NO se
+    // usa el keyword/domain-search ni el clasificador heurístico de handoff: esos
+    // existían para *adivinar* el scope cuando no había vínculo explícito. Ahora
+    // que el proyecto declara sus sesiones, ESAS son el material a investigar
+    // (aunque haya varias de ventas). Intersectar con el keyword-search perdía
+    // sesiones reales del proyecto que no matcheaban dominio/título, y el
+    // clasificador llegaba a excluir la única con transcript (p.ej. un título con
+    // "revisión") dejando 0 sesiones → el agente corría vacío y fallaba.
     if (isHandoffAgent && bodyProjectId) {
       const links = await prisma.sessionProject.findMany({
         where: { projectId: bodyProjectId },
         select: { sessionId: true },
       });
-      const projIds = new Set(links.map((l) => l.sessionId));
-      matchingSessions = matchingSessions.filter((s) => projIds.has(s.id));
+      const ids = links.map((l) => l.sessionId);
+      if (ids.length > 0) {
+        const rows = await prisma.firefliesSession.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, title: true, date: true, participants: true, organizerEmail: true },
+        });
+        matchingSessions = rows.map((s) => ({
+          id: s.id,
+          title: s.title,
+          date: s.date.getTime(),
+          // organizerEmail dentro de participants para que el detector de Sales lo vea
+          participants: s.organizerEmail
+            ? [...new Set([...s.participants, s.organizerEmail])]
+            : s.participants,
+        }));
+      }
+    } else {
+      // Resto de agentes (y handoff legacy sin proyecto): keyword/domain-search.
+      const dbSessions = await searchFirefliesFromDB(sessionKeywords, titleTerms, domainFilter);
+      if (dbSessions.length > 0) {
+        matchingSessions = dbSessions;
+      }
     }
 
     // Separar sesiones según el tipo de agente.
     let salesSessions: RawTranscript[];
     let csSessions: RawTranscript[];
 
-    if (isHandoffAgent) {
-      // Handoff: usa la clasificación híbrida (title-based + fallback Sales),
-      // últimos 90 días. NO se le pasan CS-only sessions — sin Sales en la
-      // sala y sin título de venta, esa sesión es post-handoff y confunde
-      // al agente sobre "qué prometió Ventas".
+    if (isHandoffAgent && bodyProjectId) {
+      // Handoff scopeado al proyecto: TODAS las sesiones del proyecto son el
+      // material (ya están declaradas vía SessionProject). Sin clasificador ni
+      // ventana de 90d — el vínculo explícito proyecto↔sesión ES el scope.
+      salesSessions = matchingSessions;
+      csSessions = [];
+    } else if (isHandoffAgent) {
+      // Handoff legacy sin proyecto: clasificación híbrida (title-based + Sales),
+      // últimos 90 días. NO se le pasan CS-only sessions — sin Sales en la sala
+      // y sin título de venta, esa sesión es post-handoff y confunde al agente
+      // sobre "qué prometió Ventas".
       salesSessions = matchingSessions.filter(
         (s) => s.date >= handoffCutoffMs && classifyForHandoff(s).include,
       );
@@ -879,20 +905,27 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     if (isHandoffAgent) handoffSourceSessionIds = topSales.map((s) => s.id);
 
     if (isHandoffAgent) {
+      const scopeLabel = bodyProjectId ? "sesiones del proyecto" : "clasificación 90d";
       console.log(
-        `[analyze handoff] Clasificación (${matchingSessions.length} matched → ${salesSessions.length} incluidas, últimos 90d):`,
+        `[analyze handoff] ${scopeLabel} (${matchingSessions.length} candidatas → ${salesSessions.length} incluidas → ${topSales.length} usadas):`,
       );
       for (const s of topSales) {
-        const cls = classifyForHandoff(s);
         const dateStr = new Date(s.date).toISOString().slice(0, 10);
-        console.log(`  ✓ [${dateStr}] "${s.title}" — ${cls.reason}`);
+        const reason = bodyProjectId ? "vinculada al proyecto" : classifyForHandoff(s).reason;
+        console.log(`  ✓ [${dateStr}] "${s.title}" — ${reason}`);
       }
+      // Excluidas = candidatas que NO terminaron usadas (por clasificador/90d o por el cap).
       const excluded = matchingSessions.filter(
-        (s) => !salesSessions.some((sl) => sl.id === s.id),
+        (s) => !topSales.some((t) => t.id === s.id),
       );
       for (const s of excluded.slice(0, 8)) {
         const dateStr = new Date(s.date).toISOString().slice(0, 10);
-        const reason = s.date < handoffCutoffMs
+        const inSales = salesSessions.some((sl) => sl.id === s.id);
+        const reason = inSales
+          ? "no usada (cap de 6)"
+          : bodyProjectId
+          ? "vinculada pero no usada"
+          : s.date < handoffCutoffMs
           ? "fuera de 90d"
           : classifyForHandoff(s).reason;
         console.log(`  ✗ [${dateStr}] "${s.title}" — ${reason}`);
