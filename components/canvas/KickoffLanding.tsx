@@ -229,6 +229,25 @@ function KickoffLandingView({
           <button onClick={() => clearError?.()} title="Cerrar" style={{ color: "#b91c1c", background: "transparent", border: "none", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
         </div>
       )}
+      {/* Revisión del agente — CHROME DE NEXUS (interno), NO parte del landing del
+          cliente. Barra sticky con estética de app (clara, marca Nexus) para que se lea
+          como un mensaje de la herramienta, no como contenido del kickoff. */}
+      {editable && draftCount > 0 && acceptAll && (
+        <div style={{ position: "sticky", top: 0, zIndex: 49, display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", background: "#eef2ff", borderBottom: "1px solid #c7d2fe", color: "#3730a3", fontSize: 13, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+            </svg>
+            Nexus
+          </span>
+          <span style={{ flex: 1 }}>
+            El agente generó {draftCount} {draftCount === 1 ? "bloque" : "bloques"} sin revisar — solo vos los ves.
+          </span>
+          <button onClick={acceptAll} className="btn-primary" style={{ padding: "6px 12px", fontSize: 12, flexShrink: 0 }}>
+            Aceptar todo
+          </button>
+        </div>
+      )}
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <section ref={heroRef} className="section-dark hero-backdrop" style={{ padding: "clamp(56px, 8vw, 96px) 24px clamp(48px, 6vw, 72px)" }}>
         <div style={{ maxWidth: 820, margin: "0 auto", textAlign: "center" }}>
@@ -264,16 +283,6 @@ function KickoffLandingView({
               <Stat value={String(totalWeeks)} unit="semanas" label="Duración total" />
               <Stat value={startLabel} label="Arranque" />
               <Stat value={String(phases.length)} unit={phases.length === 1 ? "fase" : "fases"} label="Hoja de ruta" />
-            </div>
-          )}
-          {editable && draftCount > 0 && acceptAll && (
-            <div className="reveal" style={{ marginTop: 30, display: "inline-flex", alignItems: "center", gap: 12, padding: "8px 14px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid var(--dark-border-strong)" }}>
-              <span style={{ color: "var(--dark-text-secondary)", fontSize: 13 }}>
-                {draftCount} {draftCount === 1 ? "bloque" : "bloques"} sin revisar del agente
-              </span>
-              <button onClick={acceptAll} className="btn-primary" style={{ padding: "6px 12px", fontSize: 12 }}>
-                Aceptar todo
-              </button>
             </div>
           )}
         </div>
