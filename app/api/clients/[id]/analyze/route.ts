@@ -295,7 +295,18 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   const bodySectionLabel: string | null = body?.sectionLabel ?? null;
   const bodyAgentId: string | null      = body?.agentId      ?? null;
   const sessionKeywords: string[] = Array.isArray(body?.sessionKeywords) ? body.sessionKeywords : [];
-  const bodyProjectId: string | null = body?.projectId ?? null;
+  let bodyProjectId: string | null = body?.projectId ?? null;
+  // El pop-up de Agentes (y el tab "Información del cliente") manda projectId con el
+  // SENTINEL "__strategy__", que NO es un id de Project real → FK violation en
+  // agentRun.create (AgentRun_projectId_fkey). Lo resolvemos al proyecto __strategy__
+  // real del cliente, o null si no existe (projectId es nullable).
+  if (bodyProjectId === "__strategy__") {
+    const strat = await prisma.project.findFirst({
+      where: { clientId, serviceType: "__strategy__" },
+      select: { id: true },
+    });
+    bodyProjectId = strat?.id ?? null;
+  }
   // Señal para confirmar en dev que corre el código nuevo y si llegó async (A2).
   console.log(`[analyze] POST agentId=${bodyAgentId ?? "—"} async=${body?.async === true} stage=${bodyStage} step=${bodyStep} project=${bodyProjectId ?? "—"}`);
 
