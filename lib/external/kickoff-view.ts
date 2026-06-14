@@ -64,6 +64,7 @@ export async function getPublishedKickoffForToken(
       id: true,
       key: true,
       label: true,
+      titleOverride: true,
       order: true,
       blocks: {
         where: { status: "CONFIRMED" },
@@ -91,6 +92,7 @@ export async function getPublishedKickoffForToken(
       id: s.id,
       key: s.key,
       label: s.label,
+      titleOverride: s.titleOverride,
       order: s.order,
       blocks: s.blocks.map((b) => ({
         id: b.id,

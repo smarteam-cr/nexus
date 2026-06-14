@@ -26,6 +26,8 @@ export interface SectionWithBlocks {
   id: string;
   key: string;
   label: string;
+  /** Título de cara al cliente editado por el CSE; null = título por defecto de la plantilla. */
+  titleOverride: string | null;
   order: number;
   layout: unknown;
   blocks: BlockData[];
@@ -206,6 +208,38 @@ export function useCanvasSections(projectId: string, canvasId: string) {
     [mutate, refetch],
   );
 
+  // Renombra el TÍTULO de cara al cliente de una sección (titleOverride). String vacío
+  // → vuelve al título por defecto de la plantilla. Optimista + refetch para el estado
+  // canónico. No usa el endpoint de blocks (es metadata de sección) → PATCH dedicado.
+  const renameSection = useCallback(
+    async (sectionId: string, title: string): Promise<boolean> => {
+      const t = title.trim();
+      // Optimista: refleja el cambio ya (el título es de respuesta inmediata al tipear).
+      setSections((prev) =>
+        prev.map((s) => (s.id === sectionId ? { ...s, titleOverride: t || null } : s)),
+      );
+      try {
+        const res = await fetch(`/api/projects/${projectId}/canvas-sections/${sectionId}`, {
+          method: "PATCH",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ titleOverride: t || null }),
+        });
+        if (!res.ok) {
+          setError("No se pudo guardar el título. Reintentá.");
+          refetch(); // revertir al estado del server
+          return false;
+        }
+        setError(null);
+        return true;
+      } catch {
+        setError("Error de conexión al guardar el título.");
+        refetch();
+        return false;
+      }
+    },
+    [projectId, refetch],
+  );
+
   const acceptAll = useCallback(async () => {
     const drafts = sections.flatMap((s) =>
       s.blocks.filter((b) => b.status === "DRAFT").map((b) => ({ sectionId: s.id, blockId: b.id })),
@@ -237,6 +271,7 @@ export function useCanvasSections(projectId: string, canvasId: string) {
     regenerateBlock,
     addBlock,
     restoreBlock,
+    renameSection,
     acceptAll,
   };
 }

@@ -392,6 +392,7 @@ model CanvasSection {
   canvas    ProjectCanvas @relation(fields: [canvasId], references: [id], onDelete: Cascade)
   key       String
   label     String
+  titleOverride String? // Título de cara al cliente editado por el CSE (landing Kickoff). null = título por defecto de la plantilla (SECTION_META).
   order     Int      @default(0)
   layout    Json?    // RGL layout: [{ i: blockId, x, y, w, h }]
   createdAt DateTime @default(now())

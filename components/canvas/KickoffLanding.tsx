@@ -46,12 +46,14 @@ function Accent({ children }: { children: ReactNode }) {
 
 /** Eyebrow + título (con palabra italic) por sección — presentacional, fijo.
  *  Las 6 secciones del canvas Kickoff son conocidas; fallback a section.label. */
-const SECTION_META: Record<string, { eyebrow: string; title: ReactNode }> = {
-  objetivos:      { eyebrow: "Lo que buscamos", title: <>Objetivos del <Accent>proyecto</Accent></> },
-  alcance:        { eyebrow: "El trabajo",      title: <>Alcance: qué <Accent>incluye</Accent></> },
-  tu_rol:         { eyebrow: "Tu parte",        title: <>Lo que necesitamos de tu <Accent>equipo</Accent></> },
-  metricas_exito: { eyebrow: "La medición",     title: <>Cómo mediremos el <Accent>éxito</Accent></> },
-  proximos_pasos: { eyebrow: "El arranque",     title: <><Accent>Próximos</Accent> pasos</> },
+// `title` = título styled por defecto (con palabra accent). `titleText` = la versión en
+// texto plano, que siembra el editor inline cuando el CSE personaliza el título.
+const SECTION_META: Record<string, { eyebrow: string; title: ReactNode; titleText: string }> = {
+  objetivos:      { eyebrow: "Lo que buscamos", title: <>Objetivos del <Accent>proyecto</Accent></>, titleText: "Objetivos del proyecto" },
+  alcance:        { eyebrow: "El trabajo",      title: <>Alcance: qué <Accent>incluye</Accent></>, titleText: "Alcance: qué incluye" },
+  tu_rol:         { eyebrow: "Tu parte",        title: <>Lo que necesitamos de tu <Accent>equipo</Accent></>, titleText: "Lo que necesitamos de tu equipo" },
+  metricas_exito: { eyebrow: "La medición",     title: <>Cómo mediremos el <Accent>éxito</Accent></>, titleText: "Cómo mediremos el éxito" },
+  proximos_pasos: { eyebrow: "El arranque",     title: <><Accent>Próximos</Accent> pasos</>, titleText: "Próximos pasos" },
 };
 
 /* ── Handlers del modo interno (todos opcionales: ausentes en modo externo) ──── */
@@ -64,6 +66,8 @@ interface LandingHandlers {
   acceptBlock?: (sectionId: string, blockId: string) => void;
   deleteBlock?: (sectionId: string, blockId: string) => void;
   addBlock?: (sectionId: string) => void;
+  /** Edita el título de cara al cliente de una sección (titleOverride). */
+  renameSection?: (sectionId: string, title: string) => void;
   acceptAll?: () => void;
 }
 
@@ -100,6 +104,7 @@ function KickoffLandingInternal({
     saveBlock,
     regenerateBlock,
     addBlock,
+    renameSection,
     acceptAll,
     error,
     clearError,
@@ -179,6 +184,7 @@ function KickoffLandingInternal({
       acceptBlock={acceptBlock}
       deleteBlock={deleteBlock}
       addBlock={addBlock}
+      renameSection={renameSection}
       acceptAll={acceptAll}
     />
   );
@@ -198,6 +204,7 @@ function KickoffLandingView({
   acceptBlock,
   deleteBlock,
   addBlock,
+  renameSection,
   acceptAll,
 }: {
   sections: KickoffSection[];
@@ -261,9 +268,16 @@ function KickoffLandingView({
             </div>
           )}
           <span className="eyebrow reveal">Kickoff del proyecto</span>
-          <h1 className="font-display display-italic display-tight reveal" data-stagger="1" style={{ fontSize: "clamp(34px, 5vw, 56px)", lineHeight: 1.06, color: "var(--dark-text)", marginTop: 16 }}>
-            ¡Arranquemos juntos!
-          </h1>
+          <SectionHeading
+            tag="h1"
+            editable={editable}
+            override={hero?.titleOverride}
+            defaultNode="¡Arranquemos juntos!"
+            defaultText="¡Arranquemos juntos!"
+            onSave={hero && renameSection ? (v) => renameSection(hero.id, v) : undefined}
+            className="font-display display-italic display-tight reveal"
+            style={{ fontSize: "clamp(34px, 5vw, 56px)", lineHeight: 1.06, color: "var(--dark-text)", marginTop: 16 }}
+          />
           {hero && hero.blocks.length > 0 && (
             <div className="reveal" data-stagger="2" style={{ marginTop: 18, maxWidth: 600, marginInline: "auto", fontSize: 17, display: "flex", flexDirection: "column", gap: editable ? 14 : 6 }}>
               {hero.blocks.map((b) => (
@@ -303,9 +317,16 @@ function KickoffLandingView({
             <section className={bg} style={{ padding: SECTION_PAD }}>
               <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
                 <span className="eyebrow reveal">{SECTION_META[section.key]?.eyebrow ?? "Sección"}</span>
-                <h2 className="font-display display-tight reveal" data-stagger="1" style={{ fontSize: "clamp(24px, 3.4vw, 34px)", color: "var(--text)", lineHeight: 1.15, marginTop: 8, marginBottom: 24 }}>
-                  {SECTION_META[section.key]?.title ?? section.label}
-                </h2>
+                <SectionHeading
+                  tag="h2"
+                  editable={editable}
+                  override={section.titleOverride}
+                  defaultNode={SECTION_META[section.key]?.title ?? section.label}
+                  defaultText={SECTION_META[section.key]?.titleText ?? section.label}
+                  onSave={renameSection ? (v) => renameSection(section.id, v) : undefined}
+                  className="font-display display-tight reveal"
+                  style={{ fontSize: "clamp(24px, 3.4vw, 34px)", color: "var(--text)", lineHeight: 1.15, marginTop: 8, marginBottom: 24 }}
+                />
                 <div className={`reveal${section.key === "tu_rol" ? " kl-panel" : ""}`} data-stagger="2" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                   {section.blocks.length === 0 && !editable && <p style={{ color: "var(--text-muted)", fontSize: 14 }}>—</p>}
                   {section.blocks.map((block) => (
@@ -425,6 +446,103 @@ function AddBlock({ onClick }: { onClick: () => void }) {
       </svg>
       Agregar bloque
     </button>
+  );
+}
+
+/** Título de sección editable inline (h1 del hero / h2 del cuerpo). Sin override →
+ *  título styled de la plantilla; con override → texto plano del CSE. Editar solo en
+ *  modo interno (onSave presente). En vista cliente es un heading normal. */
+function SectionHeading({
+  tag: Tag,
+  editable,
+  override,
+  defaultNode,
+  defaultText,
+  onSave,
+  className,
+  style,
+}: {
+  tag: "h1" | "h2";
+  editable: boolean;
+  override?: string | null;
+  defaultNode: ReactNode;
+  defaultText: string;
+  onSave?: (v: string) => void;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const [editing, setEditing] = useState(false);
+  const canEdit = editable && !!onSave;
+
+  if (canEdit && editing) {
+    // El input hereda la tipografía del heading (mismo className), menos `reveal`
+    // (su animación de opacity dejaría el input invisible al remontar en edición).
+    const inputClassName = (className ?? "").split(" ").filter((c) => c !== "reveal").join(" ");
+    return (
+      <InlineTitleInput
+        initial={override || defaultText}
+        className={inputClassName}
+        style={style}
+        onSave={(v) => { onSave!(v); setEditing(false); }}
+        onCancel={() => setEditing(false)}
+      />
+    );
+  }
+
+  return (
+    <Tag
+      className={className}
+      data-stagger="1"
+      style={canEdit ? { ...style, cursor: "text" } : style}
+      onClick={canEdit ? () => setEditing(true) : undefined}
+      title={canEdit ? "Clic para editar el título" : undefined}
+    >
+      {override ? override : defaultNode}
+    </Tag>
+  );
+}
+
+/** Input inline para editar un título; guarda al Enter o al perder foco, cancela con Esc. */
+function InlineTitleInput({
+  initial,
+  onSave,
+  onCancel,
+  className,
+  style,
+}: {
+  initial: string;
+  onSave: (v: string) => void;
+  onCancel: () => void;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const [v, setV] = useState(initial);
+  const ref = useRef<HTMLInputElement>(null);
+  const done = useRef(false);
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+  // commit una sola vez (Enter dispara onSave y luego onBlur volvería a dispararlo).
+  const commit = (save: boolean) => {
+    if (done.current) return;
+    done.current = true;
+    if (save) onSave(v.trim());
+    else onCancel();
+  };
+  return (
+    <input
+      ref={ref}
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={() => commit(true)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") { e.preventDefault(); commit(true); }
+        if (e.key === "Escape") { e.preventDefault(); commit(false); }
+      }}
+      className={className}
+      style={{ ...style, width: "100%", maxWidth: "100%", textAlign: "inherit", background: "transparent", border: "1px dashed currentColor", borderRadius: 8, padding: "4px 10px", outline: "none" }}
+    />
   );
 }
 

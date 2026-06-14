@@ -39,6 +39,8 @@ export interface KickoffSection {
   id: string;
   key: string;
   label: string;
+  /** Título de cara al cliente editado por el CSE; null/ausente = título por defecto de la plantilla. */
+  titleOverride?: string | null;
   order: number;
   blocks: RenderableBlock[];
 }
