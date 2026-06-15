@@ -62,6 +62,8 @@ export interface GanttPhase {
   durationWeeks: number;
   sessionCount: number | null;
   activityType: string | null;
+  /** D.2 — avance a nivel fase: DONE = completada, IN_PROGRESS = el "hoy". */
+  status?: GanttTaskStatus;
   tasks: GanttTask[];
 }
 
@@ -250,6 +252,16 @@ export default function TimelineGantt({
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                         </svg>
                         <span className="truncate">{p.name}</span>
+                        {p.status === "DONE" && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-emerald-300 bg-emerald-500/15 border-emerald-500/50" title="Fase completada">
+                            ✓ Completada
+                          </span>
+                        )}
+                        {p.status === "IN_PROGRESS" && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-blue-300 bg-blue-500/15 border-blue-500/50" title="Fase en curso (hoy)">
+                            ● En curso
+                          </span>
+                        )}
                         {meta && (
                           <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${meta.chip}`}>
                             {meta.label}

@@ -52,6 +52,7 @@ interface Phase {
   notes: string | null;
   activityType: string | null;
   source?: string;
+  status?: GanttTaskStatus; // D.2 — avance a nivel fase
   tasks: TaskDraft[];
   _key: string;
 }
@@ -99,7 +100,17 @@ interface ServerPhase {
   notes: string | null;
   activityType: string | null;
   source: string;
+  status: GanttTaskStatus;
   tasks: ServerTask[];
+}
+
+// D.2 — borrador de avance que propone el agente (el CSE confirma → status real).
+interface PendingProgress {
+  currentPhaseId: string | null;
+  asOfSessionId: string | null;
+  reasoning: string;
+  phases: Array<{ id: string; done: boolean }>;
+  tasks: Array<{ id: string; done: boolean }>;
 }
 
 export default function CronogramaCanvas({ projectId, clientId }: { projectId: string; clientId: string }) {
@@ -120,6 +131,11 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [assistWarnings, setAssistWarnings] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
+  // ── Avance detectado por el agente (D.2) — borrador que el CSE confirma ──
+  const [pendingProgress, setPendingProgress] = useState<PendingProgress | null>(null);
+  const [progressPhaseSel, setProgressPhaseSel] = useState<Set<string>>(new Set());
+  const [progressTaskSel, setProgressTaskSel] = useState<Set<string>>(new Set());
+  const [applyingProgress, setApplyingProgress] = useState(false);
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
   const keyCounter = useRef(0);
   const nextKey = () => `new-${keyCounter.current++}`;
@@ -134,6 +150,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
       notes: p.notes,
       activityType: p.activityType,
       source: p.source,
+      status: p.status,
       tasks: (p.tasks ?? []).map((t) => ({
         id: t.id,
         title: t.title,
@@ -162,10 +179,17 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
         setProposal((prev) =>
           prev ?? (data.pendingProposal ? (data.pendingProposal as Proposal) : null),
         );
+        // D.2 — borrador de avance: lo expone el GET. Inicializa la selección con
+        // TODO lo propuesto pre-marcado (el CSE puede destildar antes de aplicar).
+        const pp = data.pendingProgress ? (data.pendingProgress as PendingProgress) : null;
+        setPendingProgress(pp);
+        setProgressPhaseSel(new Set((pp?.phases ?? []).map((p) => p.id)));
+        setProgressTaskSel(new Set((pp?.tasks ?? []).map((t) => t.id)));
       } else {
         setPhases([]);
         setAnchor("");
         setDetailConfirmedAt(null);
+        setPendingProgress(null);
       }
       setError(null);
     } catch {
@@ -467,6 +491,50 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
     setAssistWarnings([]);
   };
 
+  // ── Avance (D.2): aplicar lo que el CSE confirmó / descartar el borrador ──────
+  const applyProgress = async () => {
+    if (!pendingProgress) return;
+    setApplyingProgress(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/progress/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phaseIds: [...progressPhaseSel],
+          taskIds: [...progressTaskSel],
+          currentPhaseId: pendingProgress.currentPhaseId,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d?.error ?? "No se pudo aplicar el avance.");
+      } else {
+        setPendingProgress(null);
+        await load();
+      }
+    } catch {
+      setError("Error de conexión al aplicar el avance.");
+    }
+    setApplyingProgress(false);
+  };
+
+  const discardProgress = async () => {
+    try {
+      await fetch(`/api/projects/${projectId}/timeline/progress`, { method: "DELETE" });
+    } catch {
+      /* limpiar local igual */
+    }
+    setPendingProgress(null);
+  };
+
+  const toggleSet = (s: Set<string>, id: string): Set<string> => {
+    const n = new Set(s);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
+  };
+
   // ── Confirmación del detalle (gate de la vista cliente) ───────────────────────
   const setDetailConfirmed = async (confirm: boolean) => {
     setConfirmBusy(true);
@@ -542,6 +610,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
     durationWeeks: p.durationWeeks,
     sessionCount: p.sessionCount,
     activityType: p.activityType,
+    status: p.status,
     tasks: p.tasks.map((t) => ({
       key: t._key,
       id: t.id,
@@ -763,6 +832,105 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
           </p>
         </div>
       )}
+
+      {/* ── Banner de AVANCE detectado por el agente (D.2) — propone, el CSE confirma ── */}
+      {pendingProgress &&
+        (pendingProgress.phases.length > 0 ||
+          pendingProgress.tasks.length > 0 ||
+          !!pendingProgress.currentPhaseId) && (
+          <div className="rounded-2xl border border-emerald-700/40 bg-emerald-900/20 px-4 py-3 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
+                Avance detectado por el agente — revisá y confirmá
+              </span>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={applyProgress}
+                  disabled={applyingProgress}
+                  className="text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3.5 py-1.5 rounded-lg transition-colors"
+                >
+                  {applyingProgress ? "Aplicando…" : "Aplicar avance"}
+                </button>
+                <button
+                  onClick={discardProgress}
+                  disabled={applyingProgress}
+                  className="text-xs font-medium text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
+                >
+                  Descartar
+                </button>
+              </div>
+            </div>
+
+            {pendingProgress.reasoning && (
+              <p className="text-[11px] text-gray-400 leading-relaxed">{pendingProgress.reasoning}</p>
+            )}
+
+            {pendingProgress.currentPhaseId && (
+              <p className="text-[11px] text-blue-300">
+                Hoy:{" "}
+                <span className="font-semibold">
+                  {phases.find((p) => p.id === pendingProgress.currentPhaseId)?.name ?? "—"}
+                </span>
+              </p>
+            )}
+
+            {pendingProgress.phases.length > 0 && (
+              <div className="space-y-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                  Fases completadas
+                </span>
+                {pendingProgress.phases.map((ph) => {
+                  const name = phases.find((p) => p.id === ph.id)?.name ?? "(fase)";
+                  const checked = progressPhaseSel.has(ph.id);
+                  return (
+                    <label key={ph.id} className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setProgressPhaseSel((s) => toggleSet(s, ph.id))}
+                        className="accent-emerald-500"
+                      />
+                      <span className={checked ? "" : "line-through text-gray-600"}>{name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            {pendingProgress.tasks.length > 0 && (
+              <div className="space-y-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                  Tareas hechas
+                </span>
+                {pendingProgress.tasks.map((tk) => {
+                  let title = "(tarea)";
+                  let phaseName = "";
+                  for (const p of phases) {
+                    const t = p.tasks.find((t) => t.id === tk.id);
+                    if (t) { title = t.title; phaseName = p.name; break; }
+                  }
+                  const checked = progressTaskSel.has(tk.id);
+                  return (
+                    <label key={tk.id} className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setProgressTaskSel((s) => toggleSet(s, tk.id))}
+                        className="accent-emerald-500"
+                      />
+                      <span className={checked ? "" : "line-through text-gray-600"}>{title}</span>
+                      {phaseName && <span className="text-gray-600">· {phaseName}</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            <p className="text-[11px] text-gray-500">
+              Al aplicar, vos confirmás el avance (se marca como hecho). El agente solo lo propone — destildá lo que no corresponda.
+            </p>
+          </div>
+        )}
 
       {/* ── Error ── */}
       {error && (
