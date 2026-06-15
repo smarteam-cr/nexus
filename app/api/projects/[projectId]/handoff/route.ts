@@ -53,8 +53,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const projectSessionCount = await prisma.sessionProject.count({ where: { projectId } });
 
+  // Id del agente de handoff resuelto por grupo (no hardcodeado) — el front lo usa
+  // para disparar /analyze sin embeber el cuid.
+  const handoffAgent = await prisma.agent.findFirst({
+    where: { agentGroup: "handoff" },
+    select: { id: true },
+  });
+
   return NextResponse.json({
     handoffId: project.handoff?.id ?? null,
+    agentId: handoffAgent?.id ?? null,
     canvasId,
     generated: blockCount > 0,
     blockCount,

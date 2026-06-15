@@ -13,10 +13,10 @@ import { useState, useEffect, useCallback } from "react";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import { pollAgentRun } from "@/lib/clients/poll-agent-run";
 
-const HANDOFF_AGENT_ID = "cmmla1g1x00005wijix3qnr7u";
-
 interface HandoffStatus {
   handoffId: string | null;
+  /** Id del agente de handoff, resuelto por grupo en el GET (no hardcodeado). */
+  agentId: string | null;
   canvasId: string | null;
   generated: boolean;
   blockCount: number;
@@ -48,6 +48,8 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
 
   const handleGenerate = useCallback(async () => {
+    const agentId = status?.agentId;
+    if (!agentId) { setError("No se encontró el agente de handoff."); return; }
     setGenerating(true);
     setError(null);
     try {
@@ -61,7 +63,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
       const res = await fetch(`/api/clients/${clientId}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId: HANDOFF_AGENT_ID, projectId, async: true }),
+        body: JSON.stringify({ agentId, projectId, async: true }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -89,7 +91,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     } finally {
       setGenerating(false);
     }
-  }, [projectId, clientId, fetchStatus]);
+  }, [projectId, clientId, fetchStatus, status?.agentId]);
 
   if (loading) return <div className="h-14 rounded-2xl skeleton-shimmer" />;
   if (!status) return null;
