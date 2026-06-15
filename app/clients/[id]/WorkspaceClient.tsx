@@ -125,7 +125,9 @@ function ProjectSection({
   useEffect(() => {
     if (tabRestoredRef.current) return;
     tabRestoredRef.current = true;
-    const tab = searchParams.get("tab");
+    // Leemos de window.location (no de useSearchParams): sin un <Suspense> boundary,
+    // useSearchParams puede venir vacío en el primer render → el restore no dispararía.
+    const tab = new URLSearchParams(window.location.search).get("tab");
     if (!tab) return;
     const valid =
       tab === STRATEGY_TAB_ID ||
