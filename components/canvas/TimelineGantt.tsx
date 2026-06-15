@@ -171,9 +171,9 @@ export default function TimelineGantt({
               Arranque:
               <input
                 type="date"
-                value={anchor}
+                value={anchor ?? ""}
                 onChange={(e) => e.target.value && onSetAnchor(e.target.value)}
-                title="Cambiar la fecha de arranque (guarda al instante)"
+                title="Cambiar la fecha de arranque (se guarda con «Guardar cronograma»)"
                 className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500"
               />
             </label>
@@ -182,6 +182,7 @@ export default function TimelineGantt({
               Fijá la fecha de arranque para ver fechas reales:
               <input
                 type="date"
+                value={anchor ?? ""}
                 onChange={(e) => e.target.value && onSetAnchor(e.target.value)}
                 className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500"
               />

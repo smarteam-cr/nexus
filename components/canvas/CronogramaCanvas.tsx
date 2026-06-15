@@ -325,10 +325,11 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
     setSaving(false);
   };
 
-  // Fijar fecha de arranque directamente desde el Gantt (guarda al toque)
+  // Fijar/cambiar la fecha de arranque desde el Gantt: actualiza el preview (fechas
+  // reales) y marca dirty — se PERSISTE con "Guardar cronograma", no al instante.
   const setAnchorFromGantt = (ymd: string) => {
     setAnchor(ymd);
-    void save(ymd);
+    setDirty(true);
   };
 
   // Crear la PRIMERA fase desde el empty state (persiste al toque). Las fases
