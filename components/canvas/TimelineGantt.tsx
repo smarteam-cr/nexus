@@ -209,8 +209,8 @@ export default function TimelineGantt({
               return (
                 <div
                   key={w}
-                  className={`text-center leading-tight rounded py-0.5 ${
-                    isCur ? "bg-blue-500/20 ring-1 ring-inset ring-blue-500/50 text-blue-200 font-semibold" : "text-gray-500"
+                  className={`text-center leading-tight py-0.5 ${
+                    isCur ? "bg-blue-500/15 text-blue-200 font-semibold" : "text-gray-500"
                   }`}
                 >
                   <div className="text-[10px] font-bold">S{w + 1}</div>
@@ -232,14 +232,7 @@ export default function TimelineGantt({
               >
                 <div />
                 {Array.from({ length: total }).map((_, w) => (
-                  <div
-                    key={w}
-                    className={
-                      w === curWeek
-                        ? "rounded-md bg-blue-500/10 ring-1 ring-inset ring-blue-500/40"
-                        : ""
-                    }
-                  />
+                  <div key={w} className={w === curWeek ? "bg-blue-500/15" : ""} />
                 ))}
               </div>
             )}
