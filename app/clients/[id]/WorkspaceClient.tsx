@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useCallback } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
 import { invalidateGps } from "@/lib/clients/gps-cache";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
@@ -100,6 +100,40 @@ function ProjectSection({
   strategyCanvasId: string;
 }) {
   const { activeProjectId, setActiveProjectId } = useWorkspace();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  // Persistencia del tab activo en la URL (?tab=) — el canvas ya usa ?canvas=. Así
+  // al recargar se restaura el proyecto y su canvas. selectTab escribe ?tab y, si
+  // se cambia de proyecto, limpia ?canvas (no arrastrar el canvas del anterior).
+  const selectTab = useCallback(
+    (id: string) => {
+      const changingProject = id !== activeProjectId;
+      setActiveProjectId(id);
+      const params = new URLSearchParams(Array.from(searchParams.entries()));
+      params.set("tab", id);
+      if (changingProject) params.delete("canvas");
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [activeProjectId, searchParams, pathname, router, setActiveProjectId],
+  );
+
+  // Al montar, restaurar el tab desde ?tab= (override del default del server en reload).
+  // Una sola pasada; si no hay ?tab o es inválido, queda el default del server.
+  const tabRestoredRef = useRef(false);
+  useEffect(() => {
+    if (tabRestoredRef.current) return;
+    tabRestoredRef.current = true;
+    const tab = searchParams.get("tab");
+    if (!tab) return;
+    const valid =
+      tab === STRATEGY_TAB_ID ||
+      tab === PROCESOS_TAB_ID ||
+      projects.some((p) => p.id === tab);
+    if (valid && tab !== activeProjectId) setActiveProjectId(tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isStrategy = activeProjectId === STRATEGY_TAB_ID;
   const isProcesos = activeProjectId === PROCESOS_TAB_ID;
@@ -114,7 +148,7 @@ function ProjectSection({
           return (
             <button
               key={p.id}
-              onClick={() => setActiveProjectId(p.id)}
+              onClick={() => selectTab(p.id)}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 isActive
                   ? "border-brand text-white"
@@ -129,7 +163,7 @@ function ProjectSection({
         {/* Procesos — pestaña top-level del cliente. Muestra la sección "procesos"
             del canvas de Información del cliente (mismo storage, superficie dedicada). */}
         <button
-          onClick={() => setActiveProjectId(PROCESOS_TAB_ID)}
+          onClick={() => selectTab(PROCESOS_TAB_ID)}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
             isProcesos
               ? "border-brand text-white"
@@ -146,7 +180,7 @@ function ProjectSection({
             el Project con serviceType=__strategy__ (mismo storage; cambia el
             label visible y el contenido del panel). */}
         <button
-          onClick={() => setActiveProjectId(STRATEGY_TAB_ID)}
+          onClick={() => selectTab(STRATEGY_TAB_ID)}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
             isStrategy
               ? "border-brand text-white"
