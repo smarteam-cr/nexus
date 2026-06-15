@@ -57,6 +57,15 @@ interface TimelineTaskResponse {
   source: TimelinePhaseSource;
 }
 
+// D.2 — borrador de avance que propone el agente (no es status real; el CSE confirma).
+export interface PendingProgress {
+  currentPhaseId: string | null;
+  asOfSessionId: string | null;
+  reasoning: string;
+  phases: Array<{ id: string; done: boolean }>;
+  tasks: Array<{ id: string; done: boolean }>;
+}
+
 interface TimelineResponse {
   exists: true;
   anchorStartDate: string | null;
@@ -71,6 +80,9 @@ interface TimelineResponse {
    *  muestra como vista previa aplicable. Se limpia al aplicar (PUT) o descartar (DELETE). */
   pendingProposal: PutBody | null;
   pendingProposalRunId: string | null;
+  // D.2 — borrador de avance (separado de pendingProposal; no es status real).
+  pendingProgress: PendingProgress | null;
+  pendingProgressRunId: string | null;
   phases: Array<{
     id: string;
     name: string;
@@ -80,6 +92,7 @@ interface TimelineResponse {
     notes: string | null;
     activityType: TimelineActivityType | null;
     source: TimelinePhaseSource;
+    status: TimelineTaskStatus;
     tasks: TimelineTaskResponse[];
   }>;
 }
@@ -94,6 +107,8 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
       detailConfirmedAt: true,
       pendingProposal: true,
       pendingProposalRunId: true,
+      pendingProgress: true,
+      pendingProgressRunId: true,
       project: { select: { timelinePublishedAt: true } },
       phases: {
         orderBy: { order: "asc" },
@@ -106,6 +121,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
           notes: true,
           activityType: true,
           source: true,
+          status: true,
           tasks: {
             orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
             select: {
@@ -133,6 +149,8 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     timelinePublishedAt: tl.project.timelinePublishedAt?.toISOString() ?? null,
     pendingProposal: (tl.pendingProposal as PutBody | null) ?? null,
     pendingProposalRunId: tl.pendingProposalRunId,
+    pendingProgress: (tl.pendingProgress as PendingProgress | null) ?? null,
+    pendingProgressRunId: tl.pendingProgressRunId,
     phases: tl.phases,
   };
 }

@@ -319,6 +319,22 @@ export async function postProcessSession(
     invalidateProjectHeat(project.id);
   }
 
+  // D.2 — Cronograma vivo: tras la sesión nueva, regenerar el BORRADOR de avance
+  // del cronograma (la función no toca status; el CSE confirma). Best-effort: si
+  // falla, NO tumba el post-process. Sólo corre si el proyecto tiene detalle
+  // (lo verifica adentro y devuelve skipped si no).
+  if (project) {
+    try {
+      const { regenerateTimelineProgress } = await import("@/lib/timeline/regenerate-progress");
+      const r = await regenerateTimelineProgress(project.id, { asOfSessionId: sessionId });
+      if (r.status === "ok") {
+        console.log(`[post-session] ✓ avance de cronograma propuesto (${r.phasesDone} fases, ${r.tasksDone} tareas)`);
+      }
+    } catch (e) {
+      console.error(`[post-session] avance de cronograma falló (no bloqueante):`, e instanceof Error ? e.message : e);
+    }
+  }
+
   console.log(
     `[post-session] ✓ "${session.title}" (cliente=${client.name}) — minuta DRAFT + ${created} action items`,
   );
