@@ -435,6 +435,26 @@ html.light .skeleton-shimmer {
   animation: shimmer 1.6s ease-in-out infinite;
 }
 
+/* ── Pulso "semana actual" del cronograma (header + barra, idéntico) ──────────── */
+/* Anillo azul fijo (capa 1) + glow que irradia y se desvanece (capa 2). No usa
+   opacity (el contenido no parpadea) y es self-contained (no depende del ring de
+   Tailwind, que también usa box-shadow). Se aplica igual a la celda del header y al
+   segmento de la barra para que pulsen iguales. */
+@keyframes timeline-now {
+  0%   { box-shadow: 0 0 0 1.5px rgba(96, 165, 250, 0.9), 0 0 0 0 rgba(96, 165, 250, 0.5); }
+  70%  { box-shadow: 0 0 0 1.5px rgba(96, 165, 250, 0.9), 0 0 0 6px rgba(96, 165, 250, 0); }
+  100% { box-shadow: 0 0 0 1.5px rgba(96, 165, 250, 0.9), 0 0 0 0 rgba(96, 165, 250, 0); }
+}
+.timeline-now-pulse {
+  animation: timeline-now 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .timeline-now-pulse {
+    animation: none;
+    box-shadow: 0 0 0 1.5px rgba(96, 165, 250, 0.9);
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Markdown renderer para Base de conocimiento (tema oscuro)
    ───────────────────────────────────────────────────────────────────────── */

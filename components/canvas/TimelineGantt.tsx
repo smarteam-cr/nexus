@@ -210,7 +210,7 @@ export default function TimelineGantt({
                 <div
                   key={w}
                   className={`text-center leading-tight rounded py-0.5 ${
-                    isCur ? "bg-blue-900/50 ring-1 ring-blue-500/60 text-blue-300" : "text-gray-500"
+                    isCur ? "bg-blue-900/50 text-blue-300 timeline-now-pulse" : "text-gray-500"
                   }`}
                 >
                   <div className="text-[10px] font-bold">S{w + 1}</div>
@@ -306,7 +306,7 @@ export default function TimelineGantt({
                           key={w}
                           className={`h-3 rounded transition-all ${meta?.seg ?? NEUTRAL_SEG} ${
                             allDone || isPast ? "opacity-35" : ""
-                          } ${isCur ? "ring-2 ring-blue-400 animate-pulse scale-y-125" : ""} ${
+                          } ${isCur ? "timeline-now-pulse" : ""} ${
                             weekOverdue && !isCur ? "ring-1 ring-red-500/80" : ""
                           }`}
                           title={`S${w + 1}${weekTasks.length ? ` · ${weekTasks.length} tareas` : ""}`}
