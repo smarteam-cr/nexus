@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { getStageSteps, STAGE_LABELS } from "@/lib/steps";
-import { getSystemHubspotClient } from "@/lib/hubspot/client";
+import { getProjectStage } from "@/lib/hubspot/stage";
 import { normalize, extractTitleTerms } from "@/lib/utils/matching";
 import { enrichClient } from "@/lib/matching/enrichment";
 import { sessionMatchesClient } from "@/lib/matching/cascade";
@@ -14,55 +14,6 @@ interface PendingItem {
   done: boolean;
   source?: string;
   addedAt?: string;
-}
-
-// Slugs del objeto Proyectos en HubSpot (mismos que usa sync-projects)
-const PROJECT_SLUGS = ["projects", "PROJECT", "0-18", "0-49"];
-
-// Resolve HubSpot pipeline stage ID → human-readable label
-async function fetchHubspotStageLabel(serviceId: string): Promise<string | null> {
-  try {
-    const hs = await getSystemHubspotClient();
-
-    let pipelineId: string | null = null;
-    let stageId: string | null = null;
-    let workingSlug: string | null = null;
-
-    for (const slug of PROJECT_SLUGS) {
-      try {
-        const res = await hs.apiRequest({
-          method: "GET",
-          path: `/crm/v3/objects/${slug}/${serviceId}?properties=hs_pipeline,hs_pipeline_stage`,
-        });
-        const data = (await res.json()) as {
-          id?: string;
-          properties?: { hs_pipeline?: string; hs_pipeline_stage?: string };
-          status?: string;
-        };
-        if (data.status === "error" || !data.id) continue;
-        pipelineId = data.properties?.hs_pipeline ?? null;
-        stageId = data.properties?.hs_pipeline_stage ?? null;
-        workingSlug = slug;
-        break;
-      } catch {
-        continue;
-      }
-    }
-
-    if (!pipelineId || !stageId || !workingSlug) return null;
-
-    const pipelineRes = await hs.apiRequest({
-      method: "GET",
-      path: `/crm/v3/pipelines/${workingSlug}/${pipelineId}/stages`,
-    });
-    const pipelineData = (await pipelineRes.json()) as {
-      results?: Array<{ id: string; label: string }>;
-    };
-    const stage = pipelineData.results?.find((s) => s.id === stageId);
-    return stage?.label ?? null;
-  } catch {
-    return null;
-  }
 }
 
 // Buscar sesiones del cliente (Google Meet + Fireflies legacy) y devolver
@@ -224,8 +175,8 @@ export async function GET(
   // Estado actual (HubSpot first, fallback a stage/step internos)
   let currentState: string;
   if (project.hubspotServiceId) {
-    const hsLabel = await fetchHubspotStageLabel(project.hubspotServiceId);
-    currentState = hsLabel ?? "Sin etapa";
+    const stage = await getProjectStage(project.hubspotServiceId);
+    currentState = stage?.label ?? "Sin etapa";
   } else {
     const stageSteps = getStageSteps(project.serviceType);
     const stageLabel = STAGE_LABELS[project.currentStage] ?? `Etapa ${project.currentStage}`;

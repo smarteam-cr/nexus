@@ -49,6 +49,7 @@ const PROJECT_PROPERTIES = [
   "hubspot_owner_id",
   "hs_createdate",
   "hs_pipeline",
+  "hs_pipeline_stage",    // D.2: etapa actual del pipeline de CS (ancla del cronograma vivo)
   "cls_encargado",        // propiedad custom (si existe en el portal)
 ];
 
@@ -62,6 +63,8 @@ const READ_SLUGS = ["projects", "PROJECT", "0-18", "0-49"];
 // Cache en memoria por proceso para evitar fetches repetidos durante un sync
 const ownerCache = new Map<string, { name: string | null; email: string | null }>();
 const pipelineNameCache = new Map<string, string | null>();
+// D.2 — cache de las etapas de un pipeline (slug:pipelineId → Map<stageId,label>).
+const pipelineStagesCache = new Map<string, Map<string, string>>();
 
 async function resolveOwner(
   hs: Client,
@@ -112,6 +115,34 @@ async function resolvePipelineName(
     pipelineNameCache.set(cacheKey, null);
     return null;
   }
+}
+
+// D.2 — resuelve el label legible de una etapa (hs_pipeline_stage) del pipeline.
+// Cachea TODAS las etapas del pipeline en una sola llamada (slug:pipelineId).
+async function resolvePipelineStageLabel(
+  hs: Client,
+  pipelineId: string | null | undefined,
+  stageId: string | null | undefined,
+  workingSlug: string,
+): Promise<string | null> {
+  if (!pipelineId || !stageId) return null;
+  const cacheKey = `${workingSlug}:${pipelineId}`;
+  let stages = pipelineStagesCache.get(cacheKey);
+  if (!stages) {
+    stages = new Map<string, string>();
+    try {
+      const res = await hs.apiRequest({
+        method: "GET",
+        path: `/crm/v3/pipelines/${workingSlug}/${pipelineId}/stages`,
+      });
+      const data = (await res.json()) as { results?: Array<{ id: string; label: string }> };
+      for (const s of data.results ?? []) stages.set(s.id, s.label);
+    } catch {
+      // cache vacío → no reintenta este pipeline en la corrida
+    }
+    pipelineStagesCache.set(cacheKey, stages);
+  }
+  return stages.get(stageId) ?? null;
 }
 
 // ── Sync principal ───────────────────────────────────────────────────────────
@@ -459,6 +490,10 @@ export async function syncProjectsForClient(clientId: string): Promise<SyncResul
     const readSlugForPipeline = workingAssocSlug ?? "projects";
     const pipelineName = await resolvePipelineName(hsClient, pipelineId, readSlugForPipeline);
 
+    // D.2 — etapa actual del pipeline de CS (ancla del cronograma vivo)
+    const stageId = (props.hs_pipeline_stage ?? "").trim() || null;
+    const stageLabel = await resolvePipelineStageLabel(hsClient, pipelineId, stageId, readSlugForPipeline);
+
     // ── Parsear fecha de creación ──────────────────────────────────────────
     const createdAtRaw = (props.hs_createdate ?? "").trim();
     const hubCreatedAt = createdAtRaw ? new Date(createdAtRaw) : null;
@@ -486,6 +521,9 @@ export async function syncProjectsForClient(clientId: string): Promise<SyncResul
           hubspotOwnerEmail:   ownerEmail,
           hubspotCreatedAt:    hubCreatedAtValid,
           hubspotPipelineName: pipelineName,
+          hubspotPipelineStageId:    stageId,
+          hubspotPipelineStageLabel: stageLabel,
+          hubspotStageSyncedAt:      stageId ? new Date() : null,
         },
       });
       result.updated++;
@@ -503,6 +541,9 @@ export async function syncProjectsForClient(clientId: string): Promise<SyncResul
           hubspotOwnerEmail:   ownerEmail,
           hubspotCreatedAt:    hubCreatedAtValid,
           hubspotPipelineName: pipelineName,
+          hubspotPipelineStageId:    stageId,
+          hubspotPipelineStageLabel: stageLabel,
+          hubspotStageSyncedAt:      stageId ? new Date() : null,
           status: "active",
         },
       });

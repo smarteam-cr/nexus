@@ -194,6 +194,13 @@ model Project {
   hubspotCreatedAt    DateTime? // hs_createdate del servicio en HubSpot
   hubspotPipelineName String?   // Nombre del pipeline resuelto desde hs_pipeline
 
+  // D.2 — etapa actual del pipeline de Customer Success (híbrido: materializada acá
+  // por sync-projects y revalidada en vivo al disparar la regeneración del cronograma).
+  // El label es lo que el agente de avance razona (ancla #1); el id permite comparar.
+  hubspotPipelineStageLabel String?   // label legible de hs_pipeline_stage (p.ej. "Onboarding")
+  hubspotPipelineStageId    String?   // id de la etapa (hs_pipeline_stage) para comparar/revalidar
+  hubspotStageSyncedAt      DateTime? // última vez que se materializó/revalidó la etapa
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -269,6 +276,13 @@ model ProjectTimeline {
   // la muestra como vista previa aplicable. null = sin propuesta pendiente. Se limpia al aplicar/descartar.
   pendingProposal       Json?
   pendingProposalRunId  String?         // AgentRun del que salió la propuesta pendiente (trazabilidad)
+  // D.2 — BORRADOR DE AVANCE (hermano de pendingProposal; NO se mezcla). El agente de
+  // avance detecta qué fases/tareas están hechas y dónde cae el "hoy", y lo guarda acá
+  // SIN tocar status (eso lo confirma el CSE). Shape: { currentPhaseId, asOfSessionId,
+  // reasoning, phases:[{id,done}], tasks:[{id,done}] }. Se reemplaza en cada corrida;
+  // se limpia al aplicar (timeline/progress/apply) o descartar (DELETE timeline/progress).
+  pendingProgress       Json?
+  pendingProgressRunId  String?         // AgentRun del que salió el borrador de avance (trazabilidad)
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
 
@@ -288,6 +302,10 @@ model TimelinePhase {
   notes         String?               @db.Text          // texto libre opcional (contexto editable)
   activityType  TimelineActivityType?                   // D.1: tipo de actividad (nullable — fases pre-D.1 quedan sin tipo, render neutro)
   source        TimelinePhaseSource   @default(AGENT)
+  // D.2 — avance a nivel fase (reusa el enum de tarea). DONE = fase completada;
+  // IN_PROGRESS = la fase en curso (el "hoy"); PENDING = por delante. Lo escribe SOLO
+  // el CSE (mismo invariante que TimelineTask.status); el agente lo PROPONE en pendingProgress.
+  status        TimelineTaskStatus    @default(PENDING)
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
 
