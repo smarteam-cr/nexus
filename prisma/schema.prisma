@@ -393,6 +393,10 @@ model CanvasSection {
   key       String
   label     String
   titleOverride String? // Título de cara al cliente editado por el CSE (landing Kickoff). null = título por defecto de la plantilla (SECTION_META).
+  eyebrowOverride String? // Eyebrow (título pequeño) editado por el CSE. null = eyebrow por defecto de la plantilla.
+  // Deshacer de 1 nivel (persistido): valor inmediatamente anterior de title/eyebrow. null = nada que deshacer.
+  previousTitleOverride   String?
+  previousEyebrowOverride String?
   order     Int      @default(0)
   layout    Json?    // RGL layout: [{ i: blockId, x, y, w, h }]
   createdAt DateTime @default(now())
@@ -411,6 +415,9 @@ model CanvasBlock {
   blockType  BlockType   @default(TEXT)
   content    String?     @db.Text
   data       Json?
+  // Deshacer de 1 nivel (persistido): contenido/data inmediatamente anterior. null = nada que deshacer.
+  previousContent String? @db.Text
+  previousData    Json?
   order      Int         @default(0)
   colSpan    Int         @default(4) // 1-4 columns width
   colStart   Int?        // 1-4 column start position (null = auto)

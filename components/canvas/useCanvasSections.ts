@@ -28,6 +28,11 @@ export interface SectionWithBlocks {
   label: string;
   /** Título de cara al cliente editado por el CSE; null = título por defecto de la plantilla. */
   titleOverride: string | null;
+  /** Eyebrow (título pequeño) editado por el CSE; null = eyebrow por defecto. */
+  eyebrowOverride: string | null;
+  /** Valor anterior de title/eyebrow para el deshacer de 1 nivel (null = nada que deshacer). */
+  previousTitleOverride: string | null;
+  previousEyebrowOverride: string | null;
   order: number;
   layout: unknown;
   blocks: BlockData[];
@@ -142,6 +147,17 @@ export function useCanvasSections(projectId: string, canvasId: string) {
     [mutate, refetch],
   );
 
+  // Deshacer de 1 nivel un bloque: intercambia content/data con su versión previa
+  // (persistida en previous*). Devuelve true si OK.
+  const undoBlock = useCallback(
+    async (sectionId: string, blockId: string): Promise<boolean> => {
+      const ok = await mutate(sectionId, { method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ blockId, undo: true }) });
+      if (ok) refetch();
+      return ok;
+    },
+    [mutate, refetch],
+  );
+
   // Edición granular por IA: pide al endpoint de regen el content/data nuevo de un
   // bloque y lo DEVUELVE (no escribe). El guardado real lo hace saveBlock (PUT) — la
   // misma vía. Devuelve null si falló.
@@ -208,36 +224,59 @@ export function useCanvasSections(projectId: string, canvasId: string) {
     [mutate, refetch],
   );
 
-  // Renombra el TÍTULO de cara al cliente de una sección (titleOverride). String vacío
-  // → vuelve al título por defecto de la plantilla. Optimista + refetch para el estado
-  // canónico. No usa el endpoint de blocks (es metadata de sección) → PATCH dedicado.
-  const renameSection = useCallback(
-    async (sectionId: string, title: string): Promise<boolean> => {
-      const t = title.trim();
-      // Optimista: refleja el cambio ya (el título es de respuesta inmediata al tipear).
-      setSections((prev) =>
-        prev.map((s) => (s.id === sectionId ? { ...s, titleOverride: t || null } : s)),
-      );
+  // PATCH de metadata de sección (title/eyebrow de cara al cliente, o undo). Refetchea para
+  // traer el estado canónico (incluye previous* que habilita el botón "Deshacer"). No usa el
+  // endpoint de blocks (es metadata de sección) → PATCH dedicado.
+  const patchSection = useCallback(
+    async (sectionId: string, body: Record<string, unknown>, errMsg: string): Promise<boolean> => {
       try {
         const res = await fetch(`/api/projects/${projectId}/canvas-sections/${sectionId}`, {
           method: "PATCH",
           headers: JSON_HEADERS,
-          body: JSON.stringify({ titleOverride: t || null }),
+          body: JSON.stringify(body),
         });
         if (!res.ok) {
-          setError("No se pudo guardar el título. Reintentá.");
-          refetch(); // revertir al estado del server
+          setError(errMsg);
+          refetch();
           return false;
         }
         setError(null);
+        refetch();
         return true;
       } catch {
-        setError("Error de conexión al guardar el título.");
+        setError(errMsg);
         refetch();
         return false;
       }
     },
     [projectId, refetch],
+  );
+
+  // Título grande. String vacío → vuelve al título por defecto de la plantilla. Optimista.
+  const renameSection = useCallback(
+    (sectionId: string, title: string): Promise<boolean> => {
+      const t = title.trim() || null;
+      setSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, titleOverride: t } : s)));
+      return patchSection(sectionId, { titleOverride: t }, "No se pudo guardar el título. Reintentá.");
+    },
+    [patchSection],
+  );
+
+  // Eyebrow (título pequeño). String vacío → default.
+  const setEyebrow = useCallback(
+    (sectionId: string, eyebrow: string): Promise<boolean> => {
+      const e = eyebrow.trim() || null;
+      setSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, eyebrowOverride: e } : s)));
+      return patchSection(sectionId, { eyebrowOverride: e }, "No se pudo guardar el subtítulo. Reintentá.");
+    },
+    [patchSection],
+  );
+
+  // Deshacer de 1 nivel (toggle actual↔previous) del título o el eyebrow de una sección.
+  const undoSection = useCallback(
+    (sectionId: string, which: "title" | "eyebrow"): Promise<boolean> =>
+      patchSection(sectionId, { undo: which }, "No se pudo deshacer. Reintentá."),
+    [patchSection],
   );
 
   const acceptAll = useCallback(async () => {
@@ -269,9 +308,12 @@ export function useCanvasSections(projectId: string, canvasId: string) {
     deleteBlock,
     saveBlock,
     regenerateBlock,
+    undoBlock,
     addBlock,
     restoreBlock,
     renameSection,
+    setEyebrow,
+    undoSection,
     acceptAll,
   };
 }

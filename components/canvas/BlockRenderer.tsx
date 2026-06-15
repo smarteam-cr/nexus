@@ -16,6 +16,9 @@ export interface BlockData {
   blockType: string;
   content: string | null;
   data: unknown;
+  /** Versión inmediatamente anterior (deshacer de 1 nivel). null/ausente = nada que deshacer. */
+  previousContent?: string | null;
+  previousData?: unknown;
   order: number;
   colSpan: number;
   colStart: number | null;

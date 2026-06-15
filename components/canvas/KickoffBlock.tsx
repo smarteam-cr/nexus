@@ -134,7 +134,8 @@ export default function KickoffBlock({
             }}
           />
         )}
-        {editor}
+        {/* Mientras la IA regenera, el área del bloque muestra un skeleton (no el draft viejo). */}
+        {aiBusy ? <BlockSkeleton /> : editor}
       </div>
     );
   }
@@ -169,6 +170,7 @@ export default function KickoffBlock({
             }
           }}
         />
+        {aiBusy && <BlockSkeleton />}
       </div>
     );
   }
@@ -212,6 +214,17 @@ export default function KickoffBlock({
       ) : (
         view
       )}
+    </div>
+  );
+}
+
+/** Skeleton del área de un bloque mientras la IA regenera (reusa .skeleton-shimmer global). */
+function BlockSkeleton() {
+  return (
+    <div aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: 8, padding: "4px 0" }}>
+      <div className="skeleton-shimmer" style={{ height: 14, borderRadius: 6, width: "90%" }} />
+      <div className="skeleton-shimmer" style={{ height: 14, borderRadius: 6, width: "100%" }} />
+      <div className="skeleton-shimmer" style={{ height: 14, borderRadius: 6, width: "75%" }} />
     </div>
   );
 }

@@ -65,9 +65,15 @@ interface LandingHandlers {
   regenerateBlock?: (sectionId: string, blockId: string, instruction: string, base?: { content?: string | null; data?: unknown }) => Promise<{ content?: string | null; data?: unknown } | null>;
   acceptBlock?: (sectionId: string, blockId: string) => void;
   deleteBlock?: (sectionId: string, blockId: string) => void;
+  /** Deshacer de 1 nivel un bloque (vuelve a su versión previa). */
+  undoBlock?: (sectionId: string, blockId: string) => void;
   addBlock?: (sectionId: string) => void;
   /** Edita el título de cara al cliente de una sección (titleOverride). */
   renameSection?: (sectionId: string, title: string) => void;
+  /** Edita el eyebrow (título pequeño) de una sección (eyebrowOverride). */
+  setEyebrow?: (sectionId: string, eyebrow: string) => void;
+  /** Deshacer de 1 nivel el título o el eyebrow de una sección. */
+  undoSection?: (sectionId: string, which: "title" | "eyebrow") => void;
   acceptAll?: () => void;
 }
 
@@ -103,8 +109,11 @@ function KickoffLandingInternal({
     deleteBlock,
     saveBlock,
     regenerateBlock,
+    undoBlock,
     addBlock,
     renameSection,
+    setEyebrow,
+    undoSection,
     acceptAll,
     error,
     clearError,
@@ -183,8 +192,11 @@ function KickoffLandingInternal({
       regenerateBlock={regenerateBlock}
       acceptBlock={acceptBlock}
       deleteBlock={deleteBlock}
+      undoBlock={undoBlock}
       addBlock={addBlock}
       renameSection={renameSection}
+      setEyebrow={setEyebrow}
+      undoSection={undoSection}
       acceptAll={acceptAll}
     />
   );
@@ -203,8 +215,11 @@ function KickoffLandingView({
   regenerateBlock,
   acceptBlock,
   deleteBlock,
+  undoBlock,
   addBlock,
   renameSection,
+  setEyebrow,
+  undoSection,
   acceptAll,
 }: {
   sections: KickoffSection[];
@@ -267,15 +282,27 @@ function KickoffLandingView({
               </span>
             </div>
           )}
-          <span className="eyebrow reveal">Kickoff del proyecto</span>
-          <SectionHeading
+          <EditableHeading
+            tag="span"
+            editable={editable}
+            override={hero?.eyebrowOverride}
+            previous={hero?.previousEyebrowOverride}
+            defaultNode="Kickoff del proyecto"
+            defaultText="Kickoff del proyecto"
+            onSave={hero && setEyebrow ? (v) => setEyebrow(hero.id, v) : undefined}
+            onUndo={hero && undoSection ? () => undoSection(hero.id, "eyebrow") : undefined}
+            className="eyebrow"
+          />
+          <EditableHeading
             tag="h1"
             editable={editable}
             override={hero?.titleOverride}
+            previous={hero?.previousTitleOverride}
             defaultNode="¡Arranquemos juntos!"
             defaultText="¡Arranquemos juntos!"
             onSave={hero && renameSection ? (v) => renameSection(hero.id, v) : undefined}
-            className="font-display display-italic display-tight reveal"
+            onUndo={hero && undoSection ? () => undoSection(hero.id, "title") : undefined}
+            className="font-display display-italic display-tight"
             style={{ fontSize: "clamp(34px, 5vw, 56px)", lineHeight: 1.06, color: "var(--dark-text)", marginTop: 16 }}
           />
           {hero && hero.blocks.length > 0 && (
@@ -294,6 +321,7 @@ function KickoffLandingView({
                   onRegenerate={regenerateBlock ? (instr, base) => regenerateBlock(hero.id, b.id, instr, base) : undefined}
                   onAccept={acceptBlock ? () => acceptBlock(hero.id, b.id) : undefined}
                   onDelete={deleteBlock ? () => deleteBlock(hero.id, b.id) : undefined}
+                  onUndo={undoBlock ? () => undoBlock(hero.id, b.id) : undefined}
                 />
               ))}
             </div>
@@ -316,15 +344,27 @@ function KickoffLandingView({
             {section.key === "proximos_pasos" && <TimelineSection phases={phases} anchor={timeline?.anchorStartDate ?? null} />}
             <section className={bg} style={{ padding: SECTION_PAD }}>
               <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
-                <span className="eyebrow reveal">{SECTION_META[section.key]?.eyebrow ?? "Sección"}</span>
-                <SectionHeading
+                <EditableHeading
+                  tag="span"
+                  editable={editable}
+                  override={section.eyebrowOverride}
+                  previous={section.previousEyebrowOverride}
+                  defaultNode={SECTION_META[section.key]?.eyebrow ?? "Sección"}
+                  defaultText={SECTION_META[section.key]?.eyebrow ?? "Sección"}
+                  onSave={setEyebrow ? (v) => setEyebrow(section.id, v) : undefined}
+                  onUndo={undoSection ? () => undoSection(section.id, "eyebrow") : undefined}
+                  className="eyebrow"
+                />
+                <EditableHeading
                   tag="h2"
                   editable={editable}
                   override={section.titleOverride}
+                  previous={section.previousTitleOverride}
                   defaultNode={SECTION_META[section.key]?.title ?? section.label}
                   defaultText={SECTION_META[section.key]?.titleText ?? section.label}
                   onSave={renameSection ? (v) => renameSection(section.id, v) : undefined}
-                  className="font-display display-tight reveal"
+                  onUndo={undoSection ? () => undoSection(section.id, "title") : undefined}
+                  className="font-display display-tight"
                   style={{ fontSize: "clamp(24px, 3.4vw, 34px)", color: "var(--text)", lineHeight: 1.15, marginTop: 8, marginBottom: 24 }}
                 />
                 <div className={`reveal${section.key === "tu_rol" ? " kl-panel" : ""}`} data-stagger="2" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -338,6 +378,7 @@ function KickoffLandingView({
                       onRegenerate={regenerateBlock ? (instr, base) => regenerateBlock(section.id, block.id, instr, base) : undefined}
                       onAccept={acceptBlock ? () => acceptBlock(section.id, block.id) : undefined}
                       onDelete={deleteBlock ? () => deleteBlock(section.id, block.id) : undefined}
+                      onUndo={undoBlock ? () => undoBlock(section.id, block.id) : undefined}
                     />
                   ))}
                   {editable && addBlock && <AddBlock onClick={() => addBlock(section.id)} />}
@@ -401,6 +442,7 @@ function BlockRow({
   onRegenerate,
   onAccept,
   onDelete,
+  onUndo,
 }: {
   block: RenderableBlock;
   editable: boolean;
@@ -410,8 +452,12 @@ function BlockRow({
   onRegenerate?: (instruction: string, base?: { content?: string | null; data?: unknown }) => Promise<{ content?: string | null; data?: unknown } | null>;
   onAccept?: () => void;
   onDelete?: () => void;
+  onUndo?: () => void;
 }) {
   const isDraft = block.status === "DRAFT";
+  // Hay versión previa persistida → se puede deshacer el último cambio (1 nivel).
+  const b = block as RenderableBlock & { previousContent?: string | null; previousData?: unknown };
+  const canUndo = !!onUndo && (b.previousContent != null || b.previousData != null);
   return (
     <div className="group/row" style={{ position: "relative" }}>
       {/* Franja de controles con su PROPIO espacio, encima del bloque — nunca
@@ -426,6 +472,15 @@ function BlockRow({
             <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--brand-teal-dark)", background: "var(--brand-teal-soft)", padding: "2px 7px", borderRadius: 999 }}>Editado</span>
           )}
           <div style={{ flex: 1 }} />
+          {canUndo && (
+            <button
+              onClick={() => onUndo?.()}
+              title="Deshacer el último cambio"
+              style={{ fontSize: 11, color: "var(--text-muted, #6b7280)", background: "transparent", border: "none", cursor: "pointer", padding: "2px 4px" }}
+            >
+              ↶ Deshacer
+            </button>
+          )}
           {isDraft && <IconBtn title="Aceptar" color="#16a34a" onClick={() => onAccept?.()} path="M5 13l4 4L19 7" />}
           <IconBtn title="Eliminar bloque" color="#dc2626" onClick={() => onDelete?.()} path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
         </div>
@@ -462,7 +517,7 @@ function SectionHeading({
   className,
   style,
 }: {
-  tag: "h1" | "h2";
+  tag: "h1" | "h2" | "span";
   editable: boolean;
   override?: string | null;
   defaultNode: ReactNode;
@@ -492,13 +547,66 @@ function SectionHeading({
   return (
     <Tag
       className={className}
-      data-stagger="1"
       style={canEdit ? { ...style, cursor: "text" } : style}
       onClick={canEdit ? () => setEditing(true) : undefined}
       title={canEdit ? "Clic para editar el título" : undefined}
     >
       {override ? override : defaultNode}
     </Tag>
+  );
+}
+
+/** Wrapper de un título/eyebrow editable: contenedor `.reveal` ESTABLE (arregla el bug de
+ *  invisibilidad al remontar) + el heading interno SIN reveal + botón "Deshacer" cuando hay
+ *  una versión previa persistida (deshacer de 1 nivel; toggle actual↔previous). */
+function EditableHeading({
+  tag,
+  editable,
+  override,
+  previous,
+  defaultNode,
+  defaultText,
+  onSave,
+  onUndo,
+  className,
+  style,
+  wrapperStyle,
+}: {
+  tag: "h1" | "h2" | "span";
+  editable: boolean;
+  override?: string | null;
+  previous?: string | null;
+  defaultNode: ReactNode;
+  defaultText: string;
+  onSave?: (v: string) => void;
+  onUndo?: () => void;
+  className?: string;
+  style?: React.CSSProperties;
+  wrapperStyle?: React.CSSProperties;
+}) {
+  const showUndo = editable && !!onUndo && previous != null;
+  return (
+    <div className="reveal" data-stagger="1" style={{ position: "relative", ...wrapperStyle }}>
+      <SectionHeading
+        tag={tag}
+        editable={editable}
+        override={override}
+        defaultNode={defaultNode}
+        defaultText={defaultText}
+        onSave={onSave}
+        className={className}
+        style={style}
+      />
+      {showUndo && (
+        <button
+          onClick={() => onUndo!()}
+          title="Deshacer el último cambio"
+          style={{ position: "absolute", top: 0, right: 0, fontSize: 11, color: "#9ca3af", background: "transparent", border: "none", cursor: "pointer", padding: 2 }}
+        >
+          ↶ Deshacer
+        </button>
+      )}
+    </div>
   );
 }
 

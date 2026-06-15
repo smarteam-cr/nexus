@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { Prisma } from "@prisma/client";
 
 type Params = Promise<{ projectId: string; sectionId: string }>;
+
+// Json null en Prisma necesita DbNull (no el literal null). Para escribir un valor Json
+// que puede venir null (al guardar previous*/undo), normalizamos.
+const jsonInput = (v: Prisma.JsonValue | null | undefined): Prisma.InputJsonValue | typeof Prisma.DbNull =>
+  v === null || v === undefined ? Prisma.DbNull : (v as Prisma.InputJsonValue);
 
 // POST: create a block manually
 export async function POST(req: NextRequest, { params }: { params: Params }) {
@@ -52,7 +58,26 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
     return NextResponse.json({ error: "block not found" }, { status: 404 });
   }
 
+  // ── Deshacer de 1 nivel: intercambia content/data con previous* (toggle). ─────
+  if (body.undo === true) {
+    const updated = await prisma.canvasBlock.update({
+      where: { id: body.blockId },
+      data: {
+        content: block.previousContent,
+        data: jsonInput(block.previousData),
+        previousContent: block.content,
+        previousData: jsonInput(block.data),
+      },
+    });
+    return NextResponse.json(updated);
+  }
+
   const updateData: Record<string, unknown> = {};
+  // Al editar contenido/datos, guardar el valor ACTUAL en previous* (habilita "Deshacer").
+  if ("content" in body || "data" in body) {
+    updateData.previousContent = block.content;
+    updateData.previousData = jsonInput(block.data);
+  }
   if ("content" in body) updateData.content = body.content;
   if ("data" in body) updateData.data = body.data;
   if ("status" in body) updateData.status = body.status;

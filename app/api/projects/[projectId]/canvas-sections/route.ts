@@ -37,6 +37,8 @@ export async function GET(
           blockType: true,
           content: true,
           data: true,
+          previousContent: true,
+          previousData: true,
           order: true,
           colSpan: true,
           colStart: true,

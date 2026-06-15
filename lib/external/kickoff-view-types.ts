@@ -41,6 +41,11 @@ export interface KickoffSection {
   label: string;
   /** Título de cara al cliente editado por el CSE; null/ausente = título por defecto de la plantilla. */
   titleOverride?: string | null;
+  /** Eyebrow (título pequeño) editado por el CSE; null/ausente = eyebrow por defecto. */
+  eyebrowOverride?: string | null;
+  /** Solo modo interno: valor previo para el deshacer de 1 nivel. Ausente en el shape externo. */
+  previousTitleOverride?: string | null;
+  previousEyebrowOverride?: string | null;
   order: number;
   blocks: RenderableBlock[];
 }

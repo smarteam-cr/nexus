@@ -65,6 +65,7 @@ export async function getPublishedKickoffForToken(
       key: true,
       label: true,
       titleOverride: true,
+      eyebrowOverride: true,
       order: true,
       blocks: {
         where: { status: "CONFIRMED" },
@@ -93,6 +94,7 @@ export async function getPublishedKickoffForToken(
       key: s.key,
       label: s.label,
       titleOverride: s.titleOverride,
+      eyebrowOverride: s.eyebrowOverride,
       order: s.order,
       blocks: s.blocks.map((b) => ({
         id: b.id,
