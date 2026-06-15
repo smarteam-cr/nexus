@@ -24,6 +24,7 @@ export default async function AgentsPage() {
       status: true,
       scope: true,
       agentType: true,
+      agentGroup: true,
       outputType: true,
       associatedStages: true,
       createdAt: true,
