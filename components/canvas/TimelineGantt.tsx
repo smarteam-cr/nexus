@@ -210,7 +210,7 @@ export default function TimelineGantt({
                 <div
                   key={w}
                   className={`text-center leading-tight rounded py-0.5 ${
-                    isCur ? "bg-blue-900/50 ring-1 ring-blue-500/60 text-blue-300" : "text-gray-500"
+                    isCur ? "bg-blue-500/20 ring-1 ring-inset ring-blue-500/50 text-blue-200 font-semibold" : "text-gray-500"
                   }`}
                 >
                   <div className="text-[10px] font-bold">S{w + 1}</div>
@@ -221,7 +221,29 @@ export default function TimelineGantt({
           </div>
 
           {/* Filas de fases */}
-          <div className="px-4 py-2 space-y-0.5">
+          <div className="relative px-4 py-2">
+            {/* Banda vertical de la SEMANA ACTUAL — resalta toda la columna (detrás de
+                las barras). Usa el mismo gridCols que las filas → alinea por columna. */}
+            {curInRange && (
+              <div
+                className="pointer-events-none absolute inset-y-2 left-4 right-4 grid gap-1 z-0"
+                style={gridCols}
+                aria-hidden
+              >
+                <div />
+                {Array.from({ length: total }).map((_, w) => (
+                  <div
+                    key={w}
+                    className={
+                      w === curWeek
+                        ? "rounded-md bg-blue-500/10 ring-1 ring-inset ring-blue-500/40"
+                        : ""
+                    }
+                  />
+                ))}
+              </div>
+            )}
+            <div className="relative z-10 space-y-0.5">
             {phases.map((p, i) => {
               const range = ranges[i];
               const meta = p.activityType ? ACTIVITY_META[p.activityType] : null;
@@ -306,7 +328,7 @@ export default function TimelineGantt({
                           key={w}
                           className={`h-3 rounded transition-all ${meta?.seg ?? NEUTRAL_SEG} ${
                             allDone || isPast ? "opacity-35" : ""
-                          } ${isCur ? "ring-2 ring-blue-400 animate-pulse scale-y-125" : ""} ${
+                          } ${isCur ? "ring-1 ring-inset ring-white/40" : ""} ${
                             weekOverdue && !isCur ? "ring-1 ring-red-500/80" : ""
                           }`}
                           title={`S${w + 1}${weekTasks.length ? ` · ${weekTasks.length} tareas` : ""}`}
@@ -454,6 +476,7 @@ export default function TimelineGantt({
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
       </div>
