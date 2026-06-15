@@ -22,6 +22,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { useCanvasSections } from "./useCanvasSections";
 import KickoffBlock from "./KickoffBlock";
 import TimelineSection from "./TimelineSection";
@@ -31,10 +32,30 @@ import type {
   KickoffSection,
   KickoffTimelineData,
   KickoffPhase,
+  KickoffProceso,
   RenderableBlock,
 } from "@/lib/external/kickoff-view-types";
+import type { FlowchartData } from "@/components/flowchart/FlowchartViewer";
 
 import { fmtFull } from "@/lib/timeline/weeks";
+
+// FlowchartViewer (@xyflow) es pesado y necesita window → lazy + sin SSR. Solo se carga
+// cuando hay procesos que renderizar.
+const FlowchartViewer = dynamic(() => import("@/components/flowchart/FlowchartViewer"), {
+  ssr: false,
+  loading: () => <div className="skeleton-shimmer" style={{ height: 440, borderRadius: 12 }} />,
+});
+
+/** Mapea un proceso del cliente al shape que espera FlowchartViewer. */
+function toFlowchartData(p: KickoffProceso): FlowchartData {
+  const d = (p.data ?? {}) as { nodes?: unknown[]; edges?: unknown[]; description?: string };
+  return {
+    title: p.title ?? undefined,
+    description: d.description,
+    nodes: (d.nodes ?? []) as FlowchartData["nodes"],
+    edges: (d.edges ?? []) as FlowchartData["edges"],
+  };
+}
 
 const MAXW = 760;
 const SECTION_PAD = "clamp(40px, 6vw, 72px) 24px";
@@ -85,7 +106,7 @@ type KickoffLandingProps =
 export default function KickoffLanding(props: KickoffLandingProps) {
   if ("data" in props) {
     // Modo EXTERNO: data ya resuelta server-side, read-only.
-    return <KickoffLandingView sections={props.data.sections} timeline={props.data.timeline} clientLogoUrl={props.data.clientLogoUrl} editable={false} />;
+    return <KickoffLandingView sections={props.data.sections} timeline={props.data.timeline} clientLogoUrl={props.data.clientLogoUrl} procesos={props.data.procesos} editable={false} />;
   }
   // Modo INTERNO: hooks + fetch.
   return <KickoffLandingInternal projectId={props.projectId} canvasId={props.canvasId} editable={props.editable} />;
@@ -121,6 +142,15 @@ function KickoffLandingInternal({
 
   const [timeline, setTimeline] = useState<KickoffTimelineData | null>(null);
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
+  const [procesos, setProcesos] = useState<KickoffProceso[]>([]);
+
+  // Procesos del cliente (diagramas) — el preview interno los muestra todos. Endpoint guarded.
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/procesos`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setProcesos(d?.procesos ?? []))
+      .catch(() => setProcesos([]));
+  }, [projectId]);
 
   // Logo del cliente: mismo chip que la vista externa, también en el preview
   // interno (así el CSE lo ve sin tener que publicar). Endpoint guarded.
@@ -185,6 +215,7 @@ function KickoffLandingInternal({
       timeline={timeline}
       editable={editable}
       clientLogoUrl={clientLogoUrl}
+      procesos={procesos}
       draftCount={draftCount}
       error={error}
       clearError={clearError}
@@ -208,6 +239,7 @@ function KickoffLandingView({
   timeline,
   editable,
   clientLogoUrl = null,
+  procesos = [],
   draftCount = 0,
   error = null,
   clearError,
@@ -227,6 +259,8 @@ function KickoffLandingView({
   editable: boolean;
   /** Logo del cliente (solo modo externo); en interno va ausente → null. */
   clientLogoUrl?: string | null;
+  /** Diagramas de proceso del cliente (sección "Procesos"). */
+  procesos?: KickoffProceso[];
 } & LandingHandlers) {
   const rootRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLElement>(null);
@@ -391,6 +425,30 @@ function KickoffLandingView({
 
       {/* Si no hay sección "Próximos pasos", el cronograma va antes del cierre */}
       {!hasProximos && <TimelineSection phases={phases} anchor={timeline?.anchorStartDate ?? null} />}
+
+      {/* ── PROCESOS ─── diagramas del cliente (si hay). Render read-only del flowchart. */}
+      {procesos.length > 0 && (
+        <section className="section-soft" style={{ padding: SECTION_PAD }}>
+          <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
+            <span className="eyebrow reveal">Cómo trabajamos</span>
+            <h2 className="font-display display-tight reveal" data-stagger="1" style={{ fontSize: "clamp(24px, 3.4vw, 34px)", color: "var(--text)", lineHeight: 1.15, marginTop: 8, marginBottom: 24 }}>
+              Nuestros <Accent>procesos</Accent>
+            </h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+              {procesos.map((p) => (
+                <div key={p.id} className="reveal">
+                  {p.title && (
+                    <h3 className="font-display" style={{ fontSize: 18, color: "var(--text)", marginBottom: 10 }}>{p.title}</h3>
+                  )}
+                  <div style={{ height: 460, border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "var(--surface, #fff)" }}>
+                    <FlowchartViewer data={toFlowchartData(p)} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Cierre dark — bookend editorial con el hero */}
       <section className="section-dark hero-backdrop" style={{ padding: "clamp(52px, 7vw, 84px) 24px" }}>

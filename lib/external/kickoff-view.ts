@@ -29,6 +29,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { resolveActiveAccess, touchAccess } from "./access";
 import { readClientTimeline } from "./timeline-view";
+import { readClientProcesos } from "@/lib/canvas/read-procesos";
 import type { KickoffLandingData } from "./kickoff-view-types";
 
 /**
@@ -83,12 +84,20 @@ export async function getPublishedKickoffForToken(
     ? await readClientTimeline(projectId)
     : { exists: false as const, anchorStartDate: null, phases: [] };
 
-  // 6. Marcar uso (no bloquea el render si falla).
+  // 6. Procesos del cliente — SOLO CONFIRMED para la vista externa (mismo gate que los bloques).
+  const proj = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { clientId: true },
+  });
+  const procesos = proj ? await readClientProcesos(proj.clientId, { onlyConfirmed: true }) : [];
+
+  // 7. Marcar uso (no bloquea el render si falla).
   await touchAccess(access.accessId);
 
   return {
     projectName: access.project.name,
     clientLogoUrl: access.project.client.logoUrl,
+    procesos,
     sections: sections.map((s) => ({
       id: s.id,
       key: s.key,

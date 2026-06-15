@@ -50,6 +50,14 @@ export interface KickoffSection {
   blocks: RenderableBlock[];
 }
 
+/** Diagrama de proceso (FLOWCHART) del cliente, para la sección "Procesos" del kickoff. */
+export interface KickoffProceso {
+  id: string;
+  title: string | null;
+  /** { nodes, edges, description? } — shape de FlowchartViewer. */
+  data: unknown;
+}
+
 /** Lo que la ruta pública pasa como `data` a <KickoffLanding/>. */
 export interface KickoffLandingData {
   projectName: string;
@@ -57,4 +65,6 @@ export interface KickoffLandingData {
   clientLogoUrl: string | null;
   sections: KickoffSection[];
   timeline: KickoffTimelineData;
+  /** Procesos del cliente (solo CONFIRMED en la vista externa). */
+  procesos: KickoffProceso[];
 }
