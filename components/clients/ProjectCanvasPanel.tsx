@@ -13,6 +13,7 @@ import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import KickoffLanding from "@/components/canvas/KickoffLanding";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
+import CronogramaProgressButton from "@/components/clients/CronogramaProgressButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import { PublishKickoffButton } from "./PublishKickoffButton";
@@ -471,6 +472,14 @@ export default function ProjectCanvasPanel({
                 onDone={() => setAgentNonce((n) => n + 1)}
               />
             )}
+            {/* CTA del agente de avance (D.2) para el Cronograma — mismo lugar que los
+                CTA de agente de los demás canvases. Remonta el canvas al terminar. */}
+            {!isResumenCanvas && activeCanvas?.name === "Cronograma" && (
+              <CronogramaProgressButton
+                projectId={projectId}
+                onDone={() => setAgentNonce((n) => n + 1)}
+              />
+            )}
           </div>
           {isResumenCanvas && (
             <p className="text-sm text-gray-400 mt-0.5">
@@ -576,7 +585,8 @@ export default function ProjectCanvasPanel({
           Fuente única — el Kickoff lo refleja read-only. clientId habilita el
           disparo del agente de detalle (POST /api/clients/[clientId]/analyze). */}
       {activeCanvas?.name === "Cronograma" && (
-        <CronogramaCanvas projectId={projectId} clientId={clientId} />
+        // agentNonce remonta el canvas al terminar el CTA de avance → muestra el banner
+        <CronogramaCanvas key={`cronograma-${agentNonce}`} projectId={projectId} clientId={clientId} />
       )}
 
       {/* Resto de canvases custom: grilla de bloques (Diagnóstico, Planificación, …) */}

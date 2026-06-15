@@ -53,6 +53,8 @@ export interface GanttTask {
   status: GanttTaskStatus;
   notes: string | null;
   needsValidation: boolean;
+  /** Procedencia (de `source`): AGENT → tag "IA", MODIFIED|HUMAN → tag "CSE". */
+  source?: string;
 }
 
 export interface GanttPhase {
@@ -223,7 +225,6 @@ export default function TimelineGantt({
               const range = ranges[i];
               const meta = p.activityType ? ACTIVITY_META[p.activityType] : null;
               const isOpen = expanded.has(p.key);
-              const pendingValidation = p.tasks.filter((t) => t.needsValidation).length;
               const hasOverdue = p.tasks.some((t) =>
                 isOverdue(absoluteWeek(range.start, t.weekIndex), curWeek, t.status),
               );
@@ -265,11 +266,6 @@ export default function TimelineGantt({
                         {meta && (
                           <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${meta.chip}`}>
                             {meta.label}
-                          </span>
-                        )}
-                        {pendingValidation > 0 && (
-                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-amber-300 bg-amber-500/15 border-amber-500/50">
-                            ⚠ {pendingValidation} por validar
                           </span>
                         )}
                         {hasOverdue && (
@@ -354,11 +350,7 @@ export default function TimelineGantt({
                                 return (
                                   <div
                                     key={t.key}
-                                    className={`flex items-start gap-2.5 rounded-lg px-2.5 py-1.5 group/task ${
-                                      t.needsValidation
-                                        ? "bg-amber-500/10 border border-amber-500/40"
-                                        : "hover:bg-gray-800/50"
-                                    }`}
+                                    className="flex items-start gap-2.5 rounded-lg px-2.5 py-1.5 group/task hover:bg-gray-800/50"
                                   >
                                     <button
                                       onClick={(e) => {
@@ -395,9 +387,16 @@ export default function TimelineGantt({
                                             {t.title}
                                           </span>
                                         )}
-                                        {t.needsValidation && (
-                                          <span className="text-[9px] font-extrabold uppercase tracking-widest text-amber-300 bg-amber-500/20 border border-amber-500/60 rounded px-1.5 py-0.5 flex-shrink-0">
-                                            Por validar
+                                        {t.source && (
+                                          <span
+                                            className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${
+                                              t.source === "AGENT"
+                                                ? "text-gray-400 bg-gray-700/40 border-gray-600/50"
+                                                : "text-blue-300 bg-blue-900/30 border-blue-700/40"
+                                            }`}
+                                            title={t.source === "AGENT" ? "Generada por la IA" : "Creada o editada por el CSE"}
+                                          >
+                                            {t.source === "AGENT" ? "IA" : "CSE"}
                                           </span>
                                         )}
                                       </div>

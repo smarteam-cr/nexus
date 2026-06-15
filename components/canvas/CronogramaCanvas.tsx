@@ -136,8 +136,6 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
   const [progressPhaseSel, setProgressPhaseSel] = useState<Set<string>>(new Set());
   const [progressTaskSel, setProgressTaskSel] = useState<Set<string>>(new Set());
   const [applyingProgress, setApplyingProgress] = useState(false);
-  const [checkingProgress, setCheckingProgress] = useState(false);
-  const [progressNote, setProgressNote] = useState<string | null>(null);
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
   const keyCounter = useRef(0);
   const nextKey = () => `new-${keyCounter.current++}`;
@@ -530,33 +528,6 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
     setPendingProgress(null);
   };
 
-  // Disparo manual del agente de avance (mismo motor que el de postProcessSession).
-  // Recarga el cronograma → si hay borrador, aparece el banner de avance.
-  const checkProgress = async () => {
-    setCheckingProgress(true);
-    setError(null);
-    setProgressNote(null);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/timeline/progress`, { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      await load();
-      if (data?.status === "ok") {
-        // el banner se muestra solo (load() trajo el pendingProgress)
-      } else if (data?.status === "skipped") {
-        setProgressNote(
-          data.reason === "no_detail"
-            ? "Generá el detalle del cronograma antes de chequear avance."
-            : "No se detectó avance nuevo respecto a lo ya confirmado.",
-        );
-      } else {
-        setError(data?.reason ? `No se pudo chequear el avance (${data.reason}).` : "No se pudo chequear el avance.");
-      }
-    } catch {
-      setError("Error de conexión al chequear el avance.");
-    }
-    setCheckingProgress(false);
-  };
-
   const toggleSet = (s: Set<string>, id: string): Set<string> => {
     const n = new Set(s);
     if (n.has(id)) n.delete(id);
@@ -648,6 +619,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
       status: t.status,
       notes: t.notes,
       needsValidation: t.needsValidation,
+      source: t.source,
     })),
   }));
 
@@ -757,11 +729,6 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
 
         {totalTasks > 0 && !proposal && !generating && (
           <div className="ml-auto flex flex-wrap items-center gap-2.5">
-            {pendingValidation > 0 && (
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-300 bg-amber-500/15 border border-amber-500/50 rounded-lg px-2.5 py-1.5">
-                ⚠ {plural(pendingValidation, "tarea por validar", "tareas por validar")}
-              </span>
-            )}
             {detailConfirmedAt ? (
               <>
                 <span className="text-[11px] font-semibold text-emerald-300 bg-emerald-900/30 border border-emerald-700/40 rounded-lg px-2.5 py-1.5">
@@ -792,27 +759,9 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
             >
               Regenerar detalle
             </button>
-            {/* D.2 — disparo manual del avance (además del automático por sesión nueva) */}
-            <button
-              onClick={checkProgress}
-              disabled={checkingProgress}
-              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-300 border border-emerald-700/50 hover:bg-emerald-900/30 rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
-              title="El agente revisa la etapa de HubSpot + las sesiones y propone el avance — vos lo confirmás"
-            >
-              {checkingProgress ? (
-                <span className="w-3.5 h-3.5 border-2 border-emerald-300/30 border-t-emerald-300 rounded-full animate-spin" />
-              ) : (
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-              )}
-              {checkingProgress ? "Chequeando…" : "Re-chequear avance"}
-            </button>
           </div>
         )}
       </div>
-
-      {progressNote && (
-        <p className="text-[11px] text-gray-400 -mt-1">{progressNote}</p>
-      )}
 
       {/* ── Disparador del asistente IA (abre el dialog; el preview vuelve al Gantt) ── */}
       {phases.length > 0 && !proposal && (
@@ -984,6 +933,18 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-900/20 border border-red-700/50 text-red-300">
           <span className="text-sm font-medium flex-1">{error}</span>
           <button onClick={() => setError(null)} className="text-xs font-semibold text-red-200 hover:text-white px-2 py-1 rounded hover:bg-red-800/40">Cerrar</button>
+        </div>
+      )}
+
+      {/* ── Alerta global de handoff flaco (reemplaza el badge "por validar" por fila) ── */}
+      {totalTasks > 0 && pendingValidation > 0 && !proposal && !generating && (
+        <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-200">
+          <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <span className="text-xs leading-relaxed">
+            Este cronograma se generó con handoff limitado — revisá que las tareas reflejen el proyecto real.
+          </span>
         </div>
       )}
 
