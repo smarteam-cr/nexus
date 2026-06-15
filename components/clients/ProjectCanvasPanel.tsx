@@ -12,6 +12,8 @@ import SectionBlockList from "@/components/canvas/SectionBlockList";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import KickoffLanding from "@/components/canvas/KickoffLanding";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
+import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
+import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import { PublishKickoffButton } from "./PublishKickoffButton";
 import ProjectHandoffSection from "./ProjectHandoffSection";
@@ -92,6 +94,9 @@ export default function ProjectCanvasPanel({
   // Multi-canvas state
   const [canvases, setCanvases] = useState<CanvasMeta[]>([]);
   const [activeCanvasId, setActiveCanvasId] = useState<string | null>(null);
+  // Se incrementa al terminar una corrida de agente desde el CTA → remonta el canvas
+  // activo (key) para que muestre los bloques nuevos sin recargar la página.
+  const [agentNonce, setAgentNonce] = useState(0);
   const [canvasDropdownOpen, setCanvasDropdownOpen] = useState(false);
   const [creatingCanvas, setCreatingCanvas] = useState(false);
   const [newCanvasName, setNewCanvasName] = useState("");
@@ -454,6 +459,18 @@ export default function ProjectCanvasPanel({
               )}
             </div>
             {isResumenCanvas && <HubBadge tags={tags} serviceType={serviceType} size="sm" />}
+            {/* CTA por-canvas: ejecuta el agente primario del canvas, anclado junto al
+                nombre (reemplaza el pop-up). Handoff/Cronograma tienen su propio CTA. */}
+            {!isResumenCanvas && activeCanvas && CANVAS_PRIMARY_AGENT[activeCanvas.name] && (
+              <CanvasAgentButton
+                clientId={clientId}
+                projectId={projectId}
+                agentId={CANVAS_PRIMARY_AGENT[activeCanvas.name].agentId}
+                label={CANVAS_PRIMARY_AGENT[activeCanvas.name].label}
+                async={CANVAS_PRIMARY_AGENT[activeCanvas.name].async}
+                onDone={() => setAgentNonce((n) => n + 1)}
+              />
+            )}
           </div>
           {isResumenCanvas && (
             <p className="text-sm text-gray-400 mt-0.5">
@@ -549,7 +566,8 @@ export default function ProjectCanvasPanel({
               proyecto — es project-level, compartido por todas las superficies). */}
           <PublishKickoffButton projectId={projectId} />
           <div style={{ margin: "-1.5rem -1.5rem -2rem" }}>
-            <KickoffLanding projectId={projectId} canvasId={activeCanvasId} editable />
+            {/* agentNonce remonta el landing al terminar una corrida del CTA → refetch */}
+            <KickoffLanding key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} editable />
           </div>
         </>
       )}
@@ -563,7 +581,8 @@ export default function ProjectCanvasPanel({
 
       {/* Resto de canvases custom: grilla de bloques (Diagnóstico, Planificación, …) */}
       {!isResumenCanvas && activeCanvas?.name !== "Handoff" && activeCanvas?.name !== "Kickoff" && activeCanvas?.name !== "Cronograma" && activeCanvasId && (
-        <SectionBlockList projectId={projectId} canvasId={activeCanvasId} />
+        // agentNonce remonta la grilla al terminar una corrida del CTA → refetch
+        <SectionBlockList key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
       )}
 
       {/* ── Resumen — LEGACY / RETIRADO (código muerto) ─────────────────────

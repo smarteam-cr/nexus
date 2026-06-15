@@ -170,6 +170,7 @@ function ProjectSection({
       ) : isProcesos ? (
         <ClientProcesosPanel
           key={PROCESOS_TAB_ID}
+          clientId={clientId}
           projectId={strategyProjectId}
           canvasId={strategyCanvasId}
         />

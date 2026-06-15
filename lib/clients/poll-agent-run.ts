@@ -6,8 +6,8 @@
  * como CARDS_AND_FLOWCHARTS, o cuando el cliente pidió async), el disparador debe
  * pollear el GET /api/clients/[id]/analyze/[runId] hasta DONE/ERROR.
  *
- * Lo usan los 3 disparadores: AgentPanel (pop-up), SubstepAgentButton y
- * ClientContextCards — para no duplicar el loop.
+ * Lo usan los disparadores de agentes: CanvasAgentButton (CTA por-canvas),
+ * SubstepAgentButton y ClientContextCards — para no duplicar el loop.
  */
 
 export interface PolledRun {

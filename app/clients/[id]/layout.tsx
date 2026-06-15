@@ -7,7 +7,6 @@ import WorkspaceShell from "@/components/clients/WorkspaceShell";
 // WorkspaceHeaderPopovers (drawer Contexto con Docs/Sesiones/Deal) — eliminado.
 // Docs y Sesiones se migraron al panel "Información del cliente"; el Deal se
 // descontinuó.
-import HeaderAgentButton from "@/components/clients/HeaderAgentButton";
 
 import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
 
@@ -58,14 +57,6 @@ export default async function ClientLayout({
   });
 
   if (!client) notFound();
-
-  // Default project ID for header components
-  const firstProject = await prisma.project.findFirst({
-    where: { clientId: id },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-  const defaultProjectId = firstProject?.id ?? null;
 
   // ── Determinar pestaña inicial ──────────────────────────────────────────
   // Regla: si el cliente tiene un único proyecto activo (no estrategia),
@@ -155,9 +146,8 @@ export default async function ClientLayout({
             </div>
           </div>
 
-          {/* Right: agentes + settings */}
+          {/* Right: settings (los agentes ahora se disparan por canvas, sin pop-up) */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <HeaderAgentButton clientId={id} defaultProjectId={defaultProjectId} />
             <Link
               href={`/clients/${id}/settings`}
               className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
