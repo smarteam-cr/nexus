@@ -1090,15 +1090,17 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
     "PRIORIZA SIEMPRE lo que dice el canvas. El canvas es la fuente de verdad del proyecto.";
 
   // Inyectar reglas de formato para agentes que apuntan a canvases no-default.
-  // Lista de agentes que usan el formato sections+blocks (en lugar de cards).
-  // El render de canvases custom (SectionBlockList) lee CanvasBlock, no
+  // Los GRUPOS que usan el formato sections+blocks (en lugar de cards): handoff,
+  // kickoff, diagnostico y planificacion. El render de esos canvases
+  // (CanvasLinearView / SectionBlockList / KickoffLanding) lee CanvasBlock, no
   // ClientContextCard — por eso estos agentes deben persistir como blocks.
-  const BLOCK_FORMAT_AGENT_IDS = new Set([
-    "agent-diagnostico-canvas",
-    "cmmla1g1x00005wijix3qnr7u", // Handoff Sales→CS (Fase 2 módulo externo)
-    "agent-kickoff-canvas",      // Kickoff landing (Fase A)
-  ]);
-  const useBlockFormat = !!targetCanvasId && BLOCK_FORMAT_AGENT_IDS.has(agent.id);
+  // Se chequea por agentGroup (no por id) para no hardcodear el cuid del handoff
+  // y para que cualquier agente futuro del grupo herede el formato. Los agentes
+  // dormidos del grupo "diagnostico" (funnel/marketing) no tienen disparador en
+  // la UI, así que esto no cambia su comportamiento en la práctica.
+  const BLOCK_FORMAT_GROUPS = new Set(["handoff", "kickoff", "diagnostico", "planificacion"]);
+  const useBlockFormat =
+    !!targetCanvasId && !!agent.agentGroup && BLOCK_FORMAT_GROUPS.has(agent.agentGroup);
   if (targetCanvasId) {
     const tcSections = await prisma.canvasSection.findMany({
       where: { canvasId: targetCanvasId },
@@ -1295,6 +1297,25 @@ ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}
 ${handoffCtx || "(Sin handoff todavía. Indicá en cada sección que falta el handoff; no inventes contenido.)"}
 
 ${timelineCtx ? `${timelineCtx}\n\n` : ""}Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: tono cliente, sin inflar alcance/objetivos (solo lo respaldado por el handoff), métricas como propuesta de Smarteam si no están explícitas, y NO reproduzcas el cronograma en prosa (la plantilla lo muestra aparte).`;
+  }
+
+  // ── 10b''. Input del agente de Planificación ─────────────────────────────────
+  // Como el Kickoff, NO consume fuentes crudas: su input es el HANDOFF + el
+  // DIAGNÓSTICO ya curados del proyecto. Gateado por grupo (planificacion).
+  const isPlanificacionAgent = agent.agentGroup === "planificacion";
+  if (isPlanificacionAgent && bodyProjectId) {
+    const handoffCtx = await loadCanvasContext(bodyProjectId, "Handoff", { onlyConfirmed: false });
+    const diagnosticoCtx = await loadCanvasContext(bodyProjectId, "Diagnóstico", { onlyConfirmed: false });
+    userMessage = `Empresa: ${companyName}
+Industria: ${client.industry ?? "No especificada"}
+${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}
+=== HANDOFF DEL PROYECTO (alcance contratado, expectativas, acuerdos) ===
+${handoffCtx || "(Sin handoff todavía.)"}
+
+=== DIAGNÓSTICO DEL PROYECTO (estado actual, gaps, recomendaciones) ===
+${diagnosticoCtx || "(Sin diagnóstico todavía. Si falta, indicá en cada sección qué necesitás del diagnóstico; no inventes contenido.)"}
+
+Generá el plan de implementación siguiendo tus instrucciones: arquitectura de la solución, roadmap, definición de procesos y métricas de éxito. Cíñete a lo respaldado por el handoff y el diagnóstico; no inventes alcance ni fechas.`;
   }
 
   // ── 10b'. Input del agente de Detalle de Cronograma (D.1) ────────────────────
