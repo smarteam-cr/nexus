@@ -18,6 +18,7 @@
  * Endpoint backend: app/api/projects/[projectId]/external-access/route.ts
  */
 import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { useToast } from "@/components/ui/Toast";
 
 interface AccessState {
   exists: boolean;
@@ -49,6 +50,7 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
   const [working, setWorking] = useState(false);
   const [confirming, setConfirming] = useState<"regenerate" | "revoke" | null>(null);
   const [justGenerated, setJustGenerated] = useState(false);
+  const toast = useToast();
 
   // ── Fetch estado actual ───────────────────────────────────────────────────
 
@@ -78,7 +80,7 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
     try {
       const res = await fetch(`/api/projects/${projectId}/external-access`, { method: "POST" });
       if (!res.ok) {
-        alert("No se pudo generar el acceso.");
+        toast.error("No se pudo generar el acceso.");
         return;
       }
       await refresh();
@@ -109,7 +111,7 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
     try {
       const res = await fetch(`/api/projects/${projectId}/external-access`, { method: "DELETE" });
       if (!res.ok) {
-        alert("No se pudo revocar el acceso.");
+        toast.error("No se pudo revocar el acceso.");
         return;
       }
       await refresh();
@@ -128,7 +130,7 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
         method: publish ? "POST" : "DELETE",
       });
       if (!res.ok) {
-        alert("No se pudo cambiar la publicación.");
+        toast.error("No se pudo cambiar la publicación.");
         return;
       }
       if (kind === "cronograma" && publish) {
@@ -138,7 +140,7 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
       }
       await refresh();
     } catch {
-      alert("Error de conexión.");
+      toast.error("Error de conexión.");
     }
   };
 

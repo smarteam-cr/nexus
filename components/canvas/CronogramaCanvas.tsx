@@ -29,6 +29,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { plural } from "@/lib/timeline/weeks";
 import { ConfirmDialog } from "@/components/ui";
+import { useToast } from "@/components/ui/Toast";
 import TimelineGantt, { type GanttPhase, type GanttTaskStatus } from "./TimelineGantt";
 import TimelineAssistDialog from "./TimelineAssistDialog";
 
@@ -113,6 +114,7 @@ interface PendingProgress {
 }
 
 export default function CronogramaCanvas({ projectId, clientId }: { projectId: string; clientId: string }) {
+  const toast = useToast();
   const [phases, setPhases] = useState<Phase[]>([]);
   const [anchor, setAnchor] = useState<string>(""); // yyyy-mm-dd o ""
   const [kickoffDate, setKickoffDate] = useState<string>(""); // yyyy-mm-dd de la sesión de kickoff (sugerencia)
@@ -387,7 +389,10 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        // En auto (al montar sin detalle) no bloqueamos con banner, pero ya no es
+        // mudo: un toast suave avisa que se puede reintentar a mano.
         if (!auto) setError(data?.message ?? data?.error ?? "Error al generar el detalle.");
+        else toast.info("No se pudo generar el detalle automáticamente. Usá «Regenerar detalle» para reintentar.");
       } else if (data?.timelineDetail?.skipped) {
         const reason = data.timelineDetail.reason;
         // En auto no molestamos si ya existe (caso esperado al reabrir) — solo recargamos.
@@ -405,6 +410,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
       }
     } catch {
       if (!auto) setError("Error de conexión al generar el detalle.");
+      else toast.info("No se pudo generar el detalle automáticamente. Usá «Regenerar detalle» para reintentar.");
     }
     setGenerating(false);
   };

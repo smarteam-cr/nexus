@@ -20,6 +20,7 @@ import {
   useContext,
   useState,
   useCallback,
+  useMemo,
   useRef,
   useEffect,
   type ReactNode,
@@ -107,12 +108,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     return () => map.forEach((t) => clearTimeout(t));
   }, []);
 
-  const api: ToastApi = {
-    success: (m, o) => push("success", m, o),
-    error: (m, o) => push("error", m, o),
-    info: (m, o) => push("info", m, o),
-    dismiss,
-  };
+  // Memoizado para que `toast` sea estable entre renders (seguro en dep arrays de
+  // useCallback/useEffect). push y dismiss ya son estables (useCallback).
+  const api = useMemo<ToastApi>(
+    () => ({
+      success: (m, o) => push("success", m, o),
+      error: (m, o) => push("error", m, o),
+      info: (m, o) => push("info", m, o),
+      dismiss,
+    }),
+    [push, dismiss],
+  );
 
   return (
     <ToastContext.Provider value={api}>

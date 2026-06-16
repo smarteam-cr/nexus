@@ -17,6 +17,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import SessionHistoryDrawer from "./SessionHistoryDrawer";
+import { useToast } from "@/components/ui/Toast";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,7 @@ export default function MinuteDialog({
   projectId: string;
   onClose: () => void;
 }) {
+  const toast = useToast();
   const [tab, setTab] = useState<SubTab>("minute");
   const [data, setData] = useState<MeetingsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -91,10 +93,15 @@ export default function MinuteDialog({
 
   const reload = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/projects/${projectId}/meetings`);
-    if (res.ok) setData((await res.json()) as MeetingsData);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/meetings`);
+      if (res.ok) setData((await res.json()) as MeetingsData);
+      else toast.error("No se pudo cargar la minuta de la sesión.");
+    } catch {
+      toast.error("No se pudo cargar la minuta. Revisá tu conexión.");
+    }
     setLoading(false);
-  }, [projectId]);
+  }, [projectId, toast]);
 
   useEffect(() => {
     reload();

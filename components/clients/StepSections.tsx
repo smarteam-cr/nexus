@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import ClientContextCards from "./ClientContextCards";
+import { useToast } from "@/components/ui/Toast";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ interface Props {
 export default function StepSections({
   clientId, projectId, stage, stepIndex, stepLabel, stepKeywords,
 }: Props) {
+  const toast = useToast();
   const [sections, setSections] = useState<SectionInfo[]>([]);
   const [loading, setLoading]   = useState(true);
 
@@ -45,9 +47,9 @@ export default function StepSections({
     fetch(`/api/clients/${clientId}/analyze?stage=${stage}&step=${stepIndex}`)
       .then((r) => r.json())
       .then((data) => setSections(data.sections ?? []))
-      .catch(() => setSections([]))
+      .catch(() => toast.error("No se pudieron cargar las secciones de este paso."))
       .finally(() => setLoading(false));
-  }, [clientId, stage, stepIndex]);
+  }, [clientId, stage, stepIndex, toast]);
 
   if (loading) {
     return <SectionSkeleton />;

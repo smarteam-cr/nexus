@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import MinuteDialog from "./MinuteDialog";
 import ActionItemsDialog from "./ActionItemsDialog";
 import { useWorkspace } from "./WorkspaceContext";
+import { useToast } from "@/components/ui/Toast";
 import { readGpsCache, writeGpsCache, invalidateGps } from "@/lib/clients/gps-cache";
 
 export interface PendingItem {
@@ -63,6 +64,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   // Inicializa desde el cache de módulo → al remontar (cambio de tab) renderiza al
   // instante, sin recarga. (Ver lib/clients/gps-cache.ts)
   const { gpsRefreshSignal } = useWorkspace();
+  const toast = useToast();
   const [data, setData] = useState<GPSData | null>(() => readGpsCache<GPSData>(projectId)?.data ?? null);
   const [error, setError] = useState<string | null>(null);
   const [editingSession, setEditingSession] = useState(false);
@@ -116,12 +118,17 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   }, [gpsRefreshSignal, projectId, fetchGPS]);
 
   const saveField = useCallback(async (field: string, value: unknown) => {
-    await fetch(`/api/projects/${projectId}/gps`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [field]: value }),
-    }).catch(() => {});
-  }, [projectId]);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/gps`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!res.ok) toast.error("No se pudo guardar el cambio del GPS.");
+    } catch {
+      toast.error("No se pudo guardar el cambio del GPS. Revisá tu conexión.");
+    }
+  }, [projectId, toast]);
 
   const debouncedSave = useCallback((field: string, value: unknown) => {
     if (saveTimeout.current) clearTimeout(saveTimeout.current);

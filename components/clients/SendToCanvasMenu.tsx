@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useToast } from "@/components/ui/Toast";
 
 const PROJECT_SECTIONS = [
   { key: "objetivo_alcance", label: "Objetivo y alcance", icon: "🎯" },
@@ -35,6 +36,7 @@ interface Props {
 }
 
 export default function SendToCanvasMenu({ cardId, clientId, currentProjectId }: Props) {
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -69,8 +71,8 @@ export default function SendToCanvasMenu({ cardId, clientId, currentProjectId }:
           setSelectedProjectId(currentProjectId ?? projs[0].id);
         }
       })
-      .catch(() => {});
-  }, [open, clientId, currentProjectId, selectedProjectId]);
+      .catch(() => toast.error("No se pudieron cargar los proyectos del cliente."));
+  }, [open, clientId, currentProjectId, selectedProjectId, toast]);
 
   // Close on click outside
   useEffect(() => {
