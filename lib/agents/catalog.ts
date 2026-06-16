@@ -16,7 +16,7 @@
  * La pertenencia se decide por id curado + agentGroup + agentType (no por cuid
  * hardcodeado: el handoff se resuelve por agentGroup="handoff").
  */
-import { AGENT_GROUP_TO_CANVAS } from "@/lib/canvas/default-canvases";
+import { AGENT_GROUP_TO_CANVAS } from "@/lib/canvas/canvas-defs";
 
 export type AgentCategoryKey = "canvas" | "session" | "transversal" | "library";
 

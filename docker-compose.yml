@@ -1,0 +1,34 @@
+# Nexus — un solo servicio (la app Next.js). La base de datos es Supabase
+# (externa), por eso NO hay servicio de Postgres acá.
+#
+#   docker compose build      # construye la imagen
+#   docker compose up -d      # levanta la app  → http://localhost:3000
+#   docker compose logs -f    # ver logs
+#
+# Las variables salen del archivo .env de ESTA carpeta:
+#   · NEXT_PUBLIC_* → build args (se inlinean en el bundle del navegador en build).
+#   · todo lo demás → env_file (se inyecta en RUNTIME, no se hornea en la imagen).
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Compose interpola estos desde el .env de esta carpeta.
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+    image: nexus:latest
+    container_name: nexus
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${PORT:-3000}:3000"
+    # Inyecta DATABASE_URL, claves de servicio, Anthropic, HubSpot, Google,
+    # Data Lake, etc. en runtime. NO se hornean en la imagen.
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"

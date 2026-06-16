@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --webpack -p 3004",
+    "dev": "next dev -p 3004",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -31,6 +31,7 @@
     "dagre": "^0.8.5",
     "echarts": "^6.0.0",
     "echarts-for-react": "^3.0.6",
+    "fs": "^0.0.1-security",
     "google-auth-library": "^10.6.2",
     "googleapis": "^171.4.0",
     "html-to-text": "^10.0.0",
