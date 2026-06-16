@@ -132,12 +132,12 @@ export async function POST(
     const raw = (msg.content[0] as { type: string; text: string }).text.trim();
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      return NextResponse.json({ error: "assist_parse_error" }, { status: 500 });
+      return NextResponse.json({ error: "No se pudo interpretar la respuesta de la IA. Probá reformulando el pedido." }, { status: 500 });
     }
     parsedRaw = JSON.parse(jsonMatch[0]);
   } catch (e) {
     console.error("[timeline/assist] Claude error:", e instanceof Error ? e.message : e);
-    return NextResponse.json({ error: "assist_claude_error" }, { status: 500 });
+    return NextResponse.json({ error: "La IA no pudo procesar el pedido. Probá de nuevo en un momento." }, { status: 500 });
   }
 
   // Validación con el MISMO validador del PUT — la propuesta debe ser aplicable tal cual.

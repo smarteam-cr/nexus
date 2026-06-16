@@ -144,6 +144,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ clientId, ...result }, { status: 201 });
   } catch (e) {
     console.error("[handoffs] create error:", e);
-    return NextResponse.json({ error: "create_failed" }, { status: 500 });
+    return NextResponse.json({ error: "No se pudo crear el handoff. Probá de nuevo." }, { status: 500 });
   }
 }

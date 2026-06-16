@@ -116,7 +116,7 @@ export const PUT = withAuth(async (req: NextRequest, { params }: Params) => {
   } else if (outputType === "FLOWCHART" && body.flowchart) {
     newOutput = JSON.stringify(body.flowchart);
   } else {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return NextResponse.json({ error: "Solicitud inválida." }, { status: 400 });
   }
 
   await prisma.agentRun.update({ where: { id: runId }, data: { output: newOutput } });

@@ -1448,28 +1448,30 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
     );
   }
 
-  // Validar según outputType
+  // Validar según outputType. Mensajes legibles: el agente a veces devuelve un
+  // output vacío/malformado (típico cuando se cortó por tokens) → el CSE necesita
+  // saber que es reintentable, no un código seco.
   if (isFlowchart) {
     if (!analysisJson?.nodes || !Array.isArray(analysisJson.nodes) || analysisJson.nodes.length === 0) {
-      return NextResponse.json({ error: "invalid_flowchart_response" }, { status: 500 });
+      return NextResponse.json({ error: "El agente devolvió un diagrama vacío o inválido. Probá de nuevo." }, { status: 500 });
     }
   } else if (isCardsAndFlowcharts) {
     // Cards son opcionales (el agente puede generar solo flowcharts)
     if (!analysisJson?.flowcharts?.length && !analysisJson?.cards?.length) {
-      return NextResponse.json({ error: "invalid_response_empty" }, { status: 500 });
+      return NextResponse.json({ error: "El agente no devolvió contenido. Probá de nuevo." }, { status: 500 });
     }
   } else if (isTimelineDetailAgent) {
     // D.1: el agente de detalle emite timelineDetail, no cards/sections.
     if (!analysisJson?.timelineDetail?.phases?.length) {
-      return NextResponse.json({ error: "invalid_timeline_detail" }, { status: 500 });
+      return NextResponse.json({ error: "El agente devolvió un detalle de cronograma inválido. Probá de nuevo." }, { status: 500 });
     }
   } else if (useBlockFormat) {
     if (!analysisJson?.sections?.length) {
-      return NextResponse.json({ error: "invalid_block_response" }, { status: 500 });
+      return NextResponse.json({ error: "El agente devolvió bloques inválidos. Probá de nuevo." }, { status: 500 });
     }
   } else {
     if (!analysisJson?.cards?.length) {
-      return NextResponse.json({ error: "invalid_response" }, { status: 500 });
+      return NextResponse.json({ error: "El agente devolvió una respuesta inválida. Probá de nuevo." }, { status: 500 });
     }
   }
 

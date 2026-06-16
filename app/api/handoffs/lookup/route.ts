@@ -62,6 +62,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (e) {
     console.error("[handoffs/lookup] error:", e);
-    return NextResponse.json({ error: "lookup_failed" }, { status: 500 });
+    return NextResponse.json({ error: "No se pudo buscar el handoff." }, { status: 500 });
   }
 }
