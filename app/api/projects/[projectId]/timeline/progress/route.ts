@@ -14,6 +14,7 @@ import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { regenerateTimelineProgress } from "@/lib/timeline/regenerate-progress";
+import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 
 export async function POST(
   _req: NextRequest,
@@ -23,8 +24,14 @@ export async function POST(
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
-  const result = await regenerateTimelineProgress(projectId);
-  return NextResponse.json(result);
+  try {
+    const result = await regenerateTimelineProgress(projectId);
+    return NextResponse.json(result);
+  } catch (e) {
+    // El agente de avance falló (créditos, key, rate limit, …) → razón real al CSE.
+    console.error("[timeline/progress] error:", e instanceof Error ? e.message : e);
+    return NextResponse.json({ status: "error", error: humanizeAgentError(e) }, { status: 500 });
+  }
 }
 
 export async function DELETE(

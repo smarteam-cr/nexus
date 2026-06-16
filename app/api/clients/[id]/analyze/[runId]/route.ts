@@ -18,6 +18,20 @@ export const GET = withAuth(async (_req: NextRequest, { params }: Params) => {
 
   if (!run) return apiError("not_found", 404);
 
+  // El run falló → exponer la razón real (markError la guardó humanizada en output).
+  // El polling la lee y el frontend la muestra en vez de "el agente falló".
+  if (run.status === "ERROR") {
+    let error = "El agente no pudo completar la tarea. Probá de nuevo.";
+    try {
+      const parsed = JSON.parse(run.output ?? "{}");
+      if (typeof parsed?.error === "string" && parsed.error.trim()) error = parsed.error;
+    } catch { /* output no-JSON */ }
+    return NextResponse.json({
+      id: run.id, status: run.status, createdAt: run.createdAt,
+      agentName: run.agent?.name ?? null, error,
+    });
+  }
+
   const outputType = run.agent?.outputType ?? "CARDS";
 
   // ── FLOWCHART: leer desde output JSON ────────────────────────────────────────

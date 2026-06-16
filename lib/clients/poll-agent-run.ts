@@ -19,6 +19,11 @@ export interface PolledRun {
   cards?: Array<{ cardType?: string; canvasSection?: string | null; [k: string]: unknown }>;
   flowcharts?: unknown[];
   flowchart?: unknown;
+  blocks?: unknown[];
+  /** Razón real del fallo (la expone el GET [runId] cuando status=ERROR). F2. */
+  error?: string;
+  /** Fase en curso ("Analizando sesiones…") — la expone el GET cuando RUNNING. F3. */
+  currentPhase?: string | null;
 }
 
 export async function pollAgentRun(
@@ -43,6 +48,25 @@ export async function pollAgentRun(
     // RUNNING / PENDING → seguir polleando
   }
   return { status: "TIMEOUT" };
+}
+
+/**
+ * Traduce el resultado del polling a un toast (tipo + mensaje). Centraliza la
+ * lógica que antes vivía inline en cada disparador (F2.2):
+ *   DONE    → success con resumen de lo generado
+ *   ERROR   → la razón REAL (créditos / key / rate limit …), no "el agente falló"
+ *   TIMEOUT → mensaje honesto: sigue corriendo, revisá en unos minutos
+ */
+export function summarizePollResult(r: PolledRun): { type: "success" | "error"; message: string } {
+  if (r.status === "DONE") return { type: "success", message: `Listo — ${summarizeRun(r)}` };
+  if (r.status === "ERROR") {
+    return { type: "error", message: r.error || "El agente no pudo completar la tarea. Probá de nuevo." };
+  }
+  // TIMEOUT: el polling se rindió pero el agente puede seguir corriendo.
+  return {
+    type: "error",
+    message: "El agente se está demorando más de lo esperado. Revisá el resultado en unos minutos.",
+  };
 }
 
 /** Resumen corto de lo que produjo una corrida (para toasts). */

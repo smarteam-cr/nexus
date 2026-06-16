@@ -17,6 +17,7 @@ import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas
 import { syncFlowchartsToProcesos } from "@/lib/canvas/sync-procesos-blocks";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
+import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -1995,7 +1996,9 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
       .catch(() => {});
   const markError = (e: unknown) =>
     prisma.agentRun
-      .update({ where: { id: pre.id }, data: { status: "ERROR", output: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) } })
+      // Guardamos el mensaje YA humanizado en output → el GET [runId] lo expone y el
+      // frontend (polling) muestra la razón real (créditos, key, rate limit, …).
+      .update({ where: { id: pre.id }, data: { status: "ERROR", output: JSON.stringify({ error: humanizeAgentError(e) }) } })
       .catch(() => {});
 
   // Background para agentes pesados (CARDS_AND_FLOWCHARTS) o cuando el cliente lo pide:
@@ -2019,7 +2022,7 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
     return res;
   } catch (e) {
     await markError(e);
-    return NextResponse.json({ error: "AGENT_ERROR", message: "Error al ejecutar el agente. Intenta de nuevo.", runId: pre.id }, { status: 500 });
+    return NextResponse.json({ error: "AGENT_ERROR", message: humanizeAgentError(e), runId: pre.id }, { status: 500 });
   }
 });
 

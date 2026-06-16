@@ -9,7 +9,7 @@
  * NO_HANDOFF vía data.message). `onDone` deja al canvas refrescar su contenido.
  */
 import { useState } from "react";
-import { pollAgentRun, summarizeRun } from "@/lib/clients/poll-agent-run";
+import { pollAgentRun, summarizeRun, summarizePollResult } from "@/lib/clients/poll-agent-run";
 import { useToast } from "@/components/ui/Toast";
 
 export default function CanvasAgentButton({
@@ -50,13 +50,12 @@ export default function CanvasAgentButton({
         toast.error(data.message ?? data.error ?? "No se pudo ejecutar el agente.");
       } else if (data.runId) {
         const result = await pollAgentRun(clientId, data.runId);
-        if (result.status === "DONE") {
-          toast.success(`Listo — ${summarizeRun(result)}`);
+        const summary = summarizePollResult(result);
+        if (summary.type === "success") {
+          toast.success(summary.message);
           onDone?.();
-        } else if (result.status === "ERROR") {
-          toast.error("El agente falló durante la ejecución.");
         } else {
-          toast.error("Sigue corriendo — revisá en unos minutos.");
+          toast.error(summary.message);
         }
       } else {
         toast.success(`Listo — ${summarizeRun(data)}`);
