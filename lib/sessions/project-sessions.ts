@@ -48,3 +48,29 @@ export async function getPastSessionsForProject(
   }
   return out;
 }
+
+/**
+ * Fecha de la sesión de KICKOFF del proyecto (la más antigua cuyo título matchee
+ * kickoff), o null si no hay. Fuente de verdad de la heurística "kickoff" — la
+ * reusan: la derivación del anchor del cronograma al generar (analyze), el GET del
+ * timeline (para sugerirla en la UI) y el backfill. Se matchea por TÍTULO (no por la
+ * primera sesión: la primera suele ser el Hand Off de Sales→CS, no el kickoff).
+ * Mismas variantes que HANDOFF_EXCLUDE_TITLE_KEYWORDS (analyze/route.ts).
+ */
+export async function getKickoffSessionDate(projectId: string): Promise<Date | null> {
+  const link = await prisma.sessionProject.findFirst({
+    where: {
+      projectId,
+      session: {
+        OR: [
+          { title: { contains: "kickoff", mode: "insensitive" } },
+          { title: { contains: "kick-off", mode: "insensitive" } },
+          { title: { contains: "kick off", mode: "insensitive" } },
+        ],
+      },
+    },
+    orderBy: { session: { date: "asc" } },
+    select: { session: { select: { date: true } } },
+  });
+  return link?.session.date ?? null;
+}

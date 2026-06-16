@@ -33,6 +33,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 import { Prisma } from "@prisma/client";
 import type {
   TimelinePhaseSource,
@@ -75,6 +76,9 @@ interface TimelineResponse {
   /** D.1.5 — flag de publicación de la superficie externa del cronograma (vive
    *  en Project). El preview interno del kickoff lo espeja para ser fiel. */
   timelinePublishedAt: string | null;
+  /** Fecha de la sesión de kickoff del proyecto (ISO) o null. Solo informativo: la UI
+   *  la ofrece como sugerencia del anchor cuando difiere del actual. */
+  kickoffSessionDate: string | null;
   /** Propuesta pendiente de re-generación del agente (re-run con timeline ya existente).
    *  Shape del PUT (fases id-aware, sin `tasks`); null = sin propuesta. El canvas la
    *  muestra como vista previa aplicable. Se limpia al aplicar (PUT) o descartar (DELETE). */
@@ -140,6 +144,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     },
   });
   if (!tl) return { exists: false };
+  const kickoffDate = await getKickoffSessionDate(projectId);
   return {
     exists: true,
     anchorStartDate: tl.anchorStartDate?.toISOString() ?? null,
@@ -147,6 +152,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     generatedByAgentRunId: tl.generatedByAgentRunId,
     detailConfirmedAt: tl.detailConfirmedAt?.toISOString() ?? null,
     timelinePublishedAt: tl.project.timelinePublishedAt?.toISOString() ?? null,
+    kickoffSessionDate: kickoffDate?.toISOString() ?? null,
     pendingProposal: (tl.pendingProposal as PutBody | null) ?? null,
     pendingProposalRunId: tl.pendingProposalRunId,
     pendingProgress: (tl.pendingProgress as PendingProgress | null) ?? null,

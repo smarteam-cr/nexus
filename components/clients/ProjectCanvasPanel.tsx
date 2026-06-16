@@ -16,7 +16,6 @@ import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import CronogramaProgressButton from "@/components/clients/CronogramaProgressButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
-import { PublishKickoffButton } from "./PublishKickoffButton";
 import ProjectHandoffSection from "./ProjectHandoffSection";
 
 const FlowchartViewer = dynamic(
@@ -570,15 +569,12 @@ export default function ProjectCanvasPanel({
           El div rompe el padding del panel (px-6 py-8 space-y-6) para que las
           secciones del landing sean full-bleed dentro del scroll container. */}
       {!isResumenCanvas && activeCanvas?.name === "Kickoff" && activeCanvasId && (
-        <>
-          {/* Publicar el kickoff (el ACCESO del cliente vive en el toolbar del
-              proyecto — es project-level, compartido por todas las superficies). */}
-          <PublishKickoffButton projectId={projectId} />
-          <div style={{ margin: "-1.5rem -1.5rem -2rem" }}>
-            {/* agentNonce remonta el landing al terminar una corrida del CTA → refetch */}
-            <KickoffLanding key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} editable />
-          </div>
-        </>
+        // Publicar/ocultar el kickoff vive en el pop-up "Acceso del cliente"
+        // (toolbar del proyecto), junto al resto de la visibilidad por superficie.
+        <div style={{ margin: "-1.5rem -1.5rem -2rem" }}>
+          {/* agentNonce remonta el landing al terminar una corrida del CTA → refetch */}
+          <KickoffLanding key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} editable />
+        </div>
       )}
 
       {/* Cronograma: Gantt + editor del ProjectTimeline (fases/tareas/semanas).

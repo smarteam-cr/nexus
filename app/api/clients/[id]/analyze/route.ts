@@ -16,6 +16,7 @@ import { AGENT_GROUP_TO_CANVAS } from "@/lib/canvas/default-canvases";
 import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { syncFlowchartsToProcesos } from "@/lib/canvas/sync-procesos-blocks";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
+import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -2152,8 +2153,13 @@ async function persistTimelineFromAgentOutput(
         });
       }
 
+      // Si el anchor sigue vacío, derivarlo de la sesión de kickoff (la propuesta lo
+      // lleva → al aplicarla, el PUT lo persiste). Si ya está, se conserva (no se pisa).
       const pendingProposal = {
-        anchorStartDate: existing.anchorStartDate?.toISOString() ?? null,
+        anchorStartDate:
+          existing.anchorStartDate?.toISOString() ??
+          (await getKickoffSessionDate(bodyProjectId))?.toISOString() ??
+          null,
         phases: proposedPhases,
       };
 
@@ -2170,14 +2176,21 @@ async function persistTimelineFromAgentOutput(
       return;
     }
 
+    // Fecha de arranque por defecto = sesión de kickoff del proyecto (null si no hay).
+    // Editable después por el CSE vía PUT /timeline.
+    const kickoffDate = await getKickoffSessionDate(bodyProjectId);
     await prisma.projectTimeline.create({
       data: {
         projectId: bodyProjectId,
         generatedByAgentRunId: agentRunId,
+        anchorStartDate: kickoffDate,
         phases: { create: validPhases },
       },
     });
-    console.log(`[analyze] ✓ ProjectTimeline creado con ${validPhases.length} fases (AgentRun ${agentRunId})`);
+    console.log(
+      `[analyze] ✓ ProjectTimeline creado con ${validPhases.length} fases (AgentRun ${agentRunId})` +
+        (kickoffDate ? ` · anchor=${kickoffDate.toISOString().slice(0, 10)} (kickoff)` : " · sin anchor (sin kickoff)"),
+    );
   } catch (e) {
     console.error("[analyze] Timeline persist error:", e);
     // No fallar la respuesta — el handoff principal (cards/blocks) ya quedó persistido.

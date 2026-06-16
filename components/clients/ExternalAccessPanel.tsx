@@ -118,6 +118,30 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
     }
   };
 
+  // Publicar / ocultar una superficie (kickoff | cronograma) para el cliente.
+  // El cronograma se muestra COMPLETO al publicar: confirmamos el detalle de paso
+  // (best-effort; 404 si todavía no hay cronograma). Refresca para actualizar badges.
+  const togglePublish = async (kind: "kickoff" | "cronograma", publish: boolean) => {
+    const endpoint = kind === "kickoff" ? "publish-kickoff" : "publish-timeline";
+    try {
+      const res = await fetch(`/api/projects/${projectId}/${endpoint}`, {
+        method: publish ? "POST" : "DELETE",
+      });
+      if (!res.ok) {
+        alert("No se pudo cambiar la publicación.");
+        return;
+      }
+      if (kind === "cronograma" && publish) {
+        await fetch(`/api/projects/${projectId}/timeline/confirm-detail`, {
+          method: "POST",
+        }).catch(() => {});
+      }
+      await refresh();
+    } catch {
+      alert("Error de conexión.");
+    }
+  };
+
   const closeModal = () => {
     setOpen(false);
     setConfirming(null);
@@ -178,6 +202,7 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
               confirming={confirming}
               working={working}
               onSavePassword={savePassword}
+              onTogglePublish={togglePublish}
               onAskRegenerate={() => setConfirming("regenerate")}
               onAskRevoke={() => setConfirming("revoke")}
               onCancelConfirm={() => setConfirming(null)}
@@ -240,6 +265,7 @@ function ManageView({
   confirming,
   working,
   onSavePassword,
+  onTogglePublish,
   onAskRegenerate,
   onAskRevoke,
   onCancelConfirm,
@@ -252,6 +278,7 @@ function ManageView({
   confirming: "regenerate" | "revoke" | null;
   working: boolean;
   onSavePassword: (pw: string) => Promise<string | null>;
+  onTogglePublish: (kind: "kickoff" | "cronograma", publish: boolean) => Promise<void>;
   onAskRegenerate: () => void;
   onAskRevoke: () => void;
   onCancelConfirm: () => void;
@@ -297,10 +324,17 @@ function ManageView({
 
       {!isRevoked && (
         <>
-          {/* Links de entrada — uno por superficie (kickoff / cronograma) */}
+          {/* Links de entrada + publicación — uno por superficie (kickoff / cronograma) */}
           <div className="space-y-3">
             {links.map((l) => (
-              <LinkRow key={l.kind} label={l.label} url={l.url} published={l.published} />
+              <LinkRow
+                key={l.kind}
+                kind={l.kind}
+                label={l.label}
+                url={l.url}
+                published={l.published}
+                onTogglePublish={onTogglePublish}
+              />
             ))}
           </div>
 
@@ -464,12 +498,33 @@ function PasswordEditor({
 
 // ── Helpers de fila ────────────────────────────────────────────────────────────
 
-function LinkRow({ label, url, published }: { label: string; url: string; published: boolean }) {
+function LinkRow({
+  kind,
+  label,
+  url,
+  published,
+  onTogglePublish,
+}: {
+  kind: "kickoff" | "cronograma";
+  label: string;
+  url: string;
+  published: boolean;
+  onTogglePublish: (kind: "kickoff" | "cronograma", publish: boolean) => Promise<void>;
+}) {
   const [copied, setCopied] = useState(false);
+  const [toggling, setToggling] = useState(false);
   const copy = async () => {
     await navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+  const toggle = async () => {
+    setToggling(true);
+    try {
+      await onTogglePublish(kind, !published);
+    } finally {
+      setToggling(false);
+    }
   };
   return (
     <div>
@@ -484,6 +539,18 @@ function LinkRow({ label, url, published }: { label: string; url: string; publis
         >
           {published ? "publicado" : "sin publicar"}
         </span>
+        <div className="flex-1" />
+        <button
+          onClick={toggle}
+          disabled={toggling}
+          className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border transition-colors disabled:opacity-50 ${
+            published
+              ? "border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
+              : "border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
+          }`}
+        >
+          {toggling ? "…" : published ? "Ocultar" : "Publicar"}
+        </button>
       </div>
       <div className="flex items-center gap-1">
         <input

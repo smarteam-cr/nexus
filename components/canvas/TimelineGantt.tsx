@@ -79,6 +79,7 @@ interface Props {
   onRemoveTask?: (phaseKey: string, taskKey: string) => void;
   onSetAnchor?: (isoDate: string) => void; // yyyy-mm-dd — fijar arranque desde el Gantt
   onAssistPhase?: (phase: GanttPhase) => void; // abrir el dialog de IA scopeado a esta fase
+  kickoffDate?: string | null; // yyyy-mm-dd de la sesión de kickoff — sugerencia del anchor
 }
 
 // ── Metadata de tipos de actividad (color de barra + chip) ────────────────────
@@ -122,6 +123,7 @@ export default function TimelineGantt({
   onRemoveTask,
   onSetAnchor,
   onAssistPhase,
+  kickoffDate,
 }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -188,6 +190,20 @@ export default function TimelineGantt({
               />
             </label>
           ))}
+
+        {/* Sugerencia: fecha de la sesión de kickoff. Aparece si difiere del anchor
+            actual (incl. cuando está vacío). Un click la fija; se guarda con «Guardar». */}
+        {onSetAnchor && kickoffDate && kickoffDate !== anchor && (
+          <button
+            type="button"
+            onClick={() => onSetAnchor(kickoffDate)}
+            title="Usar la fecha de la sesión de kickoff como arranque"
+            className="flex items-center gap-1.5 text-[11px] font-semibold text-blue-300 bg-blue-900/30 border border-blue-700/40 hover:bg-blue-900/50 rounded-lg px-2.5 py-1 transition-colors"
+          >
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            Kickoff: {fmtFull(kickoffDate)} · usar
+          </button>
+        )}
 
         <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
           {Object.values(ACTIVITY_META).map((m) => (

@@ -29,7 +29,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { plural } from "@/lib/timeline/weeks";
 import { ConfirmDialog } from "@/components/ui";
-import { PublishSurfaceButton } from "@/components/clients/PublishSurfaceButton";
 import TimelineGantt, { type GanttPhase, type GanttTaskStatus } from "./TimelineGantt";
 import TimelineAssistDialog from "./TimelineAssistDialog";
 
@@ -116,11 +115,10 @@ interface PendingProgress {
 export default function CronogramaCanvas({ projectId, clientId }: { projectId: string; clientId: string }) {
   const [phases, setPhases] = useState<Phase[]>([]);
   const [anchor, setAnchor] = useState<string>(""); // yyyy-mm-dd o ""
-  const [detailConfirmedAt, setDetailConfirmedAt] = useState<string | null>(null);
+  const [kickoffDate, setKickoffDate] = useState<string>(""); // yyyy-mm-dd de la sesión de kickoff (sugerencia)
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [confirmBusy, setConfirmBusy] = useState(false);
   const [deleteDetailOpen, setDeleteDetailOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -172,7 +170,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
       if (data.exists) {
         setPhases(mapServerPhases(data.phases ?? []));
         setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
-        setDetailConfirmedAt(data.detailConfirmedAt ?? null);
+        setKickoffDate(data.kickoffSessionDate ? String(data.kickoffSessionDate).slice(0, 10) : "");
         // Propuesta de re-generación del agente (re-run con cronograma ya existente):
         // se muestra como vista previa aplicable, reusando el mismo banner que el assist.
         // No pisa una propuesta de assist en curso (prev tiene prioridad).
@@ -188,7 +186,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
       } else {
         setPhases([]);
         setAnchor("");
-        setDetailConfirmedAt(null);
+        setKickoffDate("");
         setPendingProgress(null);
       }
       setError(null);
@@ -316,7 +314,6 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
       if (data.exists) {
         setPhases(mapServerPhases(data.phases ?? []));
         setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
-        setDetailConfirmedAt(data.detailConfirmedAt ?? null);
       }
       setDirty(false);
     } catch {
@@ -536,23 +533,6 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
     return n;
   };
 
-  // ── Confirmación del detalle (gate de la vista cliente) ───────────────────────
-  const setDetailConfirmed = async (confirm: boolean) => {
-    setConfirmBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/timeline/confirm-detail`, {
-        method: confirm ? "POST" : "DELETE",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data?.error ?? "No se pudo actualizar la confirmación.");
-      else setDetailConfirmedAt(data.confirmedAt ?? null);
-    } catch {
-      setError("Error de conexión.");
-    }
-    setConfirmBusy(false);
-  };
-
   // ── Regenerar detalle: borra las tareas (conserva esqueleto/anchor/tipos) y las
   // vuelve a crear con IA. Único control manual del flujo auto. ──────────────────
   const regenerateDetail = async () => {
@@ -699,70 +679,16 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
         </div>
       )}
 
-      {/* ── Publicación de la superficie externa (D.1.5) — fuera del gate de
-          tareas: publicar SIN detalle confirmado es válido (el cliente ve las
-          fases solas). La regla es unificada: el flag gobierna la página
-          /external/cronograma Y la sección embebida en el kickoff. ── */}
-      {phases.length > 0 && !proposal && (
-        <PublishSurfaceButton
-          projectId={projectId}
-          endpoint="publish-timeline"
-          copy={{
-            published: "Cronograma publicado al cliente",
-            unpublished: "Cronograma no publicado",
-            publishedHint: detailConfirmedAt
-              ? "El cliente ve las fases y las acciones por semana — en su página propia y dentro del kickoff."
-              : "El cliente ve las FASES (en su página propia y dentro del kickoff). Las acciones por semana aparecen cuando confirmes el detalle.",
-            unpublishedHint:
-              "El cliente no ve el cronograma — ni en su página propia ni dentro del kickoff — aunque tenga el acceso.",
-          }}
-        />
+      {/* Publicar/ocultar el cronograma para el cliente vive ahora en el pop-up
+          "Acceso del cliente" (toolbar del proyecto), junto al kickoff. */}
+
+      {/* ── Estado de generación del detalle ── */}
+      {generating && (
+        <span className="flex items-center gap-2 text-sm font-medium text-blue-400">
+          <span className="w-3.5 h-3.5 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
+          Creando tareas internas…
+        </span>
       )}
-
-      {/* ── Cabecera: estado de generación / confirmar / regenerar ── */}
-      <div className="flex flex-wrap items-center gap-2.5">
-        {generating && (
-          <span className="flex items-center gap-2 text-sm font-medium text-blue-600">
-            <span className="w-3.5 h-3.5 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
-            Creando tareas internas…
-          </span>
-        )}
-
-        {totalTasks > 0 && !proposal && !generating && (
-          <div className="ml-auto flex flex-wrap items-center gap-2.5">
-            {detailConfirmedAt ? (
-              <>
-                <span className="text-[11px] font-semibold text-emerald-300 bg-emerald-900/30 border border-emerald-700/40 rounded-lg px-2.5 py-1.5">
-                  ✓ Detalle confirmado — visible para el cliente
-                </span>
-                <button
-                  onClick={() => setDetailConfirmed(false)}
-                  disabled={confirmBusy}
-                  className="text-xs font-medium text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
-                >
-                  Quitar confirmación
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setDetailConfirmed(true)}
-                disabled={confirmBusy}
-                className="text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3.5 py-1.5 disabled:opacity-50 transition-colors"
-                title="Habilita que el cliente vea las acciones por semana en el kickoff"
-              >
-                Confirmar detalle
-              </button>
-            )}
-            <button
-              onClick={() => setDeleteDetailOpen(true)}
-              className="text-xs font-medium text-gray-500 hover:text-blue-400 border border-gray-700 hover:border-blue-700/60 rounded-lg px-3 py-1.5 transition-colors"
-              title="Borra las tareas actuales y la IA propone unas nuevas"
-            >
-              Regenerar detalle
-            </button>
-          </div>
-        )}
-      </div>
 
       {/* ── Disparador del asistente IA (abre el dialog; el preview vuelve al Gantt) ── */}
       {phases.length > 0 && !proposal && (
@@ -770,13 +696,24 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
           <span className="text-sm text-gray-400">
             ¿Necesitás ajustar el cronograma? Pedíselo a la IA — vos revisás antes de aplicar.
           </span>
-          <button
-            onClick={() => { setAssistScopePhaseId(null); setAssistOpen(true); }}
-            className="flex items-center gap-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
-            Pedir cambio con IA
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {totalTasks > 0 && !generating && (
+              <button
+                onClick={() => setDeleteDetailOpen(true)}
+                className="text-xs font-medium text-gray-500 hover:text-blue-400 border border-gray-700 hover:border-blue-700/60 rounded-lg px-3 py-1.5 transition-colors"
+                title="Borra las tareas actuales y la IA propone unas nuevas"
+              >
+                Regenerar detalle
+              </button>
+            )}
+            <button
+              onClick={() => { setAssistScopePhaseId(null); setAssistOpen(true); }}
+              className="flex items-center gap-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+              Pedir cambio con IA
+            </button>
+          </div>
         </div>
       )}
 
@@ -1002,6 +939,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
           onRemoveTask={removeTask}
           onSetAnchor={setAnchorFromGantt}
           onAssistPhase={(phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }}
+          kickoffDate={kickoffDate || null}
         />
       )}
 
