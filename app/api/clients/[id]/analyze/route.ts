@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { withAuth, apiError } from "@/lib/api";
-import { dataLake } from "@/lib/data-lake/client";
+import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
 import { extractTitleTerms, extractDomain } from "@/lib/utils/matching";
 import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
@@ -888,7 +888,7 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   let dataLakeContent = "";
   try {
     const searchTerm = titleTerms[0] ?? companyName;
-    const { data: rows } = await dataLake
+    const { data: rows } = await getDataLake()
       .from("hs_notes")
       .select("content")
       .ilike("content", `%${searchTerm}%`)

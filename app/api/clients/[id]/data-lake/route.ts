@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dataLake } from "@/lib/data-lake/client";
+import { getDataLake } from "@/lib/data-lake/client";
 import { prisma } from "@/lib/db/prisma";
 import { withAuth, apiError } from "@/lib/api";
 
@@ -43,7 +43,7 @@ export const GET = withAuth(async (
 
   try {
     // Schema real de hs_notes: id, content, metadata, embedding
-    let query = dataLake
+    let query = getDataLake()
       .from("hs_notes")
       .select("id, content, metadata")
       .order("id", { ascending: false })
