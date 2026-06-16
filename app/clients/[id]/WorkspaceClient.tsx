@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
+import { useToast } from "@/components/ui/Toast";
 import { invalidateGps } from "@/lib/clients/gps-cache";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
@@ -39,41 +40,72 @@ export default function WorkspaceClient({
   const router = useRouter();
   const syncedRef = useRef(false);
   const { bumpGpsRefresh } = useWorkspace();
+  const toast = useToast();
 
-  // Sincronización automática al entrar al cliente (silenciosa, en background)
+  // F4 — el auto-sync de fondo deja de ser invisible: un indicador discreto mientras
+  // corre, y un toast si falla. El contador maneja que los dos syncs corran en paralelo.
+  const [syncing, setSyncing] = useState(false);
+  const activeSyncs = useRef(0);
+  const startSync = useCallback(() => { activeSyncs.current++; setSyncing(true); }, []);
+  const endSync = useCallback(() => {
+    activeSyncs.current = Math.max(0, activeSyncs.current - 1);
+    if (activeSyncs.current === 0) setSyncing(false);
+  }, []);
+
+  // Sincronización con HubSpot al entrar al cliente (background). Reintentable.
+  const runHubspotSync = useCallback(async () => {
+    startSync();
+    try {
+      const res = await fetch(`/api/clients/${clientId}/sync-projects`, { method: "POST" });
+      if (!res.ok) throw new Error("sync failed");
+      const data = await res.json();
+      if (data.created || data.updated) router.refresh();
+    } catch {
+      toast.error("No se pudo sincronizar con HubSpot.", {
+        action: { label: "Reintentar", onClick: () => void runHubspotSync() },
+      });
+    } finally {
+      endSync();
+    }
+  }, [clientId, router, toast, startSync, endSync]);
+
   useEffect(() => {
     if (!hasHubspot || syncedRef.current) return;
     syncedRef.current = true;
+    void runHubspotSync();
+  }, [hasHubspot, runHubspotSync]);
 
-    fetch(`/api/clients/${clientId}/sync-projects`, { method: "POST" })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.created || data.updated) {
-          router.refresh();
-        }
-      })
-      .catch(() => {});
-  }, [clientId, hasHubspot]);
-
-  // Auto-sync de Google Meet en background — descubre transcripts/Docs nuevos
-  // sin que el usuario tenga que disparar nada. El endpoint tiene cooldown
-  // de 20 min, así que no spamea si recargás múltiples clientes seguidos.
-  // Si descubre sesiones/transcripts nuevos, bumpea la señal para que el GPS se
-  // refresque (única condición de recarga del widget — no recarga al cambiar de tab).
+  // Auto-sync de Google Meet en background — descubre transcripts/Docs nuevos sin que
+  // el usuario dispare nada. Cooldown de 20 min en el endpoint. Si descubre cosas
+  // nuevas, bumpea la señal para refrescar el GPS.
   useEffect(() => {
+    startSync();
     fetch("/api/integrations/google/auto-sync", { method: "POST" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d && !d.skipped && ((d.sync?.synced ?? 0) > 0 || (d.enrich?.enriched ?? 0) > 0)) {
-          invalidateGps(); // limpia el cache → el GPS montado refetchea y los no montados también al remontar
+          invalidateGps(); // limpia el cache → el GPS montado refetchea
           bumpGpsRefresh();
         }
       })
-      .catch(() => {});
-  }, [bumpGpsRefresh]);
+      // Enriquecimiento de fondo: el fallo se queda silencioso (no toda cuenta tiene
+      // Google conectado). El indicador alcanza; el error ruidoso es el de HubSpot.
+      .catch(() => {})
+      .finally(() => endSync());
+  }, [bumpGpsRefresh, startSync, endSync]);
 
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 57px)" }}>
+      {/* Indicador discreto de sync de fondo (F4) — desaparece al terminar bien. */}
+      {syncing && (
+        <div
+          className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border border-gray-700 bg-gray-900/90 px-3 py-1.5 text-[11px] font-medium text-gray-300 shadow-lg backdrop-blur"
+          title="Sincronizando con HubSpot y Google en segundo plano"
+        >
+          <span className="w-3 h-3 border-2 border-gray-600 border-t-blue-400 rounded-full animate-spin" />
+          Sincronizando…
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto">
         <ProjectSection
           clientId={clientId}
