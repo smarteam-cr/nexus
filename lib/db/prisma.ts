@@ -17,6 +17,14 @@ function createPrismaClient() {
     idleTimeoutMillis: 30_000,        // mantener conexiones tibias entre navegaciones
     connectionTimeoutMillis: 5_000,   // fail rápido si Supabase no responde
   });
+  // pg.Pool emite 'error' cuando un cliente OCIOSO falla — p. ej. el pooler de
+  // Supabase (Supavisor) cierra conexiones idle. SIN este listener, Node trata
+  // el evento como "unhandled 'error'" y MATA el proceso entero → nginx da 502.
+  // Con el listener, el cliente roto se descarta y el Pool sigue (el próximo
+  // query abre uno nuevo). Imprescindible al usar el connection pooler.
+  pool.on("error", (err) => {
+    console.error("[prisma] pg pool idle client error:", err.message);
+  });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({
     adapter,
