@@ -101,7 +101,7 @@ export async function analyzeProjectParticipants(
 
   // Equipo interno para separar Smarteam vs cliente
   const teamMembers = await prisma.teamMember.findMany({
-    select: { email: true, name: true, role: true },
+    select: { email: true, name: true, area: true },
   });
   const internalEmails = new Set(teamMembers.map((m) => m.email.toLowerCase()));
 

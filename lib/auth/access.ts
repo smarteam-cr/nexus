@@ -18,15 +18,16 @@
  *   10. 403
  */
 import { prisma } from "@/lib/db/prisma";
+import type { Prisma } from "@prisma/client";
 import {
   requireUser,
   ForbiddenError,
   type AppUserWithTeamMember,
 } from "./supabase";
+import { hasCapability } from "./roles";
 
 export type AccessReason =
   | "super-admin"
-  | "admin"
   | "view-all"
   | "hubspot-owner"
   | "granted"
@@ -52,39 +53,41 @@ export async function requireAccessToClient(clientId: string): Promise<AccessRes
     throw new ForbiddenError("Cliente externo solo puede acceder a su propio cliente");
   }
 
-  // 3. INTERNAL necesita TeamMember
+  // 3. INTERNAL necesita TeamMember activo
   const tm = user.teamMember;
   if (!tm) throw new ForbiddenError("Usuario interno sin TeamMember vinculado");
+  if (tm.deactivatedAt) throw new ForbiddenError("Tu cuenta del equipo fue desactivada");
 
-  // 4. SUPER_ADMIN
+  // 4. SUPER_ADMIN ve todo
   if (tm.roleEnum === "SUPER_ADMIN") return { user, reason: "super-admin" };
 
-  // 5. ADMIN
-  if (tm.roleEnum === "ADMIN") return { user, reason: "admin" };
+  // 5. Roles con "ve todos los clientes" (VENTAS / CSL / MARKETING)
+  if (hasCapability(tm.roleEnum, "seeAllClients")) return { user, reason: "view-all" };
 
-  // 6. canViewAllClients (con expiración opcional)
+  // 6. Override excepcional por flag (ej. un CSE con acceso temporal a todo)
   if (tm.canViewAllClients) {
     const notExpired = !tm.canViewAllExpiresAt || tm.canViewAllExpiresAt > new Date();
     if (notExpired) return { user, reason: "view-all" };
   }
 
-  // 7-8. ClientAssignment
-  const assignment = await prisma.clientAssignment.findUnique({
-    where: { clientId_teamMemberId: { clientId, teamMemberId: tm.id } },
+  // 7. Compartir / override: por persona (teamMemberId) o por rol (targetRole, ej.
+  //    CSE = todo el equipo). Cualquier REVOKE que me alcance corta; sino GRANT da acceso.
+  const assignments = await prisma.clientAssignment.findMany({
+    where: { clientId, OR: [{ teamMemberId: tm.id }, { targetRole: tm.roleEnum }] },
     select: { kind: true },
   });
-  if (assignment?.kind === "REVOKE") {
-    throw new ForbiddenError("Acceso revocado explícitamente para este cliente");
+  if (assignments.some((a) => a.kind === "REVOKE")) {
+    throw new ForbiddenError("Acceso revocado para este cliente");
   }
-  if (assignment?.kind === "GRANT") return { user, reason: "granted" };
+  if (assignments.some((a) => a.kind === "GRANT")) return { user, reason: "granted" };
 
-  // 9. Owner en HubSpot
+  // 8. Owner en HubSpot (algún Project del cliente con su email como owner)
   const ownerProjectCount = await prisma.project.count({
     where: { clientId, hubspotOwnerEmail: tm.email },
   });
   if (ownerProjectCount > 0) return { user, reason: "hubspot-owner" };
 
-  // 10. Sin acceso
+  // 9. Sin acceso
   throw new ForbiddenError("Sin acceso a este cliente");
 }
 
@@ -99,3 +102,51 @@ export async function requireAccessToClient(clientId: string): Promise<AccessRes
  *
  * Si el recurso no existe (project null), devolver 404 ANTES de llamar al helper.
  */
+
+/**
+ * Devuelve el filtro Prisma de clientes VISIBLES para un usuario, o `null` si
+ * puede ver TODOS (sin filtro). Lo usan la lista de clientes (página + API) para
+ * aplicar el modelo de acceso del lado del SERVIDOR (no cosmético en el browser).
+ */
+export async function accessibleClientWhere(
+  user: AppUserWithTeamMember,
+): Promise<Prisma.ClientWhereInput | null> {
+  // EXTERNAL: solo su propio cliente
+  if (user.kind === "EXTERNAL") {
+    return { id: user.clientId ?? "__none__" };
+  }
+  const tm = user.teamMember;
+  if (!tm || tm.deactivatedAt) return { id: "__none__" }; // sin acceso
+
+  // Ve todo: SUPER_ADMIN / VENTAS / CSL / MARKETING, o el flag override vigente
+  if (tm.roleEnum === "SUPER_ADMIN" || hasCapability(tm.roleEnum, "seeAllClients")) return null;
+  if (tm.canViewAllClients && (!tm.canViewAllExpiresAt || tm.canViewAllExpiresAt > new Date())) {
+    return null;
+  }
+
+  // CSE (scoped): owner por proyecto OR GRANT (a mí o a mi rol), menos REVOKE
+  const [grants, revokes] = await Promise.all([
+    prisma.clientAssignment.findMany({
+      where: { kind: "GRANT", OR: [{ teamMemberId: tm.id }, { targetRole: tm.roleEnum }] },
+      select: { clientId: true },
+    }),
+    prisma.clientAssignment.findMany({
+      where: { kind: "REVOKE", OR: [{ teamMemberId: tm.id }, { targetRole: tm.roleEnum }] },
+      select: { clientId: true },
+    }),
+  ]);
+  const grantedIds = grants.map((g) => g.clientId);
+  const revokedIds = revokes.map((r) => r.clientId);
+
+  const visibility: Prisma.ClientWhereInput[] = [
+    { projects: { some: { hubspotOwnerEmail: tm.email } } },
+  ];
+  if (grantedIds.length) visibility.push({ id: { in: grantedIds } });
+
+  return {
+    AND: [
+      { OR: visibility },
+      ...(revokedIds.length ? [{ id: { notIn: revokedIds } }] : []),
+    ],
+  };
+}

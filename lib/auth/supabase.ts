@@ -74,6 +74,9 @@ export async function requireInternalUser(): Promise<{
   if (!user.teamMember) {
     throw new ForbiddenError("Usuario interno sin TeamMember vinculado");
   }
+  if (user.teamMember.deactivatedAt) {
+    throw new ForbiddenError("Tu cuenta del equipo fue desactivada. Contactá a un administrador.");
+  }
   return { user, teamMember: user.teamMember, role: user.teamMember.roleEnum };
 }
 

@@ -57,13 +57,25 @@ export async function GET(req: NextRequest) {
   // 4. Filtro: TeamMember existente (AppUser INTERNAL con ese email)
   const appUser = await prisma.appUser.findUnique({
     where: { email },
-    select: { id: true, kind: true, authUserId: true },
+    select: {
+      id: true,
+      kind: true,
+      authUserId: true,
+      teamMember: { select: { deactivatedAt: true } },
+    },
   });
 
   if (!appUser || appUser.kind !== "INTERNAL") {
     console.warn(`[/auth/callback] No hay AppUser INTERNAL para ${email}`);
     await supabase.auth.signOut();
     return NextResponse.redirect(new URL("/?error=not_member", req.url));
+  }
+
+  // 4b. Miembro desactivado → bloquear acceso (mantiene histórico, sin login)
+  if (appUser.teamMember?.deactivatedAt) {
+    console.warn(`[/auth/callback] Miembro desactivado intentó entrar: ${email}`);
+    await supabase.auth.signOut();
+    return NextResponse.redirect(new URL("/?error=deactivated", req.url));
   }
 
   // 5. Primer login: vincular authUserId al AppUser

@@ -10,6 +10,7 @@ import {
   UnauthorizedError,
   ForbiddenError,
 } from "@/lib/auth/supabase";
+import { accessibleClientWhere } from "@/lib/auth/access";
 import ClientsGrid, { type ClientRow } from "./ClientsGrid";
 import ICPSection from "./ICPSection";
 
@@ -36,8 +37,13 @@ export default async function ClientsPage() {
     isSuperAdmin: user.teamMember?.roleEnum === "SUPER_ADMIN",
   };
 
+  // Filtro de acceso server-side: CSE ve solo sus clientes (owner) + compartidos;
+  // roles con visibilidad total → null (sin filtro). Ya no es cosmético en el browser.
+  const clientWhere = await accessibleClientWhere(user);
+
   const [clients, teamMembers] = await Promise.all([
     prisma.client.findMany({
+      where: clientWhere ?? undefined,
       orderBy: { createdAt: "desc" }, // fallback secundario; el orden real se aplica abajo
       select: {
         id: true,

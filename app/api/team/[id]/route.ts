@@ -1,21 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { withAuth, apiError } from "@/lib/api";
+import { apiError } from "@/lib/api";
+import { guardCapability } from "@/lib/auth/api-guards";
 import { revalidateTeamMembers } from "@/lib/cache/team";
 
 type Params = { params: Promise<{ id: string }> };
 
-// PUT /api/team/[id] — actualizar miembro
-export const PUT = withAuth(async (req: NextRequest, { params }: Params) => {
-  const { id } = await params;
-  const { name, email, role } = await req.json();
+// PUT /api/team/[id] — actualizar nombre/email/area (solo SUPER_ADMIN).
+// El roleEnum (permiso) NO se cambia acá: se gestiona por script esta vuelta.
+export async function PUT(req: NextRequest, { params }: Params) {
+  const guard = await guardCapability("manageTeam");
+  if (guard instanceof NextResponse) return guard;
 
+  const { id } = await params;
+  const { name, email, area, role } = await req.json();
   if (!name?.trim() || !email?.trim()) return apiError("name y email son requeridos", 400);
 
   try {
     const member = await prisma.teamMember.update({
       where: { id },
-      data: { name: name.trim(), email: email.trim().toLowerCase(), role: role?.trim() || null },
+      data: {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        area: (area ?? role)?.trim() || null,
+      },
     });
     revalidateTeamMembers();
     return NextResponse.json({ member });
@@ -25,16 +33,23 @@ export const PUT = withAuth(async (req: NextRequest, { params }: Params) => {
     if (code === "P2025") return apiError("No encontrado", 404);
     return apiError("Error interno");
   }
-});
+}
 
-// DELETE /api/team/[id] — eliminar miembro
-export const DELETE = withAuth(async (_req: NextRequest, { params }: Params) => {
+// DELETE /api/team/[id] — DESACTIVA (soft): setea deactivatedAt en vez de borrar,
+// para preservar el histórico (sesiones/handoffs/runs). Solo SUPER_ADMIN.
+export async function DELETE(_req: NextRequest, { params }: Params) {
+  const guard = await guardCapability("manageTeam");
+  if (guard instanceof NextResponse) return guard;
+
   const { id } = await params;
   try {
-    await prisma.teamMember.delete({ where: { id } });
+    await prisma.teamMember.update({
+      where: { id },
+      data: { deactivatedAt: new Date() },
+    });
     revalidateTeamMembers();
     return NextResponse.json({ ok: true });
   } catch {
     return apiError("No encontrado", 404);
   }
-});
+}

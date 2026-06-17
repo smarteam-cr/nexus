@@ -72,7 +72,7 @@ export const POST = withAuth(async (req) => {
       },
     }),
     prisma.teamMember.findMany({
-      select: { email: true, role: true },
+      select: { email: true, area: true },
     }),
   ]);
 

@@ -23,9 +23,9 @@ export interface MeetingDates {
 
 interface TeamMemberLite {
   email: string;
-  /** LEGACY string libre ("Sales"/"CSE"/…) — puede venir null. */
-  role: string | null;
-  /** Enum nuevo (TeamRole). Se acepta cualquiera de los dos para el match. */
+  /** Área funcional (eje de ANÁLISIS): "Ventas"/"CSE"/… — puede venir null. */
+  area?: string | null;
+  /** Rol de permiso (TeamRole) — fallback para el match. */
   roleEnum?: string | null;
 }
 
@@ -43,8 +43,11 @@ export async function computeLastMeetingDates(params: {
   const { clientIds, teamMembers } = params;
   if (clientIds.length === 0) return new Map();
 
-  const isSales = (m: TeamMemberLite) => m.roleEnum === "SALES" || m.role === "Sales";
-  const isCse = (m: TeamMemberLite) => m.roleEnum === "CSE" || m.role === "CSE";
+  // Clasificación por ÁREA (eje de análisis), no por permiso: así Marco Salas
+  // (roleEnum=SUPER_ADMIN, area=Ventas) sigue contando como Ventas.
+  const isSales = (m: TeamMemberLite) =>
+    m.area === "Ventas" || m.area === "Sales" || m.roleEnum === "VENTAS";
+  const isCse = (m: TeamMemberLite) => m.area === "CSE" || m.roleEnum === "CSE";
 
   const salesEmails = new Set(teamMembers.filter(isSales).map((m) => m.email.toLowerCase()));
   const cseEmails = new Set(teamMembers.filter(isCse).map((m) => m.email.toLowerCase()));

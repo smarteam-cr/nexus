@@ -104,7 +104,7 @@ export async function postProcessSession(
     prisma.sessionCategory.findMany({
       select: { id: true, name: true, slug: true, domains: true, kind: true, color: true },
     }),
-    prisma.teamMember.findMany({ select: { email: true, name: true, role: true } }),
+    prisma.teamMember.findMany({ select: { email: true, name: true, area: true, deactivatedAt: true } }),
   ]);
 
   const ctx: CategorizeContext = {
@@ -157,8 +157,10 @@ export async function postProcessSession(
   });
 
   // 5. Construir prompt
+  // Roster de owners SUGERIBLES: solo miembros activos (no se sugiere a desactivados).
   const teamRoster = teamMembers
-    .map((m) => `- ${m.name} <${m.email}>${m.role ? ` [${m.role}]` : ""}`)
+    .filter((m) => !m.deactivatedAt)
+    .map((m) => `- ${m.name} <${m.email}>${m.area ? ` [${m.area}]` : ""}`)
     .join("\n");
 
   const previousItemsBlock =

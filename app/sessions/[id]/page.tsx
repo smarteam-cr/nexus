@@ -142,9 +142,9 @@ export default async function SessionPage({
 
   // 3. Cargar TeamMembers para selector de owner
   const teamMembers = await prisma.teamMember.findMany({
-    where: { role: { in: ["CSE", "PM", "Sales", "RevOps", "Admin"] } },
-    select: { email: true, name: true, role: true },
-    orderBy: [{ role: "asc" }, { name: "asc" }],
+    where: { deactivatedAt: null }, // selector de owner: solo miembros activos
+    select: { email: true, name: true, area: true },
+    orderBy: [{ area: "asc" }, { name: "asc" }],
   });
 
   // 4. Proyectos del cliente matched (para el selector de override manual)
@@ -214,7 +214,8 @@ export default async function SessionPage({
           canvasSection: c.canvasSection,
         })),
       })),
-    teamMembers,
+    // El componente espera `role` (label de área para mostrar) — alimentado desde `area`.
+    teamMembers: teamMembers.map((m) => ({ email: m.email, name: m.name, role: m.area })),
     // F3-C: asignaciones a proyecto + lista de proyectos disponibles
     projectAssignments: projectAssignments.map((a) => ({
       projectId: a.projectId,

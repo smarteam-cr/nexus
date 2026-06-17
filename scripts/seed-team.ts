@@ -8,24 +8,26 @@ const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter } as Parameters<typeof PrismaClient>[0]);
 
+// `area` = eje de ANÁLISIS (Ventas/CSE/…). El roleEnum (permiso) arranca en CSE
+// y se asigna por scripts/assign-team-roles.ts.
 const TEAM = [
-  { name: "Fidel Castro Chaves",  email: "fcastro@smarteamcr.com",    role: "Ventas" },
-  { name: "Iván Rodriguez",       email: "irodriguez@smarteamcr.com",  role: "Ventas" },
-  { name: "Danilo González",      email: "dgonzalez@smarteamcr.com",   role: "Ventas" },
-  { name: "Sarahí Castañeda",     email: "scastaneda@smarteamcr.com",  role: "Ventas" },
-  { name: "Alexander Vanegas",    email: "avanegas@smarteamcr.com",    role: "Ventas" },
-  { name: "Carolina Muñoz",       email: "cmunoz@smarteamcr.com",      role: "CSE" },
-  { name: "Ximena Rivera",        email: "xrivera@smarteamcr.com",     role: "CSE" },
-  { name: "Nataly Morales",       email: "nmorales@smarteamcr.com",    role: "CSE" },
-  { name: "Guillermo Osorio",     email: "gosorio@smarteamcr.com",     role: "CSE" },
-  { name: "María Sánchez",        email: "msanchez@smarteamcr.com",    role: "CSE" },
+  { name: "Fidel Castro Chaves",  email: "fcastro@smarteamcr.com",    area: "Ventas" },
+  { name: "Iván Rodriguez",       email: "irodriguez@smarteamcr.com",  area: "Ventas" },
+  { name: "Danilo González",      email: "dgonzalez@smarteamcr.com",   area: "Ventas" },
+  { name: "Sarahí Castañeda",     email: "scastaneda@smarteamcr.com",  area: "Ventas" },
+  { name: "Alexander Vanegas",    email: "avanegas@smarteamcr.com",    area: "Ventas" },
+  { name: "Carolina Muñoz",       email: "cmunoz@smarteamcr.com",      area: "CSE" },
+  { name: "Ximena Rivera",        email: "xrivera@smarteamcr.com",     area: "CSE" },
+  { name: "Nataly Morales",       email: "nmorales@smarteamcr.com",    area: "CSE" },
+  { name: "Guillermo Osorio",     email: "gosorio@smarteamcr.com",     area: "CSE" },
+  { name: "María Sánchez",        email: "msanchez@smarteamcr.com",    area: "CSE" },
 ];
 
 async function main() {
   for (const member of TEAM) {
     const result = await prisma.teamMember.upsert({
       where: { email: member.email },
-      update: { name: member.name, role: member.role },
+      update: { name: member.name, area: member.area },
       create: member,
     });
     console.log(`✓ ${result.name} <${result.email}>`);

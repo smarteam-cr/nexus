@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/api";
+import { guardCapability } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemAccessToken } from "@/lib/hubspot/client";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
@@ -22,6 +23,10 @@ interface HubspotCompanyResult {
 // POST /api/system/hubspot/import
 // Trae todas las empresas de HubSpot con implementor = true y las crea/actualiza como clientes
 export const POST = withAuth(async () => {
+  // Importación masiva del portal HubSpot → operación de sistema, solo SUPER_ADMIN.
+  const guard = await guardCapability("manageTeam");
+  if (guard instanceof NextResponse) return guard;
+
   let accessToken: string;
   try {
     accessToken = await getSystemAccessToken();

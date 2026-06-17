@@ -707,20 +707,20 @@ Responde SOLO con JSON válido:
 
 async function seedTeamMembers() {
   const members = [
-    { email: "msalas@smarteamcr.com",  name: "M. Salas",  role: "Ventas" },
-    { email: "apinzon@smarteamcr.com", name: "A. Pinzón", role: "Ventas" },
+    { email: "msalas@smarteamcr.com",  name: "M. Salas",  area: "Ventas" },
+    { email: "apinzon@smarteamcr.com", name: "A. Pinzón", area: "Ventas" },
   ];
 
   for (const m of members) {
     await prisma.teamMember.upsert({
       where: { email: m.email },
-      update: { name: m.name, role: m.role },
-      create: { email: m.email, name: m.name, role: m.role },
+      update: { name: m.name, area: m.area },
+      create: { email: m.email, name: m.name, area: m.area },
     });
     console.log(`  ✓ ${m.name} (${m.email})`);
   }
 
-  const count = await prisma.teamMember.count({ where: { role: "Ventas" } });
+  const count = await prisma.teamMember.count({ where: { area: "Ventas" } });
   console.log(`\nTeam members Ventas: ${count}`);
 }
 

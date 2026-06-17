@@ -5,6 +5,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   domain: "Solo se permite el inicio de sesión con cuentas de @smarteamcr.com.",
   not_member:
     "Tu correo no está registrado como miembro del equipo en Nexus. Pedile a un administrador que te agregue.",
+  deactivated:
+    "Tu cuenta del equipo fue desactivada. Contactá a un administrador si creés que es un error.",
   oauth_init: "No se pudo iniciar el flujo de Google. Intentá de nuevo en un momento.",
   oauth_exchange: "Google rechazó el intercambio de credenciales. Probá de nuevo.",
   oauth_no_code: "Google no devolvió un código de autorización válido.",

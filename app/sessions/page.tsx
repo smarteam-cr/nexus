@@ -122,7 +122,7 @@ export default async function SessionsPage() {
       .map((email) => memberByEmail.get(email.toLowerCase()))
       .filter((m): m is NonNullable<typeof m> => m !== undefined);
 
-    const roles = [...new Set(matchedMembers.map((m) => m.role).filter(Boolean))] as string[];
+    const roles = [...new Set(matchedMembers.map((m) => m.area).filter(Boolean))] as string[];
 
     return {
       id: s.id,
@@ -138,7 +138,7 @@ export default async function SessionsPage() {
       group: s.group,
       // Legacy fields conservados para compatibilidad con la UI actual mientras refactor:
       clientId: s.group.kind === "client" ? s.group.id : null,
-      teamMembers: matchedMembers.map((m) => ({ name: m.name, email: m.email, role: m.role })),
+      teamMembers: matchedMembers.map((m) => ({ name: m.name, email: m.email, role: m.area })),
       teamRoles: roles,
       // F1: status de la minuta post-sesión (DRAFT/REVIEWED/EDITED) o null si nunca se generó
       minuteStatus: minuteStatusBySessionId.get(s.id) ?? null,
@@ -159,7 +159,7 @@ export default async function SessionsPage() {
   // ── 8. Preparar teamMembers ligeros para el panel de análisis ─────────────
   // Solo email + role — los necesita AnalysisPanel para el filtro multi-select
   // de roles (Sales/CSE/PM/etc).
-  const teamMembersLite = teamMembers.map((m) => ({ email: m.email, role: m.role }));
+  const teamMembersLite = teamMembers.map((m) => ({ email: m.email, role: m.area }));
 
   return (
     <AppShell>

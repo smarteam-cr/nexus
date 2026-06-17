@@ -25,6 +25,7 @@ import {
   UnauthorizedError,
   type AppUserWithTeamMember,
 } from "./supabase";
+import { requireCapability, type Capability } from "./roles";
 
 function toErrorResponse(e: unknown): NextResponse | null {
   if (e instanceof UnauthorizedError) {
@@ -75,6 +76,22 @@ export async function guardInternalUser(): Promise<
 > {
   try {
     return await requireInternalUser();
+  } catch (e) {
+    const r = toErrorResponse(e);
+    if (r) return r;
+    throw e;
+  }
+}
+
+/**
+ * Verifica que haya un usuario INTERNAL con la capacidad dada (ej. "manageTeam").
+ * Devuelve el bundle o una NextResponse 401/403.
+ */
+export async function guardCapability(
+  cap: Capability,
+): Promise<Awaited<ReturnType<typeof requireCapability>> | NextResponse> {
+  try {
+    return await requireCapability(cap);
   } catch (e) {
     const r = toErrorResponse(e);
     if (r) return r;

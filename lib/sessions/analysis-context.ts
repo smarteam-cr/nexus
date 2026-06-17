@@ -87,7 +87,7 @@ export function buildAnalysisContext(
     "id" | "title" | "date" | "participants" | "transcript" | "summary" | "manualClientId"
   >[],
   client: Pick<Client, "id" | "name" | "company" | "emailDomains">,
-  teamMembers: Pick<TeamMember, "email" | "role">[],
+  teamMembers: Pick<TeamMember, "email" | "area">[],
   filters: AnalysisFilters
 ): AnalysisContextResult {
   const fromDate = filters.from ? new Date(filters.from) : null;
@@ -99,7 +99,7 @@ export function buildAnalysisContext(
   const teamEmailsByRole = new Set<string>();
   if (teamRolesSet.size > 0) {
     for (const m of teamMembers) {
-      if (m.role && teamRolesSet.has(m.role.toLowerCase())) {
+      if (m.area && teamRolesSet.has(m.area.toLowerCase())) {
         teamEmailsByRole.add(m.email.toLowerCase());
       }
     }
@@ -193,7 +193,7 @@ export function countMatchingSessions(
     "id" | "title" | "date" | "participants" | "transcript" | "summary" | "manualClientId"
   >[],
   client: Pick<Client, "id" | "name" | "company" | "emailDomains">,
-  teamMembers: Pick<TeamMember, "email" | "role">[],
+  teamMembers: Pick<TeamMember, "email" | "area">[],
   filters: AnalysisFilters
 ): number {
   return buildAnalysisContext(allSessions, client, teamMembers, filters).count;

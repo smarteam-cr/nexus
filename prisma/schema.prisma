@@ -691,10 +691,21 @@ model TeamMember {
   id                  String    @id @default(cuid())
   name                String
   email               String    @unique
-  role                String?   // LEGACY — string libre ("CSE"/"PM"/etc). NO usar para nueva lógica de permisos: usar roleEnum. Se elimina en deuda 🟡 cuando todos los consumidores migren.
+  // ÁREA FUNCIONAL — eje de ANÁLISIS de sesiones, NO permisos. Valores: Ventas,
+  // CSE, CSL, Marketing, Development, PM, Admin, RevOps (set abierto). Antes se
+  // llamaba `role`; se renombró a `area` para no confundir con roleEnum (permisos).
+  // Marco Salas, p.ej., es roleEnum=SUPER_ADMIN pero area=Ventas (análisis).
+  area                String?
+  // ROL DE PERMISO — única fuente de verdad de acceso/capacidades. Ver lib/auth/roles.ts.
   roleEnum            TeamRole  @default(CSE)
-  canViewAllClients   Boolean   @default(false)  // permiso otorgado por ADMIN/SUPER_ADMIN
-  canViewAllExpiresAt DateTime?                  // opcional: caducidad del permiso temporal
+  // Visibilidad total HOY se deriva del rol (todos menos CSE ven todo). Este flag
+  // queda como override excepcional (ej. un CSE con acceso temporal a todo).
+  canViewAllClients   Boolean   @default(false)
+  canViewAllExpiresAt DateTime?
+  // Baja blanda: si != null, el miembro pierde acceso (login bloqueado) y desaparece
+  // de los listados de personas, pero su histórico (sesiones/handoffs/runs) queda intacto.
+  deactivatedAt       DateTime?
+  deactivatedReason   String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -706,11 +717,11 @@ model TeamMember {
 }
 
 enum TeamRole {
-  CSE
-  PM
-  SALES
-  ADMIN
-  SUPER_ADMIN
+  CSE         // scoped: solo sus clientes asignados (owner) + los compartidos
+  VENTAS      // ve todo + handoff en cualquiera; NO comparte
+  CSL         // ve todo + handoff en cualquiera + comparte; NO gestiona equipo
+  MARKETING   // capacidades = CSL (etiqueta distinta para análisis/UI)
+  SUPER_ADMIN // todo + ÚNICO que gestiona el equipo (alta/baja/cambio de rol)
 }
 
 // ─── AppUser ──────────────────────────────────────────────────────────────────
@@ -751,16 +762,22 @@ model ClientAssignment {
   id           String         @id @default(cuid())
   clientId     String
   client       Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  teamMemberId String
-  teamMember   TeamMember     @relation("AssignedTo", fields: [teamMemberId], references: [id], onDelete: Cascade)
+  // Target del compartir: a UNA persona (teamMemberId) O a un ROL entero
+  // (targetRole, ej. CSE = "todo el equipo CSE"). Exactamente uno de los dos.
+  teamMemberId String?
+  teamMember   TeamMember?    @relation("AssignedTo", fields: [teamMemberId], references: [id], onDelete: Cascade)
+  targetRole   TeamRole?
   kind         AssignmentKind
-  grantedById  String         // FK al TeamMember admin/super que otorgó
+  grantedById  String         // FK al TeamMember (CSL/SUPER_ADMIN) que compartió
   grantedBy    TeamMember     @relation("GrantedBy", fields: [grantedById], references: [id], onDelete: Restrict)
   reason       String?        @db.Text
   createdAt    DateTime       @default(now())
 
-  @@unique([clientId, teamMemberId])
+  // NULLs son distintos en PG → la unicidad real la garantizan los scripts esta
+  // vuelta (no hay UI). Se reforzará con constraint parcial cuando llegue la UI.
+  @@unique([clientId, teamMemberId, targetRole])
   @@index([teamMemberId])
+  @@index([clientId])
 }
 
 enum AssignmentKind {

@@ -656,12 +656,12 @@ export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
   // OJO: en seed el role es "Sales" (no "Ventas") — antes esta query devolvía
   // vacío y TODAS las sesiones caían en "CS" por defecto.
   const allTeam = await prisma.teamMember.findMany({
-    select: { email: true, name: true, role: true },
+    select: { email: true, name: true, area: true },
   });
   const internalEmails = new Set(allTeam.map((m) => m.email.toLowerCase()));
   const salesEmails = new Set(
     allTeam
-      .filter((m) => m.role === "Sales" || m.role === "Ventas")
+      .filter((m) => m.area === "Sales" || m.area === "Ventas")
       .map((m) => m.email.toLowerCase()),
   );
 

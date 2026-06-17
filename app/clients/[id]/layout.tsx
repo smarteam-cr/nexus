@@ -1,4 +1,5 @@
-import { requireConsultantSession } from "@/lib/auth";
+import { requireAccessToClient } from "@/lib/auth/access";
+import { UnauthorizedError, ForbiddenError } from "@/lib/auth/supabase";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import Link from "next/link";
@@ -39,13 +40,16 @@ export default async function ClientLayout({
   children: React.ReactNode;
   params: Promise<{ id: string }>;
 }) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    redirect("/");
-  }
-
   const { id } = await params;
+
+  // Acceso a nivel cliente: CSE solo a los suyos/compartidos; roles "ve todo" pasan.
+  try {
+    await requireAccessToClient(id);
+  } catch (e) {
+    if (e instanceof UnauthorizedError) redirect("/");
+    if (e instanceof ForbiddenError) redirect("/clients?error=no_access");
+    throw e;
+  }
 
   const client = await prisma.client.findUnique({
     where: { id },
