@@ -3,7 +3,10 @@ import { requireConsultantSession } from "@/lib/auth";
 import {
   guardAccessToClient,
   guardAccessToProject,
+  guardInternalUser,
+  guardCapability,
 } from "@/lib/auth/api-guards";
+import type { Capability } from "@/lib/auth/roles";
 
 type RouteContext = { params: Promise<Record<string, string>> };
 type Handler<C extends RouteContext = RouteContext> = (
@@ -58,6 +61,35 @@ export function withProjectAccess<
   return async (req, ctx) => {
     const { projectId } = await ctx.params;
     const guard = await guardAccessToProject(projectId);
+    if (guard instanceof NextResponse) return guard;
+    return handler(req, ctx);
+  };
+}
+
+/**
+ * Wrapper para endpoints que requieren un usuario INTERNAL activo (sin ownership
+ * de cliente). Reemplaza a `withAuth` en endpoints internos no atados a un cliente.
+ */
+export function withInternal<C extends RouteContext = RouteContext>(
+  handler: Handler<C>
+): Handler<C> {
+  return async (req, ctx) => {
+    const guard = await guardInternalUser();
+    if (guard instanceof NextResponse) return guard;
+    return handler(req, ctx);
+  };
+}
+
+/**
+ * Wrapper que exige una capacidad de rol (ej. "seeAllClients", "manageTeam").
+ * Uso: export const POST = withCapability("seeAllClients", async (req, ctx) => {…})
+ */
+export function withCapability<C extends RouteContext = RouteContext>(
+  cap: Capability,
+  handler: Handler<C>
+): Handler<C> {
+  return async (req, ctx) => {
+    const guard = await guardCapability(cap);
     if (guard instanceof NextResponse) return guard;
     return handler(req, ctx);
   };

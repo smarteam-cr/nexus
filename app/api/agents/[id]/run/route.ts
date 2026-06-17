@@ -1,4 +1,5 @@
 import { withAuth } from "@/lib/api";
+import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { NextResponse } from "next/server";
 import { anthropic } from "@/lib/anthropic";
@@ -40,6 +41,10 @@ export const POST = withAuth(async (
   if (!clientId) {
     return NextResponse.json({ error: "clientId requerido" }, { status: 400 });
   }
+
+  // Acceso a nivel cliente: un CSE solo corre agentes en clientes que puede ver.
+  const access = await guardAccessToClient(clientId);
+  if (access instanceof NextResponse) return access;
 
   // Cargar agente y cliente en paralelo
   const [agent, client] = await Promise.all([

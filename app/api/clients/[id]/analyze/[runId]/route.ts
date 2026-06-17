@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { withAuth, apiError } from "@/lib/api";
+import { withClientAccess, apiError } from "@/lib/api";
 
 type Params = { params: Promise<{ id: string; runId: string }> };
 
-export const GET = withAuth(async (_req: NextRequest, { params }: Params) => {
+export const GET = withClientAccess(async (_req: NextRequest, { params }: Params) => {
   const { id: clientId, runId } = await params;
 
   const run = await prisma.agentRun.findFirst({
@@ -94,7 +94,7 @@ export const GET = withAuth(async (_req: NextRequest, { params }: Params) => {
 });
 
 // PATCH /api/clients/:id/analyze/:runId  →  archivar ejecución
-export const PATCH = withAuth(async (_req: NextRequest, { params }: Params) => {
+export const PATCH = withClientAccess(async (_req: NextRequest, { params }: Params) => {
   const { id: clientId, runId } = await params;
 
   const run = await prisma.agentRun.findFirst({ where: { id: runId, clientId } });
@@ -109,7 +109,7 @@ export const PATCH = withAuth(async (_req: NextRequest, { params }: Params) => {
 });
 
 // PUT /api/clients/:id/analyze/:runId  →  guardar flowcharts editados
-export const PUT = withAuth(async (req: NextRequest, { params }: Params) => {
+export const PUT = withClientAccess(async (req: NextRequest, { params }: Params) => {
   const { id: clientId, runId } = await params;
 
   const run = await prisma.agentRun.findFirst({

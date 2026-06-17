@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/api";
+import { withInternal, withCapability } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
-export const GET = withAuth(async () => {
+export const GET = withInternal(async () => {
   try {
     const entries = await prisma.knowledge.findMany({
       orderBy: { createdAt: "desc" },
@@ -14,7 +14,7 @@ export const GET = withAuth(async () => {
   }
 });
 
-export const POST = withAuth(async (request) => {
+export const POST = withCapability("seeAllClients", async (request) => {
   try {
     const { title, content, category } = (await request.json()) as {
       title?: string;

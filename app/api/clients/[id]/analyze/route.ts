@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { withAuth, apiError } from "@/lib/api";
+import { withClientAccess, apiError } from "@/lib/api";
 import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
 import { extractTitleTerms, extractDomain } from "@/lib/utils/matching";
@@ -127,7 +127,7 @@ type Params = { params: Promise<{ id: string }> };
 // Retorna { sections: SectionInfo[] } donde cada sección corresponde a un agente
 // activo configurado para ese stage+step. Si hay múltiples agentes con distinto
 // sectionLabel, cada uno forma su propio bloque visual independiente.
-export const GET = withAuth(async (_req: NextRequest, { params }: Params) => {
+export const GET = withClientAccess(async (_req: NextRequest, { params }: Params) => {
   const { id: clientId } = await params;
 
   const stageParam = _req.nextUrl.searchParams.get("stage");
@@ -208,7 +208,7 @@ export const GET = withAuth(async (_req: NextRequest, { params }: Params) => {
 });
 
 // ── POST: ejecutar análisis ───────────────────────────────────────────────────
-export const POST = withAuth(async (_req: NextRequest, { params }: Params) => {
+export const POST = withClientAccess(async (_req: NextRequest, { params }: Params) => {
   const { id: clientId } = await params;
 
   // ── 0. Leer parámetros del body ───────────────────────────────────────────────

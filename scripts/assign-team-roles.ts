@@ -28,7 +28,9 @@ const ASSIGNMENTS: Record<string, { roleEnum: TeamRole; area: string }> = {
   "fsepulveda@smarteamcr.com":{ roleEnum: "CSE",         area: "CSE" },
   "hgomez@smarteamcr.com":    { roleEnum: "CSE",         area: "CSE" },
   "jarmijos@smarteamcr.com":  { roleEnum: "CSE",         area: "CSE" },
-  "aortega@smarteamcr.com":   { roleEnum: "MARKETING",   area: "Marketing" },
+  // Alejandra: roleEnum pasa a MARKETING pero area se mantiene en "PM" hasta que
+  // su transición PM→Marketing esté completa (preserva fidelidad del histórico).
+  "aortega@smarteamcr.com":   { roleEnum: "MARKETING",   area: "PM" },
   "lflores@smarteamcr.com":   { roleEnum: "MARKETING",   area: "Marketing" },
   "arodriguez@smarteamcr.com":{ roleEnum: "CSE",         area: "Development" },
   "asalas@smarteamcr.com":    { roleEnum: "CSE",         area: "Development" },

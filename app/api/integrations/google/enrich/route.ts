@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { withAuth, apiError } from "@/lib/api";
+import { guardInternalUser } from "@/lib/auth/api-guards";
 import { enrichGoogleMeetSessions } from "@/lib/google/meet-enrichment";
 import { prisma } from "@/lib/db/prisma";
 
 export const POST = withAuth(async (req) => {
+  const guard = await guardInternalUser();
+  if (guard instanceof NextResponse) return guard;
+
   const serviceKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
   const adminEmail = process.env.GOOGLE_ADMIN_EMAIL;
 

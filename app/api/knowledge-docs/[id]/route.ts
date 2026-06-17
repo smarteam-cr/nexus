@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/api";
+import { withInternal, withCapability } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { KnowledgeStatus, KnowledgeType, TagCategory } from "@prisma/client";
 
 // GET /api/knowledge-docs/[id]
-export const GET = withAuth(async (
+export const GET = withInternal(async (
   _req,
   { params }: { params: Promise<{ id: string }> }
 ) => {
@@ -19,7 +19,7 @@ export const GET = withAuth(async (
 });
 
 // PUT /api/knowledge-docs/[id]
-export const PUT = withAuth(async (
+export const PUT = withCapability("seeAllClients", async (
   req,
   { params }: { params: Promise<{ id: string }> }
 ) => {
@@ -70,7 +70,7 @@ export const PUT = withAuth(async (
 });
 
 // DELETE /api/knowledge-docs/[id]
-export const DELETE = withAuth(async (
+export const DELETE = withCapability("seeAllClients", async (
   _req,
   { params }: { params: Promise<{ id: string }> }
 ) => {

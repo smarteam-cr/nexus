@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/lib/api";
+import { withInternal, withCapability } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { KnowledgeStatus, KnowledgeType, TagCategory } from "@prisma/client";
 
@@ -8,7 +8,7 @@ import { KnowledgeStatus, KnowledgeType, TagCategory } from "@prisma/client";
 export const revalidate = 60;
 
 // GET /api/knowledge-docs — listar documentos con filtros opcionales
-export const GET = withAuth(async (req) => {
+export const GET = withInternal(async (req) => {
   const { searchParams } = new URL(req.url);
   const type   = searchParams.get("type")   as KnowledgeType   | null;
   const status = searchParams.get("status") as KnowledgeStatus | null;
@@ -28,7 +28,7 @@ export const GET = withAuth(async (req) => {
 });
 
 // POST /api/knowledge-docs — crear documento
-export const POST = withAuth(async (req) => {
+export const POST = withCapability("seeAllClients", async (req) => {
   const body = (await req.json()) as {
     type?: string;
     status?: string;

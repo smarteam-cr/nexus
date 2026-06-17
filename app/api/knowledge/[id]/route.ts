@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/api";
+import { withInternal, withCapability } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
 type Params = { params: Promise<{ id: string }> };
 
-export const GET = withAuth(async (_req, { params }: Params) => {
+export const GET = withInternal(async (_req, { params }: Params) => {
   try {
     const { id } = await params;
     const entry = await prisma.knowledge.findUnique({ where: { id } });
@@ -16,7 +16,7 @@ export const GET = withAuth(async (_req, { params }: Params) => {
   }
 });
 
-export const PUT = withAuth(async (request, { params }: Params) => {
+export const PUT = withCapability("seeAllClients", async (request, { params }: Params) => {
   try {
     const { id } = await params;
     const { title, content, category } = (await request.json()) as {
@@ -45,7 +45,7 @@ export const PUT = withAuth(async (request, { params }: Params) => {
   }
 });
 
-export const DELETE = withAuth(async (_req, { params }: Params) => {
+export const DELETE = withCapability("seeAllClients", async (_req, { params }: Params) => {
   try {
     const { id } = await params;
     await prisma.knowledge.delete({ where: { id } });

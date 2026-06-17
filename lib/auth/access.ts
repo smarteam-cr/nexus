@@ -21,6 +21,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import {
   requireUser,
+  requireInternalUser,
   ForbiddenError,
   type AppUserWithTeamMember,
 } from "./supabase";
@@ -149,4 +150,25 @@ export async function accessibleClientWhere(
       ...(revokedIds.length ? [{ id: { notIn: revokedIds } }] : []),
     ],
   };
+}
+
+/** ¿El usuario (por email) es OWNER de este cliente — owner HubSpot de algún proyecto? */
+export async function ownsClient(email: string, clientId: string): Promise<boolean> {
+  const n = await prisma.project.count({ where: { clientId, hubspotOwnerEmail: email } });
+  return n > 0;
+}
+
+/**
+ * Acceso para CREAR/EDITAR el handoff o el cronograma de un cliente.
+ * Más estricto que requireAccessToClient: tener acceso (ej. cliente compartido)
+ * NO alcanza — hace falta capacidad `handoffAnywhere` (VENTAS/CSL/MARKETING/
+ * SUPER_ADMIN) O ser owner del cliente. Un CSE solo en SUS clientes.
+ */
+export async function requireHandoffAccess(clientId: string) {
+  const ctx = await requireInternalUser(); // interno + activo (chequea deactivatedAt)
+  if (hasCapability(ctx.role, "handoffAnywhere")) return ctx;
+  if (await ownsClient(ctx.teamMember.email, clientId)) return ctx;
+  throw new ForbiddenError(
+    "Solo el owner del cliente (o un rol con permiso) puede editar el handoff/cronograma",
+  );
 }

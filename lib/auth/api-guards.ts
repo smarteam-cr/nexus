@@ -16,6 +16,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import {
   requireAccessToClient,
+  requireHandoffAccess,
   type AccessResult,
 } from "./access";
 import {
@@ -115,6 +116,41 @@ export async function guardAccessToProject(
     return NextResponse.json({ error: "Proyecto no existe" }, { status: 404 });
   }
   const guard = await guardAccessToClient(project.clientId);
+  if (guard instanceof NextResponse) return guard;
+  return { ...guard, clientId: project.clientId };
+}
+
+/**
+ * Acceso para editar handoff/cronograma de un cliente (handoffAnywhere || owner).
+ * Devuelve el bundle de requireInternalUser o una NextResponse 401/403.
+ */
+export async function guardHandoffAccess(
+  clientId: string,
+): Promise<Awaited<ReturnType<typeof requireHandoffAccess>> | NextResponse> {
+  try {
+    return await requireHandoffAccess(clientId);
+  } catch (e) {
+    const r = toErrorResponse(e);
+    if (r) return r;
+    throw e;
+  }
+}
+
+/**
+ * Igual que guardHandoffAccess pero a partir de un projectId: carga el proyecto,
+ * resuelve su clientId y exige handoff-access. 404 si el proyecto no existe.
+ */
+export async function guardProjectHandoffAccess(
+  projectId: string,
+): Promise<(Awaited<ReturnType<typeof requireHandoffAccess>> & { clientId: string }) | NextResponse> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { clientId: true },
+  });
+  if (!project) {
+    return NextResponse.json({ error: "Proyecto no existe" }, { status: 404 });
+  }
+  const guard = await guardHandoffAccess(project.clientId);
   if (guard instanceof NextResponse) return guard;
   return { ...guard, clientId: project.clientId };
 }

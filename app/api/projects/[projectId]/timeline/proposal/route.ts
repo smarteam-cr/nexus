@@ -8,10 +8,10 @@
  * "Aplicar" la propuesta es un PUT normal a /timeline (que también limpia el pendiente);
  * "Descartar" no debe escribir el cronograma, por eso este sub-recurso dedicado.
  *
- * Guarded con guardAccessToProject (interno/CSE).
+ * Guarded con guardProjectHandoffAccess (interno/CSE).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 
@@ -20,7 +20,7 @@ export async function DELETE(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardAccessToProject(projectId);
+  const guard = await guardProjectHandoffAccess(projectId);
   if (guard instanceof NextResponse) return guard;
 
   const existing = await prisma.projectTimeline.findUnique({

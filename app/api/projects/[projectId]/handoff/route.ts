@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardAccessToProject, guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { createHandoffCanvas } from "@/lib/canvas/default-canvases";
 
@@ -82,7 +82,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
  */
 export async function POST(_req: NextRequest, { params }: Params) {
   const { projectId } = await params;
-  const guard = await guardAccessToProject(projectId);
+  const guard = await guardProjectHandoffAccess(projectId);
   if (guard instanceof NextResponse) return guard;
 
   const project = await prisma.project.findUnique({

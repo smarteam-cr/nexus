@@ -13,10 +13,10 @@
  * toca lastEditedByHuman (es avance, no edición estructural — misma regla que el
  * PATCH de status de tareas).
  *
- * Guarded con guardAccessToProject (interno/CSE).
+ * Guarded con guardProjectHandoffAccess (interno/CSE).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 
@@ -25,7 +25,7 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardAccessToProject(projectId);
+  const guard = await guardProjectHandoffAccess(projectId);
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;
