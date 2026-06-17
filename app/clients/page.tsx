@@ -10,7 +10,7 @@ import {
   UnauthorizedError,
   ForbiddenError,
 } from "@/lib/auth/supabase";
-import { accessibleClientWhere } from "@/lib/auth/access";
+import { accessibleClientWhere, sharedClientIdsFor } from "@/lib/auth/access";
 import ClientsGrid, { type ClientRow } from "./ClientsGrid";
 import ICPSection from "./ICPSection";
 
@@ -39,7 +39,11 @@ export default async function ClientsPage() {
 
   // Filtro de acceso server-side: CSE ve solo sus clientes (owner) + compartidos;
   // roles con visibilidad total → null (sin filtro). Ya no es cosmético en el browser.
-  const clientWhere = await accessibleClientWhere(user);
+  // sharedIds = los compartidos con él (GRANT) → alimenta la pestaña "Compartidos conmigo".
+  const [clientWhere, sharedIds] = await Promise.all([
+    accessibleClientWhere(user),
+    sharedClientIdsFor(user),
+  ]);
 
   const [clients, teamMembers] = await Promise.all([
     prisma.client.findMany({
@@ -103,6 +107,7 @@ export default async function ClientsPage() {
       nextMeetingAt: activity?.nextMeeting?.date.toISOString() ?? null,
       nextMeetingLabel: activity?.nextMeeting?.label ?? null,
       projectCount: c._count.projects,
+      isShared: sharedIds.has(c.id),
     };
   });
 

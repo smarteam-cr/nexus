@@ -152,6 +152,28 @@ export async function accessibleClientWhere(
   };
 }
 
+/**
+ * IDs de clientes COMPARTIDOS con el usuario (GRANT a él o a su rol, menos REVOKE).
+ * Independiente del rol "ve todo" — sirve para la pestaña "Compartidos conmigo".
+ */
+export async function sharedClientIdsFor(user: AppUserWithTeamMember): Promise<Set<string>> {
+  const tm = user.teamMember;
+  if (!tm) return new Set<string>();
+  const [grants, revokes] = await Promise.all([
+    prisma.clientAssignment.findMany({
+      where: { kind: "GRANT", OR: [{ teamMemberId: tm.id }, { targetRole: tm.roleEnum }] },
+      select: { clientId: true },
+    }),
+    prisma.clientAssignment.findMany({
+      where: { kind: "REVOKE", OR: [{ teamMemberId: tm.id }, { targetRole: tm.roleEnum }] },
+      select: { clientId: true },
+    }),
+  ]);
+  const ids = new Set(grants.map((g) => g.clientId));
+  for (const r of revokes) ids.delete(r.clientId);
+  return ids;
+}
+
 /** ¿El usuario (por email) es OWNER de este cliente — owner HubSpot de algún proyecto? */
 export async function ownsClient(email: string, clientId: string): Promise<boolean> {
   const n = await prisma.project.count({ where: { clientId, hubspotOwnerEmail: email } });

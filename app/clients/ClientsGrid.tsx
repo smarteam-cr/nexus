@@ -32,6 +32,7 @@ export interface ClientRow {
   nextMeetingAt: string | null;
   nextMeetingLabel: string | null;
   projectCount: number;
+  isShared: boolean;            // compartido con el usuario actual (GRANT a él o a su rol)
 }
 
 /** Formatea una fecha pasada en forma relativa (hoy/ayer/hace N días/sem/fecha). */
@@ -125,21 +126,37 @@ export default function ClientsGrid({
 }) {
   const router = useRouter();
 
-  // Filtro "Mis clientes" — solo significativo si hay un CSE específico
-  // (no Super Admin, no sin elegir). Default ON cuando aplica.
-  const canFilterMine = !!activeCse && !activeCse.isSuperAdmin;
-  const [filterMine, setFilterMine] = useState(canFilterMine);
+  // Pestañas: "mine" (soy owner) · "shared" (compartidos conmigo) · "all" (accesibles).
+  // Solo para un CSE específico — el Super Admin ve todo sin filtro.
+  const canFilter = !!activeCse && !activeCse.isSuperAdmin;
 
-  const displayedClients = useMemo(() => {
-    if (!filterMine || !activeCse || activeCse.isSuperAdmin) return clients;
+  const isMine = useMemo(() => {
+    if (!activeCse) return (_c: ClientRow) => false;
     const myEmail = activeCse.email.toLowerCase();
     const myName = activeCse.name.toLowerCase();
-    return clients.filter(
-      (c) =>
-        c.cseEmails.some((e) => e === myEmail) ||
-        c.cseNames.some((n) => n.toLowerCase() === myName),
-    );
-  }, [clients, filterMine, activeCse]);
+    return (c: ClientRow) =>
+      c.cseEmails.some((e) => e === myEmail) ||
+      c.cseNames.some((n) => n.toLowerCase() === myName);
+  }, [activeCse]);
+
+  const mineClients = useMemo(() => clients.filter(isMine), [clients, isMine]);
+  const sharedClients = useMemo(
+    () => clients.filter((c) => c.isShared && !isMine(c)),
+    [clients, isMine],
+  );
+
+  // Default inteligente: si no soy owner de ninguno pero tengo compartidos, abrir en "Compartidos".
+  const [tab, setTab] = useState<"mine" | "shared" | "all">(() =>
+    !canFilter ? "all" : mineClients.length > 0 ? "mine" : sharedClients.length > 0 ? "shared" : "all",
+  );
+
+  const displayedClients = !canFilter
+    ? clients
+    : tab === "mine"
+      ? mineClients
+      : tab === "shared"
+        ? sharedClients
+        : clients;
 
   const columns: TableColumn<ClientRow>[] = [
     {
@@ -229,32 +246,41 @@ export default function ClientsGrid({
 
   return (
     <div className="space-y-3">
-      {/* Toolbar: filtro "Mis clientes" (solo si hay CSE específico) */}
-      {canFilterMine && (
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setFilterMine(true)}
-            className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-              filterMine
-                ? "bg-brand/15 text-brand border-brand/30"
-                : "bg-gray-900 text-gray-400 border-gray-800 hover:border-gray-700"
-            }`}
-          >
-            Mis clientes ({activeCse.name})
-          </button>
-          <button
-            onClick={() => setFilterMine(false)}
-            className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-              !filterMine
-                ? "bg-gray-700 text-white border-gray-600"
-                : "bg-gray-900 text-gray-400 border-gray-800 hover:border-gray-700"
-            }`}
-          >
-            Todos
-          </button>
-          {filterMine && displayedClients.length === 0 && (
-            <span className="text-xs text-gray-500 ml-2">
-              No tenés clientes asignados aún · <button onClick={() => setFilterMine(false)} className="text-brand hover:underline">ver todos</button>
+      {/* Toolbar: pestañas Mis clientes / Compartidos conmigo / Todos (solo CSE) */}
+      {canFilter && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {([
+            { key: "mine" as const, label: "Mis clientes", count: mineClients.length },
+            { key: "shared" as const, label: "Compartidos conmigo", count: sharedClients.length },
+            { key: "all" as const, label: "Todos", count: clients.length },
+          ]).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+                tab === t.key
+                  ? "bg-brand/15 text-brand border-brand/30"
+                  : "bg-gray-900 text-gray-400 border-gray-800 hover:border-gray-700"
+              }`}
+            >
+              {t.label} <span className="tabular-nums opacity-70">{t.count}</span>
+            </button>
+          ))}
+          {displayedClients.length === 0 && (
+            <span className="text-xs text-gray-500 ml-1">
+              {tab === "mine"
+                ? "No sos owner de ningún cliente."
+                : tab === "shared"
+                  ? "No tenés clientes compartidos."
+                  : "Sin clientes."}
+              {clients.length > 0 && tab !== "all" && (
+                <>
+                  {" · "}
+                  <button onClick={() => setTab("all")} className="text-brand hover:underline">
+                    ver todos
+                  </button>
+                </>
+              )}
             </span>
           )}
         </div>
