@@ -13,12 +13,16 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET(req: NextRequest) {
   const supabase = await createSupabaseServerClient();
+  // En producción (detrás de proxy/Docker) `req.url` suele resolver a
+  // localhost:3004 → el OAuth volvería a localhost. Usamos APP_URL (URL pública)
+  // y caemos al origin del request solo si APP_URL no está seteada (dev local).
   const origin = new URL(req.url).origin;
+  const baseUrl = process.env.APP_URL || origin;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${origin}/auth/callback`,
+      redirectTo: `${baseUrl}/auth/callback`,
       queryParams: {
         // hd hint le pide a Google que prefiera cuentas del dominio Smarteam
         // (no es un filtro duro — el filtro real está en el callback).

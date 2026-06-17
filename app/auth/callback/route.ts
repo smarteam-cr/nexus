@@ -84,6 +84,8 @@ export async function GET(req: NextRequest) {
     console.log(`[/auth/callback] ↻ Re-vinculado authUserId para ${email}`);
   }
 
-  // 6. Bienvenida — al detalle de clientes (entry point estándar del CSE)
-  return NextResponse.redirect(new URL("/clients", origin));
+  // 6. Bienvenida — al detalle de clientes (entry point estándar del CSE).
+  // Usar APP_URL (URL pública) y no `origin`, que detrás de proxy/Docker puede
+  // resolver a localhost. Fallback al origin del request en dev local.
+  return NextResponse.redirect(new URL("/clients", process.env.APP_URL || origin));
 }
