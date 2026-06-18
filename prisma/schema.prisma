@@ -990,11 +990,16 @@ model ActionItem {
   source                String? // "agent:post-session" | "agent:sales-analysis" | "manual" | "legacy" | "agent:client-analyze"
   generatedByAgentRunId String? // FK suave al AgentRun que lo creó
 
+  // Soft-delete: borrar una tarea NO la elimina; setea deletedAt para que siga
+  // visible en el "Histórico" del modal de pendientes (tareas hechas o borradas).
+  deletedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([clientId, done])
   @@index([projectId, done])
+  @@index([projectId, deletedAt])
   @@index([sessionId])
   @@index([ownerEmail, done])
   @@index([dueDate])

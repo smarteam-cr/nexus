@@ -68,6 +68,9 @@ export async function PATCH(
 
 /**
  * DELETE /api/action-items/[id]
+ *
+ * Soft-delete: NO elimina la fila, setea deletedAt. Así la tarea sigue visible
+ * en el "Histórico" del modal de pendientes (tareas hechas o borradas).
  */
 export async function DELETE(
   _req: NextRequest,
@@ -82,6 +85,6 @@ export async function DELETE(
   const guard = await guardAccessToClient(item.clientId);
   if (guard instanceof NextResponse) return guard;
 
-  await prisma.actionItem.delete({ where: { id } });
+  await prisma.actionItem.update({ where: { id }, data: { deletedAt: new Date() } });
   return NextResponse.json({ ok: true });
 }

@@ -40,10 +40,11 @@ export const HANDOFF_CANVAS: CanvasDefinition = {
   ],
 };
 
-// Orden = flujo real del onboarding (SIN Handoff, que migró a entidad cliente-level):
-// Kickoff → Diagnóstico → Planificación → Cronograma. El array ES la fuente del
-// `order`. El ancla/default (isDefault → fallback cuando no hay canvas elegido + no
-// borrable desde la UI) es KICKOFF.
+// Orden de presentación en el dropdown: Cronograma → Kickoff → Diagnóstico →
+// Planificación (pedido del usuario). El array YA NO es la fuente del `order`: cada
+// canvas lleva su `order` explícito abajo. El ancla/default (isDefault → fallback
+// cuando no hay canvas elegido + no borrable desde la UI) sigue siendo KICKOFF; el
+// canvas que se abre al entrar es el de menor `order` (Cronograma).
 export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
   {
     // Kickoff (Fase A): landing de arranque DE CARA AL CLIENTE. El cronograma NO
@@ -52,7 +53,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     // borrable desde la UI).
     name: "Kickoff",
     isDefault: true,
-    order: 0,
+    order: 1,
     sections: [
       { key: "bienvenida",     label: "Bienvenida y contexto" },
       { key: "objetivos",      label: "Objetivos del proyecto" },
@@ -65,7 +66,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
   {
     name: "Diagnóstico",
     isDefault: false,
-    order: 1,
+    order: 2,
     sections: [
       { key: "contexto_alcance", label: "Contexto y alcance" },
       { key: "estado_actual", label: "Estado actual (Current State)" },
@@ -80,7 +81,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
   {
     name: "Planificación",
     isDefault: false,
-    order: 2,
+    order: 3,
     sections: [
       { key: "arquitectura_solucion", label: "Arquitectura de la solución" },
       { key: "roadmap", label: "Roadmap de implementación" },
@@ -94,7 +95,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     // refleja). Render especial en ProjectCanvasPanel (branch name==="Cronograma").
     name: "Cronograma",
     isDefault: false,
-    order: 3,
+    order: 0,
     sections: [],
   },
 ];

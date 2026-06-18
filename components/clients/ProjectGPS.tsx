@@ -17,6 +17,7 @@ export interface PendingItem {
   ownerEmail?: string | null;
   dueDate?: string | null; // ISO
   status?: "PENDING" | "IN_PROGRESS" | "BLOCKED" | "DONE";
+  deletedAt?: string | null; // ISO — set si la tarea fue borrada (soft-delete) → Histórico
   sessionId?: string | null;
   sessionTitle?: string | null;
 }
@@ -58,6 +59,7 @@ interface GPSData {
   nextSession?: NextSessionInfo;
   lastSession?: LastSessionInfo;
   projectInfo?: ProjectInfo;
+  historyItems?: PendingItem[]; // tareas hechas o borradas (tab Histórico del modal)
 }
 
 export default function ProjectGPS({ projectId, clientId }: { projectId: string; clientId: string }) {
@@ -136,25 +138,52 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   }, [saveField]);
 
   // ── Mutaciones de pendientes (compartidas con el dialog) ──────────────────────
-  const toggleItem = useCallback(async (index: number) => {
+  // Modelo de dos listas: pendingItems = SOLO abiertas; historyItems = hechas o
+  // borradas. Las mutaciones MUEVEN el item entre listas (por id), así el tab
+  // Pendientes y el tab Histórico del modal se alimentan directo sin filtrar.
+  const patchDone = useCallback((id: string, done: boolean) => {
+    fetch(`/api/action-items/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done }),
+    }).catch(() => fetchGPS());
+  }, [fetchGPS]);
+
+  const toggleItem = useCallback(async (id: string) => {
     setData((cur) => {
       if (!cur) return cur;
-      const item = cur.pendingItems[index];
-      const newDone = !item.done;
-      const items = [...cur.pendingItems];
-      items[index] = { ...item, done: newDone, status: newDone ? "DONE" : "PENDING" };
-      const next = { ...cur, pendingItems: items };
-      writeGpsCache(projectId, next);
-      if (item.id) {
-        fetch(`/api/action-items/${item.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ done: newDone }),
-        }).catch(() => fetchGPS());
+      const history = cur.historyItems ?? [];
+      // Está en Pendientes → marcar hecha y mover a Histórico.
+      const pIdx = cur.pendingItems.findIndex((i) => i.id === id);
+      if (pIdx !== -1) {
+        const item = cur.pendingItems[pIdx];
+        const moved: PendingItem = { ...item, done: true, status: "DONE" };
+        const next = {
+          ...cur,
+          pendingItems: cur.pendingItems.filter((_, i) => i !== pIdx),
+          historyItems: [moved, ...history],
+        };
+        writeGpsCache(projectId, next);
+        if (item.id) patchDone(item.id, true);
+        return next;
       }
-      return next;
+      // Está en Histórico como HECHA (no borrada) → des-marcar y devolver a Pendientes.
+      const hIdx = history.findIndex((i) => i.id === id && !i.deletedAt);
+      if (hIdx !== -1) {
+        const item = history[hIdx];
+        const moved: PendingItem = { ...item, done: false, status: "PENDING" };
+        const next = {
+          ...cur,
+          historyItems: history.filter((_, i) => i !== hIdx),
+          pendingItems: [...cur.pendingItems, moved],
+        };
+        writeGpsCache(projectId, next);
+        if (item.id) patchDone(item.id, false);
+        return next;
+      }
+      return cur;
     });
-  }, [projectId, fetchGPS]);
+  }, [projectId, patchDone]);
 
   const addItem = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -179,11 +208,19 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     }
   }, [clientId, projectId]);
 
-  const removeItem = useCallback(async (index: number) => {
+  // Borrar = soft-delete: sale de Pendientes y pasa al Histórico (no se elimina).
+  const removeItem = useCallback(async (id: string) => {
     setData((cur) => {
       if (!cur) return cur;
-      const item = cur.pendingItems[index];
-      const next = { ...cur, pendingItems: cur.pendingItems.filter((_, i) => i !== index) };
+      const pIdx = cur.pendingItems.findIndex((i) => i.id === id);
+      if (pIdx === -1) return cur;
+      const item = cur.pendingItems[pIdx];
+      const deleted: PendingItem = { ...item, deletedAt: new Date().toISOString() };
+      const next = {
+        ...cur,
+        pendingItems: cur.pendingItems.filter((_, i) => i !== pIdx),
+        historyItems: [deleted, ...(cur.historyItems ?? [])],
+      };
       writeGpsCache(projectId, next);
       if (item.id) {
         fetch(`/api/action-items/${item.id}`, { method: "DELETE" }).catch(() => fetchGPS());
@@ -298,7 +335,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             {lastSession.source === "auto" && autoBadge}
             <button
               onClick={() => setMinuteDialogOpen(true)}
-              className="ml-auto text-[10px] font-semibold text-brand hover:text-brand/80 bg-brand/10 hover:bg-brand/20 border border-brand/30 rounded px-1.5 py-0.5 transition-colors"
+              className="ml-auto text-xs font-semibold text-brand hover:text-brand/80 transition-colors"
               title="Ver minuta generada por la IA"
             >
               Ver minuta
@@ -422,7 +459,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
           )}
           <button
             onClick={() => setItemsDialogOpen(true)}
-            className="mt-auto text-xs font-medium text-brand hover:text-brand/80 self-start"
+            className="mt-auto text-xs font-semibold text-brand hover:text-brand/80 self-start transition-colors"
           >
             {pendingCount > 0 ? "Ver todos" : "Agregar pendiente"}
           </button>
@@ -435,6 +472,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
         open={itemsDialogOpen}
         onClose={() => setItemsDialogOpen(false)}
         items={data.pendingItems}
+        history={data.historyItems ?? []}
         onToggle={toggleItem}
         onAdd={addItem}
         onRemove={removeItem}

@@ -52,7 +52,11 @@ function generatePassword(): string {
 }
 
 function buildVerifyUrl(req: NextRequest, accessToken: string): string {
-  return `${req.nextUrl.origin}/external/verify/${accessToken}`;
+  // Usar APP_URL (URL pública). Detrás de Docker, req.nextUrl.origin resuelve al
+  // bind interno (0.0.0.0:3004) y el link quedaría inalcanzable para el cliente.
+  // Fallback al origin en dev. Mismo patrón que auth/signout|callback|google.
+  const base = process.env.APP_URL || new URL(req.url).origin;
+  return `${base}/external/verify/${accessToken}`;
 }
 
 // ── POST: generar o regenerar acceso ─────────────────────────────────────────

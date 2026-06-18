@@ -98,8 +98,6 @@ export default function ProjectCanvasPanel({
   // activo (key) para que muestre los bloques nuevos sin recargar la página.
   const [agentNonce, setAgentNonce] = useState(0);
   const [canvasDropdownOpen, setCanvasDropdownOpen] = useState(false);
-  const [creatingCanvas, setCreatingCanvas] = useState(false);
-  const [newCanvasName, setNewCanvasName] = useState("");
   const [addingSectionName, setAddingSectionName] = useState<string | null>(null);
   const canvasDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -143,33 +141,11 @@ export default function ProjectCanvasPanel({
     const handler = (e: MouseEvent) => {
       if (canvasDropdownRef.current && !canvasDropdownRef.current.contains(e.target as Node)) {
         setCanvasDropdownOpen(false);
-        setCreatingCanvas(false);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
-
-  const createCanvas = async () => {
-    if (!newCanvasName.trim()) return;
-    const res = await fetch(`/api/projects/${projectId}/canvases`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newCanvasName.trim() }),
-    });
-    const canvas = await res.json();
-    const updated = [...canvases, canvas];
-    setCanvases(updated);
-    setNewCanvasName("");
-    setCreatingCanvas(false);
-    setCanvasDropdownOpen(false);
-    // Use direct URL update since canvases state hasn't settled yet
-    setActiveCanvasId(canvas.id);
-    setLoading(true);
-    const url = new URL(window.location.href);
-    url.searchParams.set("canvas", canvas.id);
-    router.replace(url.pathname + url.search, { scroll: false });
-  };
 
   const addSection = async () => {
     if (!addingSectionName?.trim() || !activeCanvasId) return;
@@ -430,31 +406,6 @@ export default function ProjectCanvasPanel({
                       {c.name}
                     </button>
                   ))}
-                  <div className="border-t border-gray-800 mt-1 pt-1">
-                    {creatingCanvas ? (
-                      <div className="px-4 py-2 flex items-center gap-2">
-                        <input
-                          autoFocus
-                          value={newCanvasName}
-                          onChange={(e) => setNewCanvasName(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === "Enter") createCanvas(); if (e.key === "Escape") setCreatingCanvas(false); }}
-                          placeholder="Nombre del canvas"
-                          className="flex-1 px-2 py-1 text-sm border border-gray-700 rounded-lg focus:outline-none focus:border-brand"
-                        />
-                        <button onClick={createCanvas} className="text-xs font-medium text-brand hover:text-brand/80">Crear</button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setCreatingCanvas(true)}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-300 flex items-center gap-2"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Nuevo canvas
-                      </button>
-                    )}
-                  </div>
                 </div>
               )}
             </div>
@@ -571,7 +522,7 @@ export default function ProjectCanvasPanel({
       {!isResumenCanvas && activeCanvas?.name === "Kickoff" && activeCanvasId && (
         // Publicar/ocultar el kickoff vive en el pop-up "Acceso del cliente"
         // (toolbar del proyecto), junto al resto de la visibilidad por superficie.
-        <div style={{ margin: "-1.5rem -1.5rem -2rem" }}>
+        <div style={{ margin: "0 -1.5rem -2rem" }}>
           {/* agentNonce remonta el landing al terminar una corrida del CTA → refetch */}
           <KickoffLanding key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} editable />
         </div>

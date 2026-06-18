@@ -227,26 +227,33 @@ export async function GET(
   };
 
   // ── ActionItems del proyecto (tabla nueva, reemplaza el Json legacy) ─────
-  const actionItems = await prisma.actionItem.findMany({
-    where: { projectId, done: false },
-    orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-    select: {
-      id: true,
-      text: true,
-      ownerEmail: true,
-      dueDate: true,
-      status: true,
-      done: true,
-      source: true,
-      sessionId: true,
-      session: { select: { id: true, title: true, date: true } },
-    },
-    take: 20,
-  });
+  const actionItemSelect = {
+    id: true,
+    text: true,
+    ownerEmail: true,
+    dueDate: true,
+    status: true,
+    done: true,
+    deletedAt: true,
+    source: true,
+    sessionId: true,
+    session: { select: { id: true, title: true, date: true } },
+  } as const;
 
-  // Para compat hacia atrás: también devolver `pendingItems` con shape antiguo
-  // basado en ActionItems (el GPS UI viejo lee `pendingItems`).
-  const pendingItemsCompat = actionItems.map((a) => ({
+  type ActionItemRow = {
+    id: string;
+    text: string;
+    ownerEmail: string | null;
+    dueDate: Date | null;
+    status: "PENDING" | "IN_PROGRESS" | "BLOCKED" | "DONE";
+    done: boolean;
+    deletedAt: Date | null;
+    source: string | null;
+    sessionId: string | null;
+    session: { id: string; title: string | null; date: Date | null } | null;
+  };
+
+  const toCompat = (a: ActionItemRow) => ({
     text: a.text,
     done: a.done,
     source: a.source ?? undefined,
@@ -256,9 +263,32 @@ export async function GET(
     ownerEmail: a.ownerEmail,
     dueDate: a.dueDate?.toISOString() ?? null,
     status: a.status,
+    deletedAt: a.deletedAt?.toISOString() ?? null,
     sessionId: a.sessionId,
     sessionTitle: a.session?.title ?? null,
-  }));
+  });
+
+  // Pendientes ABIERTOS (no hechos, no borrados) — lo que ve el widget + tab Pendientes.
+  const [openItems, historyRows] = await Promise.all([
+    prisma.actionItem.findMany({
+      where: { projectId, done: false, deletedAt: null },
+      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+      select: actionItemSelect,
+      take: 20,
+    }),
+    // Histórico: tareas HECHAS o BORRADAS del proyecto (tab Histórico del modal).
+    prisma.actionItem.findMany({
+      where: { projectId, OR: [{ done: true }, { deletedAt: { not: null } }] },
+      orderBy: { updatedAt: "desc" },
+      select: actionItemSelect,
+      take: 50,
+    }),
+  ]);
+
+  // Para compat hacia atrás: también devolver `pendingItems` con shape antiguo
+  // basado en ActionItems (el GPS UI viejo lee `pendingItems`).
+  const pendingItemsCompat = openItems.map(toCompat);
+  const historyItems = historyRows.map(toCompat);
 
   return NextResponse.json({
     // Campos legacy (compatibilidad hacia atrás con el UI actual)
@@ -273,6 +303,7 @@ export async function GET(
     lastSession,
     projectInfo,
     actionItems: pendingItemsCompat, // alias semántico
+    historyItems, // tareas hechas o borradas (tab Histórico)
   });
 }
 
