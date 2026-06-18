@@ -156,6 +156,48 @@ export interface SyncResult {
   debug?: string[];
 }
 
+/**
+ * Verifica el estado REAL de un objeto proyecto en HubSpot antes de que la
+ * reconciliación lo desactive. El set `projectIds` de asociaciones puede salir
+ * mal (hipo de la API → fallback a un slug equivocado), así que NUNCA confiamos
+ * solo en "no vino en la lista". Devuelve:
+ *   - "alive":  el objeto existe y no está cerrado → NO desactivar.
+ *   - "closed": existe pero en estado cerrado/terminado → desactivar.
+ *   - "gone":   confirmado 404 (borrado/desasociado) → desactivar.
+ * Ante CUALQUIER ambigüedad (timeout, scope, error transitorio) devuelve "alive"
+ * (conservador): preferimos conservar un proyecto vivo que ocultarlo por error.
+ */
+async function verifyProjectInHubspot(hsClient: Client, objectId: string): Promise<"alive" | "closed" | "gone"> {
+  let confirmedNotFound = false;
+  let ambiguous = false;
+  for (const slug of READ_SLUGS) {
+    try {
+      const res = await hsClient.apiRequest({
+        method: "GET",
+        path: `/crm/v3/objects/${slug}/${objectId}?properties=hs_name,hs_status,nombre_del_proyecto,estatus_del_proyecto`,
+      });
+      if (res.status === 404) { confirmedNotFound = true; continue; }
+      if (!res.ok) { ambiguous = true; continue; } // 429/5xx → no concluir nada
+      const data = (await res.json()) as { id?: string; properties?: Record<string, string | null> };
+      if (data?.id) {
+        const raw = (data.properties?.hs_status || data.properties?.estatus_del_proyecto || "").toLowerCase().trim();
+        const closed =
+          raw === "completed" || raw === "cancelled" ||
+          raw.includes("completado") || raw.includes("cancelado") || raw.includes("cerrado");
+        return closed ? "closed" : "alive";
+      }
+      ambiguous = true;
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? "");
+      if (msg.includes("404") || /not found/i.test(msg)) confirmedNotFound = true;
+      else ambiguous = true;
+    }
+  }
+  // No lo encontramos vivo por ningún slug. Solo confirmamos "gone" si hubo un 404
+  // claro y CERO errores ambiguos; sino, conservador: "alive" (no desactivar).
+  return confirmedNotFound && !ambiguous ? "gone" : "alive";
+}
+
 export async function syncProjectsForClient(clientId: string): Promise<SyncResult> {
   const result: SyncResult = { found: 0, created: 0, updated: 0, skipped: 0, errors: [], debug: [] };
 
@@ -558,13 +600,28 @@ export async function syncProjectsForClient(clientId: string): Promise<SyncResul
   // API de HubSpot NO desactiva todo. NUNCA toca proyectos sin hubspotServiceId
   // (manuales / handoff / sentinel __strategy__): esos no son de HubSpot.
   if (projectIds.length > 0) {
-    const reconciled = await prisma.project.updateMany({
+    // Candidatos: proyectos sincronizados (hubspotServiceId) activos que NO vinieron
+    // en el set de asociaciones de ESTA corrida. ANTES era un updateMany ciego — pero
+    // `projectIds` puede estar incompleto/erróneo (hipo de la API → fallback a un slug
+    // equivocado), y eso desactivaba proyectos VIVOS. Ahora verificamos cada uno
+    // directamente en HubSpot y solo desactivamos si está confirmado gone/closed.
+    const candidates = await prisma.project.findMany({
       where: { clientId, status: "active", hubspotServiceId: { not: null, notIn: projectIds } },
-      data: { status: "inactive" },
+      select: { id: true, name: true, hubspotServiceId: true },
     });
-    if (reconciled.count > 0) {
-      result.updated += reconciled.count; // dispara router.refresh() en WorkspaceClient
-      result.debug!.push(`Reconciliación: ${reconciled.count} proyecto(s) ya no en HubSpot → inactive`);
+    for (const cand of candidates) {
+      const verdict = await verifyProjectInHubspot(hsClient, cand.hubspotServiceId!);
+      if (verdict === "alive") {
+        result.debug!.push(
+          `Reconciliación: "${cand.name}" (${cand.hubspotServiceId}) no vino en la asociación pero SIGUE vivo en HubSpot → se conserva activo (probable hipo de la API o slug equivocado)`,
+        );
+        continue;
+      }
+      await prisma.project.update({ where: { id: cand.id }, data: { status: "inactive" } });
+      result.updated++; // dispara router.refresh() en WorkspaceClient
+      result.debug!.push(
+        `Reconciliación: "${cand.name}" (${cand.hubspotServiceId}) ${verdict === "gone" ? "no existe (404)" : "en estado cerrado"} en HubSpot → inactive`,
+      );
     }
   }
 
