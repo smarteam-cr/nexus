@@ -28,7 +28,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { plural } from "@/lib/timeline/weeks";
-import { ConfirmDialog } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import TimelineGantt, { type GanttPhase, type GanttTaskStatus } from "./TimelineGantt";
 import TimelineAssistDialog from "./TimelineAssistDialog";
@@ -121,7 +120,6 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [deleteDetailOpen, setDeleteDetailOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // ── Asistente IA ──
@@ -539,19 +537,6 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
     return n;
   };
 
-  // ── Regenerar detalle: borra las tareas (conserva esqueleto/anchor/tipos) y las
-  // vuelve a crear con IA. Único control manual del flujo auto. ──────────────────
-  const regenerateDetail = async () => {
-    setDeleteDetailOpen(false);
-    setError(null);
-    const res = await fetch(`/api/projects/${projectId}/timeline/detail`, { method: "DELETE" });
-    if (!res.ok) {
-      setError("No se pudo regenerar el detalle.");
-      return;
-    }
-    await load();
-    await generateDetail();
-  };
 
   // ── Toggle de estado desde el Gantt (PATCH, optimista) ────────────────────────
   const toggleStatus = async (taskId: string, next: GanttTaskStatus) => {
@@ -703,15 +688,6 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
             ¿Necesitás ajustar el cronograma? Pedíselo a la IA — vos revisás antes de aplicar.
           </span>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {totalTasks > 0 && !generating && (
-              <button
-                onClick={() => setDeleteDetailOpen(true)}
-                className="text-xs font-medium text-gray-500 hover:text-blue-400 border border-gray-700 hover:border-blue-700/60 rounded-lg px-3 py-1.5 transition-colors"
-                title="Borra las tareas actuales y la IA propone unas nuevas"
-              >
-                Regenerar detalle
-              </button>
-            )}
             <button
               onClick={() => { setAssistScopePhaseId(null); setAssistOpen(true); }}
               className="flex items-center gap-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition-colors"
@@ -962,16 +938,6 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
           </button>
         </div>
       )}
-
-      {/* Confirmación de regeneración del detalle */}
-      <ConfirmDialog
-        open={deleteDetailOpen}
-        onConfirm={regenerateDetail}
-        onCancel={() => setDeleteDetailOpen(false)}
-        title="¿Regenerar el detalle del cronograma?"
-        description="Se borran las tareas actuales y la IA propone unas nuevas a partir del contexto. Las fases, la fecha de arranque y los tipos se conservan."
-        confirmLabel="Regenerar detalle"
-      />
 
       <TimelineAssistDialog
         open={assistOpen}
