@@ -522,7 +522,7 @@ export default function ProjectCanvasPanel({
       {!isResumenCanvas && activeCanvas?.name === "Kickoff" && activeCanvasId && (
         // Publicar/ocultar el kickoff vive en el pop-up "Acceso del cliente"
         // (toolbar del proyecto), junto al resto de la visibilidad por superficie.
-        <div style={{ margin: "0 -1.5rem -2rem" }}>
+        <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
           {/* agentNonce remonta el landing al terminar una corrida del CTA → refetch */}
           <KickoffLanding key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} editable />
         </div>
