@@ -432,7 +432,7 @@ function MinuteContent({
               });
               onReload();
             }}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand text-white hover:bg-brand-dark transition-colors"
           >
             ✓ Aceptar minuta
           </button>

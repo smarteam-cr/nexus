@@ -773,7 +773,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
               <button
                 onClick={applyProposal}
                 disabled={applying}
-                className="text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3.5 py-1.5 rounded-lg transition-colors"
+                className="text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-50 px-3.5 py-1.5 rounded-lg transition-colors"
               >
                 {applying ? "Aplicando…" : "Aplicar cambios"}
               </button>
@@ -813,7 +813,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
                 <button
                   onClick={applyProgress}
                   disabled={applyingProgress}
-                  className="text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3.5 py-1.5 rounded-lg transition-colors"
+                  className="text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-50 px-3.5 py-1.5 rounded-lg transition-colors"
                 >
                   {applyingProgress ? "Aplicando…" : "Aplicar avance"}
                 </button>
