@@ -122,6 +122,9 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
   const [generating, setGenerating] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // ── Publicación al cliente (in-canvas) ──
+  const [publishedAt, setPublishedAt] = useState<string | null>(null);
+  const [publishWorking, setPublishWorking] = useState(false);
   // ── Asistente IA ──
   const [assistOpen, setAssistOpen] = useState(false);
   const [assistScopePhaseId, setAssistScopePhaseId] = useState<string | null>(null);
@@ -171,6 +174,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
         setPhases(mapServerPhases(data.phases ?? []));
         setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
         setKickoffDate(data.kickoffSessionDate ? String(data.kickoffSessionDate).slice(0, 10) : "");
+        setPublishedAt(data.timelinePublishedAt ?? null);
         // Propuesta de re-generación del agente (re-run con cronograma ya existente):
         // se muestra como vista previa aplicable, reusando el mismo banner que el assist.
         // No pisa una propuesta de assist en curso (prev tiene prioridad).
@@ -188,6 +192,7 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
         setAnchor("");
         setKickoffDate("");
         setPendingProgress(null);
+        setPublishedAt(null);
       }
       setError(null);
     } catch {
@@ -208,6 +213,33 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
       .then((d) => setClientLogoUrl(d?.logoUrl ?? null))
       .catch(() => setClientLogoUrl(null));
   }, [projectId]);
+
+  // ── Publicar / actualizar / ocultar el cronograma para el cliente ──────────────
+  // Publicar (o "Actualizar publicación") siempre confirma el detalle de paso
+  // (confirm-detail) para que las tareas crucen al cliente — re-publicar destraba
+  // el caso en que detailConfirmedAt quedó en null y el cronograma seguía publicado.
+  const publishTimeline = async (publish: boolean) => {
+    setPublishWorking(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/publish-timeline`, {
+        method: publish ? "POST" : "DELETE",
+      });
+      if (!res.ok) {
+        setError("No se pudo cambiar la publicación del cronograma.");
+        return;
+      }
+      if (publish) {
+        await fetch(`/api/projects/${projectId}/timeline/confirm-detail`, { method: "POST" }).catch(() => {});
+      }
+      await load();
+      toast.success(publish ? "Cronograma publicado al cliente." : "Cronograma ocultado.");
+    } catch {
+      setError("Error de conexión al publicar el cronograma.");
+    } finally {
+      setPublishWorking(false);
+    }
+  };
 
   // ── Bootstrap (estructura SOLO por IA — pero sin fases la barra no opera) ──────
   const [bootName, setBootName] = useState("");
@@ -670,8 +702,52 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
         </div>
       )}
 
-      {/* Publicar/ocultar el cronograma para el cliente vive ahora en el pop-up
-          "Acceso del cliente" (toolbar del proyecto), junto al kickoff. */}
+      {/* ── Publicar al cliente (in-canvas) ── */}
+      {phases.length > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-800 bg-gray-900 px-4 py-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            {publishedAt ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                Publicado — el cliente ve este cronograma
+              </span>
+            ) : (
+              <span className="text-sm text-gray-400">
+                Este cronograma todavía no está publicado al cliente.
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {publishedAt ? (
+              <>
+                <button
+                  onClick={() => publishTimeline(true)}
+                  disabled={publishWorking}
+                  className="text-xs font-medium text-gray-300 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
+                  title="Vuelve a empujar la versión actual (fases + tareas) al cliente"
+                >
+                  {publishWorking ? "Actualizando…" : "Actualizar publicación"}
+                </button>
+                <button
+                  onClick={() => publishTimeline(false)}
+                  disabled={publishWorking}
+                  className="text-xs font-medium text-amber-400 hover:text-amber-300 border border-amber-700/50 hover:border-amber-600 rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
+                >
+                  Ocultar
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => publishTimeline(true)}
+                disabled={publishWorking}
+                className="text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3.5 py-1.5 rounded-lg transition-colors"
+              >
+                {publishWorking ? "Publicando…" : "Publicar al cliente"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Estado de generación del detalle ── */}
       {generating && (

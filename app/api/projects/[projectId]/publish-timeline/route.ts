@@ -48,6 +48,18 @@ export async function POST(
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
+  // No publicar un cronograma fantasma: tiene que existir y tener al menos una fase,
+  // sino el cliente vería una superficie vacía con badge "publicado".
+  const phaseCount = await prisma.timelinePhase.count({
+    where: { timeline: { projectId } },
+  });
+  if (phaseCount === 0) {
+    return NextResponse.json(
+      { error: "El cronograma no tiene fases todavía — no se puede publicar vacío." },
+      { status: 400 },
+    );
+  }
+
   const updated = await prisma.project.update({
     where: { id: projectId },
     data: { timelinePublishedAt: new Date() },
