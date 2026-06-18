@@ -46,6 +46,10 @@ export default function WorkspaceClient({
   // corre, y un toast si falla. El contador maneja que los dos syncs corran en paralelo.
   const [syncing, setSyncing] = useState(false);
   const activeSyncs = useRef(0);
+  // Resultado del último sync de HubSpot → para no fallar en SILENCIO: si un cliente
+  // con HubSpot queda sin proyectos visibles, mostramos un banner con el motivo + Reintentar.
+  const [syncResult, setSyncResult] = useState<{ created?: number; updated?: number; errors?: string[] } | null>(null);
+  const [syncDone, setSyncDone] = useState(false);
   const startSync = useCallback(() => { activeSyncs.current++; setSyncing(true); }, []);
   const endSync = useCallback(() => {
     activeSyncs.current = Math.max(0, activeSyncs.current - 1);
@@ -59,8 +63,15 @@ export default function WorkspaceClient({
       const res = await fetch(`/api/clients/${clientId}/sync-projects`, { method: "POST" });
       if (!res.ok) throw new Error("sync failed");
       const data = await res.json();
+      setSyncResult({
+        created: data.created,
+        updated: data.updated,
+        errors: Array.isArray(data.errors) ? data.errors : [],
+      });
+      setSyncDone(true);
       if (data.created || data.updated) router.refresh();
     } catch {
+      setSyncDone(true);
       toast.error("No se pudo sincronizar con HubSpot.", {
         action: { label: "Reintentar", onClick: () => void runHubspotSync() },
       });
@@ -107,6 +118,35 @@ export default function WorkspaceClient({
         </div>
       )}
       <div className="flex-1 overflow-y-auto">
+        {/* Sync no-silencioso: cliente con HubSpot que quedó SIN proyectos visibles
+            tras sincronizar → banner con el motivo + Reintentar (antes era un cliente
+            vacío y mudo, imposible de diagnosticar). */}
+        {hasHubspot && projects.length === 0 && syncDone && !syncing && (
+          <div className="mx-6 mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-200">
+                  No se cargó ningún proyecto de HubSpot para este cliente.
+                </p>
+                <p className="text-xs text-amber-200/80 mt-0.5">
+                  {syncResult?.errors && syncResult.errors.length > 0
+                    ? syncResult.errors[0]
+                    : "Revisá en HubSpot que el proyecto esté asociado a la empresa de este cliente, y reintentá."}
+                </p>
+              </div>
+              <button
+                onClick={() => void runHubspotSync()}
+                disabled={syncing}
+                className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-100 transition-colors disabled:opacity-50"
+              >
+                Reintentar
+              </button>
+            </div>
+          </div>
+        )}
         <ProjectSection
           clientId={clientId}
           projects={projects}
