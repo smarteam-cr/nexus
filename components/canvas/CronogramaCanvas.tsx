@@ -778,9 +778,9 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
         (pendingProgress.phases.length > 0 ||
           pendingProgress.tasks.length > 0 ||
           !!pendingProgress.currentPhaseId) && (
-          <div className="rounded-2xl border border-emerald-700/40 bg-emerald-900/20 px-4 py-3 space-y-3">
+          <div className="rounded-2xl border border-emerald-600/40 bg-emerald-900/25 px-5 py-4 space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
+              <span className="text-[13px] font-bold uppercase tracking-wider text-emerald-300">
                 Avance detectado por el agente — revisá y confirmá
               </span>
               <div className="ml-auto flex items-center gap-2">
@@ -802,12 +802,12 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
             </div>
 
             {pendingProgress.reasoning && (
-              <p className="text-[11px] text-gray-400 leading-relaxed">{pendingProgress.reasoning}</p>
+              <p className="text-[13px] text-gray-200 leading-relaxed max-w-3xl">{pendingProgress.reasoning}</p>
             )}
 
             {pendingProgress.currentPhaseId && (
-              <p className="text-[11px] text-blue-300">
-                Hoy:{" "}
+              <p className="text-xs text-blue-200 inline-flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/30 rounded-md px-2 py-1">
+                <span className="uppercase tracking-wide text-blue-300/80 font-semibold">Hoy</span>
                 <span className="font-semibold">
                   {phases.find((p) => p.id === pendingProgress.currentPhaseId)?.name ?? "—"}
                 </span>
@@ -815,20 +815,20 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
             )}
 
             {pendingProgress.phases.length > 0 && (
-              <div className="space-y-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400/80">
                   Fases completadas
                 </span>
                 {pendingProgress.phases.map((ph) => {
                   const name = phases.find((p) => p.id === ph.id)?.name ?? "(fase)";
                   const checked = progressPhaseSel.has(ph.id);
                   return (
-                    <label key={ph.id} className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                    <label key={ph.id} className="flex items-center gap-2.5 text-sm text-gray-200 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={checked}
                         onChange={() => setProgressPhaseSel((s) => toggleSet(s, ph.id))}
-                        className="accent-emerald-500"
+                        className="w-4 h-4 accent-emerald-500"
                       />
                       <span className={checked ? "" : "line-through text-gray-600"}>{name}</span>
                     </label>
@@ -838,8 +838,8 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
             )}
 
             {pendingProgress.tasks.length > 0 && (
-              <div className="space-y-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400/80">
                   Tareas hechas
                 </span>
                 {pendingProgress.tasks.map((tk) => {
@@ -851,22 +851,22 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
                   }
                   const checked = progressTaskSel.has(tk.id);
                   return (
-                    <label key={tk.id} className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                    <label key={tk.id} className="flex items-center gap-2.5 text-sm text-gray-200 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={checked}
                         onChange={() => setProgressTaskSel((s) => toggleSet(s, tk.id))}
-                        className="accent-emerald-500"
+                        className="w-4 h-4 accent-emerald-500"
                       />
                       <span className={checked ? "" : "line-through text-gray-600"}>{title}</span>
-                      {phaseName && <span className="text-gray-600">· {phaseName}</span>}
+                      {phaseName && <span className="text-gray-500 text-xs">· {phaseName}</span>}
                     </label>
                   );
                 })}
               </div>
             )}
 
-            <p className="text-[11px] text-gray-500">
+            <p className="text-xs text-gray-400 pt-2 border-t border-emerald-700/25">
               Al aplicar, vos confirmás el avance (se marca como hecho). El agente solo lo propone — destildá lo que no corresponda.
             </p>
           </div>

@@ -26,6 +26,7 @@ export async function PATCH(
     done?: boolean;
     ownerEmail?: string | null;
     dueDate?: string | null;
+    deletedAt?: string | null; // null = restaurar (des-borrar)
   };
   try {
     body = await req.json();
@@ -48,11 +49,15 @@ export async function PATCH(
       data.dueDate = null;
     }
   }
+  // Restaurar: deletedAt=null la saca del Histórico (des-borrado).
+  if (body.deletedAt !== undefined) {
+    data.deletedAt = body.deletedAt ? new Date(body.deletedAt) : null;
+  }
 
   // Sincronizar done ↔ status
   if (data.status === "DONE") data.done = true;
   if (data.done === true && !data.status) data.status = "DONE";
-  if (data.done === false && data.status === "DONE") data.status = "PENDING";
+  if (data.done === false && !data.status) data.status = "PENDING";
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "Nada que actualizar" }, { status: 400 });

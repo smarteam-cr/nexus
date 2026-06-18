@@ -52,6 +52,7 @@ export default function ActionItemsDialog({
   onToggle,
   onAdd,
   onRemove,
+  onRestore,
 }: {
   open: boolean;
   onClose: () => void;
@@ -60,6 +61,7 @@ export default function ActionItemsDialog({
   onToggle: (id: string) => void;
   onAdd: (text: string) => void;
   onRemove: (id: string) => void;
+  onRestore: (id: string) => void; // hecha o borrada → vuelve a Pendientes
 }) {
   const [newText, setNewText] = useState("");
   const [tab, setTab] = useState<"pending" | "history">("pending");
@@ -133,9 +135,9 @@ export default function ActionItemsDialog({
               {history.map((item, i) => {
                 const isDeleted = !!item.deletedAt;
                 return (
-                  <div key={item.id ?? i} className="flex items-start gap-2.5 rounded-lg px-2 py-1.5 -mx-2">
+                  <div key={item.id ?? i} className="flex items-start gap-2.5 group rounded-lg hover:bg-surface-muted px-2 py-1.5 -mx-2">
+                    {/* Indicador de estado (no interactivo): check verde = hecha, × = borrada. */}
                     {isDeleted ? (
-                      // Borrada: sin checkbox, ícono atenuado.
                       <span
                         className="mt-0.5 w-4 h-4 rounded border border-line/60 flex-shrink-0 flex items-center justify-center text-fg-muted text-[10px]"
                         title="Tarea borrada"
@@ -143,16 +145,14 @@ export default function ActionItemsDialog({
                         ×
                       </span>
                     ) : (
-                      // Hecha: check verde; click la des-marca y la devuelve a Pendientes.
-                      <button
-                        onClick={() => item.id && onToggle(item.id)}
-                        className="mt-0.5 w-4 h-4 rounded border bg-emerald-500 border-emerald-500 flex-shrink-0 flex items-center justify-center transition-colors"
-                        title="Des-marcar (volver a Pendientes)"
+                      <span
+                        className="mt-0.5 w-4 h-4 rounded border bg-emerald-500 border-emerald-500 flex-shrink-0 flex items-center justify-center"
+                        title="Tarea hecha"
                       >
                         <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
-                      </button>
+                      </span>
                     )}
                     <div className="flex-1 min-w-0">
                       <span className="text-sm block line-through text-fg-muted">{item.text}</span>
@@ -163,6 +163,14 @@ export default function ActionItemsDialog({
                         <ItemMeta item={item} />
                       </div>
                     </div>
+                    {/* CTA restaurar — aparece al hover, para hechas y borradas. */}
+                    <button
+                      onClick={() => item.id && onRestore(item.id)}
+                      className="text-[11px] font-semibold text-brand hover:text-brand/80 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 whitespace-nowrap mt-0.5"
+                      title="Restaurar a Pendientes"
+                    >
+                      Restaurar
+                    </button>
                   </div>
                 );
               })}

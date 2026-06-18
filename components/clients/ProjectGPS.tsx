@@ -149,41 +149,50 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     }).catch(() => fetchGPS());
   }, [fetchGPS]);
 
+  // Marcar una pendiente como hecha → sale de Pendientes y pasa al Histórico.
   const toggleItem = useCallback(async (id: string) => {
     setData((cur) => {
       if (!cur) return cur;
-      const history = cur.historyItems ?? [];
-      // Está en Pendientes → marcar hecha y mover a Histórico.
       const pIdx = cur.pendingItems.findIndex((i) => i.id === id);
-      if (pIdx !== -1) {
-        const item = cur.pendingItems[pIdx];
-        const moved: PendingItem = { ...item, done: true, status: "DONE" };
-        const next = {
-          ...cur,
-          pendingItems: cur.pendingItems.filter((_, i) => i !== pIdx),
-          historyItems: [moved, ...history],
-        };
-        writeGpsCache(projectId, next);
-        if (item.id) patchDone(item.id, true);
-        return next;
-      }
-      // Está en Histórico como HECHA (no borrada) → des-marcar y devolver a Pendientes.
-      const hIdx = history.findIndex((i) => i.id === id && !i.deletedAt);
-      if (hIdx !== -1) {
-        const item = history[hIdx];
-        const moved: PendingItem = { ...item, done: false, status: "PENDING" };
-        const next = {
-          ...cur,
-          historyItems: history.filter((_, i) => i !== hIdx),
-          pendingItems: [...cur.pendingItems, moved],
-        };
-        writeGpsCache(projectId, next);
-        if (item.id) patchDone(item.id, false);
-        return next;
-      }
-      return cur;
+      if (pIdx === -1) return cur;
+      const item = cur.pendingItems[pIdx];
+      const moved: PendingItem = { ...item, done: true, status: "DONE" };
+      const next = {
+        ...cur,
+        pendingItems: cur.pendingItems.filter((_, i) => i !== pIdx),
+        historyItems: [moved, ...(cur.historyItems ?? [])],
+      };
+      writeGpsCache(projectId, next);
+      if (item.id) patchDone(item.id, true);
+      return next;
     });
   }, [projectId, patchDone]);
+
+  // Restaurar desde el Histórico (hecha o borrada) → vuelve a Pendientes.
+  const restoreItem = useCallback(async (id: string) => {
+    setData((cur) => {
+      if (!cur) return cur;
+      const history = cur.historyItems ?? [];
+      const hIdx = history.findIndex((i) => i.id === id);
+      if (hIdx === -1) return cur;
+      const item = history[hIdx];
+      const restored: PendingItem = { ...item, done: false, status: "PENDING", deletedAt: null };
+      const next = {
+        ...cur,
+        historyItems: history.filter((_, i) => i !== hIdx),
+        pendingItems: [...cur.pendingItems, restored],
+      };
+      writeGpsCache(projectId, next);
+      if (item.id) {
+        fetch(`/api/action-items/${item.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ done: false, deletedAt: null }),
+        }).catch(() => fetchGPS());
+      }
+      return next;
+    });
+  }, [projectId, fetchGPS]);
 
   const addItem = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -329,17 +338,10 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
 
       <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-line">
         {/* Última sesión */}
-        <div className="p-4">
+        <div className="p-4 flex flex-col">
           <div className="flex items-center gap-1.5 mb-2">
             <span className={cardLabel}>Última sesión</span>
             {lastSession.source === "auto" && autoBadge}
-            <button
-              onClick={() => setMinuteDialogOpen(true)}
-              className="ml-auto text-xs font-semibold text-brand hover:text-brand/80 transition-colors"
-              title="Ver minuta generada por la IA"
-            >
-              Ver minuta
-            </button>
           </div>
           {editingSummary ? (
             <div className="space-y-1.5">
@@ -380,6 +382,13 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
               )}
             </button>
           )}
+          <button
+            onClick={() => setMinuteDialogOpen(true)}
+            className="mt-auto pt-2 text-xs font-semibold text-brand hover:text-brand/80 self-start transition-colors"
+            title="Ver minuta generada por la IA"
+          >
+            Ver minuta
+          </button>
         </div>
 
         {/* Próxima sesión */}
@@ -476,6 +485,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
         onToggle={toggleItem}
         onAdd={addItem}
         onRemove={removeItem}
+        onRestore={restoreItem}
       />
     </div>
   );
