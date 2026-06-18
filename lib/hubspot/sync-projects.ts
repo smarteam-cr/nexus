@@ -53,9 +53,15 @@ const PROJECT_PROPERTIES = [
   "cls_encargado",        // propiedad custom (si existe en el portal)
 ];
 
-// ── Slugs del objeto Proyectos a probar en orden ─────────────────────────────
-// "projects" y "PROJECT" funcionan en HubSpot estándar; "0-18" y "0-49" son fallbacks
-const ASSOCIATION_SLUGS = ["projects", "PROJECT", "0-18", "0-49"];
+// ── Slugs del objeto Proyectos ───────────────────────────────────────────────
+// CANÓNICOS: "projects"/"PROJECT" son el objeto Proyectos estándar de HubSpot.
+// FALLBACK numérico ("0-18"/"0-49"): guesses de ÚLTIMO recurso para portales donde
+// el slug nombrado no existe. Peligrosos si matchean OTRO objeto (p.ej. en este
+// portal "0-49" devuelve 28 objetos que NO son proyectos), así que SOLO se usan
+// cuando no pudimos identificar el objeto Proyectos ni por slug nombrado ni por schema.
+const NAMED_PROJECT_SLUGS = ["projects", "PROJECT"];
+const FALLBACK_PROJECT_SLUGS = ["0-18", "0-49"];
+const ASSOCIATION_SLUGS = [...NAMED_PROJECT_SLUGS, ...FALLBACK_PROJECT_SLUGS]; // para mensajes
 const READ_SLUGS = ["projects", "PROJECT", "0-18", "0-49"];
 
 // ── Helpers para resolver owner y pipeline ──────────────────────────────────
@@ -275,82 +281,128 @@ export async function syncProjectsForClient(clientId: string): Promise<SyncResul
     result.debug!.push(`✓ hubspotCompanyId: ${companyId}`);
   }
 
-  // 4. Buscar proyectos HubSpot asociados a la empresa
+  // 4. Buscar proyectos HubSpot asociados a la empresa.
+  //    Estrategia robusta (evita ocultar/crear proyectos por datos basura):
+  //      a) slugs nombrados canónicos ("projects"/"PROJECT")
+  //      b) descubrimiento por schema (objeto cuyo nombre incluye project/proyecto) — autoritativo
+  //      c) fallbacks numéricos SOLO si no identificamos el objeto y NO hubo error transitorio
+  //         (sino abortamos la corrida para no reconciliar con un set incompleto).
   let projectIds: string[] = [];
   let workingAssocSlug: string | null = null;
+  let objectIdentified = false; // ¿pudimos identificar el objeto Proyectos del portal?
+  let anyTransient = false;     // ¿hubo algún error transitorio (timeout/5xx) consultando?
 
-  for (const slug of ASSOCIATION_SLUGS) {
+  // Consulta company→slug. Distingue OK / ausente (4xx) / transitorio (5xx/throw).
+  const queryAssoc = async (
+    slug: string,
+  ): Promise<{ kind: "ok"; ids: string[] } | { kind: "absent" } | { kind: "transient" }> => {
     try {
-      const assocResponse = await hsClient.apiRequest({
+      const res = await hsClient.apiRequest({
         method: "GET",
         path: `/crm/v4/objects/companies/${companyId}/associations/${slug}`,
       });
-      const assocData = (await assocResponse.json()) as {
-        results?: Array<{ toObjectId: number }>;
-      };
-      const ids = (assocData.results ?? []).map((r) => String(r.toObjectId));
-      if (ids.length > 0) {
-        projectIds = ids;
-        workingAssocSlug = slug;
-        result.debug!.push(`✓ ${ids.length} proyectos encontrados via slug "${slug}"`);
-        break;
-      } else {
-        result.debug!.push(`Slug "${slug}": 0 asociaciones`);
+      if (res.ok) {
+        const data = (await res.json()) as { results?: Array<{ toObjectId: number }> };
+        return { kind: "ok", ids: (data.results ?? []).map((r) => String(r.toObjectId)) };
       }
+      if (res.status >= 400 && res.status < 500) {
+        result.debug!.push(`Slug "${slug}": HTTP ${res.status} (objeto/asociación ausente)`);
+        return { kind: "absent" };
+      }
+      result.debug!.push(`Slug "${slug}": HTTP ${res.status} (transitorio)`);
+      return { kind: "transient" };
     } catch (e) {
-      result.debug!.push(`Slug "${slug}": error - ${(e as Error).message?.slice(0, 80)}`);
-      continue;
+      const msg = String((e as Error)?.message ?? "");
+      result.debug!.push(`Slug "${slug}": error - ${msg.slice(0, 80)}`);
+      return /\b40\d\b|not found|invalid/i.test(msg) ? { kind: "absent" } : { kind: "transient" };
+    }
+  };
+
+  // a) Slugs nombrados canónicos.
+  for (const slug of NAMED_PROJECT_SLUGS) {
+    const r = await queryAssoc(slug);
+    if (r.kind === "transient") anyTransient = true;
+    if (r.kind === "ok") {
+      objectIdentified = true;
+      if (r.ids.length > 0) {
+        projectIds = r.ids;
+        workingAssocSlug = slug;
+        result.debug!.push(`✓ ${r.ids.length} proyectos via slug "${slug}"`);
+        break;
+      }
+      result.debug!.push(`Slug "${slug}": 0 asociaciones (objeto existe, empresa sin proyectos)`);
     }
   }
 
-  // 4b. Si los slugs estándar fallan, intentar descubrimiento por schemas
+  // b) Descubrimiento por schema (autoritativo: objeto cuyo nombre incluye project/proyecto).
   if (projectIds.length === 0) {
     try {
-      const schemasRes = await hsClient.apiRequest({
-        method: "GET",
-        path: "/crm/v3/schemas",
-      });
-      const schemas = (await schemasRes.json()) as {
-        results?: Array<{ name: string; objectTypeId: string; labels: { singular: string; plural: string } }>;
-      };
-      const customSchemas = schemas.results ?? [];
-      result.debug!.push(
-        `Custom schemas: ${customSchemas.map((s) => `${s.name}(${s.objectTypeId})`).join(", ") || "ninguno"}`
-      );
-
-      const projectSchema = customSchemas.find((s) => {
-        const n = (s.name + " " + s.labels?.singular + " " + s.labels?.plural).toLowerCase();
-        return n.includes("project") || n.includes("proyecto");
-      });
-
-      if (projectSchema) {
-        result.debug!.push(`Schema candidato: ${projectSchema.name} (${projectSchema.objectTypeId})`);
-        try {
-          const assocRes = await hsClient.apiRequest({
-            method: "GET",
-            path: `/crm/v4/objects/companies/${companyId}/associations/${projectSchema.objectTypeId}`,
-          });
-          const assocData = (await assocRes.json()) as { results?: Array<{ toObjectId: number }> };
-          const ids = (assocData.results ?? []).map((r) => String(r.toObjectId));
-          if (ids.length > 0) {
-            projectIds = ids;
-            workingAssocSlug = projectSchema.objectTypeId;
-            result.debug!.push(`✓ ${ids.length} proyectos via schema ${projectSchema.name}`);
+      const schemasRes = await hsClient.apiRequest({ method: "GET", path: "/crm/v3/schemas" });
+      if (schemasRes.ok) {
+        const schemas = (await schemasRes.json()) as {
+          results?: Array<{ name: string; objectTypeId: string; labels: { singular: string; plural: string } }>;
+        };
+        const customSchemas = schemas.results ?? [];
+        result.debug!.push(
+          `Custom schemas: ${customSchemas.map((s) => `${s.name}(${s.objectTypeId})`).join(", ") || "ninguno"}`,
+        );
+        const projectSchema = customSchemas.find((s) => {
+          const n = (s.name + " " + s.labels?.singular + " " + s.labels?.plural).toLowerCase();
+          return n.includes("project") || n.includes("proyecto");
+        });
+        if (projectSchema) {
+          result.debug!.push(`Schema candidato: ${projectSchema.name} (${projectSchema.objectTypeId})`);
+          const r = await queryAssoc(projectSchema.objectTypeId);
+          if (r.kind === "transient") anyTransient = true;
+          if (r.kind === "ok") {
+            objectIdentified = true;
+            if (r.ids.length > 0) {
+              projectIds = r.ids;
+              workingAssocSlug = projectSchema.objectTypeId;
+              result.debug!.push(`✓ ${r.ids.length} proyectos via schema ${projectSchema.name}`);
+            }
           }
-        } catch (e) {
-          result.debug!.push(`Error asociación schema: ${(e as Error).message?.slice(0, 100)}`);
         }
+      } else {
+        anyTransient = true;
+        result.debug!.push(`Schemas: HTTP ${schemasRes.status}`);
       }
     } catch (e) {
+      anyTransient = true;
       result.debug!.push(`Error obteniendo schemas: ${(e as Error).message?.slice(0, 100)}`);
     }
   }
 
+  // c) Fallbacks numéricos: ÚLTIMO recurso, solo si NO identificamos el objeto y NO hubo
+  //    error transitorio. Así nunca ingerimos objetos no-proyecto cuando el objeto real
+  //    respondió (aunque vacío) ni cuando hubo un hipo de la API.
+  if (projectIds.length === 0 && !objectIdentified && !anyTransient) {
+    for (const slug of FALLBACK_PROJECT_SLUGS) {
+      const r = await queryAssoc(slug);
+      if (r.kind === "ok" && r.ids.length > 0) {
+        projectIds = r.ids;
+        workingAssocSlug = slug;
+        result.debug!.push(`✓ ${r.ids.length} proyectos via fallback "${slug}"`);
+        break;
+      }
+    }
+  }
+
   if (projectIds.length === 0) {
+    // Error transitorio sin objeto identificado → ABORTAR la corrida SIN reconciliar:
+    // no podemos confiar en un set incompleto, así que no desactivamos nada.
+    if (anyTransient && !objectIdentified) {
+      result.errors.push(
+        `No se pudieron consultar las asociaciones de proyectos de la empresa ${companyId} ` +
+        `(error transitorio de HubSpot). Se omite esta corrida para no reconciliar con datos incompletos.`,
+      );
+      return result;
+    }
     result.errors.push(
-      `No se encontraron proyectos HubSpot asociados a la empresa ${companyId}. ` +
-      `Slugs intentados: ${ASSOCIATION_SLUGS.join(", ")}. ` +
-      `Verifica que los Proyectos estén asociados a la empresa en HubSpot.`
+      objectIdentified
+        ? `La empresa ${companyId} no tiene proyectos asociados (objeto Proyectos identificado, 0 asociaciones).`
+        : `No se identificó el objeto Proyectos para la empresa ${companyId}. ` +
+          `Slugs intentados: ${ASSOCIATION_SLUGS.join(", ")}. Verifica que los Proyectos estén asociados en HubSpot.`,
     );
     return result;
   }
