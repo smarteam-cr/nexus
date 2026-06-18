@@ -164,6 +164,17 @@ function UserAvatar({ user, isOpen }: { user: UserLite; isOpen: boolean }) {
 export default function Sidebar({ clients, user, onToggle, isOpen = true }: SidebarProps) {
   const pathname = usePathname();
 
+  // Visibilidad de ítems del menú por rol de permiso (roleEnum). Es cosmético:
+  // la seguridad real vive en cada página/endpoint; esto solo evita mostrar
+  // accesos que el rol no usa. Universales (todos): Clientes, ICP, Insights,
+  // Sesiones, Conocimientos.
+  const role = user.role ?? "";
+  const isSuperAdmin = user.isSuperAdmin || role === "SUPER_ADMIN";
+  const canSeeAgents = isSuperAdmin || ["VENTAS", "CSL", "MARKETING"].includes(role); // todos menos CSE
+  const canSeeAudits = isSuperAdmin || ["VENTAS", "CSL"].includes(role);              // super admin, CSL, ventas
+  const canSeeTeam = isSuperAdmin;                                                     // solo super admin
+  const canSeeConfig = isSuperAdmin;                                                   // solo super admin
+
   return (
     <aside className="w-full bg-gray-950 border-r border-gray-800 flex flex-col min-h-screen sticky top-0 h-screen">
 
@@ -220,6 +231,19 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
             }
           />
           <NavItem
+            href="/icp"
+            active={pathname.startsWith("/icp")}
+            isOpen={isOpen}
+            label="ICP"
+            icon={
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <circle cx="12" cy="12" r="9" strokeWidth={2} />
+                <circle cx="12" cy="12" r="5" strokeWidth={2} />
+                <circle cx="12" cy="12" r="1.5" strokeWidth={2} />
+              </svg>
+            }
+          />
+          <NavItem
             href="/dashboard"
             active={pathname === "/dashboard"}
             isOpen={isOpen}
@@ -230,28 +254,32 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
               </svg>
             }
           />
-          <NavItem
-            href="/audits"
-            active={pathname.startsWith("/audits")}
-            isOpen={isOpen}
-            label="Auditoría"
-            icon={
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
-            }
-          />
-          <NavItem
-            href="/agents"
-            active={pathname.startsWith("/agents")}
-            isOpen={isOpen}
-            label="Agentes"
-            icon={
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-            }
-          />
+          {canSeeAudits && (
+            <NavItem
+              href="/audits"
+              active={pathname.startsWith("/audits")}
+              isOpen={isOpen}
+              label="Auditoría"
+              icon={
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              }
+            />
+          )}
+          {canSeeAgents && (
+            <NavItem
+              href="/agents"
+              active={pathname.startsWith("/agents")}
+              isOpen={isOpen}
+              label="Agentes"
+              icon={
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              }
+            />
+          )}
           <NavItem
             href="/sessions"
             active={pathname.startsWith("/sessions")}
@@ -274,28 +302,32 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
               </svg>
             }
           />
-          <NavItem
-            href="/team"
-            active={pathname.startsWith("/team")}
-            isOpen={isOpen}
-            label="Equipo"
-            icon={
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            }
-          />
-          <NavItem
-            href="/integrations"
-            active={pathname.startsWith("/integrations")}
-            isOpen={isOpen}
-            label="Configuración"
-            icon={
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
-              </svg>
-            }
-          />
+          {canSeeTeam && (
+            <NavItem
+              href="/team"
+              active={pathname.startsWith("/team")}
+              isOpen={isOpen}
+              label="Equipo"
+              icon={
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              }
+            />
+          )}
+          {canSeeConfig && (
+            <NavItem
+              href="/integrations"
+              active={pathname.startsWith("/integrations")}
+              isOpen={isOpen}
+              label="Configuración"
+              icon={
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
+                </svg>
+              }
+            />
+          )}
         </div>
 
         {isOpen && clients.length > 0 && (

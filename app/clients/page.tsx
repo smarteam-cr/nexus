@@ -12,7 +12,6 @@ import {
 } from "@/lib/auth/supabase";
 import { accessibleClientWhere, sharedClientIdsFor } from "@/lib/auth/access";
 import ClientsGrid, { type ClientRow } from "./ClientsGrid";
-import ICPSection from "./ICPSection";
 
 // Render dinámico — la página depende del usuario logueado (sesión Supabase
 // vía cookies), así que no puede cachearse con ISR como antes.
@@ -133,7 +132,6 @@ export default async function ClientsPage() {
         />
 
         <ClientsGrid clients={rows} activeCse={activeCse} />
-        <ICPSection />
       </div>
     </AppShell>
   );
