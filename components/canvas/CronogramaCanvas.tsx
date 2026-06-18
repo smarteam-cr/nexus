@@ -703,78 +703,49 @@ export default function CronogramaCanvas({ projectId, clientId }: { projectId: s
 
   return (
     <div className="space-y-4">
-      {/* Logo del cliente — paridad con el preview del kickoff (lado Nexus). */}
-      {clientLogoUrl && (
-        <div className="flex items-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={clientLogoUrl} alt="Logo del cliente" className="h-9 w-auto max-w-[180px] object-contain" />
-        </div>
-      )}
-
-      {/* ── Barra única de controles del cronograma ──────────────────────────────
-          Estado de publicación + Pedir cambio con IA (CTA compacto) + Actualizar
-          (solo si hay cambios sin publicar) / Ocultar / Publicar. ── */}
-      {phases.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border border-gray-800 bg-gray-900 px-4 py-2.5">
-          {/* Estado de publicación */}
-          <div className="flex items-center gap-2 min-w-0">
-            {publishedAt ? (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                Publicado — el cliente ve este cronograma
-              </span>
-            ) : (
-              <span className="text-xs text-gray-400">Sin publicar al cliente</span>
+      {/* Logo del cliente (izq) + acciones del cronograma (der), estilo toolbar — a la
+          par del header. El estado "Publicado" / Ocultar / Publicar vive SOLO en el
+          pop-up "Acceso del cliente" para no duplicar. Acá quedan las acciones de
+          trabajo: Pedir cambio con IA, y Actualizar (solo cuando hay cambios sin publicar). */}
+      {(clientLogoUrl || phases.length > 0) && (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center">
+            {clientLogoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={clientLogoUrl} alt="Logo del cliente" className="h-9 w-auto max-w-[180px] object-contain" />
             )}
           </div>
-          {/* Controles */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {generating && (
-              <span className="flex items-center gap-1.5 text-xs font-medium text-blue-400">
-                <span className="w-3 h-3 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
-                Creando tareas…
-              </span>
-            )}
-            {!proposal && (
-              <button
-                onClick={() => { setAssistScopePhaseId(null); setAssistOpen(true); }}
-                className="flex items-center gap-1.5 text-xs font-semibold text-blue-300 hover:text-blue-200 border border-blue-700/50 hover:border-blue-600 rounded-lg px-3 py-1.5 transition-colors"
-                title="Pedile a la IA un cambio del cronograma — vos revisás antes de aplicar"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
-                Pedir cambio con IA
-              </button>
-            )}
-            {publishedAt ? (
-              <>
-                {hasUnpublishedChanges && (
-                  <button
-                    onClick={() => publishTimeline(true)}
-                    disabled={publishWorking}
-                    className="text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors"
-                    title="Empujar los cambios actuales al cliente"
-                  >
-                    {publishWorking ? "Actualizando…" : "Actualizar"}
-                  </button>
-                )}
+          {phases.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {generating && (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-blue-400">
+                  <span className="w-3 h-3 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
+                  Creando tareas…
+                </span>
+              )}
+              {!proposal && (
                 <button
-                  onClick={() => publishTimeline(false)}
-                  disabled={publishWorking}
-                  className="text-xs font-medium text-amber-400 hover:text-amber-300 border border-amber-700/50 hover:border-amber-600 rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
+                  onClick={() => { setAssistScopePhaseId(null); setAssistOpen(true); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800 hover:border-gray-700"
+                  title="Pedile a la IA un cambio del cronograma — vos revisás antes de aplicar"
                 >
-                  Ocultar
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+                  Pedir cambio con IA
                 </button>
-              </>
-            ) : (
-              <button
-                onClick={() => publishTimeline(true)}
-                disabled={publishWorking}
-                className="text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3.5 py-1.5 rounded-lg transition-colors"
-              >
-                {publishWorking ? "Publicando…" : "Publicar al cliente"}
-              </button>
-            )}
-          </div>
+              )}
+              {hasUnpublishedChanges && (
+                <button
+                  onClick={() => publishTimeline(true)}
+                  disabled={publishWorking}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"
+                  title="Empujar al cliente los cambios del cronograma"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  {publishWorking ? "Actualizando…" : "Actualizar cronograma"}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
