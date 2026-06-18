@@ -100,6 +100,10 @@ export default function ProjectCanvasPanel({
   const [canvasDropdownOpen, setCanvasDropdownOpen] = useState(false);
   const [addingSectionName, setAddingSectionName] = useState<string | null>(null);
   const canvasDropdownRef = useRef<HTMLDivElement>(null);
+  // Slot en el header para los CTAs del Cronograma (Pedir cambio con IA / Guardar
+  // cambios). CronogramaCanvas los renderiza acá vía portal → quedan a la par de
+  // "Acceso activo" sin tener que levantar su estado del asistente.
+  const [cronogramaSlot, setCronogramaSlot] = useState<HTMLDivElement | null>(null);
 
   const activeCanvas = canvases.find((c) => c.id === activeCanvasId) ?? canvases.find((c) => c.isDefault) ?? canvases[0] ?? null;
   // El render se ramifica por NOMBRE, no por isDefault (Handoff es el "home" pero
@@ -440,6 +444,11 @@ export default function ProjectCanvasPanel({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Slot de los CTAs del Cronograma (vía portal desde CronogramaCanvas):
+              Pedir cambio con IA + Guardar cambios, a la par de "Acceso activo". */}
+          {activeCanvas?.name === "Cronograma" && (
+            <div ref={setCronogramaSlot} className="flex items-center gap-2" />
+          )}
           {/* Acceso del cliente externo (token + contraseña) — PROJECT-LEVEL:
               las mismas credenciales destraban todas las superficies externas
               (kickoff, cronograma), por eso vive acá y no en un canvas. */}
@@ -533,7 +542,7 @@ export default function ProjectCanvasPanel({
           disparo del agente de detalle (POST /api/clients/[clientId]/analyze). */}
       {activeCanvas?.name === "Cronograma" && (
         // agentNonce remonta el canvas al terminar el CTA de avance → muestra el banner
-        <CronogramaCanvas key={`cronograma-${agentNonce}`} projectId={projectId} clientId={clientId} />
+        <CronogramaCanvas key={`cronograma-${agentNonce}`} projectId={projectId} clientId={clientId} headerSlot={cronogramaSlot} />
       )}
 
       {/* Resto de canvases custom: grilla de bloques (Diagnóstico, Planificación, …) */}
