@@ -3,7 +3,6 @@ import { withAuth } from "@/lib/api";
 import { guardCapability } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemAccessToken } from "@/lib/hubspot/client";
-import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
 
@@ -129,15 +128,12 @@ export const POST = withAuth(async () => {
         },
       });
 
-      // Crear proyecto principal automáticamente
-      const newProject = await prisma.project.create({
-        data: {
-          clientId: newClient.id,
-          name: "Proyecto principal",
-        },
-      });
-      await createDefaultCanvases(newProject.id);
-
+      // NO creamos un stub "Proyecto principal": estos clientes vienen de HubSpot
+      // (nexus=true → con hubspotCompanyId), así que sus proyectos REALES los trae el
+      // sync al entrar al cliente. El stub quedaba OCULTO (sin hubspotServiceId, filtro
+      // del detalle) y además contaminaba el clasificador de sesiones (un candidato
+      // fantasma que podía robarse el handoff). El empty-state del workspace ya guía
+      // mientras el sync corre.
       created++;
     }
   }

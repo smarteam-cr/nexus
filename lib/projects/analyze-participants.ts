@@ -216,7 +216,7 @@ export async function analyzeProjectParticipants(
  * cutover de F2 (SessionProject) queda con sesiones huérfanas y los flujos
  * dependientes (analyze-participants, meetings tab) responden vacío.
  */
-async function autoClassifyOrphanSessions(clientId: string): Promise<number> {
+export async function autoClassifyOrphanSessions(clientId: string): Promise<number> {
   // 1. Cargar cliente + categorías + todas las sesiones (solo lo mínimo)
   const [client, categories, allSessions, existingLinks] = await Promise.all([
     prisma.client.findUnique({

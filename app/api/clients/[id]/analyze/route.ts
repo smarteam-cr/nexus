@@ -18,6 +18,7 @@ import { syncFlowchartsToProcesos } from "@/lib/canvas/sync-procesos-blocks";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
+import { autoClassifyOrphanSessions } from "@/lib/projects/analyze-participants";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -339,7 +340,16 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // ── Handoff scopeado al proyecto: sin sesiones clasificadas a ESTE proyecto no
   //    hay nada que investigar → cortar antes de crear el run (sin fallback client-wide).
   if (agent.agentGroup === "handoff" && bodyProjectId) {
-    const projSessionCount = await prisma.sessionProject.count({ where: { projectId: bodyProjectId } });
+    let projSessionCount = await prisma.sessionProject.count({ where: { projectId: bodyProjectId } });
+    if (projSessionCount === 0) {
+      // Auto-sanar: adoptar las sesiones HUÉRFANAS del cliente (matcheadas a nivel
+      // cliente pero sin SessionProject) y reclasificarlas. Cubre el caso del proyecto
+      // creado DESPUÉS de que ya existían sesiones (sync de HubSpot) → el handoff
+      // funciona sin que el CSE tenga que clasificar a mano. El clasificador decide el
+      // proyecto correcto, así que en multi-proyecto no asigna a ciegas a este.
+      await autoClassifyOrphanSessions(clientId).catch(() => {});
+      projSessionCount = await prisma.sessionProject.count({ where: { projectId: bodyProjectId } });
+    }
     if (projSessionCount === 0) {
       return NextResponse.json(
         { error: "NO_PROJECT_SESSIONS", message: "Este proyecto no tiene sesiones clasificadas. Clasificá sesiones al proyecto antes de generar el handoff." },

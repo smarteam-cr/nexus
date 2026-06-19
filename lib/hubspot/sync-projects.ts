@@ -643,6 +643,13 @@ export async function syncProjectsForClient(clientId: string): Promise<SyncResul
       });
       await createDefaultCanvases(newProject.id);
       result.created++;
+      // Proyecto NUEVO → adoptar las sesiones existentes del cliente (huérfanas:
+      // matcheadas al cliente, sin SessionProject) para que el handoff / la pestaña de
+      // reuniones no queden vacíos. Fire-and-forget (no bloquea el sync) + dynamic
+      // import (no arrastra el clasificador al grafo del sync).
+      void import("@/lib/projects/analyze-participants")
+        .then((m) => m.autoClassifyOrphanSessions(clientId))
+        .catch(() => {});
     }
   }
 

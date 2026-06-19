@@ -120,7 +120,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
               ? `Armado con ${status.sourceSessions.length} sesión${status.sourceSessions.length === 1 ? "" : "es"} del proyecto${status.lastRunAt ? ` · ${fmtDate(status.lastRunAt)}` : ""}`
               : projectSessionCount > 0
               ? `${projectSessionCount} sesión${projectSessionCount === 1 ? "" : "es"} clasificada${projectSessionCount === 1 ? "" : "s"} a este proyecto`
-              : "Este proyecto no tiene sesiones clasificadas todavía"}
+              : "Al generar se clasifican las sesiones del cliente a este proyecto"}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
