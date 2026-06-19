@@ -6,6 +6,7 @@ import ActionItemsDialog from "./ActionItemsDialog";
 import { useWorkspace } from "./WorkspaceContext";
 import { useToast } from "@/components/ui/Toast";
 import { readGpsCache, writeGpsCache, invalidateGps } from "@/lib/clients/gps-cache";
+import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 
 export interface PendingItem {
   id?: string;             // ActionItem.id (nuevo) — undefined si viene del Json viejo
@@ -270,16 +271,18 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   const lastDate = lastSession.date ? new Date(lastSession.date) : null;
 
   const formatDate = (d: Date) => {
-    const days = Math.floor((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    const dateStr = d.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+    const days = calendarDaysFromToday(d);
+    const dayMonth = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
     const timeStr = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-    if (days === 0) return `Hoy · ${timeStr}`;
-    if (days === 1) return `Mañana · ${timeStr}`;
-    return `${dateStr} · ${timeStr}`;
+    // Mostramos SIEMPRE la fecha agendada (no solo "Hoy/Mañana") para que no haya dudas.
+    if (days === 0) return `Hoy ${dayMonth} · ${timeStr}`;
+    if (days === 1) return `Mañana ${dayMonth} · ${timeStr}`;
+    const full = d.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+    return `${full} · ${timeStr}`;
   };
   const formatPastDate = (d: Date) => {
-    const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
-    if (days === 0) return "hoy";
+    const days = -calendarDaysFromToday(d);
+    if (days <= 0) return "hoy";
     if (days === 1) return "ayer";
     if (days < 7) return `hace ${days} días`;
     return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });

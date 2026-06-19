@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Table, Avatar, Badge, EmptyState, type TableColumn } from "@/components/ui";
 import DeleteClientButton from "./DeleteClientButton";
 import NewClientButton from "./NewClientButton";
+import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 // Shape mínimo del usuario activo para el filtro "Mis clientes".
 // Antes venía del tipo ActiveCse de lib/auth (basado en cookie nexus_cse);
 // ahora viene de Supabase Auth + AppUser en el server component.
@@ -39,7 +40,7 @@ export interface ClientRow {
 function PastDateCell({ iso }: { iso: string | null }) {
   if (!iso) return <span className="text-gray-600">—</span>;
   const d = new Date(iso);
-  const ago = Math.max(0, Math.round((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24)));
+  const ago = Math.max(0, -calendarDaysFromToday(d));
   const rel =
     ago === 0  ? "hoy" :
     ago === 1  ? "ayer" :
@@ -68,7 +69,7 @@ function LastActivityCell({ row }: { row: ClientRow }) {
     return <span className="text-gray-600">—</span>;
   }
   const d = new Date(row.lastActivityAt);
-  const ago = Math.max(0, Math.round((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24)));
+  const ago = Math.max(0, -calendarDaysFromToday(d));
   const rel =
     ago === 0  ? "hoy" :
     ago === 1  ? "ayer" :
@@ -96,7 +97,7 @@ function NextMeetingCell({ row }: { row: ClientRow }) {
     return <span className="text-gray-600">—</span>;
   }
   const d = new Date(row.nextMeetingAt);
-  const days = Math.max(0, Math.round((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+  const days = Math.max(0, calendarDaysFromToday(d));
   const rel =
     days === 0 ? "hoy" :
     days === 1 ? "mañana" :
