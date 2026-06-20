@@ -14,6 +14,7 @@ interface ActiveCse {
   name: string;
   role: string;
   isSuperAdmin: boolean;
+  canSeeAll: boolean; // roles que ven todos los clientes (VENTAS/CSL/MARKETING/SUPER_ADMIN)
 }
 
 export interface ClientRow {
@@ -146,9 +147,19 @@ export default function ClientsGrid({
     [clients, isMine],
   );
 
-  // Default inteligente: si no soy owner de ninguno pero tengo compartidos, abrir en "Compartidos".
+  // Roles "ven todo" abren el índice en "Todos" (su caso normal es la cartera completa).
+  // CSE mantiene el default inteligente: owner → "Mis clientes"; si no, compartidos; si no, todos.
+  const canSeeAll = !!activeCse?.canSeeAll;
   const [tab, setTab] = useState<"mine" | "shared" | "all">(() =>
-    !canFilter ? "all" : mineClients.length > 0 ? "mine" : sharedClients.length > 0 ? "shared" : "all",
+    !canFilter
+      ? "all"
+      : canSeeAll
+        ? "all"
+        : mineClients.length > 0
+          ? "mine"
+          : sharedClients.length > 0
+            ? "shared"
+            : "all",
   );
 
   const displayedClients = !canFilter
@@ -250,11 +261,18 @@ export default function ClientsGrid({
       {/* Toolbar: pestañas Mis clientes / Compartidos conmigo / Todos (solo CSE) */}
       {canFilter && (
         <div className="flex items-center gap-1.5 flex-wrap">
-          {([
-            { key: "mine" as const, label: "Mis clientes", count: mineClients.length },
-            { key: "shared" as const, label: "Compartidos conmigo", count: sharedClients.length },
-            { key: "all" as const, label: "Todos", count: clients.length },
-          ]).map((t) => (
+          {(canSeeAll
+            ? [
+                { key: "all" as const, label: "Todos", count: clients.length },
+                { key: "mine" as const, label: "Mis clientes", count: mineClients.length },
+                { key: "shared" as const, label: "Compartido", count: sharedClients.length },
+              ]
+            : [
+                { key: "mine" as const, label: "Mis clientes", count: mineClients.length },
+                { key: "shared" as const, label: "Compartido", count: sharedClients.length },
+                { key: "all" as const, label: "Todos", count: clients.length },
+              ]
+          ).map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}

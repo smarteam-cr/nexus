@@ -11,6 +11,7 @@ import {
   ForbiddenError,
 } from "@/lib/auth/supabase";
 import { accessibleClientWhere, sharedClientIdsFor } from "@/lib/auth/access";
+import { hasCapability } from "@/lib/auth/roles";
 import ClientsGrid, { type ClientRow } from "./ClientsGrid";
 
 // Render dinámico — la página depende del usuario logueado (sesión Supabase
@@ -29,11 +30,15 @@ export default async function ClientsPage() {
   }
 
   // Shape compatible con el viejo ActiveCse para el ClientsGrid client component.
+  const roleEnum = user.teamMember?.roleEnum;
   const activeCse = {
     email: user.email,
     name: user.teamMember?.name ?? user.email,
-    role: user.teamMember?.roleEnum ?? "Miembro",
-    isSuperAdmin: user.teamMember?.roleEnum === "SUPER_ADMIN",
+    role: roleEnum ?? "Miembro",
+    isSuperAdmin: roleEnum === "SUPER_ADMIN",
+    // Roles "ven todo" (VENTAS/CSL/MARKETING/SUPER_ADMIN) → el índice abre en "Todos"
+    // y reordena las pestañas. CSE (sin la capacidad) queda igual que siempre.
+    canSeeAll: roleEnum ? hasCapability(roleEnum, "seeAllClients") : false,
   };
 
   // Filtro de acceso server-side: CSE ve solo sus clientes (owner) + compartidos;
