@@ -187,6 +187,13 @@ model Project {
   // puede estar publicada sin la otra. Chequeado en CADA lectura por los chokepoints.
   timelinePublishedAt DateTime?
 
+  // #3 — ocultar la sección de PROCESOS del kickoff del cliente, por proyecto.
+  // Opt-out: por defecto los procesos CONFIRMED se muestran (comportamiento previo);
+  // true = el chokepoint del kickoff (lib/external/kickoff-view.ts) los omite. Reversible,
+  // no borra datos ni afecta la regeneración de los agentes. (El cronograma ya se oculta
+  // vía timelinePublishedAt; procesos no tenía gate por proyecto hasta acá.)
+  procesosHiddenFromKickoff Boolean @default(false)
+
   // Propiedades sincronizadas desde HubSpot (objeto Service)
   hubspotOwnerId      String?   // hubspot_owner_id (ID del owner en HubSpot)
   hubspotOwnerName    String?   // Nombre del owner (CSE encargado) resuelto desde /owners/{id}
@@ -287,6 +294,7 @@ model ProjectTimeline {
   updatedAt             DateTime        @updatedAt
 
   phases                TimelinePhase[]
+  changes               TimelineChange[] // #4 — historial de ediciones (razón + snapshot) para D.3
 
   @@index([projectId])
 }
@@ -340,6 +348,29 @@ enum TimelinePhaseSource {
   AGENT      // generada por la IA, sin tocar humano
   MODIFIED   // generada por IA, editada por humano (al pasar por PUT con id existente)
   HUMAN      // creada desde cero por humano (PUT con phase sin id)
+}
+
+// #4 — historial de cambios del cronograma. Cada edición lleva una razón OBLIGATORIA
+// y guarda un snapshot del estado resultante (no es un log efímero) para que D.3 pueda
+// comparar el cronograma "vendido" (primer snapshot) contra el "real" (último) y
+// explicar los desvíos con su motivo.
+model TimelineChange {
+  id             String             @id @default(cuid())
+  timelineId     String
+  timeline       ProjectTimeline    @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  reason         String             @db.Text          // obligatoria — el "por qué" del cambio
+  kind           TimelineChangeKind @default(MANUAL)
+  instruction    String?            @db.Text          // si kind=AI_ASSIST, la instrucción dada al asistente
+  changedByEmail String?                              // quién hizo el cambio (del guard de sesión)
+  snapshot       Json                                 // estado resultante: { anchorStartDate, phases:[{...,tasks:[...]}] }
+  createdAt      DateTime           @default(now())
+
+  @@index([timelineId, createdAt])
+}
+
+enum TimelineChangeKind {
+  MANUAL     // edición manual del CSE ("Guardar cronograma")
+  AI_ASSIST  // aplicada desde una propuesta del asistente de IA
 }
 
 // D.1 — los 5 tipos de actividad de una implementación (orden de negocio fijo).
