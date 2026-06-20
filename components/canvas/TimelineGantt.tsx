@@ -20,8 +20,10 @@
  *
  * readOnly: para la VISTA PREVIA de una propuesta de la IA (sin handlers).
  *
- * Derivados (nunca persistidos): "vencida" = semana absoluta < semana actual y
- * status != DONE; celda atenuada = semana pasada o todas sus tareas DONE.
+ * Derivados (nunca persistidos): el badge muestra el ESTADO real (pendiente /
+ * en curso / hecho); si la semana ya pasó y la tarea no está DONE se marca
+ * "atrasada" en rojo APARTE (tag + punto de fase + anillo de celda). Celda
+ * atenuada = semana pasada o todas sus tareas DONE.
  * Las tareas needsValidation se GRITAN a propósito (fila amber + badge): si el
  * CSE confirma sin revisar, esos títulos cruzan al cliente — este tratamiento
  * es la barrera. La marca en sí nunca cruza (columna excluida del mapper externo).
@@ -40,6 +42,7 @@ import {
   absoluteWeek,
   isOverdue,
 } from "@/lib/timeline/weeks";
+import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
 
@@ -167,29 +170,7 @@ export default function TimelineGantt({
             <span className="font-medium text-blue-400/90">· cronograma finalizado</span>
           )}
         </span>
-        {onSetAnchor &&
-          (anchor ? (
-            <label className="flex items-center gap-2 text-[11px] font-semibold text-gray-500">
-              Arranque:
-              <input
-                type="date"
-                value={anchor ?? ""}
-                onChange={(e) => e.target.value && onSetAnchor(e.target.value)}
-                title="Cambiar la fecha de arranque (se guarda con «Guardar cronograma»)"
-                className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500"
-              />
-            </label>
-          ) : (
-            <label className="flex items-center gap-2 text-[11px] font-semibold text-amber-300 bg-amber-500/15 border border-amber-500/50 rounded-lg px-3 py-1.5">
-              Fijá la fecha de arranque para ver fechas reales:
-              <input
-                type="date"
-                value={anchor ?? ""}
-                onChange={(e) => e.target.value && onSetAnchor(e.target.value)}
-                className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500"
-              />
-            </label>
-          ))}
+        {onSetAnchor && <AnchorDatePicker value={anchor ?? ""} onChange={onSetAnchor} />}
 
         {/* Sugerencia: fecha de la sesión de kickoff. Aparece si difiere del anchor
             actual (incl. cuando está vacío). Un click la fija; se guarda con «Guardar». */}
@@ -380,12 +361,18 @@ export default function TimelineGantt({
                                           ? "Guardá el cronograma para poder cambiar el estado"
                                           : "Cambiar estado (pendiente → en curso → hecho)"
                                       }
-                                      className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded border transition-colors min-w-[66px] text-center mt-0.5 ${
-                                        overdue ? OVERDUE_CLS : sm.cls
-                                      } ${!canToggle ? "opacity-50 cursor-default" : ""}`}
+                                      className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded border transition-colors min-w-[66px] text-center mt-0.5 ${sm.cls} ${!canToggle ? "opacity-50 cursor-default" : ""}`}
                                     >
-                                      {overdue ? "vencida" : sm.label}
+                                      {sm.label}
                                     </button>
+                                    {overdue && (
+                                      <span
+                                        title="La fecha de esta tarea ya pasó y todavía no está hecha"
+                                        className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded border text-center mt-0.5 ${OVERDUE_CLS}`}
+                                      >
+                                        atrasada
+                                      </span>
+                                    )}
 
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center gap-2">
