@@ -207,7 +207,8 @@ export async function GET(
       lastUsedAt: true,
       createdBy: { select: { name: true, email: true } },
       // Flags de publicación por superficie → el panel marca qué link ya sirve.
-      project: { select: { kickoffPublishedAt: true, timelinePublishedAt: true } },
+      // procesosHiddenFromKickoff (#3): el panel muestra el toggle de visibilidad de procesos.
+      project: { select: { kickoffPublishedAt: true, timelinePublishedAt: true, procesosHiddenFromKickoff: true } },
     },
   });
 
@@ -229,6 +230,8 @@ export async function GET(
     // Publicación por superficie (D.1.5): kickoff y cronograma se publican aparte.
     kickoffPublished: !!access.project.kickoffPublishedAt,
     timelinePublished: !!access.project.timelinePublishedAt,
+    // #3 — procesos vive dentro del kickoff; su visibilidad es un toggle aparte.
+    procesosHidden: !!access.project.procesosHiddenFromKickoff,
   });
 }
 

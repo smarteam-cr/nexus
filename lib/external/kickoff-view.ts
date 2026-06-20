@@ -85,11 +85,17 @@ export async function getPublishedKickoffForToken(
     : { exists: false as const, anchorStartDate: null, phases: [] };
 
   // 6. Procesos del cliente — SOLO CONFIRMED para la vista externa (mismo gate que los bloques).
+  //    #3 — el proyecto puede OCULTAR la sección de procesos del kickoff
+  //    (procesosHiddenFromKickoff): si está oculta, el cliente no ve procesos
+  //    (shape vacío, igual que "no hay procesos"). Reversible, no borra datos.
   const proj = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { clientId: true },
+    select: { clientId: true, procesosHiddenFromKickoff: true },
   });
-  const procesos = proj ? await readClientProcesos(proj.clientId, { onlyConfirmed: true }) : [];
+  const procesos =
+    proj && !proj.procesosHiddenFromKickoff
+      ? await readClientProcesos(proj.clientId, { onlyConfirmed: true })
+      : [];
 
   // 7. Marcar uso (no bloquea el render si falla).
   await touchAccess(access.accessId);
