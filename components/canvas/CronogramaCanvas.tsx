@@ -134,10 +134,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [assistWarnings, setAssistWarnings] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
-  // #4 — razón obligatoria del cambio. Manual → modal; assist → la instrucción de la IA.
+  // #4 — razón obligatoria del cambio. Lo piden los DOS caminos (guardado manual y
+  // aplicar una propuesta de la IA) vía el mismo modal. En assist se prellena con la instrucción.
   const [assistInstruction, setAssistInstruction] = useState("");
   const [reasonOpen, setReasonOpen] = useState(false);
   const [reasonText, setReasonText] = useState("");
+  const [reasonMode, setReasonMode] = useState<"manual" | "assist">("manual");
   // ── Avance detectado por el agente (D.2) — borrador que el CSE confirma ──
   const [pendingProgress, setPendingProgress] = useState<PendingProgress | null>(null);
   const [progressPhaseSel, setProgressPhaseSel] = useState<Set<string>>(new Set());
@@ -502,8 +504,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     setAssisting(false);
   };
 
-  const applyProposal = async () => {
+  const applyProposal = async (reason: string) => {
     if (!proposal) return;
+    // #4 — la razón es obligatoria también para los cambios de la IA (el server la exige con 400).
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) return setError("Indicá una razón para el cambio.");
     setApplying(true);
     setError(null);
     try {
@@ -512,9 +517,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...proposal,
-          // #4 — la razón es la instrucción que el CSE le dio a la IA; si la propuesta
-          // vino de una regeneración del agente (sin instrucción), una razón por defecto.
-          reason: assistInstruction.trim() || "Propuesta de regeneración del agente aplicada",
+          reason: trimmedReason,
           kind: "AI_ASSIST",
           instruction: assistInstruction.trim() || null,
         }),
@@ -526,6 +529,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setProposal(null);
         setAssistWarnings([]);
         setAssistInstruction("");
+        setReasonOpen(false);
+        setReasonText("");
         await load();
       }
     } catch {
@@ -752,15 +757,18 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             </button>
           )}
           {hasUnpublishedChanges && (
-            <button
-              onClick={() => publishTimeline(true)}
-              disabled={publishWorking}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"
-              title="Guardar y publicar al cliente los cambios del cronograma"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-              {publishWorking ? "Guardando…" : "Guardar cambios"}
-            </button>
+            <>
+              <span className="text-xs font-medium text-amber-400">Cambios sin subir</span>
+              <button
+                onClick={() => publishTimeline(true)}
+                disabled={publishWorking}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-950 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 transition-colors"
+                title="Subir al cliente los cambios del cronograma (publicar)"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                {publishWorking ? "Subiendo…" : "Subir cambios"}
+              </button>
+            </>
           )}
         </>,
         headerSlot,
@@ -788,7 +796,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             </span>
             <div className="ml-auto flex items-center gap-2">
               <button
-                onClick={applyProposal}
+                onClick={() => { setReasonMode("assist"); setReasonText(assistInstruction); setError(null); setReasonOpen(true); }}
                 disabled={applying}
                 className="text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-50 px-3.5 py-1.5 rounded-lg transition-colors"
               >
@@ -997,7 +1005,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         <div className="flex items-center justify-end gap-3">
           <span className="text-xs text-amber-400">Cambios sin guardar</span>
           <button
-            onClick={() => { setError(null); setReasonText(""); setReasonOpen(true); }}
+            onClick={() => { setReasonMode("manual"); setError(null); setReasonText(""); setReasonOpen(true); }}
             disabled={saving}
             className="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 px-4 py-2 rounded-lg transition-colors"
           >
@@ -1015,12 +1023,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         loading={assisting}
       />
 
-      {/* #4 — modal de razón del guardado MANUAL. La razón + un snapshot del
-          cronograma quedan registrados (TimelineChange) para D.3 (vendido vs real). */}
+      {/* #4 — modal de razón. La razón + un snapshot del cronograma quedan
+          registrados (TimelineChange) para D.3 (vendido vs real). Lo usan los DOS
+          caminos: guardado manual y aplicar una propuesta de la IA (prellenado con la instrucción). */}
       {reasonOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          onClick={() => { if (!saving) setReasonOpen(false); }}
+          onClick={() => { if (!saving && !applying) setReasonOpen(false); }}
         >
           <div
             className="w-full max-w-md rounded-2xl bg-gray-900 border border-gray-700 shadow-2xl p-5 space-y-3"
@@ -1029,7 +1038,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             <div>
               <h3 className="text-sm font-semibold text-gray-100">Razón del cambio</h3>
               <p className="text-xs text-gray-400 mt-0.5">
-                Queda registrada con un snapshot del cronograma para comparar después lo planificado contra lo real.
+                {reasonMode === "assist"
+                  ? "Confirmá o ajustá el motivo del cambio que le pediste a la IA. Queda registrado con un snapshot del cronograma."
+                  : "Queda registrada con un snapshot del cronograma para comparar después lo planificado contra lo real."}
               </p>
             </div>
             <textarea
@@ -1044,17 +1055,19 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={() => setReasonOpen(false)}
-                disabled={saving}
+                disabled={saving || applying}
                 className="text-xs font-medium text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
               >
                 Cancelar
               </button>
               <button
-                onClick={() => save(undefined, reasonText)}
-                disabled={saving || reasonText.trim().length === 0}
+                onClick={() => (reasonMode === "manual" ? save(undefined, reasonText) : applyProposal(reasonText))}
+                disabled={saving || applying || reasonText.trim().length === 0}
                 className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 px-4 py-1.5 rounded-lg transition-colors"
               >
-                {saving ? "Guardando…" : "Guardar cronograma"}
+                {reasonMode === "manual"
+                  ? (saving ? "Guardando…" : "Guardar cronograma")
+                  : (applying ? "Aplicando…" : "Aplicar cambios")}
               </button>
             </div>
           </div>
