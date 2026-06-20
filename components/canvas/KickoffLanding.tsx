@@ -611,8 +611,13 @@ function HideableSection({
   if (!editable || !onToggleHidden) return <>{children}</>;
   const hidden = !!hiddenKeys?.has(sectionKey);
   return (
-    <div style={{ position: "relative" }}>
-      <div style={{ position: "absolute", top: 12, right: 16, zIndex: 30 }}>
+    <div style={{ position: "relative", ...(hidden ? { outline: "2px dashed rgba(245,158,11,0.55)", outlineOffset: -4, borderRadius: 10 } : {}) }}>
+      <div style={{ position: "absolute", top: 12, right: 16, zIndex: 30, display: "flex", alignItems: "center", gap: 8 }}>
+        {hidden && (
+          <span style={{ fontSize: 11, fontWeight: 700, lineHeight: 1, color: "#b45309", background: "rgba(245,158,11,0.16)", border: "1px solid rgba(245,158,11,0.5)", borderRadius: 999, padding: "4px 10px", backdropFilter: "blur(4px)" }}>
+            No visible para el cliente
+          </span>
+        )}
         <HideToggle hidden={hidden} label={label} onToggle={() => onToggleHidden(sectionKey, !hidden)} />
       </div>
       <div style={hidden ? { opacity: 0.42, filter: "grayscale(0.55)" } : undefined}>
