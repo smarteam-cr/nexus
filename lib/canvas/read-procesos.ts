@@ -16,6 +16,8 @@ export interface ProcesoFlowchart {
   title: string | null;
   /** { nodes, edges, description? } — shape de FlowchartViewer. */
   data: unknown;
+  /** DRAFT | CONFIRMED. Lo usa el editor del kickoff para el botón "Confirmar para el cliente". */
+  status?: string;
 }
 
 export async function readClientProcesos(
@@ -35,7 +37,7 @@ export async function readClientProcesos(
       section: { key: "procesos", canvas: { projectId: strategy.id, name: CANVAS_NAME } },
     },
     orderBy: { order: "asc" },
-    select: { id: true, content: true, data: true },
+    select: { id: true, content: true, data: true, status: true },
   });
 
   // Solo flowcharts con nodos (descarta vacíos).
@@ -44,5 +46,5 @@ export async function readClientProcesos(
       const d = b.data as { nodes?: unknown[] } | null;
       return Array.isArray(d?.nodes) && (d!.nodes as unknown[]).length > 0;
     })
-    .map((b) => ({ id: b.id, title: b.content, data: b.data }));
+    .map((b) => ({ id: b.id, title: b.content, data: b.data, status: b.status }));
 }

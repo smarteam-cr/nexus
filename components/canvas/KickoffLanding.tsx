@@ -100,6 +100,8 @@ interface LandingHandlers {
   hiddenKeys?: Set<string>;
   /** #3 — togglear la visibilidad de una clave (solo editor). */
   onToggleHidden?: (key: string, hidden: boolean) => void;
+  /** Confirmar (o volver a borrador) un proceso del cliente — solo CONFIRMED cruza al cliente. */
+  confirmProceso?: (blockId: string, confirmed: boolean) => void;
 }
 
 /* ── Router: elige modo según props (sin hooks → no viola reglas de hooks) ───── */
@@ -190,6 +192,20 @@ function KickoffLandingInternal({
     }
   };
 
+  // Confirmar / volver a borrador un proceso del cliente (solo CONFIRMED cruza al cliente).
+  const confirmProceso = async (blockId: string, confirmed: boolean) => {
+    setProcesos((prev) => prev.map((p) => (p.id === blockId ? { ...p, status: confirmed ? "CONFIRMED" : "DRAFT" } : p)));
+    try {
+      await fetch(`/api/projects/${projectId}/procesos`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blockId, status: confirmed ? "CONFIRMED" : "DRAFT" }),
+      });
+    } catch {
+      /* mantener el estado optimista */
+    }
+  };
+
   // Logo del cliente: mismo chip que la vista externa, también en el preview
   // interno (así el CSE lo ve sin tener que publicar). Endpoint guarded.
   useEffect(() => {
@@ -254,6 +270,7 @@ function KickoffLandingInternal({
       editable={editable}
       hiddenKeys={hiddenKeys}
       onToggleHidden={toggleHidden}
+      confirmProceso={confirmProceso}
       clientLogoUrl={clientLogoUrl}
       procesos={procesos}
       draftCount={draftCount}
@@ -280,6 +297,7 @@ function KickoffLandingView({
   editable,
   hiddenKeys,
   onToggleHidden,
+  confirmProceso,
   clientLogoUrl = null,
   procesos = [],
   draftCount = 0,
@@ -499,6 +517,9 @@ function KickoffLandingView({
                 {procesos.map((p) => {
                   const content = (
                     <>
+                      {editable && p.status && (
+                        <ProcesoStatusBar status={p.status} onConfirm={confirmProceso ? (c) => confirmProceso(p.id, c) : undefined} />
+                      )}
                       {p.title && (
                         <h3 className="font-display" style={{ fontSize: 18, color: "var(--text)", marginBottom: 10 }}>{p.title}</h3>
                       )}
@@ -561,6 +582,41 @@ function IconBtn({ title, color, onClick, path }: { title: string; color: string
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d={path} />
       </svg>
     </button>
+  );
+}
+
+/* ── Estado de confirmación de un proceso del cliente (solo editor) ─────────── */
+function ProcesoStatusBar({ status, onConfirm }: { status: string; onConfirm?: (confirmed: boolean) => void }) {
+  const confirmed = status === "CONFIRMED";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+      <span
+        style={{
+          fontSize: 11, fontWeight: 700, lineHeight: 1, padding: "4px 10px", borderRadius: 999,
+          ...(confirmed
+            ? { color: "#047857", background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.4)" }
+            : { color: "#b45309", background: "rgba(245,158,11,0.14)", border: "1px solid rgba(245,158,11,0.5)" }),
+        }}
+      >
+        {confirmed ? "✓ Visible para el cliente" : "Borrador — el cliente no lo ve"}
+      </span>
+      {onConfirm &&
+        (confirmed ? (
+          <button
+            onClick={() => onConfirm(false)}
+            style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", background: "transparent", border: "none", cursor: "pointer", textDecoration: "underline" }}
+          >
+            Pasar a borrador
+          </button>
+        ) : (
+          <button
+            onClick={() => onConfirm(true)}
+            style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: "#059669", border: "none", borderRadius: 8, padding: "5px 11px", cursor: "pointer" }}
+          >
+            Confirmar para el cliente
+          </button>
+        ))}
+    </div>
   );
 }
 

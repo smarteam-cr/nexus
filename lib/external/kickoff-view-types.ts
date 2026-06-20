@@ -56,6 +56,8 @@ export interface KickoffProceso {
   title: string | null;
   /** { nodes, edges, description? } — shape de FlowchartViewer. */
   data: unknown;
+  /** Solo modo interno (editable): DRAFT | CONFIRMED. El externo siempre trae CONFIRMED. */
+  status?: string;
 }
 
 /** Lo que la ruta pública pasa como `data` a <KickoffLanding/>. */
