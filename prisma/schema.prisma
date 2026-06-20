@@ -187,11 +187,16 @@ model Project {
   // puede estar publicada sin la otra. Chequeado en CADA lectura por los chokepoints.
   timelinePublishedAt DateTime?
 
-  // #3 — ocultar la sección de PROCESOS del kickoff del cliente, por proyecto.
-  // Opt-out: por defecto los procesos CONFIRMED se muestran (comportamiento previo);
-  // true = el chokepoint del kickoff (lib/external/kickoff-view.ts) los omite. Reversible,
-  // no borra datos ni afecta la regeneración de los agentes. (El cronograma ya se oculta
-  // vía timelinePublishedAt; procesos no tenía gate por proyecto hasta acá.)
+  // #3 — visibilidad de secciones/procesos en el kickoff del cliente, por proyecto.
+  // hiddenKickoffKeys = claves OCULTAS del kickoff. Una clave puede ser:
+  //   · el id de una CanvasSection del kickoff → oculta esa sección de contenido,
+  //   · "cronograma" → oculta la sección de cronograma embebida (independiente del
+  //      publish del cronograma standalone, timelinePublishedAt),
+  //   · "procesos" → oculta toda la sección de procesos,
+  //   · el id de un flowchart de proceso → oculta ESE proceso.
+  // El chokepoint (lib/external/kickoff-view.ts) filtra por este set. Reversible, no borra datos.
+  hiddenKickoffKeys String[] @default([])
+  // Legacy — reemplazado por hiddenKickoffKeys (se mantiene la columna por compat; sin uso en código).
   procesosHiddenFromKickoff Boolean @default(false)
 
   // Propiedades sincronizadas desde HubSpot (objeto Service)

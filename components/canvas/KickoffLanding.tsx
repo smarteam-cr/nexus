@@ -96,6 +96,10 @@ interface LandingHandlers {
   /** Deshacer de 1 nivel el título o el eyebrow de una sección. */
   undoSection?: (sectionId: string, which: "title" | "eyebrow") => void;
   acceptAll?: () => void;
+  /** #3 — claves OCULTAS del kickoff (id de sección, "procesos", "cronograma", id de proceso). */
+  hiddenKeys?: Set<string>;
+  /** #3 — togglear la visibilidad de una clave (solo editor). */
+  onToggleHidden?: (key: string, hidden: boolean) => void;
 }
 
 /* ── Router: elige modo según props (sin hooks → no viola reglas de hooks) ───── */
@@ -143,6 +147,9 @@ function KickoffLandingInternal({
   const [timeline, setTimeline] = useState<KickoffTimelineData | null>(null);
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
   const [procesos, setProcesos] = useState<KickoffProceso[]>([]);
+  // #3 — claves ocultas del kickoff (secciones/procesos/cronograma). El editor las
+  // muestra atenuadas con un toggle; la vista del cliente las omite (server-side).
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
 
   // Procesos del cliente (diagramas) — el preview interno los muestra todos. Endpoint guarded.
   useEffect(() => {
@@ -151,6 +158,37 @@ function KickoffLandingInternal({
       .then((d) => setProcesos(d?.procesos ?? []))
       .catch(() => setProcesos([]));
   }, [projectId]);
+
+  // #3 — set de claves ocultas del kickoff.
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/kickoff-visibility`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setHiddenKeys(new Set(d?.hiddenKeys ?? [])))
+      .catch(() => setHiddenKeys(new Set()));
+  }, [projectId]);
+
+  // Toggle optimista: actualiza el set local y persiste; reconcilia con la respuesta.
+  const toggleHidden = async (key: string, hidden: boolean) => {
+    setHiddenKeys((prev) => {
+      const n = new Set(prev);
+      if (hidden) n.add(key);
+      else n.delete(key);
+      return n;
+    });
+    try {
+      const res = await fetch(`/api/projects/${projectId}/kickoff-visibility`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, hidden }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setHiddenKeys(new Set(d?.hiddenKeys ?? []));
+      }
+    } catch {
+      /* mantener el estado optimista */
+    }
+  };
 
   // Logo del cliente: mismo chip que la vista externa, también en el preview
   // interno (así el CSE lo ve sin tener que publicar). Endpoint guarded.
@@ -214,6 +252,8 @@ function KickoffLandingInternal({
       sections={sections}
       timeline={timeline}
       editable={editable}
+      hiddenKeys={hiddenKeys}
+      onToggleHidden={toggleHidden}
       clientLogoUrl={clientLogoUrl}
       procesos={procesos}
       draftCount={draftCount}
@@ -238,6 +278,8 @@ function KickoffLandingView({
   sections,
   timeline,
   editable,
+  hiddenKeys,
+  onToggleHidden,
   clientLogoUrl = null,
   procesos = [],
   draftCount = 0,
@@ -375,7 +417,16 @@ function KickoffLandingView({
         const bg = i % 2 === 0 ? "section-light" : "section-soft";
         return (
           <div key={section.id}>
-            {section.key === "proximos_pasos" && <TimelineSection phases={phases} anchor={timeline?.anchorStartDate ?? null} />}
+            {section.key === "proximos_pasos" && (
+              phases.length > 0 ? (
+                <HideableSection editable={editable} hiddenKeys={hiddenKeys} onToggleHidden={onToggleHidden} sectionKey="cronograma" label="el cronograma">
+                  <TimelineSection phases={phases} anchor={timeline?.anchorStartDate ?? null} />
+                </HideableSection>
+              ) : (
+                <TimelineSection phases={phases} anchor={timeline?.anchorStartDate ?? null} />
+              )
+            )}
+            <HideableSection editable={editable} hiddenKeys={hiddenKeys} onToggleHidden={onToggleHidden} sectionKey={section.id} label="esta sección">
             <section className={bg} style={{ padding: SECTION_PAD }}>
               <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
                 <EditableHeading
@@ -419,35 +470,48 @@ function KickoffLandingView({
                 </div>
               </div>
             </section>
+            </HideableSection>
           </div>
         );
       })}
 
       {/* Si no hay sección "Próximos pasos", el cronograma va antes del cierre */}
-      {!hasProximos && <TimelineSection phases={phases} anchor={timeline?.anchorStartDate ?? null} />}
+      {!hasProximos && (
+        phases.length > 0 ? (
+          <HideableSection editable={editable} hiddenKeys={hiddenKeys} onToggleHidden={onToggleHidden} sectionKey="cronograma" label="el cronograma">
+            <TimelineSection phases={phases} anchor={timeline?.anchorStartDate ?? null} />
+          </HideableSection>
+        ) : (
+          <TimelineSection phases={phases} anchor={timeline?.anchorStartDate ?? null} />
+        )
+      )}
 
       {/* ── PROCESOS ─── diagramas del cliente (si hay). Render read-only del flowchart. */}
       {procesos.length > 0 && (
-        <section className="section-soft" style={{ padding: SECTION_PAD }}>
-          <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
-            <span className="eyebrow reveal">Cómo trabajamos</span>
-            <h2 className="font-display display-tight reveal" data-stagger="1" style={{ fontSize: "clamp(24px, 3.4vw, 34px)", color: "var(--text)", lineHeight: 1.15, marginTop: 8, marginBottom: 24 }}>
-              Nuestros <Accent>procesos</Accent>
-            </h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-              {procesos.map((p) => (
-                <div key={p.id} className="reveal">
-                  {p.title && (
-                    <h3 className="font-display" style={{ fontSize: 18, color: "var(--text)", marginBottom: 10 }}>{p.title}</h3>
-                  )}
-                  <div style={{ height: 460, border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "var(--surface, #fff)" }}>
-                    <FlowchartViewer data={toFlowchartData(p)} />
-                  </div>
-                </div>
-              ))}
+        <HideableSection editable={editable} hiddenKeys={hiddenKeys} onToggleHidden={onToggleHidden} sectionKey="procesos" label="los procesos">
+          <section className="section-soft" style={{ padding: SECTION_PAD }}>
+            <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
+              <span className="eyebrow reveal">Cómo trabajamos</span>
+              <h2 className="font-display display-tight reveal" data-stagger="1" style={{ fontSize: "clamp(24px, 3.4vw, 34px)", color: "var(--text)", lineHeight: 1.15, marginTop: 8, marginBottom: 24 }}>
+                Nuestros <Accent>procesos</Accent>
+              </h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+                {procesos.map((p) => (
+                  <HideableSection key={p.id} editable={editable} hiddenKeys={hiddenKeys} onToggleHidden={onToggleHidden} sectionKey={p.id} label="este proceso">
+                    <div className="reveal">
+                      {p.title && (
+                        <h3 className="font-display" style={{ fontSize: 18, color: "var(--text)", marginBottom: 10 }}>{p.title}</h3>
+                      )}
+                      <div style={{ height: 460, border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "var(--surface, #fff)" }}>
+                        <FlowchartViewer data={toFlowchartData(p)} />
+                      </div>
+                    </div>
+                  </HideableSection>
+                ))}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </HideableSection>
       )}
 
       {/* Cierre dark — bookend editorial con el hero */}
@@ -489,6 +553,64 @@ function IconBtn({ title, color, onClick, path }: { title: string; color: string
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d={path} />
       </svg>
     </button>
+  );
+}
+
+/* ── #3 — visibilidad por sección/proceso (solo editor) ─────────────────────── */
+function HideToggle({ hidden, label, onToggle }: { hidden: boolean; label: string; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={hidden ? `Mostrar ${label} al cliente` : `Ocultar ${label} del cliente`}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 9px",
+        borderRadius: 999, cursor: "pointer", fontSize: 11, fontWeight: 600, lineHeight: 1,
+        border: `1px solid ${hidden ? "rgba(245,158,11,0.6)" : "rgba(0,0,0,0.12)"}`,
+        background: hidden ? "rgba(245,158,11,0.14)" : "rgba(255,255,255,0.92)",
+        color: hidden ? "#b45309" : "#6b7280", backdropFilter: "blur(4px)",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+      }}
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        {hidden ? (
+          <path strokeLinecap="round" strokeLinejoin="round" d="M17.94 17.94A10.07 10.07 0 0112 20C5 20 1 12 1 12a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22" />
+        ) : (
+          <>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </>
+        )}
+      </svg>
+      {hidden ? "Oculto" : "Ocultar"}
+    </button>
+  );
+}
+
+/** Envuelve una sección/proceso del kickoff: en el editor agrega un toggle flotante
+ *  de ocultar/mostrar y atenúa el contenido si está oculto. En la vista del cliente
+ *  (editable=false) es transparente (el filtrado real lo hace kickoff-view.ts). */
+function HideableSection({
+  editable, hiddenKeys, onToggleHidden, sectionKey, label, children,
+}: {
+  editable: boolean;
+  hiddenKeys?: Set<string>;
+  onToggleHidden?: (key: string, hidden: boolean) => void;
+  sectionKey: string;
+  label: string;
+  children: ReactNode;
+}) {
+  if (!editable || !onToggleHidden) return <>{children}</>;
+  const hidden = !!hiddenKeys?.has(sectionKey);
+  return (
+    <div style={{ position: "relative" }}>
+      <div style={{ position: "absolute", top: 12, right: 16, zIndex: 30 }}>
+        <HideToggle hidden={hidden} label={label} onToggle={() => onToggleHidden(sectionKey, !hidden)} />
+      </div>
+      <div style={hidden ? { opacity: 0.42, filter: "grayscale(0.55)" } : undefined}>
+        {children}
+      </div>
+    </div>
   );
 }
 

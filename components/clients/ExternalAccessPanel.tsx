@@ -31,7 +31,6 @@ interface AccessState {
   createdBy?: { name: string; email: string } | null;
   kickoffPublished?: boolean;
   timelinePublished?: boolean;
-  procesosHidden?: boolean; // #3 — procesos vive dentro del kickoff; visibilidad aparte
 }
 
 // Alphabet sin caracteres ambiguos (igual que el server) para las sugerencias
@@ -145,25 +144,6 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
     }
   };
 
-  // #3 — Ocultar / mostrar la sección de procesos DENTRO del kickoff (no es una
-  // superficie con link propio). Reversible; no borra datos.
-  const toggleProcesos = async (hidden: boolean) => {
-    try {
-      const res = await fetch(`/api/projects/${projectId}/procesos-visibility`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hidden }),
-      });
-      if (!res.ok) {
-        toast.error("No se pudo cambiar la visibilidad de procesos.");
-        return;
-      }
-      await refresh();
-    } catch {
-      toast.error("Error de conexión.");
-    }
-  };
-
   const closeModal = () => {
     setOpen(false);
     setConfirming(null);
@@ -225,7 +205,6 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
               working={working}
               onSavePassword={savePassword}
               onTogglePublish={togglePublish}
-              onToggleProcesos={toggleProcesos}
               onAskRegenerate={() => setConfirming("regenerate")}
               onAskRevoke={() => setConfirming("revoke")}
               onCancelConfirm={() => setConfirming(null)}
@@ -289,7 +268,6 @@ function ManageView({
   working,
   onSavePassword,
   onTogglePublish,
-  onToggleProcesos,
   onAskRegenerate,
   onAskRevoke,
   onCancelConfirm,
@@ -303,7 +281,6 @@ function ManageView({
   working: boolean;
   onSavePassword: (pw: string) => Promise<string | null>;
   onTogglePublish: (kind: "kickoff" | "cronograma", publish: boolean) => Promise<void>;
-  onToggleProcesos: (hidden: boolean) => Promise<void>;
   onAskRegenerate: () => void;
   onAskRevoke: () => void;
   onCancelConfirm: () => void;
@@ -361,9 +338,6 @@ function ManageView({
                 onTogglePublish={onTogglePublish}
               />
             ))}
-            {/* #3 — procesos no es una superficie con link: es una sección dentro
-                del kickoff. Toggle de visibilidad aparte (reversible, no borra datos). */}
-            <ProcesosVisibilityRow hidden={!!state.procesosHidden} onToggle={onToggleProcesos} />
           </div>
 
           {/* Editor de contraseña — visible, editable, copiable, regenerable */}
@@ -599,62 +573,6 @@ function LinkRow({
           El cliente verá &quot;no disponible&quot; hasta que publiques esta superficie.
         </p>
       )}
-    </div>
-  );
-}
-
-// #3 — visibilidad de la sección de procesos DENTRO del kickoff. No tiene link
-// propio (vive en el kickoff): solo un toggle Mostrar / Ocultar. visible = !hidden.
-function ProcesosVisibilityRow({
-  hidden,
-  onToggle,
-}: {
-  hidden: boolean;
-  onToggle: (hidden: boolean) => Promise<void>;
-}) {
-  const [toggling, setToggling] = useState(false);
-  const visible = !hidden;
-  const toggle = async () => {
-    setToggling(true);
-    try {
-      await onToggle(!hidden);
-    } finally {
-      setToggling(false);
-    }
-  };
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-1.5">
-        <label className="text-[10px] font-semibold text-fg-muted uppercase tracking-wider">
-          Procesos (dentro del kickoff)
-        </label>
-        <span
-          className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
-            visible
-              ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
-              : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
-          }`}
-        >
-          {visible ? "visible" : "oculto"}
-        </span>
-        <div className="flex-1" />
-        <button
-          onClick={toggle}
-          disabled={toggling}
-          className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border transition-colors disabled:opacity-50 ${
-            visible
-              ? "border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
-              : "border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
-          }`}
-        >
-          {toggling ? "…" : visible ? "Ocultar" : "Mostrar"}
-        </button>
-      </div>
-      <p className="text-[10px] text-fg-muted">
-        {visible
-          ? "El cliente ve la sección de diagramas de proceso en el kickoff."
-          : "La sección de procesos no se muestra en el kickoff del cliente."}
-      </p>
     </div>
   );
 }

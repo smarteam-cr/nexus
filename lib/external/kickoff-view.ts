@@ -50,6 +50,14 @@ export async function getPublishedKickoffForToken(
 
   const projectId = access.project.id;
 
+  // #3 — claves OCULTAS del kickoff (id de sección, "procesos", "cronograma", o id de
+  // un proceso individual). El cliente NO ve nada cuya clave esté en este set.
+  const proj = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { clientId: true, hiddenKickoffKeys: true },
+  });
+  const hidden = new Set(proj?.hiddenKickoffKeys ?? []);
+
   // 3. Canvas Kickoff del proyecto (se identifica por nombre, igual que el panel interno).
   const canvas = await prisma.projectCanvas.findFirst({
     where: { projectId, name: "Kickoff" },
@@ -80,21 +88,18 @@ export async function getPublishedKickoffForToken(
   // Sin publicar → shape vacío (el landing renderiza como si no hubiera
   // cronograma). La lectura compartida aplica el filtro de seguridad (tareas
   // solo {title, weekIndex} y solo con detailConfirmedAt).
-  const timeline = access.project.timelinePublishedAt
+  //    #3 — además del publish (D.1.5), "cronograma" en hiddenKickoffKeys lo oculta
+  //    SOLO del kickoff (la página standalone sigue gobernada por timelinePublishedAt).
+  const timeline = access.project.timelinePublishedAt && !hidden.has("cronograma")
     ? await readClientTimeline(projectId)
     : { exists: false as const, anchorStartDate: null, phases: [] };
 
-  // 6. Procesos del cliente — SOLO CONFIRMED para la vista externa (mismo gate que los bloques).
-  //    #3 — el proyecto puede OCULTAR la sección de procesos del kickoff
-  //    (procesosHiddenFromKickoff): si está oculta, el cliente no ve procesos
-  //    (shape vacío, igual que "no hay procesos"). Reversible, no borra datos.
-  const proj = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { clientId: true, procesosHiddenFromKickoff: true },
-  });
+  // 6. Procesos del cliente — SOLO CONFIRMED (mismo gate que los bloques).
+  //    #3 — "procesos" en hiddenKickoffKeys oculta toda la sección; además se filtran
+  //    los procesos individuales cuyo id esté oculto. Reversible, no borra datos.
   const procesos =
-    proj && !proj.procesosHiddenFromKickoff
-      ? await readClientProcesos(proj.clientId, { onlyConfirmed: true })
+    proj && !hidden.has("procesos")
+      ? (await readClientProcesos(proj.clientId, { onlyConfirmed: true })).filter((p) => !hidden.has(p.id))
       : [];
 
   // 7. Marcar uso (no bloquea el render si falla).
@@ -104,7 +109,7 @@ export async function getPublishedKickoffForToken(
     projectName: access.project.name,
     clientLogoUrl: access.project.client.logoUrl,
     procesos,
-    sections: sections.map((s) => ({
+    sections: sections.filter((s) => !hidden.has(s.id)).map((s) => ({
       id: s.id,
       key: s.key,
       label: s.label,
