@@ -331,6 +331,8 @@ function KickoffLandingView({
   const hero = sections.find((s) => s.key === "bienvenida");
   const body = sections.filter((s) => s.key !== "bienvenida");
   const hasProximos = body.some((s) => s.key === "proximos_pasos");
+  // Procesos sin confirmar: el cliente solo ve los CONFIRMED → CTA para subirlos.
+  const draftProcesos = editable ? procesos.filter((p) => p.status === "DRAFT") : [];
 
   const phases = timeline?.phases ?? [];
   const totalWeeks = phases.reduce((n, p) => n + (p.durationWeeks || 0), 0);
@@ -361,6 +363,24 @@ function KickoffLandingView({
           </span>
           <button onClick={acceptAll} className="btn-primary" style={{ padding: "6px 12px", fontSize: 12, flexShrink: 0 }}>
             Aceptar todo
+          </button>
+        </div>
+      )}
+      {/* Procesos sin confirmar → CTA ámbar para subirlos al cliente (igual idea que
+          "Subir cambios" del cronograma). Solo CONFIRMED cruza a la URL del cliente. */}
+      {editable && draftProcesos.length > 0 && confirmProceso && (
+        <div style={{ position: "sticky", top: 0, zIndex: 48, display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", background: "#fffbeb", borderBottom: "1px solid #fcd34d", color: "#92400e", fontSize: 13, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>
+            ⚠ Procesos
+          </span>
+          <span style={{ flex: 1 }}>
+            {draftProcesos.length} {draftProcesos.length === 1 ? "proceso sin confirmar" : "procesos sin confirmar"} — el cliente {draftProcesos.length === 1 ? "no lo ve" : "no los ve"} todavía.
+          </span>
+          <button
+            onClick={() => draftProcesos.forEach((p) => confirmProceso(p.id, true))}
+            style={{ flexShrink: 0, fontWeight: 700, fontSize: 12, color: "#fff", background: "#d97706", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer" }}
+          >
+            Subir al cliente
           </button>
         </div>
       )}
