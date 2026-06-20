@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/api";
+import { withAuth, withRole } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
 export const GET = withAuth(async (
@@ -28,7 +28,7 @@ export const GET = withAuth(async (
   }
 });
 
-export const PATCH = withAuth(async (
+export const PATCH = withRole("SUPER_ADMIN", async (
   request,
   { params }: { params: Promise<{ id: string }> }
 ) => {
@@ -52,7 +52,7 @@ export const PATCH = withAuth(async (
   }
 });
 
-export const DELETE = withAuth(async (
+export const DELETE = withRole("SUPER_ADMIN", async (
   _request,
   { params }: { params: Promise<{ id: string }> }
 ) => {

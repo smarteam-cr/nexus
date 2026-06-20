@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/api";
+import { withAuth, withRole } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { revalidateSessionCategories } from "@/lib/cache/session-categories";
 
@@ -89,7 +89,7 @@ export const PATCH = withAuth(async (request, ctx: RouteCtx) => {
 // ── DELETE /api/session-categories/[id] ──────────────────────────────────────
 // Elimina una categoría. Rechaza si es isDefault=true.
 
-export const DELETE = withAuth(async (_request, ctx: RouteCtx) => {
+export const DELETE = withRole("SUPER_ADMIN", async (_request, ctx: RouteCtx) => {
   const { id } = await ctx.params;
 
   const existing = await prisma.sessionCategory.findUnique({ where: { id } });

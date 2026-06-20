@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
-import { guardAccessToClient } from "@/lib/auth/api-guards";
+import { guardAccessToClient, guardCapability } from "@/lib/auth/api-guards";
 
 // GET /api/clients/[id]
 export async function GET(
@@ -74,7 +74,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const guard = await guardAccessToClient(id);
+  const guard = await guardCapability("deleteClients");
   if (guard instanceof NextResponse) return guard;
 
   await prisma.client.delete({ where: { id } });

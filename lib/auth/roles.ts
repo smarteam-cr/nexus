@@ -9,6 +9,7 @@
  *   | seeAllClients    |  ✗  |   ✓    |  ✓  |     ✓     |      ✓      |
  *   | handoffAnywhere  |  ✗  |   ✓    |  ✓  |     ✓     |      ✓      |
  *   | shareClients     |  ✗  |   ✗    |  ✓  |     ✓     |      ✓      |
+ *   | deleteClients    |  ✗  |   ✗    |  ✓  |     ✗     |      ✓      |
  *   | manageTeam       |  ✗  |   ✗    |  ✗  |     ✗     |      ✓      |
  *
  * CSE es el único "scoped" (ve solo sus clientes asignados + compartidos).
@@ -22,14 +23,15 @@ export type Capability =
   | "seeAllClients"
   | "handoffAnywhere"
   | "shareClients"
+  | "deleteClients"
   | "manageTeam";
 
 const CAPABILITIES: Record<TeamRole, ReadonlyArray<Capability>> = {
   CSE: [],
   VENTAS: ["seeAllClients", "handoffAnywhere"],
-  CSL: ["seeAllClients", "handoffAnywhere", "shareClients"],
+  CSL: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients"],
   MARKETING: ["seeAllClients", "handoffAnywhere", "shareClients"],
-  SUPER_ADMIN: ["seeAllClients", "handoffAnywhere", "shareClients", "manageTeam"],
+  SUPER_ADMIN: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients", "manageTeam"],
 };
 
 /** Rango lineal — para gates simples de "rol mínimo". */
@@ -52,6 +54,11 @@ export const ROLE_LABEL: Record<TeamRole, string> = {
 
 export function hasCapability(role: TeamRole, cap: Capability): boolean {
   return CAPABILITIES[role]?.includes(cap) ?? false;
+}
+
+/** Lista de capacidades del rol (para exponer al cliente, ej. /api/me). */
+export function capabilitiesFor(role: TeamRole): ReadonlyArray<Capability> {
+  return CAPABILITIES[role] ?? [];
 }
 
 export function roleRank(role: TeamRole): number {

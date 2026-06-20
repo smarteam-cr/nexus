@@ -5,8 +5,10 @@ import {
   guardAccessToProject,
   guardInternalUser,
   guardCapability,
+  guardRole,
 } from "@/lib/auth/api-guards";
 import type { Capability } from "@/lib/auth/roles";
+import type { TeamRole } from "@prisma/client";
 
 type RouteContext = { params: Promise<Record<string, string>> };
 type Handler<C extends RouteContext = RouteContext> = (
@@ -90,6 +92,21 @@ export function withCapability<C extends RouteContext = RouteContext>(
 ): Handler<C> {
   return async (req, ctx) => {
     const guard = await guardCapability(cap);
+    if (guard instanceof NextResponse) return guard;
+    return handler(req, ctx);
+  };
+}
+
+/**
+ * Wrapper que exige un rol mínimo (por rango, ej. "SUPER_ADMIN").
+ * Uso: export const DELETE = withRole("SUPER_ADMIN", async (req, ctx) => {…})
+ */
+export function withRole<C extends RouteContext = RouteContext>(
+  min: TeamRole,
+  handler: Handler<C>
+): Handler<C> {
+  return async (req, ctx) => {
+    const guard = await guardRole(min);
     if (guard instanceof NextResponse) return guard;
     return handler(req, ctx);
   };

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToClient } from "@/lib/auth/api-guards";
+import { guardAccessToClient, guardCapability } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 export async function PATCH(
@@ -30,8 +30,8 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; projectId: string }> }
 ) {
-  const { id, projectId } = await params;
-  const guard = await guardAccessToClient(id);
+  const { projectId } = await params;
+  const guard = await guardCapability("deleteClients");
   if (guard instanceof NextResponse) return guard;
 
   await prisma.project.delete({ where: { id: projectId } });

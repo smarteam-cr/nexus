@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { useMe } from "@/hooks/useMe";
 import {
   Button,
   Badge,
@@ -48,6 +49,8 @@ const TAG_CLASS = "inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded bor
 
 export default function AgentsClient({ agents }: { agents: Agent[] }) {
   const router = useRouter();
+  const me = useMe();
+  const isSuperAdmin = me?.isSuperAdmin ?? false;
   const [confirmTarget, setConfirmTarget] = useState<{ id: string; name: string } | null>(null);
 
   async function handleDelete() {
@@ -132,24 +135,28 @@ export default function AgentsClient({ agents }: { agents: Agent[] }) {
       width: "w-32",
       render: (a) => <span className="tabular-nums text-gray-400">{a._count.runs}</span>,
     },
-    {
-      key: "actions",
-      header: "",
-      align: "right",
-      width: "w-24",
-      render: (a) => (
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            setConfirmTarget({ id: a.id, name: a.name });
-          }}
-        >
-          Eliminar
-        </Button>
-      ),
-    },
+    ...(isSuperAdmin
+      ? ([
+          {
+            key: "actions",
+            header: "",
+            align: "right",
+            width: "w-24",
+            render: (a) => (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmTarget({ id: a.id, name: a.name });
+                }}
+              >
+                Eliminar
+              </Button>
+            ),
+          },
+        ] as TableColumn<Agent>[])
+      : []),
   ];
 
   return (
@@ -158,12 +165,14 @@ export default function AgentsClient({ agents }: { agents: Agent[] }) {
         title="Agentes IA"
         description="Catálogo de agentes. Se ejecutan desde su canvas en el proyecto o automáticamente al sincronizar sesiones — no desde aquí."
         action={
-          <Link href="/agents/new" className={buttonVariants({ variant: "primary", size: "md" })}>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Nuevo agente
-          </Link>
+          isSuperAdmin ? (
+            <Link href="/agents/new" className={buttonVariants({ variant: "primary", size: "md" })}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Nuevo agente
+            </Link>
+          ) : undefined
         }
       />
 
@@ -177,9 +186,11 @@ export default function AgentsClient({ agents }: { agents: Agent[] }) {
           title="Sin agentes aún"
           description="Crea tu primer agente para automatizar pasos del proceso de consultoría con IA."
           action={
-            <Link href="/agents/new" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-              Crear agente
-            </Link>
+            isSuperAdmin ? (
+              <Link href="/agents/new" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                Crear agente
+              </Link>
+            ) : undefined
           }
         />
       ) : (

@@ -1,4 +1,4 @@
-import { withAuth } from "@/lib/api";
+import { withAuth, withRole } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { NextResponse } from "next/server";
 
@@ -24,7 +24,7 @@ export const GET = withAuth(async (request) => {
   return NextResponse.json(agents);
 });
 
-export const POST = withAuth(async (request) => {
+export const POST = withRole("SUPER_ADMIN", async (request) => {
   const body = await request.json();
   const {
     name,

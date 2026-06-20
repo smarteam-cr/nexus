@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
+import ClientSharing from "@/components/clients/ClientSharing";
 
 interface HubspotAccount {
   id: string;
@@ -20,6 +21,11 @@ interface Client {
   hubspotAccount: HubspotAccount | null;
 }
 
+interface Me {
+  role: string | null;
+  capabilities: string[];
+}
+
 export default function ClientSettingsPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -27,6 +33,7 @@ export default function ClientSettingsPage() {
   const clientId = params.id as string;
 
   const [client, setClient] = useState<Client | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [justConnected, setJustConnected] = useState(false);
@@ -58,6 +65,10 @@ export default function ClientSettingsPage() {
 
   useEffect(() => {
     fetchClient();
+    fetch("/api/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setMe(d))
+      .catch(() => {});
     if (searchParams.get("connected") === "1") {
       setJustConnected(true);
       // Limpiar param de URL
@@ -279,14 +290,19 @@ export default function ClientSettingsPage() {
         )}
       </section>
 
-      {/* Sección: Zona de peligro */}
-      <section className="rounded-xl bg-gray-900 border border-red-500/20 p-5">
-        <h2 className="text-sm font-semibold text-red-400 mb-1">Zona de peligro</h2>
-        <p className="text-xs text-gray-500 mb-4">
-          Eliminar el cliente eliminará todo su historial, notas, documentos y configuraciones asociadas. Esta acción no se puede deshacer.
-        </p>
-        <DeleteClientButton clientId={clientId} />
-      </section>
+      {/* Sección: Compartir cliente (solo roles con shareClients) */}
+      {me?.capabilities.includes("shareClients") && <ClientSharing clientId={clientId} />}
+
+      {/* Sección: Zona de peligro (solo roles con deleteClients) */}
+      {me?.capabilities.includes("deleteClients") && (
+        <section className="rounded-xl bg-gray-900 border border-red-500/20 p-5">
+          <h2 className="text-sm font-semibold text-red-400 mb-1">Zona de peligro</h2>
+          <p className="text-xs text-gray-500 mb-4">
+            Eliminar el cliente eliminará todo su historial, notas, documentos y configuraciones asociadas. Esta acción no se puede deshacer.
+          </p>
+          <DeleteClientButton clientId={clientId} />
+        </section>
+      )}
 
       {error && (
         <p className="text-red-400 text-sm">{error}</p>

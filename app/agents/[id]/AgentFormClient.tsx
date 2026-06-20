@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
+import { useMe } from "@/hooks/useMe";
 import { Button, Input, Textarea, buttonVariants } from "@/components/ui";
 
 interface AgentData {
@@ -41,6 +42,8 @@ interface AgentFormClientProps {
 export default function AgentFormClient({ agentId, initialData }: AgentFormClientProps) {
   const router = useRouter();
   const isNew = agentId === "new";
+  const me = useMe();
+  const isSuperAdmin = me?.isSuperAdmin ?? false;
 
   const [form, setForm] = useState<AgentForm>({
     name: initialData?.name ?? "",
@@ -122,6 +125,7 @@ export default function AgentFormClient({ agentId, initialData }: AgentFormClien
       </h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        <fieldset disabled={!isSuperAdmin} className="space-y-5 border-0 p-0 m-0 min-w-0">
         {/* Nombre */}
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-1.5">
@@ -345,33 +349,48 @@ export default function AgentFormClient({ agentId, initialData }: AgentFormClien
             {error}
           </p>
         )}
+        </fieldset>
 
-        {/* Botones */}
-        <div className="flex items-center justify-between pt-2 pb-8">
-          <div className="flex gap-3">
-            <Button type="submit" variant="primary" size="lg" loading={saving}>
-              {isNew ? "Crear agente" : "Guardar cambios"}
-            </Button>
+        {/* Botones — crear/editar/borrar agentes es solo Super Admin */}
+        {isSuperAdmin ? (
+          <div className="flex items-center justify-between pt-2 pb-8">
+            <div className="flex gap-3">
+              <Button type="submit" variant="primary" size="lg" loading={saving}>
+                {isNew ? "Crear agente" : "Guardar cambios"}
+              </Button>
+              <Link
+                href="/agents"
+                className={buttonVariants({ variant: "secondary", size: "lg" })}
+              >
+                Cancelar
+              </Link>
+            </div>
+
+            {!isNew && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="md"
+                onClick={handleDelete}
+                disabled={saving}
+              >
+                Eliminar agente
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between pt-2 pb-8">
+            <p className="text-sm text-gray-500">
+              Solo lectura · solo un <span className="text-gray-300 font-medium">Super Admin</span> puede crear o editar agentes.
+            </p>
             <Link
               href="/agents"
-              className={buttonVariants({ variant: "secondary", size: "lg" })}
+              className={buttonVariants({ variant: "secondary", size: "md" })}
             >
-              Cancelar
+              Volver
             </Link>
           </div>
-
-          {!isNew && (
-            <Button
-              type="button"
-              variant="destructive"
-              size="md"
-              onClick={handleDelete}
-              disabled={saving}
-            >
-              Eliminar agente
-            </Button>
-          )}
-        </div>
+        )}
       </form>
     </div>
   );

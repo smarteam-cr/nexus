@@ -26,7 +26,8 @@ import {
   UnauthorizedError,
   type AppUserWithTeamMember,
 } from "./supabase";
-import { requireCapability, type Capability } from "./roles";
+import { requireCapability, requireRole, type Capability } from "./roles";
+import type { TeamRole } from "@prisma/client";
 
 function toErrorResponse(e: unknown): NextResponse | null {
   if (e instanceof UnauthorizedError) {
@@ -93,6 +94,22 @@ export async function guardCapability(
 ): Promise<Awaited<ReturnType<typeof requireCapability>> | NextResponse> {
   try {
     return await requireCapability(cap);
+  } catch (e) {
+    const r = toErrorResponse(e);
+    if (r) return r;
+    throw e;
+  }
+}
+
+/**
+ * Verifica que haya un usuario INTERNAL con rol mínimo (por rango, ej.
+ * "SUPER_ADMIN"). Devuelve el bundle o una NextResponse 401/403.
+ */
+export async function guardRole(
+  min: TeamRole,
+): Promise<Awaited<ReturnType<typeof requireRole>> | NextResponse> {
+  try {
+    return await requireRole(min);
   } catch (e) {
     const r = toErrorResponse(e);
     if (r) return r;
