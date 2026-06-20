@@ -369,7 +369,7 @@ function KickoffLandingView({
       {/* Procesos sin confirmar → CTA ámbar para subirlos al cliente (igual idea que
           "Subir cambios" del cronograma). Solo CONFIRMED cruza a la URL del cliente. */}
       {editable && draftProcesos.length > 0 && confirmProceso && (
-        <div style={{ position: "sticky", top: 0, zIndex: 48, display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", background: "#fffbeb", borderBottom: "1px solid #fcd34d", color: "#92400e", fontSize: 13, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+        <div style={{ position: "sticky", top: 0, zIndex: 48, display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", background: "#fef3c7", borderBottom: "1px solid #f59e0b", color: "#92400e", fontSize: 13, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>
             ⚠ Procesos
           </span>
@@ -378,7 +378,7 @@ function KickoffLandingView({
           </span>
           <button
             onClick={() => draftProcesos.forEach((p) => confirmProceso(p.id, true))}
-            style={{ flexShrink: 0, fontWeight: 700, fontSize: 12, color: "#fff", background: "#d97706", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer" }}
+            style={{ flexShrink: 0, fontWeight: 700, fontSize: 12, color: "#92400e", background: "rgba(217,119,6,0.18)", border: "1px solid #d97706", borderRadius: 8, padding: "6px 14px", cursor: "pointer" }}
           >
             Subir al cliente
           </button>
