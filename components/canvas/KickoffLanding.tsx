@@ -307,7 +307,7 @@ function KickoffLandingView({
   const rootRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLElement>(null);
 
-  useReveal(rootRef, [sections.length, timeline?.phases.length, editable]);
+  useReveal(rootRef, [sections.length, timeline?.phases.length, procesos.length, editable]);
   useHeroParallax(heroRef);
 
   const hero = sections.find((s) => s.key === "bienvenida");
@@ -496,18 +496,26 @@ function KickoffLandingView({
                 Nuestros <Accent>procesos</Accent>
               </h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-                {procesos.map((p) => (
-                  <HideableSection key={p.id} editable={editable} hiddenKeys={hiddenKeys} onToggleHidden={onToggleHidden} sectionKey={p.id} label="este proceso">
-                    <div className="reveal">
+                {procesos.map((p) => {
+                  const content = (
+                    <>
                       {p.title && (
                         <h3 className="font-display" style={{ fontSize: 18, color: "var(--text)", marginBottom: 10 }}>{p.title}</h3>
                       )}
                       <div style={{ height: 460, border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "var(--surface, #fff)" }}>
                         <FlowchartViewer data={toFlowchartData(p)} />
                       </div>
-                    </div>
-                  </HideableSection>
-                ))}
+                    </>
+                  );
+                  // El toggle por proceso solo tiene sentido con 2+ procesos; con 1, basta el de la sección.
+                  return procesos.length > 1 ? (
+                    <HideableSection key={p.id} editable={editable} hiddenKeys={hiddenKeys} onToggleHidden={onToggleHidden} sectionKey={p.id} label="este proceso">
+                      <div className="reveal">{content}</div>
+                    </HideableSection>
+                  ) : (
+                    <div key={p.id} className="reveal">{content}</div>
+                  );
+                })}
               </div>
             </div>
           </section>
