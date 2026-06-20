@@ -148,18 +148,10 @@ export default function ClientsGrid({
   );
 
   // Roles "ven todo" abren el índice en "Todos" (su caso normal es la cartera completa).
-  // CSE mantiene el default inteligente: owner → "Mis clientes"; si no, compartidos; si no, todos.
+  // CSE abre SIEMPRE en "Mis clientes" (aunque esté vacía), no en "Compartido".
   const canSeeAll = !!activeCse?.canSeeAll;
   const [tab, setTab] = useState<"mine" | "shared" | "all">(() =>
-    !canFilter
-      ? "all"
-      : canSeeAll
-        ? "all"
-        : mineClients.length > 0
-          ? "mine"
-          : sharedClients.length > 0
-            ? "shared"
-            : "all",
+    !canFilter ? "all" : canSeeAll ? "all" : "mine",
   );
 
   const displayedClients = !canFilter
