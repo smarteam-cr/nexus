@@ -134,6 +134,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [assistWarnings, setAssistWarnings] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
+  // #4 — razón obligatoria del cambio. Manual → modal; assist → la instrucción de la IA.
+  const [assistInstruction, setAssistInstruction] = useState("");
+  const [reasonOpen, setReasonOpen] = useState(false);
+  const [reasonText, setReasonText] = useState("");
   // ── Avance detectado por el agente (D.2) — borrador que el CSE confirma ──
   const [pendingProgress, setPendingProgress] = useState<PendingProgress | null>(null);
   const [progressPhaseSel, setProgressPhaseSel] = useState<Set<string>>(new Set());
@@ -328,9 +332,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     return null;
   };
 
-  const save = async (anchorOverride?: string) => {
+  const save = async (anchorOverride?: string, reason?: string) => {
     const localError = validateLocal();
     if (localError) return setError(localError);
+    // #4 — la razón es obligatoria (el server también la exige con 400).
+    const trimmedReason = (reason ?? "").trim();
+    if (!trimmedReason) return setError("Indicá una razón para el cambio.");
     const anchorYmd = anchorOverride ?? anchor;
     setSaving(true);
     setError(null);
@@ -338,7 +345,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       const res = await fetch(`/api/projects/${projectId}/timeline`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildPutBody(phases, anchorYmd)),
+        body: JSON.stringify({ ...buildPutBody(phases, anchorYmd), reason: trimmedReason, kind: "MANUAL" }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -352,6 +359,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
       }
       setDirty(false);
+      setReasonOpen(false);
+      setReasonText("");
     } catch {
       setError("Error de conexión al guardar.");
     }
@@ -386,7 +395,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       const res = await fetch(`/api/projects/${projectId}/timeline`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildPutBody([firstPhase], anchor)),
+        body: JSON.stringify({ ...buildPutBody([firstPhase], anchor), reason: "Creación inicial del cronograma", kind: "MANUAL" }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -483,6 +492,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         );
       } else {
         setProposal(data.proposal as Proposal);
+        setAssistInstruction(instruction.trim()); // #4 — será la razón al aplicar la propuesta
         setAssistWarnings(Array.isArray(data.warnings) ? data.warnings : []);
         setAssistOpen(false); // cerrar el dialog; la propuesta se ve en el Gantt (preview)
       }
@@ -500,7 +510,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       const res = await fetch(`/api/projects/${projectId}/timeline`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(proposal),
+        body: JSON.stringify({
+          ...proposal,
+          // #4 — la razón es la instrucción que el CSE le dio a la IA; si la propuesta
+          // vino de una regeneración del agente (sin instrucción), una razón por defecto.
+          reason: assistInstruction.trim() || "Propuesta de regeneración del agente aplicada",
+          kind: "AI_ASSIST",
+          instruction: assistInstruction.trim() || null,
+        }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -508,6 +525,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       } else {
         setProposal(null);
         setAssistWarnings([]);
+        setAssistInstruction("");
         await load();
       }
     } catch {
@@ -979,7 +997,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         <div className="flex items-center justify-end gap-3">
           <span className="text-xs text-amber-400">Cambios sin guardar</span>
           <button
-            onClick={() => save()}
+            onClick={() => { setError(null); setReasonText(""); setReasonOpen(true); }}
             disabled={saving}
             className="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 px-4 py-2 rounded-lg transition-colors"
           >
@@ -996,6 +1014,52 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         onSubmit={submitAssist}
         loading={assisting}
       />
+
+      {/* #4 — modal de razón del guardado MANUAL. La razón + un snapshot del
+          cronograma quedan registrados (TimelineChange) para D.3 (vendido vs real). */}
+      {reasonOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => { if (!saving) setReasonOpen(false); }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-gray-900 border border-gray-700 shadow-2xl p-5 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="text-sm font-semibold text-gray-100">Razón del cambio</h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Queda registrada con un snapshot del cronograma para comparar después lo planificado contra lo real.
+              </p>
+            </div>
+            <textarea
+              value={reasonText}
+              onChange={(e) => setReasonText(e.target.value)}
+              rows={3}
+              autoFocus
+              placeholder="Ej: el cliente pidió correr la fase de arquitectura una semana."
+              className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+            />
+            {error && <p className="text-xs text-red-400">{error}</p>}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setReasonOpen(false)}
+                disabled={saving}
+                className="text-xs font-medium text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => save(undefined, reasonText)}
+                disabled={saving || reasonText.trim().length === 0}
+                className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 px-4 py-1.5 rounded-lg transition-colors"
+              >
+                {saving ? "Guardando…" : "Guardar cronograma"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

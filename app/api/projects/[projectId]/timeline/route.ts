@@ -39,6 +39,7 @@ import type {
   TimelinePhaseSource,
   TimelineActivityType,
   TimelineTaskStatus,
+  TimelineChangeKind,
 } from "@prisma/client";
 
 // Validador + tipos del body compartidos con POST /timeline/assist (la IA
@@ -201,8 +202,27 @@ export async function PUT(
   }
   const { anchorStartDate, phases: incomingPhases } = validation.parsed;
 
+  // #4 — razón OBLIGATORIA del cambio. Se guarda con un snapshot del estado
+  // resultante (TimelineChange) para que D.3 compare lo vendido contra lo real.
+  // Los 3 caminos del editor (guardar manual, aplicar propuesta IA, crear 1ra fase)
+  // mandan razón; cualquier PUT sin ella se rechaza.
+  const rawObj = (raw ?? {}) as Record<string, unknown>;
+  const reason = typeof rawObj.reason === "string" ? rawObj.reason.trim() : "";
+  const changeKind: TimelineChangeKind = rawObj.kind === "AI_ASSIST" ? "AI_ASSIST" : "MANUAL";
+  const changeInstruction =
+    typeof rawObj.instruction === "string" && rawObj.instruction.trim()
+      ? rawObj.instruction.trim()
+      : null;
+  if (!reason) {
+    return NextResponse.json(
+      { error: "Falta la razón del cambio (obligatoria)." },
+      { status: 400 },
+    );
+  }
+
   const now = new Date();
   const anchorDate = anchorStartDate ? new Date(anchorStartDate) : null;
+  let timelineId = ""; // #4 — capturado dentro de la tx para registrar el cambio después
 
   // Transacción: upsert del timeline + diff de phases + diff de tasks por phase
   try {
@@ -226,6 +246,7 @@ export async function PUT(
         },
         select: { id: true },
       });
+      timelineId = tl.id; // #4 — para registrar el TimelineChange tras la transacción
 
       // 2. Phases existentes en DB (con sus tasks para el diff anidado).
       // Se seleccionan TODOS los campos editables para detectar no-ops: el PUT
@@ -413,8 +434,43 @@ export async function PUT(
     throw err;
   }
 
-  // 5. Re-cargar y devolver el estado final
+  // 5. Re-cargar el estado final
   const updated = await loadTimeline(projectId);
+
+  // 6. #4 — registrar el cambio con su razón + snapshot del estado resultante.
+  // El snapshot (estado canónico tras aplicar) deja a D.3 comparar lo "vendido"
+  // (primer snapshot) contra lo "real" (último) y explicar los desvíos con su motivo.
+  if (timelineId && "exists" in updated && updated.exists) {
+    await prisma.timelineChange.create({
+      data: {
+        timelineId,
+        reason,
+        kind: changeKind,
+        instruction: changeInstruction,
+        changedByEmail: guard.user.email ?? null,
+        snapshot: {
+          anchorStartDate: updated.anchorStartDate,
+          phases: updated.phases.map((p) => ({
+            id: p.id,
+            name: p.name,
+            order: p.order,
+            durationWeeks: p.durationWeeks,
+            sessionCount: p.sessionCount,
+            activityType: p.activityType,
+            status: p.status,
+            tasks: p.tasks.map((t) => ({
+              id: t.id,
+              title: t.title,
+              weekIndex: t.weekIndex,
+              order: t.order,
+              status: t.status,
+            })),
+          })),
+        } as Prisma.InputJsonValue,
+      },
+    });
+  }
+
   return NextResponse.json(updated);
 }
 
