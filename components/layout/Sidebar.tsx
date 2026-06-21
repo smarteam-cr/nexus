@@ -166,11 +166,11 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
 
   // Visibilidad de ítems del menú por rol de permiso (roleEnum). Es cosmético:
   // la seguridad real vive en cada página/endpoint; esto solo evita mostrar
-  // accesos que el rol no usa. Universales (todos): Clientes, ICP, Insights,
-  // Sesiones, Conocimientos.
+  // accesos que el rol no usa. Universales (todos): Clientes, ICP, Sesiones, Conocimientos.
   const role = user.role ?? "";
   const isSuperAdmin = user.isSuperAdmin || role === "SUPER_ADMIN";
   const canSeeAgents = isSuperAdmin || ["VENTAS", "CSL", "MARKETING"].includes(role); // todos menos CSE
+  const canSeePortfolio = isSuperAdmin || ["VENTAS", "CSL", "MARKETING"].includes(role); // Cartera: seeAllClients (todos menos CSE)
   const canSeeAudits = isSuperAdmin || ["VENTAS", "CSL"].includes(role);              // super admin, CSL, ventas
   const canSeeTeam = isSuperAdmin;                                                     // solo super admin
   const canSeeConfig = isSuperAdmin;                                                   // solo super admin
@@ -243,17 +243,19 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
               </svg>
             }
           />
-          <NavItem
-            href="/dashboard"
-            active={pathname === "/dashboard"}
-            isOpen={isOpen}
-            label="Insights"
-            icon={
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            }
-          />
+          {canSeePortfolio && (
+            <NavItem
+              href="/dashboard"
+              active={pathname === "/dashboard"}
+              isOpen={isOpen}
+              label="Cartera"
+              icon={
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              }
+            />
+          )}
           {canSeeAudits && (
             <NavItem
               href="/audits"

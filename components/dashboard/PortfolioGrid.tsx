@@ -42,6 +42,7 @@ export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRo
   const [healthFilter, setHealthFilter] = useState<Health | "all">("all");
   const [onlyRisk, setOnlyRisk] = useState(false);
   const [onlyScope, setOnlyScope] = useState(false);
+  const [hideCompleted, setHideCompleted] = useState(false);
   const [cseFilter, setCseFilter] = useState("all");
   const [sortBy, setSortBy] = useState<SortBy>("severity");
   const [groupByClient, setGroupByClient] = useState(false);
@@ -66,6 +67,7 @@ export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRo
     if (healthFilter !== "all") list = list.filter((r) => r.summary.health.resolved === healthFilter);
     if (onlyRisk) list = list.filter(hasRisk);
     if (onlyScope) list = list.filter(scopeExceeded);
+    if (hideCompleted) list = list.filter((r) => r.status !== "completed");
     if (cseFilter !== "all") list = list.filter((r) => r.cseName === cseFilter);
 
     return [...list].sort((a, b) => {
@@ -77,7 +79,7 @@ export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRo
       if (sortBy === "scope") return scopeMagnitude(b) - scopeMagnitude(a);
       return (a.cseName ?? "~").localeCompare(b.cseName ?? "~");
     });
-  }, [rows, q, healthFilter, onlyRisk, onlyScope, cseFilter, sortBy]);
+  }, [rows, q, healthFilter, onlyRisk, onlyScope, hideCompleted, cseFilter, sortBy]);
 
   const grouped = useMemo(() => {
     if (!groupByClient) return null;
@@ -152,6 +154,12 @@ export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRo
           className={`text-[11px] px-2 py-1 rounded-md border transition-colors ${onlyScope ? "border-amber-500/40 text-amber-600 bg-amber-500/10" : "border-line text-fg-muted hover:text-fg"}`}
         >
           Solo alcance excedido
+        </button>
+        <button
+          onClick={() => setHideCompleted((v) => !v)}
+          className={`text-[11px] px-2 py-1 rounded-md border transition-colors ${hideCompleted ? "border-brand text-brand bg-brand/10" : "border-line text-fg-muted hover:text-fg"}`}
+        >
+          Ocultar completados
         </button>
         <select
           value={cseFilter}
@@ -239,6 +247,12 @@ function Row({
   const s = r.summary;
   const resolved = s.health.resolved as Health;
   const meta = HEALTH_META[resolved];
+  const isCompleted = r.status === "completed";
+  // Completado y sin override → badge neutro "Completado" (no "Saludable"); fila atenuada.
+  const showCompleted = isCompleted && s.health.source === "derived";
+  const badge = showCompleted
+    ? { label: "Completado", dot: "bg-gray-400", chip: "text-fg-muted bg-surface-muted border border-line" }
+    : meta;
   const pct = Math.round(s.progress.pct * 100);
   const overdue = s.overduePhases + s.overdueTasks;
 
@@ -250,7 +264,7 @@ function Row({
   }
 
   return (
-    <tr className="border-b border-line last:border-0 hover:bg-surface-muted/40 transition-colors">
+    <tr className={`border-b border-line last:border-0 hover:bg-surface-muted/40 transition-colors ${isCompleted ? "opacity-60" : ""}`}>
       {/* Proyecto */}
       <td className="px-3 py-2.5 align-top">
         <Link href={`/clients/${r.clientId}/projects/${r.projectId}`} className="text-fg font-medium hover:text-brand transition-colors">
@@ -280,16 +294,20 @@ function Row({
       <td className="px-3 py-2.5 align-top relative">
         <button
           onClick={() => setEditing(editing === r.projectId ? null : r.projectId)}
-          className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full ${meta.chip}`}
+          className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full ${badge.chip}`}
           title={
             s.health.source === "override"
               ? `Manual${r.healthOverrideReason ? `: ${r.healthOverrideReason}` : ""}`
-              : "Sugerido por el sistema — clic para fijar"
+              : showCompleted
+                ? "Proyecto completado"
+                : "Sugerido por el sistema — clic para fijar"
           }
         >
-          <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
-          {meta.label}
-          <span className="text-[9px] opacity-70">{s.health.source === "override" ? "· manual" : "· sugerido"}</span>
+          <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+          {badge.label}
+          {!showCompleted && (
+            <span className="text-[9px] opacity-70">{s.health.source === "override" ? "· manual" : "· sugerido"}</span>
+          )}
         </button>
         {editing === r.projectId && (
           <HealthPopover r={r} onSet={(status, reason) => onSetHealth(r.projectId, status, reason)} onClose={() => setEditing(null)} />
