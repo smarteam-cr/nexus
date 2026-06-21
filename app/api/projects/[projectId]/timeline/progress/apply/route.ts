@@ -13,12 +13,21 @@
  * toca lastEditedByHuman (es avance, no edición estructural — misma regla que el
  * PATCH de status de tareas).
  *
+ * D.3 fundación:
+ *   - captura las FECHAS REALES (actualEnd al DONE; actualStart si faltaba / al "hoy"),
+ *     con las mismas reglas que lib/timeline/actual-dates.ts pero en bulk (par de updateMany).
+ *   - escribe UN TimelineChange kind=PROGRESS por confirmación (quién + qué + cuándo),
+ *     con un delta compacto que congela las fechas reales (auditable aunque luego se
+ *     resetee un ítem a PENDING).
+ *
  * Guarded con guardProjectHandoffAccess (interno/CSE).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
+
+type ProgressRow = { id: string; status: string; actualStart: Date | null; actualEnd: Date | null };
 
 export async function POST(
   req: NextRequest,
@@ -47,49 +56,114 @@ export async function POST(
   });
   if (!tl) return NextResponse.json({ error: "No hay cronograma" }, { status: 404 });
 
+  const now = new Date();
   let phasesDone = 0;
   let tasksDone = 0;
 
-  await prisma.$transaction(async (tx) => {
-    // Fases aceptadas → DONE (acotado al timeline de ESTE proyecto).
-    if (phaseIds.length > 0) {
-      const r = await tx.timelinePhase.updateMany({
-        where: { id: { in: phaseIds }, timelineId: tl.id },
-        data: { status: "DONE" },
-      });
-      phasesDone = r.count;
-    }
-
-    // Tareas aceptadas → DONE. Se resuelven primero por ownership (vía la fase del
-    // timeline) y luego se actualizan por id (evita filtros de relación en updateMany).
-    if (taskIds.length > 0) {
-      const valid = await tx.timelineTask.findMany({
-        where: { id: { in: taskIds }, phase: { timelineId: tl.id } },
-        select: { id: true },
-      });
-      if (valid.length > 0) {
-        const r = await tx.timelineTask.updateMany({
-          where: { id: { in: valid.map((t) => t.id) } },
-          data: { status: "DONE" },
+  await prisma.$transaction(
+    async (tx) => {
+      // Fases aceptadas → DONE + fecha real de fin (y de inicio si faltaba).
+      if (phaseIds.length > 0) {
+        const r = await tx.timelinePhase.updateMany({
+          where: { id: { in: phaseIds }, timelineId: tl.id },
+          data: { status: "DONE", actualEnd: now },
         });
-        tasksDone = r.count;
+        phasesDone = r.count;
+        await tx.timelinePhase.updateMany({
+          where: { id: { in: phaseIds }, timelineId: tl.id, actualStart: null },
+          data: { actualStart: now },
+        });
       }
-    }
 
-    // El "hoy" → IN_PROGRESS, salvo que el CSE lo haya marcado DONE en esta misma tanda.
-    if (currentPhaseId) {
-      await tx.timelinePhase.updateMany({
-        where: { id: currentPhaseId, timelineId: tl.id, status: { not: "DONE" } },
-        data: { status: "IN_PROGRESS" },
+      // Tareas aceptadas → DONE. Se resuelven primero por ownership (vía la fase del
+      // timeline) y luego se actualizan por id (evita filtros de relación en updateMany).
+      let validTaskIds: string[] = [];
+      if (taskIds.length > 0) {
+        const valid = await tx.timelineTask.findMany({
+          where: { id: { in: taskIds }, phase: { timelineId: tl.id } },
+          select: { id: true },
+        });
+        validTaskIds = valid.map((t) => t.id);
+        if (validTaskIds.length > 0) {
+          const r = await tx.timelineTask.updateMany({
+            where: { id: { in: validTaskIds } },
+            data: { status: "DONE", actualEnd: now },
+          });
+          tasksDone = r.count;
+          await tx.timelineTask.updateMany({
+            where: { id: { in: validTaskIds }, actualStart: null },
+            data: { actualStart: now },
+          });
+        }
+      }
+
+      // El "hoy" → IN_PROGRESS, salvo que el CSE lo haya marcado DONE en esta misma tanda.
+      // Inicio real si faltaba (no pisa el ya registrado).
+      if (currentPhaseId) {
+        await tx.timelinePhase.updateMany({
+          where: { id: currentPhaseId, timelineId: tl.id, status: { not: "DONE" } },
+          data: { status: "IN_PROGRESS" },
+        });
+        await tx.timelinePhase.updateMany({
+          where: { id: currentPhaseId, timelineId: tl.id, actualStart: null },
+          data: { actualStart: now },
+        });
+      }
+
+      // El borrador ya se aplicó → limpiar.
+      await tx.projectTimeline.update({
+        where: { id: tl.id },
+        data: { pendingProgress: Prisma.DbNull, pendingProgressRunId: null },
       });
-    }
 
-    // El borrador ya se aplicó → limpiar.
-    await tx.projectTimeline.update({
-      where: { id: tl.id },
-      data: { pendingProgress: Prisma.DbNull, pendingProgressRunId: null },
-    });
-  });
+      // D.3 fundación — auditar el EVENTO de avance (quién + qué + cuándo). Delta compacto
+      // con las fechas reales ya escritas; sobrevive aunque luego se resetee un ítem.
+      const touchedPhaseIds = [
+        ...new Set([...phaseIds, ...(currentPhaseId ? [currentPhaseId] : [])]),
+      ];
+      if (touchedPhaseIds.length > 0 || validTaskIds.length > 0) {
+        const [phaseRows, taskRows] = await Promise.all([
+          touchedPhaseIds.length > 0
+            ? tx.timelinePhase.findMany({
+                where: { id: { in: touchedPhaseIds }, timelineId: tl.id },
+                select: { id: true, status: true, actualStart: true, actualEnd: true },
+              })
+            : Promise.resolve([] as ProgressRow[]),
+          validTaskIds.length > 0
+            ? tx.timelineTask.findMany({
+                where: { id: { in: validTaskIds } },
+                select: { id: true, status: true, actualStart: true, actualEnd: true },
+              })
+            : Promise.resolve([] as ProgressRow[]),
+        ]);
+        await tx.timelineChange.create({
+          data: {
+            timelineId: tl.id,
+            reason: "Avance confirmado",
+            kind: "PROGRESS",
+            changedByEmail: guard.user.email ?? null,
+            snapshot: {
+              confirmedAt: now.toISOString(),
+              currentPhaseId,
+              phases: phaseRows.map((p) => ({
+                id: p.id,
+                status: p.status,
+                actualStart: p.actualStart?.toISOString() ?? null,
+                actualEnd: p.actualEnd?.toISOString() ?? null,
+              })),
+              tasks: taskRows.map((t) => ({
+                id: t.id,
+                status: t.status,
+                actualStart: t.actualStart?.toISOString() ?? null,
+                actualEnd: t.actualEnd?.toISOString() ?? null,
+              })),
+            } as Prisma.InputJsonValue,
+          },
+        });
+      }
+    },
+    { maxWait: 10000, timeout: 30000 },
+  );
 
   return NextResponse.json({ applied: true, phasesDone, tasksDone });
 }
