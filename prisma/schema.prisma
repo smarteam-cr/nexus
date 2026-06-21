@@ -221,6 +221,14 @@ model Project {
   hubspotPipelineStageId    String?   // id de la etapa (hs_pipeline_stage) para comparar/revalidar
   hubspotStageSyncedAt      DateTime? // última vez que se materializó/revalidó la etapa
 
+  // D.3 panel — SALUD del proyecto, HÍBRIDA: el panel de cartera PROPONE una salud derivada
+  // de señales (atrasos/inactividad/firmeza) calculada al vuelo en lib/portfolio; este override
+  // es la versión CURADA por CSL/Ventas/SA. Si hay override prevalece; null = se usa la derivada.
+  healthStatusOverride       ProjectHealth?
+  healthStatusOverrideReason String?        // por qué el humano fijó este estado
+  healthStatusOverrideAt     DateTime?      // cuándo
+  healthStatusOverrideBy     String?        // email de quien lo fijó (del guard)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -236,6 +244,16 @@ model Project {
   timeline            ProjectTimeline?
   handoff             Handoff?
   handoffSources      HandoffSource[]
+}
+
+// D.3 panel — salud del proyecto para el panel de cartera. Es el OVERRIDE curado; la salud
+// derivada (automática) se calcula al vuelo en lib/portfolio a partir de las señales de riesgo.
+// PAUSADO espeja el caso Project.status="paused".
+enum ProjectHealth {
+  SALUDABLE
+  EN_FRICCION
+  EN_RIESGO
+  PAUSADO
 }
 
 // ─── Handoff (entidad cliente-level) ──────────────────────────────────────────
