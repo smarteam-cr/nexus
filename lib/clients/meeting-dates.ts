@@ -11,6 +11,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
+import { classifyTeamEmailsByArea, type TeamMemberLite } from "@/lib/sessions/areas";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -19,14 +20,6 @@ export interface MeetingDates {
   sales?: Date;
   /** Última sesión donde participó un TeamMember de CSE. */
   cse?: Date;
-}
-
-interface TeamMemberLite {
-  email: string;
-  /** Área funcional (eje de ANÁLISIS): "Ventas"/"CSE"/… — puede venir null. */
-  area?: string | null;
-  /** Rol de permiso (TeamRole) — fallback para el match. */
-  roleEnum?: string | null;
 }
 
 // ── Función principal ──────────────────────────────────────────────────────────
@@ -43,14 +36,8 @@ export async function computeLastMeetingDates(params: {
   const { clientIds, teamMembers } = params;
   if (clientIds.length === 0) return new Map();
 
-  // Clasificación por ÁREA (eje de análisis), no por permiso: así Marco Salas
-  // (roleEnum=SUPER_ADMIN, area=Ventas) sigue contando como Ventas.
-  const isSales = (m: TeamMemberLite) =>
-    m.area === "Ventas" || m.area === "Sales" || m.roleEnum === "VENTAS";
-  const isCse = (m: TeamMemberLite) => m.area === "CSE" || m.roleEnum === "CSE";
-
-  const salesEmails = new Set(teamMembers.filter(isSales).map((m) => m.email.toLowerCase()));
-  const cseEmails = new Set(teamMembers.filter(isCse).map((m) => m.email.toLowerCase()));
+  // Clasificación por ÁREA (eje de análisis), no por permiso — ver lib/sessions/areas.ts.
+  const { salesEmails, cseEmails } = classifyTeamEmailsByArea(teamMembers);
   if (salesEmails.size === 0 && cseEmails.size === 0) return new Map();
 
   // Solo sesiones pasadas YA matcheadas a los clientes pedidos — usa el índice
