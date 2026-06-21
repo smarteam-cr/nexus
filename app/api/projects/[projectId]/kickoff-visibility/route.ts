@@ -7,7 +7,7 @@
  * "cronograma", o el id de un proceso (flowchart) individual.
  *
  *   GET   → { hiddenKeys }
- *   PATCH { key: string, hidden: boolean } → agrega/saca la clave del set
+ *   PATCH { hiddenKeys: string[] } → reemplaza el set completo (el editor lo manda al subir)
  *
  * Guarded. El gate de la vista del cliente vive en lib/external/kickoff-view.ts.
  */
@@ -41,37 +41,22 @@ export async function PATCH(
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
-  let body: { key?: unknown; hidden?: unknown } = {};
+  let body: { hiddenKeys?: unknown } = {};
   try {
     body = await req.json();
   } catch {
     body = {};
   }
-  const key = typeof body.key === "string" ? body.key.trim() : "";
-  if (!key) {
-    return NextResponse.json({ error: "Falta 'key'" }, { status: 400 });
+  if (!Array.isArray(body.hiddenKeys) || body.hiddenKeys.some((k) => typeof k !== "string")) {
+    return NextResponse.json({ error: "hiddenKeys debe ser string[]" }, { status: 400 });
   }
-  if (typeof body.hidden !== "boolean") {
-    return NextResponse.json({ error: "'hidden' debe ser boolean" }, { status: 400 });
-  }
+  // El editor manda el SET COMPLETO al "Subir cambios" (cambios staged). Reemplazo total.
+  const hiddenKeys = [...new Set(body.hiddenKeys as string[])];
 
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { hiddenKickoffKeys: true },
-  });
-  if (!project) {
-    return NextResponse.json({ error: "Proyecto no existe" }, { status: 404 });
-  }
-
-  const set = new Set(project.hiddenKickoffKeys);
-  if (body.hidden) set.add(key);
-  else set.delete(key);
-  const hiddenKeys = [...set];
-
-  await prisma.project.update({
+  const updated = await prisma.project.update({
     where: { id: projectId },
     data: { hiddenKickoffKeys: hiddenKeys },
-    select: { id: true },
+    select: { hiddenKickoffKeys: true },
   });
-  return NextResponse.json({ hiddenKeys });
+  return NextResponse.json({ hiddenKeys: updated.hiddenKickoffKeys });
 }

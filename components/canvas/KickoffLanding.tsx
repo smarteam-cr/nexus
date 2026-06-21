@@ -100,8 +100,11 @@ interface LandingHandlers {
   hiddenKeys?: Set<string>;
   /** #3 — togglear la visibilidad de una clave (solo editor). */
   onToggleHidden?: (key: string, hidden: boolean) => void;
-  /** Confirmar (o volver a borrador) un proceso del cliente — solo CONFIRMED cruza al cliente. */
-  confirmProceso?: (blockId: string, confirmed: boolean) => void;
+  /** Hay cambios sin subir (visibilidad staged y/o procesos en borrador). */
+  dirty?: boolean;
+  publishing?: boolean;
+  /** Subir al cliente: confirma procesos en borrador + persiste la visibilidad. */
+  onPublishKickoff?: () => void;
 }
 
 /* ── Router: elige modo según props (sin hooks → no viola reglas de hooks) ───── */
@@ -151,7 +154,9 @@ function KickoffLandingInternal({
   const [procesos, setProcesos] = useState<KickoffProceso[]>([]);
   // #3 — claves ocultas del kickoff (secciones/procesos/cronograma). El editor las
   // muestra atenuadas con un toggle; la vista del cliente las omite (server-side).
-  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set()); // edición LOCAL (staged)
+  const [savedHiddenKeys, setSavedHiddenKeys] = useState<Set<string>>(new Set()); // baseline persistido
+  const [publishing, setPublishing] = useState(false);
 
   // Procesos del cliente (diagramas) — el preview interno los muestra todos. Endpoint guarded.
   useEffect(() => {
@@ -165,45 +170,58 @@ function KickoffLandingInternal({
   useEffect(() => {
     fetch(`/api/projects/${projectId}/kickoff-visibility`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setHiddenKeys(new Set(d?.hiddenKeys ?? [])))
-      .catch(() => setHiddenKeys(new Set()));
+      .then((d) => { const s = new Set<string>(d?.hiddenKeys ?? []); setHiddenKeys(s); setSavedHiddenKeys(s); })
+      .catch(() => { setHiddenKeys(new Set()); setSavedHiddenKeys(new Set()); });
   }, [projectId]);
 
-  // Toggle optimista: actualiza el set local y persiste; reconcilia con la respuesta.
-  const toggleHidden = async (key: string, hidden: boolean) => {
+  // STAGED: el toggle solo cambia el set LOCAL; se persiste recién al "Subir cambios al cliente".
+  const toggleHidden = (key: string, hidden: boolean) => {
     setHiddenKeys((prev) => {
       const n = new Set(prev);
       if (hidden) n.add(key);
       else n.delete(key);
       return n;
     });
+  };
+
+  // ¿Hay cambios de visibilidad sin persistir? (set local distinto del baseline guardado)
+  const dirty =
+    hiddenKeys.size !== savedHiddenKeys.size || [...hiddenKeys].some((k) => !savedHiddenKeys.has(k));
+
+  // Subir al cliente TODO lo pendiente: confirma los procesos en borrador y persiste la
+  // visibilidad (secciones/procesos ocultos). Es el "Subir cambios al cliente".
+  const publishChanges = async () => {
+    setPublishing(true);
     try {
+      const drafts = procesos.filter((p) => p.status === "DRAFT");
+      await Promise.all(
+        drafts.map((p) =>
+          fetch(`/api/projects/${projectId}/procesos`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ blockId: p.id, status: "CONFIRMED" }),
+          }),
+        ),
+      );
+      if (drafts.length) {
+        setProcesos((prev) => prev.map((p) => (p.status === "DRAFT" ? { ...p, status: "CONFIRMED" } : p)));
+      }
+      const keys = [...hiddenKeys];
       const res = await fetch(`/api/projects/${projectId}/kickoff-visibility`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key, hidden }),
+        body: JSON.stringify({ hiddenKeys: keys }),
       });
       if (res.ok) {
         const d = await res.json();
-        setHiddenKeys(new Set(d?.hiddenKeys ?? []));
+        const s = new Set<string>(d?.hiddenKeys ?? keys);
+        setHiddenKeys(s);
+        setSavedHiddenKeys(s);
       }
     } catch {
-      /* mantener el estado optimista */
+      /* dejar el estado local; el usuario puede reintentar */
     }
-  };
-
-  // Confirmar / volver a borrador un proceso del cliente (solo CONFIRMED cruza al cliente).
-  const confirmProceso = async (blockId: string, confirmed: boolean) => {
-    setProcesos((prev) => prev.map((p) => (p.id === blockId ? { ...p, status: confirmed ? "CONFIRMED" : "DRAFT" } : p)));
-    try {
-      await fetch(`/api/projects/${projectId}/procesos`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blockId, status: confirmed ? "CONFIRMED" : "DRAFT" }),
-      });
-    } catch {
-      /* mantener el estado optimista */
-    }
+    setPublishing(false);
   };
 
   // Logo del cliente: mismo chip que la vista externa, también en el preview
@@ -270,7 +288,9 @@ function KickoffLandingInternal({
       editable={editable}
       hiddenKeys={hiddenKeys}
       onToggleHidden={toggleHidden}
-      confirmProceso={confirmProceso}
+      dirty={dirty}
+      publishing={publishing}
+      onPublishKickoff={publishChanges}
       clientLogoUrl={clientLogoUrl}
       procesos={procesos}
       draftCount={draftCount}
@@ -297,7 +317,9 @@ function KickoffLandingView({
   editable,
   hiddenKeys,
   onToggleHidden,
-  confirmProceso,
+  dirty,
+  publishing,
+  onPublishKickoff,
   clientLogoUrl = null,
   procesos = [],
   draftCount = 0,
@@ -366,21 +388,22 @@ function KickoffLandingView({
           </button>
         </div>
       )}
-      {/* Procesos sin confirmar → CTA ámbar para subirlos al cliente (igual idea que
-          "Subir cambios" del cronograma). Solo CONFIRMED cruza a la URL del cliente. */}
-      {editable && draftProcesos.length > 0 && confirmProceso && (
+      {/* Cambios sin subir (visibilidad staged y/o procesos en borrador) → CTA ámbar
+          que persiste TODO de una (mismo flujo que "Subir cambios" del cronograma). */}
+      {editable && onPublishKickoff && (dirty || draftProcesos.length > 0) && (
         <div style={{ position: "sticky", top: 0, zIndex: 48, display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", background: "#fef3c7", borderBottom: "1px solid #f59e0b", color: "#92400e", fontSize: 13, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>
-            ⚠ Procesos
+            ⚠ Cambios
           </span>
           <span style={{ flex: 1 }}>
-            {draftProcesos.length} {draftProcesos.length === 1 ? "proceso sin confirmar" : "procesos sin confirmar"} — el cliente {draftProcesos.length === 1 ? "no lo ve" : "no los ve"} todavía.
+            Tenés cambios sin subir{draftProcesos.length > 0 ? ` (${draftProcesos.length} ${draftProcesos.length === 1 ? "proceso sin confirmar" : "procesos sin confirmar"})` : ""} — el cliente todavía no los ve.
           </span>
           <button
-            onClick={() => draftProcesos.forEach((p) => confirmProceso(p.id, true))}
-            style={{ flexShrink: 0, fontWeight: 700, fontSize: 12, color: "#92400e", background: "rgba(217,119,6,0.18)", border: "1px solid #d97706", borderRadius: 8, padding: "6px 14px", cursor: "pointer" }}
+            onClick={onPublishKickoff}
+            disabled={publishing}
+            style={{ flexShrink: 0, fontWeight: 700, fontSize: 12, color: "#92400e", background: "rgba(217,119,6,0.18)", border: "1px solid #d97706", borderRadius: 8, padding: "6px 14px", cursor: publishing ? "default" : "pointer", opacity: publishing ? 0.6 : 1 }}
           >
-            Subir al cliente
+            {publishing ? "Subiendo…" : "Subir cambios al cliente"}
           </button>
         </div>
       )}
@@ -538,7 +561,7 @@ function KickoffLandingView({
                   const content = (
                     <>
                       {editable && p.status && (
-                        <ProcesoStatusBar status={p.status} onConfirm={confirmProceso ? (c) => confirmProceso(p.id, c) : undefined} />
+                        <ProcesoStatusBar status={p.status} />
                       )}
                       {p.title && (
                         <h3 className="font-display" style={{ fontSize: 18, color: "var(--text)", marginBottom: 10 }}>{p.title}</h3>
