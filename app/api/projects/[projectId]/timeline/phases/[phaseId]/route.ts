@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import type { TimelineTaskStatus } from "@prisma/client";
+import { actualDatesPatch } from "@/lib/timeline/actual-dates";
 
 const STATUSES = ["PENDING", "IN_PROGRESS", "DONE"] as const;
 
@@ -40,16 +41,20 @@ export async function PATCH(
   // Ownership: la fase debe pertenecer al timeline de ESTE proyecto.
   const phase = await prisma.timelinePhase.findFirst({
     where: { id: phaseId, timeline: { projectId } },
-    select: { id: true },
+    select: { id: true, actualStart: true },
   });
   if (!phase) {
     return NextResponse.json({ error: "Fase no encontrada en este proyecto" }, { status: 404 });
   }
 
+  // D.3 fundación — además del status, capturar la fecha REAL de ejecución.
   const updated = await prisma.timelinePhase.update({
     where: { id: phaseId },
-    data: { status: status as TimelineTaskStatus },
-    select: { id: true, status: true, updatedAt: true },
+    data: {
+      status: status as TimelineTaskStatus,
+      ...actualDatesPatch(status as TimelineTaskStatus, { actualStart: phase.actualStart }),
+    },
+    select: { id: true, status: true, actualStart: true, actualEnd: true, updatedAt: true },
   });
 
   return NextResponse.json(updated);
