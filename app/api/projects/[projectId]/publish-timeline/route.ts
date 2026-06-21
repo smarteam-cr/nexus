@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { freezeBaselineOnPublish } from "@/lib/timeline/baseline";
 
 export async function GET(
   _req: NextRequest,
@@ -50,15 +51,31 @@ export async function POST(
 
   // No publicar un cronograma fantasma: tiene que existir y tener al menos una fase,
   // sino el cliente vería una superficie vacía con badge "publicado".
-  const phaseCount = await prisma.timelinePhase.count({
-    where: { timeline: { projectId } },
+  const tl = await prisma.projectTimeline.findUnique({
+    where: { projectId },
+    select: { anchorStartDate: true, _count: { select: { phases: true } } },
   });
-  if (phaseCount === 0) {
+  if (!tl || tl._count.phases === 0) {
     return NextResponse.json(
       { error: "El cronograma no tiene fases todavía — no se puede publicar vacío." },
       { status: 400 },
     );
   }
+  // D.3 fundación — publicar = prometer un calendario: exigir fecha de arranque para que
+  // el baseline congele fechas planeadas absolutas (no solo semanas relativas).
+  if (!tl.anchorStartDate) {
+    return NextResponse.json(
+      {
+        error:
+          "Definí la fecha de arranque del cronograma antes de publicar (las fechas planeadas del baseline salen de ahí).",
+      },
+      { status: 400 },
+    );
+  }
+
+  // D.3 fundación — congelar el baseline "vendido" en el momento de publicar (versionado;
+  // no crea versión si la promesa no cambió). Independiente de si el CSE editó a mano.
+  const baseline = await freezeBaselineOnPublish(projectId, guard.user.email ?? null);
 
   const updated = await prisma.project.update({
     where: { id: projectId },
@@ -69,6 +86,8 @@ export async function POST(
   return NextResponse.json({
     published: true,
     publishedAt: updated.timelinePublishedAt?.toISOString() ?? null,
+    baselineVersion: baseline.version,
+    baselineCreated: baseline.created,
   });
 }
 
