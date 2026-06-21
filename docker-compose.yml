@@ -2,7 +2,7 @@
 # (externa), por eso NO hay servicio de Postgres acá.
 #
 #   docker compose build      # construye la imagen
-#   docker compose up -d      # levanta la app  → http://localhost:3000
+#   docker compose up -d      # levanta la app  → http://localhost:3004
 #   docker compose logs -f    # ver logs
 #
 # Las variables salen del archivo .env de ESTA carpeta:
@@ -23,12 +23,12 @@ services:
     restart: unless-stopped
     init: true
     ports:
-      - "${PORT:-3000}:3000"
+      - "${PORT:-3004}:3004"
     # Inyecta DATABASE_URL, claves de servicio, Anthropic, HubSpot, Google,
     # Data Lake, etc. en runtime. NO se hornean en la imagen.
     env_file:
       - .env
     environment:
       NODE_ENV: production
-      PORT: "3000"
+      PORT: "3004"
       HOSTNAME: "0.0.0.0"
