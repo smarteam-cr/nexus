@@ -1,5 +1,6 @@
 import { getConsultantSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import ParticleField from "@/components/particle-field";
 
 const ERROR_MESSAGES: Record<string, string> = {
   domain: "Solo se permite el inicio de sesión con cuentas de @smarteamcr.com.",
@@ -12,19 +13,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   oauth_no_code: "Google no devolvió un código de autorización válido.",
   oauth_no_user: "Google no devolvió información de usuario. Probá de nuevo.",
 };
-
-/* Posiciones de los 7 nodos del logo (constelación) en el viewBox 0..24 del SVG
-   de marca. El nodo central es el "hub"; los 6 perimetrales se conectan a él.
-   Se usan en la capa de fondo para que la red "lata" con pulsos escalonados. */
-const HUB = { x: 12, y: 12 };
-const SATELLITES = [
-  { x: 19, y: 12 },
-  { x: 15.5, y: 18.1 },
-  { x: 8.5, y: 18.1 },
-  { x: 5, y: 12 },
-  { x: 8.5, y: 5.9 },
-  { x: 15.5, y: 5.9 },
-];
 
 export default async function HomePage({
   searchParams,
@@ -39,49 +27,13 @@ export default async function HomePage({
 
   return (
     <main className="nx-login">
-      {/* ── Capa de fondo: aurora a la deriva + constelación de marca viva ──── */}
-      <div className="nx-login__bg" aria-hidden="true">
-        <span className="nx-login__blob nx-login__blob--a" />
-        <span className="nx-login__blob nx-login__blob--b" />
-        <span className="nx-login__blob nx-login__blob--c" />
-        <span className="nx-login__grid" />
-
-        {/* Constelación de marca, grande y tenue, con nodos/aristas que laten */}
-        <svg
-          className="nx-login__constellation"
-          viewBox="0 0 24 24"
-          fill="none"
-          focusable="false"
-        >
-          {/* Aristas hub → satélites */}
-          {SATELLITES.map((s, i) => (
-            <line
-              key={`edge-${i}`}
-              x1={HUB.x}
-              y1={HUB.y}
-              x2={s.x}
-              y2={s.y}
-              className="nx-login__edge"
-              style={{ animationDelay: `${i * 0.45}s` }}
-            />
-          ))}
-          {/* Nodos satélite */}
-          {SATELLITES.map((s, i) => (
-            <circle
-              key={`node-${i}`}
-              cx={s.x}
-              cy={s.y}
-              r="0.9"
-              className="nx-login__node"
-              style={{ animationDelay: `${i * 0.45}s` }}
-            />
-          ))}
-          {/* Nodo central (hub) */}
-          <circle cx={HUB.x} cy={HUB.y} r="1.6" className="nx-login__node nx-login__node--hub" />
-        </svg>
-
-        <span className="nx-login__vignette" />
-      </div>
+      {/* ── Capa de fondo: campo de partículas animado (canvas) ───────────────
+         Red de datos viva: nodos que laten, paquetes con estela y hexágonos a
+         la deriva. Puro canvas + CSS (sin libs de animación); respeta
+         prefers-reduced-motion. Arranca a 1s para no competir con la entrada
+         del card. El page sigue siendo Server Component: ParticleField es el
+         único island ("use client"). */}
+      <ParticleField density="high" startDelayMs={1000} />
 
       {/* ── Card central ───────────────────────────────────────────────────── */}
       <section className="nx-login__card" aria-labelledby="nx-login-title">
