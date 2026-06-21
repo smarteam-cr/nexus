@@ -352,8 +352,9 @@ model TimelinePhase {
   // IN_PROGRESS = la fase en curso (el "hoy"); PENDING = por delante. Lo escribe SOLO
   // el CSE (mismo invariante que TimelineTask.status); el agente lo PROPONE en pendingProgress.
   status        TimelineTaskStatus    @default(PENDING)
-  // D.3 fundación — fechas REALES de ejecución (capturadas al cambiar status):
-  // actualStart al pasar a IN_PROGRESS, actualEnd al DONE; volver a PENDING las limpia.
+  // D.3 fundación — fechas REALES de ejecución, MONÓTONAS (no se auto-borran):
+  // actualStart la 1ra vez que va a IN_PROGRESS/DONE; actualEnd al DONE. Volver a
+  // PENDING/IN_PROGRESS NO las borra — el status manda para "¿hecho hoy?", las fechas son histórico.
   actualStart   DateTime?
   actualEnd     DateTime?
   createdAt     DateTime              @default(now())
