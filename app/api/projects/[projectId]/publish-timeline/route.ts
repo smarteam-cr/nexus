@@ -66,8 +66,7 @@ export async function POST(
   if (!tl.anchorStartDate) {
     return NextResponse.json(
       {
-        error:
-          "Definí la fecha de arranque del cronograma antes de publicar (las fechas planeadas del baseline salen de ahí).",
+        error: "Definí la fecha de arranque del proyecto antes de publicar.",
       },
       { status: 400 },
     );
