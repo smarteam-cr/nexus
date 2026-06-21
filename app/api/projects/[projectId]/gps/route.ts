@@ -8,16 +8,34 @@ import { sessionMatchesClient } from "@/lib/matching/cascade";
 import type { EnrichedClientMatcher } from "@/lib/matching/cascade";
 import type { RawTranscript } from "@/lib/utils/matching";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
 
-interface PendingItem {
-  text: string;
-  done: boolean;
-  source?: string;
-  addedAt?: string;
-}
+// Sesión resuelta por frente (auto-detectada). isUpcoming = es futura (próxima
+// agendada); si es false, es la última pasada. mixed = participan ambas áreas.
+type FrontAuto = {
+  sessionId: string;
+  title: string;
+  date: string;
+  isUpcoming: boolean;
+  mixed: boolean;
+  googleDocId: string | null;
+  googleEventId: string | null;
+};
 
-// Buscar sesiones del cliente (Google Meet + Fireflies legacy) y devolver
-// la próxima futura y la última pasada.
+// Frente ya resuelto para el widget (el manual precede al auto). `source` distingue origen.
+type FrontResolved = {
+  date: string;
+  title: string | null;
+  note: string | null;
+  isUpcoming: boolean;
+  mixed: boolean;
+  googleDocId: string | null;
+  googleEventId: string | null;
+  source: "manual" | "auto";
+};
+
+// Buscar sesiones del cliente (Google Meet + Fireflies legacy) y devolver la próxima
+// futura y la última pasada — a nivel proyecto y POR FRENTE (Ventas / CS).
 async function getClientSessionBookends(clientId: string): Promise<{
   next: {
     sessionId: string;
@@ -33,20 +51,23 @@ async function getClientSessionBookends(clientId: string): Promise<{
     summary: string | null;
     googleDocId: string | null;
   } | null;
+  fronts: { ventas: FrontAuto | null; cs: FrontAuto | null };
 }> {
   const client = await prisma.client.findUnique({
     where: { id: clientId },
     include: { hubspotAccount: { select: { id: true } } },
   });
 
-  if (!client) return { next: null, last: null };
+  if (!client) return { next: null, last: null, fronts: { ventas: null, cs: null } };
 
-  const [enriched, teamEmails] = await Promise.all([
+  const [enriched, team] = await Promise.all([
     enrichClient(client),
-    prisma.teamMember
-      .findMany({ select: { email: true } })
-      .then((ms) => new Set(ms.map((m) => normalize(m.email)))),
+    prisma.teamMember.findMany({ select: { email: true, area: true, roleEnum: true } }),
   ]);
+  // Set normalizado para el cascade de matching (igual que antes)…
+  const teamEmails = new Set(team.map((m) => normalize(m.email)));
+  // …y los Sets por área (frente) para clasificar a los participantes internos.
+  const { salesEmails, cseEmails } = classifyTeamEmailsByArea(team);
 
   for (const te of teamEmails) {
     enriched.companyContactEmails.delete(te);
@@ -67,7 +88,7 @@ async function getClientSessionBookends(clientId: string): Promise<{
     enriched.companyContactEmails.size > 0 ||
     enriched.dealContactEmails.size > 0;
 
-  if (!hasMatchingSignal) return { next: null, last: null };
+  if (!hasMatchingSignal) return { next: null, last: null, fronts: { ventas: null, cs: null } };
 
   // Cargar todas las sesiones (manualClientId override + matching cascade)
   // Optimización: traer solo lo que necesitamos para matching + bookends
@@ -109,6 +130,34 @@ async function getClientSessionBookends(clientId: string): Promise<{
   const nextRaw = future[0] ?? null;
   const lastRaw = past[0] ?? null;
 
+  // ── Por frente (Ventas / CS): la próxima futura que involucra al área o, si no hay,
+  //    la última pasada que la involucra. Una sesión mixta (ambas áreas) cae en los dos
+  //    frentes. future está ASC y past DESC → el primer .find() ya es el bookend correcto.
+  const involvesArea = (s: (typeof matched)[number], emails: Set<string>) =>
+    s.participants.some((p) => emails.has(p.toLowerCase()));
+
+  const frontBookend = (emails: Set<string>): FrontAuto | null => {
+    if (emails.size === 0) return null;
+    const chosen =
+      future.find((s) => involvesArea(s, emails)) ??
+      past.find((s) => involvesArea(s, emails));
+    if (!chosen) return null;
+    return {
+      sessionId: chosen.id,
+      title: chosen.title,
+      date: chosen.date.toISOString(),
+      isUpcoming: chosen.date.getTime() > now,
+      mixed: involvesArea(chosen, salesEmails) && involvesArea(chosen, cseEmails),
+      googleDocId: chosen.googleDocId,
+      googleEventId: chosen.googleEventId,
+    };
+  };
+
+  const fronts = {
+    ventas: frontBookend(salesEmails),
+    cs: frontBookend(cseEmails),
+  };
+
   const extractSummaryText = (summary: unknown): string | null => {
     if (!summary || typeof summary !== "object") return null;
     const s = summary as Record<string, unknown>;
@@ -137,6 +186,7 @@ async function getClientSessionBookends(clientId: string): Promise<{
           googleDocId: lastRaw.googleDocId,
         }
       : null,
+    fronts,
   };
 }
 
@@ -157,6 +207,10 @@ export async function GET(
       nextSessionDate: true,
       nextSessionNote: true,
       lastSessionSummary: true,
+      salesNextSessionDate: true,
+      salesNextSessionNote: true,
+      csNextSessionDate: true,
+      csNextSessionNote: true,
       pendingItems: true,
       currentStage: true,
       currentStep: true,
@@ -188,7 +242,7 @@ export async function GET(
   // Auto-rellenado de próxima y última sesión desde FirefliesSession (Google Meet + legacy)
   const sessionBookends = await getClientSessionBookends(project.clientId);
 
-  // Resolver con override manual (si Project.* está seteado, prevalece)
+  // Resolver con override manual (si Project.* está seteado, prevalece) — campos legacy.
   const manualNextDate = project.nextSessionDate?.toISOString() ?? null;
   const manualLastSummary = project.lastSessionSummary ?? null;
 
@@ -214,6 +268,55 @@ export async function GET(
       : sessionBookends.last
       ? "auto"
       : null) as "manual" | "auto" | null,
+  };
+
+  // ── Frentes (Ventas / CS): el override manual de la próxima precede al auto; si no
+  //    hay manual (o ya pasó), se usa la próxima-o-última auto-detectada del frente. ──
+  const nowMs = Date.now();
+  const resolveFront = (
+    manualDate: Date | null,
+    manualNote: string | null,
+    auto: FrontAuto | null,
+  ): FrontResolved | null => {
+    // El manual aplica como "próxima" solo si es futuro; si ya pasó, cae al auto.
+    if (manualDate && manualDate.getTime() > nowMs) {
+      return {
+        date: manualDate.toISOString(),
+        title: null,
+        note: manualNote ?? null,
+        isUpcoming: true,
+        mixed: false,
+        googleDocId: null,
+        googleEventId: null,
+        source: "manual",
+      };
+    }
+    if (auto) {
+      return {
+        date: auto.date,
+        title: auto.title,
+        note: null,
+        isUpcoming: auto.isUpcoming,
+        mixed: auto.mixed,
+        googleDocId: auto.googleDocId,
+        googleEventId: auto.googleEventId,
+        source: "auto",
+      };
+    }
+    return null;
+  };
+
+  const fronts = {
+    ventas: resolveFront(
+      project.salesNextSessionDate,
+      project.salesNextSessionNote,
+      sessionBookends.fronts.ventas,
+    ),
+    cs: resolveFront(
+      project.csNextSessionDate,
+      project.csNextSessionNote,
+      sessionBookends.fronts.cs,
+    ),
   };
 
   // ── Info del proyecto (propiedades de HubSpot + base) ────────────────────
@@ -301,6 +404,7 @@ export async function GET(
     // Campos enriquecidos (nueva API)
     nextSession,
     lastSession,
+    fronts, // dos frentes (Ventas / CS): próxima-agendada o última-pasada por frente
     projectInfo,
     actionItems: pendingItemsCompat, // alias semántico
     historyItems, // tareas hechas o borradas (tab Histórico)
@@ -328,6 +432,19 @@ export async function PUT(
   }
   if ("lastSessionSummary" in body) {
     data.lastSessionSummary = body.lastSessionSummary || null;
+  }
+  // Override manual de la próxima sesión POR FRENTE (reuniones ajenas a meets).
+  if ("salesNextSessionDate" in body) {
+    data.salesNextSessionDate = body.salesNextSessionDate ? new Date(body.salesNextSessionDate) : null;
+  }
+  if ("salesNextSessionNote" in body) {
+    data.salesNextSessionNote = body.salesNextSessionNote || null;
+  }
+  if ("csNextSessionDate" in body) {
+    data.csNextSessionDate = body.csNextSessionDate ? new Date(body.csNextSessionDate) : null;
+  }
+  if ("csNextSessionNote" in body) {
+    data.csNextSessionNote = body.csNextSessionNote || null;
   }
   if ("pendingItems" in body) {
     data.pendingItems = body.pendingItems ?? [];
