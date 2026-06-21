@@ -72,9 +72,21 @@ export async function POST(
     );
   }
 
-  // D.3 fundación — congelar el baseline "vendido" en el momento de publicar (versionado;
-  // no crea versión si la promesa no cambió). Independiente de si el CSE editó a mano.
-  const baseline = await freezeBaselineOnPublish(projectId, guard.user.email ?? null);
+  // D.3 fundación — congelar el baseline "vendido" al publicar (versionado; no crea versión
+  // si la promesa no cambió). FAIL-OPEN: publicar es la acción crítica del CSE, así que un
+  // fallo del freeze (bug, hiccup del pooler, etc.) NO debe bloquear la publicación — se
+  // loguea y se publica igual; el baseline se vuelve a intentar en la próxima publicación.
+  let baseline: { created: boolean; version: number | null } = { created: false, version: null };
+  let baselineError = false;
+  try {
+    baseline = await freezeBaselineOnPublish(projectId, guard.user.email ?? null);
+  } catch (e) {
+    baselineError = true;
+    console.error(
+      "[publish-timeline] freezeBaselineOnPublish falló (se publica igual):",
+      e instanceof Error ? e.message : e,
+    );
+  }
 
   const updated = await prisma.project.update({
     where: { id: projectId },
@@ -87,6 +99,7 @@ export async function POST(
     publishedAt: updated.timelinePublishedAt?.toISOString() ?? null,
     baselineVersion: baseline.version,
     baselineCreated: baseline.created,
+    baselineError,
   });
 }
 
