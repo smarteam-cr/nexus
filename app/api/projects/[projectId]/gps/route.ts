@@ -10,32 +10,21 @@ import type { RawTranscript } from "@/lib/utils/matching";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
 
-// Sesión resuelta por frente (auto-detectada). isUpcoming = es futura (próxima
-// agendada); si es false, es la última pasada. mixed = participan ambas áreas.
-type FrontAuto = {
+// Sesión cruda por frente (auto-detectada). mixed = participan ambas áreas.
+type FrontSession = {
   sessionId: string;
   title: string;
   date: string;
-  isUpcoming: boolean;
   mixed: boolean;
+  summary: string | null;
   googleDocId: string | null;
   googleEventId: string | null;
 };
-
-// Frente ya resuelto para el widget (el manual precede al auto). `source` distingue origen.
-type FrontResolved = {
-  date: string;
-  title: string | null;
-  note: string | null;
-  isUpcoming: boolean;
-  mixed: boolean;
-  googleDocId: string | null;
-  googleEventId: string | null;
-  source: "manual" | "auto";
-};
+// Por frente: la próxima futura y la última pasada (cada una puede faltar).
+type FrontPairAuto = { next: FrontSession | null; last: FrontSession | null };
 
 // Buscar sesiones del cliente (Google Meet + Fireflies legacy) y devolver la próxima
-// futura y la última pasada — a nivel proyecto y POR FRENTE (Ventas / CS).
+// futura y la última pasada — a nivel proyecto y POR FRENTE (Ventas / CSE).
 async function getClientSessionBookends(clientId: string): Promise<{
   next: {
     sessionId: string;
@@ -51,14 +40,16 @@ async function getClientSessionBookends(clientId: string): Promise<{
     summary: string | null;
     googleDocId: string | null;
   } | null;
-  fronts: { ventas: FrontAuto | null; cs: FrontAuto | null };
+  fronts: { ventas: FrontPairAuto; cs: FrontPairAuto };
 }> {
+  const emptyFronts = { ventas: { next: null, last: null }, cs: { next: null, last: null } };
+
   const client = await prisma.client.findUnique({
     where: { id: clientId },
     include: { hubspotAccount: { select: { id: true } } },
   });
 
-  if (!client) return { next: null, last: null, fronts: { ventas: null, cs: null } };
+  if (!client) return { next: null, last: null, fronts: emptyFronts };
 
   const [enriched, team] = await Promise.all([
     enrichClient(client),
@@ -88,7 +79,7 @@ async function getClientSessionBookends(clientId: string): Promise<{
     enriched.companyContactEmails.size > 0 ||
     enriched.dealContactEmails.size > 0;
 
-  if (!hasMatchingSignal) return { next: null, last: null, fronts: { ventas: null, cs: null } };
+  if (!hasMatchingSignal) return { next: null, last: null, fronts: emptyFronts };
 
   // Cargar todas las sesiones (manualClientId override + matching cascade)
   // Optimización: traer solo lo que necesitamos para matching + bookends
@@ -130,34 +121,6 @@ async function getClientSessionBookends(clientId: string): Promise<{
   const nextRaw = future[0] ?? null;
   const lastRaw = past[0] ?? null;
 
-  // ── Por frente (Ventas / CS): la próxima futura que involucra al área o, si no hay,
-  //    la última pasada que la involucra. Una sesión mixta (ambas áreas) cae en los dos
-  //    frentes. future está ASC y past DESC → el primer .find() ya es el bookend correcto.
-  const involvesArea = (s: (typeof matched)[number], emails: Set<string>) =>
-    s.participants.some((p) => emails.has(p.toLowerCase()));
-
-  const frontBookend = (emails: Set<string>): FrontAuto | null => {
-    if (emails.size === 0) return null;
-    const chosen =
-      future.find((s) => involvesArea(s, emails)) ??
-      past.find((s) => involvesArea(s, emails));
-    if (!chosen) return null;
-    return {
-      sessionId: chosen.id,
-      title: chosen.title,
-      date: chosen.date.toISOString(),
-      isUpcoming: chosen.date.getTime() > now,
-      mixed: involvesArea(chosen, salesEmails) && involvesArea(chosen, cseEmails),
-      googleDocId: chosen.googleDocId,
-      googleEventId: chosen.googleEventId,
-    };
-  };
-
-  const fronts = {
-    ventas: frontBookend(salesEmails),
-    cs: frontBookend(cseEmails),
-  };
-
   const extractSummaryText = (summary: unknown): string | null => {
     if (!summary || typeof summary !== "object") return null;
     const s = summary as Record<string, unknown>;
@@ -165,6 +128,35 @@ async function getClientSessionBookends(clientId: string): Promise<{
     if (typeof s.overview === "string") return s.overview;
     if (typeof s.shorthand_bullet === "string") return s.shorthand_bullet;
     return null;
+  };
+
+  // ── Por frente (Ventas / CSE): la próxima futura que involucra al área y la última
+  //    pasada que la involucra (cada una por separado). Una sesión mixta (ambas áreas)
+  //    cae en los dos frentes. future está ASC y past DESC → el primer .find() es el
+  //    bookend correcto en cada caso.
+  const involvesArea = (s: (typeof matched)[number], emails: Set<string>) =>
+    s.participants.some((p) => emails.has(p.toLowerCase()));
+
+  const buildFront = (s: (typeof matched)[number]): FrontSession => ({
+    sessionId: s.id,
+    title: s.title,
+    date: s.date.toISOString(),
+    mixed: involvesArea(s, salesEmails) && involvesArea(s, cseEmails),
+    summary: extractSummaryText(s.summary),
+    googleDocId: s.googleDocId,
+    googleEventId: s.googleEventId,
+  });
+
+  const frontPair = (emails: Set<string>): FrontPairAuto => {
+    if (emails.size === 0) return { next: null, last: null };
+    const n = future.find((s) => involvesArea(s, emails)) ?? null;
+    const l = past.find((s) => involvesArea(s, emails)) ?? null;
+    return { next: n ? buildFront(n) : null, last: l ? buildFront(l) : null };
+  };
+
+  const fronts = {
+    ventas: frontPair(salesEmails),
+    cs: frontPair(cseEmails),
   };
 
   return {
@@ -270,53 +262,61 @@ export async function GET(
       : null) as "manual" | "auto" | null,
   };
 
-  // ── Frentes (Ventas / CS): el override manual de la próxima precede al auto; si no
-  //    hay manual (o ya pasó), se usa la próxima-o-última auto-detectada del frente. ──
+  // ── Frentes (Ventas / CSE): por frente la PRÓXIMA (override manual precede al auto si
+  //    es futuro) y la ÚLTIMA (siempre auto). Para que la columna Última y Próxima del
+  //    widget muestren ambos frentes agrupados. ──
   const nowMs = Date.now();
-  const resolveFront = (
+  const mkNext = (
     manualDate: Date | null,
     manualNote: string | null,
-    auto: FrontAuto | null,
-  ): FrontResolved | null => {
+    auto: FrontSession | null,
+  ) => {
     // El manual aplica como "próxima" solo si es futuro; si ya pasó, cae al auto.
     if (manualDate && manualDate.getTime() > nowMs) {
       return {
         date: manualDate.toISOString(),
-        title: null,
+        title: null as string | null,
         note: manualNote ?? null,
-        isUpcoming: true,
         mixed: false,
-        googleDocId: null,
-        googleEventId: null,
-        source: "manual",
+        googleDocId: null as string | null,
+        googleEventId: null as string | null,
+        source: "manual" as const,
       };
     }
     if (auto) {
       return {
         date: auto.date,
         title: auto.title,
-        note: null,
-        isUpcoming: auto.isUpcoming,
+        note: null as string | null,
         mixed: auto.mixed,
         googleDocId: auto.googleDocId,
         googleEventId: auto.googleEventId,
-        source: "auto",
+        source: "auto" as const,
       };
     }
     return null;
   };
+  const mkLast = (auto: FrontSession | null) =>
+    auto
+      ? {
+          date: auto.date,
+          title: auto.title,
+          summary: auto.summary,
+          mixed: auto.mixed,
+          googleDocId: auto.googleDocId,
+          source: "auto" as const,
+        }
+      : null;
 
   const fronts = {
-    ventas: resolveFront(
-      project.salesNextSessionDate,
-      project.salesNextSessionNote,
-      sessionBookends.fronts.ventas,
-    ),
-    cs: resolveFront(
-      project.csNextSessionDate,
-      project.csNextSessionNote,
-      sessionBookends.fronts.cs,
-    ),
+    ventas: {
+      next: mkNext(project.salesNextSessionDate, project.salesNextSessionNote, sessionBookends.fronts.ventas.next),
+      last: mkLast(sessionBookends.fronts.ventas.last),
+    },
+    cs: {
+      next: mkNext(project.csNextSessionDate, project.csNextSessionNote, sessionBookends.fronts.cs.next),
+      last: mkLast(sessionBookends.fronts.cs.last),
+    },
   };
 
   // ── Info del proyecto (propiedades de HubSpot + base) ────────────────────
@@ -404,7 +404,7 @@ export async function GET(
     // Campos enriquecidos (nueva API)
     nextSession,
     lastSession,
-    fronts, // dos frentes (Ventas / CS): próxima-agendada o última-pasada por frente
+    fronts, // por frente (Ventas / CSE): { next, last } — para agrupar en Última y Próxima
     projectInfo,
     actionItems: pendingItemsCompat, // alias semántico
     historyItems, // tareas hechas o borradas (tab Histórico)
