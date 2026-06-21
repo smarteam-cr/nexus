@@ -15,6 +15,8 @@ export interface PastSessionContext {
   id: string;
   title: string;
   date: Date;
+  /** Emails de los participantes — para clasificar el área (Ventas/CSE) de la sesión. */
+  participants: string[];
   /** Transcript/summary serializado a markdown, o null si no hay contenido. */
   content: string | null;
 }
@@ -33,7 +35,7 @@ export async function getPastSessionsForProject(
     where: { projectId, session: { date: { lte: now } } },
     orderBy: { session: { date: "desc" } },
     take: opts.limit ?? 12,
-    select: { session: { select: { id: true, title: true, date: true } } },
+    select: { session: { select: { id: true, title: true, date: true, participants: true } } },
   });
 
   // De más antigua a más reciente (el avance se lee mejor en orden cronológico).
@@ -44,7 +46,7 @@ export async function getPastSessionsForProject(
   const out: PastSessionContext[] = [];
   for (const s of sessions) {
     const content = await fetchTranscriptContent(s.id, s.title ?? "(sin título)");
-    out.push({ id: s.id, title: s.title ?? "(sin título)", date: s.date, content });
+    out.push({ id: s.id, title: s.title ?? "(sin título)", date: s.date, participants: s.participants, content });
   }
   return out;
 }

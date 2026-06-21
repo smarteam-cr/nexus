@@ -18,6 +18,7 @@ import { anthropic } from "@/lib/anthropic";
 import { getProjectStage } from "@/lib/hubspot/stage";
 import { getPastSessionsForProject } from "@/lib/sessions/project-sessions";
 import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
+import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
 
 const AGENT_ID_PROGRESS = "agent-timeline-progress";
 
@@ -29,6 +30,9 @@ export interface ProgressResult {
   phasesDone?: number;
   tasksDone?: number;
   currentPhaseId?: string | null;
+  /** Para el toast del re-chequeo: fecha + área (Ventas/CSE) de la última sesión usada. */
+  lastSessionDate?: string | null;
+  lastSessionArea?: string | null;
 }
 
 interface ProgressOutput {
@@ -110,6 +114,23 @@ export async function regenerateTimelineProgress(
       .map((s) => `[${s.date.toISOString().slice(0, 10)}] ${s.content ?? `Sesión "${s.title}" (sin transcript disponible)`}`)
       .join("\n\n---\n\n");
 
+    // Info de la última sesión usada → para el toast del re-chequeo ("según las sesiones
+    // de Ventas/CSE del <fecha>"). El área sale de los participantes INTERNOS.
+    const team = await prisma.teamMember.findMany({ select: { email: true, area: true, roleEnum: true } });
+    const { salesEmails, cseEmails } = classifyTeamEmailsByArea(team);
+    const latestSession = pastSessions.length ? pastSessions[pastSessions.length - 1] : null;
+    const lastSessionDate = latestSession ? latestSession.date.toISOString() : null;
+    const lastSessionArea = (() => {
+      if (!latestSession) return null;
+      const emails = latestSession.participants.map((e) => e.toLowerCase());
+      const hasSales = emails.some((e) => salesEmails.has(e));
+      const hasCse = emails.some((e) => cseEmails.has(e));
+      if (hasSales && hasCse) return "Ventas y CSE";
+      if (hasSales) return "Ventas";
+      if (hasCse) return "CSE";
+      return null;
+    })();
+
     // 4. Prompt del agente
     const agent = await prisma.agent.findUnique({
       where: { id: AGENT_ID_PROGRESS },
@@ -180,7 +201,7 @@ export async function regenerateTimelineProgress(
     // ¿Hay algo que proponer? (nuevo done, o un "hoy" que no es la fase ya IN_PROGRESS)
     const currentIsNew = currentPhaseId !== null && phaseStatus.get(currentPhaseId) !== "IN_PROGRESS";
     if (phasesDone.length === 0 && tasksDone.length === 0 && !currentIsNew) {
-      return { status: "skipped", reason: "no_progress_detected", projectId, currentPhaseId };
+      return { status: "skipped", reason: "no_progress_detected", projectId, currentPhaseId, lastSessionDate, lastSessionArea };
     }
 
     // 7. AgentRun (trazabilidad) + persistir el borrador (reemplaza el anterior).
@@ -221,6 +242,8 @@ export async function regenerateTimelineProgress(
       phasesDone: phasesDone.length,
       tasksDone: tasksDone.length,
       currentPhaseId,
+      lastSessionDate,
+      lastSessionArea,
     };
   } catch (e) {
     console.error(`[timeline-progress] error inesperado para project ${projectId}:`, e instanceof Error ? e.message : e);

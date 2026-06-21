@@ -29,17 +29,28 @@ export default function CronogramaProgressButton({
     try {
       const res = await fetch(`/api/projects/${projectId}/timeline/progress`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
+      // "según las sesiones de Ventas/CSE del <fecha>" — fecha + área de la última sesión usada.
+      const fechaSesion = data?.lastSessionDate
+        ? new Date(data.lastSessionDate).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })
+        : null;
+      const ref = fechaSesion
+        ? data?.lastSessionArea
+          ? ` según las sesiones de ${data.lastSessionArea} hasta el ${fechaSesion}`
+          : ` según las sesiones hasta el ${fechaSesion}`
+        : "";
       if (!res.ok) {
         toast.error(data?.error ?? "No se pudo chequear el avance.");
       } else if (data?.status === "ok") {
-        toast.success("Avance propuesto — revisalo abajo.");
+        toast.success(`Avance propuesto${ref} — revisalo abajo.`);
         onDone?.();
       } else if (data?.status === "skipped") {
-        toast.info(
-          data.reason === "no_detail"
-            ? "Generá el detalle del cronograma primero."
-            : "No se detectó avance nuevo.",
-        );
+        if (data.reason === "no_detail") {
+          toast.info("Generá el detalle del cronograma primero.");
+        } else if (fechaSesion) {
+          toast.success(`Cronograma al día${ref}.`);
+        } else {
+          toast.info("No hay sesiones del proyecto todavía para chequear el avance.");
+        }
       } else {
         toast.error("No se pudo chequear el avance.");
       }
