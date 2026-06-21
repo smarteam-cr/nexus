@@ -332,6 +332,7 @@ model ProjectTimeline {
 
   phases                TimelinePhase[]
   changes               TimelineChange[] // #4 — historial de ediciones (razón + snapshot) para D.3
+  baselines             TimelineBaseline[] // D.3 — baselines "vendidos" congelados al publicar (versionados)
 
   @@index([projectId])
 }
@@ -351,6 +352,10 @@ model TimelinePhase {
   // IN_PROGRESS = la fase en curso (el "hoy"); PENDING = por delante. Lo escribe SOLO
   // el CSE (mismo invariante que TimelineTask.status); el agente lo PROPONE en pendingProgress.
   status        TimelineTaskStatus    @default(PENDING)
+  // D.3 fundación — fechas REALES de ejecución (capturadas al cambiar status):
+  // actualStart al pasar a IN_PROGRESS, actualEnd al DONE; volver a PENDING las limpia.
+  actualStart   DateTime?
+  actualEnd     DateTime?
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
 
@@ -372,6 +377,9 @@ model TimelineTask {
   weekIndex       Int                                   // 0-indexed, relativo a la fase
   order           Int                 @default(0)       // orden dentro de la semana
   status          TimelineTaskStatus  @default(PENDING)
+  // D.3 fundación — fechas REALES de ejecución (ver TimelinePhase).
+  actualStart     DateTime?
+  actualEnd       DateTime?
   notes           String?             @db.Text
   needsValidation Boolean             @default(false)   // tarea típica inventada por el agente con handoff flaco — el Gantt la grita; NUNCA cruza al cliente
   source          TimelinePhaseSource @default(AGENT)   // reuso consciente del enum (mismo ciclo AGENT→MODIFIED/HUMAN); renombrarlo = recrear tipo en PG por cero ganancia
@@ -408,6 +416,29 @@ model TimelineChange {
 enum TimelineChangeKind {
   MANUAL     // edición manual del CSE ("Guardar cronograma")
   AI_ASSIST  // aplicada desde una propuesta del asistente de IA
+  PROGRESS   // D.3 — confirmación de avance (D.2): registra qué se marcó y quién (delta compacto, sin snapshot completo)
+}
+
+// D.3 fundación — BASELINE "vendido" congelado al PUBLICAR el cronograma al cliente.
+// Snapshot prístino e independiente de si el CSE editó a mano: es la promesa contra la
+// que D.3 (después) compara lo ejecutado. Versionado: cada publish con estructura distinta
+// crea una versión nueva (isActive=true) y desactiva la anterior — se conservan todas.
+// El snapshot incluye fechas planeadas por ítem + needsValidation + source para que las
+// alarmas distingan "te desviaste de algo firme" de "de un relleno del agente".
+model TimelineBaseline {
+  id               String          @id @default(cuid())
+  timelineId       String
+  timeline         ProjectTimeline @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  version          Int                              // 1, 2, 3… (max+1 por timeline)
+  isActive         Boolean         @default(true)   // la última publicada; D.3 compara contra esta
+  anchorStartDate  DateTime?                        // ancla al momento de congelar
+  snapshot         Json                             // estructura frozen: fases+tareas con planned dates, needsValidation, source
+  firmness         Json                             // resumen de firmeza: { taskCount, needsValidationCount, firmPct, label, ... }
+  publishedByEmail String?                          // quién publicó (del guard)
+  capturedAt       DateTime        @default(now())
+
+  @@index([timelineId, isActive])
+  @@index([timelineId, version])
 }
 
 // D.1 — los 5 tipos de actividad de una implementación (orden de negocio fijo).
