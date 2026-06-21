@@ -39,17 +39,28 @@ interface LastSessionInfo {
   source: "manual" | "auto" | null;
 }
 
-// Frente (Ventas / CS) ya resuelto: próxima-agendada o, si no hay, la última-pasada.
-// isUpcoming distingue una de la otra; source si es manual (ajena a meets) o auto.
-interface FrontResolved {
+// Próxima de un frente (Ventas / CSE). source: manual (ajena a meets) o auto.
+interface FrontNext {
   date: string;
   title: string | null;
   note: string | null;
-  isUpcoming: boolean;
   mixed: boolean;
   googleDocId: string | null;
   googleEventId: string | null;
   source: "manual" | "auto";
+}
+// Última de un frente (siempre auto-detectada).
+interface FrontLast {
+  date: string;
+  title: string | null;
+  summary: string | null;
+  mixed: boolean;
+  googleDocId: string | null;
+  source: "auto";
+}
+interface FrontPair {
+  next: FrontNext | null;
+  last: FrontLast | null;
 }
 
 interface ProjectInfo {
@@ -72,7 +83,7 @@ interface GPSData {
   // Enriquecidos (nueva API)
   nextSession?: NextSessionInfo;
   lastSession?: LastSessionInfo;
-  fronts?: { ventas: FrontResolved | null; cs: FrontResolved | null };
+  fronts?: { ventas: FrontPair; cs: FrontPair };
   projectInfo?: ProjectInfo;
   historyItems?: PendingItem[]; // tareas hechas o borradas (tab Histórico del modal)
 }
@@ -84,6 +95,8 @@ const FRONT_FIELDS: Record<FrontKey, { date: string; note: string }> = {
   ventas: { date: "salesNextSessionDate", note: "salesNextSessionNote" },
   cs: { date: "csNextSessionDate", note: "csNextSessionNote" },
 };
+
+const EMPTY_PAIR: FrontPair = { next: null, last: null };
 
 export default function ProjectGPS({ projectId, clientId }: { projectId: string; clientId: string }) {
   // Inicializa desde el cache de módulo → al remontar (cambio de tab) renderiza al
@@ -154,8 +167,8 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   }, [saveField]);
 
   // ── Edición manual de la PRÓXIMA por frente (reuniones ajenas a meets) ────────
-  // Optimista: actualiza el frente local como "manual" y persiste. Si se limpia la
-  // fecha, refetch para que vuelva a resolver la sesión auto-detectada.
+  // Optimista: actualiza el .next del frente como "manual" y persiste. Si se limpia
+  // la fecha, refetch para que vuelva a resolver la próxima auto-detectada.
   const onFrontDate = useCallback((frontKey: FrontKey, value: string) => {
     const iso = value ? new Date(value).toISOString() : null;
     saveField(FRONT_FIELDS[frontKey].date, iso);
@@ -166,19 +179,21 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     }
     setData((cur) => {
       if (!cur) return cur;
-      const prev = cur.fronts?.[frontKey];
-      const newFront: FrontResolved = {
+      const prevPair = cur.fronts?.[frontKey] ?? EMPTY_PAIR;
+      const newNext: FrontNext = {
         date: iso,
         title: null,
-        note: prev?.source === "manual" ? prev.note : null,
-        isUpcoming: new Date(iso).getTime() > Date.now(),
+        note: prevPair.next?.source === "manual" ? prevPair.next.note : null,
         mixed: false,
         googleDocId: null,
         googleEventId: null,
         source: "manual",
       };
-      const fronts = { ventas: cur.fronts?.ventas ?? null, cs: cur.fronts?.cs ?? null };
-      fronts[frontKey] = newFront;
+      const fronts = {
+        ventas: cur.fronts?.ventas ?? EMPTY_PAIR,
+        cs: cur.fronts?.cs ?? EMPTY_PAIR,
+      };
+      fronts[frontKey] = { ...prevPair, next: newNext };
       const next: GPSData = { ...cur, fronts };
       writeGpsCache(projectId, next);
       return next;
@@ -189,10 +204,13 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     debouncedSave(FRONT_FIELDS[frontKey].note, value || null);
     setData((cur) => {
       if (!cur) return cur;
-      const prev = cur.fronts?.[frontKey];
-      if (!prev) return cur; // la nota solo aplica con una próxima manual ya seteada
-      const fronts = { ventas: cur.fronts?.ventas ?? null, cs: cur.fronts?.cs ?? null };
-      fronts[frontKey] = { ...prev, note: value || null, source: "manual" };
+      const prevPair = cur.fronts?.[frontKey];
+      if (!prevPair?.next) return cur; // la nota solo aplica con una próxima manual seteada
+      const fronts = {
+        ventas: cur.fronts?.ventas ?? EMPTY_PAIR,
+        cs: cur.fronts?.cs ?? EMPTY_PAIR,
+      };
+      fronts[frontKey] = { ...prevPair, next: { ...prevPair.next, note: value || null, source: "manual" } };
       const next: GPSData = { ...cur, fronts };
       writeGpsCache(projectId, next);
       return next;
@@ -315,14 +333,20 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   }
 
   // Skeleton ESTRUCTURAL: misma cáscara/altura que el widget cargado (cabecera +
-  // grid de 4 columnas) para que al cargar no haya salto de scroll.
+  // grid de 4 columnas, con Última y Próxima agrupadas por frente) para que al
+  // cargar no haya salto de scroll.
   if (!data) {
     const cell = (
-      <div className="p-4 space-y-2.5">
-        <div className="h-2.5 w-14 rounded skeleton-shimmer" />
-        <div className="h-4 w-24 rounded skeleton-shimmer" />
-        <div className="h-3 w-20 rounded skeleton-shimmer" />
-        <div className="h-3 w-12 rounded skeleton-shimmer" />
+      <div className="p-4 space-y-3">
+        <div className="h-2.5 w-16 rounded skeleton-shimmer" />
+        <div className="space-y-1.5">
+          <div className="h-3 w-12 rounded skeleton-shimmer" />
+          <div className="h-3.5 w-24 rounded skeleton-shimmer" />
+        </div>
+        <div className="space-y-1.5">
+          <div className="h-3 w-12 rounded skeleton-shimmer" />
+          <div className="h-3.5 w-24 rounded skeleton-shimmer" />
+        </div>
       </div>
     );
     return (
@@ -330,7 +354,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
         <div className="px-4 py-2.5 bg-surface-muted border-b border-line">
           <div className="h-4 w-64 max-w-full rounded skeleton-shimmer" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-line min-h-[132px]">
+        <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-line min-h-[170px]">
           {cell}{cell}{cell}{cell}
         </div>
       </div>
@@ -364,35 +388,68 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     : null;
 
   const cardLabel = "text-[10px] font-semibold text-fg-muted uppercase tracking-wide";
+  const frontLabel = "text-[11px] font-semibold text-fg-secondary";
+  const mixtaBadge = (
+    <span className="text-[9px] uppercase tracking-wide text-brand bg-brand/10 border border-brand/30 rounded px-1 py-0.5">mixta</span>
+  );
 
-  // ── Render de un frente (Ventas / CS) ─────────────────────────────────────────
-  const renderFront = (frontKey: FrontKey, label: string, fullLabel: string) => {
-    const front = data.fronts?.[frontKey] ?? null;
-    const fdate = front?.date ? new Date(front.date) : null;
-    const editing = editingFront === frontKey;
-    const isManual = front?.source === "manual";
+  // ── Última de un frente (Ventas / CSE) ────────────────────────────────────────
+  const renderLastFront = (frontKey: FrontKey, label: string) => {
+    const last = data.fronts?.[frontKey]?.last ?? null;
+    const d = last?.date ? new Date(last.date) : null;
     return (
-      <div className="p-4 flex flex-col">
-        <div className="flex items-center gap-1.5 mb-2">
-          <span className={cardLabel} title={fullLabel}>{label}</span>
-          {front?.mixed && (
-            <span className="text-[9px] uppercase tracking-wide text-brand bg-brand/10 border border-brand/30 rounded px-1 py-0.5">mixta</span>
-          )}
+      <div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className={frontLabel}>{label}</span>
+          {last?.mixed && mixtaBadge}
+          {d && <span className="text-[10px] text-fg-muted">{formatPastDate(d)}</span>}
+        </div>
+        {last ? (
+          <>
+            {last.title && <p className="text-xs text-fg truncate" title={last.title}>{last.title}</p>}
+            {last.googleDocId && (
+              <a
+                href={`https://docs.google.com/document/d/${last.googleDocId}`}
+                target="_blank" rel="noopener noreferrer"
+                className="text-[10px] text-brand hover:text-brand/80 inline-block"
+              >
+                Abrir notas →
+              </a>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-fg-muted">Sin sesiones</p>
+        )}
+      </div>
+    );
+  };
+
+  // ── Próxima de un frente (Ventas / CSE) — editable (override manual) ───────────
+  const renderNextFront = (frontKey: FrontKey, label: string) => {
+    const next = data.fronts?.[frontKey]?.next ?? null;
+    const d = next?.date ? new Date(next.date) : null;
+    const editing = editingFront === frontKey;
+    const isManual = next?.source === "manual";
+    return (
+      <div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className={frontLabel}>{label}</span>
+          {next?.mixed && mixtaBadge}
           {isManual && (
             <span className="text-[9px] uppercase tracking-wide text-fg-muted bg-surface-muted border border-line rounded px-1 py-0.5">manual</span>
           )}
         </div>
         {editing ? (
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 mt-1">
             <input
               ref={frontDateRef}
               type="datetime-local"
-              defaultValue={isManual && fdate ? new Date(fdate).toISOString().slice(0, 16) : ""}
+              defaultValue={isManual && d ? new Date(d).toISOString().slice(0, 16) : ""}
               onChange={(e) => onFrontDate(frontKey, e.target.value)}
               className="w-full text-xs border border-line rounded px-2 py-1 focus:outline-none focus:border-brand bg-surface-muted text-fg"
             />
             <input
-              defaultValue={isManual ? front?.note ?? "" : ""}
+              defaultValue={isManual ? next?.note ?? "" : ""}
               placeholder="Nota (opcional)…"
               onChange={(e) => onFrontNote(frontKey, e.target.value)}
               className="w-full text-xs border border-line rounded px-2 py-1 focus:outline-none focus:border-brand bg-surface-muted text-fg"
@@ -404,31 +461,14 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             onClick={() => { setEditingFront(frontKey); setTimeout(() => frontDateRef.current?.focus(), 50); }}
             className="text-left w-full group"
           >
-            {front && fdate ? (
+            {next && d ? (
               <div>
-                <p className={`text-sm font-medium ${front.isUpcoming ? "text-fg" : "text-fg-secondary"}`}>
-                  {front.isUpcoming ? formatDate(fdate) : formatPastDate(fdate)}
-                </p>
-                {front.title && <p className="text-xs text-fg-muted mt-0.5 truncate" title={front.title}>{front.title}</p>}
-                {front.note && <p className="text-xs text-fg-muted mt-0.5 truncate">{front.note}</p>}
-                <p className={`text-[10px] mt-0.5 ${front.isUpcoming ? "text-brand" : "text-fg-muted"}`}>
-                  {front.isUpcoming ? "Próxima" : "Última"}
-                </p>
-                {!front.isUpcoming && front.googleDocId && (
-                  <a
-                    href={`https://docs.google.com/document/d/${front.googleDocId}`}
-                    target="_blank" rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-[10px] text-brand hover:text-brand/80 mt-1 inline-block"
-                  >
-                    Abrir notas →
-                  </a>
-                )}
+                <p className="text-sm font-medium text-fg">{formatDate(d)}</p>
+                {next.title && <p className="text-xs text-fg-muted truncate" title={next.title}>{next.title}</p>}
+                {next.note && <p className="text-xs text-fg-muted truncate">{next.note}</p>}
               </div>
             ) : (
-              <p className="text-xs text-fg-muted group-hover:text-fg-secondary transition-colors">
-                Sin sesiones de {label.toLowerCase()}
-              </p>
+              <p className="text-xs text-fg-muted group-hover:text-fg-secondary transition-colors">Sin agendar</p>
             )}
           </button>
         )}
@@ -438,50 +478,68 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
 
   return (
     <div className="mb-6 bg-surface border border-line rounded-xl overflow-hidden">
-      {/* Cabecera: info del proyecto (HubSpot) + Ver minuta */}
-      <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-surface-muted border-b border-line text-xs">
-        {info?.name && (
-          <span className="min-w-0 truncate">
-            <span className="text-fg-muted">Proyecto: </span>
-            <span className="text-fg font-medium" title={info.name}>{info.name}</span>
-          </span>
-        )}
-        {info?.pipelineName && (
-          <span className="min-w-0 truncate">
-            <span className="text-fg-muted">Pipeline: </span>
-            <span className="text-fg-secondary" title={info.pipelineName}>{info.pipelineName}</span>
-          </span>
-        )}
-        {info?.cseEncargado && (
-          <span className="min-w-0 truncate">
-            <span className="text-fg-muted">CSE: </span>
-            <span className="text-fg-secondary" title={info.cseEncargadoEmail ?? info.cseEncargado}>{info.cseEncargado}</span>
-          </span>
-        )}
-        {createdAtStr && (
-          <span className="min-w-0 truncate">
-            <span className="text-fg-muted">Creado: </span>
-            <span className="text-fg-secondary">{createdAtStr}</span>
-            {info?.createdAtSource === "nexus" && (
-              <span className="text-[9px] text-fg-muted uppercase tracking-wider ml-1">en Nexus</span>
-            )}
-          </span>
-        )}
-        <button
-          onClick={() => setMinuteDialogOpen(true)}
-          className="ml-auto flex-shrink-0 text-xs font-semibold text-brand hover:text-brand/80 transition-colors"
-          title="Ver minuta generada por la IA"
-        >
-          Ver minuta
-        </button>
-      </div>
+      {/* Info bar del proyecto (desde HubSpot) */}
+      {info && (info.name || info.pipelineName || info.cseEncargado || createdAtStr) && (
+        <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-surface-muted border-b border-line text-xs">
+          {info.name && (
+            <span className="min-w-0 truncate">
+              <span className="text-fg-muted">Proyecto: </span>
+              <span className="text-fg font-medium" title={info.name}>{info.name}</span>
+            </span>
+          )}
+          {info.pipelineName && (
+            <span className="min-w-0 truncate">
+              <span className="text-fg-muted">Pipeline: </span>
+              <span className="text-fg-secondary" title={info.pipelineName}>{info.pipelineName}</span>
+            </span>
+          )}
+          {info.cseEncargado && (
+            <span className="min-w-0 truncate">
+              <span className="text-fg-muted">CSE: </span>
+              <span className="text-fg-secondary" title={info.cseEncargadoEmail ?? info.cseEncargado}>{info.cseEncargado}</span>
+            </span>
+          )}
+          {createdAtStr && (
+            <span className="min-w-0 truncate ml-auto">
+              <span className="text-fg-muted">Creado: </span>
+              <span className="text-fg-secondary">{createdAtStr}</span>
+              {info.createdAtSource === "nexus" && (
+                <span className="text-[9px] text-fg-muted uppercase tracking-wider ml-1">en Nexus</span>
+              )}
+            </span>
+          )}
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-line min-h-[132px]">
-        {/* Frente Ventas */}
-        {renderFront("ventas", "Ventas", "Sesiones de Ventas")}
+      <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-line min-h-[170px]">
+        {/* Última sesión — agrupada por frente (Ventas / CSE) */}
+        <div className="p-4 flex flex-col">
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className={cardLabel}>Última sesión</span>
+          </div>
+          <div className="space-y-2.5">
+            {renderLastFront("ventas", "Ventas")}
+            {renderLastFront("cs", "CSE")}
+          </div>
+          <button
+            onClick={() => setMinuteDialogOpen(true)}
+            className="mt-auto pt-2 text-xs font-semibold text-brand hover:text-brand/80 self-start transition-colors"
+            title="Ver minuta generada por la IA"
+          >
+            Ver minuta
+          </button>
+        </div>
 
-        {/* Frente CS (entrega de servicio) */}
-        {renderFront("cs", "CS", "Entrega de servicio (CS)")}
+        {/* Próxima sesión — agrupada por frente (Ventas / CSE) */}
+        <div className="p-4 flex flex-col">
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className={cardLabel}>Próxima sesión</span>
+          </div>
+          <div className="space-y-2.5">
+            {renderNextFront("ventas", "Ventas")}
+            {renderNextFront("cs", "CSE")}
+          </div>
+        </div>
 
         {/* Estado actual */}
         <div className="p-4">
