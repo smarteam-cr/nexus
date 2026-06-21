@@ -227,6 +227,7 @@ model Project {
   externalAccess      ProjectExternalAccess?
   timeline            ProjectTimeline?
   handoff             Handoff?
+  handoffSources      HandoffSource[]
 }
 
 // ─── Handoff (entidad cliente-level) ──────────────────────────────────────────
@@ -254,6 +255,29 @@ model Handoff {
   updatedAt DateTime @updatedAt
 
   @@index([clientId])
+}
+
+// ─── HandoffSource — fuente MANUAL del handoff (transcript/resumen pegado a mano) ──
+// Para reuniones que NO entraron por el sync de Google Workspace (ej. un Zoom ajeno):
+// ventas pega el transcript/resumen y el agente de handoff lo usa como UNA fuente más,
+// ETIQUETADA como manual (distinta de las sesiones verificadas del sync). Keyed por
+// projectId (el handoff es 1:1 con el project; persiste aunque el Handoff aún no exista
+// o se recree → reproducible/auditable). El analyze la re-lee en CADA corrida, así una
+// regeneración la vuelve a incluir. SOLO la lee el path de handoff; NO se muestra en el
+// tab Documentos ni alimenta a otros agentes.
+model HandoffSource {
+  id             String    @id @default(cuid())
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title          String?                          // etiqueta opcional para identificarla
+  content        String    @db.Text               // el texto pegado (transcript/resumen)
+  kind           String    @default("manual")     // futuro-proof: otros tipos de fuente manual
+  createdByEmail String?                           // quién la pegó (del guard de sesión)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?                         // soft-delete (auditable; el read filtra deletedAt:null)
+
+  @@index([projectId, createdAt])
 }
 
 // ─── ProjectTimeline + TimelinePhase ──────────────────────────────────────────
