@@ -770,6 +770,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
 
   let firefliesContent = "";
   let salesFirefliesContent = "";
+  let manualSourcesContent = ""; // #handoff-manual — bloque de fuentes manuales (solo handoff)
   let handoffSourceSessionIds: string[] = []; // ids de sesiones de ventas usadas (handoff)
 
   try {
@@ -862,6 +863,24 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       salesFirefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
     }
     if (isHandoffAgent) handoffSourceSessionIds = topSales.map((s) => s.id);
+
+    // #handoff-manual — fuentes MANUALES pegadas (reuniones que NO entraron por el sync).
+    // Persistidas en HandoffSource → re-leídas en CADA corrida (sobreviven regeneración).
+    // Solo para handoff; etiquetadas como manuales para distinguirlas del sync verificado.
+    if (isHandoffAgent && bodyProjectId) {
+      const manualSources = await prisma.handoffSource.findMany({
+        where: { projectId: bodyProjectId, deletedAt: null },
+        orderBy: { createdAt: "asc" },
+        select: { title: true, content: true },
+      });
+      if (manualSources.length > 0) {
+        const joined = manualSources
+          .map((s, i) => `### Fuente manual: ${s.title?.trim() || `(sin título ${i + 1})`}\n${s.content.trim()}`)
+          .join("\n\n---\n\n")
+          .slice(0, 12000);
+        manualSourcesContent = `=== FUENTES MANUALES (transcripts/resúmenes pegados a mano — NO vinieron por el sync verificado de Google Workspace; usalos como fuente complementaria y atribuí explícitamente lo que salga de acá) ===\n${joined}\n\n`;
+      }
+    }
 
     if (isHandoffAgent) {
       const scopeLabel = bodyProjectId ? "sesiones del proyecto" : "clasificación 90d";
@@ -1217,7 +1236,7 @@ ${[
     return `${tag} **${c.title}:**\n${c.content}`;
   }),
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
-].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, isHandoffAgent ? 12000 : 4000)}\n\n` : ""}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
+].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, isHandoffAgent ? 12000 : 4000)}\n\n` : ""}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 10b. Input del agente Kickoff ─────────────────────────────────────────────
