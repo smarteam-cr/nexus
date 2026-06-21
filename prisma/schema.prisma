@@ -170,10 +170,18 @@ model Project {
   shareToken       String?  @unique     // Token para vista pública del cliente
 
   // GPS del proyecto
-  nextSessionDate    DateTime? // Próxima sesión agendada
-  nextSessionNote    String?   // Nota breve sobre la próxima sesión
-  lastSessionSummary String?   @db.Text // Resumen de la última sesión procesada
+  nextSessionDate    DateTime? // LEGACY (project-wide) — reemplazado por los overrides por frente de abajo
+  nextSessionNote    String?   // LEGACY (project-wide)
+  lastSessionSummary String?   @db.Text // LEGACY — resumen manual de la última sesión (el widget ya no lo edita)
   pendingItems       Json?     // Array de { text: string, done: boolean }
+
+  // Override manual de la PRÓXIMA sesión POR FRENTE — para reuniones "ajenas a meets"
+  // (no capturadas por el sync de Google Workspace). El widget GPS muestra dos frentes
+  // (Ventas / CS); si hay override manual para un frente, precede al auto-detectado.
+  salesNextSessionDate DateTime? // Próxima sesión de VENTAS agendada a mano
+  salesNextSessionNote String?   // Nota de la próxima sesión de ventas
+  csNextSessionDate    DateTime? // Próxima sesión de CS (entrega de servicio) agendada a mano
+  csNextSessionNote    String?   // Nota de la próxima sesión de CS
 
   // Fase C — publish del Kickoff al cliente externo. Acción SEPARADA del acceso:
   // null = no publicado (el cliente, aunque tenga credenciales, no ve el Kickoff);
