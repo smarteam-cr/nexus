@@ -364,7 +364,11 @@ function SetupPill({ state, label }: { state: "done" | "draft" | "missing"; labe
   return <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${cls}`}>{label}</span>;
 }
 
-const cardLink = "/clients";
+// Deep-link al panel del cliente con el tab del proyecto seleccionado (?tab=), NO a la página
+// suelta /projects/[id] (que tiene su propio layout sin el rail de tabs). WorkspaceClient lee
+// ?tab= al montar y restaura ese proyecto — el filtro de visibles del cliente coincide con el
+// del panel, así que el projectId siempre existe en el rail.
+const projectHref = (r: PortfolioRow) => `/clients/${r.clientId}?tab=${r.projectId}`;
 
 // ── Sección 1: tarjeta rica ──
 function ActionCard({
@@ -389,7 +393,7 @@ function ActionCard({
     <div className="rounded-xl border border-line border-l-4 border-l-red-500 bg-surface p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link href={`${cardLink}/${r.clientId}/projects/${r.projectId}`} className="font-semibold text-fg hover:text-brand transition-colors">
+          <Link href={projectHref(r)} className="font-semibold text-fg hover:text-brand transition-colors">
             {r.projectName}
           </Link>
           <div className="text-[11px] text-fg-muted truncate">{r.cseName || "sin CSE"}</div>
@@ -431,7 +435,7 @@ function ScopeRow({ r }: { r: PortfolioRow }) {
     s.weeksDelta > 0 && `+${s.weeksDelta} sem`,
   ].filter(Boolean).join(" · ");
   return (
-    <Link href={`${cardLink}/${r.clientId}/projects/${r.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors">
+    <Link href={projectHref(r)} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors">
       <div className="min-w-0">
         <span className="text-sm font-medium text-fg">{r.projectName}</span>
         <span className="text-[11px] text-fg-muted"> · {r.cseName || "sin CSE"}</span>
@@ -446,7 +450,7 @@ function NodataRow({ r }: { r: PortfolioRow }) {
   // weakBaseline (tiene línea base pero débil) NO es setup pendiente → nota simple, sin checklist.
   if (r.summary.hasBaseline) {
     return (
-      <Link href={`${cardLink}/${r.clientId}/projects/${r.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors">
+      <Link href={projectHref(r)} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors">
         <div className="min-w-0">
           <span className="text-sm text-fg">{r.projectName}</span>
           <span className="text-[11px] text-fg-muted"> · {r.cseName || "sin CSE"}</span>
@@ -459,7 +463,7 @@ function NodataRow({ r }: { r: PortfolioRow }) {
   }
   const s = r.setup;
   return (
-    <Link href={`${cardLink}/${r.clientId}/projects/${r.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors">
+    <Link href={projectHref(r)} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors">
       <div className="min-w-0">
         <span className="text-sm text-fg">{r.projectName}</span>
         <span className="text-[11px] text-fg-muted"> · {r.cseName || "sin CSE"}</span>
@@ -484,7 +488,7 @@ function HealthyRow({ r }: { r: PortfolioRow }) {
     ? { label: "Completado", dot: "bg-gray-400", chip: "text-fg-muted bg-surface-muted border border-line" }
     : HEALTH_META[r.summary.health.resolved as Health];
   return (
-    <Link href={`${cardLink}/${r.clientId}/projects/${r.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2 hover:bg-surface-muted/40 transition-colors opacity-85">
+    <Link href={projectHref(r)} className="flex items-center justify-between gap-3 px-4 py-2 hover:bg-surface-muted/40 transition-colors opacity-85">
       <div className="min-w-0">
         <span className="text-sm text-fg">{r.projectName}</span>
         <span className="text-[11px] text-fg-muted"> · {r.cseName || "—"}</span>
