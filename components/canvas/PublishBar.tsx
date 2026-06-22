@@ -3,92 +3,107 @@
 /**
  * components/canvas/PublishBar.tsx
  *
- * Barra ESTÁNDAR de "guardar/subir" — única fuente del CTA de publicación de los
- * canvas externos (kickoff + cronograma). Reemplaza los banners ad-hoc para que
- * el botón "Subir al cliente" se vea IGUAL en todas las superficies (pedido
- * explícito: "estandar como la barra que aparece en la kickoff").
+ * Barra ÚNICA de guardar/subir — el MISMO diseño y comportamiento en TODOS los
+ * canvas (kickoff, cronograma). Una sola fuente para que el flujo "trabajar →
+ * guardar avances → subir al cliente" se vea idéntico en todos lados.
  *
- * Modelo (staging real): el cliente ve la ÚLTIMA versión subida. Editar guarda un
- * borrador (auto-save continuo, el trabajo no se pierde); el cliente solo ve los
- * cambios al tocar "Subir al cliente".
+ * Modelo (staging real): el cliente ve la ÚLTIMA versión subida. Tres estados,
+ * por prioridad:
+ *   1. unsaved      → hay ediciones locales sin guardar → botón "Guardar" (azul).
+ *   2. unpublished  → hay cambios guardados sin subir   → botón "Subir al cliente" (ámbar).
+ *   3. (al día)     → todo guardado y subido            → sin botón (verde).
  *
- *   - state="dirty"  → cambios sin subir (ámbar + botón "Subir").
- *   - state="clean"  → todo subido (verde, sin botón).
+ * El kickoff auto-guarda → nunca pasa por "unsaved" (solo subir/al-día). El
+ * cronograma sí tiene guardado explícito (con razón) → usa los tres estados.
  *
- * El CTA (chip + mensaje + botón + colores) es idéntico entre variantes; sólo
- * cambia el contenedor para encajar en cada superficie:
- *   - variant="bar"  → franja full-bleed sticky con borde inferior, como las
- *     demás barras del landing del kickoff (error, revisión del agente).
- *   - variant="card" → tarjeta redondeada en el flujo, para el panel interno
- *     oscuro del cronograma (donde todo lo demás son cards redondeadas).
- *
- * Estilos inline (no Tailwind) para verse idéntica en el landing claro del
- * kickoff y el panel oscuro del cronograma, sin depender del tema de cada uno.
+ * Presentacional puro: el caller decide los flags y los handlers. Estilos inline
+ * (no Tailwind) para verse IGUAL en el landing claro del kickoff y el panel
+ * oscuro del cronograma, sin depender del tema de cada superficie.
  */
 
 interface PublishBarProps {
-  state: "dirty" | "clean";
-  /** Spinner + deshabilita el botón mientras sube. */
-  publishing?: boolean;
-  /** Acción de "Subir al cliente". Requerido en state="dirty". */
+  /** Hay ediciones locales sin guardar (borrador en memoria). Tiene prioridad sobre unpublished. */
+  unsaved?: boolean;
+  onSave?: () => void;
+  saving?: boolean;
+  saveLabel?: string;
+  /** Hay cambios guardados sin subir al cliente. */
+  unpublished?: boolean;
   onPublish?: () => void;
-  /** Texto del estado sucio (default: "Tenés cambios sin subir — el cliente todavía no los ve."). */
-  dirtyMessage?: string;
-  /** Texto del estado al día (default: "Todo subido — el cliente ve la última versión."). */
-  cleanMessage?: string;
-  /** Texto del botón (default: "Subir cambios al cliente"). */
+  publishing?: boolean;
   publishLabel?: string;
-  variant?: "bar" | "card";
+  unsavedMessage?: string;
+  unpublishedMessage?: string;
+  cleanMessage?: string;
+  /** No renderizar nada cuando todo está al día (en vez del estado verde). */
+  hideWhenClean?: boolean;
+  /** Pegar arriba del contenedor con scroll (útil en páginas largas, p.ej. el kickoff). */
+  sticky?: boolean;
 }
 
-const PALETTE = {
-  dirty: { bg: "#fef3c7", border: "#f59e0b", fg: "#92400e" },
-  clean: { bg: "#ecfdf5", border: "#6ee7b7", fg: "#047857" },
-} as const;
+type State = "unsaved" | "unpublished" | "clean";
+
+const THEME: Record<State, { bg: string; border: string; fg: string; chip: string }> = {
+  unsaved: { bg: "#eff6ff", border: "#93c5fd", fg: "#1d4ed8", chip: "● Sin guardar" },
+  unpublished: { bg: "#fef3c7", border: "#f59e0b", fg: "#92400e", chip: "⚠ Sin subir" },
+  clean: { bg: "#ecfdf5", border: "#6ee7b7", fg: "#047857", chip: "✓ Al día" },
+};
+
+// Botón sólido por estado (azul para guardar, ámbar para subir).
+const BTN: Record<"unsaved" | "unpublished", { bg: string; border: string }> = {
+  unsaved: { bg: "#2563eb", border: "#1d4ed8" },
+  unpublished: { bg: "#d97706", border: "#b45309" },
+};
 
 export default function PublishBar({
-  state,
-  publishing = false,
+  unsaved = false,
+  onSave,
+  saving = false,
+  saveLabel = "Guardar",
+  unpublished = false,
   onPublish,
-  dirtyMessage = "Tenés cambios sin subir — el cliente todavía no los ve.",
-  cleanMessage = "Todo subido — el cliente ve la última versión.",
-  publishLabel = "Subir cambios al cliente",
-  variant = "card",
+  publishing = false,
+  publishLabel = "Subir al cliente",
+  unsavedMessage = "Tenés cambios sin guardar.",
+  unpublishedMessage = "Cambios sin subir — el cliente todavía no los ve.",
+  cleanMessage = "Al día — el cliente ve la última versión.",
+  hideWhenClean = false,
+  sticky = false,
 }: PublishBarProps) {
-  const c = PALETTE[state];
+  const state: State = unsaved ? "unsaved" : unpublished ? "unpublished" : "clean";
+  if (state === "clean" && hideWhenClean) return null;
 
-  const container: React.CSSProperties =
-    variant === "bar"
-      ? {
-          position: "sticky",
-          top: 0,
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "10px 16px",
-          fontSize: 13,
-          background: c.bg,
-          borderBottom: `1px solid ${c.border}`,
-          color: c.fg,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-        }
-      : {
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "10px 16px",
-          fontSize: 13,
-          borderRadius: 16,
-          background: c.bg,
-          border: `1px solid ${c.border}`,
-          color: c.fg,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-        };
-
-  const container_z: React.CSSProperties = variant === "bar" ? { zIndex: 48 } : {};
+  const t = THEME[state];
+  const busy = state === "unsaved" ? saving : publishing;
+  const onClick = state === "unsaved" ? onSave : onPublish;
+  const label =
+    state === "unsaved"
+      ? saving
+        ? "Guardando…"
+        : saveLabel
+      : publishing
+        ? "Subiendo…"
+        : publishLabel;
+  const message =
+    state === "unsaved" ? unsavedMessage : state === "unpublished" ? unpublishedMessage : cleanMessage;
 
   return (
-    <div style={{ ...container, ...container_z }}>
+    <div
+      style={{
+        ...(sticky ? { position: "sticky", top: 0 } : {}),
+        zIndex: 30,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "10px 16px",
+        borderRadius: 14,
+        fontSize: 13,
+        background: t.bg,
+        border: `1px solid ${t.border}`,
+        color: t.fg,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+      }}
+    >
       <span
         style={{
           display: "inline-flex",
@@ -101,13 +116,13 @@ export default function PublishBar({
           flexShrink: 0,
         }}
       >
-        {state === "dirty" ? "⚠ Cambios" : "✓ Al día"}
+        {t.chip}
       </span>
-      <span style={{ flex: 1 }}>{state === "dirty" ? dirtyMessage : cleanMessage}</span>
-      {state === "dirty" && (
+      <span style={{ flex: 1 }}>{message}</span>
+      {state !== "clean" && (
         <button
-          onClick={onPublish}
-          disabled={publishing}
+          onClick={onClick}
+          disabled={busy}
           style={{
             flexShrink: 0,
             display: "inline-flex",
@@ -115,29 +130,29 @@ export default function PublishBar({
             gap: 6,
             fontWeight: 700,
             fontSize: 12,
-            color: c.fg,
-            background: "rgba(217,119,6,0.18)",
-            border: "1px solid #d97706",
+            color: "#fff",
+            background: BTN[state].bg,
+            border: `1px solid ${BTN[state].border}`,
             borderRadius: 8,
             padding: "6px 14px",
-            cursor: publishing ? "default" : "pointer",
-            opacity: publishing ? 0.6 : 1,
+            cursor: busy ? "default" : "pointer",
+            opacity: busy ? 0.7 : 1,
           }}
         >
-          {publishing && (
+          {busy && (
             <span
               style={{
                 width: 12,
                 height: 12,
-                border: "2px solid rgba(146,64,14,0.3)",
-                borderTopColor: "#92400e",
+                border: "2px solid rgba(255,255,255,0.4)",
+                borderTopColor: "#fff",
                 borderRadius: "50%",
                 display: "inline-block",
                 animation: "spin 0.7s linear infinite",
               }}
             />
           )}
-          {publishing ? "Subiendo…" : publishLabel}
+          {label}
         </button>
       )}
     </div>

@@ -726,10 +726,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     return { added, removed, edited, phasesAdded, phasesRemoved, phasesChanged, anchorChanged };
   })();
 
-  // ¿Hay cambios sin publicar? El cronograma fue editado por una persona DESPUÉS de
-  // la última publicación → mostramos "Actualizar" para empujar esos cambios al cliente.
+  // ¿Hay cambios guardados sin subir? Hay cronograma y: nunca se subió, O se editó
+  // (lastEditedByHuman) después de la última subida. Cualquiera de los dos → el
+  // cliente todavía no ve el estado guardado → CTA "Subir al cliente".
   const hasUnpublishedChanges = !!(
-    publishedAt && lastEditedAt && new Date(lastEditedAt) > new Date(publishedAt)
+    phases.length > 0 &&
+    (!publishedAt || (lastEditedAt && new Date(lastEditedAt) > new Date(publishedAt)))
   );
 
   return (
@@ -767,17 +769,21 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         headerSlot,
       )}
 
-      {/* Barra ESTÁNDAR de subir al cliente (misma que el kickoff). Solo una vez
-          publicado el cronograma: el primer "publicar" se hace desde el pop-up de
-          acceso. Después, editar el plan (Guardar) → queda en borrador → "Subir". */}
-      {publishedAt && (
+      {/* Barra ÚNICA de guardar/subir — mismo diseño que en el kickoff. Guardar abre
+          el modal de razón (D.4) y persiste el borrador; tras guardar aparece "Subir
+          al cliente", que publica el snapshot (también el primer publish). */}
+      {!proposal && phases.length > 0 && (
         <PublishBar
-          variant="card"
-          state={hasUnpublishedChanges ? "dirty" : "clean"}
-          publishing={publishWorking}
+          hideWhenClean
+          unsaved={dirty}
+          onSave={() => { setReasonMode("manual"); setError(null); setReasonText(""); setReasonOpen(true); }}
+          saving={saving}
+          saveLabel="Guardar cronograma"
+          unsavedMessage="Editaste el cronograma — guardá los cambios."
+          unpublished={!dirty && hasUnpublishedChanges}
           onPublish={() => publishTimeline(true)}
-          dirtyMessage="Editaste el cronograma — el cliente todavía ve la versión anterior."
-          cleanMessage="Cronograma al día — el cliente ve la última versión."
+          publishing={publishWorking}
+          unpublishedMessage="Cambios guardados sin subir — el cliente todavía ve la versión anterior."
         />
       )}
 
@@ -1005,20 +1011,6 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           onAssistPhase={(phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }}
           kickoffDate={kickoffDate || null}
         />
-      )}
-
-      {/* ── Guardar (cambios estructurales/inline pendientes) ── */}
-      {!proposal && dirty && (
-        <div className="flex items-center justify-end gap-3">
-          <span className="text-xs text-amber-400">Cambios sin guardar</span>
-          <button
-            onClick={() => { setReasonMode("manual"); setError(null); setReasonText(""); setReasonOpen(true); }}
-            disabled={saving}
-            className="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 px-4 py-2 rounded-lg transition-colors"
-          >
-            {saving ? "Guardando…" : "Guardar cronograma"}
-          </button>
-        </div>
       )}
 
       <TimelineAssistDialog
