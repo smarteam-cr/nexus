@@ -93,6 +93,23 @@ function scrollTo(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+interface ClientGroup { clientId: string; clientName: string; clientCompany: string | null; items: PortfolioRow[] }
+// Agrupa por cliente PRESERVANDO el orden de la sección: cada cliente toma la posición de su
+// primer proyecto (el más urgente/relevante de esa sección) y sus proyectos quedan juntos debajo.
+function groupByClient(items: PortfolioRow[]): ClientGroup[] {
+  const order: string[] = [];
+  const map = new Map<string, PortfolioRow[]>();
+  for (const r of items) {
+    let g = map.get(r.clientId);
+    if (!g) { g = []; map.set(r.clientId, g); order.push(r.clientId); }
+    g.push(r);
+  }
+  return order.map((id) => {
+    const its = map.get(id)!;
+    return { clientId: id, clientName: its[0].clientName, clientCompany: its[0].clientCompany, items: its };
+  });
+}
+
 export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRow[] }) {
   const toast = useToast();
   const [rows, setRows] = useState(initialRows);
@@ -211,9 +228,14 @@ export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRo
             ✅ Nada urgente — ningún proyecto atrasado.
           </p>
         ) : (
-          <div className="space-y-3">
-            {action.map((r) => (
-              <ActionCard key={r.projectId} r={r} editing={editing} setEditing={setEditing} onSetHealth={setHealth} />
+          <div className="space-y-5">
+            {groupByClient(action).map((g) => (
+              <div key={g.clientId} className="space-y-2">
+                <ClientLabel g={g} />
+                {g.items.map((r) => (
+                  <ActionCard key={r.projectId} r={r} editing={editing} setEditing={setEditing} onSetHealth={setHealth} />
+                ))}
+              </div>
             ))}
           </div>
         )}
@@ -224,7 +246,10 @@ export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRo
         <section id="sec-scope" className="scroll-mt-4">
           <SectionHeader icon="💰" title="Entregando de más" count={scopeAlerts.length} sub="alcance excedido vs lo vendido" />
           <div className="bg-surface border border-line rounded-xl divide-y divide-line overflow-hidden">
-            {scopeAlerts.map((r) => <ScopeRow key={r.projectId} r={r} />)}
+            {groupByClient(scopeAlerts).flatMap((g) => [
+              <ClientHeaderRow key={`h-${g.clientId}`} g={g} />,
+              ...g.items.map((r) => <ScopeRow key={r.projectId} r={r} />),
+            ])}
           </div>
         </section>
       )}
@@ -234,7 +259,10 @@ export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRo
         <section id="sec-nodata" className="scroll-mt-4">
           <SectionHeader icon="🟡" title="Sin datos para evaluar" count={nodata.length} sub="setup pendiente, no rescate" />
           <div className="bg-surface border border-line rounded-xl divide-y divide-line overflow-hidden">
-            {nodata.map((r) => <NodataRow key={r.projectId} r={r} />)}
+            {groupByClient(nodata).flatMap((g) => [
+              <ClientHeaderRow key={`h-${g.clientId}`} g={g} />,
+              ...g.items.map((r) => <NodataRow key={r.projectId} r={r} />),
+            ])}
           </div>
         </section>
       )}
@@ -263,7 +291,10 @@ export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRo
         </button>
         {showHealthy && healthy.length > 0 && (
           <div className="mt-2 bg-surface border border-line rounded-xl divide-y divide-line overflow-hidden">
-            {healthy.map((r) => <HealthyRow key={r.projectId} r={r} />)}
+            {groupByClient(healthy).flatMap((g) => [
+              <ClientHeaderRow key={`h-${g.clientId}`} g={g} />,
+              ...g.items.map((r) => <HealthyRow key={r.projectId} r={r} />),
+            ])}
           </div>
         )}
       </section>
@@ -297,6 +328,26 @@ function SectionHeader({ icon, title, count, sub }: { icon: string; title: strin
   );
 }
 
+// Encabezado de cliente para la sección de tarjetas (label arriba del grupo).
+function ClientLabel({ g }: { g: ClientGroup }) {
+  return (
+    <Link href={`/clients/${g.clientId}`} className="inline-flex items-baseline gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-secondary hover:text-brand transition-colors">
+      {g.clientCompany || g.clientName}
+      {g.items.length > 1 && <span className="text-[10px] font-normal normal-case text-fg-muted">· {plural(g.items.length, "proyecto", "proyectos")}</span>}
+    </Link>
+  );
+}
+
+// Encabezado de cliente para las secciones de filas compactas (fila atenuada dentro del contenedor).
+function ClientHeaderRow({ g }: { g: ClientGroup }) {
+  return (
+    <Link href={`/clients/${g.clientId}`} className="flex items-center gap-2 px-4 py-1.5 bg-surface-muted/50 hover:bg-surface-muted transition-colors">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-fg-secondary truncate">{g.clientCompany || g.clientName}</span>
+      {g.items.length > 1 && <span className="text-[10px] text-fg-muted">· {g.items.length}</span>}
+    </Link>
+  );
+}
+
 const cardLink = "/clients";
 
 // ── Sección 1: tarjeta rica ──
@@ -325,7 +376,7 @@ function ActionCard({
           <Link href={`${cardLink}/${r.clientId}/projects/${r.projectId}`} className="font-semibold text-fg hover:text-brand transition-colors">
             {r.projectName}
           </Link>
-          <div className="text-[11px] text-fg-muted truncate">{r.clientCompany || r.clientName} · {r.cseName || "sin CSE"}</div>
+          <div className="text-[11px] text-fg-muted truncate">{r.cseName || "sin CSE"}</div>
         </div>
         <HealthChip r={r} editing={editing} setEditing={setEditing} onSetHealth={onSetHealth} />
       </div>
