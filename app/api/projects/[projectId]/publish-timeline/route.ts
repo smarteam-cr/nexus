@@ -44,18 +44,23 @@ export async function GET(
 }
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
+  // Razón del cambio (opcional): el canvas del cronograma la pide en un modal al "Subir";
+  // el pop-up de acceso publica sin razón → default. Queda en un TimelineChange (audit D.3).
+  const body = (await req.json().catch(() => ({}))) as { reason?: unknown };
+  const reason = typeof body.reason === "string" && body.reason.trim() ? body.reason.trim() : null;
+
   // No publicar un cronograma fantasma: tiene que existir y tener al menos una fase,
   // sino el cliente vería una superficie vacía con badge "publicado".
   const tl = await prisma.projectTimeline.findUnique({
     where: { projectId },
-    select: { anchorStartDate: true, _count: { select: { phases: true } } },
+    select: { id: true, anchorStartDate: true, _count: { select: { phases: true } } },
   });
   if (!tl || tl._count.phases === 0) {
     return NextResponse.json(
@@ -117,6 +122,25 @@ export async function POST(
     data: { timelinePublishedAt: new Date() },
     select: { timelinePublishedAt: true },
   });
+
+  // Registrar el "Subir" en el audit (D.3): el "por qué" de esta versión + el snapshot
+  // publicado, con quién y cuándo. Best-effort: no bloquea la publicación si falla.
+  try {
+    await prisma.timelineChange.create({
+      data: {
+        timelineId: tl.id,
+        reason: reason ?? "Publicación al cliente",
+        kind: "MANUAL",
+        changedByEmail: guard.user.email ?? null,
+        snapshot: snapshot as unknown as Prisma.InputJsonValue,
+      },
+    });
+  } catch (e) {
+    console.error(
+      "[publish-timeline] no se pudo registrar el TimelineChange del publish:",
+      e instanceof Error ? e.message : e,
+    );
+  }
 
   return NextResponse.json({
     published: true,

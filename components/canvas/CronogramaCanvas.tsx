@@ -128,6 +128,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [publishedAt, setPublishedAt] = useState<string | null>(null);
   const [lastEditedAt, setLastEditedAt] = useState<string | null>(null);
   const [publishWorking, setPublishWorking] = useState(false);
+  // Modal de razón del cambio — SOLO al "Subir al cliente" (no en el auto-guardado).
+  const [publishReasonOpen, setPublishReasonOpen] = useState(false);
+  const [publishReasonText, setPublishReasonText] = useState("");
   // ── Asistente IA ──
   const [assistOpen, setAssistOpen] = useState(false);
   const [assistScopePhaseId, setAssistScopePhaseId] = useState<string | null>(null);
@@ -230,7 +233,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Publicar (o "Actualizar publicación") siempre confirma el detalle de paso
   // (confirm-detail) para que las tareas crucen al cliente — re-publicar destraba
   // el caso en que detailConfirmedAt quedó en null y el cronograma seguía publicado.
-  const publishTimeline = async (publish: boolean) => {
+  const publishTimeline = async (publish: boolean, reason?: string) => {
     setPublishWorking(true);
     setError(null);
     try {
@@ -242,11 +245,16 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       }
       const res = await fetch(`/api/projects/${projectId}/publish-timeline`, {
         method: publish ? "POST" : "DELETE",
+        ...(publish
+          ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: reason ?? "" }) }
+          : {}),
       });
       if (!res.ok) {
         setError("No se pudo cambiar la publicación del cronograma.");
         return;
       }
+      setPublishReasonOpen(false);
+      setPublishReasonText("");
       await load();
       toast.success(publish ? "Cronograma subido al cliente." : "Cronograma ocultado.");
     } catch {
@@ -797,7 +805,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           saving={saving || (dirty && validationMsg === null)}
           hint={dirty && validationMsg !== null ? validationMsg : undefined}
           unpublished={!dirty && hasUnpublishedChanges}
-          onPublish={() => publishTimeline(true)}
+          onPublish={() => { setPublishReasonText(""); setError(null); setPublishReasonOpen(true); }}
           publishing={publishWorking}
           savedMessage="Cambios guardados — el cliente todavía no los ve."
         />
@@ -1037,6 +1045,53 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         onSubmit={submitAssist}
         loading={assisting}
       />
+
+      {/* Razón del cambio — SOLO al "Subir al cliente" (no en el auto-guardado). Queda
+          registrada con un snapshot de lo publicado (TimelineChange) para D.3 (vendido vs real). */}
+      {publishReasonOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => { if (!publishWorking) setPublishReasonOpen(false); }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-gray-900 border border-gray-700 shadow-2xl p-5 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="text-sm font-semibold text-gray-100">Subir al cliente</h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Indicá qué cambió en esta versión. Queda registrado con un snapshot de lo publicado
+                para comparar después lo planificado contra lo real.
+              </p>
+            </div>
+            <textarea
+              value={publishReasonText}
+              onChange={(e) => setPublishReasonText(e.target.value)}
+              rows={3}
+              autoFocus
+              placeholder="Ej: el cliente pidió correr la fase de arquitectura una semana."
+              className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+            />
+            {error && <p className="text-xs text-red-400">{error}</p>}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setPublishReasonOpen(false)}
+                disabled={publishWorking}
+                className="text-xs font-medium text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => publishTimeline(true, publishReasonText)}
+                disabled={publishWorking || publishReasonText.trim().length === 0}
+                className="text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 disabled:opacity-40 px-4 py-1.5 rounded-lg transition-colors"
+              >
+                {publishWorking ? "Subiendo…" : "Subir al cliente"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
