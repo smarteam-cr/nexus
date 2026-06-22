@@ -150,6 +150,15 @@ export async function loadPortfolio(
   const projectIds = projects.map((p) => p.id);
   const clientIds = [...new Set(projects.map((p) => p.clientId))];
 
+  // Nombre canónico del CSE desde el roster (TeamMember por email). HubSpot puede traer un display
+  // name desfasado del owner (ej. "Deiver Acuña Salas" para asalas@, que en el roster es "Alejandro
+  // Salas") → el roster es la fuente de verdad del nombre. Fallback al de HubSpot si no está en el roster.
+  const ownerEmails = [...new Set(projects.map((p) => p.hubspotOwnerEmail).filter((e): e is string => !!e))];
+  const rosterMembers = ownerEmails.length
+    ? await prisma.teamMember.findMany({ where: { email: { in: ownerEmails } }, select: { email: true, name: true } })
+    : [];
+  const cseNameByEmail = new Map(rosterMembers.map((m) => [m.email.toLowerCase(), m.name]));
+
   // 3ra query (batch): bloques de los canvas de setup (Handoff/Kickoff) → qué pasos están
   // generados por proyecto. Kickoff cuenta solo CONFIRMED; Handoff, cualquier bloque.
   const setupBlocks = projectIds.length
@@ -234,7 +243,7 @@ export async function loadPortfolio(
       clientId: p.clientId,
       clientName: p.client.name,
       clientCompany: p.client.company,
-      cseName: p.hubspotOwnerName,
+      cseName: (p.hubspotOwnerEmail ? cseNameByEmail.get(p.hubspotOwnerEmail.toLowerCase()) : undefined) ?? p.hubspotOwnerName,
       cseEmail: p.hubspotOwnerEmail,
       stageLabel: p.hubspotPipelineStageLabel,
       status: p.status,
