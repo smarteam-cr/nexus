@@ -17,7 +17,7 @@ export default function CanvasToggleButtons() {
   if (!isInStage) return null; // Ya estamos en el canvas, no mostrar botón
 
   const handleClick = () => {
-    router.push(`/clients/${clientId}/projects/${projectId}`);
+    router.push(`/clients/${clientId}?tab=${projectId}`);
   };
 
   return (

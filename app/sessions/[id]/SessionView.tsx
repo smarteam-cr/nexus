@@ -162,7 +162,7 @@ export default function SessionView({ data }: { data: SessionViewData }) {
               <p className="text-sm text-gray-300">
                 Esta sesión es parte del proyecto{" "}
                 <Link
-                  href={`/clients/${client.id}/projects/${primary.projectId}`}
+                  href={`/clients/${client.id}?tab=${primary.projectId}`}
                   className="font-semibold text-brand hover:text-brand/80"
                 >
                   {primary.projectName}
@@ -175,7 +175,7 @@ export default function SessionView({ data }: { data: SessionViewData }) {
                   {secondaries.map((s, i) => (
                     <span key={s.projectId}>
                       <Link
-                        href={`/clients/${client.id}/projects/${s.projectId}`}
+                        href={`/clients/${client.id}?tab=${s.projectId}`}
                         className="text-gray-400 hover:text-gray-200 italic"
                       >
                         {s.projectName}
@@ -187,7 +187,7 @@ export default function SessionView({ data }: { data: SessionViewData }) {
               )}
             </div>
             <Link
-              href={`/clients/${client.id}/projects/${primary.projectId}`}
+              href={`/clients/${client.id}?tab=${primary.projectId}`}
               className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand text-white hover:bg-brand/90 flex-shrink-0"
             >
               Ver análisis →
