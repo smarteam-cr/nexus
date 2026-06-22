@@ -202,18 +202,20 @@ export async function PUT(
   }
   const { anchorStartDate, phases: incomingPhases } = validation.parsed;
 
-  // #4 — razón OBLIGATORIA del cambio. Se guarda con un snapshot del estado
-  // resultante (TimelineChange) para que D.3 compare lo vendido contra lo real.
-  // Los 3 caminos del editor (guardar manual, aplicar propuesta IA, crear 1ra fase)
-  // mandan razón; cualquier PUT sin ella se rechaza.
+  // #4 — razón del cambio, con un snapshot del estado resultante (TimelineChange) para
+  // que D.3 compare lo vendido contra lo real. Los AUTO-GUARDADOS del cronograma mandan
+  // skipAudit:true → no exigen razón ni escriben TimelineChange (serían decenas de filas
+  // con razón genérica que nadie lee; el audit que importa queda en el "Subir" y en la IA).
+  // Los caminos que SÍ auditan (aplicar propuesta IA, crear 1ra fase) mandan razón.
   const rawObj = (raw ?? {}) as Record<string, unknown>;
+  const skipAudit = rawObj.skipAudit === true;
   const reason = typeof rawObj.reason === "string" ? rawObj.reason.trim() : "";
   const changeKind: TimelineChangeKind = rawObj.kind === "AI_ASSIST" ? "AI_ASSIST" : "MANUAL";
   const changeInstruction =
     typeof rawObj.instruction === "string" && rawObj.instruction.trim()
       ? rawObj.instruction.trim()
       : null;
-  if (!reason) {
+  if (!reason && !skipAudit) {
     return NextResponse.json(
       { error: "Falta la razón del cambio (obligatoria)." },
       { status: 400 },
@@ -440,7 +442,8 @@ export async function PUT(
   // 6. #4 — registrar el cambio con su razón + snapshot del estado resultante.
   // El snapshot (estado canónico tras aplicar) deja a D.3 comparar lo "vendido"
   // (primer snapshot) contra lo "real" (último) y explicar los desvíos con su motivo.
-  if (timelineId && "exists" in updated && updated.exists) {
+  // skipAudit (auto-guardados) NO escribe: el audit vive en el "Subir" y en la IA.
+  if (!skipAudit && timelineId && "exists" in updated && updated.exists) {
     await prisma.timelineChange.create({
       data: {
         timelineId,

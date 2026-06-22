@@ -385,8 +385,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...buildPutBody(phases, anchor),
-          reason: "Edición manual del cronograma",
-          kind: "MANUAL",
+          // Auto-guardado interno: persiste sin escribir TimelineChange (el audit va en "Subir").
+          skipAudit: true,
         }),
       });
       if (!res.ok) {
