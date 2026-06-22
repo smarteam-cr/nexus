@@ -40,7 +40,7 @@ test("A — baseline + agregados: diff de alcance y avance correctos", () => {
     anchorStartDate: d("2026-06-01"),
     phases: [
       {
-        id: "p1", status: "PENDING", order: 0, durationWeeks: 2, actualStart: null, actualEnd: null,
+        id: "p1", name: "Kickoff", status: "PENDING", order: 0, durationWeeks: 2, actualStart: null, actualEnd: null,
         tasks: [
           { id: "t1", status: "DONE", weekIndex: 0, actualStart: d("2026-06-02"), actualEnd: d("2026-06-20"), needsValidation: false },
           { id: "t2", status: "PENDING", weekIndex: 1, actualStart: null, actualEnd: null, needsValidation: false },
@@ -48,7 +48,7 @@ test("A — baseline + agregados: diff de alcance y avance correctos", () => {
         ],
       },
       {
-        id: "p2", status: "PENDING", order: 1, durationWeeks: 1, actualStart: null, actualEnd: null,
+        id: "p2", name: "Set-up", status: "PENDING", order: 1, durationWeeks: 1, actualStart: null, actualEnd: null,
         tasks: [{ id: "t4", status: "PENDING", weekIndex: 0, actualStart: null, actualEnd: null, needsValidation: false }],
       },
     ],
@@ -69,7 +69,7 @@ test("B — sin baseline: alcance no medible", () => {
   const s = computeProjectSummary({
     status: "active",
     anchorStartDate: d("2026-06-01"),
-    phases: [{ id: "x1", status: "IN_PROGRESS", order: 0, durationWeeks: 2, actualStart: d("2026-06-19"), actualEnd: null, tasks: [] }],
+    phases: [{ id: "x1", name: "Discovery", status: "IN_PROGRESS", order: 0, durationWeeks: 2, actualStart: d("2026-06-19"), actualEnd: null, tasks: [] }],
     baseline: null,
     lastProgressAt: null,
     healthOverride: null,
@@ -90,7 +90,7 @@ test("C — fase vencida y no DONE: atrasada → EN_RIESGO", () => {
   const s = computeProjectSummary({
     status: "active",
     anchorStartDate: d("2026-04-01"),
-    phases: [{ id: "c1", status: "PENDING", order: 0, durationWeeks: 4, actualStart: null, actualEnd: null, tasks: [{ id: "ct1", status: "PENDING", weekIndex: 0, actualStart: null, actualEnd: null, needsValidation: false }] }],
+    phases: [{ id: "c1", name: "Arquitectura", status: "PENDING", order: 0, durationWeeks: 4, actualStart: null, actualEnd: null, tasks: [{ id: "ct1", status: "PENDING", weekIndex: 0, actualStart: null, actualEnd: null, needsValidation: false }] }],
     baseline,
     lastProgressAt: null,
     healthOverride: null,
@@ -99,6 +99,8 @@ test("C — fase vencida y no DONE: atrasada → EN_RIESGO", () => {
   assert.equal(s.overduePhases, 1);
   assert.equal(s.overdueTasks, 1);
   assert.ok(s.worstDaysLate >= 50);
+  assert.equal(s.worstOverduePhase?.name, "Arquitectura"); // la fase peor-atrasada por nombre
+  assert.ok((s.worstOverduePhase?.daysLate ?? 0) >= 50);
   assert.equal(s.health.resolved, "EN_RIESGO");
 });
 
@@ -106,7 +108,7 @@ test("D — override prevalece sobre la derivada", () => {
   const s = computeProjectSummary({
     status: "active",
     anchorStartDate: d("2026-04-01"),
-    phases: [{ id: "z1", status: "PENDING", order: 0, durationWeeks: 1, actualStart: null, actualEnd: null, tasks: [] }],
+    phases: [{ id: "z1", name: "Cierre", status: "PENDING", order: 0, durationWeeks: 1, actualStart: null, actualEnd: null, tasks: [] }],
     baseline: null,
     lastProgressAt: null,
     healthOverride: "SALUDABLE",

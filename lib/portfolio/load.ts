@@ -30,6 +30,9 @@ export interface PortfolioRow {
   healthOverrideReason: string | null;
   healthOverrideAt: string | null;
   healthOverrideBy: string | null;
+  // Última razón "humana" del cronograma (último TimelineChange MANUAL/AI_ASSIST) — el "por
+  // qué" del último cambio/publicación, para mostrar al lado de los proyectos atrasados.
+  lastChange: { reason: string; kind: string; byEmail: string | null; at: string } | null;
 }
 
 export async function loadPortfolio(
@@ -55,11 +58,13 @@ export async function loadPortfolio(
       client: { select: { name: true, company: true } },
       timeline: {
         select: {
+          id: true,
           anchorStartDate: true,
           phases: {
             orderBy: { order: "asc" },
             select: {
               id: true,
+              name: true,
               status: true,
               order: true,
               durationWeeks: true,
@@ -89,15 +94,32 @@ export async function loadPortfolio(
     },
   });
 
+  // 2da query (batcheada, sin N+1): la última razón "humana" (MANUAL/AI_ASSIST) por timeline.
+  // distinct sobre timelineId + orderBy createdAt desc → toma la más reciente de cada uno.
+  const timelineIds = projects
+    .map((p) => p.timeline?.id)
+    .filter((id): id is string => !!id);
+  const lastChanges = timelineIds.length
+    ? await prisma.timelineChange.findMany({
+        where: { timelineId: { in: timelineIds }, kind: { in: ["MANUAL", "AI_ASSIST"] } },
+        orderBy: [{ timelineId: "asc" }, { createdAt: "desc" }],
+        distinct: ["timelineId"],
+        select: { timelineId: true, reason: true, kind: true, changedByEmail: true, createdAt: true },
+      })
+    : [];
+  const lastChangeByTimeline = new Map(lastChanges.map((c) => [c.timelineId, c]));
+
   const now = new Date();
   return projects.map((p) => {
     const tl = p.timeline;
     const activeBaseline = tl?.baselines?.[0] ?? null;
+    const lc = tl?.id ? lastChangeByTimeline.get(tl.id) : undefined;
     const summary = computeProjectSummary({
       status: p.status,
       anchorStartDate: tl?.anchorStartDate ?? null,
       phases: (tl?.phases ?? []).map((ph) => ({
         id: ph.id,
+        name: ph.name,
         status: ph.status,
         order: ph.order,
         durationWeeks: ph.durationWeeks,
@@ -138,6 +160,9 @@ export async function loadPortfolio(
       healthOverrideReason: p.healthStatusOverrideReason,
       healthOverrideAt: p.healthStatusOverrideAt?.toISOString() ?? null,
       healthOverrideBy: p.healthStatusOverrideBy,
+      lastChange: lc
+        ? { reason: lc.reason, kind: lc.kind, byEmail: lc.changedByEmail, at: lc.createdAt.toISOString() }
+        : null,
     };
   });
 }

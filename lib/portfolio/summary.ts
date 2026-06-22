@@ -27,6 +27,7 @@ export interface SummaryTask {
 }
 export interface SummaryPhase {
   id: string;
+  name: string;
   status: string;
   order: number;
   durationWeeks: number;
@@ -50,6 +51,8 @@ export interface ProjectSummary {
   overduePhases: number;
   overdueTasks: number;
   worstDaysLate: number;
+  // Fase peor-atrasada (nombre + días) para el panel; null si no hay fase atrasada.
+  worstOverduePhase: { name: string; daysLate: number } | null;
   stalled: boolean;
   daysSinceActivity: number | null;
   weakBaseline: boolean;
@@ -116,11 +119,16 @@ export function computeProjectSummary(input: SummaryInput): ProjectSummary {
   let overduePhases = 0;
   let overdueTasks = 0;
   let worstMs = 0;
+  // Fase peor-atrasada (nombre) para el panel: la de mayor atraso entre las vencidas.
+  let worstPhaseMs = 0;
+  let worstPhaseName: string | null = null;
   for (const p of phases) {
     const pe = ends.phase.get(p.id);
     if (pe && pe.getTime() < now.getTime() && p.status !== "DONE") {
       overduePhases++;
-      worstMs = Math.max(worstMs, now.getTime() - pe.getTime());
+      const late = now.getTime() - pe.getTime();
+      worstMs = Math.max(worstMs, late);
+      if (late > worstPhaseMs) { worstPhaseMs = late; worstPhaseName = p.name; }
     }
     for (const t of p.tasks) {
       const te = ends.task.get(t.id);
@@ -131,6 +139,9 @@ export function computeProjectSummary(input: SummaryInput): ProjectSummary {
     }
   }
   const worstDaysLate = Math.floor(worstMs / DAY_MS);
+  const worstOverduePhase = worstPhaseName
+    ? { name: worstPhaseName, daysLate: Math.floor(worstPhaseMs / DAY_MS) }
+    : null;
 
   // ── Sin avance (stalled) ──
   const started = !!input.anchorStartDate && input.anchorStartDate.getTime() <= now.getTime();
@@ -192,6 +203,7 @@ export function computeProjectSummary(input: SummaryInput): ProjectSummary {
     overduePhases,
     overdueTasks,
     worstDaysLate,
+    worstOverduePhase,
     stalled,
     daysSinceActivity,
     weakBaseline,
