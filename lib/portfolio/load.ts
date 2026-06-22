@@ -15,6 +15,16 @@ import { computeProjectSummary, type ProjectSummary } from "./summary";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 
+// Pasos de setup basados en CANVAS (identificados por nombre). Extensible: sumar el canvas de
+// diagnóstico/planificación a futuro = una línea acá + su pill en la UI. El handoff cuenta con
+// cualquier bloque; el kickoff requiere bloques CONFIRMED (DRAFT = borrador del agente, no cuenta).
+const SETUP_CANVAS_STEPS = [
+  { key: "handoff", canvasName: "Handoff", requireConfirmed: false },
+  { key: "kickoff", canvasName: "Kickoff", requireConfirmed: true },
+] as const;
+const SETUP_CANVAS_NAMES: string[] = SETUP_CANVAS_STEPS.map((s) => s.canvasName);
+const CONFIRMED_ONLY = new Set<string>(SETUP_CANVAS_STEPS.filter((s) => s.requireConfirmed).map((s) => s.canvasName));
+
 export interface PortfolioRow {
   projectId: string;
   projectName: string;
@@ -34,6 +44,14 @@ export interface PortfolioRow {
   // Última razón "humana" del cronograma (último TimelineChange MANUAL/AI_ASSIST) — el "por
   // qué" del último cambio/publicación, para mostrar al lado de los proyectos atrasados.
   lastChange: { reason: string; kind: string; byEmail: string | null; at: string } | null;
+  // Estado del setup del proyecto (qué artefactos se generaron) — para el checklist de "Sin datos".
+  // handoff/kickoff/cronograma son por proyecto; procesos es por CLIENTE (compartido).
+  setup: {
+    handoff: boolean;
+    kickoff: boolean;
+    cronograma: "sin" | "borrador" | "publicado";
+    procesos: boolean;
+  };
 }
 
 export async function loadPortfolio(
@@ -129,11 +147,57 @@ export async function loadPortfolio(
     : [];
   const lastChangeByTimeline = new Map(lastChanges.map((c) => [c.timelineId, c]));
 
+  const projectIds = projects.map((p) => p.id);
+  const clientIds = [...new Set(projects.map((p) => p.clientId))];
+
+  // 3ra query (batch): bloques de los canvas de setup (Handoff/Kickoff) → qué pasos están
+  // generados por proyecto. Kickoff cuenta solo CONFIRMED; Handoff, cualquier bloque.
+  const setupBlocks = projectIds.length
+    ? await prisma.canvasBlock.findMany({
+        where: { section: { canvas: { projectId: { in: projectIds }, name: { in: SETUP_CANVAS_NAMES } } } },
+        select: { status: true, section: { select: { canvas: { select: { projectId: true, name: true } } } } },
+      })
+    : [];
+  const stepsByProject = new Map<string, Set<string>>();
+  for (const b of setupBlocks) {
+    const c = b.section.canvas;
+    if (CONFIRMED_ONLY.has(c.name) && b.status !== "CONFIRMED") continue;
+    let set = stepsByProject.get(c.projectId);
+    if (!set) { set = new Set(); stepsByProject.set(c.projectId, set); }
+    set.add(c.name);
+  }
+
+  // 4ta query (batch): clientes CON procesos (flowcharts CONFIRMED con nodos en la sección
+  // "procesos" del canvas "Información del cliente" del proyecto __strategy__). Procesos es por cliente.
+  const procesoBlocks = clientIds.length
+    ? await prisma.canvasBlock.findMany({
+        where: {
+          blockType: "FLOWCHART",
+          status: "CONFIRMED",
+          section: {
+            key: "procesos",
+            canvas: { name: "Información del cliente", project: { clientId: { in: clientIds }, serviceType: SENTINEL_SERVICE_TYPE } },
+          },
+        },
+        select: { data: true, section: { select: { canvas: { select: { project: { select: { clientId: true } } } } } } },
+      })
+    : [];
+  const clientsWithProcesos = new Set<string>();
+  for (const b of procesoBlocks) {
+    const nodes = (b.data as { nodes?: unknown[] } | null)?.nodes;
+    if (Array.isArray(nodes) && nodes.length > 0) clientsWithProcesos.add(b.section.canvas.project.clientId);
+  }
+
   const now = new Date();
   return projects.map((p) => {
     const tl = p.timeline;
     const activeBaseline = tl?.baselines?.[0] ?? null;
     const lc = tl?.id ? lastChangeByTimeline.get(tl.id) : undefined;
+    const projectSteps = stepsByProject.get(p.id);
+    // "publicado" = hay baseline ACTIVO congelado (lo que el panel mide), no solo el flag
+    // timelinePublishedAt (que puede quedar seteado sin baseline por el fail-open del publish).
+    const cronograma: PortfolioRow["setup"]["cronograma"] =
+      activeBaseline ? "publicado" : (tl?.phases?.length ?? 0) > 0 ? "borrador" : "sin";
     const summary = computeProjectSummary({
       status: p.status,
       anchorStartDate: tl?.anchorStartDate ?? null,
@@ -183,6 +247,12 @@ export async function loadPortfolio(
       lastChange: lc
         ? { reason: lc.reason, kind: lc.kind, byEmail: lc.changedByEmail, at: lc.createdAt.toISOString() }
         : null,
+      setup: {
+        handoff: projectSteps?.has("Handoff") ?? false,
+        kickoff: projectSteps?.has("Kickoff") ?? false,
+        cronograma,
+        procesos: clientsWithProcesos.has(p.clientId),
+      },
     };
   });
 }

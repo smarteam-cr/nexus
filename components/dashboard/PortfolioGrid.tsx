@@ -12,7 +12,7 @@
  * La clave: separa "atraso real" de "sin datos" con tratamiento visual distinto (lo que el
  * índice plano mezclaba en el mismo rojo). El chip de salud se sigue curando a mano (override).
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/Toast";
 import { plural } from "@/lib/timeline/weeks";
@@ -260,7 +260,11 @@ export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRo
           <SectionHeader icon="🟡" title="Sin datos para evaluar" count={nodata.length} sub="setup pendiente, no rescate" />
           <div className="bg-surface border border-line rounded-xl divide-y divide-line overflow-hidden">
             {groupByClient(nodata).flatMap((g) => [
-              <ClientHeaderRow key={`h-${g.clientId}`} g={g} />,
+              <ClientHeaderRow
+                key={`h-${g.clientId}`}
+                g={g}
+                right={<SetupPill state={g.items[0].setup.procesos ? "done" : "missing"} label={g.items[0].setup.procesos ? "✓ Procesos" : "Sin procesos"} />}
+              />,
               ...g.items.map((r) => <NodataRow key={r.projectId} r={r} />),
             ])}
           </div>
@@ -339,13 +343,25 @@ function ClientLabel({ g }: { g: ClientGroup }) {
 }
 
 // Encabezado de cliente para las secciones de filas compactas (fila con fondo azul muy tenue).
-function ClientHeaderRow({ g }: { g: ClientGroup }) {
+// `right` permite colgar info a nivel CLIENTE (p.ej. el pill de procesos, que es compartido).
+function ClientHeaderRow({ g, right }: { g: ClientGroup; right?: ReactNode }) {
   return (
     <Link href={`/clients/${g.clientId}`} className="flex items-center gap-2 px-4 py-1.5 bg-blue-500/[0.06] hover:bg-blue-500/10 transition-colors">
       <span className="text-[11px] font-semibold uppercase tracking-wide text-fg-secondary truncate">{g.clientCompany || g.clientName}</span>
       {g.items.length > 1 && <span className="text-[10px] text-fg-muted">· {g.items.length}</span>}
+      {right && <span className="ml-auto flex-shrink-0">{right}</span>}
     </Link>
   );
+}
+
+// Pill de un paso del setup: done (verde) / draft (ámbar) / missing (rojo).
+function SetupPill({ state, label }: { state: "done" | "draft" | "missing"; label: string }) {
+  const cls = {
+    done: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20",
+    draft: "text-amber-600 bg-amber-500/10 border-amber-500/30",
+    missing: "text-red-600 bg-red-500/10 border-red-500/25",
+  }[state];
+  return <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${cls}`}>{label}</span>;
 }
 
 const cardLink = "/clients";
@@ -425,18 +441,37 @@ function ScopeRow({ r }: { r: PortfolioRow }) {
   );
 }
 
-// ── Sección 3: sin datos (neutro) ──
+// ── Sección 3: sin datos (neutro) — checklist de setup ──
 function NodataRow({ r }: { r: PortfolioRow }) {
-  const missing = !r.summary.hasBaseline ? "Sin línea base publicada" : "Línea base sin validar";
+  // weakBaseline (tiene línea base pero débil) NO es setup pendiente → nota simple, sin checklist.
+  if (r.summary.hasBaseline) {
+    return (
+      <Link href={`${cardLink}/${r.clientId}/projects/${r.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors">
+        <div className="min-w-0">
+          <span className="text-sm text-fg">{r.projectName}</span>
+          <span className="text-[11px] text-fg-muted"> · {r.cseName || "sin CSE"}</span>
+        </div>
+        <span className="inline-flex items-center gap-1.5 text-[11px] text-fg-muted whitespace-nowrap">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400/50" />Línea base sin validar
+        </span>
+      </Link>
+    );
+  }
+  const s = r.setup;
   return (
     <Link href={`${cardLink}/${r.clientId}/projects/${r.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors">
       <div className="min-w-0">
         <span className="text-sm text-fg">{r.projectName}</span>
         <span className="text-[11px] text-fg-muted"> · {r.cseName || "sin CSE"}</span>
       </div>
-      <span className="inline-flex items-center gap-1.5 text-[11px] text-fg-muted whitespace-nowrap">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-400/50" />{missing}
-      </span>
+      <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+        <SetupPill state={s.handoff ? "done" : "missing"} label={s.handoff ? "✓ Handoff" : "Sin handoff"} />
+        <SetupPill state={s.kickoff ? "done" : "missing"} label={s.kickoff ? "✓ Kickoff" : "Sin kickoff"} />
+        <SetupPill
+          state={s.cronograma === "publicado" ? "done" : s.cronograma === "borrador" ? "draft" : "missing"}
+          label={s.cronograma === "publicado" ? "✓ Cronograma" : s.cronograma === "borrador" ? "Cronograma sin subir" : "Sin cronograma"}
+        />
+      </div>
     </Link>
   );
 }
