@@ -4,157 +4,162 @@
  * components/canvas/PublishBar.tsx
  *
  * Barra ÚNICA de guardar/subir — el MISMO diseño y comportamiento en TODOS los
- * canvas (kickoff, cronograma). Una sola fuente para que el flujo "trabajar →
- * guardar avances → subir al cliente" se vea idéntico en todos lados.
+ * canvas cara-al-cliente (kickoff, cronograma). Modelo: auto-guardado interno +
+ * "Subir al cliente" como ÚNICO paso que publica. Nada llega al cliente hasta Subir.
  *
- * Modelo (staging real): el cliente ve la ÚLTIMA versión subida. Tres estados,
- * por prioridad:
- *   1. unsaved      → hay ediciones locales sin guardar → botón "Guardar" (azul).
- *   2. unpublished  → hay cambios guardados sin subir   → botón "Subir al cliente" (ámbar).
- *   3. (al día)     → todo guardado y subido            → sin botón (verde).
+ * Estados (por prioridad):
+ *   1. saving       → "Guardando…" (spinner; el auto-guardado está en curso).
+ *   2. hint         → mensaje informativo sin acción (p.ej. "Completá los campos…").
+ *   3. unpublished  → "✓ Cambios guardados — el cliente todavía no los ve" + botón
+ *                     "Subir al cliente".
+ *   4. (al día)     → oculto con hideWhenClean, o un verde sutil.
  *
- * El kickoff auto-guarda → nunca pasa por "unsaved" (solo subir/al-día). El
- * cronograma sí tiene guardado explícito (con razón) → usa los tres estados.
- *
- * Presentacional puro: el caller decide los flags y los handlers. Estilos inline
- * (no Tailwind) para verse IGUAL en el landing claro del kickoff y el panel
- * oscuro del cronograma, sin depender del tema de cada superficie.
+ * Presentacional puro. Estilos inline (no Tailwind) para verse IGUAL en el landing
+ * claro del kickoff y el panel oscuro del cronograma, sin depender del tema.
  */
 
 interface PublishBarProps {
-  /** Hay ediciones locales sin guardar (borrador en memoria). Tiene prioridad sobre unpublished. */
-  unsaved?: boolean;
-  onSave?: () => void;
+  /** Auto-guardado en curso → "Guardando…". Máxima prioridad. */
   saving?: boolean;
-  saveLabel?: string;
-  /** Hay cambios guardados sin subir al cliente. */
+  /** Mensaje informativo sin acción (p.ej. validación pendiente). */
+  hint?: string;
+  /** Hay cambios guardados sin subir → "Cambios guardados" + "Subir al cliente". */
   unpublished?: boolean;
   onPublish?: () => void;
   publishing?: boolean;
   publishLabel?: string;
-  unsavedMessage?: string;
-  unpublishedMessage?: string;
+  savedMessage?: string;
+  savingMessage?: string;
   cleanMessage?: string;
-  /** No renderizar nada cuando todo está al día (en vez del estado verde). */
+  /** No renderizar nada cuando todo está al día. */
   hideWhenClean?: boolean;
-  /** Pegar arriba del contenedor con scroll (útil en páginas largas, p.ej. el kickoff). */
+  /** Pegar arriba del contenedor con scroll (páginas largas, p.ej. el kickoff). */
   sticky?: boolean;
 }
 
-type State = "unsaved" | "unpublished" | "clean";
+type View = "saving" | "hint" | "unpublished" | "clean";
 
-const THEME: Record<State, { bg: string; border: string; fg: string; chip: string }> = {
-  unsaved: { bg: "#eff6ff", border: "#93c5fd", fg: "#1d4ed8", chip: "● Sin guardar" },
-  unpublished: { bg: "#fef3c7", border: "#f59e0b", fg: "#92400e", chip: "⚠ Sin subir" },
-  clean: { bg: "#ecfdf5", border: "#6ee7b7", fg: "#047857", chip: "✓ Al día" },
+const PALETTE: Record<View, { bg: string; border: string; fg: string }> = {
+  saving: { bg: "#eff6ff", border: "#93c5fd", fg: "#1d4ed8" },
+  hint: { bg: "#fef3c7", border: "#f59e0b", fg: "#92400e" },
+  unpublished: { bg: "#fef3c7", border: "#f59e0b", fg: "#92400e" },
+  clean: { bg: "#ecfdf5", border: "#6ee7b7", fg: "#047857" },
 };
 
-// Botón sólido por estado (azul para guardar, ámbar para subir).
-const BTN: Record<"unsaved" | "unpublished", { bg: string; border: string }> = {
-  unsaved: { bg: "#2563eb", border: "#1d4ed8" },
-  unpublished: { bg: "#d97706", border: "#b45309" },
+function Spinner({ color }: { color: string }) {
+  return (
+    <span
+      style={{
+        width: 12,
+        height: 12,
+        border: `2px solid ${color}33`,
+        borderTopColor: color,
+        borderRadius: "50%",
+        display: "inline-block",
+        animation: "spin 0.7s linear infinite",
+      }}
+    />
+  );
+}
+
+const CHIP: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  fontWeight: 700,
+  fontSize: 11,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  flexShrink: 0,
 };
 
 export default function PublishBar({
-  unsaved = false,
-  onSave,
   saving = false,
-  saveLabel = "Guardar",
+  hint,
   unpublished = false,
   onPublish,
   publishing = false,
   publishLabel = "Subir al cliente",
-  unsavedMessage = "Tenés cambios sin guardar.",
-  unpublishedMessage = "Cambios sin subir — el cliente todavía no los ve.",
-  cleanMessage = "Al día — el cliente ve la última versión.",
+  savedMessage = "Cambios guardados — el cliente todavía no los ve.",
+  savingMessage = "Guardando…",
+  cleanMessage = "El cliente ve la última versión.",
   hideWhenClean = false,
   sticky = false,
 }: PublishBarProps) {
-  const state: State = unsaved ? "unsaved" : unpublished ? "unpublished" : "clean";
-  if (state === "clean" && hideWhenClean) return null;
+  const view: View = saving ? "saving" : hint ? "hint" : unpublished ? "unpublished" : "clean";
+  if (view === "clean" && hideWhenClean) return null;
 
-  const t = THEME[state];
-  const busy = state === "unsaved" ? saving : publishing;
-  const onClick = state === "unsaved" ? onSave : onPublish;
-  const label =
-    state === "unsaved"
-      ? saving
-        ? "Guardando…"
-        : saveLabel
-      : publishing
-        ? "Subiendo…"
-        : publishLabel;
-  const message =
-    state === "unsaved" ? unsavedMessage : state === "unpublished" ? unpublishedMessage : cleanMessage;
+  const p = PALETTE[view];
+  const container: React.CSSProperties = {
+    ...(sticky ? { position: "sticky", top: 0 } : {}),
+    zIndex: 30,
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "10px 16px",
+    borderRadius: 14,
+    fontSize: 13,
+    background: p.bg,
+    border: `1px solid ${p.border}`,
+    color: p.fg,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+  };
 
+  if (view === "saving") {
+    return (
+      <div style={container}>
+        <span style={{ ...CHIP, textTransform: "none", letterSpacing: 0, fontWeight: 600, fontSize: 13 }}>
+          <Spinner color={p.fg} /> {savingMessage}
+        </span>
+      </div>
+    );
+  }
+
+  if (view === "hint") {
+    return (
+      <div style={container}>
+        <span style={CHIP}>⚠</span>
+        <span style={{ flex: 1 }}>{hint}</span>
+      </div>
+    );
+  }
+
+  if (view === "clean") {
+    return (
+      <div style={container}>
+        <span style={CHIP}>✓ Al día</span>
+        <span style={{ flex: 1 }}>{cleanMessage}</span>
+      </div>
+    );
+  }
+
+  // unpublished
   return (
-    <div
-      style={{
-        ...(sticky ? { position: "sticky", top: 0 } : {}),
-        zIndex: 30,
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        padding: "10px 16px",
-        borderRadius: 14,
-        fontSize: 13,
-        background: t.bg,
-        border: `1px solid ${t.border}`,
-        color: t.fg,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-      }}
-    >
-      <span
+    <div style={container}>
+      <span style={CHIP}>✓ Guardado</span>
+      <span style={{ flex: 1 }}>{savedMessage}</span>
+      <button
+        onClick={onPublish}
+        disabled={publishing}
         style={{
+          flexShrink: 0,
           display: "inline-flex",
           alignItems: "center",
           gap: 6,
           fontWeight: 700,
-          fontSize: 11,
-          textTransform: "uppercase",
-          letterSpacing: "0.04em",
-          flexShrink: 0,
+          fontSize: 12,
+          color: "#fff",
+          background: "#d97706",
+          border: "1px solid #b45309",
+          borderRadius: 8,
+          padding: "6px 14px",
+          cursor: publishing ? "default" : "pointer",
+          opacity: publishing ? 0.7 : 1,
         }}
       >
-        {t.chip}
-      </span>
-      <span style={{ flex: 1 }}>{message}</span>
-      {state !== "clean" && (
-        <button
-          onClick={onClick}
-          disabled={busy}
-          style={{
-            flexShrink: 0,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            fontWeight: 700,
-            fontSize: 12,
-            color: "#fff",
-            background: BTN[state].bg,
-            border: `1px solid ${BTN[state].border}`,
-            borderRadius: 8,
-            padding: "6px 14px",
-            cursor: busy ? "default" : "pointer",
-            opacity: busy ? 0.7 : 1,
-          }}
-        >
-          {busy && (
-            <span
-              style={{
-                width: 12,
-                height: 12,
-                border: "2px solid rgba(255,255,255,0.4)",
-                borderTopColor: "#fff",
-                borderRadius: "50%",
-                display: "inline-block",
-                animation: "spin 0.7s linear infinite",
-              }}
-            />
-          )}
-          {label}
-        </button>
-      )}
+        {publishing && <Spinner color="#fff" />}
+        {publishing ? "Subiendo…" : publishLabel}
+      </button>
     </div>
   );
 }

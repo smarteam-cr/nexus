@@ -135,12 +135,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [assistWarnings, setAssistWarnings] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
-  // #4 — razón obligatoria del cambio. Lo piden los DOS caminos (guardado manual y
-  // aplicar una propuesta de la IA) vía el mismo modal. En assist se prellena con la instrucción.
+  // #4 — razón del cambio (TimelineChange/audit). Con el auto-guardado ya NO se pide
+  // tipeada: las ediciones manuales usan una razón automática y la IA usa su instrucción.
   const [assistInstruction, setAssistInstruction] = useState("");
-  const [reasonOpen, setReasonOpen] = useState(false);
-  const [reasonText, setReasonText] = useState("");
-  const [reasonMode, setReasonMode] = useState<"manual" | "assist">("manual");
   // ── Avance detectado por el agente (D.2) — borrador que el CSE confirma ──
   const [pendingProgress, setPendingProgress] = useState<PendingProgress | null>(null);
   const [progressPhaseSel, setProgressPhaseSel] = useState<Set<string>>(new Set());
@@ -150,6 +147,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const keyCounter = useRef(0);
   const nextKey = () => `new-${keyCounter.current++}`;
   const autoDetailRanRef = useRef(false); // auto-genera el detalle una vez por montaje
+  // Auto-guardado: cuenta de ediciones locales. Si cambia DURANTE un PUT, no pisamos
+  // el estado con la respuesta del server (evita perder lo que el CSE tipeó mientras guardaba).
+  const editSeq = useRef(0);
+  const markDirty = () => { editSeq.current++; setDirty(true); };
 
   const mapServerPhases = (serverPhases: ServerPhase[]): Phase[] =>
     serverPhases.map((p) => ({
@@ -269,7 +270,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           : p,
       ),
     );
-    setDirty(true);
+    markDirty();
   };
   const addTask = (phaseKey: string, weekIndex: number) => {
     setPhases((ps) =>
@@ -285,13 +286,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           : p,
       ),
     );
-    setDirty(true);
+    markDirty();
   };
   const removeTask = (phaseKey: string, taskKey: string) => {
     setPhases((ps) =>
       ps.map((p) => (p._key === phaseKey ? { ...p, tasks: p.tasks.filter((t) => t._key !== taskKey) } : p)),
     );
-    setDirty(true);
+    markDirty();
   };
 
   // ── Guardar (PUT bulk — fases + tareas; anchorOverride para fijar desde el Gantt) ──
@@ -338,20 +339,24 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     return null;
   };
 
-  const save = async (anchorOverride?: string, reason?: string) => {
-    const localError = validateLocal();
-    if (localError) return setError(localError);
-    // #4 — la razón es obligatoria (el server también la exige con 400).
-    const trimmedReason = (reason ?? "").trim();
-    if (!trimmedReason) return setError("Indicá una razón para el cambio.");
-    const anchorYmd = anchorOverride ?? anchor;
+  // Auto-guardado INTERNO (debounced). NO publica al cliente (eso es "Subir"). Razón
+  // automática para el audit (TimelineChange). Single-flight (el efecto no lo dispara
+  // mientras hay uno en curso). Si el CSE editó DURANTE el PUT (editSeq cambió) NO
+  // pisamos su trabajo con la respuesta del server — dejamos dirty para re-guardar.
+  const autoSave = async () => {
+    if (saving || validateLocal() !== null) return;
+    const seq = editSeq.current;
     setSaving(true);
     setError(null);
     try {
       const res = await fetch(`/api/projects/${projectId}/timeline`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...buildPutBody(phases, anchorYmd), reason: trimmedReason, kind: "MANUAL" }),
+        body: JSON.stringify({
+          ...buildPutBody(phases, anchor),
+          reason: "Edición manual del cronograma",
+          kind: "MANUAL",
+        }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -360,24 +365,38 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         return;
       }
       const data = await res.json();
-      if (data.exists) {
-        setPhases(mapServerPhases(data.phases ?? []));
-        setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
+      if (editSeq.current === seq) {
+        // Quedó quieto durante el PUT → adoptar el estado canónico (ids nuevos) + limpiar dirty.
+        if (data.exists) {
+          setPhases(mapServerPhases(data.phases ?? []));
+          setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
+        }
+        setDirty(false);
       }
-      setDirty(false);
-      setReasonOpen(false);
-      setReasonText("");
+      // El PUT setea lastEditedByHuman = now → reflejarlo para que aparezca "Subir al cliente".
+      setLastEditedAt(new Date().toISOString());
     } catch {
       setError("Error de conexión al guardar.");
     }
     setSaving(false);
   };
 
+  // Debounce: auto-guarda ~1.5 s después de la última edición. Se reinicia con cada
+  // cambio (phases/anchor). No corre con propuesta IA abierta, mientras guarda, ni con
+  // el cronograma inválido (espera a que el CSE complete los campos).
+  useEffect(() => {
+    if (!dirty || proposal || saving) return;
+    if (validateLocal() !== null) return;
+    const t = setTimeout(() => { void autoSave(); }, 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, phases, anchor, proposal, saving]);
+
   // Fijar/cambiar la fecha de arranque desde el Gantt: actualiza el preview (fechas
   // reales) y marca dirty — se PERSISTE con "Guardar cronograma", no al instante.
   const setAnchorFromGantt = (ymd: string) => {
     setAnchor(ymd);
-    setDirty(true);
+    markDirty();
   };
 
   // Crear la PRIMERA fase desde el empty state (persiste al toque). Las fases
@@ -508,11 +527,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     setAssisting(false);
   };
 
-  const applyProposal = async (reason: string) => {
+  // Aplicar la propuesta de la IA: PUT directo (sin modal). La razón del audit es la
+  // instrucción que el CSE le dio a la IA (o un genérico). El cliente NO la ve hasta "Subir".
+  const applyProposal = async () => {
     if (!proposal) return;
-    // #4 — la razón es obligatoria también para los cambios de la IA (el server la exige con 400).
-    const trimmedReason = reason.trim();
-    if (!trimmedReason) return setError("Indicá una razón para el cambio.");
     setApplying(true);
     setError(null);
     try {
@@ -521,7 +539,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...proposal,
-          reason: trimmedReason,
+          reason: assistInstruction.trim() || "Actualización del cronograma (IA)",
           kind: "AI_ASSIST",
           instruction: assistInstruction.trim() || null,
         }),
@@ -533,8 +551,6 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setProposal(null);
         setAssistWarnings([]);
         setAssistInstruction("");
-        setReasonOpen(false);
-        setReasonText("");
         await load();
       }
     } catch {
@@ -733,6 +749,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     phases.length > 0 &&
     (!publishedAt || (lastEditedAt && new Date(lastEditedAt) > new Date(publishedAt)))
   );
+  // Para la barra: si hay ediciones sin guardar pero el cronograma está inválido,
+  // mostramos el motivo (el auto-guardado espera a que se completen los campos).
+  const validationMsg = phases.length > 0 ? validateLocal() : null;
 
   return (
     <div className="space-y-4">
@@ -769,21 +788,18 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         headerSlot,
       )}
 
-      {/* Barra ÚNICA de guardar/subir — mismo diseño que en el kickoff. Guardar abre
-          el modal de razón (D.4) y persiste el borrador; tras guardar aparece "Subir
-          al cliente", que publica el snapshot (también el primer publish). */}
+      {/* Barra ÚNICA de guardar/subir — mismo diseño que en el kickoff. El guardado
+          es AUTOMÁTICO (interno): "Guardando…" → "Cambios guardados". "Subir al cliente"
+          es el único paso que publica el snapshot al cliente (también el primer publish). */}
       {!proposal && phases.length > 0 && (
         <PublishBar
           hideWhenClean
-          unsaved={dirty}
-          onSave={() => { setReasonMode("manual"); setError(null); setReasonText(""); setReasonOpen(true); }}
-          saving={saving}
-          saveLabel="Guardar cronograma"
-          unsavedMessage="Editaste el cronograma — guardá los cambios."
+          saving={saving || (dirty && validationMsg === null)}
+          hint={dirty && validationMsg !== null ? validationMsg : undefined}
           unpublished={!dirty && hasUnpublishedChanges}
           onPublish={() => publishTimeline(true)}
           publishing={publishWorking}
-          unpublishedMessage="Cambios guardados sin subir — el cliente todavía ve la versión anterior."
+          savedMessage="Cambios guardados — el cliente todavía no los ve."
         />
       )}
 
@@ -809,7 +825,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             </span>
             <div className="ml-auto flex items-center gap-2">
               <button
-                onClick={() => { setReasonMode("assist"); setReasonText(assistInstruction); setError(null); setReasonOpen(true); }}
+                onClick={() => applyProposal()}
                 disabled={applying}
                 className="text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-50 px-3.5 py-1.5 rounded-lg transition-colors"
               >
@@ -1022,56 +1038,6 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         loading={assisting}
       />
 
-      {/* #4 — modal de razón. La razón + un snapshot del cronograma quedan
-          registrados (TimelineChange) para D.3 (vendido vs real). Lo usan los DOS
-          caminos: guardado manual y aplicar una propuesta de la IA (prellenado con la instrucción). */}
-      {reasonOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          onClick={() => { if (!saving && !applying) setReasonOpen(false); }}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl bg-gray-900 border border-gray-700 shadow-2xl p-5 space-y-3"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div>
-              <h3 className="text-sm font-semibold text-gray-100">Razón del cambio</h3>
-              <p className="text-xs text-gray-400 mt-0.5">
-                {reasonMode === "assist"
-                  ? "Confirmá o ajustá el motivo del cambio que le pediste a la IA. Queda registrado con un snapshot del cronograma."
-                  : "Queda registrada con un snapshot del cronograma para comparar después lo planificado contra lo real."}
-              </p>
-            </div>
-            <textarea
-              value={reasonText}
-              onChange={(e) => setReasonText(e.target.value)}
-              rows={3}
-              autoFocus
-              placeholder="Ej: el cliente pidió correr la fase de arquitectura una semana."
-              className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
-            />
-            {error && <p className="text-xs text-red-400">{error}</p>}
-            <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={() => setReasonOpen(false)}
-                disabled={saving || applying}
-                className="text-xs font-medium text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => (reasonMode === "manual" ? save(undefined, reasonText) : applyProposal(reasonText))}
-                disabled={saving || applying || reasonText.trim().length === 0}
-                className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 px-4 py-1.5 rounded-lg transition-colors"
-              >
-                {reasonMode === "manual"
-                  ? (saving ? "Guardando…" : "Guardar cronograma")
-                  : (applying ? "Aplicando…" : "Aplicar cambios")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -409,11 +409,10 @@ function KickoffLandingView({
           </button>
         </div>
       )}
-      {/* Cambios sin subir (contenido de bloques/secciones editado, visibilidad
-          staged y/o procesos en borrador) → barra ÚNICA de subir, IDÉNTICA a la del
-          cronograma. El kickoff auto-guarda → no pasa por "Guardar", solo subir.
-          "Subir" persiste TODO de una (snapshot + visibilidad + procesos). Sticky
-          porque el landing es largo: el CTA queda visible al editar abajo. */}
+      {/* Barra ÚNICA de guardar/subir — IDÉNTICA a la del cronograma. El kickoff
+          auto-guarda cada cambio al instante (interno); la barra muestra "Cambios
+          guardados" y el único paso al cliente es "Subir" (snapshot + visibilidad +
+          procesos, todo de una). Sticky porque el landing es largo. */}
       {editable && onPublishKickoff && (
         <PublishBar
           sticky
@@ -421,7 +420,7 @@ function KickoffLandingView({
           unpublished={dirty || draftProcesos.length > 0}
           onPublish={onPublishKickoff}
           publishing={publishing}
-          unpublishedMessage={`Tenés cambios sin subir${draftProcesos.length > 0 ? ` (${draftProcesos.length} ${draftProcesos.length === 1 ? "proceso sin confirmar" : "procesos sin confirmar"})` : ""} — el cliente todavía no los ve.`}
+          savedMessage={`Cambios guardados${draftProcesos.length > 0 ? ` (${draftProcesos.length} ${draftProcesos.length === 1 ? "proceso sin confirmar" : "procesos sin confirmar"})` : ""} — el cliente todavía no los ve.`}
         />
       )}
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
