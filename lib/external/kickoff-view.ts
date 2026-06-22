@@ -26,6 +26,7 @@
  * su filtro) vive en readClientTimeline — compartida con /external/cronograma
  * para que el filtro de seguridad exista en UN solo lugar.
  */
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { resolveActiveAccess, touchAccess } from "./access";
 import { readPublishedClientTimeline } from "./timeline-view";
@@ -65,10 +66,10 @@ export async function getPublishedKickoffForToken(
   });
   if (!canvas) return null;
 
-  // 4. Secciones + SOLO bloques CONFIRMED, en shape limpio (sin campos internos).
-  //    STAGING (D.3): si hay snapshot publicado, el cliente ve ESE (la foto congelada
-  //    en el último "Subir"); si no, cae a la lectura EN VIVO — sin regresión en
-  //    kickoffs publicados antes de D.3. El filtro hidden (más abajo) aplica a ambos.
+  // 4. STAGING (D.3): el cliente ve SOLO el SNAPSHOT congelado al último "Subir"
+  //    (secciones + bloques CONFIRMED + procesos confirmados). Editar/guardar NO lo
+  //    toca → el cliente ve los cambios recién al re-subir. El filtro hidden se aplica
+  //    abajo, sobre el snapshot.
   const liveSections = () =>
     prisma.canvasSection.findMany({
       where: { canvasId: canvas.id },
@@ -88,25 +89,48 @@ export async function getPublishedKickoffForToken(
       },
     });
   type SectionRow = Awaited<ReturnType<typeof liveSections>>[number];
-  const snapshot = canvas.publishedSnapshot as unknown as { sections?: SectionRow[] } | null;
-  const sections: SectionRow[] = snapshot?.sections ?? (await liveSections());
+  type ProcesoRow = Awaited<ReturnType<typeof readClientProcesos>>[number];
 
-  // 5. Cronograma — regla unificada D.1.5: SOLO si timelinePublishedAt != null.
-  // Sin publicar → shape vacío (el landing renderiza como si no hubiera
-  // cronograma). La lectura compartida aplica el filtro de seguridad (tareas
-  // solo {title, weekIndex} y solo con detailConfirmedAt).
-  //    #3 — además del publish (D.1.5), "cronograma" en hiddenKickoffKeys lo oculta
-  //    SOLO del kickoff (la página standalone sigue gobernada por timelinePublishedAt).
+  let snap = canvas.publishedSnapshot as unknown as
+    | { sections?: SectionRow[]; procesos?: ProcesoRow[] }
+    | null;
+
+  // Backfill perezoso (auto-migración): kickoff publicado antes de la feature →
+  // congelar el vivo actual (= lo que el cliente ya veía) y devolverlo. Sin esto el
+  // cliente vería vacío; con esto, dejan de filtrarse las ediciones. Best-effort.
+  if (!snap) {
+    const [liveSecs, liveProcs] = await Promise.all([
+      liveSections(),
+      proj ? readClientProcesos(proj.clientId, { onlyConfirmed: true }) : Promise.resolve([] as ProcesoRow[]),
+    ]);
+    snap = { sections: liveSecs, procesos: liveProcs };
+    try {
+      await prisma.projectCanvas.update({
+        where: { id: canvas.id },
+        data: {
+          publishedSnapshot: snap as unknown as Prisma.InputJsonValue,
+          publishedSnapshotAt: new Date(),
+        },
+      });
+    } catch (e) {
+      console.error("[kickoff-view] backfill de snapshot falló:", e instanceof Error ? e.message : e);
+    }
+  }
+  const sections: SectionRow[] = snap.sections ?? [];
+  const procesosAll: ProcesoRow[] = snap.procesos ?? [];
+
+  // 5. Cronograma embebido — regla unificada D.1.5: SOLO si timelinePublishedAt != null.
+  //    Sale del SNAPSHOT del timeline (fuente única, mismo staging). "cronograma" en
+  //    hiddenKickoffKeys lo oculta solo del kickoff (la página standalone se rige por su flag).
   const timeline = access.project.timelinePublishedAt && !hidden.has("cronograma")
     ? await readPublishedClientTimeline(projectId)
     : { exists: false as const, anchorStartDate: null, phases: [] };
 
-  // 6. Procesos del cliente — SOLO CONFIRMED (mismo gate que los bloques).
-  //    #3 — "procesos" en hiddenKickoffKeys oculta toda la sección; además se filtran
-  //    los procesos individuales cuyo id esté oculto. Reversible, no borra datos.
+  // 6. Procesos — del SNAPSHOT (no en vivo). #3 — "procesos" oculto saca toda la
+  //    sección; además se filtran los procesos individuales cuyo id esté oculto.
   const procesos =
     proj && !hidden.has("procesos")
-      ? (await readClientProcesos(proj.clientId, { onlyConfirmed: true })).filter((p) => !hidden.has(p.id))
+      ? procesosAll.filter((p) => !hidden.has(p.id))
       : [];
 
   // 7. Marcar uso (no bloquea el render si falla).

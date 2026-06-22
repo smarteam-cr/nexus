@@ -74,10 +74,26 @@ export async function POST(
     );
   }
 
+  // D.3 staging — preparar el SNAPSHOT client-safe ANTES de publicar: es lo ÚNICO que
+  // verá el cliente (la lectura externa ya no cae a vivo). Si falla, NO publicamos
+  // (fail-closed): mejor un error claro que publicar sin congelar y reabrir el leak.
+  let snapshot: Awaited<ReturnType<typeof readClientTimeline>>;
+  try {
+    snapshot = await readClientTimeline(projectId);
+  } catch (e) {
+    console.error(
+      "[publish-timeline] no se pudo preparar el snapshot (no se publica):",
+      e instanceof Error ? e.message : e,
+    );
+    return NextResponse.json(
+      { error: "No se pudo preparar la versión para el cliente. Reintentá en un momento." },
+      { status: 500 },
+    );
+  }
+
   // D.3 fundación — congelar el baseline "vendido" al publicar (versionado; no crea versión
-  // si la promesa no cambió). FAIL-OPEN: publicar es la acción crítica del CSE, así que un
-  // fallo del freeze (bug, hiccup del pooler, etc.) NO debe bloquear la publicación — se
-  // loguea y se publica igual; el baseline se vuelve a intentar en la próxima publicación.
+  // si la promesa no cambió). FAIL-OPEN: el baseline es AUDITORÍA (no lo ve el cliente), así
+  // que un fallo del freeze NO bloquea la publicación; se reintenta en la próxima.
   let baseline: { created: boolean; version: number | null } = { created: false, version: null };
   let baselineError = false;
   try {
@@ -90,31 +106,17 @@ export async function POST(
     );
   }
 
+  // Congelar el snapshot (ProjectTimeline) y recién entonces marcar publicado (Project).
+  // Orden: snapshot primero → publicado ⟹ snapshot existe siempre.
+  await prisma.projectTimeline.update({
+    where: { projectId },
+    data: { publishedSnapshot: snapshot as unknown as Prisma.InputJsonValue },
+  });
   const updated = await prisma.project.update({
     where: { id: projectId },
     data: { timelinePublishedAt: new Date() },
     select: { timelinePublishedAt: true },
   });
-
-  // D.3 staging — congelar el SNAPSHOT client-safe que verá el cliente hasta el
-  // próximo "Subir". Se arma con readClientTimeline (el mismo filtro que la vista
-  // externa); el detalle ya viene confirmado del paso previo del cliente, así que
-  // incluye las tareas. FAIL-OPEN: si falla, el read externo cae a la lectura en
-  // vivo (sin regresión) — se reintenta en la próxima publicación.
-  let snapshotError = false;
-  try {
-    const snapshot = await readClientTimeline(projectId);
-    await prisma.projectTimeline.update({
-      where: { projectId },
-      data: { publishedSnapshot: snapshot as unknown as Prisma.InputJsonValue },
-    });
-  } catch (e) {
-    snapshotError = true;
-    console.error(
-      "[publish-timeline] snapshot falló (el read externo cae a vivo):",
-      e instanceof Error ? e.message : e,
-    );
-  }
 
   return NextResponse.json({
     published: true,
@@ -122,7 +124,6 @@ export async function POST(
     baselineVersion: baseline.version,
     baselineCreated: baseline.created,
     baselineError,
-    snapshotError,
   });
 }
 

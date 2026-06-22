@@ -17,6 +17,7 @@
  * fase. SÍ cruzan, by-design: las notas de FASE (lenguaje cliente, D.1) y el
  * activityType (D.1.5 — el Gantt del cliente colorea y arma leyenda por tipo).
  */
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { resolveActiveAccess, touchAccess } from "./access";
 import type { ExternalTimelineData } from "./timeline-view-types";
@@ -86,12 +87,16 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
 }
 
 /**
- * Lectura EXTERNA con STAGING (D.3): devuelve el SNAPSHOT publicado — la foto
- * client-safe que se congeló en el último "Subir" (publish-timeline). Editar el
- * plan NO la toca; el cliente la ve recién al re-subir. Si todavía no hay
- * snapshot (cronograma publicado antes de D.3, o el freeze falló) cae a la
- * lectura EN VIVO → sin regresión en lo ya publicado. NO chequea publicación ni
- * acceso (eso es de los chokepoints que la llaman). Server-side only.
+ * Lectura EXTERNA con STAGING (D.3): el cliente ve SOLO el SNAPSHOT publicado (la
+ * foto client-safe congelada en el último "Subir"). Editar/guardar el plan NO la
+ * toca → el cliente la ve recién al re-subir.
+ *
+ * Backfill perezoso (auto-migración): si la superficie está publicada pero todavía
+ * NO tiene snapshot (cronograma publicado antes de D.3), congelamos el vivo actual
+ * como snapshot y lo devolvemos — el cliente no ve vacío y, a partir de ahí, dejan
+ * de filtrarse las ediciones (leer en vivo era el leak). Si ni siquiera existe el
+ * timeline → vacío (fail-closed: NUNCA el vivo sin congelar). NO chequea publicación
+ * ni acceso (eso es de los chokepoints que la llaman). Server-side only.
  */
 export async function readPublishedClientTimeline(projectId: string): Promise<ExternalTimelineData> {
   const tl = await prisma.projectTimeline.findUnique({
@@ -101,7 +106,21 @@ export async function readPublishedClientTimeline(projectId: string): Promise<Ex
   if (tl?.publishedSnapshot) {
     return tl.publishedSnapshot as unknown as ExternalTimelineData;
   }
-  return readClientTimeline(projectId);
+  if (!tl) return { exists: false, anchorStartDate: null, phases: [] };
+
+  // Publicado sin snapshot → congelar el vivo actual (= lo que el cliente ya veía
+  // por el fallback viejo) y devolverlo. Best-effort: si el update falla, igual
+  // devolvemos esta foto (se reintenta en la próxima lectura).
+  const live = await readClientTimeline(projectId);
+  try {
+    await prisma.projectTimeline.update({
+      where: { projectId },
+      data: { publishedSnapshot: live as unknown as Prisma.InputJsonValue },
+    });
+  } catch (e) {
+    console.error("[timeline-view] backfill de snapshot falló:", e instanceof Error ? e.message : e);
+  }
+  return live;
 }
 
 /**
