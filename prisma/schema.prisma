@@ -326,6 +326,9 @@ model ProjectTimeline {
   project               Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   anchorStartDate       DateTime?       // null hasta que el CSE la fije; cuando exista, define la conversión semanas → fechas
   lastEditedByHuman     DateTime?       // se actualiza en cada PUT que toca fases (no en el create del agente)
+  // D.3 staging — el cliente ve este SNAPSHOT (shape client-safe de readClientTimeline) congelado al
+  // "Subir". null = aún no se subió → la vista externa cae al read EN VIVO (sin regresión en lo ya publicado).
+  publishedSnapshot     Json?
   generatedByAgentRunId String?         // de qué AgentRun salió la propuesta inicial (trazabilidad)
   generatedByAgentRun   AgentRun?       @relation(fields: [generatedByAgentRunId], references: [id], onDelete: SetNull)
   // D.1 — cronograma detallado:
@@ -514,6 +517,13 @@ model ProjectCanvas {
   sections  Json     @default("[]") // Array de { key: string, label: string }
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // D.3 staging — el cliente ve el SNAPSHOT publicado; el contenido vivo es borrador hasta "Subir".
+  // publishedSnapshot = foto client-safe al subir; contentUpdatedAt se toca al editar/confirmar bloques
+  // (dispara "cambios sin subir" si contentUpdatedAt > publishedSnapshotAt).
+  publishedSnapshot   Json?
+  publishedSnapshotAt DateTime?
+  contentUpdatedAt    DateTime?
 
   cards           ClientContextCard[]
   canvasSections  CanvasSection[]

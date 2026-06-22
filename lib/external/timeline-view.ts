@@ -86,6 +86,25 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
 }
 
 /**
+ * Lectura EXTERNA con STAGING (D.3): devuelve el SNAPSHOT publicado — la foto
+ * client-safe que se congeló en el último "Subir" (publish-timeline). Editar el
+ * plan NO la toca; el cliente la ve recién al re-subir. Si todavía no hay
+ * snapshot (cronograma publicado antes de D.3, o el freeze falló) cae a la
+ * lectura EN VIVO → sin regresión en lo ya publicado. NO chequea publicación ni
+ * acceso (eso es de los chokepoints que la llaman). Server-side only.
+ */
+export async function readPublishedClientTimeline(projectId: string): Promise<ExternalTimelineData> {
+  const tl = await prisma.projectTimeline.findUnique({
+    where: { projectId },
+    select: { publishedSnapshot: true },
+  });
+  if (tl?.publishedSnapshot) {
+    return tl.publishedSnapshot as unknown as ExternalTimelineData;
+  }
+  return readClientTimeline(projectId);
+}
+
+/**
  * Chokepoint de /external/cronograma. Devuelve el shape listo para render o
  * null si el acceso no aplica (token inválido/inexistente, revocado, o
  * cronograma NO publicado) — el motivo nunca se revela.
@@ -100,7 +119,7 @@ export async function getPublishedTimelineForToken(
   // cronograma corta el acceso a esta página en el render siguiente.
   if (!access.project.timelinePublishedAt) return null;
 
-  const timeline = await readClientTimeline(access.project.id);
+  const timeline = await readPublishedClientTimeline(access.project.id);
   await touchAccess(access.accessId);
 
   return {

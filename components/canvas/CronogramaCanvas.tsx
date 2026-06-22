@@ -32,6 +32,7 @@ import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/Toast";
 import TimelineGantt, { type GanttPhase, type GanttTaskStatus } from "./TimelineGantt";
 import TimelineAssistDialog from "./TimelineAssistDialog";
+import PublishBar from "./PublishBar";
 
 interface TaskDraft {
   id?: string;
@@ -232,6 +233,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     setPublishWorking(true);
     setError(null);
     try {
+      // Confirmar el detalle ANTES de publicar: el snapshot client-safe se arma
+      // dentro de publish-timeline (POST) y debe incluir las tareas (gated por
+      // detailConfirmedAt). Re-publicar también destraba detailConfirmedAt=null.
+      if (publish) {
+        await fetch(`/api/projects/${projectId}/timeline/confirm-detail`, { method: "POST" }).catch(() => {});
+      }
       const res = await fetch(`/api/projects/${projectId}/publish-timeline`, {
         method: publish ? "POST" : "DELETE",
       });
@@ -239,11 +246,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setError("No se pudo cambiar la publicación del cronograma.");
         return;
       }
-      if (publish) {
-        await fetch(`/api/projects/${projectId}/timeline/confirm-detail`, { method: "POST" }).catch(() => {});
-      }
       await load();
-      toast.success(publish ? "Cronograma publicado al cliente." : "Cronograma ocultado.");
+      toast.success(publish ? "Cronograma subido al cliente." : "Cronograma ocultado.");
     } catch {
       setError("Error de conexión al publicar el cronograma.");
     } finally {
@@ -573,6 +577,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       } else {
         setPendingProgress(null);
         await load();
+        // El avance es INTERNO (alimenta el panel de cartera) — el cliente NO ve el
+        // estado de cada tarea, así que NO dispara el banner de "subir". Toast de cierre.
+        toast.success("Avance aplicado — se refleja en el panel de cartera.");
       }
     } catch {
       setError("Error de conexión al aplicar el avance.");
@@ -756,22 +763,22 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               Pedir cambio con IA
             </button>
           )}
-          {hasUnpublishedChanges && (
-            <>
-              <span className="text-xs font-medium text-amber-300">Cambios sin subir</span>
-              <button
-                onClick={() => publishTimeline(true)}
-                disabled={publishWorking}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/40 hover:bg-amber-500/20 disabled:opacity-60 transition-colors"
-                title="Subir al cliente los cambios del cronograma (publicar)"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                {publishWorking ? "Subiendo…" : "Subir cambios"}
-              </button>
-            </>
-          )}
         </>,
         headerSlot,
+      )}
+
+      {/* Barra ESTÁNDAR de subir al cliente (misma que el kickoff). Solo una vez
+          publicado el cronograma: el primer "publicar" se hace desde el pop-up de
+          acceso. Después, editar el plan (Guardar) → queda en borrador → "Subir". */}
+      {publishedAt && (
+        <PublishBar
+          state={hasUnpublishedChanges ? "dirty" : "clean"}
+          publishing={publishWorking}
+          onPublish={() => publishTimeline(true)}
+          sticky={false}
+          dirtyMessage="Editaste el cronograma — el cliente todavía ve la versión anterior."
+          cleanMessage="Cronograma al día — el cliente ve la última versión."
+        />
       )}
 
       {/* ── Banner de propuesta (preview sin guardar) ── */}

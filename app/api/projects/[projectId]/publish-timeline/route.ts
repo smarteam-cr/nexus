@@ -15,9 +15,11 @@
  * lectura). Espejo de publish-kickoff.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { freezeBaselineOnPublish } from "@/lib/timeline/baseline";
+import { readClientTimeline } from "@/lib/external/timeline-view";
 
 export async function GET(
   _req: NextRequest,
@@ -94,12 +96,33 @@ export async function POST(
     select: { timelinePublishedAt: true },
   });
 
+  // D.3 staging — congelar el SNAPSHOT client-safe que verá el cliente hasta el
+  // próximo "Subir". Se arma con readClientTimeline (el mismo filtro que la vista
+  // externa); el detalle ya viene confirmado del paso previo del cliente, así que
+  // incluye las tareas. FAIL-OPEN: si falla, el read externo cae a la lectura en
+  // vivo (sin regresión) — se reintenta en la próxima publicación.
+  let snapshotError = false;
+  try {
+    const snapshot = await readClientTimeline(projectId);
+    await prisma.projectTimeline.update({
+      where: { projectId },
+      data: { publishedSnapshot: snapshot as unknown as Prisma.InputJsonValue },
+    });
+  } catch (e) {
+    snapshotError = true;
+    console.error(
+      "[publish-timeline] snapshot falló (el read externo cae a vivo):",
+      e instanceof Error ? e.message : e,
+    );
+  }
+
   return NextResponse.json({
     published: true,
     publishedAt: updated.timelinePublishedAt?.toISOString() ?? null,
     baselineVersion: baseline.version,
     baselineCreated: baseline.created,
     baselineError,
+    snapshotError,
   });
 }
 

@@ -28,7 +28,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { resolveActiveAccess, touchAccess } from "./access";
-import { readClientTimeline } from "./timeline-view";
+import { readPublishedClientTimeline } from "./timeline-view";
 import { readClientProcesos } from "@/lib/canvas/read-procesos";
 import type { KickoffLandingData } from "./kickoff-view-types";
 
@@ -91,7 +91,7 @@ export async function getPublishedKickoffForToken(
   //    #3 — además del publish (D.1.5), "cronograma" en hiddenKickoffKeys lo oculta
   //    SOLO del kickoff (la página standalone sigue gobernada por timelinePublishedAt).
   const timeline = access.project.timelinePublishedAt && !hidden.has("cronograma")
-    ? await readClientTimeline(projectId)
+    ? await readPublishedClientTimeline(projectId)
     : { exists: false as const, anchorStartDate: null, phases: [] };
 
   // 6. Procesos del cliente — SOLO CONFIRMED (mismo gate que los bloques).
