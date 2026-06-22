@@ -16,10 +16,9 @@
  * conceptual de publish-timeline para el cronograma.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { readClientProcesos } from "@/lib/canvas/read-procesos";
+import { freezeKickoffSnapshot } from "@/lib/canvas/kickoff-snapshot";
 
 type Params = Promise<{ projectId: string }>;
 
@@ -49,50 +48,9 @@ export async function POST(_req: NextRequest, { params }: { params: Params }) {
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { clientId: true },
-  });
-  const canvas = await prisma.projectCanvas.findFirst({
-    where: { projectId, name: "Kickoff" },
-    select: { id: true },
-  });
-  if (!project || !canvas) {
+  const snapshotAt = await freezeKickoffSnapshot(projectId);
+  if (!snapshotAt) {
     return NextResponse.json({ error: "El proyecto no tiene canvas de Kickoff." }, { status: 404 });
   }
-
-  // Mismo shape/orden que la lectura externa (kickoff-view): SOLO bloques CONFIRMED,
-  // en shape limpio (sin source/status/agentRunId), + procesos confirmados (RAW; el
-  // filtro hidden se aplica en la lectura). Es TODO lo que verá el cliente.
-  const [sections, procesos] = await Promise.all([
-    prisma.canvasSection.findMany({
-      where: { canvasId: canvas.id },
-      orderBy: { order: "asc" },
-      select: {
-        id: true,
-        key: true,
-        label: true,
-        titleOverride: true,
-        eyebrowOverride: true,
-        order: true,
-        blocks: {
-          where: { status: "CONFIRMED" },
-          orderBy: { order: "asc" },
-          select: { id: true, blockType: true, content: true, data: true },
-        },
-      },
-    }),
-    readClientProcesos(project.clientId, { onlyConfirmed: true }),
-  ]);
-
-  const now = new Date();
-  await prisma.projectCanvas.update({
-    where: { id: canvas.id },
-    data: {
-      publishedSnapshot: { sections, procesos } as unknown as Prisma.InputJsonValue,
-      publishedSnapshotAt: now,
-    },
-  });
-
-  return NextResponse.json({ publishedSnapshotAt: now.toISOString(), dirty: false });
+  return NextResponse.json({ publishedSnapshotAt: snapshotAt.toISOString(), dirty: false });
 }

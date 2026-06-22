@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { freezeKickoffSnapshot } from "@/lib/canvas/kickoff-snapshot";
 
 export async function GET(
   _req: NextRequest,
@@ -46,6 +47,19 @@ export async function POST(
   const { projectId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
+
+  // Congelar el snapshot client-safe ANTES de marcar publicado: publicar el kickoff
+  // (también desde este pop-up de acceso) debe dejar al cliente viendo una foto
+  // DELIBERADA, no lo que haya en vivo. Espejo de publish-timeline. Best-effort: si
+  // falla, el backfill perezoso de kickoff-view lo cubre.
+  try {
+    await freezeKickoffSnapshot(projectId);
+  } catch (e) {
+    console.error(
+      "[publish-kickoff] no se pudo congelar el snapshot (se publica igual):",
+      e instanceof Error ? e.message : e,
+    );
+  }
 
   const updated = await prisma.project.update({
     where: { id: projectId },

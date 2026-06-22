@@ -154,6 +154,29 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // el estado con la respuesta del server (evita perder lo que el CSE tipeó mientras guardaba).
   const editSeq = useRef(0);
   const markDirty = () => { editSeq.current++; setDirty(true); };
+  // Si un auto-guardado FALLA, guardamos el editSeq fallido: el efecto no reintenta
+  // hasta que haya una edición nueva (evita una tormenta de PUTs cada 1.5 s si el server rechaza).
+  const lastFailedSeqRef = useRef<number | null>(null);
+
+  // Adopta los ids asignados por el server SOBRE el estado local, preservando el
+  // contenido que el CSE tipeó durante el PUT. Solo zipea por posición cuando las
+  // cantidades coinciden (no hubo add/remove durante el PUT) → nunca reasigna un id a
+  // otra fila. Evita DUPLICAR ítems nuevos (sin id) al re-guardar, sin pisar ediciones.
+  const mergeServerIds = (local: Phase[], server: ServerPhase[]): Phase[] => {
+    if (server.length !== local.length) return local; // estructura cambió → no es seguro zipear
+    return local.map((p, pi) => {
+      const sp = server[pi];
+      const sameTaskCount = (sp.tasks?.length ?? 0) === p.tasks.length;
+      return {
+        ...p,
+        id: p.id ?? sp.id,
+        _key: p.id ? p._key : sp.id,
+        tasks: sameTaskCount
+          ? p.tasks.map((t, ti) => (t.id ? t : { ...t, id: sp.tasks[ti].id, _key: sp.tasks[ti].id }))
+          : p.tasks,
+      };
+    });
+  };
 
   const mapServerPhases = (serverPhases: ServerPhase[]): Phase[] =>
     serverPhases.map((p) => ({
@@ -369,10 +392,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         setError(d?.details?.[0] ?? d?.error ?? "No se pudo guardar el cronograma.");
+        lastFailedSeqRef.current = seq; // no reintentar hasta una edición nueva
         setSaving(false);
         return;
       }
       const data = await res.json();
+      lastFailedSeqRef.current = null; // éxito → habilitar el auto-guardado de nuevo
       if (editSeq.current === seq) {
         // Quedó quieto durante el PUT → adoptar el estado canónico (ids nuevos) + limpiar dirty.
         if (data.exists) {
@@ -380,21 +405,27 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
         }
         setDirty(false);
+      } else if (data.exists) {
+        // Editó durante el PUT → preservar su contenido pero adoptar los ids nuevos
+        // (evita duplicar ítems sin id en el próximo guardado). dirty queda true → re-guarda.
+        setPhases((cur) => mergeServerIds(cur, data.phases ?? []));
       }
       // El PUT setea lastEditedByHuman = now → reflejarlo para que aparezca "Subir al cliente".
       setLastEditedAt(new Date().toISOString());
     } catch {
       setError("Error de conexión al guardar.");
+      lastFailedSeqRef.current = seq; // idem ante error de red
     }
     setSaving(false);
   };
 
   // Debounce: auto-guarda ~1.5 s después de la última edición. Se reinicia con cada
-  // cambio (phases/anchor). No corre con propuesta IA abierta, mientras guarda, ni con
-  // el cronograma inválido (espera a que el CSE complete los campos).
+  // cambio (phases/anchor). No corre con propuesta IA abierta, mientras guarda, con el
+  // cronograma inválido, ni si el último intento falló para este mismo contenido.
   useEffect(() => {
     if (!dirty || proposal || saving) return;
     if (validateLocal() !== null) return;
+    if (editSeq.current === lastFailedSeqRef.current) return;
     const t = setTimeout(() => { void autoSave(); }, 1500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
