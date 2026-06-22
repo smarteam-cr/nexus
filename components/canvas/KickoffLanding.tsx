@@ -24,6 +24,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { useCanvasSections } from "./useCanvasSections";
+import PublishBar from "./PublishBar";
 import KickoffBlock from "./KickoffBlock";
 import TimelineSection from "./TimelineSection";
 import { useReveal, useHeroParallax } from "./useLandingMotion";
@@ -131,6 +132,11 @@ function KickoffLandingInternal({
   canvasId: string;
   editable?: boolean;
 }) {
+  // D.3 staging — contenido (bloques/secciones) editado después del último "Subir".
+  // setContentDirty(true) enciende la barra en el acto (callback del hook); el GET
+  // inicial lo hidrata del server (contentUpdatedAt > publishedSnapshotAt) para
+  // sobrevivir al remonte.
+  const [contentDirty, setContentDirty] = useState(false);
   const {
     sections,
     loading,
@@ -147,7 +153,7 @@ function KickoffLandingInternal({
     acceptAll,
     error,
     clearError,
-  } = useCanvasSections(projectId, canvasId);
+  } = useCanvasSections(projectId, canvasId, () => setContentDirty(true));
 
   const [timeline, setTimeline] = useState<KickoffTimelineData | null>(null);
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
@@ -174,6 +180,15 @@ function KickoffLandingInternal({
       .catch(() => { setHiddenKeys(new Set()); setSavedHiddenKeys(new Set()); });
   }, [projectId]);
 
+  // D.3 staging — estado de subida del CONTENIDO: hidrata la barra "cambios sin subir"
+  // al montar (contentUpdatedAt > publishedSnapshotAt), sin esperar a una edición nueva.
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/kickoff-content`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setContentDirty(!!d?.dirty))
+      .catch(() => {});
+  }, [projectId]);
+
   // STAGED: el toggle solo cambia el set LOCAL; se persiste recién al "Subir cambios al cliente".
   const toggleHidden = (key: string, hidden: boolean) => {
     setHiddenKeys((prev) => {
@@ -185,8 +200,10 @@ function KickoffLandingInternal({
   };
 
   // ¿Hay cambios de visibilidad sin persistir? (set local distinto del baseline guardado)
-  const dirty =
+  const visibilityDirty =
     hiddenKeys.size !== savedHiddenKeys.size || [...hiddenKeys].some((k) => !savedHiddenKeys.has(k));
+  // Cambios sin subir = visibilidad staged O contenido editado tras el último "Subir".
+  const dirty = visibilityDirty || contentDirty;
 
   // Subir al cliente TODO lo pendiente: confirma los procesos en borrador y persiste la
   // visibilidad (secciones/procesos ocultos). Es el "Subir cambios al cliente".
@@ -218,6 +235,10 @@ function KickoffLandingInternal({
         setHiddenKeys(s);
         setSavedHiddenKeys(s);
       }
+      // D.3 staging — congelar el snapshot del CONTENIDO (bloques + overrides): el
+      // cliente lo ve recién ahora. Tras subir, ya no hay "cambios sin subir".
+      await fetch(`/api/projects/${projectId}/kickoff-content`, { method: "POST" }).catch(() => {});
+      setContentDirty(false);
     } catch {
       /* dejar el estado local; el usuario puede reintentar */
     }
@@ -388,24 +409,17 @@ function KickoffLandingView({
           </button>
         </div>
       )}
-      {/* Cambios sin subir (visibilidad staged y/o procesos en borrador) → CTA ámbar
-          que persiste TODO de una (mismo flujo que "Subir cambios" del cronograma). */}
-      {editable && onPublishKickoff && (dirty || draftProcesos.length > 0) && (
-        <div style={{ position: "sticky", top: 0, zIndex: 48, display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", background: "#fef3c7", borderBottom: "1px solid #f59e0b", color: "#92400e", fontSize: 13, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>
-            ⚠ Cambios
-          </span>
-          <span style={{ flex: 1 }}>
-            Tenés cambios sin subir{draftProcesos.length > 0 ? ` (${draftProcesos.length} ${draftProcesos.length === 1 ? "proceso sin confirmar" : "procesos sin confirmar"})` : ""} — el cliente todavía no los ve.
-          </span>
-          <button
-            onClick={onPublishKickoff}
-            disabled={publishing}
-            style={{ flexShrink: 0, fontWeight: 700, fontSize: 12, color: "#92400e", background: "rgba(217,119,6,0.18)", border: "1px solid #d97706", borderRadius: 8, padding: "6px 14px", cursor: publishing ? "default" : "pointer", opacity: publishing ? 0.6 : 1 }}
-          >
-            {publishing ? "Subiendo…" : "Subir cambios al cliente"}
-          </button>
-        </div>
+      {/* Cambios sin subir (contenido de bloques/secciones editado, visibilidad
+          staged y/o procesos en borrador) → barra ESTÁNDAR de subir, compartida con
+          el cronograma. "Subir" persiste TODO de una (snapshot + visibilidad + procesos). */}
+      {editable && onPublishKickoff && (
+        <PublishBar
+          variant="bar"
+          state={dirty || draftProcesos.length > 0 ? "dirty" : "clean"}
+          publishing={publishing}
+          onPublish={onPublishKickoff}
+          dirtyMessage={`Tenés cambios sin subir${draftProcesos.length > 0 ? ` (${draftProcesos.length} ${draftProcesos.length === 1 ? "proceso sin confirmar" : "procesos sin confirmar"})` : ""} — el cliente todavía no los ve.`}
+        />
       )}
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <section ref={heroRef} className="section-dark hero-backdrop" style={{ padding: "clamp(56px, 8vw, 96px) 24px clamp(48px, 6vw, 72px)" }}>

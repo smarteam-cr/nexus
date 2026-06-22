@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { touchCanvasContent } from "@/lib/canvas/touch-content";
 
 type Params = Promise<{ projectId: string; sectionId: string }>;
 
@@ -56,6 +57,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
         ? { titleOverride: section.previousTitleOverride, previousTitleOverride: section.titleOverride }
         : { eyebrowOverride: section.previousEyebrowOverride, previousEyebrowOverride: section.eyebrowOverride };
     const updated = await prisma.canvasSection.update({ where: { id: sectionId }, data, select: RESP_SELECT });
+    await touchCanvasContent(sectionId);
     return NextResponse.json(updated);
   }
 
@@ -74,5 +76,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   }
 
   const updated = await prisma.canvasSection.update({ where: { id: sectionId }, data, select: RESP_SELECT });
+  await touchCanvasContent(sectionId);
   return NextResponse.json(updated);
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
+import { touchCanvasContent } from "@/lib/canvas/touch-content";
 
 type Params = Promise<{ projectId: string; sectionId: string }>;
 
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     },
   });
 
+  await touchCanvasContent(sectionId);
   return NextResponse.json(block, { status: 201 });
 }
 
@@ -69,6 +71,7 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
         previousData: jsonInput(block.data),
       },
     });
+    await touchCanvasContent(sectionId);
     return NextResponse.json(updated);
   }
 
@@ -98,6 +101,7 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
     data: updateData,
   });
 
+  await touchCanvasContent(sectionId);
   return NextResponse.json(updated);
 }
 
@@ -117,5 +121,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Params }) {
     where: { id: blockId, sectionId },
   });
 
+  await touchCanvasContent(sectionId);
   return NextResponse.json({ ok: true });
 }

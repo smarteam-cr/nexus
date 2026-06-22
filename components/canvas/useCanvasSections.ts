@@ -40,10 +40,21 @@ export interface SectionWithBlocks {
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
-export function useCanvasSections(projectId: string, canvasId: string) {
+export function useCanvasSections(
+  projectId: string,
+  canvasId: string,
+  // D.3 staging — se dispara tras CUALQUIER mutación de contenido exitosa (bloque o
+  // metadata de sección). Lo usa el kickoff para encender la barra "cambios sin subir"
+  // en el acto. Por ref → no invalida la memoización de mutate/patchSection.
+  onContentChange?: () => void,
+) {
   const [sections, setSections] = useState<SectionWithBlocks[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const onContentChangeRef = useRef(onContentChange);
+  useEffect(() => {
+    onContentChangeRef.current = onContentChange;
+  }, [onContentChange]);
 
   const listUrl = `/api/projects/${projectId}/canvas-sections?canvasId=${canvasId}`;
   const blocksUrl = (sectionId: string) =>
@@ -107,6 +118,7 @@ export function useCanvasSections(projectId: string, canvasId: string) {
           return false;
         }
         setError(null);
+        onContentChangeRef.current?.();
         return true;
       } catch (e) {
         console.error("[useCanvasSections] error de red al guardar", e);
@@ -242,6 +254,7 @@ export function useCanvasSections(projectId: string, canvasId: string) {
         }
         setError(null);
         refetch();
+        onContentChangeRef.current?.();
         return true;
       } catch {
         setError(errMsg);

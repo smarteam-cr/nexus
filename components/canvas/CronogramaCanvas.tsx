@@ -772,10 +772,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           acceso. Después, editar el plan (Guardar) → queda en borrador → "Subir". */}
       {publishedAt && (
         <PublishBar
+          variant="card"
           state={hasUnpublishedChanges ? "dirty" : "clean"}
           publishing={publishWorking}
           onPublish={() => publishTimeline(true)}
-          sticky={false}
           dirtyMessage="Editaste el cronograma — el cliente todavía ve la versión anterior."
           cleanMessage="Cronograma al día — el cliente ve la última versión."
         />

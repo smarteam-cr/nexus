@@ -61,28 +61,35 @@ export async function getPublishedKickoffForToken(
   // 3. Canvas Kickoff del proyecto (se identifica por nombre, igual que el panel interno).
   const canvas = await prisma.projectCanvas.findFirst({
     where: { projectId, name: "Kickoff" },
-    select: { id: true },
+    select: { id: true, publishedSnapshot: true },
   });
   if (!canvas) return null;
 
   // 4. Secciones + SOLO bloques CONFIRMED, en shape limpio (sin campos internos).
-  const sections = await prisma.canvasSection.findMany({
-    where: { canvasId: canvas.id },
-    orderBy: { order: "asc" },
-    select: {
-      id: true,
-      key: true,
-      label: true,
-      titleOverride: true,
-      eyebrowOverride: true,
-      order: true,
-      blocks: {
-        where: { status: "CONFIRMED" },
-        orderBy: { order: "asc" },
-        select: { id: true, blockType: true, content: true, data: true },
+  //    STAGING (D.3): si hay snapshot publicado, el cliente ve ESE (la foto congelada
+  //    en el último "Subir"); si no, cae a la lectura EN VIVO — sin regresión en
+  //    kickoffs publicados antes de D.3. El filtro hidden (más abajo) aplica a ambos.
+  const liveSections = () =>
+    prisma.canvasSection.findMany({
+      where: { canvasId: canvas.id },
+      orderBy: { order: "asc" },
+      select: {
+        id: true,
+        key: true,
+        label: true,
+        titleOverride: true,
+        eyebrowOverride: true,
+        order: true,
+        blocks: {
+          where: { status: "CONFIRMED" },
+          orderBy: { order: "asc" },
+          select: { id: true, blockType: true, content: true, data: true },
+        },
       },
-    },
-  });
+    });
+  type SectionRow = Awaited<ReturnType<typeof liveSections>>[number];
+  const snapshot = canvas.publishedSnapshot as unknown as { sections?: SectionRow[] } | null;
+  const sections: SectionRow[] = snapshot?.sections ?? (await liveSections());
 
   // 5. Cronograma — regla unificada D.1.5: SOLO si timelinePublishedAt != null.
   // Sin publicar → shape vacío (el landing renderiza como si no hubiera
