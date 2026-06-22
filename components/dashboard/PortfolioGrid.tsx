@@ -331,17 +331,17 @@ function SectionHeader({ icon, title, count, sub }: { icon: string; title: strin
 // Encabezado de cliente para la sección de tarjetas (label arriba del grupo).
 function ClientLabel({ g }: { g: ClientGroup }) {
   return (
-    <Link href={`/clients/${g.clientId}`} className="inline-flex items-baseline gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-secondary hover:text-brand transition-colors">
+    <Link href={`/clients/${g.clientId}`} className="inline-flex items-baseline gap-1.5 px-2 py-0.5 rounded bg-blue-500/[0.06] text-[11px] font-semibold uppercase tracking-wide text-fg-secondary hover:bg-blue-500/10 hover:text-brand transition-colors">
       {g.clientCompany || g.clientName}
       {g.items.length > 1 && <span className="text-[10px] font-normal normal-case text-fg-muted">· {plural(g.items.length, "proyecto", "proyectos")}</span>}
     </Link>
   );
 }
 
-// Encabezado de cliente para las secciones de filas compactas (fila atenuada dentro del contenedor).
+// Encabezado de cliente para las secciones de filas compactas (fila con fondo azul muy tenue).
 function ClientHeaderRow({ g }: { g: ClientGroup }) {
   return (
-    <Link href={`/clients/${g.clientId}`} className="flex items-center gap-2 px-4 py-1.5 bg-surface-muted/50 hover:bg-surface-muted transition-colors">
+    <Link href={`/clients/${g.clientId}`} className="flex items-center gap-2 px-4 py-1.5 bg-blue-500/[0.06] hover:bg-blue-500/10 transition-colors">
       <span className="text-[11px] font-semibold uppercase tracking-wide text-fg-secondary truncate">{g.clientCompany || g.clientName}</span>
       {g.items.length > 1 && <span className="text-[10px] text-fg-muted">· {g.items.length}</span>}
     </Link>
