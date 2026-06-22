@@ -12,8 +12,9 @@ const CLIENT_INFO_SECTIONS = [
 ];
 
 // Nombre interno del project — se mantiene el sentinel "__strategy__" como
-// serviceType para no romper queries en otros archivos que ya filtran por él.
-const SENTINEL_SERVICE_TYPE = "__strategy__";
+// serviceType para no romper queries en otros archivos que ya filtran por él
+// (switcher de proyectos, layout del cliente, y el panel de cartera).
+export const SENTINEL_SERVICE_TYPE = "__strategy__";
 const PROJECT_NAME = "Información del cliente";
 const CANVAS_NAME = "Información del cliente";
 

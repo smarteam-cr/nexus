@@ -13,6 +13,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import { computeProjectSummary, type ProjectSummary } from "./summary";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
+import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 
 export interface PortfolioRow {
   projectId: string;
@@ -39,7 +40,14 @@ export async function loadPortfolio(
   clientWhere: Prisma.ClientWhereInput | null,
 ): Promise<PortfolioRow[]> {
   const projects = await prisma.project.findMany({
-    where: clientWhere ? { client: clientWhere } : undefined,
+    // Excluir SOLO los sentinels "Información del cliente" (serviceType="__strategy__"): no son
+    // proyectos reales, son la vista de estrategia por cliente. OJO: `{ not: "x" }` en Prisma
+    // también descarta los serviceType NULL — por eso el OR explícito, para conservar los
+    // proyectos reales sin serviceType (que sí deben aparecer en la cartera).
+    where: {
+      OR: [{ serviceType: null }, { serviceType: { not: SENTINEL_SERVICE_TYPE } }],
+      ...(clientWhere ? { client: clientWhere } : {}),
+    },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
