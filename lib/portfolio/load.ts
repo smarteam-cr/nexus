@@ -40,13 +40,25 @@ export async function loadPortfolio(
   clientWhere: Prisma.ClientWhereInput | null,
 ): Promise<PortfolioRow[]> {
   const projects = await prisma.project.findMany({
-    // Excluir SOLO los sentinels "Información del cliente" (serviceType="__strategy__"): no son
-    // proyectos reales, son la vista de estrategia por cliente. OJO: `{ not: "x" }` en Prisma
-    // también descarta los serviceType NULL — por eso el OR explícito, para conservar los
-    // proyectos reales sin serviceType (que sí deben aparecer en la cartera).
+    // Mostrar SOLO proyectos REALES y navegables — el MISMO criterio que el rail de proyectos
+    // del cliente (app/clients/[id]/page.tsx + layout.tsx), para que el panel nunca lleve a un
+    // proyecto que no aparece al entrar al cliente:
+    //   - status "active" → excluye los "inactive" (fantasmas/terminados que marca el sync de HubSpot).
+    //   - NO el sentinel de estrategia "__strategy__" (con OR para conservar los serviceType NULL,
+    //     que `{ not }` de Prisma descartaría).
+    //   - Regla HubSpot: clientes CON HubSpot solo muestran proyectos con hubspotServiceId
+    //     (deja afuera los stubs "Proyecto principal"/"Proyecto {id}" sin servicio); clientes SIN
+    //     HubSpot muestran cualquier proyecto activo.
     where: {
+      status: "active",
       OR: [{ serviceType: null }, { serviceType: { not: SENTINEL_SERVICE_TYPE } }],
-      ...(clientWhere ? { client: clientWhere } : {}),
+      AND: [
+        { OR: [
+          { client: { hubspotCompanyId: null, hubspotAccount: { is: null } } },
+          { hubspotServiceId: { not: null } },
+        ] },
+        ...(clientWhere ? [{ client: clientWhere }] : []),
+      ],
     },
     orderBy: { createdAt: "desc" },
     select: {
