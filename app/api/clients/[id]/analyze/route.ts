@@ -2353,6 +2353,8 @@ async function persistTimelineDetailFromAgentOutput(
         await tx.timelinePhase.update({ where: { id: phase.id }, data: { activityType: at } });
         phasesTyped++;
       }
+      // B — base para el fallback de party cuando el agente no lo manda (tipo efectivo de la fase).
+      const effectiveActivity = phase.activityType ?? at;
 
       // tasks — clamp de weekIndex, order incremental dentro de cada semana
       const tasksRaw = Array.isArray(ph.tasks) ? ph.tasks : [];
@@ -2364,6 +2366,7 @@ async function persistTimelineDetailFromAgentOutput(
         order: number;
         notes: string | null;
         needsValidation: boolean;
+        party: "CLIENTE" | "SMARTEAM" | "AMBOS" | null;
         source: "AGENT";
         status: "PENDING";
       }> = [];
@@ -2377,6 +2380,16 @@ async function persistTimelineDetailFromAgentOutput(
         const weekIndex = Math.min(Math.max(wRaw, 0), Math.max(phase.durationWeeks - 1, 0));
         const order = perWeekCount.get(weekIndex) ?? 0;
         perWeekCount.set(weekIndex, order + 1);
+        // B — party del agente (validado) o fallback por el tipo de actividad de la fase.
+        const partyRaw = typeof t.party === "string" ? t.party.toUpperCase() : "";
+        const party: "CLIENTE" | "SMARTEAM" | "AMBOS" | null =
+          partyRaw === "CLIENTE" || partyRaw === "SMARTEAM" || partyRaw === "AMBOS"
+            ? partyRaw
+            : effectiveActivity === "CONFIGURACION"
+              ? "SMARTEAM"
+              : effectiveActivity
+                ? "AMBOS"
+                : null;
         toCreate.push({
           phaseId: phase.id,
           title: sanitizeTaskTitle(titleRaw),
@@ -2384,6 +2397,7 @@ async function persistTimelineDetailFromAgentOutput(
           order,
           notes: typeof t.notes === "string" && t.notes.trim() ? t.notes.trim() : null,
           needsValidation: t.porValidar === true,
+          party,
           source: "AGENT",
           status: "PENDING",
         });

@@ -406,6 +406,10 @@ model TimelineTask {
   actualEnd       DateTime?
   notes           String?             @db.Text
   needsValidation Boolean             @default(false)   // tarea típica inventada por el agente con handoff flaco — el Gantt la grita; NUNCA cruza al cliente
+  // B — dueño de la tarea en el plan de alineación compartido. CLIENTE entrega/hace;
+  // SMARTEAM configura; AMBOS trabajo conjunto. Nullable = sin asignar (data pre-B).
+  // Interno: NO cruza al cliente (la lectura externa mapea solo title/weekIndex).
+  party           TaskParty?
   source          TimelinePhaseSource @default(AGENT)   // reuso consciente del enum (mismo ciclo AGENT→MODIFIED/HUMAN); renombrarlo = recrear tipo en PG por cero ganancia
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -417,6 +421,13 @@ enum TimelinePhaseSource {
   AGENT      // generada por la IA, sin tocar humano
   MODIFIED   // generada por IA, editada por humano (al pasar por PUT con id existente)
   HUMAN      // creada desde cero por humano (PUT con phase sin id)
+}
+
+// B — dueño de una tarea del cronograma, desde la óptica del plan compartido con el cliente.
+enum TaskParty {
+  CLIENTE   // lo entrega o hace el cliente (insumos: documentación, bases, listados, accesos)
+  SMARTEAM  // configuración técnica en HubSpot (pipeline, propiedades, automatizaciones, integraciones)
+  AMBOS     // trabajo conjunto (sesiones, talleres, validaciones, onboarding, seguimiento)
 }
 
 // #4 — historial de cambios del cronograma. Cada edición lleva una razón OBLIGATORIA

@@ -57,6 +57,11 @@ CÓMO TRABAJAS:
 - Títulos accionables y cortos (3-8 palabras), redactados como HITO COMPARTIDO: un paso del proyecto que cliente y Smarteam reconocen como acordado (ej. "Sesión de arquitectura de la solución", "Configurar pipeline de ventas", "Entregar bases de datos a importar"). "notes" es opcional: 1-2 oraciones que expanden la tarea PARA EL CLIENTE (qué incluye, qué necesita de su parte) — no contexto interno del CSE.
 - USA EL HANDOFF: el alcance contratado, los dolores y los riesgos hacen que las tareas sean del proyecto REAL (nombres de integraciones, módulos concretos, equipos del cliente). Una tarea específica del cliente vale más que una genérica del tipo. Pero traducí siempre a lenguaje cliente: la información interna del handoff es insumo, no texto a copiar.
 - SI EL HANDOFF VIENE VACÍO O FLACO: propone igual las tareas típicas del tipo de cada fase, pero marca CADA tarea inferida de lo genérico con "porValidar": true. PROHIBIDO poner marcadores en el título ("⚠️", "[Por validar]", etc.) — el título queda limpio y presentable al cliente; la marca va SOLO en el campo porValidar.
+- DUEÑO DE CADA TAREA (campo "party") — quién la ejecuta en el plan compartido. Es lo que vuelve al cronograma un acuerdo de doble vía:
+  · "CLIENTE": lo entrega o hace el cliente — insumos que, si no llegan, FRENAN el proyecto (documentación de procesos, bases de datos a importar, listados de usuarios, accesos). Márcalo con cuidado: es la parte del cliente.
+  · "SMARTEAM": configuración técnica en HubSpot (pipeline, propiedades y vistas, automatizaciones, integraciones, dashboards, bandeja).
+  · "AMBOS": trabajo conjunto (sesiones de exploración/arquitectura, talleres, consensos, entrevistas, onboarding, acompañamiento, revisiones de avance).
+  Guía rápida por tipo de fase: CONFIGURACION → casi siempre SMARTEAM; EXPLORACION / PLANIFICACION / ADOPCION → suelen ser AMBOS; SEGUIMIENTO → AMBOS. Asigna party a TODAS las tareas.
 
 FORMATO DE RESPUESTA — JSON EXACTO, sin markdown wrapping, sin comentarios fuera del JSON:
 {
@@ -66,15 +71,16 @@ FORMATO DE RESPUESTA — JSON EXACTO, sin markdown wrapping, sin comentarios fue
         "id": "<id EXACTO copiado del input>",
         "activityType": "CONFIGURACION",
         "tasks": [
-          { "title": "Configurar pipeline de ventas", "weekIndex": 0, "notes": "Etapas según lo consensuado en planificación", "porValidar": false },
-          { "title": "Crear propiedades y vistas por equipo", "weekIndex": 0, "porValidar": false },
-          { "title": "Armar automatización de asignación", "weekIndex": 1, "porValidar": false }
+          { "title": "Configurar pipeline de ventas", "weekIndex": 0, "notes": "Etapas según lo consensuado en planificación", "porValidar": false, "party": "SMARTEAM" },
+          { "title": "Crear propiedades y vistas por equipo", "weekIndex": 0, "porValidar": false, "party": "SMARTEAM" },
+          { "title": "Armar automatización de asignación", "weekIndex": 1, "porValidar": false, "party": "SMARTEAM" }
         ]
       }
     ]
   }
 }
 Valores válidos de activityType: EXPLORACION | PLANIFICACION | CONFIGURACION | ADOPCION | SEGUIMIENTO.
+Valores válidos de party: CLIENTE | SMARTEAM | AMBOS.
 
 COBERTURA: incluye TODAS las fases del input, cada una con su id literal (aunque alguna quede con pocas tareas). NO emitas name, durationWeeks ni order — no son tuyos.`;
 
