@@ -124,6 +124,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [chainingProgress, setChainingProgress] = useState(false); // F — fase "evaluando avance" del encadenado
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // ── Publicación al cliente (in-canvas) ──
@@ -501,6 +502,26 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         }
       } else {
         await load();
+        // F — encadenado: recién creadas las tareas, evaluá el avance en la misma pasada.
+        // Best-effort: si el progress falla, las tareas YA quedaron (no hay rollback) y el CSE
+        // usa "Chequear avance". Si el agente detecta avance → recarga y aparece el banner.
+        if (!auto) {
+          setChainingProgress(true);
+          try {
+            const pres = await fetch(`/api/projects/${projectId}/timeline/progress`, { method: "POST" });
+            const pdata = await pres.json().catch(() => ({}));
+            if (pres.ok && pdata?.status === "ok") {
+              await load(); // trae el pendingProgress → el banner de confirmación aparece
+              toast.success("Tareas generadas y avance detectado — confirmá abajo.");
+            } else {
+              // skipped (sin sesiones, etapa temprana, sin avance) o error best-effort.
+              toast.success("Tareas generadas. Sin avance que confirmar por ahora.");
+            }
+          } catch {
+            toast.info("Tareas generadas. Podés revisar el avance con «Chequear avance».");
+          }
+          setChainingProgress(false);
+        }
       }
     } catch {
       if (!auto) setError("Error de conexión al generar el detalle.");
@@ -812,7 +833,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           {generating && (
             <span className="flex items-center gap-1.5 text-xs font-medium text-blue-400">
               <span className="w-3 h-3 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
-              Creando tareas…
+              {chainingProgress ? "Evaluando avance…" : "Creando tareas…"}
             </span>
           )}
           {/* CTA bi-estado (#2): sin tareas (y nunca publicado) → "Generar cronograma" (crea las
