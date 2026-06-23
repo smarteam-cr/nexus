@@ -422,6 +422,17 @@ function ActionCard({
           <span className="text-fg-muted">Sin motivo registrado del último cambio del cronograma.</span>
         )}
       </div>
+
+      {/* Canvas generados (#4) — mismas pills que el checklist de "Sin datos". Procesos es a
+          nivel CLIENTE → va en el encabezado del grupo, no se duplica en la card. */}
+      <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+        <SetupPill state={r.setup.handoff ? "done" : "missing"} label={r.setup.handoff ? "✓ Handoff" : "Sin handoff"} />
+        <SetupPill state={r.setup.kickoff ? "done" : "missing"} label={r.setup.kickoff ? "✓ Kickoff" : "Sin kickoff"} />
+        <SetupPill
+          state={r.setup.cronograma === "publicado" ? "done" : r.setup.cronograma === "borrador" ? "draft" : "missing"}
+          label={r.setup.cronograma === "publicado" ? "✓ Cronograma" : r.setup.cronograma === "borrador" ? "Cronograma sin subir" : "Sin cronograma"}
+        />
+      </div>
     </div>
   );
 }
