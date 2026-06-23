@@ -9,6 +9,7 @@ import type { EnrichedClientMatcher } from "@/lib/matching/cascade";
 import type { RawTranscript } from "@/lib/utils/matching";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
+import { loadProjectSetup } from "@/lib/portfolio/project-setup";
 
 // Sesión cruda por frente (auto-detectada). mixed = participan ambas áreas.
 type FrontSession = {
@@ -372,7 +373,7 @@ export async function GET(
   });
 
   // Pendientes ABIERTOS (no hechos, no borrados) — lo que ve el widget + tab Pendientes.
-  const [openItems, historyRows] = await Promise.all([
+  const [openItems, historyRows, setup] = await Promise.all([
     prisma.actionItem.findMany({
       where: { projectId, done: false, deletedAt: null },
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
@@ -386,6 +387,8 @@ export async function GET(
       select: actionItemSelect,
       take: 50,
     }),
+    // #5 — señales de setup (qué canvas tiene generados) para el indicador del widget.
+    loadProjectSetup(projectId, project.clientId),
   ]);
 
   // Para compat hacia atrás: también devolver `pendingItems` con shape antiguo
@@ -408,6 +411,7 @@ export async function GET(
     projectInfo,
     actionItems: pendingItemsCompat, // alias semántico
     historyItems, // tareas hechas o borradas (tab Histórico)
+    setup, // #5 — { handoff, kickoff, cronograma, procesos } para el indicador del widget
   });
 }
 

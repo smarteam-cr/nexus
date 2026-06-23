@@ -86,6 +86,7 @@ interface GPSData {
   fronts?: { ventas: FrontPair; cs: FrontPair };
   projectInfo?: ProjectInfo;
   historyItems?: PendingItem[]; // tareas hechas o borradas (tab Histórico del modal)
+  setup?: SetupSignals; // #5 — qué canvas tiene generados el proyecto (indicador del widget)
 }
 
 type FrontKey = "ventas" | "cs";
@@ -97,6 +98,25 @@ const FRONT_FIELDS: Record<FrontKey, { date: string; note: string }> = {
 };
 
 const EMPTY_PAIR: FrontPair = { next: null, last: null };
+
+// Señales de setup del proyecto (espejo del tipo de lib/portfolio/project-setup; inline para
+// no arrastrar el módulo server —prisma— al bundle del cliente). El indicador del widget las usa.
+type SetupSignals = {
+  handoff: boolean;
+  kickoff: boolean;
+  cronograma: "sin" | "borrador" | "publicado";
+  procesos: boolean;
+};
+
+// Pill de un canvas generado, en el tema CLARO del widget (no reusa el SetupPill del panel).
+function SetupChip({ state, label }: { state: "done" | "draft" | "missing"; label: string }) {
+  const cls = {
+    done: "text-emerald-700 bg-emerald-50 border-emerald-200",
+    draft: "text-amber-700 bg-amber-50 border-amber-200",
+    missing: "text-red-600 bg-red-50 border-red-200",
+  }[state];
+  return <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${cls}`}>{label}</span>;
+}
 
 export default function ProjectGPS({ projectId, clientId }: { projectId: string; clientId: string }) {
   // Inicializa desde el cache de módulo → al remontar (cambio de tab) renderiza al
@@ -547,6 +567,18 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             <span className={cardLabel}>Estado actual</span>
           </div>
           <p className="text-sm font-medium text-fg">{data.currentState}</p>
+          {/* #5 — canvas generados del proyecto. Guard por compat de cache (data vieja sin setup). */}
+          {data.setup && (
+            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+              <SetupChip state={data.setup.handoff ? "done" : "missing"} label={data.setup.handoff ? "✓ Handoff" : "Sin handoff"} />
+              <SetupChip state={data.setup.kickoff ? "done" : "missing"} label={data.setup.kickoff ? "✓ Kickoff" : "Sin kickoff"} />
+              <SetupChip
+                state={data.setup.cronograma === "publicado" ? "done" : data.setup.cronograma === "borrador" ? "draft" : "missing"}
+                label={data.setup.cronograma === "publicado" ? "✓ Cronograma" : data.setup.cronograma === "borrador" ? "Cronograma sin subir" : "Sin cronograma"}
+              />
+              <SetupChip state={data.setup.procesos ? "done" : "missing"} label={data.setup.procesos ? "✓ Procesos" : "Sin procesos"} />
+            </div>
+          )}
         </div>
 
         {/* Pendientes — resumen + botón al dialog central */}
