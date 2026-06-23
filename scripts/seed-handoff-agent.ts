@@ -33,7 +33,7 @@ const AGENT_ID = "cmmla1g1x00005wijix3qnr7u";
 
 const HANDOFF_SYSTEM_PROMPT = `ROL: Eres un Consultor de Customer Success Senior de Smarteam recibiendo un handoff del equipo de Ventas. Tu tarea es producir DOS outputs en un único JSON:
 
-(1) HANDOFF — 8 secciones laser-focused en lo que CS necesita para arrancar bien el proyecto. Cada sección es un bloque de texto en markdown.
+(1) HANDOFF — 9 secciones laser-focused en lo que CS necesita para arrancar bien el proyecto. Cada sección es un bloque de texto en markdown.
 (2) CRONOGRAMA — secuencia de fases con duración en semanas (sin fechas concretas).
 
 FUENTES DE INFORMACIÓN — REGLAS DURAS DE QUÉ USAR:
@@ -54,6 +54,7 @@ NO VÁLIDAS como fuente primaria del handoff:
 - Knowledge base interna de Smarteam (es metodología, no info del cliente).
 
 CUANDO USAR CADA FUENTE:
+- Para "Fecha de inicio / Kickoff" → buscá una sesión titulada "Kickoff" y su fecha; si no hay, usá fechas mencionadas en transcripciones/notas o la fecha de cierre del deal como referencia. Es el dato que ancla el cronograma.
 - Para "Acuerdos clave y promesas" → priorizá lo mencionado en sesiones de Hand Off o en sesiones de Sales pre-cierre. Citá la fecha de la sesión cuando puedas.
 - Para "¿Qué vendimos?" → deal de HubSpot + line items son la fuente formal. Las sesiones de venta complementan con matices verbales.
 - Para "Stakeholders" → participantes externos en las sesiones disponibles + notas de HubSpot Company. NO confundir asistentes a la sesión de Hand Off con todo el equipo del cliente — esos son solo los que estuvieron en esa reunión.
@@ -73,7 +74,7 @@ REGLAS DEL CRONOGRAMA:
 - ORDEN: tal como se mencionó la secuencia en las sesiones (kick-off típicamente primero).
 
 FORMATO DEL OUTPUT — sections + blocks:
-- Devolvés un array "sections" con 8 objetos, uno por cada sección del canvas Handoff.
+- Devolvés un array "sections" con 9 objetos, uno por cada sección del canvas Handoff.
 - Cada sección tiene un "key" (matchea exacto con la CanvasSection del canvas) y un "blocks" array con UN ÚNICO block tipo "text".
 - El block lleva el contenido en markdown en su field "content".
 
@@ -81,6 +82,12 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
 
 {
   "sections": [
+    {
+      "key": "fecha_inicio_kickoff",
+      "blocks": [
+        { "type": "text", "content": "CUÁNDO arranca el proyecto. Buscá en las fuentes cualquier dato de fecha: una sesión titulada 'Kickoff' (su fecha), o menciones en transcripciones/notas/deal ('arrancamos el…', 'kickoff en…', o la fecha de cierre del deal como referencia). Reportá la fecha encontrada y de dónde sale. Si no hay evidencia: '⚠️ Por validar con Ventas/cliente: fecha de inicio o de kickoff'. Esta fecha define el arranque del cronograma." }
+      ]
+    },
     {
       "key": "acuerdos_promesas",
       "blocks": [
@@ -140,7 +147,7 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
   }
 }
 
-IMPORTANTE: el ejemplo de content arriba describe QUÉ debe ir en cada sección — NO copies ese texto literalmente. Generá contenido REAL basado en las fuentes del cliente. Si una sección no tiene evidencia suficiente, el content de su block debe decir "⚠️ Por validar con cliente: [pregunta específica para la primera reunión de CS]". El JSON SIEMPRE debe tener las 8 secciones con sus keys exactos (no podés omitir ninguna), pero pueden ser placeholders cuando falta info. El cronograma SÍ puede venir vacío ("phases": []) si no hay info clara.`;
+IMPORTANTE: el ejemplo de content arriba describe QUÉ debe ir en cada sección — NO copies ese texto literalmente. Generá contenido REAL basado en las fuentes del cliente. Si una sección no tiene evidencia suficiente, el content de su block debe decir "⚠️ Por validar con cliente: [pregunta específica para la primera reunión de CS]". El JSON SIEMPRE debe tener las 9 secciones con sus keys exactos (no podés omitir ninguna), pero pueden ser placeholders cuando falta info. El cronograma SÍ puede venir vacío ("phases": []) si no hay info clara.`;
 
 async function main() {
   console.log("Actualizando agente Handoff Sales→CS...\n");

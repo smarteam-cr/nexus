@@ -29,6 +29,7 @@ export const HANDOFF_CANVAS: CanvasDefinition = {
   isDefault: false,
   order: 0,
   sections: [
+    { key: "fecha_inicio_kickoff", label: "Fecha de inicio / Kickoff" },
     { key: "acuerdos_promesas",    label: "Acuerdos clave y promesas especiales" },
     { key: "alcance_contratado",   label: "¿Qué vendimos?" },
     { key: "motivacion_decision",  label: "¿Por qué vendimos? (por qué nos eligieron)" },
