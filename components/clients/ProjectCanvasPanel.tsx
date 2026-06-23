@@ -425,9 +425,12 @@ export default function ProjectCanvasPanel({
                 onDone={() => setAgentNonce((n) => n + 1)}
               />
             )}
-            {/* El CTA del Cronograma ("Generar cronograma" / "Chequear avance", bi-estado)
-                vive ahora DENTRO de CronogramaCanvas (vía el portal del slot de abajo), que es
-                quien conoce si hay tareas / si ya se publicó. */}
+            {/* CTA principal del Cronograma (Generar cronograma / Chequear avance) — A LA PAR DEL
+                NOMBRE, igual que el CanvasAgentButton de los demás canvases. Lo inyecta
+                CronogramaCanvas por portal (conoce phases/tasks/published). */}
+            {activeCanvas?.name === "Cronograma" && (
+              <div ref={setCronogramaSlot} className="flex items-center gap-2" />
+            )}
           </div>
           {isResumenCanvas && (
             <p className="text-sm text-gray-400 mt-0.5">
@@ -438,11 +441,6 @@ export default function ProjectCanvasPanel({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {/* Slot de los CTAs del Cronograma (vía portal desde CronogramaCanvas):
-              Pedir cambio con IA + Guardar cambios, a la par de "Acceso activo". */}
-          {activeCanvas?.name === "Cronograma" && (
-            <div ref={setCronogramaSlot} className="flex items-center gap-2" />
-          )}
           {/* Acceso del cliente externo (token + contraseña) — PROJECT-LEVEL:
               las mismas credenciales destraban todas las superficies externas
               (kickoff, cronograma), por eso vive acá y no en un canvas. */}
