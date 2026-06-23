@@ -97,11 +97,11 @@ export function absoluteWeek(phaseStart: number, weekIndex: number): number {
 
 /**
  * Una tarea está ATRASADA si su semana absoluta ya pasó por completo y todavía
- * no está DONE (sea PENDING o IN_PROGRESS). Es ORTOGONAL al estado: el badge
+ * no está resuelta — ni DONE ni SUSPENDED (sigue PENDING o IN_PROGRESS). Es ORTOGONAL al estado: el badge
  * muestra el estado real (pendiente / en curso / hecho) y "atrasada" se marca
  * aparte en rojo. Derivado en render — nunca se persiste (D.3 manejará alertas).
  */
 export function isOverdue(absWeek: number, currentWeek: number | null, status: string): boolean {
   if (currentWeek === null) return false;
-  return absWeek < currentWeek && status !== "DONE";
+  return absWeek < currentWeek && status !== "DONE" && status !== "SUSPENDED";
 }

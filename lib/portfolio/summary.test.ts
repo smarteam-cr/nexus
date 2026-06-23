@@ -117,3 +117,55 @@ test("D — override prevalece sobre la derivada", () => {
   assert.equal(s.health.resolved, "SALUDABLE");
   assert.equal(s.health.source, "override");
 });
+
+test("E — SUSPENDED: fuera del denominador del avance y no cuenta como vencida", () => {
+  const baseline = {
+    snapshot: {
+      anchorStartDate: "2026-04-01",
+      phases: [{ id: "e1", durationWeeks: 2, plannedEnd: "2026-07-01", tasks: [
+        { id: "et1", plannedEnd: "2026-04-08" },
+        { id: "et2", plannedEnd: "2026-04-15" },
+      ] }],
+    } as unknown as BaselineSnapshot,
+    firmnessLabel: "FIRM",
+  };
+  const s = computeProjectSummary({
+    status: "active",
+    anchorStartDate: d("2026-04-01"),
+    phases: [{ id: "e1", name: "Kickoff", status: "IN_PROGRESS", order: 0, durationWeeks: 2, actualStart: d("2026-04-02"), actualEnd: null, tasks: [
+      { id: "et1", status: "DONE", weekIndex: 0, actualStart: d("2026-04-02"), actualEnd: d("2026-04-07"), needsValidation: false },
+      { id: "et2", status: "SUSPENDED", weekIndex: 1, actualStart: null, actualEnd: null, needsValidation: false },
+    ] }],
+    baseline,
+    lastProgressAt: null,
+    healthOverride: null,
+    now: NOW,
+  });
+  assert.ok(Math.abs(s.progress.pct - 1) < 1e-9); // 1 DONE / 1 no-suspendida = 100% (et2 fuera del denominador)
+  assert.equal(s.overdueTasks, 0); // et2 suspendida: su plannedEnd pasó pero NO cuenta como vencida
+});
+
+test("F — fase DONE con tarea PENDING vencida: la guarda evita el falso atraso", () => {
+  const baseline = {
+    snapshot: {
+      anchorStartDate: "2026-04-01",
+      phases: [{ id: "f1", durationWeeks: 2, plannedEnd: "2026-04-15", tasks: [
+        { id: "ft1", plannedEnd: "2026-04-15" },
+      ] }],
+    } as unknown as BaselineSnapshot,
+    firmnessLabel: "FIRM",
+  };
+  const s = computeProjectSummary({
+    status: "active",
+    anchorStartDate: d("2026-04-01"),
+    phases: [{ id: "f1", name: "Kickoff", status: "DONE", order: 0, durationWeeks: 2, actualStart: d("2026-04-02"), actualEnd: d("2026-04-20"), tasks: [
+      { id: "ft1", status: "PENDING", weekIndex: 1, actualStart: null, actualEnd: null, needsValidation: false },
+    ] }],
+    baseline,
+    lastProgressAt: null,
+    healthOverride: null,
+    now: NOW,
+  });
+  assert.equal(s.overdueTasks, 0); // la fase ya está DONE → su tarea PENDING vencida no ensucia el panel
+  assert.equal(s.overduePhases, 0); // la fase DONE tampoco cuenta (guarda de fase ya existente)
+});

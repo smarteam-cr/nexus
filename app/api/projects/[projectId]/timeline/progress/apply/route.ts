@@ -6,7 +6,11 @@
  * el CSE (invariante D.1/D.2: el status lo escribe el humano, nunca el agente).
  *
  * Body = subconjunto ACEPTADO por el CSE (puede haber destildado ítems):
- *   { phaseIds: string[], taskIds: string[], currentPhaseId: string | null }
+ *   { phaseIds: string[], taskIds: string[], suspendedTaskIds: string[], currentPhaseId: string | null }
+ *
+ * E — regla de cierre: una fase de phaseIds solo cierra si TODAS sus tareas quedan resueltas
+ * (DONE vía taskIds, o SUSPENDED vía suspendedTaskIds, o ya lo estaban); si no → 400. Las
+ * suspendidas se marcan SUSPENDED SIN actualEnd (no se ejecutaron).
  *
  * En una transacción: las fases/tareas aceptadas → status DONE; currentPhaseId →
  * IN_PROGRESS (si no quedó DONE); limpia pendingProgress. NO flipea `source` ni
@@ -43,11 +47,17 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
-  const body = (raw ?? {}) as { phaseIds?: unknown; taskIds?: unknown; currentPhaseId?: unknown };
+  const body = (raw ?? {}) as {
+    phaseIds?: unknown;
+    taskIds?: unknown;
+    suspendedTaskIds?: unknown;
+    currentPhaseId?: unknown;
+  };
   const asIds = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.length > 0) : [];
   const phaseIds = asIds(body.phaseIds);
   const taskIds = asIds(body.taskIds);
+  const suspendedTaskIds = asIds(body.suspendedTaskIds);
   const currentPhaseId = typeof body.currentPhaseId === "string" ? body.currentPhaseId : null;
 
   const tl = await prisma.projectTimeline.findUnique({
@@ -56,9 +66,37 @@ export async function POST(
   });
   if (!tl) return NextResponse.json({ error: "No hay cronograma" }, { status: 404 });
 
+  // E — regla de cierre: una fase solo cierra si TODAS sus tareas quedan resueltas (DONE o
+  // SUSPENDED), contando lo aceptado en esta tanda. Si queda alguna activa (PENDING/IN_PROGRESS)
+  // sin resolver acá → 400 (refuerza el bloqueo del banner; cubre también llamadas directas).
+  if (phaseIds.length > 0) {
+    const closing = await prisma.timelinePhase.findMany({
+      where: { id: { in: phaseIds }, timelineId: tl.id },
+      select: { id: true, name: true, tasks: { select: { id: true, status: true } } },
+    });
+    const willResolve = new Set([...taskIds, ...suspendedTaskIds]);
+    const blocked = closing.filter((p) =>
+      p.tasks.some((t) => t.status !== "DONE" && t.status !== "SUSPENDED" && !willResolve.has(t.id)),
+    );
+    if (blocked.length > 0) {
+      const names = blocked.map((p) => `"${p.name}"`).join(", ");
+      return NextResponse.json(
+        {
+          error:
+            blocked.length === 1
+              ? `No se puede cerrar la fase ${names}: tiene tareas sin resolver. Marcá cada tarea como hecha o suspendida.`
+              : `No se pueden cerrar las fases ${names}: tienen tareas sin resolver. Marcá cada tarea como hecha o suspendida.`,
+          blockedPhaseIds: blocked.map((p) => p.id),
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   const now = new Date();
   let phasesDone = 0;
   let tasksDone = 0;
+  let tasksSuspended = 0;
 
   await prisma.$transaction(
     async (tx) => {
@@ -97,6 +135,23 @@ export async function POST(
         }
       }
 
+      // E — tareas suspendidas → SUSPENDED (resueltas pero NO ejecutadas: sin actualEnd).
+      let validSuspendedIds: string[] = [];
+      if (suspendedTaskIds.length > 0) {
+        const valid = await tx.timelineTask.findMany({
+          where: { id: { in: suspendedTaskIds }, phase: { timelineId: tl.id } },
+          select: { id: true },
+        });
+        validSuspendedIds = valid.map((t) => t.id);
+        if (validSuspendedIds.length > 0) {
+          await tx.timelineTask.updateMany({
+            where: { id: { in: validSuspendedIds } },
+            data: { status: "SUSPENDED" },
+          });
+          tasksSuspended = validSuspendedIds.length;
+        }
+      }
+
       // El "hoy" → IN_PROGRESS, salvo que el CSE lo haya marcado DONE en esta misma tanda.
       // Inicio real si faltaba (no pisa el ya registrado).
       if (currentPhaseId) {
@@ -121,7 +176,8 @@ export async function POST(
       const touchedPhaseIds = [
         ...new Set([...phaseIds, ...(currentPhaseId ? [currentPhaseId] : [])]),
       ];
-      if (touchedPhaseIds.length > 0 || validTaskIds.length > 0) {
+      const auditTaskIds = [...new Set([...validTaskIds, ...validSuspendedIds])];
+      if (touchedPhaseIds.length > 0 || auditTaskIds.length > 0) {
         const [phaseRows, taskRows] = await Promise.all([
           touchedPhaseIds.length > 0
             ? tx.timelinePhase.findMany({
@@ -129,9 +185,9 @@ export async function POST(
                 select: { id: true, status: true, actualStart: true, actualEnd: true },
               })
             : Promise.resolve([] as ProgressRow[]),
-          validTaskIds.length > 0
+          auditTaskIds.length > 0
             ? tx.timelineTask.findMany({
-                where: { id: { in: validTaskIds } },
+                where: { id: { in: auditTaskIds } },
                 select: { id: true, status: true, actualStart: true, actualEnd: true },
               })
             : Promise.resolve([] as ProgressRow[]),
@@ -165,5 +221,5 @@ export async function POST(
     { maxWait: 10000, timeout: 30000 },
   );
 
-  return NextResponse.json({ applied: true, phasesDone, tasksDone });
+  return NextResponse.json({ applied: true, phasesDone, tasksDone, tasksSuspended });
 }

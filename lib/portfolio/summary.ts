@@ -110,7 +110,9 @@ export function computeProjectSummary(input: SummaryInput): ProjectSummary {
   // ── Avance ──
   const phasesTotal = phases.length;
   const phasesDone = phases.filter((p) => p.status === "DONE").length;
-  const tasksTotal = allTasks.length;
+  // E — las tareas SUSPENDED están resueltas (aparcadas): fuera del denominador del avance,
+  // así una fase toda Hecha + 1 Suspendida lee 100%, no <100%.
+  const tasksTotal = allTasks.filter((t) => t.status !== "SUSPENDED").length;
   const tasksDone = allTasks.filter((t) => t.status === "DONE").length;
   const pct = tasksTotal > 0 ? tasksDone / tasksTotal : phasesTotal > 0 ? phasesDone / phasesTotal : 0;
 
@@ -132,7 +134,9 @@ export function computeProjectSummary(input: SummaryInput): ProjectSummary {
     }
     for (const t of p.tasks) {
       const te = ends.task.get(t.id);
-      if (te && te.getTime() < now.getTime() && t.status !== "DONE") {
+      // E — no es vencida si está resuelta (DONE/SUSPENDED) ni si su fase ya está DONE
+      // (red barata para data vieja: fase cerrada con tareas PENDING sueltas).
+      if (te && te.getTime() < now.getTime() && t.status !== "DONE" && t.status !== "SUSPENDED" && p.status !== "DONE") {
         overdueTasks++;
         worstMs = Math.max(worstMs, now.getTime() - te.getTime());
       }

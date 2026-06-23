@@ -490,6 +490,7 @@ enum TimelineTaskStatus {
   PENDING
   IN_PROGRESS
   DONE
+  SUSPENDED // E — tarea aparcada/descartada: resuelta (no pendiente ni vencida), no se ejecutó
 }
 
 // ─── ProjectExternalAccess ────────────────────────────────────────────────────

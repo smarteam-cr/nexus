@@ -46,7 +46,7 @@ import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
 
-export type GanttTaskStatus = "PENDING" | "IN_PROGRESS" | "DONE";
+export type GanttTaskStatus = "PENDING" | "IN_PROGRESS" | "DONE" | "SUSPENDED";
 
 export interface GanttTask {
   key: string;
@@ -105,12 +105,14 @@ const NEXT_STATUS: Record<GanttTaskStatus, GanttTaskStatus> = {
   PENDING: "IN_PROGRESS",
   IN_PROGRESS: "DONE",
   DONE: "PENDING",
+  SUSPENDED: "PENDING", // E — un click en una suspendida la reactiva (vuelve a pendiente)
 };
 
 const STATUS_META: Record<GanttTaskStatus, { label: string; cls: string }> = {
   PENDING:     { label: "pendiente", cls: "bg-gray-800 text-gray-400 border-gray-700" },
   IN_PROGRESS: { label: "en curso",  cls: "bg-blue-900/30 text-blue-300 border-blue-700/50" },
   DONE:        { label: "hecho",     cls: "bg-emerald-900/40 text-emerald-300 border-emerald-700/50" },
+  SUSPENDED:   { label: "suspendida", cls: "bg-amber-900/30 text-amber-300 border-amber-700/50" },
 };
 const OVERDUE_CLS = "bg-red-900/40 text-red-300 border-red-700/50";
 
@@ -293,7 +295,7 @@ export default function TimelineGantt({
 
                       const relWeek = w - range.start;
                       const weekTasks = tasksByWeek.get(relWeek) ?? [];
-                      const allDone = weekTasks.length > 0 && weekTasks.every((t) => t.status === "DONE");
+                      const allDone = weekTasks.length > 0 && weekTasks.every((t) => t.status === "DONE" || t.status === "SUSPENDED");
                       const isPast = curWeek !== null && w < curWeek;
                       const isCur = curWeek === w;
                       const weekOverdue = weekTasks.some((t) => isOverdue(w, curWeek, t.status));
@@ -383,11 +385,11 @@ export default function TimelineGantt({
                                             onClick={(e) => e.stopPropagation()}
                                             placeholder="Tarea (visible para el cliente al confirmar)"
                                             className={`flex-1 min-w-0 bg-transparent text-xs border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:outline-none pb-0.5 ${
-                                              t.status === "DONE" ? "text-gray-500 line-through" : "text-gray-300"
+                                              t.status === "DONE" || t.status === "SUSPENDED" ? "text-gray-500 line-through" : "text-gray-300"
                                             }`}
                                           />
                                         ) : (
-                                          <span className={`text-xs ${t.status === "DONE" ? "text-gray-500 line-through" : "text-gray-300"}`}>
+                                          <span className={`text-xs ${t.status === "DONE" || t.status === "SUSPENDED" ? "text-gray-500 line-through" : "text-gray-300"}`}>
                                             {t.title}
                                           </span>
                                         )}
