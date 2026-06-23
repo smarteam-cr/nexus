@@ -143,6 +143,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
               notes: true,
               needsValidation: true,
               source: true,
+              party: true,
             },
           },
         },

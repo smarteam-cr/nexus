@@ -58,6 +58,8 @@ export interface GanttTask {
   needsValidation: boolean;
   /** Procedencia (de `source`): AGENT → tag "IA", MODIFIED|HUMAN → tag "CSE". */
   source?: string;
+  /** B — dueño en el plan compartido (chip). null/undefined = sin asignar. */
+  party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | null;
 }
 
 export interface GanttPhase {
@@ -115,6 +117,13 @@ const STATUS_META: Record<GanttTaskStatus, { label: string; cls: string }> = {
   SUSPENDED:   { label: "suspendida", cls: "bg-amber-900/30 text-amber-300 border-amber-700/50" },
 };
 const OVERDUE_CLS = "bg-red-900/40 text-red-300 border-red-700/50";
+
+// B — dueño de la tarea (chip). Cliente resalta (es lo que frena); Smarteam configura; Ambos conjunto.
+const PARTY_META: Record<string, { label: string; cls: string }> = {
+  CLIENTE:  { label: "Cliente",  cls: "text-amber-300 bg-amber-500/10 border-amber-500/40" },
+  SMARTEAM: { label: "Smarteam", cls: "text-sky-300 bg-sky-500/10 border-sky-500/40" },
+  AMBOS:    { label: "Ambos",    cls: "text-violet-300 bg-violet-500/10 border-violet-500/40" },
+};
 
 // ── Componente ────────────────────────────────────────────────────────────────
 
@@ -391,6 +400,14 @@ export default function TimelineGantt({
                                         ) : (
                                           <span className={`text-xs ${t.status === "DONE" || t.status === "SUSPENDED" ? "text-gray-500 line-through" : "text-gray-300"}`}>
                                             {t.title}
+                                          </span>
+                                        )}
+                                        {t.party && PARTY_META[t.party] && (
+                                          <span
+                                            className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${PARTY_META[t.party].cls}`}
+                                            title="Dueño de la tarea en el plan compartido"
+                                          >
+                                            {PARTY_META[t.party].label}
                                           </span>
                                         )}
                                         {t.source && (

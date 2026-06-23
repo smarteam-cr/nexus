@@ -44,6 +44,7 @@ interface TaskDraft {
   status: GanttTaskStatus;
   needsValidation: boolean;
   source?: string;
+  party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | null;
   _key: string;
 }
 
@@ -92,6 +93,7 @@ interface ServerTask {
   notes: string | null;
   needsValidation: boolean;
   source: string;
+  party: "CLIENTE" | "SMARTEAM" | "AMBOS" | null;
 }
 
 interface ServerPhase {
@@ -204,6 +206,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         status: t.status,
         needsValidation: t.needsValidation,
         source: t.source,
+        party: t.party,
         _key: t.id,
       })),
       _key: p.id,
@@ -684,11 +687,19 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
 
   // ── Toggle de estado desde el Gantt (PATCH, optimista) ────────────────────────
   const toggleStatus = async (taskId: string, next: GanttTaskStatus) => {
+    // Optimista: cambia el status de la tarea y, por coherencia, reconcilia el de su fase
+    // (todas resueltas → DONE; deja de estarlo y estaba DONE → IN_PROGRESS). El server hace lo
+    // mismo de forma autoritativa; si el PATCH falla, load() corrige.
     setPhases((ps) =>
-      ps.map((p) => ({
-        ...p,
-        tasks: p.tasks.map((t) => (t.id === taskId ? { ...t, status: next } : t)),
-      })),
+      ps.map((p) => {
+        if (!p.tasks.some((t) => t.id === taskId)) return p;
+        const tasks = p.tasks.map((t) => (t.id === taskId ? { ...t, status: next } : t));
+        let status = p.status;
+        const allResolved = tasks.length > 0 && tasks.every((t) => t.status === "DONE" || t.status === "SUSPENDED");
+        if (allResolved && p.status !== "DONE") status = "DONE";
+        else if (!allResolved && p.status === "DONE") status = "IN_PROGRESS";
+        return { ...p, tasks, status };
+      }),
     );
     try {
       const res = await fetch(`/api/projects/${projectId}/timeline/tasks/${taskId}`, {
@@ -736,6 +747,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       notes: t.notes,
       needsValidation: t.needsValidation,
       source: t.source,
+      party: t.party,
     })),
   }));
 

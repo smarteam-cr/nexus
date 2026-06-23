@@ -46,20 +46,44 @@ export async function PATCH(
   // de ESTE proyecto (no alcanza con que exista el id).
   const task = await prisma.timelineTask.findFirst({
     where: { id: taskId, phase: { timeline: { projectId } } },
-    select: { id: true, actualStart: true },
+    select: { id: true, actualStart: true, phaseId: true },
   });
   if (!task) {
     return NextResponse.json({ error: "Tarea no encontrada en este proyecto" }, { status: 404 });
   }
 
-  // D.3 fundación — además del status, capturar la fecha REAL de ejecución.
-  const updated = await prisma.timelineTask.update({
-    where: { id: taskId },
-    data: {
-      status: status as TimelineTaskStatus,
-      ...actualDatesPatch(status as TimelineTaskStatus, { actualStart: task.actualStart }),
-    },
-    select: { id: true, status: true, actualStart: true, actualEnd: true, updatedAt: true },
+  const now = new Date();
+  const updated = await prisma.$transaction(async (tx) => {
+    // D.3 fundación — además del status, capturar la fecha REAL de ejecución.
+    const u = await tx.timelineTask.update({
+      where: { id: taskId },
+      data: {
+        status: status as TimelineTaskStatus,
+        ...actualDatesPatch(status as TimelineTaskStatus, { actualStart: task.actualStart }),
+      },
+      select: { id: true, status: true, actualStart: true, actualEnd: true, updatedAt: true },
+    });
+
+    // Coherencia fase↔tarea: una fase CON tareas queda DONE sii TODAS están resueltas
+    // (DONE/SUSPENDED); si deja de estarlo y estaba DONE, reabre a IN_PROGRESS. Así marcar la
+    // última tarea cierra la fase y reabrir una tarea reabre la fase (sin esto, la fase quedaba
+    // "en curso" con todo hecho). Fechas monótonas (solo se setean, nunca se borran).
+    const phase = await tx.timelinePhase.findUnique({
+      where: { id: task.phaseId },
+      select: { status: true, actualStart: true, tasks: { select: { status: true } } },
+    });
+    if (phase && phase.tasks.length > 0) {
+      const allResolved = phase.tasks.every((t) => t.status === "DONE" || t.status === "SUSPENDED");
+      if (allResolved && phase.status !== "DONE") {
+        await tx.timelinePhase.update({
+          where: { id: task.phaseId },
+          data: { status: "DONE", actualEnd: now, ...(phase.actualStart ? {} : { actualStart: now }) },
+        });
+      } else if (!allResolved && phase.status === "DONE") {
+        await tx.timelinePhase.update({ where: { id: task.phaseId }, data: { status: "IN_PROGRESS" } });
+      }
+    }
+    return u;
   });
 
   return NextResponse.json(updated);
