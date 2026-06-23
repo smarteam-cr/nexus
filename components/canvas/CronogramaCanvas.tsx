@@ -851,7 +851,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           saving={saving || (dirty && validationMsg === null)}
           hint={dirty && validationMsg !== null ? validationMsg : undefined}
           unpublished={!dirty && hasUnpublishedChanges}
-          onPublish={() => { setPublishReasonText(""); setError(null); setPublishReasonOpen(true); }}
+          onPublish={() => {
+            setError(null);
+            // #3 — Primera publicación: SIN modal de motivo. Reason vacío → el endpoint usa su
+            // default genérico ("Publicación al cliente"), que el panel ya muestra como "sin
+            // motivo". Republicaciones (ya publicado antes) SÍ piden el motivo del cambio.
+            if (!hasPublishedOnce) { void publishTimeline(true, ""); }
+            else { setPublishReasonText(""); setPublishReasonOpen(true); }
+          }}
           publishing={publishWorking}
           savedMessage="Cambios guardados — el cliente todavía no los ve."
         />
