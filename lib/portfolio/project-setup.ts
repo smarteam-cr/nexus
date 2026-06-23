@@ -18,11 +18,13 @@ import { prisma } from "@/lib/db/prisma";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 
 // Pasos de setup basados en CANVAS (identificados por nombre). Extensible: sumar el canvas de
-// diagnóstico/planificación a futuro = una línea acá + su pill en la UI. `requireConfirmed`
-// controla si un bloque DRAFT cuenta como "generado" (handoff/kickoff cuentan por existencia).
+// diagnóstico/planificación a futuro = una línea acá + su pill en la UI. Cuentan por EXISTENCIA
+// del bloque = "generado", NO "expuesto al cliente" (eso lo gobierna el staging). Con born-CONFIRMED
+// (#1) el handoff/kickoff nacen CONFIRMED; contar por existencia además rescata kickoffs DRAFT viejos.
+// `requireConfirmed` queda por si un paso futuro necesita exigir confirmación.
 export const SETUP_CANVAS_STEPS = [
   { key: "handoff", canvasName: "Handoff", requireConfirmed: false },
-  { key: "kickoff", canvasName: "Kickoff", requireConfirmed: true },
+  { key: "kickoff", canvasName: "Kickoff", requireConfirmed: false },
 ] as const;
 export const SETUP_CANVAS_NAMES: string[] = SETUP_CANVAS_STEPS.map((s) => s.canvasName);
 export const CONFIRMED_ONLY = new Set<string>(
@@ -79,10 +81,11 @@ export async function loadProjectSetup(projectId: string, clientId: string): Pro
         phases: { take: 1, select: { id: true } },
       },
     }),
+    // Procesos por EXISTENCIA (no exige CONFIRMED): el panel mide "generado", no "expuesto" — la
+    // exposición externa sí filtra CONFIRMED (read-procesos / kickoff-view).
     prisma.canvasBlock.findMany({
       where: {
         blockType: "FLOWCHART",
-        status: "CONFIRMED",
         section: {
           key: "procesos",
           canvas: { name: "Información del cliente", project: { clientId, serviceType: SENTINEL_SERVICE_TYPE } },

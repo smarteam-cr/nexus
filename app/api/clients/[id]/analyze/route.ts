@@ -1631,6 +1631,10 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
     const sectionMap = new Map(dbSections.map((s) => [s.key, s.id]));
 
     let totalBlocks = 0;
+    // #1 — Handoff/Kickoff: los bloques nacen CONFIRMED (sin paso de "Aceptar"; borrar = rechazar).
+    // El staging (snapshot al "Subir al cliente") sigue siendo el ÚNICO gate de exposición externa —
+    // generar NO expone nada. Diagnóstico/planificación siguen DRAFT (conservan su revisión).
+    const bornConfirmed = agent.agentGroup === "handoff" || agent.agentGroup === "kickoff";
     const outputSections = analysisJson.sections as Array<{
       key: string;
       blocks: Array<{ type: string; content?: string; data?: unknown }>;
@@ -1640,9 +1644,13 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
       const sectionId = sectionMap.get(section.key);
       if (!sectionId || !section.blocks?.length) continue;
 
-      // Clear existing draft blocks in this section from previous runs
+      // Limpiar la salida anterior del AGENTE antes de regenerar. Con born-CONFIRMED hay que borrar
+      // TODOS los bloques del agente (no solo DRAFT), sino se duplicarían al regenerar; lo editado a
+      // mano (source MODIFIED, incl. edición con IA que guarda por el PUT) y lo manual (HUMAN) sobreviven.
       await prisma.canvasBlock.deleteMany({
-        where: { sectionId, status: "DRAFT", source: "AGENT" },
+        where: bornConfirmed
+          ? { sectionId, source: "AGENT" }
+          : { sectionId, status: "DRAFT", source: "AGENT" },
       });
 
       await prisma.canvasBlock.createMany({
@@ -1666,7 +1674,7 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
             colSpan: DEFAULT_COL_SPAN[bt] ?? 4,
             rowSpan,
             source: "AGENT" as const,
-            status: "DRAFT" as const,
+            status: bornConfirmed ? "CONFIRMED" : "DRAFT",
             agentRunId: run.id,
           };
         }),

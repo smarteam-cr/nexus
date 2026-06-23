@@ -151,7 +151,7 @@ export async function loadPortfolio(
   const cseNameByEmail = new Map(rosterMembers.map((m) => [m.email.toLowerCase(), m.name]));
 
   // 3ra query (batch): bloques de los canvas de setup (Handoff/Kickoff) → qué pasos están
-  // generados por proyecto. Kickoff cuenta solo CONFIRMED; Handoff, cualquier bloque.
+  // generados por proyecto. Cuentan por existencia (born-CONFIRMED #1; regla en project-setup.ts).
   const setupBlocks = projectIds.length
     ? await prisma.canvasBlock.findMany({
         where: { section: { canvas: { projectId: { in: projectIds }, name: { in: SETUP_CANVAS_NAMES } } } },
@@ -167,13 +167,13 @@ export async function loadPortfolio(
     set.add(c.name);
   }
 
-  // 4ta query (batch): clientes CON procesos (flowcharts CONFIRMED con nodos en la sección
-  // "procesos" del canvas "Información del cliente" del proyecto __strategy__). Procesos es por cliente.
+  // 4ta query (batch): clientes CON procesos (flowcharts con nodos en la sección "procesos" del
+  // canvas "Información del cliente" del proyecto __strategy__). Cuenta por EXISTENCIA, no CONFIRMED
+  // (mide "generado", no "expuesto" — la exposición externa sí filtra CONFIRMED). Por cliente.
   const procesoBlocks = clientIds.length
     ? await prisma.canvasBlock.findMany({
         where: {
           blockType: "FLOWCHART",
-          status: "CONFIRMED",
           section: {
             key: "procesos",
             canvas: { name: "Información del cliente", project: { clientId: { in: clientIds }, serviceType: SENTINEL_SERVICE_TYPE } },
