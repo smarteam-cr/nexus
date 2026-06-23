@@ -209,6 +209,7 @@ export async function GET(
       currentStep: true,
       serviceType: true,
       hubspotServiceId: true,
+      hubspotPipelineStageLabel: true,
       hubspotOwnerName: true,
       hubspotOwnerEmail: true,
       hubspotCreatedAt: true,
@@ -222,8 +223,11 @@ export async function GET(
   // Estado actual (HubSpot first, fallback a stage/step internos)
   let currentState: string;
   if (project.hubspotServiceId) {
+    // La etapa se resuelve EN VIVO desde HubSpot (lo más fresco). Si la llamada falla (token del
+    // sistema vencido, rate-limit, etc.), caer al label YA SINCRONIZADO en el Project (sync-projects)
+    // en vez de "Sin etapa" — el dato existe, solo no se pudo revalidar ahora.
     const stage = await getProjectStage(project.hubspotServiceId);
-    currentState = stage?.label ?? "Sin etapa";
+    currentState = stage?.label ?? project.hubspotPipelineStageLabel ?? "Sin etapa";
   } else {
     const stageSteps = getStageSteps(project.serviceType);
     const stageLabel = STAGE_LABELS[project.currentStage] ?? `Etapa ${project.currentStage}`;
