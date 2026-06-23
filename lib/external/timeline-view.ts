@@ -14,8 +14,10 @@
  *     != null. Cualquiera falla → null (la cookie nunca otorga acceso sola).
  *
  * NUNCA cruzan: status/notes/source/needsValidation de tarea, ni el source de
- * fase. SÍ cruzan, by-design: las notas de FASE (lenguaje cliente, D.1) y el
- * activityType (D.1.5 — el Gantt del cliente colorea y arma leyenda por tipo).
+ * fase. Las tareas SUSPENDED (E) se EXCLUYEN por completo — algo descartado del
+ * plan, no parte del cronograma del cliente. SÍ cruzan, by-design: las notas de
+ * FASE (lenguaje cliente, D.1) y el activityType (D.1.5 — el Gantt del cliente
+ * colorea y arma leyenda por tipo).
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -66,10 +68,15 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
     const tasks = await prisma.timelineTask.findMany({
       where: { phase: { timelineId: tl.id } },
       orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
-      select: { phaseId: true, title: true, weekIndex: true },
+      // status SOLO para filtrar (E): NO entra al output → sigue sin cruzar al cliente.
+      select: { phaseId: true, title: true, weekIndex: true, status: true },
     });
     tasksByPhase = new Map();
     for (const t of tasks) {
+      // E — una tarea SUSPENDED se descartó del plan: no es parte del cronograma del cliente.
+      // Filtramos en JS (NO en un WHERE con el literal del enum) para no depender de que el valor
+      // SUSPENDED exista ya en la DB — así funciona aunque la migración E se aplique recién al deploy.
+      if (t.status === "SUSPENDED") continue;
       const arr = tasksByPhase.get(t.phaseId) ?? [];
       arr.push({ title: t.title, weekIndex: t.weekIndex });
       tasksByPhase.set(t.phaseId, arr);
@@ -104,6 +111,8 @@ export async function readPublishedClientTimeline(projectId: string): Promise<Ex
     select: { publishedSnapshot: true },
   });
   if (tl?.publishedSnapshot) {
+    // El snapshot ya nace sin tareas SUSPENDED: se congela desde readClientTimeline (que las
+    // filtra) tanto en publish-timeline como en el backfill de abajo — no hay status que filtrar acá.
     return tl.publishedSnapshot as unknown as ExternalTimelineData;
   }
   if (!tl) return { exists: false, anchorStartDate: null, phases: [] };
