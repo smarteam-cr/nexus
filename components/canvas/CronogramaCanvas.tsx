@@ -292,7 +292,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           : {}),
       });
       if (!res.ok) {
-        setError("No se pudo cambiar la publicación del cronograma.");
+        // Mostrar el motivo REAL del server (ej. "Definí la fecha de arranque del proyecto antes
+        // de publicar.") en vez del genérico — sino el CSE no sabe qué falta.
+        const d = await res.json().catch(() => ({}));
+        setError(d?.error ?? "No se pudo cambiar la publicación del cronograma.");
         return;
       }
       bumpGpsRefresh(); // el pill de cronograma del widget pasa a publicado / borrador
