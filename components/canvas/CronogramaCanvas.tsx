@@ -1037,8 +1037,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       {phases.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-gray-700 px-5 py-8 text-center text-gray-400 space-y-4">
           <p className="text-sm">
-            Todavía no hay cronograma. Creá la primera fase — después pedile los cambios a la IA.
+            Generá el <span className="font-medium text-gray-300">Handoff</span> para ver el cronograma inicial — las fases salen de ahí.
           </p>
+          <p className="text-xs text-gray-600">o creá la primera fase a mano:</p>
           <div className="flex flex-wrap items-center justify-center gap-2.5">
             <input
               value={bootName}
