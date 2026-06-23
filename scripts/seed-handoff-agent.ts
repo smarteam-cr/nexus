@@ -12,7 +12,7 @@
  *   - description: actualizada
  *   - agentGroup: "preparacion" → "handoff" (routea al canvas Handoff)
  *   - defaultCanvasSection: "objetivo_alcance" → "acuerdos_promesas"
- *   - systemPrompt: 8 cards laser-focused + cronograma estructurado, sin suggestions
+ *   - systemPrompt: 9 cards laser-focused + cronograma estructurado, sin suggestions
  *
  * Idempotente — corrida 2 veces deja el mismo estado.
  *
@@ -172,7 +172,7 @@ async function main() {
     data: {
       name: "Handoff Sales→CS",
       description:
-        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 8 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
+        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 9 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
       agentGroup: "handoff",
       defaultCanvasSection: "acuerdos_promesas",
       systemPrompt: HANDOFF_SYSTEM_PROMPT,

@@ -1644,41 +1644,42 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
       const sectionId = sectionMap.get(section.key);
       if (!sectionId || !section.blocks?.length) continue;
 
-      // Limpiar la salida anterior del AGENTE antes de regenerar. Con born-CONFIRMED hay que borrar
-      // TODOS los bloques del agente (no solo DRAFT), sino se duplicarían al regenerar; lo editado a
-      // mano (source MODIFIED, incl. edición con IA que guarda por el PUT) y lo manual (HUMAN) sobreviven.
-      await prisma.canvasBlock.deleteMany({
-        where: bornConfirmed
-          ? { sectionId, source: "AGENT" }
-          : { sectionId, status: "DRAFT", source: "AGENT" },
+      // Atómico: borrar la salida anterior del AGENTE + crear la nueva en UNA transacción. Con
+      // born-CONFIRMED el delete borra TODOS los bloques del agente (no solo DRAFT), sino se
+      // duplicarían al regenerar; lo editado a mano (MODIFIED, incl. IA por el PUT) y lo manual
+      // (HUMAN) sobreviven. La tx evita dejar la sección vacía si el createMany falla entre medio.
+      const blockData: Prisma.CanvasBlockCreateManyInput[] = section.blocks.map((block, i) => {
+        const bt = (block.type?.toLowerCase() ?? "text") as BlockType;
+        // Conservative rowSpan — user can resize if needed
+        const contentLen = (block.content ?? "").length;
+        const tableRows = (block.data as { rows?: unknown[] } | null)?.rows?.length ?? 0;
+        let rowSpan: number;
+        if (bt === "heading") rowSpan = 1;
+        else if (bt === "metric") rowSpan = 1;
+        else if (bt === "table") rowSpan = Math.max(2, Math.ceil((tableRows + 1) * 35 / 125));
+        else if (bt === "flowchart") rowSpan = 3;
+        else rowSpan = Math.max(1, Math.ceil(contentLen / 800));
+        return {
+          sectionId,
+          blockType: (bt.toUpperCase()) as "TEXT" | "HEADING" | "TABLE" | "METRIC" | "CALLOUT" | "CARD" | "FLOWCHART" | "CHART" | "IMAGE",
+          content: block.content ?? null,
+          data: block.data ?? undefined,
+          order: i,
+          colSpan: DEFAULT_COL_SPAN[bt] ?? 4,
+          rowSpan,
+          source: "AGENT" as const,
+          status: bornConfirmed ? "CONFIRMED" : "DRAFT",
+          agentRunId: run.id,
+        };
       });
-
-      await prisma.canvasBlock.createMany({
-        data: section.blocks.map((block, i) => {
-          const bt = (block.type?.toLowerCase() ?? "text") as BlockType;
-          // Conservative rowSpan — user can resize if needed
-          const contentLen = (block.content ?? "").length;
-          const tableRows = (block.data as { rows?: unknown[] } | null)?.rows?.length ?? 0;
-          let rowSpan: number;
-          if (bt === "heading") rowSpan = 1;
-          else if (bt === "metric") rowSpan = 1;
-          else if (bt === "table") rowSpan = Math.max(2, Math.ceil((tableRows + 1) * 35 / 125));
-          else if (bt === "flowchart") rowSpan = 3;
-          else rowSpan = Math.max(1, Math.ceil(contentLen / 800));
-          return {
-            sectionId,
-            blockType: (bt.toUpperCase()) as "TEXT" | "HEADING" | "TABLE" | "METRIC" | "CALLOUT" | "CARD" | "FLOWCHART" | "CHART" | "IMAGE",
-            content: block.content ?? null,
-            data: block.data ?? undefined,
-            order: i,
-            colSpan: DEFAULT_COL_SPAN[bt] ?? 4,
-            rowSpan,
-            source: "AGENT" as const,
-            status: bornConfirmed ? "CONFIRMED" : "DRAFT",
-            agentRunId: run.id,
-          };
+      await prisma.$transaction([
+        prisma.canvasBlock.deleteMany({
+          where: bornConfirmed
+            ? { sectionId, source: "AGENT" }
+            : { sectionId, status: "DRAFT", source: "AGENT" },
         }),
-      });
+        prisma.canvasBlock.createMany({ data: blockData }),
+      ]);
       totalBlocks += section.blocks.length;
     }
 
