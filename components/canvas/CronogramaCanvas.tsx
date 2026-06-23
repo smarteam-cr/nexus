@@ -132,7 +132,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // sin modal (#3) + bloquear "Generar cronograma" sobre un cronograma ya vivo (#2).
   const [hasPublishedOnce, setHasPublishedOnce] = useState(false);
   // Señal del workspace: al generar el handoff, el cronograma (si está vacío) recarga sus fases.
-  const { timelineRefreshSignal } = useWorkspace();
+  const { timelineRefreshSignal, bumpGpsRefresh } = useWorkspace();
   const [lastEditedAt, setLastEditedAt] = useState<string | null>(null);
   const [publishWorking, setPublishWorking] = useState(false);
   // Modal de razón del cambio — SOLO al "Subir al cliente" (no en el auto-guardado).
@@ -295,6 +295,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setError("No se pudo cambiar la publicación del cronograma.");
         return;
       }
+      bumpGpsRefresh(); // el pill de cronograma del widget pasa a publicado / borrador
       setPublishReasonOpen(false);
       setPublishReasonText("");
       await load();

@@ -15,6 +15,7 @@
 import { useState } from "react";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
+import { invalidateGps } from "@/lib/clients/gps-cache";
 
 export default function ClientProcesosPanel({
   clientId,
@@ -43,7 +44,12 @@ export default function ClientProcesosPanel({
           label="Generar procesos"
           runningLabel="Mapeando…"
           async
-          onDone={() => setAgentNonce((n) => n + 1)}
+          onDone={() => {
+            setAgentNonce((n) => n + 1);
+            // Procesos es client-level y se genera en OTRA pestaña (GPS no montado) → invalidar el
+            // cache del GPS para que el pill "Procesos" del widget refetchee al volver al proyecto.
+            invalidateGps();
+          }}
         />
       </div>
       <CanvasLinearView key={agentNonce} projectId={projectId} canvasId={canvasId} onlyKey="procesos" />

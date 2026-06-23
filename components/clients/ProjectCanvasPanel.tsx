@@ -16,6 +16,7 @@ import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import ProjectHandoffSection from "./ProjectHandoffSection";
+import { useWorkspace } from "./WorkspaceContext";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
@@ -96,6 +97,8 @@ export default function ProjectCanvasPanel({
   // Se incrementa al terminar una corrida de agente desde el CTA → remonta el canvas
   // activo (key) para que muestre los bloques nuevos sin recargar la página.
   const [agentNonce, setAgentNonce] = useState(0);
+  // Para refrescar el widget del proyecto (ProjectGPS + pills de setup) al generar un canvas.
+  const { bumpGpsRefresh } = useWorkspace();
   const [canvasDropdownOpen, setCanvasDropdownOpen] = useState(false);
   const [addingSectionName, setAddingSectionName] = useState<string | null>(null);
   const canvasDropdownRef = useRef<HTMLDivElement>(null);
@@ -422,7 +425,7 @@ export default function ProjectCanvasPanel({
                 agentId={CANVAS_PRIMARY_AGENT[activeCanvas.name].agentId}
                 label={CANVAS_PRIMARY_AGENT[activeCanvas.name].label}
                 async={CANVAS_PRIMARY_AGENT[activeCanvas.name].async}
-                onDone={() => setAgentNonce((n) => n + 1)}
+                onDone={() => { setAgentNonce((n) => n + 1); bumpGpsRefresh(); }}
               />
             )}
             {/* CTA principal del Cronograma (Generar cronograma / Chequear avance) — A LA PAR DEL

@@ -52,7 +52,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [savingSource, setSavingSource] = useState(false);
-  const { bumpTimelineRefresh } = useWorkspace();
+  const { bumpTimelineRefresh, bumpGpsRefresh } = useWorkspace();
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -135,12 +135,13 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
       await fetchStatus();
       setShowDoc(true);
       bumpTimelineRefresh();
+      bumpGpsRefresh(); // el widget del proyecto (pills de setup) se actualiza: handoff → ✓
     } catch {
       setError("Error de conexión al generar el handoff.");
     } finally {
       setGenerating(false);
     }
-  }, [projectId, clientId, fetchStatus, status?.agentId, bumpTimelineRefresh]);
+  }, [projectId, clientId, fetchStatus, status?.agentId, bumpTimelineRefresh, bumpGpsRefresh]);
 
   if (loading) return <div className="h-14 rounded-2xl skeleton-shimmer" />;
   if (!status) return null;
