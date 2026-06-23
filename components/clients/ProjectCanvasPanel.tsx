@@ -13,7 +13,6 @@ import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import KickoffLanding from "@/components/canvas/KickoffLanding";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
-import CronogramaProgressButton from "@/components/clients/CronogramaProgressButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import ProjectHandoffSection from "./ProjectHandoffSection";
@@ -426,14 +425,9 @@ export default function ProjectCanvasPanel({
                 onDone={() => setAgentNonce((n) => n + 1)}
               />
             )}
-            {/* CTA del agente de avance (D.2) para el Cronograma — mismo lugar que los
-                CTA de agente de los demás canvases. Remonta el canvas al terminar. */}
-            {!isResumenCanvas && activeCanvas?.name === "Cronograma" && (
-              <CronogramaProgressButton
-                projectId={projectId}
-                onDone={() => setAgentNonce((n) => n + 1)}
-              />
-            )}
+            {/* El CTA del Cronograma ("Generar cronograma" / "Chequear avance", bi-estado)
+                vive ahora DENTRO de CronogramaCanvas (vía el portal del slot de abajo), que es
+                quien conoce si hay tareas / si ya se publicó. */}
           </div>
           {isResumenCanvas && (
             <p className="text-sm text-gray-400 mt-0.5">

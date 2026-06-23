@@ -77,6 +77,10 @@ interface TimelineResponse {
   /** D.1.5 — flag de publicación de la superficie externa del cronograma (vive
    *  en Project). El preview interno del kickoff lo espeja para ser fiel. */
   timelinePublishedAt: string | null;
+  /** ¿El cronograma se publicó AL MENOS UNA VEZ? (ProjectTimeline.publishedSnapshot != null).
+   *  Persiste aunque se despublique → distingue 1ra publicación (sin modal de motivo, #3) de
+   *  re-publicación, y bloquea "Generar cronograma" sobre un cronograma ya vivo (#2). */
+  hasPublishedOnce: boolean;
   /** Fecha de la sesión de kickoff del proyecto (ISO) o null. Solo informativo: la UI
    *  la ofrece como sugerencia del anchor cuando difiere del actual. */
   kickoffSessionDate: string | null;
@@ -114,6 +118,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
       pendingProposalRunId: true,
       pendingProgress: true,
       pendingProgressRunId: true,
+      publishedSnapshot: true,
       project: { select: { timelinePublishedAt: true } },
       phases: {
         orderBy: { order: "asc" },
@@ -153,6 +158,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     generatedByAgentRunId: tl.generatedByAgentRunId,
     detailConfirmedAt: tl.detailConfirmedAt?.toISOString() ?? null,
     timelinePublishedAt: tl.project.timelinePublishedAt?.toISOString() ?? null,
+    hasPublishedOnce: tl.publishedSnapshot != null,
     kickoffSessionDate: kickoffDate?.toISOString() ?? null,
     pendingProposal: (tl.pendingProposal as PutBody | null) ?? null,
     pendingProposalRunId: tl.pendingProposalRunId,

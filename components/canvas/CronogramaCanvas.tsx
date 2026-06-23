@@ -33,6 +33,7 @@ import { useToast } from "@/components/ui/Toast";
 import TimelineGantt, { type GanttPhase, type GanttTaskStatus } from "./TimelineGantt";
 import TimelineAssistDialog from "./TimelineAssistDialog";
 import PublishBar from "./PublishBar";
+import CronogramaProgressButton from "@/components/clients/CronogramaProgressButton";
 
 interface TaskDraft {
   id?: string;
@@ -126,6 +127,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [error, setError] = useState<string | null>(null);
   // ── Publicación al cliente (in-canvas) ──
   const [publishedAt, setPublishedAt] = useState<string | null>(null);
+  // ¿Se publicó al menos una vez? (publishedSnapshot != null). Gobierna: primera publicación
+  // sin modal (#3) + bloquear "Generar cronograma" sobre un cronograma ya vivo (#2).
+  const [hasPublishedOnce, setHasPublishedOnce] = useState(false);
   const [lastEditedAt, setLastEditedAt] = useState<string | null>(null);
   const [publishWorking, setPublishWorking] = useState(false);
   // Modal de razón del cambio — SOLO al "Subir al cliente" (no en el auto-guardado).
@@ -149,7 +153,6 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
   const keyCounter = useRef(0);
   const nextKey = () => `new-${keyCounter.current++}`;
-  const autoDetailRanRef = useRef(false); // auto-genera el detalle una vez por montaje
   // Auto-guardado: cuenta de ediciones locales. Si cambia DURANTE un PUT, no pisamos
   // el estado con la respuesta del server (evita perder lo que el CSE tipeó mientras guardaba).
   const editSeq = useRef(0);
@@ -211,6 +214,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
         setKickoffDate(data.kickoffSessionDate ? String(data.kickoffSessionDate).slice(0, 10) : "");
         setPublishedAt(data.timelinePublishedAt ?? null);
+        setHasPublishedOnce(!!data.hasPublishedOnce);
         setLastEditedAt(data.lastEditedByHuman ?? null);
         // Propuesta de re-generación del agente (re-run con cronograma ya existente):
         // se muestra como vista previa aplicable, reusando el mismo banner que el assist.
@@ -230,6 +234,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setKickoffDate("");
         setPendingProgress(null);
         setPublishedAt(null);
+        setHasPublishedOnce(false);
         setLastEditedAt(null);
       }
       setError(null);
@@ -522,17 +527,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     setGenerating(false);
   };
 
-  // Auto-generar el detalle al abrir: si hay fases pero todavía no hay tareas, la
-  // IA las crea sin que el CSE lo pida (proceso invisible). Una vez por montaje.
-  useEffect(() => {
-    if (loading || generating || autoDetailRanRef.current) return;
-    const hasPhases = phases.length > 0;
-    const hasTasks = phases.some((p) => p.tasks.length > 0);
-    if (hasPhases && !hasTasks) {
-      autoDetailRanRef.current = true;
-      void generateDetail({ auto: true });
-    }
-  }, [loading, generating, phases]);
+  // El detalle (tareas) ya NO se auto-genera en silencio: lo crea el CTA explícito
+  // "Generar cronograma" (#2). Ver el portal de acciones más abajo.
 
   // ── Asistente IA: instrucción → propuesta → aplicar/descartar ─────────────────
   const submitAssist = async (instruction: string, scopePhaseId: string | null) => {
@@ -812,6 +808,25 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               <span className="w-3 h-3 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
               Creando tareas…
             </span>
+          )}
+          {/* CTA bi-estado (#2): sin tareas (y nunca publicado) → "Generar cronograma" (crea las
+              tareas iniciales); ya con tareas o publicado → "Chequear avance" (D.2). El gate
+              !hasPublishedOnce evita regenerar sobre un cronograma vivo (borraría fechas/avance),
+              aun si se borraron las tareas post-publicación. */}
+          {phases.length > 0 && !proposal && (
+            !hasPublishedOnce && !phases.some((p) => p.tasks.length > 0) ? (
+              <button
+                onClick={() => void generateDetail({ auto: false })}
+                disabled={generating}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"
+                title="Crea las tareas iniciales del cronograma con IA, sobre las fases del handoff"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                Generar cronograma
+              </button>
+            ) : (
+              <CronogramaProgressButton projectId={projectId} onDone={load} />
+            )
           )}
           {phases.length > 0 && !proposal && (
             <button
