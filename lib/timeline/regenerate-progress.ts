@@ -190,18 +190,37 @@ export async function regenerateTimelineProgress(
         ? prog.currentPhaseId
         : null;
 
-    // Solo done:true, con id válido, y que NO esté ya DONE (no re-proponer).
+    // Fases que el agente marca completas (válidas, no ya DONE) — la PROPUESTA de avance.
     const phasesDone = (prog.phases ?? [])
       .filter((p) => p?.done === true && typeof p.id === "string" && phaseStatus.has(p.id) && phaseStatus.get(p.id) !== "DONE")
       .map((p) => ({ id: p.id as string, done: true }));
-    const tasksDone = (prog.tasks ?? [])
-      .filter((t) => t?.done === true && typeof t.id === "string" && taskStatus.has(t.id) && taskStatus.get(t.id) !== "DONE")
-      .map((t) => ({ id: t.id as string, done: true }));
+    // Ids de tareas que el agente infirió hechas (válidas, no ya DONE).
+    const inferredDone = new Set(
+      (prog.tasks ?? [])
+        .filter((t) => t?.done === true && typeof t.id === "string" && taskStatus.has(t.id) && taskStatus.get(t.id) !== "DONE")
+        .map((t) => t.id as string),
+    );
 
     // ¿Hay algo que proponer? (nuevo done, o un "hoy" que no es la fase ya IN_PROGRESS)
     const currentIsNew = currentPhaseId !== null && phaseStatus.get(currentPhaseId) !== "IN_PROGRESS";
-    if (phasesDone.length === 0 && tasksDone.length === 0 && !currentIsNew) {
+    if (phasesDone.length === 0 && inferredDone.size === 0 && !currentIsNew) {
       return { status: "skipped", reason: "no_progress_detected", projectId, currentPhaseId, lastSessionDate, lastSessionArea };
+    }
+
+    // D — el banner confirma tarea-por-tarea: pendingProgress.tasks lleva TODAS las tareas
+    // NO-DONE de las fases en juego (las que el agente cierra + el "hoy"), con `done` pre-seteado
+    // por inferencia. Así el CSE resuelve cada una (hecha/suspendida) y E puede cerrar la fase.
+    const phasesInPlay = new Set<string>([
+      ...phasesDone.map((p) => p.id),
+      ...(currentPhaseId ? [currentPhaseId] : []),
+    ]);
+    const tasksDraft: Array<{ id: string; done: boolean }> = [];
+    for (const ph of project.timeline.phases) {
+      if (!phasesInPlay.has(ph.id)) continue;
+      for (const t of ph.tasks) {
+        if (t.status === "DONE") continue; // ya hecha, no re-proponer
+        tasksDraft.push({ id: t.id, done: inferredDone.has(t.id) });
+      }
     }
 
     // 7. AgentRun (trazabilidad) + persistir el borrador (reemplaza el anterior).
@@ -221,7 +240,7 @@ export async function regenerateTimelineProgress(
       asOfSessionId: opts.asOfSessionId ?? null,
       reasoning: typeof prog.reasoning === "string" ? prog.reasoning : "",
       phases: phasesDone,
-      tasks: tasksDone,
+      tasks: tasksDraft,
     };
 
     await prisma.projectTimeline.update({
@@ -233,14 +252,14 @@ export async function regenerateTimelineProgress(
     });
 
     console.log(
-      `[timeline-progress] ✓ borrador de avance para project ${projectId}: ${phasesDone.length} fases, ${tasksDone.length} tareas, hoy=${currentPhaseId ?? "—"} (run ${run.id})`,
+      `[timeline-progress] ✓ borrador de avance para project ${projectId}: ${phasesDone.length} fases, ${inferredDone.size} tareas hechas (${tasksDraft.length} a confirmar), hoy=${currentPhaseId ?? "—"} (run ${run.id})`,
     );
     return {
       status: "ok",
       projectId,
       runId: run.id,
       phasesDone: phasesDone.length,
-      tasksDone: tasksDone.length,
+      tasksDone: inferredDone.size,
       currentPhaseId,
       lastSessionDate,
       lastSessionArea,
