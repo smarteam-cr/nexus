@@ -152,6 +152,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [pendingProgress, setPendingProgress] = useState<PendingProgress | null>(null);
   const [progressPhaseSel, setProgressPhaseSel] = useState<Set<string>>(new Set());
   const [progressTaskSel, setProgressTaskSel] = useState<Set<string>>(new Set());
+  const [progressSuspendedSel, setProgressSuspendedSel] = useState<Set<string>>(new Set());
   const [applyingProgress, setApplyingProgress] = useState(false);
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
   const keyCounter = useRef(0);
@@ -225,12 +226,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setProposal((prev) =>
           prev ?? (data.pendingProposal ? (data.pendingProposal as Proposal) : null),
         );
-        // D.2 — borrador de avance: lo expone el GET. Inicializa la selección con
-        // TODO lo propuesto pre-marcado (el CSE puede destildar antes de aplicar).
+        // D.2 — borrador de avance: lo expone el GET. Pre-tildá las fases propuestas y, de las
+        // tareas, SOLO las que el agente infirió hechas (done:true). El resto arranca Pendiente
+        // y nada Suspendido — el CSE resuelve cada tarea (hecha/suspendida) antes de cerrar la fase.
         const pp = data.pendingProgress ? (data.pendingProgress as PendingProgress) : null;
         setPendingProgress(pp);
         setProgressPhaseSel(new Set((pp?.phases ?? []).map((p) => p.id)));
-        setProgressTaskSel(new Set((pp?.tasks ?? []).map((t) => t.id)));
+        setProgressTaskSel(new Set((pp?.tasks ?? []).filter((t) => t.done).map((t) => t.id)));
+        setProgressSuspendedSel(new Set());
       } else {
         setPhases([]);
         setAnchor("");
@@ -586,6 +589,28 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     setAssistWarnings([]);
   };
 
+  // ── D/E — banner de avance: meta de tareas (título + fase) y regla de cierre de fase ──
+  const progressTaskMeta = new Map<string, { title: string; phaseId: string; phaseName: string }>();
+  for (const p of phases) for (const t of p.tasks) if (t.id && p.id) progressTaskMeta.set(t.id, { title: t.title, phaseId: p.id, phaseName: p.name });
+  const phaseToTaskIds = new Map<string, string[]>();
+  if (pendingProgress) {
+    for (const tk of pendingProgress.tasks) {
+      const ph = progressTaskMeta.get(tk.id)?.phaseId;
+      if (!ph) continue;
+      const arr = phaseToTaskIds.get(ph);
+      if (arr) arr.push(tk.id);
+      else phaseToTaskIds.set(ph, [tk.id]);
+    }
+  }
+  // Una fase de pendingProgress.phases solo cierra si TODAS sus tareas del borrador quedan
+  // resueltas (Hecha o Suspendida). Refuerza el 400 del apply.
+  const isPhaseResolvable = (phaseId: string): boolean =>
+    (phaseToTaskIds.get(phaseId) ?? []).every((id) => progressTaskSel.has(id) || progressSuspendedSel.has(id));
+  const setTaskState = (id: string, state: "done" | "suspended" | "pending") => {
+    setProgressTaskSel((s) => { const n = new Set(s); if (state === "done") n.add(id); else n.delete(id); return n; });
+    setProgressSuspendedSel((s) => { const n = new Set(s); if (state === "suspended") n.add(id); else n.delete(id); return n; });
+  };
+
   // ── Avance (D.2): aplicar lo que el CSE confirmó / descartar el borrador ──────
   const applyProgress = async () => {
     if (!pendingProgress) return;
@@ -596,8 +621,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phaseIds: [...progressPhaseSel],
+          // Solo fases con TODAS sus tareas resueltas (la UI lo exige; el server lo revalida).
+          phaseIds: [...progressPhaseSel].filter(isPhaseResolvable),
           taskIds: [...progressTaskSel],
+          suspendedTaskIds: [...progressSuspendedSel],
           currentPhaseId: pendingProgress.currentPhaseId,
         }),
       });
@@ -941,16 +968,29 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 </span>
                 {pendingProgress.phases.map((ph) => {
                   const name = phases.find((p) => p.id === ph.id)?.name ?? "(fase)";
-                  const checked = progressPhaseSel.has(ph.id);
+                  const resolvable = isPhaseResolvable(ph.id);
+                  const checked = resolvable && progressPhaseSel.has(ph.id);
+                  const pendingCount = (phaseToTaskIds.get(ph.id) ?? []).filter(
+                    (id) => !progressTaskSel.has(id) && !progressSuspendedSel.has(id),
+                  ).length;
                   return (
-                    <label key={ph.id} className="flex items-center gap-2.5 text-sm text-gray-200 cursor-pointer">
+                    <label
+                      key={ph.id}
+                      className={`flex items-center gap-2.5 text-sm ${resolvable ? "text-gray-200 cursor-pointer" : "text-gray-500 cursor-not-allowed"}`}
+                    >
                       <input
                         type="checkbox"
                         checked={checked}
+                        disabled={!resolvable}
                         onChange={() => setProgressPhaseSel((s) => toggleSet(s, ph.id))}
-                        className="w-4 h-4 accent-emerald-500"
+                        className="w-4 h-4 accent-emerald-500 disabled:opacity-40"
                       />
                       <span className={checked ? "" : "line-through text-gray-600"}>{name}</span>
+                      {!resolvable && (
+                        <span className="text-[11px] text-amber-300/90">
+                          · resolvé {pendingCount} {pendingCount === 1 ? "tarea" : "tareas"} para cerrarla
+                        </span>
+                      )}
                     </label>
                   );
                 })}
@@ -960,34 +1000,45 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             {pendingProgress.tasks.length > 0 && (
               <div className="space-y-1.5">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400/80">
-                  Tareas hechas
+                  Confirmá cada tarea
                 </span>
                 {pendingProgress.tasks.map((tk) => {
-                  let title = "(tarea)";
-                  let phaseName = "";
-                  for (const p of phases) {
-                    const t = p.tasks.find((t) => t.id === tk.id);
-                    if (t) { title = t.title; phaseName = p.name; break; }
-                  }
-                  const checked = progressTaskSel.has(tk.id);
+                  const meta = progressTaskMeta.get(tk.id);
+                  const title = meta?.title ?? "(tarea)";
+                  const phaseName = meta?.phaseName ?? "";
+                  const isDone = progressTaskSel.has(tk.id);
+                  const isSusp = progressSuspendedSel.has(tk.id);
+                  const state: "done" | "suspended" | "pending" = isDone ? "done" : isSusp ? "suspended" : "pending";
                   return (
-                    <label key={tk.id} className="flex items-center gap-2.5 text-sm text-gray-200 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => setProgressTaskSel((s) => toggleSet(s, tk.id))}
-                        className="w-4 h-4 accent-emerald-500"
-                      />
-                      <span className={checked ? "" : "line-through text-gray-600"}>{title}</span>
+                    <div key={tk.id} className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className={isDone ? "text-gray-200" : isSusp ? "text-gray-500 line-through" : "text-gray-300"}>
+                        {title}
+                      </span>
                       {phaseName && <span className="text-gray-500 text-xs">· {phaseName}</span>}
-                    </label>
+                      <div className="ml-auto inline-flex rounded-lg border border-gray-700 overflow-hidden text-[11px] font-semibold">
+                        {([
+                          { k: "done", label: "Hecha", on: "bg-emerald-500/25 text-emerald-200" },
+                          { k: "suspended", label: "Suspendida", on: "bg-amber-500/20 text-amber-200" },
+                          { k: "pending", label: "Pendiente", on: "bg-gray-600/40 text-gray-200" },
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.k}
+                            type="button"
+                            onClick={() => setTaskState(tk.id, opt.k)}
+                            className={`px-2.5 py-1 transition-colors ${state === opt.k ? opt.on : "text-gray-500 hover:text-gray-300"}`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
             )}
 
             <p className="text-xs text-gray-400 pt-2 border-t border-emerald-700/25">
-              Al aplicar, vos confirmás el avance (se marca como hecho). El agente solo lo propone — destildá lo que no corresponda.
+              Marcá cada tarea como Hecha, Suspendida o Pendiente. Una fase solo se cierra cuando todas sus tareas quedan resueltas (hechas o suspendidas). El agente solo propone — vos confirmás.
             </p>
           </div>
         )}
