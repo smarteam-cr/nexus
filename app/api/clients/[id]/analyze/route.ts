@@ -2309,6 +2309,8 @@ async function persistTimelineDetailFromAgentOutput(
         phases: {
           select: {
             id: true,
+            name: true,
+            order: true,
             durationWeeks: true,
             activityType: true,
             _count: { select: { tasks: true } },
@@ -2405,6 +2407,50 @@ async function persistTimelineDetailFromAgentOutput(
       if (toCreate.length > 0) {
         await tx.timelineTask.createMany({ data: toCreate });
         tasksCreated += toCreate.length;
+      }
+    }
+
+    // C — entregas del cliente que SIEMPRE arrancan el proyecto: sembradas en la fase Kick-off
+    // en la generación inicial (garantizado por la idempotencia de arriba; data histórica intacta).
+    // Son compromisos firmes del cliente (party CLIENTE, needsValidation false). Dedup por título
+    // normalizado contra lo que el agente ya creó para esa fase; el CSE puede editarlas/borrarlas.
+    const normName = (s: string) => s.trim().toLowerCase();
+    const phasesArr = [...phaseById.values()];
+    const kickoff =
+      phasesArr.find((p) => p.order === 0 && normName(p.name).includes("kick")) ??
+      phasesArr.find((p) => normName(p.name).includes("kick")) ??
+      null;
+    if (kickoff) {
+      const CLIENT_SEED_TITLES = [
+        "Entregar documentación de procesos involucrados",
+        "Proporcionar bases de datos a importar",
+        "Entregar listado de usuarios a ingresar al CRM",
+      ];
+      const existing = await tx.timelineTask.findMany({
+        where: { phaseId: kickoff.id },
+        select: { title: true, weekIndex: true },
+      });
+      const existingNorm = new Set(existing.map((t) => normName(t.title)));
+      const week0Count = existing.filter((t) => t.weekIndex === 0).length;
+      const seeds = CLIENT_SEED_TITLES.filter((title) => !existingNorm.has(normName(title))).map(
+        (title, i) => ({
+          phaseId: kickoff.id,
+          title,
+          weekIndex: 0,
+          order: week0Count + i,
+          notes: null,
+          needsValidation: false,
+          party: "CLIENTE" as const,
+          source: "AGENT" as const,
+          status: "PENDING" as const,
+        }),
+      );
+      if (seeds.length > 0) {
+        await tx.timelineTask.createMany({ data: seeds });
+        tasksCreated += seeds.length;
+        console.log(
+          `[analyze] ✓ C: ${seeds.length} entregas del cliente sembradas en Kick-off "${kickoff.name}" (project ${bodyProjectId})`,
+        );
       }
     }
 
