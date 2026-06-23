@@ -34,6 +34,7 @@ import TimelineGantt, { type GanttPhase, type GanttTaskStatus } from "./Timeline
 import TimelineAssistDialog from "./TimelineAssistDialog";
 import PublishBar from "./PublishBar";
 import CronogramaProgressButton from "@/components/clients/CronogramaProgressButton";
+import { useWorkspace } from "@/components/clients/WorkspaceContext";
 
 interface TaskDraft {
   id?: string;
@@ -130,6 +131,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // ¿Se publicó al menos una vez? (publishedSnapshot != null). Gobierna: primera publicación
   // sin modal (#3) + bloquear "Generar cronograma" sobre un cronograma ya vivo (#2).
   const [hasPublishedOnce, setHasPublishedOnce] = useState(false);
+  // Señal del workspace: al generar el handoff, el cronograma (si está vacío) recarga sus fases.
+  const { timelineRefreshSignal } = useWorkspace();
   const [lastEditedAt, setLastEditedAt] = useState<string | null>(null);
   const [publishWorking, setPublishWorking] = useState(false);
   // Modal de razón del cambio — SOLO al "Subir al cliente" (no en el auto-guardado).
@@ -248,6 +251,17 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Generar el handoff crea las fases del cronograma como efecto. El handoff bumpea
+  // timelineRefreshSignal → si el cronograma está VACÍO, recargamos para que aparezcan (no
+  // pisamos uno con datos/ediciones). Solo reacciona al CAMBIO de la señal, no al montaje.
+  const lastTimelineSignal = useRef(timelineRefreshSignal);
+  useEffect(() => {
+    if (timelineRefreshSignal === lastTimelineSignal.current) return;
+    lastTimelineSignal.current = timelineRefreshSignal;
+    if (phases.length === 0 && !loading) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timelineRefreshSignal]);
 
   // Logo del cliente — mismo branding que ve el cliente, también del lado de Nexus.
   useEffect(() => {

@@ -12,6 +12,7 @@
 import { useState, useEffect, useCallback } from "react";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import { pollAgentRun } from "@/lib/clients/poll-agent-run";
+import { useWorkspace } from "./WorkspaceContext";
 
 interface HandoffStatus {
   handoffId: string | null;
@@ -51,6 +52,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [savingSource, setSavingSource] = useState(false);
+  const { bumpTimelineRefresh } = useWorkspace();
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -129,15 +131,16 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
           body: JSON.stringify({ handoffId }),
         }).catch(() => {});
       }
-      // 4. Refrescar estado + abrir el doc
+      // 4. Refrescar estado + abrir el doc + avisar al cronograma (las fases las creó el handoff)
       await fetchStatus();
       setShowDoc(true);
+      bumpTimelineRefresh();
     } catch {
       setError("Error de conexión al generar el handoff.");
     } finally {
       setGenerating(false);
     }
-  }, [projectId, clientId, fetchStatus, status?.agentId]);
+  }, [projectId, clientId, fetchStatus, status?.agentId, bumpTimelineRefresh]);
 
   if (loading) return <div className="h-14 rounded-2xl skeleton-shimmer" />;
   if (!status) return null;
