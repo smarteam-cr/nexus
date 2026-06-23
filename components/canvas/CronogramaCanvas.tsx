@@ -292,10 +292,6 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     }
   };
 
-  // ── Bootstrap (estructura SOLO por IA — pero sin fases la barra no opera) ──────
-  const [bootName, setBootName] = useState("");
-  const [bootWeeks, setBootWeeks] = useState(4);
-  const [creatingFirst, setCreatingFirst] = useState(false);
 
   // ── Edición de tareas (inline en el Gantt) ────────────────────────────────────
   const updateTask = (phaseKey: string, taskKey: string, patch: Partial<TaskDraft>) => {
@@ -443,41 +439,6 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     markDirty();
   };
 
-  // Crear la PRIMERA fase desde el empty state (persiste al toque). Las fases
-  // siguientes —y toda la edición de estructura— van por la barra de IA.
-  const createFirstPhase = async () => {
-    const name = bootName.trim();
-    if (!name || creatingFirst) return;
-    const weeks = Math.max(1, bootWeeks || 1);
-    setCreatingFirst(true);
-    setError(null);
-    try {
-      const firstPhase: Phase = {
-        name,
-        durationWeeks: weeks,
-        sessionCount: null,
-        notes: null,
-        activityType: null,
-        tasks: [],
-        _key: nextKey(),
-      };
-      const res = await fetch(`/api/projects/${projectId}/timeline`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...buildPutBody([firstPhase], anchor), reason: "Creación inicial del cronograma", kind: "MANUAL" }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setError(d?.details?.[0] ?? d?.error ?? "No se pudo crear la fase.");
-      } else {
-        setBootName("");
-        await load();
-      }
-    } catch {
-      setError("Error de conexión al crear la fase.");
-    }
-    setCreatingFirst(false);
-  };
 
   // ── Generar el detalle del cronograma con IA (tareas por semana) ───────────────
   // Se dispara AUTOMÁTICAMENTE al abrir si hay fases sin tareas (auto=true →
@@ -1039,37 +1000,6 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           <p className="text-sm">
             Generá el <span className="font-medium text-gray-300">Handoff</span> para ver el cronograma inicial — las fases salen de ahí.
           </p>
-          <p className="text-xs text-gray-600">o creá la primera fase a mano:</p>
-          <div className="flex flex-wrap items-center justify-center gap-2.5">
-            <input
-              value={bootName}
-              onChange={(e) => setBootName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") createFirstPhase();
-              }}
-              placeholder="Nombre de la fase (ej: Kick-off)"
-              disabled={creatingFirst}
-              className="w-64 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 disabled:opacity-60"
-            />
-            <label className="flex items-center gap-1.5 text-xs text-gray-500">
-              <input
-                type="number"
-                min={1}
-                value={bootWeeks}
-                onChange={(e) => setBootWeeks(parseInt(e.target.value, 10) || 1)}
-                disabled={creatingFirst}
-                className="w-14 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-60"
-              />
-              semanas
-            </label>
-            <button
-              onClick={createFirstPhase}
-              disabled={creatingFirst || !bootName.trim()}
-              className="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 px-4 py-1.5 rounded-lg transition-colors"
-            >
-              {creatingFirst ? "Creando…" : "Crear fase"}
-            </button>
-          </div>
         </div>
       ) : proposal && proposalGantt ? (
         <TimelineGantt
