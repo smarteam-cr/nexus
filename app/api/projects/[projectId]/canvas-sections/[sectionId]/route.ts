@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardAccessToProject, denyHandoffCanvasEditForCse } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { touchCanvasContent } from "@/lib/canvas/touch-content";
 
@@ -32,12 +32,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
       eyebrowOverride: true,
       previousTitleOverride: true,
       previousEyebrowOverride: true,
-      canvas: { select: { projectId: true } },
+      canvas: { select: { projectId: true, name: true } },
     },
   });
   if (!section || section.canvas.projectId !== projectId) {
     return NextResponse.json({ error: "section not found" }, { status: 404 });
   }
+  const denied = await denyHandoffCanvasEditForCse(section.canvas.name);
+  if (denied) return denied;
 
   let body: { titleOverride?: unknown; eyebrowOverride?: unknown; undo?: unknown };
   try {

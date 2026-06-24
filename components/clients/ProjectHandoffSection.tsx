@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback } from "react";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import { pollAgentRun } from "@/lib/clients/poll-agent-run";
 import { useWorkspace } from "./WorkspaceContext";
+import { useMe } from "@/hooks/useMe";
 
 interface HandoffStatus {
   handoffId: string | null;
@@ -53,6 +54,10 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   const [newContent, setNewContent] = useState("");
   const [savingSource, setSavingSource] = useState(false);
   const { bumpTimelineRefresh, bumpGpsRefresh } = useWorkspace();
+  // RBAC: solo VENTAS/CSL/MARKETING/SUPER_ADMIN editan el handoff (capacidad
+  // handoffAnywhere). El CSE lo VE pero no lo genera ni edita.
+  const me = useMe();
+  const canEdit = me?.capabilities.includes("handoffAnywhere") ?? false;
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -182,18 +187,20 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
               {showDoc ? "Ocultar" : "Ver documento"}
             </button>
           )}
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            className="flex items-center gap-1.5 text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            {generating ? (
-              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            ) : null}
-            {generating ? "Generando…" : generated ? "Regenerar" : "Generar handoff"}
-          </button>
+          {canEdit && (
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="flex items-center gap-1.5 text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              {generating ? (
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              ) : null}
+              {generating ? "Generando…" : generated ? "Regenerar" : "Generar handoff"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -203,7 +210,8 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
         </div>
       )}
 
-      {/* Fuentes manuales — transcripts/resúmenes externos que NO entraron por el sync */}
+      {/* Fuentes manuales — solo editores del handoff (el CSE no las gestiona) */}
+      {canEdit && (
       <div className="border-t border-line px-5 py-3">
         <button
           onClick={() => setShowSources((v) => !v)}
@@ -272,10 +280,11 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
           </div>
         )}
       </div>
+      )}
 
       {generated && showDoc && status.canvasId && (
         <div className="border-t border-line px-4 py-4">
-          <CanvasLinearView projectId={projectId} canvasId={status.canvasId} />
+          <CanvasLinearView projectId={projectId} canvasId={status.canvasId} canEdit={canEdit} />
         </div>
       )}
     </section>

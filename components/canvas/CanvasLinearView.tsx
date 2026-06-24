@@ -34,11 +34,14 @@ export default function CanvasLinearView({
   projectId,
   canvasId,
   onlyKey,
+  canEdit = true,
 }: {
   projectId: string;
   canvasId: string;
   // Si viene, renderiza SOLO esa sección (sub-tabs de "Información del cliente").
   onlyKey?: string;
+  // RBAC: false = solo lectura (ej. el CSE en el handoff). Default true (kickoff editable).
+  canEdit?: boolean;
 }) {
   const {
     sections: allSections,
@@ -128,8 +131,8 @@ export default function CanvasLinearView({
         </div>
       )}
 
-      {/* Draft banner */}
-      {draftCount > 0 && (
+      {/* Draft banner — solo editores pueden aceptar */}
+      {draftCount > 0 && canEdit && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-900/20 border border-amber-700/50 text-amber-300">
           <svg className="w-4 h-4 flex-shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -167,25 +170,27 @@ export default function CanvasLinearView({
                 <BlockRenderer
                   key={block.id}
                   block={block}
-                  onAccept={block.status === "DRAFT" ? () => acceptBlock(section.id, block.id) : undefined}
-                  onReject={block.status === "DRAFT" ? () => rejectBlock(section.id, block.id) : undefined}
-                  onDelete={() => handleDelete(section.id, block)}
+                  onAccept={canEdit && block.status === "DRAFT" ? () => acceptBlock(section.id, block.id) : undefined}
+                  onReject={canEdit && block.status === "DRAFT" ? () => rejectBlock(section.id, block.id) : undefined}
+                  onDelete={canEdit ? () => handleDelete(section.id, block) : undefined}
                   isDeleting={deletingIds.has(block.id)}
-                  onSave={(updates) => saveBlock(section.id, block.id, updates)}
+                  onSave={canEdit ? (updates) => saveBlock(section.id, block.id, updates) : undefined}
                 />
               ))
             )}
 
-            {/* Agregar bloque manual (lo que el CSE sabe) */}
-            <button
-              onClick={() => addBlock(section.id)}
-              className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-white transition-colors pt-1"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Agregar bloque
-            </button>
+            {/* Agregar bloque manual (solo editores) */}
+            {canEdit && (
+              <button
+                onClick={() => addBlock(section.id)}
+                className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-white transition-colors pt-1"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Agregar bloque
+              </button>
+            )}
           </div>
         </section>
       ))}

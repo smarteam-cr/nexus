@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardAccessToProject, denyHandoffCanvasEditForCse } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 // GET: sections + blocks for a non-default canvas
@@ -72,12 +72,14 @@ export async function PUT(
 
   const block = await prisma.canvasBlock.findUnique({
     where: { id: blockId },
-    include: { section: { select: { canvasId: true, canvas: { select: { projectId: true } } } } },
+    include: { section: { select: { canvasId: true, canvas: { select: { projectId: true, name: true } } } } },
   });
 
   if (!block || block.section.canvas.projectId !== projectId) {
     return NextResponse.json({ error: "block not found" }, { status: 404 });
   }
+  const denied = await denyHandoffCanvasEditForCse(block.section.canvas.name);
+  if (denied) return denied;
 
   const fromSectionId = block.sectionId;
 

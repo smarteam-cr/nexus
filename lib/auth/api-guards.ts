@@ -171,3 +171,36 @@ export async function guardProjectHandoffAccess(
   if (guard instanceof NextResponse) return guard;
   return { ...guard, clientId: project.clientId };
 }
+
+/**
+ * Edición del HANDOFF (NO del cronograma): exige la capacidad `handoffAnywhere`
+ * (VENTAS/CSL/MARKETING/SUPER_ADMIN). A diferencia de guardProjectHandoffAccess
+ * NO hay fallback de owner — un CSE NO edita handoffs ni en sus propios clientes.
+ * El cronograma sigue usando guardProjectHandoffAccess (owner sí lo edita).
+ */
+export async function guardProjectEditHandoff(
+  projectId: string,
+): Promise<(Awaited<ReturnType<typeof requireCapability>> & { clientId: string }) | NextResponse> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { clientId: true },
+  });
+  if (!project) {
+    return NextResponse.json({ error: "Proyecto no existe" }, { status: 404 });
+  }
+  const guard = await guardCapability("handoffAnywhere");
+  if (guard instanceof NextResponse) return guard;
+  return { ...guard, clientId: project.clientId };
+}
+
+/**
+ * Para endpoints de canvas GENÉRICOS (compartidos con Kickoff/Diagnóstico): si el
+ * canvas que se edita es "Handoff", exige `handoffAnywhere` (CSE no edita handoff).
+ * Para cualquier otro canvas devuelve null (el endpoint ya validó acceso al proyecto).
+ * Devuelve una NextResponse 403 si corresponde bloquear, o null si pasa.
+ */
+export async function denyHandoffCanvasEditForCse(canvasName: string): Promise<NextResponse | null> {
+  if (canvasName !== "Handoff") return null;
+  const guard = await guardCapability("handoffAnywhere");
+  return guard instanceof NextResponse ? guard : null;
+}

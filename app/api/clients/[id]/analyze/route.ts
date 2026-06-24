@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { withClientAccess, apiError } from "@/lib/api";
+import { guardCapability } from "@/lib/auth/api-guards";
 import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
 import { extractTitleTerms, extractDomain } from "@/lib/utils/matching";
@@ -308,6 +309,14 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       { agent: null, cards: [], run: null, error: "NO_AGENT_CONFIGURED" },
       { status: 200 }
     );
+  }
+
+  // RBAC: generar/regenerar el HANDOFF exige la capacidad handoffAnywhere — un CSE
+  // NO edita handoffs (el cronograma y el resto de los agentes mantienen el acceso
+  // normal al cliente que ya validó withClientAccess).
+  if (agent.agentGroup === "handoff") {
+    const handoffGuard = await guardCapability("handoffAnywhere");
+    if (handoffGuard instanceof NextResponse) return handoffGuard;
   }
 
   // ── D.1: fail-fast del agente de detalle de cronograma ──────────────────────

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardAccessToProject, denyHandoffCanvasEditForCse } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { touchCanvasContent } from "@/lib/canvas/touch-content";
@@ -11,11 +11,22 @@ type Params = Promise<{ projectId: string; sectionId: string }>;
 const jsonInput = (v: Prisma.JsonValue | null | undefined): Prisma.InputJsonValue | typeof Prisma.DbNull =>
   v === null || v === undefined ? Prisma.DbNull : (v as Prisma.InputJsonValue);
 
+// RBAC: nombre del canvas dueño de una sección (para gatear edición del "Handoff").
+async function canvasNameOfSection(sectionId: string): Promise<string> {
+  const s = await prisma.canvasSection.findUnique({
+    where: { id: sectionId },
+    select: { canvas: { select: { name: true } } },
+  });
+  return s?.canvas.name ?? "";
+}
+
 // POST: create a block manually
 export async function POST(req: NextRequest, { params }: { params: Params }) {
   const { projectId, sectionId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
+  const denied = await denyHandoffCanvasEditForCse(await canvasNameOfSection(sectionId));
+  if (denied) return denied;
 
   const { blockType, content, data } = await req.json();
 
@@ -45,6 +56,8 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
   const { projectId, sectionId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
+  const denied = await denyHandoffCanvasEditForCse(await canvasNameOfSection(sectionId));
+  if (denied) return denied;
 
   const body = await req.json();
 
@@ -110,6 +123,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Params }) {
   const { projectId, sectionId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
+  const denied = await denyHandoffCanvasEditForCse(await canvasNameOfSection(sectionId));
+  if (denied) return denied;
 
   const { blockId } = await req.json();
 

@@ -173,7 +173,7 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
   const canSeePortfolio = isSuperAdmin || ["VENTAS", "CSL", "MARKETING"].includes(role); // Cartera: seeAllClients (todos menos CSE)
   const canSeeAudits = isSuperAdmin || ["VENTAS", "CSL"].includes(role);              // super admin, CSL, ventas
   const canSeeTeam = isSuperAdmin;                                                     // solo super admin
-  const canSeeConfig = isSuperAdmin;                                                   // solo super admin
+  const canSeeConfig = isSuperAdmin || ["CSL", "MARKETING"].includes(role);            // super admin + CSL/Marketing
 
   return (
     <aside className="w-full bg-gray-950 border-r border-gray-800 flex flex-col min-h-screen sticky top-0 h-screen">
