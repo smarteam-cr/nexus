@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardAccessToProject, denyHandoffCanvasEditForCse } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 type Params = Promise<{ projectId: string; sectionId: string }>;
@@ -9,6 +9,17 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
   const { projectId, sectionId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
+
+  // La sección debe pertenecer a un canvas de ESTE proyecto; y el Handoff no lo edita el CSE.
+  const section = await prisma.canvasSection.findUnique({
+    where: { id: sectionId },
+    select: { canvas: { select: { projectId: true, name: true } } },
+  });
+  if (!section || section.canvas.projectId !== projectId) {
+    return NextResponse.json({ error: "section not found" }, { status: 404 });
+  }
+  const denied = await denyHandoffCanvasEditForCse(section.canvas.name);
+  if (denied) return denied;
 
   const { layout } = await req.json();
 
