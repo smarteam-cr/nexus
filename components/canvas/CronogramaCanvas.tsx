@@ -1102,23 +1102,20 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       ) : (
         <>
           {totalTasks === 0 && !hasPublishedOnce && (
-            <div className="flex items-start gap-3 rounded-2xl border border-line bg-surface-muted px-5 py-4">
-              <div className="w-8 h-8 rounded-lg bg-blue-900/30 border border-blue-700/40 flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-              </div>
-              <div className="min-w-0 space-y-2">
-                <p className="text-sm text-fg-secondary leading-relaxed">
-                  Este cronograma inicial fue creado con la información del <span className="font-medium text-fg">Handoff</span>. Generá las tareas para detallarlo y consensuar el avance con el cliente.
-                </p>
+            <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-700/50 text-amber-200">
+              <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              <p className="text-xs leading-relaxed">
+                Este cronograma inicial fue creado con la información del <span className="font-semibold">Handoff</span>.{" "}
                 <button
+                  type="button"
                   onClick={() => void generateDetail({ auto: false })}
                   disabled={generating}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"
+                  className="font-semibold underline underline-offset-2 hover:opacity-80 disabled:opacity-70 disabled:no-underline"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                  {generating ? (chainingProgress ? "Evaluando avance…" : "Creando tareas…") : "Generar cronograma"}
-                </button>
-              </div>
+                  {generating ? (chainingProgress ? "Evaluando avance…" : "Creando tareas…") : "Genera las tareas"}
+                </button>{" "}
+                para detallarlo y consensuar el avance con el cliente.
+              </p>
             </div>
           )}
           <TimelineGantt
