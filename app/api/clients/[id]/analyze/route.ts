@@ -829,10 +829,15 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     let csSessions: RawTranscript[];
 
     if (isHandoffAgent && bodyProjectId) {
-      // Handoff scopeado al proyecto: TODAS las sesiones del proyecto son el
-      // material (ya están declaradas vía SessionProject). Sin clasificador ni
-      // ventana de 90d — el vínculo explícito proyecto↔sesión ES el scope.
-      salesSessions = matchingSessions;
+      // Handoff scopeado al proyecto: el material son las sesiones del proyecto donde
+      // participó alguien de VENTAS (el handoff es Sales→CS: refleja lo que Ventas
+      // habló/prometió). Las de CS/entrega (kickoff, implementación, marketing, etc.)
+      // NO entran aunque estén linkeadas al proyecto. Sin clasificador de títulos ni
+      // ventana de 90d — el scope es el vínculo proyecto↔sesión acotado a Ventas en la
+      // sala (organizerEmail ya viene incluido en participants, arriba).
+      salesSessions = matchingSessions.filter((s) =>
+        s.participants.some((p) => salesEmails.has(p.toLowerCase())),
+      );
       csSessions = [];
     } else if (isHandoffAgent) {
       // Handoff legacy sin proyecto: clasificación híbrida (title-based + Sales),
@@ -866,7 +871,8 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     // Transcripciones de ventas (máx 6).
     // Si no hay transcript, se inyecta metadata (título, fecha, participantes)
     // para que el agente sepa al menos que la reunión existió.
-    const topSales = salesSessions.sort((a, b) => b.date - a.date).slice(0, 6);
+    // El handoff puede traer hasta 10 sesiones de venta; el resto de agentes, 6.
+    const topSales = salesSessions.sort((a, b) => b.date - a.date).slice(0, isHandoffAgent ? 10 : 6);
     if (topSales.length > 0) {
       const contents = await Promise.all(topSales.map((s) => fetchOrFallback(s)));
       salesFirefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
