@@ -632,7 +632,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const proposedDone = new Set((pendingProgress?.phases ?? []).map((p) => p.id));
   const bannerPhaseIds = pendingProgress
     ? phases
-        .filter((p) => p.id && (phaseToTaskIds.has(p.id) || proposedDone.has(p.id) || p.id === pendingProgress.currentPhaseId))
+        .filter((p) => p.id && (phaseToTaskIds.has(p.id) || proposedDone.has(p.id)))
         .map((p) => p.id as string)
     : [];
   // Una fase de pendingProgress.phases solo cierra si TODAS sus tareas del borrador quedan

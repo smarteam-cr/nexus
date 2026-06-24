@@ -270,12 +270,12 @@ export default function TimelineGantt({
                         </svg>
                         <span className="truncate">{p.name}</span>
                         {p.status === "DONE" && (
-                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-emerald-300 bg-emerald-500/15 border-emerald-500/50" title="Fase completada">
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-emerald-300 bg-emerald-900/30 border-emerald-700/40" title="Fase completada">
                             ✓ Completada
                           </span>
                         )}
                         {p.status === "IN_PROGRESS" && (
-                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-blue-300 bg-blue-500/15 border-blue-500/50" title="Fase en curso (hoy)">
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-blue-300 bg-blue-900/30 border-blue-700/40" title="Fase en curso (hoy)">
                             ● En curso
                           </span>
                         )}
@@ -432,7 +432,7 @@ export default function TimelineGantt({
                                           <span
                                             className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${
                                               t.source === "AGENT"
-                                                ? "text-gray-400 bg-gray-700/40 border-gray-600/50"
+                                                ? "text-fg-muted bg-surface-hover border-line"
                                                 : "text-blue-300 bg-blue-900/30 border-blue-700/40"
                                             }`}
                                             title={t.source === "AGENT" ? "Generada por la IA" : "Creada o editada por el CSE"}
