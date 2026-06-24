@@ -18,7 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { TimelineTaskStatus } from "@prisma/client";
 import { actualDatesPatch } from "@/lib/timeline/actual-dates";
 
-const STATUSES = ["PENDING", "IN_PROGRESS", "DONE"] as const;
+const STATUSES = ["PENDING", "IN_PROGRESS", "DONE", "SUSPENDED"] as const;
 
 export async function PATCH(
   req: NextRequest,

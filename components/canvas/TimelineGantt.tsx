@@ -103,11 +103,12 @@ const NEUTRAL_SEG = "bg-gray-600";
 
 // ── Estado de tarea: ciclo + estilos ──────────────────────────────────────────
 
+// Ciclo: pendiente → en curso → hecho → suspendida → pendiente. Suspender es parte del toggle.
 const NEXT_STATUS: Record<GanttTaskStatus, GanttTaskStatus> = {
   PENDING: "IN_PROGRESS",
   IN_PROGRESS: "DONE",
-  DONE: "PENDING",
-  SUSPENDED: "PENDING", // E — un click en una suspendida la reactiva (vuelve a pendiente)
+  DONE: "SUSPENDED",
+  SUSPENDED: "PENDING",
 };
 
 const STATUS_META: Record<GanttTaskStatus, { label: string; cls: string }> = {
@@ -377,7 +378,7 @@ export default function TimelineGantt({
                                       title={
                                         !t.id
                                           ? "Guardá el cronograma para poder cambiar el estado"
-                                          : "Cambiar estado (pendiente → en curso → hecho)"
+                                          : "Cambiar estado (pendiente → en curso → hecho → suspendida)"
                                       }
                                       className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded border transition-colors min-w-[66px] text-center mt-0.5 ${sm.cls} ${!canToggle ? "opacity-50 cursor-default" : ""}`}
                                     >
