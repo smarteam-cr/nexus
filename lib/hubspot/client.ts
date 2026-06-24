@@ -23,6 +23,26 @@ export async function getSystemHubspotClient(): Promise<Client> {
   return new Client({ accessToken: account.accessToken });
 }
 
+/**
+ * Fuerza el refresh del token del sistema y lo guarda, IGNORANDO `expiresAt`. Para usar
+ * cuando una llamada devolvió 401 aunque `expiresAt` diga "válido": pasa por clock skew o
+ * rotación del token entre entornos que comparten la cuenta del sistema (PROD + local). El
+ * llamador debe re-obtener el cliente con getSystemHubspotClient() después.
+ */
+export async function forceRefreshSystemToken(): Promise<void> {
+  const account = await prisma.hubspotAccount.findFirst({ where: { isSystem: true } });
+  if (!account) throw new Error("No hay cuenta HubSpot del sistema configurada");
+  const refreshed = await refreshAccessToken(account.refreshToken);
+  await prisma.hubspotAccount.update({
+    where: { id: account.id },
+    data: {
+      accessToken: refreshed.access_token,
+      refreshToken: refreshed.refresh_token,
+      expiresAt: new Date(Date.now() + refreshed.expires_in * 1000),
+    },
+  });
+}
+
 export async function getSystemAccessToken(): Promise<string> {
   const account = await prisma.hubspotAccount.findFirst({
     where: { isSystem: true },

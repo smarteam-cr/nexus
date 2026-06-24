@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardCapability } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { getSystemHubspotClient } from "@/lib/hubspot/client";
+import { getSystemHubspotClient, forceRefreshSystemToken } from "@/lib/hubspot/client";
 import { fetchCompanyDeals } from "@/lib/hubspot/deals";
 
 /**
@@ -21,21 +21,38 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Dominio requerido (mín. 3 caracteres)" }, { status: 400 });
   }
 
-  try {
-    const hs = await getSystemHubspotClient();
+  const searchBody = {
+    method: "POST" as const,
+    path: "/crm/v3/objects/companies/search",
+    body: {
+      filterGroups: [
+        { filters: [{ propertyName: "domain", operator: "CONTAINS_TOKEN", value: domain }] },
+        { filters: [{ propertyName: "name", operator: "CONTAINS_TOKEN", value: domain }] },
+      ],
+      properties: ["name", "domain"],
+      limit: 5,
+    },
+  };
 
-    const searchRes = await hs.apiRequest({
-      method: "POST",
-      path: "/crm/v3/objects/companies/search",
-      body: {
-        filterGroups: [
-          { filters: [{ propertyName: "domain", operator: "CONTAINS_TOKEN", value: domain }] },
-          { filters: [{ propertyName: "name", operator: "CONTAINS_TOKEN", value: domain }] },
-        ],
-        properties: ["name", "domain"],
-        limit: 5,
-      },
-    });
+  try {
+    let hs = await getSystemHubspotClient();
+    let searchRes = await hs.apiRequest(searchBody);
+    // El token del sistema puede estar vencido aunque expiresAt diga lo contrario (clock
+    // skew / rotación entre entornos). Si da 401, refrescamos a la fuerza y reintentamos.
+    if (searchRes.status === 401) {
+      await forceRefreshSystemToken();
+      hs = await getSystemHubspotClient();
+      searchRes = await hs.apiRequest(searchBody);
+    }
+    // Distinguir "no hay company" (200 + 0 resultados) de un fallo de HubSpot (no-ok): el
+    // error genérico NO debe mostrarse como "no existe registro".
+    if (!searchRes.ok) {
+      console.error("[handoffs/lookup] HubSpot search no-ok:", searchRes.status);
+      return NextResponse.json(
+        { error: "No se pudo consultar HubSpot. Revisá la conexión del sistema." },
+        { status: 502 },
+      );
+    }
     const data = (await searchRes.json()) as {
       results?: { id: string; properties: { name?: string | null; domain?: string | null } }[];
     };
