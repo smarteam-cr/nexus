@@ -127,36 +127,25 @@ export default function SessionSelectionReview({
           {feeding.map((s) => (
             <li
               key={s.sessionId}
-              className="flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2"
+              className="flex items-center gap-3 rounded-lg border border-line bg-surface-muted px-3 py-2.5"
             >
+              <svg className="w-4 h-4 text-fg-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-semibold text-fg truncate">{s.title || "Sin título"}</span>
-                  <span className="text-[10px] font-medium text-fg-muted flex-shrink-0">{fmtDate(s.date)}</span>
-                  {s.forced ? (
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-brand bg-surface border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
-                      Agregada
-                    </span>
-                  ) : s.source === "manual" ? (
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-fg-muted bg-surface border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
-                      Manual
-                    </span>
-                  ) : (
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-fg-muted bg-surface border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
-                      IA{s.confidence != null ? ` ${Math.round(s.confidence * 100)}%` : ""}
-                    </span>
-                  )}
-                </div>
-                {s.rationale && <p className="text-[11px] text-fg-muted mt-0.5 line-clamp-2">{s.rationale}</p>}
+                <p className="text-sm font-medium text-fg truncate">{s.title || "Sin título"}</p>
+                <p className="text-[11px] text-fg-muted truncate">
+                  {fmtDate(s.date)} · {s.forced ? "agregada a mano" : s.source === "manual" ? "agregada manualmente" : "clasificada por IA"}
+                </p>
               </div>
               {!readOnly && (
                 <button
                   onClick={() => setFeeds(s.sessionId, false)}
                   disabled={busyId === s.sessionId}
                   title="Quitar del handoff (no la desvincula del proyecto)"
-                  className="text-fg-muted hover:text-red-500 disabled:opacity-40 transition-colors flex-shrink-0 mt-0.5"
+                  className="text-fg-muted hover:text-red-500 disabled:opacity-40 transition-colors flex-shrink-0"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -184,9 +173,12 @@ export default function SessionSelectionReview({
       {!readOnly && onAddManual && (
         <button
           onClick={onAddManual}
-          className="w-full text-left text-[11px] text-fg-muted bg-surface-muted rounded-lg px-3 py-2 hover:bg-surface-hover transition-colors"
+          className="w-full flex items-center gap-2 text-left text-[11px] text-fg-muted bg-surface-muted rounded-lg px-3 py-2 hover:bg-surface-hover transition-colors"
         >
-          ¿Una reunión clave no se grabó? <span className="text-brand font-medium">Ingresá la transcripción a mano</span>
+          <svg className="w-4 h-4 flex-shrink-0 text-fg-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span>¿Una reunión clave no se grabó? <span className="text-brand font-medium">Ingresá la transcripción a mano</span></span>
         </button>
       )}
 
