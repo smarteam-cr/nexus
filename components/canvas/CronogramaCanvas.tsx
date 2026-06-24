@@ -367,6 +367,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           weekIndex,
           order,
           notes: t.notes?.trim() ? t.notes.trim() : null,
+          party: t.party ?? null,
         };
       });
       return {

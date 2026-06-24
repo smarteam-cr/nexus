@@ -79,7 +79,7 @@ interface Props {
   phases: GanttPhase[]; // EN ORDEN
   readOnly?: boolean; // preview de propuesta IA — sin edición ni toggles
   onToggleStatus?: (taskId: string, next: GanttTaskStatus) => void;
-  onUpdateTask?: (phaseKey: string, taskKey: string, patch: { title?: string; notes?: string | null; weekIndex?: number }) => void;
+  onUpdateTask?: (phaseKey: string, taskKey: string, patch: { title?: string; notes?: string | null; weekIndex?: number; party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | null }) => void;
   onAddTask?: (phaseKey: string, weekIndex: number) => void;
   onRemoveTask?: (phaseKey: string, taskKey: string) => void;
   onSetAnchor?: (isoDate: string) => void; // yyyy-mm-dd — fijar arranque desde el Gantt
@@ -124,6 +124,10 @@ const PARTY_META: Record<string, { label: string; cls: string }> = {
   SMARTEAM: { label: "Smarteam", cls: "text-sky-300 bg-sky-900/30 border-sky-700/40" },
   AMBOS:    { label: "Ambos",    cls: "text-violet-300 bg-violet-900/30 border-violet-700/40" },
 };
+// Ciclo de dueño al click (modo edición): sin dueño → Cliente → Smarteam → Ambos → sin dueño.
+const PARTY_CYCLE: Array<"CLIENTE" | "SMARTEAM" | "AMBOS" | null> = [null, "CLIENTE", "SMARTEAM", "AMBOS"];
+const nextParty = (p: "CLIENTE" | "SMARTEAM" | "AMBOS" | null | undefined): "CLIENTE" | "SMARTEAM" | "AMBOS" | null =>
+  PARTY_CYCLE[(PARTY_CYCLE.indexOf(p ?? null) + 1) % PARTY_CYCLE.length];
 
 // ── Componente ────────────────────────────────────────────────────────────────
 
@@ -402,13 +406,24 @@ export default function TimelineGantt({
                                             {t.title}
                                           </span>
                                         )}
-                                        {t.party && PARTY_META[t.party] && (
-                                          <span
-                                            className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${PARTY_META[t.party].cls}`}
-                                            title="Dueño de la tarea en el plan compartido"
+                                        {editable ? (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); onUpdateTask!(p.key, t.key, { party: nextParty(t.party) }); }}
+                                            title="Dueño de la tarea — clic para cambiar: sin dueño, Cliente, Smarteam o Ambos"
+                                            className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border transition-colors ${t.party && PARTY_META[t.party] ? PARTY_META[t.party].cls : "text-fg-muted border-line border-dashed hover:bg-surface-hover"}`}
                                           >
-                                            {PARTY_META[t.party].label}
-                                          </span>
+                                            {t.party && PARTY_META[t.party] ? PARTY_META[t.party].label : "Dueño"}
+                                          </button>
+                                        ) : (
+                                          t.party && PARTY_META[t.party] && (
+                                            <span
+                                              className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${PARTY_META[t.party].cls}`}
+                                              title="Dueño de la tarea en el plan compartido"
+                                            >
+                                              {PARTY_META[t.party].label}
+                                            </span>
+                                          )
                                         )}
                                         {t.source && (
                                           <span

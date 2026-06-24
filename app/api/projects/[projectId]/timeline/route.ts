@@ -40,6 +40,7 @@ import type {
   TimelineActivityType,
   TimelineTaskStatus,
   TimelineChangeKind,
+  TaskParty,
 } from "@prisma/client";
 
 // Validador + tipos del body compartidos con POST /timeline/assist (la IA
@@ -280,6 +281,7 @@ export async function PUT(
               order: true,
               notes: true,
               source: true,
+              party: true,
             },
           },
         },
@@ -307,6 +309,7 @@ export async function PUT(
         weekIndex: number;
         order: number;
         notes: string | null;
+        party: TaskParty | null;
         source: TimelinePhaseSource;
         status: TimelineTaskStatus;
         needsValidation: boolean;
@@ -396,7 +399,8 @@ export async function PUT(
               existingTask.title !== t.title ||
               existingTask.weekIndex !== t.weekIndex ||
               existingTask.order !== t.order ||
-              (existingTask.notes ?? null) !== (t.notes ?? null);
+              (existingTask.notes ?? null) !== (t.notes ?? null) ||
+              (t.party !== undefined && (existingTask.party ?? null) !== (t.party ?? null));
             if (contentChanged) {
               await tx.timelineTask.update({
                 where: { id: t.id },
@@ -405,6 +409,7 @@ export async function PUT(
                   weekIndex: t.weekIndex,
                   order: t.order,
                   notes: t.notes ?? null,
+                  party: t.party, // undefined = sin cambio (Prisma lo ignora)
                   source: existingTask.source === "AGENT" ? "MODIFIED" : existingTask.source,
                   needsValidation: false, // humano revisó el contenido
                 },
@@ -418,6 +423,7 @@ export async function PUT(
               weekIndex: t.weekIndex,
               order: t.order,
               notes: t.notes ?? null,
+              party: t.party ?? null,
               source: "HUMAN",
               status: "PENDING",
               needsValidation: false,

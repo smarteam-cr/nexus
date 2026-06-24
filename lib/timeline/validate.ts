@@ -16,12 +16,16 @@ export const ACTIVITY_TYPES = [
   "SEGUIMIENTO",
 ] as const;
 
+export const PARTY_VALUES = ["CLIENTE", "SMARTEAM", "AMBOS"] as const;
+
 export interface TaskInput {
   id?: string;
   title: string;
   weekIndex: number;
   order: number;
   notes?: string | null;
+  /** dueño: undefined = no tocar; null = sin dueño; valor = set */
+  party?: (typeof PARTY_VALUES)[number] | null;
 }
 
 export interface PhaseInput {
@@ -181,6 +185,19 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
           }
           tNotes = tk.notes;
         }
+        // party (opcional — undefined = sin cambio; null = sin dueño)
+        let tParty: (typeof PARTY_VALUES)[number] | null | undefined = undefined;
+        if (tk.party !== undefined) {
+          if (tk.party === null) {
+            tParty = null;
+          } else if (typeof tk.party === "string" && (PARTY_VALUES as readonly string[]).includes(tk.party)) {
+            tParty = tk.party as (typeof PARTY_VALUES)[number];
+          } else {
+            errors.push(`phases[${idx}].tasks[${tIdx}].party debe ser uno de ${PARTY_VALUES.join("|")} o null`);
+            taskError = true;
+            return;
+          }
+        }
         let tId: string | undefined;
         if (tk.id !== undefined) {
           if (typeof tk.id !== "string" || tk.id.length === 0) {
@@ -196,6 +213,7 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
           weekIndex: tk.weekIndex,
           order: tk.order,
           notes: tNotes,
+          party: tParty,
         });
       });
       if (taskError) return;
