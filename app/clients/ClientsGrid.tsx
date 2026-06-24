@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Table, Avatar, Badge, EmptyState, type TableColumn } from "@/components/ui";
 import DeleteClientButton from "./DeleteClientButton";
 import NewClientButton from "./NewClientButton";
+import HandoffStepper from "@/components/handoffs/HandoffStepper";
 import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 // Shape mínimo del usuario activo para el filtro "Mis clientes".
 // Antes venía del tipo ActiveCse de lib/auth (basado en cookie nexus_cse);
@@ -304,7 +305,12 @@ export default function ClientsGrid({
         onRowClick={(c) => router.push(`/clients/${c.id}`)}
         search={{ placeholder: "Buscar por nombre o empresa…", getText: (c) => `${c.name} ${c.company ?? ""}` }}
         initialSort={{ key: "lastInteraction", dir: "desc" }}
-        action={<NewClientButton />}
+        action={
+          <div className="flex items-center gap-2">
+            <HandoffStepper />
+            <NewClientButton />
+          </div>
+        }
         empty={
           <EmptyState
             variant="dashed"
