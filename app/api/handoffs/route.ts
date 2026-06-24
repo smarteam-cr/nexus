@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { guardInternalUser, guardAccessToClient } from "@/lib/auth/api-guards";
+import { guardCapability, guardAccessToClient } from "@/lib/auth/api-guards";
 import { createDefaultCanvases, createHandoffCanvas } from "@/lib/canvas/default-canvases";
 
 interface Body {
@@ -28,7 +28,7 @@ interface Body {
  * de handoff lo dispara el frontend después (su corrida es larga y reintentable).
  */
 export async function POST(req: NextRequest) {
-  const internal = await guardInternalUser();
+  const internal = await guardCapability("createHandoff");
   if (internal instanceof NextResponse) return internal;
 
   let body: Body;

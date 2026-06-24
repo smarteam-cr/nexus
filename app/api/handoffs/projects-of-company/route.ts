@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardInternalUser } from "@/lib/auth/api-guards";
+import { guardCapability } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { resolveCompanyProjectIds } from "@/lib/hubspot/sync-projects";
@@ -17,7 +17,7 @@ import { resolveCompanyProjectIds } from "@/lib/hubspot/sync-projects";
 const PROJECTS_OBJECT_TYPE = "0-970";
 
 export async function GET(req: NextRequest) {
-  const guard = await guardInternalUser();
+  const guard = await guardCapability("createHandoff");
   if (guard instanceof NextResponse) return guard;
 
   const companyId = req.nextUrl.searchParams.get("companyId")?.trim() ?? "";

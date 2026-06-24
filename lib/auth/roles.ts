@@ -24,14 +24,15 @@ export type Capability =
   | "handoffAnywhere"
   | "shareClients"
   | "deleteClients"
-  | "manageTeam";
+  | "manageTeam"
+  | "createHandoff";
 
 const CAPABILITIES: Record<TeamRole, ReadonlyArray<Capability>> = {
   CSE: [],
-  VENTAS: ["seeAllClients", "handoffAnywhere"],
+  VENTAS: ["seeAllClients", "handoffAnywhere", "createHandoff"],
   CSL: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients"],
   MARKETING: ["seeAllClients", "handoffAnywhere", "shareClients"],
-  SUPER_ADMIN: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients", "manageTeam"],
+  SUPER_ADMIN: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients", "manageTeam", "createHandoff"],
 };
 
 /** Rango lineal — para gates simples de "rol mínimo". */

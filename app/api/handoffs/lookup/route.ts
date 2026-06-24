@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardInternalUser } from "@/lib/auth/api-guards";
+import { guardCapability } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { fetchCompanyDeals } from "@/lib/hubspot/deals";
@@ -13,7 +13,7 @@ import { fetchCompanyDeals } from "@/lib/hubspot/deals";
  * (para reusarlo en vez de duplicar). No crea nada — solo lectura.
  */
 export async function GET(req: NextRequest) {
-  const guard = await guardInternalUser();
+  const guard = await guardCapability("createHandoff");
   if (guard instanceof NextResponse) return guard;
 
   const domain = req.nextUrl.searchParams.get("domain")?.trim().toLowerCase() ?? "";

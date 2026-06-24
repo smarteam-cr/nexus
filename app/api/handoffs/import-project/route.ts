@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardInternalUser } from "@/lib/auth/api-guards";
+import { guardCapability } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { syncProjectsForClient } from "@/lib/hubspot/sync-projects";
 
@@ -22,7 +22,7 @@ interface Body {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await guardInternalUser();
+  const guard = await guardCapability("createHandoff");
   if (guard instanceof NextResponse) return guard;
 
   let body: Body;
