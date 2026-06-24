@@ -17,6 +17,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
 
 export const AGENT_ID_SESSION_PROJECT_CLASSIFIER = "agent-session-project-classifier";
 
@@ -51,7 +52,7 @@ export async function classifySessionToProjects(
       status: "active",
       serviceType: { not: "__strategy__" },
     },
-    select: { id: true, name: true, serviceType: true, currentStage: true },
+    select: { id: true, name: true, serviceType: true, currentStage: true, createdAt: true, hubspotDealId: true },
     orderBy: { createdAt: "desc" },
   });
 
@@ -127,11 +128,44 @@ export async function classifySessionToProjects(
     };
   }
 
+  // Cruce temporal: traer el closedate de los deals ancla de los proyectos candidatos,
+  // para que el clasificador desempate proyectos secuenciales o de fechas cercanas. El
+  // closedate vive en el deal de HubSpot (no se desnormaliza). Best-effort: si HubSpot
+  // falla, se clasifica sin fechas de cierre (NO se tumba la clasificación).
+  const closeDateByDeal = new Map<string, string>();
+  const dealIds = projects.map((p) => p.hubspotDealId).filter((d): d is string => !!d);
+  if (dealIds.length > 0) {
+    try {
+      const hs = await getSystemHubspotClient();
+      const res = await hs.apiRequest({
+        method: "POST",
+        path: "/crm/v3/objects/deals/batch/read",
+        body: { properties: ["closedate"], inputs: dealIds.map((id) => ({ id })) },
+      });
+      const data = (await res.json()) as {
+        results?: { id: string; properties: { closedate?: string | null } }[];
+      };
+      for (const d of data.results ?? []) {
+        if (d.properties.closedate) closeDateByDeal.set(d.id, d.properties.closedate);
+      }
+    } catch (e) {
+      console.warn("[classify] no se pudo traer closedate de deals:", (e as Error).message);
+    }
+  }
+
+  const day = (raw: string): string => {
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? raw : d.toISOString().slice(0, 10);
+  };
   const projectsBlock = projects
-    .map(
-      (p) =>
-        `- id: ${p.id} | name: "${p.name}" | serviceType: ${p.serviceType ?? "(none)"} | stage: ${p.currentStage}`,
-    )
+    .map((p) => {
+      const cierre = p.hubspotDealId
+        ? closeDateByDeal.has(p.hubspotDealId)
+          ? day(closeDateByDeal.get(p.hubspotDealId)!)
+          : "(deal sin fecha de cierre)"
+        : "(sin deal)";
+      return `- id: ${p.id} | name: "${p.name}" | serviceType: ${p.serviceType ?? "(none)"} | stage: ${p.currentStage} | creado: ${day(p.createdAt.toISOString())} | cierre del deal: ${cierre}`;
+    })
     .join("\n");
 
   const userMessage = [

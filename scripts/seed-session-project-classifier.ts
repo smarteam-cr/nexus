@@ -33,7 +33,7 @@ CONTEXTO QUE RECIBIRÁS:
 - Título de la reunión
 - Participantes (emails + roles inferidos)
 - Transcript completo (puede estar truncado a 30K chars)
-- Lista de proyectos activos del cliente con: id, name, serviceType (loop_marketing | loop_sales | loop_service | proyecto_temporal), currentStage
+- Lista de proyectos activos del cliente con: id, name, serviceType (loop_marketing | loop_sales | loop_service | proyecto_temporal), currentStage, fecha de creación del proyecto y fecha de cierre del deal ancla (cuando existe)
 
 DEVUELVE SOLO UN JSON VÁLIDO con esta estructura exacta:
 
@@ -67,7 +67,8 @@ CRITERIOS DE MATCHING (en orden de peso):
 - Tema principal del transcript (workflows, lead scoring, deals, tickets, etc.) vs serviceType del proyecto.
 - Título de la reunión menciona el módulo (ej. "Marketing Hub - Implementación" → loop_marketing).
 - Participantes: si el owner del proyecto está, +confidence; si responsables del área están, +confidence.
-- Stage del proyecto vs lo que se hizo en la sesión (ej. kickoff vs adopción).`;
+- Stage del proyecto vs lo que se hizo en la sesión (ej. kickoff vs adopción).
+- FECHAS (desempate CLAVE cuando dos proyectos comparten serviceType o son secuenciales): cruzá la fecha de la reunión con la ventana temporal de cada proyecto (creación del proyecto y cierre del deal ancla). Una reunión de venta/descubrimiento suele caer ANTES o cerca del cierre del deal de ESE proyecto; una de implementación cae DESPUÉS de la creación del proyecto. Ante dos proyectos del mismo tipo, la reunión pertenece al que tiene su ventana (creación↔cierre) más cercana a la fecha de la reunión. NO mezcles proyectos secuenciales: citá la fecha en el rationale cuando la uses para desempatar.`;
 
 async function main() {
   console.log("🌱 Seeding agente Clasificador sesión→proyecto...\n");
