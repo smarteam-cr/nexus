@@ -107,7 +107,30 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Proyecto inválido para este cliente" }, { status: 400 });
       }
       if (project.handoff) {
-        return NextResponse.json({ error: "Ese proyecto ya tiene un handoff" }, { status: 409 });
+        // Si el handoff YA tiene contenido generado, no se reemplaza (409). Si la
+        // entidad está VACÍA (ej. tras un reset que borró los bloques pero dejó la
+        // fila), se REUSA: se le ancla el deal y se devuelve, así el stepper puede
+        // adjuntarse al proyecto sin chocar con el @unique de projectId.
+        const handoffCanvasId = project.canvases[0]?.id ?? null;
+        const blockCount = handoffCanvasId
+          ? await prisma.canvasBlock.count({ where: { section: { canvasId: handoffCanvasId } } })
+          : 0;
+        if (blockCount > 0) {
+          return NextResponse.json(
+            { error: "Ese proyecto ya tiene un handoff", handoffId: project.handoff.id, clientId },
+            { status: 409 },
+          );
+        }
+        if (dealId) {
+          await prisma.$transaction([
+            prisma.handoff.update({ where: { id: project.handoff.id }, data: { hubspotDealId: dealId } }),
+            prisma.project.update({ where: { id: targetProjectId }, data: { hubspotDealId: dealId } }),
+          ]);
+        }
+        return NextResponse.json(
+          { clientId, projectId: targetProjectId, handoffId: project.handoff.id, handoffCanvasId },
+          { status: 201 },
+        );
       }
       result = await prisma.$transaction(async (tx) => {
         // Crear el canvas Handoff solo si falta (los proyectos sincronizados de

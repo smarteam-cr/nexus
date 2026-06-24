@@ -47,12 +47,22 @@ export async function GET(req: NextRequest) {
     const records = readData.results ?? [];
 
     // Cruce con Nexus: hubspotServiceId → { nexusProjectId, hasHandoff }.
+    // hasHandoff = el handoff está GENERADO (su canvas tiene bloques), no solo que
+    // exista la entidad: tras un reset el contenido se borra (entidad vacía) y el
+    // proyecto debe poder re-adjuntarse desde el stepper.
     const nexusProjects = await prisma.project.findMany({
       where: { hubspotServiceId: { in: ids } },
-      select: { id: true, hubspotServiceId: true, handoff: { select: { id: true } } },
+      select: { id: true, hubspotServiceId: true },
     });
+    const generated = new Set<string>();
+    for (const np of nexusProjects) {
+      const blocks = await prisma.canvasBlock.count({
+        where: { section: { canvas: { name: "Handoff", projectId: np.id } } },
+      });
+      if (blocks > 0) generated.add(np.id);
+    }
     const byServiceId = new Map(
-      nexusProjects.map((p) => [p.hubspotServiceId!, { nexusProjectId: p.id, hasHandoff: !!p.handoff }]),
+      nexusProjects.map((p) => [p.hubspotServiceId!, { nexusProjectId: p.id, hasHandoff: generated.has(p.id) }]),
     );
 
     const projects = records.map((r) => {

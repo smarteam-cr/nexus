@@ -370,9 +370,39 @@ export default function HandoffStepper() {
               )}
             </div>
 
-            {/* Proyecto: crear nuevo o adjuntar uno de HubSpot */}
+            {/* Proyecto de HubSpot: adjuntar uno existente o crear uno nuevo. */}
             <div className="space-y-1.5">
-              <p className="text-2xs font-medium text-fg-muted uppercase tracking-wider">Proyecto</p>
+              <p className="text-2xs font-medium text-fg-muted uppercase tracking-wider">Proyecto de HubSpot</p>
+              {projects.map((p) => {
+                const disabled = p.hasHandoff;
+                return (
+                  <label
+                    key={p.hubspotProjectId}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-line ${
+                      disabled ? "opacity-60 cursor-not-allowed" : "hover:bg-surface-hover cursor-pointer"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="handoff-project"
+                      disabled={disabled}
+                      checked={projectSel === p.hubspotProjectId}
+                      onChange={() => !disabled && setProjectSel(p.hubspotProjectId)}
+                    />
+                    <span className="text-sm text-fg flex-1 truncate">{p.name}</span>
+                    {p.hasHandoff ? (
+                      <span className="text-[10px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
+                        ya tiene handoff
+                      </span>
+                    ) : !p.nexusProjectId ? (
+                      <span className="text-[10px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
+                        se importará
+                      </span>
+                    ) : null}
+                  </label>
+                );
+              })}
+
               <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer">
                 <input type="radio" name="handoff-project" checked={projectSel === "new"} onChange={() => setProjectSel("new")} />
                 <span className="text-sm text-fg">Crear proyecto nuevo</span>
@@ -384,41 +414,6 @@ export default function HandoffStepper() {
                   onChange={(e) => setNewProjectName(e.target.value)}
                   placeholder="Nombre del proyecto"
                 />
-              )}
-
-              {projects.length > 0 && (
-                <>
-                  <p className="text-2xs font-medium text-fg-muted uppercase tracking-wider pt-1">Proyectos de HubSpot</p>
-                  {projects.map((p) => {
-                    const disabled = p.hasHandoff;
-                    return (
-                      <label
-                        key={p.hubspotProjectId}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-line ${
-                          disabled ? "opacity-60 cursor-not-allowed" : "hover:bg-surface-hover cursor-pointer"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="handoff-project"
-                          disabled={disabled}
-                          checked={projectSel === p.hubspotProjectId}
-                          onChange={() => !disabled && setProjectSel(p.hubspotProjectId)}
-                        />
-                        <span className="text-sm text-fg flex-1 truncate">{p.name}</span>
-                        {p.hasHandoff ? (
-                          <span className="text-[10px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
-                            ya tiene handoff
-                          </span>
-                        ) : !p.nexusProjectId ? (
-                          <span className="text-[10px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
-                            se importará
-                          </span>
-                        ) : null}
-                      </label>
-                    );
-                  })}
-                </>
               )}
             </div>
 
