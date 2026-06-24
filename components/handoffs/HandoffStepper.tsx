@@ -15,7 +15,7 @@
  * La generación del handoff la hace el flujo in-project (ProjectHandoffSection); el
  * stepper arma la fundación y deja al vendedor podar las sesiones.
  */
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Button, Input } from "@/components/ui";
 import { useMe } from "@/hooks/useMe";
@@ -51,6 +51,21 @@ const STEPS: { key: Step; label: string }[] = [
   { key: "done", label: "Listo" },
 ];
 
+// Normaliza lo que el usuario pega (URL completa, con www/path/query) a un dominio pelado.
+function extractDomain(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split(/[/?#]/)[0]
+    .trim();
+}
+// ¿Parece un dominio completo? Al menos un punto y un TLD de 2+ letras: .com, .ai, .mx, .com.mx.
+function looksLikeDomain(d: string): boolean {
+  return /^([a-z0-9-]+\.)+[a-z]{2,}$/.test(d);
+}
+
 function fmtDate(raw: string): string {
   const d = new Date(raw);
   return isNaN(d.getTime()) ? raw : d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
@@ -74,35 +89,13 @@ export default function HandoffStepper() {
   const [newProjectName, setNewProjectName] = useState("");
   const [created, setCreated] = useState<{ clientId: string; projectId: string } | null>(null);
 
-  if (!canCreate) return null;
+  // Dominio ya buscado (auto o manual) — evita relanzar la auto-búsqueda en loop.
+  const autoSearchedRef = useRef("");
 
-  const reset = () => {
-    setOpen(false);
-    setStep("domain");
-    setDomain("");
-    setLookedUpDomain("");
-    setBusy(false);
-    setError(null);
-    setLookup(null);
-    setDealId("");
-    setProjects([]);
-    setProjectSel("new");
-    setNewProjectName("");
-    setCreated(null);
-  };
-
-  const wonDeals = (lookup?.deals ?? []).filter((d) => d.isWon);
-  const stepIdx = step === "domain" ? 0 : step === "config" ? 1 : 2;
-  // El paso "config" es alcanzable si ya hubo una búsqueda OK. "done" solo post-creación.
-  const reachable = (s: Step): boolean =>
-    step === "done" ? false : s === "domain" ? true : s === "config" ? !!lookup : false;
-  // Volver al paso domain sin perder el lookup → "Siguiente" si no se editó el dominio.
-  const domainUnchanged = !!lookup && domain.trim().toLowerCase() === lookedUpDomain;
-
-  const search = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const d = domain.trim().toLowerCase();
-    if (d.length < 3 || busy) return;
+  const runSearch = useCallback(async (rawDomain: string) => {
+    const d = extractDomain(rawDomain);
+    if (d.length < 3) return;
+    autoSearchedRef.current = d;
     setBusy(true);
     setError(null);
     try {
@@ -136,6 +129,47 @@ export default function HandoffStepper() {
     } finally {
       setBusy(false);
     }
+  }, []);
+
+  // Auto-búsqueda: arranca 1s después de que el usuario deja de escribir, si lo escrito
+  // ya parece un dominio completo y no se buscó antes. (El setState vive dentro del
+  // timeout/runSearch, no en el cuerpo del efecto → no dispara set-state-in-effect.)
+  useEffect(() => {
+    const d = extractDomain(domain);
+    if (busy || autoSearchedRef.current === d || !looksLikeDomain(d)) return;
+    const t = setTimeout(() => runSearch(domain), 1000);
+    return () => clearTimeout(t);
+  }, [domain, busy, runSearch]);
+
+  if (!canCreate) return null;
+
+  const reset = () => {
+    setOpen(false);
+    setStep("domain");
+    setDomain("");
+    setLookedUpDomain("");
+    autoSearchedRef.current = "";
+    setBusy(false);
+    setError(null);
+    setLookup(null);
+    setDealId("");
+    setProjects([]);
+    setProjectSel("new");
+    setNewProjectName("");
+    setCreated(null);
+  };
+
+  const wonDeals = (lookup?.deals ?? []).filter((d) => d.isWon);
+  const stepIdx = step === "domain" ? 0 : step === "config" ? 1 : 2;
+  // El paso "config" es alcanzable si ya hubo una búsqueda OK. "done" solo post-creación.
+  const reachable = (s: Step): boolean =>
+    step === "done" ? false : s === "domain" ? true : s === "config" ? !!lookup : false;
+  // Volver al paso domain sin perder el lookup → "Siguiente" si no se editó el dominio.
+  const domainUnchanged = !!lookup && extractDomain(domain) === lookedUpDomain;
+
+  const search = (e: React.FormEvent) => {
+    e.preventDefault();
+    runSearch(domain);
   };
 
   const handleCreate = async () => {
@@ -211,11 +245,19 @@ export default function HandoffStepper() {
           Cancelar
         </Button>
         {domainUnchanged ? (
-          <Button type="button" variant="primary" size="md" onClick={() => setStep("config")}>
+          <Button type="button" variant="primary" size="md" className="bg-brand hover:bg-brand-dark" onClick={() => setStep("config")}>
             Siguiente
           </Button>
         ) : (
-          <Button type="submit" form="handoff-domain-form" variant="primary" size="md" loading={busy} disabled={domain.trim().length < 3}>
+          <Button
+            type="submit"
+            form="handoff-domain-form"
+            variant="primary"
+            size="md"
+            className="bg-brand hover:bg-brand-dark"
+            loading={busy}
+            disabled={domain.trim().length < 3}
+          >
             Buscar empresa
           </Button>
         )}
@@ -229,6 +271,7 @@ export default function HandoffStepper() {
           type="button"
           variant="primary"
           size="md"
+          className="bg-brand hover:bg-brand-dark"
           onClick={handleCreate}
           loading={busy}
           disabled={wonDeals.length === 0 || !dealId || (projectSel === "new" && newProjectName.trim().length === 0)}
@@ -246,6 +289,7 @@ export default function HandoffStepper() {
             type="button"
             variant="primary"
             size="md"
+            className="bg-brand hover:bg-brand-dark"
             onClick={() => {
               const c = created;
               reset();
@@ -302,7 +346,7 @@ export default function HandoffStepper() {
         {step === "domain" && (
           <form id="handoff-domain-form" onSubmit={search} className="space-y-3">
             <p className="text-xs text-fg-muted leading-relaxed">
-              Pegá el dominio de la empresa. Buscamos su registro en HubSpot y sus deals ganados.
+              Pegá el dominio de la empresa. Buscamos su registro en HubSpot y sus deals ganados apenas se vea completo.
             </p>
             <div>
               <label className="block text-2xs font-medium text-fg-muted uppercase tracking-wider mb-1">
@@ -316,7 +360,14 @@ export default function HandoffStepper() {
                 autoFocus
               />
             </div>
-            {error && <p className="text-xs text-red-500">{error}</p>}
+            {busy ? (
+              <p className="flex items-center gap-2 text-xs text-fg-muted">
+                <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                Buscando empresa en HubSpot…
+              </p>
+            ) : error ? (
+              <p className="text-xs text-red-500">{error}</p>
+            ) : null}
           </form>
         )}
 
