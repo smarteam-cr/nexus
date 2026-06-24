@@ -134,7 +134,15 @@ export async function POST(req: NextRequest) {
         await createDefaultCanvases(project.id, tx);
         const handoffCanvasId = await createHandoffCanvas(project.id, tx);
         const handoff = await tx.handoff.create({
-          data: { clientId, projectId: project.id, hubspotDealId: dealId, hubspotSyncStatus: "pending" },
+          data: {
+            clientId,
+            projectId: project.id,
+            hubspotDealId: dealId,
+            hubspotSyncStatus: "pending",
+            // Proyecto creado de cero (stepper) → su record HubSpot nace con owner=Lorena.
+            // La rama ADJUNTAR (arriba) NO lo setea: asociar uno existente no fuerza owner.
+            hubspotOwnerIdOnCreate: process.env.HUBSPOT_HANDOFF_OWNER_ID || null,
+          },
           select: { id: true },
         });
         return { projectId: project.id, handoffId: handoff.id, handoffCanvasId };

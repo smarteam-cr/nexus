@@ -274,6 +274,10 @@ model Handoff {
   hubspotProjectId  String? // id del record "projects" creado en HubSpot (post-sync)
   hubspotSyncStatus String  @default("pending") // pending | synced | failed
   hubspotSyncError  String? @db.Text
+  // Owner de HubSpot a setear en el record "projects" SOLO cuando el sync lo CREA de
+  // cero (handoff nacido del stepper de ventas). null = sin owner forzado (handoffs
+  // viejos / generados in-project). Se aplica una sola vez, en CASO B del sync.
+  hubspotOwnerIdOnCreate String?
 
   generatedByAgentRunId String? // trazabilidad de la corrida del agente de handoff
 

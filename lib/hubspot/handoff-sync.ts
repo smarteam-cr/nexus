@@ -106,6 +106,8 @@ export async function syncHandoffToHubspot(handoffId: string): Promise<SyncResul
     // RECONOZCA (update) en vez de re-importarlo como Project nuevo (el bug).
     const newProjectId = await createProjectRecord(hs, {
       name: handoff.project.name || handoff.client.name || "Proyecto",
+      // Solo CASO B (creación). Si el handoff nació del stepper, trae el owner a setear.
+      ownerId: handoff.hubspotOwnerIdOnCreate,
     });
     // Link inmediato y secuencial (project primero): si el 2º update fallara, el retry
     // entra por CASO A (project.hubspotServiceId ya seteado) → linkea, no duplica.
@@ -146,7 +148,10 @@ export async function retryPendingHandoffs(): Promise<SyncResult[]> {
 }
 
 /** Crea el record "projects" en el pipeline/etapa correctos. Devuelve su id. */
-async function createProjectRecord(hs: HsClient, { name }: { name: string }): Promise<string> {
+async function createProjectRecord(
+  hs: HsClient,
+  { name, ownerId }: { name: string; ownerId?: string | null },
+): Promise<string> {
   const res = await hs.apiRequest({
     method: "POST",
     path: `/crm/v3/objects/${PROJECTS_OBJECT_TYPE}`,
@@ -155,6 +160,8 @@ async function createProjectRecord(hs: HsClient, { name }: { name: string }): Pr
         [PROJECT_NAME_PROPERTY]: name,
         hs_pipeline: HUBSPOT_CS_PIPELINE_ID,
         hs_pipeline_stage: HUBSPOT_HANDOFF_STAGE_ID,
+        // Owner solo si el handoff nació del stepper (se persiste en hubspotOwnerIdOnCreate).
+        ...(ownerId ? { hubspot_owner_id: ownerId } : {}),
       },
     },
   });
