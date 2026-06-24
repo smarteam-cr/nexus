@@ -49,18 +49,20 @@ export async function GET(
     },
   });
 
-  const linked = linkedRows
-    .filter((r) => hasSales(r.session.participants, r.session.organizerEmail))
-    .map((r) => ({
-      sessionId: r.session.id,
-      title: r.session.title,
-      date: r.session.date,
-      participants: r.session.participants,
-      isPrimary: r.isPrimary,
-      source: r.source,
-      confidence: r.confidence,
-      rationale: r.rationale,
-    }));
+  // Se muestran TODAS las linkeadas (para que el humano vea qué clasificó el agente),
+  // pero se MARCA cuáles tienen Ventas en la sala: solo esas alimentan el handoff (mismo
+  // criterio que analyze). Las demás se muestran en gris, no se ocultan.
+  const linked = linkedRows.map((r) => ({
+    sessionId: r.session.id,
+    title: r.session.title,
+    date: r.session.date,
+    participants: r.session.participants,
+    isPrimary: r.isPrimary,
+    source: r.source,
+    confidence: r.confidence,
+    rationale: r.rationale,
+    hasSales: hasSales(r.session.participants, r.session.organizerEmail),
+  }));
 
   // Excluir de candidatas TODAS las ya linkeadas (incl. las de CS), no solo las de ventas.
   const linkedIds = linkedRows.map((r) => r.session.id);

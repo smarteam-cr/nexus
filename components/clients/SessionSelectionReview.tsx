@@ -22,6 +22,7 @@ interface LinkedSession {
   source: string; // "agent" | "manual" | "legacy"
   confidence: number | null;
   rationale: string | null;
+  hasSales: boolean; // ¿participó Ventas? solo esas alimentan el handoff
 }
 interface CandidateSession {
   sessionId: string;
@@ -134,8 +135,8 @@ export default function SessionSelectionReview({
       </div>
 
       <p className="text-[11px] text-fg-muted leading-relaxed">
-        El agente clasificó estas sesiones a este proyecto cruzando fechas y contenido.
-        Revisá y podá antes de generar — lo que quede acá es lo que arma el handoff.
+        Solo las sesiones con <span className="font-medium text-fg">Ventas en la sala</span> alimentan el
+        handoff; las demás van en gris. Revisá y podá antes de generar.
       </p>
 
       {linked.length === 0 ? (
@@ -145,7 +146,9 @@ export default function SessionSelectionReview({
           {linked.map((s) => (
             <li
               key={s.sessionId}
-              className="flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2"
+              className={`flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2 ${
+                s.hasSales ? "" : "opacity-60"
+              }`}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -158,6 +161,11 @@ export default function SessionSelectionReview({
                   ) : (
                     <span className="text-[9px] font-bold uppercase tracking-wider text-brand bg-surface border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
                       IA{s.confidence != null ? ` ${Math.round(s.confidence * 100)}%` : ""}
+                    </span>
+                  )}
+                  {!s.hasSales && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 flex-shrink-0">
+                      sin Ventas · no entra
                     </span>
                   )}
                 </div>
