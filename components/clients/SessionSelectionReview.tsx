@@ -22,7 +22,7 @@ interface LinkedSession {
   source: string; // "agent" | "manual" | "legacy"
   confidence: number | null;
   rationale: string | null;
-  hasSales: boolean; // ¿participó Ventas? solo esas alimentan el handoff
+  feedsHandoff: boolean; // ¿alimenta el handoff? (título de venta o Ventas en la sala)
 }
 interface CandidateSession {
   sessionId: string;
@@ -135,8 +135,8 @@ export default function SessionSelectionReview({
       </div>
 
       <p className="text-[11px] text-fg-muted leading-relaxed">
-        Solo las sesiones con <span className="font-medium text-fg">Ventas en la sala</span> alimentan el
-        handoff; las demás van en gris. Revisá y podá antes de generar.
+        Solo las <span className="font-medium text-fg">sesiones de venta</span> (por título o con Ventas
+        en la sala) alimentan el handoff; las demás van en gris. Revisá y podá antes de generar.
       </p>
 
       {linked.length === 0 ? (
@@ -147,7 +147,7 @@ export default function SessionSelectionReview({
             <li
               key={s.sessionId}
               className={`flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2 ${
-                s.hasSales ? "" : "opacity-60"
+                s.feedsHandoff ? "" : "opacity-60"
               }`}
             >
               <div className="flex-1 min-w-0">
@@ -163,9 +163,9 @@ export default function SessionSelectionReview({
                       IA{s.confidence != null ? ` ${Math.round(s.confidence * 100)}%` : ""}
                     </span>
                   )}
-                  {!s.hasSales && (
+                  {!s.feedsHandoff && (
                     <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 flex-shrink-0">
-                      sin Ventas · no entra
+                      no entra al handoff
                     </span>
                   )}
                 </div>

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { withClientAccess, apiError } from "@/lib/api";
 import { guardCapability } from "@/lib/auth/api-guards";
+import { HANDOFF_EXCLUDE_TITLE_KEYWORDS, HANDOFF_INCLUDE_TITLE_KEYWORDS } from "@/lib/handoff/session-relevance";
 import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
 import { extractTitleTerms, extractDomain } from "@/lib/utils/matching";
@@ -706,31 +707,8 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   const HANDOFF_LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000;
   const handoffCutoffMs = Date.now() - HANDOFF_LOOKBACK_MS;
 
-  // Keywords case-insensitive y sin acentos. Si necesitás agregar tipos de
-  // sesión nuevos, editá estas listas y reiniciá el dev server.
-  const HANDOFF_EXCLUDE_TITLE_KEYWORDS = [
-    "kickoff", "kick-off", "kick off",
-    "implementacion", "implementation",
-    "adopcion", "adoption",
-    "capacitacion", "training",
-    "review", "revision",
-    "retro", "retrospectiva",
-    "sesion semanal", "weekly",
-    "stand up", "standup",
-    "qbr", "business review",
-  ];
-  const HANDOFF_INCLUDE_TITLE_KEYWORDS = [
-    "hand off", "handoff", "hand-off",
-    "traspaso",
-    "discovery", "descubrimiento",
-    "demo", "demostracion",
-    "propuesta", "proposal",
-    "cierre", "closing",
-    "sales call", "llamada de venta", "llamada de ventas",
-    "preventa", "pre-venta", "pre venta",
-    "calificacion", "qualification",
-  ];
-
+  // Las listas de keywords y el clasificador de relevancia para handoff viven en
+  // lib/handoff/session-relevance.ts (importadas arriba; compartidas con la revisión A2).
   function normalizeTitle(t: string): string {
     // NFD descompone "ó" en "o" + diacrítico combinante. El regex remueve el
     // rango U+0300–U+036F (Combining Diacritical Marks) para que el matching
@@ -829,15 +807,12 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     let csSessions: RawTranscript[];
 
     if (isHandoffAgent && bodyProjectId) {
-      // Handoff scopeado al proyecto: el material son las sesiones del proyecto donde
-      // participó alguien de VENTAS (el handoff es Sales→CS: refleja lo que Ventas
-      // habló/prometió). Las de CS/entrega (kickoff, implementación, marketing, etc.)
-      // NO entran aunque estén linkeadas al proyecto. Sin clasificador de títulos ni
-      // ventana de 90d — el scope es el vínculo proyecto↔sesión acotado a Ventas en la
-      // sala (organizerEmail ya viene incluido en participants, arriba).
-      salesSessions = matchingSessions.filter((s) =>
-        s.participants.some((p) => salesEmails.has(p.toLowerCase())),
-      );
+      // Handoff scopeado al proyecto: de las sesiones linkeadas entran las de VENTA —
+      // por TÍTULO (discovery/demo/cierre/proceso comercial/sales…) O porque participó
+      // alguien de Ventas en la sala. Las de entrega/CS (kickoff, implementación,
+      // marketing/service, weekly) se excluyen aunque estén linkeadas. organizerEmail ya
+      // viene en participants (arriba). Sin ventana de 90d — el scope es el vínculo.
+      salesSessions = matchingSessions.filter((s) => classifyForHandoff(s).include);
       csSessions = [];
     } else if (isHandoffAgent) {
       // Handoff legacy sin proyecto: clasificación híbrida (title-based + Sales),
