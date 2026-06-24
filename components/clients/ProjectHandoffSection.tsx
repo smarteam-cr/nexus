@@ -14,6 +14,7 @@ import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import { pollAgentRun } from "@/lib/clients/poll-agent-run";
 import { useWorkspace } from "./WorkspaceContext";
 import { useMe } from "@/hooks/useMe";
+import SessionSelectionReview from "./SessionSelectionReview";
 
 interface HandoffStatus {
   handoffId: string | null;
@@ -207,6 +208,14 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
       {error && (
         <div className="px-5 pb-3 -mt-1">
           <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+        </div>
+      )}
+
+      {/* Selección revisable de sesiones — curar antes de generar (A2). Solo editores;
+          el CSE no la ve (rama canEdit), igual que el botón Generar. */}
+      {!generated && canEdit && (
+        <div className="border-t border-line px-5 py-3">
+          <SessionSelectionReview projectId={projectId} onChange={fetchStatus} />
         </div>
       )}
 
