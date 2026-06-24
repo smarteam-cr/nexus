@@ -337,7 +337,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               ...p,
               tasks: [
                 ...p.tasks,
-                { title: "", weekIndex, notes: null, status: "PENDING" as const, needsValidation: false, _key: nextKey() },
+                { title: "", weekIndex, notes: null, status: "PENDING" as const, needsValidation: false, party: "SMARTEAM" as const, _key: nextKey() },
               ],
             }
           : p,

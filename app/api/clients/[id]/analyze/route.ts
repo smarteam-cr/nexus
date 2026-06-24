@@ -2384,14 +2384,16 @@ async function persistTimelineDetailFromAgentOutput(
         perWeekCount.set(weekIndex, order + 1);
         // B — party del agente (validado) o fallback por el tipo de actividad de la fase.
         const partyRaw = typeof t.party === "string" ? t.party.toUpperCase() : "";
-        const party: "CLIENTE" | "SMARTEAM" | "AMBOS" | null =
+        // Toda tarea tiene dueño: si el agente no lo da, se infiere por activityType;
+        // el último fallback es SMARTEAM (nunca null).
+        const party: "CLIENTE" | "SMARTEAM" | "AMBOS" =
           partyRaw === "CLIENTE" || partyRaw === "SMARTEAM" || partyRaw === "AMBOS"
             ? partyRaw
             : effectiveActivity === "CONFIGURACION"
               ? "SMARTEAM"
               : effectiveActivity
                 ? "AMBOS"
-                : null;
+                : "SMARTEAM";
         toCreate.push({
           phaseId: phase.id,
           title: sanitizeTaskTitle(titleRaw),

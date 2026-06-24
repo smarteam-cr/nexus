@@ -124,10 +124,13 @@ const PARTY_META: Record<string, { label: string; cls: string }> = {
   SMARTEAM: { label: "Smarteam", cls: "text-sky-300 bg-sky-900/30 border-sky-700/40" },
   AMBOS:    { label: "Ambos",    cls: "text-violet-300 bg-violet-900/30 border-violet-700/40" },
 };
-// Ciclo de dueño al click (modo edición): sin dueño → Cliente → Smarteam → Ambos → sin dueño.
-const PARTY_CYCLE: Array<"CLIENTE" | "SMARTEAM" | "AMBOS" | null> = [null, "CLIENTE", "SMARTEAM", "AMBOS"];
-const nextParty = (p: "CLIENTE" | "SMARTEAM" | "AMBOS" | null | undefined): "CLIENTE" | "SMARTEAM" | "AMBOS" | null =>
-  PARTY_CYCLE[(PARTY_CYCLE.indexOf(p ?? null) + 1) % PARTY_CYCLE.length];
+// Toda tarea TIENE dueño — el ciclo es Cliente → Smarteam → Ambos → Cliente (sin estado vacío).
+// effParty resuelve null/undefined (data vieja) a SMARTEAM para que nunca se muestre "sin dueño".
+const PARTY_CYCLE = ["CLIENTE", "SMARTEAM", "AMBOS"] as const;
+const effParty = (p: "CLIENTE" | "SMARTEAM" | "AMBOS" | null | undefined): "CLIENTE" | "SMARTEAM" | "AMBOS" =>
+  p === "CLIENTE" || p === "SMARTEAM" || p === "AMBOS" ? p : "SMARTEAM";
+const nextParty = (p: "CLIENTE" | "SMARTEAM" | "AMBOS"): "CLIENTE" | "SMARTEAM" | "AMBOS" =>
+  PARTY_CYCLE[(PARTY_CYCLE.indexOf(p) + 1) % PARTY_CYCLE.length];
 
 // ── Componente ────────────────────────────────────────────────────────────────
 
@@ -409,11 +412,11 @@ export default function TimelineGantt({
                                         {editable ? (
                                           <button
                                             type="button"
-                                            onClick={(e) => { e.stopPropagation(); onUpdateTask!(p.key, t.key, { party: nextParty(t.party) }); }}
-                                            title="Dueño de la tarea — clic para cambiar: sin dueño, Cliente, Smarteam o Ambos"
-                                            className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border transition-colors ${t.party && PARTY_META[t.party] ? PARTY_META[t.party].cls : "text-fg-muted border-line border-dashed hover:bg-surface-hover"}`}
+                                            onClick={(e) => { e.stopPropagation(); onUpdateTask!(p.key, t.key, { party: nextParty(effParty(t.party)) }); }}
+                                            title="Dueño de la tarea — clic para cambiar: Cliente, Smarteam o Ambos"
+                                            className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border transition-colors ${PARTY_META[effParty(t.party)].cls}`}
                                           >
-                                            {t.party && PARTY_META[t.party] ? PARTY_META[t.party].label : "Sin dueño"}
+                                            {PARTY_META[effParty(t.party)].label}
                                           </button>
                                         ) : (
                                           t.party && PARTY_META[t.party] && (
