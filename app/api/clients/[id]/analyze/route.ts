@@ -762,6 +762,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
 
   try {
     let matchingSessions: RawTranscript[] = [];
+    // Override por sesión para el handoff (true=forzar incluir, false=forzar excluir,
+    // null/ausente=seguir la regla automática). Solo aplica al camino con proyecto.
+    const handoffOverrideById = new Map<string, boolean | null>();
 
     // ── 4a. Fuente de sesiones ────────────────────────────────────────────────
     // Handoff scopeado al proyecto: la fuente son EXACTAMENTE las sesiones
@@ -776,8 +779,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     if (isHandoffAgent && bodyProjectId) {
       const links = await prisma.sessionProject.findMany({
         where: { projectId: bodyProjectId },
-        select: { sessionId: true },
+        select: { sessionId: true, handoffOverride: true },
       });
+      for (const l of links) handoffOverrideById.set(l.sessionId, l.handoffOverride);
       const ids = links.map((l) => l.sessionId);
       if (ids.length > 0) {
         const rows = await prisma.firefliesSession.findMany({
@@ -811,7 +815,12 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       // KICKOFF (por título) O las que tienen Ventas en la sala. El resto (levantamientos
       // semanales, implementación, marketing/service…) son entrega de servicio y se
       // excluyen aunque estén linkeadas. organizerEmail ya viene en participants (arriba).
-      salesSessions = matchingSessions.filter((s) => classifyForHandoff(s).include);
+      salesSessions = matchingSessions.filter((s) => {
+        const ov = handoffOverrideById.get(s.id);
+        if (ov === false) return false; // la "X" del panel: forzar excluir
+        if (ov === true) return true; // agregada a mano desde el pop-up: forzar incluir
+        return classifyForHandoff(s).include; // regla automática
+      });
       csSessions = [];
     } else if (isHandoffAgent) {
       // Handoff legacy sin proyecto: clasificación híbrida (title-based + Sales),

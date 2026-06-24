@@ -6,16 +6,15 @@ import { classifyHandoffSession } from "@/lib/handoff/session-relevance";
 /**
  * GET /api/projects/[projectId]/session-candidates
  *
- * Selección revisable de sesiones del handoff (A2). Una sesión "alimenta el handoff" si es
- * de VENTA — por título (discovery/demo/cierre/proceso comercial…) O porque participó
- * Ventas en la sala (mismo criterio que la generación en analyze, vía
- * lib/handoff/session-relevance). Las de entrega/CS no alimentan.
- * Devuelve:
- *   - linked: TODAS las sesiones clasificadas a este proyecto, con flag `feedsHandoff`
- *     (las que no alimentan se muestran en gris, no se ocultan).
- *   - candidates: sesiones del cliente que alimentarían el handoff y NO están linkeadas.
+ * Para la selección revisable del handoff (A2 rediseñado). Devuelve:
+ *   - feeding: las sesiones que ALIMENTAN el handoff (panel limpio). Una sesión alimenta
+ *     si su override es true, o (sin override) si la regla la incluye —título de
+ *     handoff/kickoff o Ventas en la sala (lib/handoff/session-relevance). Las override=false
+ *     no entran.
+ *   - candidates: las DEMÁS sesiones del cliente (pop-up "Buscar más"), con `applies`
+ *     (¿la regla la incluiría?) para destacarlas. Agregar una la fuerza al handoff.
  *
- * Solo lectura. Incluir/excluir va por /api/sessions/[id]/projects (POST/DELETE).
+ * Solo lectura. Incluir/excluir va por POST /api/projects/[projectId]/handoff-sessions.
  */
 export async function GET(
   _req: NextRequest,
@@ -26,52 +25,53 @@ export async function GET(
   if (guard instanceof NextResponse) return guard;
   const { clientId } = guard;
 
-  // Emails del equipo de Ventas (misma fuente que analyze: area Sales/Ventas).
   const salesTeam = await prisma.teamMember.findMany({
     where: { area: { in: ["Sales", "Ventas"] } },
     select: { email: true },
   });
   const salesEmails = new Set(salesTeam.map((m) => m.email.toLowerCase()));
-  const feeds = (title: string, participants: string[], organizerEmail: string | null): boolean =>
+  const applies = (title: string, participants: string[], organizerEmail: string | null): boolean =>
     classifyHandoffSession(title, participants, organizerEmail, salesEmails).include;
 
   const linkedRows = await prisma.sessionProject.findMany({
     where: { projectId },
-    orderBy: [{ isPrimary: "desc" }, { confidence: "desc" }],
     select: {
-      isPrimary: true,
       source: true,
       confidence: true,
       rationale: true,
-      session: {
-        select: { id: true, title: true, date: true, participants: true, organizerEmail: true },
-      },
+      handoffOverride: true,
+      session: { select: { id: true, title: true, date: true, participants: true, organizerEmail: true } },
     },
   });
 
-  // TODAS las linkeadas (para ver qué clasificó el agente), marcando cuáles alimentan
-  // el handoff. Las que no alimentan se muestran en gris en la UI.
-  const linked = linkedRows.map((r) => ({
-    sessionId: r.session.id,
-    title: r.session.title,
-    date: r.session.date,
-    participants: r.session.participants,
-    isPrimary: r.isPrimary,
-    source: r.source,
-    confidence: r.confidence,
-    rationale: r.rationale,
-    feedsHandoff: feeds(r.session.title, r.session.participants, r.session.organizerEmail),
-  }));
+  // ¿Esta sesión linkeada alimenta el handoff? override gana; sino, la regla.
+  const feeds = (r: (typeof linkedRows)[number]): boolean =>
+    r.handoffOverride === false
+      ? false
+      : r.handoffOverride === true
+        ? true
+        : applies(r.session.title, r.session.participants, r.session.organizerEmail);
 
-  const linkedIds = linkedRows.map((r) => r.session.id);
+  const feeding = linkedRows
+    .filter(feeds)
+    .sort((a, b) => b.session.date.getTime() - a.session.date.getTime())
+    .map((r) => ({
+      sessionId: r.session.id,
+      title: r.session.title,
+      date: r.session.date,
+      participants: r.session.participants,
+      source: r.source,
+      confidence: r.confidence,
+      rationale: r.rationale,
+      forced: r.handoffOverride === true,
+    }));
+  const feedingIds = new Set(feeding.map((f) => f.sessionId));
 
-  // Candidatas: sesiones del cliente que ALIMENTARÍAN el handoff y no están linkeadas.
-  const candidateRows = await prisma.firefliesSession.findMany({
-    where: {
-      resolvedClientId: clientId,
-      date: { lte: new Date() },
-      id: { notIn: linkedIds },
-    },
+  // Candidatas para el pop-up: todas las sesiones del cliente que NO alimentan ya el
+  // handoff (incluye las linkeadas-pero-excluidas y las no linkeadas). `applies` marca
+  // las que entrarían por regla, para destacarlas arriba.
+  const clientSessions = await prisma.firefliesSession.findMany({
+    where: { resolvedClientId: clientId, date: { lte: new Date() } },
     orderBy: { date: "desc" },
     take: 100,
     select: {
@@ -84,16 +84,17 @@ export async function GET(
     },
   });
 
-  const candidates = candidateRows
-    .filter((s) => feeds(s.title, s.participants, s.organizerEmail))
-    .slice(0, 50)
+  const candidates = clientSessions
+    .filter((s) => !feedingIds.has(s.id))
     .map((s) => ({
       sessionId: s.id,
       title: s.title,
       date: s.date,
       participants: s.participants,
-      linkedElsewhere: s.projects.length > 0,
-    }));
+      applies: applies(s.title, s.participants, s.organizerEmail),
+      linkedElsewhere: s.projects.some((p) => p.projectId !== projectId),
+    }))
+    .sort((a, b) => Number(b.applies) - Number(a.applies)); // las que aplican, primero (date ya viene desc)
 
-  return NextResponse.json({ linked, candidates });
+  return NextResponse.json({ feeding, candidates });
 }

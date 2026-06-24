@@ -3,32 +3,35 @@
 /**
  * components/clients/SessionSelectionReview.tsx
  *
- * Selección REVISABLE de las sesiones que alimentan un handoff (A2). El agente
- * clasifica sesiones→proyecto (con su rationale); acá el humano AUDITA y PODA antes
- * de generar: quita las que no van y agrega alguna que el agente no trajo.
+ * Selección revisable de las sesiones que alimentan un handoff (A2 rediseñado).
+ *   - Panel limpio: SOLO las sesiones que alimentan el handoff (handoff/kickoff/Ventas, o
+ *     forzadas a mano). La "X" las saca del handoff sin desvincularlas del proyecto.
+ *   - "Buscar más sesiones": pop-up con las demás sesiones del cliente (buscador +
+ *     las que aplican destacadas). "Agregar" fuerza la inclusión (lo manual manda).
+ *   - Nudge para pegar transcripciones a mano cuando una reunión clave no se grabó.
  *
- * Componente COMPARTIDO: se monta en ProjectHandoffSection (cuando no hay handoff) y
- * en el stepper del vendedor. Reusa los endpoints sesión↔proyecto existentes
- * (POST/DELETE /api/sessions/[id]/projects) — incluir marca source="manual".
+ * Componente COMPARTIDO (ProjectHandoffSection + stepper). Reusa el override por sesión
+ * vía POST /api/projects/[projectId]/handoff-sessions.
  */
 import { useState, useEffect, useCallback } from "react";
+import { Modal } from "@/components/ui";
 
-interface LinkedSession {
+interface FeedingSession {
   sessionId: string;
   title: string;
   date: string;
   participants: string[];
-  isPrimary: boolean;
-  source: string; // "agent" | "manual" | "legacy"
+  source: string;
   confidence: number | null;
   rationale: string | null;
-  feedsHandoff: boolean; // ¿alimenta el handoff? (título de venta o Ventas en la sala)
+  forced: boolean;
 }
 interface CandidateSession {
   sessionId: string;
   title: string;
   date: string;
   participants: string[];
+  applies: boolean;
   linkedElsewhere: boolean;
 }
 
@@ -40,18 +43,21 @@ export default function SessionSelectionReview({
   projectId,
   onChange,
   readOnly = false,
+  onAddManual,
 }: {
   projectId: string;
   onChange?: () => void;
   readOnly?: boolean;
+  onAddManual?: () => void;
 }) {
-  const [data, setData] = useState<{ linked: LinkedSession[]; candidates: CandidateSession[] }>({
-    linked: [],
+  const [data, setData] = useState<{ feeding: FeedingSession[]; candidates: CandidateSession[] }>({
+    feeding: [],
     candidates: [],
   });
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [search, setSearch] = useState("");
 
   const reload = useCallback(async () => {
     try {
@@ -62,8 +68,6 @@ export default function SessionSelectionReview({
     }
   }, [projectId]);
 
-  // Carga inicial con cadena de promesas (setState en callbacks → no dispara
-  // react-hooks/set-state-in-effect). reload() reusa el fetch tras incluir/excluir.
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/projects/${projectId}/session-candidates`)
@@ -80,30 +84,15 @@ export default function SessionSelectionReview({
     };
   }, [projectId]);
 
-  const include = useCallback(
-    async (sessionId: string) => {
+  const setFeeds = useCallback(
+    async (sessionId: string, feeds: boolean) => {
       setBusyId(sessionId);
       try {
-        await fetch(`/api/sessions/${sessionId}/projects`, {
+        await fetch(`/api/projects/${projectId}/handoff-sessions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectId }),
+          body: JSON.stringify({ sessionId, feeds }),
         });
-        await reload();
-        onChange?.();
-      } catch {
-        /* ignore */
-      }
-      setBusyId(null);
-    },
-    [projectId, reload, onChange],
-  );
-
-  const exclude = useCallback(
-    async (sessionId: string) => {
-      setBusyId(sessionId);
-      try {
-        await fetch(`/api/sessions/${sessionId}/projects/${projectId}`, { method: "DELETE" });
         await reload();
         onChange?.();
       } catch {
@@ -116,56 +105,45 @@ export default function SessionSelectionReview({
 
   if (loading) return <div className="h-16 rounded-xl skeleton-shimmer" />;
 
-  const { linked, candidates } = data;
+  const { feeding, candidates } = data;
+  const q = search.trim().toLowerCase();
+  const filtered = q ? candidates.filter((c) => (c.title || "").toLowerCase().includes(q)) : candidates;
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-fg">
-          Sesiones de este handoff{linked.length > 0 ? ` (${linked.length})` : ""}
-        </p>
-        {!readOnly && candidates.length > 0 && (
-          <button
-            onClick={() => setShowAdd((v) => !v)}
-            className="text-[11px] font-semibold text-brand hover:text-brand-dark transition-colors"
-          >
-            {showAdd ? "Cerrar" : "Agregar otra sesión"}
-          </button>
-        )}
-      </div>
-
+      <p className="text-xs font-semibold text-fg">
+        Sesiones que alimentan el handoff{feeding.length > 0 ? ` (${feeding.length})` : ""}
+      </p>
       <p className="text-[11px] text-fg-muted leading-relaxed">
-        Solo las sesiones de <span className="font-medium text-fg">handoff, kickoff o con Ventas en la
-        sala</span> alimentan el handoff; las demás (entrega de servicio) van en gris. Revisá y podá antes de generar.
+        Detectamos las sesiones de handoff, kickoff o con Ventas en la sala. Revisá y podá antes de generar.
       </p>
 
-      {linked.length === 0 ? (
-        <p className="text-xs text-fg-muted">Todavía no hay sesiones clasificadas a este proyecto.</p>
+      {feeding.length === 0 ? (
+        <p className="text-xs text-fg-muted">
+          Todavía no hay sesiones de venta para este proyecto. Buscá más abajo o pegá la transcripción a mano.
+        </p>
       ) : (
         <ul className="space-y-2">
-          {linked.map((s) => (
+          {feeding.map((s) => (
             <li
               key={s.sessionId}
-              className={`flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2 ${
-                s.feedsHandoff ? "" : "opacity-60"
-              }`}
+              className="flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2"
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-semibold text-fg truncate">{s.title || "Sin título"}</span>
                   <span className="text-[10px] font-medium text-fg-muted flex-shrink-0">{fmtDate(s.date)}</span>
-                  {s.source === "manual" ? (
+                  {s.forced ? (
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-brand bg-surface border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
+                      Agregada
+                    </span>
+                  ) : s.source === "manual" ? (
                     <span className="text-[9px] font-bold uppercase tracking-wider text-fg-muted bg-surface border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
                       Manual
                     </span>
                   ) : (
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-brand bg-surface border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-fg-muted bg-surface border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
                       IA{s.confidence != null ? ` ${Math.round(s.confidence * 100)}%` : ""}
-                    </span>
-                  )}
-                  {!s.feedsHandoff && (
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 flex-shrink-0">
-                      no entra al handoff
                     </span>
                   )}
                 </div>
@@ -173,9 +151,9 @@ export default function SessionSelectionReview({
               </div>
               {!readOnly && (
                 <button
-                  onClick={() => exclude(s.sessionId)}
+                  onClick={() => setFeeds(s.sessionId, false)}
                   disabled={busyId === s.sessionId}
-                  title="Quitar de este handoff"
+                  title="Quitar del handoff (no la desvincula del proyecto)"
                   className="text-fg-muted hover:text-red-500 disabled:opacity-40 transition-colors flex-shrink-0 mt-0.5"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -188,44 +166,83 @@ export default function SessionSelectionReview({
         </ul>
       )}
 
-      {!readOnly && showAdd && (
-        <div className="rounded-lg border border-line p-3 space-y-2">
-          <p className="text-[11px] text-fg-muted">
-            Otras sesiones del cliente. Al agregar una queda marcada como manual y la IA ya no la cambia.
-          </p>
-          {candidates.length === 0 ? (
-            <p className="text-xs text-fg-muted">No hay otras sesiones del cliente.</p>
-          ) : (
-            <ul className="space-y-1.5 max-h-64 overflow-y-auto">
-              {candidates.map((s) => (
-                <li
-                  key={s.sessionId}
-                  className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-hover"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs text-fg truncate">{s.title || "Sin título"}</span>
-                      <span className="text-[10px] text-fg-muted flex-shrink-0">{fmtDate(s.date)}</span>
-                      {s.linkedElsewhere && (
-                        <span className="text-[9px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 flex-shrink-0">
-                          en otro proyecto
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => include(s.sessionId)}
-                    disabled={busyId === s.sessionId}
-                    className="text-[11px] font-semibold text-brand hover:text-brand-dark disabled:opacity-40 transition-colors flex-shrink-0"
-                  >
-                    Agregar
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+      {!readOnly && (
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <p className="text-[11px] text-fg-muted">¿Crees que falta alguna sesión del cliente?</p>
+          <button
+            onClick={() => setShowModal(true)}
+            className="text-[11px] font-semibold text-brand hover:text-brand-dark transition-colors inline-flex items-center gap-1 flex-shrink-0"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+            </svg>
+            Buscar más sesiones
+          </button>
         </div>
       )}
+
+      {!readOnly && onAddManual && (
+        <button
+          onClick={onAddManual}
+          className="w-full text-left text-[11px] text-fg-muted bg-surface-muted rounded-lg px-3 py-2 hover:bg-surface-hover transition-colors"
+        >
+          ¿Una reunión clave no se grabó? <span className="text-brand font-medium">Ingresá la transcripción a mano</span>
+        </button>
+      )}
+
+      <Modal
+        open={showModal}
+        onClose={() => {
+          setShowModal(false);
+          setSearch("");
+        }}
+        title="Buscar sesiones del cliente"
+        size="md"
+      >
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por título…"
+          className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand mb-3"
+        />
+        {filtered.length === 0 ? (
+          <p className="text-xs text-fg-muted py-2">No hay más sesiones del cliente.</p>
+        ) : (
+          <ul className="space-y-1.5 max-h-80 overflow-y-auto">
+            {filtered.map((c) => (
+              <li
+                key={c.sessionId}
+                className={`flex items-center gap-2 rounded-lg border border-line px-3 py-2 ${c.applies ? "" : "opacity-60"}`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-fg truncate">{c.title || "Sin título"}</span>
+                    <span className="text-[10px] text-fg-muted flex-shrink-0">{fmtDate(c.date)}</span>
+                    {c.applies && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 flex-shrink-0">
+                        aplica
+                      </span>
+                    )}
+                    {c.linkedElsewhere && (
+                      <span className="text-[9px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 flex-shrink-0">
+                        en otro proyecto
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setFeeds(c.sessionId, true)}
+                  disabled={busyId === c.sessionId}
+                  className="text-[11px] font-semibold text-brand hover:text-brand-dark disabled:opacity-40 transition-colors flex-shrink-0"
+                >
+                  Agregar
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Modal>
     </div>
   );
 }

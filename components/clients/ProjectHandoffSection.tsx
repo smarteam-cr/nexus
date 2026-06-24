@@ -215,7 +215,11 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
           el CSE no la ve (rama canEdit), igual que el botón Generar. */}
       {!generated && canEdit && (
         <div className="border-t border-line px-5 py-3">
-          <SessionSelectionReview projectId={projectId} onChange={fetchStatus} />
+          <SessionSelectionReview
+            projectId={projectId}
+            onChange={fetchStatus}
+            onAddManual={() => setShowSources(true)}
+          />
         </div>
       )}
 
