@@ -626,6 +626,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       else phaseToTaskIds.set(ph, [tk.id]);
     }
   }
+  // Agrupación del banner por fase: las que tienen tareas a confirmar + las propuestas como
+  // completas + el "hoy", en el orden del cronograma. proposedDone = las que el agente cierra.
+  const proposedDone = new Set((pendingProgress?.phases ?? []).map((p) => p.id));
+  const bannerPhaseIds = pendingProgress
+    ? phases
+        .filter((p) => p.id && (phaseToTaskIds.has(p.id) || proposedDone.has(p.id) || p.id === pendingProgress.currentPhaseId))
+        .map((p) => p.id as string)
+    : [];
   // Una fase de pendingProgress.phases solo cierra si TODAS sus tareas del borrador quedan
   // resueltas (Hecha o Suspendida). Refuerza el 400 del apply.
   const isPhaseResolvable = (phaseId: string): boolean =>
@@ -955,15 +963,24 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
 
       {/* ── Banner de AVANCE detectado por el agente (D.2) — propone, el CSE confirma ── */}
       {pendingProgress &&
-        (pendingProgress.phases.length > 0 ||
-          pendingProgress.tasks.length > 0 ||
-          !!pendingProgress.currentPhaseId) && (
-          <div className="rounded-2xl border border-emerald-600/40 bg-emerald-900/25 px-5 py-4 space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[13px] font-bold uppercase tracking-wider text-emerald-300">
-                Avance detectado por el agente — revisá y confirmá
-              </span>
-              <div className="ml-auto flex items-center gap-2">
+        (bannerPhaseIds.length > 0 || !!pendingProgress.reasoning) && (
+          <div className="rounded-2xl border border-line bg-surface-muted px-5 py-4 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-900/30 border border-emerald-700/40 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-emerald-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-fg">Avance detectado</p>
+                <p className="text-xs text-fg-muted mt-0.5">Revisá lo que propone el agente y confirmá antes de aplicar</p>
+              </div>
+              <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={discardProgress}
+                  disabled={applyingProgress}
+                  className="text-xs font-medium text-fg-muted hover:text-fg border border-line hover:bg-surface-hover rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
+                >
+                  Descartar
+                </button>
                 <button
                   onClick={applyProgress}
                   disabled={applyingProgress}
@@ -971,107 +988,80 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 >
                   {applyingProgress ? "Aplicando…" : "Aplicar avance"}
                 </button>
-                <button
-                  onClick={discardProgress}
-                  disabled={applyingProgress}
-                  className="text-xs font-medium text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
-                >
-                  Descartar
-                </button>
               </div>
             </div>
 
             {pendingProgress.reasoning && (
-              <p className="text-[13px] text-gray-200 leading-relaxed max-w-3xl">{pendingProgress.reasoning}</p>
-            )}
-
-            {pendingProgress.currentPhaseId && (
-              <p className="text-xs text-blue-200 inline-flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/30 rounded-md px-2 py-1">
-                <span className="uppercase tracking-wide text-blue-300/80 font-semibold">Hoy</span>
-                <span className="font-semibold">
-                  {phases.find((p) => p.id === pendingProgress.currentPhaseId)?.name ?? "—"}
-                </span>
-              </p>
-            )}
-
-            {pendingProgress.phases.length > 0 && (
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400/80">
-                  Fases completadas
-                </span>
-                {pendingProgress.phases.map((ph) => {
-                  const name = phases.find((p) => p.id === ph.id)?.name ?? "(fase)";
-                  const resolvable = isPhaseResolvable(ph.id);
-                  const checked = resolvable && progressPhaseSel.has(ph.id);
-                  const pendingCount = (phaseToTaskIds.get(ph.id) ?? []).filter(
-                    (id) => !progressTaskSel.has(id) && !progressSuspendedSel.has(id),
-                  ).length;
-                  return (
-                    <label
-                      key={ph.id}
-                      className={`flex items-center gap-2.5 text-sm ${resolvable ? "text-gray-200 cursor-pointer" : "text-gray-500 cursor-not-allowed"}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={!resolvable}
-                        onChange={() => setProgressPhaseSel((s) => toggleSet(s, ph.id))}
-                        className="w-4 h-4 accent-emerald-500 disabled:opacity-40"
-                      />
-                      <span className={checked ? "" : "line-through text-gray-600"}>{name}</span>
-                      {!resolvable && (
-                        <span className="text-[11px] text-amber-300/90">
-                          · resolvé {pendingCount} {pendingCount === 1 ? "tarea" : "tareas"} para cerrarla
-                        </span>
-                      )}
-                    </label>
-                  );
-                })}
+              <div className="flex gap-2.5">
+                <svg className="w-4 h-4 text-fg-muted flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+                <p className="text-[13px] leading-relaxed text-fg-secondary">{pendingProgress.reasoning}</p>
               </div>
             )}
 
-            {pendingProgress.tasks.length > 0 && (
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400/80">
-                  Confirmá cada tarea
-                </span>
-                {pendingProgress.tasks.map((tk) => {
-                  const meta = progressTaskMeta.get(tk.id);
-                  const title = meta?.title ?? "(tarea)";
-                  const phaseName = meta?.phaseName ?? "";
-                  const isDone = progressTaskSel.has(tk.id);
-                  const isSusp = progressSuspendedSel.has(tk.id);
-                  const state: "done" | "suspended" | "pending" = isDone ? "done" : isSusp ? "suspended" : "pending";
-                  return (
-                    <div key={tk.id} className="flex flex-wrap items-center gap-2 text-sm">
-                      <span className={isDone ? "text-gray-200" : isSusp ? "text-gray-500 line-through" : "text-gray-300"}>
-                        {title}
+            {bannerPhaseIds.map((pid) => {
+              const phaseName = phases.find((p) => p.id === pid)?.name ?? "(fase)";
+              const taskIds = phaseToTaskIds.get(pid) ?? [];
+              const isHoy = pendingProgress.currentPhaseId === pid;
+              const isProposedDone = proposedDone.has(pid);
+              const resolvable = isPhaseResolvable(pid);
+              const checked = resolvable && progressPhaseSel.has(pid);
+              const pendingCount = taskIds.filter((id) => !progressTaskSel.has(id) && !progressSuspendedSel.has(id)).length;
+              return (
+                <div key={pid} className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-fg">{phaseName}</span>
+                    {isHoy && (
+                      <span className="text-2xs font-semibold uppercase tracking-wide text-blue-300 bg-blue-900/30 border border-blue-700/40 rounded px-1.5 py-0.5">Hoy</span>
+                    )}
+                    {isProposedDone && (resolvable ? (
+                      <button
+                        type="button"
+                        onClick={() => setProgressPhaseSel((s) => toggleSet(s, pid))}
+                        className={`inline-flex items-center gap-1 text-2xs font-semibold rounded px-2 py-0.5 border transition-colors ${checked ? "text-emerald-300 bg-emerald-900/30 border-emerald-700/40" : "text-fg-muted border-line hover:bg-surface-hover"}`}
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                        {checked ? "Fase completada" : "Cerrar fase"}
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-2xs font-medium text-amber-300">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+                        resolvé {pendingCount} {pendingCount === 1 ? "tarea" : "tareas"} para cerrarla
                       </span>
-                      {phaseName && <span className="text-gray-500 text-xs">· {phaseName}</span>}
-                      <div className="ml-auto inline-flex rounded-lg border border-gray-700 overflow-hidden text-[11px] font-semibold">
-                        {([
-                          { k: "done", label: "Hecha", on: "bg-emerald-500/25 text-emerald-200" },
-                          { k: "suspended", label: "Suspendida", on: "bg-amber-500/20 text-amber-200" },
-                          { k: "pending", label: "Pendiente", on: "bg-gray-600/40 text-gray-200" },
-                        ] as const).map((opt) => (
-                          <button
-                            key={opt.k}
-                            type="button"
-                            onClick={() => setTaskState(tk.id, opt.k)}
-                            className={`px-2.5 py-1 transition-colors ${state === opt.k ? opt.on : "text-gray-500 hover:text-gray-300"}`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
+                    ))}
+                  </div>
+                  {taskIds.map((tid) => {
+                    const title = progressTaskMeta.get(tid)?.title ?? "(tarea)";
+                    const isDone = progressTaskSel.has(tid);
+                    const isSusp = progressSuspendedSel.has(tid);
+                    const state: "done" | "suspended" | "pending" = isDone ? "done" : isSusp ? "suspended" : "pending";
+                    return (
+                      <div key={tid} className="flex flex-wrap items-center gap-2 py-1 pl-0.5">
+                        <span className={`flex-1 min-w-0 text-sm ${isSusp ? "line-through text-fg-muted" : "text-fg-secondary"}`}>{title}</span>
+                        <div className="inline-flex rounded-lg border border-line overflow-hidden text-2xs font-semibold">
+                          {([
+                            { k: "done", label: "Hecha", on: "bg-emerald-900/30 text-emerald-300" },
+                            { k: "suspended", label: "Suspendida", on: "bg-amber-900/30 text-amber-300" },
+                            { k: "pending", label: "Pendiente", on: "bg-surface-hover text-fg" },
+                          ] as const).map((opt) => (
+                            <button
+                              key={opt.k}
+                              type="button"
+                              onClick={() => setTaskState(tid, opt.k)}
+                              className={`px-2.5 py-1 transition-colors ${state === opt.k ? opt.on : "text-fg-muted hover:text-fg"}`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              );
+            })}
 
-            <p className="text-xs text-gray-400 pt-2 border-t border-emerald-700/25">
-              Marcá cada tarea como Hecha, Suspendida o Pendiente. Una fase solo se cierra cuando todas sus tareas quedan resueltas (hechas o suspendidas). El agente solo propone — vos confirmás.
+            <p className="text-xs text-fg-muted pt-3 border-t border-line leading-relaxed">
+              Marcá cada tarea como hecha, suspendida o pendiente. Una fase se cierra solo cuando todas sus tareas quedan resueltas. El agente propone; vos confirmás.
             </p>
           </div>
         )}
@@ -1110,17 +1100,39 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           readOnly
         />
       ) : (
-        <TimelineGantt
-          anchor={anchor || null}
-          phases={ganttPhases}
-          onToggleStatus={toggleStatus}
-          onUpdateTask={(phaseKey, taskKey, patch) => updateTask(phaseKey, taskKey, patch)}
-          onAddTask={addTask}
-          onRemoveTask={removeTask}
-          onSetAnchor={setAnchorFromGantt}
-          onAssistPhase={(phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }}
-          kickoffDate={kickoffDate || null}
-        />
+        <>
+          {totalTasks === 0 && !hasPublishedOnce && (
+            <div className="flex items-start gap-3 rounded-2xl border border-line bg-surface-muted px-5 py-4">
+              <div className="w-8 h-8 rounded-lg bg-blue-900/30 border border-blue-700/40 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              </div>
+              <div className="min-w-0 space-y-2">
+                <p className="text-sm text-fg-secondary leading-relaxed">
+                  Este cronograma inicial fue creado con la información del <span className="font-medium text-fg">Handoff</span>. Generá las tareas para detallarlo y consensuar el avance con el cliente.
+                </p>
+                <button
+                  onClick={() => void generateDetail({ auto: false })}
+                  disabled={generating}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  {generating ? (chainingProgress ? "Evaluando avance…" : "Creando tareas…") : "Generar cronograma"}
+                </button>
+              </div>
+            </div>
+          )}
+          <TimelineGantt
+            anchor={anchor || null}
+            phases={ganttPhases}
+            onToggleStatus={toggleStatus}
+            onUpdateTask={(phaseKey, taskKey, patch) => updateTask(phaseKey, taskKey, patch)}
+            onAddTask={addTask}
+            onRemoveTask={removeTask}
+            onSetAnchor={setAnchorFromGantt}
+            onAssistPhase={(phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }}
+            kickoffDate={kickoffDate || null}
+          />
+        </>
       )}
 
       <TimelineAssistDialog

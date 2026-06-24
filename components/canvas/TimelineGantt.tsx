@@ -120,9 +120,9 @@ const OVERDUE_CLS = "bg-red-900/40 text-red-300 border-red-700/50";
 
 // B — dueño de la tarea (chip). Cliente resalta (es lo que frena); Smarteam configura; Ambos conjunto.
 const PARTY_META: Record<string, { label: string; cls: string }> = {
-  CLIENTE:  { label: "Cliente",  cls: "text-amber-300 bg-amber-500/10 border-amber-500/40" },
-  SMARTEAM: { label: "Smarteam", cls: "text-sky-300 bg-sky-500/10 border-sky-500/40" },
-  AMBOS:    { label: "Ambos",    cls: "text-violet-300 bg-violet-500/10 border-violet-500/40" },
+  CLIENTE:  { label: "Cliente",  cls: "text-amber-300 bg-amber-900/30 border-amber-700/50" },
+  SMARTEAM: { label: "Smarteam", cls: "text-sky-300 bg-sky-900/30 border-sky-700/40" },
+  AMBOS:    { label: "Ambos",    cls: "text-violet-300 bg-violet-900/30 border-violet-700/40" },
 };
 
 // ── Componente ────────────────────────────────────────────────────────────────
