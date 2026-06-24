@@ -413,7 +413,7 @@ export default function TimelineGantt({
                                             title="Dueño de la tarea — clic para cambiar: sin dueño, Cliente, Smarteam o Ambos"
                                             className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border transition-colors ${t.party && PARTY_META[t.party] ? PARTY_META[t.party].cls : "text-fg-muted border-line border-dashed hover:bg-surface-hover"}`}
                                           >
-                                            {t.party && PARTY_META[t.party] ? PARTY_META[t.party].label : "Dueño"}
+                                            {t.party && PARTY_META[t.party] ? PARTY_META[t.party].label : "Sin dueño"}
                                           </button>
                                         ) : (
                                           t.party && PARTY_META[t.party] && (
