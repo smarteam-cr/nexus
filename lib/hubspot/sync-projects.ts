@@ -64,6 +64,33 @@ const FALLBACK_PROJECT_SLUGS = ["0-18", "0-49"];
 const ASSOCIATION_SLUGS = [...NAMED_PROJECT_SLUGS, ...FALLBACK_PROJECT_SLUGS]; // para mensajes
 const READ_SLUGS = ["projects", "PROJECT", "0-18", "0-49"];
 
+/**
+ * Ids de los records "projects" (0-970) asociados a una company en HubSpot.
+ * Versión LIVIANA para lecturas (el stepper de handoff lista los proyectos de una
+ * company) contra el portal SISTEMA, donde el objeto Proyectos es conocido. Prueba los
+ * slugs nombrados y el tipo 0-970; NO usa los fallbacks numéricos peligrosos (0-18/0-49)
+ * ni el schema-discovery del sync completo — `syncProjectsForClient` mantiene esa
+ * robustez para portales de clientes arbitrarios.
+ */
+export async function resolveCompanyProjectIds(hs: Client, companyId: string): Promise<string[]> {
+  for (const slug of [...NAMED_PROJECT_SLUGS, "0-970"]) {
+    try {
+      const res = await hs.apiRequest({
+        method: "GET",
+        path: `/crm/v4/objects/companies/${companyId}/associations/${slug}`,
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { results?: Array<{ toObjectId: number }> };
+        const ids = (data.results ?? []).map((r) => String(r.toObjectId));
+        if (ids.length > 0) return ids;
+      }
+    } catch {
+      /* probar el siguiente slug */
+    }
+  }
+  return [];
+}
+
 // ── Helpers para resolver owner y pipeline ──────────────────────────────────
 
 // Cache en memoria por proceso para evitar fetches repetidos durante un sync
