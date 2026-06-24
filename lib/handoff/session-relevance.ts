@@ -2,17 +2,19 @@
  * lib/handoff/session-relevance.ts
  *
  * Relevancia de una sesión para el HANDOFF (Sales→CS). Regla: una sesión alimenta el
- * handoff si su título es de VENTA/descubrimiento, O si participó alguien de VENTAS en la
- * sala. Los títulos de entrega/CS (kickoff, implementación, review, marketing/service,
- * weekly…) se excluyen aunque haya Ventas presente.
+ * handoff si su título es de HANDOFF o KICKOFF, O si participó alguien de VENTAS en la
+ * sala. El resto (levantamientos/diagnósticos semanales, implementación, review, etc.)
+ * son ENTREGA DE SERVICIO y NO alimentan — aunque tengan "Sales/Marketing/Service" en el
+ * título o un CSE como organizador. (Para clientes donde no se grabaron sesiones de
+ * ventas, el handoff y el kickoff son la fuente; las llamadas de venta reales se cubren
+ * por "Ventas en la sala".)
  *
  * Fuente ÚNICA de las listas de keywords — la usan la generación (analyze, vía su
  * classifyForHandoff inline) y la revisión de sesiones (A2 · session-candidates).
  */
 
-// Títulos que NUNCA son de venta (entrega/CS). Se chequean PRIMERO (ganan sobre todo).
+// Títulos de entrega/CS que NUNCA alimentan el handoff. Se chequean PRIMERO (ganan).
 export const HANDOFF_EXCLUDE_TITLE_KEYWORDS = [
-  "kickoff", "kick-off", "kick off",
   "implementacion", "implementation",
   "adopcion", "adoption",
   "capacitacion", "training",
@@ -23,18 +25,12 @@ export const HANDOFF_EXCLUDE_TITLE_KEYWORDS = [
   "qbr", "business review",
 ];
 
-// Títulos de venta/descubrimiento (entran aunque no haya un Ventas formal en la sala).
+// Títulos que SÍ alimentan el handoff: solo handoff y kickoff (entran aunque no haya
+// Ventas formal en la sala). Lo demás depende de si hubo Ventas presente.
 export const HANDOFF_INCLUDE_TITLE_KEYWORDS = [
   "hand off", "handoff", "hand-off",
   "traspaso",
-  "discovery", "descubrimiento",
-  "demo", "demostracion",
-  "propuesta", "proposal",
-  "cierre", "closing",
-  "sales call", "sales semana", "sales week", "comercial",
-  "llamada de venta", "llamada de ventas",
-  "preventa", "pre-venta", "pre venta",
-  "calificacion", "qualification",
+  "kickoff", "kick-off", "kick off",
 ];
 
 /** Insensitive a mayúsculas y acentos (NFD + remover marcas combinantes U+0300–U+036F). */

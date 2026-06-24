@@ -807,11 +807,10 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     let csSessions: RawTranscript[];
 
     if (isHandoffAgent && bodyProjectId) {
-      // Handoff scopeado al proyecto: de las sesiones linkeadas entran las de VENTA —
-      // por TÍTULO (discovery/demo/cierre/proceso comercial/sales…) O porque participó
-      // alguien de Ventas en la sala. Las de entrega/CS (kickoff, implementación,
-      // marketing/service, weekly) se excluyen aunque estén linkeadas. organizerEmail ya
-      // viene en participants (arriba). Sin ventana de 90d — el scope es el vínculo.
+      // Handoff scopeado al proyecto: de las sesiones linkeadas entran las de HANDOFF o
+      // KICKOFF (por título) O las que tienen Ventas en la sala. El resto (levantamientos
+      // semanales, implementación, marketing/service…) son entrega de servicio y se
+      // excluyen aunque estén linkeadas. organizerEmail ya viene en participants (arriba).
       salesSessions = matchingSessions.filter((s) => classifyForHandoff(s).include);
       csSessions = [];
     } else if (isHandoffAgent) {

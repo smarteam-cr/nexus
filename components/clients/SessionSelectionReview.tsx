@@ -135,8 +135,8 @@ export default function SessionSelectionReview({
       </div>
 
       <p className="text-[11px] text-fg-muted leading-relaxed">
-        Solo las <span className="font-medium text-fg">sesiones de venta</span> (por título o con Ventas
-        en la sala) alimentan el handoff; las demás van en gris. Revisá y podá antes de generar.
+        Solo las sesiones de <span className="font-medium text-fg">handoff, kickoff o con Ventas en la
+        sala</span> alimentan el handoff; las demás (entrega de servicio) van en gris. Revisá y podá antes de generar.
       </p>
 
       {linked.length === 0 ? (
