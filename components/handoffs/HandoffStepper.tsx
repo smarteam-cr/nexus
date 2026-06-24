@@ -27,6 +27,7 @@ interface AvailableDeal {
   amount: string | null;
   closedate: string | null;
   isWon: boolean;
+  pipeline: string | null;
 }
 interface LookupResult {
   company: { id: string; name: string; domain: string | null } | null;
@@ -43,6 +44,13 @@ interface CompanyProject {
   hasHandoff: boolean;
 }
 
+type Step = "domain" | "config" | "done";
+const STEPS: { key: Step; label: string }[] = [
+  { key: "domain", label: "Empresa" },
+  { key: "config", label: "Deal y proyecto" },
+  { key: "done", label: "Listo" },
+];
+
 function fmtDate(raw: string): string {
   const d = new Date(raw);
   return isNaN(d.getTime()) ? raw : d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
@@ -54,8 +62,9 @@ export default function HandoffStepper() {
   const canCreate = me?.capabilities.includes("createHandoff") ?? false;
 
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<"domain" | "config" | "done">("domain");
+  const [step, setStep] = useState<Step>("domain");
   const [domain, setDomain] = useState("");
+  const [lookedUpDomain, setLookedUpDomain] = useState(""); // dominio de la última búsqueda OK
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lookup, setLookup] = useState<LookupResult | null>(null);
@@ -71,6 +80,7 @@ export default function HandoffStepper() {
     setOpen(false);
     setStep("domain");
     setDomain("");
+    setLookedUpDomain("");
     setBusy(false);
     setError(null);
     setLookup(null);
@@ -82,6 +92,12 @@ export default function HandoffStepper() {
   };
 
   const wonDeals = (lookup?.deals ?? []).filter((d) => d.isWon);
+  const stepIdx = step === "domain" ? 0 : step === "config" ? 1 : 2;
+  // El paso "config" es alcanzable si ya hubo una búsqueda OK. "done" solo post-creación.
+  const reachable = (s: Step): boolean =>
+    step === "done" ? false : s === "domain" ? true : s === "config" ? !!lookup : false;
+  // Volver al paso domain sin perder el lookup → "Siguiente" si no se editó el dominio.
+  const domainUnchanged = !!lookup && domain.trim().toLowerCase() === lookedUpDomain;
 
   const search = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,14 +117,16 @@ export default function HandoffStepper() {
         return;
       }
       setLookup(data);
+      setLookedUpDomain(d);
       const won = data.deals.filter((x) => x.isWon);
       if (won.length === 1) setDealId(won[0].id);
       setNewProjectName(won[0]?.name ?? data.company.name);
-      // Proyectos de la company (sin los que ya tienen handoff → evita el 409).
+      // Proyectos de la company. Se muestran TODOS; los que ya tienen handoff van
+      // deshabilitados (no se puede crear un 2º handoff para el mismo proyecto).
       try {
         const pr = await fetch(`/api/handoffs/projects-of-company?companyId=${data.company.id}`);
         const pdata = (await pr.json()) as { projects?: CompanyProject[] };
-        setProjects((pdata.projects ?? []).filter((p) => !p.hasHandoff));
+        setProjects(pdata.projects ?? []);
       } catch {
         setProjects([]);
       }
@@ -192,9 +210,15 @@ export default function HandoffStepper() {
         <Button type="button" variant="secondary" size="md" onClick={reset} disabled={busy}>
           Cancelar
         </Button>
-        <Button type="submit" form="handoff-domain-form" variant="primary" size="md" loading={busy} disabled={domain.trim().length < 3}>
-          Buscar empresa
-        </Button>
+        {domainUnchanged ? (
+          <Button type="button" variant="primary" size="md" onClick={() => setStep("config")}>
+            Siguiente
+          </Button>
+        ) : (
+          <Button type="submit" form="handoff-domain-form" variant="primary" size="md" loading={busy} disabled={domain.trim().length < 3}>
+            Buscar empresa
+          </Button>
+        )}
       </>
     ) : step === "config" ? (
       <>
@@ -244,6 +268,36 @@ export default function HandoffStepper() {
       </Button>
 
       <Modal open={open} onClose={reset} title="Nuevo handoff" size="md" footer={footer}>
+        {/* Indicador de pasos — los visitados son clickeables (ir adelante/atrás). */}
+        <div className="flex items-center gap-2 mb-4">
+          {STEPS.map((s, i) => {
+            const active = i === stepIdx;
+            const canClick = reachable(s.key) && !active;
+            return (
+              <div key={s.key} className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={!canClick}
+                  onClick={() => canClick && setStep(s.key)}
+                  className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
+                    active ? "text-fg" : canClick ? "text-fg-muted hover:text-fg cursor-pointer" : "text-fg-muted cursor-default"
+                  }`}
+                >
+                  <span
+                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${
+                      active ? "bg-brand text-white border-brand" : "border-line text-fg-muted"
+                    }`}
+                  >
+                    {i + 1}
+                  </span>
+                  {s.label}
+                </button>
+                {i < STEPS.length - 1 && <span className="w-4 h-px bg-line" />}
+              </div>
+            );
+          })}
+        </div>
+
         {/* Paso 1 — dominio */}
         {step === "domain" && (
           <form id="handoff-domain-form" onSubmit={search} className="space-y-3">
@@ -286,28 +340,37 @@ export default function HandoffStepper() {
                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                   Esta empresa no tiene deals ganados en HubSpot. Marcá el deal como ganado antes de crear el handoff.
                 </p>
-              ) : wonDeals.length === 1 ? (
-                <div className="flex items-center gap-2 rounded-lg border border-line px-3 py-2">
-                  <span className="text-sm text-fg flex-1">{wonDeals[0].name}</span>
-                  {wonDeals[0].closedate && <span className="text-xs text-fg-muted">{fmtDate(wonDeals[0].closedate)}</span>}
-                </div>
               ) : (
                 <div className="space-y-1.5">
-                  {wonDeals.map((d) => (
-                    <label
-                      key={d.id}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer"
-                    >
-                      <input type="radio" name="handoff-deal" checked={dealId === d.id} onChange={() => setDealId(d.id)} />
-                      <span className="text-sm text-fg flex-1">{d.name}</span>
-                      {d.closedate && <span className="text-xs text-fg-muted">{fmtDate(d.closedate)}</span>}
-                    </label>
-                  ))}
+                  {wonDeals.map((d) => {
+                    const only = wonDeals.length === 1;
+                    return (
+                      <label
+                        key={d.id}
+                        className={`flex items-start gap-2 px-3 py-2 rounded-lg border border-line ${only ? "" : "hover:bg-surface-hover cursor-pointer"}`}
+                      >
+                        {!only && (
+                          <input
+                            type="radio"
+                            name="handoff-deal"
+                            className="mt-1"
+                            checked={dealId === d.id}
+                            onChange={() => setDealId(d.id)}
+                          />
+                        )}
+                        <span className="flex-1 min-w-0">
+                          <span className="text-sm text-fg block">{d.name}</span>
+                          {d.pipeline && <span className="text-[11px] text-fg-muted">{d.pipeline}</span>}
+                        </span>
+                        {d.closedate && <span className="text-xs text-fg-muted flex-shrink-0 mt-0.5">{fmtDate(d.closedate)}</span>}
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            {/* Proyecto: crear nuevo o adjuntar uno existente */}
+            {/* Proyecto: crear nuevo o adjuntar uno de HubSpot */}
             <div className="space-y-1.5">
               <p className="text-2xs font-medium text-fg-muted uppercase tracking-wider">Proyecto</p>
               <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer">
@@ -322,25 +385,41 @@ export default function HandoffStepper() {
                   placeholder="Nombre del proyecto"
                 />
               )}
-              {projects.map((p) => (
-                <label
-                  key={p.hubspotProjectId}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer"
-                >
-                  <input
-                    type="radio"
-                    name="handoff-project"
-                    checked={projectSel === p.hubspotProjectId}
-                    onChange={() => setProjectSel(p.hubspotProjectId)}
-                  />
-                  <span className="text-sm text-fg flex-1 truncate">{p.name}</span>
-                  {!p.nexusProjectId && (
-                    <span className="text-[10px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5">
-                      se importará
-                    </span>
-                  )}
-                </label>
-              ))}
+
+              {projects.length > 0 && (
+                <>
+                  <p className="text-2xs font-medium text-fg-muted uppercase tracking-wider pt-1">Proyectos de HubSpot</p>
+                  {projects.map((p) => {
+                    const disabled = p.hasHandoff;
+                    return (
+                      <label
+                        key={p.hubspotProjectId}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-line ${
+                          disabled ? "opacity-60 cursor-not-allowed" : "hover:bg-surface-hover cursor-pointer"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="handoff-project"
+                          disabled={disabled}
+                          checked={projectSel === p.hubspotProjectId}
+                          onChange={() => !disabled && setProjectSel(p.hubspotProjectId)}
+                        />
+                        <span className="text-sm text-fg flex-1 truncate">{p.name}</span>
+                        {p.hasHandoff ? (
+                          <span className="text-[10px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
+                            ya tiene handoff
+                          </span>
+                        ) : !p.nexusProjectId ? (
+                          <span className="text-[10px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
+                            se importará
+                          </span>
+                        ) : null}
+                      </label>
+                    );
+                  })}
+                </>
+              )}
             </div>
 
             {error && <p className="text-xs text-red-500">{error}</p>}
