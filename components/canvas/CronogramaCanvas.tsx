@@ -30,7 +30,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { plural } from "@/lib/timeline/weeks";
 import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/Toast";
-import TimelineGantt, { type GanttPhase, type GanttTaskStatus } from "./TimelineGantt";
+import TimelineGantt, { type GanttPhase, type GanttTaskStatus, PARTY_META, effParty } from "./TimelineGantt";
 import TimelineAssistDialog from "./TimelineAssistDialog";
 import PublishBar from "./PublishBar";
 import CronogramaProgressButton from "@/components/clients/CronogramaProgressButton";
@@ -615,8 +615,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   };
 
   // ── D/E — banner de avance: meta de tareas (título + fase) y regla de cierre de fase ──
-  const progressTaskMeta = new Map<string, { title: string; phaseId: string; phaseName: string }>();
-  for (const p of phases) for (const t of p.tasks) if (t.id && p.id) progressTaskMeta.set(t.id, { title: t.title, phaseId: p.id, phaseName: p.name });
+  const progressTaskMeta = new Map<string, { title: string; phaseId: string; phaseName: string; party: "CLIENTE" | "SMARTEAM" | "AMBOS" | null }>();
+  for (const p of phases) for (const t of p.tasks) if (t.id && p.id) progressTaskMeta.set(t.id, { title: t.title, phaseId: p.id, phaseName: p.name, party: t.party ?? null });
   const phaseToTaskIds = new Map<string, string[]>();
   if (pendingProgress) {
     for (const tk of pendingProgress.tasks) {
@@ -1031,13 +1031,23 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                     ))}
                   </div>
                   {taskIds.map((tid) => {
-                    const title = progressTaskMeta.get(tid)?.title ?? "(tarea)";
+                    const meta = progressTaskMeta.get(tid);
+                    const title = meta?.title ?? "(tarea)";
+                    const party = effParty(meta?.party);
                     const isDone = progressTaskSel.has(tid);
                     const isSusp = progressSuspendedSel.has(tid);
                     const state: "done" | "suspended" | "pending" = isDone ? "done" : isSusp ? "suspended" : "pending";
                     return (
                       <div key={tid} className="flex flex-wrap items-center gap-2 py-1 pl-0.5">
-                        <span className={`flex-1 min-w-0 text-sm ${isSusp ? "line-through text-fg-muted" : "text-fg-secondary"}`}>{title}</span>
+                        <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+                          <span className={`text-sm ${isSusp ? "line-through text-fg-muted" : "text-fg-secondary"}`}>{title}</span>
+                          <span
+                            className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${PARTY_META[party].cls}`}
+                            title="Responsable de la tarea en el plan compartido"
+                          >
+                            {PARTY_META[party].label}
+                          </span>
+                        </div>
                         <div className="inline-flex rounded-lg border border-line overflow-hidden text-2xs font-semibold">
                           {([
                             { k: "done", label: "Hecha", on: "bg-emerald-900/30 text-emerald-300" },

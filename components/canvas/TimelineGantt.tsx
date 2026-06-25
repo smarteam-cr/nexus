@@ -120,7 +120,7 @@ const STATUS_META: Record<GanttTaskStatus, { label: string; cls: string }> = {
 const OVERDUE_CLS = "bg-red-900/40 text-red-300 border-red-700/50";
 
 // B — dueño de la tarea (chip). Cliente resalta (es lo que frena); Smarteam configura; Ambos conjunto.
-const PARTY_META: Record<string, { label: string; cls: string }> = {
+export const PARTY_META: Record<string, { label: string; cls: string }> = {
   CLIENTE:  { label: "Cliente",  cls: "text-amber-300 bg-amber-900/30 border-amber-700/50" },
   SMARTEAM: { label: "Smarteam", cls: "text-sky-300 bg-sky-900/30 border-sky-700/40" },
   AMBOS:    { label: "Ambos",    cls: "text-violet-300 bg-violet-900/30 border-violet-700/40" },
@@ -128,7 +128,7 @@ const PARTY_META: Record<string, { label: string; cls: string }> = {
 // Toda tarea TIENE dueño — el ciclo es Cliente → Smarteam → Ambos → Cliente (sin estado vacío).
 // effParty resuelve null/undefined (data vieja) a SMARTEAM para que nunca se muestre "sin dueño".
 const PARTY_CYCLE = ["CLIENTE", "SMARTEAM", "AMBOS"] as const;
-const effParty = (p: "CLIENTE" | "SMARTEAM" | "AMBOS" | null | undefined): "CLIENTE" | "SMARTEAM" | "AMBOS" =>
+export const effParty = (p: "CLIENTE" | "SMARTEAM" | "AMBOS" | null | undefined): "CLIENTE" | "SMARTEAM" | "AMBOS" =>
   p === "CLIENTE" || p === "SMARTEAM" || p === "AMBOS" ? p : "SMARTEAM";
 const nextParty = (p: "CLIENTE" | "SMARTEAM" | "AMBOS"): "CLIENTE" | "SMARTEAM" | "AMBOS" =>
   PARTY_CYCLE[(PARTY_CYCLE.indexOf(p) + 1) % PARTY_CYCLE.length];
