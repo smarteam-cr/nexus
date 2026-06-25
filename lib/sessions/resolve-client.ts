@@ -24,6 +24,7 @@ import {
   categorizeSession,
   buildInternalDomainsSet,
   collectExternalDomains,
+  computeAmbiguousNameTokens,
   type CategorizeContext,
   type CategorizableSession,
 } from "@/lib/sessions/categorize";
@@ -53,6 +54,7 @@ export async function buildCategorizeCtx(): Promise<CategorizeContext> {
     hubspotCompaniesByDomain: new Map(),
     internalDomains: buildInternalDomainsSet(categories),
     clientsByHubspotCompanyId,
+    ambiguousNameTokens: computeAmbiguousNameTokens(clients),
   };
 }
 

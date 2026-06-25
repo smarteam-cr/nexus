@@ -7,6 +7,7 @@ import {
   categorizeSessions,
   buildInternalDomainsSet,
   collectExternalDomains,
+  computeAmbiguousNameTokens,
   type SessionGroup,
 } from "@/lib/sessions/categorize";
 import { cachedSearchCompaniesByDomains } from "@/lib/hubspot/companies";
@@ -124,6 +125,7 @@ export default async function SessionsPage() {
     internalDomains,
     clientsByHubspotCompanyId,
     groupUnlinkedHubspotCompany: true, // /sessions agrupa las empresas-HubSpot no-cliente
+    ambiguousNameTokens: computeAmbiguousNameTokens(clients),
   });
 
   // ── 6. Enriquecer con team members + group ─────────────────────────────────

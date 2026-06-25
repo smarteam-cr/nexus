@@ -50,6 +50,12 @@ export interface CategorizeContext {
    * al título — aditivo, para no perder clientes con dominio real no registrado en el Client.
    */
   groupUnlinkedHubspotCompany?: boolean;
+  /**
+   * Tokens que aparecen en el nombre de 2+ clientes (ej. "grupo") → se ignoran en el
+   * title-match para que no sean catch-all. Computar con `computeAmbiguousNameTokens`.
+   * Opcional: si falta, no se filtra ninguno (comportamiento previo).
+   */
+  ambiguousNameTokens?: Set<string>;
 }
 
 export interface CategorizableSession {
@@ -171,6 +177,66 @@ function isTestClient(name: string): boolean {
   return TEST_CLIENT_NAME_PATTERNS.some((re) => re.test(name));
 }
 
+/** Set vacío reutilizable de tokens (evita alocar uno por llamada). */
+const EMPTY_TOKEN_SET: Set<string> = new Set();
+
+/**
+ * Tokens (>=4 chars, no stopword) que NO discriminan: aparecen en el nombre de 2+ EMPRESAS
+ * DISTINTAS (ej. "grupo" en "Grupo Servica" / "Grupo Inve"). Se ignoran en el title-match para
+ * que "GRUPO PRINTER" no matchee "Grupo Servica" por "grupo"; cada cliente real sigue
+ * resolviendo por su token distintivo (servica/inve) o por dominio.
+ *
+ * "Empresas distintas" = token-sets donde NINGUNO es subconjunto del otro. Dos registros
+ * DUPLICADOS de la misma empresa (un set ⊆ el otro, ej. "Ministerio de Economía" ⊆
+ * "Ministerio de Economía (MINEC)", o dos "Construtecho") NO cuentan como ambiguos — si no,
+ * romperían su propia resolución por título. Se computa una vez por contexto (no por sesión).
+ */
+export function computeAmbiguousNameTokens(
+  clients: Pick<Client, "name" | "company">[],
+): Set<string> {
+  const sets = clients.map((c) => {
+    const s = new Set<string>();
+    for (const p of normalize(c.name).split(/[\s.\-_]+/)) {
+      if (p.length >= 4 && !TITLE_MATCH_STOPWORDS.has(p)) s.add(p);
+    }
+    if (c.company) {
+      for (const p of normalize(c.company).split(/[\s.\-_]+/)) {
+        if (p.length >= 4 && !TITLE_MATCH_STOPWORDS.has(p)) s.add(p);
+      }
+    }
+    return s;
+  });
+  const byToken = new Map<string, number[]>();
+  sets.forEach((s, i) => {
+    for (const t of s) {
+      const arr = byToken.get(t);
+      if (arr) arr.push(i);
+      else byToken.set(t, [i]);
+    }
+  });
+  const isSubset = (a: Set<string>, b: Set<string>): boolean => {
+    for (const x of a) if (!b.has(x)) return false;
+    return true;
+  };
+  const ambiguous = new Set<string>();
+  for (const [t, idxs] of byToken) {
+    if (idxs.length < 2) continue;
+    let distinct = false;
+    outer: for (let a = 0; a < idxs.length; a++) {
+      for (let b = a + 1; b < idxs.length; b++) {
+        const A = sets[idxs[a]];
+        const B = sets[idxs[b]];
+        if (!isSubset(A, B) && !isSubset(B, A)) {
+          distinct = true;
+          break outer;
+        }
+      }
+    }
+    if (distinct) ambiguous.add(t);
+  }
+  return ambiguous;
+}
+
 /**
  * Title-matching: busca un cliente cuyo nombre o company aparezca como token
  * (palabra >= 4 chars, sin stopwords genéricas) en el título de la sesión. Match
@@ -180,12 +246,14 @@ function isTestClient(name: string): boolean {
  */
 function findClientByTitleMatch(
   title: string,
-  clients: Pick<Client, "id" | "name" | "company">[]
+  clients: Pick<Client, "id" | "name" | "company">[],
+  ambiguous: Set<string>,
 ): Pick<Client, "id" | "name" | "company"> | null {
+  const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w) || ambiguous.has(w);
   const titleWords = new Set(
     normalize(title)
       .split(/[\s|&,.()\[\]!?*\-_]+/)
-      .filter((w) => w.length >= 4 && !TITLE_MATCH_STOPWORDS.has(w))
+      .filter((w) => w.length >= 4 && !skip(w))
   );
   if (titleWords.size === 0) return null;
 
@@ -194,11 +262,11 @@ function findClientByTitleMatch(
       if (isTestClient(c.name)) return false;
       const nameParts = normalize(c.name)
         .split(/\s+/)
-        .filter((p) => p.length >= 4 && !TITLE_MATCH_STOPWORDS.has(p));
+        .filter((p) => p.length >= 4 && !skip(p));
       const compParts = c.company
         ? normalize(c.company)
             .split(/[\s.\-_]+/)
-            .filter((p) => p.length >= 4 && !TITLE_MATCH_STOPWORDS.has(p))
+            .filter((p) => p.length >= 4 && !skip(p))
         : [];
       return (
         nameParts.some((p) => titleWords.has(p)) ||
@@ -219,6 +287,7 @@ export function categorizeSession(
   ctx: CategorizeContext
 ): SessionGroup {
   const { clients, categories, hubspotCompaniesByDomain, internalDomains } = ctx;
+  const ambiguous = ctx.ambiguousNameTokens ?? EMPTY_TOKEN_SET;
 
   // ── 1. Manual override ─────────────────────────────────────────────────────
   if (session.manualClientId) {
@@ -240,7 +309,7 @@ export function categorizeSession(
   // clientes: una sesión interna cuyo título contiene el nombre del cliente
   // (ej. "Hand Off | WHEREX") debe ir al bucket de ese cliente, no a Internal.
   if (participantDomains.size > 0 && externalDomains.size === 0) {
-    const titleMatchedClient = findClientByTitleMatch(session.title, clients);
+    const titleMatchedClient = findClientByTitleMatch(session.title, clients, ambiguous);
     if (titleMatchedClient) {
       return {
         kind: "client",
@@ -327,7 +396,7 @@ export function categorizeSession(
   }
 
   // ── 6. Title matching con Client (fallback débil) ─────────────────────────
-  const titleMatched = findClientByTitleMatch(session.title, clients);
+  const titleMatched = findClientByTitleMatch(session.title, clients, ambiguous);
   if (titleMatched) {
     return {
       kind: "client",
