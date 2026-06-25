@@ -34,43 +34,11 @@ export interface AnalysisContextResult {
   count: number;
 }
 
-// ── Helper interno: ¿la sesión matchea al Client? ─────────────────────────────
-// Usa la misma lógica que la sidebar (categorize.ts): manualClientId → emailDomains → title.
-// Acá no necesitamos cascada completa porque ya estamos enfocados en UN client.
-
-function sessionMatchesClient(
-  session: Pick<FirefliesSession, "manualClientId" | "participants" | "title">,
-  client: Pick<Client, "id" | "name" | "company" | "emailDomains">
-): boolean {
-  // 1. Manual override
-  if (session.manualClientId === client.id) return true;
-
-  // 2. Email domain matching
-  const participantDomains = session.participants
-    .map((p) => p.split("@")[1]?.toLowerCase())
-    .filter((d): d is string => !!d);
-  if (client.emailDomains?.some((d) => participantDomains.includes(d.toLowerCase()))) {
-    return true;
-  }
-
-  // 3. Title matching (palabras ≥4 chars)
-  const normalize = (s: string) =>
-    s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
-  const titleWords = new Set(
-    normalize(session.title).split(/[\s|&,.()\[\]!?*\-_]+/).filter((w) => w.length >= 4)
-  );
-  if (titleWords.size === 0) return false;
-  const nameParts = normalize(client.name).split(/\s+/).filter((p) => p.length >= 4);
-  const compParts = client.company
-    ? normalize(client.company).split(/[\s.\-_]+/).filter((p) => p.length >= 4)
-    : [];
-  return (
-    nameParts.some((p) => titleWords.has(p)) ||
-    compParts.some((p) => titleWords.has(p))
-  );
-}
-
 // ── Función principal ─────────────────────────────────────────────────────────
+// NOTA: la asociación sesión→cliente NO se decide acá. El caller pasa SOLO las
+// sesiones del cliente (query client-scoped por resolvedClientId/manualClientId —
+// la fuente única de ownership). El matcher de título débil que vivía acá se eliminó
+// para no re-implementar (y debilitar) la resolución canónica de categorize.ts.
 
 /**
  * Filtra las sesiones de un Client según filtros y devuelve el contexto formateado.
@@ -107,8 +75,7 @@ export function buildAnalysisContext(
 
   // Filtrar
   const matched = allSessions.filter((s) => {
-    // a) Asociación con el Client
-    if (!sessionMatchesClient(s, client)) return false;
+    // a) Asociación con el Client: GARANTIZADA por el caller (universo ya client-scoped).
 
     // b) Rango de fechas
     if (fromDate && s.date < fromDate) return false;

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { classifyHandoffSession } from "@/lib/handoff/session-relevance";
+import { belongsToClient } from "@/lib/sessions/project-sources";
 
 /**
  * GET /api/projects/[projectId]/session-candidates
@@ -40,9 +41,23 @@ export async function GET(
       confidence: true,
       rationale: true,
       handoffOverride: true,
-      session: { select: { id: true, title: true, date: true, participants: true, organizerEmail: true } },
+      session: {
+        select: {
+          id: true, title: true, date: true, participants: true, organizerEmail: true,
+          resolvedClientId: true, manualClientId: true,
+        },
+      },
     },
   });
+
+  // Defensa de runtime (chokepoint): descartar links a sesiones que ya NO son de este
+  // cliente (stale/legacy/cross-client). El ownership lo manda resolvedClientId/manualClientId.
+  const safeRows = linkedRows.filter((r) => belongsToClient(r.session, clientId));
+  if (safeRows.length !== linkedRows.length) {
+    console.warn(
+      `[session-candidates] project=${projectId}: descartados ${linkedRows.length - safeRows.length} link(s) cross-client`,
+    );
+  }
 
   // ¿Esta sesión linkeada alimenta el handoff? override gana; sino, la regla.
   const feeds = (r: (typeof linkedRows)[number]): boolean =>
@@ -52,7 +67,7 @@ export async function GET(
         ? true
         : applies(r.session.title, r.session.participants, r.session.organizerEmail);
 
-  const feeding = linkedRows
+  const feeding = safeRows
     .filter(feeds)
     .sort((a, b) => b.session.date.getTime() - a.session.date.getTime())
     .map((r) => ({

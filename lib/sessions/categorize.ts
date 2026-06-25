@@ -14,8 +14,10 @@
  *   2. Sesión 100% interna → primera categoría con kind="internal"
  *   3. Email-domain match con Client.emailDomains
  *   4. Email-domain match con SessionCategory.domains (excluyendo internal — ya cubiertas)
- *   5. Lookup en HubSpot Companies (por dominio externo)
- *   6. Title-word match con Client.name/company (fallback débil, ≥4 chars)
+ *   5. Dominio externo → empresa HubSpot → Client ligado (Client.hubspotCompanyId).
+ *      Si la company NO está ligada: bucket "hubspotCompany" SOLO en display
+ *      (groupUnlinkedHubspotCompany); en materialización/ownership cae al título (aditivo).
+ *   6. Title-word match con Client.name/company (fallback débil, ≥4 chars, sin stopwords)
  *   7. Orphan
  */
 
@@ -36,6 +38,18 @@ export interface CategorizeContext {
   hubspotCompaniesByDomain: Map<string, HubspotCompanyLite>;
   /** Dominios marcados como "internos" en categorías kind=internal (set para lookup O(1)) */
   internalDomains: Set<string>;
+  /**
+   * Map HubSpot companyId → Client de Nexus ligado (vía Client.hubspotCompanyId).
+   * Habilita el paso 5 dominio→empresa-HubSpot→Client (señal fuerte, antes del
+   * título). Opcional: si falta, el paso 5 degrada a "hubspotCompany"/título.
+   */
+  clientsByHubspotCompanyId?: Map<string, Pick<Client, "id" | "name" | "company">>;
+  /**
+   * Si true, una company de HubSpot NO ligada a un Client se agrupa como "hubspotCompany"
+   * (display de /sessions). Si false/undefined (materialización/ownership), NO corta: cae
+   * al título — aditivo, para no perder clientes con dominio real no registrado en el Client.
+   */
+  groupUnlinkedHubspotCompany?: boolean;
 }
 
 export interface CategorizableSession {
@@ -124,10 +138,45 @@ function effectiveDomainsForClient(
   return explicit;
 }
 
+/** Map vacío reutilizable (evita alocar uno por llamada cuando el ctx no trae HubSpot). */
+const EMPTY_CLIENT_MAP: Map<string, Pick<Client, "id" | "name" | "company">> = new Map();
+
+/**
+ * Conectores/proceso genéricos que NO son el nombre distintivo de ninguna empresa.
+ * Se quitan al matchear por título (del título Y del nombre del cliente) para evitar
+ * el catch-all: "para" matcheaba "Empresa para pruebas" y DISTELSA ("…Materiales para…").
+ *
+ * REGLA DE ORO: NUNCA agregar un token que sea parte del nombre distintivo de un
+ * cliente real (ej. "smarteam", "distribuidora", "materiales", "hubspot"). Eso deja a
+ * ese cliente sin resolución por título (medido: stopwordear "smarteam" tira 2342 a 0).
+ * Tokens normalizados (sin acentos, lowercase) porque `normalize()` corre antes.
+ */
+const TITLE_MATCH_STOPWORDS = new Set<string>([
+  "para", "prueba", "pruebas", "sesion", "sesiones", "reunion", "reuniones",
+  "demo", "interna", "interno", "equipo", "proyecto", "proyectos", "cierre",
+  "seguimiento", "revision", "contexto", "recursos", "requerimientos", "alineacion",
+  "practica", "semanal", "llamada", "meeting", "onboarding", "capacitacion",
+  "soporte", "kickoff", "handoff", "taller", "avances", "status", "sync",
+  "weekly", "review", "general", "nuevo", "nueva", "final", "parte",
+]);
+
+/**
+ * Clientes de PRUEBA: su nombre es 100% palabras genéricas, así que matchearían
+ * cualquier título. Se excluyen del match por título (el match por dominio sí los
+ * reconoce). Si se crean más clientes de test, agregar el patrón acá.
+ */
+const TEST_CLIENT_NAME_PATTERNS: RegExp[] = [/empresa para pruebas/i, /\btest\b/i];
+
+function isTestClient(name: string): boolean {
+  return TEST_CLIENT_NAME_PATTERNS.some((re) => re.test(name));
+}
+
 /**
  * Title-matching: busca un cliente cuyo nombre o company aparezca como token
- * (palabra >= 4 chars) en el título de la sesión. Match débil, primero que
- * matchee gana.
+ * (palabra >= 4 chars, sin stopwords genéricas) en el título de la sesión. Match
+ * débil (último recurso del cascade); primero que matchee gana. Excluye clientes
+ * de prueba. NOTA: es solo fallback — dominio (paso 3) y HubSpot→Client (paso 5)
+ * mandan antes.
  */
 function findClientByTitleMatch(
   title: string,
@@ -136,19 +185,20 @@ function findClientByTitleMatch(
   const titleWords = new Set(
     normalize(title)
       .split(/[\s|&,.()\[\]!?*\-_]+/)
-      .filter((w) => w.length >= 4)
+      .filter((w) => w.length >= 4 && !TITLE_MATCH_STOPWORDS.has(w))
   );
   if (titleWords.size === 0) return null;
 
   return (
     clients.find((c) => {
+      if (isTestClient(c.name)) return false;
       const nameParts = normalize(c.name)
         .split(/\s+/)
-        .filter((p) => p.length >= 4);
+        .filter((p) => p.length >= 4 && !TITLE_MATCH_STOPWORDS.has(p));
       const compParts = c.company
         ? normalize(c.company)
             .split(/[\s.\-_]+/)
-            .filter((p) => p.length >= 4)
+            .filter((p) => p.length >= 4 && !TITLE_MATCH_STOPWORDS.has(p))
         : [];
       return (
         nameParts.some((p) => titleWords.has(p)) ||
@@ -242,17 +292,38 @@ export function categorizeSession(
     }
   }
 
-  // ── 5. Lookup HubSpot Companies (por dominio externo) ─────────────────────
+  // ── 5. Dominio externo → empresa HubSpot → (si está ligada) Client ────────
+  // Señal FUERTE: si el dominio es una company de HubSpot LIGADA a un Client de
+  // Nexus (Client.hubspotCompanyId), resolver a ESE Client — antes del fallback
+  // débil por título. Si la company existe pero no está ligada, queda como
+  // hubspotCompany y CORTA (no cae al título). Requiere que el caller pueble
+  // hubspotCompaniesByDomain + clientsByHubspotCompanyId (resolveAllSessions y
+  // /sessions lo hacen; si no, este paso no matchea y degrada al comportamiento previo).
+  const clientsByHs = ctx.clientsByHubspotCompanyId ?? EMPTY_CLIENT_MAP;
+  let unlinkedCompany: HubspotCompanyLite | null = null;
   for (const domain of externalDomains) {
     const company = hubspotCompaniesByDomain.get(domain);
-    if (company) {
-      return {
-        kind: "hubspotCompany",
-        id: company.id,
-        label: company.name || company.domain,
-        domain: company.domain,
-      };
+    if (!company) continue;
+    const linkedClient = clientsByHs.get(company.id);
+    if (linkedClient) {
+      // Señal FUERTE: la company de HubSpot está ligada a un Client → ese Client.
+      return { kind: "client", id: linkedClient.id, label: linkedClient.name, company: linkedClient.company };
     }
+    unlinkedCompany ??= company; // primera company de HubSpot que NO es Client de Nexus
+  }
+  // Company de HubSpot que NO es Client de Nexus:
+  //  - display (/sessions, groupUnlinkedHubspotCompany=true): se agrupa como "hubspotCompany".
+  //  - materialización/ownership (default): NO corta — cae al título (aditivo), para no
+  //    perder sesiones legítimas de clientes con dominio real en HubSpot pero no registrado
+  //    en el Client (ej. Mr Wings→tecnofood, Honda→facocr). El registro del dominio real
+  //    resuelve esto por dominio (paso 3) y permite endurecer a "corte" más adelante.
+  if (unlinkedCompany && ctx.groupUnlinkedHubspotCompany) {
+    return {
+      kind: "hubspotCompany",
+      id: unlinkedCompany.id,
+      label: unlinkedCompany.name || unlinkedCompany.domain,
+      domain: unlinkedCompany.domain,
+    };
   }
 
   // ── 6. Title matching con Client (fallback débil) ─────────────────────────

@@ -6,10 +6,11 @@
  * resultado de `categorizeSession` en `FirefliesSession.resolvedClientId` y leemos
  * con queries agregadas indexadas.
  *
- * Única fuente de verdad: `categorizeSession` (la MISMA cascada que usaba el sidebar
- * en vivo → fidelidad exacta). El paso HubSpot del cascade solo produce
- * `hubspotCompany`, nunca un cliente, así que `hubspotCompaniesByDomain` vacío NO
- * cambia la resolución de cliente.
+ * Única fuente de verdad de "de quién es la sesión": `categorizeSession` (la MISMA
+ * cascada que /sessions). Acá se materializa CON la señal de HubSpot poblada (batch
+ * `searchCompaniesByDomains` sobre los dominios externos) + el map company→Client, así
+ * el paso 5 resuelve dominio→empresa-HubSpot→Client (señal fuerte) y NO cae al título.
+ * Si HubSpot falla, degrada a mapa vacío (comportamiento previo).
  *
  * Disparadores que lo mantienen fresco (ver plan, Decisión 5):
  *   - meet-sync (create/update): resuelve inline con el ctx de la corrida.
@@ -22,27 +23,59 @@ import { prisma } from "@/lib/db/prisma";
 import {
   categorizeSession,
   buildInternalDomainsSet,
+  collectExternalDomains,
   type CategorizeContext,
   type CategorizableSession,
 } from "@/lib/sessions/categorize";
+import { searchCompaniesByDomains, type HubspotCompanyLite } from "@/lib/hubspot/companies";
 
 /** Carga el contexto de categorización (clientes + categorías) una sola vez. */
 export async function buildCategorizeCtx(): Promise<CategorizeContext> {
   const [clients, categories] = await Promise.all([
     prisma.client.findMany({
-      select: { id: true, name: true, company: true, emailDomains: true },
+      select: { id: true, name: true, company: true, emailDomains: true, hubspotCompanyId: true },
     }),
     prisma.sessionCategory.findMany({
       select: { id: true, name: true, slug: true, domains: true, kind: true, color: true },
     }),
   ]);
+  // Señal fuerte del paso 5: company de HubSpot ligada → Client de Nexus.
+  const clientsByHubspotCompanyId = new Map<string, { id: string; name: string; company: string | null }>();
+  for (const c of clients) {
+    if (c.hubspotCompanyId) {
+      clientsByHubspotCompanyId.set(c.hubspotCompanyId, { id: c.id, name: c.name, company: c.company });
+    }
+  }
   return {
     clients,
     categories,
-    // Vacío a propósito: el paso HubSpot del cascade nunca resuelve a un cliente.
+    // Se puebla por sesión/batch en reResolveSession/resolveAllSessions (degrada a vacío si falla HubSpot).
     hubspotCompaniesByDomain: new Map(),
     internalDomains: buildInternalDomainsSet(categories),
+    clientsByHubspotCompanyId,
   };
+}
+
+/**
+ * Pobla el map dominio→company de HubSpot para un conjunto de sesiones (1 batch).
+ * Usa la versión NO cacheada (corre también desde scripts `tsx`, fuera del runtime
+ * Next donde `unstable_cache` no aplica). Si HubSpot falla, devuelve vacío (degrada).
+ */
+async function buildHubspotDomainMap(
+  sessions: { participants: string[] }[],
+  internalDomains: Set<string>,
+): Promise<Map<string, HubspotCompanyLite>> {
+  try {
+    const domains = collectExternalDomains(sessions, internalDomains);
+    if (domains.length === 0) return new Map();
+    return await searchCompaniesByDomains(domains);
+  } catch (e) {
+    console.warn(
+      "[resolve-client] lookup de HubSpot falló — degradando sin la señal HubSpot→Client:",
+      e instanceof Error ? e.message : e,
+    );
+    return new Map();
+  }
 }
 
 /** Resuelve el clientId de UNA sesión (null si no matchea un cliente). */
@@ -67,7 +100,11 @@ export async function reResolveSession(
     select: { id: true, title: true, participants: true, manualClientId: true },
   });
   if (!session) return;
-  const c = ctx ?? (await buildCategorizeCtx());
+  let c = ctx;
+  if (!c) {
+    c = await buildCategorizeCtx();
+    c.hubspotCompaniesByDomain = await buildHubspotDomainMap([session], c.internalDomains);
+  }
   const resolved = resolveSessionClientId(session, c);
   await prisma.firefliesSession.update({
     where: { id: sessionId },
@@ -81,6 +118,8 @@ export interface ResolveAllResult {
   nullCount: number;
   /** conteo de sesiones resueltas por clientId (solo las que matchean cliente) */
   byClient: Record<string, number>;
+  /** delta por cliente (before→after) de los que cambian — gate del dry-run del re-resolve */
+  deltas: { clientId: string; name: string; before: number; after: number }[];
 }
 
 /**
@@ -93,14 +132,19 @@ export async function resolveAllSessions(opts?: { dryRun?: boolean }): Promise<R
   const sessions = await prisma.firefliesSession.findMany({
     select: { id: true, title: true, participants: true, manualClientId: true, resolvedClientId: true },
   });
+  // Señal fuerte: poblar el map de HubSpot con los dominios externos de TODAS las
+  // sesiones (1 batch). El paso 5 del cascade resuelve dominio→company→Client ligado.
+  ctx.hubspotCompaniesByDomain = await buildHubspotDomainMap(sessions, ctx.internalDomains);
 
   let changed = 0;
   let nullCount = 0;
   const byClient: Record<string, number> = {};
+  const beforeByClient: Record<string, number> = {}; // distribución actual (para el delta)
   // Agrupar las sesiones que cambian por el NUEVO valor → un updateMany por grupo.
   const idsByNewValue = new Map<string | null, string[]>();
 
   for (const s of sessions) {
+    if (s.resolvedClientId) beforeByClient[s.resolvedClientId] = (beforeByClient[s.resolvedClientId] ?? 0) + 1;
     const resolved = resolveSessionClientId(s, ctx);
     if (resolved === null) nullCount++;
     else byClient[resolved] = (byClient[resolved] ?? 0) + 1;
@@ -111,6 +155,13 @@ export async function resolveAllSessions(opts?: { dryRun?: boolean }): Promise<R
       idsByNewValue.set(resolved, arr);
     }
   }
+
+  // Delta por cliente (before→after) para los que cambian — gate del dry-run.
+  const nameById = new Map(ctx.clients.map((c) => [c.id, c.name]));
+  const deltas = [...new Set([...Object.keys(beforeByClient), ...Object.keys(byClient)])]
+    .map((id) => ({ clientId: id, name: nameById.get(id) ?? id, before: beforeByClient[id] ?? 0, after: byClient[id] ?? 0 }))
+    .filter((d) => d.before !== d.after)
+    .sort((a, b) => Math.abs(b.after - b.before) - Math.abs(a.after - a.before));
 
   if (!opts?.dryRun) {
     for (const [value, ids] of idsByNewValue) {
@@ -123,5 +174,5 @@ export async function resolveAllSessions(opts?: { dryRun?: boolean }): Promise<R
     }
   }
 
-  return { total: sessions.length, changed, nullCount, byClient };
+  return { total: sessions.length, changed, nullCount, byClient, deltas };
 }

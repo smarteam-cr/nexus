@@ -70,7 +70,7 @@ export default async function SessionsPage() {
     }),
     prisma.client.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true, company: true, emailDomains: true },
+      select: { id: true, name: true, company: true, emailDomains: true, hubspotCompanyId: true },
     }),
     getTeamMembers(),       // cacheado
     getSessionCategories(), // cacheado
@@ -109,11 +109,21 @@ export default async function SessionsPage() {
   const memberByEmail = new Map(teamMembers.map((m) => [m.email.toLowerCase(), m]));
 
   // ── 5. Categorizar todas las sesiones ──────────────────────────────────────
+  // Señal fuerte: company de HubSpot ligada → Client (paso 5), consistente con la
+  // materialización `resolvedClientId`. Sin esto, /sessions agruparía esas sesiones
+  // como "hubspotCompany" en vez de bajo el cliente.
+  const clientsByHubspotCompanyId = new Map(
+    clients
+      .filter((c) => c.hubspotCompanyId)
+      .map((c) => [c.hubspotCompanyId as string, { id: c.id, name: c.name, company: c.company }]),
+  );
   const categorized = categorizeSessions(sessions, {
     clients,
     categories,
     hubspotCompaniesByDomain,
     internalDomains,
+    clientsByHubspotCompanyId,
+    groupUnlinkedHubspotCompany: true, // /sessions agrupa las empresas-HubSpot no-cliente
   });
 
   // ── 6. Enriquecer con team members + group ─────────────────────────────────

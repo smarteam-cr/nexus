@@ -6,7 +6,7 @@ import { guardCapability } from "@/lib/auth/api-guards";
 import { HANDOFF_EXCLUDE_TITLE_KEYWORDS, HANDOFF_INCLUDE_TITLE_KEYWORDS } from "@/lib/handoff/session-relevance";
 import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
-import { extractTitleTerms, extractDomain } from "@/lib/utils/matching";
+import { extractTitleTerms } from "@/lib/utils/matching";
 import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { updateCanvasAsync } from "@/lib/canvas/update-agent";
@@ -21,6 +21,7 @@ import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { autoClassifyOrphanSessions } from "@/lib/projects/analyze-participants";
+import { getProjectHandoffSessions, getClientSessions } from "@/lib/sessions/project-sources";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -49,80 +50,6 @@ function repairTruncatedJson(s: string): string | null {
 
 type RawSession = { id: string; title: string; date: number; participants: string[] };
 type RawTranscript = RawSession;
-
-/**
- * Busca sesiones de Fireflies/Google Meet en la caché local (FirefliesSession).
- *
- * Lógica de matching: una sesión cuenta como relevante si CUALQUIERA de estas
- * condiciones es verdadera (OR):
- *   1. El título contiene alguno de los terms del nombre del cliente
- *      (cubre sesiones internas tipo "Hand Off | WHEREX" o "Kickoff Wherex").
- *   2. Algún participante u organizador es del dominio del cliente
- *      (cubre sesiones externas aunque el título no lo mencione).
- *
- * Antes solo aceptaba sesiones con title-match Y domain-match, lo cual
- * descartaba sesiones internas del equipo de Smarteam que mencionaban al
- * cliente. Eso ahora se incluye.
- */
-async function searchFirefliesFromDB(
-  sessionKeywords: string[],
-  titleTerms: string[],
-  domainFilter: string | null
-): Promise<RawSession[]> {
-  try {
-    const terms = [...new Set([...sessionKeywords, ...titleTerms])].filter(Boolean);
-    if (terms.length === 0 && !domainFilter) return [];
-
-    // Query: traer sesiones que matcheen por título O por dominio.
-    // Postgres maneja bien este OR; limit razonable para no traer toda la DB.
-    const orConditions: Array<Record<string, unknown>> = [];
-
-    // Title-match (incluye sesiones internas con el nombre del cliente)
-    for (const term of terms) {
-      orConditions.push({ title: { contains: term, mode: "insensitive" as const } });
-    }
-
-    // Domain-match (sesiones externas aunque el título no mencione al cliente)
-    if (domainFilter) {
-      orConditions.push({ participants: { has: `@${domainFilter}` } });
-      // `has` requiere match exacto del item del array. Como participants son
-      // emails completos, usamos `hasSome` con un patrón no es soportado;
-      // mejor un raw query, pero como fallback traemos amplio y filtramos en JS.
-    }
-
-    const sessions = await prisma.firefliesSession.findMany({
-      where: orConditions.length > 0 ? { OR: orConditions } : undefined,
-      select: { id: true, title: true, date: true, participants: true, organizerEmail: true },
-      orderBy: { date: "desc" },
-      take: 100,
-    });
-
-    // Filtro en JS para garantizar el matching (title contains O domain en participants/organizer)
-    const filtered = sessions.filter((s) => {
-      const titleLower = (s.title ?? "").toLowerCase();
-      const byTitle = terms.some((t) => titleLower.includes(t.toLowerCase()));
-      if (byTitle) return true;
-      if (!domainFilter) return false;
-      const domainPattern = `@${domainFilter}`;
-      const byDomain =
-        s.participants.some((p) => p.toLowerCase().includes(domainPattern)) ||
-        (s.organizerEmail?.toLowerCase().includes(domainPattern) ?? false);
-      return byDomain;
-    });
-
-    return filtered.map((s) => ({
-      id: s.id,
-      title: s.title,
-      date: s.date.getTime(),
-      // Incluir organizerEmail en participants para que el filtro de ventas lo detecte
-      participants: s.organizerEmail
-        ? [...new Set([...s.participants, s.organizerEmail])]
-        : s.participants,
-    }));
-  } catch {
-    return [];
-  }
-}
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -230,7 +157,6 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   const bodyStepLabel: string | null    = body?.stepLabel    ?? null;
   const bodySectionLabel: string | null = body?.sectionLabel ?? null;
   const bodyAgentId: string | null      = body?.agentId      ?? null;
-  const sessionKeywords: string[] = Array.isArray(body?.sessionKeywords) ? body.sessionKeywords : [];
   let bodyProjectId: string | null = body?.projectId ?? null;
   // El pop-up de Agentes (y el tab "Información del cliente") manda projectId con el
   // SENTINEL "__strategy__", que NO es un id de Project real → FK violation en
@@ -275,8 +201,6 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       }
     }
   }
-
-  const domainFilter = client.company ? extractDomain(client.company) : null;
 
   // ── Lookup agente por stage+step+section ─────────────────────────────────
   const agentCandidates = await prisma.agent.findMany({
@@ -777,33 +701,16 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     // clasificador llegaba a excluir la única con transcript (p.ej. un título con
     // "revisión") dejando 0 sesiones → el agente corría vacío y fallaba.
     if (isHandoffAgent && bodyProjectId) {
-      const links = await prisma.sessionProject.findMany({
-        where: { projectId: bodyProjectId },
-        select: { sessionId: true, handoffOverride: true },
-      });
-      for (const l of links) handoffOverrideById.set(l.sessionId, l.handoffOverride);
-      const ids = links.map((l) => l.sessionId);
-      if (ids.length > 0) {
-        const rows = await prisma.firefliesSession.findMany({
-          where: { id: { in: ids } },
-          select: { id: true, title: true, date: true, participants: true, organizerEmail: true },
-        });
-        matchingSessions = rows.map((s) => ({
-          id: s.id,
-          title: s.title,
-          date: s.date.getTime(),
-          // organizerEmail dentro de participants para que el detector de Sales lo vea
-          participants: s.organizerEmail
-            ? [...new Set([...s.participants, s.organizerEmail])]
-            : s.participants,
-        }));
-      }
+      // Fuente = sesiones del proyecto que PERTENECEN a su cliente (chokepoint único;
+      // descarta links cross-client stale/legacy). El override por sesión viene incluido.
+      const { sessions } = await getProjectHandoffSessions(bodyProjectId);
+      for (const s of sessions) handoffOverrideById.set(s.id, s.handoffOverride);
+      matchingSessions = sessions.map(({ id, title, date, participants }) => ({ id, title, date, participants }));
     } else {
-      // Resto de agentes (y handoff legacy sin proyecto): keyword/domain-search.
-      const dbSessions = await searchFirefliesFromDB(sessionKeywords, titleTerms, domainFilter);
-      if (dbSessions.length > 0) {
-        matchingSessions = dbSessions;
-      }
+      // Resto de agentes (y handoff legacy sin proyecto): TODAS las sesiones del
+      // CLIENTE vía el chokepoint (client-scoped por resolvedClientId; sin cross-client).
+      const clientSessions = await getClientSessions(clientId, { take: 200 });
+      matchingSessions = clientSessions.map(({ id, title, date, participants }) => ({ id, title, date, participants }));
     }
 
     // Separar sesiones según el tipo de agente.

@@ -64,8 +64,13 @@ export const POST = withAuth(async (req) => {
       select: { id: true, name: true, company: true, emailDomains: true },
     }),
     prisma.agent.findUnique({ where: { id: agentId } }),
+    // Solo las sesiones del CLIENTE (ownership = resolvedClientId/manualClientId).
+    // Antes traía TODAS y filtraba en memoria con un matcher de título débil.
     prisma.firefliesSession.findMany({
-      where: { date: { lt: new Date() } },
+      where: {
+        date: { lt: new Date() },
+        OR: [{ resolvedClientId: clientId }, { manualClientId: clientId }],
+      },
       select: {
         id: true, title: true, date: true, participants: true,
         transcript: true, summary: true, manualClientId: true,

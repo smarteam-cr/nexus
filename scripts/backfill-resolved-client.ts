@@ -15,14 +15,24 @@ async function main() {
   const r = await resolveAllSessions({ dryRun: !APPLY });
   const matched = Object.values(r.byClient).reduce((a, b) => a + b, 0);
   const distinctClients = Object.keys(r.byClient).length;
-  const top = Object.entries(r.byClient).sort((a, b) => b[1] - a[1]).slice(0, 15);
 
   console.log(`total sesiones:       ${r.total}`);
   console.log(`resueltas a cliente:  ${matched} (en ${distinctClients} clientes distintos)`);
   console.log(`sin cliente (null):   ${r.nullCount}`);
   console.log(`filas a cambiar:      ${r.changed} ${APPLY ? "(APLICADAS)" : "(se aplicarían)"}`);
-  console.log("--- top 15 clientes por nº de sesiones resueltas ---");
-  for (const [cid, n] of top) console.log(`   ${cid}: ${n}`);
+  console.log("--- delta por cliente (before → after, solo los que cambian) ---");
+  for (const d of r.deltas) {
+    const diff = d.after - d.before;
+    console.log(`   ${diff > 0 ? "+" : ""}${diff}\t(${d.before}→${d.after})\t${d.name}${d.after === 0 && d.before > 0 ? "  <<< QUEDA EN 0" : ""}`);
+  }
+  // Gate de seguridad: ningún cliente REAL (no de prueba) debe quedar en 0.
+  const realToZero = r.deltas.filter((d) => d.after === 0 && d.before > 0 && !/empresa para pruebas|test/i.test(d.name));
+  if (realToZero.length > 0) {
+    console.log(`\n⚠ ATENCIÓN: ${realToZero.length} cliente(s) REAL(es) quedarían en 0 — REVISAR antes de --apply:`);
+    for (const d of realToZero) console.log(`   - ${d.name} (${d.before}→0)`);
+  } else {
+    console.log("\n✓ Ningún cliente real queda en 0.");
+  }
 
   if (APPLY) {
     const verify = await resolveAllSessions({ dryRun: true });
