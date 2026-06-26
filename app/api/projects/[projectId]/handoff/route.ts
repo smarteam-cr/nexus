@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardProjectEditHandoff } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { createHandoffCanvas } from "@/lib/canvas/default-canvases";
+import { createHandoffCanvas, reconcileHandoffCanvasSections } from "@/lib/canvas/default-canvases";
 
 type Params = { params: Promise<{ projectId: string }> };
 
@@ -95,23 +95,23 @@ export async function POST(_req: NextRequest, { params }: Params) {
   });
   if (!project) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  let canvasId = project.canvases[0]?.id ?? null;
-  let handoffId = project.handoff?.id ?? null;
+  const canvasId = project.canvases[0]?.id ?? null;
+  const handoffId = project.handoff?.id ?? null;
 
-  if (!canvasId || !handoffId) {
-    const r = await prisma.$transaction(async (tx) => {
-      const cId = canvasId ?? (await createHandoffCanvas(projectId, tx));
-      const hId =
-        handoffId ??
-        (await tx.handoff.create({
-          data: { clientId: project.clientId, projectId, hubspotSyncStatus: "pending" },
-          select: { id: true },
-        })).id;
-      return { cId, hId };
-    });
-    canvasId = r.cId;
-    handoffId = r.hId;
-  }
+  // Ensure: canvas Handoff (creado fresco con la estructura actual si falta) o RECONCILIADO
+  // a la estructura canónica si ya existe (crea secciones nuevas como "desarrollo", nunca borra
+  // bloques) — así el agente no descarta secciones que el canvas viejo no tenía. + entidad Handoff.
+  const ensured = await prisma.$transaction(async (tx) => {
+    const cId = canvasId ?? (await createHandoffCanvas(projectId, tx));
+    if (canvasId) await reconcileHandoffCanvasSections(canvasId, tx);
+    const hId =
+      handoffId ??
+      (await tx.handoff.create({
+        data: { clientId: project.clientId, projectId, hubspotSyncStatus: "pending" },
+        select: { id: true },
+      })).id;
+    return { canvasId: cId, handoffId: hId };
+  });
 
-  return NextResponse.json({ handoffId, canvasId });
+  return NextResponse.json({ handoffId: ensured.handoffId, canvasId: ensured.canvasId });
 }

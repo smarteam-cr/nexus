@@ -53,8 +53,8 @@ export async function createDefaultCanvases(projectId: string, db: Db = prisma) 
   }
 }
 
-/** Crea el canvas "Handoff" (+8 secciones) para un proyecto. Lo usa el FLUJO de
- *  creación de handoffs (Fase 4) — el handoff arranca el proyecto y monta su canvas.
+/** Crea el canvas "Handoff" (+10 secciones de HANDOFF_CANVAS) para un proyecto. Lo usa el
+ *  FLUJO de creación de handoffs — el handoff arranca el proyecto y monta su canvas.
  *  Asume que el proyecto aún no tiene canvas Handoff (proyecto recién creado). */
 export async function createHandoffCanvas(projectId: string, db: Db = prisma): Promise<string> {
   const canvas = await db.projectCanvas.create({
@@ -78,4 +78,28 @@ export async function createHandoffCanvas(projectId: string, db: Db = prisma): P
   });
 
   return canvas.id;
+}
+
+/**
+ * Reconcilia un canvas "Handoff" YA EXISTENTE a la estructura canónica actual (HANDOFF_CANVAS):
+ * crea las secciones que falten y normaliza su `order`. NUNCA borra secciones ni bloques.
+ * Lo usa el "ensure" de POST /handoff ANTES de generar, para que el agente no descarte en
+ * silencio una sección que el canvas viejo no tenía (p.ej. "desarrollo" en handoffs legacy).
+ * Idempotente: si el canvas ya está al día, no escribe nada.
+ */
+export async function reconcileHandoffCanvasSections(canvasId: string, db: Db = prisma): Promise<void> {
+  const existing = await db.canvasSection.findMany({
+    where: { canvasId },
+    select: { id: true, key: true, order: true },
+  });
+  const byKey = new Map(existing.map((s) => [s.key, s]));
+  for (let i = 0; i < HANDOFF_CANVAS.sections.length; i++) {
+    const { key, label } = HANDOFF_CANVAS.sections[i];
+    const cur = byKey.get(key);
+    if (!cur) {
+      await db.canvasSection.create({ data: { canvasId, key, label, order: i } });
+    } else if (cur.order !== i) {
+      await db.canvasSection.update({ where: { id: cur.id }, data: { order: i } });
+    }
+  }
 }

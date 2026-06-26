@@ -22,7 +22,7 @@ export type CanvasDefinition = {
 // YA NO se crea con createDefaultCanvases: el handoff es una entidad cliente-level
 // (model Handoff) que arranca el proyecto, y su canvas lo monta el FLUJO de
 // creación de handoffs (createHandoffCanvas, Fase 4). Se mantiene la definición
-// acá como fuente ÚNICA de las 8 secciones — el agente "Handoff Sales→CS" escribe
+// acá como fuente ÚNICA de las 10 secciones — el agente "Handoff Sales→CS" escribe
 // en ellas vía AGENT_GROUP_TO_CANVAS. Cada sección 1:1 con una card del agente.
 export const HANDOFF_CANVAS: CanvasDefinition = {
   name: "Handoff",
@@ -32,6 +32,7 @@ export const HANDOFF_CANVAS: CanvasDefinition = {
     { key: "fecha_inicio_kickoff", label: "Fecha de inicio / Kickoff" },
     { key: "acuerdos_promesas",    label: "Acuerdos clave y promesas especiales" },
     { key: "alcance_contratado",   label: "¿Qué vendimos?" },
+    { key: "desarrollo",           label: "Desarrollo e integraciones" },
     { key: "motivacion_decision",  label: "¿Por qué vendimos? (por qué nos eligieron)" },
     { key: "dolor_principal",      label: "Dolor principal" },
     { key: "expectativas",         label: "Expectativas del cliente" },
