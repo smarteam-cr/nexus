@@ -7,8 +7,10 @@
  * kickoff-view-types los re-exporta con sus nombres históricos
  * (KickoffTask/KickoffPhase/KickoffTimelineData) para no churnear KickoffLanding.
  *
- * CLAVE DE SEGURIDAD: tareas SOLO {title, weekIndex} — status/notes/source/
- * needsValidation son internos y NUNCA cruzan. Las notas DE FASE sí cruzan
+ * CLAVE DE SEGURIDAD: por tarea cruzan {title, weekIndex, status, party} — el
+ * status y el party (responsable) los muestra la página compartible del
+ * cronograma (gated por "Subir"); notes/source/needsValidation siguen internos y
+ * NUNCA cruzan, y las tareas SUSPENDED se excluyen por completo. Las notas DE FASE sí cruzan
  * (by-design D.1: texto en lenguaje cliente), y el TIPO DE ACTIVIDAD de la
  * fase también (by-design D.1.5: el Gantt del cliente colorea y leyenda por
  * tipo — la taxonomía es presentable: Exploración/Planificación/…). El
@@ -18,6 +20,10 @@
 export interface ExternalTimelineTask {
   title: string;
   weekIndex: number; // 0-indexed relativo a la fase
+  /** Estado de avance (PENDING|IN_PROGRESS|DONE) — lo muestra el cronograma compartible (gated por "Subir"). SUSPENDED nunca llega. Opcional: snapshots viejos no lo tienen. */
+  status?: string;
+  /** Responsable (CLIENTE|SMARTEAM|AMBOS) — lo muestra el cronograma compartible. null/ausente = sin asignar. */
+  party?: string | null;
 }
 
 export interface ExternalTimelinePhase {

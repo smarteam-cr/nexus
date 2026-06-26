@@ -5,7 +5,7 @@
  *
  *   - readClientTimeline(projectId): EL filtro de seguridad del cronograma en
  *     UN solo lugar. Fases {name/order/durationWeeks/sessionCount/notes} y
- *     tareas {title, weekIndex} SOLO si detailConfirmedAt. Lo consumen los DOS
+ *     tareas {title, weekIndex, status, party} SOLO si detailConfirmedAt. Lo consumen los DOS
  *     chokepoints (kickoff-view para la sección embebida y el de esta página):
  *     un único select decide qué cruza al cliente — sin drift entre superficies.
  *   - getPublishedTimelineForToken(token): chokepoint de /external/cronograma.
@@ -13,7 +13,9 @@
  *     existencia + revokedAt, vía resolveActiveAccess) + timelinePublishedAt
  *     != null. Cualquiera falla → null (la cookie nunca otorga acceso sola).
  *
- * NUNCA cruzan: status/notes/source/needsValidation de tarea, ni el source de
+ * Por tarea cruzan {title, weekIndex, status, party}: el status y el party
+ * (responsable) los muestra la página compartible del cronograma (gated por
+ * "Subir"). NUNCA cruzan: notes/source/needsValidation de tarea, ni el source de
  * fase. Las tareas SUSPENDED (E) se EXCLUYEN por completo — algo descartado del
  * plan, no parte del cronograma del cliente. SÍ cruzan, by-design: las notas de
  * FASE (lenguaje cliente, D.1) y el activityType (D.1.5 — el Gantt del cliente
@@ -63,13 +65,13 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
   // Acciones por semana SOLO si el CSE confirmó el detalle (D.1). Gate
   // server-side: sin confirmación las tareas ni se consultan — jamás llegan
   // al JSON del browser. Select explícito: título + semana, nada interno.
-  let tasksByPhase: Map<string, Array<{ title: string; weekIndex: number }>> | null = null;
+  let tasksByPhase: Map<string, Array<{ title: string; weekIndex: number; status: string; party: string | null }>> | null = null;
   if (tl?.detailConfirmedAt) {
     const tasks = await prisma.timelineTask.findMany({
       where: { phase: { timelineId: tl.id } },
       orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
-      // status SOLO para filtrar (E): NO entra al output → sigue sin cruzar al cliente.
-      select: { phaseId: true, title: true, weekIndex: true, status: true },
+      // status + party cruzan al cronograma compartible (gated por "Subir"); status además filtra SUSPENDED.
+      select: { phaseId: true, title: true, weekIndex: true, status: true, party: true },
     });
     tasksByPhase = new Map();
     for (const t of tasks) {
@@ -78,7 +80,7 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
       // SUSPENDED exista ya en la DB — así funciona aunque la migración E se aplique recién al deploy.
       if (t.status === "SUSPENDED") continue;
       const arr = tasksByPhase.get(t.phaseId) ?? [];
-      arr.push({ title: t.title, weekIndex: t.weekIndex });
+      arr.push({ title: t.title, weekIndex: t.weekIndex, status: t.status, party: t.party });
       tasksByPhase.set(t.phaseId, arr);
     }
   }

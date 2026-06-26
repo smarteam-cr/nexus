@@ -412,7 +412,7 @@ model TimelineTask {
   needsValidation Boolean             @default(false)   // tarea típica inventada por el agente con handoff flaco — el Gantt la grita; NUNCA cruza al cliente
   // B — dueño de la tarea en el plan de alineación compartido. CLIENTE entrega/hace;
   // SMARTEAM configura; AMBOS trabajo conjunto. Nullable = sin asignar (data pre-B).
-  // Interno: NO cruza al cliente (la lectura externa mapea solo title/weekIndex).
+  // Cruza al cronograma compartible del cliente (gated por "Subir"); el Kickoff embebido NO lo muestra.
   party           TaskParty?
   source          TimelinePhaseSource @default(AGENT)   // reuso consciente del enum (mismo ciclo AGENT→MODIFIED/HUMAN); renombrarlo = recrear tipo en PG por cero ganancia
   createdAt       DateTime            @default(now())

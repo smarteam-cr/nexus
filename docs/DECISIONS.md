@@ -43,6 +43,18 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   cuenta — evita el "ya tiene handoff" fantasma tras un reset).
 - **Owner = Lorena solo al CREAR de cero** (vía `HUBSPOT_HANDOFF_OWNER_ID`), no al adjuntar.
 
+## Cronograma — vista del cliente
+- **El cronograma compartible (`/external/cronograma`) muestra, por tarea, el ESTADO
+  (hecho / en curso / pendiente + "atrasada" derivada de la fecha) y el RESPONSABLE
+  (Cliente / Smarteam / Ambos).** *Por qué:* el cliente necesita ver el progreso y de quién
+  depende cada cosa. Revierte el criterio previo "el avance es interno, el cliente no ve
+  estados" + el `party` marcado como interno en el schema. *Alcance:* SOLO esa página; el
+  cronograma EMBEBIDO en el Kickoff NO los muestra (prop `TimelineSection.showProgress`).
+  *Frescura:* **gated** — se refrescan al "Subir al cliente" (ahí se re-congela el
+  `publishedSnapshot` vía `readClientTimeline`); el flujo de avance interno (`progress/apply`)
+  NO toca el snapshot. *SUSPENDED sigue oculto* (tarea descartada del plan). *No sensible:*
+  estado y responsable no lo son; `notes`/`source`/`needsValidation` de tarea siguen internos.
+
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos
   dry-run-first; el usuario aprueba el `--apply`.

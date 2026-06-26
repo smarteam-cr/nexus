@@ -14,8 +14,10 @@
  * Compartido por el landing del Kickoff y la página /external/cronograma.
  * Recibe el shape EXTERNO ya filtrado por los chokepoints: fases con su tipo
  * de actividad (cruza by-design D.1.5 — colorea barras, chips y leyenda) y
- * tareas {title, weekIndex}. JAMÁS llegan estados, notas de tarea, source o
- * needsValidation — por eso acá no existen "hecha"/"vencida": no hay status.
+ * tareas {title, weekIndex, status, party}. Con showProgress=true (solo la página
+ * compartible del cronograma) se muestran el estado (hecho/en curso/pendiente +
+ * "atrasada") y el responsable (Cliente/Smarteam/Ambos). JAMÁS llegan notas de
+ * tarea, source ni needsValidation; las tareas SUSPENDED se excluyen del shape.
  *
  * Requisitos del contexto que la monta: wrapper .kickoff-landing + useReveal
  * sobre el contenedor (las .reveal arrancan opacity:0).
@@ -31,6 +33,7 @@ import {
   fmtPhaseRange,
   currentWeekIndex,
   absoluteWeek,
+  isOverdue,
 } from "@/lib/timeline/weeks";
 import type { ExternalTimelinePhase } from "@/lib/external/timeline-view-types";
 
@@ -53,6 +56,33 @@ const ACTIVITY_META: Record<
 const NEUTRAL_SEG = "#CBD5E1"; // fase sin tipo
 const EMPTY_CELL = "#EEF1F4"; // semana fuera del rango de la fase
 
+// Estado + responsable por tarea (showProgress, solo el cronograma compartible) — paleta light
+// del landing, espejo de STATUS_META/PARTY_META del Gantt interno. "atrasada" se deriva (isOverdue).
+const STATUS_META_LIGHT: Record<string, { label: string; text: string; bg: string; border: string }> = {
+  PENDING:     { label: "pendiente", text: "#475569", bg: "#f1f5f9", border: "#e2e8f0" },
+  IN_PROGRESS: { label: "en curso",  text: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" },
+  DONE:        { label: "hecho",     text: "#047857", bg: "#ecfdf5", border: "#a7f3d0" },
+};
+const OVERDUE_META_LIGHT = { label: "atrasada", text: "#b91c1c", bg: "#fef2f2", border: "#fecaca" };
+const PARTY_META_LIGHT: Record<string, { label: string; text: string; bg: string; border: string }> = {
+  CLIENTE:  { label: "Cliente",  text: "#b45309", bg: "#fffbeb", border: "#fde68a" }, // ámbar — lo que entrega el cliente
+  SMARTEAM: { label: "Smarteam", text: "#0369a1", bg: "#f0f9ff", border: "#bae6fd" }, // celeste
+  AMBOS:    { label: "Ambos",    text: "#6d28d9", bg: "#f5f3ff", border: "#ddd6fe" }, // violeta
+};
+const chipStyle = (m: { text: string; bg: string; border: string }): React.CSSProperties => ({
+  fontSize: 9,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  padding: "1px 6px",
+  borderRadius: 6,
+  color: m.text,
+  background: m.bg,
+  border: `1px solid ${m.border}`,
+  flexShrink: 0,
+  whiteSpace: "nowrap",
+});
+
 const SUB_LABEL: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 700,
@@ -65,11 +95,14 @@ export default function TimelineSection({
   phases,
   anchor,
   showHeader = true,
+  showProgress = false,
 }: {
   phases: ExternalTimelinePhase[];
   anchor: string | null;
   /** false = sin eyebrow/título propios (la página standalone pone el suyo). */
   showHeader?: boolean;
+  /** true = muestra estado (hecho/en curso/pendiente + atrasada) y responsable por tarea. Solo el cronograma compartible. */
+  showProgress?: boolean;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -272,12 +305,20 @@ export default function TimelineSection({
                                   {anchor && ` · ${fmtDay(addWeeks(anchor, absW))} – ${fmtDay(addWeeks(anchor, absW + 1))}`}
                                 </span>
                               </div>
-                              <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 3 }}>
-                                {weekTasks.map((t, ti) => (
-                                  <li key={ti} style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.5 }}>
-                                    {t.title}
-                                  </li>
-                                ))}
+                              <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 5 }}>
+                                {weekTasks.map((t, ti) => {
+                                  const sMeta = showProgress && t.status ? STATUS_META_LIGHT[t.status] : null;
+                                  const overdue = showProgress && !!t.status && isOverdue(absW, curWeek, t.status);
+                                  const pMeta = showProgress && t.party ? PARTY_META_LIGHT[t.party] : null;
+                                  return (
+                                    <li key={ti} style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.5, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                                      <span>{t.title}</span>
+                                      {sMeta && <span style={chipStyle(sMeta)}>{sMeta.label}</span>}
+                                      {overdue && <span style={chipStyle(OVERDUE_META_LIGHT)}>{OVERDUE_META_LIGHT.label}</span>}
+                                      {pMeta && <span style={chipStyle(pMeta)}>{pMeta.label}</span>}
+                                    </li>
+                                  );
+                                })}
                               </ul>
                             </div>
                           );

@@ -67,7 +67,7 @@ export default function TimelineLanding({
       </section>
 
       {timeline.phases.length > 0 ? (
-        <TimelineSection phases={timeline.phases} anchor={start} showHeader={false} />
+        <TimelineSection phases={timeline.phases} anchor={start} showHeader={false} showProgress />
       ) : (
         <section className="section-light" style={{ padding: "32px 24px 24px" }}>
           <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
