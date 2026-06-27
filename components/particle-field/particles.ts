@@ -35,8 +35,12 @@ export class DataNode implements Particle {
   color: string;
   age = 0;
   private readonly fadeIn = 0.6;
-  private timeSincePerturb = 0;
-  private readonly perturbEvery = 1.5;
+  private readonly freqX: number;
+  private readonly freqY: number;
+  private readonly phaseX: number;
+  private readonly phaseY: number;
+  private readonly ampX: number;
+  private readonly ampY: number;
 
   constructor(width: number, height: number, color: string) {
     const { x, y, radialAngle } = spawnInDisc(width, height, SPAWN_RADIUS);
@@ -49,20 +53,29 @@ export class DataNode implements Particle {
     this.radius = rand(1.5, 2.6);
     this.phase = Math.random() * TAU;
     this.color = color;
+    this.freqX = rand(0.3, 1.2);
+    this.freqY = rand(0.3, 1.2);
+    this.phaseX = Math.random() * TAU;
+    this.phaseY = Math.random() * TAU;
+    this.ampX = rand(12, 28);
+    this.ampY = rand(12, 28);
   }
 
   update(dt: number, width: number, height: number): boolean {
     this.age += dt;
-    this.timeSincePerturb += dt;
 
-    if (this.timeSincePerturb > this.perturbEvery) {
-      this.timeSincePerturb = 0;
-      this.vx += (Math.random() - 0.5) * 8;
-      this.vy += (Math.random() - 0.5) * 8;
-    }
+    const t = this.age;
+    const modX =
+      Math.sin(t * this.freqX + this.phaseX) *
+      Math.cos(t * this.freqY + this.phaseY) *
+      this.ampX;
+    const modY =
+      Math.cos(t * this.freqX + this.phaseX) *
+      Math.sin(t * this.freqY + this.phaseY) *
+      this.ampY;
 
-    this.x += this.vx * dt;
-    this.y += this.vy * dt;
+    this.x += (this.vx + modX) * dt;
+    this.y += (this.vy + modY) * dt;
     this.phase += dt * 2;
 
     return !isOutside(this.x, this.y, width, height, 20);
@@ -91,6 +104,7 @@ export class DataPacket implements Particle {
   angle: number;
   speed: number;
   curvature: number;
+  curveFreq: number;
   color: string;
   trail: { x: number; y: number }[] = [];
   age = 0;
@@ -103,14 +117,15 @@ export class DataPacket implements Particle {
     this.y = y;
     this.angle = radialAngle + (Math.random() - 0.5) * SPREAD * 2;
     this.speed = rand(50, 110);
-    this.curvature = rand(-0.4, 0.4);
+    this.curvature = rand(-0.6, 0.6);
+    this.curveFreq = rand(0.3, 1.0);
     this.color = color;
     this.trail.push({ x, y });
   }
 
   update(dt: number, width: number, height: number): boolean {
     this.age += dt;
-    this.angle += this.curvature * dt;
+    this.angle += this.curvature * Math.sin(this.age * this.curveFreq) * dt;
     this.x += Math.cos(this.angle) * this.speed * dt;
     this.y += Math.sin(this.angle) * this.speed * dt;
 
@@ -156,6 +171,12 @@ export class Hexagon implements Particle {
   color: string;
   age = 0;
   private readonly fadeIn = 0.8;
+  private readonly freqX: number;
+  private readonly freqY: number;
+  private readonly phaseX: number;
+  private readonly phaseY: number;
+  private readonly ampX: number;
+  private readonly ampY: number;
 
   constructor(width: number, height: number, color: string) {
     const { x, y, radialAngle } = spawnInDisc(width, height, SPAWN_RADIUS);
@@ -171,12 +192,29 @@ export class Hexagon implements Particle {
     this.rotationSpeed = rand(-0.15, 0.15);
     this.pulsePhase = Math.random() * TAU;
     this.color = color;
+    this.freqX = rand(0.3, 1.0);
+    this.freqY = rand(0.3, 1.0);
+    this.phaseX = Math.random() * TAU;
+    this.phaseY = Math.random() * TAU;
+    this.ampX = rand(6, 14);
+    this.ampY = rand(6, 14);
   }
 
   update(dt: number, width: number, height: number): boolean {
     this.age += dt;
-    this.x += this.vx * dt;
-    this.y += this.vy * dt;
+
+    const t = this.age;
+    const modX =
+      Math.sin(t * this.freqX + this.phaseX) *
+      Math.cos(t * this.freqY + this.phaseY) *
+      this.ampX;
+    const modY =
+      Math.cos(t * this.freqX + this.phaseX) *
+      Math.sin(t * this.freqY + this.phaseY) *
+      this.ampY;
+
+    this.x += (this.vx + modX) * dt;
+    this.y += (this.vy + modY) * dt;
     this.radius += this.growth * dt;
     this.rotation += this.rotationSpeed * dt;
     this.pulsePhase += dt * 0.5;
