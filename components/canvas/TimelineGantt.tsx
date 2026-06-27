@@ -374,7 +374,7 @@ export default function TimelineGantt({
     });
   };
 
-  const gridCols = { gridTemplateColumns: `minmax(220px, 300px) repeat(${total}, minmax(26px, 1fr))` };
+  const gridCols = { gridTemplateColumns: `minmax(240px, 380px) repeat(${total}, minmax(26px, 1fr))` };
 
   return (
     <div className="space-y-3">
@@ -497,33 +497,10 @@ export default function TimelineGantt({
                             onChange={(e) => onUpdatePhase(p.key, { name: e.target.value })}
                             onClick={(e) => e.stopPropagation()}
                             placeholder="Nombre de la fase"
-                            className="min-w-0 flex-1 bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:outline-none pb-0.5 text-gray-200"
+                            className="flex-1 min-w-[12rem] bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:outline-none pb-0.5 text-gray-200"
                           />
                         ) : (
-                          <span className="truncate">{p.name}</span>
-                        )}
-                        {p.status === "DONE" && (
-                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-emerald-300 bg-emerald-900/30 border-emerald-700/40" title="Fase completada">
-                            ✓ Completada
-                          </span>
-                        )}
-                        {p.status === "IN_PROGRESS" && (
-                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-blue-300 bg-blue-900/30 border-blue-700/40" title="Fase en curso (hoy)">
-                            ● En curso
-                          </span>
-                        )}
-                        {meta && (
-                          <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${meta.chip}`}>
-                            {meta.label}
-                          </span>
-                        )}
-                        {p.needsValidation && (
-                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-amber-300 bg-amber-900/30 border-amber-700/40" title="El agente estimó esta fase/duración sin datos de tiempos en ventas — confirmá y ajustá">
-                            ⚠ Estimada
-                          </span>
-                        )}
-                        {hasOverdue && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" title="Tareas vencidas" />
+                          <span className="flex-1 min-w-[12rem] break-words">{p.name}</span>
                         )}
                         {(onAssistPhase || (editable && onRemovePhase)) && (
                           <span className="ml-auto flex items-center gap-1 flex-shrink-0">
@@ -549,34 +526,62 @@ export default function TimelineGantt({
                           </span>
                         )}
                       </div>
-                      {editable && onUpdatePhase ? (
-                        <span className="ml-[18px] mt-0.5 flex items-center gap-1.5 text-[10px] text-gray-500" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="number" min={1}
-                            value={p.durationWeeks}
-                            onChange={(e) => { const v = parseInt(e.target.value, 10); if (v >= 1) onUpdatePhase(p.key, { durationWeeks: v }); }}
-                            className="w-9 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-blue-500"
-                            title="Duración en semanas"
-                          />
-                          <span>sem</span>
-                          <span className="text-gray-700">·</span>
-                          <input
-                            type="number" min={1}
-                            value={p.sessionCount ?? ""}
-                            placeholder="—"
-                            onChange={(e) => { const v = e.target.value === "" ? null : parseInt(e.target.value, 10); onUpdatePhase(p.key, { sessionCount: v }); }}
-                            className="w-9 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-blue-500"
-                            title="Sesiones (opcional)"
-                          />
-                          <span>ses</span>
-                          <span className="text-gray-700 ml-1">{fmtPhaseRange(anchor, range)}</span>
+                      <div className="ml-[18px] mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        {editable && onUpdatePhase ? (
+                          <span className="flex items-center gap-1.5 text-[10px] text-gray-500" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="number" min={1}
+                              value={p.durationWeeks}
+                              onChange={(e) => { const v = parseInt(e.target.value, 10); if (v >= 1) onUpdatePhase(p.key, { durationWeeks: v }); }}
+                              className="w-9 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-blue-500"
+                              title="Duración en semanas"
+                            />
+                            <span>sem</span>
+                            <span className="text-gray-700">·</span>
+                            <input
+                              type="number" min={1}
+                              value={p.sessionCount ?? ""}
+                              placeholder="—"
+                              onChange={(e) => { const v = e.target.value === "" ? null : parseInt(e.target.value, 10); onUpdatePhase(p.key, { sessionCount: v }); }}
+                              className="w-9 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-blue-500"
+                              title="Sesiones (opcional)"
+                            />
+                            <span>ses</span>
+                            <span className="text-gray-700 ml-1">{fmtPhaseRange(anchor, range)}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-gray-600">
+                            {fmtPhaseRange(anchor, range)}
+                            {p.tasks.length > 0 && ` · ${plural(p.tasks.length, "tarea", "tareas")}`}
+                          </span>
+                        )}
+                        {/* Etiquetas a la derecha: estado + tipo de actividad + estimada + atraso */}
+                        <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+                          {p.status === "DONE" && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-emerald-300 bg-emerald-900/30 border-emerald-700/40" title="Fase completada">
+                              ✓ Completada
+                            </span>
+                          )}
+                          {p.status === "IN_PROGRESS" && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-blue-300 bg-blue-900/30 border-blue-700/40" title="Fase en curso (hoy)">
+                              ● En curso
+                            </span>
+                          )}
+                          {meta && (
+                            <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${meta.chip}`}>
+                              {meta.label}
+                            </span>
+                          )}
+                          {p.needsValidation && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-amber-300 bg-amber-900/30 border-amber-700/40" title="El agente estimó esta fase/duración sin datos de tiempos en ventas — confirmá y ajustá">
+                              ⚠ Estimada
+                            </span>
+                          )}
+                          {hasOverdue && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" title="Tareas vencidas" />
+                          )}
                         </span>
-                      ) : (
-                        <span className="ml-[18px] text-[10px] text-gray-600 mt-0.5">
-                          {fmtPhaseRange(anchor, range)}
-                          {p.tasks.length > 0 && ` · ${plural(p.tasks.length, "tarea", "tareas")}`}
-                        </span>
-                      )}
+                      </div>
                     </div>
 
                     {/* Celdas de semanas */}

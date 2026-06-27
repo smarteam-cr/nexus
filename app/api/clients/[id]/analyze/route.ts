@@ -2139,16 +2139,18 @@ async function persistTimelineFromAgentOutput(
 
     // KICKOFF SIEMPRE: la 1ra fase debe ser un Kick-off. Si el agente no lo puso, lo anteponemos
     // (estimado → needsValidation). Garantiza el invariante "todo cronograma arranca con Kickoff".
-    const startsWithKickoff = /kick.?off|arranque/i.test(validPhases[0]?.name ?? "");
-    const phasesToCreate = startsWithKickoff
+    const startsWithSemana0 = /semana\s*0|semana\s*cero|kick.?off|arranque/i.test(
+      validPhases[0]?.name ?? "",
+    );
+    const phasesToCreate = startsWithSemana0
       ? validPhases
       : [
           {
-            name: "Kick-off",
+            name: "Semana 0",
             order: 0,
             durationWeeks: 1,
             sessionCount: 1 as number | null,
-            notes: "Reunión inicial de arranque y alineación con el cliente",
+            notes: "Kickoff y levantamiento inicial con el cliente",
             needsValidation: true,
             source: "AGENT" as const,
           },
@@ -2348,21 +2350,36 @@ async function persistTimelineDetailFromAgentOutput(
       }
     }
 
-    // C — entregas del cliente que SIEMPRE arrancan el proyecto: sembradas en la fase Kick-off
-    // en la generación inicial (garantizado por la idempotencia de arriba; data histórica intacta).
-    // Son compromisos firmes del cliente (party CLIENTE, needsValidation false). Dedup por título
-    // normalizado contra lo que el agente ya creó para esa fase; el CSE puede editarlas/borrarlas.
+    // C — tareas fijas que SIEMPRE arrancan el proyecto: sembradas en la "Semana 0" (kickoff +
+    // levantamiento inicial) en la generación inicial (garantizado por la idempotencia de arriba;
+    // data histórica intacta). Parties mixtas (entregas del cliente + acciones de Smarteam). La
+    // tarea de base de datos RAMIFICA por implementationType: si el cliente YA usa HubSpot
+    // (REIMPLEMENTATION) se revisa/limpia la base existente en vez de pedir que la entregue. Dedup
+    // por título normalizado contra lo que el agente ya creó para esa fase; el CSE puede editarlas.
     const normName = (s: string) => s.trim().toLowerCase();
     const phasesArr = [...phaseById.values()];
+    // La Semana 0 es la 1ra fase (order 0). Fallback por nombre cubre cronogramas viejos ("Kick-off").
     const kickoff =
-      phasesArr.find((p) => p.order === 0 && normName(p.name).includes("kick")) ??
-      phasesArr.find((p) => normName(p.name).includes("kick")) ??
+      phasesArr.find((p) => p.order === 0) ??
+      phasesArr.find((p) => normName(p.name).includes("semana 0") || normName(p.name).includes("kick")) ??
       null;
     if (kickoff) {
-      const CLIENT_SEED_TITLES = [
-        "Entregar documentación de procesos involucrados",
-        "Proporcionar bases de datos a importar",
-        "Entregar listado de usuarios a ingresar al CRM",
+      const isReimpl =
+        (await tx.project.findUnique({
+          where: { id: bodyProjectId },
+          select: { implementationType: true },
+        }))?.implementationType === "REIMPLEMENTATION";
+      const SEED_TASKS: { title: string; party: "CLIENTE" | "SMARTEAM" | "AMBOS" }[] = [
+        { title: "Entregar documentación de procesos involucrados", party: "CLIENTE" },
+        // Regla 4 — rama de base de datos según implementación vs re-implementación.
+        isReimpl
+          ? { title: "Revisar y limpiar la base de datos existente", party: "AMBOS" }
+          : { title: "Proporcionar bases de datos a importar", party: "CLIENTE" },
+        { title: "Entregar listado de usuarios a ingresar al CRM", party: "CLIENTE" },
+        // Regla 2 — Smarteam asigna la ruta de HubSpot Academy al cliente.
+        { title: "Asignar la lista de reproducción de HubSpot Academy al cliente", party: "SMARTEAM" },
+        // Regla 3 — el cliente nos da acceso a su portal de HubSpot.
+        { title: "Proporcionar acceso al portal de HubSpot a Smarteam", party: "CLIENTE" },
       ];
       const existing = await tx.timelineTask.findMany({
         where: { phaseId: kickoff.id },
@@ -2370,15 +2387,15 @@ async function persistTimelineDetailFromAgentOutput(
       });
       const existingNorm = new Set(existing.map((t) => normName(t.title)));
       const week0Count = existing.filter((t) => t.weekIndex === 0).length;
-      const seeds = CLIENT_SEED_TITLES.filter((title) => !existingNorm.has(normName(title))).map(
-        (title, i) => ({
+      const seeds = SEED_TASKS.filter((t) => !existingNorm.has(normName(t.title))).map(
+        (t, i) => ({
           phaseId: kickoff.id,
-          title,
+          title: t.title,
           weekIndex: 0,
           order: week0Count + i,
           notes: null,
           needsValidation: false,
-          party: "CLIENTE" as const,
+          party: t.party,
           source: "AGENT" as const,
           status: "PENDING" as const,
         }),
@@ -2387,7 +2404,7 @@ async function persistTimelineDetailFromAgentOutput(
         await tx.timelineTask.createMany({ data: seeds });
         tasksCreated += seeds.length;
         console.log(
-          `[analyze] ✓ C: ${seeds.length} entregas del cliente sembradas en Kick-off "${kickoff.name}" (project ${bodyProjectId})`,
+          `[analyze] ✓ C: ${seeds.length} tareas fijas sembradas en "${kickoff.name}" (project ${bodyProjectId}, ${isReimpl ? "REIMPLEMENTATION" : "IMPLEMENTATION"})`,
         );
       }
     }
