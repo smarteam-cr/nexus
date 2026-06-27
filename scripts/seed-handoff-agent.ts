@@ -73,8 +73,8 @@ REGLAS DEL CRONOGRAMA:
 - TIEMPOS (durationWeeks / sessionCount / arranque): usá lo que se DIJO en las fuentes (deadlines, "X semanas", "live antes de Q", fecha de kickoff). Si NO hay dato de tiempo para una fase, ESTIMÁ conservador y marcá esa fase con "estimated": true. Las fases con duración anclada en algo dicho/acordado → "estimated": false. NUNCA inventes una fecha exacta: las fechas las calcula el sistema desde el arranque.
 - notes: UNA sola línea GENERAL y de alto nivel que describe el PROPÓSITO de la fase, en lenguaje cliente (como un titular). PROHIBIDO en notes: nombres de personas, herramientas/sistemas concretos, listas de tareas o detalle operativo — ese detalle lo agrega DESPUÉS el agente de Detalle de cronograma como tareas por semana. La nota es la descripción general; las tareas son el detalle.
 - Entre 2 y 8 fases. Si la señal es MUY pobre, igual proponé un plan mínimo coherente CON EL ALCANCE y marcá esas fases con "estimated": true (NO uses un template fijo). Solo devolvé "phases": [] si no hay absolutamente ningún alcance del que partir.
-- KICKOFF SIEMPRE: la PRIMERA fase es SIEMPRE un Kick-off (arranque y alineación con el cliente), aunque el cliente ya use HubSpot. Las demás fases salen del alcance.
-- ORDEN: la secuencia lógica de entrega del proyecto (Kick-off primero).
+- SEMANA 0 SIEMPRE: la PRIMERA fase es SIEMPRE la "Semana 0" — kickoff y levantamiento inicial (arranque, alineación y recolección de insumos con el cliente), aunque el cliente ya use HubSpot. Nombrala literalmente "Semana 0". Las demás fases salen del alcance.
+- ORDEN: la secuencia lógica de entrega del proyecto (Semana 0 primero).
 
 IMPLEMENTACIÓN vs RE-IMPLEMENTACIÓN:
 - Determiná si el proyecto es IMPLEMENTATION (el cliente arranca con HubSpot por primera vez) o REIMPLEMENTATION (ya usa HubSpot, o viene de otro CRM/herramienta que va a migrar o reemplazar). Deducilo de las fuentes (sesiones, deal, notas: "ya tienen HubSpot", "vienen de Salesforce/Pipedrive", "limpiar el portal actual", etc.). Si no hay señal clara, asumí IMPLEMENTATION.
