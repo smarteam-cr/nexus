@@ -103,6 +103,7 @@ interface TimelineResponse {
     activityType: TimelineActivityType | null;
     source: TimelinePhaseSource;
     status: TimelineTaskStatus;
+    needsValidation: boolean;
     tasks: TimelineTaskResponse[];
   }>;
 }
@@ -133,6 +134,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
           activityType: true,
           source: true,
           status: true,
+          needsValidation: true,
           tasks: {
             orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
             select: {
@@ -345,6 +347,7 @@ export async function PUT(
                 notes: p.notes,
                 activityType: p.activityType,
                 source: newSource,
+                needsValidation: false, // humano revisó la fase → se limpia el flag "estimada"
               },
             });
           }

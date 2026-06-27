@@ -57,6 +57,7 @@ interface Phase {
   activityType: string | null;
   source?: string;
   status?: GanttTaskStatus; // D.2 — avance a nivel fase
+  needsValidation?: boolean; // fase estimada por el agente del handoff (badge "estimada")
   tasks: TaskDraft[];
   _key: string;
 }
@@ -106,6 +107,7 @@ interface ServerPhase {
   activityType: string | null;
   source: string;
   status: GanttTaskStatus;
+  needsValidation: boolean;
   tasks: ServerTask[];
 }
 
@@ -198,6 +200,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       activityType: p.activityType,
       source: p.source,
       status: p.status,
+      needsValidation: p.needsValidation,
       tasks: (p.tasks ?? []).map((t) => ({
         id: t.id,
         title: t.title,
@@ -349,6 +352,77 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     setPhases((ps) =>
       ps.map((p) => (p._key === phaseKey ? { ...p, tasks: p.tasks.filter((t) => t._key !== taskKey) } : p)),
     );
+    markDirty();
+  };
+
+  // ── Edición DIRECTA de fases (además de la barra de IA) ───────────────────────
+  // Persiste por el mismo auto-guardado (PUT): nombre/duración/sesiones, agregar y eliminar.
+  const updatePhase = (phaseKey: string, patch: { name?: string; durationWeeks?: number; sessionCount?: number | null }) => {
+    setPhases((ps) => ps.map((p) => (p._key === phaseKey ? { ...p, ...patch } : p)));
+    markDirty();
+  };
+  const addPhase = () => {
+    setPhases((ps) => [
+      ...ps,
+      { name: "", durationWeeks: 1, sessionCount: null, notes: null, activityType: null, status: "PENDING" as const, needsValidation: false, tasks: [], _key: nextKey() },
+    ]);
+    markDirty();
+  };
+  const removePhase = (phaseKey: string) => {
+    setPhases((ps) => ps.filter((p) => p._key !== phaseKey));
+    markDirty();
+  };
+
+  // Drag&drop de tareas: mover a (semana, posición) dentro de su fase. El order por semana lo
+  // recalcula buildPutBody desde la posición en el array, así que reordenamos el array de la fase.
+  const moveTask = (taskKey: string, toPhaseKey: string, toWeekIndex: number, toOrder: number) => {
+    setPhases((ps) => {
+      // 1) sacar la tarea de su fase actual (sea cual sea).
+      let moved: TaskDraft | undefined;
+      let fromPhaseKey: string | undefined;
+      const removed = ps.map((p) => {
+        const found = p.tasks.find((t) => t._key === taskKey);
+        if (!found) return p;
+        moved = found;
+        fromPhaseKey = p._key;
+        return { ...p, tasks: p.tasks.filter((t) => t._key !== taskKey) };
+      });
+      if (!moved || fromPhaseKey === undefined) return ps;
+      // Mover ENTRE fases: el PUT no permite reasignar la fase de una tarea con id, así que al
+      // cruzar de fase soltamos el id → se recrea en la fase destino (pierde estado; aceptable).
+      const crossPhase = fromPhaseKey !== toPhaseKey;
+      const updated: TaskDraft = { ...moved, weekIndex: toWeekIndex, ...(crossPhase ? { id: undefined } : {}) };
+      // 2) insertar en la fase destino, en la posición toOrder dentro de su semana.
+      return removed.map((p) => {
+        if (p._key !== toPhaseKey) return p;
+        const result: TaskDraft[] = [];
+        let inserted = false;
+        let weekSeen = 0;
+        for (const t of p.tasks) {
+          if (t.weekIndex === toWeekIndex) {
+            if (weekSeen === toOrder) { result.push(updated); inserted = true; }
+            weekSeen++;
+          }
+          result.push(t);
+        }
+        if (!inserted) result.push(updated);
+        return { ...p, tasks: result };
+      });
+    });
+    markDirty();
+  };
+
+  // Drag&drop de fases: reordenar el array → buildPutBody manda order = índice.
+  const reorderPhases = (activeKey: string, overKey: string) => {
+    setPhases((ps) => {
+      const from = ps.findIndex((p) => p._key === activeKey);
+      const to = ps.findIndex((p) => p._key === overKey);
+      if (from < 0 || to < 0 || from === to) return ps;
+      const next = [...ps];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
     markDirty();
   };
 
@@ -738,6 +812,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     (n, p) => n + p.tasks.filter((t) => t.needsValidation).length,
     0,
   );
+  // Fases que el agente del handoff estimó sin datos de tiempos → banner + badge.
+  const estimatedPhases = phases.filter((p) => p.needsValidation).length;
 
   const ganttPhases: GanttPhase[] = phases.map((p) => ({
     key: p._key,
@@ -747,6 +823,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     sessionCount: p.sessionCount,
     activityType: p.activityType,
     status: p.status,
+    needsValidation: p.needsValidation,
     tasks: p.tasks.map((t) => ({
       key: t._key,
       id: t.id,
@@ -1085,6 +1162,18 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         </div>
       )}
 
+      {/* ── Banner: fases estimadas por el agente (sin datos de tiempos en ventas) ── */}
+      {estimatedPhases > 0 && !proposal && (
+        <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-200">
+          <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <span className="text-xs leading-relaxed">
+            <span className="font-semibold">{estimatedPhases} {estimatedPhases === 1 ? "fase estimada" : "fases estimadas"}</span> — el agente no tenía tiempos en ventas; confirmá fases y duraciones antes de usar el cronograma.
+          </span>
+        </div>
+      )}
+
       {/* ── Alerta global de handoff flaco (reemplaza el badge "por validar" por fila) ── */}
       {totalTasks > 0 && pendingValidation > 0 && !proposal && !generating && (
         <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-200">
@@ -1136,6 +1225,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             onUpdateTask={(phaseKey, taskKey, patch) => updateTask(phaseKey, taskKey, patch)}
             onAddTask={addTask}
             onRemoveTask={removeTask}
+            onUpdatePhase={updatePhase}
+            onAddPhase={addPhase}
+            onRemovePhase={removePhase}
+            onMoveTask={moveTask}
+            onReorderPhases={reorderPhases}
             onSetAnchor={setAnchorFromGantt}
             onAssistPhase={(phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }}
             kickoffDate={kickoffDate || null}

@@ -21,6 +21,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
+      implementationType: true,
       handoff: { select: { id: true } },
       canvases: { where: { name: "Handoff" }, select: { id: true }, take: 1 },
     },
@@ -70,6 +71,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     lastRunStatus: lastRun?.status ?? null,
     sourceSessions,
     projectSessionCount,
+    implementationType: project.implementationType,
   });
 }
 

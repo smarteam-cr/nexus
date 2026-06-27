@@ -29,7 +29,23 @@
  * es la barrera. La marca en sí nunca cruza (columna excluida del mapper externo).
  */
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import {
+  DndContext,
+  closestCorners,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
+  type CollisionDetection,
+} from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable, sortableKeyboardCoordinates, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   fmtDay,
   fmtFull,
@@ -71,6 +87,8 @@ export interface GanttPhase {
   activityType: string | null;
   /** D.2 — avance a nivel fase: DONE = completada, IN_PROGRESS = el "hoy". */
   status?: GanttTaskStatus;
+  /** El agente del handoff estimó la fase/duración sin dato real en ventas → badge "estimada". */
+  needsValidation?: boolean;
   tasks: GanttTask[];
 }
 
@@ -85,6 +103,14 @@ interface Props {
   onSetAnchor?: (isoDate: string) => void; // yyyy-mm-dd — fijar arranque desde el Gantt
   onAssistPhase?: (phase: GanttPhase) => void; // abrir el dialog de IA scopeado a esta fase
   kickoffDate?: string | null; // yyyy-mm-dd de la sesión de kickoff — sugerencia del anchor
+  // Edición DIRECTA de fases (cuando editable) — además de la barra de IA
+  onUpdatePhase?: (phaseKey: string, patch: { name?: string; durationWeeks?: number; sessionCount?: number | null }) => void;
+  onAddPhase?: () => void;
+  onRemovePhase?: (phaseKey: string) => void;
+  // Drag&drop de tareas: mover/reordenar dentro y entre semanas Y entre fases → persiste.
+  onMoveTask?: (taskKey: string, toPhaseKey: string, toWeekIndex: number, toOrder: number) => void;
+  // Drag&drop de fases: reordenar filas → persiste order.
+  onReorderPhases?: (activeKey: string, overKey: string) => void;
 }
 
 // ── Metadata de tipos de actividad (color de barra + chip) ────────────────────
@@ -133,6 +159,44 @@ export const effParty = (p: "CLIENTE" | "SMARTEAM" | "AMBOS" | null | undefined)
 const nextParty = (p: "CLIENTE" | "SMARTEAM" | "AMBOS"): "CLIENTE" | "SMARTEAM" | "AMBOS" =>
   PARTY_CYCLE[(PARTY_CYCLE.indexOf(p) + 1) % PARTY_CYCLE.length];
 
+// ── Drag & drop de tareas: item sortable + contenedor de semana droppable ─────
+function SortableRow({
+  id,
+  disabled,
+  data,
+  children,
+}: {
+  id: string;
+  disabled?: boolean;
+  data?: Record<string, unknown>;
+  children: (attributes: DraggableAttributes, listeners: DraggableSyntheticListeners) => ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled, data });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+        position: "relative",
+        zIndex: isDragging ? 20 : undefined,
+      }}
+    >
+      {children(attributes, listeners)}
+    </div>
+  );
+}
+
+function DroppableWeek({ id, children }: { id: string; children: ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id, data: { type: "week" } });
+  return (
+    <div ref={setNodeRef} className={`space-y-1 rounded-lg ${isOver ? "ring-1 ring-blue-500/40 bg-blue-500/5" : ""}`}>
+      {children}
+    </div>
+  );
+}
+
 // ── Componente ────────────────────────────────────────────────────────────────
 
 export default function TimelineGantt({
@@ -146,6 +210,11 @@ export default function TimelineGantt({
   onSetAnchor,
   onAssistPhase,
   kickoffDate,
+  onUpdatePhase,
+  onAddPhase,
+  onRemovePhase,
+  onMoveTask,
+  onReorderPhases,
 }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -155,6 +224,144 @@ export default function TimelineGantt({
   const curInRange = curWeek !== null && curWeek >= 0 && curWeek < total;
   const todayIso = new Date().toISOString();
   const editable = !readOnly && !!onUpdateTask;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  // Copia de trabajo durante el arrastre de una tarea: cuando la tarea entra a otra semana/fase la
+  // "adoptamos" acá para que ese contenedor abra el hueco en vivo. Null fuera del drag → se renderiza
+  // `phases` (props) tal cual.
+  const [dragTasks, setDragTasks] = useState<GanttPhase[] | null>(null);
+  const renderPhases = dragTasks ?? phases;
+
+  // Ubicar una tarea por key en el árbol de fases (para resolver origen/destino del drag).
+  const locateTask = (arr: GanttPhase[], key: string) => {
+    for (let pi = 0; pi < arr.length; pi++) {
+      const ti = arr[pi].tasks.findIndex((t) => t.key === key);
+      if (ti >= 0) return { pi, ti, task: arr[pi].tasks[ti] };
+    }
+    return null;
+  };
+
+  // Colisión filtrada por tipo: una FASE solo cae sobre fases; una TAREA sobre tareas o semanas.
+  // Permite tener fases (sortable) y tareas (sortable, multi-contenedor) en UN solo DndContext.
+  const collisionStrategy: CollisionDetection = (args) => {
+    const type = args.active.data.current?.type;
+    if (!type) return closestCorners(args);
+    return closestCorners({
+      ...args,
+      droppableContainers: args.droppableContainers.filter((c) => {
+        const ct = c.data.current?.type;
+        return type === "phase" ? ct === "phase" : ct === "task" || ct === "week";
+      }),
+    });
+  };
+
+  // Durante el arrastre: solo movemos la tarea entre CONTENEDORES (fase+semana). Dentro del mismo
+  // contenedor el SortableContext anima el hueco solo (y evitamos un loop de re-render). Al cruzar
+  // a otra semana/fase, "adoptamos" la tarea en la copia de trabajo → ese contenedor abre el hueco.
+  const handleDragOver = (event: DragOverEvent) => {
+    if (event.active.data.current?.type !== "task") return;
+    const { active, over } = event;
+    if (!over) return;
+    const activeKey = String(active.id);
+    const overId = String(over.id);
+    if (overId === activeKey) return;
+    const base = dragTasks ?? phases;
+    const from = locateTask(base, activeKey);
+    if (!from) return;
+
+    let toPi: number;
+    let toWeek: number;
+    let overTaskKey: string | null = null;
+    if (overId.includes("::w")) {
+      const sep = overId.lastIndexOf("::w");
+      toPi = base.findIndex((p) => p.key === overId.slice(0, sep));
+      toWeek = parseInt(overId.slice(sep + 3), 10);
+    } else {
+      const ov = locateTask(base, overId);
+      if (!ov) return;
+      toPi = ov.pi;
+      toWeek = ov.task.weekIndex;
+      overTaskKey = overId;
+    }
+    if (toPi < 0) return;
+    if (from.pi === toPi && from.task.weekIndex === toWeek) return; // mismo contenedor
+
+    const next = base.map((p) => ({ ...p, tasks: p.tasks.filter((t) => t.key !== activeKey) }));
+    const updatedTask = { ...from.task, weekIndex: toWeek };
+    const targetTasks = next[toPi].tasks;
+    let arrIdx: number;
+    if (overTaskKey) {
+      arrIdx = targetTasks.findIndex((t) => t.key === overTaskKey);
+      if (arrIdx < 0) arrIdx = targetTasks.length;
+    } else {
+      arrIdx = targetTasks.length;
+      for (let j = targetTasks.length - 1; j >= 0; j--) {
+        if (targetTasks[j].weekIndex === toWeek) { arrIdx = j + 1; break; }
+      }
+    }
+    targetTasks.splice(arrIdx, 0, updatedTask);
+    next[toPi] = { ...next[toPi], tasks: targetTasks };
+    setDragTasks(next);
+  };
+
+  // Al soltar: ruteo por data.type. Para tareas, la posición final sale de la copia de trabajo
+  // (donde onDragOver ya dejó la tarea en su contenedor) afinada por el `over` del drop.
+  const handleDragEnd = (event: DragEndEvent) => {
+    const base = dragTasks;
+    setDragTasks(null);
+    const { active, over } = event;
+    if (!over) return;
+    const activeKey = String(active.id);
+    const overId = String(over.id);
+
+    if (active.data.current?.type === "phase") {
+      if (onReorderPhases && activeKey !== overId) onReorderPhases(activeKey, overId);
+      return;
+    }
+    if (!onMoveTask) return;
+
+    const src = base ?? phases;
+    const from = locateTask(src, activeKey);
+    if (!from) return;
+    if (!base && overId === activeKey) return; // soltó en el mismo sitio sin cruzar nada
+
+    let toPhaseKey: string;
+    let toWeek: number;
+    let toOrder: number;
+    if (overId.includes("::w")) {
+      const sep = overId.lastIndexOf("::w");
+      toPhaseKey = overId.slice(0, sep);
+      toWeek = parseInt(overId.slice(sep + 3), 10);
+      const tp = src.find((p) => p.key === toPhaseKey);
+      toOrder = tp ? tp.tasks.filter((t) => t.weekIndex === toWeek && t.key !== activeKey).length : 0;
+    } else if (overId === activeKey) {
+      // soltó sobre la propia tarea ya reubicada por onDragOver → su posición actual.
+      toPhaseKey = src[from.pi].key;
+      toWeek = from.task.weekIndex;
+      toOrder = src[from.pi].tasks.filter((t, j) => t.weekIndex === toWeek && j < from.ti).length;
+    } else {
+      const ov = locateTask(src, overId);
+      if (!ov) return;
+      toPhaseKey = src[ov.pi].key;
+      toWeek = ov.task.weekIndex;
+      if (from.pi === ov.pi && from.task.weekIndex === toWeek) {
+        // misma fase + semana → arrayMove (arriba/abajo sin off-by-one).
+        const weekKeys = src[ov.pi].tasks.filter((t) => t.weekIndex === toWeek).map((t) => t.key);
+        const oldI = weekKeys.indexOf(activeKey);
+        const newI = weekKeys.indexOf(overId);
+        toOrder = oldI >= 0 && newI >= 0 ? arrayMove(weekKeys, oldI, newI).indexOf(activeKey) : weekKeys.length;
+      } else {
+        const targetKeys = src[ov.pi].tasks.filter((t) => t.weekIndex === toWeek && t.key !== activeKey).map((t) => t.key);
+        const idx = targetKeys.indexOf(overId);
+        toOrder = idx < 0 ? targetKeys.length : idx;
+      }
+    }
+    onMoveTask(activeKey, toPhaseKey, toWeek, toOrder);
+  };
 
   if (phases.length === 0 || total === 0) return null;
 
@@ -238,7 +445,9 @@ export default function TimelineGantt({
 
           {/* Filas de fases */}
           <div className="px-4 py-2 space-y-0.5">
-            {phases.map((p, i) => {
+            <DndContext sensors={sensors} collisionDetection={collisionStrategy} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => setDragTasks(null)}>
+            <SortableContext items={renderPhases.map((ph) => ph.key)} strategy={verticalListSortingStrategy}>
+            {renderPhases.map((p, i) => {
               const range = ranges[i];
               const meta = p.activityType ? ACTIVITY_META[p.activityType] : null;
               const isOpen = expanded.has(p.key);
@@ -254,7 +463,9 @@ export default function TimelineGantt({
               }
 
               return (
-                <div key={p.key}>
+                <SortableRow key={p.key} id={p.key} data={{ type: "phase" }} disabled={!editable || !onReorderPhases}>
+                {(attributes, listeners) => (
+                <div>
                   {/* Fila del grid */}
                   <div
                     onClick={() => toggleExpand(p.key)}
@@ -263,13 +474,34 @@ export default function TimelineGantt({
                   >
                     <div className="flex flex-col min-w-0 pr-2">
                       <div className="flex items-center gap-1.5 text-xs font-medium text-gray-300 group-hover:text-white">
+                        {editable && onReorderPhases && (
+                          <button
+                            {...attributes}
+                            {...listeners}
+                            onClick={(e) => e.stopPropagation()}
+                            title="Arrastrar para reordenar la fase"
+                            className="flex-shrink-0 cursor-grab touch-none text-gray-600 hover:text-gray-400"
+                          >
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" /></svg>
+                          </button>
+                        )}
                         <svg
                           className={`w-3 h-3 text-gray-600 flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
                           fill="none" viewBox="0 0 24 24" stroke="currentColor"
                         >
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                         </svg>
-                        <span className="truncate">{p.name}</span>
+                        {editable && onUpdatePhase ? (
+                          <input
+                            value={p.name}
+                            onChange={(e) => onUpdatePhase(p.key, { name: e.target.value })}
+                            onClick={(e) => e.stopPropagation()}
+                            placeholder="Nombre de la fase"
+                            className="min-w-0 flex-1 bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:outline-none pb-0.5 text-gray-200"
+                          />
+                        ) : (
+                          <span className="truncate">{p.name}</span>
+                        )}
                         {p.status === "DONE" && (
                           <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-emerald-300 bg-emerald-900/30 border-emerald-700/40" title="Fase completada">
                             ✓ Completada
@@ -285,24 +517,66 @@ export default function TimelineGantt({
                             {meta.label}
                           </span>
                         )}
+                        {p.needsValidation && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-amber-300 bg-amber-900/30 border-amber-700/40" title="El agente estimó esta fase/duración sin datos de tiempos en ventas — confirmá y ajustá">
+                            ⚠ Estimada
+                          </span>
+                        )}
                         {hasOverdue && (
                           <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" title="Tareas vencidas" />
                         )}
-                        {onAssistPhase && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onAssistPhase(p); }}
-                            className="ml-auto flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-blue-300"
-                            title="Editar esta fase con IA"
-                          >
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
-                            IA
-                          </button>
+                        {(onAssistPhase || (editable && onRemovePhase)) && (
+                          <span className="ml-auto flex items-center gap-1 flex-shrink-0">
+                            {onAssistPhase && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onAssistPhase(p); }}
+                                className="flex items-center gap-1 text-[10px] font-semibold text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-blue-300"
+                                title="Editar esta fase con IA"
+                              >
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+                                IA
+                              </button>
+                            )}
+                            {editable && onRemovePhase && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onRemovePhase(p.key); }}
+                                className="p-1 rounded text-gray-600 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Eliminar fase"
+                              >
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            )}
+                          </span>
                         )}
                       </div>
-                      <span className="ml-[18px] text-[10px] text-gray-600 mt-0.5">
-                        {fmtPhaseRange(anchor, range)}
-                        {p.tasks.length > 0 && ` · ${plural(p.tasks.length, "tarea", "tareas")}`}
-                      </span>
+                      {editable && onUpdatePhase ? (
+                        <span className="ml-[18px] mt-0.5 flex items-center gap-1.5 text-[10px] text-gray-500" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="number" min={1}
+                            value={p.durationWeeks}
+                            onChange={(e) => { const v = parseInt(e.target.value, 10); if (v >= 1) onUpdatePhase(p.key, { durationWeeks: v }); }}
+                            className="w-9 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-blue-500"
+                            title="Duración en semanas"
+                          />
+                          <span>sem</span>
+                          <span className="text-gray-700">·</span>
+                          <input
+                            type="number" min={1}
+                            value={p.sessionCount ?? ""}
+                            placeholder="—"
+                            onChange={(e) => { const v = e.target.value === "" ? null : parseInt(e.target.value, 10); onUpdatePhase(p.key, { sessionCount: v }); }}
+                            className="w-9 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-blue-500"
+                            title="Sesiones (opcional)"
+                          />
+                          <span>ses</span>
+                          <span className="text-gray-700 ml-1">{fmtPhaseRange(anchor, range)}</span>
+                        </span>
+                      ) : (
+                        <span className="ml-[18px] text-[10px] text-gray-600 mt-0.5">
+                          {fmtPhaseRange(anchor, range)}
+                          {p.tasks.length > 0 && ` · ${plural(p.tasks.length, "tarea", "tareas")}`}
+                        </span>
+                      )}
                     </div>
 
                     {/* Celdas de semanas */}
@@ -359,16 +633,29 @@ export default function TimelineGantt({
                                 </button>
                               )}
                             </p>
-                            <div className="space-y-1">
+                            <DroppableWeek id={`${p.key}::w${relWeek}`}>
+                            <SortableContext items={weekTasks.map((wt) => wt.key)} strategy={verticalListSortingStrategy}>
                               {weekTasks.map((t) => {
                                 const overdue = isOverdue(absW, curWeek, t.status);
                                 const sm = STATUS_META[t.status];
                                 const canToggle = !readOnly && !!onToggleStatus && !!t.id;
                                 return (
+                                  <SortableRow key={t.key} id={t.key} data={{ type: "task" }} disabled={!editable || !onMoveTask}>
+                                  {(attributes, listeners) => (
                                   <div
-                                    key={t.key}
                                     className="flex items-start gap-2.5 rounded-lg px-2.5 py-1.5 group/task hover:bg-gray-800/50"
                                   >
+                                    {editable && onMoveTask && (
+                                      <button
+                                        {...attributes}
+                                        {...listeners}
+                                        onClick={(e) => e.stopPropagation()}
+                                        title="Arrastrar para reordenar o mover de semana"
+                                        className="flex-shrink-0 mt-1 cursor-grab touch-none text-gray-600 hover:text-gray-400"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" /></svg>
+                                      </button>
+                                    )}
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -478,12 +765,15 @@ export default function TimelineGantt({
                                       </div>
                                     )}
                                   </div>
+                                  )}
+                                  </SortableRow>
                                 );
                               })}
                               {weekTasks.length === 0 && editable && (
                                 <p className="text-[11px] text-gray-700 px-2.5">Sin tareas esta semana.</p>
                               )}
-                            </div>
+                            </SortableContext>
+                            </DroppableWeek>
                           </div>
                         );
                       })}
@@ -493,8 +783,21 @@ export default function TimelineGantt({
                     </div>
                   )}
                 </div>
+                )}
+                </SortableRow>
               );
             })}
+            </SortableContext>
+            </DndContext>
+            {editable && onAddPhase && (
+              <button
+                onClick={onAddPhase}
+                className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 hover:text-gray-300 transition-colors px-2 py-1.5"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" /></svg>
+                Agregar fase
+              </button>
+            )}
           </div>
         </div>
       </div>

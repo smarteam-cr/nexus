@@ -82,7 +82,7 @@ export async function createHandoffCanvas(projectId: string, db: Db = prisma): P
 
 /**
  * Reconcilia un canvas "Handoff" YA EXISTENTE a la estructura canónica actual (HANDOFF_CANVAS):
- * crea las secciones que falten y normaliza su `order`. NUNCA borra secciones ni bloques.
+ * crea las secciones que falten y normaliza su `order` y `label`. NUNCA borra secciones ni bloques.
  * Lo usa el "ensure" de POST /handoff ANTES de generar, para que el agente no descarte en
  * silencio una sección que el canvas viejo no tenía (p.ej. "desarrollo" en handoffs legacy).
  * Idempotente: si el canvas ya está al día, no escribe nada.
@@ -90,7 +90,7 @@ export async function createHandoffCanvas(projectId: string, db: Db = prisma): P
 export async function reconcileHandoffCanvasSections(canvasId: string, db: Db = prisma): Promise<void> {
   const existing = await db.canvasSection.findMany({
     where: { canvasId },
-    select: { id: true, key: true, order: true },
+    select: { id: true, key: true, order: true, label: true },
   });
   const byKey = new Map(existing.map((s) => [s.key, s]));
   for (let i = 0; i < HANDOFF_CANVAS.sections.length; i++) {
@@ -98,8 +98,8 @@ export async function reconcileHandoffCanvasSections(canvasId: string, db: Db = 
     const cur = byKey.get(key);
     if (!cur) {
       await db.canvasSection.create({ data: { canvasId, key, label, order: i } });
-    } else if (cur.order !== i) {
-      await db.canvasSection.update({ where: { id: cur.id }, data: { order: i } });
+    } else if (cur.order !== i || cur.label !== label) {
+      await db.canvasSection.update({ where: { id: cur.id }, data: { order: i, label } });
     }
   }
 }

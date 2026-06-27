@@ -32,7 +32,7 @@ export const HANDOFF_CANVAS: CanvasDefinition = {
     { key: "fecha_inicio_kickoff", label: "Fecha de inicio / Kickoff" },
     { key: "acuerdos_promesas",    label: "Acuerdos clave y promesas especiales" },
     { key: "alcance_contratado",   label: "¿Qué vendimos?" },
-    { key: "desarrollo",           label: "Desarrollo e integraciones" },
+    { key: "desarrollo",           label: "Integraciones, migraciones y desarrollo" },
     { key: "motivacion_decision",  label: "¿Por qué vendimos? (por qué nos eligieron)" },
     { key: "dolor_principal",      label: "Dolor principal" },
     { key: "expectativas",         label: "Expectativas del cliente" },

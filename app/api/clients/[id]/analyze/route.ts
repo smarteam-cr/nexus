@@ -1990,13 +1990,24 @@ async function persistTimelineFromAgentOutput(
   agentRunId: string,
 ): Promise<void> {
   try {
+    // Implementación vs re-implementación: el agente lo infiere; el CSE puede corregir luego.
+    // Se persiste a nivel Project ANTES del early-return del timeline (vale aunque no haya fases).
+    if (bodyProjectId) {
+      const implType = (analysisJson as { implementationType?: unknown } | null)?.implementationType;
+      if (implType === "IMPLEMENTATION" || implType === "REIMPLEMENTATION") {
+        await prisma.project
+          .update({ where: { id: bodyProjectId }, data: { implementationType: implType } })
+          .catch((e) => console.warn("[analyze] implementationType no guardado:", e instanceof Error ? e.message : e));
+      }
+    }
+
     const timelineRaw = (analysisJson as { timeline?: { phases?: unknown } } | null)
       ?.timeline?.phases;
     if (!bodyProjectId || !Array.isArray(timelineRaw) || timelineRaw.length === 0) return;
 
     // Validador inline (sin Zod, consistente con el resto del codebase)
     const validPhases = timelineRaw
-      .filter((p: unknown): p is { name: string; durationWeeks: number; sessionCount?: number; notes?: string } => {
+      .filter((p: unknown): p is { name: string; durationWeeks: number; sessionCount?: number; notes?: string; estimated?: boolean } => {
         if (!p || typeof p !== "object") return false;
         const obj = p as Record<string, unknown>;
         return typeof obj.name === "string"
@@ -2014,6 +2025,8 @@ async function persistTimelineFromAgentOutput(
         notes: typeof p.notes === "string" && p.notes.trim().length > 0
           ? p.notes.trim()
           : null,
+        // El agente marca "estimated" cuando no tuvo datos de tiempos en ventas → badge "estimada".
+        needsValidation: p.estimated === true,
         source: "AGENT" as const,
       }));
 
@@ -2124,6 +2137,24 @@ async function persistTimelineFromAgentOutput(
       return;
     }
 
+    // KICKOFF SIEMPRE: la 1ra fase debe ser un Kick-off. Si el agente no lo puso, lo anteponemos
+    // (estimado → needsValidation). Garantiza el invariante "todo cronograma arranca con Kickoff".
+    const startsWithKickoff = /kick.?off|arranque/i.test(validPhases[0]?.name ?? "");
+    const phasesToCreate = startsWithKickoff
+      ? validPhases
+      : [
+          {
+            name: "Kick-off",
+            order: 0,
+            durationWeeks: 1,
+            sessionCount: 1 as number | null,
+            notes: "Reunión inicial de arranque y alineación con el cliente",
+            needsValidation: true,
+            source: "AGENT" as const,
+          },
+          ...validPhases.map((p) => ({ ...p, order: p.order + 1 })),
+        ];
+
     // Fecha de arranque por defecto = sesión de kickoff del proyecto (null si no hay).
     // Editable después por el CSE vía PUT /timeline.
     const kickoffDate = await getKickoffSessionDate(bodyProjectId);
@@ -2132,11 +2163,11 @@ async function persistTimelineFromAgentOutput(
         projectId: bodyProjectId,
         generatedByAgentRunId: agentRunId,
         anchorStartDate: kickoffDate,
-        phases: { create: validPhases },
+        phases: { create: phasesToCreate },
       },
     });
     console.log(
-      `[analyze] ✓ ProjectTimeline creado con ${validPhases.length} fases (AgentRun ${agentRunId})` +
+      `[analyze] ✓ ProjectTimeline creado con ${phasesToCreate.length} fases (AgentRun ${agentRunId})` +
         (kickoffDate ? ` · anchor=${kickoffDate.toISOString().slice(0, 10)} (kickoff)` : " · sin anchor (sin kickoff)"),
     );
   } catch (e) {

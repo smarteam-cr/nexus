@@ -27,6 +27,7 @@ interface HandoffStatus {
   lastRunStatus: string | null;
   sourceSessions: { id: string; title: string; date: string }[];
   projectSessionCount: number;
+  implementationType: "IMPLEMENTATION" | "REIMPLEMENTATION" | null;
 }
 
 /** Fuente manual del handoff (transcript/resumen pegado a mano). */
@@ -101,6 +102,20 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     } catch { /* ignore */ }
   }, [projectId, fetchSources]);
 
+  // Override CSE del tipo de implementación que infirió el agente (optimista + persiste).
+  const setImplType = useCallback(async (value: "IMPLEMENTATION" | "REIMPLEMENTATION") => {
+    setStatus((s) => (s ? { ...s, implementationType: value } : s));
+    try {
+      await fetch(`/api/projects/${projectId}/implementation-type`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ implementationType: value }),
+      });
+    } catch {
+      fetchStatus();
+    }
+  }, [projectId, fetchStatus]);
+
   const handleGenerate = useCallback(async () => {
     const agentId = status?.agentId;
     if (!agentId) { setError("No se encontró el agente de handoff."); return; }
@@ -167,9 +182,32 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m4 6H4m0 0l4 4m-4-4l4-4" />
         </svg>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-sm font-bold text-fg">Handoff Sales→CS</h3>
             {badge}
+            {canEdit ? (
+              <span className="inline-flex rounded-lg border border-line overflow-hidden text-[10px] font-bold uppercase tracking-wider" title="Tipo inferido por el agente — clic para corregir">
+                {(["IMPLEMENTATION", "REIMPLEMENTATION"] as const).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setImplType(v)}
+                    className={`px-2 py-0.5 transition-colors ${
+                      status.implementationType === v
+                        ? v === "IMPLEMENTATION"
+                          ? "bg-blue-50 text-blue-700"
+                          : "bg-amber-50 text-amber-700"
+                        : "text-fg-muted hover:text-fg hover:bg-surface-hover"
+                    }`}
+                  >
+                    {v === "IMPLEMENTATION" ? "Impl." : "Re-impl."}
+                  </button>
+                ))}
+              </span>
+            ) : status.implementationType ? (
+              <span className={`text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-0.5 border ${status.implementationType === "IMPLEMENTATION" ? "text-blue-700 bg-blue-50 border-blue-200" : "text-amber-700 bg-amber-50 border-amber-200"}`}>
+                {status.implementationType === "IMPLEMENTATION" ? "Implementación" : "Re-implementación"}
+              </span>
+            ) : null}
           </div>
           <p className="text-xs text-fg-muted mt-0.5 truncate">
             {generated

@@ -67,11 +67,18 @@ REGLAS DE EVIDENCIA Y TONO:
 - NO repitas el título de la sección al inicio del content — la UI ya muestra el label de la sección como heading.
 
 REGLAS DEL CRONOGRAMA:
-- Las fases salen SOLO de lo mencionado/comprometido en las sesiones de ventas (típicamente: "kick-off, arquitectura, set up de 6 sesiones, onboarding de 6 sesiones, 10 semanas total").
-- Cada fase: name corto (1-3 palabras), durationWeeks entero positivo, sessionCount entero positivo o null si no aplica.
-- notes: UNA sola línea GENERAL y de alto nivel que describe el PROPÓSITO de la fase, en lenguaje cliente (como un titular). DEBE ser general, igual que los ejemplos de abajo ("Reunión inicial con stakeholders", "Diseño de la solución", "Configuración semanal", "Acompañamiento de adopción"). PROHIBIDO en notes: nombres de personas, herramientas/sistemas concretos, listas de tareas o detalle operativo — todo ese detalle lo agrega DESPUÉS el agente de Detalle de cronograma como tareas por semana. La nota es la descripción general de la fase; las tareas son el detalle.
-- Entre 2 y 8 fases típicas. Si no hay info clara → devolver "timeline": { "phases": [] } y dejar que el CSE lo cree a mano.
-- ORDEN: tal como se mencionó la secuencia en las sesiones (kick-off típicamente primero).
+- Las fases se DERIVAN DEL ALCANCE VENDIDO Y LOS ACUERDOS: el deal + line items, lo que Ventas prometió/conversó en las sesiones, y las secciones del handoff (alcance, acuerdos, desarrollo/integraciones). El cronograma debe reflejar ESTE proyecto puntual, NO una metodología genérica ni un set de fases fijo.
+- REGLA DURA: IGNORÁ el NOMBRE del deal/proyecto — es genérico y poco confiable (se repite entre clientes). El alcance se deduce del CONTENIDO, nunca del título.
+- Cada fase: name corto y específico del proyecto (1-3 palabras), durationWeeks entero positivo, sessionCount entero positivo o null si no aplica.
+- TIEMPOS (durationWeeks / sessionCount / arranque): usá lo que se DIJO en las fuentes (deadlines, "X semanas", "live antes de Q", fecha de kickoff). Si NO hay dato de tiempo para una fase, ESTIMÁ conservador y marcá esa fase con "estimated": true. Las fases con duración anclada en algo dicho/acordado → "estimated": false. NUNCA inventes una fecha exacta: las fechas las calcula el sistema desde el arranque.
+- notes: UNA sola línea GENERAL y de alto nivel que describe el PROPÓSITO de la fase, en lenguaje cliente (como un titular). PROHIBIDO en notes: nombres de personas, herramientas/sistemas concretos, listas de tareas o detalle operativo — ese detalle lo agrega DESPUÉS el agente de Detalle de cronograma como tareas por semana. La nota es la descripción general; las tareas son el detalle.
+- Entre 2 y 8 fases. Si la señal es MUY pobre, igual proponé un plan mínimo coherente CON EL ALCANCE y marcá esas fases con "estimated": true (NO uses un template fijo). Solo devolvé "phases": [] si no hay absolutamente ningún alcance del que partir.
+- KICKOFF SIEMPRE: la PRIMERA fase es SIEMPRE un Kick-off (arranque y alineación con el cliente), aunque el cliente ya use HubSpot. Las demás fases salen del alcance.
+- ORDEN: la secuencia lógica de entrega del proyecto (Kick-off primero).
+
+IMPLEMENTACIÓN vs RE-IMPLEMENTACIÓN:
+- Determiná si el proyecto es IMPLEMENTATION (el cliente arranca con HubSpot por primera vez) o REIMPLEMENTATION (ya usa HubSpot, o viene de otro CRM/herramienta que va a migrar o reemplazar). Deducilo de las fuentes (sesiones, deal, notas: "ya tienen HubSpot", "vienen de Salesforce/Pipedrive", "limpiar el portal actual", etc.). Si no hay señal clara, asumí IMPLEMENTATION.
+- Devolvelo en el campo top-level "implementationType" del JSON.
 
 FORMATO DEL OUTPUT — sections + blocks:
 - Devolvés un array "sections" con 10 objetos, uno por cada sección del canvas Handoff.
@@ -81,6 +88,7 @@ FORMATO DEL OUTPUT — sections + blocks:
 JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera del JSON):
 
 {
+  "implementationType": "<IMPLEMENTATION o REIMPLEMENTATION segun la regla>",
   "sections": [
     {
       "key": "fecha_inicio_kickoff",
@@ -103,7 +111,7 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
     {
       "key": "desarrollo",
       "blocks": [
-        { "type": "text", "content": "¿El proyecto lleva integraciones o desarrollo a medida — o el proyecto EN SÍ es una integración? Arrancá con un VEREDICTO explícito en negrita: 'Sí, lleva integraciones', 'No lleva integraciones ni desarrollo a medida' o '⚠️ Por validar con Ventas/cliente'. Si SÍ, por cada integración/desarrollo detallá: objetivo (qué conecta / qué problema resuelve), alcance (qué entra y qué NO), sistemas y herramientas (ej. HubSpot ↔ SAP, API/webhook, X↔Y), fechas y tiempos comprometidos, dependencias técnicas (accesos, terceros, ambientes), y todo lo conversado al respecto (citá sesión/fecha). Si no hay evidencia de integraciones/desarrollo en las fuentes, decilo explícito. Fuentes: transcripciones de ventas, deal+line items, notas y docs." }
+        { "type": "text", "content": "¿Hay trabajo TÉCNICO en este proyecto — integraciones, MIGRACIONES de datos o desarrollo a medida? (o el proyecto EN SÍ es una integración o una migración). Arrancá con un VEREDICTO en negrita ('Sí, lleva integraciones / migración / desarrollo', 'No lleva trabajo técnico de integración, migración ni desarrollo a medida', o '⚠️ Por validar con Ventas/cliente'). Si SÍ, separá claramente: INTEGRACIONES — qué sistemas conecta (ej. HubSpot ↔ SAP, ERP, e-commerce, telefonía) y si es del MARKETPLACE de HubSpot (app ya existente) o CUSTOM (a medida vía API/webhook); objetivo y alcance (qué entra y qué NO). MIGRACIONES — desde qué plataforma hacia HubSpot (ej. Salesforce, Pipedrive, Zoho, Excel), qué se migra (contactos, empresas, deals, histórico de actividades, automatizaciones) y volumen si se mencionó. Para CADA ítem: el TIPO, fechas y tiempos comprometidos, dependencias técnicas (accesos, credenciales de terceros, ambientes) y todo lo conversado (citá sesión/fecha). Si en las fuentes no hay nada técnico, decilo explícito. Fuentes: transcripciones de ventas, deal+line items, notas y docs." }
       ]
     },
     {
@@ -145,10 +153,7 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
   ],
   "timeline": {
     "phases": [
-      { "name": "Kick-off", "durationWeeks": 1, "sessionCount": 1, "notes": "Reunión inicial con stakeholders" },
-      { "name": "Arquitectura", "durationWeeks": 2, "sessionCount": 2, "notes": "Diseño de la solución" },
-      { "name": "Set up", "durationWeeks": 6, "sessionCount": 6, "notes": "Configuración semanal" },
-      { "name": "Onboarding", "durationWeeks": 6, "sessionCount": 6, "notes": "Acompañamiento de adopción" }
+      { "name": "<fase derivada del alcance vendido>", "durationWeeks": "<entero>", "sessionCount": "<entero o null>", "notes": "<titular en lenguaje cliente>", "estimated": "<true si estimaste la fase/duración sin dato en ventas; false si surge de algo dicho/acordado>" }
     ]
   }
 }
