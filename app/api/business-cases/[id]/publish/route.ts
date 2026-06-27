@@ -1,14 +1,16 @@
 /**
  * POST /api/business-cases/[id]/publish
  *
- * Congela el snapshot client-safe (bloques CONFIRMED + visibles), setea
- * publishedAt y asegura el acceso (token+password). Exige ≥1 transcript y ≥1
- * bloque CONFIRMED visible. Devuelve el link + la contraseña para compartir.
+ * Congela el snapshot client-safe del CANVAS ACTIVO (secciones + bloques
+ * CONFIRMED, en orden), setea publishedAt y asegura el acceso (token+password).
+ * Exige ≥1 transcript/sesión (que haya canvas) y ≥1 bloque CONFIRMED. Devuelve el
+ * link + la contraseña. Gateado con guardSalesAccess.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { publishBusinessCase } from "@/lib/business-cases";
+import { ensureAccess } from "@/lib/business-cases";
 
 function buildVerifyUrl(req: NextRequest, token: string): string {
   const base = process.env.APP_URL || new URL(req.url).origin;
@@ -25,29 +27,60 @@ export async function POST(
 
   const bc = await prisma.businessCase.findUnique({
     where: { id },
-    select: { id: true, _count: { select: { transcripts: true } } },
+    select: { id: true, name: true, client: { select: { name: true, logoUrl: true } } },
   });
   if (!bc) {
     return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
   }
-  if (bc._count.transcripts === 0) {
-    return NextResponse.json(
-      { error: "Agregá al menos un transcript antes de publicar." },
-      { status: 400 },
-    );
-  }
 
-  const confirmedVisible = await prisma.businessCaseBlock.count({
-    where: { businessCaseId: id, status: "CONFIRMED", isVisible: true },
+  const canvas = await prisma.projectCanvas.findFirst({
+    where: { businessCaseId: id, isActive: true },
+    select: { id: true },
   });
-  if (confirmedVisible === 0) {
+  if (!canvas) {
+    return NextResponse.json({ error: "Generá el business case antes de publicar." }, { status: 400 });
+  }
+
+  const sections = await prisma.canvasSection.findMany({
+    where: { canvasId: canvas.id },
+    orderBy: { order: "asc" },
+    select: {
+      key: true,
+      label: true,
+      blocks: {
+        where: { status: "CONFIRMED" },
+        orderBy: { order: "asc" },
+        select: { blockType: true, content: true, data: true },
+      },
+    },
+  });
+  const confirmedCount = sections.reduce((n, s) => n + s.blocks.length, 0);
+  if (confirmedCount === 0) {
     return NextResponse.json(
-      { error: "Confirmá al menos un bloque visible antes de publicar." },
+      { error: "Confirmá al menos un bloque antes de publicar." },
       { status: 400 },
     );
   }
 
-  const access = await publishBusinessCase(id, guard.user.email ?? null);
+  const snapshot = {
+    name: bc.name,
+    clientName: bc.client.name,
+    clientLogoUrl: bc.client.logoUrl,
+    sections: sections
+      .filter((s) => s.blocks.length > 0)
+      .map((s) => ({ key: s.key, label: s.label, blocks: s.blocks })),
+  };
+
+  await prisma.businessCase.update({
+    where: { id },
+    data: {
+      status: "PUBLISHED",
+      publishedAt: new Date(),
+      publishedSnapshot: snapshot as unknown as Prisma.InputJsonValue,
+    },
+  });
+
+  const access = await ensureAccess(id, guard.user.email ?? null);
   return NextResponse.json({
     published: true,
     accessToken: access.accessToken,

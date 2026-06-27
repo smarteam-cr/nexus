@@ -43,6 +43,7 @@ export async function createBusinessCase(input: {
   clientId: string;
   name: string;
   hubspotCompanyId?: string | null;
+  hubspotDealId?: string | null;
   createdByEmail?: string | null;
 }) {
   const slug = `${slugify(input.name)}-${randomBytes(3).toString("hex")}`;
@@ -52,6 +53,7 @@ export async function createBusinessCase(input: {
       name: input.name,
       slug,
       hubspotCompanyId: input.hubspotCompanyId ?? null,
+      hubspotDealId: input.hubspotDealId ?? null,
       createdByEmail: input.createdByEmail ?? null,
     },
   });

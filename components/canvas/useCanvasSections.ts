@@ -41,7 +41,10 @@ export interface SectionWithBlocks {
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 export function useCanvasSections(
-  projectId: string,
+  // Base de las rutas de canvas: `/api/projects/${projectId}` (kickoff/handoff) o
+  // `/api/business-cases/${id}` (Ventas). Permite reusar el hook (y KickoffLanding)
+  // para canvases que cuelgan de un BusinessCase, no solo de un Project.
+  basePath: string,
   canvasId: string,
   // D.3 staging — se dispara tras CUALQUIER mutación de contenido exitosa (bloque o
   // metadata de sección). Lo usa el kickoff para encender la barra "cambios sin subir"
@@ -56,9 +59,9 @@ export function useCanvasSections(
     onContentChangeRef.current = onContentChange;
   }, [onContentChange]);
 
-  const listUrl = `/api/projects/${projectId}/canvas-sections?canvasId=${canvasId}`;
+  const listUrl = `${basePath}/canvas-sections?canvasId=${canvasId}`;
   const blocksUrl = (sectionId: string) =>
-    `/api/projects/${projectId}/canvas-sections/${sectionId}/blocks`;
+    `${basePath}/canvas-sections/${sectionId}/blocks`;
 
   const refetch = useCallback(async () => {
     try {
@@ -126,7 +129,7 @@ export function useCanvasSections(
         return false;
       }
     },
-    [projectId], // eslint-disable-line react-hooks/exhaustive-deps
+    [basePath], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const acceptBlock = useCallback(
@@ -207,7 +210,7 @@ export function useCanvasSections(
         return null;
       }
     },
-    [projectId], // eslint-disable-line react-hooks/exhaustive-deps
+    [basePath], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const addBlock = useCallback(
@@ -242,7 +245,7 @@ export function useCanvasSections(
   const patchSection = useCallback(
     async (sectionId: string, body: Record<string, unknown>, errMsg: string): Promise<boolean> => {
       try {
-        const res = await fetch(`/api/projects/${projectId}/canvas-sections/${sectionId}`, {
+        const res = await fetch(`${basePath}/canvas-sections/${sectionId}`, {
           method: "PATCH",
           headers: JSON_HEADERS,
           body: JSON.stringify(body),
@@ -262,7 +265,7 @@ export function useCanvasSections(
         return false;
       }
     },
-    [projectId, refetch],
+    [basePath, refetch],
   );
 
   // Título grande. String vacío → vuelve al título por defecto de la plantilla. Optimista.

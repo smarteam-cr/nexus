@@ -153,7 +153,7 @@ function KickoffLandingInternal({
     acceptAll,
     error,
     clearError,
-  } = useCanvasSections(projectId, canvasId, () => setContentDirty(true));
+  } = useCanvasSections(`/api/projects/${projectId}`, canvasId, () => setContentDirty(true));
 
   const [timeline, setTimeline] = useState<KickoffTimelineData | null>(null);
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
@@ -332,7 +332,7 @@ function KickoffLandingInternal({
 }
 
 /* ── View presentacional: recibe data + handlers opcionales; cero data-fetching ─ */
-function KickoffLandingView({
+export function KickoffLandingView({
   sections,
   timeline,
   editable,

@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import {
   type CanvasDefinition,
   HANDOFF_CANVAS,
+  BUSINESS_CASE_CANVAS,
   DEFAULT_PROJECT_CANVASES,
   AGENT_GROUP_TO_CANVAS,
 } from "./canvas-defs";
@@ -11,7 +12,7 @@ import {
 // que los importadores de servidor existentes (analyze/route.ts, etc.) sigan
 // funcionando sin cambios. La separación evita que un componente cliente que
 // importe estos datos arrastre `pg`/`fs` al bundle del navegador.
-export { HANDOFF_CANVAS, DEFAULT_PROJECT_CANVASES, AGENT_GROUP_TO_CANVAS };
+export { HANDOFF_CANVAS, BUSINESS_CASE_CANVAS, DEFAULT_PROJECT_CANVASES, AGENT_GROUP_TO_CANVAS };
 export type { CanvasDefinition };
 
 // Acepta el cliente global o un cliente de transacción ($transaction) para que la
@@ -70,6 +71,45 @@ export async function createHandoffCanvas(projectId: string, db: Db = prisma): P
 
   await db.canvasSection.createMany({
     data: HANDOFF_CANVAS.sections.map((s, i) => ({
+      canvasId: canvas.id,
+      key: s.key,
+      label: s.label,
+      order: i,
+    })),
+  });
+
+  return canvas.id;
+}
+
+/** Crea un canvas "Business Case" (versionado) para un BusinessCase, con las
+ *  secciones de BUSINESS_CASE_CANVAS. Marca los canvases activos previos del caso
+ *  como inactivos (cada "Generar" = una versión nueva). Devuelve el id del canvas. */
+export async function createBusinessCaseCanvas(
+  businessCaseId: string,
+  version: number,
+  db: Db = prisma,
+): Promise<string> {
+  // Desactivar versiones anteriores (la nueva queda como la activa/editable).
+  await db.projectCanvas.updateMany({
+    where: { businessCaseId, isActive: true },
+    data: { isActive: false },
+  });
+
+  const canvas = await db.projectCanvas.create({
+    data: {
+      businessCaseId,
+      name: BUSINESS_CASE_CANVAS.name,
+      isDefault: true,
+      order: 0,
+      version,
+      isActive: true,
+      sections: BUSINESS_CASE_CANVAS.sections,
+    },
+    select: { id: true },
+  });
+
+  await db.canvasSection.createMany({
+    data: BUSINESS_CASE_CANVAS.sections.map((s, i) => ({
       canvasId: canvas.id,
       key: s.key,
       label: s.label,

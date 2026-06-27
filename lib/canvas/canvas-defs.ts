@@ -42,6 +42,27 @@ export const HANDOFF_CANVAS: CanvasDefinition = {
   ],
 };
 
+// ── Canvas Business Case (Ventas) ─────────────────────────────────────────────
+// Template del caso de negocio. Cuelga de un BusinessCase (no de un Project) y es
+// versionado: cada "Generar business case" crea un ProjectCanvas nuevo con estas
+// secciones (ver createBusinessCaseCanvas). El agente "businesscase" las llena.
+export const BUSINESS_CASE_CANVAS: CanvasDefinition = {
+  name: "Business Case",
+  isDefault: true,
+  order: 0,
+  sections: [
+    { key: "hero",          label: "Encabezado" },
+    { key: "dolores",       label: "Dolores y retos" },
+    { key: "antes_despues", label: "Antes y después" },
+    { key: "solucion",      label: "Solución propuesta" },
+    { key: "roi",           label: "Impacto y ROI" },
+    { key: "cronograma",    label: "Plan de implementación" },
+    { key: "inversion",     label: "Inversión" },
+    { key: "partner",       label: "Sobre Smarteam" },
+    { key: "cta",           label: "Próximos pasos" },
+  ],
+};
+
 // Orden de presentación en el dropdown: Cronograma → Kickoff → Diagnóstico →
 // Planificación (pedido del usuario). El array YA NO es la fuente del `order`: cada
 // canvas lleva su `order` explícito abajo. El ancla/default (isDefault → fallback
@@ -112,6 +133,7 @@ export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
   planificacion: "Planificación",
   handoff: "Handoff",
   kickoff: "Kickoff",
+  businesscase: "Business Case",
   // D.1: el canvas "Cronograma" no tiene secciones → resolver targetCanvasId acá
   // evita que analyze inyecte instrucciones de formato cards al prompt del agente
   // de detalle (la persistencia real va a ProjectTimeline, no a bloques).
