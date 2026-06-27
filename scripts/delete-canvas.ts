@@ -52,6 +52,7 @@ async function main() {
   }
 
   for (const c of matches) {
+    if (!c.project) continue; // canvas de business case (sin proyecto)
     console.log(
       `• ${c.project.client?.name ?? "?"} / ${c.project.name} → canvas "${c.name}"` +
       `${c.isDefault ? " [DEFAULT]" : ""}  (cards=${c._count.cards}, secciones=${c._count.canvasSections})  ${c.id}`,

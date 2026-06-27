@@ -37,6 +37,7 @@ async function main() {
   let sentinels = 0;
 
   for (const c of canvases) {
+    if (!c.project) continue; // canvas de business case (sin proyecto)
     const blocks = await prisma.canvasBlock.count({ where: { section: { canvasId: c.id } } });
     if (blocks > 0) {
       kept.push({ project: c.project.name, client: c.project.client?.name ?? "—", blocks });

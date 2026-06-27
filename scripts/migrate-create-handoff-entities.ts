@@ -53,7 +53,7 @@ async function main() {
       ...c,
       blockCount: c.canvasSections.reduce((n, s) => n + s._count.blocks, 0),
     }))
-    .filter((c) => c.blockCount > 0 && c.project.serviceType !== "__strategy__");
+    .filter((c) => c.blockCount > 0 && c.project != null && c.project.serviceType !== "__strategy__");
 
   console.log(
     `Canvases "Handoff": ${handoffCanvases.length} totales; ${withContent.length} con contenido (no-sentinel).\n`,
@@ -63,6 +63,7 @@ async function main() {
   let skipped = 0;
   let failed = 0;
   for (const c of withContent) {
+    if (!c.project || !c.projectId) continue; // canvas de business case (sin proyecto)
     const tag = `[${c.project.client.name} · ${c.project.name}]`;
     const existing = await prisma.handoff.findUnique({
       where: { projectId: c.projectId },

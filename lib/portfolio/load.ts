@@ -161,6 +161,7 @@ export async function loadPortfolio(
   const stepsByProject = new Map<string, Set<string>>();
   for (const b of setupBlocks) {
     const c = b.section.canvas;
+    if (!c.projectId) continue; // canvas de business case (sin proyecto) — fuera del portafolio
     if (!blockCountsForStep(c.name, b.status)) continue;
     let set = stepsByProject.get(c.projectId);
     if (!set) { set = new Set(); stepsByProject.set(c.projectId, set); }
@@ -185,7 +186,8 @@ export async function loadPortfolio(
   const clientsWithProcesos = new Set<string>();
   for (const b of procesoBlocks) {
     const nodes = (b.data as { nodes?: unknown[] } | null)?.nodes;
-    if (Array.isArray(nodes) && nodes.length > 0) clientsWithProcesos.add(b.section.canvas.project.clientId);
+    const clientId = b.section.canvas.project?.clientId;
+    if (clientId && Array.isArray(nodes) && nodes.length > 0) clientsWithProcesos.add(clientId);
   }
 
   const now = new Date();
