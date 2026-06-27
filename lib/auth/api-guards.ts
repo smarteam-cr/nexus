@@ -204,3 +204,24 @@ export async function denyHandoffCanvasEditForCse(canvasName: string): Promise<N
   const guard = await guardCapability("handoffAnywhere");
   return guard instanceof NextResponse ? guard : null;
 }
+
+/**
+ * Acceso al área de VENTAS (Business Cases). Reusa el rol VENTAS existente: solo
+ * VENTAS, CSL y SUPER_ADMIN entran (CSE no; MARKETING tampoco — decisión del
+ * pedido). Devuelve el bundle de usuario interno o una NextResponse 401/403.
+ */
+const SALES_ROLES: ReadonlyArray<TeamRole> = ["VENTAS", "CSL", "SUPER_ADMIN"];
+
+export async function guardSalesAccess(): Promise<
+  Awaited<ReturnType<typeof requireInternalUser>> | NextResponse
+> {
+  const guard = await guardInternalUser();
+  if (guard instanceof NextResponse) return guard;
+  if (!SALES_ROLES.includes(guard.role)) {
+    return NextResponse.json(
+      { error: "Tu rol no tiene acceso al área de Ventas." },
+      { status: 403 },
+    );
+  }
+  return guard;
+}

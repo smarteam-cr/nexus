@@ -171,6 +171,7 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
   const isSuperAdmin = user.isSuperAdmin || role === "SUPER_ADMIN";
   const canSeeAgents = isSuperAdmin || ["VENTAS", "CSL", "MARKETING"].includes(role); // todos menos CSE
   const canSeePortfolio = isSuperAdmin || ["VENTAS", "CSL", "MARKETING"].includes(role); // Cartera: seeAllClients (todos menos CSE)
+  const canSeeSales = isSuperAdmin || ["VENTAS", "CSL"].includes(role);                  // Ventas: VENTAS/CSL/SUPER_ADMIN
   const canSeeAudits = isSuperAdmin || ["VENTAS", "CSL"].includes(role);              // super admin, CSL, ventas
   const canSeeTeam = isSuperAdmin;                                                     // solo super admin
   const canSeeConfig = isSuperAdmin || ["CSL", "MARKETING"].includes(role);            // super admin + CSL/Marketing
@@ -252,6 +253,19 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
               icon={
                 <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              }
+            />
+          )}
+          {canSeeSales && (
+            <NavItem
+              href="/business-cases"
+              active={pathname.startsWith("/business-cases")}
+              isOpen={isOpen}
+              label="Ventas"
+              icon={
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 14l4-4 3 3 5-6" />
                 </svg>
               }
             />

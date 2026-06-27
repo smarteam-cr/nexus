@@ -114,6 +114,31 @@ enum BlockStatus {
   CONFIRMED
 }
 
+// ─── Business Cases (Ventas) ─────────────────────────────────────────────────
+
+enum BusinessCaseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum BusinessCaseBlockType {
+  HERO
+  PAIN_POINTS
+  BEFORE_AFTER
+  SOLUTION
+  ROI_METRICS
+  TIMELINE
+  INVESTMENT
+  PARTNER
+  CTA
+}
+
+enum BusinessCaseTranscriptSource {
+  PASTED
+  UPLOADED
+}
+
 // ─── Client (nueva entidad raíz) ──────────────────────────────────────────────
 
 model Client {
@@ -146,6 +171,7 @@ model Client {
   appUsers          AppUser[]              // F2: usuarios externos vinculados (kind=EXTERNAL)
   assignments       ClientAssignment[]     // F2: overrides manuales CSE↔Cliente
   handoffs          Handoff[]              // entidad Handoff (1:N por cliente, ver model Handoff)
+  businessCases     BusinessCase[]         // Ventas: casos de negocio (1:N por cliente)
 }
 
 // ─── SystemConfig (config GLOBAL de Nexus, singleton — no por usuario) ─────────
@@ -813,6 +839,8 @@ model AgentRun {
   client      Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
   projectId   String?
   project     Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  businessCaseId String?
+  businessCase   BusinessCase? @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
   stage       Int?
   step        Int?
   stepLabel    String?        // nombre legible de la subetapa (ej. "Análisis inicial")
@@ -836,6 +864,92 @@ model AgentRun {
 
   @@index([status])
   @@index([clientId, agentSlug, createdAt])
+}
+
+// ─── Business Cases (Ventas) — generador de casos de negocio ─────────────────
+// Entidad 1:N bajo Client (NO bajo Project). Flujo: generar (agente) →
+// editar/confirmar (vendedor) → publicar (snapshot congelado + acceso
+// token+password, mismo patrón que ProjectExternalAccess).
+
+model BusinessCase {
+  id               String             @id @default(cuid())
+  clientId         String
+  client           Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  hubspotCompanyId String?            // empresa de HubSpot asociada al caso
+  name             String
+  slug             String             @unique // referencia interna (URLs de admin)
+  status           BusinessCaseStatus @default(DRAFT)
+
+  // D.3 staging — el prospecto ve el SNAPSHOT publicado; el contenido vivo es
+  // borrador hasta "Publicar". publishedSnapshot = foto client-safe de bloques.
+  publishedAt       DateTime?
+  publishedSnapshot Json?
+
+  createdByEmail String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  blocks      BusinessCaseBlock[]
+  transcripts BusinessCaseTranscript[]
+  access      BusinessCaseExternalAccess?
+  agentRuns   AgentRun[]
+
+  @@index([clientId])
+}
+
+model BusinessCaseBlock {
+  id              String                @id @default(cuid())
+  businessCaseId  String
+  businessCase    BusinessCase          @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
+  blockType       BusinessCaseBlockType
+  order           Int                   @default(0)
+  content         Json                  // estructurado por blockType (ver lib/business-cases/schema.ts)
+  previousContent Json?                 // deshacer de 1 nivel
+  status          BlockStatus           @default(DRAFT)
+  source          BlockSource           @default(AGENT)
+  isVisible       Boolean               @default(true)
+  needsValidation Boolean               @default(false) // el agente no tuvo contexto suficiente
+  confirmedAt     DateTime?
+  confirmedByEmail String?
+  agentRunId      String?               // provenance (sin FK dura)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([businessCaseId])
+}
+
+model BusinessCaseTranscript {
+  id             String                       @id @default(cuid())
+  businessCaseId String
+  businessCase   BusinessCase                 @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
+  source         BusinessCaseTranscriptSource
+  rawText        String                       @db.Text // pegado, o texto extraído del archivo
+  fileName       String?
+  fileUrl        String?                      // path en Supabase Storage (UPLOADED)
+  fileSize       Int?
+  mimeType       String?
+  processedAt    DateTime?
+  createdAt      DateTime                     @default(now())
+
+  @@index([businessCaseId])
+}
+
+model BusinessCaseExternalAccess {
+  id             String       @id @default(cuid())
+  businessCaseId String       @unique
+  businessCase   BusinessCase @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
+  accessToken    String       @unique // 64 hex (crypto.randomBytes(32))
+  passwordHash   String                // bcrypt(12)
+  accessPassword String?               // texto plano para que el vendedor lo comparta
+  enabledAt      DateTime     @default(now())
+  revokedAt      DateTime?
+  lastUsedAt     DateTime?
+  createdByEmail String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([accessToken])
+  @@index([businessCaseId])
 }
 
 // ─── TeamMember ───────────────────────────────────────────────────────────────
