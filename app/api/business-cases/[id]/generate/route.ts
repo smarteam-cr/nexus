@@ -19,6 +19,8 @@ import { createBusinessCaseCanvas } from "@/lib/canvas/default-canvases";
 import { generateCanvasSections } from "@/lib/business-cases/canvas-agent";
 import { loadBcFeeding } from "@/lib/business-cases/feeding";
 import { briefsByKeyFrom } from "@/lib/business-cases/section-briefs";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
+import { fetchCompanyTimeline } from "@/lib/hubspot/company-timeline";
 
 export async function POST(
   _req: NextRequest,
@@ -30,7 +32,7 @@ export async function POST(
 
   const bc = await prisma.businessCase.findUnique({
     where: { id },
-    select: { id: true, clientId: true },
+    select: { id: true, clientId: true, hubspotCompanyId: true, client: { select: { notes: true } } },
   });
   if (!bc) {
     return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
@@ -62,6 +64,22 @@ export async function POST(
     if (s.transcript?.trim()) parts.push(`# Sesión: ${s.title}\n${s.transcript.trim()}`);
     else sessionsWithoutTranscript++;
   }
+
+  // Notas internas de la empresa (Nexus) + timeline de HubSpot (notas + llamadas/reuniones).
+  // Clave para prospectos por HubSpot cuyas reuniones (Zoom) no están en el sync de Meet.
+  if (bc.client.notes?.trim()) {
+    parts.push(`# Notas internas de la empresa\n${bc.client.notes.trim()}`);
+  }
+  if (bc.hubspotCompanyId) {
+    try {
+      const hs = await getSystemHubspotClient();
+      const timeline = await fetchCompanyTimeline(hs, bc.hubspotCompanyId);
+      if (timeline.trim()) parts.push(`# Timeline de HubSpot (notas + llamadas/reuniones)\n${timeline}`);
+    } catch {
+      /* sin cuenta HubSpot del sistema / sin scope concedido → seguimos sin el timeline */
+    }
+  }
+
   const context = parts.join("\n\n---\n\n");
   if (!context.trim()) {
     // Mensaje claro: distinguir "no hay fuentes" de "las sesiones no tienen transcripción aún".

@@ -13,6 +13,12 @@ const HUBSPOT_SCOPES = [
   "crm.objects.custom.read",
   "crm.objects.custom.write",
   "crm.objects.owners.read",
+  // ── Engagements: timeline de la empresa (notas + llamadas/reuniones de Zoom) ──
+  // Permite leer el contenido del registro de empresa para alimentar BC + canvas.
+  // Requiere re-autorizar la app una vez (el refresh NO agrega scopes nuevos).
+  "crm.objects.notes.read",
+  "crm.objects.calls.read",
+  "crm.objects.meetings.read",
   // ── CRM Schemas ─────────────────────────────────────────────
   "crm.schemas.contacts.read",
   "crm.schemas.contacts.write",
