@@ -409,6 +409,10 @@ model TimelinePhase {
   name          String                                  // "Kick-off", "Arquitectura", etc.
   order         Int                                     // 0-indexed, posición en la secuencia
   durationWeeks Int                   @default(1)       // 1+
+  // Inicio EXPLÍCITO (offset 0-based desde anchorStartDate). null = contigua tras la fase anterior
+  // (comportamiento por defecto). Habilita fases EN PARALELO (dos con el mismo inicio se solapan):
+  // típico, una integración/desarrollo que corre en paralelo a la implementación del hub.
+  startWeek     Int?
   sessionCount  Int?                                    // opcional — algunas fases no son por sesiones
   notes         String?               @db.Text          // texto libre opcional (contexto editable)
   activityType  TimelineActivityType?                   // D.1: tipo de actividad (nullable — fases pre-D.1 quedan sin tipo, render neutro)
@@ -455,6 +459,10 @@ model TimelineTask {
   // SMARTEAM configura; AMBOS trabajo conjunto. Nullable = sin asignar (data pre-B).
   // Cruza al cronograma compartible del cliente (gated por "Subir"); el Kickoff embebido NO lo muestra.
   party           TaskParty?
+  // ¿la tarea es una SESIÓN (reunión con el cliente) o una TASK (acción/entregable)?
+  // Nullable = sin tipar (efectivo = TASK). Cruza al cronograma compartible SOLO si es SESSION.
+  // Mapeo a futuro (NO se sincroniza hoy): SESSION → HubSpot Meeting (0-47); TASK → HubSpot Task (0-27).
+  type            TimelineTaskType?
   source          TimelinePhaseSource @default(AGENT)   // reuso consciente del enum (mismo ciclo AGENT→MODIFIED/HUMAN); renombrarlo = recrear tipo en PG por cero ganancia
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -473,6 +481,13 @@ enum TaskParty {
   CLIENTE   // lo entrega o hace el cliente (insumos: documentación, bases, listados, accesos)
   SMARTEAM  // configuración técnica en HubSpot (pipeline, propiedades, automatizaciones, integraciones)
   AMBOS     // trabajo conjunto (sesiones, talleres, validaciones, onboarding, seguimiento)
+}
+
+// Tipo de tarea del cronograma. Mapea a futuro (sin sync hoy):
+// SESSION → HubSpot Meeting (objeto 0-47); TASK → HubSpot Task (objeto 0-27, hs_task_type=TODO).
+enum TimelineTaskType {
+  SESSION   // reunión / sesión de trabajo con el cliente (kickoff, revisión, demo, capacitación)
+  TASK      // acción / entregable / configuración (no es una reunión)
 }
 
 // #4 — historial de cambios del cronograma. Cada edición lleva una razón OBLIGATORIA

@@ -29,20 +29,36 @@ export function isCseMember(m: TeamMemberLite): boolean {
   return m.area === "CSE" || m.roleEnum === "CSE";
 }
 
+// Desarrollo/dev: el área es un set abierto (String?), así que contemplamos las
+// variantes usuales (case-insensitive). Ajustar si el valor real en TeamMember difiere.
+export function isDevMember(m: TeamMemberLite): boolean {
+  const a = (m.area ?? "").trim().toLowerCase();
+  return a === "development" || a === "dev" || a === "desarrollo" || a === "developer";
+}
+
 /**
  * Devuelve Sets de emails internos (en minúscula) por frente. Un miembro puede caer
- * en ambos si su área/rol matchea los dos (raro, pero se respeta).
+ * en varios si su área/rol matchea (raro, pero se respeta).
+ * - `deliveryEmails`: entrega de servicio = CSE ∪ Desarrollo.
+ * - `internalEmails`: TODOS los miembros del equipo (para detectar "cliente" =
+ *   participante que NO es interno).
  */
 export function classifyTeamEmailsByArea(teamMembers: TeamMemberLite[]): {
   salesEmails: Set<string>;
   cseEmails: Set<string>;
+  deliveryEmails: Set<string>;
+  internalEmails: Set<string>;
 } {
   const salesEmails = new Set<string>();
   const cseEmails = new Set<string>();
+  const deliveryEmails = new Set<string>();
+  const internalEmails = new Set<string>();
   for (const m of teamMembers) {
     const email = m.email.toLowerCase();
+    internalEmails.add(email);
     if (isSalesMember(m)) salesEmails.add(email);
     if (isCseMember(m)) cseEmails.add(email);
+    if (isCseMember(m) || isDevMember(m)) deliveryEmails.add(email);
   }
-  return { salesEmails, cseEmails };
+  return { salesEmails, cseEmails, deliveryEmails, internalEmails };
 }

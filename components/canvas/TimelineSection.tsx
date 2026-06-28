@@ -29,7 +29,7 @@ import {
   fmtFull,
   plural,
   computePhaseRanges,
-  totalWeeks as sumWeeks,
+  timelineSpan,
   fmtPhaseRange,
   currentWeekIndex,
   absoluteWeek,
@@ -64,6 +64,8 @@ const STATUS_META_LIGHT: Record<string, { label: string; text: string; bg: strin
   DONE:        { label: "hecho",     text: "#047857", bg: "#ecfdf5", border: "#a7f3d0" },
 };
 const OVERDUE_META_LIGHT = { label: "atrasada", text: "#b91c1c", bg: "#fef2f2", border: "#fecaca" };
+// Tipo de tarea: solo se muestra cuando es SESIÓN (las TAREAS no muestran nada).
+const SESSION_META_LIGHT = { label: "Sesión", text: "#0f766e", bg: "#f0fdfa", border: "#99f6e4" };
 const PARTY_META_LIGHT: Record<string, { label: string; text: string; bg: string; border: string }> = {
   CLIENTE:  { label: "Cliente",  text: "#b45309", bg: "#fffbeb", border: "#fde68a" }, // ámbar — lo que entrega el cliente
   SMARTEAM: { label: "Smarteam", text: "#0369a1", bg: "#f0f9ff", border: "#bae6fd" }, // celeste
@@ -109,7 +111,7 @@ export default function TimelineSection({
   if (!phases.length) return null;
   const sorted = [...phases].sort((a, b) => a.order - b.order);
   const ranges = computePhaseRanges(sorted);
-  const total = sumWeeks(sorted);
+  const total = timelineSpan(sorted);
   if (total === 0) return null;
 
   const curWeek = currentWeekIndex(anchor);
@@ -316,6 +318,7 @@ export default function TimelineSection({
                                       {sMeta && <span style={chipStyle(sMeta)}>{sMeta.label}</span>}
                                       {overdue && <span style={chipStyle(OVERDUE_META_LIGHT)}>{OVERDUE_META_LIGHT.label}</span>}
                                       {pMeta && <span style={chipStyle(pMeta)}>{pMeta.label}</span>}
+                                      {showProgress && t.type === "SESSION" && <span style={chipStyle(SESSION_META_LIGHT)}>{SESSION_META_LIGHT.label}</span>}
                                     </li>
                                   );
                                 })}

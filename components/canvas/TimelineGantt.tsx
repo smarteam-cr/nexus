@@ -29,7 +29,7 @@
  * es la barrera. La marca en sí nunca cruza (columna excluida del mapper externo).
  */
 
-import { useState, type ReactNode } from "react";
+import { useState, useRef, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
 import {
   DndContext,
   closestCorners,
@@ -52,7 +52,7 @@ import {
   addWeeks,
   plural,
   computePhaseRanges,
-  totalWeeks as sumWeeks,
+  timelineSpan,
   fmtPhaseRange,
   currentWeekIndex,
   absoluteWeek,
@@ -76,6 +76,8 @@ export interface GanttTask {
   source?: string;
   /** B — dueño en el plan compartido (chip). null/undefined = sin asignar. */
   party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | null;
+  /** ¿la tarea es una SESIÓN (reunión con el cliente) o una TAREA (acción)? */
+  type?: "SESSION" | "TASK" | null;
 }
 
 export interface GanttPhase {
@@ -83,7 +85,12 @@ export interface GanttPhase {
   id?: string;
   name: string;
   durationWeeks: number;
+  /** Inicio explícito (offset 0-based). null = contigua tras la anterior. Habilita paralelo/solape. */
+  startWeek?: number | null;
   sessionCount: number | null;
+  /** Sesiones de entrega reales (CSE/dev + cliente) ejecutadas en la ventana de la fase.
+   *  Solo-lectura, calculado por el server. number en fases iniciadas; null → usa el estimado. */
+  actualSessionCount?: number | null;
   activityType: string | null;
   /** D.2 — avance a nivel fase: DONE = completada, IN_PROGRESS = el "hoy". */
   status?: GanttTaskStatus;
@@ -97,20 +104,22 @@ interface Props {
   phases: GanttPhase[]; // EN ORDEN
   readOnly?: boolean; // preview de propuesta IA — sin edición ni toggles
   onToggleStatus?: (taskId: string, next: GanttTaskStatus) => void;
-  onUpdateTask?: (phaseKey: string, taskKey: string, patch: { title?: string; notes?: string | null; weekIndex?: number; party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | null }) => void;
+  onUpdateTask?: (phaseKey: string, taskKey: string, patch: { title?: string; notes?: string | null; weekIndex?: number; party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | null; type?: "SESSION" | "TASK" | null }) => void;
   onAddTask?: (phaseKey: string, weekIndex: number) => void;
-  onRemoveTask?: (phaseKey: string, taskKey: string) => void;
+  // Nota: el borrado de tarea se hace desde el TaskDetailDrawer, no desde la fila del Gantt.
   onSetAnchor?: (isoDate: string) => void; // yyyy-mm-dd — fijar arranque desde el Gantt
   onAssistPhase?: (phase: GanttPhase) => void; // abrir el dialog de IA scopeado a esta fase
   kickoffDate?: string | null; // yyyy-mm-dd de la sesión de kickoff — sugerencia del anchor
   // Edición DIRECTA de fases (cuando editable) — además de la barra de IA
-  onUpdatePhase?: (phaseKey: string, patch: { name?: string; durationWeeks?: number; sessionCount?: number | null }) => void;
+  onUpdatePhase?: (phaseKey: string, patch: { name?: string; durationWeeks?: number; sessionCount?: number | null; startWeek?: number | null }) => void;
   onAddPhase?: () => void;
   onRemovePhase?: (phaseKey: string) => void;
   // Drag&drop de tareas: mover/reordenar dentro y entre semanas Y entre fases → persiste.
   onMoveTask?: (taskKey: string, toPhaseKey: string, toWeekIndex: number, toOrder: number) => void;
   // Drag&drop de fases: reordenar filas → persiste order.
   onReorderPhases?: (activeKey: string, overKey: string) => void;
+  // Abre el drawer de detalle de una tarea (la edición completa vive ahí). Sin esto, la fila no abre.
+  onOpenTask?: (phaseKey: string, taskKey: string) => void;
 }
 
 // ── Metadata de tipos de actividad (color de barra + chip) ────────────────────
@@ -130,20 +139,51 @@ const NEUTRAL_SEG = "bg-gray-600";
 // ── Estado de tarea: ciclo + estilos ──────────────────────────────────────────
 
 // Ciclo: pendiente → en curso → hecho → suspendida → pendiente. Suspender es parte del toggle.
-const NEXT_STATUS: Record<GanttTaskStatus, GanttTaskStatus> = {
+export const NEXT_STATUS: Record<GanttTaskStatus, GanttTaskStatus> = {
   PENDING: "IN_PROGRESS",
   IN_PROGRESS: "DONE",
   DONE: "SUSPENDED",
   SUSPENDED: "PENDING",
 };
 
-const STATUS_META: Record<GanttTaskStatus, { label: string; cls: string }> = {
+export const STATUS_META: Record<GanttTaskStatus, { label: string; cls: string }> = {
   PENDING:     { label: "pendiente", cls: "bg-gray-800 text-gray-400 border-gray-700" },
   IN_PROGRESS: { label: "en curso",  cls: "bg-blue-900/30 text-blue-300 border-blue-700/50" },
   DONE:        { label: "hecho",     cls: "bg-emerald-900/40 text-emerald-300 border-emerald-700/50" },
   SUSPENDED:   { label: "suspendida", cls: "bg-amber-900/30 text-amber-300 border-amber-700/50" },
 };
-const OVERDUE_CLS = "bg-red-900/40 text-red-300 border-red-700/50";
+
+// Círculo de estado tipo checklist (reusado por la fila del Gantt y el TaskDetailDrawer).
+// BINARIO: no hecha = check-circle tenue (aro + check gris); hecha = disco verde con check blanco.
+// "En curso" y "suspendida" NO se representan acá (se gestionan en el drawer). "Atrasada" es un tag.
+export function StatusCircle({ status, size = 18 }: { status: GanttTaskStatus; size?: number }) {
+  const done = status === "DONE";
+  if (done) {
+    return (
+      <span
+        className="inline-flex items-center justify-center rounded-full flex-shrink-0 bg-emerald-500"
+        style={{ width: size, height: size }}
+        aria-hidden
+      >
+        <svg width={size * 0.62} height={size * 0.62} fill="none" viewBox="0 0 24 24"><path stroke="#ffffff" strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7" /></svg>
+      </span>
+    );
+  }
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      className="flex-shrink-0 text-gray-400 group-hover/task:text-gray-300 transition-colors"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="9" strokeWidth="2" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.5 12.5l2.5 2.5 4.5-5" />
+    </svg>
+  );
+}
 
 // B — dueño de la tarea (chip). Cliente resalta (es lo que frena); Smarteam configura; Ambos conjunto.
 export const PARTY_META: Record<string, { label: string; cls: string }> = {
@@ -156,8 +196,18 @@ export const PARTY_META: Record<string, { label: string; cls: string }> = {
 const PARTY_CYCLE = ["CLIENTE", "SMARTEAM", "AMBOS"] as const;
 export const effParty = (p: "CLIENTE" | "SMARTEAM" | "AMBOS" | null | undefined): "CLIENTE" | "SMARTEAM" | "AMBOS" =>
   p === "CLIENTE" || p === "SMARTEAM" || p === "AMBOS" ? p : "SMARTEAM";
-const nextParty = (p: "CLIENTE" | "SMARTEAM" | "AMBOS"): "CLIENTE" | "SMARTEAM" | "AMBOS" =>
+export const nextParty = (p: "CLIENTE" | "SMARTEAM" | "AMBOS"): "CLIENTE" | "SMARTEAM" | "AMBOS" =>
   PARTY_CYCLE[(PARTY_CYCLE.indexOf(p) + 1) % PARTY_CYCLE.length];
+
+// Tipo de tarea (chip). Sesión = reunión con el cliente (resalta); Tarea = acción (neutro).
+// effType resuelve null/undefined (data vieja) a TASK. Mapeo a futuro: SESSION→Meeting, TASK→Task.
+export const TYPE_META: Record<string, { label: string; cls: string }> = {
+  SESSION: { label: "Sesión", cls: "text-teal-300 bg-teal-900/30 border-teal-700/40" },
+  TASK:    { label: "Tarea",  cls: "text-gray-400 bg-gray-800/60 border-gray-700/50" },
+};
+export const effType = (t: "SESSION" | "TASK" | null | undefined): "SESSION" | "TASK" =>
+  t === "SESSION" ? "SESSION" : "TASK";
+export const nextType = (t: "SESSION" | "TASK"): "SESSION" | "TASK" => (t === "SESSION" ? "TASK" : "SESSION");
 
 // ── Drag & drop de tareas: item sortable + contenedor de semana droppable ─────
 function SortableRow({
@@ -206,7 +256,6 @@ export default function TimelineGantt({
   onToggleStatus,
   onUpdateTask,
   onAddTask,
-  onRemoveTask,
   onSetAnchor,
   onAssistPhase,
   kickoffDate,
@@ -215,11 +264,13 @@ export default function TimelineGantt({
   onRemovePhase,
   onMoveTask,
   onReorderPhases,
+  onOpenTask,
+  // onRemoveTask removido del Gantt: el borrado de tarea vive en el TaskDetailDrawer.
 }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const ranges = computePhaseRanges(phases);
-  const total = sumWeeks(phases);
+  const total = timelineSpan(phases); // ancho de calendario (max end) — soporta fases en paralelo
   const curWeek = currentWeekIndex(anchor);
   const curInRange = curWeek !== null && curWeek >= 0 && curWeek < total;
   const todayIso = new Date().toISOString();
@@ -235,6 +286,41 @@ export default function TimelineGantt({
   // `phases` (props) tal cual.
   const [dragTasks, setDragTasks] = useState<GanttPhase[] | null>(null);
   const renderPhases = dragTasks ?? phases;
+
+  // Arrastre HORIZONTAL de la barra de una fase para fijar su inicio (paralelo). Pointer events
+  // nativos (NO @dnd-kit, que está cableado para reorden vertical + move-task). Mide el ancho de
+  // semana con la celda donde arranca el drag → convierte px a semanas.
+  const barDrag = useRef<{ phaseKey: string; origStart: number; startX: number; weekPx: number; last: number; moved: boolean } | null>(null);
+  // Tras un drag REAL (que movió el inicio), el pointerup sintetiza un click que burbujea a la fila y
+  // dispararía toggleExpand. Lo marcamos para tragarnos SOLO ese click (un click pelado en la barra,
+  // sin mover, sí expande). Ver el onClick de la celda de la barra.
+  const suppressBarClick = useRef(false);
+  const startBarDrag = (e: ReactPointerEvent, phaseKey: string, rangeStart: number) => {
+    if (!editable || !onUpdatePhase) return;
+    const weekPx = (e.currentTarget as HTMLElement).getBoundingClientRect().width;
+    if (!weekPx) return;
+    e.stopPropagation();
+    e.preventDefault();
+    barDrag.current = { phaseKey, origStart: rangeStart, startX: e.clientX, weekPx, last: rangeStart, moved: false };
+    const move = (ev: PointerEvent) => {
+      const d = barDrag.current;
+      if (!d) return;
+      const next = Math.max(0, d.origStart + Math.round((ev.clientX - d.startX) / d.weekPx));
+      if (next !== d.last) {
+        d.last = next;
+        d.moved = true;
+        onUpdatePhase(d.phaseKey, { startWeek: next });
+      }
+    };
+    const up = () => {
+      if (barDrag.current?.moved) suppressBarClick.current = true;
+      barDrag.current = null;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
 
   // Ubicar una tarea por key en el árbol de fases (para resolver origen/destino del drag).
   const locateTask = (arr: GanttPhase[], key: string) => {
@@ -538,20 +624,39 @@ export default function TimelineGantt({
                             />
                             <span>sem</span>
                             <span className="text-gray-700">·</span>
+                            {p.actualSessionCount != null ? (
+                              <span className="text-gray-400 font-medium" title="Sesiones de entrega ejecutadas (CSE/Dev + cliente) en la ventana de la fase — calculado">
+                                {p.actualSessionCount} ses
+                              </span>
+                            ) : (
+                              <>
+                                <input
+                                  type="number" min={1}
+                                  value={p.sessionCount ?? ""}
+                                  placeholder="—"
+                                  onChange={(e) => { const v = e.target.value === "" ? null : parseInt(e.target.value, 10); onUpdatePhase(p.key, { sessionCount: v }); }}
+                                  className="w-9 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-blue-500"
+                                  title="Sesiones estimadas (opcional)"
+                                />
+                                <span>ses</span>
+                              </>
+                            )}
+                            <span className="text-gray-700">·</span>
+                            <span className="text-gray-600">inicia S</span>
                             <input
                               type="number" min={1}
-                              value={p.sessionCount ?? ""}
-                              placeholder="—"
-                              onChange={(e) => { const v = e.target.value === "" ? null : parseInt(e.target.value, 10); onUpdatePhase(p.key, { sessionCount: v }); }}
-                              className="w-9 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-blue-500"
-                              title="Sesiones (opcional)"
+                              value={p.startWeek != null ? p.startWeek + 1 : ""}
+                              placeholder="auto"
+                              onChange={(e) => { const raw = e.target.value === "" ? null : parseInt(e.target.value, 10); onUpdatePhase(p.key, { startWeek: raw != null && raw >= 1 ? raw - 1 : null }); }}
+                              className="w-10 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-blue-500"
+                              title="Inicio de la fase (n° de semana). Vacío = automático (tras la fase anterior). Igualá el de otra fase para correr EN PARALELO."
                             />
-                            <span>ses</span>
                             <span className="text-gray-700 ml-1">{fmtPhaseRange(anchor, range)}</span>
                           </span>
                         ) : (
                           <span className="text-[10px] text-gray-600">
                             {fmtPhaseRange(anchor, range)}
+                            {p.actualSessionCount != null && ` · ${plural(p.actualSessionCount, "sesión", "sesiones")}`}
                             {p.tasks.length > 0 && ` · ${plural(p.tasks.length, "tarea", "tareas")}`}
                           </span>
                         )}
@@ -599,12 +704,25 @@ export default function TimelineGantt({
                       return (
                         <div
                           key={w}
+                          onPointerDown={editable && onUpdatePhase ? (e) => startBarDrag(e, p.key, range.start) : undefined}
+                          onClick={
+                            editable && onUpdatePhase
+                              ? (e) => {
+                                  // Tragar el click sintético post-drag para que NO togglee la fila;
+                                  // un click pelado (sin mover) sí burbujea y expande.
+                                  if (suppressBarClick.current) {
+                                    suppressBarClick.current = false;
+                                    e.stopPropagation();
+                                  }
+                                }
+                              : undefined
+                          }
                           className={`h-3 rounded transition-all ${meta?.seg ?? NEUTRAL_SEG} ${
                             allDone || isPast ? "opacity-35" : ""
                           } ${isCur ? "timeline-now-pulse" : ""} ${
                             weekOverdue && !isCur ? "ring-1 ring-red-500/80" : ""
-                          }`}
-                          title={`S${w + 1}${weekTasks.length ? ` · ${weekTasks.length} tareas` : ""}`}
+                          } ${editable && onUpdatePhase ? "cursor-ew-resize touch-none" : ""}`}
+                          title={editable && onUpdatePhase ? `S${w + 1} — arrastrá para mover el inicio de la fase` : `S${w + 1}${weekTasks.length ? ` · ${weekTasks.length} tareas` : ""}`}
                         />
                       );
                     })}
@@ -642,13 +760,13 @@ export default function TimelineGantt({
                             <SortableContext items={weekTasks.map((wt) => wt.key)} strategy={verticalListSortingStrategy}>
                               {weekTasks.map((t) => {
                                 const overdue = isOverdue(absW, curWeek, t.status);
-                                const sm = STATUS_META[t.status];
                                 const canToggle = !readOnly && !!onToggleStatus && !!t.id;
                                 return (
                                   <SortableRow key={t.key} id={t.key} data={{ type: "task" }} disabled={!editable || !onMoveTask}>
                                   {(attributes, listeners) => (
                                   <div
-                                    className="flex items-start gap-2.5 rounded-lg px-2.5 py-1.5 group/task hover:bg-gray-800/50"
+                                    onClick={() => { if (!readOnly && onOpenTask) onOpenTask(p.key, t.key); }}
+                                    className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 group/task hover:bg-gray-800/50 ${!readOnly && onOpenTask ? "cursor-pointer" : ""}`}
                                   >
                                     {editable && onMoveTask && (
                                       <button
@@ -656,119 +774,56 @@ export default function TimelineGantt({
                                         {...listeners}
                                         onClick={(e) => e.stopPropagation()}
                                         title="Arrastrar para reordenar o mover de semana"
-                                        className="flex-shrink-0 mt-1 cursor-grab touch-none text-gray-600 hover:text-gray-400"
+                                        className="flex-shrink-0 cursor-grab touch-none text-gray-600 hover:text-gray-400 opacity-0 group-hover/task:opacity-100 transition-opacity"
                                       >
                                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" /></svg>
                                       </button>
                                     )}
+                                    {/* Círculo de estado (checklist) — clic marca hecha/pendiente; no abre el drawer */}
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        if (canToggle) onToggleStatus!(t.id!, NEXT_STATUS[t.status]);
+                                        if (canToggle) onToggleStatus!(t.id!, t.status === "DONE" ? "PENDING" : "DONE");
                                       }}
                                       disabled={!canToggle}
                                       title={
                                         !t.id
                                           ? "Guardá el cronograma para poder cambiar el estado"
-                                          : "Cambiar estado (pendiente → en curso → hecho → suspendida)"
+                                          : t.status === "DONE" ? "Marcar como pendiente" : "Marcar como hecha"
                                       }
-                                      className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded border transition-colors min-w-[66px] text-center mt-0.5 ${sm.cls} ${!canToggle ? "opacity-50 cursor-default" : ""}`}
+                                      className={`flex-shrink-0 ${!canToggle ? "opacity-50 cursor-default" : "cursor-pointer"}`}
                                     >
-                                      {sm.label}
+                                      <StatusCircle status={t.status} />
                                     </button>
-                                    {overdue && (
-                                      <span
-                                        title="La fecha de esta tarea ya pasó y todavía no está hecha"
-                                        className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded border text-center mt-0.5 ${OVERDUE_CLS}`}
-                                      >
-                                        atrasada
+                                    {/* Título + tag "atrasada" a la par (clic en la fila abre el drawer) */}
+                                    <div className="flex-1 min-w-0 flex items-center gap-2">
+                                      <span className={`min-w-0 truncate text-xs ${t.status === "DONE" || t.status === "SUSPENDED" ? "text-gray-500 line-through" : "text-gray-300"}`}>
+                                        {t.title?.trim() ? t.title : <span className="text-gray-600 italic">Sin título</span>}
                                       </span>
-                                    )}
-
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2">
-                                        {editable ? (
-                                          <input
-                                            value={t.title}
-                                            onChange={(e) => onUpdateTask!(p.key, t.key, { title: e.target.value })}
-                                            onClick={(e) => e.stopPropagation()}
-                                            placeholder="Tarea (visible para el cliente al confirmar)"
-                                            className={`flex-1 min-w-0 bg-transparent text-xs border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:outline-none pb-0.5 ${
-                                              t.status === "DONE" || t.status === "SUSPENDED" ? "text-gray-500 line-through" : "text-gray-300"
-                                            }`}
-                                          />
-                                        ) : (
-                                          <span className={`text-xs ${t.status === "DONE" || t.status === "SUSPENDED" ? "text-gray-500 line-through" : "text-gray-300"}`}>
-                                            {t.title}
-                                          </span>
-                                        )}
-                                        {editable ? (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => { e.stopPropagation(); onUpdateTask!(p.key, t.key, { party: nextParty(effParty(t.party)) }); }}
-                                            title="Dueño de la tarea — clic para cambiar: Cliente, Smarteam o Ambos"
-                                            className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border transition-colors ${PARTY_META[effParty(t.party)].cls}`}
-                                          >
-                                            {PARTY_META[effParty(t.party)].label}
-                                          </button>
-                                        ) : (
-                                          t.party && PARTY_META[t.party] && (
-                                            <span
-                                              className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${PARTY_META[t.party].cls}`}
-                                              title="Dueño de la tarea en el plan compartido"
-                                            >
-                                              {PARTY_META[t.party].label}
-                                            </span>
-                                          )
-                                        )}
-                                        {t.source && (
-                                          <span
-                                            className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${
-                                              t.source === "AGENT"
-                                                ? "text-fg-muted bg-surface-hover border-line"
-                                                : "text-blue-300 bg-blue-900/30 border-blue-700/40"
-                                            }`}
-                                            title={t.source === "AGENT" ? "Generada por la IA" : "Creada o editada por el CSE"}
-                                          >
-                                            {t.source === "AGENT" ? "IA" : "CSE"}
-                                          </span>
-                                        )}
-                                      </div>
-                                      {editable ? (
-                                        <input
-                                          value={t.notes ?? ""}
-                                          onChange={(e) => onUpdateTask!(p.key, t.key, { notes: e.target.value || null })}
-                                          onClick={(e) => e.stopPropagation()}
-                                          placeholder="Nota (lenguaje cliente, opcional)"
-                                          className="w-full bg-transparent text-[11px] text-gray-500 border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:outline-none mt-0.5"
-                                        />
-                                      ) : (
-                                        t.notes?.trim() && <p className="text-[11px] text-gray-600 mt-0.5">{t.notes}</p>
+                                      {overdue && (
+                                        <span
+                                          className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border text-red-300 bg-red-900/30 border-red-700/50"
+                                          title="La fecha de esta tarea ya pasó y todavía no está hecha"
+                                        >
+                                          Atrasada
+                                        </span>
                                       )}
                                     </div>
-
-                                    {editable && (
-                                      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover/task:opacity-100 transition-opacity">
-                                        <select
-                                          value={t.weekIndex}
-                                          onChange={(e) => onUpdateTask!(p.key, t.key, { weekIndex: parseInt(e.target.value, 10) })}
-                                          onClick={(e) => e.stopPropagation()}
-                                          className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-gray-400 focus:outline-none focus:border-blue-500"
-                                          title="Mover de semana"
-                                        >
-                                          {Array.from({ length: p.durationWeeks }).map((_, w) => (
-                                            <option key={w} value={w}>Sem {w + 1}</option>
-                                          ))}
-                                        </select>
-                                        <button
-                                          onClick={(e) => { e.stopPropagation(); onRemoveTask!(p.key, t.key); }}
-                                          title="Eliminar tarea"
-                                          className="p-1 rounded text-gray-600 hover:text-red-400 hover:bg-red-500/10"
-                                        >
-                                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                        </button>
-                                      </div>
+                                    {/* Chips informativos (read-only en la fila; se editan en el drawer) */}
+                                    {effType(t.type) === "SESSION" && (
+                                      <span
+                                        className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${TYPE_META.SESSION.cls}`}
+                                        title="Sesión / reunión con el cliente"
+                                      >
+                                        {TYPE_META.SESSION.label}
+                                      </span>
                                     )}
+                                    <span
+                                      className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${PARTY_META[effParty(t.party)].cls}`}
+                                      title="Responsable de la tarea"
+                                    >
+                                      {PARTY_META[effParty(t.party)].label}
+                                    </span>
                                   </div>
                                   )}
                                   </SortableRow>

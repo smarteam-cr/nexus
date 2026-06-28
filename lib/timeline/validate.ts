@@ -17,6 +17,7 @@ export const ACTIVITY_TYPES = [
 ] as const;
 
 export const PARTY_VALUES = ["CLIENTE", "SMARTEAM", "AMBOS"] as const;
+export const TASK_TYPE_VALUES = ["SESSION", "TASK"] as const;
 
 export interface TaskInput {
   id?: string;
@@ -26,6 +27,8 @@ export interface TaskInput {
   notes?: string | null;
   /** dueño: undefined = no tocar; null = sin dueño; valor = set */
   party?: (typeof PARTY_VALUES)[number] | null;
+  /** tipo: undefined = no tocar; null = sin tipar; valor = set (SESSION | TASK) */
+  type?: (typeof TASK_TYPE_VALUES)[number] | null;
 }
 
 export interface PhaseInput {
@@ -33,6 +36,8 @@ export interface PhaseInput {
   name: string;
   order: number;
   durationWeeks: number;
+  /** Inicio explícito (offset 0-based). undefined = no tocar; null = contigua (auto); n≥0 = paralelo/solape. */
+  startWeek?: number | null;
   sessionCount?: number | null;
   notes?: string | null;
   activityType?: TimelineActivityType | null;
@@ -105,6 +110,20 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
         return;
       }
       sessionCount = ph.sessionCount;
+    }
+
+    // startWeek (opcional — undefined = no tocar; null = contigua/auto; n≥0 = inicio explícito/solape).
+    // Overlap LIBRE: no se valida contra otras fases (fases en paralelo es el requisito).
+    let startWeek: number | null | undefined = undefined;
+    if (ph.startWeek !== undefined) {
+      if (ph.startWeek === null) {
+        startWeek = null;
+      } else if (typeof ph.startWeek === "number" && Number.isInteger(ph.startWeek) && ph.startWeek >= 0) {
+        startWeek = ph.startWeek;
+      } else {
+        errors.push(`phases[${idx}].startWeek debe ser entero >= 0 o null`);
+        return;
+      }
     }
     let notes: string | null = null;
     if (ph.notes !== undefined && ph.notes !== null) {
@@ -198,6 +217,19 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
             return;
           }
         }
+        // type (opcional — undefined = sin cambio; null = sin tipar; valor = SESSION|TASK)
+        let tType: (typeof TASK_TYPE_VALUES)[number] | null | undefined = undefined;
+        if (tk.type !== undefined) {
+          if (tk.type === null) {
+            tType = null;
+          } else if (typeof tk.type === "string" && (TASK_TYPE_VALUES as readonly string[]).includes(tk.type)) {
+            tType = tk.type as (typeof TASK_TYPE_VALUES)[number];
+          } else {
+            errors.push(`phases[${idx}].tasks[${tIdx}].type debe ser uno de ${TASK_TYPE_VALUES.join("|")} o null`);
+            taskError = true;
+            return;
+          }
+        }
         let tId: string | undefined;
         if (tk.id !== undefined) {
           if (typeof tk.id !== "string" || tk.id.length === 0) {
@@ -214,6 +246,7 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
           order: tk.order,
           notes: tNotes,
           party: tParty,
+          type: tType,
         });
       });
       if (taskError) return;
@@ -225,6 +258,7 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
       name: ph.name.trim(),
       order: ph.order,
       durationWeeks: ph.durationWeeks,
+      startWeek,
       sessionCount,
       notes,
       activityType,

@@ -75,6 +75,8 @@ REGLAS DEL CRONOGRAMA:
 - Entre 2 y 8 fases. Si la señal es MUY pobre, igual proponé un plan mínimo coherente CON EL ALCANCE y marcá esas fases con "estimated": true (NO uses un template fijo). Solo devolvé "phases": [] si no hay absolutamente ningún alcance del que partir.
 - SEMANA 0 SIEMPRE: la PRIMERA fase es SIEMPRE la "Semana 0" — kickoff y levantamiento inicial (arranque, alineación y recolección de insumos con el cliente), aunque el cliente ya use HubSpot. Nombrala literalmente "Semana 0". Las demás fases salen del alcance.
 - ORDEN: la secuencia lógica de entrega del proyecto (Semana 0 primero).
+- PARALELISMO (startWeek, opcional): por DEFECTO las fases son SECUENCIALES — cada una arranca cuando termina la anterior; en ese caso OMITÍ "startWeek" (lo calcula el sistema). Usá "startWeek" (entero ≥0, offset 0-based de semanas desde el arranque del proyecto) SOLO cuando dos fases las ejecutan EQUIPOS DISTINTOS coordinados y corren EN PARALELO — el caso típico es INTEGRACIONES/DESARROLLO que un equipo técnico hace en paralelo a la implementación del hub. Dale a la fase paralela el "startWeek" de la semana donde realmente arranca (puede solaparse con otra fase). No rompe nada: Semana 0 siempre arranca en startWeek 0 y lo vendido sigue mandando.
+- ENFOQUE ESTÁNDAR DEL HUB (llenar huecos): cuando el alcance vendido no detalla una fase, completá con el enfoque estándar del hub correspondiente (Sales / Service / CMS / Marketing) según el knowledge inyectado y el serviceType del proyecto. Esto da DIRECCIÓN y cubre huecos — NUNCA por encima de lo vendido: lo que se vendió/acordó manda siempre; el enfoque estándar solo rellena lo que no se especificó.
 
 IMPLEMENTACIÓN vs RE-IMPLEMENTACIÓN:
 - Determiná si el proyecto es IMPLEMENTATION (el cliente arranca con HubSpot por primera vez) o REIMPLEMENTATION (ya usa HubSpot, o viene de otro CRM/herramienta que va a migrar o reemplazar). Deducilo de las fuentes (sesiones, deal, notas: "ya tienen HubSpot", "vienen de Salesforce/Pipedrive", "limpiar el portal actual", etc.). Si no hay señal clara, asumí IMPLEMENTATION.
@@ -153,7 +155,7 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
   ],
   "timeline": {
     "phases": [
-      { "name": "<fase derivada del alcance vendido>", "durationWeeks": "<entero>", "sessionCount": "<entero o null>", "notes": "<titular en lenguaje cliente>", "estimated": "<true si estimaste la fase/duración sin dato en ventas; false si surge de algo dicho/acordado>" }
+      { "name": "<fase derivada del alcance vendido>", "durationWeeks": "<entero>", "startWeek": "<OMITIR si es secuencial; entero ≥0 SOLO para una fase en paralelo, ej. integraciones>", "sessionCount": "<entero o null>", "notes": "<titular en lenguaje cliente>", "estimated": "<true si estimaste la fase/duración sin dato en ventas; false si surge de algo dicho/acordado>" }
     ]
   }
 }

@@ -37,6 +37,7 @@ interface BaselinePhase {
   name: string;
   order: number;
   durationWeeks: number;
+  startWeek: number | null; // inicio explícito (paralelo) congelado; null = contigua. Lo cubre planFingerprint.
   sessionCount: number | null;
   activityType: TimelineActivityType | null;
   source: TimelinePhaseSource; // AGENT|MODIFIED|HUMAN — firmeza de la fase
@@ -64,6 +65,7 @@ interface PhaseRow {
   name: string;
   order: number;
   durationWeeks: number;
+  startWeek?: number | null; // inicio explícito (paralelo); null = contigua
   sessionCount: number | null;
   activityType: TimelineActivityType | null;
   source: TimelinePhaseSource;
@@ -98,6 +100,7 @@ export function buildBaselineSnapshot(
       name: p.name,
       order: p.order,
       durationWeeks: p.durationWeeks,
+      startWeek: p.startWeek ?? null,
       sessionCount: p.sessionCount,
       activityType: p.activityType,
       source: p.source,
@@ -156,6 +159,7 @@ function planFingerprint(s: BaselineSnapshot): string {
       name: p.name,
       order: p.order,
       durationWeeks: p.durationWeeks,
+      startWeek: p.startWeek ?? null,
       sessionCount: p.sessionCount,
       activityType: p.activityType,
       source: p.source,
@@ -195,6 +199,7 @@ export async function freezeBaselineOnPublish(
           name: true,
           order: true,
           durationWeeks: true,
+          startWeek: true,
           sessionCount: true,
           activityType: true,
           source: true,

@@ -31,6 +31,8 @@ export interface SummaryPhase {
   status: string;
   order: number;
   durationWeeks: number;
+  /** Inicio explícito (offset 0-based). null/ausente = contigua tras la anterior. Lo honra computePhaseRanges (paralelismo). */
+  startWeek?: number | null;
   actualStart: Date | null;
   actualEnd: Date | null;
   tasks: SummaryTask[];

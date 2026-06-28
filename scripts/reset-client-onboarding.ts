@@ -14,7 +14,7 @@
  * Dry-run por default. Aplicar con --apply:
  *   npx tsx scripts/reset-client-onboarding.ts sfera --apply
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -78,7 +78,8 @@ async function main() {
   console.log(`  • Handoff:   ${handoffN} bloques`);
   console.log(`  • Kickoff:   ${kickoffN} bloques`);
   console.log(`  • Cronograma: ${timelines.length} timeline(s), ${phasesTotal} fases (cascada: tareas/baselines/changes)`);
-  console.log(`  • Procesos:  ${procesosBlocks.length} bloques ${JSON.stringify(procesosByType)}\n`);
+  console.log(`  • Procesos:  ${procesosBlocks.length} bloques ${JSON.stringify(procesosByType)}`);
+  console.log(`  • Publicación: se limpia timelinePublishedAt/kickoffPublishedAt + snapshots de canvas Handoff/Kickoff (vuelve a "nunca publicado")\n`);
 
   if (!APPLY) { console.log("(DRY-RUN) Nada borrado. Re-corré con --apply."); return; }
 
@@ -86,12 +87,23 @@ async function main() {
   const delKickoff = await prisma.canvasBlock.deleteMany({ where: kickoffWhere });
   const delTimeline = await prisma.projectTimeline.deleteMany({ where: { projectId: { in: realProjectIds } } });
   const delProcesos = await prisma.canvasBlock.deleteMany({ where: procesosWhere });
+  // Estado de publicación: sin esto el proyecto queda "publicado" stale tras el reset (el timeline
+  // se borra pero el flag vive en Project) y el cliente externo seguiría viendo el snapshot viejo.
+  await prisma.project.updateMany({
+    where: { id: { in: realProjectIds } },
+    data: { timelinePublishedAt: null, kickoffPublishedAt: null },
+  });
+  await prisma.projectCanvas.updateMany({
+    where: { projectId: { in: realProjectIds }, name: { in: ["Handoff", "Kickoff"] } },
+    data: { publishedSnapshot: Prisma.DbNull, publishedSnapshotAt: null, contentUpdatedAt: null },
+  });
 
   console.log("✓ Borrado:");
   console.log(`  • Handoff:    ${delHandoff.count} bloques`);
   console.log(`  • Kickoff:    ${delKickoff.count} bloques`);
   console.log(`  • Cronograma: ${delTimeline.count} timeline(s) (+ cascada)`);
   console.log(`  • Procesos:   ${delProcesos.count} bloques`);
+  console.log(`  • Publicación: limpiada (proyecto vuelve a "nunca publicado")`);
 }
 
 main()

@@ -38,7 +38,7 @@ import type {
 } from "@/lib/external/kickoff-view-types";
 import type { FlowchartData } from "@/components/flowchart/FlowchartViewer";
 
-import { fmtFull } from "@/lib/timeline/weeks";
+import { fmtFull, timelineSpan } from "@/lib/timeline/weeks";
 
 // FlowchartViewer (@xyflow) es pesado y necesita window → lazy + sin SSR. Solo se carga
 // cuando hay procesos que renderizar.
@@ -278,6 +278,7 @@ function KickoffLandingInternal({
             name: p.name,
             order: p.order,
             durationWeeks: p.durationWeeks,
+            startWeek: p.startWeek ?? null,
             sessionCount: p.sessionCount,
             notes: p.notes,
             activityType: p.activityType ?? null,
@@ -378,7 +379,10 @@ export function KickoffLandingView({
   const draftProcesos = editable ? procesos.filter((p) => p.status === "DRAFT") : [];
 
   const phases = timeline?.phases ?? [];
-  const totalWeeks = phases.reduce((n, p) => n + (p.durationWeeks || 0), 0);
+  // "Duración total" = LARGO DE CALENDARIO (timelineSpan = max end de los rangos), NO la suma de
+  // duraciones (eso es esfuerzo). Con fases en paralelo la suma sobrecuenta el tiempo real del
+  // proyecto; el span coincide con las barras del Gantt. Con todo secuencial, span === suma (cero regresión).
+  const totalWeeks = timelineSpan(phases);
   const startLabel = timeline?.anchorStartDate ? fmtFull(timeline.anchorStartDate) : "Por definir";
 
   return (

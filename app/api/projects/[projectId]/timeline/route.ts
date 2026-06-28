@@ -34,6 +34,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
+import { countDeliverySessionsByPhase } from "@/lib/timeline/delivery-sessions";
 import { Prisma } from "@prisma/client";
 import type {
   TimelinePhaseSource,
@@ -41,6 +42,7 @@ import type {
   TimelineTaskStatus,
   TimelineChangeKind,
   TaskParty,
+  TimelineTaskType,
 } from "@prisma/client";
 
 // Validador + tipos del body compartidos con POST /timeline/assist (la IA
@@ -98,7 +100,13 @@ interface TimelineResponse {
     name: string;
     order: number;
     durationWeeks: number;
+    /** Inicio explícito (offset 0-based). null = contigua tras la anterior. Habilita paralelo/solape. */
+    startWeek: number | null;
     sessionCount: number | null;
+    /** Sesiones de entrega (CSE/dev + cliente) ejecutadas en la ventana de la fase.
+     *  Calculado en lectura (no persistido). number en fases ya iniciadas; null en
+     *  futuras o si no hay anchorStartDate → la UI cae al estimado `sessionCount`. */
+    actualSessionCount: number | null;
     notes: string | null;
     activityType: TimelineActivityType | null;
     source: TimelinePhaseSource;
@@ -129,6 +137,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
           name: true,
           order: true,
           durationWeeks: true,
+          startWeek: true,
           sessionCount: true,
           notes: true,
           activityType: true,
@@ -147,6 +156,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
               needsValidation: true,
               source: true,
               party: true,
+              type: true,
             },
           },
         },
@@ -155,6 +165,17 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
   });
   if (!tl) return { exists: false };
   const kickoffDate = await getKickoffSessionDate(projectId);
+  // Sesiones de entrega reales por fase (calculado, no persistido). null por fase
+  // = futura o sin anchor → la UI usa el estimado `sessionCount`.
+  const deliveryByPhase = await countDeliverySessionsByPhase({
+    projectId,
+    anchorStartDate: tl.anchorStartDate,
+    phases: tl.phases.map((p) => ({ id: p.id, durationWeeks: p.durationWeeks, startWeek: p.startWeek })),
+  });
+  const phases = tl.phases.map((p) => ({
+    ...p,
+    actualSessionCount: deliveryByPhase?.get(p.id) ?? null,
+  }));
   return {
     exists: true,
     anchorStartDate: tl.anchorStartDate?.toISOString() ?? null,
@@ -168,7 +189,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     pendingProposalRunId: tl.pendingProposalRunId,
     pendingProgress: (tl.pendingProgress as PendingProgress | null) ?? null,
     pendingProgressRunId: tl.pendingProgressRunId,
-    phases: tl.phases,
+    phases,
   };
 }
 
@@ -271,6 +292,7 @@ export async function PUT(
           name: true,
           order: true,
           durationWeeks: true,
+          startWeek: true,
           sessionCount: true,
           notes: true,
           activityType: true,
@@ -284,6 +306,7 @@ export async function PUT(
               notes: true,
               source: true,
               party: true,
+              type: true,
             },
           },
         },
@@ -312,6 +335,7 @@ export async function PUT(
         order: number;
         notes: string | null;
         party: TaskParty | null;
+        type: TimelineTaskType | null;
         source: TimelinePhaseSource;
         status: TimelineTaskStatus;
         needsValidation: boolean;
@@ -329,6 +353,7 @@ export async function PUT(
             existing.name !== p.name ||
             existing.order !== p.order ||
             existing.durationWeeks !== p.durationWeeks ||
+            (p.startWeek !== undefined && (existing.startWeek ?? null) !== (p.startWeek ?? null)) ||
             (existing.sessionCount ?? null) !== (p.sessionCount ?? null) ||
             (existing.notes ?? null) !== (p.notes ?? null) ||
             // undefined = "sin cambio" en el body (Prisma también lo ignora)
@@ -343,6 +368,7 @@ export async function PUT(
                 name: p.name,
                 order: p.order,
                 durationWeeks: p.durationWeeks,
+                startWeek: p.startWeek, // undefined = sin cambio (Prisma lo ignora)
                 sessionCount: p.sessionCount,
                 notes: p.notes,
                 activityType: p.activityType,
@@ -360,6 +386,7 @@ export async function PUT(
               name: p.name,
               order: p.order,
               durationWeeks: p.durationWeeks,
+              startWeek: p.startWeek ?? null,
               sessionCount: p.sessionCount,
               notes: p.notes,
               activityType: p.activityType ?? null,
@@ -403,7 +430,8 @@ export async function PUT(
               existingTask.weekIndex !== t.weekIndex ||
               existingTask.order !== t.order ||
               (existingTask.notes ?? null) !== (t.notes ?? null) ||
-              (t.party !== undefined && (existingTask.party ?? null) !== (t.party ?? null));
+              (t.party !== undefined && (existingTask.party ?? null) !== (t.party ?? null)) ||
+              (t.type !== undefined && (existingTask.type ?? null) !== (t.type ?? null));
             if (contentChanged) {
               await tx.timelineTask.update({
                 where: { id: t.id },
@@ -413,6 +441,7 @@ export async function PUT(
                   order: t.order,
                   notes: t.notes ?? null,
                   party: t.party, // undefined = sin cambio (Prisma lo ignora)
+                  type: t.type, // undefined = sin cambio
                   source: existingTask.source === "AGENT" ? "MODIFIED" : existingTask.source,
                   needsValidation: false, // humano revisó el contenido
                 },
@@ -427,6 +456,7 @@ export async function PUT(
               order: t.order,
               notes: t.notes ?? null,
               party: t.party ?? null,
+              type: t.type ?? null,
               source: "HUMAN",
               status: "PENDING",
               needsValidation: false,
@@ -474,6 +504,7 @@ export async function PUT(
             name: p.name,
             order: p.order,
             durationWeeks: p.durationWeeks,
+            startWeek: p.startWeek,
             sessionCount: p.sessionCount,
             activityType: p.activityType,
             status: p.status,
