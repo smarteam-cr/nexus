@@ -1,17 +1,19 @@
 import { prisma } from "@/lib/db/prisma";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import {
   type CanvasDefinition,
   HANDOFF_CANVAS,
+  BUSINESS_CASE_CANVAS,
   DEFAULT_PROJECT_CANVASES,
   AGENT_GROUP_TO_CANVAS,
 } from "./canvas-defs";
+import { BC_DEF_BY_KEY } from "@/components/landing/configs/business-case.defs";
 
 // Re-export de las definiciones PURAS (viven en canvas-defs.ts, SIN Prisma) para
 // que los importadores de servidor existentes (analyze/route.ts, etc.) sigan
 // funcionando sin cambios. La separación evita que un componente cliente que
 // importe estos datos arrastre `pg`/`fs` al bundle del navegador.
-export { HANDOFF_CANVAS, DEFAULT_PROJECT_CANVASES, AGENT_GROUP_TO_CANVAS };
+export { HANDOFF_CANVAS, BUSINESS_CASE_CANVAS, DEFAULT_PROJECT_CANVASES, AGENT_GROUP_TO_CANVAS };
 export type { CanvasDefinition };
 
 // Acepta el cliente global o un cliente de transacción ($transaction) para que la
@@ -74,6 +76,66 @@ export async function createHandoffCanvas(projectId: string, db: Db = prisma): P
       key: s.key,
       label: s.label,
       order: i,
+    })),
+  });
+
+  return canvas.id;
+}
+
+/** Crea un canvas "Business Case" (versionado) para un BusinessCase, con las
+ *  secciones de BUSINESS_CASE_CANVAS. Marca los canvases activos previos del caso
+ *  como inactivos (cada "Generar" = una versión nueva). Devuelve el id del canvas. */
+export async function createBusinessCaseCanvas(
+  businessCaseId: string,
+  version: number,
+  db: Db = prisma,
+): Promise<string> {
+  // Desactivar versiones anteriores (la nueva queda como la activa/editable).
+  await db.projectCanvas.updateMany({
+    where: { businessCaseId, isActive: true },
+    data: { isActive: false },
+  });
+
+  const canvas = await db.projectCanvas.create({
+    data: {
+      businessCaseId,
+      // Rótulo de cara al CSE: v0 = "Plantilla" (base con las guías del agente, NO se
+      // llena con contenido); v1+ = "Caso de uso N" (cada "Generar" crea una versión).
+      name: version === 0 ? "Plantilla" : `Caso de uso ${version}`,
+      isDefault: true,
+      order: 0,
+      version,
+      isActive: true,
+      sections: BUSINESS_CASE_CANVAS.sections,
+    },
+    select: { id: true },
+  });
+
+  await db.canvasSection.createMany({
+    data: BUSINESS_CASE_CANVAS.sections.map((s, i) => ({
+      canvasId: canvas.id,
+      key: s.key,
+      label: s.label,
+      order: i,
+    })),
+  });
+
+  // Siembra 1 bloque ESTRUCTURADO VACÍO por sección (data = `empty` de la config) →
+  // el workspace muestra el template editorial completo desde el primer momento, y
+  // editar/generar/publicar siempre opera sobre un bloque existente (1 por sección).
+  const createdSections = await db.canvasSection.findMany({
+    where: { canvasId: canvas.id },
+    select: { id: true, key: true },
+  });
+  await db.canvasBlock.createMany({
+    data: createdSections.map((s) => ({
+      sectionId: s.id,
+      blockType: "CARD" as const, // neutro: el render se elige por section.key vía la config
+      content: null,
+      data: (BC_DEF_BY_KEY[s.key]?.empty ?? {}) as Prisma.InputJsonValue,
+      order: 0,
+      source: "HUMAN" as const,
+      status: "CONFIRMED" as const,
     })),
   });
 

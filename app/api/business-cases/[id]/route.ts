@@ -1,7 +1,8 @@
 /**
  * /api/business-cases/[id]
- *   GET → detalle completo (bloques + transcripts + acceso + cliente)
- *   PUT { name?, status?, hubspotCompanyId? } → actualiza metadatos
+ *   GET    → detalle completo (bloques + transcripts + acceso + cliente)
+ *   PUT    { name?, status?, hubspotCompanyId? } → actualiza metadatos
+ *   DELETE → borra el caso y, por cascade, todo su contenido
  *
  * Gateado con guardSalesAccess (VENTAS/CSL/SUPER_ADMIN).
  */
@@ -10,6 +11,7 @@ import { guardSalesAccess } from "@/lib/auth/api-guards";
 import {
   getBusinessCase,
   updateBusinessCase,
+  deleteBusinessCase,
   UpdateBusinessCaseBody,
 } from "@/lib/business-cases";
 
@@ -52,4 +54,21 @@ export async function PUT(
 
   const updated = await updateBusinessCase(id, parsed.data);
   return NextResponse.json({ businessCase: updated });
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const guard = await guardSalesAccess();
+  if (guard instanceof NextResponse) return guard;
+
+  const businessCase = await getBusinessCase(id);
+  if (!businessCase) {
+    return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
+  }
+
+  await deleteBusinessCase(id);
+  return NextResponse.json({ ok: true });
 }

@@ -596,7 +596,7 @@ model ProjectCanvas {
   // el vivo/editable. En proyectos queda version=1/isActive=true (sin uso).
   version   Int      @default(1)
   isActive  Boolean  @default(true)
-  sections  Json     @default("[]") // Array de { key: string, label: string }
+  sections  Json     @default("[]") // Array de { key, label, brief?, previousBrief? } — brief = guía del agente por sección (BC), acá y no en columna para sobrevivir db push entre las 2 PCs (ver lib/business-cases/section-briefs.ts)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -623,6 +623,9 @@ model CanvasSection {
   label     String
   titleOverride String? // Título de cara al cliente editado por el CSE (landing Kickoff). null = título por defecto de la plantilla (SECTION_META).
   eyebrowOverride String? // Eyebrow (título pequeño) editado por el CSE. null = eyebrow por defecto de la plantilla.
+  // NOTA: la "guía del agente" por sección (business case) NO vive acá. Se guarda en
+  // ProjectCanvas.sections (Json) para sobrevivir db push entre las 2 PCs que comparten
+  // la DB de prod. Ver lib/business-cases/section-briefs.ts.
   // Deshacer de 1 nivel (persistido): valor inmediatamente anterior de title/eyebrow. null = nada que deshacer.
   previousTitleOverride   String?
   previousEyebrowOverride String?

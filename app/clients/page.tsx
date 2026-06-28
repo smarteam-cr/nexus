@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import AppShell from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/ui";
@@ -31,6 +32,8 @@ export default async function ClientsPage() {
 
   // Shape compatible con el viejo ActiveCse para el ClientsGrid client component.
   const roleEnum = user.teamMember?.roleEnum;
+  // Acceso al área de Ventas (Business Cases) — mismo gate que /business-cases.
+  const canSeeSales = roleEnum ? ["VENTAS", "CSL", "SUPER_ADMIN"].includes(roleEnum) : false;
   const activeCse = {
     email: user.email,
     name: user.teamMember?.name ?? user.email,
@@ -133,6 +136,19 @@ export default async function ClientsPage() {
             rows.length === 0
               ? "Sin clientes aún"
               : `${rows.length} cliente${rows.length !== 1 ? "s" : ""}`
+          }
+          action={
+            canSeeSales ? (
+              <Link
+                href="/business-cases"
+                className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 14l4-4 3 3 5-6" />
+                </svg>
+                Business cases
+              </Link>
+            ) : undefined
           }
         />
 

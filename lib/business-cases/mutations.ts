@@ -43,6 +43,7 @@ export async function createBusinessCase(input: {
   clientId: string;
   name: string;
   hubspotCompanyId?: string | null;
+  hubspotDealId?: string | null;
   createdByEmail?: string | null;
 }) {
   const slug = `${slugify(input.name)}-${randomBytes(3).toString("hex")}`;
@@ -52,6 +53,7 @@ export async function createBusinessCase(input: {
       name: input.name,
       slug,
       hubspotCompanyId: input.hubspotCompanyId ?? null,
+      hubspotDealId: input.hubspotDealId ?? null,
       createdByEmail: input.createdByEmail ?? null,
     },
   });
@@ -66,6 +68,16 @@ export async function updateBusinessCase(
   },
 ) {
   return prisma.businessCase.update({ where: { id }, data });
+}
+
+/**
+ * Borra un business case. Por cascade (FKs ON DELETE CASCADE) se llevan también sus
+ * canvases versionados → secciones → bloques, las sesiones de contexto, los transcripts,
+ * el acceso externo y los agent runs. NO toca el cliente/prospecto ni las FirefliesSessions
+ * (BusinessCaseSession no tiene FK dura a la sesión: solo se borra el vínculo).
+ */
+export async function deleteBusinessCase(id: string) {
+  return prisma.businessCase.delete({ where: { id } });
 }
 
 // ── Transcripts ──────────────────────────────────────────────────────────────
@@ -138,38 +150,6 @@ export async function applyGeneratedBlocks(
     });
   }
   await reorderBlocks(businessCaseId);
-}
-
-/**
- * Recrea un bloque (deshacer un delete del editor). Lo agrega al final con un id nuevo;
- * por defecto HUMAN/CONFIRMED salvo que el snapshot indique otro estado.
- */
-export async function recreateBlock(
-  businessCaseId: string,
-  block: {
-    blockType: BusinessCaseBlockType;
-    content: Record<string, unknown>;
-    isVisible?: boolean;
-    status?: "DRAFT" | "CONFIRMED";
-    needsValidation?: boolean;
-  },
-) {
-  const maxOrder = await prisma.businessCaseBlock.aggregate({
-    where: { businessCaseId },
-    _max: { order: true },
-  });
-  return prisma.businessCaseBlock.create({
-    data: {
-      businessCaseId,
-      blockType: block.blockType,
-      content: block.content as Prisma.InputJsonValue,
-      isVisible: block.isVisible ?? true,
-      status: block.status ?? "CONFIRMED",
-      needsValidation: block.needsValidation ?? false,
-      source: "HUMAN",
-      order: (maxOrder._max.order ?? -1) + 1,
-    },
-  });
 }
 
 async function reorderBlocks(businessCaseId: string) {
@@ -257,18 +237,16 @@ export async function deleteBlock(blockId: string) {
 
 // ── Acceso externo + publicación ─────────────────────────────────────────────
 
-/** Crea (o reactiva) el acceso token+password del business case. */
+/** Crea, reusa o ROTA el acceso token+password del business case. */
 export async function ensureAccess(businessCaseId: string, createdByEmail?: string | null) {
   const existing = await prisma.businessCaseExternalAccess.findUnique({
     where: { businessCaseId },
-    select: { id: true, accessToken: true, accessPassword: true },
+    select: { id: true, accessToken: true, accessPassword: true, revokedAt: true },
   });
-  if (existing && existing.accessPassword) {
-    await prisma.businessCaseExternalAccess.update({
-      where: { businessCaseId },
-      data: { revokedAt: null },
-    });
-    return existing;
+  // Reusar las credenciales SOLO si no estaba revocado. Si el CSE revocó (mató un link
+  // filtrado) y vuelve a publicar, rotamos token+password nuevos para invalidar lo viejo.
+  if (existing && existing.accessPassword && !existing.revokedAt) {
+    return { id: existing.id, accessToken: existing.accessToken, accessPassword: existing.accessPassword };
   }
   const accessToken = randomBytes(32).toString("hex");
   const password = generatePassword();

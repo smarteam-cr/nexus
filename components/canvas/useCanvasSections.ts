@@ -5,18 +5,22 @@
  *
  * Hook cliente compartido para leer y mutar las secciones+bloques de un canvas
  * custom (CanvasSection + CanvasBlock). Lo usan las vistas que NO son la grilla
- * de SectionBlockList: la vista lineal del Handoff y la landing del Kickoff.
+ * de SectionBlockList: la vista lineal del Handoff, la landing del Kickoff y el
+ * workspace de Business Cases (canvases que cuelgan de un BusinessCase).
  *
- * Pega a los MISMOS endpoints que SectionBlockList (contrato compartido):
- *   GET    /api/projects/[projectId]/canvas-sections?canvasId=
- *   POST   /api/projects/[projectId]/canvas-sections/[sectionId]/blocks   (crear, HUMAN/CONFIRMED)
- *   PUT    .../blocks  { blockId, content?|data?|status? }                 (editar / aceptar)
- *   DELETE .../blocks  { blockId }                                         (rechazar / eliminar)
+ * Pega a los MISMOS endpoints que SectionBlockList (contrato compartido), bajo
+ * `basePath` (`/api/projects/[id]` o `/api/business-cases/[id]`):
+ *   GET    {basePath}/canvas-sections?canvasId=
+ *   POST   {basePath}/canvas-sections/[sectionId]/blocks   (crear, HUMAN/CONFIRMED)
+ *   PUT    .../blocks  { blockId, content?|data?|status? }  (editar / aceptar)
+ *   DELETE .../blocks  { blockId }                          (rechazar / eliminar)
  *
  * Las mutaciones chequean res.ok y exponen `error` — NO tragan el fallo. (Un PUT
  * que fallaba en silencio fue lo que ocultó el bug de persistencia de edición.)
  *
- * NO toca SectionBlockList (que sigue sirviendo a Diagnóstico/Planificación/etc.).
+ * UNDO global: cada mutación exitosa registra un comando de deshacer (snapshot del
+ * cliente → re-PUT/recreate) vía useUndo. Scope por canvas (basePath:canvasId); al
+ * desmontar la superficie se purgan sus entradas. NO toca SectionBlockList.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -31,9 +35,12 @@ export interface SectionWithBlocks {
   titleOverride: string | null;
   /** Eyebrow (título pequeño) editado por el CSE; null = eyebrow por defecto. */
   eyebrowOverride: string | null;
-  /** Valor anterior de title/eyebrow para el deshacer de 1 nivel (null = nada que deshacer). */
+  /** Guía del agente editada por el CSE (business case). null = brief por defecto de la config. */
+  agentBriefOverride: string | null;
+  /** Valor anterior de title/eyebrow/brief para el deshacer de 1 nivel (null = nada que deshacer). */
   previousTitleOverride: string | null;
   previousEyebrowOverride: string | null;
+  previousAgentBriefOverride: string | null;
   order: number;
   layout: unknown;
   blocks: BlockData[];
@@ -42,16 +49,29 @@ export interface SectionWithBlocks {
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 export function useCanvasSections(
-  projectId: string,
+  // Base de las rutas de canvas: `/api/projects/${projectId}` (kickoff/handoff) o
+  // `/api/business-cases/${id}` (Ventas). Permite reusar el hook (y KickoffLanding)
+  // para canvases que cuelgan de un BusinessCase, no solo de un Project.
+  basePath: string,
   canvasId: string,
   // D.3 staging — se dispara tras CUALQUIER mutación de contenido exitosa (bloque o
   // metadata de sección). Lo usa el kickoff para encender la barra "cambios sin subir"
   // en el acto. Por ref → no invalida la memoización de mutate/patchSection.
   onContentChange?: () => void,
+  // Opciones. `poll` (default true): polling de 5s para captar bloques DRAFT que el
+  // agente escribe async (kickoff). El business case lo pone en false: su generación
+  // es SÍNCRONA (refetch explícito tras /generate), así que el polling solo causaría
+  // re-renders periódicos innecesarios (parpadeo del editor inline).
+  options?: { poll?: boolean },
 ) {
+  const pollEnabled = options?.poll !== false;
   const [sections, setSections] = useState<SectionWithBlocks[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Última serialización aplicada → guard de igualdad: si un refetch trae contenido
+  // idéntico (p.ej. un tick de polling sin cambios), NO reemplazamos el array (evita
+  // re-renders y churn del árbol de edición sin motivo).
+  const lastSectionsJson = useRef<string>("");
   const onContentChangeRef = useRef(onContentChange);
   useEffect(() => {
     onContentChangeRef.current = onContentChange;
@@ -59,9 +79,9 @@ export function useCanvasSections(
 
   // ── Undo global ──────────────────────────────────────────────────────────────
   // Cada mutación exitosa registra un comando de deshacer (snapshot del cliente → re-PUT/recreate).
-  // Scope por canvas: al desmontar la superficie se purgan sus entradas (no aplican a otro canvas).
+  // Scope por canvas (basePath identifica al dueño: proyecto o business case); se purga al desmontar.
   const { pushUndo, registerScope } = useUndo();
-  const undoScope = `canvas:${projectId}:${canvasId}`;
+  const undoScope = `canvas:${basePath}:${canvasId}`;
   useEffect(() => registerScope(undoScope), [registerScope, undoScope]);
   const sectionsRef = useRef(sections);
   const findBlock = useCallback(
@@ -69,8 +89,13 @@ export function useCanvasSections(
       sectionsRef.current.flatMap((s) => s.blocks).find((b) => b.id === blockId),
     [],
   );
+  const findSection = useCallback(
+    (sectionId: string): SectionWithBlocks | undefined =>
+      sectionsRef.current.find((s) => s.id === sectionId),
+    [],
+  );
   // Refs a los mutadores para que los closures de undo siempre llamen la versión vigente
-  // (evita ciclos en useCallback y closures stale).
+  // (evita ciclos en useCallback y closures stale). Se sincronizan en un effect (no en render).
   const saveBlockRef = useRef<
     (sectionId: string, blockId: string, updates: { content?: string; data?: unknown }, skipUndo?: boolean) => Promise<boolean>
   >(null!);
@@ -82,18 +107,26 @@ export function useCanvasSections(
   >(null!);
   const renameSectionRef = useRef<(sectionId: string, title: string, skipUndo?: boolean) => Promise<boolean>>(null!);
   const setEyebrowRef = useRef<(sectionId: string, eyebrow: string, skipUndo?: boolean) => Promise<boolean>>(null!);
+  const setBriefRef = useRef<(sectionId: string, brief: string, skipUndo?: boolean) => Promise<boolean>>(null!);
 
-  const listUrl = `/api/projects/${projectId}/canvas-sections?canvasId=${canvasId}`;
+  const listUrl = `${basePath}/canvas-sections?canvasId=${canvasId}`;
   const blocksUrl = useCallback(
-    (sectionId: string) => `/api/projects/${projectId}/canvas-sections/${sectionId}/blocks`,
-    [projectId],
+    (sectionId: string) => `${basePath}/canvas-sections/${sectionId}/blocks`,
+    [basePath],
   );
 
   const refetch = useCallback(async () => {
     try {
       const res = await fetch(listUrl);
       const data = await res.json();
-      setSections(data.sections ?? []);
+      const next: SectionWithBlocks[] = data.sections ?? [];
+      const serialized = JSON.stringify(next);
+      // Guard de igualdad: solo actualizamos si el contenido cambió (los ids de
+      // sección son únicos por canvas → cambiar de canvas siempre difiere).
+      if (serialized !== lastSectionsJson.current) {
+        lastSectionsJson.current = serialized;
+        setSections(next);
+      }
     } catch {
       /* ignore: lectura; el polling reintenta */
     }
@@ -109,6 +142,7 @@ export function useCanvasSections(
   const lastDraft = useRef(0);
   const refetchRef = useRef(refetch);
   useEffect(() => {
+    if (!pollEnabled) return; // el business case no necesita polling (generación síncrona)
     const id = setInterval(() => {
       fetch(listUrl)
         .then((r) => r.json())
@@ -122,7 +156,7 @@ export function useCanvasSections(
         .catch(() => {});
     }, 5000);
     return () => clearInterval(id);
-  }, [listUrl]);
+  }, [listUrl, pollEnabled]);
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -158,7 +192,7 @@ export function useCanvasSections(
   );
 
   // Cambia el status del bloque (aceptar=CONFIRMED / volver a borrador=DRAFT). Registra undo
-  // al estado previo salvo que `skipUndo` (cuando lo invoca el propio undo).
+  // al estado previo salvo `skipUndo` (cuando lo invoca el propio undo).
   const setStatus = useCallback(
     async (sectionId: string, blockId: string, status: "DRAFT" | "CONFIRMED", skipUndo = false): Promise<boolean> => {
       const prev = skipUndo ? undefined : findBlock(blockId)?.status;
@@ -334,13 +368,13 @@ export function useCanvasSections(
     [mutate, refetch],
   );
 
-  // PATCH de metadata de sección (title/eyebrow de cara al cliente, o undo). Refetchea para
+  // PATCH de metadata de sección (title/eyebrow/brief de cara al cliente, o undo). Refetchea para
   // traer el estado canónico (incluye previous* que habilita el botón "Deshacer"). No usa el
   // endpoint de blocks (es metadata de sección) → PATCH dedicado.
   const patchSection = useCallback(
     async (sectionId: string, body: Record<string, unknown>, errMsg: string): Promise<boolean> => {
       try {
-        const res = await fetch(`/api/projects/${projectId}/canvas-sections/${sectionId}`, {
+        const res = await fetch(`${basePath}/canvas-sections/${sectionId}`, {
           method: "PATCH",
           headers: JSON_HEADERS,
           body: JSON.stringify(body),
@@ -360,13 +394,13 @@ export function useCanvasSections(
         return false;
       }
     },
-    [projectId, refetch],
+    [basePath, refetch],
   );
 
   // Título grande. String vacío → vuelve al título por defecto de la plantilla. Optimista.
   const renameSection = useCallback(
     (sectionId: string, title: string, skipUndo = false): Promise<boolean> => {
-      const prev = skipUndo ? null : sectionsRef.current.find((s) => s.id === sectionId)?.titleOverride ?? null;
+      const prev = skipUndo ? null : findSection(sectionId)?.titleOverride ?? null;
       const t = title.trim() || null;
       setSections((cur) => cur.map((s) => (s.id === sectionId ? { ...s, titleOverride: t } : s)));
       if (!skipUndo) {
@@ -379,13 +413,13 @@ export function useCanvasSections(
       }
       return patchSection(sectionId, { titleOverride: t }, "No se pudo guardar el título. Reintentá.");
     },
-    [patchSection, pushUndo, undoScope],
+    [patchSection, pushUndo, undoScope, findSection],
   );
 
   // Eyebrow (título pequeño). String vacío → default.
   const setEyebrow = useCallback(
     (sectionId: string, eyebrow: string, skipUndo = false): Promise<boolean> => {
-      const prev = skipUndo ? null : sectionsRef.current.find((s) => s.id === sectionId)?.eyebrowOverride ?? null;
+      const prev = skipUndo ? null : findSection(sectionId)?.eyebrowOverride ?? null;
       const e = eyebrow.trim() || null;
       setSections((cur) => cur.map((s) => (s.id === sectionId ? { ...s, eyebrowOverride: e } : s)));
       if (!skipUndo) {
@@ -398,24 +432,31 @@ export function useCanvasSections(
       }
       return patchSection(sectionId, { eyebrowOverride: e }, "No se pudo guardar el subtítulo. Reintentá.");
     },
-    [patchSection, pushUndo, undoScope],
+    [patchSection, pushUndo, undoScope, findSection],
   );
 
-  // "Latest ref" pattern: sincronizamos los refs DESPUÉS del render (no durante) — los closures de
-  // undo y el polling siempre ven la versión vigente sin violar las reglas de hooks.
-  useEffect(() => {
-    sectionsRef.current = sections;
-    refetchRef.current = refetch;
-    saveBlockRef.current = saveBlock;
-    restoreBlockRef.current = restoreBlock;
-    setStatusRef.current = setStatus;
-    renameSectionRef.current = renameSection;
-    setEyebrowRef.current = setEyebrow;
-  });
+  // Guía del agente por sección (business case). String vacío → vuelve al brief por defecto.
+  const setBrief = useCallback(
+    (sectionId: string, brief: string, skipUndo = false): Promise<boolean> => {
+      const prev = skipUndo ? null : findSection(sectionId)?.agentBriefOverride ?? null;
+      const b = brief.trim() || null;
+      setSections((cur) => cur.map((s) => (s.id === sectionId ? { ...s, agentBriefOverride: b } : s)));
+      if (!skipUndo) {
+        pushUndo({
+          scope: undoScope,
+          label: "Guía de sección",
+          coalesceKey: `${undoScope}|section-brief|${sectionId}`,
+          undo: () => setBriefRef.current(sectionId, prev ?? "", true),
+        });
+      }
+      return patchSection(sectionId, { agentBriefOverride: b }, "No se pudo guardar la guía. Reintentá.");
+    },
+    [patchSection, pushUndo, undoScope, findSection],
+  );
 
-  // Deshacer de 1 nivel (toggle actual↔previous) del título o el eyebrow de una sección.
+  // Deshacer de 1 nivel (toggle actual↔previous) del título, el eyebrow o la guía de una sección.
   const undoSection = useCallback(
-    (sectionId: string, which: "title" | "eyebrow"): Promise<boolean> =>
+    (sectionId: string, which: "title" | "eyebrow" | "brief"): Promise<boolean> =>
       patchSection(sectionId, { undo: which }, "No se pudo deshacer. Reintentá."),
     [patchSection],
   );
@@ -447,6 +488,19 @@ export function useCanvasSections(
     });
   }, [sections, mutate, refetch, pushUndo, undoScope]);
 
+  // "Latest ref" pattern: sincronizamos los refs DESPUÉS del render (no durante) — los closures de
+  // undo y el polling siempre ven la versión vigente sin violar las reglas de hooks.
+  useEffect(() => {
+    sectionsRef.current = sections;
+    refetchRef.current = refetch;
+    saveBlockRef.current = saveBlock;
+    restoreBlockRef.current = restoreBlock;
+    setStatusRef.current = setStatus;
+    renameSectionRef.current = renameSection;
+    setEyebrowRef.current = setEyebrow;
+    setBriefRef.current = setBrief;
+  });
+
   const draftCount = sections.reduce(
     (n, s) => n + s.blocks.filter((b) => b.status === "DRAFT").length,
     0,
@@ -469,6 +523,7 @@ export function useCanvasSections(
     restoreBlock,
     renameSection,
     setEyebrow,
+    setBrief,
     undoSection,
     acceptAll,
   };

@@ -119,10 +119,14 @@ export async function accessibleClientWhere(
   const tm = user.teamMember;
   if (!tm || tm.deactivatedAt) return { id: "__none__" }; // sin acceso
 
-  // Ve todo: SUPER_ADMIN / VENTAS / CSL / MARKETING, o el flag override vigente
-  if (tm.roleEnum === "SUPER_ADMIN" || hasCapability(tm.roleEnum, "seeAllClients")) return null;
+  // Ve todo: SUPER_ADMIN / VENTAS / CSL / MARKETING, o el flag override vigente.
+  // NOTA: aun "ve todo" EXCLUYE prospectos de Ventas (Clients lazily creados para un
+  // business case) — no son clientes reales y no deben aparecer en los listados de CS.
+  if (tm.roleEnum === "SUPER_ADMIN" || hasCapability(tm.roleEnum, "seeAllClients")) {
+    return { isProspect: false };
+  }
   if (tm.canViewAllClients && (!tm.canViewAllExpiresAt || tm.canViewAllExpiresAt > new Date())) {
-    return null;
+    return { isProspect: false };
   }
 
   // CSE (scoped): owner por proyecto OR GRANT (a mí o a mi rol), menos REVOKE
@@ -146,6 +150,7 @@ export async function accessibleClientWhere(
 
   return {
     AND: [
+      { isProspect: false },
       { OR: visibility },
       ...(revokedIds.length ? [{ id: { notIn: revokedIds } }] : []),
     ],

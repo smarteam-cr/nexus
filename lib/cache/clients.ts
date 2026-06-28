@@ -28,6 +28,7 @@ export const getClientsForSidebar = unstable_cache(
   async () => {
     // 1. Cargar todos los clientes con los campos básicos del sidebar
     const rows = await prisma.client.findMany({
+      where: { isProspect: false }, // los prospectos de Ventas (business cases) no van al sidebar de CS
       select: {
         id: true,
         name: true,

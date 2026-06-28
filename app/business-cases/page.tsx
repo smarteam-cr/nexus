@@ -1,60 +1,82 @@
 /**
- * /business-cases — hub del área de Ventas. Lista los clientes accesibles; cada
- * uno lleva a sus business cases. Gateado por rol VENTAS/CSL/SUPER_ADMIN.
+ * /business-cases — hub del área de Ventas: lista todos los business cases
+ * (prospectos y clientes) + "Nuevo". Gateado por VENTAS/CSL/SUPER_ADMIN.
  */
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/layout/AppShell";
-import { PageHeader } from "@/components/ui";
 import { requireInternalUser } from "@/lib/auth/supabase";
-import { accessibleClientWhere } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
+import DeleteBusinessCaseButton from "@/components/business-cases/DeleteBusinessCaseButton";
 
 export const dynamic = "force-dynamic";
 
 const SALES_ROLES = ["VENTAS", "CSL", "SUPER_ADMIN"];
+const STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Borrador",
+  PUBLISHED: "Publicado",
+  ARCHIVED: "Archivado",
+};
 
 export default async function BusinessCasesHubPage() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !SALES_ROLES.includes(ctx.role)) redirect("/clients");
 
-  const where = await accessibleClientWhere(ctx.user);
-  const clients = await prisma.client.findMany({
-    where: where ?? undefined,
-    orderBy: { name: "asc" },
+  const cases = await prisma.businessCase.findMany({
+    orderBy: { updatedAt: "desc" },
     select: {
       id: true,
       name: true,
-      company: true,
-      _count: { select: { businessCases: true } },
+      status: true,
+      client: { select: { name: true, isProspect: true } },
     },
   });
 
   return (
     <AppShell>
       <div className="px-6 py-8">
-        <PageHeader
-          title="Ventas — Business Cases"
-          description="Generá y publicá casos de negocio para tus prospectos."
-        />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-          {clients.map((c) => (
-            <Link
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold text-fg">Ventas — Business Cases</h1>
+            <p className="mt-1 text-sm text-fg-muted">Casos de negocio para prospectos y clientes.</p>
+          </div>
+          <Link
+            href="/business-cases/new"
+            className="flex-shrink-0 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          >
+            Nuevo business case
+          </Link>
+        </div>
+
+        <div className="mt-6 space-y-2">
+          {cases.map((c) => (
+            <div
               key={c.id}
-              href={`/business-cases/${c.id}`}
-              className="rounded-2xl border border-line bg-surface p-5 hover:border-brand/40 transition-colors"
+              className="flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-3 hover:border-brand/40 transition-colors"
             >
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold text-fg truncate">{c.name}</h3>
-                <span className="flex-shrink-0 text-xs text-fg-muted">
-                  {c._count.businessCases} caso{c._count.businessCases === 1 ? "" : "s"}
+              <Link
+                href={`/business-cases/${c.id}`}
+                className="flex flex-1 items-center justify-between gap-3 min-w-0"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-fg truncate">{c.name}</p>
+                  <p className="text-xs text-fg-muted truncate">
+                    {c.client.name}
+                    {c.client.isProspect ? " (prospecto)" : ""}
+                  </p>
+                </div>
+                <span className="flex-shrink-0 text-xs px-2 py-1 rounded bg-surface-muted text-fg-muted">
+                  {STATUS_LABEL[c.status] ?? c.status}
                 </span>
-              </div>
-              {c.company && <p className="mt-1 text-xs text-fg-muted truncate">{c.company}</p>}
-            </Link>
+              </Link>
+              <DeleteBusinessCaseButton
+                bcId={c.id}
+                description={`Se eliminará "${c.name}" (${c.client.name}) con todos sus casos de uso, secciones y contenido. Esta acción no se puede deshacer.`}
+              />
+            </div>
           ))}
-          {clients.length === 0 && (
-            <p className="text-sm text-fg-muted">No hay clientes disponibles.</p>
+          {cases.length === 0 && (
+            <p className="text-sm text-fg-muted">No hay business cases todavía. Creá el primero.</p>
           )}
         </div>
       </div>

@@ -55,7 +55,7 @@ export default function CanvasLinearView({
     error,
     clearError,
     restoreBlock,
-  } = useCanvasSections(projectId, canvasId);
+  } = useCanvasSections(`/api/projects/${projectId}`, canvasId);
 
   // Con onlyKey filtramos a una sección; draftCount y "Aceptar todos" se acotan a lo
   // visible (igual que SectionBlockList) para no contar/aceptar otras secciones.
