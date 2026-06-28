@@ -18,7 +18,7 @@ export async function POST(
   const guard = await guardSalesAccess();
   if (guard instanceof NextResponse) return guard;
 
-  const bc = await prisma.businessCase.findUnique({ where: { id }, select: { id: true } });
+  const bc = await prisma.businessCase.findUnique({ where: { id }, select: { id: true, clientId: true } });
   if (!bc) return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
 
   let body: { sessionId?: unknown; included?: unknown };
@@ -31,8 +31,19 @@ export async function POST(
   const included = body.included !== false; // default true
   if (!sessionId) return NextResponse.json({ error: "sessionId requerido" }, { status: 400 });
 
-  const session = await prisma.firefliesSession.findUnique({ where: { id: sessionId }, select: { id: true } });
+  const session = await prisma.firefliesSession.findUnique({
+    where: { id: sessionId },
+    select: { id: true, resolvedClientId: true, manualClientId: true },
+  });
   if (!session) return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 });
+  // INVARIANTE #1 (no mezclar contexto entre clientes): NO atar al business case una sesión que
+  // pertenece a OTRO cliente — su transcript alimentaría la generación del caso (leak cross-cliente).
+  // Owner efectivo = manualClientId ?? resolvedClientId. Se permite: del mismo cliente o HUÉRFANA
+  // (prospecto cuyas sesiones aún no resuelven). El override included=false (sacar) se deja pasar.
+  const owner = session.manualClientId ?? session.resolvedClientId;
+  if (included && owner && owner !== bc.clientId) {
+    return NextResponse.json({ error: "La sesión pertenece a otro cliente." }, { status: 403 });
+  }
 
   await prisma.businessCaseSession.upsert({
     where: { businessCaseId_sessionId: { businessCaseId: id, sessionId } },

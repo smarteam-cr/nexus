@@ -76,10 +76,18 @@ export async function loadBcFeeding(businessCaseId: string): Promise<BcFeedingRe
   if (domains.length) {
     try {
       const patterns = domains.map((d) => `%@${d}`);
+      // INVARIANTE #1: el suplemento por dominio NO debe traer sesiones de OTRO cliente (aunque
+      // un participante comparta dominio). Owner = manualClientId ?? resolvedClientId; se permite
+      // del mismo cliente o HUÉRFANA (prospecto sin resolver) — nunca de otro cliente.
+      const cid = bc.client.id;
       const rows = await prisma.$queryRaw<Row[]>(Prisma.sql`
         SELECT id, title, date, participants, "organizerEmail"
         FROM "FirefliesSession"
         WHERE EXISTS (SELECT 1 FROM unnest(participants) p WHERE lower(p) LIKE ANY(${patterns}))
+          AND (
+            "manualClientId" = ${cid}
+            OR ("manualClientId" IS NULL AND ("resolvedClientId" = ${cid} OR "resolvedClientId" IS NULL))
+          )
         ORDER BY date DESC LIMIT 100`);
       domainExtra = rows.filter((s) => !seen.has(s.id));
       domainExtra.forEach((s) => seen.add(s.id));
@@ -89,9 +97,21 @@ export async function loadBcFeeding(businessCaseId: string): Promise<BcFeedingRe
   }
 
   // Sesiones con override que no aparezcan arriba (agregadas a mano) → traer su meta.
+  // INVARIANTE #1: filtramos por ownership (solo del mismo cliente o huérfanas) como defensa por si
+  // quedó un link viejo de otro cliente; el borde de escritura (POST /sessions) ya lo previene al atar.
   const outside = [...linkedIds].filter((sid) => !seen.has(sid));
   const extra: Row[] = outside.length
-    ? await prisma.firefliesSession.findMany({ where: { id: { in: outside } }, select: SELECT })
+    ? await prisma.firefliesSession.findMany({
+        where: {
+          id: { in: outside },
+          OR: [
+            { manualClientId: bc.client.id },
+            { AND: [{ manualClientId: null }, { resolvedClientId: bc.client.id }] },
+            { AND: [{ manualClientId: null }, { resolvedClientId: null }] },
+          ],
+        },
+        select: SELECT,
+      })
     : [];
 
   const all = [...resolved, ...domainExtra, ...extra];
