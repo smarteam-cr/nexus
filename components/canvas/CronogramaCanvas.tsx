@@ -27,10 +27,11 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { plural } from "@/lib/timeline/weeks";
+import { plural, computePhaseRanges, currentWeekIndex } from "@/lib/timeline/weeks";
 import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/Toast";
-import TimelineGantt, { type GanttPhase, type GanttTaskStatus, PARTY_META, effParty } from "./TimelineGantt";
+import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus, PARTY_META, effParty } from "./TimelineGantt";
+import TaskDetailDrawer from "./TaskDetailDrawer";
 import TimelineAssistDialog from "./TimelineAssistDialog";
 import PublishBar from "./PublishBar";
 import CronogramaProgressButton from "@/components/clients/CronogramaProgressButton";
@@ -45,6 +46,7 @@ interface TaskDraft {
   needsValidation: boolean;
   source?: string;
   party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | null;
+  type?: "SESSION" | "TASK" | null;
   _key: string;
 }
 
@@ -52,7 +54,12 @@ interface Phase {
   id?: string;
   name: string;
   durationWeeks: number;
+  /** Inicio explícito (offset 0-based). null = contigua tras la anterior. Habilita paralelo. */
+  startWeek?: number | null;
   sessionCount: number | null;
+  /** Sesiones de entrega reales (CSE/dev + cliente) calculadas por el server.
+   *  Solo-lectura, derivado; NO se envía en el PUT. null = fase futura o sin anchor. */
+  actualSessionCount?: number | null;
   notes: string | null;
   activityType: string | null;
   source?: string;
@@ -75,6 +82,7 @@ interface ProposalPhase {
   name: string;
   order: number;
   durationWeeks: number;
+  startWeek?: number | null;
   sessionCount?: number | null;
   notes?: string | null;
   activityType?: string | null;
@@ -95,6 +103,7 @@ interface ServerTask {
   needsValidation: boolean;
   source: string;
   party: "CLIENTE" | "SMARTEAM" | "AMBOS" | null;
+  type: "SESSION" | "TASK" | null;
 }
 
 interface ServerPhase {
@@ -102,7 +111,9 @@ interface ServerPhase {
   name: string;
   order: number;
   durationWeeks: number;
+  startWeek?: number | null;
   sessionCount: number | null;
+  actualSessionCount?: number | null;
   notes: string | null;
   activityType: string | null;
   source: string;
@@ -146,6 +157,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // ── Asistente IA ──
   const [assistOpen, setAssistOpen] = useState(false);
   const [assistScopePhaseId, setAssistScopePhaseId] = useState<string | null>(null);
+  // Drawer de detalle de tarea: se resuelve la tarea VIVA desde `phases` por _key.
+  const [selectedTask, setSelectedTask] = useState<{ phaseKey: string; taskKey: string } | null>(null);
+  // Si la tarea seleccionada desaparece (borrada o re-zip de _key tras guardar), cerrar el drawer.
+  useEffect(() => {
+    if (!selectedTask) return;
+    const ph = phases.find((p) => p._key === selectedTask.phaseKey);
+    if (!ph?.tasks.some((t) => t._key === selectedTask.taskKey)) setSelectedTask(null);
+  }, [selectedTask, phases]);
   const [assisting, setAssisting] = useState(false);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [assistWarnings, setAssistWarnings] = useState<string[]>([]);
@@ -195,7 +214,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       id: p.id,
       name: p.name,
       durationWeeks: p.durationWeeks,
+      startWeek: p.startWeek,
       sessionCount: p.sessionCount,
+      actualSessionCount: p.actualSessionCount,
       notes: p.notes,
       activityType: p.activityType,
       source: p.source,
@@ -210,6 +231,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         needsValidation: t.needsValidation,
         source: t.source,
         party: t.party,
+        type: t.type,
         _key: t.id,
       })),
       _key: p.id,
@@ -340,7 +362,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               ...p,
               tasks: [
                 ...p.tasks,
-                { title: "", weekIndex, notes: null, status: "PENDING" as const, needsValidation: false, party: "SMARTEAM" as const, _key: nextKey() },
+                { title: "", weekIndex, notes: null, status: "PENDING" as const, needsValidation: false, party: "SMARTEAM" as const, type: "TASK" as const, _key: nextKey() },
               ],
             }
           : p,
@@ -357,14 +379,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
 
   // ── Edición DIRECTA de fases (además de la barra de IA) ───────────────────────
   // Persiste por el mismo auto-guardado (PUT): nombre/duración/sesiones, agregar y eliminar.
-  const updatePhase = (phaseKey: string, patch: { name?: string; durationWeeks?: number; sessionCount?: number | null }) => {
+  const updatePhase = (phaseKey: string, patch: { name?: string; durationWeeks?: number; sessionCount?: number | null; startWeek?: number | null }) => {
     setPhases((ps) => ps.map((p) => (p._key === phaseKey ? { ...p, ...patch } : p)));
     markDirty();
   };
   const addPhase = () => {
     setPhases((ps) => [
       ...ps,
-      { name: "", durationWeeks: 1, sessionCount: null, notes: null, activityType: null, status: "PENDING" as const, needsValidation: false, tasks: [], _key: nextKey() },
+      { name: "", durationWeeks: 1, startWeek: null, sessionCount: null, notes: null, activityType: null, status: "PENDING" as const, needsValidation: false, tasks: [], _key: nextKey() },
     ]);
     markDirty();
   };
@@ -442,6 +464,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           order,
           notes: t.notes?.trim() ? t.notes.trim() : null,
           party: t.party ?? null,
+          type: t.type ?? null,
         };
       });
       return {
@@ -449,6 +472,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         name: p.name.trim(),
         order: i,
         durationWeeks: p.durationWeeks,
+        startWeek: p.startWeek ?? null,
         sessionCount: p.sessionCount,
         notes: p.notes?.trim() ? p.notes.trim() : null,
         activityType: p.activityType || null,
@@ -808,6 +832,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
 
   // ── Derivados ─────────────────────────────────────────────────────────────────
   const totalTasks = phases.reduce((n, p) => n + p.tasks.length, 0);
+  // ¿Ya se generó el detalle con IA? = existe al menos una tarea source ∈ {AGENT, MODIFIED} (el agente
+  // de detalle o el seed de Semana 0 las crean; MODIFIED = una tarea AGENT que el CSE editó — sigue
+  // siendo detalle generado). DEBE matchear el predicado del server (gate en analyze/route.ts): si solo
+  // contáramos AGENT, editar TODAS las tareas las volvía MODIFIED, hasAiDetail caía a false, el CTA
+  // "Generar" reaparecía y un re-run duplicaba las tareas. Las MANUALES (HUMAN) que el CSE ponga en la
+  // base NO cuentan → editar/agregar a mano la base no bloquea "Generar cronograma".
+  const hasAiDetail = phases.some((p) => p.tasks.some((t) => t.source === "AGENT" || t.source === "MODIFIED"));
   const pendingValidation = phases.reduce(
     (n, p) => n + p.tasks.filter((t) => t.needsValidation).length,
     0,
@@ -820,7 +851,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     id: p.id,
     name: p.name || "(sin nombre)",
     durationWeeks: p.durationWeeks,
+    startWeek: p.startWeek ?? null,
     sessionCount: p.sessionCount,
+    actualSessionCount: p.actualSessionCount ?? null,
     activityType: p.activityType,
     status: p.status,
     needsValidation: p.needsValidation,
@@ -834,8 +867,39 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       needsValidation: t.needsValidation,
       source: t.source,
       party: t.party,
+      type: t.type,
     })),
   }));
+
+  // ── Drawer de detalle de tarea: resolución de la tarea VIVA + navegación ──────
+  const drawerRanges = computePhaseRanges(phases);
+  const selPhaseIdx = selectedTask ? phases.findIndex((p) => p._key === selectedTask.phaseKey) : -1;
+  const selPhase = selPhaseIdx >= 0 ? phases[selPhaseIdx] : null;
+  const selDraft = selPhase && selectedTask ? selPhase.tasks.find((t) => t._key === selectedTask.taskKey) ?? null : null;
+  const drawerTask: GanttTask | null = selDraft
+    ? {
+        key: selDraft._key,
+        id: selDraft.id,
+        title: selDraft.title,
+        weekIndex: selDraft.weekIndex,
+        status: (selDraft.status ?? "PENDING") as GanttTaskStatus,
+        notes: selDraft.notes,
+        needsValidation: selDraft.needsValidation ?? false,
+        source: selDraft.source,
+        party: selDraft.party,
+        type: selDraft.type,
+      }
+    : null;
+  // Lista plana (orden de render) para navegar ↑/↓ entre tareas sin cerrar el drawer.
+  const flatTasks = phases.flatMap((p) => p.tasks.map((t) => ({ phaseKey: p._key, taskKey: t._key })));
+  const flatIdx = selectedTask
+    ? flatTasks.findIndex((f) => f.phaseKey === selectedTask.phaseKey && f.taskKey === selectedTask.taskKey)
+    : -1;
+  const navigateTask = (dir: -1 | 1) => {
+    if (flatIdx < 0) return;
+    const next = flatTasks[flatIdx + dir];
+    if (next) setSelectedTask(next);
+  };
 
   // Propuesta → preview del Gantt (read-only) + resumen del diff
   const proposalGantt: GanttPhase[] | null = proposal
@@ -844,6 +908,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         id: p.id,
         name: p.name,
         durationWeeks: p.durationWeeks,
+        startWeek: p.startWeek ?? null,
         sessionCount: p.sessionCount ?? null,
         activityType: p.activityType ?? null,
         tasks: (p.tasks ?? []).map((t, ti) => ({
@@ -890,7 +955,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         continue;
       }
       const cur = currentPhaseById.get(p.id);
-      if (cur && (cur.name !== p.name || cur.durationWeeks !== p.durationWeeks || (cur.activityType ?? null) !== (p.activityType ?? null))) {
+      if (cur && (cur.name !== p.name || cur.durationWeeks !== p.durationWeeks || (cur.startWeek ?? null) !== (p.startWeek ?? null) || (cur.activityType ?? null) !== (p.activityType ?? null))) {
         phasesChanged++;
       }
     }
@@ -939,7 +1004,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               !hasPublishedOnce evita regenerar sobre un cronograma vivo (borraría fechas/avance),
               aun si se borraron las tareas post-publicación. */}
           {phases.length > 0 && !proposal && (
-            !hasPublishedOnce && !phases.some((p) => p.tasks.length > 0) ? (
+            !hasPublishedOnce && !hasAiDetail ? (
               <button
                 onClick={() => void generateDetail({ auto: false })}
                 disabled={generating}
@@ -1201,7 +1266,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         />
       ) : (
         <>
-          {totalTasks === 0 && !hasPublishedOnce && (
+          {!hasAiDetail && !hasPublishedOnce && (
             <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-700/50 text-amber-200">
               <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               <p className="text-xs leading-relaxed">
@@ -1224,7 +1289,6 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             onToggleStatus={toggleStatus}
             onUpdateTask={(phaseKey, taskKey, patch) => updateTask(phaseKey, taskKey, patch)}
             onAddTask={addTask}
-            onRemoveTask={removeTask}
             onUpdatePhase={updatePhase}
             onAddPhase={addPhase}
             onRemovePhase={removePhase}
@@ -1232,10 +1296,29 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             onReorderPhases={reorderPhases}
             onSetAnchor={setAnchorFromGantt}
             onAssistPhase={(phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }}
+            onOpenTask={(pk, tk) => setSelectedTask({ phaseKey: pk, taskKey: tk })}
             kickoffDate={kickoffDate || null}
           />
         </>
       )}
+
+      <TaskDetailDrawer
+        open={!!drawerTask}
+        task={drawerTask}
+        phaseKey={selectedTask?.phaseKey ?? null}
+        phaseName={selPhase?.name ?? ""}
+        phaseDurationWeeks={selPhase?.durationWeeks ?? 1}
+        absolutePhaseStart={selPhaseIdx >= 0 ? drawerRanges[selPhaseIdx].start : 0}
+        anchor={anchor || null}
+        currentWeek={currentWeekIndex(anchor || null)}
+        onClose={() => setSelectedTask(null)}
+        onToggleStatus={toggleStatus}
+        onUpdateTask={(pk, tk, patch) => updateTask(pk, tk, patch)}
+        onRemoveTask={removeTask}
+        onNavigate={navigateTask}
+        hasPrev={flatIdx > 0}
+        hasNext={flatIdx >= 0 && flatIdx < flatTasks.length - 1}
+      />
 
       <TimelineAssistDialog
         open={assistOpen}

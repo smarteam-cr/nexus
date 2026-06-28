@@ -54,6 +54,7 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
           name: true,
           order: true,
           durationWeeks: true,
+          startWeek: true,
           sessionCount: true,
           notes: true,
           activityType: true,
@@ -65,13 +66,13 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
   // Acciones por semana SOLO si el CSE confirmó el detalle (D.1). Gate
   // server-side: sin confirmación las tareas ni se consultan — jamás llegan
   // al JSON del browser. Select explícito: título + semana, nada interno.
-  let tasksByPhase: Map<string, Array<{ title: string; weekIndex: number; status: string; party: string | null }>> | null = null;
+  let tasksByPhase: Map<string, Array<{ title: string; weekIndex: number; status: string; party: string | null; type: string | null }>> | null = null;
   if (tl?.detailConfirmedAt) {
     const tasks = await prisma.timelineTask.findMany({
       where: { phase: { timelineId: tl.id } },
       orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
-      // status + party cruzan al cronograma compartible (gated por "Subir"); status además filtra SUSPENDED.
-      select: { phaseId: true, title: true, weekIndex: true, status: true, party: true },
+      // status + party + type cruzan al cronograma compartible (gated por "Subir"); status además filtra SUSPENDED.
+      select: { phaseId: true, title: true, weekIndex: true, status: true, party: true, type: true },
     });
     tasksByPhase = new Map();
     for (const t of tasks) {
@@ -80,7 +81,7 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
       // SUSPENDED exista ya en la DB — así funciona aunque la migración E se aplique recién al deploy.
       if (t.status === "SUSPENDED") continue;
       const arr = tasksByPhase.get(t.phaseId) ?? [];
-      arr.push({ title: t.title, weekIndex: t.weekIndex, status: t.status, party: t.party });
+      arr.push({ title: t.title, weekIndex: t.weekIndex, status: t.status, party: t.party, type: t.type });
       tasksByPhase.set(t.phaseId, arr);
     }
   }

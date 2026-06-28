@@ -62,6 +62,10 @@ CÓMO TRABAJAS:
   · "SMARTEAM": configuración técnica en HubSpot (pipeline, propiedades y vistas, automatizaciones, integraciones, dashboards, bandeja).
   · "AMBOS": trabajo conjunto (sesiones de exploración/arquitectura, talleres, consensos, entrevistas, onboarding, acompañamiento, revisiones de avance).
   Guía rápida por tipo de fase: CONFIGURACION → casi siempre SMARTEAM; EXPLORACION / PLANIFICACION / ADOPCION → suelen ser AMBOS; SEGUIMIENTO → AMBOS. Asigna party a TODAS las tareas.
+- TIPO DE CADA TAREA (campo "type") — ¿es una reunión o una acción?
+  · "SESSION": una reunión / sesión de trabajo con el cliente (kick-off, sesión de arquitectura, demo, capacitación, revisión semanal de avance, taller). Si la tarea implica juntarse con el cliente, es SESSION.
+  · "TASK": una acción, configuración o entregable que NO es una reunión (configurar pipeline, crear propiedades, entregar bases de datos, dar accesos, armar automatizaciones).
+  Asigna type a TODAS las tareas. Ante la duda, usa TASK.
 
 FORMATO DE RESPUESTA — JSON EXACTO, sin markdown wrapping, sin comentarios fuera del JSON:
 {
@@ -71,9 +75,9 @@ FORMATO DE RESPUESTA — JSON EXACTO, sin markdown wrapping, sin comentarios fue
         "id": "<id EXACTO copiado del input>",
         "activityType": "CONFIGURACION",
         "tasks": [
-          { "title": "Configurar pipeline de ventas", "weekIndex": 0, "notes": "Etapas según lo consensuado en planificación", "porValidar": false, "party": "SMARTEAM" },
-          { "title": "Crear propiedades y vistas por equipo", "weekIndex": 0, "porValidar": false, "party": "SMARTEAM" },
-          { "title": "Armar automatización de asignación", "weekIndex": 1, "porValidar": false, "party": "SMARTEAM" }
+          { "title": "Configurar pipeline de ventas", "weekIndex": 0, "notes": "Etapas según lo consensuado en planificación", "porValidar": false, "party": "SMARTEAM", "type": "TASK" },
+          { "title": "Crear propiedades y vistas por equipo", "weekIndex": 0, "porValidar": false, "party": "SMARTEAM", "type": "TASK" },
+          { "title": "Revisión semanal de avance", "weekIndex": 1, "porValidar": false, "party": "AMBOS", "type": "SESSION" }
         ]
       }
     ]
@@ -81,6 +85,7 @@ FORMATO DE RESPUESTA — JSON EXACTO, sin markdown wrapping, sin comentarios fue
 }
 Valores válidos de activityType: EXPLORACION | PLANIFICACION | CONFIGURACION | ADOPCION | SEGUIMIENTO.
 Valores válidos de party: CLIENTE | SMARTEAM | AMBOS.
+Valores válidos de type: SESSION | TASK.
 
 COBERTURA: incluye TODAS las fases del input, cada una con su id literal (aunque alguna quede con pocas tareas). NO emitas name, durationWeeks ni order — no son tuyos.`;
 

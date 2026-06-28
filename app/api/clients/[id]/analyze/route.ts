@@ -2007,7 +2007,7 @@ async function persistTimelineFromAgentOutput(
 
     // Validador inline (sin Zod, consistente con el resto del codebase)
     const validPhases = timelineRaw
-      .filter((p: unknown): p is { name: string; durationWeeks: number; sessionCount?: number; notes?: string; estimated?: boolean } => {
+      .filter((p: unknown): p is { name: string; durationWeeks: number; sessionCount?: number; notes?: string; estimated?: boolean; startWeek?: number } => {
         if (!p || typeof p !== "object") return false;
         const obj = p as Record<string, unknown>;
         return typeof obj.name === "string"
@@ -2019,6 +2019,8 @@ async function persistTimelineFromAgentOutput(
         name: p.name.trim(),
         order: i,
         durationWeeks: Math.floor(p.durationWeeks),
+        // startWeek: inicio explícito (paralelo) si el agente lo dio; null = contigua tras la anterior.
+        startWeek: typeof p.startWeek === "number" && p.startWeek >= 0 ? Math.floor(p.startWeek) : null,
         sessionCount: typeof p.sessionCount === "number" && p.sessionCount > 0
           ? Math.floor(p.sessionCount)
           : null,
@@ -2046,7 +2048,7 @@ async function persistTimelineFromAgentOutput(
         anchorStartDate: true,
         phases: {
           orderBy: { order: "asc" },
-          select: { id: true, name: true, durationWeeks: true, sessionCount: true, notes: true, activityType: true },
+          select: { id: true, name: true, durationWeeks: true, startWeek: true, sessionCount: true, notes: true, activityType: true },
         },
       },
     });
@@ -2061,6 +2063,7 @@ async function persistTimelineFromAgentOutput(
         name: string;
         order: number;
         durationWeeks: number;
+        startWeek?: number | null;
         sessionCount: number | null;
         notes: string | null;
         activityType?: string | null;
@@ -2084,6 +2087,7 @@ async function persistTimelineFromAgentOutput(
             name: p.name,
             order: i,
             durationWeeks: p.durationWeeks,
+            startWeek: p.startWeek,
             sessionCount: p.sessionCount,
             notes: p.notes,
             activityType: match.activityType,
@@ -2093,6 +2097,7 @@ async function persistTimelineFromAgentOutput(
             name: p.name,
             order: i,
             durationWeeks: p.durationWeeks,
+            startWeek: p.startWeek,
             sessionCount: p.sessionCount,
             notes: p.notes,
           });
@@ -2108,6 +2113,7 @@ async function persistTimelineFromAgentOutput(
           name: ph.name,
           order: nextOrder++,
           durationWeeks: ph.durationWeeks,
+          startWeek: ph.startWeek,
           sessionCount: ph.sessionCount,
           notes: ph.notes,
           activityType: ph.activityType,
@@ -2149,12 +2155,21 @@ async function persistTimelineFromAgentOutput(
             name: "Semana 0",
             order: 0,
             durationWeeks: 1,
+            startWeek: 0 as number | null,
             sessionCount: 1 as number | null,
             notes: "Kickoff y levantamiento inicial con el cliente",
             needsValidation: true,
             source: "AGENT" as const,
           },
-          ...validPhases.map((p) => ({ ...p, order: p.order + 1 })),
+          // Al anteponer Semana 0 (durationWeeks 1 en week 0), el origen del agente se corre +1 semana.
+          // Las contiguas (startWeek null) las recoloca solo computePhaseRanges (el cursor arranca tras
+          // Semana 0). Las que traen startWeek EXPLÍCITO (paralelo) hay que correrlas +1 a mano, o
+          // quedarían una semana antes de lo que el agente quiso.
+          ...validPhases.map((p) => ({
+            ...p,
+            order: p.order + 1,
+            startWeek: p.startWeek != null ? p.startWeek + 1 : p.startWeek,
+          })),
         ];
 
     // Fecha de arranque por defecto = sesión de kickoff del proyecto (null si no hay).
@@ -2258,11 +2273,19 @@ async function persistTimelineDetailFromAgentOutput(
     });
     if (!tl || tl.phases.length === 0) return { ...empty, reason: "no_timeline" };
 
-    // Idempotencia: si ya hay CUALQUIER tarea, no pisar (propuesta en AgentRun.output).
-    const existingTaskCount = tl.phases.reduce((n, p) => n + p._count.tasks, 0);
-    if (existingTaskCount > 0) {
+    // Idempotencia: saltamos si YA existe detalle generado por IA. La señal es source ∈ {AGENT,
+    // MODIFIED}: MODIFIED es una tarea AGENT que el CSE editó (el PUT del timeline voltea AGENT→MODIFIED
+    // al editar contenido) — sigue siendo "detalle generado", solo retocado. Contar SOLO "AGENT" reabría
+    // duplicación: si el CSE edita TODAS las tareas antes de publicar, el count caía a 0, el CTA "Generar"
+    // reaparecía y un re-run creaba un set AGENT nuevo ALADO de las MODIFIED (sin dedup). Las tareas
+    // MANUALES (source=HUMAN, que el CSE agregó a la base) NO cuentan → no bloquean la generación inicial,
+    // el detalle se suma sin pisarlas. Mismo predicado en el UI (hasAiDetail) para que CTA y server coincidan.
+    const existingAgentCount = await tx.timelineTask.count({
+      where: { phase: { timelineId: tl.id }, source: { in: ["AGENT", "MODIFIED"] } },
+    });
+    if (existingAgentCount > 0) {
       console.log(
-        `[analyze] Skipping timeline detail: ya hay ${existingTaskCount} tareas para project ${bodyProjectId}. Propuesta queda en AgentRun.output (${agentRunId}).`,
+        `[analyze] Skipping timeline detail: ya hay ${existingAgentCount} tareas IA (AGENT/MODIFIED) para project ${bodyProjectId}. Propuesta queda en AgentRun.output (${agentRunId}).`,
       );
       return { ...empty, reason: "detail_exists" };
     }
@@ -2307,6 +2330,7 @@ async function persistTimelineDetailFromAgentOutput(
         notes: string | null;
         needsValidation: boolean;
         party: "CLIENTE" | "SMARTEAM" | "AMBOS" | null;
+        type: "SESSION" | "TASK";
         source: "AGENT";
         status: "PENDING";
       }> = [];
@@ -2332,6 +2356,9 @@ async function persistTimelineDetailFromAgentOutput(
               : effectiveActivity
                 ? "AMBOS"
                 : "SMARTEAM";
+        // Tipo de tarea del agente (validado) — fallback TASK si no manda un valor válido.
+        const typeRaw = typeof t.type === "string" ? t.type.toUpperCase() : "";
+        const type: "SESSION" | "TASK" = typeRaw === "SESSION" ? "SESSION" : "TASK";
         toCreate.push({
           phaseId: phase.id,
           title: sanitizeTaskTitle(titleRaw),
@@ -2340,6 +2367,7 @@ async function persistTimelineDetailFromAgentOutput(
           notes: typeof t.notes === "string" && t.notes.trim() ? t.notes.trim() : null,
           needsValidation: t.porValidar === true,
           party,
+          type,
           source: "AGENT",
           status: "PENDING",
         });
@@ -2396,6 +2424,7 @@ async function persistTimelineDetailFromAgentOutput(
           notes: null,
           needsValidation: false,
           party: t.party,
+          type: "TASK" as const, // las tareas fijas son entregables/accesos, no reuniones
           source: "AGENT" as const,
           status: "PENDING" as const,
         }),

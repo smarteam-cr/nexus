@@ -24,6 +24,8 @@ export interface ExternalTimelineTask {
   status?: string;
   /** Responsable (CLIENTE|SMARTEAM|AMBOS) — lo muestra el cronograma compartible. null/ausente = sin asignar. */
   party?: string | null;
+  /** Tipo (SESSION|TASK). El cronograma compartible muestra badge "Sesión" SOLO si es SESSION; TASK no muestra nada. */
+  type?: string | null;
 }
 
 export interface ExternalTimelinePhase {
@@ -31,6 +33,8 @@ export interface ExternalTimelinePhase {
   name: string;
   order: number;
   durationWeeks: number;
+  /** Inicio explícito (offset 0-based). null = contigua. Cruza para que el landing muestre el paralelismo. */
+  startWeek: number | null;
   sessionCount: number | null;
   notes: string | null;
   /** Tipo de actividad (EXPLORACION|PLANIFICACION|CONFIGURACION|ADOPCION|SEGUIMIENTO) — colorea el Gantt del cliente. */

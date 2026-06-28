@@ -97,6 +97,7 @@ export async function loadPortfolio(
               status: true,
               order: true,
               durationWeeks: true,
+              startWeek: true,
               actualStart: true,
               actualEnd: true,
               tasks: {
@@ -205,6 +206,7 @@ export async function loadPortfolio(
         status: ph.status,
         order: ph.order,
         durationWeeks: ph.durationWeeks,
+        startWeek: ph.startWeek,
         actualStart: ph.actualStart,
         actualEnd: ph.actualEnd,
         tasks: ph.tasks.map((t) => ({

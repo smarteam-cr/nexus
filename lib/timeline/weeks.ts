@@ -48,21 +48,38 @@ export interface PhaseRange {
 }
 
 /**
- * Rangos absolutos acumulados de cada fase, en el orden recibido.
- * El llamador debe pasar las fases YA ordenadas por `order`.
+ * Rangos absolutos de cada fase, en el orden recibido (pasar YA ordenadas por `order`).
+ *
+ * Inicio EXPLÍCITO opcional (`startWeek`): si una fase lo trae, arranca ahí (permite SOLAPE →
+ * fases en paralelo). Si es null/undefined, es CONTIGUA: arranca donde terminó la fase anterior.
+ * Con todas las fases sin `startWeek` el resultado es idéntico al acumulado clásico.
  */
-export function computePhaseRanges(phases: Array<{ durationWeeks: number }>): PhaseRange[] {
-  let cum = 0;
+export function computePhaseRanges(
+  phases: Array<{ durationWeeks: number; startWeek?: number | null }>,
+): PhaseRange[] {
+  let cursor = 0;
   return phases.map((p) => {
-    const start = cum;
-    cum += p.durationWeeks || 1;
-    return { start, end: cum };
+    const dur = p.durationWeeks || 1;
+    const start = p.startWeek != null ? p.startWeek : cursor;
+    const end = start + dur;
+    cursor = end; // la siguiente fase contigua arranca al fin de ESTA
+    return { start, end };
   });
 }
 
-/** Total de semanas del cronograma. */
+/** Total de semanas-fase (ESFUERZO; suma de duraciones). NO es el ancho de calendario. */
 export function totalWeeks(phases: Array<{ durationWeeks: number }>): number {
   return phases.reduce((n, p) => n + (p.durationWeeks || 0), 0);
+}
+
+/**
+ * Ancho de CALENDARIO del cronograma = última semana ocupada (max end). Con fases en paralelo
+ * el span ≤ suma de duraciones; con secuencial puro span == suma. Lo usa la grilla del Gantt.
+ */
+export function timelineSpan(
+  phases: Array<{ durationWeeks: number; startWeek?: number | null }>,
+): number {
+  return computePhaseRanges(phases).reduce((m, r) => Math.max(m, r.end), 0);
 }
 
 /**
