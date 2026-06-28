@@ -507,6 +507,17 @@ function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: ()
         </div>
       </div>
 
+      {/* Aviso proactivo: sin transcript no se puede generar con IA */}
+      {!loadingSessions && transcripts.length === 0 && !included.some((s) => s.hasTranscript) && (
+        <div className="border-t border-line px-5 pt-3">
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800 leading-relaxed">
+            Para <strong>generar con IA</strong> hace falta al menos un transcript.{" "}
+            {included.length > 0 ? "Las sesiones del prospecto todavía no están transcritas — " : ""}
+            pegá uno a mano en <strong>Fuentes manuales</strong> (más abajo).
+          </div>
+        </div>
+      )}
+
       {/* Sesiones (estilo SessionSelectionReview) */}
       <div className="border-t border-line px-5 py-3 space-y-3">
         <p className="text-xs font-semibold text-fg">
