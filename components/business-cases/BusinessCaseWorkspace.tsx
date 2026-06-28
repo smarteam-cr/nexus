@@ -23,6 +23,8 @@ import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/u
 type VersionMeta = { canvasId: string; version: number; isActive: boolean; name: string };
 type SessionMeta = { sessionId: string; title: string; date: string; participants: string[]; applies: boolean; hasTranscript: boolean };
 type Transcript = { id: string; source: string; rawText: string; fileName: string | null };
+type HsTimelineItem = { type: "NOTE" | "CALL" | "MEETING"; title: string; date: string | null; snippet: string };
+const HS_TYPE_LABEL: Record<string, string> = { NOTE: "Nota", CALL: "Llamada", MEETING: "Reunión" };
 
 function fmtDate(d: string): string {
   return new Date(d).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
@@ -546,6 +548,9 @@ function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: ()
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [savingSource, setSavingSource] = useState(false);
+  // Timeline de HubSpot (llamadas + reuniones + notas detectadas en el registro de empresa)
+  const [hubspot, setHubspot] = useState<HsTimelineItem[]>([]);
+  const [loadingHs, setLoadingHs] = useState(true);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -566,7 +571,17 @@ function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: ()
       /* silencioso */
     }
   }, [bcId]);
-  useEffect(() => { loadSessions(); loadTranscripts(); }, [loadSessions, loadTranscripts]);
+  const loadHubspot = useCallback(async () => {
+    try {
+      const d = await fetchJson<{ items: HsTimelineItem[] }>(`/api/business-cases/${bcId}/hubspot-timeline`);
+      setHubspot(d.items);
+    } catch {
+      /* silencioso — sin HubSpot, el panel sigue */
+    } finally {
+      setLoadingHs(false);
+    }
+  }, [bcId]);
+  useEffect(() => { loadSessions(); loadTranscripts(); loadHubspot(); }, [loadSessions, loadTranscripts, loadHubspot]);
 
   const toggleSession = async (sessionId: string, include: boolean) => {
     setBusyId(sessionId);
@@ -607,7 +622,7 @@ function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: ()
     }
   };
 
-  const sourceCount = included.length + transcripts.length;
+  const sourceCount = included.length + transcripts.length + hubspot.length;
   const q = search.trim().toLowerCase();
   const filtered = q ? candidates.filter((c) => (c.title || "").toLowerCase().includes(q)) : candidates;
 
@@ -626,11 +641,12 @@ function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: ()
         </div>
       </div>
 
-      {/* Aviso proactivo: sin transcript no se puede generar con IA */}
-      {!loadingSessions && transcripts.length === 0 && !included.some((s) => s.hasTranscript) && (
+      {/* Aviso proactivo: sin NINGUNA fuente con contenido no se puede generar con IA.
+          Cuenta también lo detectado en HubSpot (llamadas/reuniones con resumen). */}
+      {!loadingSessions && !loadingHs && transcripts.length === 0 && !included.some((s) => s.hasTranscript) && hubspot.length === 0 && (
         <div className="border-t border-line px-5 pt-3">
           <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800 leading-relaxed">
-            Para <strong>generar con IA</strong> hace falta al menos un transcript.{" "}
+            Para <strong>generar con IA</strong> hace falta al menos una fuente con contenido (transcript o algo del timeline de HubSpot).{" "}
             {included.length > 0 ? "Las sesiones del prospecto todavía no están transcritas — " : ""}
             pegá uno a mano en <strong>Fuentes manuales</strong> (más abajo).
           </div>
@@ -692,6 +708,35 @@ function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: ()
           <span>¿Una reunión clave no se grabó? <span className="text-brand font-medium">Ingresá la transcripción a mano</span></span>
         </button>
       </div>
+
+      {/* Detectado en HubSpot — timeline del registro de empresa (llamadas + reuniones + notas) */}
+      {(loadingHs || hubspot.length > 0) && (
+        <div className="border-t border-line px-5 py-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "#ff7a59" }} />
+            <p className="text-xs font-semibold text-fg">
+              Detectado en HubSpot{hubspot.length > 0 ? ` (${hubspot.length})` : ""}
+            </p>
+          </div>
+          {loadingHs ? (
+            <div className="h-10 rounded-lg skeleton-shimmer" />
+          ) : (
+            <>
+              <p className="text-[11px] text-fg-muted">Llamadas, reuniones y notas del registro de empresa. Se usan automáticamente como contexto al generar.</p>
+              <ul className="space-y-2">
+                {hubspot.map((it, i) => (
+                  <li key={i} className="rounded-lg border border-line bg-surface-muted px-3 py-2">
+                    <p className="text-xs font-medium text-fg truncate">
+                      {HS_TYPE_LABEL[it.type] ?? it.type}{it.date ? ` · ${it.date}` : ""}{it.title ? ` · ${it.title}` : ""}
+                    </p>
+                    {it.snippet && <p className="text-[11px] text-fg-muted mt-0.5 line-clamp-2">{it.snippet}</p>}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Fuentes manuales (colapsable, estilo handoff) */}
       <div className="border-t border-line px-5 py-3">

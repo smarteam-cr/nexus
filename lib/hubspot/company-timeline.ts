@@ -60,39 +60,56 @@ function engagementText(type: string, m: Record<string, unknown>): { title: stri
   return { title: "", body: "" };
 }
 
-/**
- * Timeline de la company (notas + llamadas + reuniones) serializado a texto, más reciente
- * primero, o "" si no hay datos / falla la API. Topeado para no inflar el prompt del LLM.
- */
-export async function fetchCompanyTimeline(hsClient: Client, companyId: string): Promise<string> {
+export type TimelineItem = {
+  type: "NOTE" | "CALL" | "MEETING";
+  title: string;
+  body: string;
+  date: string | null;
+  ts: number;
+};
+
+/** Ítems del timeline de la company (notas + llamadas + reuniones), más reciente primero,
+ *  o [] si no hay datos / falla la API. Topeado para no inflar. Lo usa el panel y el prompt. */
+export async function fetchCompanyTimelineItems(hsClient: Client, companyId: string): Promise<TimelineItem[]> {
   let raw: V1Engagement[] = [];
   try {
     const res = await hsClient.apiRequest({
       method: "GET",
       path: `/engagements/v1/engagements/associated/company/${companyId}/paged?limit=100`,
     });
-    if (res.status !== 200) return "";
+    if (res.status !== 200) return [];
     const data = (await res.json()) as { results?: V1Engagement[] };
     raw = data.results ?? [];
   } catch {
-    return "";
+    return [];
   }
 
-  const items = raw
+  return raw
     .filter((e) => WANT.has(e.engagement?.type ?? ""))
-    .map((e) => {
-      const type = e.engagement?.type ?? "";
+    .map((e): TimelineItem | null => {
+      const type = (e.engagement?.type ?? "") as TimelineItem["type"];
       const { title, body } = engagementText(type, e.metadata ?? {});
       if (!body) return null;
-      const date = fmtDate(e.engagement?.timestamp);
-      const head = [TYPE_LABEL[type] ?? type, date ? `· ${date}` : "", title ? `· ${title}` : ""]
+      return { type, title, body, date: fmtDate(e.engagement?.timestamp), ts: e.engagement?.timestamp ?? 0 };
+    })
+    .filter((x): x is TimelineItem => x !== null)
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, 25);
+}
+
+/** Serializa los ítems a texto para el prompt del agente. */
+export function serializeTimeline(items: TimelineItem[]): string {
+  return items
+    .map((i) => {
+      const head = [TYPE_LABEL[i.type] ?? i.type, i.date ? `· ${i.date}` : "", i.title ? `· ${i.title}` : ""]
         .filter(Boolean)
         .join(" ");
-      return { ts: e.engagement?.timestamp ?? 0, text: `### ${head}\n${body}` };
+      return `### ${head}\n${i.body}`;
     })
-    .filter((x): x is { ts: number; text: string } => x !== null)
-    .sort((a, b) => b.ts - a.ts)
-    .slice(0, 25); // tope para no inflar el prompt
+    .join("\n\n");
+}
 
-  return items.map((i) => i.text).join("\n\n");
+/** Timeline serializado a texto (para el contexto del agente), o "" si no hay nada. */
+export async function fetchCompanyTimeline(hsClient: Client, companyId: string): Promise<string> {
+  return serializeTimeline(await fetchCompanyTimelineItems(hsClient, companyId));
 }
