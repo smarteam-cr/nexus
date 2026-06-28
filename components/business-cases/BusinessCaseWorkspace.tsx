@@ -19,6 +19,7 @@ import PublishBar from "@/components/canvas/PublishBar";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import { BUSINESS_CASE_LANDING } from "@/components/landing/configs/business-case";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
+import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 
 type VersionMeta = { canvasId: string; version: number; isActive: boolean; name: string };
 type SessionMeta = { sessionId: string; title: string; date: string; participants: string[]; applies: boolean; hasTranscript: boolean };
@@ -91,8 +92,10 @@ export default function BusinessCaseWorkspace({
 
   const generate = async () => {
     if (generating) return;
+    maybeRequestPermission(); // gesto del usuario → ofrecer activar notificaciones (una vez)
     setGenerating(true);
     toast.info("Generando con IA… puede tardar unos segundos.");
+    const notifyUrl = `/business-cases/${bcId}`;
     try {
       const r = await fetchJson<{ canvasId: string; version: number }>(`/api/business-cases/${bcId}/generate`, { method: "POST" });
       toast.success(`Caso de uso ${r.version} generado.`);
@@ -101,8 +104,10 @@ export default function BusinessCaseWorkspace({
       // closure y traería el canvas anterior (era el bug de "no aparece nada").
       await loadMeta(r.canvasId);
       setDirty(true);
+      void notifyAgentDone({ group: "business-case", clientName, ok: true, url: notifyUrl });
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "La generación falló.");
+      void notifyAgentDone({ group: "business-case", clientName, ok: false, url: notifyUrl });
     } finally {
       setGenerating(false);
     }

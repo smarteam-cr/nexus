@@ -4,6 +4,7 @@ import "./globals.css";
 import "react-day-picker/style.css";
 import { ToastProvider } from "@/components/ui/Toast";
 import { UndoProvider } from "@/components/ui/UndoProvider";
+import NotificationsInit from "@/components/notifications/NotificationsInit";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -56,7 +57,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} ${openSans.variable} antialiased bg-gray-950 text-gray-100`}
       >
         <ToastProvider>
-          <UndoProvider>{children}</UndoProvider>
+          <UndoProvider>
+            {children}
+            <NotificationsInit />
+          </UndoProvider>
         </ToastProvider>
       </body>
     </html>

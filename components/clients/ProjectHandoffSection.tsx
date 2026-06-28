@@ -12,6 +12,7 @@
 import { useState, useEffect, useCallback } from "react";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import { pollAgentRun } from "@/lib/clients/poll-agent-run";
+import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 import { useWorkspace } from "./WorkspaceContext";
 import { useMe } from "@/hooks/useMe";
 import SessionSelectionReview from "./SessionSelectionReview";
@@ -119,8 +120,10 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   const handleGenerate = useCallback(async () => {
     const agentId = status?.agentId;
     if (!agentId) { setError("No se encontró el agente de handoff."); return; }
+    maybeRequestPermission(); // gesto del usuario → ofrecer activar notificaciones (una vez)
     setGenerating(true);
     setError(null);
+    const notifyUrl = `/clients/${clientId}`;
     try {
       // 1. Asegurar entidad Handoff + canvas
       const ensure = await fetch(`/api/projects/${projectId}/handoff`, { method: "POST" });
@@ -142,7 +145,11 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
       }
       if (data.runId) {
         const result = await pollAgentRun(clientId, data.runId);
-        if (result.status === "ERROR") { setError("El handoff falló durante la generación. Reintentá."); return; }
+        if (result.status === "ERROR") {
+          setError("El handoff falló durante la generación. Reintentá.");
+          void notifyAgentDone({ group: "handoff", ok: false, url: notifyUrl });
+          return;
+        }
         if (result.status === "TIMEOUT") { setError("La generación está tardando más de lo normal. Revisá en unos minutos."); return; }
       }
       // 3. Sync a HubSpot (best-effort; reconciliable)
@@ -157,6 +164,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
       setShowDoc(true);
       bumpTimelineRefresh();
       bumpGpsRefresh(); // el widget del proyecto (pills de setup) se actualiza: handoff → ✓
+      void notifyAgentDone({ group: "handoff", ok: true, url: notifyUrl });
     } catch {
       setError("Error de conexión al generar el handoff.");
     } finally {

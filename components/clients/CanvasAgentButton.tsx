@@ -11,6 +11,7 @@
 import { useState } from "react";
 import { pollAgentRun, summarizeRun, summarizePollResult } from "@/lib/clients/poll-agent-run";
 import { useToast } from "@/components/ui/Toast";
+import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 
 export default function CanvasAgentButton({
   clientId,
@@ -21,6 +22,8 @@ export default function CanvasAgentButton({
   async: useAsync = false,
   onDone,
   className,
+  notifyLabel,
+  clientName,
 }: {
   clientId: string;
   projectId: string;
@@ -31,12 +34,22 @@ export default function CanvasAgentButton({
   async?: boolean;
   onDone?: () => void;
   className?: string;
+  /** Sustantivo para la notificación ("diagnóstico"). Default: se deriva del `label`. */
+  notifyLabel?: string;
+  clientName?: string | null;
 }) {
   const [running, setRunning] = useState(false);
   const toast = useToast();
 
+  // Notificación "agente terminado": etiqueta = notifyLabel o el label sin el verbo.
+  const noun =
+    notifyLabel ??
+    (label.replace(/^(generar|regenerar|crear)\s+(el\s+|la\s+|los\s+|las\s+)?/i, "").trim() || "documento");
+  const notifyUrl = `/clients/${clientId}`;
+
   const run = async () => {
     if (running) return;
+    maybeRequestPermission(); // gesto del usuario → ofrecer activar notificaciones (una vez)
     setRunning(true);
     try {
       const res = await fetch(`/api/clients/${clientId}/analyze`, {
@@ -57,9 +70,11 @@ export default function CanvasAgentButton({
         } else {
           toast.error(summary.message);
         }
+        void notifyAgentDone({ label: noun, clientName, ok: summary.type === "success", url: notifyUrl });
       } else {
         toast.success(`Listo — ${summarizeRun(data)}`);
         onDone?.();
+        void notifyAgentDone({ label: noun, clientName, ok: true, url: notifyUrl });
       }
     } catch {
       toast.error("Error de conexión.");
