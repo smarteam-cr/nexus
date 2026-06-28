@@ -11,7 +11,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 // Rutas públicas exactas
-const PUBLIC_PATHS = ["/"];
+//   - /sw.js → Service Worker de notificaciones (asset público, sin secretos). Debe servirse
+//     siempre 200 (si el gate lo redirige a login, el SW no registra). El matcher excluye
+//     estáticos por extensión pero NO .js, así que se permite acá explícitamente.
+const PUBLIC_PATHS = ["/", "/sw.js"];
 
 // Prefijos siempre públicos:
 //   - /api/auth/hubspot/*  → flujo OAuth HubSpot (integración, no auth de usuario)

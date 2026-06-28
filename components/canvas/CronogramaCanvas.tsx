@@ -31,6 +31,7 @@ import { plural, computePhaseRanges, currentWeekIndex } from "@/lib/timeline/wee
 import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
+import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus, PARTY_META, effParty } from "./TimelineGantt";
 import TaskDetailDrawer from "./TaskDetailDrawer";
 import TimelineAssistDialog from "./TimelineAssistDialog";
@@ -607,6 +608,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // silencioso si ya existe). También lo invoca "Regenerar detalle".
   const generateDetail = async (opts?: { auto?: boolean }) => {
     const auto = opts?.auto ?? false;
+    if (!auto) maybeRequestPermission(); // solo en la generación que el usuario disparó
     setGenerating(true);
     setError(null);
     try {
@@ -626,8 +628,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       if (!res.ok) {
         // En auto (al montar sin detalle) no bloqueamos con banner, pero ya no es
         // mudo: un toast suave avisa que se puede reintentar a mano.
-        if (!auto) setError(data?.message ?? data?.error ?? "Error al generar el detalle.");
-        else toast.info("No se pudo generar el detalle automáticamente. Usá «Regenerar detalle» para reintentar.");
+        if (!auto) {
+          setError(data?.message ?? data?.error ?? "Error al generar el detalle.");
+          void notifyAgentDone({ group: "cronograma", ok: false, url: `/clients/${clientId}` });
+        } else toast.info("No se pudo generar el detalle automáticamente. Usá «Regenerar detalle» para reintentar.");
       } else if (data?.timelineDetail?.skipped) {
         const reason = data.timelineDetail.reason;
         // En auto no molestamos si ya existe (caso esperado al reabrir) — solo recargamos.
@@ -662,6 +666,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             toast.info("Tareas generadas. Podés revisar el avance con «Chequear avance».");
           }
           setChainingProgress(false);
+          void notifyAgentDone({ group: "cronograma", ok: true, url: `/clients/${clientId}` });
         }
       }
     } catch {
