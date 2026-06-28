@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { parseSectionEntries } from "@/lib/business-cases/section-briefs";
 
 export async function GET(
   req: NextRequest,
@@ -24,13 +25,20 @@ export async function GET(
 
   const canvas = await prisma.projectCanvas.findUnique({
     where: { id: canvasId },
-    select: { businessCaseId: true },
+    select: { businessCaseId: true, sections: true },
   });
   if (!canvas || canvas.businessCaseId !== id) {
     return NextResponse.json({ error: "canvas not found" }, { status: 404 });
   }
 
-  const sections = await prisma.canvasSection.findMany({
+  // Brief por sección (la guía editable del agente) vive en el Json del canvas, no en
+  // columna → lo re-adjuntamos por key para mantener el contrato del hook.
+  const briefByKey = new Map<string, { brief: string | null; previousBrief: string | null }>();
+  for (const e of parseSectionEntries(canvas.sections)) {
+    briefByKey.set(e.key, { brief: e.brief ?? null, previousBrief: e.previousBrief ?? null });
+  }
+
+  const rows = await prisma.canvasSection.findMany({
     where: { canvasId },
     orderBy: { order: "asc" },
     include: {
@@ -55,6 +63,12 @@ export async function GET(
       },
     },
   });
+
+  const sections = rows.map((s) => ({
+    ...s,
+    agentBriefOverride: briefByKey.get(s.key)?.brief ?? null,
+    previousAgentBriefOverride: briefByKey.get(s.key)?.previousBrief ?? null,
+  }));
 
   return NextResponse.json({ sections });
 }

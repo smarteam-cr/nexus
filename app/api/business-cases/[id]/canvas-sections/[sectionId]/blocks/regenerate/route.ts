@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { regenerateSectionData } from "@/lib/business-cases/canvas-agent";
+import { briefsByKeyFrom } from "@/lib/business-cases/section-briefs";
 
 type Params = Promise<{ id: string; sectionId: string }>;
 
@@ -30,10 +31,10 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   }
   const base = body.base && typeof body.base === "object" ? body.base : null;
 
-  // Bloque + key de su sección + pertenencia al business case.
+  // Bloque + key de su sección + pertenencia al business case (+ briefs del canvas).
   const block = await prisma.canvasBlock.findFirst({
     where: { id: blockId, sectionId },
-    select: { data: true, section: { select: { key: true, agentBriefOverride: true, canvas: { select: { businessCaseId: true } } } } },
+    select: { data: true, section: { select: { key: true, canvas: { select: { businessCaseId: true, sections: true } } } } },
   });
   if (!block || block.section.canvas.businessCaseId !== id) {
     return NextResponse.json({ error: "Bloque no encontrado" }, { status: 404 });
@@ -41,7 +42,9 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
 
   try {
     const current = base ? base.data : block.data;
-    const data = await regenerateSectionData(block.section.key, current, instruction, block.section.agentBriefOverride ?? undefined);
+    // Guía efectiva de esta sección (override del CSE en el Json del canvas, si hay).
+    const brief = briefsByKeyFrom(block.section.canvas.sections)[block.section.key];
+    const data = await regenerateSectionData(block.section.key, current, instruction, brief);
     return NextResponse.json({ data });
   } catch (e) {
     console.error("[bc blocks/regenerate] error:", e);

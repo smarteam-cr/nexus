@@ -18,6 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { createBusinessCaseCanvas } from "@/lib/canvas/default-canvases";
 import { generateCanvasSections } from "@/lib/business-cases/canvas-agent";
 import { loadBcFeeding } from "@/lib/business-cases/feeding";
+import { briefsByKeyFrom } from "@/lib/business-cases/section-briefs";
 
 /** Un `data` estructurado está "vacío" si todos sus strings y arrays lo están. */
 function dataIsBlank(v: unknown): boolean {
@@ -86,7 +87,9 @@ export async function POST(
     select: {
       id: true,
       version: true,
-      canvasSections: { select: { key: true, agentBriefOverride: true, blocks: { select: { data: true, content: true } } } },
+      // sections (Json) trae la guía editable por sección; canvasSections, el contenido.
+      sections: true,
+      canvasSections: { select: { key: true, blocks: { select: { data: true, content: true } } } },
     },
   });
   const activeHasContent =
@@ -107,13 +110,10 @@ export async function POST(
   });
 
   try {
-    // Guía efectiva por sección: el override del CSE en el canvas activo gana (si no,
-    // el agente cae al brief por defecto de la config). Así, si el CSE editó la guía,
-    // el agente genera según lo que dice esa sección.
-    const briefsByKey: Record<string, string> = {};
-    for (const s of active?.canvasSections ?? []) {
-      if (s.agentBriefOverride) briefsByKey[s.key] = s.agentBriefOverride;
-    }
+    // Guía efectiva por sección: el override del CSE (guardado en el Json del canvas
+    // activo) gana; si no, el agente cae al brief por defecto de la config. Así, si el
+    // CSE editó la guía, el agente genera según lo que dice esa sección.
+    const briefsByKey = briefsByKeyFrom(active?.sections);
     const generated = await generateCanvasSections(context, briefsByKey);
 
     let canvasId: string;
