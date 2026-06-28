@@ -70,6 +70,16 @@ export async function updateBusinessCase(
   return prisma.businessCase.update({ where: { id }, data });
 }
 
+/**
+ * Borra un business case. Por cascade (FKs ON DELETE CASCADE) se llevan también sus
+ * canvases versionados → secciones → bloques, las sesiones de contexto, los transcripts,
+ * el acceso externo y los agent runs. NO toca el cliente/prospecto ni las FirefliesSessions
+ * (BusinessCaseSession no tiene FK dura a la sesión: solo se borra el vínculo).
+ */
+export async function deleteBusinessCase(id: string) {
+  return prisma.businessCase.delete({ where: { id } });
+}
+
 // ── Transcripts ──────────────────────────────────────────────────────────────
 
 export async function addPastedTranscript(

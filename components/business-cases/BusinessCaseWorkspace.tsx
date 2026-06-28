@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { Modal } from "@/components/ui";
+import DeleteBusinessCaseButton from "@/components/business-cases/DeleteBusinessCaseButton";
 import PublishBar from "@/components/canvas/PublishBar";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import { BUSINESS_CASE_LANDING } from "@/components/landing/configs/business-case";
@@ -146,6 +147,11 @@ export default function BusinessCaseWorkspace({
         </div>
         <div className="flex items-center gap-2">
           <BcAccessButton bcId={bcId} refreshKey={accessNonce} onRevoked={() => setPublished(false)} />
+          <DeleteBusinessCaseButton
+            bcId={bcId}
+            redirectTo="/business-cases"
+            description={`Se eliminará el caso de negocio de ${clientName} con todos sus casos de uso, secciones y contenido. Esta acción no se puede deshacer.`}
+          />
         </div>
       </div>
 

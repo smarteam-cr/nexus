@@ -7,6 +7,7 @@ import Link from "next/link";
 import AppShell from "@/components/layout/AppShell";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { prisma } from "@/lib/db/prisma";
+import DeleteBusinessCaseButton from "@/components/business-cases/DeleteBusinessCaseButton";
 
 export const dynamic = "force-dynamic";
 
@@ -49,22 +50,30 @@ export default async function BusinessCasesHubPage() {
 
         <div className="mt-6 space-y-2">
           {cases.map((c) => (
-            <Link
+            <div
               key={c.id}
-              href={`/business-cases/${c.id}`}
-              className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3 hover:border-brand/40 transition-colors"
+              className="flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-3 hover:border-brand/40 transition-colors"
             >
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-fg truncate">{c.name}</p>
-                <p className="text-xs text-fg-muted truncate">
-                  {c.client.name}
-                  {c.client.isProspect ? " (prospecto)" : ""}
-                </p>
-              </div>
-              <span className="flex-shrink-0 text-xs px-2 py-1 rounded bg-surface-muted text-fg-muted">
-                {STATUS_LABEL[c.status] ?? c.status}
-              </span>
-            </Link>
+              <Link
+                href={`/business-cases/${c.id}`}
+                className="flex flex-1 items-center justify-between gap-3 min-w-0"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-fg truncate">{c.name}</p>
+                  <p className="text-xs text-fg-muted truncate">
+                    {c.client.name}
+                    {c.client.isProspect ? " (prospecto)" : ""}
+                  </p>
+                </div>
+                <span className="flex-shrink-0 text-xs px-2 py-1 rounded bg-surface-muted text-fg-muted">
+                  {STATUS_LABEL[c.status] ?? c.status}
+                </span>
+              </Link>
+              <DeleteBusinessCaseButton
+                bcId={c.id}
+                description={`Se eliminará "${c.name}" (${c.client.name}) con todos sus casos de uso, secciones y contenido. Esta acción no se puede deshacer.`}
+              />
+            </div>
           ))}
           {cases.length === 0 && (
             <p className="text-sm text-fg-muted">No hay business cases todavía. Creá el primero.</p>
