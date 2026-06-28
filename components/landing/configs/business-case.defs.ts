@@ -37,7 +37,7 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
     theme: "dark",
     backdrop: true,
     selfTitled: true,
-    empty: { headline: "", subhead: "", tags: [] },
+    empty: { headline: "", subhead: "", tags: [], brands: [] },
     agentHint: "Encabezado del caso (titular + subtítulo + tags de hubs/integración/diferenciador).",
     brief:
       "Cabecera del business case (dark, con logos cliente × Smarteam × HubSpot). `headline`: '[Verbo de transformación] la [operación/experiencia/proceso] de [Nombre cliente]'. `subhead`: una frase que resume el dolor central y la apuesta. `tags`: 3 a 4 chips (hubs involucrados + integración clave + elemento diferenciador). Fuente: extraé del transcript el nombre del cliente, su industria, los hubs discutidos y la frase del dolor principal.",

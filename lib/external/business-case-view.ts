@@ -22,6 +22,8 @@ export type BusinessCaseLandingBlock = {
 export type BusinessCaseLandingSection = {
   key: string;
   label: string;
+  titleOverride?: string | null;
+  eyebrowOverride?: string | null;
   blocks: BusinessCaseLandingBlock[];
 };
 export type BusinessCaseLandingData = {

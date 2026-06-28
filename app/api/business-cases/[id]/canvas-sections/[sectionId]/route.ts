@@ -11,7 +11,7 @@ import { Prisma } from "@prisma/client";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { touchCanvasContent } from "@/lib/canvas/touch-content";
-import { parseSectionEntries, withBriefUpdated } from "@/lib/business-cases/section-briefs";
+import { parseSectionEntries, withBriefUpdated, patchSectionEntry } from "@/lib/business-cases/section-briefs";
 
 type Params = Promise<{ id: string; sectionId: string }>;
 
@@ -38,7 +38,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
     return NextResponse.json({ error: "section not found" }, { status: 404 });
   }
 
-  let body: { titleOverride?: unknown; eyebrowOverride?: unknown; agentBriefOverride?: unknown; undo?: unknown };
+  let body: { titleOverride?: unknown; eyebrowOverride?: unknown; agentBriefOverride?: unknown; hidden?: unknown; undo?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -52,6 +52,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   const curEntry = parseSectionEntries(section.canvas.sections).find((e) => e.key === section.key);
   const curBrief = curEntry?.brief ?? null;
   const curPrevBrief = curEntry?.previousBrief ?? null;
+
+  // ── Rama OCULTAR (hidden): el CSE oculta/muestra la sección. Persiste en el Json. ──
+  if ("hidden" in body) {
+    const hidden = body.hidden === true;
+    const entries = patchSectionEntry(section.canvas.sections, section.key, { hidden });
+    await prisma.projectCanvas.update({
+      where: { id: section.canvasId },
+      data: { sections: entries as unknown as Prisma.InputJsonValue },
+    });
+    await touchCanvasContent(sectionId);
+    return NextResponse.json({ id: section.id, hidden });
+  }
 
   // ── Rama BRIEF (guía del agente): set o undo. Persiste en ProjectCanvas.sections. ──
   if (body.undo === "brief" || "agentBriefOverride" in body) {

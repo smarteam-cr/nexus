@@ -24,6 +24,11 @@ export interface LandingSectionData {
   data: unknown;
   /** Override del brief del agente (Fase B). null/undefined → usa el brief de la config. */
   brief?: string | null;
+  /** Título/eyebrow de cara al cliente editados por el CSE. null → default de la config. */
+  titleOverride?: string | null;
+  eyebrowOverride?: string | null;
+  /** El CSE ocultó la sección: marcada en el editor, no se publica al cliente. */
+  hidden?: boolean;
 }
 
 /** Una sección está "en blanco" si todos sus strings y arrays lo están. En lectura
@@ -44,6 +49,8 @@ export default function LandingView({
   showBriefs = true,
   onSectionChange,
   onBriefChange,
+  onTitleChange,
+  onEyebrowChange,
   renderOverlay,
 }: {
   config: LandingConfig;
@@ -56,6 +63,9 @@ export default function LandingView({
   onSectionChange?: (key: string, data: unknown) => void;
   // Modo edición: el CSE edita la GUÍA del agente por sección (override persistido).
   onBriefChange?: (key: string, brief: string) => void;
+  // Modo edición: el CSE edita el TÍTULO y el EYEBROW de cara al cliente por sección.
+  onTitleChange?: (key: string, title: string) => void;
+  onEyebrowChange?: (key: string, eyebrow: string) => void;
   // Modo edición: controles por sección (IA / confirmar / estado) que el workspace
   // inyecta en la esquina de cada sección. No se usa en el render externo (read).
   renderOverlay?: (key: string) => React.ReactNode;
@@ -87,28 +97,43 @@ export default function LandingView({
         const raw = sec?.data;
         const briefOverride = sec?.brief;
         const effectiveBrief = briefOverride != null ? briefOverride : (def.brief ?? "");
+        // Título/eyebrow efectivos: override del CSE gana; si no, el default de la config.
+        const effTitle = (sec?.titleOverride ?? "").trim() || def.label;
+        const effEyebrow = sec?.eyebrowOverride != null ? sec.eyebrowOverride : (def.eyebrow ?? "");
+        const hidden = sec?.hidden === true;
         const data = {
           ...(def.empty as Record<string, unknown>),
           ...((raw as Record<string, unknown>) ?? {}),
         };
-        // En lectura, omitir secciones sin contenido (no se publicó / no se confirmó).
-        if (!editable && isBlank(data)) return null;
+        // En lectura, omitir secciones sin contenido o que el CSE ocultó.
+        if (!editable && (isBlank(data) || hidden)) return null;
         const isHero = !!def.backdrop;
         const Comp = def.Component;
         return (
           <section
             key={def.key}
             ref={isHero ? heroRef : undefined}
-            className={`stl-sec stl-${def.theme}${isHero ? " hero-backdrop" : ""}`}
+            className={`stl-sec stl-${def.theme}${isHero ? " hero-backdrop" : ""}${editable && hidden ? " stl-hidden" : ""}`}
           >
+            {editable && hidden && <div className="stl-hidden-badge">No visible para el cliente</div>}
             {editable && renderOverlay && (
               <div className="stl-overlay">{renderOverlay(def.key)}</div>
             )}
             <div className={`stl-wrap${editable ? "" : " reveal"}`}>
               {!def.selfTitled && (
                 <header className="stl-sec-head">
-                  {def.eyebrow && <span className="stl-eyebrow">{def.eyebrow}</span>}
-                  <h2 className="stl-title">{def.label}</h2>
+                  {editable ? (
+                    <Editable as="span" className="stl-eyebrow" editable value={effEyebrow}
+                      placeholder="Eyebrow…" onCommit={(v) => onEyebrowChange?.(def.key, v)} />
+                  ) : (
+                    effEyebrow && <span className="stl-eyebrow">{effEyebrow}</span>
+                  )}
+                  {editable ? (
+                    <Editable as="h2" className="stl-title" editable value={effTitle}
+                      placeholder={def.label} onCommit={(v) => onTitleChange?.(def.key, v)} />
+                  ) : (
+                    <h2 className="stl-title">{effTitle}</h2>
+                  )}
                 </header>
               )}
               {/* Guía del agente — ayuda EDITABLE solo en la Plantilla del editor (el

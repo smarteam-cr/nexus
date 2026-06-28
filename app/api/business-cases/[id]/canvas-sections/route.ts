@@ -31,11 +31,11 @@ export async function GET(
     return NextResponse.json({ error: "canvas not found" }, { status: 404 });
   }
 
-  // Brief por sección (la guía editable del agente) vive en el Json del canvas, no en
-  // columna → lo re-adjuntamos por key para mantener el contrato del hook.
-  const briefByKey = new Map<string, { brief: string | null; previousBrief: string | null }>();
+  // Brief (guía del agente) + flag `hidden` por sección viven en el Json del canvas, no
+  // en columnas → los re-adjuntamos por key para mantener el contrato del hook.
+  const entryByKey = new Map<string, { brief: string | null; previousBrief: string | null; hidden: boolean }>();
   for (const e of parseSectionEntries(canvas.sections)) {
-    briefByKey.set(e.key, { brief: e.brief ?? null, previousBrief: e.previousBrief ?? null });
+    entryByKey.set(e.key, { brief: e.brief ?? null, previousBrief: e.previousBrief ?? null, hidden: e.hidden === true });
   }
 
   const rows = await prisma.canvasSection.findMany({
@@ -66,8 +66,9 @@ export async function GET(
 
   const sections = rows.map((s) => ({
     ...s,
-    agentBriefOverride: briefByKey.get(s.key)?.brief ?? null,
-    previousAgentBriefOverride: briefByKey.get(s.key)?.previousBrief ?? null,
+    agentBriefOverride: entryByKey.get(s.key)?.brief ?? null,
+    previousAgentBriefOverride: entryByKey.get(s.key)?.previousBrief ?? null,
+    hidden: entryByKey.get(s.key)?.hidden ?? false,
   }));
 
   return NextResponse.json({ sections });

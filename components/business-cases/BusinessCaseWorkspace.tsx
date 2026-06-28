@@ -73,7 +73,14 @@ export default function BusinessCaseWorkspace({
   // onContentChange → marca cambios sin subir (dirty) para la PublishBar.
   const hook = useCanvasSections(`/api/business-cases/${bcId}`, canvasId, () => setDirty(true), { poll: false });
   const sectionByKey = new Map<string, SectionWithBlocks>(hook.sections.map((s) => [s.key, s]));
-  const sectionsData: LandingSectionData[] = hook.sections.map((s) => ({ key: s.key, data: s.blocks[0]?.data ?? null, brief: s.agentBriefOverride }));
+  const sectionsData: LandingSectionData[] = hook.sections.map((s) => ({
+    key: s.key,
+    data: s.blocks[0]?.data ?? null,
+    brief: s.agentBriefOverride,
+    titleOverride: s.titleOverride,
+    eyebrowOverride: s.eyebrowOverride,
+    hidden: s.hidden,
+  }));
   // ¿Hay contenido real para publicar? (los bloques se generan auto-aceptados; lo que
   // importa es que NO estén en blanco, no el status).
   const hasContent = hook.sections.some((s) => s.blocks.some((b) => !blockBlank(b.data)));
@@ -87,6 +94,32 @@ export default function BusinessCaseWorkspace({
   const onBriefChange = (key: string, brief: string) => {
     const sec = sectionByKey.get(key);
     if (sec) hook.setBrief(sec.id, brief);
+  };
+
+  // Título / eyebrow de cara al cliente por sección (mismo patrón que el kickoff).
+  const onTitleChange = (key: string, title: string) => {
+    const sec = sectionByKey.get(key);
+    if (sec) hook.renameSection(sec.id, title);
+  };
+  const onEyebrowChange = (key: string, eyebrow: string) => {
+    const sec = sectionByKey.get(key);
+    if (sec) hook.setEyebrow(sec.id, eyebrow);
+  };
+
+  // Ocultar / mostrar una sección (flag `hidden` en el Json del canvas). No borra el
+  // contenido — solo lo excluye del cliente. PATCH directo + refetch.
+  const toggleHidden = async (sectionId: string, hidden: boolean) => {
+    try {
+      await fetchJson(`/api/business-cases/${bcId}/canvas-sections/${sectionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hidden }),
+      });
+      await hook.refetch();
+      setDirty(true);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo ocultar/mostrar la sección.");
+    }
   };
 
   const generate = async () => {
@@ -220,7 +253,11 @@ export default function BusinessCaseWorkspace({
             showBriefs={isTemplate}
             onSectionChange={onSectionChange}
             onBriefChange={onBriefChange}
-            renderOverlay={(key) => <SectionTools section={sectionByKey.get(key)} hook={hook} isTemplate={isTemplate} />}
+            onTitleChange={onTitleChange}
+            onEyebrowChange={onEyebrowChange}
+            renderOverlay={(key) => (
+              <SectionTools section={sectionByKey.get(key)} hook={hook} isTemplate={isTemplate} onToggleHidden={toggleHidden} />
+            )}
           />
         )}
       </div>
@@ -323,15 +360,17 @@ function CanvasDropdown({
   );
 }
 
-// ── Controles por sección (overlay): IA + limpiar. Solo en casos, no en la Plantilla. ──
+// ── Controles por sección (overlay): IA + ocultar + limpiar. Solo en casos, no en la Plantilla. ──
 function SectionTools({
   section,
   hook,
   isTemplate,
+  onToggleHidden,
 }: {
   section: SectionWithBlocks | undefined;
   hook: ReturnType<typeof useCanvasSections>;
   isTemplate: boolean;
+  onToggleHidden: (sectionId: string, hidden: boolean) => void;
 }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -377,7 +416,14 @@ function SectionTools({
         <button style={{ ...pill, color: "#168CF6" }} onClick={() => setOpen((o) => !o)} title="Editar con IA">
           ✨ IA
         </button>
-        <button style={{ ...pill, color: "#b91c1c" }} onClick={clear} title="Vaciar esta sección">
+        <button
+          style={{ ...pill, color: section.hidden ? "#047857" : "#b45309" }}
+          onClick={() => onToggleHidden(section.id, !section.hidden)}
+          title={section.hidden ? "Mostrar al cliente" : "Ocultar del cliente (no la verá)"}
+        >
+          {section.hidden ? "👁 Mostrar" : "🙈 Ocultar"}
+        </button>
+        <button style={{ ...pill, color: "#b91c1c" }} onClick={clear} title="Vaciar el contenido de esta sección">
           🗑 Limpiar
         </button>
       </div>

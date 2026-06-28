@@ -41,6 +41,8 @@ export interface SectionWithBlocks {
   previousTitleOverride: string | null;
   previousEyebrowOverride: string | null;
   previousAgentBriefOverride: string | null;
+  /** El CSE ocultó la sección (business case): no se publica al cliente. Default false. */
+  hidden?: boolean;
   order: number;
   layout: unknown;
   blocks: BlockData[];

@@ -20,6 +20,8 @@ export interface CanvasSectionEntry {
   brief?: string | null;
   /** Valor anterior del brief para el deshacer de 1 nivel (toggle). */
   previousBrief?: string | null;
+  /** El CSE ocultó esta sección: no se publica al cliente (reversible, no borra datos). */
+  hidden?: boolean;
 }
 
 /** Lee el array de secciones del Json de un ProjectCanvas, tolerante a basura/forma vieja. */
@@ -39,6 +41,27 @@ export function briefsByKeyFrom(sections: unknown): Record<string, string> {
     if (typeof e.brief === "string" && e.brief.trim()) out[e.key] = e.brief.trim();
   }
   return out;
+}
+
+/** Set de keys de sección OCULTAS (el cliente no las ve). */
+export function hiddenKeysFrom(sections: unknown): Set<string> {
+  const out = new Set<string>();
+  for (const e of parseSectionEntries(sections)) {
+    if (e.hidden === true) out.add(e.key);
+  }
+  return out;
+}
+
+/** Merge inmutable de un patch parcial en la entry de `key` (la crea si falta). */
+export function patchSectionEntry(
+  sections: unknown,
+  key: string,
+  patch: Partial<CanvasSectionEntry>,
+): CanvasSectionEntry[] {
+  const entries = parseSectionEntries(sections);
+  const idx = entries.findIndex((e) => e.key === key);
+  if (idx === -1) return [...entries, { key, label: key, ...patch }];
+  return entries.map((e, i) => (i === idx ? { ...e, ...patch } : e));
 }
 
 /**

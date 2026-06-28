@@ -13,8 +13,9 @@ import type { FC } from "react";
 
 // ── Datos estructurados por sección (lo que llena el agente) ─────────────────
 
-// 1) Hero — logos (cliente×Smarteam×HubSpot) + titular + subtítulo + tags (chips).
-export interface HeroData { headline: string; subhead: string; tags: string[] }
+// 1) Hero — brand-row editable (cliente×Smarteam×HubSpot, +agregables) + titular +
+//    subtítulo + tags (chips). `brands` vacío → la brand-row cae a los defaults.
+export interface HeroData { headline: string; subhead: string; tags: string[]; brands?: string[] }
 
 // 2) Diagnóstico — 3 a 6 dolores concretos.
 export interface PainItem { title: string; detail: string }

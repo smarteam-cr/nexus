@@ -35,7 +35,12 @@ export default async function ExternalBusinessCasePage() {
         <LandingView
           config={BUSINESS_CASE_LANDING}
           ctx={{ clientName: data.clientName, clientLogoUrl: data.clientLogoUrl }}
-          sections={data.sections.map((s) => ({ key: s.key, data: s.blocks[0]?.data ?? null }))}
+          sections={data.sections.map((s) => ({
+            key: s.key,
+            data: s.blocks[0]?.data ?? null,
+            titleOverride: s.titleOverride,
+            eyebrowOverride: s.eyebrowOverride,
+          }))}
           mode="read"
         />
       ) : (

@@ -11,6 +11,7 @@ import { Prisma } from "@prisma/client";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { ensureAccess } from "@/lib/business-cases";
+import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
 
 function buildVerifyUrl(req: NextRequest, token: string): string {
   const base = process.env.APP_URL || new URL(req.url).origin;
@@ -55,11 +56,11 @@ export async function POST(
   const canvas = bodyCanvasId
     ? await prisma.projectCanvas.findFirst({
         where: { id: bodyCanvasId, businessCaseId: id, version: { gt: 0 } },
-        select: { id: true },
+        select: { id: true, sections: true },
       })
     : await prisma.projectCanvas.findFirst({
         where: { businessCaseId: id, isActive: true, version: { gt: 0 } },
-        select: { id: true },
+        select: { id: true, sections: true },
       });
   if (!canvas) {
     return NextResponse.json(
@@ -71,6 +72,8 @@ export async function POST(
       { status: 400 },
     );
   }
+  // Secciones que el CSE ocultó (flag en el Json del canvas) → no se publican.
+  const hidden = hiddenKeysFrom(canvas.sections);
 
   const sections = await prisma.canvasSection.findMany({
     where: { canvasId: canvas.id },
@@ -78,6 +81,8 @@ export async function POST(
     select: {
       key: true,
       label: true,
+      titleOverride: true,
+      eyebrowOverride: true,
       blocks: {
         where: { status: "CONFIRMED" },
         orderBy: { order: "asc" },
@@ -85,10 +90,12 @@ export async function POST(
       },
     },
   });
-  // Solo las secciones con contenido REAL: los bloques sembrados vacíos también son
-  // CONFIRMED, así que filtramos el placeholder en blanco (si no, se publicaría vacío).
-  const filled = sections.filter((s) =>
-    s.blocks.some((b) => !dataIsBlank(b.data) || (b.content ?? "").trim() !== ""),
+  // Solo secciones con contenido REAL y NO ocultas (los bloques sembrados vacíos también
+  // son CONFIRMED, así que filtramos el placeholder en blanco; si no, se publicaría vacío).
+  const filled = sections.filter(
+    (s) =>
+      !hidden.has(s.key) &&
+      s.blocks.some((b) => !dataIsBlank(b.data) || (b.content ?? "").trim() !== ""),
   );
   if (filled.length === 0) {
     return NextResponse.json(
@@ -101,7 +108,13 @@ export async function POST(
     name: bc.name,
     clientName: bc.client.name,
     clientLogoUrl: bc.client.logoUrl,
-    sections: filled.map((s) => ({ key: s.key, label: s.label, blocks: s.blocks })),
+    sections: filled.map((s) => ({
+      key: s.key,
+      label: s.label,
+      titleOverride: s.titleOverride,
+      eyebrowOverride: s.eyebrowOverride,
+      blocks: s.blocks,
+    })),
   };
 
   await prisma.businessCase.update({

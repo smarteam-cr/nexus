@@ -55,6 +55,9 @@
 
 /* Overlay de controles por sección (solo modo edición del workspace). */
 .stl .stl-overlay { position: absolute; top: 12px; right: 16px; z-index: 5; }
+/* Sección OCULTA (no se publica al cliente) — solo marca en el editor interno. */
+.stl .stl-sec.stl-hidden { opacity: 0.5; filter: grayscale(0.55); outline: 2px dashed rgba(245, 158, 11, 0.5); outline-offset: -6px; }
+.stl .stl-hidden-badge { position: absolute; top: 12px; left: 16px; z-index: 6; font-size: 11px; font-weight: 700; color: #b45309; background: rgba(245, 158, 11, 0.16); border: 1px solid rgba(245, 158, 11, 0.42); border-radius: 999px; padding: 3px 10px; }
 .stl .stl-light { background: var(--bg);       color: var(--text); --accent: var(--blue); --accent-soft: var(--blue-soft); }
 .stl .stl-soft  { background: var(--bg-soft);  color: var(--text); --accent: var(--blue); --accent-soft: var(--blue-soft); border-top: 1px solid var(--border); }
 .stl .stl-dark  { background: var(--dark-bg);  color: var(--dark-text); --accent: var(--teal); --accent-soft: var(--teal-soft); }

@@ -9,7 +9,7 @@
  * quitar. Branded Smarteam; estilos en app/landing-engine.css (scope .stl, hex
  * literal → theme-safe en el render externo).
  */
-import type { FC } from "react";
+import { Fragment, type FC } from "react";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import type {
   SectionProps,
@@ -66,19 +66,33 @@ function TextCard({
 export const HeroSection: FC<SectionProps<HeroData>> = ({ data, ctx, editable, onChange }) => {
   const tags = data.tags ?? [];
   const set = (next: Partial<HeroData>) => onChange?.({ ...data, ...next });
+  // Brand-row EDITABLE: si el CSE no la tocó (brands vacío) cae a los defaults.
+  // Con logo del cliente, los defaults son Smarteam × HubSpot (el cliente lo da el logo).
+  const hasLogo = !!ctx.clientLogoUrl;
+  const brands =
+    data.brands && data.brands.length
+      ? data.brands
+      : hasLogo
+        ? ["Smarteam", "HubSpot"]
+        : [ctx.clientName || "Cliente", "Smarteam", "HubSpot"];
   return (
     <div style={{ maxWidth: 900 }}>
       <div className="stl-brandrow">
-        {ctx.clientLogoUrl ? (
+        {hasLogo && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img className="stl-brand-logo" src={ctx.clientLogoUrl} alt={ctx.clientName} />
-        ) : (
-          <span className="stl-brand-badge">{ctx.clientName || "Cliente"}</span>
+          <img className="stl-brand-logo" src={ctx.clientLogoUrl!} alt={ctx.clientName} />
         )}
-        <span className="stl-brand-x">×</span>
-        <span className="stl-brand-badge">Smarteam</span>
-        <span className="stl-brand-x">×</span>
-        <span className="stl-brand-badge">HubSpot</span>
+        {brands.map((b, i) => (
+          <Fragment key={i}>
+            {(i > 0 || hasLogo) && <span className="stl-brand-x">×</span>}
+            <span className="stl-item stl-brand-badge">
+              {editable && <RemoveBtn onClick={() => set({ brands: removeAt(brands, i) })} />}
+              <Editable as="span" editable={editable} value={b} placeholder="Marca / plataforma…"
+                onCommit={(v) => set({ brands: replaceAt(brands, i, v) })} />
+            </span>
+          </Fragment>
+        ))}
+        {editable && <AddBtn label="Marca" onClick={() => set({ brands: appendItem(brands, "") })} />}
       </div>
       <Editable as="h1" className="stl-hero-title" editable={editable} value={data.headline}
         placeholder="[Verbo de transformación] la [operación / proceso] de [cliente]…" onCommit={(v) => set({ headline: v })} />
