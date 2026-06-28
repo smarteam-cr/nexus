@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Montserrat, Open_Sans } from "next/font/google";
 import "./globals.css";
 import "react-day-picker/style.css";
 import { ToastProvider } from "@/components/ui/Toast";
+import { UndoProvider } from "@/components/ui/UndoProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -54,7 +55,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} ${openSans.variable} antialiased bg-gray-950 text-gray-100`}
       >
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          <UndoProvider>{children}</UndoProvider>
+        </ToastProvider>
       </body>
     </html>
   );

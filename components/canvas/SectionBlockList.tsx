@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import BlockRenderer, { type BlockData } from "./BlockRenderer";
+import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,17 @@ export default function SectionBlockList({
   const [cellSize, setCellSize] = useState(160);
   const gridRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // ── Undo global ──────────────────────────────────────────────────────────────
+  const { pushUndo } = useUndo();
+  const undoScope = `canvas:${projectId}:${canvasId}`;
+  useUndoScope(undoScope); // purga el historial al desmontar (no aplica a otro canvas)
+  const allSectionsRef = useRef(allSections);
+  useEffect(() => { allSectionsRef.current = allSections; }); // latest ref (no tocar refs en render)
+  const findBlockSnap = (blockId: string): BlockData | undefined =>
+    allSectionsRef.current.flatMap((s) => s.blocks).find((b) => b.id === blockId);
+  const blocksUrl = (sectionId: string) =>
+    `/api/projects/${projectId}/canvas-sections/${sectionId}/blocks`;
 
   // Measure cell row height: half the column width for 2:1 ratio
   // This way a 2-row block looks roughly square
@@ -135,7 +147,7 @@ export default function SectionBlockList({
   // Polling
   const lastBlockCount = useRef(0);
   const fetchRef = useRef(fetchSections);
-  fetchRef.current = fetchSections;
+  useEffect(() => { fetchRef.current = fetchSections; }); // latest ref (no tocar refs en render)
   useEffect(() => {
     const interval = setInterval(() => {
       fetch(`/api/projects/${projectId}/canvas-sections?canvasId=${canvasId}`)
@@ -205,6 +217,8 @@ export default function SectionBlockList({
         const rowSpan = prev.h;
         const changed = colStart !== (block.colStart ?? startCol + 1) || colSpan !== block.colSpan || rowSpan !== block.rowSpan;
         if (changed) {
+          // Snapshot del layout previo para deshacer (coalesce por bloque: un arrastre = 1 paso).
+          const prevLayout = { colSpan: block.colSpan, colStart: block.colStart, rowSpan: block.rowSpan };
           setAllSections((ss) => ss.map((s) =>
             s.id === sectionId
               ? { ...s, blocks: s.blocks.map((b) => b.id === blockId ? { ...b, colSpan, colStart, rowSpan } : b) }
@@ -214,6 +228,24 @@ export default function SectionBlockList({
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ blockId, colSpan, colStart, rowSpan }),
+          });
+          pushUndo({
+            scope: undoScope,
+            label: type === "resize" ? "Bloque redimensionado" : "Bloque movido",
+            coalesceKey: `${undoScope}|layout|${blockId}`,
+            undo: async () => {
+              setAllSections((ss) => ss.map((s) =>
+                s.id === sectionId
+                  ? { ...s, blocks: s.blocks.map((b) => b.id === blockId ? { ...b, ...prevLayout } : b) }
+                  : s
+              ));
+              await fetch(blocksUrl(sectionId), {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ blockId, ...prevLayout }),
+              });
+              return true;
+            },
           });
         }
         return null;
@@ -227,20 +259,53 @@ export default function SectionBlockList({
   // ── Block actions ───────────────────────────────────────────────────────
 
   const handleBlockSave = async (blockId: string, sectionId: string, updates: { content?: string; data?: unknown }) => {
+    const snap = findBlockSnap(blockId); // contenido/data ANTES de pisar
     await fetch(`/api/projects/${projectId}/canvas-sections/${sectionId}/blocks`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ blockId, ...updates }),
     });
     fetchSections();
+    if (snap) {
+      const prev = { content: snap.content ?? "", data: snap.data };
+      pushUndo({
+        scope: undoScope,
+        label: "Bloque editado",
+        coalesceKey: `${undoScope}|block|${blockId}`,
+        undo: async () => {
+          await fetch(blocksUrl(sectionId), {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ blockId, ...prev }),
+          });
+          fetchSections();
+          return true;
+        },
+      });
+    }
   };
 
   const handleBlockAction = async (blockId: string, sectionId: string, action: "accept" | "reject") => {
+    const snap = findBlockSnap(blockId);
     if (action === "accept") {
       await fetch(`/api/projects/${projectId}/canvas-sections/${sectionId}/blocks`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ blockId, status: "CONFIRMED" }),
+      });
+      fetchSections();
+      pushUndo({
+        scope: undoScope,
+        label: "Bloque aceptado",
+        undo: async () => {
+          await fetch(blocksUrl(sectionId), {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ blockId, status: "DRAFT" }),
+          });
+          fetchSections();
+          return true;
+        },
       });
     } else {
       await fetch(`/api/projects/${projectId}/canvas-sections/${sectionId}/blocks`, {
@@ -248,8 +313,24 @@ export default function SectionBlockList({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ blockId }),
       });
+      fetchSections();
+      // Undo: recrea el bloque (nuevo id, layout por defecto — la grilla reacomoda).
+      if (snap) {
+        pushUndo({
+          scope: undoScope,
+          label: "Bloque eliminado",
+          undo: async () => {
+            await fetch(blocksUrl(sectionId), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ blockType: snap.blockType, content: snap.content ?? "", data: snap.data ?? undefined }),
+            });
+            fetchSections();
+            return true;
+          },
+        });
+      }
     }
-    fetchSections();
   };
 
   const acceptAllDrafts = async () => {

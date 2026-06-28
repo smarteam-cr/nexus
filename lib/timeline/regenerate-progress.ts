@@ -201,9 +201,13 @@ export async function regenerateTimelineProgress(
         .map((t) => t.id as string),
     );
 
-    // ¿Hay algo que proponer? (nuevo done, o un "hoy" que no es la fase ya IN_PROGRESS)
-    const currentIsNew = currentPhaseId !== null && phaseStatus.get(currentPhaseId) !== "IN_PROGRESS";
-    if (phasesDone.length === 0 && inferredDone.size === 0 && !currentIsNew) {
+    // ¿Hay algo HECHO que confirmar? Si NO hay fases completas NI tareas inferidas hechas, el
+    // borrador sería "todo pendiente" → nada que confirmar, solo ruido → se OMITE el banner.
+    // Antes había una excepción (currentIsNew: mostrar el banner si el agente ubicaba el "hoy" en
+    // una fase nueva aunque no hubiera nada hecho); se quitó por pedido: mover el marcador sin
+    // tareas/fases hechas no amerita confirmación (el "hoy" del Gantt es por fecha, y el CSE marca
+    // las tareas a mano cuando las haya).
+    if (phasesDone.length === 0 && inferredDone.size === 0) {
       return { status: "skipped", reason: "no_progress_detected", projectId, currentPhaseId, lastSessionDate, lastSessionArea };
     }
 

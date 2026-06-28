@@ -147,6 +147,15 @@ export const BlockEditBody = z.object({
 export const AiEditBody = z.object({
   instruction: z.string().trim().min(1, "Indicá qué cambiar"),
 });
+// Recrear un bloque eliminado (deshacer un delete). blockType validado contra los tipos canónicos
+// (BLOCK_ORDER es el runtime de BusinessCaseBlockType) → la salida tipa como el enum, sin `as` en Prisma.
+export const BlockRecreateBody = z.object({
+  blockType: z.enum(BLOCK_ORDER as [BusinessCaseBlockType, ...BusinessCaseBlockType[]]),
+  content: z.record(z.string(), z.unknown()),
+  isVisible: z.boolean().optional(),
+  status: z.enum(["DRAFT", "CONFIRMED"]).optional(),
+  needsValidation: z.boolean().optional(),
+});
 
 /** Un bloque tal como lo emite el agente generador. */
 export type GeneratedBlock = {

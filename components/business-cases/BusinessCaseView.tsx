@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
+import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
 
 type BCBlock = {
   id: string;
@@ -55,6 +56,9 @@ export default function BusinessCaseView({
   onChanged?: () => void;
 }) {
   const toast = useToast();
+  const { clearScope } = useUndo();
+  const undoScope = `bc:${bcId}`;
+  useUndoScope(undoScope); // purga el historial al desmontar / cambiar de caso
   const [detail, setDetail] = useState<BCDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -86,6 +90,7 @@ export default function BusinessCaseView({
     try {
       await fetchJson(`/api/business-cases/${bcId}/generate`, { method: "POST" });
       toast.success("Bloques generados. Revisalos y confirmá los que sirvan.");
+      clearScope(undoScope); // la generación reemplaza los bloques DRAFT: el historial previo ya no aplica
       refresh();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "La generación falló.");
@@ -342,6 +347,8 @@ function BlockEditor({
   onChanged: () => void;
 }) {
   const toast = useToast();
+  const { pushUndo } = useUndo();
+  const undoScope = `bc:${bcId}`;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [aiOpen, setAiOpen] = useState(false);
@@ -364,6 +371,34 @@ function BlockEditor({
     }
   };
 
+  // PUT + registro de undo que re-PUTea el estado previo (sin volver a registrar undo).
+  const putUndoable = async (
+    body: Record<string, unknown>,
+    label: string,
+    prevBody: Record<string, unknown>,
+    coalesceKey?: string,
+  ) => {
+    await put(body);
+    pushUndo({
+      scope: undoScope,
+      label,
+      coalesceKey,
+      undo: async () => {
+        try {
+          await fetchJson(`/api/business-cases/${bcId}/blocks/${block.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(prevBody),
+          });
+          onChanged();
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    });
+  };
+
   const saveContent = async () => {
     let parsed: unknown;
     try {
@@ -372,7 +407,12 @@ function BlockEditor({
       toast.error("El JSON del contenido no es válido.");
       return;
     }
-    await put({ content: parsed });
+    await putUndoable(
+      { content: parsed },
+      "Bloque editado",
+      { content: block.content as Record<string, unknown> },
+      `${undoScope}|block|${block.id}`,
+    );
     setEditing(false);
   };
 
@@ -380,6 +420,7 @@ function BlockEditor({
     if (!instruction.trim() || busy) return;
     setBusy(true);
     try {
+      const prevContent = block.content as Record<string, unknown>;
       await fetchJson(`/api/business-cases/${bcId}/blocks/${block.id}/ai-edit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -389,6 +430,24 @@ function BlockEditor({
       setAiOpen(false);
       toast.success("Bloque editado por IA.");
       onChanged();
+      // Undo: restaura el contenido pre-IA (re-PUT directo).
+      pushUndo({
+        scope: undoScope,
+        label: "Edición por IA",
+        undo: async () => {
+          try {
+            await fetchJson(`/api/business-cases/${bcId}/blocks/${block.id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ content: prevContent }),
+            });
+            onChanged();
+            return true;
+          } catch {
+            return false;
+          }
+        },
+      });
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "La edición por IA falló.");
     } finally {
@@ -399,8 +458,33 @@ function BlockEditor({
   const remove = async () => {
     setBusy(true);
     try {
+      // Snapshot ANTES de borrar → habilita recrear el bloque al deshacer.
+      const snap = {
+        blockType: block.blockType,
+        content: (block.content ?? {}) as Record<string, unknown>,
+        isVisible: block.isVisible,
+        status: block.status,
+        needsValidation: block.needsValidation,
+      };
       await fetchJson(`/api/business-cases/${bcId}/blocks/${block.id}`, { method: "DELETE" });
       onChanged();
+      pushUndo({
+        scope: undoScope,
+        label: "Bloque eliminado",
+        undo: async () => {
+          try {
+            await fetchJson(`/api/business-cases/${bcId}/blocks`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(snap),
+            });
+            onChanged();
+            return true;
+          } catch {
+            return false;
+          }
+        },
+      });
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar.");
     } finally {
@@ -470,15 +554,15 @@ function BlockEditor({
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
         {block.status === "CONFIRMED" ? (
-          <button onClick={() => put({ status: "DRAFT" })} disabled={busy} className="text-fg-muted hover:text-fg">
+          <button onClick={() => putUndoable({ status: "DRAFT" }, "Bloque reabierto", { status: "CONFIRMED" })} disabled={busy} className="text-fg-muted hover:text-fg">
             Reabrir
           </button>
         ) : (
-          <button onClick={() => put({ status: "CONFIRMED" })} disabled={busy} className="text-emerald-600 hover:underline font-medium">
+          <button onClick={() => putUndoable({ status: "CONFIRMED" }, "Bloque confirmado", { status: "DRAFT" })} disabled={busy} className="text-emerald-600 hover:underline font-medium">
             Confirmar
           </button>
         )}
-        <button onClick={() => put({ isVisible: !block.isVisible })} disabled={busy} className="text-fg-muted hover:text-fg">
+        <button onClick={() => putUndoable({ isVisible: !block.isVisible }, block.isVisible ? "Bloque oculto" : "Bloque visible", { isVisible: block.isVisible })} disabled={busy} className="text-fg-muted hover:text-fg">
           {block.isVisible ? "Ocultar" : "Mostrar"}
         </button>
         <button

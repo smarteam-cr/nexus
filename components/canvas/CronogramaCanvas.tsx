@@ -30,6 +30,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { plural, computePhaseRanges, currentWeekIndex } from "@/lib/timeline/weeks";
 import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/Toast";
+import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
 import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus, PARTY_META, effParty } from "./TimelineGantt";
 import TaskDetailDrawer from "./TaskDetailDrawer";
 import TimelineAssistDialog from "./TimelineAssistDialog";
@@ -133,6 +134,9 @@ interface PendingProgress {
 
 export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { projectId: string; clientId: string; headerSlot?: HTMLElement | null }) {
   const toast = useToast();
+  const { pushUndo, clearScope } = useUndo();
+  const undoScope = `cronograma:${projectId}`;
+  useUndoScope(undoScope); // purga el historial de undo al desmontar (no aplica a otro proyecto)
   const [phases, setPhases] = useState<Phase[]>([]);
   const [anchor, setAnchor] = useState<string>(""); // yyyy-mm-dd o ""
   const [kickoffDate, setKickoffDate] = useState<string>(""); // yyyy-mm-dd de la sesión de kickoff (sugerencia)
@@ -185,6 +189,23 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // el estado con la respuesta del server (evita perder lo que el CSE tipeó mientras guardaba).
   const editSeq = useRef(0);
   const markDirty = () => { editSeq.current++; setDirty(true); };
+  // Undo: captura el estado pre-edición (phases+anchor del render actual) y registra un comando
+  // que lo restaura. El restore llama markDirty (reprograma el autosave) pero NO vuelve a registrar
+  // undo → sin loop. Snapshot por referencia: los updates de phases son inmutables (arrays nuevos).
+  const pushTimelineUndo = (label: string, coalesceKey?: string) => {
+    const snapPhases = phases;
+    const snapAnchor = anchor;
+    pushUndo({
+      scope: undoScope,
+      label,
+      coalesceKey,
+      undo: () => {
+        setPhases(snapPhases);
+        setAnchor(snapAnchor);
+        markDirty();
+      },
+    });
+  };
   // Si un auto-guardado FALLA, guardamos el editSeq fallido: el efecto no reintenta
   // hasta que haya una edición nueva (evita una tormenta de PUTs cada 1.5 s si el server rechaza).
   const lastFailedSeqRef = useRef<number | null>(null);
@@ -258,7 +279,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         // D.2 — borrador de avance: lo expone el GET. Pre-tildá las fases propuestas y, de las
         // tareas, SOLO las que el agente infirió hechas (done:true). El resto arranca Pendiente
         // y nada Suspendido — el CSE resuelve cada tarea (hecha/suspendida) antes de cerrar la fase.
-        const pp = data.pendingProgress ? (data.pendingProgress as PendingProgress) : null;
+        const ppRaw = data.pendingProgress ? (data.pendingProgress as PendingProgress) : null;
+        // Si el borrador no trae NADA hecho (sin fases completas ni tareas inferidas hechas), es
+        // "todo pendiente" → no hay nada que confirmar, se omite el banner (guarda por si quedó
+        // persistido un borrador viejo; la generación nueva ya no lo crea).
+        const ppHasProgress =
+          !!ppRaw && ((ppRaw.phases?.length ?? 0) > 0 || (ppRaw.tasks ?? []).some((t) => t.done));
+        const pp = ppHasProgress ? ppRaw : null;
         setPendingProgress(pp);
         setProgressPhaseSel(new Set((pp?.phases ?? []).map((p) => p.id)));
         setProgressTaskSel(new Set((pp?.tasks ?? []).filter((t) => t.done).map((t) => t.id)));
@@ -345,6 +372,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
 
   // ── Edición de tareas (inline en el Gantt) ────────────────────────────────────
   const updateTask = (phaseKey: string, taskKey: string, patch: Partial<TaskDraft>) => {
+    // Coalesce por tarea+campos: tipear un título o ajustar un campo = 1 paso de undo.
+    pushTimelineUndo("Cambio en la tarea", `${undoScope}|task|${taskKey}|${Object.keys(patch).sort().join(",")}`);
     setPhases((ps) =>
       ps.map((p) =>
         p._key === phaseKey
@@ -355,6 +384,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     markDirty();
   };
   const addTask = (phaseKey: string, weekIndex: number) => {
+    pushTimelineUndo("Tarea agregada");
     setPhases((ps) =>
       ps.map((p) =>
         p._key === phaseKey
@@ -371,6 +401,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     markDirty();
   };
   const removeTask = (phaseKey: string, taskKey: string) => {
+    pushTimelineUndo("Tarea eliminada");
     setPhases((ps) =>
       ps.map((p) => (p._key === phaseKey ? { ...p, tasks: p.tasks.filter((t) => t._key !== taskKey) } : p)),
     );
@@ -380,10 +411,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // ── Edición DIRECTA de fases (además de la barra de IA) ───────────────────────
   // Persiste por el mismo auto-guardado (PUT): nombre/duración/sesiones, agregar y eliminar.
   const updatePhase = (phaseKey: string, patch: { name?: string; durationWeeks?: number; sessionCount?: number | null; startWeek?: number | null }) => {
+    // Coalesce por fase+campos: tipear el nombre o arrastrar el inicio = 1 paso de undo.
+    pushTimelineUndo("Cambio en la fase", `${undoScope}|phase|${phaseKey}|${Object.keys(patch).sort().join(",")}`);
     setPhases((ps) => ps.map((p) => (p._key === phaseKey ? { ...p, ...patch } : p)));
     markDirty();
   };
   const addPhase = () => {
+    pushTimelineUndo("Fase agregada");
     setPhases((ps) => [
       ...ps,
       { name: "", durationWeeks: 1, startWeek: null, sessionCount: null, notes: null, activityType: null, status: "PENDING" as const, needsValidation: false, tasks: [], _key: nextKey() },
@@ -391,6 +425,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     markDirty();
   };
   const removePhase = (phaseKey: string) => {
+    pushTimelineUndo("Fase eliminada");
     setPhases((ps) => ps.filter((p) => p._key !== phaseKey));
     markDirty();
   };
@@ -398,6 +433,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Drag&drop de tareas: mover a (semana, posición) dentro de su fase. El order por semana lo
   // recalcula buildPutBody desde la posición en el array, así que reordenamos el array de la fase.
   const moveTask = (taskKey: string, toPhaseKey: string, toWeekIndex: number, toOrder: number) => {
+    pushTimelineUndo("Tarea movida");
     setPhases((ps) => {
       // 1) sacar la tarea de su fase actual (sea cual sea).
       let moved: TaskDraft | undefined;
@@ -436,6 +472,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
 
   // Drag&drop de fases: reordenar el array → buildPutBody manda order = índice.
   const reorderPhases = (activeKey: string, overKey: string) => {
+    pushTimelineUndo("Fases reordenadas");
     setPhases((ps) => {
       const from = ps.findIndex((p) => p._key === activeKey);
       const to = ps.findIndex((p) => p._key === overKey);
@@ -559,6 +596,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Fijar/cambiar la fecha de arranque desde el Gantt: actualiza el preview (fechas
   // reales) y marca dirty — se PERSISTE con "Guardar cronograma", no al instante.
   const setAnchorFromGantt = (ymd: string) => {
+    pushTimelineUndo("Fecha de inicio cambiada", `${undoScope}|anchor`);
     setAnchor(ymd);
     markDirty();
   };
@@ -604,6 +642,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         }
       } else {
         await load();
+        clearScope(undoScope); // el detalle nuevo reemplaza el estado: el historial de undo previo ya no aplica
         // F — encadenado: recién creadas las tareas, evaluá el avance en la misma pasada.
         // Best-effort: si el progress falla, las tareas YA quedaron (no hay rollback) y el CSE
         // usa "Chequear avance". Si el agente detecta avance → recarga y aparece el banner.
@@ -692,6 +731,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setAssistWarnings([]);
         setAssistInstruction("");
         await load();
+        clearScope(undoScope); // la propuesta aplicada reemplaza el estado: limpiamos el historial de undo
       }
     } catch {
       setError("Error de conexión al aplicar.");
@@ -793,7 +833,25 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
 
 
   // ── Toggle de estado desde el Gantt (PATCH, optimista) ────────────────────────
-  const toggleStatus = async (taskId: string, next: GanttTaskStatus) => {
+  // `fromUndo` evita registrar un nuevo comando de undo cuando el toggle viene del propio undo.
+  const toggleStatus = async (taskId: string, next: GanttTaskStatus, fromUndo = false) => {
+    // Undo del estado: re-PATCH al estado previo (no pasa por phases+autosave; es su propia vía).
+    if (!fromUndo) {
+      let prev: GanttTaskStatus | undefined;
+      for (const p of phases) {
+        const t = p.tasks.find((x) => x.id === taskId);
+        if (t) { prev = t.status; break; }
+      }
+      if (prev !== undefined && prev !== next) {
+        const prevStatus = prev;
+        pushUndo({
+          scope: undoScope,
+          label: "Estado de tarea cambiado",
+          coalesceKey: `${undoScope}|status|${taskId}`,
+          undo: () => { void toggleStatus(taskId, prevStatus, true); },
+        });
+      }
+    }
     // Optimista: cambia el status de la tarea y, por coherencia, reconcilia el de su fase
     // (todas resueltas → DONE; deja de estarlo y estaba DONE → IN_PROGRESS). El server hace lo
     // mismo de forma autoritativa; si el PATCH falla, load() corrige.

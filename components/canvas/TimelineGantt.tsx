@@ -291,9 +291,11 @@ export default function TimelineGantt({
   // nativos (NO @dnd-kit, que está cableado para reorden vertical + move-task). Mide el ancho de
   // semana con la celda donde arranca el drag → convierte px a semanas.
   const barDrag = useRef<{ phaseKey: string; origStart: number; startX: number; weekPx: number; last: number; moved: boolean } | null>(null);
-  // Tras un drag REAL (que movió el inicio), el pointerup sintetiza un click que burbujea a la fila y
-  // dispararía toggleExpand. Lo marcamos para tragarnos SOLO ese click (un click pelado en la barra,
-  // sin mover, sí expande). Ver el onClick de la celda de la barra.
+  // Mover la barra en el tiempo NO debe desplegar/colapsar la fila. Tras un drag REAL (que movió el
+  // inicio) el pointerup sintetiza un click; si el drag cruzó varias celdas, ese click se dispara sobre
+  // la FILA (ancestro común de press y release), no sobre una celda — por eso el guard vive en el onClick
+  // de la FILA, no de la celda. Lo consumimos ahí para que la fase quede como estaba. Un click pelado en
+  // la barra (sin mover) sí togglea.
   const suppressBarClick = useRef(false);
   const startBarDrag = (e: ReactPointerEvent, phaseKey: string, rangeStart: number) => {
     if (!editable || !onUpdatePhase) return;
@@ -301,6 +303,7 @@ export default function TimelineGantt({
     if (!weekPx) return;
     e.stopPropagation();
     e.preventDefault();
+    suppressBarClick.current = false; // arrancar limpio: una bandera vieja no debe comerse este gesto
     barDrag.current = { phaseKey, origStart: rangeStart, startX: e.clientX, weekPx, last: rangeStart, moved: false };
     const move = (ev: PointerEvent) => {
       const d = barDrag.current;
@@ -554,7 +557,15 @@ export default function TimelineGantt({
                 <div>
                   {/* Fila del grid */}
                   <div
-                    onClick={() => toggleExpand(p.key)}
+                    onClick={() => {
+                      // Si venimos de mover la barra en el tiempo (drag real), nos comemos este click
+                      // sintético para que la fila quede como estaba (no se despliega ni colapsa).
+                      if (suppressBarClick.current) {
+                        suppressBarClick.current = false;
+                        return;
+                      }
+                      toggleExpand(p.key);
+                    }}
                     className="grid gap-1 items-center px-2 py-1.5 -mx-2 rounded-lg cursor-pointer hover:bg-gray-800/50 transition-colors group"
                     style={gridCols}
                   >
@@ -705,18 +716,6 @@ export default function TimelineGantt({
                         <div
                           key={w}
                           onPointerDown={editable && onUpdatePhase ? (e) => startBarDrag(e, p.key, range.start) : undefined}
-                          onClick={
-                            editable && onUpdatePhase
-                              ? (e) => {
-                                  // Tragar el click sintético post-drag para que NO togglee la fila;
-                                  // un click pelado (sin mover) sí burbujea y expande.
-                                  if (suppressBarClick.current) {
-                                    suppressBarClick.current = false;
-                                    e.stopPropagation();
-                                  }
-                                }
-                              : undefined
-                          }
                           className={`h-3 rounded transition-all ${meta?.seg ?? NEUTRAL_SEG} ${
                             allDone || isPast ? "opacity-35" : ""
                           } ${isCur ? "timeline-now-pulse" : ""} ${

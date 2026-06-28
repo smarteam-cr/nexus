@@ -140,6 +140,38 @@ export async function applyGeneratedBlocks(
   await reorderBlocks(businessCaseId);
 }
 
+/**
+ * Recrea un bloque (deshacer un delete del editor). Lo agrega al final con un id nuevo;
+ * por defecto HUMAN/CONFIRMED salvo que el snapshot indique otro estado.
+ */
+export async function recreateBlock(
+  businessCaseId: string,
+  block: {
+    blockType: BusinessCaseBlockType;
+    content: Record<string, unknown>;
+    isVisible?: boolean;
+    status?: "DRAFT" | "CONFIRMED";
+    needsValidation?: boolean;
+  },
+) {
+  const maxOrder = await prisma.businessCaseBlock.aggregate({
+    where: { businessCaseId },
+    _max: { order: true },
+  });
+  return prisma.businessCaseBlock.create({
+    data: {
+      businessCaseId,
+      blockType: block.blockType,
+      content: block.content as Prisma.InputJsonValue,
+      isVisible: block.isVisible ?? true,
+      status: block.status ?? "CONFIRMED",
+      needsValidation: block.needsValidation ?? false,
+      source: "HUMAN",
+      order: (maxOrder._max.order ?? -1) + 1,
+    },
+  });
+}
+
 async function reorderBlocks(businessCaseId: string) {
   const blocks = await prisma.businessCaseBlock.findMany({
     where: { businessCaseId },
