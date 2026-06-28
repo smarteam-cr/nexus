@@ -526,7 +526,8 @@ function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: ()
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-fg truncate">{s.title || "Sin título"}</p>
                   <p className="text-[11px] text-fg-muted truncate">
-                    {fmtDate(s.date)}{!s.hasTranscript ? " · sin transcripción" : ""}
+                    {fmtDate(s.date)}
+                    {!s.hasTranscript && <span className="text-amber-600"> · sin transcripción</span>}
                   </p>
                 </div>
                 <button

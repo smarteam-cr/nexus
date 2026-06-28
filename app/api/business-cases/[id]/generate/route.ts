@@ -17,6 +17,7 @@ import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { createBusinessCaseCanvas } from "@/lib/canvas/default-canvases";
 import { generateCanvasSections } from "@/lib/business-cases/canvas-agent";
+import { loadBcFeeding } from "@/lib/business-cases/feeding";
 
 /** Un `data` estructurado está "vacío" si todos sus strings y arrays lo están. */
 function dataIsBlank(v: unknown): boolean {
@@ -43,38 +44,40 @@ export async function POST(
     return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
   }
 
-  // ── Contexto: transcripts manuales + sesiones incluidas con transcript ──────
-  const [transcripts, includedSessions] = await Promise.all([
+  // ── Contexto: transcripts manuales + transcripts de las sesiones que ALIMENTAN
+  //    el caso (regla de Ventas + overrides; mismo criterio que el panel) ─────────
+  const feeding = await loadBcFeeding(id);
+  const feedingIds = feeding?.feedingIds ?? [];
+  const [transcripts, sessions] = await Promise.all([
     prisma.businessCaseTranscript.findMany({
       where: { businessCaseId: id },
       select: { rawText: true, fileName: true },
     }),
-    prisma.businessCaseSession.findMany({
-      where: { businessCaseId: id, included: true },
-      select: { sessionId: true },
-    }),
+    feedingIds.length
+      ? prisma.firefliesSession.findMany({
+          where: { id: { in: feedingIds } },
+          select: { title: true, date: true, transcript: true },
+        })
+      : Promise.resolve([] as { title: string; date: Date; transcript: string | null }[]),
   ]);
-  const sessionIds = includedSessions.map((s) => s.sessionId);
-  const sessions = sessionIds.length
-    ? await prisma.firefliesSession.findMany({
-        where: { id: { in: sessionIds } },
-        select: { title: true, date: true, transcript: true },
-      })
-    : [];
 
   const parts: string[] = [];
   for (const t of transcripts) {
     if (t.rawText.trim()) parts.push(`# Nota/transcript${t.fileName ? ` (${t.fileName})` : ""}\n${t.rawText.trim()}`);
   }
+  let sessionsWithoutTranscript = 0;
   for (const s of sessions) {
     if (s.transcript?.trim()) parts.push(`# Sesión: ${s.title}\n${s.transcript.trim()}`);
+    else sessionsWithoutTranscript++;
   }
   const context = parts.join("\n\n---\n\n");
   if (!context.trim()) {
-    return NextResponse.json(
-      { error: "Agregá al menos un transcript o una sesión con transcripción antes de generar." },
-      { status: 400 },
-    );
+    // Mensaje claro: distinguir "no hay fuentes" de "las sesiones no tienen transcripción aún".
+    const error =
+      sessionsWithoutTranscript > 0
+        ? "Las sesiones del prospecto todavía no tienen transcripción. Pegá un transcript a mano en “Fuentes manuales” (o esperá a que se transcriba la reunión)."
+        : "Agregá una sesión del prospecto con transcripción o pegá un transcript a mano antes de generar.";
+    return NextResponse.json({ error }, { status: 400 });
   }
 
   // ── Canvas destino: llenar el activo si está vacío, si no crear versión nueva ──
