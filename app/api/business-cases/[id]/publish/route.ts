@@ -1,10 +1,10 @@
 /**
- * POST /api/business-cases/[id]/publish
+ * POST /api/business-cases/[id]/publish   body: { canvasId? }
  *
- * Congela el snapshot client-safe del CANVAS ACTIVO (secciones + bloques
- * CONFIRMED, en orden), setea publishedAt y asegura el acceso (token+password).
- * Exige ≥1 transcript/sesión (que haya canvas) y ≥1 bloque CONFIRMED. Devuelve el
- * link + la contraseña. Gateado con guardSalesAccess.
+ * Congela el snapshot client-safe del CASO DE USO que el CSE está viendo (el
+ * `canvasId` del body; fallback al activo). Valida pertenencia al BC (IDOR) y que
+ * NO sea la Plantilla (version 0). Setea publishedAt + asegura el acceso. Exige ≥1
+ * sección con contenido real. Gateado con guardSalesAccess.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
@@ -42,12 +42,34 @@ export async function POST(
     return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
   }
 
-  const canvas = await prisma.projectCanvas.findFirst({
-    where: { businessCaseId: id, isActive: true },
-    select: { id: true },
-  });
+  // El caso a publicar lo elige el CSE en el dropdown (canvasId en el body). Validamos
+  // pertenencia al BC (IDOR) y que NO sea la Plantilla (version 0). Fallback al activo.
+  let bodyCanvasId: string | null = null;
+  try {
+    const body = await req.json();
+    if (body && typeof body.canvasId === "string") bodyCanvasId = body.canvasId;
+  } catch {
+    /* sin body */
+  }
+
+  const canvas = bodyCanvasId
+    ? await prisma.projectCanvas.findFirst({
+        where: { id: bodyCanvasId, businessCaseId: id, version: { gt: 0 } },
+        select: { id: true },
+      })
+    : await prisma.projectCanvas.findFirst({
+        where: { businessCaseId: id, isActive: true, version: { gt: 0 } },
+        select: { id: true },
+      });
   if (!canvas) {
-    return NextResponse.json({ error: "Generá el business case antes de publicar." }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: bodyCanvasId
+          ? "Ese caso de uso no existe o es la Plantilla (la Plantilla no se publica)."
+          : "Generá un caso de uso antes de subir al cliente.",
+      },
+      { status: 400 },
+    );
   }
 
   const sections = await prisma.canvasSection.findMany({

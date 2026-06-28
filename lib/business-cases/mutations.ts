@@ -237,18 +237,16 @@ export async function deleteBlock(blockId: string) {
 
 // ── Acceso externo + publicación ─────────────────────────────────────────────
 
-/** Crea (o reactiva) el acceso token+password del business case. */
+/** Crea, reusa o ROTA el acceso token+password del business case. */
 export async function ensureAccess(businessCaseId: string, createdByEmail?: string | null) {
   const existing = await prisma.businessCaseExternalAccess.findUnique({
     where: { businessCaseId },
-    select: { id: true, accessToken: true, accessPassword: true },
+    select: { id: true, accessToken: true, accessPassword: true, revokedAt: true },
   });
-  if (existing && existing.accessPassword) {
-    await prisma.businessCaseExternalAccess.update({
-      where: { businessCaseId },
-      data: { revokedAt: null },
-    });
-    return existing;
+  // Reusar las credenciales SOLO si no estaba revocado. Si el CSE revocó (mató un link
+  // filtrado) y vuelve a publicar, rotamos token+password nuevos para invalidar lo viejo.
+  if (existing && existing.accessPassword && !existing.revokedAt) {
+    return { id: existing.id, accessToken: existing.accessToken, accessPassword: existing.accessPassword };
   }
   const accessToken = randomBytes(32).toString("hex");
   const password = generatePassword();

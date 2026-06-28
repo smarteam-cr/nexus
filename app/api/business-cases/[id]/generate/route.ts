@@ -4,10 +4,10 @@
  * Llena el canvas del business case con el agente (datos ESTRUCTURADOS por sección):
  *   1. Junta el contexto (transcripts pegados/subidos + transcripts de las
  *      sesiones incluidas).
- *   2. Elige el canvas destino: si el canvas activo está VACÍO (template recién
- *      creado) → lo llena en su lugar; si ya tiene contenido → crea "Caso de uso N+1".
- *   3. El agente produce `data` por sección → escribe ese data en el bloque de cada
- *      sección (DRAFT/AGENT). El vendedor confirma/edita después.
+ *   2. Crea SIEMPRE un caso de uso nuevo (v1, v2, …); el agente lee las guías de la
+ *      Plantilla (v0), que nunca se llena.
+ *   3. El agente produce `data` por sección → se escribe YA ACEPTADO (CONFIRMED) en el
+ *      bloque de cada sección. El vendedor edita/borra (no hay paso de "confirmar").
  *
  * Exige ≥1 fuente de contexto. Gateado con guardSalesAccess.
  */
@@ -83,6 +83,25 @@ export async function POST(
       select: { sections: true },
     }));
 
+  // Guard anti-doble-generación: si ya hay una corrida en curso para este BC (otra
+  // pestaña, retry de red), no arrancamos otra — evita dos casos con la misma versión.
+  // Acotado a 5 min para que una corrida colgada/caída no bloquee para siempre.
+  const inFlight = await prisma.agentRun.findFirst({
+    where: {
+      businessCaseId: id,
+      agentSlug: "business-case",
+      status: "RUNNING",
+      createdAt: { gt: new Date(Date.now() - 5 * 60 * 1000) },
+    },
+    select: { id: true },
+  });
+  if (inFlight) {
+    return NextResponse.json(
+      { error: "Ya hay una generación en curso para este caso. Esperá a que termine." },
+      { status: 409 },
+    );
+  }
+
   const run = await prisma.agentRun.create({
     data: {
       clientId: bc.clientId,
@@ -98,7 +117,7 @@ export async function POST(
     // Guía efectiva por sección: el override del CSE en la Plantilla gana; si no, el
     // agente cae al brief por defecto de la config (BC_DEF_BY_KEY.brief).
     const briefsByKey = briefsByKeyFrom(template?.sections);
-    const generated = await generateCanvasSections(context, briefsByKey);
+    const generated = await generateCanvasSections(context, briefsByKey); // LLM, FUERA de la tx
 
     // Cada "Generar" crea un CASO NUEVO (v1, v2, …). La Plantilla (v0) nunca se llena.
     const last = await prisma.projectCanvas.aggregate({
@@ -106,32 +125,35 @@ export async function POST(
       _max: { version: true },
     });
     const version = (last._max.version ?? 0) + 1;
-    const canvasId = await createBusinessCaseCanvas(id, version);
 
-    // 1 bloque por sección: llenamos el bloque sembrado (vacío) con el data generado,
-    // YA ACEPTADO (CONFIRMED) — el agente no propone borradores; el usuario edita/borra.
-    const sections = await prisma.canvasSection.findMany({
-      where: { canvasId },
-      select: { id: true, key: true, blocks: { select: { id: true }, orderBy: { order: "asc" }, take: 1 } },
-    });
-    const sectionByKey = new Map(sections.map((s) => [s.key, s]));
-
-    for (const gs of generated) {
-      const section = sectionByKey.get(gs.key);
-      if (!section) continue;
-      const blockId = section.blocks[0]?.id;
-      const data = gs.data as Prisma.InputJsonValue;
-      if (blockId) {
-        await prisma.canvasBlock.update({
-          where: { id: blockId },
-          data: { data, content: null, source: "AGENT", status: "CONFIRMED", agentRunId: run.id },
-        });
-      } else {
-        await prisma.canvasBlock.create({
-          data: { sectionId: section.id, blockType: "CARD", content: null, data, order: 0, source: "AGENT", status: "CONFIRMED", agentRunId: run.id },
-        });
+    // Atómico: crear el caso (+ desactivar el previo) y llenar los bloques con el data
+    // generado, YA ACEPTADO (CONFIRMED), TODO o NADA. Si algo falla, no queda un caso
+    // vacío activo ni se desactiva el caso bueno anterior.
+    const canvasId = await prisma.$transaction(async (tx) => {
+      const cid = await createBusinessCaseCanvas(id, version, tx);
+      const sections = await tx.canvasSection.findMany({
+        where: { canvasId: cid },
+        select: { id: true, key: true, blocks: { select: { id: true }, orderBy: { order: "asc" }, take: 1 } },
+      });
+      const sectionByKey = new Map(sections.map((s) => [s.key, s]));
+      for (const gs of generated) {
+        const section = sectionByKey.get(gs.key);
+        if (!section) continue;
+        const blockId = section.blocks[0]?.id;
+        const data = gs.data as Prisma.InputJsonValue;
+        if (blockId) {
+          await tx.canvasBlock.update({
+            where: { id: blockId },
+            data: { data, content: null, source: "AGENT", status: "CONFIRMED", agentRunId: run.id },
+          });
+        } else {
+          await tx.canvasBlock.create({
+            data: { sectionId: section.id, blockType: "CARD", content: null, data, order: 0, source: "AGENT", status: "CONFIRMED", agentRunId: run.id },
+          });
+        }
       }
-    }
+      return cid;
+    });
 
     await prisma.agentRun.update({ where: { id: run.id }, data: { status: "DONE" } });
     return NextResponse.json({ canvasId, version });

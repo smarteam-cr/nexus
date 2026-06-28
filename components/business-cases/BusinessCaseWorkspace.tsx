@@ -112,11 +112,16 @@ export default function BusinessCaseWorkspace({
     if (publishing) return;
     setPublishing(true);
     try {
-      await fetchJson(`/api/business-cases/${bcId}/publish`, { method: "POST" });
+      // Publicamos el caso que el CSE está viendo (no el "activo" del server).
+      await fetchJson(`/api/business-cases/${bcId}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ canvasId }),
+      });
       setPublished(true);
       setDirty(false);
       setAccessNonce((n) => n + 1);
-      toast.success("Subido. El cliente ya ve la última versión.");
+      toast.success("Subido. El cliente ya ve este caso de uso.");
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo subir al cliente.");
     } finally {
