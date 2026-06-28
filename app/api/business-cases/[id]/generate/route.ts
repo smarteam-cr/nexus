@@ -20,15 +20,6 @@ import { generateCanvasSections } from "@/lib/business-cases/canvas-agent";
 import { loadBcFeeding } from "@/lib/business-cases/feeding";
 import { briefsByKeyFrom } from "@/lib/business-cases/section-briefs";
 
-/** Un `data` estructurado está "vacío" si todos sus strings y arrays lo están. */
-function dataIsBlank(v: unknown): boolean {
-  if (v == null) return true;
-  if (typeof v === "string") return v.trim() === "";
-  if (Array.isArray(v)) return v.every(dataIsBlank);
-  if (typeof v === "object") return Object.values(v as Record<string, unknown>).every(dataIsBlank);
-  return false;
-}
-
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -81,22 +72,16 @@ export async function POST(
     return NextResponse.json({ error }, { status: 400 });
   }
 
-  // ── Canvas destino: llenar el activo si está vacío, si no crear versión nueva ──
-  const active = await prisma.projectCanvas.findFirst({
-    where: { businessCaseId: id, isActive: true },
-    select: {
-      id: true,
-      version: true,
-      // sections (Json) trae la guía editable por sección; canvasSections, el contenido.
-      sections: true,
-      canvasSections: { select: { key: true, blocks: { select: { data: true, content: true } } } },
-    },
-  });
-  const activeHasContent =
-    !!active &&
-    active.canvasSections.some((s) =>
-      s.blocks.some((b) => !dataIsBlank(b.data) || (b.content ?? "").trim() !== ""),
-    );
+  // ── Guías del agente: SIEMPRE desde la Plantilla (v0). Fallback al activo (BC legacy). ──
+  const template =
+    (await prisma.projectCanvas.findFirst({
+      where: { businessCaseId: id, version: 0 },
+      select: { sections: true },
+    })) ??
+    (await prisma.projectCanvas.findFirst({
+      where: { businessCaseId: id, isActive: true },
+      select: { sections: true },
+    }));
 
   const run = await prisma.agentRun.create({
     data: {
@@ -104,34 +89,27 @@ export async function POST(
       businessCaseId: id,
       status: "RUNNING",
       agentSlug: "business-case",
-      stepLabel: active && !activeHasContent ? `Generación v${active.version}` : "Generación",
+      stepLabel: "Generación",
     },
     select: { id: true },
   });
 
   try {
-    // Guía efectiva por sección: el override del CSE (guardado en el Json del canvas
-    // activo) gana; si no, el agente cae al brief por defecto de la config. Así, si el
-    // CSE editó la guía, el agente genera según lo que dice esa sección.
-    const briefsByKey = briefsByKeyFrom(active?.sections);
+    // Guía efectiva por sección: el override del CSE en la Plantilla gana; si no, el
+    // agente cae al brief por defecto de la config (BC_DEF_BY_KEY.brief).
+    const briefsByKey = briefsByKeyFrom(template?.sections);
     const generated = await generateCanvasSections(context, briefsByKey);
 
-    let canvasId: string;
-    let version: number;
-    if (active && !activeHasContent) {
-      canvasId = active.id;
-      version = active.version;
-    } else {
-      const last = await prisma.projectCanvas.aggregate({
-        where: { businessCaseId: id },
-        _max: { version: true },
-      });
-      version = (last._max.version ?? 0) + 1;
-      canvasId = await createBusinessCaseCanvas(id, version);
-    }
+    // Cada "Generar" crea un CASO NUEVO (v1, v2, …). La Plantilla (v0) nunca se llena.
+    const last = await prisma.projectCanvas.aggregate({
+      where: { businessCaseId: id },
+      _max: { version: true },
+    });
+    const version = (last._max.version ?? 0) + 1;
+    const canvasId = await createBusinessCaseCanvas(id, version);
 
-    // 1 bloque por sección: escribimos el data generado en el bloque existente
-    // (sembrado vacío) o lo creamos si faltara.
+    // 1 bloque por sección: llenamos el bloque sembrado (vacío) con el data generado,
+    // YA ACEPTADO (CONFIRMED) — el agente no propone borradores; el usuario edita/borra.
     const sections = await prisma.canvasSection.findMany({
       where: { canvasId },
       select: { id: true, key: true, blocks: { select: { id: true }, orderBy: { order: "asc" }, take: 1 } },
@@ -146,11 +124,11 @@ export async function POST(
       if (blockId) {
         await prisma.canvasBlock.update({
           where: { id: blockId },
-          data: { data, content: null, source: "AGENT", status: "DRAFT", agentRunId: run.id },
+          data: { data, content: null, source: "AGENT", status: "CONFIRMED", agentRunId: run.id },
         });
       } else {
         await prisma.canvasBlock.create({
-          data: { sectionId: section.id, blockType: "CARD", content: null, data, order: 0, source: "AGENT", status: "DRAFT", agentRunId: run.id },
+          data: { sectionId: section.id, blockType: "CARD", content: null, data, order: 0, source: "AGENT", status: "CONFIRMED", agentRunId: run.id },
         });
       }
     }

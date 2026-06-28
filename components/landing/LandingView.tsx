@@ -41,6 +41,7 @@ export default function LandingView({
   ctx,
   sections,
   mode = "read",
+  showBriefs = true,
   onSectionChange,
   onBriefChange,
   renderOverlay,
@@ -49,6 +50,9 @@ export default function LandingView({
   ctx: LandingContext;
   sections: LandingSectionData[];
   mode?: "edit" | "read";
+  // Mostrar/editar la guía del agente por sección. Solo la Plantilla (v0) del business
+  // case la activa; los casos generados la ocultan. Default true → kickoff sin cambios.
+  showBriefs?: boolean;
   onSectionChange?: (key: string, data: unknown) => void;
   // Modo edición: el CSE edita la GUÍA del agente por sección (override persistido).
   onBriefChange?: (key: string, brief: string) => void;
@@ -107,9 +111,9 @@ export default function LandingView({
                   <h2 className="stl-title">{def.label}</h2>
                 </header>
               )}
-              {/* Guía del agente — ayuda EDITABLE solo en el editor (el cliente no la ve).
-                  El agente la lee al generar. Vacío → vuelve al brief por defecto de la config. */}
-              {editable && (def.brief || briefOverride != null) && (
+              {/* Guía del agente — ayuda EDITABLE solo en la Plantilla del editor (el
+                  cliente no la ve). El agente la lee al generar. Vacío → brief de la config. */}
+              {editable && showBriefs && (def.brief || briefOverride != null) && (
                 <Editable
                   as="p"
                   className="stl-brief"

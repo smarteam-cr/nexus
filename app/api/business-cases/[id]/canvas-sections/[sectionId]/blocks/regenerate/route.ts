@@ -42,8 +42,13 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
 
   try {
     const current = base ? base.data : block.data;
-    // Guía efectiva de esta sección (override del CSE en el Json del canvas, si hay).
-    const brief = briefsByKeyFrom(block.section.canvas.sections)[block.section.key];
+    // Guía efectiva: desde la Plantilla (v0) del BC; fallback al canvas propio (legacy).
+    const template = await prisma.projectCanvas.findFirst({
+      where: { businessCaseId: id, version: 0 },
+      select: { sections: true },
+    });
+    const briefSource = template?.sections ?? block.section.canvas.sections;
+    const brief = briefsByKeyFrom(briefSource)[block.section.key];
     const data = await regenerateSectionData(block.section.key, current, instruction, brief);
     return NextResponse.json({ data });
   } catch (e) {

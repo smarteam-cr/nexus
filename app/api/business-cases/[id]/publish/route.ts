@@ -17,6 +17,15 @@ function buildVerifyUrl(req: NextRequest, token: string): string {
   return `${base}/external/business-case/verify/${token}`;
 }
 
+/** Un `data` estructurado está "en blanco" si todos sus strings/arrays lo están. */
+function dataIsBlank(v: unknown): boolean {
+  if (v == null) return true;
+  if (typeof v === "string") return v.trim() === "";
+  if (Array.isArray(v)) return v.every(dataIsBlank);
+  if (typeof v === "object") return Object.values(v as Record<string, unknown>).every(dataIsBlank);
+  return false;
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -54,10 +63,14 @@ export async function POST(
       },
     },
   });
-  const confirmedCount = sections.reduce((n, s) => n + s.blocks.length, 0);
-  if (confirmedCount === 0) {
+  // Solo las secciones con contenido REAL: los bloques sembrados vacíos también son
+  // CONFIRMED, así que filtramos el placeholder en blanco (si no, se publicaría vacío).
+  const filled = sections.filter((s) =>
+    s.blocks.some((b) => !dataIsBlank(b.data) || (b.content ?? "").trim() !== ""),
+  );
+  if (filled.length === 0) {
     return NextResponse.json(
-      { error: "Confirmá al menos un bloque antes de publicar." },
+      { error: "Generá o escribí contenido antes de subir al cliente." },
       { status: 400 },
     );
   }
@@ -66,9 +79,7 @@ export async function POST(
     name: bc.name,
     clientName: bc.client.name,
     clientLogoUrl: bc.client.logoUrl,
-    sections: sections
-      .filter((s) => s.blocks.length > 0)
-      .map((s) => ({ key: s.key, label: s.label, blocks: s.blocks })),
+    sections: filled.map((s) => ({ key: s.key, label: s.label, blocks: s.blocks })),
   };
 
   await prisma.businessCase.update({

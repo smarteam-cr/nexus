@@ -99,8 +99,9 @@ export async function createBusinessCaseCanvas(
   const canvas = await db.projectCanvas.create({
     data: {
       businessCaseId,
-      // Rótulo de cara al CSE: "Caso de uso N" (cada versión es un caso de uso).
-      name: `Caso de uso ${version}`,
+      // Rótulo de cara al CSE: v0 = "Plantilla" (base con las guías del agente, NO se
+      // llena con contenido); v1+ = "Caso de uso N" (cada "Generar" crea una versión).
+      name: version === 0 ? "Plantilla" : `Caso de uso ${version}`,
       isDefault: true,
       order: 0,
       version,

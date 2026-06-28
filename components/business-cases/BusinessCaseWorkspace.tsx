@@ -12,8 +12,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { Modal } from "@/components/ui";
+import { Modal, ConfirmDialog } from "@/components/ui";
 import DeleteBusinessCaseButton from "@/components/business-cases/DeleteBusinessCaseButton";
+import { BC_DEF_BY_KEY } from "@/components/landing/configs/business-case.defs";
 import PublishBar from "@/components/canvas/PublishBar";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import { BUSINESS_CASE_LANDING } from "@/components/landing/configs/business-case";
@@ -73,7 +74,9 @@ export default function BusinessCaseWorkspace({
   const hook = useCanvasSections(`/api/business-cases/${bcId}`, canvasId, () => setDirty(true), { poll: false });
   const sectionByKey = new Map<string, SectionWithBlocks>(hook.sections.map((s) => [s.key, s]));
   const sectionsData: LandingSectionData[] = hook.sections.map((s) => ({ key: s.key, data: s.blocks[0]?.data ?? null, brief: s.agentBriefOverride }));
-  const hasConfirmed = hook.sections.some((s) => s.blocks.some((b) => b.status === "CONFIRMED" && !blockBlank(b.data)));
+  // ¿Hay contenido real para publicar? (los bloques se generan auto-aceptados; lo que
+  // importa es que NO estén en blanco, no el status).
+  const hasContent = hook.sections.some((s) => s.blocks.some((b) => !blockBlank(b.data)));
 
   const onSectionChange = (key: string, data: unknown) => {
     const sec = sectionByKey.get(key);
@@ -89,11 +92,14 @@ export default function BusinessCaseWorkspace({
   const generate = async () => {
     if (generating) return;
     setGenerating(true);
+    toast.info("Generando con IA… puede tardar unos segundos.");
     try {
       const r = await fetchJson<{ canvasId: string; version: number }>(`/api/business-cases/${bcId}/generate`, { method: "POST" });
-      toast.success(`Caso de uso ${r.version} generado. Revisá y confirmá las secciones.`);
+      toast.success(`Caso de uso ${r.version} generado.`);
+      // El cambio de canvasId (vía loadMeta → setCanvasId) dispara el refetch del hook
+      // por efecto. NO llamar hook.refetch() acá: correría con el canvasId viejo del
+      // closure y traería el canvas anterior (era el bug de "no aparece nada").
       await loadMeta(r.canvasId);
-      await hook.refetch();
       setDirty(true);
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "La generación falló.");
@@ -120,6 +126,23 @@ export default function BusinessCaseWorkspace({
 
   const hasCanvas = !!canvasId;
   const unpublished = !published || dirty;
+  // La Plantilla es v0: muestra las guías editables, oculta la PublishBar y no se borra.
+  const activeVersion = versions.find((v) => v.canvasId === canvasId)?.version;
+  const isTemplate = activeVersion === 0;
+
+  // Borrar un caso de uso (versión generada) desde el dropdown.
+  const deleteCanvas = async (cid: string) => {
+    try {
+      const r = await fetchJson<{ activeCanvasId: string | null }>(
+        `/api/business-cases/${bcId}/canvases/${cid}`,
+        { method: "DELETE" },
+      );
+      toast.success("Caso de uso eliminado.");
+      await loadMeta(r.activeCanvasId ?? undefined);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar el caso de uso.");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -129,7 +152,7 @@ export default function BusinessCaseWorkspace({
       {/* 2. Header: dropdown del canvas + Generar (izq) · Acceso (der) */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <CanvasDropdown versions={versions} canvasId={canvasId} onSwitch={setCanvasId} />
+          <CanvasDropdown versions={versions} canvasId={canvasId} onSwitch={setCanvasId} onDelete={deleteCanvas} />
           <button
             onClick={generate}
             disabled={generating}
@@ -155,15 +178,7 @@ export default function BusinessCaseWorkspace({
         </div>
       </div>
 
-      {/* Revisión del agente / errores */}
-      {hook.draftCount > 0 && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800">
-          <span className="text-sm font-medium flex-1">
-            {hook.draftCount} {hook.draftCount === 1 ? "sección nueva" : "secciones nuevas"} del agente — revisá y confirmá.
-          </span>
-          <button onClick={hook.acceptAll} className="text-xs font-semibold hover:underline">Confirmar todas</button>
-        </div>
-      )}
+      {/* Errores del hook (guardado/edición) */}
       {hook.error && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700">
           <span className="text-sm font-medium flex-1">{hook.error}</span>
@@ -173,19 +188,22 @@ export default function BusinessCaseWorkspace({
 
       {/* 3. PublishBar + Landing FULL-BLEED (rompe el padding del panel px-6 py-8) */}
       <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
-        <div style={{ padding: "0 24px 14px" }}>
-          <PublishBar
-            unpublished={unpublished}
-            hint={unpublished && !hasConfirmed ? "Confirmá al menos una sección para poder subirla al cliente." : undefined}
-            onPublish={publish}
-            publishing={publishing}
-            cleanMessage="El cliente ve la última versión."
-          />
-        </div>
+        {/* La Plantilla no se publica: solo los casos de uso generados. */}
+        {!isTemplate && (
+          <div style={{ padding: "0 24px 14px" }}>
+            <PublishBar
+              unpublished={unpublished}
+              hint={unpublished && !hasContent ? "Generá o escribí contenido antes de subirlo al cliente." : undefined}
+              onPublish={publish}
+              publishing={publishing}
+              cleanMessage="El cliente ve la última versión."
+            />
+          </div>
+        )}
         {!hasCanvas || hook.loading ? (
           <div className="px-6 pb-8">
             <div className="rounded-xl border border-dashed border-line bg-surface p-8 text-center text-sm text-fg-muted">
-              {hasCanvas ? "Cargando…" : "Preparando el caso de uso…"}
+              {hasCanvas ? "Cargando…" : "Preparando…"}
             </div>
           </div>
         ) : (
@@ -194,9 +212,10 @@ export default function BusinessCaseWorkspace({
             ctx={{ clientName, clientLogoUrl }}
             sections={sectionsData}
             mode="edit"
+            showBriefs={isTemplate}
             onSectionChange={onSectionChange}
             onBriefChange={onBriefChange}
-            renderOverlay={(key) => <SectionTools section={sectionByKey.get(key)} hook={hook} />}
+            renderOverlay={(key) => <SectionTools section={sectionByKey.get(key)} hook={hook} isTemplate={isTemplate} />}
           />
         )}
       </div>
@@ -213,17 +232,20 @@ function blockBlank(v: unknown): boolean {
   return false;
 }
 
-// ── Dropdown del canvas ("Caso de uso N ▾"), estilo ProjectCanvasPanel ─────────
+// ── Dropdown del canvas (Plantilla v0 + "Caso de uso N" con borrar) ────────────
 function CanvasDropdown({
   versions,
   canvasId,
   onSwitch,
+  onDelete,
 }: {
   versions: VersionMeta[];
   canvasId: string;
   onSwitch: (id: string) => void;
+  onDelete: (id: string) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -233,6 +255,7 @@ function CanvasDropdown({
     return () => document.removeEventListener("mousedown", h);
   }, []);
   const active = versions.find((v) => v.canvasId === canvasId);
+  const confirmTarget = versions.find((v) => v.canvasId === confirmId);
   return (
     <div className="relative" ref={ref}>
       <button
@@ -245,39 +268,73 @@ function CanvasDropdown({
         </svg>
       </button>
       {open && versions.length > 0 && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-60 bg-surface border border-line rounded-xl shadow-xl py-1">
+        <div className="absolute left-0 top-full mt-1 z-50 w-64 bg-surface border border-line rounded-xl shadow-xl py-1">
           {versions.map((v) => (
-            <button
+            <div
               key={v.canvasId}
-              onClick={() => { onSwitch(v.canvasId); setOpen(false); }}
-              className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                v.canvasId === canvasId ? "bg-brand/10 text-brand font-semibold" : "text-fg-secondary hover:bg-surface-hover"
-              }`}
+              className={`flex items-center gap-1 ${v.canvasId === canvasId ? "bg-brand/10" : "hover:bg-surface-hover"}`}
             >
-              {v.name}{v.isActive ? " · activo" : ""}
-            </button>
+              <button
+                onClick={() => { onSwitch(v.canvasId); setOpen(false); }}
+                className={`flex-1 text-left px-4 py-2 text-sm transition-colors ${
+                  v.canvasId === canvasId ? "text-brand font-semibold" : "text-fg-secondary"
+                }`}
+              >
+                {v.name}{v.isActive ? " · activo" : ""}
+              </button>
+              {/* La Plantilla (v0) no se borra; los casos de uso sí. */}
+              {v.version >= 1 && (
+                <button
+                  onClick={() => setConfirmId(v.canvasId)}
+                  title="Borrar caso de uso"
+                  className="flex-shrink-0 p-1.5 mr-1 rounded-md text-fg-muted hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
+      <ConfirmDialog
+        open={!!confirmId}
+        onConfirm={async () => {
+          if (confirmId) await onDelete(confirmId);
+          setConfirmId(null);
+          setOpen(false);
+        }}
+        onCancel={() => setConfirmId(null)}
+        title="¿Borrar este caso de uso?"
+        description={
+          confirmTarget
+            ? `Se eliminará "${confirmTarget.name}" con todo su contenido. No afecta la Plantilla ni los otros casos.`
+            : ""
+        }
+        confirmLabel="Borrar"
+      />
     </div>
   );
 }
 
-// ── Controles por sección (overlay): IA + confirmar ───────────────────────────
+// ── Controles por sección (overlay): IA + limpiar. Solo en casos, no en la Plantilla. ──
 function SectionTools({
   section,
   hook,
+  isTemplate,
 }: {
   section: SectionWithBlocks | undefined;
   hook: ReturnType<typeof useCanvasSections>;
+  isTemplate: boolean;
 }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [instr, setInstr] = useState("");
   const [busy, setBusy] = useState(false);
   const block = section?.blocks[0];
-  if (!section || !block) return null;
-  const isDraft = block.status === "DRAFT";
+  // En la Plantilla se editan las GUÍAS (no el contenido) → sin controles de sección.
+  if (isTemplate || !section || !block) return null;
 
   const regen = async () => {
     if (!instr.trim() || busy) return;
@@ -295,6 +352,13 @@ function SectionTools({
     }
   };
 
+  // Vaciar la sección → vuelve al placeholder (no se ve en el cliente). Undo vía previousData.
+  const clear = async () => {
+    const empty = (BC_DEF_BY_KEY[section.key]?.empty ?? {}) as Record<string, unknown>;
+    const ok = await hook.saveBlock(section.id, block.id, { data: empty });
+    if (ok) toast.info("Sección vaciada (el cliente no la verá).");
+  };
+
   const pill: React.CSSProperties = {
     display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px",
     borderRadius: 8, fontSize: 12, fontWeight: 600, background: "rgba(255,255,255,0.92)",
@@ -305,13 +369,11 @@ function SectionTools({
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
       <div style={{ display: "flex", gap: 6 }}>
-        {isDraft && (
-          <button style={{ ...pill, color: "#047857" }} onClick={() => hook.acceptBlock(section.id, block.id)}>
-            ✓ Confirmar
-          </button>
-        )}
         <button style={{ ...pill, color: "#168CF6" }} onClick={() => setOpen((o) => !o)} title="Editar con IA">
           ✨ IA
+        </button>
+        <button style={{ ...pill, color: "#b91c1c" }} onClick={clear} title="Vaciar esta sección">
+          🗑 Limpiar
         </button>
       </div>
       {open && (

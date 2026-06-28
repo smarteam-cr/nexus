@@ -65,9 +65,9 @@ export async function POST(req: NextRequest) {
     createdByEmail: guard.user.email ?? null,
   });
 
-  // Template editorial vacío ("Caso de uso 1") listo desde el inicio: el workspace
-  // muestra la página completa de una y el primer "Generar" lo llena en su lugar.
-  await createBusinessCaseCanvas(bc.id, 1);
+  // Plantilla (v0): base con las guías editables del agente. NO se llena con
+  // contenido — cada "Generar con IA" crea un caso de uso nuevo (v1, v2, …).
+  await createBusinessCaseCanvas(bc.id, 0);
 
   return NextResponse.json({ businessCaseId: bc.id }, { status: 201 });
 }
