@@ -123,7 +123,16 @@ No inventes datos que no estén en el contenido actual o la instrucción.`,
   });
 
   const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-  return coerceToSchema(def.schema, parseObject(text));
+  const coerced = coerceToSchema(def.schema, parseObject(text)) as Record<string, unknown>;
+  // Preservar los campos del data ACTUAL que NO están en el schema (p.ej. hero.brands: la
+  // brand-row la edita el CSE, el agente no la genera). coerceToSchema los descartaría →
+  // se perdería el trabajo del CSE al usar "✨ IA" sobre esa sección.
+  const schemaKeys = new Set(Object.keys((def.schema as { properties?: Record<string, unknown> }).properties ?? {}));
+  const cur = (currentData && typeof currentData === "object" ? currentData : {}) as Record<string, unknown>;
+  for (const k of Object.keys(cur)) {
+    if (!schemaKeys.has(k)) coerced[k] = cur[k];
+  }
+  return coerced;
 }
 
 function parseObject(text: string): Record<string, unknown> {
