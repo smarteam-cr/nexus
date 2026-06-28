@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { createBusinessCase } from "@/lib/business-cases";
+import { createBusinessCaseCanvas } from "@/lib/canvas/default-canvases";
 
 export async function POST(req: NextRequest) {
   const guard = await guardSalesAccess();
@@ -63,6 +64,10 @@ export async function POST(req: NextRequest) {
     hubspotDealId: dealId,
     createdByEmail: guard.user.email ?? null,
   });
+
+  // Template editorial vacío ("Caso de uso 1") listo desde el inicio: el workspace
+  // muestra la página completa de una y el primer "Generar" lo llena en su lugar.
+  await createBusinessCaseCanvas(bc.id, 1);
 
   return NextResponse.json({ businessCaseId: bc.id }, { status: 201 });
 }

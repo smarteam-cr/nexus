@@ -36,14 +36,14 @@ export default async function BusinessCasePage({
       status: true,
       publishedAt: true,
       hubspotDealId: true,
-      client: { select: { name: true, isProspect: true } },
+      client: { select: { name: true, isProspect: true, logoUrl: true } },
     },
   });
   if (!bc) notFound();
 
   return (
     <AppShell>
-      <div className="px-6 py-8 max-w-4xl">
+      <div className="px-6 py-8">
         <Link href="/business-cases" className="text-xs text-fg-muted hover:text-fg">
           ← Ventas
         </Link>
@@ -62,6 +62,8 @@ export default async function BusinessCasePage({
         <div className="mt-8">
           <BusinessCaseWorkspace
             bcId={bc.id}
+            clientName={bc.client.name}
+            clientLogoUrl={bc.client.logoUrl}
             status={bc.status}
             publishedAt={bc.publishedAt ? bc.publishedAt.toISOString() : null}
           />

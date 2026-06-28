@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import {
   type CanvasDefinition,
   HANDOFF_CANVAS,
@@ -7,6 +7,7 @@ import {
   DEFAULT_PROJECT_CANVASES,
   AGENT_GROUP_TO_CANVAS,
 } from "./canvas-defs";
+import { BC_DEF_BY_KEY } from "@/components/landing/configs/business-case.defs";
 
 // Re-export de las definiciones PURAS (viven en canvas-defs.ts, SIN Prisma) para
 // que los importadores de servidor existentes (analyze/route.ts, etc.) sigan
@@ -98,7 +99,8 @@ export async function createBusinessCaseCanvas(
   const canvas = await db.projectCanvas.create({
     data: {
       businessCaseId,
-      name: BUSINESS_CASE_CANVAS.name,
+      // Rótulo de cara al CSE: "Caso de uso N" (cada versión es un caso de uso).
+      name: `Caso de uso ${version}`,
       isDefault: true,
       order: 0,
       version,
@@ -114,6 +116,25 @@ export async function createBusinessCaseCanvas(
       key: s.key,
       label: s.label,
       order: i,
+    })),
+  });
+
+  // Siembra 1 bloque ESTRUCTURADO VACÍO por sección (data = `empty` de la config) →
+  // el workspace muestra el template editorial completo desde el primer momento, y
+  // editar/generar/publicar siempre opera sobre un bloque existente (1 por sección).
+  const createdSections = await db.canvasSection.findMany({
+    where: { canvasId: canvas.id },
+    select: { id: true, key: true },
+  });
+  await db.canvasBlock.createMany({
+    data: createdSections.map((s) => ({
+      sectionId: s.id,
+      blockType: "CARD" as const, // neutro: el render se elige por section.key vía la config
+      content: null,
+      data: (BC_DEF_BY_KEY[s.key]?.empty ?? {}) as Prisma.InputJsonValue,
+      order: 0,
+      source: "HUMAN" as const,
+      status: "CONFIRMED" as const,
     })),
   });
 

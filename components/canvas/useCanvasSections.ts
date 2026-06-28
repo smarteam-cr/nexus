@@ -30,9 +30,12 @@ export interface SectionWithBlocks {
   titleOverride: string | null;
   /** Eyebrow (título pequeño) editado por el CSE; null = eyebrow por defecto. */
   eyebrowOverride: string | null;
-  /** Valor anterior de title/eyebrow para el deshacer de 1 nivel (null = nada que deshacer). */
+  /** Guía del agente editada por el CSE (business case). null = brief por defecto de la config. */
+  agentBriefOverride: string | null;
+  /** Valor anterior de title/eyebrow/brief para el deshacer de 1 nivel (null = nada que deshacer). */
   previousTitleOverride: string | null;
   previousEyebrowOverride: string | null;
+  previousAgentBriefOverride: string | null;
   order: number;
   layout: unknown;
   blocks: BlockData[];
@@ -50,10 +53,20 @@ export function useCanvasSections(
   // metadata de sección). Lo usa el kickoff para encender la barra "cambios sin subir"
   // en el acto. Por ref → no invalida la memoización de mutate/patchSection.
   onContentChange?: () => void,
+  // Opciones. `poll` (default true): polling de 5s para captar bloques DRAFT que el
+  // agente escribe async (kickoff). El business case lo pone en false: su generación
+  // es SÍNCRONA (refetch explícito tras /generate), así que el polling solo causaría
+  // re-renders periódicos innecesarios (parpadeo del editor inline).
+  options?: { poll?: boolean },
 ) {
+  const pollEnabled = options?.poll !== false;
   const [sections, setSections] = useState<SectionWithBlocks[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Última serialización aplicada → guard de igualdad: si un refetch trae contenido
+  // idéntico (p.ej. un tick de polling sin cambios), NO reemplazamos el array (evita
+  // re-renders y churn del árbol de edición sin motivo).
+  const lastSectionsJson = useRef<string>("");
   const onContentChangeRef = useRef(onContentChange);
   useEffect(() => {
     onContentChangeRef.current = onContentChange;
@@ -67,7 +80,14 @@ export function useCanvasSections(
     try {
       const res = await fetch(listUrl);
       const data = await res.json();
-      setSections(data.sections ?? []);
+      const next: SectionWithBlocks[] = data.sections ?? [];
+      const serialized = JSON.stringify(next);
+      // Guard de igualdad: solo actualizamos si el contenido cambió (los ids de
+      // sección son únicos por canvas → cambiar de canvas siempre difiere).
+      if (serialized !== lastSectionsJson.current) {
+        lastSectionsJson.current = serialized;
+        setSections(next);
+      }
     } catch {
       /* ignore: lectura; el polling reintenta */
     }
@@ -84,6 +104,7 @@ export function useCanvasSections(
   const refetchRef = useRef(refetch);
   refetchRef.current = refetch;
   useEffect(() => {
+    if (!pollEnabled) return; // el business case no necesita polling (generación síncrona)
     const id = setInterval(() => {
       fetch(listUrl)
         .then((r) => r.json())
@@ -97,7 +118,7 @@ export function useCanvasSections(
         .catch(() => {});
     }, 5000);
     return () => clearInterval(id);
-  }, [listUrl]);
+  }, [listUrl, pollEnabled]);
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -288,9 +309,19 @@ export function useCanvasSections(
     [patchSection],
   );
 
-  // Deshacer de 1 nivel (toggle actual↔previous) del título o el eyebrow de una sección.
+  // Guía del agente por sección (business case). String vacío → vuelve al brief por defecto.
+  const setBrief = useCallback(
+    (sectionId: string, brief: string): Promise<boolean> => {
+      const b = brief.trim() || null;
+      setSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, agentBriefOverride: b } : s)));
+      return patchSection(sectionId, { agentBriefOverride: b }, "No se pudo guardar la guía. Reintentá.");
+    },
+    [patchSection],
+  );
+
+  // Deshacer de 1 nivel (toggle actual↔previous) del título, el eyebrow o la guía de una sección.
   const undoSection = useCallback(
-    (sectionId: string, which: "title" | "eyebrow"): Promise<boolean> =>
+    (sectionId: string, which: "title" | "eyebrow" | "brief"): Promise<boolean> =>
       patchSection(sectionId, { undo: which }, "No se pudo deshacer. Reintentá."),
     [patchSection],
   );
@@ -329,6 +360,7 @@ export function useCanvasSections(
     restoreBlock,
     renameSection,
     setEyebrow,
+    setBrief,
     undoSection,
     acceptAll,
   };

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./kickoff-landing.css";
+@import "./landing-engine.css";
 @plugin "@tailwindcss/typography";
 
 /* ─── React Flow: handles (puntos de conexión) ───────────────────────── */

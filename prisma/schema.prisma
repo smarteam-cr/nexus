@@ -608,6 +608,10 @@ model CanvasSection {
   label     String
   titleOverride String? // Título de cara al cliente editado por el CSE (landing Kickoff). null = título por defecto de la plantilla (SECTION_META).
   eyebrowOverride String? // Eyebrow (título pequeño) editado por el CSE. null = eyebrow por defecto de la plantilla.
+  // Guía del agente editada por el CSE (business case): el agente la lee al generar
+  // esa sección. null = usar el brief por defecto de la config (BC_SECTION_DEFS.brief).
+  agentBriefOverride         String?
+  previousAgentBriefOverride String?
   // Deshacer de 1 nivel (persistido): valor inmediatamente anterior de title/eyebrow. null = nada que deshacer.
   previousTitleOverride   String?
   previousEyebrowOverride String?
