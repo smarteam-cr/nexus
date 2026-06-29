@@ -1,4 +1,5 @@
 ﻿import { requireConsultantSession } from "@/lib/auth";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import ThemeToggle from "@/components/layout/ThemeToggle";
@@ -9,6 +10,8 @@ export default async function SettingsPage() {
   } catch {
     redirect("/");
   }
+
+  const initialTheme = (await cookies()).get("nexus-theme")?.value === "dark" ? "dark" : "light";
 
   return (
     <AppShell>
@@ -63,7 +66,7 @@ export default async function SettingsPage() {
                 <p className="text-gray-500 text-sm">Alternar entre modo oscuro y claro</p>
               </div>
             </div>
-            <ThemeToggle />
+            <ThemeToggle initialTheme={initialTheme} />
           </div>
         </div>
 

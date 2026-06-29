@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTheme } from "@/lib/theme";
 
 interface ClientSummary {
   id: string;
@@ -77,7 +78,25 @@ function NavItem({
 // persona es ella misma vía Supabase Auth.)
 function UserAvatar({ user, isOpen }: { user: UserLite; isOpen: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // Estado de tema compartido (useTheme) → ícono/label correctos aunque el tema se haya
+  // cambiado desde /settings, y el primer clic nunca es un no-op. No hay hydration mismatch:
+  // el botón del avatar no depende de `isDark` y el menú no se renderiza en SSR.
+  const { isDark, toggle: toggleTheme } = useTheme();
+  // Posición del menú (position:fixed) calculada desde el botón → escapa del
+  // overflow-hidden del rail colapsado, que si no recortaba el desplegable.
+  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  const computePos = () => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setPos({ left: r.left, bottom: window.innerHeight - r.top + 6 });
+  };
+
+  const toggleMenu = () => {
+    if (!menuOpen) computePos();
+    setMenuOpen((p) => !p);
+  };
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -86,8 +105,23 @@ function UserAvatar({ user, isOpen }: { user: UserLite; isOpen: boolean }) {
         setMenuOpen(false);
       }
     }
+    function onScroll(e: Event) {
+      // No cerrar si el scroll ocurre DENTRO del menú (cuando es alto y scrollea por maxHeight);
+      // el menú es descendiente DOM de `ref` aunque visualmente sea position:fixed.
+      if (ref.current && e.target instanceof Node && ref.current.contains(e.target)) return;
+      setMenuOpen(false);
+    }
     document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    window.addEventListener("resize", computePos);
+    // El menú es position:fixed (coords congeladas al abrir); si el <nav> interno scrollea,
+    // el botón se mueve y el menú quedaría desanclado → lo cerramos. `true` = fase de captura,
+    // para atrapar también el scroll de contenedores internos, no solo el de window.
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      window.removeEventListener("resize", computePos);
+      window.removeEventListener("scroll", onScroll, true);
+    };
   }, [menuOpen]);
 
   const initials = user.name
@@ -104,8 +138,9 @@ function UserAvatar({ user, isOpen }: { user: UserLite; isOpen: boolean }) {
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setMenuOpen((p) => !p)}
-        className={`w-full flex items-center gap-2 ${isOpen ? "px-2 py-1.5" : "p-1.5 justify-center"} rounded-lg hover:bg-gray-800/60 transition-colors text-left`}
+        ref={btnRef}
+        onClick={toggleMenu}
+        className={`w-full flex items-center gap-2 ${isOpen ? "px-2 py-1.5" : "p-1.5 justify-center"} rounded-lg hover:bg-surface-hover transition-colors text-left`}
         title={!isOpen ? user.name : undefined}
       >
         <div className={`flex-shrink-0 w-7 h-7 rounded-full border flex items-center justify-center text-[10px] font-bold ${avatarBg}`}>
@@ -113,30 +148,33 @@ function UserAvatar({ user, isOpen }: { user: UserLite; isOpen: boolean }) {
         </div>
         {isOpen && (
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-gray-200 truncate">
+            <p className="text-xs font-semibold text-fg-secondary truncate">
               {user.name}
             </p>
-            <p className="text-[10px] text-gray-500 truncate">
+            <p className="text-[10px] text-fg-muted truncate">
               {user.isSuperAdmin ? "Super Admin" : user.role ?? "Miembro"}
             </p>
           </div>
         )}
         {isOpen && (
-          <svg className={`w-3 h-3 text-gray-600 transition-transform flex-shrink-0 ${menuOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className={`w-3 h-3 text-fg-muted transition-transform flex-shrink-0 ${menuOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         )}
       </button>
 
-      {menuOpen && (
-        <div className="absolute left-2 right-2 bottom-full mb-1 z-50 bg-gray-900 border border-gray-700 rounded-xl shadow-xl py-1.5">
-          <div className="px-3 py-2 border-b border-gray-800">
-            <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
+      {menuOpen && pos && (
+        <div
+          className="fixed z-50 w-56 bg-surface border border-line rounded-xl shadow-xl py-1.5 overflow-y-auto"
+          style={{ left: pos.left, bottom: pos.bottom, maxHeight: "calc(100vh - 16px)" }}
+        >
+          <div className="px-3 py-2 border-b border-line">
+            <p className="text-[11px] text-fg-muted truncate">{user.email}</p>
           </div>
           <Link
             href="/settings"
             onClick={() => setMenuOpen(false)}
-            className="flex items-center gap-2 px-3 py-2 text-xs text-gray-300 hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-xs text-fg-secondary hover:bg-surface-hover transition-colors"
           >
             <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -144,10 +182,28 @@ function UserAvatar({ user, isOpen }: { user: UserLite; isOpen: boolean }) {
             </svg>
             Configuración
           </Link>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-fg-secondary hover:bg-surface-hover transition-colors"
+          >
+            {isDark ? (
+              // Sol → estás en oscuro, clic cambia a claro
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+              </svg>
+            ) : (
+              // Luna → estás en claro, clic cambia a oscuro
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+            {isDark ? "Modo claro" : "Modo oscuro"}
+          </button>
           <form action="/auth/signout" method="post">
             <button
               type="submit"
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-gray-800 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-surface-hover transition-colors"
             >
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

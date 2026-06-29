@@ -75,6 +75,7 @@
    *    bg-surface · bg-surface-muted · bg-surface-hover · border-line
    *    text-fg · text-fg-secondary · text-fg-muted
    */
+  --color-background:     var(--background);
   --color-surface:        var(--surface);
   --color-surface-muted:  var(--surface-muted);
   --color-surface-hover:  var(--surface-hover);
@@ -131,11 +132,60 @@ html {
   --line:           #1f2937;  /* gray-800 — bordes sutiles */
   --fg-secondary:   #e5e7eb;  /* gray-200 — texto secundario */
   --fg-muted:       #9ca3af;  /* gray-400 — texto atenuado */
+
+  /* Scrollbars temáticos (valores OSCUROS) — html.light los redefine */
+  --scrollbar-thumb:       #374151;  /* gray-700 */
+  --scrollbar-thumb-hover: #4b5563;  /* gray-600 */
+
+  /* Le dice al navegador que el chrome es oscuro → scrollbars y controles nativos
+     (selects, date pickers) se pintan oscuros en vez de blancos. html.light lo invierte. */
+  color-scheme: dark;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* ── Scrollbars temáticos ─────────────────────────────────────────────────────
+ * Flipean con el tema vía tokens (en modo oscuro ya no se ven blancos). Firefox
+ * usa scrollbar-color; Chromium/WebKit usan los pseudo-elementos. La pista
+ * (track) queda transparente para no marcar un canal claro en oscuro. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+/* ── Aislamiento del chrome externo ───────────────────────────────────────────
+ * Si la página contiene una superficie externa (app/external/layout.tsx marca el
+ * subárbol con data-external-surface), el DOCUMENTO se fuerza a CLARO: scrollbar +
+ * color-scheme, sin importar la cookie `nexus-theme`. El cliente nunca ve chrome
+ * oscuro aunque el navegador arrastre el modo oscuro del CSE. `:has()` es Baseline
+ * 2024; si el navegador no lo soporta, cae al default light (cliente real sin cookie). */
+html:has([data-external-surface]) {
+  color-scheme: light;
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb-hover: #94a3b8;
+}
+/* La hoja de impresión (.cp-root) es siempre clara → mismo blindaje del color-scheme. */
+.cp-root {
+  color-scheme: light;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────── */
@@ -152,6 +202,12 @@ html.light {
   --line:           #e5e7eb;  /* gray-200 */
   --fg-secondary:   #374151;  /* gray-700 */
   --fg-muted:       #6b7280;  /* gray-500 */
+
+  /* Scrollbars temáticos — valores CLAROS */
+  --scrollbar-thumb:       #cbd5e1;  /* slate-300 */
+  --scrollbar-thumb-hover: #94a3b8;  /* slate-400 */
+
+  color-scheme: light;
 }
 
 /* ── Backgrounds (neutrals) ── */
@@ -258,6 +314,29 @@ html.light .hover\:bg-gray-900\/60:hover { background-color: #f3f4f6 !important;
 html.light .divide-gray-800 > :not([hidden]) ~ :not([hidden]) {
   border-color: #e5e7eb !important;
 }
+
+/* ── Completar cobertura: variantes de opacidad/hover/divide NO cubiertas arriba ──────
+ * Auditoría del tema (2026-06-28): grises crudos con opacidad usados en la UI interna que
+ * la allowlist no remapeaba → quedaban OSCUROS en modo claro ("lo roto"). Se mapean a sus
+ * mismos valores claros que las bases. Código NUEVO usa tokens (ver eslint.config.mjs);
+ * esto es solo la red para lo legacy ya escrito. */
+html.light .bg-gray-900\/60,
+html.light .bg-gray-900\/80,
+html.light .bg-gray-900\/90 { background-color: #ffffff !important; }
+html.light .bg-gray-700\/50,
+html.light .bg-gray-700\/40 { background-color: #e5e7eb !important; }
+html.light .bg-gray-600\/60 { background-color: #e5e7eb !important; }
+html.light .hover\:bg-gray-900\/80:hover { background-color: #f3f4f6 !important; }
+html.light .border-gray-800\/50,
+html.light .border-gray-800\/40,
+html.light .border-gray-800\/30 { border-color: #e5e7eb !important; }
+html.light .border-gray-700\/80,
+html.light .border-gray-700\/60 { border-color: #e5e7eb !important; }
+html.light .divide-gray-800\/50 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e5e7eb !important;
+}
+/* Focus ring gris oscuro sobre inputs claros → anillo sutil claro */
+html.light .focus\:ring-gray-700\/50:focus { --tw-ring-color: rgba(209, 213, 219, 0.6) !important; }
 
 /* ── Amber / Warning ── */
 html.light .bg-amber-900\/20  { background-color: #fffbeb !important; }
