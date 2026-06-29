@@ -50,7 +50,7 @@ const PROJECT_PROPERTIES = [
   "hs_createdate",
   "hs_pipeline",
   "hs_pipeline_stage",    // D.2: etapa actual del pipeline de CS (ancla del cronograma vivo)
-  "cls_encargado",        // propiedad custom (si existe en el portal)
+  "csl_encargado",        // propiedad custom OWNER = CSE encargado (fuente de verdad de la asignación → visibilidad)
 ];
 
 // ── Slugs del objeto Proyectos ───────────────────────────────────────────────
@@ -597,14 +597,21 @@ export async function syncProjectsForClient(clientId: string): Promise<SyncResul
     const servicioContratado = props.servicio_contratado || props.tipo_de_servicio || projectName;
     const mapping = inferServiceMapping(servicioContratado);
 
-    // ── Resolver owner (CSE encargado) ────────────────────────────────────
-    // Priorizar propiedad custom "cls_encargado" (string libre, normalmente nombre)
-    // sobre el owner estándar de HubSpot.
-    const clsRaw = (props.cls_encargado ?? "").trim();
-    const hubOwnerId = (props.hubspot_owner_id ?? "").trim() || null;
-    const ownerInfo = await resolveOwner(hsClient, hubOwnerId);
-    const ownerName = clsRaw || ownerInfo.name;
-    const ownerEmail = ownerInfo.email;
+    // ── Resolver CSE encargado (gobierna la VISIBILIDAD del cliente) ──────────
+    // La asignación del CSE vive en la propiedad custom "CSL Encargado" (csl_encargado),
+    // un campo OWNER (guarda un owner id). La visibilidad (lib/auth/access) matchea por
+    // EMAIL, así que resolvemos ESE owner → email/nombre y lo priorizamos sobre el owner
+    // estándar (hubspot_owner_id, que suele ser el SA/líder técnico cuando el servicio
+    // lleva integraciones, NO el CSE). Fallback al owner estándar si no hay csl_encargado.
+    const cslOwnerId = (props.csl_encargado ?? "").trim() || null;
+    const stdOwnerId = (props.hubspot_owner_id ?? "").trim() || null;
+    const [cslOwner, stdOwner] = await Promise.all([
+      resolveOwner(hsClient, cslOwnerId),
+      resolveOwner(hsClient, stdOwnerId),
+    ]);
+    const hubOwnerId = cslOwnerId ?? stdOwnerId;
+    const ownerName = cslOwner.name ?? stdOwner.name;
+    const ownerEmail = cslOwner.email ?? stdOwner.email;
 
     // ── Resolver pipeline name ─────────────────────────────────────────────
     const pipelineId = (props.hs_pipeline ?? "").trim() || null;
