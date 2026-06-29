@@ -16,6 +16,7 @@ import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/cli
 import { useWorkspace } from "./WorkspaceContext";
 import { useMe } from "@/hooks/useMe";
 import SessionSelectionReview from "./SessionSelectionReview";
+import HubspotTimelinePanel from "./HubspotTimelinePanel";
 
 interface HandoffStatus {
   handoffId: string | null;
@@ -268,6 +269,10 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
           />
         </div>
       )}
+
+      {/* Detectado en HubSpot — timeline del registro de empresa (notas + Zoom). Igual que
+          en Business Cases; se usa automáticamente como contexto al generar el handoff/cronograma. */}
+      {canEdit && <HubspotTimelinePanel projectId={projectId} />}
 
       {/* Fuentes manuales — solo editores del handoff (el CSE no las gestiona) */}
       {canEdit && (

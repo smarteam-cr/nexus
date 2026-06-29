@@ -19,6 +19,7 @@
  * de objeto en la app). Si falla / no hay datos, devuelve "" (no rompe la generación).
  */
 import type { Client } from "@hubspot/api-client";
+import { getSystemHubspotClient, forceRefreshSystemToken } from "./client";
 
 type V1Engagement = {
   engagement?: { type?: string; timestamp?: number };
@@ -70,16 +71,31 @@ export type TimelineItem = {
 
 /** Ítems del timeline de la company (notas + llamadas + reuniones), más reciente primero,
  *  o [] si no hay datos / falla la API. Topeado para no inflar. Lo usa el panel y el prompt. */
+/** Una llamada cruda a la v1 de engagements. Devuelve el status para poder reintentar ante 401. */
+async function fetchEngagements(hsClient: Client, companyId: string): Promise<{ status: number; results: V1Engagement[] }> {
+  const res = await hsClient.apiRequest({
+    method: "GET",
+    path: `/engagements/v1/engagements/associated/company/${companyId}/paged?limit=100`,
+  });
+  if (res.status !== 200) return { status: res.status, results: [] };
+  const data = (await res.json()) as { results?: V1Engagement[] };
+  return { status: 200, results: data.results ?? [] };
+}
+
 export async function fetchCompanyTimelineItems(hsClient: Client, companyId: string): Promise<TimelineItem[]> {
   let raw: V1Engagement[] = [];
   try {
-    const res = await hsClient.apiRequest({
-      method: "GET",
-      path: `/engagements/v1/engagements/associated/company/${companyId}/paged?limit=100`,
-    });
-    if (res.status !== 200) return [];
-    const data = (await res.json()) as { results?: V1Engagement[] };
-    raw = data.results ?? [];
+    let r = await fetchEngagements(hsClient, companyId);
+    // 401 = el access token del sistema está stale: la cuenta de HubSpot del sistema es
+    // compartida (PROD/local/scripts/2da PC) y el refresh-token ROTA, así que un entorno
+    // desincroniza al otro. Forzamos refresh y reintentamos UNA vez con un cliente fresco; si
+    // no, el panel y el contexto de generación quedaban VACÍOS sin avisar (síntoma real visto
+    // en Visual Branding). Ver forceRefreshSystemToken en lib/hubspot/client.ts.
+    if (r.status === 401) {
+      await forceRefreshSystemToken();
+      r = await fetchEngagements(await getSystemHubspotClient(), companyId);
+    }
+    raw = r.results;
   } catch {
     return [];
   }

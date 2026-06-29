@@ -22,6 +22,7 @@ import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { autoClassifyOrphanSessions } from "@/lib/projects/analyze-participants";
 import { getProjectHandoffSessions, getClientSessions } from "@/lib/sessions/project-sources";
+import { fetchCompanyTimeline } from "@/lib/hubspot/company-timeline";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -358,6 +359,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // ── 3b. Obtener line items del deal y datos de adquisición desde HubSpot ──────
   let dealContent = "";
   let acquisitionContent = "";
+  let companyTimelineContent = "";
   try {
     const { getSystemHubspotClient, getHubspotClient } = await import("@/lib/hubspot/client");
     // Buscar la cuenta HubSpot del cliente (o la del sistema)
@@ -585,6 +587,19 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       if (companyNotes.length > 0) {
         dealContent += `\n\n## Notas de la empresa en HubSpot (${companyNotes.length})\n` +
           companyNotes.slice(0, 15).map((n) => `• ${n}`).join("\n");
+      }
+    }
+
+    // ── Timeline de HubSpot (notas + llamadas/reuniones con transcript/resumen de Zoom) ──
+    // Vía la API v1 de engagements (funciona con los scopes actuales). Alimenta la
+    // generación de los canvases que consumen fuentes crudas (handoff, diagnóstico) y, por
+    // ende, el cronograma inicial que propone el agente de handoff. Reusa el hsClient ya
+    // construido arriba. El kickoff usa el handoff curado (no fuentes crudas), así que no lo ve.
+    if (client.hubspotCompanyId) {
+      try {
+        companyTimelineContent = await fetchCompanyTimeline(hsClient, client.hubspotCompanyId);
+      } catch (e) {
+        console.error("[analyze] HubSpot company timeline error:", e);
       }
     }
   } catch (e) {
@@ -1105,6 +1120,14 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       .map(({ title, content, source }) => ({ title, content, source }));
   }
 
+  // Bloque del timeline de HubSpot (notas + Zoom), inyectado junto a las fuentes crudas.
+  const hubspotTimelineBlock = companyTimelineContent.trim()
+    ? `=== TIMELINE DE HUBSPOT (notas + llamadas/reuniones Zoom) ===
+${companyTimelineContent.slice(0, 8000)}
+
+`
+    : "";
+
   const baseUserMessage = `Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
 Notas base: ${client.notes ?? "Sin notas"}
@@ -1146,7 +1169,7 @@ ${[
     return `${tag} **${c.title}:**\n${c.content}`;
   }),
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
-].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, isHandoffAgent ? 12000 : 4000)}\n\n` : ""}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
+].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${hubspotTimelineBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, isHandoffAgent ? 12000 : 4000)}\n\n` : ""}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 10b. Input del agente Kickoff ─────────────────────────────────────────────
