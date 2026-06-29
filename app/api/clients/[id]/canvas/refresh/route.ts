@@ -148,6 +148,7 @@ REGLAS:
 6. Para escala_rendimiento: solo sugiere si hay evidencia clara para cambiar un nivel
 7. NO inventes información
 8. Incluye en "source_label" una descripción legible de la fuente (ej: "Análisis inicial · 24 mar")
+9. ESTILO: todo texto en TUTEO neutro ("tú"), nunca voseo ("tenés", "querés", "Transformá")
 
 Responde SOLO con JSON válido. Cada sugerencia es un objeto con:
 {

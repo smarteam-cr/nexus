@@ -76,7 +76,9 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const basePrompt = agent?.additionalInstructions
     ? `${agent.systemPrompt}\n\n${agent.additionalInstructions}`
     : agent?.systemPrompt ?? "Generás contenido de la landing de kickoff de cara al cliente de Smarteam.";
-  const systemPrompt = `${basePrompt}\n\n${getSingleBlockOutputInstructions(block.blockType)}`;
+  const tuteoRule =
+    'ESTILO (OBLIGATORIO): español con TUTEO neutro (segunda persona con "tú"). Conjuga SIEMPRE en forma de tú: "Transforma", "centraliza", "optimiza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA escribas "Transformá", "centralizá", "tenés", "querés", "podés" ni "vos".';
+  const systemPrompt = `${basePrompt}\n\n${tuteoRule}\n\n${getSingleBlockOutputInstructions(block.blockType)}`;
 
   // Multi-turno: si vino un draft en progreso (base), la regen parte de ESE estado, no del
   // bloque guardado. El tipo SIEMPRE sale de la DB (base no puede cambiarlo). Sin base →

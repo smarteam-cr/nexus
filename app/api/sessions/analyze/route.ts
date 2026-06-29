@@ -119,7 +119,7 @@ export const POST = withAuth(async (req) => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 8000,
-      system: agent.systemPrompt,
+      system: `${agent.systemPrompt}\n\nESTILO (OBLIGATORIO): español con TUTEO neutro ("tú"): "Transforma", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "tenés", "querés", "podés" ni "vos".`,
       messages: [{ role: "user", content: ctx.userMessage }],
     });
     rawText = (msg.content[0] as { type: string; text: string }).text.trim();

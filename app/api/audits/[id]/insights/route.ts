@@ -281,7 +281,7 @@ Responde ÚNICAMENTE con el JSON (sin texto previo, sin markdown, sin bloques de
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 8000,
-      system: systemPrompt,
+      system: `${systemPrompt}\n\nESTILO (OBLIGATORIO): español con TUTEO neutro ("tú"): "Transforma", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "tenés", "querés", "podés" ni "vos".`,
       messages: [{ role: "user", content: userMessage }],
     });
 

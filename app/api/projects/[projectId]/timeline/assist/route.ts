@@ -36,6 +36,7 @@ REGLAS DURAS:
 - activityType ∈ EXPLORACION|PLANIFICACION|CONFIGURACION|ADOPCION|SEGUIMIENTO o null.
 - anchorStartDate: inclúyelo SOLO si la instrucción pide cambiar la fecha de arranque (ISO). Si no, omítelo.
 - TODO el texto (títulos y notas de tareas, nombres y notas de fases) es DE CARA AL CLIENTE: claro, profesional, sin nombres del equipo interno de Smarteam, sin instrucciones operativas internas, sin jerga. Los textos existentes que no toques se conservan tal cual.
+- ESTILO (OBLIGATORIO): español con TUTEO neutro (segunda persona con "tú"): "Transforma", "centraliza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "centralizá", "tenés", "querés", "podés" ni "vos".
 - Si la instrucción es ambigua, interpreta lo más razonable y conservador.
 
 FORMATO DE RESPUESTA — JSON EXACTO, sin markdown:

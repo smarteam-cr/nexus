@@ -165,7 +165,7 @@ export async function regenerateTimelineProgress(
       const msg = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 2000,
-        system: agent.systemPrompt ?? "",
+        system: `${agent.systemPrompt ?? ""}\n\nESTILO (OBLIGATORIO): TODO el texto en español con TUTEO neutro ("tú"): "Transforma", "centraliza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "centralizá", "tenés", "querés", "podés" ni "vos".`,
         messages: [{ role: "user", content: userMessage }],
       });
       rawText = (msg.content[0] as { type: string; text: string }).text.trim();

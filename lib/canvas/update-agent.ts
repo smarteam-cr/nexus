@@ -81,6 +81,7 @@ REGLAS:
 - Si el canvas ya tiene contenido, ENRIQUÉCELO, no lo reemplaces con menos info.
 - NO inventes información que no esté en las cards.
 - Si no hay info relevante para una sección, NO la incluyas.
+- ESTILO: todo texto en TUTEO neutro ("tú"), nunca voseo ("tenés", "querés", "Transformá").
 
 Responde SOLO con JSON válido:
 {

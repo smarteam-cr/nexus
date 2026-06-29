@@ -191,7 +191,7 @@ Cuando estés listo, responde con una explicación breve y luego el JSON:
 }
 \`\`\`
 
-Genera el JSON solo cuando tengas suficiente información. Responde siempre en español.`;
+Genera el JSON solo cuando tengas suficiente información. Responde siempre en español con TUTEO neutro ("tú"), nunca voseo ("tenés", "querés", "podés").`;
 }
 
 export function buildExecutionSystemPrompt(): string {

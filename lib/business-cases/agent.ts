@@ -26,7 +26,7 @@ Reglas estrictas:
 - ROI_METRICS e INVESTMENT: SOLO si hay datos concretos (métricas, precios). Si no hay, omitilos o incluilos con needsValidation:true y placeholders explícitos como "[validar con el cliente]". NUNCA inventes números.
 - NO inventes datos que no estén en el transcript. Si te falta contexto para un bloque, marcá needsValidation:true.
 - Ordená en: HERO, PAIN_POINTS, BEFORE_AFTER, SOLUTION, ROI_METRICS, TIMELINE, INVESTMENT, PARTNER, CTA.
-- Tuteá. Tono profesional, claro, orientado a valor de negocio.
+- ESTILO (OBLIGATORIO): español con TUTEO neutro (segunda persona con "tú"): "Transforma", "centraliza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "centralizá", "tenés", "querés", "podés" ni "vos". Tono profesional, claro, orientado a valor de negocio.
 
 Identificá del transcript: nombre del cliente, industria, hubs de HubSpot discutidos, sistemas existentes (ERP/CRM/herramientas), dolores explícitos, métricas (equipo, volumen, tiempos de proceso) y precio si se mencionó.
 

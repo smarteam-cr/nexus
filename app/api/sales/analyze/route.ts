@@ -46,7 +46,7 @@ Genera exactamente estas 7 cards con los canvasSection indicados:
    Acciones acordadas, compromisos de ambas partes, recomendación de siguiente acción concreta.
 
 Reglas:
-- Escribe en español
+- Escribe en español con TUTEO neutro ("tú"), nunca voseo ("tenés", "querés", "Transformá")
 - Cita frases concretas de los transcripts cuando sea posible
 - Usa "- " para listas dentro del content de cada card
 - Si una sección no tiene información suficiente, indícalo brevemente en lugar de inventar

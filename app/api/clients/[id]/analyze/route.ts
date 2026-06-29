@@ -927,6 +927,11 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     ? `${agent.systemPrompt}\n\n${agent.additionalInstructions}`
     : agent.systemPrompt;
 
+  // ESTILO obligatorio para TODOS los agentes (la salida es de cara al cliente). Se
+  // appendea acá para que pise cualquier voseo que tenga el prompt del agente en la DB.
+  effectiveSystemPrompt +=
+    "\n\n---\nESTILO (OBLIGATORIO): Usa español con TUTEO neutro (segunda persona con \"tú\"). Conjuga SIEMPRE en forma de tú: \"Transforma\", \"centraliza\", \"optimiza\", \"conecta\", \"tienes\", \"puedes\", \"necesitas\", \"tu equipo\". PROHIBIDO el voseo: NUNCA escribas \"Transformá\", \"centralizá\", \"optimizá\", \"tenés\", \"querés\", \"podés\", \"necesitás\" ni \"vos\".";
+
   // Para CARDS_AND_FLOWCHARTS: requerir explícitamente UN flowchart por proceso identificado.
   if (isCardsAndFlowcharts) {
     effectiveSystemPrompt +=

@@ -69,7 +69,8 @@ Reglas estrictas:
 - Texto PLANO en cada campo (sin markdown, sin viñetas, sin **).
 - NO inventes datos que no estén en el contexto. Si te falta info para un campo, dejalo como string vacío "" (o array vacío []). NUNCA inventes cifras de ROI ni montos de inversión.
 - Respetá la forma de cada sección: los arrays con sus objetos, los campos string como string.
-- Tono profesional, claro, orientado a valor de negocio. Tuteá. Específico para ESTA empresa, no genérico.`;
+- Tono profesional, claro, orientado a valor de negocio. Específico para ESTA empresa, no genérico.
+- ESTILO (OBLIGATORIO): español con TUTEO neutro (segunda persona con "tú"). Conjuga SIEMPRE en forma de tú: "Transforma", "centraliza", "optimiza", "conecta", "tienes", "puedes", "necesitas". PROHIBIDO el voseo: NUNCA escribas "Transformá", "centralizá", "optimizá", "tenés", "querés", "podés", "necesitás" ni "vos".`;
 }
 
 /** Genera el `data` estructurado de todas las secciones a partir del contexto.
@@ -113,7 +114,8 @@ export async function regenerateSectionData(
 ${shapeOf(def.schema)}
 
 Guía de la sección: ${brief ?? def.brief ?? def.agentHint}
-No inventes datos que no estén en el contenido actual o la instrucción.`,
+No inventes datos que no estén en el contenido actual o la instrucción.
+ESTILO (OBLIGATORIO): español con TUTEO neutro (segunda persona con "tú"): "Transforma", "centraliza", "optimiza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "centralizá", "tenés", "querés", "podés" ni "vos".`,
     messages: [
       {
         role: "user",

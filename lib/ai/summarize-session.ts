@@ -68,7 +68,7 @@ Instrucciones:
 - Si la reunión trató un solo tema, agrupa en subsecciones (contexto, demostración, decisiones, etc.).
 - keywords: 5-8 términos clave, herramientas, nombres de proyectos o conceptos importantes.
 - action_items: SOLO tareas o compromisos concretos. Si no hubo ninguno, usar array vacío [].
-- Todo el contenido en español.
+- Todo el contenido en español, con TUTEO neutro ("tú") si te diriges al lector — nunca voseo ("tenés", "querés", "Transformá").
 - NO uses markdown dentro del JSON (sin **, sin #, sin guiones como bullets).`,
         },
       ],
