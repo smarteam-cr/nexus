@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { Geist, Geist_Mono, Montserrat, Open_Sans } from "next/font/google";
 import "./globals.css";
 import "react-day-picker/style.css";
@@ -38,23 +39,32 @@ export const metadata: Metadata = {
   description: "Nexus — planifica y ejecuta tu implementación de HubSpot con IA",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Fuente de verdad del tema: cookie `nexus-theme` leída en el server → la clase `light`
+  // se renderiza ya en el HTML inicial (autoritativa, sin parpadeo). Default: claro.
+  const theme = (await cookies()).get("nexus-theme")?.value === "dark" ? "dark" : "light";
+
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es" className={theme === "light" ? "light" : ""} suppressHydrationWarning>
       <head>
-        {/* Previene flash de tema: aplica clase "light" antes de que React hidrate */}
+        {/*
+         * Migración/fallback de una sola pasada (corre ANTES del paint): si todavía no hay
+         * cookie `nexus-theme` pero existe el legacy localStorage('theme'), lo respeta,
+         * corrige la clase y escribe la cookie para que el próximo SSR sea autoritativo.
+         * Cubre a los usuarios actuales (su tema vivía solo en localStorage) sin flash.
+         */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{if(localStorage.getItem('theme')!=='dark')document.documentElement.classList.add('light');}catch(e){}`,
+            __html: `try{if(!document.cookie.includes('nexus-theme=')){var t=localStorage.getItem('theme'),d=t==='dark';document.documentElement.classList.toggle('light',!d);document.cookie='nexus-theme='+(d?'dark':'light')+';path=/;max-age=31536000;SameSite=Lax';}}catch(e){}`,
           }}
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} ${openSans.variable} antialiased bg-gray-950 text-gray-100`}
+        className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} ${openSans.variable} antialiased`}
       >
         <ToastProvider>
           <UndoProvider>

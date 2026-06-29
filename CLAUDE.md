@@ -28,8 +28,18 @@ Anthropic SDK · HubSpot/Google/Fireflies.
    destructiva / DDL / escritura masiva es **dry-run-first** y la aplica el usuario tras revisar.
    Las migraciones se aplican **a mano** a PROD (el deploy NO corre `db push`).
 4. **`.env.example` NUNCA se commitea** (tiene secretos reales). Excluilo de todo `git add`.
-5. **Modo claro es el default** del tema. Tokens semánticos (`text-fg`, `bg-surface`,
-   `border-line`, `text-brand`…); evitá opacidades fuera de las whitelisteadas.
+5. **Tema = tokens semánticos, NO grises crudos.** Modo claro es el **default**; la fuente de
+   verdad es la cookie `nexus-theme` que el SSR (`app/layout.tsx`) lee y materializa como
+   `<html class="light">` (sin parpadeo). En UI interna usá SOLO los tokens —flipean solos en
+   claro/oscuro—: `bg-surface` · `bg-surface-muted` · `bg-surface-hover` · `border-line` ·
+   `text-fg` · `text-fg-secondary` · `text-fg-muted` · `text-brand` (+ `brand-light/soft/dark`).
+   **Prohibido el gris crudo** (`bg-gray-*`, `text-white`, `text-gray-*`, `border-gray-*`…): NO
+   flipea en claro → reproduce el bug de "lo nuevo se ve oscuro". Un scrim/overlay que DEBE ser
+   oscuro en ambos modos usa `bg-black/NN`. La regla ESLint `no-restricted-syntax` (en
+   `eslint.config.mjs`, severidad **warn**) marca los grises crudos en `app/**`/`components/**`
+   (excluye landing/external/login/print/TimelineSection, que son hex literal a propósito). El
+   bloque `html.light` de `globals.css` remapea grises crudos legacy como **red de seguridad**,
+   no como API — código nuevo va por tokens.
 6. **Tuteo** en copy de UI nuevo (no voseo), salvo que el archivo ya esté en voseo.
 
 ## Convenciones
