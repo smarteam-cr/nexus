@@ -162,7 +162,7 @@ export default function TimelineSection({
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--brand-blue)", flexShrink: 0 }} />
             )}
             Hoy: {fmtFull(todayIso)}
-            {curInRange && <span style={{ fontWeight: 800 }}>· Semana S{(curWeek as number) + 1}</span>}
+            {curInRange && <span style={{ fontWeight: 800 }}>· Semana S{curWeek as number}</span>}
             {anchor && curWeek !== null && curWeek < 0 && (
               <span style={{ fontWeight: 600, opacity: 0.85 }}>· el proyecto arranca el {fmtFull(anchor)}</span>
             )}
@@ -200,7 +200,7 @@ export default function TimelineSection({
                       ...(isCur ? { background: "var(--brand-blue-soft)", boxShadow: "inset 0 0 0 1px rgba(22, 140, 246, 0.45)" } : {}),
                     }}
                   >
-                    <div style={{ fontSize: 10, fontWeight: 700, color: isCur ? "var(--brand-blue-dark)" : "var(--text-muted)" }}>S{w + 1}</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: isCur ? "var(--brand-blue-dark)" : "var(--text-muted)" }}>S{w}</div>
                     {anchor && <div style={{ fontSize: 9, color: "var(--text-muted)" }}>{fmtDay(addWeeks(anchor, w))}</div>}
                   </div>
                 );
@@ -276,7 +276,7 @@ export default function TimelineSection({
                         return (
                           <div
                             key={w}
-                            title={`S${w + 1}`}
+                            title={`S${w}`}
                             style={{
                               height: 12,
                               borderRadius: 6,
@@ -304,7 +304,7 @@ export default function TimelineSection({
                               <div style={{ ...SUB_LABEL, borderBottom: "1px dashed var(--border)", paddingBottom: 3, marginBottom: 5 }}>
                                 Semana {relWeek + 1}
                                 <span style={{ fontWeight: 600, marginLeft: 6, opacity: 0.8 }}>
-                                  S{absW + 1}
+                                  S{absW}
                                   {anchor && ` · ${fmtDay(addWeeks(anchor, absW))} – ${fmtDay(addWeeks(anchor, absW + 1))}`}
                                 </span>
                               </div>

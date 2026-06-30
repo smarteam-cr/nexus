@@ -484,6 +484,116 @@ html.light aside .bg-gray-800 {
   background-color: #f0f0f0 !important;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────────
+ * ── [data-fixed-dark]: subárboles de APARIENCIA FIJA (no flipean con el modo claro) ──
+ *
+ * Algunas vizs deben verse IDÉNTICAS en claro y oscuro porque son cliente-facing o
+ * intencionalmente con paleta propia: el Cronograma interno (TimelineGantt, oscuro) y el
+ * FlowchartViewer embebido en el Kickoff (claro). Usan grises/acentos crudos de Tailwind
+ * que el remap `html.light` de arriba invierte en modo claro. Acá RE-AFIRMAMOS los valores
+ * ORIGINALES de la utilidad dentro del subárbol marcado con `data-fixed-dark`, ganando por
+ * especificidad (html.light + [attr] + clase > html.light + clase). Usamos `var(--color-*)`
+ * = EXACTAMENTE lo que produce la utilidad sin remap, así no hay drift entre temas. Patrón
+ * análogo a la excepción del sidebar (arriba). Lo NUEVO debe usar tokens; esto blinda vizs
+ * legacy con paleta cruda propia. (El nombre es histórico — aplica a vizs oscuras y claras.)
+ * ───────────────────────────────────────────────────────────────────────────────── */
+html.light [data-fixed-dark] .bg-gray-950 { background-color: var(--color-gray-950) !important; }
+html.light [data-fixed-dark] .bg-gray-900 { background-color: var(--color-gray-900) !important; }
+html.light [data-fixed-dark] .bg-gray-800 { background-color: var(--color-gray-800) !important; }
+html.light [data-fixed-dark] .bg-gray-700 { background-color: var(--color-gray-700) !important; }
+html.light [data-fixed-dark] .bg-gray-900\/50 { background-color: color-mix(in oklab, var(--color-gray-900) 50%, transparent) !important; }
+html.light [data-fixed-dark] .bg-gray-900\/30 { background-color: color-mix(in oklab, var(--color-gray-900) 30%, transparent) !important; }
+html.light [data-fixed-dark] .bg-gray-800\/80 { background-color: color-mix(in oklab, var(--color-gray-800) 80%, transparent) !important; }
+html.light [data-fixed-dark] .bg-gray-800\/70 { background-color: color-mix(in oklab, var(--color-gray-800) 70%, transparent) !important; }
+html.light [data-fixed-dark] .bg-gray-800\/60 { background-color: color-mix(in oklab, var(--color-gray-800) 60%, transparent) !important; }
+html.light [data-fixed-dark] .bg-gray-800\/50 { background-color: color-mix(in oklab, var(--color-gray-800) 50%, transparent) !important; }
+
+html.light [data-fixed-dark] .border-gray-800 { border-color: var(--color-gray-800) !important; }
+html.light [data-fixed-dark] .border-gray-700 { border-color: var(--color-gray-700) !important; }
+html.light [data-fixed-dark] .border-gray-600 { border-color: var(--color-gray-600) !important; }
+
+html.light [data-fixed-dark] .text-white    { color: var(--color-white) !important; }
+html.light [data-fixed-dark] .text-gray-100 { color: var(--color-gray-100) !important; }
+html.light [data-fixed-dark] .text-gray-200 { color: var(--color-gray-200) !important; }
+html.light [data-fixed-dark] .text-gray-300 { color: var(--color-gray-300) !important; }
+html.light [data-fixed-dark] .text-gray-400 { color: var(--color-gray-400) !important; }
+html.light [data-fixed-dark] .text-gray-500 { color: var(--color-gray-500) !important; }
+html.light [data-fixed-dark] .text-gray-600 { color: var(--color-gray-600) !important; }
+
+html.light [data-fixed-dark] .hover\:bg-gray-900\/40:hover { background-color: color-mix(in oklab, var(--color-gray-900) 40%, transparent) !important; }
+html.light [data-fixed-dark] .hover\:bg-gray-800\/70:hover { background-color: color-mix(in oklab, var(--color-gray-800) 70%, transparent) !important; }
+html.light [data-fixed-dark] .hover\:bg-gray-800\/60:hover { background-color: color-mix(in oklab, var(--color-gray-800) 60%, transparent) !important; }
+html.light [data-fixed-dark] .hover\:bg-gray-800\/50:hover { background-color: color-mix(in oklab, var(--color-gray-800) 50%, transparent) !important; }
+html.light [data-fixed-dark] .hover\:bg-gray-800\/40:hover { background-color: color-mix(in oklab, var(--color-gray-800) 40%, transparent) !important; }
+html.light [data-fixed-dark] .hover\:text-white:hover { color: var(--color-white) !important; }
+html.light [data-fixed-dark] .hover\:text-gray-300:hover { color: var(--color-gray-300) !important; }
+html.light [data-fixed-dark] .hover\:text-gray-400:hover { color: var(--color-gray-400) !important; }
+html.light [data-fixed-dark] .hover\:border-gray-700:hover { border-color: var(--color-gray-700) !important; }
+
+/* Inputs del editor de fases (Gantt) — campo oscuro. Acotado a `data-dark-chrome` (solo el
+   Gantt) para NO pisar inputs de vizs CLARAS que también llevan data-fixed-dark (ej. el
+   FlowchartViewer del Kickoff, cuyos inputs son blancos a propósito). */
+html.light [data-dark-chrome] input,
+html.light [data-dark-chrome] textarea {
+  background-color: var(--color-gray-800) !important;
+  color: var(--color-gray-200) !important;
+  border-color: var(--color-gray-700) !important;
+}
+html.light [data-dark-chrome] input::placeholder,
+html.light [data-dark-chrome] textarea::placeholder { color: var(--color-gray-500) !important; }
+
+/* Sin la sombra clara de tarjeta — SOLO el Gantt (`data-dark-chrome`). Las vizs claras
+   marcadas data-fixed-dark (FlowchartViewer) conservan sus sombras de panel. */
+html.light [data-dark-chrome] .rounded-2xl.border,
+html.light [data-dark-chrome] .rounded-xl.border { box-shadow: none !important; }
+
+/* divide-y oscuro */
+html.light [data-fixed-dark] .divide-gray-800 > :not([hidden]) ~ :not([hidden]) { border-color: var(--color-gray-800) !important; }
+
+/* ── Chips de actividad / estado / responsable (translúcidos oscuros) ── */
+html.light [data-fixed-dark] .bg-blue-900\/50 { background-color: color-mix(in oklab, var(--color-blue-900) 50%, transparent) !important; }
+html.light [data-fixed-dark] .bg-blue-900\/40 { background-color: color-mix(in oklab, var(--color-blue-900) 40%, transparent) !important; }
+html.light [data-fixed-dark] .bg-blue-900\/30 { background-color: color-mix(in oklab, var(--color-blue-900) 30%, transparent) !important; }
+html.light [data-fixed-dark] .border-blue-700\/50 { border-color: color-mix(in oklab, var(--color-blue-700) 50%, transparent) !important; }
+html.light [data-fixed-dark] .border-blue-700\/40 { border-color: color-mix(in oklab, var(--color-blue-700) 40%, transparent) !important; }
+html.light [data-fixed-dark] .text-blue-300 { color: var(--color-blue-300) !important; }
+html.light [data-fixed-dark] .text-blue-400 { color: var(--color-blue-400) !important; }
+html.light [data-fixed-dark] .bg-sky-900\/30 { background-color: color-mix(in oklab, var(--color-sky-900) 30%, transparent) !important; }
+html.light [data-fixed-dark] .border-sky-700\/40 { border-color: color-mix(in oklab, var(--color-sky-700) 40%, transparent) !important; }
+html.light [data-fixed-dark] .text-sky-300 { color: var(--color-sky-300) !important; }
+html.light [data-fixed-dark] .bg-teal-900\/30 { background-color: color-mix(in oklab, var(--color-teal-900) 30%, transparent) !important; }
+html.light [data-fixed-dark] .border-teal-700\/40 { border-color: color-mix(in oklab, var(--color-teal-700) 40%, transparent) !important; }
+html.light [data-fixed-dark] .text-teal-300 { color: var(--color-teal-300) !important; }
+html.light [data-fixed-dark] .bg-emerald-900\/40 { background-color: color-mix(in oklab, var(--color-emerald-900) 40%, transparent) !important; }
+html.light [data-fixed-dark] .bg-emerald-900\/30 { background-color: color-mix(in oklab, var(--color-emerald-900) 30%, transparent) !important; }
+html.light [data-fixed-dark] .border-emerald-700\/50 { border-color: color-mix(in oklab, var(--color-emerald-700) 50%, transparent) !important; }
+html.light [data-fixed-dark] .border-emerald-700\/40 { border-color: color-mix(in oklab, var(--color-emerald-700) 40%, transparent) !important; }
+html.light [data-fixed-dark] .text-emerald-300 { color: var(--color-emerald-300) !important; }
+html.light [data-fixed-dark] .bg-violet-900\/30 { background-color: color-mix(in oklab, var(--color-violet-900) 30%, transparent) !important; }
+html.light [data-fixed-dark] .border-violet-700\/40 { border-color: color-mix(in oklab, var(--color-violet-700) 40%, transparent) !important; }
+html.light [data-fixed-dark] .text-violet-300 { color: var(--color-violet-300) !important; }
+html.light [data-fixed-dark] .bg-indigo-900\/30 { background-color: color-mix(in oklab, var(--color-indigo-900) 30%, transparent) !important; }
+html.light [data-fixed-dark] .border-indigo-700\/40 { border-color: color-mix(in oklab, var(--color-indigo-700) 40%, transparent) !important; }
+html.light [data-fixed-dark] .text-indigo-300 { color: var(--color-indigo-300) !important; }
+html.light [data-fixed-dark] .bg-orange-900\/30 { background-color: color-mix(in oklab, var(--color-orange-900) 30%, transparent) !important; }
+html.light [data-fixed-dark] .border-orange-700\/40 { border-color: color-mix(in oklab, var(--color-orange-700) 40%, transparent) !important; }
+html.light [data-fixed-dark] .text-orange-300 { color: var(--color-orange-300) !important; }
+html.light [data-fixed-dark] .bg-fuchsia-900\/30 { background-color: color-mix(in oklab, var(--color-fuchsia-900) 30%, transparent) !important; }
+html.light [data-fixed-dark] .border-fuchsia-700\/40 { border-color: color-mix(in oklab, var(--color-fuchsia-700) 40%, transparent) !important; }
+html.light [data-fixed-dark] .text-fuchsia-300 { color: var(--color-fuchsia-300) !important; }
+html.light [data-fixed-dark] .bg-amber-900\/30 { background-color: color-mix(in oklab, var(--color-amber-900) 30%, transparent) !important; }
+html.light [data-fixed-dark] .border-amber-700\/50 { border-color: color-mix(in oklab, var(--color-amber-700) 50%, transparent) !important; }
+html.light [data-fixed-dark] .border-amber-700\/40 { border-color: color-mix(in oklab, var(--color-amber-700) 40%, transparent) !important; }
+html.light [data-fixed-dark] .text-amber-300 { color: var(--color-amber-300) !important; }
+html.light [data-fixed-dark] .bg-green-900\/30 { background-color: color-mix(in oklab, var(--color-green-900) 30%, transparent) !important; }
+html.light [data-fixed-dark] .border-green-700\/40 { border-color: color-mix(in oklab, var(--color-green-700) 40%, transparent) !important; }
+html.light [data-fixed-dark] .text-green-400 { color: var(--color-green-400) !important; }
+html.light [data-fixed-dark] .bg-red-900\/40 { background-color: color-mix(in oklab, var(--color-red-900) 40%, transparent) !important; }
+html.light [data-fixed-dark] .bg-red-900\/30 { background-color: color-mix(in oklab, var(--color-red-900) 30%, transparent) !important; }
+html.light [data-fixed-dark] .border-red-700\/50 { border-color: color-mix(in oklab, var(--color-red-700) 50%, transparent) !important; }
+html.light [data-fixed-dark] .text-red-300 { color: var(--color-red-300) !important; }
+html.light [data-fixed-dark] .text-red-400 { color: var(--color-red-400) !important; }
+
 /* ─────────────────────────────────────────────────────────────────────────────── */
 /* ── Skeleton shimmer animation ─────────────────────────────────────────────── */
 /* ─────────────────────────────────────────────────────────────────────────────── */

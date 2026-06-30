@@ -475,7 +475,10 @@ export default function TimelineGantt({
   const gridCols = { gridTemplateColumns: `minmax(240px, 380px) repeat(${total}, minmax(26px, 1fr))` };
 
   return (
-    <div className="space-y-3">
+    // data-fixed-dark: neutraliza el remap de grises crudos de `html.light` (globals.css) para
+    // que el Gantt no cambie en modo claro. data-dark-chrome: además, este es chrome 100% oscuro
+    // (inputs oscuros + sin sombra de tarjeta) — reglas que NO aplican a vizs claras (FlowchartViewer).
+    <div className="space-y-3" data-fixed-dark data-dark-chrome>
       {/* Fecha de hoy — SIEMPRE visible — + leyenda */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <span className="flex items-center gap-2 text-xs font-bold text-blue-300 bg-blue-900/30 border border-blue-700/40 rounded-lg px-3 py-1.5">
@@ -486,7 +489,7 @@ export default function TimelineGantt({
             </span>
           )}
           Hoy: {fmtFull(todayIso)}
-          {curInRange && <span className="font-extrabold">· Semana S{(curWeek as number) + 1}</span>}
+          {curInRange && <span className="font-extrabold">· Semana S{curWeek as number}</span>}
           {anchor && curWeek !== null && curWeek < 0 && (
             <span className="font-medium text-blue-400/90">· el proyecto arranca el {fmtFull(anchor)}</span>
           )}
@@ -534,7 +537,7 @@ export default function TimelineGantt({
                     isCur ? "bg-blue-900/50 text-blue-300 timeline-now-pulse" : "text-gray-500"
                   }`}
                 >
-                  <div className="text-[10px] font-bold">S{w + 1}</div>
+                  <div className="text-[10px] font-bold">S{w}</div>
                   {anchor && <div className="text-[9px] text-gray-600">{fmtDay(addWeeks(anchor, w))}</div>}
                 </div>
               );
@@ -730,7 +733,7 @@ export default function TimelineGantt({
                           } ${isCur ? "timeline-now-pulse" : ""} ${
                             weekOverdue && !isCur ? "ring-1 ring-red-500/80" : ""
                           } ${editable && onUpdatePhase ? "cursor-ew-resize touch-none" : ""}`}
-                          title={editable && onUpdatePhase ? `S${w + 1} — arrastrá para mover el inicio de la fase` : `S${w + 1}${weekTasks.length ? ` · ${weekTasks.length} tareas` : ""}`}
+                          title={editable && onUpdatePhase ? `S${w} — arrastrá para mover el inicio de la fase` : `S${w}${weekTasks.length ? ` · ${weekTasks.length} tareas` : ""}`}
                         />
                       );
                     })}
@@ -749,7 +752,7 @@ export default function TimelineGantt({
                               <span>
                                 Semana {relWeek + 1}
                                 <span className="text-gray-600 font-semibold ml-2">
-                                  S{absW + 1}
+                                  S{absW}
                                   {anchor && ` · ${fmtDay(addWeeks(anchor, absW))} – ${fmtDay(addWeeks(anchor, absW + 1))}`}
                                 </span>
                               </span>
