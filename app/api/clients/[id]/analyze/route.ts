@@ -23,6 +23,7 @@ import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { autoClassifyOrphanSessions } from "@/lib/projects/analyze-participants";
 import { getProjectHandoffSessions, getClientSessions } from "@/lib/sessions/project-sources";
 import { fetchCompanyTimeline } from "@/lib/hubspot/company-timeline";
+import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT } from "@/lib/tags/catalog";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -342,7 +343,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       }),
       // Buscar el deal asociado al proyecto (si hay projectId)
       bodyProjectId
-        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true } })
+        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true, tags: true, implementationType: true } })
         : Promise.resolve(null),
     ]);
 
@@ -1071,6 +1072,17 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // Siempre incluir serviceType si está disponible (aunque no haya deal en HubSpot)
   const serviceTypeLabel = dealProject?.serviceType ?? null;
 
+  // Clasificación del proyecto (tira de tags): modalidad impl/re-impl + productos/alcance.
+  // Alimenta a TODOS los agentes que leen este bloque (handoff, kickoff, detalle del
+  // cronograma) para que razonen el #6 (tarea de BD) y el #7 (fase técnica).
+  const classificationLabel = (() => {
+    const parts: string[] = [];
+    if (dealProject?.implementationType) parts.push(`Modalidad: ${MODALITY_LABEL[dealProject.implementationType]}`);
+    const labels = tagLabels(sanitizeTags(dealProject?.tags ?? []));
+    if (labels.length) parts.push(`Productos/alcance: ${labels.join(", ")}`);
+    return parts.length ? parts.join(" · ") : null;
+  })();
+
   // ── 3c. Output del agente de la subetapa anterior (step - 1) ─────────────────
   // Cada agente se alimenta del output estructurado del agente anterior en la cadena.
   let prevStepCards: { title: string; content: string; source: string }[] = [];
@@ -1132,6 +1144,7 @@ ${companyTimelineContent.slice(0, 8000)}
 Industria: ${client.industry ?? "No especificada"}
 Notas base: ${client.notes ?? "Sin notas"}
 ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}` : ""}
+${classificationLabel ? `Clasificación del proyecto: ${classificationLabel}` : ""}
 
 ${(() => {
   const escala = (clientCanvas as Record<string, unknown>)?.escala_rendimiento as { general?: number; por_hub?: { marketing?: number; sales?: number; service?: number }; objetivo?: number } | undefined;
@@ -1220,14 +1233,30 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   if (isTimelineDetailAgent && bodyProjectId) {
     const handoffCtx = await loadCanvasContext(bodyProjectId, "Handoff", { onlyConfirmed: true });
     const timelineCtx = await loadTimelineContext(bodyProjectId, { includeIds: true });
+
+    // Reglas #6 (tarea de BD) y #7 (tareas técnicas) derivadas de la clasificación del proyecto.
+    const projTagSlugs = sanitizeTags(dealProject?.tags ?? []);
+    const isReimpl = dealProject?.implementationType === "REIMPLEMENTATION";
+    const hasMigration = projTagSlugs.includes("crm_migration");
+    const hasTechnical = projTagSlugs.includes("custom_dev") || projTagSlugs.includes("insider_one");
+    const dbTaskRule = isReimpl && !hasMigration
+      ? `- BASE DE DATOS (#6): es una RE-IMPLEMENTACIÓN sobre un HubSpot que el cliente YA usa, SIN migración desde otro CRM. NO incluyas una tarea de "cargar/crear la base de datos"; en su lugar, en la primera fase, incluí una tarea de REVISIÓN DE ESTRUCTURA Y LIMPIEZA de la base existente (propiedades, duplicados, datos sucios).`
+      : `- BASE DE DATOS (#6): ${isReimpl ? "es una re-implementación pero CON migración desde otro CRM" : "es una implementación desde cero"}, así que SÍ incluí en la primera fase una tarea de CARGAR/ESTRUCTURAR LA BASE DE DATOS (importar y modelar los datos en HubSpot).`;
+    const techRule = hasTechnical
+      ? `\n- DESARROLLO/INTEGRACIÓN (#7): el proyecto lleva desarrollo a medida o Insider One. Las tareas técnicas (integraciones, desarrollo, APIs) marcalas con responsable "DEV" y, si existe una fase de "Desarrollo / Integración", ubicalas SOLO ahí (no las mezcles con las tareas funcionales de otras fases).`
+      : "";
+
     userMessage = `Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
-${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}
+${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}${classificationLabel ? `Clasificación del proyecto: ${classificationLabel}\n` : ""}
 === CRONOGRAMA A DETALLAR (fases EXISTENTES — no cambies nombres, duraciones ni orden) ===
 ${timelineCtx}
 
 === HANDOFF CURADO (bloques confirmados por el CSE) ===
 ${handoffCtx || '(Sin handoff confirmado. Generá las tareas típicas del tipo de cada fase y marcá CADA una con "porValidar": true. Títulos limpios, sin marcadores.)'}
+
+=== REGLAS SEGÚN LA CLASIFICACIÓN ===
+${dbTaskRule}${techRule}
 
 Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a cada fase y proponé las tareas por semana (weekIndex relativo a la fase, < durationWeeks). Usá los ids EXACTOS del input.`;
   }
@@ -1877,31 +1906,9 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
     }
   }
 
-  // ── 14. Auto-generar project tags (solo desde serviceType, NO desde respuesta del agente) ──
-  if (bodyProjectId) {
-    try {
-      const proj = await prisma.project.findUnique({
-        where: { id: bodyProjectId },
-        select: { tags: true, serviceType: true },
-      });
-      const currentTags = proj?.tags ?? [];
-
-      // Solo usar serviceType → Hub tag. Tags del agente se ignoran.
-      const SERVICE_TO_HUB: Record<string, string> = {
-        loop_marketing: "Marketing Hub",
-        loop_sales: "Sales Hub",
-        loop_service: "Service Hub",
-      };
-      const hubTag = proj?.serviceType ? SERVICE_TO_HUB[proj.serviceType] : undefined;
-
-      if (hubTag && !currentTags.includes(hubTag)) {
-        await prisma.project.update({
-          where: { id: bodyProjectId },
-          data: { tags: [hubTag] },
-        });
-      }
-    } catch { /* no-op */ }
-  }
+  // ── 14. Project tags (clasificación) ─────────────────────────────────────────
+  // Se persiste dentro de `persistTimelineFromAgentOutput` (junto a la modalidad) para que
+  // valga TAMBIÉN en el branch block-format del handoff, que retorna antes de llegar acá.
 
   // ── 14b. Mergear pendingItems del agente al Project.pendingItems[] ─────────
   // El agente puede devolver además de "cards" un campo "pendingItems" con
@@ -2026,6 +2033,29 @@ async function persistTimelineFromAgentOutput(
         await prisma.project
           .update({ where: { id: bodyProjectId }, data: { implementationType: implType } })
           .catch((e) => console.warn("[analyze] implementationType no guardado:", e instanceof Error ? e.message : e));
+      }
+    }
+
+    // Tags de producto/alcance (mismo catálogo que la tira). Co-locado con la modalidad porque
+    // ambos son "la clasificación" y este helper corre en AMBOS paths (block format y cards) —
+    // el branch block-format del handoff retorna ANTES de la auto-derivación de la sección 14.
+    // ADITIVO + slug-based: deriva del serviceType, une lo que el agente emita, normaliza legacy.
+    if (bodyProjectId) {
+      try {
+        const proj = await prisma.project.findUnique({
+          where: { id: bodyProjectId },
+          select: { tags: true, serviceType: true },
+        });
+        const current = sanitizeTags(proj?.tags ?? []);
+        const next = [...current];
+        const push = (slug: string | undefined) => { if (slug && !next.includes(slug)) next.push(slug); };
+        if (proj?.serviceType) push(SERVICE_TO_PRODUCT[proj.serviceType]);
+        sanitizeTags((analysisJson as { tags?: unknown } | null)?.tags).forEach(push);
+        if (JSON.stringify(next) !== JSON.stringify(proj?.tags ?? [])) {
+          await prisma.project.update({ where: { id: bodyProjectId }, data: { tags: next } });
+        }
+      } catch (e) {
+        console.warn("[analyze] tags no guardados:", e instanceof Error ? e.message : e);
       }
     }
 

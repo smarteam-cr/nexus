@@ -20,6 +20,8 @@ import LandingView, { type LandingSectionData } from "@/components/landing/Landi
 import { BUSINESS_CASE_LANDING } from "@/components/landing/configs/business-case";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
+import TagsStrip from "@/components/tags/TagsStrip";
+import type { ImplementationType } from "@prisma/client";
 
 type VersionMeta = { canvasId: string; version: number; isActive: boolean; name: string };
 type SessionMeta = { sessionId: string; title: string; date: string; participants: string[]; applies: boolean; hasTranscript: boolean };
@@ -556,6 +558,9 @@ function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: ()
   // Timeline de HubSpot (llamadas + reuniones + notas detectadas en el registro de empresa)
   const [hubspot, setHubspot] = useState<HsTimelineItem[]>([]);
   const [loadingHs, setLoadingHs] = useState(true);
+  // Clasificación (tira de tags) — mismo catálogo que el proyecto; se PROPAGA al crear el handoff.
+  const [tags, setTags] = useState<string[]>([]);
+  const [modality, setModalityState] = useState<ImplementationType | null>(null);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -586,7 +591,32 @@ function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: ()
       setLoadingHs(false);
     }
   }, [bcId]);
-  useEffect(() => { loadSessions(); loadTranscripts(); loadHubspot(); }, [loadSessions, loadTranscripts, loadHubspot]);
+  const loadTags = useCallback(async () => {
+    try {
+      const d = await fetchJson<{ tags: string[]; implementationType: ImplementationType | null }>(`/api/business-cases/${bcId}/tags`);
+      setTags(d.tags);
+      setModalityState(d.implementationType);
+    } catch {
+      /* silencioso — la tira aparece vacía/editable */
+    }
+  }, [bcId]);
+  useEffect(() => { loadSessions(); loadTranscripts(); loadHubspot(); loadTags(); }, [loadSessions, loadTranscripts, loadHubspot, loadTags]);
+
+  // Persistencia optimista de la clasificación (PATCH /tags).
+  const patchTags = useCallback(async (payload: { tags?: string[]; implementationType?: ImplementationType | null }) => {
+    try {
+      await fetchJson(`/api/business-cases/${bcId}/tags`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo guardar la clasificación.");
+      loadTags(); // revertir al estado del servidor
+    }
+  }, [bcId, toast, loadTags]);
+  const saveTags = useCallback((slugs: string[]) => { setTags(slugs); patchTags({ tags: slugs }); }, [patchTags]);
+  const setModality = useCallback((m: ImplementationType | null) => { setModalityState(m); patchTags({ implementationType: m }); }, [patchTags]);
 
   const toggleSession = async (sessionId: string, include: boolean) => {
     setBusyId(sessionId);
@@ -643,6 +673,10 @@ function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: ()
           <p className="text-xs text-fg-muted mt-0.5">
             {sourceCount === 0 ? "Sumá sesiones del prospecto o pegá notas." : `${sourceCount} fuente${sourceCount === 1 ? "" : "s"} de contexto.`}
           </p>
+          {/* Clasificación: modalidad + productos/alcance. Se propaga al proyecto al generar el handoff. */}
+          <div className="mt-2">
+            <TagsStrip tags={tags} implementationType={modality} canEdit onSetTags={saveTags} onSetModality={setModality} />
+          </div>
         </div>
       </div>
 

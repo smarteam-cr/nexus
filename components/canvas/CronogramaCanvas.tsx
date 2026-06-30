@@ -36,6 +36,7 @@ import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus, P
 import TaskDetailDrawer from "./TaskDetailDrawer";
 import TimelineAssistDialog from "./TimelineAssistDialog";
 import PublishBar from "./PublishBar";
+import { useMe } from "@/hooks/useMe";
 import CronogramaProgressButton from "@/components/clients/CronogramaProgressButton";
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
 
@@ -47,8 +48,10 @@ interface TaskDraft {
   status: GanttTaskStatus;
   needsValidation: boolean;
   source?: string;
-  party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | null;
+  party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null;
   type?: "SESSION" | "TASK" | null;
+  startDateOverride?: string | null; // #4 — ISO o null (null = derivar de la semana)
+  dueDateOverride?: string | null;
   _key: string;
 }
 
@@ -104,8 +107,10 @@ interface ServerTask {
   notes: string | null;
   needsValidation: boolean;
   source: string;
-  party: "CLIENTE" | "SMARTEAM" | "AMBOS" | null;
+  party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null;
   type: "SESSION" | "TASK" | null;
+  startDateOverride?: string | null; // #4
+  dueDateOverride?: string | null;
 }
 
 interface ServerPhase {
@@ -154,6 +159,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [hasPublishedOnce, setHasPublishedOnce] = useState(false);
   // Señal del workspace: al generar el handoff, el cronograma (si está vacío) recarga sus fases.
   const { timelineRefreshSignal, bumpGpsRefresh } = useWorkspace();
+  // #1/#3 — RBAC del cronograma. `editTimeline` lo tiene TODO interno (incl. CSE): editar,
+  // renombrar, mover, fechas, agregar, estado. `deleteTimeline` (NO el CSE) habilita BORRAR
+  // tareas/fases — el CSE en su lugar SUSPENDE. El server lo refuerza (guardTimelineEdit/Delete +
+  // el diff del PUT no borra sin deleteTimeline); esto es el gating cosmético de la UI.
+  const me = useMe();
+  const canEdit = me?.capabilities.includes("editTimeline") ?? false;
+  const canDelete = me?.capabilities.includes("deleteTimeline") ?? false;
   const [lastEditedAt, setLastEditedAt] = useState<string | null>(null);
   const [publishWorking, setPublishWorking] = useState(false);
   // Modal de razón del cambio — SOLO al "Subir al cliente" (no en el auto-guardado).
@@ -219,13 +231,23 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     if (server.length !== local.length) return local; // estructura cambió → no es seguro zipear
     return local.map((p, pi) => {
       const sp = server[pi];
-      const sameTaskCount = (sp.tasks?.length ?? 0) === p.tasks.length;
+      // Las tareas en blanco son borradores locales que NO se enviaron (buildPutBody las filtra),
+      // así que el server devuelve solo las NO-vacías. Zipeamos por posición contra esas y
+      // conservamos los borradores tal cual (idless) — así la adopción de ids no se rompe.
+      const localNonBlank = p.tasks.filter((t) => t.title.trim() !== "");
+      const sameTaskCount = (sp.tasks?.length ?? 0) === localNonBlank.length;
+      let si = 0; // índice sobre las tareas del server (que son las NO-vacías, en orden)
       return {
         ...p,
         id: p.id ?? sp.id,
         _key: p.id ? p._key : sp.id,
         tasks: sameTaskCount
-          ? p.tasks.map((t, ti) => (t.id ? t : { ...t, id: sp.tasks[ti].id, _key: sp.tasks[ti].id }))
+          ? p.tasks.map((t) => {
+              if (t.title.trim() === "") return t; // borrador local sin enviar → intacto
+              const st = sp.tasks[si];
+              si += 1;
+              return t.id ? t : { ...t, id: st.id, _key: st.id };
+            })
           : p.tasks,
       };
     });
@@ -254,6 +276,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         source: t.source,
         party: t.party,
         type: t.type,
+        startDateOverride: t.startDateOverride ?? null,
+        dueDateOverride: t.dueDateOverride ?? null,
         _key: t.id,
       })),
       _key: p.id,
@@ -491,7 +515,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     anchorStartDate: anchorYmd ? new Date(anchorYmd).toISOString() : null,
     phases: phasesToSave.map((p, i) => {
       const perWeek = new Map<number, number>();
-      const tasks = p.tasks.map((t) => {
+      // Las tareas con título VACÍO son borradores locales (recién agregadas, sin titular aún):
+      // no se persisten ni se envían al server (evita el 400 por título vacío) y NO deben bloquear
+      // el guardado del resto — viven solo en el estado local hasta que se les pone título.
+      const tasks = p.tasks
+        .filter((t) => t.title.trim() !== "")
+        .map((t) => {
         const weekIndex = Math.min(Math.max(t.weekIndex, 0), Math.max(p.durationWeeks - 1, 0));
         const order = perWeek.get(weekIndex) ?? 0;
         perWeek.set(weekIndex, order + 1);
@@ -503,6 +532,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           notes: t.notes?.trim() ? t.notes.trim() : null,
           party: t.party ?? null,
           type: t.type ?? null,
+          startDateOverride: t.startDateOverride ?? null,
+          dueDateOverride: t.dueDateOverride ?? null,
         };
       });
       return {
@@ -526,9 +557,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         return "La duración de cada fase debe ser un entero mayor que 0.";
       if (p.sessionCount != null && (!Number.isInteger(p.sessionCount) || p.sessionCount <= 0))
         return "Las sesiones deben ser un entero mayor que 0 (o vacío).";
-      for (const t of p.tasks) {
-        if (!t.title.trim()) return `Cada tarea de "${p.name || "la fase"}" necesita un título.`;
-      }
+      // NB: una tarea con título vacío NO invalida el cronograma — es un borrador local que
+      // buildPutBody omite. Si bloqueáramos acá, una tarea en blanco congelaría TODO el
+      // auto-guardado (incluido el borrado de otras tareas) — era la causa del bug de borrado.
     }
     return null;
   };
@@ -563,8 +594,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       lastFailedSeqRef.current = null; // éxito → habilitar el auto-guardado de nuevo
       if (editSeq.current === seq) {
         // Quedó quieto durante el PUT → adoptar el estado canónico (ids nuevos) + limpiar dirty.
+        // Si hay borradores en blanco locales (no enviados), preservarlos: mergeServerIds adopta
+        // ids sin tirar los blancos; mapServerPhases (reemplazo total) los perdería.
         if (data.exists) {
-          setPhases(mapServerPhases(data.phases ?? []));
+          const hasBlankDrafts = phases.some((p) => p.tasks.some((t) => !t.title.trim()));
+          setPhases((cur) =>
+            hasBlankDrafts ? mergeServerIds(cur, data.phases ?? []) : mapServerPhases(data.phases ?? []),
+          );
           setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
         }
         setDirty(false);
@@ -586,7 +622,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // cambio (phases/anchor). No corre con propuesta IA abierta, mientras guarda, con el
   // cronograma inválido, ni si el último intento falló para este mismo contenido.
   useEffect(() => {
-    if (!dirty || proposal || saving) return;
+    if (!dirty || proposal || saving || !canEdit) return; // el CSE no autosalva (no edita)
     if (validateLocal() !== null) return;
     if (editSeq.current === lastFailedSeqRef.current) return;
     const t = setTimeout(() => { void autoSave(); }, 1500);
@@ -758,7 +794,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   };
 
   // ── D/E — banner de avance: meta de tareas (título + fase) y regla de cierre de fase ──
-  const progressTaskMeta = new Map<string, { title: string; phaseId: string; phaseName: string; party: "CLIENTE" | "SMARTEAM" | "AMBOS" | null }>();
+  const progressTaskMeta = new Map<string, { title: string; phaseId: string; phaseName: string; party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null }>();
   for (const p of phases) for (const t of p.tasks) if (t.id && p.id) progressTaskMeta.set(t.id, { title: t.title, phaseId: p.id, phaseName: p.name, party: t.party ?? null });
   const phaseToTaskIds = new Map<string, string[]>();
   if (pendingProgress) {
@@ -931,6 +967,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       source: t.source,
       party: t.party,
       type: t.type,
+      startDateOverride: t.startDateOverride ?? null,
+      dueDateOverride: t.dueDateOverride ?? null,
     })),
   }));
 
@@ -951,6 +989,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         source: selDraft.source,
         party: selDraft.party,
         type: selDraft.type,
+        startDateOverride: selDraft.startDateOverride ?? null,
+        dueDateOverride: selDraft.dueDateOverride ?? null,
       }
     : null;
   // Lista plana (orden de render) para navegar ↑/↓ entre tareas sin cerrar el drawer.
@@ -1066,7 +1106,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               tareas iniciales); ya con tareas o publicado → "Chequear avance" (D.2). El gate
               !hasPublishedOnce evita regenerar sobre un cronograma vivo (borraría fechas/avance),
               aun si se borraron las tareas post-publicación. */}
-          {phases.length > 0 && !proposal && (
+          {canEdit && phases.length > 0 && !proposal && (
             !hasPublishedOnce && !hasAiDetail ? (
               <button
                 onClick={() => void generateDetail({ auto: false })}
@@ -1081,7 +1121,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               <CronogramaProgressButton projectId={projectId} onDone={load} />
             )
           )}
-          {phases.length > 0 && !proposal && (
+          {canEdit && phases.length > 0 && !proposal && (
             <button
               onClick={() => { setAssistScopePhaseId(null); setAssistOpen(true); }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800 hover:border-gray-700"
@@ -1098,7 +1138,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       {/* Barra ÚNICA de guardar/subir — mismo diseño que en el kickoff. El guardado
           es AUTOMÁTICO (interno): "Guardando…" → "Cambios guardados". "Subir al cliente"
           es el único paso que publica el snapshot al cliente (también el primer publish). */}
-      {!proposal && phases.length > 0 && (
+      {canEdit && !proposal && phases.length > 0 && (
         <PublishBar
           hideWhenClean
           saving={saving || (dirty && validationMsg === null)}
@@ -1329,7 +1369,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         />
       ) : (
         <>
-          {!hasAiDetail && !hasPublishedOnce && (
+          {canEdit && !hasAiDetail && !hasPublishedOnce && (
             <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-700/50 text-amber-200">
               <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               <p className="text-xs leading-relaxed">
@@ -1349,6 +1389,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           <TimelineGantt
             anchor={anchor || null}
             phases={ganttPhases}
+            readOnly={!canEdit}
+            canDelete={canDelete}
             onToggleStatus={toggleStatus}
             onUpdateTask={(phaseKey, taskKey, patch) => updateTask(phaseKey, taskKey, patch)}
             onAddTask={addTask}
@@ -1378,10 +1420,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         onToggleStatus={toggleStatus}
         onUpdateTask={(pk, tk, patch) => updateTask(pk, tk, patch)}
         onRemoveTask={removeTask}
+        canDelete={canDelete}
         onNavigate={navigateTask}
         hasPrev={flatIdx > 0}
         hasNext={flatIdx >= 0 && flatIdx < flatTasks.length - 1}
       />
+
 
       <TimelineAssistDialog
         open={assistOpen}

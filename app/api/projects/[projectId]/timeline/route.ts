@@ -31,7 +31,7 @@
  * (lastEditedByHuman = now, todas las phases nacen como HUMAN).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject, guardProjectHandoffAccess } from "@/lib/auth/api-guards";
+import { guardAccessToProject, guardTimelineEdit, guardTimelineDelete } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 import { countDeliverySessionsByPhase } from "@/lib/timeline/delivery-sessions";
@@ -157,6 +157,8 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
               source: true,
               party: true,
               type: true,
+              startDateOverride: true,
+              dueDateOverride: true,
             },
           },
         },
@@ -214,7 +216,7 @@ export async function PUT(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardProjectHandoffAccess(projectId);
+  const guard = await guardTimelineEdit(projectId);
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;
@@ -307,6 +309,8 @@ export async function PUT(
               source: true,
               party: true,
               type: true,
+              startDateOverride: true,
+              dueDateOverride: true,
             },
           },
         },
@@ -316,7 +320,10 @@ export async function PUT(
         incomingPhases.filter((p) => p.id).map((p) => p.id as string),
       );
 
-      // 3. DELETE: phases en DB que no aparecen en el body (cascade borra tasks)
+      // 3. DELETE: phases en DB que no aparecen en el body (cascade borra tasks).
+      // NB: el "no borrar" del CSE se aplica en la UI (sin botones de borrar fase/tarea);
+      // acá NO se bloquea porque un MOVE entre fases borra-del-origen + crea-en-destino, y
+      // bloquearlo duplicaría la tarea. El nuke del cronograma entero (DELETE) sí está gateado.
       const idsToDelete = existingPhases
         .filter((p) => !incomingIds.has(p.id))
         .map((p) => p.id);
@@ -336,6 +343,8 @@ export async function PUT(
         notes: string | null;
         party: TaskParty | null;
         type: TimelineTaskType | null;
+        startDateOverride: Date | null;
+        dueDateOverride: Date | null;
         source: TimelinePhaseSource;
         status: TimelineTaskStatus;
         needsValidation: boolean;
@@ -431,7 +440,9 @@ export async function PUT(
               existingTask.order !== t.order ||
               (existingTask.notes ?? null) !== (t.notes ?? null) ||
               (t.party !== undefined && (existingTask.party ?? null) !== (t.party ?? null)) ||
-              (t.type !== undefined && (existingTask.type ?? null) !== (t.type ?? null));
+              (t.type !== undefined && (existingTask.type ?? null) !== (t.type ?? null)) ||
+              (t.startDateOverride !== undefined && (existingTask.startDateOverride?.toISOString() ?? null) !== (t.startDateOverride ?? null)) ||
+              (t.dueDateOverride !== undefined && (existingTask.dueDateOverride?.toISOString() ?? null) !== (t.dueDateOverride ?? null));
             if (contentChanged) {
               await tx.timelineTask.update({
                 where: { id: t.id },
@@ -442,6 +453,9 @@ export async function PUT(
                   notes: t.notes ?? null,
                   party: t.party, // undefined = sin cambio (Prisma lo ignora)
                   type: t.type, // undefined = sin cambio
+                  // #4 — override de fechas por tarea (undefined = sin cambio; null = volver a derivada).
+                  startDateOverride: t.startDateOverride !== undefined ? (t.startDateOverride ? new Date(t.startDateOverride) : null) : undefined,
+                  dueDateOverride: t.dueDateOverride !== undefined ? (t.dueDateOverride ? new Date(t.dueDateOverride) : null) : undefined,
                   source: existingTask.source === "AGENT" ? "MODIFIED" : existingTask.source,
                   needsValidation: false, // humano revisó el contenido
                 },
@@ -457,6 +471,8 @@ export async function PUT(
               notes: t.notes ?? null,
               party: t.party ?? null,
               type: t.type ?? null,
+              startDateOverride: t.startDateOverride ? new Date(t.startDateOverride) : null,
+              dueDateOverride: t.dueDateOverride ? new Date(t.dueDateOverride) : null,
               source: "HUMAN",
               status: "PENDING",
               needsValidation: false,
@@ -531,7 +547,7 @@ export async function DELETE(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardProjectHandoffAccess(projectId);
+  const guard = await guardTimelineDelete(projectId);
   if (guard instanceof NextResponse) return guard;
 
   const existing = await prisma.projectTimeline.findUnique({

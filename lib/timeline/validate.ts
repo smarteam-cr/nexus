@@ -16,7 +16,7 @@ export const ACTIVITY_TYPES = [
   "SEGUIMIENTO",
 ] as const;
 
-export const PARTY_VALUES = ["CLIENTE", "SMARTEAM", "AMBOS"] as const;
+export const PARTY_VALUES = ["CLIENTE", "SMARTEAM", "AMBOS", "DEV"] as const;
 export const TASK_TYPE_VALUES = ["SESSION", "TASK"] as const;
 
 export interface TaskInput {
@@ -29,6 +29,9 @@ export interface TaskInput {
   party?: (typeof PARTY_VALUES)[number] | null;
   /** tipo: undefined = no tocar; null = sin tipar; valor = set (SESSION | TASK) */
   type?: (typeof TASK_TYPE_VALUES)[number] | null;
+  /** #4 — override de fechas (ISO). undefined = no tocar; null = derivar de la semana; string = set */
+  startDateOverride?: string | null;
+  dueDateOverride?: string | null;
 }
 
 export interface PhaseInput {
@@ -230,6 +233,19 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
             return;
           }
         }
+        // #4 — override de fechas (opcional; undefined = sin cambio; null = derivar; string ISO = set)
+        const parseOverride = (v: unknown, field: string): string | null | undefined => {
+          if (v === undefined) return undefined;
+          if (v === null) return null;
+          if (typeof v === "string" && !Number.isNaN(Date.parse(v))) return v;
+          errors.push(`phases[${idx}].tasks[${tIdx}].${field} debe ser una fecha ISO o null`);
+          taskError = true;
+          return undefined;
+        };
+        const tStart = parseOverride((tk as { startDateOverride?: unknown }).startDateOverride, "startDateOverride");
+        const tDue = parseOverride((tk as { dueDateOverride?: unknown }).dueDateOverride, "dueDateOverride");
+        if (taskError) return;
+
         let tId: string | undefined;
         if (tk.id !== undefined) {
           if (typeof tk.id !== "string" || tk.id.length === 0) {
@@ -247,6 +263,8 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
           notes: tNotes,
           party: tParty,
           type: tType,
+          startDateOverride: tStart,
+          dueDateOverride: tDue,
         });
       });
       if (taskError) return;

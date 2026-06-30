@@ -450,6 +450,14 @@ model TimelineTask {
   weekIndex       Int                                   // 0-indexed, relativo a la fase
   order           Int                 @default(0)       // orden dentro de la semana
   status          TimelineTaskStatus  @default(PENDING)
+  // #4 — override manual de fechas por tarea. INTENCIÓN: cuando estén seteadas deben
+  // ganar sobre la fecha DERIVADA de la semana (anchor + offset de fase + weekIndex) y
+  // cruzar al cronograma compartible como fecha efectiva. Se editan con datepicker en el
+  // drawer (chip "manual"). ESTADO: se PERSISTEN, pero el consumo en el render (Gantt
+  // interno + vista externa) está PENDIENTE — hoy ningún render prefiere el override sobre
+  // la fecha derivada. null = derivar (default).
+  startDateOverride DateTime?
+  dueDateOverride   DateTime?
   // D.3 fundación — fechas REALES de ejecución (ver TimelinePhase).
   actualStart     DateTime?
   actualEnd       DateTime?
@@ -481,6 +489,7 @@ enum TaskParty {
   CLIENTE   // lo entrega o hace el cliente (insumos: documentación, bases, listados, accesos)
   SMARTEAM  // configuración técnica en HubSpot (pipeline, propiedades, automatizaciones, integraciones)
   AMBOS     // trabajo conjunto (sesiones, talleres, validaciones, onboarding, seguimiento)
+  DEV       // #7 — desarrollo/integración (equipo técnico). Tareas de la fase "Desarrollo / Integración".
 }
 
 // Tipo de tarea del cronograma. Mapea a futuro (sin sync hoy):
@@ -911,6 +920,12 @@ model BusinessCase {
   name             String
   slug             String             @unique // referencia interna (URLs de admin)
   status           BusinessCaseStatus @default(DRAFT)
+
+  // Clasificación (tira de tags) — MISMO catálogo y modalidad que Project (lib/tags/catalog.ts).
+  // El agente del BC los detecta; el CSE corrige. Se PROPAGAN al Project al crear el handoff
+  // (match por hubspotDealId). tags = slugs de product+scope; implementationType = modalidad.
+  tags               String[]            @default([])
+  implementationType ImplementationType?
 
   // D.3 staging — el prospecto ve el SNAPSHOT publicado; el contenido vivo es
   // borrador hasta "Publicar". publishedSnapshot = foto client-safe de bloques.

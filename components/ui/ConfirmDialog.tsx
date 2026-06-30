@@ -18,6 +18,8 @@ export interface ConfirmDialogProps {
   variant?: "destructive" | "default";
   /** Si se omite, el diálogo gestiona el estado de carga cuando onConfirm es async. */
   loading?: boolean;
+  /** z-index del overlay (Tailwind). Subir si se abre desde una capa alta (ej. drawer z-[60]). */
+  z?: string;
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────────
@@ -36,6 +38,7 @@ export function ConfirmDialog({
   cancelLabel = "Cancelar",
   variant = "destructive",
   loading: loadingProp,
+  z,
 }: ConfirmDialogProps) {
   const [busy, setBusy] = useState(false);
   const loading = loadingProp ?? busy;
@@ -59,6 +62,7 @@ export function ConfirmDialog({
       size="sm"
       closeOnBackdrop={!loading}
       closeOnEscape={!loading}
+      z={z}
     >
       <div className="flex items-start gap-3">
         <div

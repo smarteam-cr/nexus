@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { guardCapability, guardAccessToClient } from "@/lib/auth/api-guards";
 import { createDefaultCanvases, createHandoffCanvas } from "@/lib/canvas/default-canvases";
+import { sanitizeTags } from "@/lib/tags/catalog";
 
 interface Body {
   dealId?: string;
@@ -154,6 +155,27 @@ export async function POST(req: NextRequest) {
           data: { clientId, name: projectName, status: "active", hubspotDealId: dealId },
           select: { id: true },
         });
+        // Propagación BC→Project: si existe un business case del mismo deal, su clasificación
+        // (tags + modalidad) nace en el proyecto. Aditivo — el CSE la refina luego. Habilita el
+        // flujo futuro "desde el BC genero el handoff → el proyecto nace con los tags".
+        if (dealId) {
+          const bc = await tx.businessCase.findFirst({
+            // Escopado por clientId: nunca mirar el BC de otro cliente aunque dos
+            // compartieran dealId (hubspotDealId NO es @unique en BusinessCase).
+            where: { hubspotDealId: dealId, clientId },
+            select: { tags: true, implementationType: true },
+            orderBy: { createdAt: "desc" },
+          });
+          if (bc && (bc.tags.length > 0 || bc.implementationType)) {
+            await tx.project.update({
+              where: { id: project.id },
+              data: {
+                tags: sanitizeTags(bc.tags),
+                ...(bc.implementationType ? { implementationType: bc.implementationType } : {}),
+              },
+            });
+          }
+        }
         await createDefaultCanvases(project.id, tx);
         const handoffCanvasId = await createHandoffCanvas(project.id, tx);
         const handoff = await tx.handoff.create({

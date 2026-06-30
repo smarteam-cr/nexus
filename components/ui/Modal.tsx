@@ -25,6 +25,9 @@ export interface ModalProps {
   footer?: React.ReactNode;
   closeOnBackdrop?: boolean;
   closeOnEscape?: boolean;
+  /** z-index del overlay (clase Tailwind). Subir cuando el modal se abre DESDE otra capa
+   *  alta (ej. un drawer en z-[60]) para que no quede debajo. Default: z-50. */
+  z?: string;
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────────
@@ -43,12 +46,15 @@ export function Modal({
   footer,
   closeOnBackdrop = true,
   closeOnEscape = true,
+  z = "z-50",
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
   const [mounted, setMounted] = useState(false);
 
-  // Evita mismatch de hidratación: el portal solo se monta en cliente
+  // Evita mismatch de hidratación: el portal solo se monta en cliente. El setState-en-effect
+  // es el patrón canónico de "mount guard" SSR-safe (server→null, cliente→portal tras montar).
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- mount guard intencional (portal SSR)
   useEffect(() => setMounted(true), []);
 
   // Cierre por tecla Escape
@@ -86,7 +92,7 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className={cn("fixed inset-0 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm", z)}
       onMouseDown={(e) => {
         if (closeOnBackdrop && e.target === e.currentTarget) onClose();
       }}

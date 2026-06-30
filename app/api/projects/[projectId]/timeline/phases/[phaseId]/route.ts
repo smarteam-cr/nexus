@@ -9,7 +9,7 @@
  * el agente solo lo PROPONE (pendingProgress), nunca lo escribe.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
+import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import type { TimelineTaskStatus } from "@prisma/client";
 import { actualDatesPatch } from "@/lib/timeline/actual-dates";
@@ -21,7 +21,7 @@ export async function PATCH(
   { params }: { params: Promise<{ projectId: string; phaseId: string }> },
 ) {
   const { projectId, phaseId } = await params;
-  const guard = await guardProjectHandoffAccess(projectId);
+  const guard = await guardTimelineEdit(projectId);
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;

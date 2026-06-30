@@ -11,7 +11,7 @@
  * Guarded con guardProjectHandoffAccess (interno/CSE).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
+import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 
@@ -20,7 +20,7 @@ export async function DELETE(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardProjectHandoffAccess(projectId);
+  const guard = await guardTimelineEdit(projectId);
   if (guard instanceof NextResponse) return guard;
 
   const existing = await prisma.projectTimeline.findUnique({

@@ -75,9 +75,12 @@ export interface GanttTask {
   /** Procedencia (de `source`): AGENT → tag "IA", MODIFIED|HUMAN → tag "CSE". */
   source?: string;
   /** B — dueño en el plan compartido (chip). null/undefined = sin asignar. */
-  party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | null;
+  party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null;
   /** ¿la tarea es una SESIÓN (reunión con el cliente) o una TAREA (acción)? */
   type?: "SESSION" | "TASK" | null;
+  /** #4 — override manual de fechas (ISO o null = derivar de la semana). */
+  startDateOverride?: string | null;
+  dueDateOverride?: string | null;
 }
 
 export interface GanttPhase {
@@ -103,8 +106,9 @@ interface Props {
   anchor: string | null; // yyyy-mm-dd o null
   phases: GanttPhase[]; // EN ORDEN
   readOnly?: boolean; // preview de propuesta IA — sin edición ni toggles
+  canDelete?: boolean; // #3 — habilita BORRAR fases/tareas (el CSE no: suspende). Default false.
   onToggleStatus?: (taskId: string, next: GanttTaskStatus) => void;
-  onUpdateTask?: (phaseKey: string, taskKey: string, patch: { title?: string; notes?: string | null; weekIndex?: number; party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | null; type?: "SESSION" | "TASK" | null }) => void;
+  onUpdateTask?: (phaseKey: string, taskKey: string, patch: { title?: string; notes?: string | null; weekIndex?: number; party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null; type?: "SESSION" | "TASK" | null }) => void;
   onAddTask?: (phaseKey: string, weekIndex: number) => void;
   // Nota: el borrado de tarea se hace desde el TaskDetailDrawer, no desde la fila del Gantt.
   onSetAnchor?: (isoDate: string) => void; // yyyy-mm-dd — fijar arranque desde el Gantt
@@ -190,13 +194,15 @@ export const PARTY_META: Record<string, { label: string; cls: string }> = {
   CLIENTE:  { label: "Cliente",  cls: "text-amber-300 bg-amber-900/30 border-amber-700/50" },
   SMARTEAM: { label: "Smarteam", cls: "text-sky-300 bg-sky-900/30 border-sky-700/40" },
   AMBOS:    { label: "Ambos",    cls: "text-violet-300 bg-violet-900/30 border-violet-700/40" },
+  DEV:      { label: "Dev",      cls: "text-indigo-300 bg-indigo-900/30 border-indigo-700/40" }, // #7 — desarrollo/integración
 };
-// Toda tarea TIENE dueño — el ciclo es Cliente → Smarteam → Ambos → Cliente (sin estado vacío).
+// Toda tarea TIENE dueño — el ciclo es Cliente → Smarteam → Ambos → Dev → Cliente (sin estado vacío).
 // effParty resuelve null/undefined (data vieja) a SMARTEAM para que nunca se muestre "sin dueño".
-const PARTY_CYCLE = ["CLIENTE", "SMARTEAM", "AMBOS"] as const;
-export const effParty = (p: "CLIENTE" | "SMARTEAM" | "AMBOS" | null | undefined): "CLIENTE" | "SMARTEAM" | "AMBOS" =>
-  p === "CLIENTE" || p === "SMARTEAM" || p === "AMBOS" ? p : "SMARTEAM";
-export const nextParty = (p: "CLIENTE" | "SMARTEAM" | "AMBOS"): "CLIENTE" | "SMARTEAM" | "AMBOS" =>
+type Party = "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV";
+const PARTY_CYCLE = ["CLIENTE", "SMARTEAM", "AMBOS", "DEV"] as const;
+export const effParty = (p: Party | null | undefined): Party =>
+  p === "CLIENTE" || p === "SMARTEAM" || p === "AMBOS" || p === "DEV" ? p : "SMARTEAM";
+export const nextParty = (p: Party): Party =>
   PARTY_CYCLE[(PARTY_CYCLE.indexOf(p) + 1) % PARTY_CYCLE.length];
 
 // Tipo de tarea (chip). Sesión = reunión con el cliente (resalta); Tarea = acción (neutro).
@@ -253,6 +259,7 @@ export default function TimelineGantt({
   anchor,
   phases,
   readOnly = false,
+  canDelete = false,
   onToggleStatus,
   onUpdateTask,
   onAddTask,
@@ -268,6 +275,8 @@ export default function TimelineGantt({
   // onRemoveTask removido del Gantt: el borrado de tarea vive en el TaskDetailDrawer.
 }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // #3 — renombrar inline: el título es TEXTO; al hacer clic se vuelve input (solo esa tarea).
+  const [editingTitleKey, setEditingTitleKey] = useState<string | null>(null);
 
   const ranges = computePhaseRanges(phases);
   const total = timelineSpan(phases); // ancho de calendario (max end) — soporta fases en paralelo
@@ -599,7 +608,7 @@ export default function TimelineGantt({
                         ) : (
                           <span className="flex-1 min-w-[12rem] break-words">{p.name}</span>
                         )}
-                        {(onAssistPhase || (editable && onRemovePhase)) && (
+                        {(onAssistPhase || (editable && canDelete && onRemovePhase)) && (
                           <span className="ml-auto flex items-center gap-1 flex-shrink-0">
                             {onAssistPhase && (
                               <button
@@ -611,7 +620,7 @@ export default function TimelineGantt({
                                 IA
                               </button>
                             )}
-                            {editable && onRemovePhase && (
+                            {editable && canDelete && onRemovePhase && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); onRemovePhase(p.key); }}
                                 className="p-1 rounded text-gray-600 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -794,11 +803,32 @@ export default function TimelineGantt({
                                     >
                                       <StatusCircle status={t.status} />
                                     </button>
-                                    {/* Título + tag "atrasada" a la par (clic en la fila abre el drawer) */}
+                                    {/* Título — TEXTO por defecto; clic en el nombre (cuando se puede editar) lo
+                                        vuelve input solo para esa tarea. El clic no burbujea para no abrir el drawer. */}
                                     <div className="flex-1 min-w-0 flex items-center gap-2">
-                                      <span className={`min-w-0 truncate text-xs ${t.status === "DONE" || t.status === "SUSPENDED" ? "text-gray-500 line-through" : "text-gray-300"}`}>
-                                        {t.title?.trim() ? t.title : <span className="text-gray-600 italic">Sin título</span>}
-                                      </span>
+                                      {editable && editingTitleKey === t.key ? (
+                                        <input
+                                          value={t.title}
+                                          onChange={(e) => onUpdateTask(p.key, t.key, { title: e.target.value })}
+                                          onClick={(e) => e.stopPropagation()}
+                                          onBlur={() => setEditingTitleKey(null)}
+                                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }}
+                                          autoFocus
+                                          placeholder="Título de la tarea"
+                                          // Auto-ancho al contenido: `size` (en caracteres) sigue al texto; crece al tipear
+                                          // (value controlado → re-render). max-w-full evita desbordar la fila.
+                                          size={Math.max(t.title.length, 8)}
+                                          className={`max-w-full bg-transparent text-xs border-b border-blue-500 focus:outline-none ${t.status === "DONE" || t.status === "SUSPENDED" ? "text-gray-500 line-through" : "text-gray-300"}`}
+                                        />
+                                      ) : (
+                                        <span
+                                          onClick={editable ? (e) => { e.stopPropagation(); setEditingTitleKey(t.key); } : undefined}
+                                          title={editable ? "Clic para renombrar" : undefined}
+                                          className={`min-w-0 truncate text-xs ${editable ? "cursor-text hover:underline decoration-dotted underline-offset-2" : ""} ${t.status === "DONE" || t.status === "SUSPENDED" ? "text-gray-500 line-through" : "text-gray-300"}`}
+                                        >
+                                          {t.title?.trim() ? t.title : <span className="text-gray-600 italic">Sin título</span>}
+                                        </span>
+                                      )}
                                       {overdue && (
                                         <span
                                           className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border text-red-300 bg-red-900/30 border-red-700/50"

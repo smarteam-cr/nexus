@@ -16,13 +16,16 @@ import {
 } from "./TimelineGantt";
 import { addWeeks, absoluteWeek, fmtDay, isOverdue } from "@/lib/timeline/weeks";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import DatePickerField from "@/components/ui/DatePickerField";
 
 type TaskPatch = {
   title?: string;
   notes?: string | null;
   weekIndex?: number;
-  party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | null;
+  party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null;
   type?: "SESSION" | "TASK" | null;
+  startDateOverride?: string | null;
+  dueDateOverride?: string | null;
 };
 
 interface Props {
@@ -39,6 +42,8 @@ interface Props {
   onToggleStatus: (taskId: string, next: GanttTaskStatus) => void;
   onUpdateTask: (phaseKey: string, taskKey: string, patch: TaskPatch) => void;
   onRemoveTask: (phaseKey: string, taskKey: string) => void;
+  /** #3 — habilita BORRAR la tarea (el CSE no: suspende). Default false. */
+  canDelete?: boolean;
   // Navegación entre tareas con el drawer abierto (revisor).
   onNavigate?: (dir: -1 | 1) => void;
   hasPrev?: boolean;
@@ -60,6 +65,7 @@ export default function TaskDetailDrawer({
   onToggleStatus,
   onUpdateTask,
   onRemoveTask,
+  canDelete = false,
   onNavigate,
   hasPrev,
   hasNext,
@@ -112,6 +118,11 @@ export default function TaskDetailDrawer({
   const dateLabel = anchor
     ? `${fmtDay(addWeeks(anchor, absW))} – ${fmtDay(addWeeks(anchor, absW + 1))}`
     : `Semana ${absW + 1} (sin fecha de arranque)`;
+  // #4 — fechas DERIVADAS (yyyy-mm-dd) para precargar los datepickers; el override gana si existe.
+  const toYmd = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const derivedStartYmd = anchor ? toYmd(addWeeks(anchor, absW)) : "";
+  const derivedDueYmd = anchor ? toYmd(addWeeks(anchor, absW + 1)) : "";
 
   const propLabel = "text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1";
 
@@ -227,9 +238,30 @@ export default function TaskDetailDrawer({
               ))}
             </select>
           </div>
-          <div>
-            <div className={propLabel}>Fecha</div>
-            <p className="text-xs text-gray-300">{dateLabel}</p>
+          <div className="col-span-2">
+            <div className={propLabel}>Fechas — inicio · límite</div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <DatePickerField
+                value={task.startDateOverride ? task.startDateOverride.slice(0, 10) : derivedStartYmd}
+                manual={!!task.startDateOverride}
+                placeholder="Inicio"
+                onChange={(ymd) => onUpdateTask(phaseKey, task.key, { startDateOverride: ymd || null })}
+              />
+              <span className="text-fg-muted text-xs">→</span>
+              <DatePickerField
+                value={task.dueDateOverride ? task.dueDateOverride.slice(0, 10) : derivedDueYmd}
+                manual={!!task.dueDateOverride}
+                placeholder="Límite"
+                onChange={(ymd) => onUpdateTask(phaseKey, task.key, { dueDateOverride: ymd || null })}
+              />
+            </div>
+            <p className="text-[10px] text-fg-muted mt-1">
+              {task.startDateOverride || task.dueDateOverride
+                ? "Fechas con ajuste manual (Borrar en el calendario vuelve a la automática)."
+                : anchor
+                  ? "Automáticas según la semana — elegí una fecha para sobreescribir."
+                  : "Fijá la fecha de arranque del cronograma para ver fechas."}
+            </p>
           </div>
           <div>
             <div className={propLabel}>Origen</div>
@@ -260,13 +292,17 @@ export default function TaskDetailDrawer({
 
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-gray-800 flex-shrink-0">
-          <button
-            onClick={() => setConfirmDelete(true)}
-            className="text-xs font-semibold text-red-400 hover:text-red-300 flex items-center gap-1.5"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            Eliminar tarea
-          </button>
+          {canDelete ? (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="text-xs font-semibold text-red-400 hover:text-red-300 flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              Eliminar tarea
+            </button>
+          ) : (
+            <span className="text-[11px] text-fg-muted">Para sacarla del plan, suspendela (Estado → Suspendida).</span>
+          )}
           <span className="text-[11px] text-gray-600">Los cambios se guardan solos</span>
         </div>
       </div>
@@ -276,6 +312,7 @@ export default function TaskDetailDrawer({
         title="¿Eliminar esta tarea?"
         description="Se quita del cronograma. Esta acción no se puede deshacer."
         confirmLabel="Eliminar tarea"
+        z="z-[70]"
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           setConfirmDelete(false);

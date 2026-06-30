@@ -194,6 +194,40 @@ export async function guardProjectEditHandoff(
 }
 
 /**
+ * Edición/movimiento del CRONOGRAMA (estructura + tareas): DOS chequeos —
+ *   1) acceso al CLIENTE del proyecto (`guardAccessToProject` → `requireAccessToClient`):
+ *      el CSE solo en SUS clientes; VENTAS/CSL/MARKETING/SUPER_ADMIN en todos (seeAllClients).
+ *   2) capacidad `editTimeline` (la tiene TODO interno, incluido el CSE — edita/mueve/
+ *      renombra/estado/fechas). Lo único reservado a no-CSE es BORRAR (guardTimelineDelete).
+ * El check de acceso es lo que evita que un CSE edite el cronograma de un cliente ajeno
+ * con solo conocer el projectId. 404 si el proyecto no existe; 401/403 si falta acceso o capacidad.
+ */
+export async function guardTimelineEdit(
+  projectId: string,
+): Promise<(Awaited<ReturnType<typeof requireCapability>> & { clientId: string }) | NextResponse> {
+  const access = await guardAccessToProject(projectId);
+  if (access instanceof NextResponse) return access;
+  const guard = await guardCapability("editTimeline");
+  if (guard instanceof NextResponse) return guard;
+  return { ...guard, clientId: access.clientId };
+}
+
+/**
+ * BORRAR del cronograma (tareas/fases/cronograma entero): acceso al CLIENTE del proyecto
+ * (igual scope que la edición) + capacidad `deleteTimeline` (todos menos el CSE — el CSE
+ * suspende, no borra). 404 si el proyecto no existe; 401/403 si falta acceso o capacidad.
+ */
+export async function guardTimelineDelete(
+  projectId: string,
+): Promise<(Awaited<ReturnType<typeof requireCapability>> & { clientId: string }) | NextResponse> {
+  const access = await guardAccessToProject(projectId);
+  if (access instanceof NextResponse) return access;
+  const guard = await guardCapability("deleteTimeline");
+  if (guard instanceof NextResponse) return guard;
+  return { ...guard, clientId: access.clientId };
+}
+
+/**
  * Para endpoints de canvas GENÉRICOS (compartidos con Kickoff/Diagnóstico): si el
  * canvas que se edita es "Handoff", exige `handoffAnywhere` (CSE no edita handoff).
  * Para cualquier otro canvas devuelve null (el endpoint ya validó acceso al proyecto).

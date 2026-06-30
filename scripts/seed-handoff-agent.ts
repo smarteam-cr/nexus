@@ -77,10 +77,18 @@ REGLAS DEL CRONOGRAMA:
 - ORDEN: la secuencia lógica de entrega del proyecto (Semana 0 primero).
 - PARALELISMO (startWeek, opcional): por DEFECTO las fases son SECUENCIALES — cada una arranca cuando termina la anterior; en ese caso OMITÍ "startWeek" (lo calcula el sistema). Usá "startWeek" (entero ≥0, offset 0-based de semanas desde el arranque del proyecto) SOLO cuando dos fases las ejecutan EQUIPOS DISTINTOS coordinados y corren EN PARALELO — el caso típico es INTEGRACIONES/DESARROLLO que un equipo técnico hace en paralelo a la implementación del hub. Dale a la fase paralela el "startWeek" de la semana donde realmente arranca (puede solaparse con otra fase). No rompe nada: Semana 0 siempre arranca en startWeek 0 y lo vendido sigue mandando.
 - ENFOQUE ESTÁNDAR DEL HUB (llenar huecos): cuando el alcance vendido no detalla una fase, completá con el enfoque estándar del hub correspondiente (Sales / Service / CMS / Marketing) según el knowledge inyectado y el serviceType del proyecto. Esto da DIRECCIÓN y cubre huecos — NUNCA por encima de lo vendido: lo que se vendió/acordó manda siempre; el enfoque estándar solo rellena lo que no se especificó.
+- FASE TÉCNICA DEDICADA (#7): si marcaste "custom_dev" o "insider_one" en los tags (hay integración / desarrollo a medida / Insider One), incluí una fase EXCLUSIVA "Desarrollo / Integración" para ese trabajo técnico — NO mezcles el desarrollo con las fases funcionales del hub. Normalmente corre EN PARALELO (dale su "startWeek" de arranque real). El detalle (tareas, responsable DEV) lo agrega el agente de detalle del cronograma.
+- BASE DE DATOS (#6): si es IMPLEMENTATION (o REIMPLEMENTATION con "crm_migration") el plan arranca cargando/estructurando la base; si es REIMPLEMENTATION SIN "crm_migration" (ya usa HubSpot), la primera fase es de revisión/limpieza de la base existente, NO de "agregar base de datos".
 
 IMPLEMENTACIÓN vs RE-IMPLEMENTACIÓN:
 - Determiná si el proyecto es IMPLEMENTATION (el cliente arranca con HubSpot por primera vez) o REIMPLEMENTATION (ya usa HubSpot, o viene de otro CRM/herramienta que va a migrar o reemplazar). Deducilo de las fuentes (sesiones, deal, notas: "ya tienen HubSpot", "vienen de Salesforce/Pipedrive", "limpiar el portal actual", etc.). Si no hay señal clara, asumí IMPLEMENTATION.
 - Devolvelo en el campo top-level "implementationType" del JSON.
+
+CLASIFICACIÓN (TAGS) — campo top-level "tags" (array de slugs, podés devolver []):
+- PRODUCTOS HubSpot involucrados (uno por cada uno que entre en el alcance): "marketing_hub", "sales_hub", "service_hub", "content_hub", "operations_hub", "commerce_hub", "data_hub". Si es Insider One: "insider_one".
+- ALCANCE técnico: "custom_dev" si hay integración o desarrollo a medida; "crm_migration" si se migran datos desde OTRO CRM (Salesforce, Pipedrive, Zoho, etc.) hacia HubSpot.
+- Usá EXACTAMENTE esos slugs (en minúscula con guion bajo). NO inventes otros. Devolvé solo los que tengan evidencia en las fuentes; ante la duda, omití el tag.
+- COHERENCIA con la sección "desarrollo" y con el cronograma: si marcás "custom_dev" o "insider_one", el cronograma DEBE incluir una fase dedicada "Desarrollo / Integración" (ver regla del timeline).
 
 FORMATO DEL OUTPUT — sections + blocks:
 - Devolvés un array "sections" con 10 objetos, uno por cada sección del canvas Handoff.
@@ -91,6 +99,7 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
 
 {
   "implementationType": "<IMPLEMENTATION o REIMPLEMENTATION segun la regla>",
+  "tags": ["<slugs del catálogo: marketing_hub|sales_hub|service_hub|content_hub|operations_hub|commerce_hub|data_hub|insider_one|custom_dev|crm_migration — solo los que apliquen, o []>"],
   "sections": [
     {
       "key": "fecha_inicio_kickoff",

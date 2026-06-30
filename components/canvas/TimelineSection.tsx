@@ -70,6 +70,7 @@ const PARTY_META_LIGHT: Record<string, { label: string; text: string; bg: string
   CLIENTE:  { label: "Cliente",  text: "#b45309", bg: "#fffbeb", border: "#fde68a" }, // ámbar — lo que entrega el cliente
   SMARTEAM: { label: "Smarteam", text: "#0369a1", bg: "#f0f9ff", border: "#bae6fd" }, // celeste
   AMBOS:    { label: "Ambos",    text: "#6d28d9", bg: "#f5f3ff", border: "#ddd6fe" }, // violeta
+  DEV:      { label: "Dev",      text: "#3730a3", bg: "#eef2ff", border: "#c7d2fe" }, // índigo — desarrollo/integración
 };
 const chipStyle = (m: { text: string; bg: string; border: string }): React.CSSProperties => ({
   fontSize: 9,

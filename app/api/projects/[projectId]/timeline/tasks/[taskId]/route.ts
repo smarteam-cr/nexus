@@ -13,7 +13,7 @@
  * En D.1 el estado lo pone el CSE a mano; el agente solo crea PENDING.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
+import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import type { TimelineTaskStatus } from "@prisma/client";
 import { actualDatesPatch } from "@/lib/timeline/actual-dates";
@@ -25,7 +25,9 @@ export async function PATCH(
   { params }: { params: Promise<{ projectId: string; taskId: string }> },
 ) {
   const { projectId, taskId } = await params;
-  const guard = await guardProjectHandoffAccess(projectId);
+  // Cambiar estado es EDITAR el cronograma → exige editTimeline (la tiene TODO interno,
+  // incluido el CSE) + acceso al cliente del proyecto. Lo único reservado a no-CSE es BORRAR.
+  const guard = await guardTimelineEdit(projectId);
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;

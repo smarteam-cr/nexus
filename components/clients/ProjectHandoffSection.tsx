@@ -17,6 +17,8 @@ import { useWorkspace } from "./WorkspaceContext";
 import { useMe } from "@/hooks/useMe";
 import SessionSelectionReview from "./SessionSelectionReview";
 import HubspotTimelinePanel from "./HubspotTimelinePanel";
+import TagsStrip from "@/components/tags/TagsStrip";
+import type { ImplementationType } from "@prisma/client";
 
 interface HandoffStatus {
   handoffId: string | null;
@@ -47,6 +49,7 @@ function fmtDate(d: string): string {
 
 export default function ProjectHandoffSection({ projectId, clientId }: { projectId: string; clientId: string }) {
   const [status, setStatus] = useState<HandoffStatus | null>(null);
+  const [tags, setTagsState] = useState<string[]>([]); // #5 — tags de producto/alcance del proyecto
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,17 +107,40 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     } catch { /* ignore */ }
   }, [projectId, fetchSources]);
 
-  // Override CSE del tipo de implementación que infirió el agente (optimista + persiste).
-  const setImplType = useCallback(async (value: "IMPLEMENTATION" | "REIMPLEMENTATION") => {
+  // #5 — tags de producto/alcance del proyecto (tira compartida con el business case).
+  const fetchTags = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/projects/${projectId}/tags`);
+      if (r.ok) { const d = await r.json(); setTagsState(d.tags ?? []); }
+    } catch { /* ignore */ }
+  }, [projectId]);
+  useEffect(() => { fetchTags(); }, [fetchTags]);
+
+  const saveTags = useCallback(async (slugs: string[]) => {
+    setTagsState(slugs); // optimista
+    try {
+      const r = await fetch(`/api/projects/${projectId}/tags`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags: slugs }),
+      });
+      // res.ok=false NO lanza → chequear explícito para no dejar el chip "guardado" sin serlo.
+      if (!r.ok) { setError("No se pudieron guardar los tags."); fetchTags(); }
+    } catch { setError("Error de conexión al guardar los tags."); fetchTags(); }
+  }, [projectId, fetchTags]);
+
+  // Modalidad (impl/re-impl) — override del CSE/editor; acepta null ("Sin definir"). Optimista.
+  const setModality = useCallback(async (value: ImplementationType | null) => {
     setStatus((s) => (s ? { ...s, implementationType: value } : s));
     try {
-      await fetch(`/api/projects/${projectId}/implementation-type`, {
+      const r = await fetch(`/api/projects/${projectId}/implementation-type`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ implementationType: value }),
       });
+      if (!r.ok) { setError("No se pudo guardar la modalidad."); fetchStatus(); }
     } catch {
-      fetchStatus();
+      setError("Error de conexión al guardar la modalidad."); fetchStatus();
     }
   }, [projectId, fetchStatus]);
 
@@ -160,8 +186,9 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
           body: JSON.stringify({ handoffId }),
         }).catch(() => {});
       }
-      // 4. Refrescar estado + abrir el doc + avisar al cronograma (las fases las creó el handoff)
+      // 4. Refrescar estado + tags + abrir el doc + avisar al cronograma (las fases las creó el handoff)
       await fetchStatus();
+      fetchTags(); // el agente puede haber detectado/actualizado la clasificación (tags + modalidad)
       setShowDoc(true);
       bumpTimelineRefresh();
       bumpGpsRefresh(); // el widget del proyecto (pills de setup) se actualiza: handoff → ✓
@@ -171,7 +198,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     } finally {
       setGenerating(false);
     }
-  }, [projectId, clientId, fetchStatus, status?.agentId, bumpTimelineRefresh, bumpGpsRefresh]);
+  }, [projectId, clientId, fetchStatus, fetchTags, status?.agentId, bumpTimelineRefresh, bumpGpsRefresh]);
 
   if (loading) return <div className="h-14 rounded-2xl skeleton-shimmer" />;
   if (!status) return null;
@@ -194,29 +221,6 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-sm font-bold text-fg">Handoff Sales→CS</h3>
             {badge}
-            {canEdit ? (
-              <span className="inline-flex rounded-lg border border-line overflow-hidden text-[10px] font-bold uppercase tracking-wider" title="Tipo inferido por el agente — clic para corregir">
-                {(["IMPLEMENTATION", "REIMPLEMENTATION"] as const).map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => setImplType(v)}
-                    className={`px-2 py-0.5 transition-colors ${
-                      status.implementationType === v
-                        ? v === "IMPLEMENTATION"
-                          ? "bg-blue-50 text-blue-700"
-                          : "bg-amber-50 text-amber-700"
-                        : "text-fg-muted hover:text-fg hover:bg-surface-hover"
-                    }`}
-                  >
-                    {v === "IMPLEMENTATION" ? "Impl." : "Re-impl."}
-                  </button>
-                ))}
-              </span>
-            ) : status.implementationType ? (
-              <span className={`text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-0.5 border ${status.implementationType === "IMPLEMENTATION" ? "text-blue-700 bg-blue-50 border-blue-200" : "text-amber-700 bg-amber-50 border-amber-200"}`}>
-                {status.implementationType === "IMPLEMENTATION" ? "Implementación" : "Re-implementación"}
-              </span>
-            ) : null}
           </div>
           <p className="text-xs text-fg-muted mt-0.5 truncate">
             {generated
@@ -225,6 +229,16 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
               ? `${projectSessionCount} sesión${projectSessionCount === 1 ? "" : "es"} clasificada${projectSessionCount === 1 ? "" : "s"} a este proyecto`
               : "Al generar se clasifican las sesiones del cliente a este proyecto"}
           </p>
+          {/* #5 — clasificación del proyecto (modalidad + productos/alcance), compartida con el BC. */}
+          <div className="mt-2">
+            <TagsStrip
+              tags={tags}
+              implementationType={status.implementationType}
+              canEdit={canEdit}
+              onSetTags={saveTags}
+              onSetModality={setModality}
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {generated && status.canvasId && (

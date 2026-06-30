@@ -369,6 +369,11 @@ html.light .bg-violet-900\/20 { background-color: #f5f3ff !important; }
 html.light .border-violet-700\/30 { border-color: #ddd6fe !important; }
 html.light .text-violet-400   { color: #7c3aed !important; }
 
+/* ── Indigo (#7 — responsable DEV / desarrollo) ── */
+html.light .bg-indigo-900\/30    { background-color: #eef2ff !important; }
+html.light .text-indigo-300      { color: #3730a3 !important; }
+html.light .border-indigo-700\/40 { border-color: #c7d2fe !important; }
+
 /* ── Blue ── */
 html.light .bg-blue-900\/30   { background-color: #eff6ff !important; }
 html.light .text-blue-400     { color: #1d4ed8 !important; }
