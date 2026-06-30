@@ -13,6 +13,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
+import { ContextColumnList, ContextRow, CTX_ICONS } from "./context-column";
 
 type HsTimelineItem = { type: "NOTE" | "CALL" | "MEETING"; title: string; date: string | null; snippet: string };
 const HS_TYPE_LABEL: Record<string, string> = { NOTE: "Nota", CALL: "Llamada", MEETING: "Reunión" };
@@ -20,9 +21,15 @@ const HS_TYPE_LABEL: Record<string, string> = { NOTE: "Nota", CALL: "Llamada", M
 export default function HubspotTimelinePanel({
   projectId,
   framed = false,
+  columnMode = false,
+  onCount,
 }: {
   projectId: string;
   framed?: boolean;
+  /** Render compacto para la columna de "Contexto" (sin header ni border-t propios). */
+  columnMode?: boolean;
+  /** Reporta la cantidad de ítems (para el contador del header de Contexto). */
+  onCount?: (n: number) => void;
 }) {
   const [hubspot, setHubspot] = useState<HsTimelineItem[]>([]);
   const [loadingHs, setLoadingHs] = useState(true);
@@ -41,6 +48,27 @@ export default function HubspotTimelinePanel({
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!loadingHs) onCount?.(hubspot.length);
+  }, [loadingHs, hubspot.length, onCount]);
+
+  // Modo columna (Contexto): lista compacta + estado vacío, sin header ni borde propios.
+  if (columnMode) {
+    return (
+      <ContextColumnList loading={loadingHs} empty="Sin actividad en HubSpot.">
+        {hubspot.map((it, i) => (
+          <ContextRow
+            key={i}
+            icon={it.type === "NOTE" ? CTX_ICONS.note : CTX_ICONS.calendar}
+            meta={`${HS_TYPE_LABEL[it.type] ?? it.type}${it.date ? ` · ${it.date}` : ""}`}
+            title={it.title}
+            snippet={it.snippet}
+          />
+        ))}
+      </ContextColumnList>
+    );
+  }
 
   // Igual que BC: visible mientras carga (skeleton) y, ya cargado, solo si hay ítems.
   if (!loadingHs && hubspot.length === 0) return null;

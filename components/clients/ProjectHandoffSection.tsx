@@ -15,8 +15,7 @@ import { pollAgentRun } from "@/lib/clients/poll-agent-run";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 import { useWorkspace } from "./WorkspaceContext";
 import { useMe } from "@/hooks/useMe";
-import SessionSelectionReview from "./SessionSelectionReview";
-import HubspotTimelinePanel from "./HubspotTimelinePanel";
+import ProjectContextSection from "./ProjectContextSection";
 import TagsStrip from "@/components/tags/TagsStrip";
 import type { ImplementationType } from "@prisma/client";
 
@@ -34,15 +33,6 @@ interface HandoffStatus {
   implementationType: "IMPLEMENTATION" | "REIMPLEMENTATION" | null;
 }
 
-/** Fuente manual del handoff (transcript/resumen pegado a mano). */
-interface ManualSource {
-  id: string;
-  title: string | null;
-  content: string;
-  createdByEmail: string | null;
-  createdAt: string;
-}
-
 function fmtDate(d: string): string {
   return new Date(d).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
 }
@@ -54,12 +44,6 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDoc, setShowDoc] = useState(false);
-  // Fuentes manuales (transcripts/resúmenes pegados a mano)
-  const [sources, setSources] = useState<ManualSource[]>([]);
-  const [showSources, setShowSources] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newContent, setNewContent] = useState("");
-  const [savingSource, setSavingSource] = useState(false);
   const { bumpTimelineRefresh, bumpGpsRefresh } = useWorkspace();
   // RBAC: solo VENTAS/CSL/MARKETING/SUPER_ADMIN editan el handoff (capacidad
   // handoffAnywhere). El CSE lo VE pero no lo genera ni edita.
@@ -75,37 +59,6 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   }, [projectId]);
 
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
-
-  const fetchSources = useCallback(async () => {
-    try {
-      const r = await fetch(`/api/projects/${projectId}/handoff-sources`);
-      if (r.ok) { const d = await r.json(); setSources(d.sources ?? []); }
-    } catch { /* ignore */ }
-  }, [projectId]);
-
-  useEffect(() => { fetchSources(); }, [fetchSources]);
-
-  const addSource = useCallback(async () => {
-    const content = newContent.trim();
-    if (!content || savingSource) return;
-    setSavingSource(true);
-    try {
-      const r = await fetch(`/api/projects/${projectId}/handoff-sources`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: newTitle.trim() || undefined, content }),
-      });
-      if (r.ok) { setNewTitle(""); setNewContent(""); await fetchSources(); }
-    } catch { /* ignore */ }
-    setSavingSource(false);
-  }, [projectId, newTitle, newContent, savingSource, fetchSources]);
-
-  const removeSource = useCallback(async (id: string) => {
-    try {
-      await fetch(`/api/projects/${projectId}/handoff-sources/${id}`, { method: "DELETE" });
-      await fetchSources();
-    } catch { /* ignore */ }
-  }, [projectId, fetchSources]);
 
   // #5 — tags de producto/alcance del proyecto (tira compartida con el business case).
   const fetchTags = useCallback(async () => {
@@ -272,92 +225,15 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
         </div>
       )}
 
-      {/* Selección revisable de sesiones — curar antes de generar (A2). Solo editores;
-          el CSE no la ve (rama canEdit), igual que el botón Generar. */}
-      {!generated && canEdit && (
-        <div className="border-t border-line px-5 py-3">
-          <SessionSelectionReview
-            projectId={projectId}
-            onChange={fetchStatus}
-            onAddManual={() => setShowSources(true)}
-          />
-        </div>
-      )}
-
-      {/* Detectado en HubSpot — timeline del registro de empresa (notas + Zoom). Igual que
-          en Business Cases; se usa automáticamente como contexto al generar el handoff/cronograma. */}
-      {canEdit && <HubspotTimelinePanel projectId={projectId} />}
-
-      {/* Fuentes manuales — solo editores del handoff (el CSE no las gestiona) */}
+      {/* Contexto — HubSpot · Google Meet · Fuentes manuales, en 3 columnas colapsables.
+          Solo editores (el CSE no gestiona el contexto). Curado + display unificados. */}
       {canEdit && (
-      <div className="border-t border-line px-5 py-3">
-        <button
-          onClick={() => setShowSources((v) => !v)}
-          className="flex items-center gap-2 text-xs font-semibold text-fg-muted hover:text-fg transition-colors"
-        >
-          <svg className={`w-3 h-3 transition-transform ${showSources ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          Fuentes manuales{sources.length > 0 ? ` (${sources.length})` : ""}
-        </button>
-
-        {showSources && (
-          <div className="mt-3 space-y-3">
-            <p className="text-[11px] text-fg-muted leading-relaxed">
-              Pegá transcripts o resúmenes de reuniones que NO entraron por el sync (ej. un Zoom externo).
-              El agente de handoff los usa como una fuente más, etiquetados como manuales. Se guardan y
-              cuentan también al regenerar.
-            </p>
-
-            {sources.length > 0 && (
-              <ul className="space-y-2">
-                {sources.map((s) => (
-                  <li key={s.id} className="flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-fg truncate">{s.title || "Sin título"}</p>
-                      <p className="text-[11px] text-fg-muted truncate">{s.content.slice(0, 140)}</p>
-                    </div>
-                    <button
-                      onClick={() => removeSource(s.id)}
-                      title="Quitar fuente"
-                      className="text-fg-muted hover:text-red-500 transition-colors flex-shrink-0 mt-0.5"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <div className="space-y-2 rounded-lg border border-line p-3">
-              <input
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Título (ej. Zoom con el cliente — 12 jun)"
-                className="w-full px-2.5 py-1.5 text-xs bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand"
-              />
-              <textarea
-                value={newContent}
-                onChange={(e) => setNewContent(e.target.value)}
-                rows={4}
-                placeholder="Pegá acá el transcript o el resumen…"
-                className="w-full px-2.5 py-1.5 text-xs bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand resize-y"
-              />
-              <div className="flex justify-end">
-                <button
-                  onClick={addSource}
-                  disabled={savingSource || newContent.trim().length === 0}
-                  className="text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-40 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  {savingSource ? "Agregando…" : "Agregar fuente"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+        <ProjectContextSection
+          projectId={projectId}
+          canEdit={canEdit}
+          generated={generated}
+          onSessionsChange={fetchStatus}
+        />
       )}
 
       {generated && showDoc && status.canvasId && (
