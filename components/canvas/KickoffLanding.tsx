@@ -586,7 +586,7 @@ export function KickoffLandingView({
                       {p.title && (
                         <h3 className="font-display" style={{ fontSize: 18, color: "var(--text)", marginBottom: 10 }}>{p.title}</h3>
                       )}
-                      <div data-fixed-dark style={{ height: 460, border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "var(--bg, #fff)" }}>
+                      <div style={{ height: 460, border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "var(--bg, #fff)" }}>
                         <FlowchartViewer data={toFlowchartData(p)} />
                       </div>
                     </>

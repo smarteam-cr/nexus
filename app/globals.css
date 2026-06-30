@@ -211,25 +211,25 @@ html.light {
 }
 
 /* ── Backgrounds (neutrals) ── */
-html.light .bg-gray-950 { background-color: #ffffff !important; }
-html.light .bg-gray-900 { background-color: #ffffff !important; }
-html.light .bg-gray-800 { background-color: #f3f4f6 !important; }
-html.light .bg-gray-700 { background-color: #e5e7eb !important; }
+:is(html.light, [data-fixed-light]) .bg-gray-950 { background-color: #ffffff !important; }
+:is(html.light, [data-fixed-light]) .bg-gray-900 { background-color: #ffffff !important; }
+:is(html.light, [data-fixed-light]) .bg-gray-800 { background-color: #f3f4f6 !important; }
+:is(html.light, [data-fixed-light]) .bg-gray-700 { background-color: #e5e7eb !important; }
 
 /* ── Borders ── */
-html.light .border-gray-800 { border-color: #e5e7eb !important; }
-html.light .border-gray-700 { border-color: #e5e7eb !important; }
-html.light .border-gray-600 { border-color: #e5e7eb !important; }
-html.light .border-dashed    { border-color: #d1d5db !important; }
+:is(html.light, [data-fixed-light]) .border-gray-800 { border-color: #e5e7eb !important; }
+:is(html.light, [data-fixed-light]) .border-gray-700 { border-color: #e5e7eb !important; }
+:is(html.light, [data-fixed-light]) .border-gray-600 { border-color: #e5e7eb !important; }
+:is(html.light, [data-fixed-light]) .border-dashed    { border-color: #d1d5db !important; }
 
 /* ── Text (neutrals) ── */
-html.light .text-white    { color: #111827 !important; }
-html.light .text-gray-100 { color: #1f2937 !important; }
-html.light .text-gray-200 { color: #374151 !important; }
-html.light .text-gray-300 { color: #4b5563 !important; }
-html.light .text-gray-400 { color: #6b7280 !important; }
-html.light .text-gray-500 { color: #9ca3af !important; }
-html.light .text-gray-600 { color: #9ca3af !important; }
+:is(html.light, [data-fixed-light]) .text-white    { color: #111827 !important; }
+:is(html.light, [data-fixed-light]) .text-gray-100 { color: #1f2937 !important; }
+:is(html.light, [data-fixed-light]) .text-gray-200 { color: #374151 !important; }
+:is(html.light, [data-fixed-light]) .text-gray-300 { color: #4b5563 !important; }
+:is(html.light, [data-fixed-light]) .text-gray-400 { color: #6b7280 !important; }
+:is(html.light, [data-fixed-light]) .text-gray-500 { color: #9ca3af !important; }
+:is(html.light, [data-fixed-light]) .text-gray-600 { color: #9ca3af !important; }
 
 /*
  * ── Colored buttons: text-white must stay white on solid color backgrounds ──
@@ -239,79 +239,79 @@ html.light .text-gray-600 { color: #9ca3af !important; }
  * Los selectores compuestos (sin espacio) seleccionan el MISMO elemento que
  * tiene ambas clases simultáneamente, restaurando el blanco solo en ese caso.
  */
-html.light .bg-red-500.text-white,
-html.light .bg-red-400.text-white,
-html.light .bg-red-600.text-white,
-html.light .bg-purple-600.text-white,
-html.light .bg-purple-500.text-white,
-html.light .bg-green-500.text-white,
-html.light .bg-green-600.text-white,
-html.light .bg-blue-600.text-white,
-html.light .bg-blue-500.text-white,
-html.light .bg-brand-soft.text-white,
-html.light .bg-brand.text-white,
-html.light .bg-brand-light.text-white { color: #ffffff !important; }
+:is(html.light, [data-fixed-light]) .bg-red-500.text-white,
+:is(html.light, [data-fixed-light]) .bg-red-400.text-white,
+:is(html.light, [data-fixed-light]) .bg-red-600.text-white,
+:is(html.light, [data-fixed-light]) .bg-purple-600.text-white,
+:is(html.light, [data-fixed-light]) .bg-purple-500.text-white,
+:is(html.light, [data-fixed-light]) .bg-green-500.text-white,
+:is(html.light, [data-fixed-light]) .bg-green-600.text-white,
+:is(html.light, [data-fixed-light]) .bg-blue-600.text-white,
+:is(html.light, [data-fixed-light]) .bg-blue-500.text-white,
+:is(html.light, [data-fixed-light]) .bg-brand-soft.text-white,
+:is(html.light, [data-fixed-light]) .bg-brand.text-white,
+:is(html.light, [data-fixed-light]) .bg-brand-light.text-white { color: #ffffff !important; }
 
 /* ── Hover backgrounds (neutrals) ── */
-html.light .hover\:bg-gray-900:hover     { background-color: #f9fafb !important; }
-html.light .hover\:bg-gray-800:hover     { background-color: #f3f4f6 !important; }
-html.light .hover\:bg-gray-800\/70:hover { background-color: #f3f4f6 !important; }
-html.light .hover\:bg-gray-700:hover     { background-color: #e5e7eb !important; }
+:is(html.light, [data-fixed-light]) .hover\:bg-gray-900:hover     { background-color: #f9fafb !important; }
+:is(html.light, [data-fixed-light]) .hover\:bg-gray-800:hover     { background-color: #f3f4f6 !important; }
+:is(html.light, [data-fixed-light]) .hover\:bg-gray-800\/70:hover { background-color: #f3f4f6 !important; }
+:is(html.light, [data-fixed-light]) .hover\:bg-gray-700:hover     { background-color: #e5e7eb !important; }
 
 /* ── Hover text ── */
-html.light .hover\:text-white:hover      { color: #111827 !important; }
-html.light .hover\:text-gray-300:hover   { color: #374151 !important; }
-html.light .hover\:text-gray-400:hover   { color: #6b7280 !important; }
+:is(html.light, [data-fixed-light]) .hover\:text-white:hover      { color: #111827 !important; }
+:is(html.light, [data-fixed-light]) .hover\:text-gray-300:hover   { color: #374151 !important; }
+:is(html.light, [data-fixed-light]) .hover\:text-gray-400:hover   { color: #6b7280 !important; }
 
 /* ── Hover borders ── */
-html.light .hover\:border-gray-700:hover { border-color: #d1d5db !important; }
+:is(html.light, [data-fixed-light]) .hover\:border-gray-700:hover { border-color: #d1d5db !important; }
 
 /* ── Inputs / Textareas ── */
-html.light input,
-html.light textarea {
+:is(html.light, [data-fixed-light]) input,
+:is(html.light, [data-fixed-light]) textarea {
   background-color: #f9fafb !important;
   color: #111827 !important;
   border-color: #e5e7eb !important;
 }
-html.light input::placeholder,
-html.light textarea::placeholder {
+:is(html.light, [data-fixed-light]) input::placeholder,
+:is(html.light, [data-fixed-light]) textarea::placeholder {
   color: #9ca3af !important;
 }
 
 /* ── Focus ring ── */
-html.light .focus\:border-blue-500:focus { border-color: #3b82f6 !important; }
+:is(html.light, [data-fixed-light]) .focus\:border-blue-500:focus { border-color: #3b82f6 !important; }
 
 /* ── Cards: subtle shadow in light mode ── */
-html.light .rounded-xl.border,
-html.light .rounded-2xl.border {
+:is(html.light, [data-fixed-light]) .rounded-xl.border,
+:is(html.light, [data-fixed-light]) .rounded-2xl.border {
   box-shadow: 0 1px 3px 0 rgba(0,0,0,0.06), 0 1px 2px -1px rgba(0,0,0,0.04) !important;
 }
 
 /* ── Opacity variants (bg-gray-XXX/YY) — no cubiertos por los overrides base ── */
-html.light .bg-gray-950\/50,
-html.light .bg-gray-950\/40,
-html.light .bg-gray-950\/30 { background-color: #ffffff !important; }
-html.light .bg-gray-900\/50,
-html.light .bg-gray-900\/40,
-html.light .bg-gray-900\/30 { background-color: #ffffff !important; }
-html.light .bg-gray-800\/80,
-html.light .bg-gray-800\/70,
-html.light .bg-gray-800\/60,
-html.light .bg-gray-800\/50 { background-color: #f3f4f6 !important; }
+:is(html.light, [data-fixed-light]) .bg-gray-950\/50,
+:is(html.light, [data-fixed-light]) .bg-gray-950\/40,
+:is(html.light, [data-fixed-light]) .bg-gray-950\/30 { background-color: #ffffff !important; }
+:is(html.light, [data-fixed-light]) .bg-gray-900\/50,
+:is(html.light, [data-fixed-light]) .bg-gray-900\/40,
+:is(html.light, [data-fixed-light]) .bg-gray-900\/30 { background-color: #ffffff !important; }
+:is(html.light, [data-fixed-light]) .bg-gray-800\/80,
+:is(html.light, [data-fixed-light]) .bg-gray-800\/70,
+:is(html.light, [data-fixed-light]) .bg-gray-800\/60,
+:is(html.light, [data-fixed-light]) .bg-gray-800\/50 { background-color: #f3f4f6 !important; }
 
 /* ── Border opacity variants ── */
-html.light .border-gray-800\/80,
-html.light .border-gray-800\/60,
-html.light .border-gray-700\/50 { border-color: #e5e7eb !important; }
+:is(html.light, [data-fixed-light]) .border-gray-800\/80,
+:is(html.light, [data-fixed-light]) .border-gray-800\/60,
+:is(html.light, [data-fixed-light]) .border-gray-700\/50 { border-color: #e5e7eb !important; }
 
 /* ── Hover opacity variants (ej. hover:bg-gray-800/60) ── */
-html.light .hover\:bg-gray-800\/60:hover { background-color: #f3f4f6 !important; }
-html.light .hover\:bg-gray-800\/50:hover { background-color: #f3f4f6 !important; }
-html.light .hover\:bg-gray-900\/40:hover { background-color: #f9fafb !important; }
-html.light .hover\:bg-gray-900\/60:hover { background-color: #f3f4f6 !important; }
+:is(html.light, [data-fixed-light]) .hover\:bg-gray-800\/60:hover { background-color: #f3f4f6 !important; }
+:is(html.light, [data-fixed-light]) .hover\:bg-gray-800\/50:hover { background-color: #f3f4f6 !important; }
+:is(html.light, [data-fixed-light]) .hover\:bg-gray-900\/40:hover { background-color: #f9fafb !important; }
+:is(html.light, [data-fixed-light]) .hover\:bg-gray-900\/60:hover { background-color: #f3f4f6 !important; }
 
 /* ── Divide color (divide-y divide-gray-800) ── */
-html.light .divide-gray-800 > :not([hidden]) ~ :not([hidden]) {
+:is(html.light, [data-fixed-light]) .divide-gray-800 > :not([hidden]) ~ :not([hidden]) {
   border-color: #e5e7eb !important;
 }
 
@@ -320,91 +320,91 @@ html.light .divide-gray-800 > :not([hidden]) ~ :not([hidden]) {
  * la allowlist no remapeaba → quedaban OSCUROS en modo claro ("lo roto"). Se mapean a sus
  * mismos valores claros que las bases. Código NUEVO usa tokens (ver eslint.config.mjs);
  * esto es solo la red para lo legacy ya escrito. */
-html.light .bg-gray-900\/60,
-html.light .bg-gray-900\/80,
-html.light .bg-gray-900\/90 { background-color: #ffffff !important; }
-html.light .bg-gray-700\/50,
-html.light .bg-gray-700\/40 { background-color: #e5e7eb !important; }
-html.light .bg-gray-600\/60 { background-color: #e5e7eb !important; }
-html.light .hover\:bg-gray-900\/80:hover { background-color: #f3f4f6 !important; }
-html.light .border-gray-800\/50,
-html.light .border-gray-800\/40,
-html.light .border-gray-800\/30 { border-color: #e5e7eb !important; }
-html.light .border-gray-700\/80,
-html.light .border-gray-700\/60 { border-color: #e5e7eb !important; }
-html.light .divide-gray-800\/50 > :not([hidden]) ~ :not([hidden]) {
+:is(html.light, [data-fixed-light]) .bg-gray-900\/60,
+:is(html.light, [data-fixed-light]) .bg-gray-900\/80,
+:is(html.light, [data-fixed-light]) .bg-gray-900\/90 { background-color: #ffffff !important; }
+:is(html.light, [data-fixed-light]) .bg-gray-700\/50,
+:is(html.light, [data-fixed-light]) .bg-gray-700\/40 { background-color: #e5e7eb !important; }
+:is(html.light, [data-fixed-light]) .bg-gray-600\/60 { background-color: #e5e7eb !important; }
+:is(html.light, [data-fixed-light]) .hover\:bg-gray-900\/80:hover { background-color: #f3f4f6 !important; }
+:is(html.light, [data-fixed-light]) .border-gray-800\/50,
+:is(html.light, [data-fixed-light]) .border-gray-800\/40,
+:is(html.light, [data-fixed-light]) .border-gray-800\/30 { border-color: #e5e7eb !important; }
+:is(html.light, [data-fixed-light]) .border-gray-700\/80,
+:is(html.light, [data-fixed-light]) .border-gray-700\/60 { border-color: #e5e7eb !important; }
+:is(html.light, [data-fixed-light]) .divide-gray-800\/50 > :not([hidden]) ~ :not([hidden]) {
   border-color: #e5e7eb !important;
 }
 /* Focus ring gris oscuro sobre inputs claros → anillo sutil claro */
-html.light .focus\:ring-gray-700\/50:focus { --tw-ring-color: rgba(209, 213, 219, 0.6) !important; }
+:is(html.light, [data-fixed-light]) .focus\:ring-gray-700\/50:focus { --tw-ring-color: rgba(209, 213, 219, 0.6) !important; }
 
 /* ── Amber / Warning ── */
-html.light .bg-amber-900\/20  { background-color: #fffbeb !important; }
-html.light .bg-amber-900\/10  { background-color: #fff8e1 !important; }
-html.light .bg-amber-900\/30  { background-color: #fef3c7 !important; }
-html.light .border-amber-700\/50 { border-color: #fde68a !important; }
-html.light .border-amber-700\/30 { border-color: #fef3c7 !important; }
-html.light .text-amber-300    { color: #92400e !important; }
-html.light .text-amber-400    { color: #b45309 !important; }
-html.light .hover\:bg-amber-900\/30:hover { background-color: #fef3c7 !important; }
+:is(html.light, [data-fixed-light]) .bg-amber-900\/20  { background-color: #fffbeb !important; }
+:is(html.light, [data-fixed-light]) .bg-amber-900\/10  { background-color: #fff8e1 !important; }
+:is(html.light, [data-fixed-light]) .bg-amber-900\/30  { background-color: #fef3c7 !important; }
+:is(html.light, [data-fixed-light]) .border-amber-700\/50 { border-color: #fde68a !important; }
+:is(html.light, [data-fixed-light]) .border-amber-700\/30 { border-color: #fef3c7 !important; }
+:is(html.light, [data-fixed-light]) .text-amber-300    { color: #92400e !important; }
+:is(html.light, [data-fixed-light]) .text-amber-400    { color: #b45309 !important; }
+:is(html.light, [data-fixed-light]) .hover\:bg-amber-900\/30:hover { background-color: #fef3c7 !important; }
 
 /* ── Green / Success ── */
-html.light .bg-green-900\/10  { background-color: #f0fdf4 !important; }
-html.light .bg-green-900\/20  { background-color: #dcfce7 !important; }
-html.light .bg-green-900\/30  { background-color: #bbf7d0 !important; }
-html.light .border-green-700\/50 { border-color: #86efac !important; }
-html.light .border-green-700\/40 { border-color: #86efac !important; }
-html.light .text-green-400    { color: #16a34a !important; }
+:is(html.light, [data-fixed-light]) .bg-green-900\/10  { background-color: #f0fdf4 !important; }
+:is(html.light, [data-fixed-light]) .bg-green-900\/20  { background-color: #dcfce7 !important; }
+:is(html.light, [data-fixed-light]) .bg-green-900\/30  { background-color: #bbf7d0 !important; }
+:is(html.light, [data-fixed-light]) .border-green-700\/50 { border-color: #86efac !important; }
+:is(html.light, [data-fixed-light]) .border-green-700\/40 { border-color: #86efac !important; }
+:is(html.light, [data-fixed-light]) .text-green-400    { color: #16a34a !important; }
 
 /* ── Red / Danger ── */
-html.light .bg-red-900\/20    { background-color: #fff1f2 !important; }
-html.light .bg-red-900\/30    { background-color: #ffe4e6 !important; }
-html.light .hover\:bg-red-900\/20:hover { background-color: #fee2e2 !important; }
-html.light .hover\:bg-red-900\/30:hover { background-color: #ffe4e6 !important; }
-html.light .text-red-400      { color: #dc2626 !important; }
+:is(html.light, [data-fixed-light]) .bg-red-900\/20    { background-color: #fff1f2 !important; }
+:is(html.light, [data-fixed-light]) .bg-red-900\/30    { background-color: #ffe4e6 !important; }
+:is(html.light, [data-fixed-light]) .hover\:bg-red-900\/20:hover { background-color: #fee2e2 !important; }
+:is(html.light, [data-fixed-light]) .hover\:bg-red-900\/30:hover { background-color: #ffe4e6 !important; }
+:is(html.light, [data-fixed-light]) .text-red-400      { color: #dc2626 !important; }
 
 /* ── Violet / Agent ── */
-html.light .bg-violet-900\/30 { background-color: #f5f3ff !important; }
-html.light .bg-violet-900\/20 { background-color: #f5f3ff !important; }
-html.light .border-violet-700\/30 { border-color: #ddd6fe !important; }
-html.light .text-violet-400   { color: #7c3aed !important; }
+:is(html.light, [data-fixed-light]) .bg-violet-900\/30 { background-color: #f5f3ff !important; }
+:is(html.light, [data-fixed-light]) .bg-violet-900\/20 { background-color: #f5f3ff !important; }
+:is(html.light, [data-fixed-light]) .border-violet-700\/30 { border-color: #ddd6fe !important; }
+:is(html.light, [data-fixed-light]) .text-violet-400   { color: #7c3aed !important; }
 
 /* ── Indigo (#7 — responsable DEV / desarrollo) ── */
-html.light .bg-indigo-900\/30    { background-color: #eef2ff !important; }
-html.light .text-indigo-300      { color: #3730a3 !important; }
-html.light .border-indigo-700\/40 { border-color: #c7d2fe !important; }
+:is(html.light, [data-fixed-light]) .bg-indigo-900\/30    { background-color: #eef2ff !important; }
+:is(html.light, [data-fixed-light]) .text-indigo-300      { color: #3730a3 !important; }
+:is(html.light, [data-fixed-light]) .border-indigo-700\/40 { border-color: #c7d2fe !important; }
 
 /* ── Blue ── */
-html.light .bg-blue-900\/30   { background-color: #eff6ff !important; }
-html.light .text-blue-400     { color: #1d4ed8 !important; }
+:is(html.light, [data-fixed-light]) .bg-blue-900\/30   { background-color: #eff6ff !important; }
+:is(html.light, [data-fixed-light]) .text-blue-400     { color: #1d4ed8 !important; }
 
 /* ── Timeline/Gantt (D.1) — variantes que faltaban para sky/teal/emerald/blue/red ── */
-html.light .hover\:bg-gray-800\/40:hover { background-color: #f3f4f6 !important; }
-html.light .bg-blue-900\/40,
-html.light .bg-blue-900\/50   { background-color: #dbeafe !important; }
-html.light .border-blue-700\/40,
-html.light .border-blue-700\/50 { border-color: #bfdbfe !important; }
-html.light .bg-sky-900\/30    { background-color: #f0f9ff !important; }
-html.light .text-sky-300      { color: #0369a1 !important; }
-html.light .border-sky-700\/40 { border-color: #bae6fd !important; }
-html.light .bg-teal-900\/30   { background-color: #f0fdfa !important; }
-html.light .text-teal-300     { color: #0f766e !important; }
-html.light .border-teal-700\/40 { border-color: #99f6e4 !important; }
-html.light .bg-emerald-900\/30,
-html.light .bg-emerald-900\/40 { background-color: #ecfdf5 !important; }
-html.light .border-emerald-700\/40,
-html.light .border-emerald-700\/50 { border-color: #a7f3d0 !important; }
-html.light .bg-red-900\/40    { background-color: #fee2e2 !important; }
-html.light .border-red-700\/50 { border-color: #fecaca !important; }
-html.light .text-violet-300   { color: #6d28d9 !important; }
-html.light .border-violet-700\/40 { border-color: #ddd6fe !important; }
+:is(html.light, [data-fixed-light]) .hover\:bg-gray-800\/40:hover { background-color: #f3f4f6 !important; }
+:is(html.light, [data-fixed-light]) .bg-blue-900\/40,
+:is(html.light, [data-fixed-light]) .bg-blue-900\/50   { background-color: #dbeafe !important; }
+:is(html.light, [data-fixed-light]) .border-blue-700\/40,
+:is(html.light, [data-fixed-light]) .border-blue-700\/50 { border-color: #bfdbfe !important; }
+:is(html.light, [data-fixed-light]) .bg-sky-900\/30    { background-color: #f0f9ff !important; }
+:is(html.light, [data-fixed-light]) .text-sky-300      { color: #0369a1 !important; }
+:is(html.light, [data-fixed-light]) .border-sky-700\/40 { border-color: #bae6fd !important; }
+:is(html.light, [data-fixed-light]) .bg-teal-900\/30   { background-color: #f0fdfa !important; }
+:is(html.light, [data-fixed-light]) .text-teal-300     { color: #0f766e !important; }
+:is(html.light, [data-fixed-light]) .border-teal-700\/40 { border-color: #99f6e4 !important; }
+:is(html.light, [data-fixed-light]) .bg-emerald-900\/30,
+:is(html.light, [data-fixed-light]) .bg-emerald-900\/40 { background-color: #ecfdf5 !important; }
+:is(html.light, [data-fixed-light]) .border-emerald-700\/40,
+:is(html.light, [data-fixed-light]) .border-emerald-700\/50 { border-color: #a7f3d0 !important; }
+:is(html.light, [data-fixed-light]) .bg-red-900\/40    { background-color: #fee2e2 !important; }
+:is(html.light, [data-fixed-light]) .border-red-700\/50 { border-color: #fecaca !important; }
+:is(html.light, [data-fixed-light]) .text-violet-300   { color: #6d28d9 !important; }
+:is(html.light, [data-fixed-light]) .border-violet-700\/40 { border-color: #ddd6fe !important; }
 /* Paleta de tipos de actividad — orange (CONFIGURACION) y fuchsia (SEGUIMIENTO) */
-html.light .bg-orange-900\/30  { background-color: #fff7ed !important; }
-html.light .text-orange-300    { color: #c2410c !important; }
-html.light .border-orange-700\/40 { border-color: #fed7aa !important; }
-html.light .bg-fuchsia-900\/30 { background-color: #fdf4ff !important; }
-html.light .text-fuchsia-300   { color: #a21caf !important; }
-html.light .border-fuchsia-700\/40 { border-color: #f5d0fe !important; }
+:is(html.light, [data-fixed-light]) .bg-orange-900\/30  { background-color: #fff7ed !important; }
+:is(html.light, [data-fixed-light]) .text-orange-300    { color: #c2410c !important; }
+:is(html.light, [data-fixed-light]) .border-orange-700\/40 { border-color: #fed7aa !important; }
+:is(html.light, [data-fixed-light]) .bg-fuchsia-900\/30 { background-color: #fdf4ff !important; }
+:is(html.light, [data-fixed-light]) .text-fuchsia-300   { color: #a21caf !important; }
+:is(html.light, [data-fixed-light]) .border-fuchsia-700\/40 { border-color: #f5d0fe !important; }
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Opacity variants para colores semánticos (bg-X-500/10, text-X-200/300, etc.)
@@ -417,50 +417,50 @@ html.light .border-fuchsia-700\/40 { border-color: #f5d0fe !important; }
  * ────────────────────────────────────────────────────────────────────────── */
 
 /* Amber/warning (opacity variants) */
-html.light .bg-amber-500\/10      { background-color: #fffbeb !important; }
-html.light .bg-amber-500\/20      { background-color: #fef3c7 !important; }
-html.light .border-amber-500\/30  { border-color: #fde68a !important; }
-html.light .border-amber-500\/20  { border-color: #fef3c7 !important; }
-html.light .text-amber-200        { color: #78350f !important; }
+:is(html.light, [data-fixed-light]) .bg-amber-500\/10      { background-color: #fffbeb !important; }
+:is(html.light, [data-fixed-light]) .bg-amber-500\/20      { background-color: #fef3c7 !important; }
+:is(html.light, [data-fixed-light]) .border-amber-500\/30  { border-color: #fde68a !important; }
+:is(html.light, [data-fixed-light]) .border-amber-500\/20  { border-color: #fef3c7 !important; }
+:is(html.light, [data-fixed-light]) .text-amber-200        { color: #78350f !important; }
 
 /* Red/danger (opacity variants) */
-html.light .bg-red-500\/10        { background-color: #fef2f2 !important; }
-html.light .bg-red-500\/20        { background-color: #fee2e2 !important; }
-html.light .border-red-500\/30    { border-color: #fecaca !important; }
-html.light .border-red-500\/20    { border-color: #fee2e2 !important; }
-html.light .text-red-200          { color: #7f1d1d !important; }
-html.light .text-red-300          { color: #991b1b !important; }
+:is(html.light, [data-fixed-light]) .bg-red-500\/10        { background-color: #fef2f2 !important; }
+:is(html.light, [data-fixed-light]) .bg-red-500\/20        { background-color: #fee2e2 !important; }
+:is(html.light, [data-fixed-light]) .border-red-500\/30    { border-color: #fecaca !important; }
+:is(html.light, [data-fixed-light]) .border-red-500\/20    { border-color: #fee2e2 !important; }
+:is(html.light, [data-fixed-light]) .text-red-200          { color: #7f1d1d !important; }
+:is(html.light, [data-fixed-light]) .text-red-300          { color: #991b1b !important; }
 
 /* Emerald/success (opacity variants) */
-html.light .bg-emerald-500\/10    { background-color: #ecfdf5 !important; }
-html.light .bg-emerald-500\/20    { background-color: #d1fae5 !important; }
-html.light .border-emerald-500\/30 { border-color: #a7f3d0 !important; }
-html.light .border-emerald-500\/20 { border-color: #d1fae5 !important; }
-html.light .text-emerald-200      { color: #064e3b !important; }
-html.light .text-emerald-300      { color: #065f46 !important; }
-html.light .text-emerald-400      { color: #059669 !important; }
+:is(html.light, [data-fixed-light]) .bg-emerald-500\/10    { background-color: #ecfdf5 !important; }
+:is(html.light, [data-fixed-light]) .bg-emerald-500\/20    { background-color: #d1fae5 !important; }
+:is(html.light, [data-fixed-light]) .border-emerald-500\/30 { border-color: #a7f3d0 !important; }
+:is(html.light, [data-fixed-light]) .border-emerald-500\/20 { border-color: #d1fae5 !important; }
+:is(html.light, [data-fixed-light]) .text-emerald-200      { color: #064e3b !important; }
+:is(html.light, [data-fixed-light]) .text-emerald-300      { color: #065f46 !important; }
+:is(html.light, [data-fixed-light]) .text-emerald-400      { color: #059669 !important; }
 
 /* Blue (opacity variants) */
-html.light .bg-blue-500\/10       { background-color: #eff6ff !important; }
-html.light .bg-blue-500\/20       { background-color: #dbeafe !important; }
-html.light .border-blue-500\/30   { border-color: #bfdbfe !important; }
-html.light .border-blue-500\/20   { border-color: #dbeafe !important; }
-html.light .text-blue-300         { color: #1e40af !important; }
+:is(html.light, [data-fixed-light]) .bg-blue-500\/10       { background-color: #eff6ff !important; }
+:is(html.light, [data-fixed-light]) .bg-blue-500\/20       { background-color: #dbeafe !important; }
+:is(html.light, [data-fixed-light]) .border-blue-500\/30   { border-color: #bfdbfe !important; }
+:is(html.light, [data-fixed-light]) .border-blue-500\/20   { border-color: #dbeafe !important; }
+:is(html.light, [data-fixed-light]) .text-blue-300         { color: #1e40af !important; }
 
 /* Orange (hot project badge) */
-html.light .bg-orange-500\/10     { background-color: #fff7ed !important; }
-html.light .border-orange-500\/20 { border-color: #fed7aa !important; }
-html.light .text-orange-400       { color: #c2410c !important; }
+:is(html.light, [data-fixed-light]) .bg-orange-500\/10     { background-color: #fff7ed !important; }
+:is(html.light, [data-fixed-light]) .border-orange-500\/20 { border-color: #fed7aa !important; }
+:is(html.light, [data-fixed-light]) .text-orange-400       { color: #c2410c !important; }
 
 /* Brand badges (bg-brand/10, bg-brand/20, etc.) */
-html.light .bg-brand\/5           { background-color: #faf5ff !important; }
-html.light .bg-brand\/10          { background-color: #f5f3ff !important; }
-html.light .bg-brand\/20          { background-color: #ede9fe !important; }
-html.light .border-brand\/30      { border-color: #ddd6fe !important; }
-html.light .border-brand\/20      { border-color: #ede9fe !important; }
+:is(html.light, [data-fixed-light]) .bg-brand\/5           { background-color: #faf5ff !important; }
+:is(html.light, [data-fixed-light]) .bg-brand\/10          { background-color: #f5f3ff !important; }
+:is(html.light, [data-fixed-light]) .bg-brand\/20          { background-color: #ede9fe !important; }
+:is(html.light, [data-fixed-light]) .border-brand\/30      { border-color: #ddd6fe !important; }
+:is(html.light, [data-fixed-light]) .border-brand\/20      { border-color: #ede9fe !important; }
 
 /* ── Prose-invert: en light mode fuerza colores oscuros aunque prose-invert esté activo ── */
-html.light .prose-invert {
+:is(html.light, [data-fixed-light]) .prose-invert {
   --tw-prose-body:          #374151;
   --tw-prose-headings:      #111827;
   --tw-prose-lead:          #4b5563;
@@ -483,116 +483,6 @@ html.light .prose-invert {
 html.light aside .bg-gray-800 {
   background-color: #f0f0f0 !important;
 }
-
-/* ─────────────────────────────────────────────────────────────────────────────────
- * ── [data-fixed-dark]: subárboles de APARIENCIA FIJA (no flipean con el modo claro) ──
- *
- * Algunas vizs deben verse IDÉNTICAS en claro y oscuro porque son cliente-facing o
- * intencionalmente con paleta propia: el Cronograma interno (TimelineGantt, oscuro) y el
- * FlowchartViewer embebido en el Kickoff (claro). Usan grises/acentos crudos de Tailwind
- * que el remap `html.light` de arriba invierte en modo claro. Acá RE-AFIRMAMOS los valores
- * ORIGINALES de la utilidad dentro del subárbol marcado con `data-fixed-dark`, ganando por
- * especificidad (html.light + [attr] + clase > html.light + clase). Usamos `var(--color-*)`
- * = EXACTAMENTE lo que produce la utilidad sin remap, así no hay drift entre temas. Patrón
- * análogo a la excepción del sidebar (arriba). Lo NUEVO debe usar tokens; esto blinda vizs
- * legacy con paleta cruda propia. (El nombre es histórico — aplica a vizs oscuras y claras.)
- * ───────────────────────────────────────────────────────────────────────────────── */
-html.light [data-fixed-dark] .bg-gray-950 { background-color: var(--color-gray-950) !important; }
-html.light [data-fixed-dark] .bg-gray-900 { background-color: var(--color-gray-900) !important; }
-html.light [data-fixed-dark] .bg-gray-800 { background-color: var(--color-gray-800) !important; }
-html.light [data-fixed-dark] .bg-gray-700 { background-color: var(--color-gray-700) !important; }
-html.light [data-fixed-dark] .bg-gray-900\/50 { background-color: color-mix(in oklab, var(--color-gray-900) 50%, transparent) !important; }
-html.light [data-fixed-dark] .bg-gray-900\/30 { background-color: color-mix(in oklab, var(--color-gray-900) 30%, transparent) !important; }
-html.light [data-fixed-dark] .bg-gray-800\/80 { background-color: color-mix(in oklab, var(--color-gray-800) 80%, transparent) !important; }
-html.light [data-fixed-dark] .bg-gray-800\/70 { background-color: color-mix(in oklab, var(--color-gray-800) 70%, transparent) !important; }
-html.light [data-fixed-dark] .bg-gray-800\/60 { background-color: color-mix(in oklab, var(--color-gray-800) 60%, transparent) !important; }
-html.light [data-fixed-dark] .bg-gray-800\/50 { background-color: color-mix(in oklab, var(--color-gray-800) 50%, transparent) !important; }
-
-html.light [data-fixed-dark] .border-gray-800 { border-color: var(--color-gray-800) !important; }
-html.light [data-fixed-dark] .border-gray-700 { border-color: var(--color-gray-700) !important; }
-html.light [data-fixed-dark] .border-gray-600 { border-color: var(--color-gray-600) !important; }
-
-html.light [data-fixed-dark] .text-white    { color: var(--color-white) !important; }
-html.light [data-fixed-dark] .text-gray-100 { color: var(--color-gray-100) !important; }
-html.light [data-fixed-dark] .text-gray-200 { color: var(--color-gray-200) !important; }
-html.light [data-fixed-dark] .text-gray-300 { color: var(--color-gray-300) !important; }
-html.light [data-fixed-dark] .text-gray-400 { color: var(--color-gray-400) !important; }
-html.light [data-fixed-dark] .text-gray-500 { color: var(--color-gray-500) !important; }
-html.light [data-fixed-dark] .text-gray-600 { color: var(--color-gray-600) !important; }
-
-html.light [data-fixed-dark] .hover\:bg-gray-900\/40:hover { background-color: color-mix(in oklab, var(--color-gray-900) 40%, transparent) !important; }
-html.light [data-fixed-dark] .hover\:bg-gray-800\/70:hover { background-color: color-mix(in oklab, var(--color-gray-800) 70%, transparent) !important; }
-html.light [data-fixed-dark] .hover\:bg-gray-800\/60:hover { background-color: color-mix(in oklab, var(--color-gray-800) 60%, transparent) !important; }
-html.light [data-fixed-dark] .hover\:bg-gray-800\/50:hover { background-color: color-mix(in oklab, var(--color-gray-800) 50%, transparent) !important; }
-html.light [data-fixed-dark] .hover\:bg-gray-800\/40:hover { background-color: color-mix(in oklab, var(--color-gray-800) 40%, transparent) !important; }
-html.light [data-fixed-dark] .hover\:text-white:hover { color: var(--color-white) !important; }
-html.light [data-fixed-dark] .hover\:text-gray-300:hover { color: var(--color-gray-300) !important; }
-html.light [data-fixed-dark] .hover\:text-gray-400:hover { color: var(--color-gray-400) !important; }
-html.light [data-fixed-dark] .hover\:border-gray-700:hover { border-color: var(--color-gray-700) !important; }
-
-/* Inputs del editor de fases (Gantt) — campo oscuro. Acotado a `data-dark-chrome` (solo el
-   Gantt) para NO pisar inputs de vizs CLARAS que también llevan data-fixed-dark (ej. el
-   FlowchartViewer del Kickoff, cuyos inputs son blancos a propósito). */
-html.light [data-dark-chrome] input,
-html.light [data-dark-chrome] textarea {
-  background-color: var(--color-gray-800) !important;
-  color: var(--color-gray-200) !important;
-  border-color: var(--color-gray-700) !important;
-}
-html.light [data-dark-chrome] input::placeholder,
-html.light [data-dark-chrome] textarea::placeholder { color: var(--color-gray-500) !important; }
-
-/* Sin la sombra clara de tarjeta — SOLO el Gantt (`data-dark-chrome`). Las vizs claras
-   marcadas data-fixed-dark (FlowchartViewer) conservan sus sombras de panel. */
-html.light [data-dark-chrome] .rounded-2xl.border,
-html.light [data-dark-chrome] .rounded-xl.border { box-shadow: none !important; }
-
-/* divide-y oscuro */
-html.light [data-fixed-dark] .divide-gray-800 > :not([hidden]) ~ :not([hidden]) { border-color: var(--color-gray-800) !important; }
-
-/* ── Chips de actividad / estado / responsable (translúcidos oscuros) ── */
-html.light [data-fixed-dark] .bg-blue-900\/50 { background-color: color-mix(in oklab, var(--color-blue-900) 50%, transparent) !important; }
-html.light [data-fixed-dark] .bg-blue-900\/40 { background-color: color-mix(in oklab, var(--color-blue-900) 40%, transparent) !important; }
-html.light [data-fixed-dark] .bg-blue-900\/30 { background-color: color-mix(in oklab, var(--color-blue-900) 30%, transparent) !important; }
-html.light [data-fixed-dark] .border-blue-700\/50 { border-color: color-mix(in oklab, var(--color-blue-700) 50%, transparent) !important; }
-html.light [data-fixed-dark] .border-blue-700\/40 { border-color: color-mix(in oklab, var(--color-blue-700) 40%, transparent) !important; }
-html.light [data-fixed-dark] .text-blue-300 { color: var(--color-blue-300) !important; }
-html.light [data-fixed-dark] .text-blue-400 { color: var(--color-blue-400) !important; }
-html.light [data-fixed-dark] .bg-sky-900\/30 { background-color: color-mix(in oklab, var(--color-sky-900) 30%, transparent) !important; }
-html.light [data-fixed-dark] .border-sky-700\/40 { border-color: color-mix(in oklab, var(--color-sky-700) 40%, transparent) !important; }
-html.light [data-fixed-dark] .text-sky-300 { color: var(--color-sky-300) !important; }
-html.light [data-fixed-dark] .bg-teal-900\/30 { background-color: color-mix(in oklab, var(--color-teal-900) 30%, transparent) !important; }
-html.light [data-fixed-dark] .border-teal-700\/40 { border-color: color-mix(in oklab, var(--color-teal-700) 40%, transparent) !important; }
-html.light [data-fixed-dark] .text-teal-300 { color: var(--color-teal-300) !important; }
-html.light [data-fixed-dark] .bg-emerald-900\/40 { background-color: color-mix(in oklab, var(--color-emerald-900) 40%, transparent) !important; }
-html.light [data-fixed-dark] .bg-emerald-900\/30 { background-color: color-mix(in oklab, var(--color-emerald-900) 30%, transparent) !important; }
-html.light [data-fixed-dark] .border-emerald-700\/50 { border-color: color-mix(in oklab, var(--color-emerald-700) 50%, transparent) !important; }
-html.light [data-fixed-dark] .border-emerald-700\/40 { border-color: color-mix(in oklab, var(--color-emerald-700) 40%, transparent) !important; }
-html.light [data-fixed-dark] .text-emerald-300 { color: var(--color-emerald-300) !important; }
-html.light [data-fixed-dark] .bg-violet-900\/30 { background-color: color-mix(in oklab, var(--color-violet-900) 30%, transparent) !important; }
-html.light [data-fixed-dark] .border-violet-700\/40 { border-color: color-mix(in oklab, var(--color-violet-700) 40%, transparent) !important; }
-html.light [data-fixed-dark] .text-violet-300 { color: var(--color-violet-300) !important; }
-html.light [data-fixed-dark] .bg-indigo-900\/30 { background-color: color-mix(in oklab, var(--color-indigo-900) 30%, transparent) !important; }
-html.light [data-fixed-dark] .border-indigo-700\/40 { border-color: color-mix(in oklab, var(--color-indigo-700) 40%, transparent) !important; }
-html.light [data-fixed-dark] .text-indigo-300 { color: var(--color-indigo-300) !important; }
-html.light [data-fixed-dark] .bg-orange-900\/30 { background-color: color-mix(in oklab, var(--color-orange-900) 30%, transparent) !important; }
-html.light [data-fixed-dark] .border-orange-700\/40 { border-color: color-mix(in oklab, var(--color-orange-700) 40%, transparent) !important; }
-html.light [data-fixed-dark] .text-orange-300 { color: var(--color-orange-300) !important; }
-html.light [data-fixed-dark] .bg-fuchsia-900\/30 { background-color: color-mix(in oklab, var(--color-fuchsia-900) 30%, transparent) !important; }
-html.light [data-fixed-dark] .border-fuchsia-700\/40 { border-color: color-mix(in oklab, var(--color-fuchsia-700) 40%, transparent) !important; }
-html.light [data-fixed-dark] .text-fuchsia-300 { color: var(--color-fuchsia-300) !important; }
-html.light [data-fixed-dark] .bg-amber-900\/30 { background-color: color-mix(in oklab, var(--color-amber-900) 30%, transparent) !important; }
-html.light [data-fixed-dark] .border-amber-700\/50 { border-color: color-mix(in oklab, var(--color-amber-700) 50%, transparent) !important; }
-html.light [data-fixed-dark] .border-amber-700\/40 { border-color: color-mix(in oklab, var(--color-amber-700) 40%, transparent) !important; }
-html.light [data-fixed-dark] .text-amber-300 { color: var(--color-amber-300) !important; }
-html.light [data-fixed-dark] .bg-green-900\/30 { background-color: color-mix(in oklab, var(--color-green-900) 30%, transparent) !important; }
-html.light [data-fixed-dark] .border-green-700\/40 { border-color: color-mix(in oklab, var(--color-green-700) 40%, transparent) !important; }
-html.light [data-fixed-dark] .text-green-400 { color: var(--color-green-400) !important; }
-html.light [data-fixed-dark] .bg-red-900\/40 { background-color: color-mix(in oklab, var(--color-red-900) 40%, transparent) !important; }
-html.light [data-fixed-dark] .bg-red-900\/30 { background-color: color-mix(in oklab, var(--color-red-900) 30%, transparent) !important; }
-html.light [data-fixed-dark] .border-red-700\/50 { border-color: color-mix(in oklab, var(--color-red-700) 50%, transparent) !important; }
-html.light [data-fixed-dark] .text-red-300 { color: var(--color-red-300) !important; }
-html.light [data-fixed-dark] .text-red-400 { color: var(--color-red-400) !important; }
 
 /* ─────────────────────────────────────────────────────────────────────────────── */
 /* ── Skeleton shimmer animation ─────────────────────────────────────────────── */
@@ -617,7 +507,7 @@ html.light [data-fixed-dark] .text-red-400 { color: var(--color-red-400) !import
 }
 
 /* Light mode shimmer */
-html.light .skeleton-shimmer {
+:is(html.light, [data-fixed-light]) .skeleton-shimmer {
   background: linear-gradient(
     90deg,
     #d1d5db 0%,
@@ -786,31 +676,31 @@ html.light .skeleton-shimmer {
 .knowledge-markdown > *:last-child  { margin-bottom: 0; }
 
 /* Light mode override */
-html.light .knowledge-markdown h1,
-html.light .knowledge-markdown h2,
-html.light .knowledge-markdown h3,
-html.light .knowledge-markdown h4,
-html.light .knowledge-markdown h5,
-html.light .knowledge-markdown h6,
-html.light .knowledge-markdown strong { color: #111827; }
-html.light .knowledge-markdown h2 { border-bottom-color: #e5e7eb; }
-html.light .knowledge-markdown p,
-html.light .knowledge-markdown li,
-html.light .knowledge-markdown td { color: #374151; }
-html.light .knowledge-markdown li::marker { color: #9ca3af; }
-html.light .knowledge-markdown code { background: #f3f4f6; color: #111827; }
-html.light .knowledge-markdown pre { background: #f9fafb; border-color: #e5e7eb; }
-html.light .knowledge-markdown pre code { color: #111827; }
-html.light .knowledge-markdown blockquote {
+:is(html.light, [data-fixed-light]) .knowledge-markdown h1,
+:is(html.light, [data-fixed-light]) .knowledge-markdown h2,
+:is(html.light, [data-fixed-light]) .knowledge-markdown h3,
+:is(html.light, [data-fixed-light]) .knowledge-markdown h4,
+:is(html.light, [data-fixed-light]) .knowledge-markdown h5,
+:is(html.light, [data-fixed-light]) .knowledge-markdown h6,
+:is(html.light, [data-fixed-light]) .knowledge-markdown strong { color: #111827; }
+:is(html.light, [data-fixed-light]) .knowledge-markdown h2 { border-bottom-color: #e5e7eb; }
+:is(html.light, [data-fixed-light]) .knowledge-markdown p,
+:is(html.light, [data-fixed-light]) .knowledge-markdown li,
+:is(html.light, [data-fixed-light]) .knowledge-markdown td { color: #374151; }
+:is(html.light, [data-fixed-light]) .knowledge-markdown li::marker { color: #9ca3af; }
+:is(html.light, [data-fixed-light]) .knowledge-markdown code { background: #f3f4f6; color: #111827; }
+:is(html.light, [data-fixed-light]) .knowledge-markdown pre { background: #f9fafb; border-color: #e5e7eb; }
+:is(html.light, [data-fixed-light]) .knowledge-markdown pre code { color: #111827; }
+:is(html.light, [data-fixed-light]) .knowledge-markdown blockquote {
   background: #f9fafb;
   border-left-color: #9ca3af;
   color: #4b5563;
 }
-html.light .knowledge-markdown hr { border-top-color: #e5e7eb; }
-html.light .knowledge-markdown table { border-color: #e5e7eb; }
-html.light .knowledge-markdown thead { background: #f9fafb; }
-html.light .knowledge-markdown th { color: #111827; border-bottom-color: #e5e7eb; }
-html.light .knowledge-markdown td { border-bottom-color: #f3f4f6; }
+:is(html.light, [data-fixed-light]) .knowledge-markdown hr { border-top-color: #e5e7eb; }
+:is(html.light, [data-fixed-light]) .knowledge-markdown table { border-color: #e5e7eb; }
+:is(html.light, [data-fixed-light]) .knowledge-markdown thead { background: #f9fafb; }
+:is(html.light, [data-fixed-light]) .knowledge-markdown th { color: #111827; border-bottom-color: #e5e7eb; }
+:is(html.light, [data-fixed-light]) .knowledge-markdown td { border-bottom-color: #f3f4f6; }
 
 /* ─────────────────────────────────────────────────────────────────────────
    Canvas print view — exportable a PDF vía window.print()
@@ -1160,7 +1050,7 @@ html.light .knowledge-markdown td { border-bottom-color: #f3f4f6; }
    TODO vive bajo `.nx-login` con su propia paleta y VALORES LITERALES (hex/rgba)
    en px. NO se usa NINGUNA utilidad temática (bg-gray-*, text-white, text-gray-*,
    bg-brand/*, border-gray-*). globals.css remapea esas clases con
-   `html.light ... !important` (ver arriba). Como acá no aparece ninguna de la
+   `:is(html.light, [data-fixed-light]) ... !important` (ver arriba). Como acá no aparece ninguna de la
    whitelist, no hay nada que "lavar": el login se ve IDÉNTICO en claro y oscuro.
    El <body> es bg-gray-950 → en light se fuerza a #fff; el <main.nx-login> es
    full-bleed (min-height:100svh + su propio gradiente navy) y TAPA ese blanco.

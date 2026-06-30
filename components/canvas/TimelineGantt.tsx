@@ -475,10 +475,11 @@ export default function TimelineGantt({
   const gridCols = { gridTemplateColumns: `minmax(240px, 380px) repeat(${total}, minmax(26px, 1fr))` };
 
   return (
-    // data-fixed-dark: neutraliza el remap de grises crudos de `html.light` (globals.css) para
-    // que el Gantt no cambie en modo claro. data-dark-chrome: además, este es chrome 100% oscuro
-    // (inputs oscuros + sin sombra de tarjeta) — reglas que NO aplican a vizs claras (FlowchartViewer).
-    <div className="space-y-3" data-fixed-dark data-dark-chrome>
+    // data-fixed-light: el Cronograma interno debe verse SIEMPRE CLARO (igual que el del
+    // cliente), sin importar el tema. El remap claro de `html.light` (globals.css) se extiende
+    // a este subárbol vía `:is(html.light, [data-fixed-light])`, así la viz queda clara también
+    // en modo oscuro.
+    <div className="space-y-3" data-fixed-light>
       {/* Fecha de hoy — SIEMPRE visible — + leyenda */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <span className="flex items-center gap-2 text-xs font-bold text-blue-300 bg-blue-900/30 border border-blue-700/40 rounded-lg px-3 py-1.5">
