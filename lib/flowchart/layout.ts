@@ -23,6 +23,8 @@ const NODE_DIMS: Record<string, { width: number; height: number }> = {
   outcome_negative:   { width: 260, height: 60  },
   lifecycle_change:   { width: 260, height: 70  },
   lead_status:        { width: 240, height: 52  },
+  // Integración (mapa de sistemas)
+  system:             { width: 168, height: 96  },
 };
 
 const DEFAULT_DIMS = { width: 240, height: 80 };
@@ -38,6 +40,11 @@ export function getLayoutedElements(
   edges: Edge[],
   direction: "TB" | "LR" = "LR"
 ): { nodes: Node[]; edges: Edge[] } {
+  // Diagrama de INTEGRACIÓN (mapa de sistemas): nodos "system" → layout radial propio.
+  if (nodes.some((n) => n.type === "system")) {
+    return getIntegrationLayout(nodes, edges);
+  }
+
   // Detectar si es un diagrama de pipeline (tiene nodos pipeline_stage)
   const hasPipelineNodes = nodes.some((n) =>
     ["pipeline_stage", "trigger", "action", "follow_up", "outcome_positive", "outcome_negative", "lifecycle_change", "lead_status"].includes(n.type ?? "")
@@ -93,6 +100,183 @@ function getDagreLayout(
     }),
     edges,
   };
+}
+
+// ── Posiciones de etiquetas del mapa de sistemas (de-overlap GLOBAL) ──────────
+// Calcula, por edge, la posición de su etiqueta a partir de las posiciones ACTUALES de los
+// nodos (no recoloca nodos). Arranca en el punto medio + offset perpendicular por par
+// (labelShift), imanta a la línea (≤ SIDE) y separa por fuerza (AABB) las que chocan.
+// Las aristas con `data.labelT` (posición MANUAL del usuario) NO se mueven: se siembran como
+// OBSTÁCULOS fijos para que las automáticas no se les encimen, y NO se devuelven (su posición
+// la fija el DataFlowEdge desde labelT/labelSide). Se usa en AMBOS caminos de buildGraph.
+const LBL_BW = 196;
+const LBL_BH = 54;
+const LBL_SIDE = 32; // distancia perpendicular máxima a la línea (igual que en DataFlowEdge)
+
+export function computeIntegrationLabelPositions(
+  nodes: Node[],
+  edges: Edge[],
+): Map<string, { x: number; y: number }> {
+  const centers = new Map<string, { x: number; y: number }>();
+  for (const nd of nodes) {
+    const { width, height } = getNodeDims(nd.type ?? "system");
+    const p = nd.position ?? { x: 0, y: 0 };
+    centers.set(nd.id, { x: p.x + width / 2, y: p.y + height / 2 });
+  }
+
+  type LP = { x: number; y: number; fixed: boolean; id: string; i: number };
+  const items: LP[] = edges.map((e, i) => {
+    const id = e.id ?? `e${i}`;
+    const s = centers.get(e.source);
+    const t = centers.get(e.target);
+    const d = e.data as { labelShift?: number; labelT?: number; labelSide?: number } | undefined;
+    if (!s || !t) return { x: 0, y: 0, fixed: true, id, i };
+    // MANUAL (labelT presente): obstáculo fijo en su posición aprox. (sobre la cuerda).
+    if (typeof d?.labelT === "number") {
+      const tt = Math.max(0, Math.min(1, d.labelT));
+      const bx = s.x + (t.x - s.x) * tt;
+      const by = s.y + (t.y - s.y) * tt;
+      let dx = t.x - s.x;
+      let dy = t.y - s.y;
+      const len = Math.hypot(dx, dy) || 1;
+      dx /= len;
+      dy /= len;
+      const side = d.labelSide ?? 0;
+      return { x: bx + -dy * side * LBL_SIDE, y: by + dx * side * LBL_SIDE, fixed: true, id, i };
+    }
+    // AUTO: punto medio + perp por labelShift (pares paralelos/bidireccionales).
+    const midX = (s.x + t.x) / 2;
+    const midY = (s.y + t.y) / 2;
+    let x = midX;
+    let y = midY;
+    const shift = typeof d?.labelShift === "number" ? d.labelShift : 0;
+    if (shift !== 0) {
+      const aFirst = e.source < e.target;
+      const ax = aFirst ? s.x : t.x;
+      const bx = aFirst ? t.x : s.x;
+      const ay = aFirst ? s.y : t.y;
+      const by = aFirst ? t.y : s.y;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const len = Math.hypot(dx, dy) || 1;
+      x += (-dy / len) * LBL_SIDE * shift;
+      y += (dx / len) * LBL_SIDE * shift;
+    }
+    return { x, y, fixed: false, id, i };
+  });
+
+  // Imantar a la línea las NO-fijas (perpendicular ≤ SIDE, dentro del tramo central).
+  const clamp = () => {
+    for (const it of items) {
+      if (it.fixed) continue;
+      const e = edges[it.i];
+      const s = centers.get(e.source);
+      const t = centers.get(e.target);
+      if (!s || !t) continue;
+      const mx = (s.x + t.x) / 2;
+      const my = (s.y + t.y) / 2;
+      let dx = t.x - s.x;
+      let dy = t.y - s.y;
+      const len = Math.hypot(dx, dy) || 1;
+      dx /= len;
+      dy /= len;
+      const vx = it.x - mx;
+      const vy = it.y - my;
+      let along = vx * dx + vy * dy;
+      let perp = vx * -dy + vy * dx;
+      const maxAlong = Math.max(0, len / 2 - 60);
+      along = Math.max(-maxAlong, Math.min(maxAlong, along));
+      perp = Math.max(-LBL_SIDE, Math.min(LBL_SIDE, perp));
+      it.x = mx + dx * along + -dy * perp;
+      it.y = my + dy * along + dx * perp;
+    }
+  };
+
+  for (let iter = 0; iter < 160; iter++) {
+    let moved = false;
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const a = items[i];
+        const b = items[j];
+        if (a.fixed && b.fixed) continue;
+        const ddx = b.x - a.x;
+        const ddy = b.y - a.y;
+        const ox = LBL_BW - Math.abs(ddx);
+        const oy = LBL_BH - Math.abs(ddy);
+        if (ox > 0 && oy > 0) {
+          moved = true;
+          if (ox <= oy) {
+            const sign = ddx < 0 ? -1 : 1;
+            if (a.fixed) b.x += (ox + 1) * sign;
+            else if (b.fixed) a.x -= (ox + 1) * sign;
+            else { const p = (ox / 2 + 1) * sign; a.x -= p; b.x += p; }
+          } else {
+            const sign = ddy < 0 ? -1 : 1;
+            if (a.fixed) b.y += (oy + 1) * sign;
+            else if (b.fixed) a.y -= (oy + 1) * sign;
+            else { const p = (oy / 2 + 1) * sign; a.y -= p; b.y += p; }
+          }
+        }
+      }
+    }
+    clamp();
+    if (!moved) break;
+  }
+
+  const result = new Map<string, { x: number; y: number }>();
+  for (const it of items) if (!it.fixed) result.set(it.id, { x: it.x, y: it.y });
+  return result;
+}
+
+// ── Layout de integración (mapa de sistemas) ──────────────────────────────────
+// Coloca los nodos "system" en un CÍRCULO en el orden del array (el agente los lista
+// en orden de flujo → los conectados quedan adyacentes, con pocos cruces) y tolera
+// ciclos (el mapa de integración suele serlo). Asigna sourceHandle/targetHandle por el
+// lado que mira al otro nodo, para flechas limpias. Sin dependencias.
+function getIntegrationLayout(
+  nodes: Node[],
+  edges: Edge[],
+): { nodes: Node[]; edges: Edge[] } {
+  const n = nodes.length;
+  const maxW = Math.max(168, ...nodes.map((nd) => getNodeDims(nd.type ?? "system").width));
+  // Radio amplio: más aire entre nodos = menos choque de etiquetas (que viven sobre las líneas).
+  const R = n <= 1 ? 0 : Math.max(300, (n * (maxW + 90)) / (2 * Math.PI));
+  const cx = R + maxW;
+  const cy = R + 120;
+
+  const centers = new Map<string, { x: number; y: number }>();
+  const positioned = nodes.map((node, i) => {
+    const { width, height } = getNodeDims(node.type ?? "system");
+    const a = (i / Math.max(1, n)) * 2 * Math.PI - Math.PI / 2;
+    const x = n <= 1 ? cx : cx + R * Math.cos(a);
+    const y = n <= 1 ? cy : cy + R * Math.sin(a);
+    centers.set(node.id, { x, y });
+    return { ...node, position: { x: x - width / 2, y: y - height / 2 } };
+  });
+
+  // El lado del nodo `from` que mira hacia `to` (para anclar la flecha sin cruzar la caja).
+  const sideFor = (from: { x: number; y: number }, to: { x: number; y: number }): string => {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "r" : "l";
+    return dy >= 0 ? "b" : "t";
+  };
+  const layoutEdges = edges.map((e) => {
+    const s = centers.get(e.source);
+    const t = centers.get(e.target);
+    // type "dataflow" → DataFlowEdge: etiqueta en caja opaca compacta multilínea + arrastrable.
+    if (!s || !t) return { ...e, type: "dataflow" };
+    return { ...e, type: "dataflow", sourceHandle: sideFor(s, t), targetHandle: sideFor(t, s) };
+  });
+
+  // Posiciones de etiquetas: de-overlap global desde las posiciones circulares recién calculadas.
+  const posMap = computeIntegrationLabelPositions(positioned, layoutEdges);
+  const edgesWithLabels = layoutEdges.map((e, i) => ({
+    ...e,
+    data: { ...(e.data ?? {}), labelPos: posMap.get(e.id ?? `e${i}`) },
+  }));
+
+  return { nodes: positioned, edges: edgesWithLabels };
 }
 
 // ── Pipeline columnar layout ──────────────────────────────────────────────────

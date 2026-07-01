@@ -165,7 +165,7 @@ export default function BlockRenderer({
         {editing ? (
           <EditBlock block={block} onSave={handleSave} onCancel={() => setEditing(false)} />
         ) : (
-          renderBlock(block)
+          renderBlock(block, onSave)
         )}
       </div>
 
@@ -333,14 +333,16 @@ function EditCallout({ content, data, onSave, onCancel }: { content: string; dat
 
 // ── View renderers ──────────────────────────────────────────────────────────
 
-function renderBlock(block: BlockData) {
+type BlockSaveFn = (updates: { content?: string; data?: unknown }) => void | boolean | Promise<void | boolean>;
+
+function renderBlock(block: BlockData, onSave?: BlockSaveFn) {
   switch (block.blockType) {
     case "TEXT": case "CARD": return <TextBlockView content={block.content ?? ""} />;
     case "HEADING": return <HeadingBlockView content={block.content ?? ""} data={block.data as { level?: number } | null} />;
     case "TABLE": return <TableBlockView data={block.data as { headers?: string[]; rows?: string[][] } | null} />;
     case "METRIC": return <MetricBlockView data={block.data as { label?: string; value?: string; trend?: string; comparison?: string } | null} />;
     case "CALLOUT": return <CalloutBlockView content={block.content ?? ""} data={block.data as { variant?: string; title?: string } | null} />;
-    case "FLOWCHART": return <FlowchartBlockView data={block.data as { nodes?: unknown[]; edges?: unknown[]; description?: string } | null} title={block.content} />;
+    case "FLOWCHART": return <FlowchartBlockView data={block.data as { nodes?: unknown[]; edges?: unknown[]; description?: string } | null} title={block.content} onSave={onSave} />;
     case "CHART": return <TextBlockView content={block.content ?? "[Gráfico — próximamente]"} />;
     case "IMAGE": return <ImageBlockView data={block.data as { url?: string; alt?: string; caption?: string } | null} />;
     default: return <TextBlockView content={block.content ?? ""} />;
@@ -399,7 +401,7 @@ function CalloutBlockView({ content, data }: { content: string; data: { variant?
   );
 }
 
-function FlowchartBlockView({ data, title }: { data: { nodes?: unknown[]; edges?: unknown[]; description?: string } | null; title?: string | null }) {
+function FlowchartBlockView({ data, title, onSave }: { data: { nodes?: unknown[]; edges?: unknown[]; description?: string } | null; title?: string | null; onSave?: BlockSaveFn }) {
   if (!data?.nodes?.length) return null;
   const heading = title?.trim() ?? "";
   const desc = typeof data.description === "string" ? data.description.trim() : "";
@@ -411,8 +413,13 @@ function FlowchartBlockView({ data, title }: { data: { nodes?: unknown[]; edges?
           {desc && <p className="text-xs text-gray-600 leading-relaxed mt-0.5">{desc}</p>}
         </div>
       )}
-      <div className="h-[400px] rounded-xl border border-gray-200 overflow-hidden">
-        <FlowchartViewer data={{ title: "", description: "", nodes: data.nodes as Array<{ id: string; type: string; label: string; position?: { x: number; y: number } }>, edges: data.edges as Array<{ id?: string; source: string; target: string; label?: string }> }} />
+      <div className="h-[560px] rounded-xl border border-gray-200 overflow-hidden">
+        <FlowchartViewer
+          data={{ title: "", description: data.description ?? "", nodes: data.nodes as Array<{ id: string; type: string; label: string; position?: { x: number; y: number } }>, edges: data.edges as Array<{ id?: string; source: string; target: string; label?: string }> }}
+          // Guardar el diagrama editado → PUT del bloque (marca source MODIFIED → sobrevive regen).
+          // Solo se manda `data` (nunca content) para no pisar el título del bloque.
+          onSave={onSave ? async (updated) => { await onSave({ data: { nodes: updated.nodes, edges: updated.edges, description: updated.description } }); } : undefined}
+        />
       </div>
     </div>
   );

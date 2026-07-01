@@ -948,10 +948,17 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   effectiveSystemPrompt +=
     "\n\n---\nESTILO (OBLIGATORIO): Usa español con TUTEO neutro (segunda persona con \"tú\"). Conjuga SIEMPRE en forma de tú: \"Transforma\", \"centraliza\", \"optimiza\", \"conecta\", \"tienes\", \"puedes\", \"necesitas\", \"tu equipo\". PROHIBIDO el voseo: NUNCA escribas \"Transformá\", \"centralizá\", \"optimizá\", \"tenés\", \"querés\", \"podés\", \"necesitás\" ni \"vos\".";
 
-  // Para CARDS_AND_FLOWCHARTS: requerir explícitamente UN flowchart por proceso identificado.
+  // Para CARDS_AND_FLOWCHARTS: instrucción sobre CUÁNTOS flowcharts generar. El agente de MAPEO
+  // (agent-mapeo-inicial) prioriza LEGIBILIDAD (prompt v3: 1-3 procesos, calidad > cantidad); los
+  // demás CAF (p.ej. diagnóstico) sí quieren exhaustividad. Se separan para no darle órdenes opuestas.
   if (isCardsAndFlowcharts) {
-    effectiveSystemPrompt +=
-      "\n\n---\nINSTRUCCIÓN CRÍTICA: Analiza los datos del cliente como si fuera la PRIMERA VEZ que los ves, sin asumir ningún resultado previo. Identifica TODOS los procesos operacionales distintos mencionados en las transcripciones, notas y documentos. Cada proceso que tenga un flujo de trabajo propio (con pasos, responsables o herramientas diferentes) debe tener SU PROPIO flowchart independiente. Reglas estrictas: (1) Sé exhaustivo — NO omitas ningún proceso identificable. (2) NO combines procesos distintos en un solo flowchart. (3) El número final de flowcharts debe reflejar exactamente cuántos procesos operacionales distintos encontraste. (4) Si identificas N procesos → genera N flowcharts. Nunca menos.";
+    if (agent.id === "agent-mapeo-inicial") {
+      effectiveSystemPrompt +=
+        "\n\n---\nINSTRUCCIÓN: Mapea SOLO los 1-3 procesos operativos MÁS IMPORTANTES (calidad > cantidad). Un flowchart por proceso RELEVANTE; consolida los micro-pasos en vez de crear un diagrama por cada micro-flujo. Prioridad #1: LEGIBILIDAD — mejor pocos mapas limpios que se entienden que muchos saturados.";
+    } else {
+      effectiveSystemPrompt +=
+        "\n\n---\nINSTRUCCIÓN CRÍTICA: Analiza los datos del cliente como si fuera la PRIMERA VEZ que los ves, sin asumir ningún resultado previo. Identifica TODOS los procesos operacionales distintos mencionados en las transcripciones, notas y documentos. Cada proceso que tenga un flujo de trabajo propio (con pasos, responsables o herramientas diferentes) debe tener SU PROPIO flowchart independiente. Reglas estrictas: (1) Sé exhaustivo — NO omitas ningún proceso identificable. (2) NO combines procesos distintos en un solo flowchart. (3) El número final de flowcharts debe reflejar exactamente cuántos procesos operacionales distintos encontraste. (4) Si identificas N procesos → genera N flowcharts. Nunca menos.";
+    }
   }
 
   // Agente de subetapa no-primero: tiene step específico asignado y no es el paso 1.
@@ -1690,40 +1697,18 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
       });
     }
 
-    // Crear cards FLOWCHART (una por cada flowchart generado) → siempre en "procesos"
+    // Flowcharts → bloques FLOWCHART en la sección "Procesos" del canvas "Información del
+    // cliente" (lo que lee la pestaña vía read-procesos). ÚNICA vía: nacen CONFIRMED y
+    // REEMPLAZAN los del MISMO agente (no duplican al regenerar) — mismo patrón que el handoff.
+    // La antigua copia en ClientContextCard (cardType FLOWCHART) se eliminó: era redundante
+    // (la pestaña nunca la leía, solo el CanvasBlock).
     const flowcharts = analysisJson!.flowcharts ?? [];
     console.log(`[analyze CAF] Saving ${flowcharts.length} flowcharts, projectId=${bodyProjectId}, clientId=${clientId}`);
-    if (flowcharts.length > 0) {
-      await prisma.clientContextCard.createMany({
-        data: flowcharts.map((fc: { title?: string; description?: string; nodes: unknown[]; edges: unknown[] }, i: number) => ({
-          clientId,
-          projectId:     bodyProjectId,
-          agentRunId:    run.id,
-          title:         fc.title?.trim() || "Diagrama de proceso",
-          content:       fc.description ?? "",
-          order:         validCards.length + i,
-          source:        "AGENT" as const,
-          cardType:      "FLOWCHART" as const,
-          diagramData:   { nodes: fc.nodes, edges: fc.edges },
-          canvasSection: "procesos",
-          canvasStatus:  "draft",
-          canvasOrder:   validCards.length + i,
-        })),
-        skipDuplicates: true,
-      });
-    }
-
-    // B: además de las cards legacy, crear los bloques FLOWCHART en la sección
-    // "Procesos" del canvas "Información del cliente" — que es DONDE los lee esa
-    // pestaña (SectionBlockList → CanvasBlock). Sin esto los flowcharts no aparecían
-    // ahí (solo quedaban como cards legacy del proyecto de servicio).
-    if (flowcharts.length > 0) {
-      try {
-        const nBlocks = await syncFlowchartsToProcesos(clientId, flowcharts);
-        console.log(`[analyze CAF] syncFlowchartsToProcesos → ${nBlocks} bloque(s) en Procesos`);
-      } catch (e) {
-        console.error("[analyze CAF] syncFlowchartsToProcesos error:", e);
-      }
+    try {
+      const nBlocks = await syncFlowchartsToProcesos(clientId, flowcharts, { agentId: agent.id, agentRunId: run.id });
+      console.log(`[analyze CAF] syncFlowchartsToProcesos → ${nBlocks} bloque(s) en Procesos`);
+    } catch (e) {
+      console.error("[analyze CAF] syncFlowchartsToProcesos error:", e);
     }
 
     // Guardar suggestions off-canvas (si las hay)

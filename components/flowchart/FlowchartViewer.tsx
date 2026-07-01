@@ -19,7 +19,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { getLayoutedElements, getNodeDims } from "@/lib/flowchart/layout";
+import { getLayoutedElements, getNodeDims, computeIntegrationLabelPositions } from "@/lib/flowchart/layout";
 import {
   StartEndNode,
   ProcessNode,
@@ -40,6 +40,8 @@ import {
   LifecycleChangeNode,
   LeadStatusNode,
 } from "./pipeline-nodes";
+import { SystemNode } from "./integration-nodes";
+import { DataFlowEdge } from "./integration-edges";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -55,6 +57,7 @@ export interface FlowchartData {
     detail?: string;
     icon?: string;
     pipelineName?: string;
+    systemColor?: string;
     position?: { x: number; y: number };
   }>;
   edges: Array<{
@@ -67,6 +70,12 @@ export interface FlowchartData {
     targetHandle?: string;
     strokeColor?: string;
     dashed?: boolean;
+    // Integración (dataflow): posición MANUAL relativa de la etiqueta + semántica de flujo.
+    labelT?: number;         // 0..1 a lo largo de la curva (manual)
+    labelSide?: -1 | 0 | 1;  // lado imantado (manual)
+    direction?: "to" | "bidir";
+    syncType?: "realtime" | "batch" | "manual";
+    pending?: boolean;       // "[Por confirmar]"
   }>;
 }
 
@@ -96,6 +105,13 @@ const NODE_TYPES = {
   outcome_negative:   OutcomeNegativeNode,
   lifecycle_change:   LifecycleChangeNode,
   lead_status:        LeadStatusNode,
+  // Integración (mapa de sistemas)
+  system:             SystemNode,
+};
+
+const EDGE_TYPES = {
+  // Etiqueta de flujo de datos: caja opaca compacta multilínea + arrastrable.
+  dataflow: DataFlowEdge,
 };
 
 // ── Toolbar items (agrupados por categoría) ─────────────────────────────────
@@ -126,6 +142,12 @@ const TOOLBAR_GROUPS: { title: string; items: ToolbarItem[] }[] = [
     ],
   },
   {
+    title: "Integración",
+    items: [
+      { type: "system", label: "Sistema", icon: "▦", color: "text-slate-600", bg: "bg-slate-50 hover:bg-slate-100 border-slate-200" },
+    ],
+  },
+  {
     title: "Pipeline",
     items: [
       { type: "pipeline_stage",   label: "Etapa",       icon: "📋", color: "text-green-700",  bg: "bg-green-50 hover:bg-green-100 border-green-200" },
@@ -146,6 +168,7 @@ const DEFAULT_LABELS: Record<string, string> = {
   text: "Texto", pipeline_stage: "Nueva etapa", trigger: "Trigger", action: "Acción",
   follow_up: "Seguimiento", outcome_positive: "Avanza", outcome_negative: "No avanza",
   lifecycle_change: "Cambio lifecycle", lead_status: "Estado del lead",
+  system: "Nuevo sistema",
 };
 
 // ── Componente interno (dentro del Provider) ──────────────────────────────────
@@ -160,6 +183,7 @@ function ToolbarSidebar({
   addNode,
   direction,
   onToggleDirection,
+  diagramKind,
 }: {
   activeTool: "pointer" | "text" | "comment" | "node";
   setActiveTool: (tool: "pointer" | "text" | "comment" | "node") => void;
@@ -168,7 +192,15 @@ function ToolbarSidebar({
   addNode: (type: string) => void;
   direction: "TB" | "LR";
   onToggleDirection: () => void;
+  diagramKind: "integration" | "pipeline" | "classic";
 }) {
+  // Ofrecer solo los tipos de nodo coherentes con el diagrama (no mezclar system con pipeline).
+  const GROUPS_BY_KIND: Record<string, string[]> = {
+    integration: ["Integración", "Hallazgos"],
+    pipeline: ["Flujo", "Hallazgos", "Pipeline"],
+    classic: ["Flujo", "Hallazgos"],
+  };
+  const visibleGroups = TOOLBAR_GROUPS.filter((g) => (GROUPS_BY_KIND[diagramKind] ?? GROUPS_BY_KIND.classic).includes(g.title));
   const tools: { id: "pointer" | "text" | "comment" | "node"; icon: React.ReactNode; label: string }[] = [
     {
       id: "pointer",
@@ -245,7 +277,7 @@ function ToolbarSidebar({
             {/* Node type popup */}
             {tool.id === "node" && nodePopupOpen && (
               <div className="absolute left-full top-0 ml-2 bg-white border border-gray-200 rounded-xl shadow-xl p-2 w-[180px] max-h-[400px] overflow-y-auto">
-                {TOOLBAR_GROUPS.map((group) => (
+                {visibleGroups.map((group) => (
                   <div key={group.title} className="mb-1.5">
                     <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider px-2">{group.title}</span>
                     <div className="mt-0.5 space-y-0.5">
@@ -441,12 +473,46 @@ function FlowchartInner({
           );
         };
 
+      // Edición inline de etiqueta de edge "dataflow" (mapa de integración): marca dirty + undo,
+      // igual que makeOnLabelChange para nodos. Sin esto, el commit no habilitaría "Guardar".
+      const makeOnEdgeLabelChange =
+        (edgeId: string) =>
+        (value: string) => {
+          undoStack.current.push(captureSnapshot());
+          if (undoStack.current.length > 50) undoStack.current.shift();
+          redoStack.current = [];
+          setCanUndo(true);
+          setCanRedo(false);
+          setIsDirty(true);
+          setEdges((eds) =>
+            eds.map((ed) => (ed.id === edgeId ? { ...ed, label: value.trim() || undefined } : ed))
+          );
+        };
+
+      // Persistir la posición MANUAL (t, side) de una etiqueta dataflow al soltar el drag:
+      // escribe en edge.data + dirty + undo (igual patrón que makeOnEdgeLabelChange).
+      const makeOnEdgeLabelPos =
+        (edgeId: string) =>
+        (t: number, side: number) => {
+          undoStack.current.push(captureSnapshot());
+          if (undoStack.current.length > 50) undoStack.current.shift();
+          redoStack.current = [];
+          setCanUndo(true);
+          setCanRedo(false);
+          setIsDirty(true);
+          setEdges((eds) =>
+            eds.map((ed) =>
+              ed.id === edgeId ? { ...ed, data: { ...(ed.data as object), labelT: t, labelSide: side } } : ed
+            )
+          );
+        };
+
       const rawNodes: Node[] = data.nodes.map((n) => {
         // Tolerar nodos en formato react-flow ANIDADO ({ data: { label, … } }) además del
         // plano ({ label, … }): los flowcharts del agente vienen anidados → sin esto los
         // labels salen vacíos (placeholders "Detalle…"/"Descripción…").
         const nd = (n as unknown as {
-          data?: { label?: string; sublabel?: string; owner?: string; detail?: string; icon?: string; pipelineName?: string };
+          data?: { label?: string; sublabel?: string; owner?: string; detail?: string; icon?: string; pipelineName?: string; systemColor?: string };
         }).data;
         return {
           id:       n.id,
@@ -459,6 +525,7 @@ function FlowchartInner({
             detail:        n.detail ?? nd?.detail,
             icon:          n.icon ?? nd?.icon,
             pipelineName:  n.pipelineName ?? nd?.pipelineName,
+            systemColor:   n.systemColor ?? nd?.systemColor,
             variant:       n.type,
             onLabelChange: makeOnLabelChange(n.id),
           },
@@ -467,6 +534,16 @@ function FlowchartInner({
 
       // Build a lookup of node types for smart handle assignment
       const nodeTypeMap = new Map(data.nodes.map((n) => [n.id, n.type]));
+
+      // Agrupar aristas por par NO-ordenado → separar etiquetas de paralelas/bidireccionales.
+      const pairKey = (s: string, t: string) => (s < t ? `${s}|${t}` : `${t}|${s}`);
+      const pairGroups = new Map<string, string[]>();
+      data.edges.forEach((e, i) => {
+        const k = pairKey(e.source, e.target);
+        const arr = pairGroups.get(k) ?? [];
+        arr.push(e.id ?? `e${i}`);
+        pairGroups.set(k, arr);
+      });
 
       const rawEdges: Edge[] = data.edges.map((e, i) => {
         // Use saved strokeColor if available, otherwise derive from edgeType
@@ -482,6 +559,14 @@ function FlowchartInner({
         const isPipeline = data.nodes.some((n) =>
           ["pipeline_stage", "trigger", "action", "follow_up", "outcome_positive", "outcome_negative", "lifecycle_change", "lead_status"].includes(n.type ?? "")
         );
+        // Mapa de integración (nodos system) → edge "dataflow" (etiqueta sobre la línea,
+        // editable y arrastrable), en ambos caminos (con y sin posiciones guardadas).
+        const isIntegration = data.nodes.some((n) => n.type === "system");
+        // Separar etiquetas de aristas paralelas/bidireccionales del mismo par: offset
+        // perpendicular escalonado y simétrico (idx - (n-1)/2). 0 si la arista es única.
+        const eid = e.id ?? `e${i}`;
+        const group = pairGroups.get(pairKey(e.source, e.target)) ?? [eid];
+        const labelShift = isIntegration && group.length > 1 ? group.indexOf(eid) - (group.length - 1) / 2 : 0;
 
         const targetType = nodeTypeMap.get(e.target);
 
@@ -516,8 +601,19 @@ function FlowchartInner({
         sourceHandle,
         targetHandle,
         label:        e.label,
-        type:         "smoothstep",
-        markerEnd:    { type: MarkerType.ArrowClosed, color },
+        type:         isIntegration ? "dataflow" : "smoothstep",
+        data:         isIntegration ? {
+                        labelShift,
+                        labelT:    e.labelT,
+                        labelSide: e.labelSide,
+                        direction: e.direction,
+                        syncType:  e.syncType,
+                        pending:   e.pending,
+                        onLabelCommit: makeOnEdgeLabelChange(eid),
+                        onLabelPos:    makeOnEdgeLabelPos(eid),
+                      } : undefined,
+        // Integración: el DataFlowEdge dibuja su propia flecha → sin markerEnd (evita <marker> huérfano).
+        markerEnd:    isIntegration ? undefined : { type: MarkerType.ArrowClosed, color },
         style:        { stroke: color, strokeWidth: 1.5, ...(isDashed ? { strokeDasharray: "6 3" } : {}) },
         labelStyle:   { fontSize: 10, fontWeight: 600, fill: color },
         labelBgStyle: { fill: "white", fillOpacity: 0.85 },
@@ -559,8 +655,21 @@ function FlowchartInner({
       };
 
       if (hasSavedPositions && !shouldForce) {
-        setNodes(addTitleNode(rawNodes));
-        setEdges(rawEdges);
+        const titled = addTitleNode(rawNodes);
+        setNodes(titled);
+        // Integración: recomputar el de-overlap de etiquetas desde las posiciones GUARDADAS
+        // (getIntegrationLayout no corre en este camino) para que no se tapen. Las manuales
+        // (labelT) se excluyen y quedan donde el usuario las puso.
+        const isIntegration = data.nodes.some((n) => n.type === "system");
+        if (isIntegration) {
+          const posMap = computeIntegrationLabelPositions(titled, rawEdges);
+          setEdges(rawEdges.map((e) => ({
+            ...e,
+            data: { ...(e.data as object), labelPos: posMap.get(e.id ?? "") },
+          })));
+        } else {
+          setEdges(rawEdges);
+        }
       } else {
         try {
           const cleanNodes = shouldForce
@@ -602,12 +711,36 @@ function FlowchartInner({
       redoStack.current = [];
       setCanUndo(true);
       setCanRedo(false);
+      // En un mapa de sistemas, las conexiones nuevas también son "dataflow" (etiqueta sobre
+      // la línea), para no romper la coherencia del modelo Miro.
+      const isIntegration = nodesRef.current.some((n) => n.type === "system");
+      // Id propio + handlers de etiqueta inyectados, para que la posición y el texto de la
+      // etiqueta de la arista NUEVA persistan/undo desde el primer arrastre (igual que rawEdges).
+      const newEdgeId = `e-${connection.source ?? ""}-${connection.target ?? ""}-${Date.now()}`;
+      const pushUndoDirty = () => {
+        undoStack.current.push(captureSnapshot());
+        if (undoStack.current.length > 50) undoStack.current.shift();
+        redoStack.current = [];
+        setCanUndo(true);
+        setCanRedo(false);
+        setIsDirty(true);
+      };
+      const onLabelCommit = (value: string) => {
+        pushUndoDirty();
+        setEdges((eds) => eds.map((ed) => (ed.id === newEdgeId ? { ...ed, label: value.trim() || undefined } : ed)));
+      };
+      const onLabelPos = (t: number, side: number) => {
+        pushUndoDirty();
+        setEdges((eds) => eds.map((ed) => (ed.id === newEdgeId ? { ...ed, data: { ...(ed.data as object), labelT: t, labelSide: side } } : ed)));
+      };
       setEdges((eds) =>
         addEdge(
           {
             ...connection,
-            type:      "smoothstep",
-            markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
+            ...(isIntegration ? { id: newEdgeId } : {}),
+            type:      isIntegration ? "dataflow" : "smoothstep",
+            ...(isIntegration ? { data: { labelShift: 0, onLabelCommit, onLabelPos } } : {}),
+            markerEnd: isIntegration ? undefined : { type: MarkerType.ArrowClosed, color: "#94a3b8" },
             style:     { stroke: "#94a3b8", strokeWidth: 1.5 },
           },
           eds
@@ -800,6 +933,7 @@ function FlowchartInner({
 
   const onEdgeDoubleClick = useCallback((event: React.MouseEvent, edge: Edge) => {
     event.preventDefault();
+    if (edge.type === "dataflow") return; // el DataFlowEdge edita su etiqueta inline
     setSelectedEdgeId(edge.id);
     setEdgeEditId(edge.id);
     setEdgeEditLabel(typeof edge.label === "string" ? edge.label : "");
@@ -870,7 +1004,12 @@ function FlowchartInner({
           id,
           type,
           position,
-          data: { label: DEFAULT_LABELS[type] ?? "Nodo", variant: type, onLabelChange },
+          data: {
+            label: DEFAULT_LABELS[type] ?? "Nodo",
+            ...(type === "system" ? { sublabel: "Sistema" } : {}),
+            variant: type,
+            onLabelChange,
+          },
         } as Node,
       ]);
       setIsDirty(true);
@@ -903,7 +1042,14 @@ function FlowchartInner({
 
   // ── Serializar estado actual para guardar ─────────────────────────────────
   const getCurrentData = useCallback(
-    (): FlowchartData => ({
+    (): FlowchartData => {
+      // Pipeline: NO persistir posiciones de nodos → al recargar corre getPipelineLayout de nuevo,
+      // regenerando los fondos de columna + el título (sintéticos, no serializados). El texto y los
+      // nodos agregados sí persisten. Integración/clásicos SÍ persisten posiciones.
+      const isPipeline = nodes.some((n) =>
+        ["pipeline_stage", "trigger", "action", "follow_up", "outcome_positive", "outcome_negative", "lifecycle_change", "lead_status"].includes(n.type ?? ""),
+      );
+      return {
       title:       data.title,
       description: data.description,
       nodes: nodes.filter((n) => !n.id.startsWith("__bg_col_") && !n.id.startsWith("__pipeline_")).map((n) => ({
@@ -915,11 +1061,16 @@ function FlowchartInner({
         detail:       (n.data.detail       as string | undefined) || undefined,
         icon:         (n.data.icon         as string | undefined) || undefined,
         pipelineName: (n.data.pipelineName as string | undefined) || undefined,
-        position:     n.position,
+        systemColor:  (n.data.systemColor  as string | undefined) || undefined,
+        position:     isPipeline ? undefined : n.position,
       })),
       edges: edges.map((e) => {
         const stroke = (e.style as { stroke?: string })?.stroke;
         const dashArray = (e.style as { strokeDasharray?: string })?.strokeDasharray;
+        const d = e.data as {
+          labelT?: number; labelSide?: number;
+          direction?: "to" | "bidir"; syncType?: "realtime" | "batch" | "manual"; pending?: boolean;
+        } | undefined;
         return {
           id:           e.id,
           source:       e.source,
@@ -933,9 +1084,16 @@ function FlowchartInner({
             : "default" as const,
           strokeColor:  stroke || undefined,
           dashed:       dashArray ? true : undefined,
+          // Integración: posición manual de etiqueta + semántica de flujo (round-trip).
+          labelT:       typeof d?.labelT === "number" ? d.labelT : undefined,
+          labelSide:    typeof d?.labelSide === "number" ? (d.labelSide as -1 | 0 | 1) : undefined,
+          direction:    d?.direction,
+          syncType:     d?.syncType,
+          pending:      d?.pending || undefined,
         };
       }),
-    }),
+      };
+    },
     [nodes, edges, data]
   );
 
@@ -982,6 +1140,15 @@ function FlowchartInner({
           nodePopupOpen={nodePopupOpen}
           setNodePopupOpen={setNodePopupOpen}
           addNode={addNode}
+          diagramKind={
+            nodes.some((n) => n.type === "system")
+              ? "integration"
+              : nodes.some((n) =>
+                  ["pipeline_stage", "trigger", "action", "follow_up", "outcome_positive", "outcome_negative", "lifecycle_change", "lead_status"].includes(n.type ?? ""),
+                )
+                ? "pipeline"
+                : "classic"
+          }
           direction={direction}
           onToggleDirection={() => {
             const newDir = direction === "LR" ? "TB" : "LR";
@@ -1078,30 +1245,32 @@ function FlowchartInner({
         onDragOver={isFullscreen ? onDragOver : undefined}
         onInit={(instance) => { rfInstance.current = instance; }}
         nodeTypes={NODE_TYPES}
-        connectionMode={isFullscreen ? ConnectionMode.Loose : ConnectionMode.Strict}
+        edgeTypes={EDGE_TYPES}
+        connectionMode={ConnectionMode.Loose}
         connectionRadius={isFullscreen ? 40 : 0}
         deleteKeyCode={isFullscreen ? ["Delete", "Backspace"] : []}
         multiSelectionKeyCode={isFullscreen ? ["Control", "Meta"] : []}
         selectionOnDrag={false}
         selectionKeyCode={isFullscreen ? ["Control", "Meta"] : []}
-        panOnDrag={isFullscreen ? true : false}
+        panOnDrag={isFullscreen ? true : [0]}
         nodesDraggable={isFullscreen}
         nodesConnectable={isFullscreen}
         elementsSelectable={isFullscreen}
         fitView
-        fitViewOptions={{ padding: 0.08, minZoom: 0.1, maxZoom: isFullscreen ? 1.5 : 0.8 }}
+        fitViewOptions={{ padding: 0.08, minZoom: 0.1, maxZoom: isFullscreen ? 1.5 : 1.2 }}
         minZoom={0.1}
-        maxZoom={isFullscreen ? 2 : 0.8}
+        maxZoom={isFullscreen ? 2 : 1.6}
         panOnScroll={isFullscreen}
         panOnScrollSpeed={0.8}
         zoomOnScroll={false}
-        zoomOnPinch={isFullscreen}
+        zoomOnPinch={true}
         zoomOnDoubleClick={false}
         preventScrolling={isFullscreen}
         proOptions={{ hideAttribution: true }}
       >
-        {isFullscreen && <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#e2e8f0" />}
-        {isFullscreen && <Controls showInteractive={false} className="!bg-white !border-gray-200 !shadow-sm !rounded-xl" />}
+        <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#e2e8f0" />
+        {/* Controles de zoom — también embebido, para leer el diagrama sin fullscreen. */}
+        <Controls showInteractive={false} className="!bg-white !border-gray-200 !shadow-sm !rounded-xl" />
 
         {/* Guías de alineación */}
         {guidelines.length > 0 && <SnapGuidelines guidelines={guidelines} />}
