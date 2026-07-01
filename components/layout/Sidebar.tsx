@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "@/lib/theme";
+import { isSalesAreaRole } from "@/lib/auth/sales-roles";
 
 interface ClientSummary {
   id: string;
@@ -225,10 +226,10 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
   // accesos que el rol no usa. Universales (todos): Clientes, ICP, Sesiones, Conocimientos.
   const role = user.role ?? "";
   const isSuperAdmin = user.isSuperAdmin || role === "SUPER_ADMIN";
-  const canSeeAgents = isSuperAdmin || ["VENTAS", "CSL", "MARKETING"].includes(role); // todos menos CSE
-  const canSeePortfolio = isSuperAdmin || ["VENTAS", "CSL", "MARKETING"].includes(role); // Cartera: seeAllClients (todos menos CSE)
-  const canSeeSales = isSuperAdmin || ["VENTAS", "CSL"].includes(role);                  // Ventas: VENTAS/CSL/SUPER_ADMIN
-  const canSeeAudits = isSuperAdmin || ["VENTAS", "CSL"].includes(role);              // super admin, CSL, ventas
+  const canSeeAgents = isSuperAdmin || ["VENTAS", "DEV", "CSL", "MARKETING"].includes(role); // todos menos CSE (DEV ≡ VENTAS)
+  const canSeePortfolio = isSuperAdmin || ["VENTAS", "DEV", "CSL", "MARKETING"].includes(role); // Cartera: seeAllClients (todos menos CSE)
+  const canSeeSales = isSalesAreaRole(role);                                            // Ventas/Business Cases (incluye DEV) — fuente única
+  const canSeeAudits = isSuperAdmin || ["VENTAS", "DEV", "CSL"].includes(role);        // super admin, CSL, ventas, dev
   const canSeeTeam = isSuperAdmin;                                                     // solo super admin
   const canSeeConfig = isSuperAdmin || ["CSL", "MARKETING"].includes(role);            // super admin + CSL/Marketing
 

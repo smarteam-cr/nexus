@@ -33,7 +33,10 @@ export function isCseMember(m: TeamMemberLite): boolean {
 // variantes usuales (case-insensitive). Ajustar si el valor real en TeamMember difiere.
 export function isDevMember(m: TeamMemberLite): boolean {
   const a = (m.area ?? "").trim().toLowerCase();
-  return a === "development" || a === "dev" || a === "desarrollo" || a === "developer";
+  return (
+    a === "development" || a === "dev" || a === "desarrollo" || a === "developer" ||
+    m.roleEnum === "DEV"
+  );
 }
 
 /**

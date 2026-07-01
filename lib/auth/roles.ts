@@ -5,19 +5,20 @@
  * es solo para análisis de sesiones y NO se decide acá.
  *
  * Matriz de capacidades (fuente real = el objeto CAPABILITIES más abajo):
- *   | capacidad        | CSE | VENTAS | CSL | MARKETING | SUPER_ADMIN |
- *   | seeAllClients    |  ✗  |   ✓    |  ✓  |     ✓     |      ✓      |
- *   | handoffAnywhere  |  ✗  |   ✓    |  ✓  |     ✓     |      ✓      |
- *   | createHandoff    |  ✗  |   ✓    |  ✗  |     ✗     |      ✓      |
- *   | shareClients     |  ✗  |   ✗    |  ✓  |     ✓     |      ✓      |
- *   | deleteClients    |  ✗  |   ✗    |  ✓  |     ✗     |      ✓      |
- *   | manageTeam       |  ✗  |   ✗    |  ✗  |     ✗     |      ✓      |
- *   | editTimeline     |  ✓  |   ✓    |  ✓  |     ✓     |      ✓      |
- *   | deleteTimeline   |  ✗  |   ✓    |  ✓  |     ✓     |      ✓      |
+ *   | capacidad        | CSE | VENTAS | DEV | CSL | MARKETING | SUPER_ADMIN |
+ *   | seeAllClients    |  ✗  |   ✓    |  ✓  |  ✓  |     ✓     |      ✓      |
+ *   | handoffAnywhere  |  ✗  |   ✓    |  ✓  |  ✓  |     ✓     |      ✓      |
+ *   | createHandoff    |  ✗  |   ✓    |  ✓  |  ✗  |     ✗     |      ✓      |
+ *   | shareClients     |  ✗  |   ✗    |  ✗  |  ✓  |     ✓     |      ✓      |
+ *   | deleteClients    |  ✗  |   ✗    |  ✗  |  ✓  |     ✗     |      ✓      |
+ *   | manageTeam       |  ✗  |   ✗    |  ✗  |  ✗  |     ✗     |      ✓      |
+ *   | editTimeline     |  ✓  |   ✓    |  ✓  |  ✓  |     ✓     |      ✓      |
+ *   | deleteTimeline   |  ✗  |   ✓    |  ✓  |  ✓  |     ✓     |      ✓      |
  *
  * CSE es el único "scoped" (ve solo sus clientes asignados + compartidos).
- * MARKETING ≡ CSL en capacidades (etiqueta distinta). SUPER_ADMIN es el único
- * que gestiona el equipo.
+ * MARKETING ≡ CSL en capacidades (etiqueta distinta). DEV ≡ VENTAS en capacidades
+ * (rol técnico: ve todo + cronogramas + handoffs; + acceso al área de Ventas).
+ * SUPER_ADMIN es el único que gestiona el equipo.
  */
 import type { TeamRole } from "@prisma/client";
 import { requireInternalUser, ForbiddenError } from "./supabase";
@@ -39,6 +40,8 @@ export type Capability =
 const CAPABILITIES: Record<TeamRole, ReadonlyArray<Capability>> = {
   CSE: ["editTimeline"],
   VENTAS: ["seeAllClients", "handoffAnywhere", "createHandoff", "editTimeline", "deleteTimeline"],
+  // DEV (equipo técnico) = mismas capacidades que VENTAS. Ver la matriz arriba.
+  DEV: ["seeAllClients", "handoffAnywhere", "createHandoff", "editTimeline", "deleteTimeline"],
   CSL: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients", "editTimeline", "deleteTimeline"],
   MARKETING: ["seeAllClients", "handoffAnywhere", "shareClients", "editTimeline", "deleteTimeline"],
   SUPER_ADMIN: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients", "manageTeam", "createHandoff", "editTimeline", "deleteTimeline"],
@@ -48,6 +51,7 @@ const CAPABILITIES: Record<TeamRole, ReadonlyArray<Capability>> = {
 export const ROLE_RANK: Record<TeamRole, number> = {
   CSE: 1,
   VENTAS: 2,
+  DEV: 2,
   CSL: 3,
   MARKETING: 3,
   SUPER_ADMIN: 4,
@@ -57,6 +61,7 @@ export const ROLE_RANK: Record<TeamRole, number> = {
 export const ROLE_LABEL: Record<TeamRole, string> = {
   CSE: "CSE",
   VENTAS: "Ventas",
+  DEV: "Dev",
   CSL: "CSL",
   MARKETING: "Marketing",
   SUPER_ADMIN: "Super Admin",

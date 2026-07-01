@@ -1053,6 +1053,7 @@ enum TeamRole {
   VENTAS      // ve todo + handoff en cualquiera; NO comparte
   CSL         // ve todo + handoff en cualquiera + comparte; NO gestiona equipo
   MARKETING   // capacidades = CSL (etiqueta distinta para análisis/UI)
+  DEV         // equipo técnico: capacidades = VENTAS (ve todo + cronogramas + handoffs) + área Ventas
   SUPER_ADMIN // todo + ÚNICO que gestiona el equipo (alta/baja/cambio de rol)
 }
 

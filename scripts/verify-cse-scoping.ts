@@ -17,7 +17,7 @@ import "dotenv/config";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
-const SEE_ALL: TeamRole[] = ["VENTAS", "CSL", "MARKETING", "SUPER_ADMIN"];
+const SEE_ALL: TeamRole[] = ["VENTAS", "DEV", "CSL", "MARKETING", "SUPER_ADMIN"];
 
 async function accessibleIds(email: string, role: TeamRole): Promise<Set<string> | "ALL"> {
   if (SEE_ALL.includes(role)) return "ALL";

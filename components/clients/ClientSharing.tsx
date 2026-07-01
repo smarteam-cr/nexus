@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 const ROLE_OPTIONS = [
   { value: "CSE", label: "CSE" },
   { value: "VENTAS", label: "Ventas" },
+  { value: "DEV", label: "Dev" },
   { value: "CSL", label: "CSL" },
   { value: "MARKETING", label: "Marketing" },
   { value: "SUPER_ADMIN", label: "Super Admin" },

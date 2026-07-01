@@ -13,6 +13,7 @@ import {
 } from "@/lib/auth/supabase";
 import { accessibleClientWhere, sharedClientIdsFor } from "@/lib/auth/access";
 import { hasCapability } from "@/lib/auth/roles";
+import { isSalesAreaRole } from "@/lib/auth/sales-roles";
 import ClientsGrid, { type ClientRow } from "./ClientsGrid";
 
 // Render dinámico — la página depende del usuario logueado (sesión Supabase
@@ -32,8 +33,8 @@ export default async function ClientsPage() {
 
   // Shape compatible con el viejo ActiveCse para el ClientsGrid client component.
   const roleEnum = user.teamMember?.roleEnum;
-  // Acceso al área de Ventas (Business Cases) — mismo gate que /business-cases.
-  const canSeeSales = roleEnum ? ["VENTAS", "CSL", "SUPER_ADMIN"].includes(roleEnum) : false;
+  // Acceso al área de Ventas (Business Cases) — mismo gate que /business-cases (incluye DEV).
+  const canSeeSales = isSalesAreaRole(roleEnum);
   const activeCse = {
     email: user.email,
     name: user.teamMember?.name ?? user.email,

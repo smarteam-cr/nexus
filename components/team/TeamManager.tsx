@@ -19,7 +19,7 @@ interface TeamMember {
   /** Área funcional (eje de ANÁLISIS de sesiones): Ventas / CSE / Marketing / … */
   area: string | null;
   /** Rol de PERMISO (TeamRole). */
-  roleEnum: "CSE" | "VENTAS" | "CSL" | "MARKETING" | "SUPER_ADMIN" | string;
+  roleEnum: "CSE" | "VENTAS" | "DEV" | "CSL" | "MARKETING" | "SUPER_ADMIN" | string;
   createdAt: string;
 }
 
@@ -27,6 +27,7 @@ interface TeamMember {
 const ROLE_LABEL: Record<string, string> = {
   CSE: "CSE",
   VENTAS: "Ventas",
+  DEV: "Dev",
   CSL: "CSL",
   MARKETING: "Marketing",
   SUPER_ADMIN: "Super Admin",

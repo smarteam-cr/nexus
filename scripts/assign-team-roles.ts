@@ -4,7 +4,7 @@
  * Asigna el roleEnum (PERMISO) y el area (ANÁLISIS) del equipo activo según la
  * matriz aprobada. Reemplaza al viejo migrate-team-member-roles.ts.
  *
- *   roleEnum (permiso): CSE | VENTAS | CSL | MARKETING | SUPER_ADMIN
+ *   roleEnum (permiso): CSE | VENTAS | DEV | CSL | MARKETING | SUPER_ADMIN
  *   area (análisis):    Ventas | CSE | CSL | Marketing | Development | RevOps | Admin
  *
  * Caso Marco Salas: roleEnum=SUPER_ADMIN pero area=Ventas (para que el análisis
@@ -32,8 +32,10 @@ const ASSIGNMENTS: Record<string, { roleEnum: TeamRole; area: string }> = {
   // su transición PM→Marketing esté completa (preserva fidelidad del histórico).
   "aortega@smarteamcr.com":   { roleEnum: "MARKETING",   area: "PM" },
   "lflores@smarteamcr.com":   { roleEnum: "MARKETING",   area: "Marketing" },
-  "arodriguez@smarteamcr.com":{ roleEnum: "CSE",         area: "Development" },
-  "asalas@smarteamcr.com":    { roleEnum: "CSE",         area: "Development" },
+  // Equipo de desarrollo: rol DEV (idéntico a Ventas). area=Development (eje análisis).
+  "arodriguez@smarteamcr.com":{ roleEnum: "DEV",         area: "Development" },
+  "asalas@smarteamcr.com":    { roleEnum: "DEV",         area: "Development" },
+  "bsalas@smarteamcr.com":    { roleEnum: "DEV",         area: "Development" },
 };
 
 const pool = new Pool({

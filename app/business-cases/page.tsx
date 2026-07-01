@@ -1,6 +1,6 @@
 /**
  * /business-cases — hub del área de Ventas: lista todos los business cases
- * (prospectos y clientes) + "Nuevo". Gateado por VENTAS/CSL/SUPER_ADMIN.
+ * (prospectos y clientes) + "Nuevo". Gateado por el área de Ventas (VENTAS/DEV/CSL/SUPER_ADMIN).
  */
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -8,10 +8,10 @@ import AppShell from "@/components/layout/AppShell";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { prisma } from "@/lib/db/prisma";
 import DeleteBusinessCaseButton from "@/components/business-cases/DeleteBusinessCaseButton";
+import { isSalesAreaRole } from "@/lib/auth/sales-roles";
 
 export const dynamic = "force-dynamic";
 
-const SALES_ROLES = ["VENTAS", "CSL", "SUPER_ADMIN"];
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Borrador",
   PUBLISHED: "Publicado",
@@ -20,7 +20,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default async function BusinessCasesHubPage() {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !SALES_ROLES.includes(ctx.role)) redirect("/clients");
+  if (!ctx || !isSalesAreaRole(ctx.role)) redirect("/clients");
 
   const cases = await prisma.businessCase.findMany({
     orderBy: { updatedAt: "desc" },

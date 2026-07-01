@@ -1,6 +1,6 @@
 /**
  * /business-cases/new — crear un business case sobre una empresa de HubSpot
- * (stepper on-page). Gateado por rol VENTAS/CSL/SUPER_ADMIN.
+ * (stepper on-page). Gateado por el área de Ventas (VENTAS/DEV/CSL/SUPER_ADMIN).
  */
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -8,14 +8,13 @@ import AppShell from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/ui";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import BusinessCaseStepper from "@/components/business-cases/BusinessCaseStepper";
+import { isSalesAreaRole } from "@/lib/auth/sales-roles";
 
 export const dynamic = "force-dynamic";
 
-const SALES_ROLES = ["VENTAS", "CSL", "SUPER_ADMIN"];
-
 export default async function NewBusinessCasePage() {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !SALES_ROLES.includes(ctx.role)) redirect("/clients");
+  if (!ctx || !isSalesAreaRole(ctx.role)) redirect("/clients");
 
   return (
     <AppShell>

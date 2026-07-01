@@ -1,7 +1,7 @@
 /**
  * /business-cases/[id] — workspace de un business case (por businessCaseId).
  * F2: shell mínimo (header). El panel de sesiones de contexto, la generación y el
- * editor de canvas se construyen en F3–F5. Gateado por VENTAS/CSL/SUPER_ADMIN.
+ * editor de canvas se construyen en F3–F5. Gateado por el área de Ventas (VENTAS/DEV/CSL/SUPER_ADMIN).
  */
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
@@ -9,10 +9,10 @@ import AppShell from "@/components/layout/AppShell";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { prisma } from "@/lib/db/prisma";
 import BusinessCaseWorkspace from "@/components/business-cases/BusinessCaseWorkspace";
+import { isSalesAreaRole } from "@/lib/auth/sales-roles";
 
 export const dynamic = "force-dynamic";
 
-const SALES_ROLES = ["VENTAS", "CSL", "SUPER_ADMIN"];
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Borrador",
   PUBLISHED: "Publicado",
@@ -26,7 +26,7 @@ export default async function BusinessCasePage({
 }) {
   const { id } = await params;
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !SALES_ROLES.includes(ctx.role)) redirect("/clients");
+  if (!ctx || !isSalesAreaRole(ctx.role)) redirect("/clients");
 
   const bc = await prisma.businessCase.findUnique({
     where: { id },

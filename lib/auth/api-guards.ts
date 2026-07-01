@@ -27,6 +27,7 @@ import {
   type AppUserWithTeamMember,
 } from "./supabase";
 import { requireCapability, requireRole, type Capability } from "./roles";
+import { isSalesAreaRole } from "./sales-roles";
 import type { TeamRole } from "@prisma/client";
 
 function toErrorResponse(e: unknown): NextResponse | null {
@@ -240,18 +241,18 @@ export async function denyHandoffCanvasEditForCse(canvasName: string): Promise<N
 }
 
 /**
- * Acceso al área de VENTAS (Business Cases). Reusa el rol VENTAS existente: solo
- * VENTAS, CSL y SUPER_ADMIN entran (CSE no; MARKETING tampoco — decisión del
- * pedido). Devuelve el bundle de usuario interno o una NextResponse 401/403.
+ * Acceso al área de VENTAS (Business Cases). Whitelist de roles = fuente única
+ * `SALES_AREA_ROLES` (lib/auth/sales-roles.ts): VENTAS, DEV, CSL y SUPER_ADMIN
+ * (CSE no; MARKETING tampoco). DEV entra porque su alcance es "idéntico a Ventas".
+ * La MISMA lista gatea las páginas/UI del área — no re-declarar el array acá.
+ * Devuelve el bundle de usuario interno o una NextResponse 401/403.
  */
-const SALES_ROLES: ReadonlyArray<TeamRole> = ["VENTAS", "CSL", "SUPER_ADMIN"];
-
 export async function guardSalesAccess(): Promise<
   Awaited<ReturnType<typeof requireInternalUser>> | NextResponse
 > {
   const guard = await guardInternalUser();
   if (guard instanceof NextResponse) return guard;
-  if (!SALES_ROLES.includes(guard.role)) {
+  if (!isSalesAreaRole(guard.role)) {
     return NextResponse.json(
       { error: "Tu rol no tiene acceso al área de Ventas." },
       { status: 403 },

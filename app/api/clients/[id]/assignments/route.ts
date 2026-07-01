@@ -13,7 +13,7 @@ import { guardCapability } from "@/lib/auth/api-guards";
  * el destinatario.
  */
 
-const TEAM_ROLES = ["CSE", "VENTAS", "CSL", "MARKETING", "SUPER_ADMIN"] as const;
+const TEAM_ROLES = ["CSE", "VENTAS", "DEV", "CSL", "MARKETING", "SUPER_ADMIN"] as const;
 const KINDS = ["GRANT", "REVOKE"] as const;
 
 const createSchema = z
