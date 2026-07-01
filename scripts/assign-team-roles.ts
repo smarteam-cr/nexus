@@ -38,6 +38,13 @@ const ASSIGNMENTS: Record<string, { roleEnum: TeamRole; area: string }> = {
   "bsalas@smarteamcr.com":    { roleEnum: "DEV",         area: "Development" },
 };
 
+// El equipo ya existe como TeamMember salvo Breiner Salas → se CREA si falta (y el
+// loop de abajo le asigna el rol). NO se usa scripts/seed-team.ts porque su roster
+// está desactualizado (no contiene al equipo actual) y correrlo crearía miembros viejos.
+const CREATE_IF_MISSING: { name: string; email: string; area: string }[] = [
+  { name: "Breiner Salas", email: "bsalas@smarteamcr.com", area: "Development" },
+];
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
   ssl: { rejectUnauthorized: false },
@@ -46,6 +53,18 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 async function main() {
   console.log(APPLY ? "APLICANDO asignaciones de rol…\n" : "DRY-RUN (usá --apply para escribir)\n");
+
+  // Crear los miembros que falten (hoy solo Breiner) ANTES de asignar roles.
+  for (const m of CREATE_IF_MISSING) {
+    const existing = await prisma.teamMember.findUnique({ where: { email: m.email }, select: { id: true } });
+    if (existing) continue;
+    if (APPLY) {
+      await prisma.teamMember.create({ data: { name: m.name, email: m.email, area: m.area } });
+      console.log(`+ creado ${m.name} <${m.email}> (area=${m.area}) → rol asignado abajo`);
+    } else {
+      console.log(`+ (crearía) ${m.name} <${m.email}> (area=${m.area})`);
+    }
+  }
 
   const members = await prisma.teamMember.findMany({
     select: { id: true, name: true, email: true, roleEnum: true, area: true },
