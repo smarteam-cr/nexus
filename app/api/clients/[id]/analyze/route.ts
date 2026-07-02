@@ -647,6 +647,17 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   const HANDOFF_LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000;
   const handoffCutoffMs = Date.now() - HANDOFF_LOOKBACK_MS;
 
+  // ── Perfil de contexto por agente ─────────────────────────────────────────
+  // El MAPEO DE PROCESOS necesita ver MUCHO más transcript que el resto (detectar
+  // todos los procesos hablados: ventas, servicio, cobranza…): más sesiones, caps
+  // de bloque amplios, timeline extendido y fuentes manuales. Los defaults del
+  // "resto" son idénticos a los literales históricos → cero cambio para
+  // handoff/diagnóstico/kickoff/planificación.
+  const isMapeoAgent = agent.id === "agent-mapeo-inicial";
+  const CTX = isMapeoAgent
+    ? { maxSales: 7, maxCS: 8, perSessionChars: 9000, salesBlockCap: 60000, csBlockCap: 60000, timelineCap: 12000, manualCap: 20000 }
+    : { maxSales: 6, maxCS: 6, perSessionChars: Infinity, salesBlockCap: 4000, csBlockCap: 5000, timelineCap: 8000, manualCap: 12000 };
+
   // Las listas de keywords y el clasificador de relevancia para handoff viven en
   // lib/handoff/session-relevance.ts (importadas arriba; compartidas con la revisión A2).
   function normalizeTitle(t: string): string {
@@ -767,21 +778,26 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       );
     }
 
-    // Transcripciones de CS / Kickoff / Handoff (máx 6) — vacío para handoff agent.
-    const topCS = csSessions.sort((a, b) => b.date - a.date).slice(0, 6);
+    // Cap por sesión (perfil): evita que una sesión monstruosa se coma el presupuesto
+    // de las demás. Infinity para el resto de agentes (comportamiento histórico).
+    const capSession = (c: string) =>
+      Number.isFinite(CTX.perSessionChars) ? c.slice(0, CTX.perSessionChars) : c;
+
+    // Transcripciones de CS / Kickoff / Handoff (cap por perfil) — vacío para handoff agent.
+    const topCS = csSessions.sort((a, b) => b.date - a.date).slice(0, CTX.maxCS);
     if (topCS.length > 0) {
       const contents = await Promise.all(topCS.map((s) => fetchOrFallback(s)));
-      firefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
+      firefliesContent = contents.filter(Boolean).map(capSession).join("\n\n---\n\n");
     }
 
-    // Transcripciones de ventas (máx 6).
+    // Transcripciones de ventas (cap por perfil).
     // Si no hay transcript, se inyecta metadata (título, fecha, participantes)
     // para que el agente sepa al menos que la reunión existió.
-    // El handoff puede traer hasta 10 sesiones de venta; el resto de agentes, 6.
-    const topSales = salesSessions.sort((a, b) => b.date - a.date).slice(0, isHandoffAgent ? 10 : 6);
+    // El handoff puede traer hasta 10 sesiones de venta; el resto según su perfil.
+    const topSales = salesSessions.sort((a, b) => b.date - a.date).slice(0, isHandoffAgent ? 10 : CTX.maxSales);
     if (topSales.length > 0) {
       const contents = await Promise.all(topSales.map((s) => fetchOrFallback(s)));
-      salesFirefliesContent = contents.filter(Boolean).join("\n\n---\n\n");
+      salesFirefliesContent = contents.filter(Boolean).map(capSession).join("\n\n---\n\n");
     }
     if (isHandoffAgent) handoffSourceSessionIds = topSales.map((s) => s.id);
 
@@ -798,8 +814,24 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         const joined = manualSources
           .map((s, i) => `### Fuente manual: ${s.title?.trim() || `(sin título ${i + 1})`}\n${s.content.trim()}`)
           .join("\n\n---\n\n")
-          .slice(0, 12000);
+          .slice(0, CTX.manualCap);
         manualSourcesContent = `=== FUENTES MANUALES (transcripts/resúmenes pegados a mano — NO vinieron por el sync verificado de Google Workspace; usalos como fuente complementaria y atribuí explícitamente lo que salga de acá) ===\n${joined}\n\n`;
+      }
+    } else if (isMapeoAgent) {
+      // El mapeo corre a nivel CLIENTE: una fuente manual pegada en cualquier proyecto
+      // del cliente es evidencia de procesos → entran TODAS, etiquetadas por proyecto.
+      const manualSources = await prisma.handoffSource.findMany({
+        where: { deletedAt: null, project: { clientId } },
+        orderBy: { createdAt: "asc" },
+        select: { title: true, content: true, project: { select: { name: true } } },
+        take: 30, // el bloque igual se recorta a manualCap; sin take, un cliente con muchas fuentes @db.Text cargaría MB para tirar casi todo
+      });
+      if (manualSources.length > 0) {
+        const joined = manualSources
+          .map((s, i) => `### Fuente manual [proyecto: ${s.project?.name ?? "?"}]: ${s.title?.trim() || `(sin título ${i + 1})`}\n${s.content.trim()}`)
+          .join("\n\n---\n\n")
+          .slice(0, CTX.manualCap);
+        manualSourcesContent = `=== FUENTES MANUALES (transcripts/resúmenes pegados a mano por el equipo — fuente complementaria; atribuí explícitamente lo que salga de acá) ===\n${joined}\n\n`;
       }
     }
 
@@ -821,7 +853,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         const dateStr = new Date(s.date).toISOString().slice(0, 10);
         const inSales = salesSessions.some((sl) => sl.id === s.id);
         const reason = inSales
-          ? "no usada (cap de 6)"
+          ? `no usada (cap de ${isHandoffAgent ? 10 : CTX.maxSales})`
           : bodyProjectId
           ? "vinculada pero no usada"
           : s.date < handoffCutoffMs
@@ -949,12 +981,14 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     "\n\n---\nESTILO (OBLIGATORIO): Usa español con TUTEO neutro (segunda persona con \"tú\"). Conjuga SIEMPRE en forma de tú: \"Transforma\", \"centraliza\", \"optimiza\", \"conecta\", \"tienes\", \"puedes\", \"necesitas\", \"tu equipo\". PROHIBIDO el voseo: NUNCA escribas \"Transformá\", \"centralizá\", \"optimizá\", \"tenés\", \"querés\", \"podés\", \"necesitás\" ni \"vos\".";
 
   // Para CARDS_AND_FLOWCHARTS: instrucción sobre CUÁNTOS flowcharts generar. El agente de MAPEO
-  // (agent-mapeo-inicial) prioriza LEGIBILIDAD (prompt v3: 1-3 procesos, calidad > cantidad); los
-  // demás CAF (p.ej. diagnóstico) sí quieren exhaustividad. Se separan para no darle órdenes opuestas.
+  // (agent-mapeo-inicial, prompt v4) mapea TODOS los procesos con sustancia — la legibilidad es
+  // POR diagrama (10-18 nodos), no un límite de cantidad. ⚠ Mantener alineado con el prompt en DB
+  // (scripts/update-mapeo-agent.ts): si uno dice "todos" y el otro "1-3", el agente recibe
+  // órdenes contradictorias. Los demás CAF (p.ej. diagnóstico) conservan su exhaustividad propia.
   if (isCardsAndFlowcharts) {
-    if (agent.id === "agent-mapeo-inicial") {
+    if (isMapeoAgent) {
       effectiveSystemPrompt +=
-        "\n\n---\nINSTRUCCIÓN: Mapea SOLO los 1-3 procesos operativos MÁS IMPORTANTES (calidad > cantidad). Un flowchart por proceso RELEVANTE; consolida los micro-pasos en vez de crear un diagrama por cada micro-flujo. Prioridad #1: LEGIBILIDAD — mejor pocos mapas limpios que se entienden que muchos saturados.";
+        "\n\n---\nINSTRUCCIÓN: PRIMERO enumera los procesos operativos DISTINTOS que el cliente describió CON SUSTANCIA en las fuentes (ventas, servicio/tickets, cobranza, onboarding, integración…). Genera UN flowchart por CADA UNO (típico 2-5). La legibilidad se logra POR diagrama (pipeline: 10-18 nodos; mapa de sistemas: 3-8 sistemas — consolida micro-pasos), NO recortando procesos. No dupliques un proceso ya cubierto como etapa de otro salvo zoom con detalle nuevo. Si un proceso se menciona al pasar sin detalle operativo, no inventes el diagrama: va a 'Puntos ciegos' de la card.";
     } else {
       effectiveSystemPrompt +=
         "\n\n---\nINSTRUCCIÓN CRÍTICA: Analiza los datos del cliente como si fuera la PRIMERA VEZ que los ves, sin asumir ningún resultado previo. Identifica TODOS los procesos operacionales distintos mencionados en las transcripciones, notas y documentos. Cada proceso que tenga un flujo de trabajo propio (con pasos, responsables o herramientas diferentes) debe tener SU PROPIO flowchart independiente. Reglas estrictas: (1) Sé exhaustivo — NO omitas ningún proceso identificable. (2) NO combines procesos distintos en un solo flowchart. (3) El número final de flowcharts debe reflejar exactamente cuántos procesos operacionales distintos encontraste. (4) Si identificas N procesos → genera N flowcharts. Nunca menos.";
@@ -1142,7 +1176,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // Bloque del timeline de HubSpot (notas + Zoom), inyectado junto a las fuentes crudas.
   const hubspotTimelineBlock = companyTimelineContent.trim()
     ? `=== TIMELINE DE HUBSPOT (notas + llamadas/reuniones Zoom) ===
-${companyTimelineContent.slice(0, 8000)}
+${companyTimelineContent.slice(0, CTX.timelineCap)}
 
 `
     : "";
@@ -1189,7 +1223,7 @@ ${[
     return `${tag} **${c.title}:**\n${c.content}`;
   }),
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
-].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${hubspotTimelineBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, isHandoffAgent ? 12000 : 4000)}\n\n` : ""}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, 5000)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
+].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${hubspotTimelineBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, isHandoffAgent ? 12000 : CTX.salesBlockCap)}\n\n` : ""}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 10b. Input del agente Kickoff ─────────────────────────────────────────────
@@ -1319,7 +1353,10 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   // CARDS_AND_FLOWCHARTS genera varios diagramas grandes (8-15 nodos c/u) + cards;
   // con 16k la salida se trunca (stop_reason=max_tokens) → JSON irrecuperable →
   // invalid_response → run fallido. Más techo evita la truncación.
-  const maxTokens = isCardsAndFlowcharts ? 32000 : 16000;
+  // El mapeo puede emitir 4-6 diagramas (~4-6k tokens c/u) + card → 32k es riesgo
+  // cierto de max_tokens; 64k da margen (Sonnet lo soporta con streaming, que este
+  // path ya usa; el techo no cuesta — se factura lo generado).
+  const maxTokens = isCardsAndFlowcharts ? (isMapeoAgent ? 64000 : 32000) : 16000;
   let analysisJson: {
     cards?: { title: string; content: string }[];
     suggestions?: Array<{ title?: string; content?: string; type?: string; suggestedSection?: string }>;
@@ -1676,8 +1713,11 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
       (card: { title?: string; content?: string }) => card.title?.trim()
     );
 
-    // Crear cards de texto (con canvasSection si la tienen)
-    if (validCards.length > 0) {
+    // Crear cards de texto (con canvasSection si la tienen). El MAPEO no crea
+    // ClientContextCards: su card "Procesos Clave" va como bloque TEXT CONFIRMED a la
+    // sección Procesos vía syncFlowchartsToProcesos (abajo) — nada que aceptar. Los demás
+    // CAF (diagnóstico-marketing…) conservan su flujo de revisión (draft + banner).
+    if (validCards.length > 0 && !isMapeoAgent) {
       await prisma.clientContextCard.createMany({
         data: validCards.map((card: { title: string; content: string; canvasSection?: string }, i: number) => ({
           clientId,
@@ -1705,7 +1745,11 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
     const flowcharts = analysisJson!.flowcharts ?? [];
     console.log(`[analyze CAF] Saving ${flowcharts.length} flowcharts, projectId=${bodyProjectId}, clientId=${clientId}`);
     try {
-      const nBlocks = await syncFlowchartsToProcesos(clientId, flowcharts, { agentId: agent.id, agentRunId: run.id });
+      const nBlocks = await syncFlowchartsToProcesos(clientId, flowcharts, {
+        agentId: agent.id,
+        agentRunId: run.id,
+        summaryCards: isMapeoAgent ? validCards : undefined,
+      });
       console.log(`[analyze CAF] syncFlowchartsToProcesos → ${nBlocks} bloque(s) en Procesos`);
     } catch (e) {
       console.error("[analyze CAF] syncFlowchartsToProcesos error:", e);
@@ -1740,10 +1784,12 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
       }
     }
 
-    // Guardar los flowcharts en AgentRun.output como backup
+    // Backup en AgentRun.output: cards + flowcharts. Las cards del mapeo NO viven en
+    // ClientContextCard (van a CanvasBlock vía el sync) → sin esto, si el sync falla o el
+    // guard corta (0 flowcharts válidos), el texto de la card no quedaría en ningún lado.
     await prisma.agentRun.update({
       where: { id: run.id },
-      data: { output: JSON.stringify({ flowcharts }) },
+      data: { output: JSON.stringify({ cards: validCards, flowcharts }) },
     });
 
     const runCards = await prisma.clientContextCard.findMany({

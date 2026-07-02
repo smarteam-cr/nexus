@@ -10,7 +10,7 @@ interface NodeData {
   sublabel?: string;
   owner?: string;
   variant?: string;
-  onLabelChange?: (field: "label" | "sublabel" | "owner", value: string) => void;
+  onLabelChange?: (field: "label" | "sublabel" | "owner" | "detail", value: string) => void;
   [key: string]: unknown;
 }
 
@@ -37,14 +37,16 @@ export function EditableText({
   className = "",
   placeholder,
   multiline = false,
+  rows = 2,
   style,
 }: {
   value: string;
-  field: "label" | "sublabel" | "owner";
+  field: "label" | "sublabel" | "owner" | "detail";
   onLabelChange?: NodeData["onLabelChange"];
   className?: string;
   placeholder?: string;
   multiline?: boolean;
+  rows?: number;
   style?: React.CSSProperties;
 }) {
   const [editing, setEditing] = useState(false);
@@ -70,7 +72,7 @@ export function EditableText({
         <textarea
           ref={inputRef as React.RefObject<HTMLTextAreaElement>}
           value={draft}
-          rows={2}
+          rows={rows}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={(e) => { if (e.key === "Escape") { setDraft(value); setEditing(false); } }}
@@ -313,5 +315,34 @@ export function TextNode({ data, selected }: { data: NodeData & { fontSize?: num
         />
       </div>
     </>
+  );
+}
+
+// ── InfoNode ──────────────────────────────────────────────────────────────────
+// Caja de RESUMEN del proceso DENTRO del diagrama (fuente, responsables, herramientas,
+// fricción, qué funciona / qué no). El agente la emite en cada flowchart; el usuario la
+// edita inline (doble clic; cuerpo multilínea) o la borra/mueve como cualquier nodo.
+// Sin handles: no participa del flujo.
+
+export function InfoNode({ data }: { data: NodeData }) {
+  return (
+    <div className="group/node w-[520px] bg-slate-50/95 border border-slate-200 rounded-xl shadow-sm px-4 py-3">
+      <EditableText
+        value={data.label}
+        field="label"
+        onLabelChange={data.onLabelChange}
+        className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block"
+        placeholder="Resumen del proceso"
+      />
+      <EditableText
+        value={(data.detail as string) ?? ""}
+        field="detail"
+        onLabelChange={data.onLabelChange}
+        multiline
+        rows={8}
+        className="mt-1.5 text-xs leading-relaxed text-slate-700 whitespace-pre-wrap block"
+        placeholder="Fuente, responsables, herramientas, fricción…"
+      />
+    </div>
   );
 }

@@ -27,6 +27,7 @@ import {
   PainNode,
   AnnotationNode,
   TextNode,
+  InfoNode,
 } from "./nodes";
 import {
   PipelineTitleNode,
@@ -94,6 +95,7 @@ const NODE_TYPES = {
   pain:               PainNode,
   annotation:         AnnotationNode,
   text:               TextNode,
+  info:               InfoNode,
   // Pipeline
   pipeline_title:     PipelineTitleNode,
   column_background:  ColumnBackgroundNode,
@@ -124,51 +126,49 @@ interface ToolbarItem {
   bg: string;
 }
 
-const TOOLBAR_GROUPS: { title: string; items: ToolbarItem[] }[] = [
-  {
-    title: "Flujo",
-    items: [
-      { type: "start",    label: "Inicio",   icon: "▶", color: "text-gray-600",   bg: "bg-gray-100 hover:bg-gray-200 border-gray-200" },
-      { type: "end",      label: "Fin",      icon: "⏹", color: "text-emerald-600", bg: "bg-emerald-50 hover:bg-emerald-100 border-emerald-200" },
-      { type: "process",  label: "Proceso",  icon: "□", color: "text-blue-600",   bg: "bg-blue-50 hover:bg-blue-100 border-blue-200" },
-      { type: "decision", label: "Decisión", icon: "◇", color: "text-violet-600", bg: "bg-violet-50 hover:bg-violet-100 border-violet-200" },
-    ],
-  },
-  {
-    title: "Hallazgos",
-    items: [
-      { type: "pain",       label: "Dolor",    icon: "⚠", color: "text-red-600",    bg: "bg-red-50 hover:bg-red-100 border-red-200" },
-      { type: "annotation", label: "Nota",     icon: "📝", color: "text-amber-600", bg: "bg-amber-50 hover:bg-amber-100 border-amber-200" },
-    ],
-  },
-  {
-    title: "Integración",
-    items: [
-      { type: "system", label: "Sistema", icon: "▦", color: "text-slate-600", bg: "bg-slate-50 hover:bg-slate-100 border-slate-200" },
-    ],
-  },
-  {
-    title: "Pipeline",
-    items: [
-      { type: "pipeline_stage",   label: "Etapa",       icon: "📋", color: "text-green-700",  bg: "bg-green-50 hover:bg-green-100 border-green-200" },
-      { type: "trigger",          label: "Trigger",     icon: "⚡", color: "text-green-600",  bg: "bg-green-50 hover:bg-green-100 border-green-200" },
-      { type: "action",           label: "Acción",      icon: "⚙", color: "text-green-600",  bg: "bg-green-50 hover:bg-green-100 border-green-200" },
-      { type: "follow_up",        label: "Seguimiento", icon: "🔄", color: "text-green-600",  bg: "bg-green-50 hover:bg-green-100 border-green-200" },
-      { type: "outcome_positive", label: "Positivo",    icon: "✅", color: "text-blue-600",   bg: "bg-blue-50 hover:bg-blue-100 border-blue-200" },
-      { type: "outcome_negative", label: "Negativo",    icon: "❌", color: "text-red-600",    bg: "bg-red-50 hover:bg-red-100 border-red-200" },
-      { type: "lifecycle_change", label: "Lifecycle",   icon: "🔀", color: "text-green-600",  bg: "bg-green-50 hover:bg-green-100 border-green-200" },
-      { type: "lead_status",      label: "Status",      icon: "📊", color: "text-gray-600",   bg: "bg-gray-100 hover:bg-gray-200 border-gray-200" },
-    ],
-  },
-];
+// Catálogo plano de tipos de nodo que se pueden AGREGAR a mano. Recortado a lo esencial:
+// los tipos que solo genera el agente (follow_up, lifecycle_change, lead_status, end) siguen
+// renderizando y persistiendo (NODE_TYPES/getCurrentData intactos), pero no se ofrecen acá.
+const TOOLBAR_ITEMS: Record<string, ToolbarItem> = {
+  start:            { type: "start",            label: "Inicio",    icon: "▶", color: "text-gray-600",   bg: "bg-gray-100 hover:bg-gray-200 border-gray-200" },
+  process:          { type: "process",          label: "Proceso",   icon: "□", color: "text-blue-600",   bg: "bg-blue-50 hover:bg-blue-100 border-blue-200" },
+  decision:         { type: "decision",         label: "Decisión",  icon: "◇", color: "text-violet-600", bg: "bg-violet-50 hover:bg-violet-100 border-violet-200" },
+  pain:             { type: "pain",             label: "Dolor",     icon: "⚠", color: "text-red-600",    bg: "bg-red-50 hover:bg-red-100 border-red-200" },
+  annotation:       { type: "annotation",       label: "Nota",      icon: "📝", color: "text-amber-600",  bg: "bg-amber-50 hover:bg-amber-100 border-amber-200" },
+  info:             { type: "info",             label: "Resumen",   icon: "📄", color: "text-slate-600",  bg: "bg-slate-50 hover:bg-slate-100 border-slate-200" },
+  system:           { type: "system",           label: "Sistema",   icon: "▦", color: "text-slate-600",  bg: "bg-slate-50 hover:bg-slate-100 border-slate-200" },
+  pipeline_stage:   { type: "pipeline_stage",   label: "Etapa",     icon: "📋", color: "text-green-700",  bg: "bg-green-50 hover:bg-green-100 border-green-200" },
+  trigger:          { type: "trigger",          label: "Trigger",   icon: "⚡", color: "text-green-600",  bg: "bg-green-50 hover:bg-green-100 border-green-200" },
+  action:           { type: "action",           label: "Acción",    icon: "⚙", color: "text-green-600",  bg: "bg-green-50 hover:bg-green-100 border-green-200" },
+  outcome_positive: { type: "outcome_positive", label: "Avanza",    icon: "✅", color: "text-indigo-600", bg: "bg-indigo-50 hover:bg-indigo-100 border-indigo-200" },
+  outcome_negative: { type: "outcome_negative", label: "No avanza", icon: "❌", color: "text-red-600",    bg: "bg-red-50 hover:bg-red-100 border-red-200" },
+};
+
+// Grupos ofrecidos según el tipo de diagrama — justo lo necesario, sin mezclar vocabularios
+// (integración: 3 · clásico: 5 · pipeline: 8).
+const GROUPS_BY_KIND: Record<"integration" | "pipeline" | "classic", { title: string; types: string[] }[]> = {
+  integration: [
+    { title: "Sistemas",  types: ["system"] },
+    { title: "Hallazgos", types: ["pain", "annotation", "info"] },
+  ],
+  pipeline: [
+    { title: "Pipeline",   types: ["pipeline_stage", "trigger", "action", "decision"] },
+    { title: "Resultados", types: ["outcome_positive", "outcome_negative"] },
+    { title: "Hallazgos",  types: ["pain", "annotation", "info"] },
+  ],
+  classic: [
+    { title: "Flujo",     types: ["start", "process", "decision"] },
+    { title: "Hallazgos", types: ["pain", "annotation", "info"] },
+  ],
+};
 
 const DEFAULT_LABELS: Record<string, string> = {
   start: "Inicio", end: "Fin", process: "Nuevo proceso",
-  decision: "¿Decisión?", pain: "Punto de dolor", annotation: "Anotación",
+  decision: "¿Decisión?", pain: "Punto de dolor", annotation: "Nota",
   text: "Texto", pipeline_stage: "Nueva etapa", trigger: "Trigger", action: "Acción",
   follow_up: "Seguimiento", outcome_positive: "Avanza", outcome_negative: "No avanza",
   lifecycle_change: "Cambio lifecycle", lead_status: "Estado del lead",
-  system: "Nuevo sistema",
+  system: "Nuevo sistema", info: "Resumen del proceso",
 };
 
 // ── Componente interno (dentro del Provider) ──────────────────────────────────
@@ -185,8 +185,8 @@ function ToolbarSidebar({
   onToggleDirection,
   diagramKind,
 }: {
-  activeTool: "pointer" | "text" | "comment" | "node";
-  setActiveTool: (tool: "pointer" | "text" | "comment" | "node") => void;
+  activeTool: "pointer" | "text" | "note" | "add";
+  setActiveTool: (tool: "pointer" | "text" | "note" | "add") => void;
   nodePopupOpen: boolean;
   setNodePopupOpen: (open: boolean) => void;
   addNode: (type: string) => void;
@@ -195,13 +195,9 @@ function ToolbarSidebar({
   diagramKind: "integration" | "pipeline" | "classic";
 }) {
   // Ofrecer solo los tipos de nodo coherentes con el diagrama (no mezclar system con pipeline).
-  const GROUPS_BY_KIND: Record<string, string[]> = {
-    integration: ["Integración", "Hallazgos"],
-    pipeline: ["Flujo", "Hallazgos", "Pipeline"],
-    classic: ["Flujo", "Hallazgos"],
-  };
-  const visibleGroups = TOOLBAR_GROUPS.filter((g) => (GROUPS_BY_KIND[diagramKind] ?? GROUPS_BY_KIND.classic).includes(g.title));
-  const tools: { id: "pointer" | "text" | "comment" | "node"; icon: React.ReactNode; label: string }[] = [
+  const visibleGroups = (GROUPS_BY_KIND[diagramKind] ?? GROUPS_BY_KIND.classic)
+    .map((g) => ({ title: g.title, items: g.types.map((t) => TOOLBAR_ITEMS[t]).filter(Boolean) }));
+  const tools: { id: "pointer" | "text" | "note" | "add"; icon: React.ReactNode; label: string }[] = [
     {
       id: "pointer",
       label: "Seleccionar",
@@ -213,7 +209,7 @@ function ToolbarSidebar({
     },
     {
       id: "text",
-      label: "Texto",
+      label: "Texto libre — clic para agregar",
       icon: (
         <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" fill="currentColor">
           <path d="M5 4h14a1 1 0 011 1v2a1 1 0 01-2 0V6H13v12h2a1 1 0 010 2H9a1 1 0 010-2h2V6H6v1a1 1 0 01-2 0V5a1 1 0 011-1z" />
@@ -221,20 +217,22 @@ function ToolbarSidebar({
       ),
     },
     {
-      id: "comment",
-      label: "Comentario",
+      id: "note",
+      label: "Nota — clic para agregar",
       icon: (
+        // Nota adhesiva con esquina doblada
         <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+          <path d="M4 4a1 1 0 011-1h14a1 1 0 011 1v10l-6 6H5a1 1 0 01-1-1V4z" />
+          <path d="M14 20v-5a1 1 0 011-1h5" fill="none" stroke="white" strokeWidth={1.6} />
         </svg>
       ),
     },
     {
-      id: "node",
-      label: "Nodo",
+      id: "add",
+      label: "Agregar nodo",
       icon: (
         <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" fill="currentColor">
-          <rect x="3" y="3" width="18" height="18" rx="3" />
+          <circle cx="12" cy="12" r="10" />
           <path d="M12 8v8M8 12h8" stroke="white" strokeWidth={2} strokeLinecap="round" />
         </svg>
       ),
@@ -248,14 +246,14 @@ function ToolbarSidebar({
           <div key={tool.id} className="relative">
             <button
               onClick={() => {
-                if (tool.id === "node") {
+                if (tool.id === "add") {
                   setNodePopupOpen(!nodePopupOpen);
-                  setActiveTool("node");
+                  setActiveTool("add");
                 } else if (tool.id === "text") {
                   addNode("text");
                   setActiveTool("pointer");
                   setNodePopupOpen(false);
-                } else if (tool.id === "comment") {
+                } else if (tool.id === "note") {
                   addNode("annotation");
                   setActiveTool("pointer");
                   setNodePopupOpen(false);
@@ -275,7 +273,7 @@ function ToolbarSidebar({
             </button>
 
             {/* Node type popup */}
-            {tool.id === "node" && nodePopupOpen && (
+            {tool.id === "add" && nodePopupOpen && (
               <div className="absolute left-full top-0 ml-2 bg-white border border-gray-200 rounded-xl shadow-xl p-2 w-[180px] max-h-[400px] overflow-y-auto">
                 {visibleGroups.map((group) => (
                   <div key={group.title} className="mb-1.5">
@@ -294,7 +292,7 @@ function ToolbarSidebar({
                             setNodePopupOpen(false);
                             setActiveTool("pointer");
                           }}
-                          title={`Agregar: ${item.label}`}
+                          title={`Agregar: ${item.label} (clic o arrastrá al lienzo)`}
                           className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg border text-[11px] font-medium transition-all cursor-grab active:cursor-grabbing ${item.bg}`}
                         >
                           <span>{item.icon}</span>
@@ -304,6 +302,9 @@ function ToolbarSidebar({
                     </div>
                   </div>
                 ))}
+                <div className="mt-1 pt-1.5 border-t border-gray-100 px-2 pb-0.5 text-[9px] leading-snug text-gray-400">
+                  Clic: agrega al centro · Arrastrá al lienzo para ubicarlo
+                </div>
               </div>
             )}
           </div>
@@ -366,7 +367,7 @@ function FlowchartInner({
   const [isDirty, setIsDirty]   = useState(false);
   const [saving, setSaving]     = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [activeTool, setActiveTool] = useState<"pointer" | "text" | "comment" | "node">("pointer");
+  const [activeTool, setActiveTool] = useState<"pointer" | "text" | "note" | "add">("pointer");
   const [nodePopupOpen, setNodePopupOpen] = useState(false);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [edgeEditId, setEdgeEditId] = useState<string | null>(null);
@@ -459,7 +460,7 @@ function FlowchartInner({
       // Generador de handler de edición de etiqueta para cada nodo
       const makeOnLabelChange =
         (nodeId: string) =>
-        (field: "label" | "sublabel" | "owner", value: string) => {
+        (field: "label" | "sublabel" | "owner" | "detail", value: string) => {
           undoStack.current.push(captureSnapshot());
           if (undoStack.current.length > 50) undoStack.current.shift();
           redoStack.current = [];
@@ -785,7 +786,7 @@ function FlowchartInner({
 
       // onLabelChange para el nuevo nodo (inline para evitar dependencias externas)
       const onLabelChange =
-        (field: "label" | "sublabel" | "owner", value: string) => {
+        (field: "label" | "sublabel" | "owner" | "detail", value: string) => {
           undoStack.current.push({ nodes: nodesRef.current, edges: edgesRef.current });
           if (undoStack.current.length > 50) undoStack.current.shift();
           redoStack.current = [];
@@ -944,6 +945,7 @@ function FlowchartInner({
     setSelectedEdgeId(null);
     setEdgeEditId(null);
     setNodePopupOpen(false);
+    setActiveTool("pointer"); // el botón "+" no queda resaltado tras cerrar el popup con clic en el lienzo
   }, []);
 
   const updateEdgeLabel = useCallback((edgeId: string, label: string) => {
@@ -969,13 +971,27 @@ function FlowchartInner({
 
   // ── Agregar nodo desde el panel ───────────────────────────────────────────
   const addNode = useCallback(
-    (type: FlowchartData["nodes"][0]["type"]) => {
+    (type: FlowchartData["nodes"][0]["type"], dropPosition?: { x: number; y: number }) => {
       const id = `node-${Date.now()}`;
-      let position = { x: 200, y: 200 };
-      try {
-        const c = screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-        position = { x: c.x + (Math.random() - 0.5) * 100, y: c.y + (Math.random() - 0.5) * 100 };
-      } catch { /* usar posición por defecto */ }
+      const { width, height } = getNodeDims(type);
+      let position = dropPosition ?? { x: 200, y: 200 };
+      if (!dropPosition) {
+        try {
+          // Clic desde el popup: CENTRO exacto del viewport (predecible, sin jitter),
+          // centrando la caja con sus dimensiones reales.
+          const c = screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+          position = { x: c.x - width / 2, y: c.y - height / 2 };
+        } catch { /* usar posición por defecto */ }
+        // Anti-apilamiento: si ya hay un nodo casi en el mismo lugar (doble clic en el popup),
+        // correr en diagonal hasta un hueco libre.
+        const taken = (p: { x: number; y: number }) =>
+          nodesRef.current.some((n) => Math.abs(n.position.x - p.x) < 24 && Math.abs(n.position.y - p.y) < 24);
+        let guard = 0;
+        while (taken(position) && guard < 20) {
+          position = { x: position.x + 28, y: position.y + 28 };
+          guard++;
+        }
+      }
 
       undoStack.current.push(captureSnapshot());
       if (undoStack.current.length > 50) undoStack.current.shift();
@@ -984,7 +1000,7 @@ function FlowchartInner({
       setCanRedo(false);
 
       const onLabelChange =
-        (field: "label" | "sublabel" | "owner", value: string) => {
+        (field: "label" | "sublabel" | "owner" | "detail", value: string) => {
           undoStack.current.push({ nodes: nodesRef.current, edges: edgesRef.current });
           if (undoStack.current.length > 50) undoStack.current.shift();
           redoStack.current = [];
@@ -998,12 +1014,14 @@ function FlowchartInner({
           );
         };
 
+      // Nuevo nodo SELECCIONADO (resaltado y listo para arrastrar); deseleccionar el resto.
       setNodes((nds) => [
-        ...nds,
+        ...nds.map((n) => (n.selected ? { ...n, selected: false } : n)),
         {
           id,
           type,
           position,
+          selected: true,
           data: {
             label: DEFAULT_LABELS[type] ?? "Nodo",
             ...(type === "system" ? { sublabel: "Sistema" } : {}),
@@ -1024,15 +1042,9 @@ function FlowchartInner({
       const type = event.dataTransfer.getData("application/reactflow-type");
       if (!type) return;
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      addNode(type as FlowchartData["nodes"][0]["type"]);
-      // Override the random position with the drop position
-      setNodes((nds) => {
-        const last = nds[nds.length - 1];
-        if (last) return [...nds.slice(0, -1), { ...last, position }];
-        return nds;
-      });
+      addNode(type as FlowchartData["nodes"][0]["type"], position);
     },
-    [screenToFlowPosition, addNode, setNodes]
+    [screenToFlowPosition, addNode]
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -1129,6 +1141,15 @@ function FlowchartInner({
   }, [isFullscreen]);
 
   // ── Render ────────────────────────────────────────────────────────────────
+  // Tipo de diagrama actual: decide qué nodos ofrece la toolbar y qué leyenda se muestra.
+  const diagramKind: "integration" | "pipeline" | "classic" = nodes.some((n) => n.type === "system")
+    ? "integration"
+    : nodes.some((n) =>
+        ["pipeline_stage", "trigger", "action", "follow_up", "outcome_positive", "outcome_negative", "lifecycle_change", "lead_status"].includes(n.type ?? ""),
+      )
+      ? "pipeline"
+      : "classic";
+
   const flowContent = (
     <div className="relative w-full h-full">
 
@@ -1140,15 +1161,7 @@ function FlowchartInner({
           nodePopupOpen={nodePopupOpen}
           setNodePopupOpen={setNodePopupOpen}
           addNode={addNode}
-          diagramKind={
-            nodes.some((n) => n.type === "system")
-              ? "integration"
-              : nodes.some((n) =>
-                  ["pipeline_stage", "trigger", "action", "follow_up", "outcome_positive", "outcome_negative", "lifecycle_change", "lead_status"].includes(n.type ?? ""),
-                )
-                ? "pipeline"
-                : "classic"
-          }
+          diagramKind={diagramKind}
           direction={direction}
           onToggleDirection={() => {
             const newDir = direction === "LR" ? "TB" : "LR";
@@ -1222,7 +1235,6 @@ function FlowchartInner({
           )}
         </button>
 
-        {/* Layout buttons moved to left toolbar */}
       </div>
 
       <ReactFlow
@@ -1302,6 +1314,24 @@ function FlowchartInner({
       {/* Edge style panel */}
       {selectedEdgeId && !edgeEditId && isFullscreen && (
         <div className="absolute bottom-14 right-3 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-2">
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <span className="text-[10px] text-gray-600 font-semibold">Conector</span>
+            {edges.find((e) => e.id === selectedEdgeId)?.type !== "dataflow" && (
+              <button
+                onClick={() => {
+                  const edge = edges.find((e) => e.id === selectedEdgeId);
+                  if (!edge) return;
+                  setEdgeEditId(edge.id);
+                  setEdgeEditLabel(typeof edge.label === "string" ? edge.label : "");
+                  setEdgeEditPos({ x: window.innerWidth - 260, y: window.innerHeight - 220 });
+                }}
+                title="Editar la etiqueta del conector"
+                className="px-2 py-0.5 text-[10px] rounded border border-gray-200 hover:bg-gray-50 text-gray-600"
+              >
+                ✎ Etiqueta
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-1 mb-1.5">
             <span className="text-[9px] text-gray-400 font-semibold uppercase">Color</span>
           </div>
@@ -1353,13 +1383,33 @@ function FlowchartInner({
         </div>
       )}
 
-      {/* Leyenda */}
+      {/* Leyenda (según el tipo de diagrama) */}
       <div className="absolute bottom-3 left-3 z-10 flex items-center gap-3 bg-white/90 backdrop-blur-sm border border-gray-100 rounded-xl px-3 py-2 shadow-sm">
-        <LegendItem color="bg-gray-800"   label="Inicio / Fin" />
-        <LegendItem color="bg-blue-400"   label="Proceso" />
-        <LegendItem color="bg-violet-400" label="Decisión" />
-        <LegendItem color="bg-red-400"    label="Dolor" />
-        <LegendItem color="bg-amber-400"  label="Anotación" />
+        {diagramKind === "integration" ? (
+          <>
+            <LegendItem color="bg-slate-500"  label="Sistema" />
+            <span className="flex items-center gap-1.5 text-[10px] text-gray-500"><span className="inline-block w-4 border-t-2 border-gray-400" /> flujo de datos</span>
+            <span className="flex items-center gap-1.5 text-[10px] text-gray-500"><span className="inline-block w-4 border-t-2 border-dashed border-gray-400" /> batch / manual</span>
+            <span className="flex items-center gap-1.5 text-[10px] text-gray-500"><span className="inline-block w-4 border-t-2 border-amber-500" /> por confirmar</span>
+          </>
+        ) : diagramKind === "pipeline" ? (
+          <>
+            <LegendItem color="bg-green-500"  label="Etapa" />
+            <LegendItem color="bg-green-300"  label="Trigger / Acción" />
+            <LegendItem color="bg-violet-400" label="Decisión" />
+            <LegendItem color="bg-indigo-400" label="Avanza" />
+            <LegendItem color="bg-red-400"    label="No avanza / Dolor" />
+            <LegendItem color="bg-amber-400"  label="Nota" />
+          </>
+        ) : (
+          <>
+            <LegendItem color="bg-gray-800"   label="Inicio / Fin" />
+            <LegendItem color="bg-blue-400"   label="Proceso" />
+            <LegendItem color="bg-violet-400" label="Decisión" />
+            <LegendItem color="bg-red-400"    label="Dolor" />
+            <LegendItem color="bg-amber-400"  label="Nota" />
+          </>
+        )}
       </div>
     </div>
   );

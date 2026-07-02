@@ -65,13 +65,21 @@ export type FlowchartLike = { title?: string; description?: string; nodes: unkno
  * y crea los nuevos, en una transacción — mismo patrón que el path BLOCK_FORMAT del handoff.
  * Los bloques nacen CONFIRMED (sin paso de "Aceptar todos"; borrar = quitar). Preserva los
  * procesos de OTROS agentes (p.ej. diagnóstico-marketing) y lo editado a mano (MODIFIED/HUMAN).
+ *
+ * `summaryCards` (opcional): cards de texto del agente (p.ej. "Procesos Clave Identificados")
+ * que van como bloques TEXT CONFIRMED ANTES de los diagramas, por la MISMA vía — el deleteWhere
+ * no filtra blockType, así que la card sigue el ciclo de vida de los flowcharts (se reemplaza
+ * en cada regen, sin duplicados ni paso de aceptar). Si el CSE EDITÓ la card (TEXT MODIFIED),
+ * también se reemplaza cuando llega card nueva (es el inventario del agente sobre los diagramas
+ * actuales); los FLOWCHART editados a mano sí se preservan.
+ *
  * Devuelve cuántos bloques creó. Si la corrida NO trae diagramas (solo cards / truncación), NO
- * toca lo previo (no borra) — evita perder procesos buenos ante una corrida sin flowcharts.
+ * toca lo previo (no borra, tampoco actualiza la card) — evita perder procesos buenos.
  */
 export async function syncFlowchartsToProcesos(
   clientId: string,
   flowcharts: FlowchartLike[],
-  opts: { agentId: string; agentRunId: string },
+  opts: { agentId: string; agentRunId: string; summaryCards?: { title: string; content: string }[] },
 ): Promise<number> {
   const valid = (flowcharts ?? []).filter(
     (fc) => fc && Array.isArray(fc.nodes) && fc.nodes.length > 0,
@@ -95,8 +103,39 @@ export async function syncFlowchartsToProcesos(
   };
   const deleteWhere = { sectionId, ...mineOrLegacy };
 
-  // Orden: después de los bloques que se conservan (manuales + de otros agentes), para no interleavear.
-  const base = await prisma.canvasBlock.count({ where: { sectionId, NOT: mineOrLegacy } });
+  const summaryCards = (opts.summaryCards ?? []).filter((c) => c.title?.trim());
+
+  // La card resumen editada a mano (TEXT MODIFIED de ESTE agente) se barre SOLO cuando esta
+  // corrida trae card nueva: la card es el inventario del agente sobre los diagramas ACTUALES;
+  // conservar la editada junto a la nueva duplicaría inventarios contradictorios (el stale
+  // primero). Los FLOWCHART MODIFIED (diagramas afinados a mano) SÍ se preservan.
+  const modifiedCardWhere = summaryCards.length > 0
+    ? { sectionId, blockType: "TEXT" as const, source: "MODIFIED" as const, agentRun: { agentId: opts.agentId } }
+    : null;
+
+  // Orden: DESPUÉS de los bloques que sobreviven. max(order)+1 — un count no alcanza porque los
+  // preservados conservan su order original y los nuevos podrían empatar/intercalarse con ellos.
+  const survivors = await prisma.canvasBlock.aggregate({
+    _max: { order: true },
+    where: {
+      sectionId,
+      AND: [{ NOT: mineOrLegacy }, ...(modifiedCardWhere ? [{ NOT: modifiedCardWhere }] : [])],
+    },
+  });
+  const base = (survivors._max.order ?? -1) + 1;
+
+  // Cards de resumen (TEXT) primero — CanvasBlock no tiene campo title: va embebido en el
+  // markdown del content (TextBlockView lo renderiza como heading).
+  const cardBlocks = summaryCards.map((c, j) => ({
+    sectionId,
+    blockType: "TEXT" as const,
+    content: `### ${c.title.trim()}\n\n${(c.content ?? "").trim()}`,
+    order: base + j,
+    source: "AGENT" as const,
+    status: "CONFIRMED" as const,
+    agentRunId: opts.agentRunId,
+  }));
+
   const blocks = valid.map((fc, i) => ({
     sectionId,
     blockType: "FLOWCHART" as const,
@@ -106,7 +145,7 @@ export async function syncFlowchartsToProcesos(
       edges: fc.edges,
       ...(fc.description?.trim() ? { description: fc.description.trim() } : {}),
     } as object,
-    order: base + i,
+    order: base + cardBlocks.length + i,
     source: "AGENT" as const,
     status: "CONFIRMED" as const,
     agentRunId: opts.agentRunId,
@@ -114,7 +153,8 @@ export async function syncFlowchartsToProcesos(
 
   await prisma.$transaction([
     prisma.canvasBlock.deleteMany({ where: deleteWhere }),
-    prisma.canvasBlock.createMany({ data: blocks }),
+    ...(modifiedCardWhere ? [prisma.canvasBlock.deleteMany({ where: modifiedCardWhere })] : []),
+    prisma.canvasBlock.createMany({ data: [...cardBlocks, ...blocks] }),
   ]);
-  return blocks.length;
+  return cardBlocks.length + blocks.length;
 }

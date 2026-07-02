@@ -3,6 +3,15 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
+// ⚠ MIGRACIÓN HISTÓRICA YA APLICADA (one-shot). Re-correrla PISARÍA el prompt vigente del
+// agente de mapeo (v4, fuente única en lib/agents/mapeo-prompt.ts) con la versión v1 de este
+// archivo. El prompt vigente se aplica con scripts/update-mapeo-agent.ts.
+console.error(
+  "✗ split-kickoff-agent.ts es una migración histórica ya aplicada. NO re-correr: revertiría el " +
+  "prompt del mapeo. El prompt vigente vive en lib/agents/mapeo-prompt.ts (aplicar con scripts/update-mapeo-agent.ts).",
+);
+process.exit(1);
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
   ssl: { rejectUnauthorized: false },

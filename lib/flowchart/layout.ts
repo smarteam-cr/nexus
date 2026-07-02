@@ -25,6 +25,8 @@ const NODE_DIMS: Record<string, { width: number; height: number }> = {
   lead_status:        { width: 240, height: 52  },
   // Integración (mapa de sistemas)
   system:             { width: 168, height: 96  },
+  // Caja de resumen del proceso (flota fuera del flujo; la altura real se estima por contenido)
+  info:               { width: 520, height: 200 },
 };
 
 const DEFAULT_DIMS = { width: 240, height: 80 };
@@ -40,6 +42,42 @@ export function getLayoutedElements(
   edges: Edge[],
   direction: "TB" | "LR" = "LR"
 ): { nodes: Node[]; edges: Edge[] } {
+  // Nodos "info" (resumen del proceso): flotan FUERA del flujo. Se apartan del layout
+  // (columnas/círculo/dagre los colocarían como un paso más) y se ubican ARRIBA-IZQUIERDA
+  // del diagrama ya calculado — debajo del título del bloque, donde se lee primero.
+  const infoNodes = nodes.filter((n) => n.type === "info");
+  if (infoNodes.length > 0) {
+    const core = nodes.filter((n) => n.type !== "info");
+    const layout = getLayoutedElements(core, edges, direction);
+    let minX = Infinity;
+    let minY = Infinity;
+    for (const n of layout.nodes) {
+      // Incluir también los sintéticos (__pipeline_title/__bg_col_) — si se ignoran, la caja
+      // info queda solapando el título del pipeline.
+      minX = Math.min(minX, n.position.x);
+      minY = Math.min(minY, n.position.y);
+    }
+    if (!Number.isFinite(minX)) { minX = 0; minY = 0; }
+    // Altura ESTIMADA por contenido (el texto envuelve a ~74 chars por línea con 520px de
+    // ancho): con una altura fija, un resumen largo desborda y se solapa con el título o el
+    // primer nodo. Margen generoso (48px) entre la caja y el diagrama.
+    const CHARS_PER_LINE = 74;
+    const estimateInfoH = (n: Node) => {
+      const detail = String((n.data as Record<string, unknown> | undefined)?.detail ?? "");
+      const lines = detail
+        .split("\n")
+        .reduce((acc, l) => acc + Math.max(1, Math.ceil(l.length / CHARS_PER_LINE)), 0);
+      return Math.max(80, 46 + lines * 20); // padding + header + cuerpo
+    };
+    let top = minY;
+    const placed = infoNodes.map((n) => {
+      const h = estimateInfoH(n);
+      top = top - 48 - h;
+      return { ...n, position: { x: minX, y: top } };
+    });
+    return { nodes: [...placed, ...layout.nodes], edges: layout.edges };
+  }
+
   // Diagrama de INTEGRACIÓN (mapa de sistemas): nodos "system" → layout radial propio.
   if (nodes.some((n) => n.type === "system")) {
     return getIntegrationLayout(nodes, edges);

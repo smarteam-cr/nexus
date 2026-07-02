@@ -17,7 +17,7 @@ interface NodeData {
   sublabel?: string;
   systemColor?: string;
   icon?: string;
-  onLabelChange?: (field: "label" | "sublabel" | "owner", value: string) => void;
+  onLabelChange?: (field: "label" | "sublabel" | "owner" | "detail", value: string) => void;
   [key: string]: unknown;
 }
 

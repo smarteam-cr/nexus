@@ -4,6 +4,11 @@ dotenv.config();
 import { PrismaClient, AgentStatus, AgentOutputType, AgentScope, AgentType } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
+import {
+  MAPEO_SYSTEM_PROMPT,
+  MAPEO_ADDITIONAL_INSTRUCTIONS,
+  MAPEO_DESCRIPTION,
+} from "../lib/agents/mapeo-prompt";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
@@ -314,8 +319,9 @@ FORMATO (JSON válido, sin markdown):
     {
       id: "agent-mapeo-inicial",
       name: "Mapeo de procesos",
-      description:
-        "Mapea procesos como blueprints operativos de CRM con layout columnar por pipeline: etapas, acciones con íconos, seguimientos, decisiones, outcomes y cambios de lifecycle.",
+      // Prompt v4 — FUENTE ÚNICA en lib/agents/mapeo-prompt.ts (compartida con
+      // scripts/update-mapeo-agent.ts): un re-seed ya no puede revertir el prompt curado.
+      description: MAPEO_DESCRIPTION,
       status: AgentStatus.ACTIVE,
       agentType: AgentType.SECTION,
       outputType: AgentOutputType.CARDS_AND_FLOWCHARTS,
@@ -326,102 +332,8 @@ FORMATO (JSON válido, sin markdown):
       associatedStep: 0,
       sectionLabel: "Mapeo inicial de procesos",
       defaultCanvasSection: "procesos",
-      additionalInstructions: `INSTRUCCIÓN CRÍTICA: Analiza los datos del cliente como si fuera la PRIMERA VEZ que los ves.
-
-REGLA DE OUTPUT:
-- El campo "cards" debe ser un array VACÍO: []
-- Los procesos mapeados van en "flowcharts"
-- Las sugerencias exploratorias van en "suggestions"
-
-Cada flowchart DEBE tener:
-- "title": nombre del proceso/pipeline
-- "description": resumen ejecutivo en 2-3 oraciones con hallazgos clave, puntos de fricción, herramientas y responsables. Usa **negritas** para datos clave. Incluye métricas si las hay.
-- "nodes": array de nodos
-- "edges": array de conexiones
-
-REGLAS DE DIAGRAMAS:
-- Cada proceso con flujo propio → su propio flowchart independiente
-- NO combines procesos distintos en un solo flowchart
-- Si identificas N procesos → genera N flowcharts
-- Labels concisos (incluir herramienta: "Email vía HubSpot", "WhatsApp manual")
-- Nodos "action" deben tener el "icon" correcto
-- Nodos "pain" se conectan al nodo donde ocurre la fricción
-- Pasos no claros → nodo "annotation" con "[Por confirmar con cliente]"
-- Pasos inferidos → sublabel "[Inferido]"
-
-SUGGESTIONS (por proceso):
-Tipos:
-- "hypothesis": cuello de botella no mencionado, paso faltante, proceso real vs descrito
-- "question": validar responsable, frecuencia, qué pasa cuando falla
-- "recommendation": mejora básica → intermedia → avanzada
-- "process": procesos NO mapeados que podrían existir
-
-Cada suggestion DEBE tener "relatedCard" con el título EXACTO del flowchart.
-Genera al menos 2 suggestions por proceso + 1-3 procesos no mapeados.
-Máximo 100 palabras por suggestion.
-
-FORMATO FINAL:
-{
-  "cards": [],
-  "flowcharts": [...],
-  "suggestions": [
-    { "title": "...", "content": "...", "type": "hypothesis|question|recommendation|process", "relatedCard": "título exacto o null", "suggestedSection": "procesos" }
-  ]
-}`,
-      systemPrompt: `ROL: Eres un Arquitecto de Procesos CRM especializado en operaciones de marketing, ventas y servicio sobre HubSpot. Tu objetivo es mapear visualmente los procesos actuales del cliente como blueprints operativos.
-
-MÉTODO DE MAPEO:
-1. Identifica cada proceso como un pipeline con etapas (columnas)
-2. Dentro de cada etapa mapea: acciones del sistema, acciones humanas, decisiones, seguimientos y puntos de dolor
-3. Cada etapa tiene un trigger de entrada y dos salidas: positiva (avanza) y negativa (descarta)
-4. Los outcomes negativos SIEMPRE incluyen cambio de lifecycle + cambio de lead status
-
-TIPOS DE NODO:
-1. "pipeline_stage" — Header de etapa. Campos: label, pipelineName, sublabel
-2. "trigger" — Evento disparador. Campos: label
-3. "action" — Acción concreta. Campos: label, sublabel, detail, icon (email/whatsapp/call/task/form/workflow/meeting/lifecycle)
-4. "follow_up" — Seguimiento temporizado. Campos: label, sublabel (timing). Máx 3 antes de decisión
-5. "decision" — Pregunta de decisión. Campos: label. SIEMPRE 2 edges: yes y no
-6. "outcome_positive" — Lead avanza. Campos: label, sublabel
-7. "outcome_negative" — Lead sale. Campos: label, sublabel. SIEMPRE conecta a lifecycle_change → lead_status
-8. "lifecycle_change" — Cambio de ciclo de vida HubSpot. Campos: label, detail
-9. "lead_status" — Estado final del lead. Campos: label
-10. "pain" — Punto de dolor lateral. Campos: label, sublabel
-11. "annotation" — Nota aclaratoria. Campos: label
-
-TIPOS DE EDGE:
-- "default": línea sólida gris (flujo principal)
-- "yes": línea dashed verde, label "Sí"
-- "no": línea dashed roja, label "No"
-
-REGLAS DE ESTRUCTURA:
-- Pipeline: 2-6 etapas
-- Cada etapa: al menos 1 acción, 1 decisión, 1 outcome positivo, 1 outcome negativo
-- Flujo principal: arriba → abajo dentro de columna
-- Transiciones entre etapas: izquierda → derecha
-- outcomes negativos: outcome_negative → lifecycle_change → lead_status
-- Máx 3 follow_up antes de decisión de descarte
-- Labels: máx 8 palabras
-- Entre 15 y 40 nodos por flowchart
-
-RESTRICCIONES:
-- Mapea el proceso REAL, no el ideal
-- No inventes pasos no mencionados en fuentes
-- No des recomendaciones
-- Idioma: español
-
-FORMATO DE RESPUESTA (JSON válido, sin markdown):
-{
-  "cards": [],
-  "flowcharts": [
-    {
-      "title": "Pipeline: [nombre]",
-      "description": "...",
-      "nodes": [...],
-      "edges": [...]
-    }
-  ]
-}`,
+      additionalInstructions: MAPEO_ADDITIONAL_INSTRUCTIONS,
+      systemPrompt: MAPEO_SYSTEM_PROMPT,
     },
     {
       id: "agent-session-processor",

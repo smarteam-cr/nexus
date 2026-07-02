@@ -14,7 +14,7 @@ interface NodeData {
   owner?: string;
   variant?: string;
   pipelineName?: string;
-  onLabelChange?: (field: "label" | "sublabel" | "owner", value: string) => void;
+  onLabelChange?: (field: "label" | "sublabel" | "owner" | "detail", value: string) => void;
   [key: string]: unknown;
 }
 
@@ -109,13 +109,15 @@ export function PipelineStageNode({ data }: { data: NodeData }) {
           onLabelChange={data.onLabelChange}
           className="text-sm font-bold text-gray-900 leading-snug block w-full"
         />
-        <EditableText
-          value={data.sublabel ?? ""}
-          field="sublabel"
-          onLabelChange={data.onLabelChange}
-          placeholder="Descripción..."
-          className="text-xs text-gray-500 mt-0.5 block w-full"
-        />
+        {/* Solo si hay descripción — el placeholder "Descripción..." en cada etapa vacía era ruido. */}
+        {data.sublabel && (
+          <EditableText
+            value={data.sublabel}
+            field="sublabel"
+            onLabelChange={data.onLabelChange}
+            className="text-xs text-gray-500 mt-0.5 block w-full"
+          />
+        )}
       </div>
     </div>
   );
