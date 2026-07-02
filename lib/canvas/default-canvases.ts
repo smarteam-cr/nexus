@@ -7,7 +7,9 @@ import {
   DEFAULT_PROJECT_CANVASES,
   AGENT_GROUP_TO_CANVAS,
 } from "./canvas-defs";
-import { BC_DEF_BY_KEY } from "@/components/landing/configs/business-case.defs";
+import { templateById, templateDefsByKey } from "@/components/landing/configs/templates.defs";
+import { HUBSPOT_TEMPLATE_ID } from "@/lib/business-cases/case-types";
+import { buildTemplateMetaEntry } from "@/lib/business-cases/template-meta";
 
 // Re-export de las definiciones PURAS (viven en canvas-defs.ts, SIN Prisma) para
 // que los importadores de servidor existentes (analyze/route.ts, etc.) sigan
@@ -83,39 +85,68 @@ export async function createHandoffCanvas(projectId: string, db: Db = prisma): P
 }
 
 /** Crea un canvas "Business Case" (versionado) para un BusinessCase, con las
- *  secciones de BUSINESS_CASE_CANVAS. Marca los canvases activos previos del caso
- *  como inactivos (cada "Generar" = una versión nueva). Devuelve el id del canvas. */
+ *  secciones del TEMPLATE indicado (default: hubspot_v1 = comportamiento legacy).
+ *  Marca los canvases activos previos del caso como inactivos (cada "Generar" =
+ *  una versión nueva). Devuelve el id del canvas. */
 export async function createBusinessCaseCanvas(
   businessCaseId: string,
   version: number,
   db: Db = prisma,
+  templateId: string = HUBSPOT_TEMPLATE_ID,
+  meta?: {
+    caseType?: string | null;
+    caseSubtype?: string | null;
+    /** Decisiones hidden EXPLÍCITAS del canvas previo (carry-forward al regenerar):
+     *  ganan al `defaultHidden` del template — si el CSE mostró una sección oculta,
+     *  el caso nuevo no debe volver a esconderla. */
+    hiddenByKey?: Record<string, boolean>;
+  },
 ): Promise<string> {
+  const tpl = templateById(templateId);
+  const defsByKey = templateDefsByKey(templateId);
+
   // Desactivar versiones anteriores (la nueva queda como la activa/editable).
   await db.projectCanvas.updateMany({
     where: { businessCaseId, isActive: true },
     data: { isActive: false },
   });
 
+  // Json de secciones: entry reservada `__meta` (respaldo dual-PC de tipo/template,
+  // ver lib/business-cases/template-meta.ts) + una entry por sección, con `hidden`
+  // sembrado desde `defaultHidden` (publish filtra hidden por ESTE Json, no por la
+  // config) u override explícito del canvas previo.
+  const sectionsJson = [
+    buildTemplateMetaEntry({ templateId: tpl.id, caseType: meta?.caseType, caseSubtype: meta?.caseSubtype }),
+    ...tpl.sections.map((s) => {
+      const hidden = meta?.hiddenByKey?.[s.key] ?? s.defaultHidden ?? false;
+      return {
+        key: s.key,
+        label: s.canvasLabel ?? s.label,
+        ...(hidden ? { hidden: true } : {}),
+      };
+    }),
+  ];
+
   const canvas = await db.projectCanvas.create({
     data: {
       businessCaseId,
       // Rótulo de cara al CSE: v0 = "Plantilla" (base con las guías del agente, NO se
       // llena con contenido); v1+ = "Caso de uso N" (cada "Generar" crea una versión).
-      name: version === 0 ? "Plantilla" : `Caso de uso ${version}`,
+      name: version === 0 ? "Plantilla" : `${tpl.caseLabel} ${version}`,
       isDefault: true,
       order: 0,
       version,
       isActive: true,
-      sections: BUSINESS_CASE_CANVAS.sections,
+      sections: sectionsJson as Prisma.InputJsonValue,
     },
     select: { id: true },
   });
 
   await db.canvasSection.createMany({
-    data: BUSINESS_CASE_CANVAS.sections.map((s, i) => ({
+    data: tpl.sections.map((s, i) => ({
       canvasId: canvas.id,
       key: s.key,
-      label: s.label,
+      label: s.canvasLabel ?? s.label,
       order: i,
     })),
   });
@@ -132,7 +163,7 @@ export async function createBusinessCaseCanvas(
       sectionId: s.id,
       blockType: "CARD" as const, // neutro: el render se elige por section.key vía la config
       content: null,
-      data: (BC_DEF_BY_KEY[s.key]?.empty ?? {}) as Prisma.InputJsonValue,
+      data: (defsByKey[s.key]?.empty ?? {}) as Prisma.InputJsonValue,
       order: 0,
       source: "HUMAN" as const,
       status: "CONFIRMED" as const,

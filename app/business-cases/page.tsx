@@ -9,6 +9,7 @@ import { requireInternalUser } from "@/lib/auth/supabase";
 import { prisma } from "@/lib/db/prisma";
 import DeleteBusinessCaseButton from "@/components/business-cases/DeleteBusinessCaseButton";
 import { isSalesAreaRole } from "@/lib/auth/sales-roles";
+import { resolveBcType } from "@/lib/business-cases/case-types";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function BusinessCasesHubPage() {
       id: true,
       name: true,
       status: true,
+      caseType: true,
       client: { select: { name: true, isProspect: true } },
     },
   });
@@ -40,12 +42,17 @@ export default async function BusinessCasesHubPage() {
             <h1 className="text-xl font-semibold text-fg">Ventas — Business Cases</h1>
             <p className="mt-1 text-sm text-fg-muted">Casos de negocio para prospectos y clientes.</p>
           </div>
-          <Link
-            href="/business-cases/new"
-            className="flex-shrink-0 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            Nuevo business case
-          </Link>
+          <div className="flex-shrink-0 flex items-center gap-3">
+            <Link href="/sales/use-cases" className="text-xs text-fg-muted hover:text-fg">
+              Catálogo de casos de uso
+            </Link>
+            <Link
+              href="/business-cases/new"
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              Nuevo business case
+            </Link>
+          </div>
         </div>
 
         <div className="mt-6 space-y-2">
@@ -65,8 +72,13 @@ export default async function BusinessCasesHubPage() {
                     {c.client.isProspect ? " (prospecto)" : ""}
                   </p>
                 </div>
-                <span className="flex-shrink-0 text-xs px-2 py-1 rounded bg-surface-muted text-fg-muted">
-                  {STATUS_LABEL[c.status] ?? c.status}
+                <span className="flex-shrink-0 flex items-center gap-1.5">
+                  <span className="text-[11px] px-2 py-1 rounded border border-line text-fg-muted">
+                    {resolveBcType(c.caseType).shortLabel}
+                  </span>
+                  <span className="text-xs px-2 py-1 rounded bg-surface-muted text-fg-muted">
+                    {STATUS_LABEL[c.status] ?? c.status}
+                  </span>
                 </span>
               </Link>
               <DeleteBusinessCaseButton

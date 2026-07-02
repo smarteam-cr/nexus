@@ -21,7 +21,7 @@
  * El CRONOGRAMA se lee del ProjectTimeline; el agente NO lo regenera → fuente única.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { useCanvasSections } from "./useCanvasSections";
 import PublishBar from "./PublishBar";
@@ -116,7 +116,7 @@ type KickoffLandingProps =
 export default function KickoffLanding(props: KickoffLandingProps) {
   if ("data" in props) {
     // Modo EXTERNO: data ya resuelta server-side, read-only.
-    return <KickoffLandingView sections={props.data.sections} timeline={props.data.timeline} clientLogoUrl={props.data.clientLogoUrl} procesos={props.data.procesos} editable={false} />;
+    return <KickoffLandingView sections={props.data.sections} timeline={props.data.timeline} clientLogoUrl={props.data.clientLogoUrl} platformLogos={props.data.platformLogos} procesos={props.data.procesos} editable={false} />;
   }
   // Modo INTERNO: hooks + fetch.
   return <KickoffLandingInternal projectId={props.projectId} canvasId={props.canvasId} editable={props.editable} />;
@@ -157,6 +157,7 @@ function KickoffLandingInternal({
 
   const [timeline, setTimeline] = useState<KickoffTimelineData | null>(null);
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
+  const [platformLogos, setPlatformLogos] = useState<string[]>([]);
   const [procesos, setProcesos] = useState<KickoffProceso[]>([]);
   // #3 — claves ocultas del kickoff (secciones/procesos/cronograma). El editor las
   // muestra atenuadas con un toggle; la vista del cliente las omite (server-side).
@@ -245,13 +246,19 @@ function KickoffLandingInternal({
     setPublishing(false);
   };
 
-  // Logo del cliente: mismo chip que la vista externa, también en el preview
-  // interno (así el CSE lo ve sin tener que publicar). Endpoint guarded.
+  // Logo del cliente + logos de plataforma (HubSpot/Insider según tags): mismo chip
+  // que la vista externa, también en el preview interno. Endpoint guarded.
   useEffect(() => {
     fetch(`/api/projects/${projectId}/client-logo`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setClientLogoUrl(d?.logoUrl ?? null))
-      .catch(() => setClientLogoUrl(null));
+      .then((d) => {
+        setClientLogoUrl(d?.logoUrl ?? null);
+        setPlatformLogos(Array.isArray(d?.platformLogos) ? d.platformLogos : []);
+      })
+      .catch(() => {
+        setClientLogoUrl(null);
+        setPlatformLogos([]);
+      });
   }, [projectId]);
 
   useEffect(() => {
@@ -314,6 +321,7 @@ function KickoffLandingInternal({
       publishing={publishing}
       onPublishKickoff={publishChanges}
       clientLogoUrl={clientLogoUrl}
+      platformLogos={platformLogos}
       procesos={procesos}
       draftCount={draftCount}
       error={error}
@@ -343,6 +351,7 @@ export function KickoffLandingView({
   publishing,
   onPublishKickoff,
   clientLogoUrl = null,
+  platformLogos = [],
   procesos = [],
   draftCount = 0,
   error = null,
@@ -363,6 +372,8 @@ export function KickoffLandingView({
   editable: boolean;
   /** Logo del cliente (solo modo externo); en interno va ausente → null. */
   clientLogoUrl?: string | null;
+  /** Logos de PLATAFORMA (HubSpot / Insider One, config global según tags del proyecto). */
+  platformLogos?: string[];
   /** Diagramas de proceso del cliente (sección "Procesos"). */
   procesos?: KickoffProceso[];
 } & LandingHandlers) {
@@ -430,12 +441,23 @@ export function KickoffLandingView({
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <section ref={heroRef} className="section-dark hero-backdrop" style={{ padding: "clamp(56px, 8vw, 96px) 24px clamp(48px, 6vw, 72px)" }}>
         <div style={{ maxWidth: 820, margin: "0 auto", textAlign: "center" }}>
-          {clientLogoUrl && (
+          {(clientLogoUrl || platformLogos.length > 0) && (
             <div className="reveal" style={{ display: "flex", justifyContent: "center", marginBottom: 26 }}>
-              {/* Chip blanco para contraste sobre el hero oscuro */}
-              <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#fff", borderRadius: 16, padding: "14px 20px", boxShadow: "0 10px 30px rgba(0,0,0,0.22)" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={clientLogoUrl} alt="" style={{ height: 46, width: "auto", maxWidth: 220, objectFit: "contain", display: "block" }} />
+              {/* Chip blanco para contraste sobre el hero oscuro: cliente × plataforma(s) */}
+              <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 14, background: "#fff", borderRadius: 16, padding: "14px 20px", boxShadow: "0 10px 30px rgba(0,0,0,0.22)" }}>
+                {clientLogoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={clientLogoUrl} alt="" style={{ height: 46, width: "auto", maxWidth: 220, objectFit: "contain", display: "block" }} />
+                )}
+                {platformLogos.map((url, i) => (
+                  <Fragment key={i}>
+                    {(clientLogoUrl || i > 0) && (
+                      <span style={{ color: "#94a3b8", fontSize: 14, fontWeight: 600 }}>×</span>
+                    )}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt="" style={{ height: 34, width: "auto", maxWidth: 160, objectFit: "contain", display: "block" }} />
+                  </Fragment>
+                ))}
               </span>
             </div>
           )}

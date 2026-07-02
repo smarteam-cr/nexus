@@ -25,11 +25,20 @@ export type BusinessCaseLandingSection = {
   titleOverride?: string | null;
   eyebrowOverride?: string | null;
   blocks: BusinessCaseLandingBlock[];
+  // Presentación congelada al publicar (snapshots nuevos): permite renderizar fiel
+  // una sección aunque el template vivo ya no la defina (render sintetizado).
+  sectionType?: string;
+  theme?: "dark" | "light" | "soft" | null;
+  eyebrow?: string | null;
+  selfTitled?: boolean;
+  backdrop?: boolean;
 };
 export type BusinessCaseLandingData = {
   name: string;
   clientName: string;
   clientLogoUrl: string | null;
+  /** Template con el que se publicó (snapshots nuevos). Ausente = hubspot (legacy). */
+  templateId?: string;
   sections: BusinessCaseLandingSection[];
 };
 
@@ -70,6 +79,7 @@ export async function getPublishedBusinessCaseForToken(
     name: snap.name ?? bc.name,
     clientName: snap.clientName ?? bc.client.name,
     clientLogoUrl: snap.clientLogoUrl ?? bc.client.logoUrl,
+    templateId: typeof snap.templateId === "string" ? snap.templateId : undefined,
     sections: snap.sections,
   };
 }

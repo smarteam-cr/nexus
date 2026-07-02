@@ -15,7 +15,9 @@ import type { FC } from "react";
 
 // 1) Hero — brand-row editable (cliente×Smarteam×HubSpot, +agregables) + titular +
 //    subtítulo + tags (chips). `brands` vacío → la brand-row cae a los defaults.
-export interface HeroData { headline: string; subhead: string; tags: string[]; brands?: string[] }
+//    `coverImageUrl` (fuera del schema del agente, como `brands`): imagen de portada
+//    subida por el CSE — se renderiza como fondo con overlay azul (LandingView).
+export interface HeroData { headline: string; subhead: string; tags: string[]; brands?: string[]; coverImageUrl?: string | null }
 
 // 2) Diagnóstico — 3 a 6 dolores concretos.
 export interface PainItem { title: string; detail: string }
@@ -42,8 +44,83 @@ export interface InvestmentData { licenciasHubspot: InvestmentLine; implementaci
 // 8) Partner — 4 campos (2 con default fijo).
 export interface PartnerData { credencial: string; experiencia: string; referenciaSectorial: string; equipo: string }
 
-// 9) CTA final.
-export interface CtaData { headline: string; subhead: string; buttonLabel: string }
+// 9) CTA final. `buttonUrl` (fuera del schema del agente — nunca inventa URLs; el
+//    CSE la configura y sobrevive regeneraciones vía carry-forward): en la landing
+//    pública el botón navega ahí en una pestaña nueva.
+export interface CtaData { headline: string; subhead: string; buttonLabel: string; buttonUrl?: string }
+
+// ── Secciones COMPARTIDAS entre templates (sectionType ≠ key) ────────────────
+
+// Arquitectura tecnológica / de conexión — sistemas involucrados + flujo de datos.
+// Data-driven (cards + flechas CSS); sin imágenes. Solo hojas string (coerceToSchema).
+export interface TechArchNode { nombre: string; rol: string; detalle: string }
+export interface TechArchFlow { desde: string; hacia: string; descripcion: string }
+export interface TechArchOptional { nombre: string; detalle: string }
+export interface TechArchitectureData {
+  intro: string;
+  nodos: TechArchNode[];
+  flujos: TechArchFlow[];
+  fueraDeAlcance: string[];
+  opcionales: TechArchOptional[];
+}
+
+// Mapeo de procesos (opcional) — cómo cambia cada proceso del cliente.
+export interface ProcessMapItem { nombre: string; comoEsHoy: string; comoSera: string; sistemas: string }
+export interface ProcessMappingData { intro: string; procesos: ProcessMapItem[] }
+
+// Casos de uso del catálogo — sección DETERMINÍSTICA (agentGenerated:false): el
+// generate la escribe con los seleccionados del checklist (títulos/precios exactos);
+// el agente jamás la llena. Editable inline como cualquier sección.
+export interface UseCaseItem { title: string; detail: string; price: string }
+export interface UseCasesData { items: UseCaseItem[] }
+
+// ── Template SITIO WEB (estructura RIGORA de 8 secciones) ────────────────────
+
+// 2) Diagnóstico y contexto — retos + por qué la plataforma + objetivo.
+export interface WebDiagnosisData {
+  intro: string;
+  retos: { title: string; detail: string }[];
+  porQuePlataforma: string;
+  objetivo: string;
+}
+
+// 3) Arquitectura del sitio — recorrido del usuario + sitemap por fases
+//    (fases con `badge` p.ej. "Próximamente" se pintan punteadas).
+export interface SiteMapPhase { nombre: string; badge: string; paginas: string[] }
+export interface SiteArchitectureData { recorrido: string; fases: SiteMapPhase[] }
+
+// 5) Alcance — lista PLANA de entregables (cosas que el cliente RECIBE, estilo
+//    checklist) + resultado. Deliberadamente distinta del cronograma (fases):
+//    entregables ≠ etapas. `bloques` es el shape LEGACY (por áreas) — solo se lee
+//    como fallback de data generada antes del cambio.
+export interface ScopeDeliverable { title: string; detail: string }
+export interface ScopeBlock { area: string; items: string[] }
+export interface WebScopeData {
+  entregables: ScopeDeliverable[];
+  resultado: string;
+  /** Legacy: shape anterior por áreas; el componente lo aplana si no hay entregables. */
+  bloques?: ScopeBlock[];
+}
+
+// 6) Cronograma — fases con semanas + qué se cotiza aparte.
+export interface WebMethodologyData { fases: Phase[]; cotizaAparte: string }
+
+// 7) Inversión (web) — líneas fase 1 (rangos) + extras opcionales + recurrentes separados.
+export interface WebInvestLine { concepto: string; monto: string; detalle: string }
+export interface WebInvestmentData {
+  lineas: WebInvestLine[];
+  extras: WebInvestLine[];
+  recurrentes: WebInvestLine[];
+  nota: string;
+}
+
+// 8) Por qué Smarteam — cards + siguiente paso. `buttonUrl`: ver CtaData.
+export interface WhyUsData {
+  cards: { title: string; detail: string }[];
+  siguientePaso: string;
+  buttonLabel: string;
+  buttonUrl?: string;
+}
 
 // ── Contrato del motor ───────────────────────────────────────────────────────
 
@@ -51,6 +128,21 @@ export interface CtaData { headline: string; subhead: string; buttonLabel: strin
 export interface LandingContext {
   clientName: string;
   clientLogoUrl?: string | null;
+  /** Logo de marca Smarteam (config global de Nexus, getSmarteamLogoUrl). El hero lo
+   *  pinta como imagen en la brand-row en lugar del badge de texto "Smarteam". */
+  smarteamLogoUrl?: string | null;
+  /** Logos de plataforma por nombre lowercase (brandLogoMap: "hubspot", "insider one"…):
+   *  una brand de TEXTO de la brand-row cuyo nombre matchee se pinta como imagen. */
+  brandLogos?: Record<string, string>;
+  /** Endpoint de upload de imágenes de contenido (solo modo edición del workspace;
+   *  ausente en read/externo). P.ej. `/api/business-cases/{id}/images`. */
+  imageUploadUrl?: string | null;
+  /** Endpoint para subir/quitar el logo del CLIENTE (solo edición): POST FormData →
+   *  Client.logoUrl. P.ej. `/api/clients/{clientId}/logo`. */
+  clientLogoUploadUrl?: string | null;
+  /** Callback de edición: el hero avisa que cambió el logo del cliente (el workspace
+   *  refresca su estado local — el logo vive en Client, no en el data de la sección). */
+  onClientLogoChange?: (url: string | null) => void;
 }
 
 /** Props que recibe TODA sección. `onChange` emite el nuevo `data` (estado local

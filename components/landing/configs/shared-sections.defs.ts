@@ -1,0 +1,102 @@
+/**
+ * components/landing/configs/shared-sections.defs.ts
+ *
+ * Defs (server-safe) de las secciones COMPARTIDAS entre templates: arquitectura
+ * tecnológica/de conexión y mapeo de procesos. Se exportan como BUILDERS porque
+ * cada template las instancia con su propia key/label/brief (el renderer se
+ * comparte vía `sectionType`). Schemas SOLO con hojas string (coerceToSchema
+ * aplana booleans/números a "").
+ */
+import type { BCSectionDef } from "./business-case.defs";
+
+const str = { type: "string" } as const;
+const strArray = { type: "array", items: { type: "string" } } as const;
+function arrayOf(props: Record<string, unknown>, required: string[]) {
+  return { type: "array", items: { type: "object", properties: props, required } } as const;
+}
+
+export const TECH_ARCHITECTURE_SCHEMA = {
+  type: "object",
+  properties: {
+    intro: str,
+    nodos: arrayOf({ nombre: str, rol: str, detalle: str }, ["nombre"]),
+    flujos: arrayOf({ desde: str, hacia: str, descripcion: str }, ["desde", "hacia"]),
+    fueraDeAlcance: strArray,
+    opcionales: arrayOf({ nombre: str, detalle: str }, ["nombre"]),
+  },
+  required: ["nodos"],
+} as const;
+
+export const TECH_ARCHITECTURE_EMPTY = {
+  intro: "",
+  nodos: [],
+  flujos: [],
+  fueraDeAlcance: [],
+  opcionales: [],
+};
+
+export function makeTechArchitectureDef(
+  overrides: Pick<BCSectionDef, "key" | "label"> & Partial<BCSectionDef>,
+): BCSectionDef {
+  return {
+    eyebrow: "Arquitectura",
+    theme: "light",
+    sectionType: "tech_architecture",
+    schema: TECH_ARCHITECTURE_SCHEMA as unknown as Record<string, unknown>,
+    empty: TECH_ARCHITECTURE_EMPTY,
+    agentHint: "Sistemas involucrados + flujo de información entre ellos + fuera de alcance + opcionales.",
+    brief:
+      "Arquitectura de conexión: cómo se conectan los sistemas involucrados. `nodos`: cada sistema (sitio, CRM, ERP, WhatsApp…) con su rol y qué datos maneja. `flujos`: qué información viaja de un sistema a otro y cuándo (ej. 'Formulario del sitio' → 'CRM': el lead entra con origen y página). `fueraDeAlcance`: qué NO incluye esta fase. `opcionales`: integraciones o módulos a futuro. Fuente: SOLO sistemas y flujos mencionados en el contexto — no inventes integraciones.",
+    ...overrides,
+  };
+}
+
+// ── Casos de uso del catálogo (sección DETERMINÍSTICA) ──────────────────────
+// `agentGenerated:false`: el agente la SALTEA — la escribe el generate con los
+// seleccionados del checklist (títulos/precios EXACTOS del catálogo; cero
+// alucinación). Vacía → blank → invisible interna (read) y externamente.
+export const USE_CASES_DEF: BCSectionDef = {
+  key: "casos_de_uso",
+  canvasLabel: "Casos de uso",
+  label: "Casos de uso incluidos",
+  eyebrow: "Casos de uso",
+  theme: "light",
+  sectionType: "use_cases",
+  agentGenerated: false,
+  empty: { items: [] },
+  schema: {
+    type: "object",
+    properties: { items: arrayOf({ title: str, detail: str, price: str }, ["title"]) },
+    required: ["items"],
+  },
+  agentHint: "(No la genera el agente: se llena con el checklist del catálogo.)",
+  brief:
+    "Casos de uso del catálogo seleccionados por el vendedor. Esta sección NO la escribe el agente: se llena automáticamente con los casos marcados en el checklist (con sus precios exactos) y se puede retocar a mano.",
+};
+
+export const PROCESS_MAPPING_SCHEMA = {
+  type: "object",
+  properties: {
+    intro: str,
+    procesos: arrayOf({ nombre: str, comoEsHoy: str, comoSera: str, sistemas: str }, ["nombre"]),
+  },
+  required: ["procesos"],
+} as const;
+
+export const PROCESS_MAPPING_EMPTY = { intro: "", procesos: [] };
+
+export function makeProcessMappingDef(
+  overrides: Pick<BCSectionDef, "key" | "label"> & Partial<BCSectionDef>,
+): BCSectionDef {
+  return {
+    eyebrow: "Procesos",
+    theme: "soft",
+    sectionType: "process_mapping",
+    schema: PROCESS_MAPPING_SCHEMA as unknown as Record<string, unknown>,
+    empty: PROCESS_MAPPING_EMPTY,
+    agentHint: "Procesos del cliente que cambian: cómo son hoy vs cómo quedarán, y con qué sistemas.",
+    brief:
+      "Mapeo de procesos (opcional): los procesos operativos del cliente que cambian con la implementación (ventas, seguimiento, cobranza, onboarding…). Por proceso: `comoEsHoy` (con la fricción real mencionada), `comoSera` (qué queda automatizado/conectado) y `sistemas` involucrados. Fuente: SOLO procesos descritos con sustancia en el contexto.",
+    ...overrides,
+  };
+}

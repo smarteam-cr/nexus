@@ -242,6 +242,64 @@
 .stl .stl-brief { font-size: 13px; line-height: 1.55; color: var(--text-muted); font-style: italic; margin: -6px 0 20px; max-width: 76ch; }
 .stl .stl-dark .stl-brief { color: var(--dark-text-2); }
 
+/* ── Arquitectura tecnológica: flujo de información (origen → destino) ────── */
+.stl .stl-flow-row {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 10px;
+  padding: 12px 0; border-top: 1px solid var(--border);
+}
+.stl .stl-flow-row:first-of-type { border-top: none; }
+.stl .stl-flow-node {
+  font-family: var(--font-montserrat), system-ui, sans-serif; font-weight: 600;
+  font-size: 14px; color: var(--text);
+  background: var(--blue-soft); border-radius: 8px; padding: 4px 10px;
+}
+.stl .stl-flow-arrow { color: var(--blue); font-weight: 600; }
+.stl .stl-flow-desc { font-size: 13px; color: var(--text-2); flex: 1; min-width: 180px; }
+
+/* Lista simple con viñeta neutra (fuera de alcance / alcance) */
+.stl .stl-plain-li { position: relative; padding-left: 18px; font-size: 14px; line-height: 1.5; color: var(--text-2); }
+.stl .stl-plain-li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+
+/* ── Sitemap por fases (arquitectura del sitio) ───────────────────────────── */
+.stl .stl-sitemap-phase { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; }
+.stl .stl-sitemap-phase--soon { border-style: dashed; background: var(--bg-soft); }
+.stl .stl-sitemap-badge {
+  display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px;
+  border: 1px dashed var(--border); color: var(--text-muted);
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.stl .stl-page-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.stl .stl-page-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg-soft);
+  color: var(--text); font-size: 13px; font-weight: 500;
+}
+.stl .stl-sitemap-phase--soon .stl-page-chip { border-style: dashed; color: var(--text-2); }
+
+/* Callout (resultado del alcance) */
+.stl .stl-callout {
+  background: var(--teal-soft); border: 1px solid rgba(66, 228, 179, 0.30);
+  border-radius: 14px; padding: 20px 22px;
+}
+
+/* Entregables del alcance (checklist plana — visualmente opuesta a las fases
+   numeradas del cronograma) */
+.stl .stl-deliverable {
+  display: flex; align-items: flex-start; gap: 12px;
+  background: #fff; border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 16px;
+}
+.stl .stl-deliverable-check {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--teal-soft); color: var(--teal-dark);
+  font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; margin-top: 1px;
+}
+.stl .stl-deliverable-title {
+  font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-weight: 600; font-size: 15px; color: var(--text); line-height: 1.35;
+}
+
 /* Logo del cliente en el hero */
 .stl .stl-logo { height: 38px; margin-bottom: 26px; filter: brightness(0) invert(1); opacity: 0.92; }
 
@@ -267,6 +325,28 @@
 }
 .stl .hero-backdrop > * { position: relative; z-index: 2; }
 @media (max-width: 768px) { .stl .hero-backdrop::before { background-size: 40px 40px; } }
+
+/* Portada con imagen (hero): capa full-bleed + DEGRADADO horizontal (izquierda
+   azul oscuro opaco → derecha transparente): el texto queda sobre el lado sólido
+   y la imagen "respira" a la derecha sin verse estirada ni teñida entera.
+   `cover` + posición derecha: la imagen llena recortando (nunca deforma).
+   Declarada DESPUÉS de `.hero-backdrop > *` para ganar position/z-index (misma
+   especificidad, orden manda): queda sobre el glow/grid (z 0-1) y bajo el
+   contenido (z 2). */
+.stl .stl-sec-cover {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background-size: cover; background-position: center right;
+}
+.stl .stl-sec-cover::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(
+    90deg,
+    #0B1426 0%,
+    rgba(11, 20, 38, 0.94) 28%,
+    rgba(11, 20, 38, 0.62) 55%,
+    rgba(11, 20, 38, 0.22) 100%
+  );
+}
 
 /* ── Reveal on scroll ────────────────────────────────────────────────────── */
 .stl .reveal { opacity: 0; transform: translateY(20px); transition: opacity 700ms var(--ease), transform 700ms var(--ease); will-change: opacity, transform; }

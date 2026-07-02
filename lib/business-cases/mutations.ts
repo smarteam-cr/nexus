@@ -10,6 +10,7 @@ import bcrypt from "bcrypt";
 import { Prisma, type BusinessCaseBlockType } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { BLOCK_ORDER, type GeneratedBlock } from "./schema";
+import { sanitizeTags } from "@/lib/tags/catalog";
 
 const BCRYPT_ROUNDS = 12;
 const PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
@@ -45,6 +46,11 @@ export async function createBusinessCase(input: {
   hubspotCompanyId?: string | null;
   hubspotDealId?: string | null;
   createdByEmail?: string | null;
+  /** Tipo de caso (slug de BC_TYPE_CATALOG) + sub-tipo. null = impl. HubSpot (legacy). */
+  caseType?: string | null;
+  caseSubtype?: string | null;
+  /** Tags seed del tipo (slugs del catálogo; se sanitizan). El CSE los edita después. */
+  tags?: string[];
 }) {
   const slug = `${slugify(input.name)}-${randomBytes(3).toString("hex")}`;
   return prisma.businessCase.create({
@@ -55,6 +61,9 @@ export async function createBusinessCase(input: {
       hubspotCompanyId: input.hubspotCompanyId ?? null,
       hubspotDealId: input.hubspotDealId ?? null,
       createdByEmail: input.createdByEmail ?? null,
+      caseType: input.caseType ?? null,
+      caseSubtype: input.caseSubtype ?? null,
+      ...(input.tags?.length ? { tags: sanitizeTags(input.tags) } : {}),
     },
   });
 }

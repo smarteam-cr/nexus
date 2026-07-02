@@ -108,6 +108,12 @@ export default function LandingView({
         // En lectura, omitir secciones sin contenido o que el CSE ocultó.
         if (!editable && (isBlank(data) || hidden)) return null;
         const isHero = !!def.backdrop;
+        // Portada con imagen (hero): capa de fondo + overlay azul a nivel SECCIÓN
+        // (hermana de .stl-wrap — dentro del wrap no cubriría el full-bleed).
+        const coverUrl =
+          isHero && typeof data.coverImageUrl === "string" && data.coverImageUrl.trim()
+            ? (data.coverImageUrl as string)
+            : null;
         const Comp = def.Component;
         return (
           <section
@@ -115,6 +121,9 @@ export default function LandingView({
             ref={isHero ? heroRef : undefined}
             className={`stl-sec stl-${def.theme}${isHero ? " hero-backdrop" : ""}${editable && hidden ? " stl-hidden" : ""}`}
           >
+            {coverUrl && (
+              <div className="stl-sec-cover" style={{ backgroundImage: `url(${coverUrl})` }} aria-hidden />
+            )}
             {editable && hidden && <div className="stl-hidden-badge">No visible para el cliente</div>}
             {editable && renderOverlay && (
               <div className="stl-overlay">{renderOverlay(def.key)}</div>

@@ -32,6 +32,7 @@ import { resolveActiveAccess, touchAccess } from "./access";
 import { readPublishedClientTimeline } from "./timeline-view";
 import { readClientProcesos } from "@/lib/canvas/read-procesos";
 import type { KickoffLandingData } from "./kickoff-view-types";
+import { getBrandLogos, platformLogosFor } from "./smarteam-logo";
 
 /**
  * Resuelve un token de acceso externo al Kickoff publicado de SU proyecto.
@@ -55,7 +56,7 @@ export async function getPublishedKickoffForToken(
   // un proceso individual). El cliente NO ve nada cuya clave esté en este set.
   const proj = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { clientId: true, hiddenKickoffKeys: true },
+    select: { clientId: true, hiddenKickoffKeys: true, tags: true },
   });
   const hidden = new Set(proj?.hiddenKickoffKeys ?? []);
 
@@ -139,6 +140,7 @@ export async function getPublishedKickoffForToken(
   return {
     projectName: access.project.name,
     clientLogoUrl: access.project.client.logoUrl,
+    platformLogos: platformLogosFor(proj?.tags ?? [], await getBrandLogos()),
     procesos,
     sections: sections.filter((s) => !hidden.has(s.id)).map((s) => ({
       id: s.id,

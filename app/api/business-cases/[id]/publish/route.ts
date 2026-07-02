@@ -12,6 +12,8 @@ import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { ensureAccess } from "@/lib/business-cases";
 import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
+import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
+import { templateDefsByKey } from "@/components/landing/configs/templates.defs";
 
 function buildVerifyUrl(req: NextRequest, token: string): string {
   const base = process.env.APP_URL || new URL(req.url).origin;
@@ -37,7 +39,13 @@ export async function POST(
 
   const bc = await prisma.businessCase.findUnique({
     where: { id },
-    select: { id: true, name: true, client: { select: { name: true, logoUrl: true } } },
+    select: {
+      id: true,
+      name: true,
+      caseType: true,
+      caseSubtype: true,
+      client: { select: { name: true, logoUrl: true } },
+    },
   });
   if (!bc) {
     return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
@@ -104,17 +112,35 @@ export async function POST(
     );
   }
 
+  // Tipo/template del caso (columna → __meta del canvas → default) + defs para congelar
+  // la PRESENTACIÓN por sección: el snapshot debe poder renderizarse fiel aunque el
+  // template viva y cambie después (render sintetizado del external page).
+  const resolved = resolveCaseTypeFor(bc, canvas.sections);
+  const defsByKey = templateDefsByKey(resolved.templateId);
+
   const snapshot = {
     name: bc.name,
     clientName: bc.client.name,
     clientLogoUrl: bc.client.logoUrl,
-    sections: filled.map((s) => ({
-      key: s.key,
-      label: s.label,
-      titleOverride: s.titleOverride,
-      eyebrowOverride: s.eyebrowOverride,
-      blocks: s.blocks,
-    })),
+    templateId: resolved.templateId,
+    caseType: resolved.caseType,
+    caseSubtype: resolved.caseSubtype,
+    sections: filled.map((s) => {
+      const def = defsByKey[s.key];
+      return {
+        key: s.key,
+        label: s.label,
+        titleOverride: s.titleOverride,
+        eyebrowOverride: s.eyebrowOverride,
+        blocks: s.blocks,
+        // Presentación congelada (robustez histórica):
+        sectionType: def?.sectionType ?? s.key,
+        theme: def?.theme ?? null,
+        eyebrow: def?.eyebrow ?? null,
+        selfTitled: def?.selfTitled ?? false,
+        backdrop: def?.backdrop ?? false,
+      };
+    }),
   };
 
   await prisma.businessCase.update({

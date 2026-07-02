@@ -65,6 +65,9 @@ export interface KickoffLandingData {
   projectName: string;
   /** Logo de la EMPRESA cliente (Client.logoUrl, bucket público) o null. */
   clientLogoUrl: string | null;
+  /** Logos de PLATAFORMA (HubSpot / Insider One, config global según tags del
+   *  proyecto — platformLogosFor). Se pintan junto al logo del cliente en el hero. */
+  platformLogos?: string[];
   sections: KickoffSection[];
   timeline: KickoffTimelineData;
   /** Procesos del cliente (solo CONFIRMED en la vista externa). */

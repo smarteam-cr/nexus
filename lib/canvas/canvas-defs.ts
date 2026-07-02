@@ -43,9 +43,10 @@ export const HANDOFF_CANVAS: CanvasDefinition = {
 };
 
 // ── Canvas Business Case (Ventas) ─────────────────────────────────────────────
-// Template del caso de negocio. Cuelga de un BusinessCase (no de un Project) y es
-// versionado: cada "Generar business case" crea un ProjectCanvas nuevo con estas
-// secciones (ver createBusinessCaseCanvas). El agente "businesscase" las llena.
+// LEGACY/informativo: la fuente de composición del BC ahora es el registry de
+// templates (components/landing/configs/templates.defs.ts) — createBusinessCaseCanvas
+// siembra desde BC_TEMPLATES[templateId], no desde acá. Se conserva como referencia
+// de las 9 secciones históricas de hubspot_v1 (mismas keys y rótulos internos).
 export const BUSINESS_CASE_CANVAS: CanvasDefinition = {
   name: "Business Case",
   isDefault: true,

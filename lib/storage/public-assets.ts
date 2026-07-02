@@ -22,6 +22,16 @@ export function isAllowedLogoType(mime: string): boolean {
   return LOGO_MIME_TYPES.includes(mime);
 }
 
+/** MIME para IMÁGENES de contenido subidas por usuarios (portadas, diagramas):
+ *  SIN SVG (los diagramas van rasterizados). Subset de los MIME del bucket —
+ *  el bucket ya limita a LOGO_MIME_TYPES y 4MB a nivel Supabase. */
+export const IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
+export const MAX_IMAGE_SIZE = MAX_LOGO_SIZE; // 4MB (límite del bucket)
+
+export function isAllowedImageType(mime: string): boolean {
+  return IMAGE_MIME_TYPES.includes(mime);
+}
+
 /** Asegura el bucket público (idempotente). No-op si Storage no está configurado. */
 export async function ensurePublicBucket(): Promise<void> {
   const client = getStorageClient();

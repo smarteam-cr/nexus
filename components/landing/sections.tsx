@@ -9,7 +9,8 @@
  * quitar. Branded Smarteam; estilos en app/landing-engine.css (scope .stl, hex
  * literal → theme-safe en el render externo).
  */
-import { Fragment, type FC } from "react";
+import { Fragment, useRef, useState, type FC } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import type {
   SectionProps,
@@ -62,36 +63,159 @@ function TextCard({
   );
 }
 
+/** Botón "Portada" del hero (solo edición): sube una imagen al endpoint del BC
+ *  (`ctx.imageUploadUrl`) y la guarda en `data.coverImageUrl` (fuera del schema del
+ *  agente — sobrevive regeneraciones vía carry-forward, patrón `brands`). */
+function CoverButton({
+  coverImageUrl, uploadUrl, onSet,
+}: { coverImageUrl?: string | null; uploadUrl: string; onSet: (url: string | null) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  const pill: React.CSSProperties = {
+    display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px",
+    borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
+    background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.22)", color: "#fff",
+  };
+  const upload = async (file: File) => {
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(uploadUrl, { method: "POST", body: fd });
+      const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (res.ok && body.url) onSet(body.url);
+      else toast.error(body.error ?? "No se pudo subir la imagen.");
+    } catch {
+      toast.error("No se pudo subir la imagen (error de red).");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+  return (
+    <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+      <button type="button" style={pill} disabled={busy} onClick={() => inputRef.current?.click()}>
+        🖼 {busy ? "Subiendo…" : coverImageUrl ? "Cambiar portada" : "Portada"}
+      </button>
+      {coverImageUrl && (
+        <button type="button" style={{ ...pill, background: "transparent" }} disabled={busy} onClick={() => onSet(null)}>
+          ✕ Quitar
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Botón "Logo del cliente" (solo edición): sube al endpoint del CLIENTE
+ *  (`ctx.clientLogoUploadUrl` → Client.logoUrl) y avisa vía ctx.onClientLogoChange. */
+function ClientLogoButton({
+  hasLogo, uploadUrl, onChanged,
+}: { hasLogo: boolean; uploadUrl: string; onChanged: (url: string | null) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  const pill: React.CSSProperties = {
+    display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px",
+    borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
+    background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.22)", color: "#fff",
+  };
+  const upload = async (file: File) => {
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(uploadUrl, { method: "POST", body: fd });
+      const body = (await res.json().catch(() => ({}))) as { logoUrl?: string; error?: string };
+      if (res.ok && body.logoUrl) onChanged(body.logoUrl);
+      else toast.error(body.error ?? "No se pudo subir el logo.");
+    } catch {
+      toast.error("No se pudo subir el logo (error de red).");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+  return (
+    <>
+      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style={{ display: "none" }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+      <button type="button" style={pill} disabled={busy} onClick={() => inputRef.current?.click()}>
+        ⛭ {busy ? "Subiendo…" : hasLogo ? "Cambiar logo del cliente" : "Logo del cliente"}
+      </button>
+    </>
+  );
+}
+
 // ── 1) Hero ──────────────────────────────────────────────────────────────────
 export const HeroSection: FC<SectionProps<HeroData>> = ({ data, ctx, editable, onChange }) => {
   const tags = data.tags ?? [];
   const set = (next: Partial<HeroData>) => onChange?.({ ...data, ...next });
   // Brand-row EDITABLE: si el CSE no la tocó (brands vacío) cae a los defaults.
-  // Con logo del cliente, los defaults son Smarteam × HubSpot (el cliente lo da el logo).
+  // Los LOGOS reales (cliente + Smarteam de la config global) van como imagen;
+  // los defaults de texto solo cubren lo que no tiene logo.
   const hasLogo = !!ctx.clientLogoUrl;
+  const hasSmarteamLogo = !!ctx.smarteamLogoUrl;
   const brands =
     data.brands && data.brands.length
       ? data.brands
-      : hasLogo
-        ? ["Smarteam", "HubSpot"]
-        : [ctx.clientName || "Cliente", "Smarteam", "HubSpot"];
+      : [
+          ...(hasLogo ? [] : [ctx.clientName || "Cliente"]),
+          ...(hasSmarteamLogo ? [] : ["Smarteam"]),
+          "HubSpot",
+        ];
   return (
     <div style={{ maxWidth: 900 }}>
+      {editable && (ctx.imageUploadUrl || ctx.clientLogoUploadUrl) && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {ctx.imageUploadUrl && (
+            <CoverButton coverImageUrl={data.coverImageUrl} uploadUrl={ctx.imageUploadUrl}
+              onSet={(url) => set({ coverImageUrl: url })} />
+          )}
+          {ctx.clientLogoUploadUrl && ctx.onClientLogoChange && (
+            <div style={{ marginBottom: 18 }}>
+              <ClientLogoButton hasLogo={hasLogo} uploadUrl={ctx.clientLogoUploadUrl} onChanged={ctx.onClientLogoChange} />
+            </div>
+          )}
+        </div>
+      )}
       <div className="stl-brandrow">
         {hasLogo && (
           // eslint-disable-next-line @next/next/no-img-element
           <img className="stl-brand-logo" src={ctx.clientLogoUrl!} alt={ctx.clientName} />
         )}
-        {brands.map((b, i) => (
-          <Fragment key={i}>
-            {(i > 0 || hasLogo) && <span className="stl-brand-x">×</span>}
-            <span className="stl-item stl-brand-badge">
-              {editable && <RemoveBtn onClick={() => set({ brands: removeAt(brands, i) })} />}
-              <Editable as="span" editable={editable} value={b} placeholder="Marca / plataforma…"
-                onCommit={(v) => set({ brands: replaceAt(brands, i, v) })} />
-            </span>
-          </Fragment>
-        ))}
+        {hasSmarteamLogo && (
+          <>
+            {hasLogo && <span className="stl-brand-x">×</span>}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="stl-brand-logo" src={ctx.smarteamLogoUrl!} alt="Smarteam" />
+          </>
+        )}
+        {brands.map((b, i) => {
+          // Brand de texto con logo configurado (HubSpot / Insider One / Smarteam) →
+          // se pinta la imagen. Sin logo → badge de texto editable, como siempre.
+          const brandLogo = ctx.brandLogos?.[b.trim().toLowerCase()];
+          return (
+            <Fragment key={i}>
+              {(i > 0 || hasLogo || hasSmarteamLogo) && <span className="stl-brand-x">×</span>}
+              {brandLogo ? (
+                <span className="stl-item" style={{ display: "inline-flex", alignItems: "center" }}>
+                  {editable && <RemoveBtn onClick={() => set({ brands: removeAt(brands, i) })} />}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img className="stl-brand-logo" src={brandLogo} alt={b} />
+                </span>
+              ) : (
+                <span className="stl-item stl-brand-badge">
+                  {editable && <RemoveBtn onClick={() => set({ brands: removeAt(brands, i) })} />}
+                  <Editable as="span" editable={editable} value={b} placeholder="Marca / plataforma…"
+                    onCommit={(v) => set({ brands: replaceAt(brands, i, v) })} />
+                </span>
+              )}
+            </Fragment>
+          );
+        })}
         {editable && <AddBtn label="Marca" onClick={() => set({ brands: appendItem(brands, "") })} />}
       </div>
       <Editable as="h1" className="stl-hero-title" editable={editable} value={data.headline}
@@ -277,6 +401,31 @@ export const PartnerSection: FC<SectionProps<PartnerData>> = ({ data, editable, 
   );
 };
 
+/** Botón del CTA en LECTURA: con `buttonUrl` navega en pestaña nueva; sin URL, span. */
+export function CtaButton({ label, url }: { label?: string; url?: string }) {
+  if (!label) return null;
+  if (url?.trim()) {
+    return (
+      <a className="stl-btn" href={url.trim()} target="_blank" rel="noopener noreferrer">
+        {label}
+      </a>
+    );
+  }
+  return <span className="stl-btn">{label}</span>;
+}
+
+/** Editor de la URL del botón (solo modo edición): fuera del schema del agente —
+ *  el CSE la configura y sobrevive regeneraciones (carry-forward de keys no-schema). */
+export function CtaUrlField({ value, onCommit }: { value?: string; onCommit: (v: string) => void }) {
+  return (
+    <div style={{ marginTop: 10, display: "flex", alignItems: "baseline", justifyContent: "center", gap: 6, fontSize: 12, opacity: 0.75 }}>
+      <span>URL del botón:</span>
+      <Editable as="span" editable value={value ?? ""} placeholder="https://… (vacío = sin link)"
+        onCommit={onCommit} />
+    </div>
+  );
+}
+
 // ── 9) CTA final ─────────────────────────────────────────────────────────────
 export const CtaSection: FC<SectionProps<CtaData>> = ({ data, editable, onChange }) => {
   const set = (next: Partial<CtaData>) => onChange?.({ ...data, ...next });
@@ -290,9 +439,10 @@ export const CtaSection: FC<SectionProps<CtaData>> = ({ data, editable, onChange
         <div style={{ marginTop: 26 }}>
           <Editable as="span" className="stl-btn" editable value={data.buttonLabel}
             placeholder="Agendar siguiente paso…" onCommit={(v) => set({ buttonLabel: v })} />
+          <CtaUrlField value={data.buttonUrl} onCommit={(v) => set({ buttonUrl: v.trim() })} />
         </div>
       ) : (
-        data.buttonLabel ? <span className="stl-btn">{data.buttonLabel}</span> : null
+        <CtaButton label={data.buttonLabel} url={data.buttonUrl} />
       )}
     </div>
   );

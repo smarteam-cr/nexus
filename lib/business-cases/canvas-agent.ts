@@ -11,9 +11,27 @@
  * componentes client.
  */
 import { anthropic } from "@/lib/anthropic";
-import { BC_SECTION_DEFS, BC_DEF_BY_KEY } from "@/components/landing/configs/business-case.defs";
+import type { BCSectionDef } from "@/components/landing/configs/business-case.defs";
+import {
+  type BcTemplateDef,
+  templateById,
+  templateDefsByKey,
+  findDefAcrossTemplates,
+} from "@/components/landing/configs/templates.defs";
+import { HUBSPOT_TEMPLATE_ID } from "@/lib/business-cases/case-types";
 
 const MODEL = "claude-sonnet-4-6";
+
+const DEFAULT_AGENT_INTRO =
+  "Sos un consultor de Smarteam (Elite HubSpot Partner en LATAM) que arma un Business Case (caso de negocio) para un prospecto, a partir de transcripts de reuniones comerciales y notas.";
+
+/** Secciones que el AGENTE genera: excluye `agentGenerated: false` (se llenan
+ *  determinísticamente — p.ej. casos de uso del catálogo — o a mano) y las
+ *  `skipKeys` (secciones OCULTAS del caso: generarlas costaría tokens/latencia
+ *  por contenido que el cliente no ve; al mostrarlas y regenerar, sí entran). */
+function generableSections(tpl: BcTemplateDef, skipKeys?: Set<string>): BCSectionDef[] {
+  return tpl.sections.filter((d) => d.agentGenerated !== false && !skipKeys?.has(d.key));
+}
 
 export type GeneratedSection = { key: string; data: unknown };
 
@@ -49,21 +67,23 @@ function coerceToSchema(schema: unknown, value: unknown): unknown {
   return typeof value === "string" ? value : "";
 }
 
-function sectionsGuide(briefsByKey?: Record<string, string>): string {
-  return BC_SECTION_DEFS.map(
+function sectionsGuide(sections: BCSectionDef[], briefsByKey?: Record<string, string>): string {
+  return sections.map(
     (d) => `"${d.key}" — ${d.label}\n  Qué redactar: ${briefsByKey?.[d.key] ?? d.brief ?? d.agentHint}\n  Forma de "${d.key}": ${shapeOf(d.schema)}`,
   ).join("\n\n");
 }
 
-function buildSystemPrompt(briefsByKey?: Record<string, string>): string {
-  return `Sos un consultor de Smarteam (Elite HubSpot Partner en LATAM) que arma un Business Case (caso de negocio) para un prospecto, a partir de transcripts de reuniones comerciales y notas.
+function buildSystemPrompt(tpl: BcTemplateDef, briefsByKey?: Record<string, string>, skipKeys?: Set<string>): string {
+  const sections = generableSections(tpl, skipKeys);
+  const exampleKeys = sections.slice(0, 2).map((d) => `"${d.key}": { ... }`).join(", ");
+  return `${tpl.agentIntro ?? DEFAULT_AGENT_INTRO}
 
 Devolvé SOLO un objeto JSON válido, sin texto alrededor ni fences de markdown, con UNA key por sección y como valor el objeto de datos de esa sección (sin markdown, texto plano en cada campo):
-  { "hero": { ... }, "dolores": { ... }, ... }
+  { ${exampleKeys}, ... }
 
 Seguí la GUÍA de cada sección al pie de la letra (es la instrucción del consultor para esa sección):
 
-${sectionsGuide(briefsByKey)}
+${sectionsGuide(sections, briefsByKey)}
 
 Reglas estrictas:
 - Texto PLANO en cada campo (sin markdown, sin viñetas, sin **).
@@ -73,16 +93,22 @@ Reglas estrictas:
 - ESTILO (OBLIGATORIO): español con TUTEO neutro (segunda persona con "tú"). Conjuga SIEMPRE en forma de tú: "Transforma", "centraliza", "optimiza", "conecta", "tienes", "puedes", "necesitas". PROHIBIDO el voseo: NUNCA escribas "Transformá", "centralizá", "optimizá", "tenés", "querés", "podés", "necesitás" ni "vos".`;
 }
 
-/** Genera el `data` estructurado de todas las secciones a partir del contexto.
+/** Genera el `data` estructurado de todas las secciones GENERABLES del template a
+ *  partir del contexto (default: hubspot_v1 = comportamiento legacy).
  *  `briefsByKey` (Fase B): guía efectiva por sección (override del CSE ?? brief del spec). */
 export async function generateCanvasSections(
   context: string,
   briefsByKey?: Record<string, string>,
+  templateId: string = HUBSPOT_TEMPLATE_ID,
+  skipKeys?: Set<string>,
 ): Promise<GeneratedSection[]> {
+  const tpl = templateById(templateId);
+  const sections = generableSections(tpl, skipKeys);
+
   const msg = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 8000,
-    system: buildSystemPrompt(briefsByKey),
+    max_tokens: tpl.maxTokens ?? 8000,
+    system: buildSystemPrompt(tpl, briefsByKey, skipKeys),
     messages: [
       {
         role: "user",
@@ -91,20 +117,33 @@ export async function generateCanvasSections(
     ],
   });
 
+  // Guard anti-canvas-vacío: si la salida se cortó por max_tokens o el JSON no
+  // parseó, ABORTAR acá (antes de la transacción del route) — sin esto, parseObject
+  // devuelve {} y coerceToSchema vacía TODO: nacería un caso nuevo VACÍO y activo,
+  // desactivando el bueno anterior, con toast de éxito.
+  if (msg.stop_reason === "max_tokens") {
+    throw new Error("la generación se cortó por límite de tokens — reintentá (si persiste, reducí las fuentes de contexto)");
+  }
   const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
   const obj = parseObject(text);
+  if (Object.keys(obj).length === 0) {
+    throw new Error("el agente no devolvió un JSON válido — reintentá la generación");
+  }
 
-  return BC_SECTION_DEFS.map((d) => ({ key: d.key, data: coerceToSchema(d.schema, obj[d.key]) }));
+  return sections.map((d) => ({ key: d.key, data: coerceToSchema(d.schema, obj[d.key]) }));
 }
 
-/** Regenera el `data` de UNA sección según una instrucción (edición por IA). */
+/** Regenera el `data` de UNA sección según una instrucción (edición por IA).
+ *  `templateId` resuelve la def; el fallback cross-template es LOAD-BEARING: un bloque
+ *  de un canvas viejo cuya key ya no está en su template no debe perder su data. */
 export async function regenerateSectionData(
   sectionKey: string,
   currentData: unknown,
   instruction: string,
   brief?: string,
+  templateId?: string,
 ): Promise<unknown> {
-  const def = BC_DEF_BY_KEY[sectionKey];
+  const def = templateDefsByKey(templateId)[sectionKey] ?? findDefAcrossTemplates(sectionKey);
   if (!def) return coerceToSchema({ type: "object", properties: {} }, currentData);
 
   const msg = await anthropic.messages.create({

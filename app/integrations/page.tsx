@@ -87,9 +87,14 @@ export default async function IntegrationsPage({
     getHubspotSystemStatus(),
     getGoogleStatus(),
     prisma.firefliesSession.count({ where: { source: "google_meet" } }),
-    prisma.systemConfig.findUnique({ where: { id: "system" }, select: { smarteamLogoUrl: true } }),
+    prisma.systemConfig.findUnique({
+      where: { id: "system" },
+      select: { smarteamLogoUrl: true, hubspotLogoUrl: true, insiderLogoUrl: true },
+    }),
   ]);
   const smarteamLogoUrl = systemCfg?.smarteamLogoUrl ?? null;
+  const hubspotLogoUrl = systemCfg?.hubspotLogoUrl ?? null;
+  const insiderLogoUrl = systemCfg?.insiderLogoUrl ?? null;
 
   return (
     <AppShell>
@@ -121,7 +126,7 @@ export default async function IntegrationsPage({
           <section className="rounded-xl bg-surface border border-line p-5">
             <h2 className="text-sm font-semibold text-fg mb-1">Logo de Smarteam</h2>
             <p className="text-xs text-fg-muted mb-4">
-              Se muestra en el encabezado y pie de las páginas externas del cliente (kickoff y cronograma). Si no subís uno, se usa el logo por defecto.
+              Se muestra en el encabezado y pie de las páginas externas del cliente (kickoff y cronograma) y en la cabecera de los business cases. Si no subís uno, se usa el logo por defecto.
             </p>
             <LogoUploader
               currentUrl={smarteamLogoUrl}
@@ -129,6 +134,35 @@ export default async function IntegrationsPage({
               label="Logo de Smarteam"
               hint="PNG, JPG, WebP o SVG · máx 4MB."
             />
+          </section>
+
+          {/* Logos de plataforma (HubSpot / Insider One) — brand-row de BCs y kickoffs */}
+          <section className="rounded-xl bg-surface border border-line p-5">
+            <h2 className="text-sm font-semibold text-fg mb-1">Logos de plataforma</h2>
+            <p className="text-xs text-fg-muted mb-4">
+              Se muestran junto al logo del cliente en los business cases y kickoffs. Sin logo,
+              el business case muestra el nombre como texto.
+            </p>
+            <div className="space-y-4">
+              <div className="rounded-lg border border-line p-4">
+                <p className="text-xs font-semibold text-fg mb-3">Logo de HubSpot</p>
+                <LogoUploader
+                  currentUrl={hubspotLogoUrl}
+                  endpoint="/api/system/brand-logos/hubspot"
+                  label="Logo de HubSpot"
+                  hint="PNG, JPG, WebP o SVG · máx 4MB."
+                />
+              </div>
+              <div className="rounded-lg border border-line p-4">
+                <p className="text-xs font-semibold text-fg mb-3">Logo de Insider One</p>
+                <LogoUploader
+                  currentUrl={insiderLogoUrl}
+                  endpoint="/api/system/brand-logos/insider"
+                  label="Logo de Insider One"
+                  hint="PNG, JPG, WebP o SVG · máx 4MB."
+                />
+              </div>
+            </div>
           </section>
         </div>
       </div>

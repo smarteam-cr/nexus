@@ -184,6 +184,8 @@ model Client {
 model SystemConfig {
   id              String   @id @default("system")
   smarteamLogoUrl String?  // URL pública del logo de Smarteam (bucket public-assets)
+  hubspotLogoUrl  String?  // logo de HubSpot — brand-row de business cases + kickoffs
+  insiderLogoUrl  String?  // logo de Insider One — ídem
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -927,6 +929,13 @@ model BusinessCase {
   tags               String[]            @default([])
   implementationType ImplementationType?
 
+  // Tipo de caso (slug del catálogo TS en lib/business-cases/case-types.ts) — determina
+  // template de landing + tags seed. String? y NO enum (agregar tipos sin migración;
+  // valor desconocido degrada al default). null = implementación HubSpot (legacy/default).
+  // Respaldo dual-PC: la entry `__meta` del Json sections del canvas v0 (template-meta.ts).
+  caseType    String?
+  caseSubtype String? // sub-tipo (website: "ecommerce" | "informativo")
+
   // D.3 staging — el prospecto ve el SNAPSHOT publicado; el contenido vivo es
   // borrador hasta "Publicar". publishedSnapshot = foto client-safe de bloques.
   publishedAt       DateTime?
@@ -940,10 +949,53 @@ model BusinessCase {
   canvases    ProjectCanvas[]              // canvases versionados (cada "Generar" = uno nuevo)
   sessions    BusinessCaseSession[]        // sesiones de contexto incluidas/excluidas
   transcripts BusinessCaseTranscript[]
+  useCases    BusinessCaseUseCase[]        // checklist del catálogo de casos de uso
   access      BusinessCaseExternalAccess?
   agentRuns   AgentRun[]
 
   @@index([clientId])
+}
+
+// ─── Catálogo de casos de uso (Ventas) ────────────────────────────────────────
+// Checklist INTERNO del vendedor: casos de uso pre-armados con precio que se marcan
+// por BC y se materializan determinísticamente en la sección `casos_de_uso` (el
+// agente NUNCA los genera → precios exactos). 100% opcional: sin filas aplicables,
+// el flujo de texto libre sigue idéntico. Tabla propia (NO KnowledgeDocument: los
+// docs PUBLISHED se inyectan al contexto de OTROS agentes y esto lleva precios).
+model UseCase {
+  id             String   @id @default(cuid())
+  title          String
+  description    String   @db.Text // markdown corto (checklist + landing)
+  price          String?  // TEXTO libre mostrable ("USD 1.200", "desde $X/mes") — NUNCA numérico (sin calculadora, por diseño)
+  appliesTo      String[] @default([]) // slugs de caseType (case-types.ts); [] = aplica a TODOS los tipos
+  tags           String[] @default([]) // slugs del catálogo lib/tags (mismo vocabulario que BusinessCase.tags)
+  active         Boolean  @default(true)
+  order          Int      @default(0)
+  createdByEmail String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  businessCases BusinessCaseUseCase[]
+
+  @@index([active])
+}
+
+// Pivote BC ↔ caso de uso — espejo de BusinessCaseSession. SEMÁNTICA: sin fila = no
+// seleccionado; la fila se crea recién al primer toggle (un seed que cree filas para
+// todos los candidatos invertiría el default). La verdad PUBLICABLE es el `data` de
+// la sección `casos_de_uso` del canvas; el pivote es estado de trabajo + input del prompt.
+model BusinessCaseUseCase {
+  id             String       @id @default(cuid())
+  businessCaseId String
+  businessCase   BusinessCase @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
+  useCaseId      String
+  useCase        UseCase      @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+  selected       Boolean      @default(true)
+  priceOverride  String?      // precio negociado para ESTE caso (texto)
+  createdAt      DateTime     @default(now())
+
+  @@unique([businessCaseId, useCaseId])
+  @@index([businessCaseId])
 }
 
 model BusinessCaseSession {

@@ -42,6 +42,10 @@ export async function GET(
       fileSize: true,
       mimeType: true,
       createdAt: true,
+      // Fuente URL (transcript/url): la UI necesita distinguirla (fileUrl http) y
+      // mostrar la fecha del último fetch. Aditivo — los consumidores viejos lo ignoran.
+      fileUrl: true,
+      processedAt: true,
     },
   });
   return NextResponse.json({ transcripts });

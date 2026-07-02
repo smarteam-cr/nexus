@@ -18,7 +18,14 @@ import { prisma } from "@/lib/db/prisma";
 import { createBusinessCaseCanvas } from "@/lib/canvas/default-canvases";
 import { generateCanvasSections } from "@/lib/business-cases/canvas-agent";
 import { loadBcFeeding } from "@/lib/business-cases/feeding";
-import { briefsByKeyFrom } from "@/lib/business-cases/section-briefs";
+import { briefsByKeyFrom, parseSectionEntries } from "@/lib/business-cases/section-briefs";
+import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
+import { templateById, templateDefsByKey } from "@/components/landing/configs/templates.defs";
+import {
+  loadSelectedUseCases,
+  useCasesSectionData,
+  USE_CASES_SECTION_KEY,
+} from "@/lib/business-cases/use-cases";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { fetchCompanyTimeline } from "@/lib/hubspot/company-timeline";
 
@@ -32,7 +39,14 @@ export async function POST(
 
   const bc = await prisma.businessCase.findUnique({
     where: { id },
-    select: { id: true, clientId: true, hubspotCompanyId: true, client: { select: { notes: true } } },
+    select: {
+      id: true,
+      clientId: true,
+      hubspotCompanyId: true,
+      caseType: true,
+      caseSubtype: true,
+      client: { select: { notes: true } },
+    },
   });
   if (!bc) {
     return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
@@ -101,15 +115,50 @@ export async function POST(
       select: { sections: true },
     }));
 
+  // Tipo/template del caso: columna → __meta del v0 → default hubspot (BCs legacy: no-op).
+  const resolved = resolveCaseTypeFor(bc, template?.sections);
+
+  // Casos de uso seleccionados en el checklist. NO cuentan como fuente (el guard de
+  // arriba ya corrió — son input de materialización, no contexto del prospecto);
+  // entran al prompt para que el hero/solución/inversión los referencien SIN
+  // inventar otros ni alterar precios. Con cero seleccionados: contexto byte-idéntico.
+  // Template con checklist APAGADO (website): se ignoran pivotes aunque existan —
+  // no hay sección de materialización, y sin ella los precios se tejerían en texto libre.
+  const checklistOn = templateById(resolved.templateId).features?.useCaseChecklist !== false;
+  const selectedUseCases = checklistOn ? await loadSelectedUseCases(id) : [];
+
+  const preamble: string[] = [];
+  if (resolved.caseType) {
+    preamble.push(
+      `# Tipo de caso: ${resolved.typeDef.label}${
+        resolved.caseSubtype
+          ? ` (${resolved.typeDef.subtypes?.find((s) => s.id === resolved.caseSubtype)?.label ?? resolved.caseSubtype})`
+          : ""
+      }`,
+    );
+  }
+  if (selectedUseCases.length) {
+    preamble.push(
+      `# Casos de uso seleccionados por el vendedor (catálogo Smarteam)\nEl vendedor marcó estos casos de uso para incluir en la propuesta. Tenelos en cuenta al redactar (mencionalos donde aporten, NO inventes otros casos de uso del catálogo NI alteres sus precios — la sección de casos de uso se arma aparte con los datos exactos):\n${selectedUseCases
+        .map((u) => `- ${u.title}${u.price ? ` — ${u.price}` : ""}\n  ${u.description}`)
+        .join("\n")}`,
+    );
+  }
+  const contextForAgent = preamble.length ? `${preamble.join("\n\n")}\n\n---\n\n${context}` : context;
+
   // Guard anti-doble-generación: si ya hay una corrida en curso para este BC (otra
   // pestaña, retry de red), no arrancamos otra — evita dos casos con la misma versión.
-  // Acotado a 5 min para que una corrida colgada/caída no bloquee para siempre.
+  // Ventana acotada (para que una corrida colgada no bloquee para siempre) y DERIVADA
+  // del template: website genera 12k tokens (~4-6 min) → 5 min quedaba corto y un
+  // retry del vendedor durante una corrida lenta pasaba el guard. Nota: el SDK exige
+  // streaming si estima >10 min de salida — cualquier bump futuro de maxTokens choca ahí.
+  const guardMinutes = (templateById(resolved.templateId).maxTokens ?? 8000) > 8000 ? 10 : 5;
   const inFlight = await prisma.agentRun.findFirst({
     where: {
       businessCaseId: id,
       agentSlug: "business-case",
       status: "RUNNING",
-      createdAt: { gt: new Date(Date.now() - 5 * 60 * 1000) },
+      createdAt: { gt: new Date(Date.now() - guardMinutes * 60 * 1000) },
     },
     select: { id: true },
   });
@@ -135,7 +184,55 @@ export async function POST(
     // Guía efectiva por sección: el override del CSE en la Plantilla gana; si no, el
     // agente cae al brief por defecto de la config (BC_DEF_BY_KEY.brief).
     const briefsByKey = briefsByKeyFrom(template?.sections);
-    const generated = await generateCanvasSections(context, briefsByKey); // LLM, FUERA de la tx
+
+    // Carry-forward desde el caso ACTIVO previo (v>0; el v0 nunca se llena), ANTES
+    // de que la transacción lo desactive:
+    //  (a) keys NO-schema del hero (brands, coverImageUrl) — coerceToSchema las
+    //      descarta → sin esto, la portada/brand-row del CSE se pierden al regenerar;
+    //  (b) decisiones hidden EXPLÍCITAS — si el CSE mostró una sección defaultHidden,
+    //      el caso nuevo no debe volver a esconderla.
+    const prevCanvas = await prisma.projectCanvas.findFirst({
+      where: { businessCaseId: id, isActive: true, version: { gt: 0 } },
+      select: { sections: true },
+    });
+    const prevHiddenByKey: Record<string, boolean> = {};
+    for (const e of parseSectionEntries(prevCanvas?.sections)) {
+      if (typeof e.hidden === "boolean") prevHiddenByKey[e.key] = e.hidden;
+    }
+
+    // Las secciones que quedarán OCULTAS en el caso nuevo NO se generan (tokens y
+    // latencia por contenido que el cliente no ve). Al mostrarlas y regenerar, entran.
+    const skipKeys = new Set(
+      templateById(resolved.templateId)
+        .sections.filter((d) => (prevHiddenByKey[d.key] ?? d.defaultHidden) === true)
+        .map((d) => d.key),
+    );
+
+    const generated = await generateCanvasSections(contextForAgent, briefsByKey, resolved.templateId, skipKeys); // LLM, FUERA de la tx
+
+    // Carry-forward (a): keys NO-schema de CADA sección — coerceToSchema las descarta
+    // al generar → sin esto se pierden al regenerar la portada del hero (coverImageUrl),
+    // la brand-row (brands) y la URL del botón del CTA (buttonUrl), todas configuradas
+    // por el CSE, no por el agente.
+    const prevBlocks = await prisma.canvasSection.findMany({
+      where: { canvas: { businessCaseId: id, isActive: true, version: { gt: 0 } } },
+      select: { key: true, blocks: { orderBy: { order: "asc" }, take: 1, select: { data: true } } },
+    });
+    const prevDataByKey = new Map(prevBlocks.map((s) => [s.key, s.blocks[0]?.data]));
+    const defsByKey = templateDefsByKey(resolved.templateId);
+    for (const gs of generated) {
+      const prev = prevDataByKey.get(gs.key);
+      const def = defsByKey[gs.key];
+      if (!def || !prev || typeof prev !== "object" || Array.isArray(prev)) continue;
+      const schemaKeys = new Set(
+        Object.keys((def.schema as { properties?: Record<string, unknown> }).properties ?? {}),
+      );
+      const merged = { ...(gs.data as Record<string, unknown>) };
+      for (const k of Object.keys(prev as Record<string, unknown>)) {
+        if (!schemaKeys.has(k)) merged[k] = (prev as Record<string, unknown>)[k];
+      }
+      gs.data = merged;
+    }
 
     // Cada "Generar" crea un CASO NUEVO (v1, v2, …). La Plantilla (v0) nunca se llena.
     const last = await prisma.projectCanvas.aggregate({
@@ -148,17 +245,20 @@ export async function POST(
     // generado, YA ACEPTADO (CONFIRMED), TODO o NADA. Si algo falla, no queda un caso
     // vacío activo ni se desactiva el caso bueno anterior.
     const canvasId = await prisma.$transaction(async (tx) => {
-      const cid = await createBusinessCaseCanvas(id, version, tx);
+      const cid = await createBusinessCaseCanvas(id, version, tx, resolved.templateId, {
+        caseType: resolved.caseType,
+        caseSubtype: resolved.caseSubtype,
+        hiddenByKey: prevHiddenByKey,
+      });
       const sections = await tx.canvasSection.findMany({
         where: { canvasId: cid },
         select: { id: true, key: true, blocks: { select: { id: true }, orderBy: { order: "asc" }, take: 1 } },
       });
       const sectionByKey = new Map(sections.map((s) => [s.key, s]));
-      for (const gs of generated) {
-        const section = sectionByKey.get(gs.key);
-        if (!section) continue;
+      const writeSection = async (key: string, data: Prisma.InputJsonValue) => {
+        const section = sectionByKey.get(key);
+        if (!section) return;
         const blockId = section.blocks[0]?.id;
-        const data = gs.data as Prisma.InputJsonValue;
         if (blockId) {
           await tx.canvasBlock.update({
             where: { id: blockId },
@@ -169,7 +269,18 @@ export async function POST(
             data: { sectionId: section.id, blockType: "CARD", content: null, data, order: 0, source: "AGENT", status: "CONFIRMED", agentRunId: run.id },
           });
         }
+      };
+      for (const gs of generated) {
+        await writeSection(gs.key, gs.data as Prisma.InputJsonValue);
       }
+      // Sección `casos_de_uso` (agentGenerated:false): SIEMPRE determinística — con
+      // seleccionados escribe los datos EXACTOS del catálogo; sin seleccionados,
+      // {items:[]} explícito (blank → invisible). Cinturón y tiradores contra
+      // cualquier fuga del LLM: nunca queda contenido generado en esta sección.
+      await writeSection(
+        USE_CASES_SECTION_KEY,
+        useCasesSectionData(selectedUseCases) as unknown as Prisma.InputJsonValue,
+      );
       return cid;
     });
 

@@ -14,18 +14,43 @@ import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { Modal, ConfirmDialog } from "@/components/ui";
 import DeleteBusinessCaseButton from "@/components/business-cases/DeleteBusinessCaseButton";
-import { BC_DEF_BY_KEY } from "@/components/landing/configs/business-case.defs";
+import { templateDefsByKey } from "@/components/landing/configs/templates.defs";
 import PublishBar from "@/components/canvas/PublishBar";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
-import { BUSINESS_CASE_LANDING } from "@/components/landing/configs/business-case";
+import { landingConfigFor } from "@/components/landing/configs/templates";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 import TagsStrip from "@/components/tags/TagsStrip";
+import { ContextColumn, ContextColumnList, ContextRow, CTX_ICONS } from "@/components/clients/context-column";
 import type { ImplementationType } from "@prisma/client";
 
 type VersionMeta = { canvasId: string; version: number; isActive: boolean; name: string };
 type SessionMeta = { sessionId: string; title: string; date: string; participants: string[]; applies: boolean; hasTranscript: boolean };
-type Transcript = { id: string; source: string; rawText: string; fileName: string | null };
+type Transcript = {
+  id: string;
+  source: string;
+  rawText: string;
+  fileName: string | null;
+  // Fuente URL (diagnóstico por URL): fileUrl http + fecha del último fetch.
+  fileUrl?: string | null;
+  processedAt?: string | null;
+};
+
+const isUrlTranscript = (t: Transcript) => !!t.fileUrl?.startsWith("http");
+function hostnameOf(u: string): string {
+  try { return new URL(u).hostname; } catch { return u; }
+}
+
+// Checklist de casos de uso del catálogo (GET use-case-candidates)
+type UseCaseRow = {
+  id: string;
+  title: string;
+  description: string;
+  price: string | null;
+  active: boolean;
+  selected: boolean;
+  priceOverride: string | null;
+};
 type HsTimelineItem = { type: "NOTE" | "CALL" | "MEETING"; title: string; date: string | null; snippet: string };
 const HS_TYPE_LABEL: Record<string, string> = { NOTE: "Nota", CALL: "Llamada", MEETING: "Reunión" };
 
@@ -35,15 +60,27 @@ function fmtDate(d: string): string {
 
 export default function BusinessCaseWorkspace({
   bcId,
+  clientId,
   clientName,
   clientLogoUrl,
+  smarteamLogoUrl,
+  brandLogos,
   publishedAt,
+  templateId,
 }: {
   bcId: string;
+  /** Para subir el logo del cliente desde el hero (POST /api/clients/[id]/logo). */
+  clientId?: string | null;
   clientName: string;
   clientLogoUrl: string | null;
+  /** Logo de marca Smarteam (config global) — el hero lo pinta en la brand-row. */
+  smarteamLogoUrl?: string | null;
+  /** Logos de plataforma por nombre lowercase (brandLogoMap) — brands de texto con logo. */
+  brandLogos?: Record<string, string>;
   status: string;
   publishedAt: string | null;
+  /** Template del caso (por su tipo). Ausente/null = hubspot_v1 (legacy). */
+  templateId?: string | null;
 }) {
   const toast = useToast();
   const [versions, setVersions] = useState<VersionMeta[]>([]);
@@ -53,6 +90,11 @@ export default function BusinessCaseWorkspace({
   const [published, setPublished] = useState(!!publishedAt);
   const [dirty, setDirty] = useState(!publishedAt);
   const [accessNonce, setAccessNonce] = useState(0);
+  // Títulos seleccionados en el checklist de casos de uso (reporte del ContextCard;
+  // null = checklist no montado). Solo para el AVISO de divergencia al publicar.
+  const [ucSelectedTitles, setUcSelectedTitles] = useState<string[] | null>(null);
+  // Logo del cliente (vive en Client.logoUrl; el hero puede subirlo/cambiarlo).
+  const [clientLogo, setClientLogo] = useState<string | null>(clientLogoUrl);
 
   const loadMeta = useCallback(
     async (preferCanvasId?: string) => {
@@ -89,6 +131,17 @@ export default function BusinessCaseWorkspace({
   // ¿Hay contenido real para publicar? (los bloques se generan auto-aceptados; lo que
   // importa es que NO estén en blanco, no el status).
   const hasContent = hook.sections.some((s) => s.blocks.some((b) => !blockBlank(b.data)));
+
+  // Config del template INTERSECADA con las secciones reales del canvas: un canvas
+  // viejo sembrado con menos secciones que el template vigente no debe mostrar
+  // "secciones fantasma" no editables (sin fila ni bloque detrás).
+  // SOLO cuando el hook ya cargó: con sections=[] (ventana de carga / cambio de
+  // canvas) la intersección dejaría la config VACÍA y la Plantilla no aparecería —
+  // en esa ventana mostramos el template completo (placeholders), como siempre.
+  const baseConfig = landingConfigFor(templateId);
+  const landingConfig = hook.sections.length
+    ? { ...baseConfig, sections: baseConfig.sections.filter((d) => sectionByKey.has(d.key)) }
+    : baseConfig;
 
   const onSectionChange = (key: string, data: unknown) => {
     const sec = sectionByKey.get(key);
@@ -152,6 +205,20 @@ export default function BusinessCaseWorkspace({
 
   const publish = async () => {
     if (publishing) return;
+    // Aviso (no bloqueante) si la sección "Casos de uso" del canvas difiere del
+    // checklist — la verdad publicable es el data de la sección, pero la divergencia
+    // no debe ser silenciosa (p.ej. se publica un canvas viejo sin la sección).
+    if (ucSelectedTitles !== null) {
+      const sec = sectionByKey.get("casos_de_uso");
+      const inSection = (((sec?.blocks[0]?.data as { items?: { title?: string }[] } | null)?.items) ?? [])
+        .map((i) => (i.title ?? "").trim())
+        .filter(Boolean)
+        .sort();
+      const inChecklist = ucSelectedTitles.map((t) => t.trim()).filter(Boolean).sort();
+      if (JSON.stringify(inSection) !== JSON.stringify(inChecklist)) {
+        toast.info("Aviso: los casos de uso de este canvas difieren del checklist. Se publica lo que ves en la sección.");
+      }
+    }
     setPublishing(true);
     try {
       // Publicamos el caso que el CSE está viendo (no el "activo" del server).
@@ -191,10 +258,39 @@ export default function BusinessCaseWorkspace({
     }
   };
 
+  // Sync del checklist → sección `casos_de_uso` del canvas que se está VIENDO
+  // (publish publica el canvas elegido en el dropdown, no "el activo" — sincronizar
+  // otro canvas divergiría en silencio). SOLO al togglear (nunca al cargar: pisaría
+  // ediciones a mano de la sección). La verdad publicable es el data de la sección;
+  // el pivote es estado de trabajo. Canvases previos a esta feature no tienen la
+  // sección → no-op ("regenerá para incluir casos de uso").
+  const syncUseCasesIntoSection = (items: { title: string; detail: string; price: string }[]) => {
+    if (isTemplate) {
+      // La Plantilla (v0) nunca se llena — que el vendedor sepa dónde impacta.
+      toast.info("Checklist guardado. Se aplica a los casos generados (estás viendo la Plantilla).");
+      return;
+    }
+    const sec = sectionByKey.get("casos_de_uso");
+    const block = sec?.blocks[0];
+    if (sec && block) {
+      hook.saveBlock(sec.id, block.id, { data: { items } });
+      // No silencioso: la reescritura pisa retoques manuales de ESA sección (hay
+      // deshacer de 1 nivel; los retoques finales van después de cerrar la selección).
+      toast.info("Sección “Casos de uso” actualizada desde el catálogo.");
+    } else {
+      toast.info("Checklist guardado. Este canvas no tiene la sección “Casos de uso” — regenerá para incluirla.");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* 1. Contexto (estilo card de handoff) */}
-      <ContextCard bcId={bcId} onAfterChange={() => setDirty(true)} />
+      <ContextCard
+        bcId={bcId}
+        onAfterChange={() => setDirty(true)}
+        onUseCasesSync={syncUseCasesIntoSection}
+        onUseCasesState={setUcSelectedTitles}
+      />
 
       {/* 2. Header: dropdown del canvas + Generar (izq) · Acceso (der) */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -255,8 +351,20 @@ export default function BusinessCaseWorkspace({
           </div>
         ) : (
           <LandingView
-            config={BUSINESS_CASE_LANDING}
-            ctx={{ clientName, clientLogoUrl }}
+            config={landingConfig}
+            ctx={{
+              clientName,
+              clientLogoUrl: clientLogo,
+              smarteamLogoUrl,
+              brandLogos,
+              imageUploadUrl: `/api/business-cases/${bcId}/images`,
+              clientLogoUploadUrl: clientId ? `/api/clients/${clientId}/logo` : null,
+              onClientLogoChange: (url) => {
+                setClientLogo(url);
+                setDirty(true);
+                toast.success("Logo del cliente actualizado.");
+              },
+            }}
             sections={sectionsData}
             mode="edit"
             showBriefs={isTemplate}
@@ -265,7 +373,7 @@ export default function BusinessCaseWorkspace({
             onTitleChange={onTitleChange}
             onEyebrowChange={onEyebrowChange}
             renderOverlay={(key) => (
-              <SectionTools section={sectionByKey.get(key)} hook={hook} isTemplate={isTemplate} onToggleHidden={toggleHidden} />
+              <SectionTools section={sectionByKey.get(key)} hook={hook} isTemplate={isTemplate} onToggleHidden={toggleHidden} templateId={templateId} />
             )}
           />
         )}
@@ -375,11 +483,13 @@ function SectionTools({
   hook,
   isTemplate,
   onToggleHidden,
+  templateId,
 }: {
   section: SectionWithBlocks | undefined;
   hook: ReturnType<typeof useCanvasSections>;
   isTemplate: boolean;
   onToggleHidden: (sectionId: string, hidden: boolean) => void;
+  templateId?: string | null;
 }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -388,6 +498,9 @@ function SectionTools({
   const block = section?.blocks[0];
   // En la Plantilla se editan las GUÍAS (no el contenido) → sin controles de sección.
   if (isTemplate || !section || !block) return null;
+  // Secciones determinísticas (agentGenerated:false, p.ej. casos_de_uso): sin ✨ IA
+  // (el server igual devuelve 400) — se editan a mano o desde el checklist.
+  const aiAllowed = templateDefsByKey(templateId)[section.key]?.agentGenerated !== false;
 
   const regen = async () => {
     if (!instr.trim() || busy) return;
@@ -407,7 +520,7 @@ function SectionTools({
 
   // Vaciar la sección → vuelve al placeholder (no se ve en el cliente). Undo vía previousData.
   const clear = async () => {
-    const empty = (BC_DEF_BY_KEY[section.key]?.empty ?? {}) as Record<string, unknown>;
+    const empty = (templateDefsByKey(templateId)[section.key]?.empty ?? {}) as Record<string, unknown>;
     const ok = await hook.saveBlock(section.id, block.id, { data: empty });
     if (ok) toast.info("Sección vaciada (el cliente no la verá).");
   };
@@ -422,9 +535,11 @@ function SectionTools({
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
       <div style={{ display: "flex", gap: 6 }}>
-        <button style={{ ...pill, color: "#168CF6" }} onClick={() => setOpen((o) => !o)} title="Editar con IA">
-          ✨ IA
-        </button>
+        {aiAllowed && (
+          <button style={{ ...pill, color: "#168CF6" }} onClick={() => setOpen((o) => !o)} title="Editar con IA">
+            ✨ IA
+          </button>
+        )}
         <button
           style={{ ...pill, color: section.hidden ? "#047857" : "#b45309" }}
           onClick={() => onToggleHidden(section.id, !section.hidden)}
@@ -541,7 +656,19 @@ function BcAccessButton({ bcId, refreshKey, onRevoked }: { bcId: string; refresh
 }
 
 // ── Card de contexto (estilo ProjectHandoffSection) ───────────────────────────
-function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: () => void }) {
+function ContextCard({
+  bcId,
+  onAfterChange,
+  onUseCasesSync,
+  onUseCasesState,
+}: {
+  bcId: string;
+  onAfterChange?: () => void;
+  /** Re-escribe la sección `casos_de_uso` del canvas visto con los seleccionados (solo al togglear). */
+  onUseCasesSync?: (items: { title: string; detail: string; price: string }[]) => void;
+  /** Reporte (sin escribir) de los títulos seleccionados — para el aviso al publicar. */
+  onUseCasesState?: (titles: string[]) => void;
+}) {
   const toast = useToast();
   const [included, setIncluded] = useState<SessionMeta[]>([]);
   const [candidates, setCandidates] = useState<SessionMeta[]>([]);
@@ -551,16 +678,30 @@ function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: ()
   const [busyId, setBusyId] = useState<string | null>(null);
   // Fuentes manuales
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
-  const [showSources, setShowSources] = useState(false);
+  const [loadingTranscripts, setLoadingTranscripts] = useState(true);
+  // Colapso general de la card (diseño de 3 columnas, calcado de ProjectContextSection).
+  const [open, setOpen] = useState(true);
+  // Form de pegado manual (colapsado dentro de la columna "Fuentes manuales").
+  const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [savingSource, setSavingSource] = useState(false);
+  // Diagnóstico por URL (fuente URL: fetch server-side, congelado al pegar, releer manual)
+  const [newUrl, setNewUrl] = useState("");
+  const [fetchingUrl, setFetchingUrl] = useState(false);
+  const [busyTranscriptId, setBusyTranscriptId] = useState<string | null>(null);
   // Timeline de HubSpot (llamadas + reuniones + notas detectadas en el registro de empresa)
   const [hubspot, setHubspot] = useState<HsTimelineItem[]>([]);
   const [loadingHs, setLoadingHs] = useState(true);
   // Clasificación (tira de tags) — mismo catálogo que el proyecto; se PROPAGA al crear el handoff.
   const [tags, setTags] = useState<string[]>([]);
   const [modality, setModalityState] = useState<ImplementationType | null>(null);
+  // Checklist de casos de uso del catálogo — solo se monta si hay catálogo aplicable
+  // (degradación elegante: sin catálogo, este BC funciona exactamente como siempre).
+  const [useCases, setUseCases] = useState<UseCaseRow[]>([]);
+  const [ucEnabled, setUcEnabled] = useState(false);
+  const [ucUnavailable, setUcUnavailable] = useState(false);
+  const [ucBusyId, setUcBusyId] = useState<string | null>(null);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -579,6 +720,8 @@ function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: ()
       setTranscripts(d.transcripts);
     } catch {
       /* silencioso */
+    } finally {
+      setLoadingTranscripts(false);
     }
   }, [bcId]);
   const loadHubspot = useCallback(async () => {
@@ -600,7 +743,27 @@ function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: ()
       /* silencioso — la tira aparece vacía/editable */
     }
   }, [bcId]);
-  useEffect(() => { loadSessions(); loadTranscripts(); loadHubspot(); loadTags(); }, [loadSessions, loadTranscripts, loadHubspot, loadTags]);
+  // Devuelve null en error (≠ []): un reload fallido tras togglear NO debe
+  // sincronizar la sección con "cero casos" (borraría contenido publicable).
+  const ucReqSeq = useRef(0);
+  const loadUseCases = useCallback(async (): Promise<UseCaseRow[] | null> => {
+    const seq = ++ucReqSeq.current;
+    try {
+      const d = await fetchJson<{ enabled: boolean; catalogUnavailable: boolean; useCases: UseCaseRow[] }>(
+        `/api/business-cases/${bcId}/use-case-candidates`,
+      );
+      if (seq !== ucReqSeq.current) return null; // respuesta vieja (carrera): descartarla
+      setUseCases(d.useCases);
+      setUcEnabled(d.enabled);
+      setUcUnavailable(d.catalogUnavailable);
+      if (d.enabled) onUseCasesState?.(d.useCases.filter((u) => u.selected).map((u) => u.title));
+      return d.useCases;
+    } catch {
+      /* silencioso — sin catálogo, el panel sigue */
+      return null;
+    }
+  }, [bcId, onUseCasesState]);
+  useEffect(() => { loadSessions(); loadTranscripts(); loadHubspot(); loadTags(); loadUseCases(); }, [loadSessions, loadTranscripts, loadHubspot, loadTags, loadUseCases]);
 
   // Persistencia optimista de la clasificación (PATCH /tags).
   const patchTags = useCallback(async (payload: { tags?: string[]; implementationType?: ImplementationType | null }) => {
@@ -657,179 +820,357 @@ function ContextCard({ bcId, onAfterChange }: { bcId: string; onAfterChange?: ()
     }
   };
 
+  // Leer una URL de diagnóstico (server-side) → fuente URL. El contenido queda
+  // congelado al pegar; "Releer" lo refresca a demanda.
+  const addUrlSource = async () => {
+    const url = newUrl.trim();
+    if (!url || fetchingUrl) return;
+    setFetchingUrl(true);
+    try {
+      const d = await fetchJson<{ transcript: { chars: number; updated: boolean } }>(
+        `/api/business-cases/${bcId}/transcript/url`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) },
+      );
+      setNewUrl("");
+      toast.success(
+        d.transcript.updated
+          ? `Fuente actualizada (${d.transcript.chars.toLocaleString()} caracteres).`
+          : `Página leída (${d.transcript.chars.toLocaleString()} caracteres).`,
+      );
+      loadTranscripts();
+      onAfterChange?.();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo leer la página.");
+    } finally {
+      setFetchingUrl(false);
+    }
+  };
+
+  const refetchUrl = async (transcriptId: string) => {
+    setBusyTranscriptId(transcriptId);
+    try {
+      const d = await fetchJson<{ transcript: { chars: number } }>(
+        `/api/business-cases/${bcId}/transcript/url`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transcriptId, refetch: true }),
+        },
+      );
+      toast.success(`Página releída (${d.transcript.chars.toLocaleString()} caracteres).`);
+      loadTranscripts();
+      onAfterChange?.();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo releer la página.");
+    } finally {
+      setBusyTranscriptId(null);
+    }
+  };
+
+  const deleteTranscript = async (transcriptId: string) => {
+    setBusyTranscriptId(transcriptId);
+    try {
+      await fetchJson(`/api/business-cases/${bcId}/transcript/${transcriptId}`, { method: "DELETE" });
+      toast.info("Fuente eliminada.");
+      loadTranscripts();
+      onAfterChange?.();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar la fuente.");
+    } finally {
+      setBusyTranscriptId(null);
+    }
+  };
+
+  // Marcar/desmarcar (o cambiar priceOverride de) un caso de uso: upsert del pivote +
+  // sync de la sección `casos_de_uso` del canvas visto con los seleccionados frescos.
+  const patchUseCase = async (useCaseId: string, selected: boolean, priceOverride?: string | null) => {
+    setUcBusyId(useCaseId);
+    try {
+      await fetchJson(`/api/business-cases/${bcId}/use-cases`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ useCaseId, selected, ...(priceOverride !== undefined ? { priceOverride } : {}) }),
+      });
+      const fresh = await loadUseCases();
+      if (!fresh) {
+        // El toggle SÍ se guardó pero el reload falló: NO sincronizar la sección con
+        // datos viejos/vacíos (borraría contenido). El aviso de publish cubre la divergencia.
+        toast.error("Se guardó el cambio, pero no se pudo refrescar el checklist. Recargá la página.");
+        return;
+      }
+      onUseCasesSync?.(
+        fresh
+          .filter((u) => u.selected)
+          .map((u) => ({ title: u.title, detail: u.description, price: u.priceOverride ?? u.price ?? "" })),
+      );
+      onAfterChange?.();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar el caso de uso.");
+    } finally {
+      setUcBusyId(null);
+    }
+  };
+
+  const selectedUcCount = useCases.filter((u) => u.selected).length;
+
   const sourceCount = included.length + transcripts.length + hubspot.length;
   const q = search.trim().toLowerCase();
   const filtered = q ? candidates.filter((c) => (c.title || "").toLowerCase().includes(q)) : candidates;
 
+  const totalCtx = hubspot.length + included.length + transcripts.length;
+  const dot = (color: string) => <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: color }} />;
+
   return (
     <section className="rounded-2xl border border-line bg-surface">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-3.5">
-        <svg className="w-4 h-4 text-brand flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      {/* Header colapsable — calcado de ProjectContextSection (Contexto del proyecto) */}
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-2.5 px-5 py-3 hover:bg-surface-hover transition-colors text-left rounded-t-2xl"
+      >
+        <svg className={`w-4 h-4 text-fg-secondary flex-shrink-0 transition-transform ${open ? "" : "-rotate-90"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
-        <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-bold text-fg">Contexto para generar el caso de negocio</h3>
-          <p className="text-xs text-fg-muted mt-0.5">
-            {sourceCount === 0 ? "Sumá sesiones del prospecto o pegá notas." : `${sourceCount} fuente${sourceCount === 1 ? "" : "s"} de contexto.`}
-          </p>
-          {/* Clasificación: modalidad + productos/alcance. Se propaga al proyecto al generar el handoff. */}
-          <div className="mt-2">
-            <TagsStrip tags={tags} implementationType={modality} canEdit onSetTags={saveTags} onSetModality={setModality} />
-          </div>
-        </div>
+        <span className="text-sm font-bold text-fg">Contexto</span>
+        <span className="text-[11px] text-fg-muted">{totalCtx} fuente{totalCtx === 1 ? "" : "s"}</span>
+        <span className="hidden sm:flex items-center gap-3 ml-2 text-[11px] text-fg-secondary">
+          <span className="inline-flex items-center gap-1">{dot("#ff7a59")}{hubspot.length}</span>
+          <span className="inline-flex items-center gap-1">{dot("#16a34a")}{included.length}</span>
+          <span className="inline-flex items-center gap-1">{dot("#7c6df2")}{transcripts.length}</span>
+        </span>
+        <span className="ml-auto text-xs text-fg-muted">{open ? "Colapsar" : "Expandir"}</span>
+      </button>
+
+      {/* Clasificación (tags + modalidad): siempre visible, se propaga al handoff. */}
+      <div className="px-5 pb-2.5">
+        <TagsStrip tags={tags} implementationType={modality} canEdit onSetTags={saveTags} onSetModality={setModality} />
       </div>
 
-      {/* Aviso proactivo: sin NINGUNA fuente con contenido no se puede generar con IA.
-          Cuenta también lo detectado en HubSpot (llamadas/reuniones con resumen). */}
+      {/* Aviso proactivo: sin NINGUNA fuente con contenido no se puede generar con IA. */}
       {!loadingSessions && !loadingHs && transcripts.length === 0 && !included.some((s) => s.hasTranscript) && hubspot.length === 0 && (
-        <div className="border-t border-line px-5 pt-3">
+        <div className="px-5 pb-2.5">
           <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800 leading-relaxed">
             Para <strong>generar con IA</strong> hace falta al menos una fuente con contenido (transcript o algo del timeline de HubSpot).{" "}
             {included.length > 0 ? "Las sesiones del prospecto todavía no están transcritas — " : ""}
-            pegá uno a mano en <strong>Fuentes manuales</strong> (más abajo).
+            pegá uno a mano en <strong>Fuentes manuales</strong>.
           </div>
         </div>
       )}
 
-      {/* Sesiones (estilo SessionSelectionReview) */}
-      <div className="border-t border-line px-5 py-3 space-y-3">
-        <p className="text-xs font-semibold text-fg">
-          Sesiones que alimentan el caso{included.length > 0 ? ` (${included.length})` : ""}
+      {/* Cuerpo: 3 columnas (HubSpot · Google Meet · Fuentes manuales), como el proyecto.
+          Siempre montado (contadores del header valen colapsado); `hidden` al colapsar. */}
+      <div className={open ? "px-5 pb-4" : "hidden"}>
+        <p className="text-[11px] text-fg-muted mb-2.5">
+          Llamadas, reuniones, notas y transcripciones del prospecto. Se usan automáticamente como contexto al generar.
         </p>
-        {loadingSessions ? (
-          <div className="h-12 rounded-xl skeleton-shimmer" />
-        ) : included.length === 0 ? (
-          <p className="text-xs text-fg-muted">Todavía no incluiste sesiones del prospecto. Buscá abajo o pegá una transcripción a mano.</p>
-        ) : (
-          <ul className="space-y-2">
-            {included.map((s) => (
-              <li key={s.sessionId} className="flex items-center gap-3 rounded-lg border border-line bg-surface-muted px-3 py-2.5">
-                <svg className="w-4 h-4 text-fg-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-fg truncate">{s.title || "Sin título"}</p>
-                  <p className="text-[11px] text-fg-muted truncate">
-                    {fmtDate(s.date)}
-                    {!s.hasTranscript && <span className="text-amber-600"> · sin transcripción</span>}
-                  </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <ContextColumn icon={CTX_ICONS.hubspot} color="#ff7a59" title="HubSpot" count={hubspot.length}>
+            <ContextColumnList loading={loadingHs} empty="Nada detectado en el registro de la empresa.">
+              {hubspot.map((it, i) => (
+                <ContextRow
+                  key={i}
+                  icon={CTX_ICONS.hubspot}
+                  meta={`${HS_TYPE_LABEL[it.type] ?? it.type}${it.date ? ` · ${it.date}` : ""}`}
+                  title={it.title || undefined}
+                  snippet={it.snippet ?? undefined}
+                />
+              ))}
+            </ContextColumnList>
+          </ContextColumn>
+
+          <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={included.length}>
+            <ContextColumnList loading={loadingSessions} empty="Sin sesiones del prospecto.">
+              {included.map((s) => (
+                <ContextRow
+                  key={s.sessionId}
+                  icon={CTX_ICONS.meet}
+                  meta={`${fmtDate(s.date)}${!s.hasTranscript ? " · sin transcripción" : ""}`}
+                  title={s.title || "Sin título"}
+                  onRemove={busyId === s.sessionId ? undefined : () => toggleSession(s.sessionId, false)}
+                  removeTitle="Quitar del caso"
+                />
+              ))}
+            </ContextColumnList>
+            <button
+              onClick={() => setShowSearch(true)}
+              className="mt-2 w-full inline-flex items-center justify-center gap-1 text-[11px] font-medium text-fg-muted hover:text-fg-secondary border border-dashed border-line rounded-lg px-2 py-1.5 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" /></svg>
+              Buscar más sesiones
+            </button>
+          </ContextColumn>
+
+          <ContextColumn icon={CTX_ICONS.note} color="#7c6df2" title="Fuentes manuales" count={transcripts.length}>
+            <ContextColumnList loading={loadingTranscripts} empty="Sin notas, URLs ni transcripciones a mano.">
+              {transcripts.map((t) => {
+                const isUrl = isUrlTranscript(t);
+                const busy = busyTranscriptId === t.id;
+                return (
+                  <li key={t.id} className="flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-2.5 py-1.5">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 text-[10px] text-fg-muted">
+                        <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={CTX_ICONS.note} />
+                        </svg>
+                        <span className="truncate">
+                          {isUrl
+                            ? `URL · ${hostnameOf(t.fileUrl!)}${t.processedAt ? ` · leída ${fmtDate(t.processedAt)}` : ""}`
+                            : t.source === "UPLOADED" ? "Archivo" : "Manual"}
+                        </span>
+                      </div>
+                      {t.fileName && <p className="text-xs font-medium text-fg truncate mt-0.5">{t.fileName}</p>}
+                      <p className="text-[11px] text-fg-muted truncate">{t.rawText.slice(0, 120)}</p>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+                      {isUrl && (
+                        <button
+                          onClick={() => refetchUrl(t.id)}
+                          disabled={busy}
+                          title="Releer la página (actualiza el contenido)"
+                          className="text-fg-muted hover:text-fg disabled:opacity-40 transition-colors text-xs px-0.5"
+                        >
+                          ↻
+                        </button>
+                      )}
+                      <button
+                        onClick={() => deleteTranscript(t.id)}
+                        disabled={busy}
+                        title="Eliminar esta fuente"
+                        className="text-fg-muted hover:text-red-500 disabled:opacity-40 transition-colors flex-shrink-0"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ContextColumnList>
+
+            {/* Diagnóstico por URL: fetch server-side; congelado al pegar, releer manual. */}
+            <div className="mt-2 flex gap-1.5">
+              <input
+                value={newUrl}
+                onChange={(e) => setNewUrl(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") addUrlSource(); }}
+                placeholder="URL del diagnóstico…"
+                className="flex-1 min-w-0 px-2 py-1.5 text-[11px] bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand"
+              />
+              <button
+                onClick={addUrlSource}
+                disabled={fetchingUrl || newUrl.trim().length === 0}
+                className="text-[11px] font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-40 px-2.5 py-1 rounded-lg transition-colors flex-shrink-0"
+              >
+                {fetchingUrl ? "Leyendo…" : "Leer"}
+              </button>
+            </div>
+
+            {showAdd ? (
+              <div className="mt-2 space-y-1.5 rounded-lg border border-line p-2">
+                <input
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="Título (ej. Zoom con el prospecto)"
+                  className="w-full px-2 py-1.5 text-[11px] bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand"
+                />
+                <textarea
+                  value={newContent}
+                  onChange={(e) => setNewContent(e.target.value)}
+                  rows={3}
+                  placeholder="Pegá el transcript o resumen…"
+                  className="w-full px-2 py-1.5 text-[11px] bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand resize-y"
+                />
+                <div className="flex justify-end gap-1.5">
+                  <button onClick={() => { setShowAdd(false); setNewTitle(""); setNewContent(""); }} className="text-[11px] text-fg-muted hover:text-fg px-2 py-1 rounded-lg transition-colors">Cancelar</button>
+                  <button onClick={addSource} disabled={savingSource || newContent.trim().length === 0} className="text-[11px] font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-40 px-2.5 py-1 rounded-lg transition-colors">{savingSource ? "Agregando…" : "Agregar"}</button>
                 </div>
-                <button
-                  onClick={() => toggleSession(s.sessionId, false)}
-                  disabled={busyId === s.sessionId}
-                  title="Quitar del caso"
-                  className="text-fg-muted hover:text-red-500 disabled:opacity-40 transition-colors flex-shrink-0"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
+              </div>
+            ) : (
+              <button onClick={() => setShowAdd(true)} className="mt-2 w-full inline-flex items-center justify-center gap-1 text-[11px] font-medium text-fg-muted hover:text-fg-secondary border border-dashed border-line rounded-lg px-2 py-1.5 transition-colors">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                Agregar fuente
+              </button>
+            )}
+          </ContextColumn>
+        </div>
+      </div>
+
+      {/* Checklist de casos de uso del catálogo — INTERNO (para compartir pantalla):
+          lo marcado se materializa en la sección "Casos de uso" con precios exactos.
+          Solo se monta si hay catálogo aplicable; sin catálogo, nada cambia. */}
+      {ucUnavailable && (
+        <div className="border-t border-line px-5 py-3">
+          <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            El catálogo de casos de uso no está disponible (tabla ausente en la base). No regeneres
+            este caso hasta resolverlo — la sección de casos de uso saldría vacía.
+          </p>
+        </div>
+      )}
+      {ucEnabled && useCases.length > 0 && (
+        <div className="border-t border-line px-5 py-3">
+          <p className="text-xs font-semibold text-fg-muted mb-2">
+            Casos de uso del catálogo{selectedUcCount > 0 ? ` (${selectedUcCount} seleccionados)` : ""}
+          </p>
+          <p className="text-[11px] text-fg-muted leading-relaxed mb-2.5">
+            Marcá los que van en esta propuesta: entran a la sección &quot;Casos de uso&quot; con el texto y
+            precio exactos del catálogo (el agente no los inventa ni los altera).
+          </p>
+          <ul className="space-y-1.5">
+            {useCases.map((u) => (
+              <li
+                key={u.id}
+                className={`rounded-lg border px-3 py-2.5 ${u.selected ? "border-brand/50 bg-brand/5" : "border-line"}`}
+              >
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={u.selected}
+                    // Se deshabilita TODO el checklist con un patch en vuelo: dos toggles
+                    // concurrentes en filas distintas reordenados por la red revertirían
+                    // el segundo (el load viejo pisa al nuevo).
+                    disabled={ucBusyId !== null}
+                    onChange={() => patchUseCase(u.id, !u.selected)}
+                  />
+                  <span className="flex-1 min-w-0">
+                    <span className="text-sm text-fg font-medium block">
+                      {u.title}
+                      {u.price && (
+                        <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full border border-line text-fg-muted">
+                          {u.price}
+                        </span>
+                      )}
+                      {!u.active && (
+                        <span className="ml-2 text-[10px] uppercase tracking-wider text-amber-700">
+                          retirado del catálogo
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs text-fg-muted block mt-0.5">{u.description}</span>
+                  </span>
+                </label>
+                {u.selected && (
+                  <div className="mt-2 ml-6 flex items-center gap-2">
+                    <span className="text-[11px] text-fg-muted flex-shrink-0">Precio para este caso:</span>
+                    <input
+                      defaultValue={u.priceOverride ?? ""}
+                      placeholder={u.price ?? "según catálogo"}
+                      disabled={ucBusyId !== null}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v !== (u.priceOverride ?? "")) patchUseCase(u.id, true, v || null);
+                      }}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                      className="w-44 px-2 py-1 text-xs bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand"
+                    />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
-        )}
-
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <p className="text-[11px] text-fg-muted">¿Falta alguna sesión del prospecto?</p>
-          <button
-            onClick={() => setShowSearch(true)}
-            className="text-[11px] font-semibold text-brand hover:text-brand-dark transition-colors inline-flex items-center gap-1 flex-shrink-0"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" /></svg>
-            Buscar más sesiones
-          </button>
-        </div>
-
-        <button
-          onClick={() => setShowSources(true)}
-          className="w-full flex items-center gap-2 text-left text-[11px] text-fg-muted bg-surface-muted rounded-lg px-3 py-2 hover:bg-surface-hover transition-colors"
-        >
-          <svg className="w-4 h-4 flex-shrink-0 text-fg-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-          <span>¿Una reunión clave no se grabó? <span className="text-brand font-medium">Ingresá la transcripción a mano</span></span>
-        </button>
-      </div>
-
-      {/* Detectado en HubSpot — timeline del registro de empresa (llamadas + reuniones + notas) */}
-      {(loadingHs || hubspot.length > 0) && (
-        <div className="border-t border-line px-5 py-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "#ff7a59" }} />
-            <p className="text-xs font-semibold text-fg">
-              Detectado en HubSpot{hubspot.length > 0 ? ` (${hubspot.length})` : ""}
-            </p>
-          </div>
-          {loadingHs ? (
-            <div className="h-10 rounded-lg skeleton-shimmer" />
-          ) : (
-            <>
-              <p className="text-[11px] text-fg-muted">Llamadas, reuniones y notas del registro de empresa. Se usan automáticamente como contexto al generar.</p>
-              <ul className="space-y-2">
-                {hubspot.map((it, i) => (
-                  <li key={i} className="rounded-lg border border-line bg-surface-muted px-3 py-2">
-                    <p className="text-xs font-medium text-fg truncate">
-                      {HS_TYPE_LABEL[it.type] ?? it.type}{it.date ? ` · ${it.date}` : ""}{it.title ? ` · ${it.title}` : ""}
-                    </p>
-                    {it.snippet && <p className="text-[11px] text-fg-muted mt-0.5 line-clamp-2">{it.snippet}</p>}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
         </div>
       )}
-
-      {/* Fuentes manuales (colapsable, estilo handoff) */}
-      <div className="border-t border-line px-5 py-3">
-        <button
-          onClick={() => setShowSources((v) => !v)}
-          className="flex items-center gap-2 text-xs font-semibold text-fg-muted hover:text-fg transition-colors"
-        >
-          <svg className={`w-3 h-3 transition-transform ${showSources ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          Fuentes manuales{transcripts.length > 0 ? ` (${transcripts.length})` : ""}
-        </button>
-        {showSources && (
-          <div className="mt-3 space-y-3">
-            <p className="text-[11px] text-fg-muted leading-relaxed">
-              Pegá transcripts o resúmenes de reuniones que NO entraron por el sync (ej. un Zoom externo). El agente los usa como una fuente más. Se guardan y cuentan al generar.
-            </p>
-            {transcripts.length > 0 && (
-              <ul className="space-y-2">
-                {transcripts.map((t) => (
-                  <li key={t.id} className="flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-fg truncate">{t.source === "UPLOADED" ? "Archivo" : "Pegado"}{t.fileName ? ` · ${t.fileName}` : ""}</p>
-                      <p className="text-[11px] text-fg-muted truncate">{t.rawText.slice(0, 140)}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="space-y-2 rounded-lg border border-line p-3">
-              <input
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Título (ej. Zoom con el prospecto — 12 jun)"
-                className="w-full px-2.5 py-1.5 text-xs bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand"
-              />
-              <textarea
-                value={newContent}
-                onChange={(e) => setNewContent(e.target.value)}
-                rows={4}
-                placeholder="Pegá acá el transcript o el resumen…"
-                className="w-full px-2.5 py-1.5 text-xs bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand resize-y"
-              />
-              <div className="flex justify-end">
-                <button
-                  onClick={addSource}
-                  disabled={savingSource || newContent.trim().length === 0}
-                  className="text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-40 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  {savingSource ? "Agregando…" : "Agregar fuente"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Modal "Buscar más sesiones" */}
       <Modal open={showSearch} onClose={() => { setShowSearch(false); setSearch(""); }} title="Buscar sesiones del prospecto" size="md">

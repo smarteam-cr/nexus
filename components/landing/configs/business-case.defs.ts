@@ -7,8 +7,10 @@
  * business-case.ts (que ata los componentes client) para que el agente —código
  * server— pueda importar solo esto sin arrastrar React.
  *
- * Estructura HubSpot-específica del spec de 9 secciones. Las `key` matchean
- * BUSINESS_CASE_CANVAS.sections (lib/canvas/canvas-defs.ts).
+ * Estructura HubSpot-específica del spec de 9 secciones. Estas defs son las
+ * `sections` del template "hubspot_v1" en BC_TEMPLATES (configs/templates.defs.ts) —
+ * el registry es la fuente de composición; BC_SECTION_DEFS/BC_DEF_BY_KEY se mantienen
+ * exportados por compatibilidad.
  */
 export interface BCSectionDef {
   key: string;
@@ -21,6 +23,18 @@ export interface BCSectionDef {
   agentHint: string;   // instrucción base (fallback); el `brief` la gana
   brief: string;       // guía del spec (descripción + regla "Fuente:") — editable + leída por el agente
   empty: unknown;
+  /** Rótulo INTERNO de la fila CanvasSection (y del snapshot). Ausente = `label`.
+   *  Histórico: los 9 de hubspot usan los rótulos cortos de BUSINESS_CASE_CANVAS. */
+  canvasLabel?: string;
+  /** Id del renderer en SECTION_COMPONENTS (configs/templates.ts). Ausente = la key.
+   *  Permite que templates distintos reusen un mismo componente con keys propias. */
+  sectionType?: string;
+  /** La sección nace OCULTA: createBusinessCaseCanvas siembra `hidden:true` en el Json
+   *  del canvas (publish filtra por ese Json, no por la config). El CSE la muestra cuando aplica. */
+  defaultHidden?: boolean;
+  /** false = el agente NO genera esta sección (se llena determinísticamente o a mano);
+   *  generateCanvasSections la saltea y blocks/regenerate la rechaza. */
+  agentGenerated?: boolean;
 }
 
 const str = { type: "string" } as const;
@@ -33,6 +47,7 @@ function arrayOf(props: Record<string, unknown>, required: string[]) {
 export const BC_SECTION_DEFS: BCSectionDef[] = [
   {
     key: "hero",
+    canvasLabel: "Encabezado",
     label: "Cabecera del business case",
     theme: "dark",
     backdrop: true,
@@ -45,6 +60,7 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
   },
   {
     key: "dolores",
+    canvasLabel: "Dolores y retos",
     label: "Los puntos de dolor reales",
     eyebrow: "Diagnóstico",
     theme: "light",
@@ -56,6 +72,7 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
   },
   {
     key: "antes_despues",
+    canvasLabel: "Antes y después",
     label: "Antes vs. después",
     eyebrow: "Qué cambia",
     theme: "soft",
@@ -67,6 +84,7 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
   },
   {
     key: "solucion",
+    canvasLabel: "Solución propuesta",
     label: "Qué se implementa",
     eyebrow: "Solución propuesta",
     theme: "light",
@@ -78,6 +96,7 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
   },
   {
     key: "roi",
+    canvasLabel: "Impacto y ROI",
     label: "Números que respaldan la decisión",
     eyebrow: "Impacto / ROI",
     theme: "dark",
@@ -89,6 +108,7 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
   },
   {
     key: "cronograma",
+    canvasLabel: "Plan de implementación",
     label: "Plan de implementación",
     eyebrow: "Timeline",
     theme: "light",
@@ -100,6 +120,7 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
   },
   {
     key: "inversion",
+    canvasLabel: "Inversión",
     label: "Licencias + servicios Smarteam",
     eyebrow: "Inversión",
     theme: "soft",
@@ -111,6 +132,7 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
   },
   {
     key: "partner",
+    canvasLabel: "Sobre Smarteam",
     label: "Por qué Smarteam",
     eyebrow: "Partner",
     theme: "light",
@@ -122,6 +144,7 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
   },
   {
     key: "cta",
+    canvasLabel: "Próximos pasos",
     label: "Llamado a la acción",
     theme: "dark",
     selfTitled: true,
