@@ -1,165 +1,68 @@
 "use client";
 
 /**
- * El motor de Contenido: dispara corridas (cadena completa / solo ingesta /
- * regenerar con lo guardado), pollea el progreso (run.phase como copy), muestra
- * stats de posts + historial. Notifica al terminar (Service Worker local).
+ * Motor de Contenido (detalle): estado de la última corrida, stats de posts,
+ * fuentes con error, historial completo. Tres niveles de CTA, siempre visibles
+ * (sin banners condicionales que aparecen/desaparecen según el historial):
+ *   1) "Generar ideas nuevas" (CHAIN) — primario. SIEMPRE genera (con lo nuevo
+ *      + lo guardado). Es la misma corrida que dispara el cron los viernes.
+ *   2) "Regenerar con lo guardado" (GENERATE) — sin re-scrapear; para cuando
+ *      se editaron insumos (pilares/voz/personas) y se quiere una tanda nueva.
+ *   3) "Solo actualizar fuentes" (INGEST) — sin generar; para revisar que una
+ *      fuente nueva esté trayendo posts antes de gastar en generación.
  */
-import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { fetchJson, ApiError } from "@/lib/api/fetch-json";
-import { useToast } from "@/components/ui/Toast";
 import { Badge } from "@/components/ui";
-import { pollMarketingRun, type PolledMarketingRun } from "@/lib/marketing/poll-run";
-import { maybeRequestPermission, notifyAgentDone } from "@/lib/notifications/client";
-
-interface RunRow {
-  id: string;
-  kind: "INGEST" | "GENERATE" | "CHAIN";
-  trigger: "MANUAL" | "CRON";
-  status: "RUNNING" | "DONE" | "ERROR";
-  phase: string | null;
-  newPostsCount: number | null;
-  fetchedPostsCount: number | null;
-  sourcesOkCount: number | null;
-  sourcesErrorCount: number | null;
-  contentIdeasCount: number | null;
-  campaignIdeasCount: number | null;
-  pillarSuggestionsCount: number | null;
-  error: string | null;
-  createdAt: string;
-  finishedAt: string | null;
-}
-interface SourceStat {
-  id: string;
-  label: string;
-  active: boolean;
-  posts: number;
-  lastFetchedAt: string | null;
-  lastFetchError: string | null;
-}
-interface PostsStats {
-  total: number;
-  inWindow: number;
-}
-
-const KIND_LABEL: Record<RunRow["kind"], string> = {
-  INGEST: "Solo ingesta",
-  GENERATE: "Generación (con lo guardado)",
-  CHAIN: "Cadena completa",
-};
+import { useMarketingEngine, RUN_KIND_LABEL } from "@/components/marketing/useMarketingEngine";
 
 export default function EngineClient({ canEdit }: { canEdit: boolean }) {
-  const toast = useToast();
-  const [runs, setRuns] = useState<RunRow[]>([]);
-  const [stats, setStats] = useState<PostsStats | null>(null);
-  const [sources, setSources] = useState<SourceStat[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [runningPhase, setRunningPhase] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      const [runsRes, postsRes] = await Promise.all([
-        fetchJson<{ runs: RunRow[]; activeRunId: string | null }>("/api/marketing/runs"),
-        fetchJson<{ stats: PostsStats; sources: SourceStat[] }>("/api/marketing/posts"),
-      ]);
-      setRuns(runsRes.runs);
-      setStats(postsRes.stats);
-      setSources(postsRes.sources);
-      // Si hay una corrida activa (ej. disparada por el cron), engancharse al polling.
-      if (runsRes.activeRunId && !busy) {
-        attachToRun(runsRes.activeRunId);
-      }
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo cargar el estado.");
-    } finally {
-      setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]);
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const attachToRun = useCallback(
-    async (runId: string) => {
-      setBusy(true);
-      setRunningPhase("en curso…");
-      const finished = await pollMarketingRun(runId, {
-        onTick: (r: PolledMarketingRun) => setRunningPhase(r.phase ?? "en curso…"),
-      });
-      setBusy(false);
-      setRunningPhase(null);
-
-      if (finished.status === "DONE") {
-        const parts: string[] = [];
-        if (finished.newPostsCount != null) parts.push(`${finished.newPostsCount} post(s) nuevos`);
-        if (finished.contentIdeasCount != null) parts.push(`${finished.contentIdeasCount} idea(s)`);
-        if (finished.campaignIdeasCount != null) parts.push(`${finished.campaignIdeasCount} campaña(s)`);
-        if (finished.sourcesErrorCount) parts.push(`${finished.sourcesErrorCount} fuente(s) con error`);
-        toast.success(`Listo — ${parts.join(" · ") || "corrida completada"}.`);
-        notifyAgentDone({ group: "marketing-contenido", ok: true });
-      } else if (finished.status === "ERROR") {
-        toast.error(finished.error ?? "La corrida falló.");
-        notifyAgentDone({ group: "marketing-contenido", ok: false });
-      } else {
-        toast.error("La corrida sigue en curso (timeout del polling). Recargá en un rato.");
-      }
-      load();
-    },
-    [toast, load],
-  );
-
-  const startRun = async (kind: RunRow["kind"]) => {
-    if (busy) return;
-    maybeRequestPermission();
-    setBusy(true);
-    try {
-      const d = await fetchJson<{ runId: string }>("/api/marketing/runs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind }),
-      });
-      toast.info(`${KIND_LABEL[kind]} en marcha…`);
-      await attachToRun(d.runId);
-    } catch (e) {
-      setBusy(false);
-      toast.error(e instanceof ApiError ? e.message : "No se pudo disparar la corrida.");
-    }
-  };
-
-  const last = runs[0] ?? null;
-  const lastIngestHadNoNews =
-    last?.status === "DONE" && (last.kind === "INGEST" || last.kind === "CHAIN") && last.newPostsCount === 0;
+  const { runs, stats, sources, loading, busy, runningPhase, startRun, lastRun } = useMarketingEngine();
+  const canGenerate = (stats?.inWindow ?? 0) > 0;
 
   return (
     <div className="space-y-6">
       {/* CTAs */}
       <div className="rounded-2xl border border-line bg-surface p-5">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="max-w-md">
             <p className="text-sm font-semibold text-fg">Correr el motor</p>
             <p className="mt-0.5 text-xs text-fg-muted">
-              La cadena completa scrapea las fuentes y genera ideas. El cron la corre solo, cada viernes a las 6:00 am.
+              &quot;Generar ideas nuevas&quot; scrapea las fuentes y genera SIEMPRE — aunque
+              esa semana no haya inspiración nueva, genera con lo guardado. Es la misma
+              corrida que dispara el cron cada viernes a las 6:00 am.
             </p>
           </div>
           {canEdit ? (
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-col items-end gap-2 flex-shrink-0">
               <button
                 onClick={() => startRun("CHAIN")}
                 disabled={busy}
                 className="px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
               >
-                {busy ? (runningPhase ?? "En curso…") : "Correr cadena completa"}
+                {busy ? (runningPhase ?? "En curso…") : "Generar ideas nuevas"}
               </button>
-              <button
-                onClick={() => startRun("INGEST")}
-                disabled={busy}
-                className="px-4 py-2 text-sm rounded-lg border border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-40"
-              >
-                Solo ingesta
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => startRun("GENERATE")}
+                  disabled={busy || !canGenerate}
+                  title={
+                    canGenerate
+                      ? "Genera sin re-scrapear, con los posts que ya están guardados"
+                      : "Todavía no hay posts guardados"
+                  }
+                  className="text-xs text-brand hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
+                >
+                  Regenerar con lo guardado
+                </button>
+                <span className="text-fg-muted">·</span>
+                <button
+                  onClick={() => startRun("INGEST")}
+                  disabled={busy}
+                  className="text-xs text-fg-muted hover:text-fg-secondary disabled:opacity-40"
+                >
+                  Solo actualizar fuentes
+                </button>
+              </div>
             </div>
           ) : (
             <p className="text-xs text-fg-muted">Tu rol puede ver el estado; correr el motor es del equipo de Marketing.</p>
@@ -170,27 +73,9 @@ export default function EngineClient({ canEdit }: { canEdit: boolean }) {
           <p className="mt-3 text-xs text-brand animate-pulse">⏳ {runningPhase}</p>
         )}
 
-        {!busy && lastIngestHadNoNews && (
-          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-xs text-fg-secondary">
-              No hay inspiración nueva esta semana (la última ingesta no trajo posts).
-              {last?.kind === "CHAIN" && " La generación no corrió."}
-            </p>
-            {canEdit && (
-              <button
-                onClick={() => startRun("GENERATE")}
-                disabled={busy}
-                className="px-3 py-1.5 text-xs rounded-lg bg-brand text-white hover:opacity-90 disabled:opacity-40"
-              >
-                Regenerar con lo guardado
-              </button>
-            )}
-          </div>
-        )}
-
-        {!busy && last?.status === "ERROR" && (
+        {!busy && lastRun?.status === "ERROR" && (
           <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3">
-            <p className="text-xs text-red-400">Última corrida falló: {last.error}</p>
+            <p className="text-xs text-red-400">Última corrida falló: {lastRun.error}</p>
           </div>
         )}
       </div>
@@ -247,7 +132,7 @@ export default function EngineClient({ canEdit }: { canEdit: boolean }) {
             {runs.map((r) => (
               <li key={r.id} className="flex items-center justify-between gap-3 text-xs border-b border-line pb-2 last:border-0 last:pb-0">
                 <div className="min-w-0">
-                  <span className="font-medium text-fg">{KIND_LABEL[r.kind]}</span>
+                  <span className="font-medium text-fg">{RUN_KIND_LABEL[r.kind]}</span>
                   <Badge size="xs" className="ml-2">
                     {r.trigger === "CRON" ? "Cron" : "Manual"}
                   </Badge>
@@ -289,13 +174,13 @@ export default function EngineClient({ canEdit }: { canEdit: boolean }) {
       <p className="text-xs text-fg-muted">
         Las salidas viven en{" "}
         <Link href="/marketing/ideas" className="text-brand hover:underline">
-          Marketing → Ideas
+          Ideas
         </Link>{" "}
         y{" "}
         <Link href="/marketing/campanas" className="text-brand hover:underline">
           Campañas
         </Link>
-        . Los insumos (ICP, personas, pilares, fuentes, voz) se administran en Marketing.
+        . Los insumos (ICP, personas, pilares, fuentes, voz) se administran en las otras tabs.
       </p>
     </div>
   );

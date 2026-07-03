@@ -1,14 +1,19 @@
 "use client";
 
 /**
- * Ideas de contenido generadas — salida NO-CRUD: se revisan y se PODAN (borrar
+ * Ideas de contenido generadas — PÁGINA DE ATERRIZAJE del módulo (el equipo de
+ * Marketing llega acá el lunes). Salida NO-CRUD: se revisan y se PODAN (borrar
  * las que no sirven). Las buenas se migran a HubSpot a mano, campo por campo.
+ *
+ * Incluye arriba la barra del motor (CTA "Generar ideas nuevas" + estado de la
+ * última corrida) para no depender de navegar a la pestaña Contenido.
  */
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog, EmptyState, Badge } from "@/components/ui";
+import { useMarketingEngine } from "@/components/marketing/useMarketingEngine";
 
 interface IdeaRow {
   id: string;
@@ -36,6 +41,8 @@ export default function IdeasClient({ canEdit }: { canEdit: boolean }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  const engine = useMarketingEngine();
+
   const load = useCallback(async () => {
     try {
       const qs = pillarFilter ? `?pillarId=${encodeURIComponent(pillarFilter)}` : "";
@@ -54,6 +61,14 @@ export default function IdeasClient({ canEdit }: { canEdit: boolean }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Cuando el motor termina una corrida disparada desde esta página, refrescar
+  // la lista de ideas también (además del propio estado interno del hook).
+  const engineBusy = engine.busy;
+  useEffect(() => {
+    if (!engineBusy) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engineBusy]);
 
   const remove = async (id: string) => {
     try {
@@ -74,11 +89,46 @@ export default function IdeasClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
+  const lastRun = engine.lastRun;
+
   return (
     <div className="space-y-4">
+      {/* Barra del motor: CTA principal + estado, siempre visible arriba */}
+      <div className="rounded-2xl border border-line bg-surface p-4 flex items-center justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-fg">
+            {engine.loading
+              ? "Cargando estado del motor…"
+              : lastRun
+                ? `Última corrida: ${new Date(lastRun.createdAt).toLocaleString("es-CR", { dateStyle: "short", timeStyle: "short" })}${
+                    lastRun.status === "DONE" && lastRun.contentIdeasCount != null
+                      ? ` · ${lastRun.contentIdeasCount} idea(s) generadas`
+                      : lastRun.status === "ERROR"
+                        ? " · falló"
+                        : lastRun.status === "RUNNING"
+                          ? " · en curso"
+                          : ""
+                  }`
+                : "Todavía no corriste el motor."}
+          </p>
+          <Link href="/marketing/contenido" className="text-xs text-brand hover:underline">
+            Ver detalle del motor →
+          </Link>
+        </div>
+        {canEdit && (
+          <button
+            onClick={() => engine.startRun("CHAIN")}
+            disabled={engine.busy}
+            className="flex-shrink-0 px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
+          >
+            {engine.busy ? (engine.runningPhase ?? "En curso…") : "Generar ideas nuevas"}
+          </button>
+        )}
+      </div>
+
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-xs text-fg-muted">
-          Salida del motor de contenido: revisá y <span className="font-medium text-fg-secondary">borrá las que no sirven</span>.
+          Revisá y <span className="font-medium text-fg-secondary">borrá las que no sirven</span>.
           Las buenas se migran a HubSpot copiando campo por campo.
         </p>
         <select
@@ -101,12 +151,7 @@ export default function IdeasClient({ canEdit }: { canEdit: boolean }) {
         <EmptyState
           variant="dashed"
           title="Todavía no hay ideas"
-          description="Corré el motor desde la sección Contenido para generar las primeras."
-          action={
-            <Link href="/marketing/contenido" className="text-sm text-brand hover:underline">
-              Ir a Contenido →
-            </Link>
-          }
+          description="Generá la primera tanda con el botón de arriba."
         />
       ) : (
         <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3">

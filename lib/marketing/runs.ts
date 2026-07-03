@@ -4,7 +4,13 @@
  * Orquestador de corridas del módulo Contenido (server-only):
  *   INGEST   → scrapea las fuentes activas (secuencial, error por-fuente no tumba)
  *   GENERATE → corre el agente sobre lo guardado (últimos 3 meses)
- *   CHAIN    → ingesta y, SOLO si hubo posts nuevos, generación
+ *   CHAIN    → ingesta + generación SIEMPRE (garantiza que el equipo tenga ideas
+ *              frescas el lunes, aunque esa semana ninguna fuente haya publicado
+ *              nada nuevo — genera igual con lo guardado en la ventana de 3
+ *              meses). Si la ingesta falla del todo, NO cancela la generación:
+ *              intenta igual con lo que ya había guardado (solo si no hay NADA
+ *              guardado falla, con mensaje claro). Es la corrida que dispara el
+ *              cron de los viernes — su confiabilidad es la promesa del lunes.
  *
  * Patrón async del repo: el endpoint crea el MarketingRun (RUNNING) y lanza
  * `runMarketingRun` fire-and-forget; el front pollea GET /api/marketing/runs/[id].
@@ -163,10 +169,18 @@ export async function runMarketingRun(runId: string, kind: MarketingRunKind): Pr
     } else if (kind === "GENERATE") {
       await runGenerate(runId);
     } else {
-      // CHAIN: ingesta → generación SOLO si hubo posts nuevos (sin novedades, el
-      // front ofrece "Regenerar con lo guardado" = kind GENERATE).
-      const { newPosts } = await runIngest(runId);
-      if (newPosts > 0) await runGenerate(runId);
+      // CHAIN: ingesta best-effort (un fallo total NO cancela la generación —
+      // no dejamos al equipo sin ideas el lunes por un apagón de Apify) +
+      // generación SIEMPRE, mientras haya algún post guardado en la ventana.
+      try {
+        await runIngest(runId);
+      } catch (e) {
+        console.error(
+          `[marketing/runs] ingesta de la cadena ${runId} falló, se genera igual con lo guardado:`,
+          e,
+        );
+      }
+      await runGenerate(runId);
     }
     await prisma.marketingRun.update({
       where: { id: runId },
