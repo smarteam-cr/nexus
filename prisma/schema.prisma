@@ -1473,3 +1473,242 @@ model SessionCategory {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MARKETING + CONTENIDO — módulo single-tenant (equipo Smarteam; NADA cuelga de
+// Client). Insumos curados (ICP, personas, pilares, fuentes, voz) + posts de
+// inspiración scrapeados de LinkedIn + salidas del agente (ideas/campañas/
+// sugerencias de pilar) + corridas (ingesta/generación) + lock del cron semanal.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+enum IcpSection {
+  FIRMOGRAFICA_DESCRIPTOR // Firmográfica — descriptores
+  FIRMOGRAFICA_INDUSTRIA  // Firmográfica — industrias con validación real
+  BEHAVIORAL_REVENUE      // Behavioral — revenue intelligence
+  BEHAVIORAL_CANALES      // Behavioral — canales y comportamiento
+  BEHAVIORAL_ORG          // Behavioral — la organización
+  BEHAVIORAL_DECISION     // Behavioral — estructura de decisión
+  SIGNAL_ANTI             // Señales — Anti-ICP
+  SIGNAL_FUERTE           // Señales fuertes
+  SIGNAL_MEDIA            // Señales medias
+  SIGNAL_DEBIL            // Señales débiles
+}
+
+enum PillarOrigin {
+  HUMAN // creado a mano por el equipo
+  AGENT // nació de una PillarSuggestion aprobada
+}
+
+enum MarketingApprovalStatus {
+  PENDING
+  APPROVED
+  DISCARDED
+}
+
+enum CampaignChannel {
+  GOOGLE_SEARCH
+  PAID_SOCIAL
+  DISPLAY
+  OTHER
+}
+
+enum MarketingRunKind {
+  INGEST   // solo scraping de fuentes
+  GENERATE // solo agente de generación (sobre lo guardado)
+  CHAIN    // ingesta → generación (si hubo posts nuevos)
+}
+
+enum MarketingRunTrigger {
+  MANUAL // CTA en /contenido
+  CRON   // viernes 6:00 America Costa Rica
+}
+
+enum MarketingRunStatus {
+  RUNNING
+  DONE
+  ERROR
+}
+
+// Config singleton del módulo (id="marketing"): voz de marca + lock del cron.
+model MarketingSettings {
+  id              String    @id @default("marketing")
+  brandVoice      String    @db.Text // voz/posicionamiento (markdown) — editable en /marketing/voz
+  lastCronRunAt   DateTime? // nullable porque nunca corrió — display en /contenido
+  lastCronDateKey String?   // nullable ídem — "YYYY-MM-DD" (día CR) del último disparo; claim atómico anti-doble-fire
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Ítem del ICP (migrado del hardcode de app/icp/ICPSection.tsx). 1 fila = 1 bullet.
+model IcpItem {
+  id        String     @id @default(cuid())
+  section   IcpSection
+  label     String     @db.Text
+  order     Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([section, order])
+}
+
+// Buyer persona — insumo curado que alimenta al agente de generación.
+model BuyerPersona {
+  id          String   @id @default(cuid())
+  name        String
+  role        String?  // nullable porque el cargo/segmento puede cargarse después
+  description String   @db.Text // quién es, contexto (markdown)
+  pains       String?  @db.Text // nullable porque se carga incremental
+  goals       String?  @db.Text // nullable ídem
+  active      Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active])
+}
+
+// Pilar de contenido (tema/enfoque). Los AGENT nacen al aprobar una PillarSuggestion.
+model ContentPillar {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  description String?      @db.Text // nullable porque un pilar puede ser solo un nombre al alta
+  origin      PillarOrigin @default(HUMAN)
+  active      Boolean      @default(true)
+  order       Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  ideas      ContentIdea[]
+  suggestion PillarSuggestion?
+}
+
+// Fuente de inspiración: perfil público de LinkedIn (se scrapea vía InspirationProvider).
+model InspirationSource {
+  id             String    @id @default(cuid())
+  profileUrl     String    @unique
+  label          String?   // nullable porque al alta a veces solo hay URL
+  active         Boolean   @default(true)
+  lastFetchedAt  DateTime? // nullable hasta la primera ingesta
+  lastFetchError String?   @db.Text // nullable = última ingesta OK; error del provider si falló
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  posts InspirationPost[]
+
+  @@index([active])
+}
+
+// Post scrapeado de una fuente. Dedup por externalId. "Archivado" NO es campo:
+// la generación filtra postedAt >= hoy-3 meses; lo viejo queda fuera del contexto.
+model InspirationPost {
+  id           String            @id @default(cuid())
+  sourceId     String
+  source       InspirationSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  externalId   String            @unique // id/URN del post en LinkedIn — DEDUP KEY
+  url          String?           // nullable porque algunos actors no devuelven permalink
+  authorName   String?           // nullable ídem
+  text         String            @db.Text
+  likeCount    Int               @default(0)
+  commentCount Int               @default(0)
+  repostCount  Int               @default(0)
+  hasImage     Boolean           @default(false)
+  postedAt     DateTime
+  fetchedAt    DateTime          @default(now())
+
+  ideaSources ContentIdeaSource[]
+
+  @@index([postedAt])
+  @@index([sourceId, postedAt])
+}
+
+// Corrida del módulo (ingesta/generación/cadena). Modelo PROPIO: AgentRun exige
+// clientId (NOT NULL) y esto es single-tenant. Trazabilidad estilo regla 6.5.
+model MarketingRun {
+  id                     String              @id @default(cuid())
+  kind                   MarketingRunKind
+  trigger                MarketingRunTrigger @default(MANUAL)
+  status                 MarketingRunStatus  @default(RUNNING)
+  phase                  String?   // nullable cuando terminó — copy de progreso ("ingesta 3/8")
+  newPostsCount          Int?      // nullable hasta terminar la ingesta — posts NUEVOS post-dedup
+  fetchedPostsCount      Int?      // total traído del provider
+  sourcesOkCount         Int?
+  sourcesErrorCount      Int?
+  contentIdeasCount      Int?      // nullable hasta terminar la generación
+  campaignIdeasCount     Int?
+  pillarSuggestionsCount Int?
+  error                  String?   @db.Text // mensaje REAL cuando status=ERROR
+  rawOutput              String?   @db.Text // JSON crudo de Claude (backup/debug)
+  startedByEmail         String?   // nullable porque el CRON no tiene usuario
+  createdAt              DateTime  @default(now())
+  finishedAt             DateTime?
+
+  contentIdeas      ContentIdea[]
+  campaignIdeas     CampaignIdea[]
+  pillarSuggestions PillarSuggestion[]
+
+  @@index([status, createdAt])
+  @@index([kind, createdAt])
+}
+
+// Idea de contenido generada — salida NO-CRUD: se revisa y se PODA (DELETE).
+// Registro estructurado por campo para migrar a HubSpot copiando campo a campo.
+model ContentIdea {
+  id                  String         @id @default(cuid())
+  runId               String?        // nullable porque la idea sobrevive si se borra la corrida
+  run                 MarketingRun?  @relation(fields: [runId], references: [id], onDelete: SetNull)
+  pillarId            String?        // nullable porque puede referir a un pilar SUGERIDO aún no aprobado
+  pillar              ContentPillar? @relation(fields: [pillarId], references: [id], onDelete: SetNull)
+  suggestedPillarName String?        // nullable — nombre del pilar NUEVO propuesto; se linkea al aprobar
+  title               String
+  copy                String         @db.Text // copy listo para red social
+  imageConcept        String         @db.Text // descripción TEXTUAL del concepto de imagen (no se genera)
+  createdAt           DateTime       @default(now())
+
+  sources ContentIdeaSource[]
+
+  @@index([pillarId])
+  @@index([createdAt])
+}
+
+// Pivote idea ↔ posts que la inspiraron (el agente nunca inventa fuentes).
+model ContentIdeaSource {
+  id     String          @id @default(cuid())
+  ideaId String
+  idea   ContentIdea     @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  postId String
+  post   InspirationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([ideaId, postId])
+}
+
+// Idea de campaña (PPC / Google Search) — aprobable / descartable.
+model CampaignIdea {
+  id          String                  @id @default(cuid())
+  runId       String?                 // nullable porque sobrevive a la corrida
+  run         MarketingRun?           @relation(fields: [runId], references: [id], onDelete: SetNull)
+  title       String
+  channel     CampaignChannel
+  description String                  @db.Text // objetivo, audiencia, ángulo, keywords si aplica
+  status      MarketingApprovalStatus @default(PENDING)
+  reviewedAt  DateTime? // nullable hasta aprobar/descartar
+  createdAt   DateTime  @default(now())
+
+  @@index([status, createdAt])
+}
+
+// Sugerencia de pilar NUEVO del agente. PENDING → approve (crea ContentPillar) / discard.
+model PillarSuggestion {
+  id               String                  @id @default(cuid())
+  runId            String?                 // nullable porque sobrevive a la corrida
+  run              MarketingRun?           @relation(fields: [runId], references: [id], onDelete: SetNull)
+  name             String
+  description      String?                 @db.Text
+  rationale        String?                 @db.Text // evidencia del agente (posts/insumos que lo motivan)
+  status           MarketingApprovalStatus @default(PENDING)
+  approvedPillarId String?                 @unique // nullable hasta aprobar — FK al pilar creado
+  approvedPillar   ContentPillar?          @relation(fields: [approvedPillarId], references: [id], onDelete: SetNull)
+  reviewedAt       DateTime?
+  createdAt        DateTime                @default(now())
+
+  @@index([status])
+}

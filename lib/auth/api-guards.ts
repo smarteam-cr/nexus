@@ -28,6 +28,7 @@ import {
 } from "./supabase";
 import { requireCapability, requireRole, type Capability } from "./roles";
 import { isSalesAreaRole } from "./sales-roles";
+import { isMarketingEditor } from "./marketing-roles";
 import type { TeamRole } from "@prisma/client";
 
 function toErrorResponse(e: unknown): NextResponse | null {
@@ -255,6 +256,26 @@ export async function guardSalesAccess(): Promise<
   if (!isSalesAreaRole(guard.role)) {
     return NextResponse.json(
       { error: "Tu rol no tiene acceso al área de Ventas." },
+      { status: 403 },
+    );
+  }
+  return guard;
+}
+
+/**
+ * ESCRITURA en el área de Marketing + Contenido (CRUD de insumos, correr
+ * ingesta/agente, podar/aprobar salidas). Whitelist = fuente única
+ * `MARKETING_EDITOR_ROLES` (lib/auth/marketing-roles.ts): MARKETING/CSL/SUPER_ADMIN.
+ * La LECTURA del área es de todo rol interno → los GET usan `guardInternalUser`.
+ */
+export async function guardMarketingEditor(): Promise<
+  Awaited<ReturnType<typeof requireInternalUser>> | NextResponse
+> {
+  const guard = await guardInternalUser();
+  if (guard instanceof NextResponse) return guard;
+  if (!isMarketingEditor(guard.role)) {
+    return NextResponse.json(
+      { error: "Tu rol no puede editar el área de Marketing." },
       { status: 403 },
     );
   }

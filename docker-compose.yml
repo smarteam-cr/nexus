@@ -32,3 +32,6 @@ services:
       NODE_ENV: production
       PORT: "3004"
       HOSTNAME: "0.0.0.0"
+      # Cron del módulo Contenido (viernes 6:00 America Costa Rica). Solo PROD:
+      # dev no setea esta var → instrumentation.ts no arranca el intervalo.
+      CRON_ENABLED: "1"

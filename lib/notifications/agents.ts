@@ -26,6 +26,7 @@ const BY_GROUP: Record<string, AgentNotifyMeta> = {
   diagnostico: { label: "diagnóstico", notifiable: true },
   planificacion: { label: "planificación", notifiable: true },
   "business-case": { label: "caso de negocio", notifiable: true },
+  "marketing-contenido": { label: "ideas de contenido", notifiable: true },
 };
 
 const DEFAULT_META: AgentNotifyMeta = { label: "documento", notifiable: true };
