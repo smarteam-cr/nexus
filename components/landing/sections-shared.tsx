@@ -8,80 +8,80 @@
  * procesos. Data-driven (cards + flechas CSS), sin imágenes. Mismo contrato que
  * sections.tsx: vista pulida en lectura + edición inline en modo `editable`.
  */
-import { type FC } from "react";
+import { Fragment, type FC } from "react";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
+import { SortableItems } from "./sortable";
+import { landingLang, t } from "./i18n";
 import type { SectionProps, TechArchitectureData, ProcessMappingData, UseCasesData } from "./types";
 
-// ── Arquitectura tecnológica / de conexión ──────────────────────────────────
-export const TechArchitectureSection: FC<SectionProps<TechArchitectureData>> = ({ data, editable, onChange }) => {
-  const nodos = data.nodos ?? [];
-  const flujos = data.flujos ?? [];
+// ── Arquitectura tecnológica / de conexión — CADENA con flechas ─────────────
+export const TechArchitectureSection: FC<SectionProps<TechArchitectureData>> = ({ data, ctx, editable, onChange }) => {
+  const lang = landingLang(ctx.lang);
+  // Fallback LEGACY: data v1 (nodos + flujos separados) se aplana a la cadena.
+  const cadena =
+    data.cadena?.length
+      ? data.cadena
+      : (data.nodos ?? []).map((n) => ({ actor: n.rol, titulo: n.nombre, detalle: n.detalle }));
   const fuera = data.fueraDeAlcance ?? [];
   const opcionales = data.opcionales ?? [];
   const set = (next: Partial<TechArchitectureData>) => onChange?.({ ...data, ...next });
+  // Escribir la cadena LIMPIA el legacy (`nodos`): si no, vaciar la lista resucita
+  // los nodos v1 aplanados (imposible borrar el último paso).
+  const setCadena = (list: { actor: string; titulo: string; detalle: string }[]) => set({ cadena: list, nodos: [] });
 
   return (
     <>
       <Editable as="p" className="stl-intro" editable={editable} value={data.intro ?? ""}
-        placeholder="Cómo se conectan los sistemas involucrados…" onCommit={(v) => set({ intro: v })} />
+        placeholder="La idea central en 1-2 frases…" onCommit={(v) => set({ intro: v })} />
 
-      {/* Sistemas involucrados */}
-      <div className="stl-grid stl-grid-3">
-        {nodos.map((n, i) => (
-          <div key={i} className="stl-item stl-card">
-            {editable && <RemoveBtn onClick={() => set({ nodos: removeAt(nodos, i) })} />}
-            <Editable as="h3" className="stl-card-title" editable={editable} value={n.nombre}
-              placeholder="Sistema (Sitio / CRM / ERP)…" onCommit={(v) => set({ nodos: replaceAt(nodos, i, { ...n, nombre: v }) })} />
-            <Editable as="div" className="stl-field-label" editable={editable} value={n.rol}
-              placeholder="Rol en la arquitectura…" onCommit={(v) => set({ nodos: replaceAt(nodos, i, { ...n, rol: v }) })} />
-            <Editable as="p" className="stl-card-detail" editable={editable} value={n.detalle}
-              placeholder="Qué hace / qué datos maneja…" onCommit={(v) => set({ nodos: replaceAt(nodos, i, { ...n, detalle: v }) })} />
-          </div>
-        ))}
-      </div>
-      {editable && <AddBtn label="Agregar sistema" onClick={() => set({ nodos: appendItem(nodos, { nombre: "", rol: "", detalle: "" }) })} />}
-
-      {/* Flujo de información */}
-      {(flujos.length > 0 || editable) && (
-        <div style={{ marginTop: 28 }}>
-          <div className="stl-field-label">Flujo de información</div>
-          {flujos.map((f, i) => (
-            <div key={i} className="stl-item stl-flow-row">
-              {editable && <RemoveBtn onClick={() => set({ flujos: removeAt(flujos, i) })} />}
-              <Editable as="span" className="stl-flow-node" editable={editable} value={f.desde}
-                placeholder="Origen…" onCommit={(v) => set({ flujos: replaceAt(flujos, i, { ...f, desde: v }) })} />
-              <span className="stl-flow-arrow">→</span>
-              <Editable as="span" className="stl-flow-node" editable={editable} value={f.hacia}
-                placeholder="Destino…" onCommit={(v) => set({ flujos: replaceAt(flujos, i, { ...f, hacia: v }) })} />
-              <Editable as="span" className="stl-flow-desc" editable={editable} value={f.descripcion}
-                placeholder="Qué viaja y cuándo…" onCommit={(v) => set({ flujos: replaceAt(flujos, i, { ...f, descripcion: v }) })} />
+      {/* Cadena del flujo: cards con chip de actor + flechas. En modo drag, la
+          flecha viaja DENTRO del wrapper (flex) para que el layout no cambie. */}
+      <SortableItems items={cadena} disabled={!editable} onReorder={(next) => setCadena(next)}
+        itemStyle={{ display: "flex", alignItems: "stretch", gap: 12, flex: "1 1 190px", minWidth: 190 }}
+        container={(nodes) => <div className="stl-chain">{nodes}</div>}>
+        {(c, i, handle) => (
+          <Fragment>
+            {i > 0 && <span className="stl-chain-arrow" aria-hidden>→</span>}
+            <div className="stl-item stl-chain-card" style={editable ? { flex: 1 } : undefined}>
+              {handle}
+              {editable && <RemoveBtn onClick={() => setCadena(removeAt(cadena, i))} />}
+              <Editable as="span" className="stl-chain-actor" editable={editable} value={c.actor}
+                placeholder="Actor…" onCommit={(v) => setCadena(replaceAt(cadena, i, { ...c, actor: v }))} />
+              <Editable as="h3" className="stl-chain-title" editable={editable} value={c.titulo}
+                placeholder="Qué pasa (3-6 palabras)…" onCommit={(v) => setCadena(replaceAt(cadena, i, { ...c, titulo: v }))} />
+              <Editable as="p" className="stl-chain-detail" editable={editable} value={c.detalle}
+                placeholder="Detalle (1 línea)…" onCommit={(v) => setCadena(replaceAt(cadena, i, { ...c, detalle: v }))} />
             </div>
-          ))}
-          {editable && <AddBtn label="Agregar flujo" onClick={() => set({ flujos: appendItem(flujos, { desde: "", hacia: "", descripcion: "" }) })} />}
-        </div>
-      )}
+          </Fragment>
+        )}
+      </SortableItems>
+      {editable && <AddBtn label="Agregar paso" onClick={() => setCadena(appendItem(cadena, { actor: "", titulo: "", detalle: "" }))} />}
 
       {/* Fuera de alcance + opcionales */}
       {(fuera.length > 0 || opcionales.length > 0 || editable) && (
         <div className="stl-grid stl-grid-2" style={{ marginTop: 28 }}>
           <div className="stl-field-card">
-            <div className="stl-field-label">Fuera de alcance</div>
-            <ul className="stl-ba-list">
-              {fuera.map((t, i) => (
-                <li key={i} className="stl-item stl-plain-li">
+            <div className="stl-field-label">{t(lang, "fueraDeAlcance")}</div>
+            <SortableItems items={fuera} disabled={!editable} onReorder={(next) => set({ fueraDeAlcance: next })}
+              container={(nodes) => <div className="stl-ba-list">{nodes}</div>}>
+              {(txt, i, handle) => (
+                <div className="stl-item stl-plain-li">
+                  {handle}
                   {editable && <RemoveBtn onClick={() => set({ fueraDeAlcance: removeAt(fuera, i) })} />}
-                  <Editable as="span" editable={editable} value={t} placeholder="Qué NO incluye esta fase…"
+                  <Editable as="span" editable={editable} value={txt} placeholder="Qué NO incluye esta fase…"
                     onCommit={(v) => set({ fueraDeAlcance: replaceAt(fuera, i, v) })} />
-                </li>
-              ))}
-            </ul>
+                </div>
+              )}
+            </SortableItems>
             {editable && <AddBtn label="Agregar" onClick={() => set({ fueraDeAlcance: appendItem(fuera, "") })} />}
           </div>
           <div className="stl-field-card">
-            <div className="stl-field-label">Opcionales / a futuro</div>
-            <ul className="stl-ba-list">
-              {opcionales.map((o, i) => (
-                <li key={i} className="stl-item stl-plain-li">
+            <div className="stl-field-label">{t(lang, "opcionales")}</div>
+            <SortableItems items={opcionales} disabled={!editable} onReorder={(next) => set({ opcionales: next })}
+              container={(nodes) => <div className="stl-ba-list">{nodes}</div>}>
+              {(o, i, handle) => (
+                <div className="stl-item stl-plain-li">
+                  {handle}
                   {editable && <RemoveBtn onClick={() => set({ opcionales: removeAt(opcionales, i) })} />}
                   <Editable as="span" editable={editable} value={o.nombre} placeholder="Integración / módulo…"
                     onCommit={(v) => set({ opcionales: replaceAt(opcionales, i, { ...o, nombre: v }) })} />
@@ -92,9 +92,9 @@ export const TechArchitectureSection: FC<SectionProps<TechArchitectureData>> = (
                         onCommit={(v) => set({ opcionales: replaceAt(opcionales, i, { ...o, detalle: v }) })} />
                     </>
                   )}
-                </li>
-              ))}
-            </ul>
+                </div>
+              )}
+            </SortableItems>
             {editable && <AddBtn label="Agregar" onClick={() => set({ opcionales: appendItem(opcionales, { nombre: "", detalle: "" }) })} />}
           </div>
         </div>
@@ -111,9 +111,11 @@ export const UseCasesSection: FC<SectionProps<UseCasesData>> = ({ data, editable
   const set = (next: Partial<UseCasesData>) => onChange?.({ ...data, ...next });
   return (
     <>
-      <div className="stl-grid stl-grid-2">
-        {items.map((it, i) => (
-          <div key={i} className="stl-item stl-field-card">
+      <SortableItems items={items} disabled={!editable} onReorder={(next) => set({ items: next })}
+        container={(nodes) => <div className="stl-grid stl-grid-2">{nodes}</div>}>
+        {(it, i, handle) => (
+          <div className="stl-item stl-field-card">
+            {handle}
             {editable && <RemoveBtn onClick={() => set({ items: removeAt(items, i) })} />}
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
               <Editable as="h3" className="stl-card-title" editable={editable} value={it.title}
@@ -126,8 +128,8 @@ export const UseCasesSection: FC<SectionProps<UseCasesData>> = ({ data, editable
             <Editable as="p" className="stl-card-detail" editable={editable} value={it.detail ?? ""}
               placeholder="Qué incluye / qué resuelve…" onCommit={(v) => set({ items: replaceAt(items, i, { ...it, detail: v }) })} />
           </div>
-        ))}
-      </div>
+        )}
+      </SortableItems>
       {editable && (
         <AddBtn label="Agregar caso de uso" onClick={() => set({ items: appendItem(items, { title: "", detail: "", price: "" }) })} />
       )}
@@ -136,26 +138,30 @@ export const UseCasesSection: FC<SectionProps<UseCasesData>> = ({ data, editable
 };
 
 // ── Mapeo de procesos (opcional) ─────────────────────────────────────────────
-export const ProcessMappingSection: FC<SectionProps<ProcessMappingData>> = ({ data, editable, onChange }) => {
+export const ProcessMappingSection: FC<SectionProps<ProcessMappingData>> = ({ data, ctx, editable, onChange }) => {
+  const lang = landingLang(ctx.lang);
   const procesos = data.procesos ?? [];
   const set = (next: Partial<ProcessMappingData>) => onChange?.({ ...data, ...next });
   return (
     <>
       <Editable as="p" className="stl-intro" editable={editable} value={data.intro ?? ""}
         placeholder="Qué procesos del cliente cambian con la implementación…" onCommit={(v) => set({ intro: v })} />
-      {procesos.map((p, i) => (
-        <div key={i} className="stl-item stl-cmp-row" style={{ marginTop: i === 0 ? 24 : 26 }}>
+      <SortableItems items={procesos} disabled={!editable} onReorder={(next) => set({ procesos: next })}
+        container={(nodes) => <>{nodes}</>}>
+        {(p, i, handle) => (
+        <div className="stl-item stl-cmp-row" style={{ marginTop: i === 0 ? 24 : 26 }}>
+          {handle}
           {editable && <RemoveBtn onClick={() => set({ procesos: removeAt(procesos, i) })} />}
           <Editable as="h3" className="stl-cmp-aspect" editable={editable} value={p.nombre}
             placeholder="Proceso (ventas, cobranza, onboarding…)…" onCommit={(v) => set({ procesos: replaceAt(procesos, i, { ...p, nombre: v }) })} />
           <div className="stl-cmp">
             <div className="stl-cmp-now">
-              <div className="stl-cmp-label">Hoy</div>
+              <div className="stl-cmp-label">{t(lang, "hoy")}</div>
               <Editable as="p" className="stl-cmp-text" editable={editable} value={p.comoEsHoy}
                 placeholder="Cómo funciona hoy…" onCommit={(v) => set({ procesos: replaceAt(procesos, i, { ...p, comoEsHoy: v }) })} />
             </div>
             <div className="stl-cmp-future">
-              <div className="stl-cmp-label">Con la implementación</div>
+              <div className="stl-cmp-label">{t(lang, "conImplementacion")}</div>
               <Editable as="p" className="stl-cmp-text" editable={editable} value={p.comoSera}
                 placeholder="Cómo quedará…" onCommit={(v) => set({ procesos: replaceAt(procesos, i, { ...p, comoSera: v }) })} />
             </div>
@@ -167,7 +173,8 @@ export const ProcessMappingSection: FC<SectionProps<ProcessMappingData>> = ({ da
             </div>
           )}
         </div>
-      ))}
+        )}
+      </SortableItems>
       {editable && <AddBtn label="Agregar proceso" onClick={() => set({ procesos: appendItem(procesos, { nombre: "", comoEsHoy: "", comoSera: "", sistemas: "" }) })} />}
     </>
   );

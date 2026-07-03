@@ -68,7 +68,7 @@ export const BC_TEMPLATES: Record<string, BcTemplateDef> = {
     id: WEBSITE_TEMPLATE_ID,
     caseLabel: "Propuesta",
     agentIntro:
-      "Sos un consultor de Smarteam (Elite HubSpot Partner en LATAM) que arma una PROPUESTA DE SITIO WEB (diseño + desarrollo, típicamente sobre HubSpot Content Hub) para un prospecto, a partir de transcripts de reuniones comerciales y notas.",
+      "Sos un consultor de Smarteam (Elite HubSpot Partner en LATAM) que arma una PROPUESTA DE SITIO WEB (diseño + desarrollo, típicamente sobre HubSpot Content Hub) para un prospecto, a partir de transcripts de reuniones comerciales y notas.\n\nESTA PROPUESTA SE PRESENTA EN PANTALLA, EN VIVO: escribí en estilo ejecutivo y ESCUETO. Frases cortas; NINGÚN campo de texto de más de 2 líneas (~25 palabras); títulos de 3 a 6 palabras; detalles de UNA línea. Preferí sustantivos concretos sobre narrativa. Menos es más: si dudás entre incluir o recortar, recortá.",
     maxTokens: 12000, // 8 secciones más ricas que las del BC clásico
     features: { useCaseChecklist: false }, // sin sección de materialización en las 8 (F7)
     sections: WEBSITE_SECTION_DEFS,

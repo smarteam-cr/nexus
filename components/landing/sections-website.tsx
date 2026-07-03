@@ -10,7 +10,9 @@
  */
 import { type FC } from "react";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
-import { CtaButton, CtaUrlField } from "./sections";
+import { SortableItems } from "./sortable";
+import { CtaButton, CtaEditor } from "./sections";
+import { landingLang, t } from "./i18n";
 import type {
   SectionProps,
   WebDiagnosisData,
@@ -22,87 +24,168 @@ import type {
   WhyUsData,
 } from "./types";
 
-// ── 2) Diagnóstico y contexto ────────────────────────────────────────────────
-export const WebDiagnosisSection: FC<SectionProps<WebDiagnosisData>> = ({ data, editable, onChange }) => {
+// ── 2) Diagnóstico y contexto — retos (izq) + panel oscuro "Por qué X" (der) ──
+export const WebDiagnosisSection: FC<SectionProps<WebDiagnosisData>> = ({ data, ctx, editable, onChange }) => {
+  const lang = landingLang(ctx.lang);
   const retos = data.retos ?? [];
+  // Fallback LEGACY: `porQuePlataforma` (párrafo) → un bullet único sin título.
+  const bullets =
+    data.porQueBullets?.length
+      ? data.porQueBullets
+      : data.porQuePlataforma?.trim()
+        ? [{ title: "", detail: data.porQuePlataforma }]
+        : [];
   const set = (next: Partial<WebDiagnosisData>) => onChange?.({ ...data, ...next });
+  // Escribir bullets LIMPIA el legacy: si no, al borrar el último bullet el render
+  // re-deriva de `porQuePlataforma` y el bullet "resucita" (imposible vaciar la lista).
+  const setBullets = (list: { title: string; detail: string }[]) => set({ porQueBullets: list, porQuePlataforma: "" });
   return (
     <>
-      <Editable as="p" className="stl-intro" editable={editable} value={data.intro ?? ""}
-        placeholder="Contexto del cliente y del proyecto…" onCommit={(v) => set({ intro: v })} />
-      <div className="stl-grid stl-grid-3">
-        {retos.map((r, i) => (
-          <div key={i} className="stl-item stl-card">
-            {editable && <RemoveBtn onClick={() => set({ retos: removeAt(retos, i) })} />}
-            <Editable as="h3" className="stl-card-title" editable={editable} value={r.title}
-              placeholder="Reto actual…" onCommit={(v) => set({ retos: replaceAt(retos, i, { ...r, title: v }) })} />
-            <Editable as="p" className="stl-card-detail" editable={editable} value={r.detail}
-              placeholder="Por qué duele hoy…" onCommit={(v) => set({ retos: replaceAt(retos, i, { ...r, detail: v }) })} />
-          </div>
-        ))}
-      </div>
-      {editable && <AddBtn label="Agregar reto" onClick={() => set({ retos: appendItem(retos, { title: "", detail: "" }) })} />}
-      <div className="stl-grid stl-grid-2" style={{ marginTop: 28 }}>
-        <div className="stl-field-card">
-          <div className="stl-field-label">Por qué esta plataforma</div>
-          <Editable as="div" className="stl-field-value" editable={editable} value={data.porQuePlataforma ?? ""}
-            placeholder="Por qué Content Hub / la plataforma elegida…" onCommit={(v) => set({ porQuePlataforma: v })} />
+      {(data.intro || editable) && (
+        <Editable as="p" className="stl-intro" editable={editable} value={data.intro ?? ""}
+          placeholder="Contexto esencial (máx 2 frases)…" onCommit={(v) => set({ intro: v })} />
+      )}
+      <div className="stl-diag">
+        {/* Izquierda: retos actuales (cards de una línea) */}
+        <div>
+          <span className="stl-diag-chip">{t(lang, "retosActuales")}</span>
+          <SortableItems items={retos} disabled={!editable} onReorder={(next) => set({ retos: next })}
+            container={(nodes) => <div className="stl-diag-retos">{nodes}</div>}>
+            {(r, i, handle) => (
+              <div className="stl-item stl-diag-reto">
+                {handle}
+                {editable && <RemoveBtn onClick={() => set({ retos: removeAt(retos, i) })} />}
+                <Editable as="strong" editable={editable} value={r.title}
+                  placeholder="Reto (3-6 palabras)…" onCommit={(v) => set({ retos: replaceAt(retos, i, { ...r, title: v }) })} />{" "}
+                <Editable as="span" editable={editable} value={r.detail}
+                  placeholder="Una frase corta…" onCommit={(v) => set({ retos: replaceAt(retos, i, { ...r, detail: v }) })} />
+              </div>
+            )}
+          </SortableItems>
+          {editable && <AddBtn label="Agregar reto" onClick={() => set({ retos: appendItem(retos, { title: "", detail: "" }) })} />}
         </div>
-        <div className="stl-field-card">
-          <div className="stl-field-label">Objetivo del proyecto</div>
-          <Editable as="div" className="stl-field-value" editable={editable} value={data.objetivo ?? ""}
-            placeholder="Qué debe lograr el sitio…" onCommit={(v) => set({ objetivo: v })} />
+
+        {/* Derecha: panel oscuro "Por qué [plataforma]" con bullets + objetivo */}
+        <div className="stl-diag-panel">
+          <span className="stl-diag-panel-chip">
+            {/*  : el espacio normal se colapsa entre items del inline-flex */}
+            {`${t(lang, "porQue")} `}
+            <Editable as="span" editable={editable} value={data.plataforma ?? ""}
+              placeholder="HubSpot Content Hub…" onCommit={(v) => set({ plataforma: v })} />
+          </span>
+          <SortableItems items={bullets} disabled={!editable} onReorder={setBullets}
+            container={(nodes) => <div className="stl-diag-bullets">{nodes}</div>}>
+            {(b, i, handle) => (
+              <div className="stl-item stl-diag-bullet">
+                {handle}
+                {editable && <RemoveBtn onClick={() => setBullets(removeAt(bullets, i))} />}
+                <span className="stl-diag-dot" aria-hidden />
+                <span>
+                  {(b.title || editable) && (
+                    <>
+                      <Editable as="strong" editable={editable} value={b.title}
+                        placeholder="Razón (2-4 palabras)…" onCommit={(v) => setBullets(replaceAt(bullets, i, { ...b, title: v }))} />
+                      {(b.title || editable) && b.detail !== undefined && ": "}
+                    </>
+                  )}
+                  <Editable as="span" editable={editable} value={b.detail ?? ""}
+                    placeholder="Detalle (1 línea)…" onCommit={(v) => setBullets(replaceAt(bullets, i, { ...b, detail: v }))} />
+                </span>
+              </div>
+            )}
+          </SortableItems>
+          {editable && <AddBtn label="Agregar razón" onClick={() => setBullets(appendItem(bullets, { title: "", detail: "" }))} />}
+          {(data.objetivo || editable) && (
+            <div className="stl-diag-footer">
+              <span style={{ opacity: 0.75 }}>{t(lang, "objetivo")}: </span>
+              <Editable as="span" editable={editable} value={data.objetivo ?? ""}
+                placeholder="Una frase compacta…" onCommit={(v) => set({ objetivo: v })} />
+            </div>
+          )}
         </div>
       </div>
     </>
   );
 };
 
-// ── 3) Arquitectura del sitio (sitemap por fases) ────────────────────────────
+// ── 3) Arquitectura del sitio — diagrama: Home + fases con cards top-level ───
 export const SiteArchitectureSection: FC<SectionProps<SiteArchitectureData>> = ({ data, editable, onChange }) => {
   const fases = data.fases ?? [];
   const set = (next: Partial<SiteArchitectureData>) => onChange?.({ ...data, ...next });
+  // Normalización LEGACY: páginas string → { nombre, detalle: "" }.
+  const pageOf = (p: { nombre: string; detalle: string } | string) =>
+    typeof p === "string" ? { nombre: p, detalle: "" } : p;
+  const setPagina = (fi: number, pi: number, next: { nombre: string; detalle: string }) => {
+    const f = fases[fi];
+    set({ fases: replaceAt(fases, fi, { ...f, paginas: replaceAt(f.paginas ?? [], pi, next) }) });
+  };
   return (
     <>
       <Editable as="p" className="stl-intro" editable={editable} value={data.recorrido ?? ""}
-        placeholder="Recorrido del usuario por el sitio…" onCommit={(v) => set({ recorrido: v })} />
-      <div className="stl-grid stl-grid-2">
-        {fases.map((f, i) => {
-          const soon = (f.badge ?? "").trim() !== "";
-          return (
-            <div key={i} className={`stl-item stl-sitemap-phase${soon ? " stl-sitemap-phase--soon" : ""}`}>
-              {editable && <RemoveBtn onClick={() => set({ fases: removeAt(fases, i) })} />}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <Editable as="h3" className="stl-card-title" editable={editable} value={f.nombre}
-                  placeholder="Fase 1 — Lanzamiento…" onCommit={(v) => set({ fases: replaceAt(fases, i, { ...f, nombre: v }) })} />
-                {(soon || editable) && (
-                  <span className="stl-sitemap-badge">
-                    <Editable as="span" editable={editable} value={f.badge ?? ""} placeholder="Próximamente…"
-                      onCommit={(v) => set({ fases: replaceAt(fases, i, { ...f, badge: v }) })} />
-                  </span>
-                )}
-              </div>
-              <div className="stl-page-chips">
-                {(f.paginas ?? []).map((p, j) => (
-                  <span key={j} className="stl-item stl-page-chip">
-                    {editable && <RemoveBtn onClick={() => set({ fases: replaceAt(fases, i, { ...f, paginas: removeAt(f.paginas ?? [], j) }) })} />}
-                    <Editable as="span" editable={editable} value={p} placeholder="Página…"
-                      onCommit={(v) => set({ fases: replaceAt(fases, i, { ...f, paginas: replaceAt(f.paginas ?? [], j, v) }) })} />
-                  </span>
-                ))}
-                {editable && <AddBtn label="Página" onClick={() => set({ fases: replaceAt(fases, i, { ...f, paginas: appendItem(f.paginas ?? [], "") }) })} />}
-              </div>
+        placeholder="Recorrido del usuario en una frase…" onCommit={(v) => set({ recorrido: v })} />
+
+      {/* Nodo raíz: Home */}
+      {(data.home || editable) && (
+        <div className="stl-map-root">
+          <span className="stl-map-home">
+            <Editable as="span" editable={editable} value={data.home ?? ""}
+              placeholder="Home · resumen del ecosistema…" onCommit={(v) => set({ home: v })} />
+          </span>
+          <span className="stl-map-stem" aria-hidden />
+        </div>
+      )}
+
+      {fases.map((f, i) => {
+        const soon = (f.badge ?? "").trim() !== "";
+        return (
+          <div key={i} className="stl-item stl-map-phase">
+            {editable && <RemoveBtn onClick={() => set({ fases: removeAt(fases, i) })} />}
+            <div className="stl-map-phase-head">
+              <span className={`stl-map-phase-chip${soon ? " stl-map-phase-chip--soon" : ""}`}>
+                <Editable as="span" editable={editable} value={f.nombre}
+                  placeholder="Fase 1 · MVP…" onCommit={(v) => set({ fases: replaceAt(fases, i, { ...f, nombre: v }) })} />
+              </span>
+              {editable && (
+                <span className="stl-sitemap-badge">
+                  <Editable as="span" editable value={f.badge ?? ""} placeholder="Badge (vacío = fase actual)…"
+                    onCommit={(v) => set({ fases: replaceAt(fases, i, { ...f, badge: v }) })} />
+                </span>
+              )}
+              <span className="stl-map-phase-line" aria-hidden />
             </div>
-          );
-        })}
-      </div>
+            <SortableItems items={f.paginas ?? []} disabled={!editable}
+              onReorder={(next) => set({ fases: replaceAt(fases, i, { ...f, paginas: next }) })}
+              container={(nodes) => <div className="stl-map-cards">{nodes}</div>}>
+              {(raw, j, handle) => {
+                const p = pageOf(raw);
+                return (
+                  <div className={`stl-item stl-map-card${soon ? " stl-map-card--soon" : ""}`}>
+                    {handle}
+                    {editable && <RemoveBtn onClick={() => set({ fases: replaceAt(fases, i, { ...f, paginas: removeAt(f.paginas ?? [], j) }) })} />}
+                    <Editable as="div" className="stl-map-card-title" editable={editable} value={p.nombre}
+                      placeholder="Sección…" onCommit={(v) => setPagina(i, j, { ...p, nombre: v })} />
+                    {(p.detalle || editable) && (
+                      <Editable as="div" className="stl-map-card-detail" editable={editable} value={p.detalle}
+                        placeholder="2-4 palabras…" onCommit={(v) => setPagina(i, j, { ...p, detalle: v })} />
+                    )}
+                  </div>
+                );
+              }}
+            </SortableItems>
+            {editable && (
+              <AddBtn label="Sección" onClick={() => set({ fases: replaceAt(fases, i, { ...f, paginas: appendItem((f.paginas ?? []) as { nombre: string; detalle: string }[], { nombre: "", detalle: "" }) }) })} />
+            )}
+          </div>
+        );
+      })}
       {editable && <AddBtn label="Agregar fase" onClick={() => set({ fases: appendItem(fases, { nombre: "", badge: "", paginas: [] }) })} />}
     </>
   );
 };
 
 // ── 5) Alcance — checklist PLANA de entregables (≠ etapas: eso es el Cronograma) ──
-export const WebScopeSection: FC<SectionProps<WebScopeData>> = ({ data, editable, onChange }) => {
+export const WebScopeSection: FC<SectionProps<WebScopeData>> = ({ data, ctx, editable, onChange }) => {
+  const lang = landingLang(ctx.lang);
   // Fallback LEGACY: data generada con el shape viejo por áreas (`bloques`) se
   // aplana a entregables para que canvases/snapshots previos no queden en blanco.
   const entregables =
@@ -110,12 +193,15 @@ export const WebScopeSection: FC<SectionProps<WebScopeData>> = ({ data, editable
       ? data.entregables
       : (data.bloques ?? []).flatMap((b) => (b.items ?? []).map((it) => ({ title: it, detail: "" })));
   const set = (next: Partial<WebScopeData>) => onChange?.({ ...data, ...next });
-  const setEntregables = (list: { title: string; detail: string }[]) => set({ entregables: list });
+  // Escribir entregables LIMPIA el legacy (`bloques`): si no, vaciar la lista los resucita.
+  const setEntregables = (list: { title: string; detail: string }[]) => set({ entregables: list, bloques: [] });
   return (
     <>
-      <div className="stl-grid stl-grid-2">
-        {entregables.map((e, i) => (
-          <div key={i} className="stl-item stl-deliverable">
+      <SortableItems items={entregables} disabled={!editable} onReorder={setEntregables}
+        container={(nodes) => <div className="stl-grid stl-grid-2">{nodes}</div>}>
+        {(e, i, handle) => (
+          <div className="stl-item stl-deliverable">
+            {handle}
             {editable && <RemoveBtn onClick={() => setEntregables(removeAt(entregables, i))} />}
             <span className="stl-deliverable-check" aria-hidden>✓</span>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -129,12 +215,12 @@ export const WebScopeSection: FC<SectionProps<WebScopeData>> = ({ data, editable
               )}
             </div>
           </div>
-        ))}
-      </div>
+        )}
+      </SortableItems>
       {editable && <AddBtn label="Agregar entregable" onClick={() => setEntregables(appendItem(entregables, { title: "", detail: "" }))} />}
       {(data.resultado || editable) && (
         <div className="stl-callout" style={{ marginTop: 28 }}>
-          <div className="stl-field-label">Resultado</div>
+          <div className="stl-field-label">{t(lang, "resultado")}</div>
           <Editable as="p" className="stl-field-value" editable={editable} value={data.resultado ?? ""}
             placeholder="Qué recibe el cliente al final…" onCommit={(v) => set({ resultado: v })} />
         </div>
@@ -149,9 +235,11 @@ export const WebMethodologySection: FC<SectionProps<WebMethodologyData>> = ({ da
   const set = (next: Partial<WebMethodologyData>) => onChange?.({ ...data, ...next });
   return (
     <>
-      <div>
-        {fases.map((p, i) => (
-          <div key={i} className="stl-item stl-phase">
+      <SortableItems items={fases} disabled={!editable} onReorder={(next) => set({ fases: next })}
+        container={(nodes) => <div>{nodes}</div>}>
+        {(p, i, handle) => (
+          <div className="stl-item stl-phase">
+            {handle}
             {editable && <RemoveBtn onClick={() => set({ fases: removeAt(fases, i) })} />}
             <div className="stl-phase-num">{i + 1}</div>
             <div style={{ flex: 1 }}>
@@ -163,8 +251,8 @@ export const WebMethodologySection: FC<SectionProps<WebMethodologyData>> = ({ da
                 placeholder="Qué pasa en esta fase…" onCommit={(v) => set({ fases: replaceAt(fases, i, { ...p, detail: v }) })} />
             </div>
           </div>
-        ))}
-      </div>
+        )}
+      </SortableItems>
       {editable && <AddBtn label="Agregar fase" onClick={() => set({ fases: appendItem(fases, { name: "", detail: "", duration: "" }) })} />}
       {(data.cotizaAparte || editable) && (
         <Editable as="p" className="stl-invest-note" editable={editable} value={data.cotizaAparte ?? ""}
@@ -174,47 +262,166 @@ export const WebMethodologySection: FC<SectionProps<WebMethodologyData>> = ({ da
   );
 };
 
-// ── 7) Inversión (web) ───────────────────────────────────────────────────────
-function InvestGroup({
-  label, lines, editable, onChange, addLabel,
-}: { label: string; lines: WebInvestLine[]; editable?: boolean; onChange: (l: WebInvestLine[]) => void; addLabel: string }) {
-  if (!lines.length && !editable) return null;
-  return (
-    <div style={{ marginTop: 24 }}>
-      <div className="stl-field-label">{label}</div>
-      <div className="stl-invest" style={{ marginTop: 10 }}>
-        {lines.map((l, i) => (
-          <div key={i} className="stl-item stl-invest-row">
-            {editable && <RemoveBtn onClick={() => onChange(removeAt(lines, i))} />}
-            <div>
-              <Editable as="div" className="stl-invest-concept" editable={editable} value={l.concepto}
-                placeholder="Concepto…" onCommit={(v) => onChange(replaceAt(lines, i, { ...l, concepto: v }))} />
-              <Editable as="div" className="stl-invest-detail" editable={editable} value={l.detalle}
-                placeholder="Qué incluye…" onCommit={(v) => onChange(replaceAt(lines, i, { ...l, detalle: v }))} />
-            </div>
-            <Editable as="div" className="stl-invest-amount" editable={editable} value={l.monto}
-              placeholder="[Rango]" onCommit={(v) => onChange(replaceAt(lines, i, { ...l, monto: v }))} />
-          </div>
-        ))}
-      </div>
-      {editable && <AddBtn label={addLabel} onClick={() => onChange(appendItem(lines, { concepto: "", monto: "", detalle: "" }))} />}
-    </div>
-  );
+// ── 7) Inversión (web) — tabla fase 1 + TOTAL autocalculado + extras + mensual ──
+
+/** Monedas frecuentes del negocio (el select ofrece además "Otra…" con código libre). */
+const CURRENCIES = ["USD", "CRC", "MXN", "COP", "PEN", "CLP", "GTQ", "DOP", "EUR"];
+
+/** Extrae los números de un monto en texto ("$5,600–6,650" → {min:5600, max:6650}).
+ *  Sin números parseables → null (la línea no entra al total). */
+function parseAmount(monto: string): { min: number; max: number } | null {
+  const nums = (monto.match(/\d[\d,.]*/g) ?? [])
+    .map((s) => parseFloat(s.replace(/,/g, "")))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (!nums.length) return null;
+  return { min: Math.min(...nums), max: Math.max(...nums) };
 }
 
-export const WebInvestmentSection: FC<SectionProps<WebInvestmentData>> = ({ data, editable, onChange }) => {
+/** Suma los montos parseables de las líneas → rango total, o null si ninguna parsea. */
+function totalOf(lines: WebInvestLine[]): { min: number; max: number } | null {
+  let min = 0;
+  let max = 0;
+  let any = false;
+  for (const l of lines) {
+    const a = parseAmount(l.monto ?? "");
+    if (!a) continue;
+    any = true;
+    min += a.min;
+    max += a.max;
+  }
+  return any ? { min, max } : null;
+}
+
+function fmtMoney(n: number): string {
+  return `$${n.toLocaleString("en-US")}`;
+}
+
+export const WebInvestmentSection: FC<SectionProps<WebInvestmentData>> = ({ data, ctx, editable, onChange }) => {
+  const lang = landingLang(ctx.lang);
   const set = (next: Partial<WebInvestmentData>) => onChange?.({ ...data, ...next });
+  const lineas = data.lineas ?? [];
+  const extras = data.extras ?? [];
+  const recurrentes = data.recurrentes ?? [];
+  const total = totalOf(lineas);
+
   return (
     <>
-      <InvestGroup label="Inversión — Fase 1" lines={data.lineas ?? []} editable={editable}
-        onChange={(l) => set({ lineas: l })} addLabel="Agregar línea" />
-      <InvestGroup label="Extras opcionales" lines={data.extras ?? []} editable={editable}
-        onChange={(l) => set({ extras: l })} addLabel="Agregar extra" />
-      <InvestGroup label="Recurrente mensual" lines={data.recurrentes ?? []} editable={editable}
-        onChange={(l) => set({ recurrentes: l })} addLabel="Agregar recurrente" />
-      {(data.nota || editable) && (
-        <Editable as="p" className="stl-invest-note" editable={editable} value={data.nota ?? ""}
-          placeholder="Vigencia de la propuesta / condiciones…" onCommit={(v) => set({ nota: v })} />
+      {/* Moneda + nota de exclusiones */}
+      {(data.moneda || data.nota || editable) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
+          {editable ? (
+            <label className="stl-inv-currency stl-inv-currency--edit">
+              {t(lang, "montosEn")}
+              <select
+                value={data.moneda || "USD"}
+                onChange={(e) => set({ moneda: e.target.value })}
+              >
+                {[...new Set([...(data.moneda ? [data.moneda] : []), ...CURRENCIES])].map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            data.moneda && (
+              <span className="stl-inv-currency">{`${t(lang, "montosEn")} ${data.moneda}`}</span>
+            )
+          )}
+          {(data.nota || editable) && (
+            <span className="stl-inv-note-badge">
+              <span className="stl-inv-note-dot" aria-hidden />
+              {t(lang, "nota").toUpperCase() + ": "}
+              <Editable as="span" editable={editable} value={data.nota ?? ""}
+                placeholder="impuestos no contemplados…" onCommit={(v) => set({ nota: v })} />
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Fase 1: chip + tabla + total autocalculado */}
+      <span className="stl-inv-chip">{t(lang, "inversionFase")}</span>
+      <div className="stl-inv-table">
+        <SortableItems items={lineas} disabled={!editable} onReorder={(next) => set({ lineas: next })}
+          container={(nodes) => <>{nodes}</>}>
+          {(l, i, handle) => (
+            <div className="stl-item stl-inv-row">
+              {handle}
+              {editable && <RemoveBtn onClick={() => set({ lineas: removeAt(lineas, i) })} />}
+              <div className="stl-inv-row-main">
+                <Editable as="span" className="stl-inv-concept" editable={editable} value={l.concepto}
+                  placeholder="Concepto…" onCommit={(v) => set({ lineas: replaceAt(lineas, i, { ...l, concepto: v }) })} />{" "}
+                <Editable as="span" className="stl-inv-detail" editable={editable} value={l.detalle}
+                  placeholder="qué incluye…" onCommit={(v) => set({ lineas: replaceAt(lineas, i, { ...l, detalle: v }) })} />
+              </div>
+              <Editable as="span" className="stl-inv-amount" editable={editable} value={l.monto}
+                placeholder="$0–0" onCommit={(v) => set({ lineas: replaceAt(lineas, i, { ...l, monto: v }) })} />
+            </div>
+          )}
+        </SortableItems>
+        {total && (
+          <div className="stl-inv-total">
+            <span className="stl-inv-total-label">{t(lang, "rangoFase")}</span>
+            <span className="stl-inv-total-pill">
+              {total.min === total.max
+                ? fmtMoney(total.min)
+                : `${fmtMoney(total.min)}–${total.max.toLocaleString("en-US")}`}
+            </span>
+          </div>
+        )}
+      </div>
+      {editable && <AddBtn label="Agregar línea" onClick={() => set({ lineas: appendItem(lineas, { concepto: "", monto: "", detalle: "" }) })} />}
+
+      {/* Extras opcionales (cards claras) + recurrente mensual (card oscura) */}
+      {(extras.length > 0 || recurrentes.length > 0 || editable) && (
+        <div className="stl-inv-below">
+          <SortableItems items={extras} disabled={!editable} onReorder={(next) => set({ extras: next })}
+            container={(nodes) => <>{nodes}</>}>
+            {(l, i, handle) => (
+              <div className="stl-item stl-inv-extra">
+                {handle}
+                {editable && <RemoveBtn onClick={() => set({ extras: removeAt(extras, i) })} />}
+                <div className="stl-inv-extra-head">
+                  <Editable as="strong" editable={editable} value={l.concepto}
+                    placeholder="Extra…" onCommit={(v) => set({ extras: replaceAt(extras, i, { ...l, concepto: v }) })} />
+                  <span className="stl-inv-extra-tag">{t(lang, "opcional")}</span>
+                </div>
+                <Editable as="p" className="stl-inv-extra-detail" editable={editable} value={l.detalle}
+                  placeholder="Qué incluye…" onCommit={(v) => set({ extras: replaceAt(extras, i, { ...l, detalle: v }) })} />
+                <Editable as="div" className="stl-inv-extra-amount" editable={editable} value={l.monto}
+                  placeholder="+$0" onCommit={(v) => set({ extras: replaceAt(extras, i, { ...l, monto: v }) })} />
+              </div>
+            )}
+          </SortableItems>
+          {editable && (
+            <button type="button" className="stl-inv-extra stl-inv-extra--add"
+              onClick={() => set({ extras: appendItem(extras, { concepto: "", monto: "", detalle: "" }) })}>
+              + {t(lang, "extrasOpcionales")}
+            </button>
+          )}
+
+          {(recurrentes.length > 0 || editable) && (
+            <div className="stl-inv-monthly">
+              <div className="stl-inv-monthly-title">{t(lang, "recurrenteMensual")}</div>
+              <SortableItems items={recurrentes} disabled={!editable} onReorder={(next) => set({ recurrentes: next })}
+                container={(nodes) => <>{nodes}</>}>
+                {(l, i, handle) => (
+                  <div className="stl-item stl-inv-monthly-row">
+                    {handle}
+                    {editable && <RemoveBtn onClick={() => set({ recurrentes: removeAt(recurrentes, i) })} />}
+                    <Editable as="span" editable={editable} value={l.concepto}
+                      placeholder="Licencia / mantenimiento…" onCommit={(v) => set({ recurrentes: replaceAt(recurrentes, i, { ...l, concepto: v }) })} />{" "}
+                    <Editable as="strong" editable={editable} value={l.monto}
+                      placeholder="$0" onCommit={(v) => set({ recurrentes: replaceAt(recurrentes, i, { ...l, monto: v }) })} />{" "}
+                    <Editable as="span" className="stl-inv-monthly-detail" editable={editable} value={l.detalle}
+                      placeholder="detalle…" onCommit={(v) => set({ recurrentes: replaceAt(recurrentes, i, { ...l, detalle: v }) })} />
+                  </div>
+                )}
+              </SortableItems>
+              {editable && (
+                <AddBtn label="Agregar recurrente" onClick={() => set({ recurrentes: appendItem(recurrentes, { concepto: "", monto: "", detalle: "" }) })} />
+              )}
+            </div>
+          )}
+        </div>
       )}
     </>
   );
@@ -226,29 +433,30 @@ export const WhyUsSection: FC<SectionProps<WhyUsData>> = ({ data, editable, onCh
   const set = (next: Partial<WhyUsData>) => onChange?.({ ...data, ...next });
   return (
     <>
-      <div className="stl-grid stl-grid-2">
-        {cards.map((c, i) => (
-          <div key={i} className="stl-item stl-card">
+      <SortableItems items={cards} disabled={!editable} onReorder={(next) => set({ cards: next })}
+        container={(nodes) => <div className="stl-grid stl-grid-2">{nodes}</div>}>
+        {(c, i, handle) => (
+          <div className="stl-item stl-card">
+            {handle}
             {editable && <RemoveBtn onClick={() => set({ cards: removeAt(cards, i) })} />}
             <Editable as="h3" className="stl-card-title" editable={editable} value={c.title}
               placeholder="Partner Elite / equipo / método…" onCommit={(v) => set({ cards: replaceAt(cards, i, { ...c, title: v }) })} />
             <Editable as="p" className="stl-card-detail" editable={editable} value={c.detail}
               placeholder="Por qué importa para este proyecto…" onCommit={(v) => set({ cards: replaceAt(cards, i, { ...c, detail: v }) })} />
           </div>
-        ))}
-      </div>
+        )}
+      </SortableItems>
       {editable && <AddBtn label="Agregar card" onClick={() => set({ cards: appendItem(cards, { title: "", detail: "" }) })} />}
       <div className="stl-cta-wrap" style={{ marginTop: 36 }}>
         <Editable as="p" className="stl-lead" editable={editable} value={data.siguientePaso ?? ""}
           placeholder="Siguiente paso propuesto…" onCommit={(v) => set({ siguientePaso: v })} />
         {editable ? (
-          <div style={{ marginTop: 20 }}>
-            <Editable as="span" className="stl-btn" editable value={data.buttonLabel ?? ""}
-              placeholder="Agendar siguiente paso…" onCommit={(v) => set({ buttonLabel: v })} />
-            <CtaUrlField value={data.buttonUrl} onCommit={(v) => set({ buttonUrl: v.trim() })} />
-          </div>
+          <CtaEditor label={data.buttonLabel} url={data.buttonUrl} target={data.buttonTarget}
+            labelPlaceholder="Agendar siguiente paso…"
+            onLabel={(v) => set({ buttonLabel: v })}
+            onUrl={(v) => set({ buttonUrl: v })} onTarget={(v) => set({ buttonTarget: v })} />
         ) : (
-          <CtaButton label={data.buttonLabel} url={data.buttonUrl} />
+          <CtaButton label={data.buttonLabel} url={data.buttonUrl} target={data.buttonTarget} />
         )}
       </div>
     </>

@@ -19,18 +19,16 @@ export const TECH_ARCHITECTURE_SCHEMA = {
   type: "object",
   properties: {
     intro: str,
-    nodos: arrayOf({ nombre: str, rol: str, detalle: str }, ["nombre"]),
-    flujos: arrayOf({ desde: str, hacia: str, descripcion: str }, ["desde", "hacia"]),
+    cadena: arrayOf({ actor: str, titulo: str, detalle: str }, ["actor", "titulo"]),
     fueraDeAlcance: strArray,
     opcionales: arrayOf({ nombre: str, detalle: str }, ["nombre"]),
   },
-  required: ["nodos"],
+  required: ["cadena"],
 } as const;
 
 export const TECH_ARCHITECTURE_EMPTY = {
   intro: "",
-  nodos: [],
-  flujos: [],
+  cadena: [],
   fueraDeAlcance: [],
   opcionales: [],
 };
@@ -44,9 +42,9 @@ export function makeTechArchitectureDef(
     sectionType: "tech_architecture",
     schema: TECH_ARCHITECTURE_SCHEMA as unknown as Record<string, unknown>,
     empty: TECH_ARCHITECTURE_EMPTY,
-    agentHint: "Sistemas involucrados + flujo de información entre ellos + fuera de alcance + opcionales.",
+    agentHint: "Cadena del flujo de datos (3-5 pasos con actor + qué pasa) + fuera de alcance + opcionales. Escueto.",
     brief:
-      "Arquitectura de conexión: cómo se conectan los sistemas involucrados. `nodos`: cada sistema (sitio, CRM, ERP, WhatsApp…) con su rol y qué datos maneja. `flujos`: qué información viaja de un sistema a otro y cuándo (ej. 'Formulario del sitio' → 'CRM': el lead entra con origen y página). `fueraDeAlcance`: qué NO incluye esta fase. `opcionales`: integraciones o módulos a futuro. Fuente: SOLO sistemas y flujos mencionados en el contexto — no inventes integraciones.",
+      "Arquitectura de conexión como CADENA de 3 a 5 pasos (se presenta como cards con flechas): cada paso con `actor` (quién/qué sistema: 'Visitante', 'Sitio', 'HubSpot CRM', 'Equipo comercial', 'ERP'…), `titulo` de 3 a 6 palabras (qué pasa: 'Lead registrado al instante') y `detalle` de UNA línea corta. `intro`: máximo 2 frases con la idea central. `fueraDeAlcance`: qué NO incluye esta fase (frases cortas). `opcionales`: integraciones a futuro. Fuente: SOLO sistemas mencionados en el contexto — no inventes integraciones.",
     ...overrides,
   };
 }

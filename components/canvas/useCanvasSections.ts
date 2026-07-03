@@ -110,6 +110,7 @@ export function useCanvasSections(
   const renameSectionRef = useRef<(sectionId: string, title: string, skipUndo?: boolean) => Promise<boolean>>(null!);
   const setEyebrowRef = useRef<(sectionId: string, eyebrow: string, skipUndo?: boolean) => Promise<boolean>>(null!);
   const setBriefRef = useRef<(sectionId: string, brief: string, skipUndo?: boolean) => Promise<boolean>>(null!);
+  const reorderSectionsRef = useRef<(orderedIds: string[], skipUndo?: boolean) => Promise<boolean>>(null!);
 
   const listUrl = `${basePath}/canvas-sections?canvasId=${canvasId}`;
   const blocksUrl = useCallback(
@@ -117,10 +118,31 @@ export function useCanvasSections(
     [basePath],
   );
 
+  // Secuencia de ESCRITURAS optimistas: un refetch que arrancó ANTES de la última
+  // escritura trae un snapshot stale del server → si lo aplicáramos, revertiría
+  // visualmente lo que el usuario acaba de tipear (los números "que se borran").
+  const writeSeq = useRef(0);
+
+  // Contador de escrituras EN VUELO (PUT/PATCH de contenido/orden/visibilidad —
+  // NO lecturas). El guardado es optimista y "fire and forget" desde el caller
+  // (onSectionChange no espera saveBlock): sin esto, publicar justo después de
+  // tipear/arrastrar podría leer la DB ANTES de que el último request llegara →
+  // "la versión publicada no es la última mostrada". `flushPending` lo espera.
+  const pendingWrites = useRef(0);
+  const flushPending = useCallback(async (): Promise<void> => {
+    // Cap defensivo (5s): un fetch que jamás resuelve (red caída) no debe colgar
+    // el publish para siempre — mejor publicar lo último asentado y seguir.
+    for (let i = 0; i < 100 && pendingWrites.current > 0; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  }, []);
+
   const refetch = useCallback(async () => {
+    const seqAtStart = writeSeq.current;
     try {
       const res = await fetch(listUrl);
       const data = await res.json();
+      if (writeSeq.current !== seqAtStart) return; // hubo escrituras más nuevas: no pisarlas
       const next: SectionWithBlocks[] = data.sections ?? [];
       const serialized = JSON.stringify(next);
       // Guard de igualdad: solo actualizamos si el contenido cambió (los ids de
@@ -168,6 +190,7 @@ export function useCanvasSections(
    */
   const mutate = useCallback(
     async (sectionId: string, init: RequestInit): Promise<boolean> => {
+      pendingWrites.current++;
       try {
         const res = await fetch(blocksUrl(sectionId), init);
         if (!res.ok) {
@@ -188,6 +211,8 @@ export function useCanvasSections(
         console.error("[useCanvasSections] error de red al guardar", e);
         setError("Error de conexión al guardar el bloque.");
         return false;
+      } finally {
+        pendingWrites.current--;
       }
     },
     [blocksUrl],
@@ -251,7 +276,31 @@ export function useCanvasSections(
     async (sectionId: string, blockId: string, updates: { content?: string; data?: unknown }, skipUndo = false): Promise<boolean> => {
       // Snapshot del cliente ANTES de pisar (no usamos el toggle de 1 nivel del server → multi-nivel).
       const snap = skipUndo ? undefined : findBlock(blockId);
+      // OPTIMISTA e INMEDIATO: aplicar al estado local ANTES del PUT. Sin esto, un
+      // commit rápido en otro campo se arma con `data` stale (el PUT+refetch del
+      // anterior aún no volvió) y PISA el cambio previo — números que "se borran".
+      writeSeq.current++;
+      setSections((prev) =>
+        prev.map((s) =>
+          s.id !== sectionId
+            ? s
+            : {
+                ...s,
+                blocks: s.blocks.map((b) =>
+                  b.id !== blockId
+                    ? b
+                    : {
+                        ...b,
+                        ...(updates.content !== undefined ? { content: updates.content } : {}),
+                        ...(updates.data !== undefined ? { data: updates.data as BlockData["data"] } : {}),
+                      },
+                ),
+              },
+        ),
+      );
       const ok = await mutate(sectionId, { method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ blockId, ...updates }) });
+      // En FALLO no refrescamos (diseño original): el optimista deja el texto del CSE
+      // visible y `error` avisa — reintenta sin perder lo tipeado.
       if (ok) {
         refetch();
         if (!skipUndo && snap) {
@@ -375,6 +424,7 @@ export function useCanvasSections(
   // endpoint de blocks (es metadata de sección) → PATCH dedicado.
   const patchSection = useCallback(
     async (sectionId: string, body: Record<string, unknown>, errMsg: string): Promise<boolean> => {
+      pendingWrites.current++;
       try {
         const res = await fetch(`${basePath}/canvas-sections/${sectionId}`, {
           method: "PATCH",
@@ -394,6 +444,8 @@ export function useCanvasSections(
         setError(errMsg);
         refetch();
         return false;
+      } finally {
+        pendingWrites.current--;
       }
     },
     [basePath, refetch],
@@ -404,6 +456,7 @@ export function useCanvasSections(
     (sectionId: string, title: string, skipUndo = false): Promise<boolean> => {
       const prev = skipUndo ? null : findSection(sectionId)?.titleOverride ?? null;
       const t = title.trim() || null;
+      writeSeq.current++;
       setSections((cur) => cur.map((s) => (s.id === sectionId ? { ...s, titleOverride: t } : s)));
       if (!skipUndo) {
         pushUndo({
@@ -423,6 +476,7 @@ export function useCanvasSections(
     (sectionId: string, eyebrow: string, skipUndo = false): Promise<boolean> => {
       const prev = skipUndo ? null : findSection(sectionId)?.eyebrowOverride ?? null;
       const e = eyebrow.trim() || null;
+      writeSeq.current++;
       setSections((cur) => cur.map((s) => (s.id === sectionId ? { ...s, eyebrowOverride: e } : s)));
       if (!skipUndo) {
         pushUndo({
@@ -442,6 +496,7 @@ export function useCanvasSections(
     (sectionId: string, brief: string, skipUndo = false): Promise<boolean> => {
       const prev = skipUndo ? null : findSection(sectionId)?.agentBriefOverride ?? null;
       const b = brief.trim() || null;
+      writeSeq.current++;
       setSections((cur) => cur.map((s) => (s.id === sectionId ? { ...s, agentBriefOverride: b } : s)));
       if (!skipUndo) {
         pushUndo({
@@ -461,6 +516,64 @@ export function useCanvasSections(
     (sectionId: string, which: "title" | "eyebrow" | "brief"): Promise<boolean> =>
       patchSection(sectionId, { undo: which }, "No se pudo deshacer. Reintentá."),
     [patchSection],
+  );
+
+  // Ocultar/mostrar una sección de cara al cliente. OPTIMISTA (el toggle responde al
+  // instante; sin esto el PATCH+refetch tardaba ~1s y se sentía "lerdo").
+  const setHidden = useCallback(
+    (sectionId: string, hidden: boolean): Promise<boolean> => {
+      writeSeq.current++;
+      setSections((cur) => cur.map((s) => (s.id === sectionId ? { ...s, hidden } : s)));
+      return patchSection(sectionId, { hidden }, "No se pudo cambiar la visibilidad. Reintentá.");
+    },
+    [patchSection],
+  );
+
+  // Reordenar las SECCIONES del canvas (drag & drop). OPTIMISTA + PATCH al endpoint
+  // de reorden; con undo al orden previo.
+  const reorderSections = useCallback(
+    async (orderedIds: string[], skipUndo = false): Promise<boolean> => {
+      const prevOrder = sectionsRef.current.map((s) => s.id);
+      writeSeq.current++;
+      setSections((cur) => {
+        const byId = new Map(cur.map((s) => [s.id, s]));
+        const next = orderedIds.map((id) => byId.get(id)).filter((s): s is SectionWithBlocks => !!s);
+        // Secciones no incluidas en el orden (raro): al final, en su orden previo.
+        for (const s of cur) if (!orderedIds.includes(s.id)) next.push(s);
+        return next.map((s, i) => ({ ...s, order: i }));
+      });
+      pendingWrites.current++;
+      try {
+        const res = await fetch(`${basePath}/canvas-sections`, {
+          method: "PATCH",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ canvasId, orderedIds }),
+        });
+        if (!res.ok) {
+          setError("No se pudo guardar el orden. Reintentá.");
+          refetch();
+          return false;
+        }
+        setError(null);
+        onContentChangeRef.current?.();
+        if (!skipUndo) {
+          pushUndo({
+            scope: undoScope,
+            label: "Secciones reordenadas",
+            undo: () => reorderSectionsRef.current(prevOrder, true),
+          });
+        }
+        refetch();
+        return true;
+      } catch {
+        setError("Error de conexión al reordenar.");
+        refetch();
+        return false;
+      } finally {
+        pendingWrites.current--;
+      }
+    },
+    [basePath, canvasId, refetch, pushUndo, undoScope],
   );
 
   const acceptAll = useCallback(async () => {
@@ -501,6 +614,7 @@ export function useCanvasSections(
     renameSectionRef.current = renameSection;
     setEyebrowRef.current = setEyebrow;
     setBriefRef.current = setBrief;
+    reorderSectionsRef.current = reorderSections;
   });
 
   const draftCount = sections.reduce(
@@ -526,7 +640,10 @@ export function useCanvasSections(
     renameSection,
     setEyebrow,
     setBrief,
+    setHidden,
+    reorderSections,
     undoSection,
     acceptAll,
+    flushPending,
   };
 }

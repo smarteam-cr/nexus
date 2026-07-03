@@ -55,9 +55,25 @@
 
 /* Overlay de controles por sección (solo modo edición del workspace). */
 .stl .stl-overlay { position: absolute; top: 12px; right: 16px; z-index: 5; }
-/* Sección OCULTA (no se publica al cliente) — solo marca en el editor interno. */
-.stl .stl-sec.stl-hidden { opacity: 0.5; filter: grayscale(0.55); outline: 2px dashed rgba(245, 158, 11, 0.5); outline-offset: -6px; }
-.stl .stl-hidden-badge { position: absolute; top: 12px; left: 16px; z-index: 6; font-size: 11px; font-weight: 700; color: #b45309; background: rgba(245, 158, 11, 0.16); border: 1px solid rgba(245, 158, 11, 0.42); border-radius: 999px; padding: 3px 10px; }
+/* Sección OCULTA (no se publica al cliente) — chrome ESTANDARIZADO con el kickoff:
+   outline punteado suave + SOLO el contenido atenuado (los controles quedan nítidos
+   y los paneles oscuros no se "engrisan" completos). */
+.stl .stl-sec.stl-hidden { outline: 2px dashed rgba(245, 158, 11, 0.55); outline-offset: -4px; border-radius: 10px; }
+.stl .stl-sec.stl-hidden > .stl-wrap { opacity: 0.42; filter: grayscale(0.55); }
+.stl .stl-hidden-badge {
+  font-size: 11px; font-weight: 700; line-height: 1; color: #b45309;
+  background: rgba(245, 158, 11, 0.16); border: 1px solid rgba(245, 158, 11, 0.5);
+  border-radius: 999px; padding: 4px 10px; backdrop-filter: blur(4px); white-space: nowrap;
+}
+/* Handle de drag & drop de secciones (⠿) — misma familia de pills del chrome. */
+.stl .stl-drag-handle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 24px; border-radius: 999px; cursor: grab;
+  border: 1px solid rgba(0, 0, 0, 0.12); background: rgba(255, 255, 255, 0.92);
+  color: #6b7280; font-size: 13px; line-height: 1; backdrop-filter: blur(4px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); touch-action: none;
+}
+.stl .stl-drag-handle:active { cursor: grabbing; }
 .stl .stl-light { background: var(--bg);       color: var(--text); --accent: var(--blue); --accent-soft: var(--blue-soft); }
 .stl .stl-soft  { background: var(--bg-soft);  color: var(--text); --accent: var(--blue); --accent-soft: var(--blue-soft); border-top: 1px solid var(--border); }
 .stl .stl-dark  { background: var(--dark-bg);  color: var(--dark-text); --accent: var(--teal); --accent-soft: var(--teal-soft); }
@@ -227,6 +243,11 @@
 .stl .stl-ba-now .stl-ba-li::before { background: #DC2626; }
 .stl .stl-ba-future .stl-ba-li { color: var(--text); }
 .stl .stl-ba-future .stl-ba-li::before { background: var(--teal); }
+/* El handle de arrastre (solo EDIT: `.stl-drag-item` no existe en lectura) es un
+   botón de 24px que no entra en los 18px de sangría pensados para el bullet de
+   6px — en edición, el bullet cede su lugar y se agranda el hueco. */
+.stl .stl-ba-li:has(.stl-drag-item) { padding-left: 34px; }
+.stl .stl-ba-li:has(.stl-drag-item)::before { display: none; }
 
 /* Field-card rotulada (solución / partner / inversión) */
 .stl .stl-field-card { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; }
@@ -242,39 +263,168 @@
 .stl .stl-brief { font-size: 13px; line-height: 1.55; color: var(--text-muted); font-style: italic; margin: -6px 0 20px; max-width: 76ch; }
 .stl .stl-dark .stl-brief { color: var(--dark-text-2); }
 
-/* ── Arquitectura tecnológica: flujo de información (origen → destino) ────── */
-.stl .stl-flow-row {
-  display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 10px;
-  padding: 12px 0; border-top: 1px solid var(--border);
-}
-.stl .stl-flow-row:first-of-type { border-top: none; }
-.stl .stl-flow-node {
-  font-family: var(--font-montserrat), system-ui, sans-serif; font-weight: 600;
-  font-size: 14px; color: var(--text);
-  background: var(--blue-soft); border-radius: 8px; padding: 4px 10px;
-}
-.stl .stl-flow-arrow { color: var(--blue); font-weight: 600; }
-.stl .stl-flow-desc { font-size: 13px; color: var(--text-2); flex: 1; min-width: 180px; }
-
 /* Lista simple con viñeta neutra (fuera de alcance / alcance) */
 .stl .stl-plain-li { position: relative; padding-left: 18px; font-size: 14px; line-height: 1.5; color: var(--text-2); }
 .stl .stl-plain-li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+/* Mismo hueco que .stl-ba-li para el handle de arrastre en edición. */
+.stl .stl-plain-li:has(.stl-drag-item) { padding-left: 34px; }
+.stl .stl-plain-li:has(.stl-drag-item)::before { display: none; }
 
-/* ── Sitemap por fases (arquitectura del sitio) ───────────────────────────── */
-.stl .stl-sitemap-phase { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; }
-.stl .stl-sitemap-phase--soon { border-style: dashed; background: var(--bg-soft); }
+/* ── Diagnóstico y contexto: retos (izq) + panel oscuro "Por qué X" (der) ── */
+.stl .stl-diag { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-top: 24px; align-items: start; }
+@media (max-width: 880px) { .stl .stl-diag { grid-template-columns: 1fr; } }
+.stl .stl-diag-chip {
+  display: inline-flex; padding: 5px 14px; border-radius: 999px; background: var(--dark-bg);
+  color: #fff; font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.stl .stl-diag-retos { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.stl .stl-diag-reto {
+  background: #fff; border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 18px; font-size: 14px; line-height: 1.55; color: var(--text-2);
+}
+.stl .stl-diag-reto strong { color: var(--text); font-weight: 700; }
+/* Handle de arrastre (edición): la card no reserva espacio a la izquierda para
+   un botón de 24px — se lo hacemos cuando el handle está presente. */
+.stl .stl-diag-reto:has(.stl-drag-item) { padding-left: 40px; }
+.stl .stl-diag-panel {
+  background: var(--dark-bg); border-radius: 18px; padding: 26px 28px; color: var(--dark-text);
+}
+/* El panel es OSCURO: .stl-remove/.stl-drag-item (fondo #fff fijo) chocarían —
+   pill translúcido, mismo lenguaje que los botones de portada/logo del hero. */
+.stl .stl-diag-panel .stl-remove,
+.stl .stl-diag-panel .stl-drag-item {
+  background: rgba(255, 255, 255, 0.10); border-color: rgba(255, 255, 255, 0.22); color: var(--dark-text-2);
+}
+.stl .stl-diag-panel .stl-remove:hover { color: #FCA5A5; border-color: #FCA5A5; }
+.stl .stl-diag-panel .stl-drag-item:hover { color: var(--teal); border-color: var(--teal); }
+.stl .stl-diag-panel-chip {
+  display: inline-flex; padding: 5px 14px; border-radius: 999px; background: var(--teal);
+  color: var(--dark-bg); font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.stl .stl-diag-bullets { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.stl .stl-diag-bullet { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.55; color: var(--dark-text-2); }
+.stl .stl-diag-bullet strong { color: #fff; font-weight: 700; }
+/* Sin sangría propia (flex sin padding-left): el handle absoluto de 24px taparía
+   el punto + el inicio del texto — se le hace lugar cuando está presente. */
+.stl .stl-diag-bullet:has(.stl-drag-item) { padding-left: 34px; }
+.stl .stl-diag-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--teal); margin-top: 7px; }
+.stl .stl-diag-footer {
+  margin-top: 22px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 13px; color: var(--dark-text-2);
+}
+
+/* ── Cadena de arquitectura (cards con chip de actor + flechas) ──────────── */
+.stl .stl-chain { display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
+.stl .stl-chain-card {
+  flex: 1 1 190px; min-width: 190px; background: #fff; border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 8px;
+  text-align: center; align-items: center;
+}
+.stl .stl-chain-actor {
+  display: inline-flex; padding: 3px 12px; border-radius: 999px; background: var(--blue-soft);
+  color: var(--blue); font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.stl .stl-chain-title { font-family: var(--font-montserrat), system-ui, sans-serif; font-weight: 700; font-size: 15px; color: var(--text); margin: 0; line-height: 1.3; }
+.stl .stl-chain-detail { font-size: 12px; color: var(--text-muted); margin: 0; line-height: 1.45; }
+.stl .stl-chain-arrow { align-self: center; color: var(--teal-dark); font-size: 18px; font-weight: 700; flex-shrink: 0; }
+@media (max-width: 720px) { .stl .stl-chain { flex-direction: column; } .stl .stl-chain-arrow { transform: rotate(90deg); } }
+
+/* ── Inversión (website): nota + tabla fase 1 + total + extras + mensual ──── */
+.stl .stl-inv-currency { font-size: 13px; color: var(--text-2); font-weight: 500; }
+.stl .stl-inv-currency--edit { display: inline-flex; align-items: center; gap: 8px; }
+.stl .stl-inv-currency--edit select {
+  padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border);
+  background: #fff; color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.stl .stl-inv-note-badge {
+  display: inline-flex; align-items: center; gap: 7px; padding: 5px 14px; border-radius: 999px;
+  background: rgba(245, 158, 11, 0.10); border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #92400E; font-size: 12px; font-weight: 600;
+}
+.stl .stl-inv-note-dot { width: 7px; height: 7px; border-radius: 50%; background: #F59E0B; flex-shrink: 0; }
+.stl .stl-inv-chip {
+  display: inline-flex; padding: 5px 16px; border-radius: 999px; background: var(--blue);
+  color: #fff; font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.stl .stl-inv-table { margin-top: 14px; border-top: 2px solid var(--text); }
+.stl .stl-inv-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 18px;
+  padding: 16px 2px; border-bottom: 1px solid var(--border);
+}
+.stl .stl-inv-row-main { min-width: 0; }
+.stl .stl-inv-concept { font-family: var(--font-montserrat), system-ui, sans-serif; font-weight: 700; font-size: 15px; color: var(--text); }
+.stl .stl-inv-detail { font-size: 13px; color: var(--text-muted); }
+.stl .stl-inv-amount { font-family: var(--font-montserrat), system-ui, sans-serif; font-weight: 700; font-size: 16px; color: var(--text); white-space: nowrap; flex-shrink: 0; }
+.stl .stl-inv-total { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px 2px 4px; }
+.stl .stl-inv-total-label { font-family: var(--font-montserrat), system-ui, sans-serif; font-weight: 700; font-size: 15px; color: var(--text); }
+.stl .stl-inv-total-pill {
+  display: inline-flex; padding: 10px 22px; border-radius: 999px; background: var(--teal);
+  color: var(--dark-bg); font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-weight: 700; font-size: 20px;
+}
+.stl .stl-inv-below { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 28px; align-items: stretch; }
+.stl .stl-inv-extra {
+  background: var(--blue-soft); border: 1px solid rgba(22, 140, 246, 0.22);
+  border-radius: 14px; padding: 18px 20px;
+}
+.stl .stl-inv-extra--add {
+  background: transparent; border: 1px dashed var(--border); color: var(--text-muted);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.stl .stl-inv-extra-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.stl .stl-inv-extra-head strong { font-family: var(--font-montserrat), system-ui, sans-serif; font-weight: 700; font-size: 14px; color: var(--text); }
+.stl .stl-inv-extra-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--blue); }
+.stl .stl-inv-extra-detail { font-size: 12px; color: var(--text-2); line-height: 1.5; margin: 8px 0 0; }
+.stl .stl-inv-extra-amount { font-family: var(--font-montserrat), system-ui, sans-serif; font-weight: 700; font-size: 15px; color: var(--blue); margin-top: 10px; }
+.stl .stl-inv-monthly { background: var(--dark-bg); border-radius: 14px; padding: 18px 20px; color: var(--dark-text); }
+.stl .stl-inv-monthly-title { font-family: var(--font-montserrat), system-ui, sans-serif; font-weight: 700; font-size: 14px; color: var(--teal); margin-bottom: 10px; }
+.stl .stl-inv-monthly-row { font-size: 13px; line-height: 1.6; color: var(--dark-text-2); }
+.stl .stl-inv-monthly-row strong { color: #fff; }
+/* Panel OSCURO: .stl-remove/.stl-drag-item (fondo #fff fijo) chocarían — mismo
+   tratamiento translúcido que .stl-diag-panel. */
+.stl .stl-inv-monthly .stl-remove,
+.stl .stl-inv-monthly .stl-drag-item {
+  background: rgba(255, 255, 255, 0.10); border-color: rgba(255, 255, 255, 0.22); color: var(--dark-text-2);
+}
+.stl .stl-inv-monthly .stl-remove:hover { color: #FCA5A5; border-color: #FCA5A5; }
+.stl .stl-inv-monthly .stl-drag-item:hover { color: var(--teal); border-color: var(--teal); }
+.stl .stl-inv-monthly-detail { font-size: 12px; opacity: 0.8; }
+
+/* ── Arquitectura del sitio: diagrama Home + fases con cards (sección DARK) ── */
+.stl .stl-map-root { display: flex; flex-direction: column; align-items: center; margin-top: 26px; }
+.stl .stl-map-home {
+  display: inline-flex; padding: 12px 26px; border-radius: 999px; background: var(--teal);
+  color: var(--dark-bg); font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-weight: 700; font-size: 15px;
+}
+.stl .stl-map-stem { width: 1px; height: 26px; background: rgba(255, 255, 255, 0.25); }
+.stl .stl-map-phase { margin-top: 18px; }
+.stl .stl-map-phase-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.stl .stl-map-phase-chip {
+  flex-shrink: 0; display: inline-flex; padding: 4px 14px; border-radius: 999px;
+  background: var(--blue); color: #fff; font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.stl .stl-map-phase-chip--soon { background: rgba(255, 255, 255, 0.14); color: var(--dark-text-2); }
+.stl .stl-map-phase-line { flex: 1; height: 1px; background: rgba(255, 255, 255, 0.16); }
+.stl .stl-map-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.stl .stl-map-card {
+  background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px; padding: 14px 16px; text-align: center;
+}
+.stl .stl-map-card--soon { border-style: dashed; background: transparent; }
+.stl .stl-map-card-title { font-family: var(--font-montserrat), system-ui, sans-serif; font-weight: 700; font-size: 14px; color: #fff; }
+.stl .stl-map-card-detail { font-size: 11px; color: var(--dark-text-2); margin-top: 4px; }
 .stl .stl-sitemap-badge {
   display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px;
   border: 1px dashed var(--border); color: var(--text-muted);
   font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
 }
-.stl .stl-page-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-.stl .stl-page-chip {
-  display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 8px;
-  border: 1px solid var(--border); background: var(--bg-soft);
-  color: var(--text); font-size: 13px; font-weight: 500;
-}
-.stl .stl-sitemap-phase--soon .stl-page-chip { border-style: dashed; color: var(--text-2); }
 
 /* Callout (resultado del alcance) */
 .stl .stl-callout {
@@ -324,6 +474,10 @@
   transform: translate3d(0, var(--parallax-fast, 0), 0); will-change: transform; z-index: 1;
 }
 .stl .hero-backdrop > * { position: relative; z-index: 2; }
+/* El chrome de sección (overlay) DEBE quedar absoluto arriba-derecha también en el
+   hero: la regla de arriba lo volvía `relative` (misma especificidad, orden manda)
+   y lo empujaba arriba a la IZQUIERDA como primer elemento en flujo. */
+.stl .hero-backdrop > .stl-overlay { position: absolute; z-index: 6; }
 @media (max-width: 768px) { .stl .hero-backdrop::before { background-size: 40px 40px; } }
 
 /* Portada con imagen (hero): capa full-bleed + DEGRADADO horizontal (izquierda
@@ -379,6 +533,23 @@
 }
 .stl .stl-item:hover .stl-remove { opacity: 1; }
 .stl .stl-remove:hover { color: #DC2626; border-color: #FCA5A5; }
+/* Handle ⠿ de reorden de ÍTEMS (espejo del × de quitar, a la izquierda). */
+.stl .stl-drag-item {
+  position: absolute; top: 6px; left: 6px; width: 24px; height: 24px;
+  border-radius: 6px; border: 1px solid var(--border); background: #fff; color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center; cursor: grab; opacity: 0;
+  font-size: 12px; line-height: 1; touch-action: none;
+  transition: opacity 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+.stl .stl-item:hover .stl-drag-item { opacity: 1; }
+.stl .stl-drag-item:active { cursor: grabbing; }
+.stl .stl-drag-item:hover { color: var(--blue); border-color: var(--blue); }
+/* En chips compactos (tags/marcas), inline como el × */
+.stl .stl-tag .stl-drag-item, .stl .stl-brand-badge .stl-drag-item {
+  position: static; opacity: 0.6; width: 16px; height: 16px; border: none;
+  background: transparent; box-shadow: none; color: inherit;
+}
+.stl .stl-tag:hover .stl-drag-item, .stl .stl-brand-badge:hover .stl-drag-item { opacity: 1; }
 .stl .stl-add {
   display: inline-flex; align-items: center; gap: 6px; margin-top: 14px;
   padding: 8px 14px; border: 1px dashed var(--border-strong); border-radius: 8px;

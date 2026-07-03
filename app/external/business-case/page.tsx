@@ -29,6 +29,12 @@ export default async function ExternalBusinessCasePage() {
     getBrandLogos(),
   ]);
 
+  // Idioma de la propuesta: lo declara el agente en `__lang` del data del hero
+  // (viaja congelado en el snapshot) → traduce los rótulos fijos de los componentes.
+  const proposalLang =
+    ((data?.sections.find((s) => s.key === "hero")?.blocks[0]?.data as { __lang?: string } | null)
+      ?.__lang) ?? null;
+
   return (
     <ExternalShell smarteamLogoUrl={brandLogos.smarteam}>
       {data ? (
@@ -36,6 +42,7 @@ export default async function ExternalBusinessCasePage() {
           config={configForSnapshot(data.templateId, data.sections)}
           ctx={{
             clientName: data.clientName,
+            lang: proposalLang,
             clientLogoUrl: data.clientLogoUrl,
             smarteamLogoUrl: brandLogos.smarteam,
             brandLogos: brandLogoMap(brandLogos),

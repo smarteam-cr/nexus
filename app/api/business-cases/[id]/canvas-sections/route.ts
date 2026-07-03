@@ -1,8 +1,10 @@
 /**
- * GET /api/business-cases/[id]/canvas-sections?canvasId=
+ * /api/business-cases/[id]/canvas-sections
+ *   GET ?canvasId=       → secciones + bloques del canvas (contrato del hook
+ *                          useCanvasSections; espejo de projects/canvas-sections)
+ *   PATCH { canvasId, orderedIds } → reordena las SECCIONES (drag & drop):
+ *                          order = índice en orderedIds
  *
- * Secciones + bloques de un canvas del business case (contrato del hook
- * useCanvasSections; espejo de /api/projects/[projectId]/canvas-sections).
  * Gateado con guardSalesAccess + verificación de pertenencia al caso.
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -72,4 +74,58 @@ export async function GET(
   }));
 
   return NextResponse.json({ sections });
+}
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const guard = await guardSalesAccess();
+  if (guard instanceof NextResponse) return guard;
+
+  let body: { canvasId?: unknown; orderedIds?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+  }
+  const canvasId = typeof body.canvasId === "string" ? body.canvasId : "";
+  // Set (no solo filter de tipo): un id repetido en el payload haría que dos
+  // secciones terminen con el mismo `order` (gana el último update) y otro valor
+  // de order quede sin usar — dedup preserva la primera ocurrencia (su posición).
+  const orderedIds = Array.isArray(body.orderedIds)
+    ? [...new Set(body.orderedIds.filter((x): x is string => typeof x === "string"))]
+    : [];
+  if (!canvasId || orderedIds.length === 0) {
+    return NextResponse.json({ error: "canvasId y orderedIds requeridos" }, { status: 400 });
+  }
+
+  const canvas = await prisma.projectCanvas.findUnique({
+    where: { id: canvasId },
+    select: { businessCaseId: true },
+  });
+  if (!canvas || canvas.businessCaseId !== id) {
+    return NextResponse.json({ error: "canvas not found" }, { status: 404 });
+  }
+
+  // Solo secciones del PROPIO canvas (ids ajenos se ignoran); las no incluidas
+  // conservan su posición relativa al final.
+  const rows = await prisma.canvasSection.findMany({
+    where: { canvasId },
+    orderBy: { order: "asc" },
+    select: { id: true },
+  });
+  const valid = new Set(rows.map((r) => r.id));
+  const ordered = orderedIds.filter((sid) => valid.has(sid));
+  const rest = rows.map((r) => r.id).filter((sid) => !ordered.includes(sid));
+  const finalOrder = [...ordered, ...rest];
+
+  await prisma.$transaction(
+    finalOrder.map((sid, i) =>
+      prisma.canvasSection.update({ where: { id: sid }, data: { order: i } }),
+    ),
+  );
+
+  return NextResponse.json({ ok: true });
 }

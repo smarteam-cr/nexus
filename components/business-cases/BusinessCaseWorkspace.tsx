@@ -132,15 +132,21 @@ export default function BusinessCaseWorkspace({
   // importa es que NO estén en blanco, no el status).
   const hasContent = hook.sections.some((s) => s.blocks.some((b) => !blockBlank(b.data)));
 
-  // Config del template INTERSECADA con las secciones reales del canvas: un canvas
-  // viejo sembrado con menos secciones que el template vigente no debe mostrar
-  // "secciones fantasma" no editables (sin fila ni bloque detrás).
+  // Idioma de la propuesta (lo declara el agente en `__lang` del hero) → traduce
+  // los rótulos fijos de los componentes (i18n.ts). Ausente = español.
+  const proposalLang =
+    ((sectionByKey.get("hero")?.blocks[0]?.data as { __lang?: string } | null)?.__lang) ?? null;
+
+  // Config del template en el ORDEN del canvas (habilita el drag & drop) e
+  // INTERSECADA con sus secciones reales: un canvas viejo sembrado con menos
+  // secciones que el template vigente no debe mostrar "secciones fantasma".
   // SOLO cuando el hook ya cargó: con sections=[] (ventana de carga / cambio de
-  // canvas) la intersección dejaría la config VACÍA y la Plantilla no aparecería —
-  // en esa ventana mostramos el template completo (placeholders), como siempre.
+  // canvas) quedaría una config VACÍA y la Plantilla no aparecería — en esa
+  // ventana mostramos el template completo (placeholders), como siempre.
   const baseConfig = landingConfigFor(templateId);
+  const baseByKey = new Map(baseConfig.sections.map((d) => [d.key, d]));
   const landingConfig = hook.sections.length
-    ? { ...baseConfig, sections: baseConfig.sections.filter((d) => sectionByKey.has(d.key)) }
+    ? { ...baseConfig, sections: hook.sections.map((s) => baseByKey.get(s.key)).filter((d): d is NonNullable<typeof d> => !!d) }
     : baseConfig;
 
   const onSectionChange = (key: string, data: unknown) => {
@@ -165,15 +171,10 @@ export default function BusinessCaseWorkspace({
   };
 
   // Ocultar / mostrar una sección (flag `hidden` en el Json del canvas). No borra el
-  // contenido — solo lo excluye del cliente. PATCH directo + refetch.
+  // contenido — solo lo excluye del cliente. Optimista (hook.setHidden) → sin lag.
   const toggleHidden = async (sectionId: string, hidden: boolean) => {
     try {
-      await fetchJson(`/api/business-cases/${bcId}/canvas-sections/${sectionId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hidden }),
-      });
-      await hook.refetch();
+      await hook.setHidden(sectionId, hidden);
       setDirty(true);
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo ocultar/mostrar la sección.");
@@ -187,6 +188,10 @@ export default function BusinessCaseWorkspace({
     toast.info("Generando con IA… puede tardar unos segundos.");
     const notifyUrl = `/business-cases/${bcId}`;
     try {
+      // El carry-forward (portada, marcas, URL del CTA, orden/oculto) lo arma el
+      // server leyendo el canvas actual de la DB — mismo riesgo de carrera que el
+      // publish: esperar los writes en vuelo antes de disparar la generación.
+      await hook.flushPending();
       const r = await fetchJson<{ canvasId: string; version: number }>(`/api/business-cases/${bcId}/generate`, { method: "POST" });
       toast.success(`Caso de uso ${r.version} generado.`);
       // El cambio de canvasId (vía loadMeta → setCanvasId) dispara el refetch del hook
@@ -221,6 +226,10 @@ export default function BusinessCaseWorkspace({
     }
     setPublishing(true);
     try {
+      // Esperar cualquier guardado en vuelo (edición/orden/ocultar son optimistas y
+      // "fire and forget" — sin esto, publicar justo después de tipear/arrastrar podía
+      // leer la DB antes de que el último cambio llegara: "no es lo último que se ve").
+      await hook.flushPending();
       // Publicamos el caso que el CSE está viendo (no el "activo" del server).
       await fetchJson(`/api/business-cases/${bcId}/publish`, {
         method: "POST",
@@ -354,6 +363,7 @@ export default function BusinessCaseWorkspace({
             config={landingConfig}
             ctx={{
               clientName,
+              lang: proposalLang,
               clientLogoUrl: clientLogo,
               smarteamLogoUrl,
               brandLogos,
@@ -372,8 +382,21 @@ export default function BusinessCaseWorkspace({
             onBriefChange={onBriefChange}
             onTitleChange={onTitleChange}
             onEyebrowChange={onEyebrowChange}
+            onToggleHidden={(key, hidden) => {
+              const sec = sectionByKey.get(key);
+              if (sec) toggleHidden(sec.id, hidden);
+            }}
+            onReorder={(orderedKeys) => {
+              const ids = orderedKeys
+                .map((k) => sectionByKey.get(k)?.id)
+                .filter((sid): sid is string => !!sid);
+              if (ids.length) {
+                hook.reorderSections(ids);
+                setDirty(true);
+              }
+            }}
             renderOverlay={(key) => (
-              <SectionTools section={sectionByKey.get(key)} hook={hook} isTemplate={isTemplate} onToggleHidden={toggleHidden} templateId={templateId} />
+              <SectionTools section={sectionByKey.get(key)} hook={hook} isTemplate={isTemplate} templateId={templateId} />
             )}
           />
         )}
@@ -482,13 +505,11 @@ function SectionTools({
   section,
   hook,
   isTemplate,
-  onToggleHidden,
   templateId,
 }: {
   section: SectionWithBlocks | undefined;
   hook: ReturnType<typeof useCanvasSections>;
   isTemplate: boolean;
-  onToggleHidden: (sectionId: string, hidden: boolean) => void;
   templateId?: string | null;
 }) {
   const toast = useToast();
@@ -525,11 +546,13 @@ function SectionTools({
     if (ok) toast.info("Sección vaciada (el cliente no la verá).");
   };
 
+  // Pills del chrome — MISMO look que el HideToggle estandarizado (kickoff): píldora
+  // blanca translúcida con blur. El toggle de ocultar vive en LandingView.
   const pill: React.CSSProperties = {
-    display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px",
-    borderRadius: 8, fontSize: 12, fontWeight: 600, background: "rgba(255,255,255,0.92)",
-    border: "1px solid rgba(15,23,42,0.12)", boxShadow: "0 4px 14px -6px rgba(15,23,42,0.3)",
-    color: "#0f172a", cursor: "pointer",
+    display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 9px",
+    borderRadius: 999, cursor: "pointer", fontSize: 11, fontWeight: 600, lineHeight: 1,
+    border: "1px solid rgba(0,0,0,0.12)", background: "rgba(255,255,255,0.92)",
+    color: "#6b7280", backdropFilter: "blur(4px)", boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
   };
 
   return (
@@ -540,13 +563,6 @@ function SectionTools({
             ✨ IA
           </button>
         )}
-        <button
-          style={{ ...pill, color: section.hidden ? "#047857" : "#b45309" }}
-          onClick={() => onToggleHidden(section.id, !section.hidden)}
-          title={section.hidden ? "Mostrar al cliente" : "Ocultar del cliente (no la verá)"}
-        >
-          {section.hidden ? "👁 Mostrar" : "🙈 Ocultar"}
-        </button>
         <button style={{ ...pill, color: "#b91c1c" }} onClick={clear} title="Vaciar el contenido de esta sección">
           🗑 Limpiar
         </button>

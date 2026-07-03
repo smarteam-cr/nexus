@@ -44,24 +44,29 @@ export interface InvestmentData { licenciasHubspot: InvestmentLine; implementaci
 // 8) Partner — 4 campos (2 con default fijo).
 export interface PartnerData { credencial: string; experiencia: string; referenciaSectorial: string; equipo: string }
 
-// 9) CTA final. `buttonUrl` (fuera del schema del agente — nunca inventa URLs; el
-//    CSE la configura y sobrevive regeneraciones vía carry-forward): en la landing
-//    pública el botón navega ahí en una pestaña nueva.
-export interface CtaData { headline: string; subhead: string; buttonLabel: string; buttonUrl?: string }
+// 9) CTA final. `buttonUrl`/`buttonTarget` (fuera del schema del agente — nunca
+//    inventa URLs; el CSE los configura y sobreviven regeneraciones vía carry-forward):
+//    en la landing pública el botón navega ahí. buttonTarget "_self" = misma pestaña;
+//    ausente/"_blank" = pestaña nueva (default).
+export interface CtaData { headline: string; subhead: string; buttonLabel: string; buttonUrl?: string; buttonTarget?: string }
 
 // ── Secciones COMPARTIDAS entre templates (sectionType ≠ key) ────────────────
 
-// Arquitectura tecnológica / de conexión — sistemas involucrados + flujo de datos.
-// Data-driven (cards + flechas CSS); sin imágenes. Solo hojas string (coerceToSchema).
+// Arquitectura tecnológica / de conexión — CADENA horizontal del flujo (cards con
+// chip de actor + flechas, estilo presentación). Solo hojas string (coerceToSchema).
+// `nodos`/`flujos` son el shape LEGACY (v1) — el componente los aplana como fallback.
+export interface TechChainStep { actor: string; titulo: string; detalle: string }
 export interface TechArchNode { nombre: string; rol: string; detalle: string }
 export interface TechArchFlow { desde: string; hacia: string; descripcion: string }
 export interface TechArchOptional { nombre: string; detalle: string }
 export interface TechArchitectureData {
   intro: string;
-  nodos: TechArchNode[];
-  flujos: TechArchFlow[];
+  cadena: TechChainStep[];
   fueraDeAlcance: string[];
   opcionales: TechArchOptional[];
+  /** Legacy v1 (por nodos + flujos separados): solo lectura de data vieja. */
+  nodos?: TechArchNode[];
+  flujos?: TechArchFlow[];
 }
 
 // Mapeo de procesos (opcional) — cómo cambia cada proceso del cliente.
@@ -76,18 +81,25 @@ export interface UseCasesData { items: UseCaseItem[] }
 
 // ── Template SITIO WEB (estructura RIGORA de 8 secciones) ────────────────────
 
-// 2) Diagnóstico y contexto — retos + por qué la plataforma + objetivo.
+// 2) Diagnóstico y contexto — retos (cards de una línea) a la izquierda + panel
+//    oscuro "Por qué [plataforma]" con bullets + objetivo como footer (estilo
+//    presentación). `porQuePlataforma` es el shape LEGACY (párrafo) — fallback.
 export interface WebDiagnosisData {
   intro: string;
   retos: { title: string; detail: string }[];
-  porQuePlataforma: string;
+  plataforma: string; // rótulo del panel: "Por qué {plataforma}" (ej. "HubSpot Content Hub")
+  porQueBullets: { title: string; detail: string }[];
   objetivo: string;
+  /** Legacy (párrafo único): solo lectura de data vieja. */
+  porQuePlataforma?: string;
 }
 
-// 3) Arquitectura del sitio — recorrido del usuario + sitemap por fases
-//    (fases con `badge` p.ej. "Próximamente" se pintan punteadas).
-export interface SiteMapPhase { nombre: string; badge: string; paginas: string[] }
-export interface SiteArchitectureData { recorrido: string; fases: SiteMapPhase[] }
+// 3) Arquitectura del sitio — DIAGRAMA: pill "Home" + fases con cards top-level
+//    (nombre + detalle corto); fases con `badge` se pintan punteadas. Las páginas
+//    legacy eran strings — el componente las normaliza.
+export interface SitePage { nombre: string; detalle: string }
+export interface SiteMapPhase { nombre: string; badge: string; paginas: (SitePage | string)[] }
+export interface SiteArchitectureData { recorrido: string; home: string; fases: SiteMapPhase[] }
 
 // 5) Alcance — lista PLANA de entregables (cosas que el cliente RECIBE, estilo
 //    checklist) + resultado. Deliberadamente distinta del cronograma (fases):
@@ -105,21 +117,24 @@ export interface WebScopeData {
 // 6) Cronograma — fases con semanas + qué se cotiza aparte.
 export interface WebMethodologyData { fases: Phase[]; cotizaAparte: string }
 
-// 7) Inversión (web) — líneas fase 1 (rangos) + extras opcionales + recurrentes separados.
+// 7) Inversión (web) — tabla fase 1 con TOTAL autocalculado + extras opcionales +
+//    recurrentes separados (card oscura) + nota de exclusiones + moneda configurable.
 export interface WebInvestLine { concepto: string; monto: string; detalle: string }
 export interface WebInvestmentData {
+  moneda: string; // "USD", "CRC"… (editable; el total y el intro la muestran)
   lineas: WebInvestLine[];
   extras: WebInvestLine[];
   recurrentes: WebInvestLine[];
-  nota: string;
+  nota: string; // exclusiones ("impuestos no contemplados") — badge arriba
 }
 
-// 8) Por qué Smarteam — cards + siguiente paso. `buttonUrl`: ver CtaData.
+// 8) Por qué Smarteam — cards + siguiente paso. `buttonUrl`/`buttonTarget`: ver CtaData.
 export interface WhyUsData {
   cards: { title: string; detail: string }[];
   siguientePaso: string;
   buttonLabel: string;
   buttonUrl?: string;
+  buttonTarget?: string;
 }
 
 // ── Contrato del motor ───────────────────────────────────────────────────────
@@ -127,6 +142,9 @@ export interface WhyUsData {
 /** Datos del business case (no editables) que el motor pasa a cada sección. */
 export interface LandingContext {
   clientName: string;
+  /** Idioma de la propuesta (código ISO, del `__lang` que declara el agente en el
+   *  data del hero). null/ausente = español. Traduce los rótulos FIJOS (i18n.ts). */
+  lang?: string | null;
   clientLogoUrl?: string | null;
   /** Logo de marca Smarteam (config global de Nexus, getSmarteamLogoUrl). El hero lo
    *  pinta como imagen en la brand-row en lugar del badge de texto "Smarteam". */

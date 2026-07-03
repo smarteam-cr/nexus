@@ -9,9 +9,11 @@
  * quitar. Branded Smarteam; estilos en app/landing-engine.css (scope .stl, hex
  * literal → theme-safe en el render externo).
  */
-import { Fragment, useRef, useState, type FC } from "react";
+import { Fragment, useEffect, useRef, useState, type FC } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
+import { SortableItems } from "./sortable";
+import { landingLang, t } from "./i18n";
 import type {
   SectionProps,
   HeroData,
@@ -181,33 +183,45 @@ export const HeroSection: FC<SectionProps<HeroData>> = ({ data, ctx, editable, o
           )}
         </div>
       )}
-      <div className="stl-brandrow">
-        {hasLogo && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="stl-brand-logo" src={ctx.clientLogoUrl!} alt={ctx.clientName} />
-        )}
-        {hasSmarteamLogo && (
-          <>
-            {hasLogo && <span className="stl-brand-x">×</span>}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="stl-brand-logo" src={ctx.smarteamLogoUrl!} alt="Smarteam" />
-          </>
-        )}
-        {brands.map((b, i) => {
+      {/* key: el fallback de brands se RE-DERIVA (y cambia de largo desde la cabeza)
+          cuando aparece un logo — remontar el sortable realinea sus ids internos. */}
+      <SortableItems key={`brands-${hasLogo}-${hasSmarteamLogo}`} items={brands} disabled={!editable}
+        onReorder={(next) => set({ brands: next })}
+        itemStyle={{ display: "inline-flex", alignItems: "center", gap: 12 }}
+        container={(nodes) => (
+          <div className="stl-brandrow">
+            {hasLogo && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="stl-brand-logo" src={ctx.clientLogoUrl!} alt={ctx.clientName} />
+            )}
+            {hasSmarteamLogo && (
+              <>
+                {hasLogo && <span className="stl-brand-x">×</span>}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="stl-brand-logo" src={ctx.smarteamLogoUrl!} alt="Smarteam" />
+              </>
+            )}
+            {nodes}
+            {editable && <AddBtn label="Marca" onClick={() => set({ brands: appendItem(brands, "") })} />}
+          </div>
+        )}>
+        {(b, i, handle) => {
           // Brand de texto con logo configurado (HubSpot / Insider One / Smarteam) →
           // se pinta la imagen. Sin logo → badge de texto editable, como siempre.
           const brandLogo = ctx.brandLogos?.[b.trim().toLowerCase()];
           return (
-            <Fragment key={i}>
+            <Fragment>
               {(i > 0 || hasLogo || hasSmarteamLogo) && <span className="stl-brand-x">×</span>}
               {brandLogo ? (
                 <span className="stl-item" style={{ display: "inline-flex", alignItems: "center" }}>
+                  {handle}
                   {editable && <RemoveBtn onClick={() => set({ brands: removeAt(brands, i) })} />}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img className="stl-brand-logo" src={brandLogo} alt={b} />
                 </span>
               ) : (
                 <span className="stl-item stl-brand-badge">
+                  {handle}
                   {editable && <RemoveBtn onClick={() => set({ brands: removeAt(brands, i) })} />}
                   <Editable as="span" editable={editable} value={b} placeholder="Marca / plataforma…"
                     onCommit={(v) => set({ brands: replaceAt(brands, i, v) })} />
@@ -215,24 +229,29 @@ export const HeroSection: FC<SectionProps<HeroData>> = ({ data, ctx, editable, o
               )}
             </Fragment>
           );
-        })}
-        {editable && <AddBtn label="Marca" onClick={() => set({ brands: appendItem(brands, "") })} />}
-      </div>
+        }}
+      </SortableItems>
       <Editable as="h1" className="stl-hero-title" editable={editable} value={data.headline}
         placeholder="[Verbo de transformación] la [operación / proceso] de [cliente]…" onCommit={(v) => set({ headline: v })} />
       <Editable as="p" className="stl-lead" editable={editable} value={data.subhead}
         placeholder="Una frase que resume el dolor central y la apuesta…" onCommit={(v) => set({ subhead: v })} />
       {(tags.length > 0 || editable) && (
-        <div className="stl-tags">
-          {tags.map((t, i) => (
-            <span key={i} className="stl-item stl-tag">
+        <SortableItems items={tags} disabled={!editable} onReorder={(next) => set({ tags: next })}
+          container={(nodes) => (
+            <div className="stl-tags">
+              {nodes}
+              {editable && <AddBtn label="Tag" onClick={() => set({ tags: appendItem(tags, "") })} />}
+            </div>
+          )}>
+          {(tag, i, handle) => (
+            <span className="stl-item stl-tag">
+              {handle}
               {editable && <RemoveBtn onClick={() => set({ tags: removeAt(tags, i) })} />}
-              <Editable as="span" editable={editable} value={t} placeholder="Hub / integración / diferenciador…"
+              <Editable as="span" editable={editable} value={tag} placeholder="Hub / integración / diferenciador…"
                 onCommit={(v) => set({ tags: replaceAt(tags, i, v) })} />
             </span>
-          ))}
-          {editable && <AddBtn label="Tag" onClick={() => set({ tags: appendItem(tags, "") })} />}
-        </div>
+          )}
+        </SortableItems>
       )}
     </div>
   );
@@ -244,9 +263,11 @@ export const PainSection: FC<SectionProps<PainData>> = ({ data, editable, onChan
   const set = (next: Partial<PainData>) => onChange?.({ ...data, ...next });
   return (
     <>
-      <div className="stl-grid stl-grid-4">
-        {items.map((it, i) => (
-          <div key={i} className="stl-item stl-card">
+      <SortableItems items={items} disabled={!editable} onReorder={(next) => set({ items: next })}
+        container={(nodes) => <div className="stl-grid stl-grid-4">{nodes}</div>}>
+        {(it, i, handle) => (
+          <div className="stl-item stl-card">
+            {handle}
             {editable && <RemoveBtn onClick={() => set({ items: removeAt(items, i) })} />}
             <div className="stl-card-icon" style={{ background: "rgba(245,158,11,0.10)", color: "#D97706" }}>{PAIN_ICONS[i % PAIN_ICONS.length]}</div>
             <Editable as="h3" className="stl-card-title" editable={editable} value={it.title}
@@ -254,44 +275,49 @@ export const PainSection: FC<SectionProps<PainData>> = ({ data, editable, onChan
             <Editable as="p" className="stl-card-detail" editable={editable} value={it.detail}
               placeholder="Descripción en 1-2 líneas (impacto medible si se mencionó)…" onCommit={(v) => set({ items: replaceAt(items, i, { ...it, detail: v }) })} />
           </div>
-        ))}
-      </div>
+        )}
+      </SortableItems>
       {editable && <AddBtn label="Agregar dolor" onClick={() => set({ items: appendItem(items, { title: "", detail: "" }) })} />}
     </>
   );
 };
 
 // ── 3) Antes vs. después — dos columnas ──────────────────────────────────────
-export const BeforeAfterSection: FC<SectionProps<BeforeAfterData>> = ({ data, editable, onChange }) => {
+export const BeforeAfterSection: FC<SectionProps<BeforeAfterData>> = ({ data, ctx, editable, onChange }) => {
+  const lang = landingLang(ctx.lang);
   const before = data.before ?? [];
   const after = data.after ?? [];
   const set = (next: Partial<BeforeAfterData>) => onChange?.({ ...data, ...next });
   return (
     <div className="stl-ba">
       <div className="stl-ba-now">
-        <div className="stl-ba-head">Hoy</div>
-        <ul className="stl-ba-list">
-          {before.map((b, i) => (
-            <li key={i} className="stl-item stl-ba-li">
+        <div className="stl-ba-head">{t(lang, "hoy")}</div>
+        <SortableItems items={before} disabled={!editable} onReorder={(next) => set({ before: next })}
+          container={(nodes) => <div className="stl-ba-list">{nodes}</div>}>
+          {(b, i, handle) => (
+            <div className="stl-item stl-ba-li">
+              {handle}
               {editable && <RemoveBtn onClick={() => set({ before: removeAt(before, i) })} />}
               <Editable as="span" editable={editable} value={b} placeholder="Proceso manual / herramienta desconectada…"
                 onCommit={(v) => set({ before: replaceAt(before, i, v) })} />
-            </li>
-          ))}
-        </ul>
+            </div>
+          )}
+        </SortableItems>
         {editable && <AddBtn label="Agregar" onClick={() => set({ before: appendItem(before, "") })} />}
       </div>
       <div className="stl-ba-future">
-        <div className="stl-ba-head">Con HubSpot + Smarteam</div>
-        <ul className="stl-ba-list">
-          {after.map((a, i) => (
-            <li key={i} className="stl-item stl-ba-li">
+        <div className="stl-ba-head">{t(lang, "conHubspotSmarteam")}</div>
+        <SortableItems items={after} disabled={!editable} onReorder={(next) => set({ after: next })}
+          container={(nodes) => <div className="stl-ba-list">{nodes}</div>}>
+          {(a, i, handle) => (
+            <div className="stl-item stl-ba-li">
+              {handle}
               {editable && <RemoveBtn onClick={() => set({ after: removeAt(after, i) })} />}
               <Editable as="span" editable={editable} value={a} placeholder="Qué queda automatizado / conectado…"
                 onCommit={(v) => set({ after: replaceAt(after, i, v) })} />
-            </li>
-          ))}
-        </ul>
+            </div>
+          )}
+        </SortableItems>
         {editable && <AddBtn label="Agregar" onClick={() => set({ after: appendItem(after, "") })} />}
       </div>
     </div>
@@ -299,14 +325,15 @@ export const BeforeAfterSection: FC<SectionProps<BeforeAfterData>> = ({ data, ed
 };
 
 // ── 4) Solución — qué se implementa (4 campos) ───────────────────────────────
-export const SolutionSection: FC<SectionProps<SolutionData>> = ({ data, editable, onChange }) => {
+export const SolutionSection: FC<SectionProps<SolutionData>> = ({ data, ctx, editable, onChange }) => {
+  const lang = landingLang(ctx.lang);
   const set = (next: Partial<SolutionData>) => onChange?.({ ...data, ...next });
   return (
     <div className="stl-grid stl-grid-2">
-      <TextCard label="Hubs incluidos" value={data.hubs} editable={editable} placeholder="Sales / Marketing / Service / Data Hub…" onCommit={(v) => set({ hubs: v })} />
-      <TextCard label="Integraciones clave" value={data.integraciones} editable={editable} placeholder="ERP / WhatsApp / sistema mencionado…" onCommit={(v) => set({ integraciones: v })} />
-      <TextCard label="Casos de uso principales" value={data.casosDeUso} editable={editable} placeholder="Pipeline / seguimiento / automatización / reportería…" onCommit={(v) => set({ casosDeUso: v })} />
-      <TextCard label="Usuarios afectados" value={data.usuarios} editable={editable} placeholder="Roles: vendedores, gerencia, CS…" onCommit={(v) => set({ usuarios: v })} />
+      <TextCard label={t(lang, "hubsIncluidos")} value={data.hubs} editable={editable} placeholder="Sales / Marketing / Service / Data Hub…" onCommit={(v) => set({ hubs: v })} />
+      <TextCard label={t(lang, "integracionesClave")} value={data.integraciones} editable={editable} placeholder="ERP / WhatsApp / sistema mencionado…" onCommit={(v) => set({ integraciones: v })} />
+      <TextCard label={t(lang, "casosDeUsoPrincipales")} value={data.casosDeUso} editable={editable} placeholder="Pipeline / seguimiento / automatización / reportería…" onCommit={(v) => set({ casosDeUso: v })} />
+      <TextCard label={t(lang, "usuariosAfectados")} value={data.usuarios} editable={editable} placeholder="Roles: vendedores, gerencia, CS…" onCommit={(v) => set({ usuarios: v })} />
     </div>
   );
 };
@@ -317,17 +344,19 @@ export const RoiSection: FC<SectionProps<RoiData>> = ({ data, editable, onChange
   const set = (next: Partial<RoiData>) => onChange?.({ ...data, ...next });
   return (
     <>
-      <div className="stl-grid stl-grid-4">
-        {metrics.map((m, i) => (
-          <div key={i} className="stl-item stl-metric">
+      <SortableItems items={metrics} disabled={!editable} onReorder={(next) => set({ metrics: next })}
+        container={(nodes) => <div className="stl-grid stl-grid-4">{nodes}</div>}>
+        {(m, i, handle) => (
+          <div className="stl-item stl-metric">
+            {handle}
             {editable && <RemoveBtn onClick={() => set({ metrics: removeAt(metrics, i) })} />}
             <Editable as="div" className="stl-metric-value" editable={editable} value={m.value}
               placeholder="[X]%" onCommit={(v) => set({ metrics: replaceAt(metrics, i, { ...m, value: v }) })} />
             <Editable as="div" className="stl-metric-label" editable={editable} value={m.label}
               placeholder="reducción en [proceso]…" onCommit={(v) => set({ metrics: replaceAt(metrics, i, { ...m, label: v }) })} />
           </div>
-        ))}
-      </div>
+        )}
+      </SortableItems>
       {editable && <AddBtn label="Agregar métrica" onClick={() => set({ metrics: appendItem(metrics, { value: "", label: "" }) })} />}
     </>
   );
@@ -339,9 +368,11 @@ export const PlanSection: FC<SectionProps<PlanData>> = ({ data, editable, onChan
   const set = (next: Partial<PlanData>) => onChange?.({ ...data, ...next });
   return (
     <>
-      <div>
-        {phases.map((p, i) => (
-          <div key={i} className="stl-item stl-phase">
+      <SortableItems items={phases} disabled={!editable} onReorder={(next) => set({ phases: next })}
+        container={(nodes) => <div>{nodes}</div>}>
+        {(p, i, handle) => (
+          <div className="stl-item stl-phase">
+            {handle}
             {editable && <RemoveBtn onClick={() => set({ phases: removeAt(phases, i) })} />}
             <div className="stl-phase-num">{i + 1}</div>
             <div style={{ flex: 1 }}>
@@ -353,8 +384,8 @@ export const PlanSection: FC<SectionProps<PlanData>> = ({ data, editable, onChan
                 placeholder="Qué pasa en esta fase…" onCommit={(v) => set({ phases: replaceAt(phases, i, { ...p, detail: v }) })} />
             </div>
           </div>
-        ))}
-      </div>
+        )}
+      </SortableItems>
       {editable && <AddBtn label="Agregar fase" onClick={() => set({ phases: appendItem(phases, { name: "", detail: "", duration: "" }) })} />}
     </>
   );
@@ -372,15 +403,16 @@ function InvestCard({
     </div>
   );
 }
-export const InvestmentSection: FC<SectionProps<InvestmentData>> = ({ data, editable, onChange }) => {
+export const InvestmentSection: FC<SectionProps<InvestmentData>> = ({ data, ctx, editable, onChange }) => {
+  const lang = landingLang(ctx.lang);
   const lic = data.licenciasHubspot ?? { monto: "", detalle: "" };
   const impl = data.implementacion ?? { monto: "", detalle: "" };
   const set = (next: Partial<InvestmentData>) => onChange?.({ ...data, ...next });
   return (
     <>
       <div className="stl-grid stl-grid-2">
-        <InvestCard label="Licencias HubSpot / año" line={lic} editable={editable} montoPh="[Monto o rango]" detallePh="Hubs × usuarios × descuento si aplica" onChange={(v) => set({ licenciasHubspot: v })} />
-        <InvestCard label="Implementación Smarteam" line={impl} editable={editable} montoPh="[Monto o rango]" detallePh="Set up + onboarding + integraciones" onChange={(v) => set({ implementacion: v })} />
+        <InvestCard label={t(lang, "licenciasHubspot")} line={lic} editable={editable} montoPh="[Monto o rango]" detallePh="Hubs × usuarios × descuento si aplica" onChange={(v) => set({ licenciasHubspot: v })} />
+        <InvestCard label={t(lang, "implementacionSmarteam")} line={impl} editable={editable} montoPh="[Monto o rango]" detallePh="Set up + onboarding + integraciones" onChange={(v) => set({ implementacion: v })} />
       </div>
       <Editable as="p" className="stl-invest-note" editable={editable} value={data.nota ?? ""}
         placeholder="Si no hay precio en el transcript → 'A definir en propuesta formal'…" onCommit={(v) => set({ nota: v })} />
@@ -389,24 +421,44 @@ export const InvestmentSection: FC<SectionProps<InvestmentData>> = ({ data, edit
 };
 
 // ── 8) Partner — por qué Smarteam (4 campos) ─────────────────────────────────
-export const PartnerSection: FC<SectionProps<PartnerData>> = ({ data, editable, onChange }) => {
+export const PartnerSection: FC<SectionProps<PartnerData>> = ({ data, ctx, editable, onChange }) => {
+  const lang = landingLang(ctx.lang);
   const set = (next: Partial<PartnerData>) => onChange?.({ ...data, ...next });
   return (
     <div className="stl-grid stl-grid-2">
-      <TextCard label="Credencial" value={data.credencial} editable={editable} placeholder="HubSpot Partner Elite" onCommit={(v) => set({ credencial: v })} />
-      <TextCard label="Experiencia" value={data.experiencia} editable={editable} placeholder="+200 proyectos, +8 países LATAM" onCommit={(v) => set({ experiencia: v })} />
-      <TextCard label="Referencia sectorial" value={data.referenciaSectorial} editable={editable} placeholder="Cliente de referencia en industria similar…" onCommit={(v) => set({ referenciaSectorial: v })} />
-      <TextCard label="Equipo asignado" value={data.equipo} editable={editable} placeholder="Nombres del equipo si se mencionaron…" onCommit={(v) => set({ equipo: v })} />
+      <TextCard label={t(lang, "credencial")} value={data.credencial} editable={editable} placeholder="HubSpot Partner Elite" onCommit={(v) => set({ credencial: v })} />
+      <TextCard label={t(lang, "experiencia")} value={data.experiencia} editable={editable} placeholder="+200 proyectos, +8 países LATAM" onCommit={(v) => set({ experiencia: v })} />
+      <TextCard label={t(lang, "referenciaSectorial")} value={data.referenciaSectorial} editable={editable} placeholder="Cliente de referencia en industria similar…" onCommit={(v) => set({ referenciaSectorial: v })} />
+      <TextCard label={t(lang, "equipoAsignado")} value={data.equipo} editable={editable} placeholder="Nombres del equipo si se mencionaron…" onCommit={(v) => set({ equipo: v })} />
     </div>
   );
 };
 
-/** Botón del CTA en LECTURA: con `buttonUrl` navega en pestaña nueva; sin URL, span. */
-export function CtaButton({ label, url }: { label?: string; url?: string }) {
+/** Sin esquema (el CSE pegó "smarteamcr.com/contacto" en vez de una URL completa),
+ *  el <a href> se resuelve RELATIVO a la página actual → termina en
+ *  ".../external/smarteamcr.com/contacto". Antepone "https://" salvo que ya traiga
+ *  un esquema (http/https/mailto/tel/...), sea protocol-relative ("//") o una ruta
+ *  interna intencional ("/algo"). */
+function normalizeUrl(raw: string): string {
+  const v = raw.trim();
+  // Whitelist de esquemas (no "cualquier palabra:") — un genérico [a-z][a-z0-9+.-]*:
+  // también matchearía "localhost:3004/x" o "cliente:8080/ruta" (host:puerto sin
+  // protocolo) y los dejaría igual de rotos (relativos) que el bug original.
+  if (!v || /^(https?:|mailto:|tel:|\/\/|\/)/i.test(v)) return v;
+  return `https://${v}`;
+}
+
+/** Botón del CTA en LECTURA: con `buttonUrl` navega (pestaña nueva por default,
+ *  misma pestaña con `target="_self"`); sin URL, span. Normaliza defensivamente
+ *  (dato ya guardado sin esquema, de antes del fix). */
+export function CtaButton({ label, url, target }: { label?: string; url?: string; target?: string }) {
   if (!label) return null;
-  if (url?.trim()) {
+  const href = url ? normalizeUrl(url) : "";
+  if (href) {
+    const self = target === "_self";
     return (
-      <a className="stl-btn" href={url.trim()} target="_blank" rel="noopener noreferrer">
+      <a className="stl-btn" href={href} target={self ? undefined : "_blank"}
+        rel={self ? undefined : "noopener noreferrer"}>
         {label}
       </a>
     );
@@ -414,14 +466,108 @@ export function CtaButton({ label, url }: { label?: string; url?: string }) {
   return <span className="stl-btn">{label}</span>;
 }
 
-/** Editor de la URL del botón (solo modo edición): fuera del schema del agente —
- *  el CSE la configura y sobrevive regeneraciones (carry-forward de keys no-schema). */
-export function CtaUrlField({ value, onCommit }: { value?: string; onCommit: (v: string) => void }) {
+/** Input de texto que comitea en blur / Enter (como `Editable`), para los popovers
+ *  de edición. Estado local para no re-guardar en cada tecla. */
+function PopInput({
+  value, placeholder, onCommit, style,
+}: { value: string; placeholder: string; onCommit: (v: string) => void; style?: React.CSSProperties }) {
+  const [v, setV] = useState(value);
+  useEffect(() => setV(value), [value]);
   return (
-    <div style={{ marginTop: 10, display: "flex", alignItems: "baseline", justifyContent: "center", gap: 6, fontSize: 12, opacity: 0.75 }}>
-      <span>URL del botón:</span>
-      <Editable as="span" editable value={value ?? ""} placeholder="https://… (vacío = sin link)"
-        onCommit={onCommit} />
+    <input
+      type="text"
+      value={v}
+      placeholder={placeholder}
+      style={style}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={() => { if (v !== value) onCommit(v); }}
+      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }}
+    />
+  );
+}
+
+/** Editor del CTA (solo modo edición): el botón se ve como el real; al hacerle CLIC
+ *  se abre un popover con el TEXTO, la URL y en qué pestaña abre. Clic afuera / Esc
+ *  cierra. `buttonUrl`/`buttonTarget` viven fuera del schema del agente (el CSE los
+ *  configura; sobreviven regeneraciones por carry-forward de keys no-schema). */
+export function CtaEditor({
+  label, url, target, labelPlaceholder, onLabel, onUrl, onTarget,
+}: {
+  label?: string;
+  url?: string;
+  target?: string;
+  labelPlaceholder: string;
+  onLabel: (v: string) => void;
+  onUrl: (v: string) => void;
+  onTarget: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const isSelf = target === "_self";
+  const field: React.CSSProperties = {
+    width: "100%", boxSizing: "border-box", padding: "7px 10px", borderRadius: 8,
+    border: "1px solid rgba(0,0,0,0.14)", fontSize: 13, color: "#1f2937", background: "#fff",
+  };
+  const fieldLabel: React.CSSProperties = {
+    fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#6b7280",
+  };
+  const pill = (active: boolean): React.CSSProperties => ({
+    flex: 1, padding: "6px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
+    border: `1px solid ${active ? "#168CF6" : "rgba(0,0,0,0.14)"}`,
+    background: active ? "rgba(22,140,246,0.10)" : "#fff",
+    color: active ? "#168CF6" : "#6b7280",
+  });
+
+  return (
+    <div ref={wrapRef} style={{ position: "relative", display: "inline-block", marginTop: 26 }}>
+      <button type="button" className="stl-btn" onClick={() => setOpen((o) => !o)}
+        title="Editar botón (texto, enlace, destino)" style={{ cursor: "pointer" }}>
+        {label ? label : <span style={{ opacity: 0.6 }}>{labelPlaceholder}</span>}
+        <span aria-hidden style={{ marginLeft: 8, opacity: 0.7, fontSize: "0.85em" }}>✎</span>
+      </button>
+      {open && (
+        <div
+          role="dialog"
+          style={{
+            // Flota HACIA ARRIBA (anclado por `bottom`) para no empujar el scroll
+            // de la landing hacia abajo al abrirlo (el CTA suele ir al final).
+            position: "absolute", bottom: "calc(100% + 10px)", left: "50%", transform: "translateX(-50%)",
+            zIndex: 30, width: 288, maxWidth: "88vw", background: "#fff", borderRadius: 12, padding: 14,
+            border: "1px solid rgba(0,0,0,0.10)", boxShadow: "0 -12px 34px rgba(0,0,0,0.22)",
+            textAlign: "left", display: "flex", flexDirection: "column", gap: 12, cursor: "auto",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <span style={fieldLabel}>Texto del botón</span>
+            <PopInput value={label ?? ""} placeholder={labelPlaceholder} onCommit={onLabel} style={field} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <span style={fieldLabel}>Enlace (URL)</span>
+            <PopInput value={url ?? ""} placeholder="https://… (vacío = sin link)" onCommit={(v) => onUrl(normalizeUrl(v))} style={field} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <span style={fieldLabel}>Abre en</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button type="button" style={pill(!isSelf)} onClick={() => onTarget("_blank")}>Pestaña nueva</button>
+              <button type="button" style={pill(isSelf)} onClick={() => onTarget("_self")}>Misma pestaña</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -436,13 +582,12 @@ export const CtaSection: FC<SectionProps<CtaData>> = ({ data, editable, onChange
       <Editable as="p" className="stl-lead" editable={editable} value={data.subhead}
         placeholder="Frase de cierre que retoma el dolor y la apuesta…" onCommit={(v) => set({ subhead: v })} />
       {editable ? (
-        <div style={{ marginTop: 26 }}>
-          <Editable as="span" className="stl-btn" editable value={data.buttonLabel}
-            placeholder="Agendar siguiente paso…" onCommit={(v) => set({ buttonLabel: v })} />
-          <CtaUrlField value={data.buttonUrl} onCommit={(v) => set({ buttonUrl: v.trim() })} />
-        </div>
+        <CtaEditor label={data.buttonLabel} url={data.buttonUrl} target={data.buttonTarget}
+          labelPlaceholder="Agendar siguiente paso…"
+          onLabel={(v) => set({ buttonLabel: v })}
+          onUrl={(v) => set({ buttonUrl: v })} onTarget={(v) => set({ buttonTarget: v })} />
       ) : (
-        <CtaButton label={data.buttonLabel} url={data.buttonUrl} />
+        <CtaButton label={data.buttonLabel} url={data.buttonUrl} target={data.buttonTarget} />
       )}
     </div>
   );

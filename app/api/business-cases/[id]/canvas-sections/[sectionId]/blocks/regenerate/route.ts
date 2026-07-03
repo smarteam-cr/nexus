@@ -43,6 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
           key: true,
           canvas: {
             select: {
+              id: true,
               businessCaseId: true,
               sections: true,
               businessCase: { select: { id: true, caseType: true, caseSubtype: true } },
@@ -80,12 +81,26 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
         { status: 400 },
       );
     }
+    // Idioma de la propuesta: `__lang` (key no-schema) del hero de ESTE canvas —
+    // el ✨ IA debe reescribir la sección en el idioma en que está la propuesta.
+    const hero = await prisma.canvasSection.findFirst({
+      where: { canvasId: block.section.canvas.id, key: "hero" },
+      select: { blocks: { orderBy: { order: "asc" }, take: 1, select: { data: true } } },
+    });
+    const heroData = hero?.blocks[0]?.data;
+    const rawLang =
+      heroData && typeof heroData === "object" && !Array.isArray(heroData)
+        ? (heroData as Record<string, unknown>).__lang
+        : null;
+    const lang = typeof rawLang === "string" && rawLang.trim() ? rawLang.trim().toLowerCase() : null;
+
     const data = await regenerateSectionData(
       block.section.key,
       current,
       instruction,
       brief,
       resolved?.templateId,
+      lang,
     );
     return NextResponse.json({ data });
   } catch (e) {

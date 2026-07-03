@@ -185,14 +185,15 @@ export async function POST(
     // agente cae al brief por defecto de la config (BC_DEF_BY_KEY.brief).
     const briefsByKey = briefsByKeyFrom(template?.sections);
 
-    // Carry-forward desde el caso ACTIVO previo (v>0; el v0 nunca se llena), ANTES
-    // de que la transacción lo desactive:
-    //  (a) keys NO-schema del hero (brands, coverImageUrl) — coerceToSchema las
-    //      descarta → sin esto, la portada/brand-row del CSE se pierden al regenerar;
+    // Carry-forward desde el canvas ACTIVO previo — el v0 (Plantilla) INCLUIDO: en el
+    // primer "Generar" el activo ES la Plantilla, y una portada subida ahí debe
+    // heredarse al caso. Se lee ANTES de que la transacción lo desactive:
+    //  (a) keys NO-schema por sección (brands, coverImageUrl, buttonUrl) —
+    //      coerceToSchema las descarta → sin esto se pierden al (re)generar;
     //  (b) decisiones hidden EXPLÍCITAS — si el CSE mostró una sección defaultHidden,
     //      el caso nuevo no debe volver a esconderla.
     const prevCanvas = await prisma.projectCanvas.findFirst({
-      where: { businessCaseId: id, isActive: true, version: { gt: 0 } },
+      where: { businessCaseId: id, isActive: true },
       select: { sections: true },
     });
     const prevHiddenByKey: Record<string, boolean> = {};
@@ -208,18 +209,26 @@ export async function POST(
         .map((d) => d.key),
     );
 
-    const generated = await generateCanvasSections(contextForAgent, briefsByKey, resolved.templateId, skipKeys); // LLM, FUERA de la tx
+    const gen = await generateCanvasSections(contextForAgent, briefsByKey, resolved.templateId, skipKeys); // LLM, FUERA de la tx
+    const generated = gen.sections;
 
     // Carry-forward (a): keys NO-schema de CADA sección — coerceToSchema las descarta
     // al generar → sin esto se pierden al regenerar la portada del hero (coverImageUrl),
     // la brand-row (brands) y la URL del botón del CTA (buttonUrl), todas configuradas
-    // por el CSE, no por el agente.
+    // por el CSE, no por el agente. Incluye el v0 (primer Generar: activo = Plantilla).
     const prevBlocks = await prisma.canvasSection.findMany({
-      where: { canvas: { businessCaseId: id, isActive: true, version: { gt: 0 } } },
+      where: { canvas: { businessCaseId: id, isActive: true } },
+      orderBy: { order: "asc" }, // el ORDEN previo (drag & drop) también se hereda
       select: { key: true, blocks: { orderBy: { order: "asc" }, take: 1, select: { data: true } } },
     });
     const prevDataByKey = new Map(prevBlocks.map((s) => [s.key, s.blocks[0]?.data]));
     const defsByKey = templateDefsByKey(resolved.templateId);
+    // Shapes v1 de secciones migradas (ver components/landing/types.ts) — NUNCA se
+    // cargan hacia adelante junto con el resto de keys no-schema: si el campo nuevo
+    // viene vacío en esta corrida (el LLM no lo llenó; el schema no valida "required"),
+    // el fallback legacy de los componentes "resucitaría" contenido viejo en vez de
+    // mostrar la sección tal como el agente la generó esta vez.
+    const LEGACY_CARRY_EXCLUDE = new Set(["nodos", "flujos", "porQuePlataforma", "bloques"]);
     for (const gs of generated) {
       const prev = prevDataByKey.get(gs.key);
       const def = defsByKey[gs.key];
@@ -229,9 +238,27 @@ export async function POST(
       );
       const merged = { ...(gs.data as Record<string, unknown>) };
       for (const k of Object.keys(prev as Record<string, unknown>)) {
-        if (!schemaKeys.has(k)) merged[k] = (prev as Record<string, unknown>)[k];
+        if (!schemaKeys.has(k) && !LEGACY_CARRY_EXCLUDE.has(k)) merged[k] = (prev as Record<string, unknown>)[k];
       }
       gs.data = merged;
+    }
+    // Secciones OCULTAS (skipKeys) no se regeneran (tokens/latencia) — pero "ocultar"
+    // no es "borrar": sin esto, el bloque quedaba reseteado al `empty` sembrado por
+    // createBusinessCaseCanvas y el CSE perdía el contenido al volver a mostrarlas.
+    // Se cargan tal cual (mismo objeto, sin pasar por el merge de arriba — no hay
+    // campo "nuevo" que resucitar contra, es el mismo dato de siempre).
+    for (const key of skipKeys) {
+      if (generated.some((g) => g.key === key)) continue;
+      const prev = prevDataByKey.get(key);
+      if (prev != null) generated.push({ key, data: prev });
+    }
+    // Idioma de ESTA corrida (`__lang`, key no-schema del hero): SIEMPRE se re-escribe
+    // — nunca por carry-forward, que arrastraría el idioma de la versión anterior.
+    const heroGen = generated.find((g) => g.key === "hero");
+    if (heroGen && heroGen.data && typeof heroGen.data === "object") {
+      const heroData = heroGen.data as Record<string, unknown>;
+      if (gen.lang) heroData.__lang = gen.lang;
+      else delete heroData.__lang;
     }
 
     // Cada "Generar" crea un CASO NUEVO (v1, v2, …). La Plantilla (v0) nunca se llena.
@@ -249,6 +276,7 @@ export async function POST(
         caseType: resolved.caseType,
         caseSubtype: resolved.caseSubtype,
         hiddenByKey: prevHiddenByKey,
+        orderedKeys: prevBlocks.map((s) => s.key),
       });
       const sections = await tx.canvasSection.findMany({
         where: { canvasId: cid },
@@ -281,6 +309,21 @@ export async function POST(
         USE_CASES_SECTION_KEY,
         useCasesSectionData(selectedUseCases) as unknown as Prisma.InputJsonValue,
       );
+      // Idioma ≠ español: el agente tradujo los títulos/eyebrows de sección →
+      // se aplican como overrides de cara al cliente (editables después como siempre).
+      const overrideKeys = new Set([
+        ...Object.keys(gen.titleOverrides),
+        ...Object.keys(gen.eyebrowOverrides),
+      ]);
+      for (const key of overrideKeys) {
+        await tx.canvasSection.updateMany({
+          where: { canvasId: cid, key },
+          data: {
+            ...(gen.titleOverrides[key] ? { titleOverride: gen.titleOverrides[key] } : {}),
+            ...(gen.eyebrowOverrides[key] ? { eyebrowOverride: gen.eyebrowOverrides[key] } : {}),
+          },
+        });
+      }
       return cid;
     });
 

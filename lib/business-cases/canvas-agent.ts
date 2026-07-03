@@ -35,6 +35,28 @@ function generableSections(tpl: BcTemplateDef, skipKeys?: Set<string>): BCSectio
 
 export type GeneratedSection = { key: string; data: unknown };
 
+export interface GeneratedCanvas {
+  sections: GeneratedSection[];
+  /** Títulos/eyebrows por key TRADUCIDOS por el agente — solo cuando el contexto pide
+   *  la propuesta en otro idioma (se aplican como titleOverride/eyebrowOverride). */
+  titleOverrides: Record<string, string>;
+  eyebrowOverrides: Record<string, string>;
+  /** Idioma declarado por el agente (código ISO, "en"…) — null = español. Se persiste
+   *  como `__lang` en el data del hero para traducir los rótulos fijos (i18n.ts). */
+  lang: string | null;
+}
+
+/** Filtra un posible mapa { key: string } del modelo a keys válidas del template. */
+function stringMapFor(raw: unknown, validKeys: Set<string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (validKeys.has(k) && typeof v === "string" && v.trim()) out[k] = v.trim();
+    }
+  }
+  return out;
+}
+
 /** Representación compacta del shape de un JSON Schema, para guiar al modelo. */
 function shapeOf(schema: unknown): string {
   const s = schema as { type?: string; properties?: Record<string, unknown>; items?: unknown };
@@ -90,7 +112,8 @@ Reglas estrictas:
 - NO inventes datos que no estén en el contexto. Si te falta info para un campo, dejalo como string vacío "" (o array vacío []). NUNCA inventes cifras de ROI ni montos de inversión.
 - Respetá la forma de cada sección: los arrays con sus objetos, los campos string como string.
 - Tono profesional, claro, orientado a valor de negocio. Específico para ESTA empresa, no genérico.
-- ESTILO (OBLIGATORIO): español con TUTEO neutro (segunda persona con "tú"). Conjuga SIEMPRE en forma de tú: "Transforma", "centraliza", "optimiza", "conecta", "tienes", "puedes", "necesitas". PROHIBIDO el voseo: NUNCA escribas "Transformá", "centralizá", "optimizá", "tenés", "querés", "podés", "necesitás" ni "vos".`;
+- IDIOMA: por defecto la propuesta va en ESPAÑOL. Si el contexto especifica que debe ir en OTRO idioma (p.ej. "la propuesta debe estar en inglés"), redactá TODO el contenido en ese idioma y agregá al JSON tres keys extra: "__lang" (código ISO del idioma, p.ej. "en"), "__titles" y "__eyebrows" — estos dos últimos, objetos { key de sección: texto } con el TÍTULO y el eyebrow de cada sección traducidos a ese idioma (traducí los títulos de la guía de arriba). Si la propuesta va en español, NO incluyas esas keys.
+- ESTILO EN ESPAÑOL (OBLIGATORIO cuando redactes en español): TUTEO neutro (segunda persona con "tú"). Conjuga SIEMPRE en forma de tú: "Transforma", "centraliza", "optimiza", "conecta", "tienes", "puedes", "necesitas". PROHIBIDO el voseo: NUNCA escribas "Transformá", "centralizá", "optimizá", "tenés", "querés", "podés", "necesitás" ni "vos".`;
 }
 
 /** Genera el `data` estructurado de todas las secciones GENERABLES del template a
@@ -101,7 +124,7 @@ export async function generateCanvasSections(
   briefsByKey?: Record<string, string>,
   templateId: string = HUBSPOT_TEMPLATE_ID,
   skipKeys?: Set<string>,
-): Promise<GeneratedSection[]> {
+): Promise<GeneratedCanvas> {
   const tpl = templateById(templateId);
   const sections = generableSections(tpl, skipKeys);
 
@@ -130,21 +153,41 @@ export async function generateCanvasSections(
     throw new Error("el agente no devolvió un JSON válido — reintentá la generación");
   }
 
-  return sections.map((d) => ({ key: d.key, data: coerceToSchema(d.schema, obj[d.key]) }));
+  // Idioma ≠ español: el agente devuelve los títulos/eyebrows de sección traducidos
+  // en "__titles"/"__eyebrows" (keys válidas del template solamente).
+  const validKeys = new Set(tpl.sections.map((d) => d.key));
+  const rawLang = obj["__lang"];
+  return {
+    sections: sections.map((d) => ({ key: d.key, data: coerceToSchema(d.schema, obj[d.key]) })),
+    titleOverrides: stringMapFor(obj["__titles"], validKeys),
+    eyebrowOverrides: stringMapFor(obj["__eyebrows"], validKeys),
+    lang: typeof rawLang === "string" && rawLang.trim() ? rawLang.trim().toLowerCase() : null,
+  };
 }
 
 /** Regenera el `data` de UNA sección según una instrucción (edición por IA).
  *  `templateId` resuelve la def; el fallback cross-template es LOAD-BEARING: un bloque
- *  de un canvas viejo cuya key ya no está en su template no debe perder su data. */
+ *  de un canvas viejo cuya key ya no está en su template no debe perder su data.
+ *  `lang` = idioma de la propuesta (`__lang` del hero del canvas): el contenido
+ *  regenerado se escribe en ESE idioma, no siempre en español. */
 export async function regenerateSectionData(
   sectionKey: string,
   currentData: unknown,
   instruction: string,
   brief?: string,
   templateId?: string,
+  lang?: string | null,
 ): Promise<unknown> {
   const def = templateDefsByKey(templateId)[sectionKey] ?? findDefAcrossTemplates(sectionKey);
   if (!def) return coerceToSchema({ type: "object", properties: {} }, currentData);
+
+  // Regla de idioma: si la propuesta declara idioma no-español, TODO el contenido va
+  // en ese idioma; en español (o sin declarar) aplica el estilo tuteo del repo.
+  const langRule =
+    lang && !lang.startsWith("es") // startsWith: "es-419"/"es-mx" son español (simetría con i18n.ts)
+      ? `IDIOMA (OBLIGATORIO): TODO el contenido va en el idioma de la propuesta: "${lang}" (código ISO 639-1). Mantené el idioma del contenido actual — NO lo traduzcas al español.`
+      : `IDIOMA: mantené el idioma del contenido actual (por defecto, español).
+ESTILO en español (OBLIGATORIO): TUTEO neutro (segunda persona con "tú"): "Transforma", "centraliza", "optimiza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "centralizá", "tenés", "querés", "podés" ni "vos".`;
 
   const msg = await anthropic.messages.create({
     model: MODEL,
@@ -154,7 +197,7 @@ ${shapeOf(def.schema)}
 
 Guía de la sección: ${brief ?? def.brief ?? def.agentHint}
 No inventes datos que no estén en el contenido actual o la instrucción.
-ESTILO (OBLIGATORIO): español con TUTEO neutro (segunda persona con "tú"): "Transforma", "centraliza", "optimiza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "centralizá", "tenés", "querés", "podés" ni "vos".`,
+${langRule}`,
     messages: [
       {
         role: "user",

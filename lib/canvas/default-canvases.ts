@@ -100,10 +100,24 @@ export async function createBusinessCaseCanvas(
      *  ganan al `defaultHidden` del template — si el CSE mostró una sección oculta,
      *  el caso nuevo no debe volver a esconderla. */
     hiddenByKey?: Record<string, boolean>;
+    /** ORDEN de secciones del canvas previo (drag & drop del CSE): el caso nuevo lo
+     *  respeta; keys nuevas del template van al final en su orden de template. */
+    orderedKeys?: string[];
   },
 ): Promise<string> {
   const tpl = templateById(templateId);
   const defsByKey = templateDefsByKey(templateId);
+
+  // Orden efectivo: el del canvas previo si existe; secciones sin posición previa
+  // (nuevas en el template) al final, manteniendo su orden relativo del template.
+  const prevIdx = new Map((meta?.orderedKeys ?? []).map((k, i) => [k, i]));
+  const orderedSections = prevIdx.size
+    ? [...tpl.sections].sort((a, b) => {
+        const av = prevIdx.get(a.key) ?? 1000 + tpl.sections.findIndex((s) => s.key === a.key);
+        const bv = prevIdx.get(b.key) ?? 1000 + tpl.sections.findIndex((s) => s.key === b.key);
+        return av - bv;
+      })
+    : tpl.sections;
 
   // Desactivar versiones anteriores (la nueva queda como la activa/editable).
   await db.projectCanvas.updateMany({
@@ -117,7 +131,7 @@ export async function createBusinessCaseCanvas(
   // config) u override explícito del canvas previo.
   const sectionsJson = [
     buildTemplateMetaEntry({ templateId: tpl.id, caseType: meta?.caseType, caseSubtype: meta?.caseSubtype }),
-    ...tpl.sections.map((s) => {
+    ...orderedSections.map((s) => {
       const hidden = meta?.hiddenByKey?.[s.key] ?? s.defaultHidden ?? false;
       return {
         key: s.key,
@@ -143,7 +157,7 @@ export async function createBusinessCaseCanvas(
   });
 
   await db.canvasSection.createMany({
-    data: tpl.sections.map((s, i) => ({
+    data: orderedSections.map((s, i) => ({
       canvasId: canvas.id,
       key: s.key,
       label: s.canvasLabel ?? s.label,
