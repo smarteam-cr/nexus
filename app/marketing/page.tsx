@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// El hub de Marketing abre en la subsección de Ideas (la salida principal).
+// El hub de Marketing abre en el motor de Contenido.
 export default function MarketingIndexPage() {
-  redirect("/marketing/ideas");
+  redirect("/marketing/contenido");
 }

@@ -1,19 +1,25 @@
 /**
  * lib/marketing/inspiration/apify.ts
  *
- * Implementación Apify del InspirationProvider. Usa un actor "no cookies" de
- * pago por resultado (default: apimaestro/linkedin-profile-posts, ~$1-2/1000
- * posts — sin cuenta de LinkedIn, sin riesgo de baneo) vía el endpoint síncrono
- * `run-sync-get-dataset-items` (espera server-side hasta 300s; suficiente para
- * ~20 posts por perfil). Si algún día no alcanza, cambiar a run+poll ACÁ,
- * sin tocar callers.
+ * Implementación Apify del InspirationProvider. Actors "no cookies" de pago por
+ * resultado (~$1-2/1000 posts, sin cuenta de LinkedIn) vía el endpoint síncrono
+ * `run-sync-get-dataset-items` (espera server-side hasta 300s). Si algún día no
+ * alcanza, cambiar a run+poll ACÁ, sin tocar callers.
+ *
+ * Ruteo por tipo de fuente (verificado contra los input schemas reales):
+ *   - Perfil  (linkedin.com/in/…)      → apimaestro~linkedin-profile-posts  { username, limit }
+ *   - Company (linkedin.com/company/…) → apimaestro~linkedin-company-posts  { company_name, limit }
  *
  * Env vars:
- *   APIFY_TOKEN                 (obligatoria)
- *   APIFY_LINKEDIN_POSTS_ACTOR  (opcional; formato "owner~actor" para la URL)
+ *   APIFY_TOKEN                         (obligatoria)
+ *   APIFY_LINKEDIN_POSTS_ACTOR          (opcional; override del actor de perfiles)
+ *   APIFY_LINKEDIN_COMPANY_POSTS_ACTOR  (opcional; override del actor de companies)
  *
- * `mapItem` es Zod laxo POR ÍTEM: si el actor cambia el shape, los ítems que no
- * mapean se descartan con log (degrada, no explota).
+ * El input va EXACTO al schema del actor (sin campos extra: la corrida con campos
+ * desconocidos devolvía dataset vacío). `mapItem` es Zod laxo POR ÍTEM y refleja
+ * el shape REAL del output (urn = objeto {activity_urn, ugcPost_urn}; posted_at =
+ * objeto {date, timestamp}; stats.total_reactions; media {type, url}): un ítem
+ * que no mapea se descarta con log (degrada, no explota).
  */
 import { z } from "zod";
 import {
@@ -22,7 +28,8 @@ import {
   InspirationProviderError,
 } from "./provider";
 
-const DEFAULT_ACTOR = "apimaestro~linkedin-profile-posts";
+const DEFAULT_PROFILE_ACTOR = "apimaestro~linkedin-profile-posts";
+const DEFAULT_COMPANY_ACTOR = "apimaestro~linkedin-company-posts";
 const TIMEOUT_MS = 240_000; // el endpoint sync espera hasta 300s server-side
 
 function getToken(): string {
@@ -35,29 +42,38 @@ function getToken(): string {
   return token;
 }
 
-function getActor(): string {
-  return process.env.APIFY_LINKEDIN_POSTS_ACTOR || DEFAULT_ACTOR;
+function isCompanyUrl(profileUrl: string): boolean {
+  return /linkedin\.com\/company\//i.test(profileUrl);
 }
 
-/** Input del actor concreto. Los actors de posts por perfil aceptan username o URL. */
+function actorFor(profileUrl: string): string {
+  return isCompanyUrl(profileUrl)
+    ? process.env.APIFY_LINKEDIN_COMPANY_POSTS_ACTOR || DEFAULT_COMPANY_ACTOR
+    : process.env.APIFY_LINKEDIN_POSTS_ACTOR || DEFAULT_PROFILE_ACTOR;
+}
+
+/** Input EXACTO del actor (ambos aceptan username/company_name como URL completa). */
 function buildActorInput(profileUrl: string, limit: number): Record<string, unknown> {
-  return {
-    username: profileUrl, // apimaestro acepta URL completa o username
-    profileUrl, // alias que otros actors usan — inofensivo si sobra
-    limit,
-    total_posts: limit,
-    maxPosts: limit,
-  };
+  return isCompanyUrl(profileUrl)
+    ? { company_name: profileUrl, limit }
+    : { username: profileUrl, limit };
 }
 
-// Shape laxo: cubre las variantes de nombres que usan los actors de posts
-// (apimaestro y afines). Todo opcional; mapItem decide qué alcanza.
+// ── Shape REAL del output (verificado con una corrida de apimaestro) ───────────
+
+const urnObjectSchema = z
+  .object({
+    activity_urn: z.union([z.string(), z.number()]).nullish(),
+    ugcPost_urn: z.union([z.string(), z.number()]).nullish(),
+    share_urn: z.union([z.string(), z.number()]).nullish(),
+  })
+  .passthrough();
+
 const rawItemSchema = z
   .object({
-    urn: z.union([z.string(), z.number()]).optional(),
-    id: z.union([z.string(), z.number()]).optional(),
-    activity_urn: z.string().optional(),
+    urn: z.union([z.string(), z.number(), urnObjectSchema]).optional(),
     full_urn: z.string().optional(),
+    id: z.union([z.string(), z.number()]).optional(),
     url: z.string().optional(),
     post_url: z.string().optional(),
     text: z.string().optional(),
@@ -68,10 +84,11 @@ const rawItemSchema = z
         name: z.string().optional(),
         first_name: z.string().optional(),
         last_name: z.string().optional(),
-        headline: z.string().optional(),
+        username: z.string().optional(),
       })
       .passthrough()
       .optional(),
+    company: z.object({ name: z.string().optional() }).passthrough().optional(),
     author_name: z.string().optional(),
     stats: z
       .object({
@@ -84,24 +101,19 @@ const rawItemSchema = z
       })
       .passthrough()
       .optional(),
-    likes_count: z.number().optional(),
-    num_likes: z.number().optional(),
-    comments_count: z.number().optional(),
-    num_comments: z.number().optional(),
-    reposts_count: z.number().optional(),
-    num_shares: z.number().optional(),
     posted_at: z
       .union([
         z.string(),
-        z.object({ date: z.string().optional(), timestamp: z.number().optional() }).passthrough(),
+        z
+          .object({ date: z.string().optional(), timestamp: z.number().optional() })
+          .passthrough(),
       ])
       .optional(),
-    posted_at_iso: z.string().optional(),
     date: z.string().optional(),
-    time: z.string().optional(),
     media: z.unknown().optional(),
     images: z.unknown().optional(),
     image_url: z.string().optional(),
+    post_type: z.string().optional(),
   })
   .passthrough();
 
@@ -121,13 +133,27 @@ function toDate(raw: unknown): Date | null {
   return null;
 }
 
+function extractExternalId(item: z.infer<typeof rawItemSchema>): string {
+  if (item.full_urn) return String(item.full_urn);
+  const urn = item.urn;
+  if (urn && typeof urn === "object") {
+    const o = urn as z.infer<typeof urnObjectSchema>;
+    const v = o.activity_urn ?? o.ugcPost_urn ?? o.share_urn;
+    if (v != null && String(v).trim()) return String(v).trim();
+  } else if (urn != null && String(urn).trim()) {
+    return String(urn).trim();
+  }
+  return item.id != null ? String(item.id).trim() : "";
+}
+
 function hasImage(item: z.infer<typeof rawItemSchema>): boolean {
   if (typeof item.image_url === "string" && item.image_url) return true;
   const media = item.media ?? item.images;
   if (Array.isArray(media)) return media.length > 0;
   if (media && typeof media === "object") {
-    const t = (media as { type?: string }).type;
-    return typeof t === "string" && /image|photo/i.test(t);
+    const m = media as { type?: string; images?: unknown };
+    if (typeof m.type === "string" && /image|photo/i.test(m.type)) return true;
+    if (Array.isArray(m.images)) return m.images.length > 0;
   }
   return false;
 }
@@ -138,15 +164,16 @@ export function mapItem(raw: unknown): RawInspirationPost | null {
   if (!parsed.success) return null;
   const item = parsed.data;
 
-  const externalId = String(item.urn ?? item.full_urn ?? item.activity_urn ?? item.id ?? "").trim();
+  const externalId = extractExternalId(item);
   const text = (item.text ?? item.post_text ?? item.commentary ?? "").trim();
-  const postedAt = toDate(item.posted_at_iso ?? item.posted_at ?? item.date ?? item.time);
+  const postedAt = toDate(item.posted_at ?? item.date);
   if (!externalId || !text || !postedAt) return null;
 
   const authorName =
     item.author_name ??
     item.author?.name ??
     [item.author?.first_name, item.author?.last_name].filter(Boolean).join(" ").trim() ??
+    item.company?.name ??
     undefined;
 
   return {
@@ -155,11 +182,9 @@ export function mapItem(raw: unknown): RawInspirationPost | null {
     authorName: authorName || undefined,
     text,
     likeCount:
-      item.stats?.total_reactions ?? item.stats?.like ?? item.stats?.likes ??
-      item.likes_count ?? item.num_likes ?? 0,
-    commentCount: item.stats?.comments ?? item.comments_count ?? item.num_comments ?? 0,
-    repostCount:
-      item.stats?.reposts ?? item.stats?.shares ?? item.reposts_count ?? item.num_shares ?? 0,
+      item.stats?.total_reactions ?? item.stats?.like ?? item.stats?.likes ?? 0,
+    commentCount: item.stats?.comments ?? 0,
+    repostCount: item.stats?.reposts ?? item.stats?.shares ?? 0,
     hasImage: hasImage(item),
     postedAt,
   };
@@ -167,7 +192,7 @@ export function mapItem(raw: unknown): RawInspirationPost | null {
 
 async function fetchRecentPosts(profileUrl: string, limit: number): Promise<RawInspirationPost[]> {
   const token = getToken();
-  const actor = getActor();
+  const actor = actorFor(profileUrl);
   const url = `https://api.apify.com/v2/acts/${actor}/run-sync-get-dataset-items?token=${token}&format=json`;
 
   const controller = new AbortController();
@@ -211,7 +236,7 @@ async function fetchRecentPosts(profileUrl: string, limit: number): Promise<RawI
     }
     if (res.status === 404) {
       throw new InspirationProviderError(
-        `El actor "${actor}" no existe en Apify (revisá APIFY_LINKEDIN_POSTS_ACTOR).`,
+        `El actor "${actor}" no existe en Apify (revisá las env APIFY_*_ACTOR).`,
         { profileUrl, status: res.status },
       );
     }
@@ -235,6 +260,9 @@ async function fetchRecentPosts(profileUrl: string, limit: number): Promise<RawI
     console.warn(
       `[inspiration/apify] ${dropped}/${data.length} ítems descartados por shape desconocido (${profileUrl})`,
     );
+  }
+  if (data.length === 0) {
+    console.warn(`[inspiration/apify] dataset vacío para ${profileUrl} (actor ${actor})`);
   }
   return mapped.slice(0, limit);
 }

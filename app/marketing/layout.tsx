@@ -20,7 +20,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
       <div className="px-6 py-8">
         <PageHeader
           title="Marketing"
-          description="Insumos del equipo (ICP, personas, pilares, fuentes, voz) y salidas del motor de contenido"
+          description="El motor de contenido, sus salidas (ideas, campañas) y los insumos del equipo (ICP, personas, pilares, fuentes, voz)"
         />
         <MarketingTabs />
         <div className="mt-6">{children}</div>

@@ -103,7 +103,7 @@ export default function IdeasClient({ canEdit }: { canEdit: boolean }) {
           title="Todavía no hay ideas"
           description="Corré el motor desde la sección Contenido para generar las primeras."
           action={
-            <Link href="/contenido" className="text-sm text-brand hover:underline">
+            <Link href="/marketing/contenido" className="text-sm text-brand hover:underline">
               Ir a Contenido →
             </Link>
           }
