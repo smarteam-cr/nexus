@@ -3,11 +3,13 @@
 /**
  * components/marketing/ICPView.tsx
  *
- * Vista read-only del ICP — extracción props-driven del viejo app/icp/ICPSection.tsx
- * (que tenía el contenido hardcodeado). Ahora el contenido viene de la tabla IcpItem
- * (editable en /marketing/icp) y esta vista solo pinta. Las clases visuales se
- * conservan IDÉNTICAS al componente original (por eso los grises literales: es una
- * relocación, no diseño nuevo; el remap de html.light las cubre).
+ * Vista del ICP — extracción props-driven del viejo app/icp/ICPSection.tsx
+ * (que tenía el contenido hardcodeado). El contenido vive en la tabla IcpItem.
+ * Modo dual: read-only (por default, usado donde `editable` no se pasa) y
+ * editable (usado por /marketing/icp — mismo formato visual, con altas/bajas/
+ * ediciones in-place vía onAdd/onEdit/onDelete). Las clases visuales se
+ * conservan IDÉNTICAS al componente original (por eso los grises literales: es
+ * una relocación, no diseño nuevo; el remap de html.light las cubre).
  */
 import { useState } from "react";
 import type { IcpSection } from "@prisma/client";
@@ -15,6 +17,14 @@ import type { IcpSection } from "@prisma/client";
 export interface IcpViewGroup {
   section: IcpSection;
   items: Array<{ id: string; label: string }>;
+}
+
+interface EditHandlers {
+  editable?: boolean;
+  onAdd?: (section: IcpSection, label: string) => void;
+  onEdit?: (id: string, label: string) => void;
+  onDelete?: (id: string) => void;
+  busy?: boolean;
 }
 
 const SIGNAL_SECTIONS: Array<{ section: IcpSection; level: "strong" | "medium" | "weak" | "anti"; label: string }> = [
@@ -31,8 +41,8 @@ const SIGNAL_CONFIG: Record<string, { accent: string; dot: string; panelBorder: 
   anti: { accent: "border-l-red-400", dot: "bg-red-400", panelBorder: "border-red-500/25", panelBg: "bg-red-500/5" },
 };
 
-function itemsOf(groups: IcpViewGroup[], section: IcpSection): string[] {
-  return (groups.find((g) => g.section === section)?.items ?? []).map((i) => i.label);
+function itemsOf(groups: IcpViewGroup[], section: IcpSection): Array<{ id: string; label: string }> {
+  return groups.find((g) => g.section === section)?.items ?? [];
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -41,33 +51,199 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function NumberedList({ items, accent = "text-brand-light" }: { items: string[]; accent?: string }) {
+/** Lista bullet/numerada editable — hover muestra editar/borrar, "+ Agregar" al final. */
+function EditableList({
+  section,
+  items,
+  numbered,
+  accent = "text-brand-light",
+  editable,
+  onAdd,
+  onEdit,
+  onDelete,
+  busy,
+}: {
+  section: IcpSection;
+  items: Array<{ id: string; label: string }>;
+  numbered: boolean;
+  accent?: string;
+} & EditHandlers) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [newText, setNewText] = useState("");
+
+  const startEdit = (item: { id: string; label: string }) => {
+    setEditingId(item.id);
+    setEditingText(item.label);
+  };
+  const saveEdit = () => {
+    if (editingId && editingText.trim()) onEdit?.(editingId, editingText.trim());
+    setEditingId(null);
+  };
+  const saveAdd = () => {
+    if (newText.trim()) onAdd?.(section, newText.trim());
+    setNewText("");
+    setAdding(false);
+  };
+
+  const Wrapper = numbered ? "ol" : "ul";
+
   return (
-    <ol className="space-y-1.5">
-      {items.map((item, i) => (
-        <li key={i} className="flex items-start gap-2 text-xs text-gray-300 leading-relaxed">
-          <span className={`flex-shrink-0 text-2xs font-bold ${accent} mt-0.5 w-3 text-right`}>{i + 1}.</span>
-          {item}
-        </li>
-      ))}
-    </ol>
+    <div>
+      <Wrapper className="space-y-1.5">
+        {items.map((item, i) => (
+          <li key={item.id} className="group/item flex items-start gap-2 text-xs text-gray-300 leading-relaxed">
+            {numbered ? (
+              <span className={`flex-shrink-0 text-2xs font-bold ${accent} mt-0.5 w-3 text-right`}>{i + 1}.</span>
+            ) : (
+              <span className="flex-shrink-0 mt-1.5 w-1 h-1 rounded-full bg-gray-600" />
+            )}
+            {editingId === item.id ? (
+              <span className="flex-1 flex items-center gap-1">
+                <input
+                  value={editingText}
+                  onChange={(e) => setEditingText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveEdit();
+                    if (e.key === "Escape") setEditingId(null);
+                  }}
+                  className="flex-1 min-w-0 bg-gray-800 text-white text-xs px-1.5 py-0.5 rounded border border-gray-700"
+                  autoFocus
+                />
+                <button onClick={saveEdit} className="flex-shrink-0 text-brand-light hover:opacity-80" title="Guardar">
+                  ✓
+                </button>
+                <button onClick={() => setEditingId(null)} className="flex-shrink-0 text-gray-500 hover:text-gray-300" title="Cancelar">
+                  ✕
+                </button>
+              </span>
+            ) : (
+              <>
+                <span className="flex-1">{item.label}</span>
+                {editable && (
+                  <span className="flex-shrink-0 flex gap-1.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                    <button onClick={() => startEdit(item)} title="Editar" className="text-gray-500 hover:text-white">
+                      ✎
+                    </button>
+                    <button onClick={() => onDelete?.(item.id)} title="Borrar" className="text-gray-500 hover:text-red-400">
+                      🗑
+                    </button>
+                  </span>
+                )}
+              </>
+            )}
+          </li>
+        ))}
+      </Wrapper>
+      {editable &&
+        (adding ? (
+          <div className="mt-1.5 flex items-center gap-1">
+            <input
+              value={newText}
+              onChange={(e) => setNewText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveAdd();
+                if (e.key === "Escape") {
+                  setAdding(false);
+                  setNewText("");
+                }
+              }}
+              placeholder="Nuevo ítem…"
+              className="flex-1 min-w-0 bg-gray-800 text-white text-xs px-1.5 py-0.5 rounded border border-gray-700"
+              autoFocus
+            />
+            <button onClick={saveAdd} disabled={busy} className="flex-shrink-0 text-xs text-brand-light hover:underline disabled:opacity-40">
+              Agregar
+            </button>
+            <button
+              onClick={() => {
+                setAdding(false);
+                setNewText("");
+              }}
+              className="flex-shrink-0 text-xs text-gray-500 hover:text-gray-300"
+            >
+              Cancelar
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => setAdding(true)} className="mt-1.5 text-2xs text-brand-light hover:underline">
+            + Agregar
+          </button>
+        ))}
+    </div>
   );
 }
 
-function BulletList({ items }: { items: string[] }) {
+/** Industrias — pills en vez de lista, con "×" en hover y una pill "+ Agregar". */
+function EditableIndustries({
+  section,
+  items,
+  editable,
+  onAdd,
+  onDelete,
+}: {
+  section: IcpSection;
+  items: Array<{ id: string; label: string }>;
+} & EditHandlers) {
+  const [adding, setAdding] = useState(false);
+  const [newText, setNewText] = useState("");
+
+  const commit = () => {
+    if (newText.trim()) onAdd?.(section, newText.trim());
+    setNewText("");
+    setAdding(false);
+  };
+
   return (
-    <ul className="space-y-1.5">
-      {items.map((item, i) => (
-        <li key={i} className="flex items-start gap-2 text-xs text-gray-300 leading-relaxed">
-          <span className="flex-shrink-0 mt-1.5 w-1 h-1 rounded-full bg-gray-600" />
-          {item}
-        </li>
+    <div className="flex flex-wrap gap-1.5 items-center">
+      {items.map((item) => (
+        <span
+          key={item.id}
+          className="group/pill inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-brand/10 text-brand-light border border-brand/20"
+        >
+          {item.label}
+          {editable && (
+            <button
+              onClick={() => onDelete?.(item.id)}
+              title="Borrar"
+              className="opacity-0 group-hover/pill:opacity-100 transition-opacity text-brand-light/70 hover:text-red-400 leading-none"
+            >
+              ×
+            </button>
+          )}
+        </span>
       ))}
-    </ul>
+      {editable &&
+        (adding ? (
+          <input
+            value={newText}
+            onChange={(e) => setNewText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape") {
+                setAdding(false);
+                setNewText("");
+              }
+            }}
+            onBlur={commit}
+            placeholder="Nueva industria…"
+            className="px-2 py-0.5 text-xs bg-gray-800 text-white rounded-full border border-gray-700 w-32"
+            autoFocus
+          />
+        ) : (
+          <button
+            onClick={() => setAdding(true)}
+            className="px-2 py-0.5 rounded-full text-xs border border-dashed border-gray-600 text-gray-500 hover:text-white hover:border-gray-400"
+          >
+            + Agregar
+          </button>
+        ))}
+    </div>
   );
 }
 
-function ICPCard({ groups }: { groups: IcpViewGroup[] }) {
+function ICPCard({ groups, editable, onAdd, onEdit, onDelete, busy }: { groups: IcpViewGroup[] } & EditHandlers) {
   const [signalOpen, setSignalOpen] = useState<string | null>("strong");
 
   const descriptors = itemsOf(groups, "FIRMOGRAFICA_DESCRIPTOR");
@@ -77,7 +253,7 @@ function ICPCard({ groups }: { groups: IcpViewGroup[] }) {
   const org = itemsOf(groups, "BEHAVIORAL_ORG");
   const decision = itemsOf(groups, "BEHAVIORAL_DECISION");
   const signals = SIGNAL_SECTIONS.map((s) => ({ ...s, items: itemsOf(groups, s.section) })).filter(
-    (s) => s.items.length > 0,
+    (s) => editable || s.items.length > 0,
   );
 
   return (
@@ -106,39 +282,33 @@ function ICPCard({ groups }: { groups: IcpViewGroup[] }) {
         <div className="p-5 space-y-5">
           <div>
             <SectionTitle>Firmográfica</SectionTitle>
-            <BulletList items={descriptors} />
+            <EditableList section="FIRMOGRAFICA_DESCRIPTOR" items={descriptors} numbered={false} editable={editable} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} busy={busy} />
           </div>
           <div>
             <SectionTitle>Industrias con validación real</SectionTitle>
-            <div className="flex flex-wrap gap-1.5">
-              {industries.map((ind) => (
-                <span key={ind} className="px-2 py-0.5 rounded-full text-xs bg-brand/10 text-brand-light border border-brand/20">
-                  {ind}
-                </span>
-              ))}
-            </div>
+            <EditableIndustries section="FIRMOGRAFICA_INDUSTRIA" items={industries} editable={editable} onAdd={onAdd} onDelete={onDelete} busy={busy} />
           </div>
         </div>
 
         <div className="p-5 space-y-5">
           <div>
             <SectionTitle>Revenue Intelligence</SectionTitle>
-            <NumberedList items={revenue} />
+            <EditableList section="BEHAVIORAL_REVENUE" items={revenue} numbered editable={editable} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} busy={busy} />
           </div>
           <div>
             <SectionTitle>Canales y comportamiento</SectionTitle>
-            <NumberedList items={channels} accent="text-purple-400" />
+            <EditableList section="BEHAVIORAL_CANALES" items={channels} numbered accent="text-purple-400" editable={editable} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} busy={busy} />
           </div>
         </div>
 
         <div className="p-5 space-y-5">
           <div>
             <SectionTitle>La organización</SectionTitle>
-            <NumberedList items={org} accent="text-sky-400" />
+            <EditableList section="BEHAVIORAL_ORG" items={org} numbered accent="text-sky-400" editable={editable} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} busy={busy} />
           </div>
           <div>
             <SectionTitle>Estructura de decisión</SectionTitle>
-            <NumberedList items={decision} accent="text-sky-400" />
+            <EditableList section="BEHAVIORAL_DECISION" items={decision} numbered accent="text-sky-400" editable={editable} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} busy={busy} />
           </div>
         </div>
       </div>
@@ -184,7 +354,16 @@ function ICPCard({ groups }: { groups: IcpViewGroup[] }) {
               const cfg = SIGNAL_CONFIG[group.level];
               return (
                 <div className={`rounded-xl border px-4 py-3 ${cfg.panelBorder} ${cfg.panelBg}`}>
-                  <BulletList items={group.items} />
+                  <EditableList
+                    section={group.section}
+                    items={group.items}
+                    numbered={false}
+                    editable={editable}
+                    onAdd={onAdd}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    busy={busy}
+                  />
                 </div>
               );
             })()}
@@ -242,7 +421,7 @@ function TierCard({ tier, label, color }: { tier: string; label: string; color: 
   );
 }
 
-export default function ICPView({ groups }: { groups: IcpViewGroup[] }) {
+export default function ICPView({ groups, editable, onAdd, onEdit, onDelete, busy }: { groups: IcpViewGroup[] } & EditHandlers) {
   return (
     <div className="mt-8 mb-8 space-y-3">
       <div className="flex items-center gap-2 mb-1">
@@ -252,7 +431,7 @@ export default function ICPView({ groups }: { groups: IcpViewGroup[] }) {
         <div className="flex-1 h-px bg-gray-800" />
       </div>
 
-      <ICPCard groups={groups} />
+      <ICPCard groups={groups} editable={editable} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} busy={busy} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <TierCard tier="2" label="Tier 2" color="border-purple-500/15" />

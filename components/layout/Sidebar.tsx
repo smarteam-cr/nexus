@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "@/lib/theme";
 import { isSalesAreaRole } from "@/lib/auth/sales-roles";
+import MarketingFlyout from "./MarketingFlyout";
 
 interface ClientSummary {
   id: string;
@@ -223,7 +224,8 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
 
   // Visibilidad de ítems del menú por rol de permiso (roleEnum). Es cosmético:
   // la seguridad real vive en cada página/endpoint; esto solo evita mostrar
-  // accesos que el rol no usa. Universales (todos): Clientes, ICP, Sesiones, Conocimientos.
+  // accesos que el rol no usa. Universales (todos): Clientes, Marketing (incluye
+  // ICP en su submenú), Sesiones, Conocimientos.
   const role = user.role ?? "";
   const isSuperAdmin = user.isSuperAdmin || role === "SUPER_ADMIN";
   const canSeeAgents = isSuperAdmin || ["VENTAS", "DEV", "CSL", "MARKETING"].includes(role); // todos menos CSE (DEV ≡ VENTAS)
@@ -288,32 +290,9 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
               </svg>
             }
           />
-          <NavItem
-            href="/icp"
-            active={pathname.startsWith("/icp")}
-            isOpen={isOpen}
-            label="ICP"
-            icon={
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <circle cx="12" cy="12" r="9" strokeWidth={2} />
-                <circle cx="12" cy="12" r="5" strokeWidth={2} />
-                <circle cx="12" cy="12" r="1.5" strokeWidth={2} />
-              </svg>
-            }
-          />
-          {/* Marketing (incluye el motor de Contenido como tab): universal — todo
-              rol interno VE; editan MARKETING/CSL/SUPER_ADMIN (gate en API/páginas). */}
-          <NavItem
-            href="/marketing"
-            active={pathname.startsWith("/marketing") || pathname.startsWith("/contenido")}
-            isOpen={isOpen}
-            label="Marketing"
-            icon={
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-              </svg>
-            }
-          />
+          {/* Marketing: universal — todo rol interno VE (submenú flyout, incluye
+              ICP/Audiencia); editan MARKETING/CSL/SUPER_ADMIN (gate en API/páginas). */}
+          <MarketingFlyout isOpen={isOpen} />
           {canSeePortfolio && (
             <NavItem
               href="/dashboard"

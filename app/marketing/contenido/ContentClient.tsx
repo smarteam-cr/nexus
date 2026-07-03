@@ -8,7 +8,7 @@
  * Incluye arriba la barra del motor (CTA "Generar ideas nuevas" + estado de la
  * última corrida) para no depender de navegar a la sección Generación.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
@@ -53,7 +53,13 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
 
   const engine = useMarketingEngine();
 
+  // requestId evita que una respuesta vieja (ej. el fetch inicial, si tarda más
+  // que el fetch disparado por un toggle posterior) pise el estado con datos
+  // stale — sin esto, marcar "usada" podía revertirse solo si el fetch de
+  // montaje resolvía después.
+  const requestIdRef = useRef(0);
   const load = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     try {
       const params = new URLSearchParams();
       params.set("used", tab === "used" ? "true" : "false");
@@ -62,12 +68,14 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
         fetchJson<{ ideas: IdeaRow[] }>(`/api/marketing/ideas?${params.toString()}`),
         fetchJson<{ pillars: PillarOption[] }>("/api/marketing/pillars"),
       ]);
+      if (requestId !== requestIdRef.current) return;
       setIdeas(ideasRes.ideas);
       setPillars(pillarsRes.pillars);
     } catch (e) {
+      if (requestId !== requestIdRef.current) return;
       toast.error(e instanceof ApiError ? e.message : "No se pudieron cargar las ideas.");
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [toast, pillarFilter, tab]);
   useEffect(() => {
@@ -75,10 +83,14 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
   }, [load]);
 
   // Cuando el motor termina una corrida disparada desde esta página, refrescar
-  // la lista de ideas también (además del propio estado interno del hook).
+  // la lista también — pero SOLO en la transición ocupado→libre, no en el
+  // montaje (engine.busy arranca en false y disparaba un load() redundante
+  // que competía con el del efecto de arriba).
+  const wasEngineBusyRef = useRef(false);
   const engineBusy = engine.busy;
   useEffect(() => {
-    if (!engineBusy) load();
+    if (wasEngineBusyRef.current && !engineBusy) load();
+    wasEngineBusyRef.current = engineBusy;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engineBusy]);
 
