@@ -2,12 +2,14 @@
 
 /**
  * CRUD del ICP (1 fila = 1 bullet), agrupado por sección. La vista bonita para
- * consumo vive en /icp (ICPView); acá es administración pura.
+ * consumo vive en /icp (ICPView); acá es administración pura. Editar un bullet
+ * existente sigue siendo inline (texto corto); agregar uno nuevo abre el panel
+ * lateral con la sección ya fijada.
  */
 import { useState, useEffect, useCallback } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog } from "@/components/ui";
+import { ConfirmDialog, Drawer } from "@/components/ui";
 import { ICP_SECTION_META, ICP_SECTION_ORDER } from "@/lib/marketing/seed-data";
 import type { IcpSection } from "@prisma/client";
 
@@ -26,7 +28,8 @@ export default function IcpAdminClient({ canEdit }: { canEdit: boolean }) {
   const [sections, setSections] = useState<SectionGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [newLabels, setNewLabels] = useState<Record<string, string>>({});
+  const [drawerSection, setDrawerSection] = useState<IcpSection | null>(null);
+  const [newLabel, setNewLabel] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -45,17 +48,22 @@ export default function IcpAdminClient({ canEdit }: { canEdit: boolean }) {
     load();
   }, [load]);
 
-  const add = async (section: IcpSection) => {
-    const label = (newLabels[section] ?? "").trim();
-    if (!label || busy) return;
+  const closeDrawer = () => {
+    setDrawerSection(null);
+    setNewLabel("");
+  };
+
+  const add = async () => {
+    const label = newLabel.trim();
+    if (!label || !drawerSection || busy) return;
     setBusy(true);
     try {
       await fetchJson("/api/marketing/icp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ section, label }),
+        body: JSON.stringify({ section: drawerSection, label }),
       });
-      setNewLabels((p) => ({ ...p, [section]: "" }));
+      closeDrawer();
       load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo agregar.");
@@ -106,9 +114,19 @@ export default function IcpAdminClient({ canEdit }: { canEdit: boolean }) {
         const meta = ICP_SECTION_META[sectionKey];
         return (
           <div key={sectionKey} className="rounded-2xl border border-line bg-surface p-4">
-            <p className="text-xs font-semibold uppercase tracking-widest text-fg-muted mb-3">
-              {meta.label}
-            </p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold uppercase tracking-widest text-fg-muted">
+                {meta.label}
+              </p>
+              {canEdit && (
+                <button
+                  onClick={() => setDrawerSection(sectionKey)}
+                  className="text-xs text-brand hover:underline"
+                >
+                  + Agregar
+                </button>
+              )}
+            </div>
             <ul className="space-y-1.5">
               {(group?.items ?? []).map((item) => (
                 <li key={item.id} className="flex items-start gap-2 group">
@@ -159,27 +177,45 @@ export default function IcpAdminClient({ canEdit }: { canEdit: boolean }) {
                 <li className="text-xs text-fg-muted italic">Sin ítems en esta sección.</li>
               )}
             </ul>
-            {canEdit && (
-              <div className="mt-3 flex gap-2">
-                <input
-                  value={newLabels[sectionKey] ?? ""}
-                  onChange={(e) => setNewLabels((p) => ({ ...p, [sectionKey]: e.target.value }))}
-                  onKeyDown={(e) => e.key === "Enter" && add(sectionKey)}
-                  placeholder="Agregar ítem…"
-                  className="flex-1 px-3 py-1.5 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-                />
-                <button
-                  onClick={() => add(sectionKey)}
-                  disabled={busy || !(newLabels[sectionKey] ?? "").trim()}
-                  className="px-3 py-1.5 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
-                >
-                  Agregar
-                </button>
-              </div>
-            )}
           </div>
         );
       })}
+
+      <Drawer
+        open={!!drawerSection}
+        onClose={closeDrawer}
+        title="Nuevo ítem del ICP"
+        description={drawerSection ? ICP_SECTION_META[drawerSection].label : undefined}
+        footer={
+          <>
+            <button onClick={closeDrawer} className="px-4 py-2 text-sm rounded-lg border border-line text-fg-secondary hover:bg-surface-hover">
+              Cancelar
+            </button>
+            <button
+              onClick={add}
+              disabled={busy || !newLabel.trim()}
+              className="px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
+            >
+              {busy ? "Agregando…" : "Agregar"}
+            </button>
+          </>
+        }
+      >
+        <textarea
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder="Texto del ítem…"
+          rows={3}
+          className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
+          autoFocus
+        />
+      </Drawer>
 
       <ConfirmDialog
         open={!!confirmDeleteId}

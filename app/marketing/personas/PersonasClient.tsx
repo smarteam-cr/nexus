@@ -1,10 +1,11 @@
 "use client";
 
-/** CRUD de buyer personas (insumo del agente de contenido). */
+/** CRUD de buyer personas (insumo del agente de contenido). Crear/editar vive
+ * en un panel lateral (Drawer) — el CTA lo abre, el form no está siempre visible. */
 import { useState, useEffect, useCallback } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog, EmptyState, Badge } from "@/components/ui";
+import { ConfirmDialog, EmptyState, Badge, Drawer } from "@/components/ui";
 
 interface PersonaRow {
   id: string;
@@ -22,6 +23,7 @@ export default function PersonasClient({ canEdit }: { canEdit: boolean }) {
   const toast = useToast();
   const [rows, setRows] = useState<PersonaRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -41,9 +43,16 @@ export default function PersonasClient({ canEdit }: { canEdit: boolean }) {
     load();
   }, [load]);
 
-  const cancelEdit = () => {
+  const closeDrawer = () => {
+    setDrawerOpen(false);
     setForm(EMPTY_FORM);
     setEditingId(null);
+  };
+
+  const openCreate = () => {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setDrawerOpen(true);
   };
 
   const startEdit = (r: PersonaRow) => {
@@ -55,6 +64,7 @@ export default function PersonasClient({ canEdit }: { canEdit: boolean }) {
       pains: r.pains ?? "",
       goals: r.goals ?? "",
     });
+    setDrawerOpen(true);
   };
 
   const save = async () => {
@@ -83,7 +93,7 @@ export default function PersonasClient({ canEdit }: { canEdit: boolean }) {
         });
         toast.success("Persona creada.");
       }
-      cancelEdit();
+      closeDrawer();
       load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo guardar.");
@@ -118,59 +128,13 @@ export default function PersonasClient({ canEdit }: { canEdit: boolean }) {
   return (
     <div className="space-y-6">
       {canEdit && (
-        <div className="rounded-2xl border border-line bg-surface p-5 space-y-3">
-          <p className="text-sm font-semibold text-fg">{editingId ? "Editar persona" : "Nueva persona"}</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Nombre (ej. Director comercial LATAM)…"
-              className="px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-            />
-            <input
-              value={form.role}
-              onChange={(e) => setForm({ ...form, role: e.target.value })}
-              placeholder="Cargo / segmento (opcional)…"
-              className="px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-            />
-          </div>
-          <textarea
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Quién es, contexto…"
-            rows={3}
-            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-          />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <textarea
-              value={form.pains}
-              onChange={(e) => setForm({ ...form, pains: e.target.value })}
-              placeholder="Dolores (opcional)…"
-              rows={2}
-              className="px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-            />
-            <textarea
-              value={form.goals}
-              onChange={(e) => setForm({ ...form, goals: e.target.value })}
-              placeholder="Objetivos (opcional)…"
-              rows={2}
-              className="px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={save}
-              disabled={busy || !form.name.trim() || !form.description.trim()}
-              className="px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
-            >
-              {busy ? "Guardando…" : editingId ? "Guardar cambios" : "Crear persona"}
-            </button>
-            {editingId && (
-              <button onClick={cancelEdit} className="px-4 py-2 text-sm rounded-lg border border-line text-fg-secondary hover:bg-surface-hover">
-                Cancelar
-              </button>
-            )}
-          </div>
+        <div className="flex justify-end">
+          <button
+            onClick={openCreate}
+            className="px-4 py-2 text-sm rounded-lg bg-brand text-white hover:opacity-90"
+          >
+            + Nueva persona
+          </button>
         </div>
       )}
 
@@ -180,7 +144,7 @@ export default function PersonasClient({ canEdit }: { canEdit: boolean }) {
         <EmptyState
           variant="dashed"
           title="Todavía no hay buyer personas"
-          description={canEdit ? "Creá la primera con el formulario de arriba." : "El equipo de Marketing todavía no cargó personas."}
+          description={canEdit ? "Creá la primera con el botón de arriba." : "El equipo de Marketing todavía no cargó personas."}
         />
       ) : (
         <ul className="space-y-2">
@@ -219,6 +183,63 @@ export default function PersonasClient({ canEdit }: { canEdit: boolean }) {
           ))}
         </ul>
       )}
+
+      <Drawer
+        open={drawerOpen}
+        onClose={closeDrawer}
+        title={editingId ? "Editar persona" : "Nueva persona"}
+        footer={
+          <>
+            <button onClick={closeDrawer} className="px-4 py-2 text-sm rounded-lg border border-line text-fg-secondary hover:bg-surface-hover">
+              Cancelar
+            </button>
+            <button
+              onClick={save}
+              disabled={busy || !form.name.trim() || !form.description.trim()}
+              className="px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
+            >
+              {busy ? "Guardando…" : editingId ? "Guardar cambios" : "Crear persona"}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <input
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Nombre (ej. Director comercial LATAM)…"
+            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
+            autoFocus
+          />
+          <input
+            value={form.role}
+            onChange={(e) => setForm({ ...form, role: e.target.value })}
+            placeholder="Cargo / segmento (opcional)…"
+            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
+          />
+          <textarea
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            placeholder="Quién es, contexto…"
+            rows={3}
+            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
+          />
+          <textarea
+            value={form.pains}
+            onChange={(e) => setForm({ ...form, pains: e.target.value })}
+            placeholder="Dolores (opcional)…"
+            rows={2}
+            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
+          />
+          <textarea
+            value={form.goals}
+            onChange={(e) => setForm({ ...form, goals: e.target.value })}
+            placeholder="Objetivos (opcional)…"
+            rows={2}
+            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
+          />
+        </div>
+      </Drawer>
 
       <ConfirmDialog
         open={!!confirmDeleteId}

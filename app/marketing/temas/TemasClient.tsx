@@ -1,13 +1,15 @@
 "use client";
 
 /**
- * Pilares de contenido: bloque de SUGERENCIAS PENDING del agente (aprobar =
- * crea el pilar y re-linkea ideas huérfanas; descartar) + CRUD de pilares.
+ * Temas de contenido (antes "Pilares" — el modelo Prisma sigue llamándose
+ * ContentPillar, esto es solo relabel de UI): bloque de SUGERENCIAS PENDING
+ * del agente (aprobar = crea el tema y re-linkea ideas huérfanas; descartar)
+ * + CRUD (crear/editar en panel lateral).
  */
 import { useState, useEffect, useCallback } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog, EmptyState, Badge } from "@/components/ui";
+import { ConfirmDialog, EmptyState, Badge, Drawer } from "@/components/ui";
 
 interface PillarRow {
   id: string;
@@ -26,11 +28,12 @@ interface SuggestionRow {
 
 const EMPTY_FORM = { name: "", description: "" };
 
-export default function PillarsClient({ canEdit }: { canEdit: boolean }) {
+export default function TemasClient({ canEdit }: { canEdit: boolean }) {
   const toast = useToast();
   const [pillars, setPillars] = useState<PillarRow[]>([]);
   const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,7 +47,7 @@ export default function PillarsClient({ canEdit }: { canEdit: boolean }) {
       setPillars(d.pillars);
       setSuggestions(d.suggestions);
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudieron cargar los pilares.");
+      toast.error(e instanceof ApiError ? e.message : "No se pudieron cargar los temas.");
     } finally {
       setLoading(false);
     }
@@ -67,7 +70,7 @@ export default function PillarsClient({ canEdit }: { canEdit: boolean }) {
       );
       if (action === "approve") {
         toast.success(
-          `Pilar creado${r.relinkedIdeas ? ` · ${r.relinkedIdeas} idea(s) re-vinculadas` : ""}.`,
+          `Tema creado${r.relinkedIdeas ? ` · ${r.relinkedIdeas} idea(s) re-vinculadas` : ""}.`,
         );
       } else {
         toast.info("Sugerencia descartada.");
@@ -80,9 +83,22 @@ export default function PillarsClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
-  const cancelEdit = () => {
+  const closeDrawer = () => {
+    setDrawerOpen(false);
     setForm(EMPTY_FORM);
     setEditingId(null);
+  };
+
+  const openCreate = () => {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setDrawerOpen(true);
+  };
+
+  const startEdit = (r: PillarRow) => {
+    setEditingId(r.id);
+    setForm({ name: r.name, description: r.description ?? "" });
+    setDrawerOpen(true);
   };
 
   const save = async () => {
@@ -96,16 +112,16 @@ export default function PillarsClient({ canEdit }: { canEdit: boolean }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        toast.success("Pilar actualizado.");
+        toast.success("Tema actualizado.");
       } else {
         await fetchJson("/api/marketing/pillars", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        toast.success("Pilar creado.");
+        toast.success("Tema creado.");
       }
-      cancelEdit();
+      closeDrawer();
       load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo guardar.");
@@ -130,7 +146,7 @@ export default function PillarsClient({ canEdit }: { canEdit: boolean }) {
   const remove = async (id: string) => {
     try {
       await fetchJson(`/api/marketing/pillars/${id}`, { method: "DELETE" });
-      toast.info("Pilar eliminado (sus ideas quedan sin pilar, no se pierden).");
+      toast.info("Tema eliminado (sus ideas quedan sin tema, no se pierden).");
       load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar.");
@@ -183,35 +199,13 @@ export default function PillarsClient({ canEdit }: { canEdit: boolean }) {
 
       {/* CRUD */}
       {canEdit && (
-        <div className="rounded-2xl border border-line bg-surface p-5 space-y-3">
-          <p className="text-sm font-semibold text-fg">{editingId ? "Editar pilar" : "Nuevo pilar"}</p>
-          <input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Nombre del pilar (ej. IA aplicada a revenue)…"
-            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-          />
-          <textarea
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Qué cubre este pilar (opcional)…"
-            rows={2}
-            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-          />
-          <div className="flex gap-2">
-            <button
-              onClick={save}
-              disabled={busy || !form.name.trim()}
-              className="px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
-            >
-              {busy ? "Guardando…" : editingId ? "Guardar cambios" : "Crear pilar"}
-            </button>
-            {editingId && (
-              <button onClick={cancelEdit} className="px-4 py-2 text-sm rounded-lg border border-line text-fg-secondary hover:bg-surface-hover">
-                Cancelar
-              </button>
-            )}
-          </div>
+        <div className="flex justify-end">
+          <button
+            onClick={openCreate}
+            className="px-4 py-2 text-sm rounded-lg bg-brand text-white hover:opacity-90"
+          >
+            + Nuevo tema
+          </button>
         </div>
       )}
 
@@ -220,8 +214,8 @@ export default function PillarsClient({ canEdit }: { canEdit: boolean }) {
       ) : pillars.length === 0 ? (
         <EmptyState
           variant="dashed"
-          title="Todavía no hay pilares de contenido"
-          description={canEdit ? "Creá el primero, o corré el motor: el agente puede sugerir pilares." : "El equipo de Marketing todavía no cargó pilares."}
+          title="Todavía no hay temas de contenido"
+          description={canEdit ? "Creá el primero, o corré el motor: el agente puede sugerir temas." : "El equipo de Marketing todavía no cargó temas."}
         />
       ) : (
         <ul className="space-y-2">
@@ -247,13 +241,7 @@ export default function PillarsClient({ canEdit }: { canEdit: boolean }) {
                 </div>
                 {canEdit && (
                   <span className="flex-shrink-0 flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setEditingId(r.id);
-                        setForm({ name: r.name, description: r.description ?? "" });
-                      }}
-                      className="text-xs text-fg-muted hover:text-fg"
-                    >
+                    <button onClick={() => startEdit(r)} className="text-xs text-fg-muted hover:text-fg">
                       Editar
                     </button>
                     <button onClick={() => toggleActive(r)} className="text-xs text-fg-muted hover:text-fg">
@@ -270,6 +258,43 @@ export default function PillarsClient({ canEdit }: { canEdit: boolean }) {
         </ul>
       )}
 
+      <Drawer
+        open={drawerOpen}
+        onClose={closeDrawer}
+        title={editingId ? "Editar tema" : "Nuevo tema"}
+        footer={
+          <>
+            <button onClick={closeDrawer} className="px-4 py-2 text-sm rounded-lg border border-line text-fg-secondary hover:bg-surface-hover">
+              Cancelar
+            </button>
+            <button
+              onClick={save}
+              disabled={busy || !form.name.trim()}
+              className="px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
+            >
+              {busy ? "Guardando…" : editingId ? "Guardar cambios" : "Crear tema"}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <input
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Nombre del tema (ej. IA aplicada a revenue)…"
+            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
+            autoFocus
+          />
+          <textarea
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            placeholder="Qué cubre este tema (opcional)…"
+            rows={3}
+            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
+          />
+        </div>
+      </Drawer>
+
       <ConfirmDialog
         open={!!confirmDeleteId}
         onCancel={() => setConfirmDeleteId(null)}
@@ -278,8 +303,8 @@ export default function PillarsClient({ canEdit }: { canEdit: boolean }) {
           setConfirmDeleteId(null);
           if (id) await remove(id);
         }}
-        title="¿Borrar este pilar?"
-        description="Las ideas categorizadas en él quedan sin pilar (no se borran)."
+        title="¿Borrar este tema?"
+        description="Las ideas categorizadas en él quedan sin tema (no se borran)."
         confirmLabel="Borrar"
       />
     </div>

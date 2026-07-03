@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * Fuentes de inspiración (perfiles públicos de LinkedIn). CRUD + estado de la
- * última ingesta por fuente (lastFetchedAt / lastFetchError).
+ * Fuentes de inspiración (perfiles públicos de LinkedIn). CRUD (crear en
+ * panel lateral) + estado de la última ingesta por fuente (lastFetchedAt /
+ * lastFetchError).
  */
 import { useState, useEffect, useCallback } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog, EmptyState, Badge } from "@/components/ui";
+import { ConfirmDialog, EmptyState, Badge, Drawer } from "@/components/ui";
 
 interface SourceRow {
   id: string;
@@ -25,6 +26,7 @@ export default function SourcesClient({ canEdit }: { canEdit: boolean }) {
   const toast = useToast();
   const [rows, setRows] = useState<SourceRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -43,6 +45,11 @@ export default function SourcesClient({ canEdit }: { canEdit: boolean }) {
     load();
   }, [load]);
 
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    setForm(EMPTY_FORM);
+  };
+
   const add = async () => {
     if (!form.profileUrl.trim() || busy) return;
     setBusy(true);
@@ -56,7 +63,7 @@ export default function SourcesClient({ canEdit }: { canEdit: boolean }) {
         }),
       });
       toast.success("Fuente agregada.");
-      setForm(EMPTY_FORM);
+      closeDrawer();
       load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo agregar.");
@@ -90,37 +97,20 @@ export default function SourcesClient({ canEdit }: { canEdit: boolean }) {
 
   return (
     <div className="space-y-6">
-      <p className="text-xs text-fg-muted">
-        Perfiles públicos de LinkedIn que la ingesta scrapea (~20 posts recientes por corrida, sin duplicar).
-        Recomendado: 5–10 fuentes activas.
-      </p>
-
-      {canEdit && (
-        <div className="rounded-2xl border border-line bg-surface p-5 space-y-3">
-          <p className="text-sm font-semibold text-fg">Nueva fuente</p>
-          <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr] gap-3">
-            <input
-              value={form.profileUrl}
-              onChange={(e) => setForm({ ...form, profileUrl: e.target.value })}
-              placeholder="https://www.linkedin.com/in/…"
-              className="px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-            />
-            <input
-              value={form.label}
-              onChange={(e) => setForm({ ...form, label: e.target.value })}
-              placeholder="Etiqueta (opcional)…"
-              className="px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-            />
-          </div>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <p className="text-xs text-fg-muted max-w-xl">
+          Perfiles públicos de LinkedIn que la ingesta scrapea (~20 posts recientes por corrida, sin duplicar).
+          Recomendado: 5–10 fuentes activas.
+        </p>
+        {canEdit && (
           <button
-            onClick={add}
-            disabled={busy || !form.profileUrl.trim()}
-            className="px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
+            onClick={() => setDrawerOpen(true)}
+            className="flex-shrink-0 px-4 py-2 text-sm rounded-lg bg-brand text-white hover:opacity-90"
           >
-            {busy ? "Agregando…" : "Agregar fuente"}
+            + Nueva fuente
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {loading ? (
         <p className="text-sm text-fg-muted">Cargando…</p>
@@ -177,6 +167,43 @@ export default function SourcesClient({ canEdit }: { canEdit: boolean }) {
           ))}
         </ul>
       )}
+
+      <Drawer
+        open={drawerOpen}
+        onClose={closeDrawer}
+        title="Nueva fuente"
+        description="Un perfil o company público de LinkedIn."
+        footer={
+          <>
+            <button onClick={closeDrawer} className="px-4 py-2 text-sm rounded-lg border border-line text-fg-secondary hover:bg-surface-hover">
+              Cancelar
+            </button>
+            <button
+              onClick={add}
+              disabled={busy || !form.profileUrl.trim()}
+              className="px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
+            >
+              {busy ? "Agregando…" : "Agregar fuente"}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <input
+            value={form.profileUrl}
+            onChange={(e) => setForm({ ...form, profileUrl: e.target.value })}
+            placeholder="https://www.linkedin.com/in/…"
+            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
+            autoFocus
+          />
+          <input
+            value={form.label}
+            onChange={(e) => setForm({ ...form, label: e.target.value })}
+            placeholder="Etiqueta (opcional)…"
+            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
+          />
+        </div>
+      </Drawer>
 
       <ConfirmDialog
         open={!!confirmDeleteId}

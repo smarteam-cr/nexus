@@ -90,6 +90,10 @@ export const campaignPatchSchema = z.object({
   action: z.enum(["approve", "discard"]),
 });
 
+export const ideaPatchSchema = z.object({
+  used: z.boolean(),
+});
+
 // ── Output del agente de generación ────────────────────────────────────────────
 
 /** Un ítem inválido se descarta (safeParse por ítem), no tumba la corrida. */

@@ -59,11 +59,13 @@ export async function getSettings() {
 
 // ── Salidas del agente ─────────────────────────────────────────────────────────
 
-export async function getIdeas(filter?: { pillarId?: string; runId?: string }) {
+export async function getIdeas(filter?: { pillarId?: string; runId?: string; used?: boolean }) {
   return prisma.contentIdea.findMany({
     where: {
       ...(filter?.pillarId ? { pillarId: filter.pillarId } : {}),
       ...(filter?.runId ? { runId: filter.runId } : {}),
+      ...(filter?.used === true ? { usedAt: { not: null } } : {}),
+      ...(filter?.used === false ? { usedAt: null } : {}),
     },
     orderBy: { createdAt: "desc" },
     include: {

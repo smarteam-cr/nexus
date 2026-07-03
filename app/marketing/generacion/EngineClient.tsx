@@ -173,14 +173,15 @@ export default function EngineClient({ canEdit }: { canEdit: boolean }) {
 
       <p className="text-xs text-fg-muted">
         Las salidas viven en{" "}
-        <Link href="/marketing/ideas" className="text-brand hover:underline">
-          Ideas
+        <Link href="/marketing/contenido" className="text-brand hover:underline">
+          Contenido
         </Link>{" "}
         y{" "}
-        <Link href="/marketing/campanas" className="text-brand hover:underline">
-          Campañas
+        <Link href="/marketing/ideas-de-campana" className="text-brand hover:underline">
+          Ideas de campaña
         </Link>
-        . Los insumos (ICP, personas, pilares, fuentes, voz) se administran en las otras tabs.
+        . Los insumos (ICP, personas, temas, fuentes, voz) se administran en el resto de las
+        secciones.
       </p>
     </div>
   );

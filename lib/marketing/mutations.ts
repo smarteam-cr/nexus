@@ -82,6 +82,14 @@ export async function deleteIdea(id: string) {
   return prisma.contentIdea.delete({ where: { id } });
 }
 
+/** Marca/desmarca una idea como utilizada — sale de "Pendientes", entra a "Utilizadas". */
+export async function markIdeaUsed(id: string, used: boolean) {
+  return prisma.contentIdea.update({
+    where: { id },
+    data: { usedAt: used ? new Date() : null },
+  });
+}
+
 export async function reviewCampaign(id: string, action: "approve" | "discard") {
   return prisma.campaignIdea.update({
     where: { id },

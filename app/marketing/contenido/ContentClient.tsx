@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * Ideas de contenido generadas — PÁGINA DE ATERRIZAJE del módulo (el equipo de
- * Marketing llega acá el lunes). Salida NO-CRUD: se revisan y se PODAN (borrar
- * las que no sirven). Las buenas se migran a HubSpot a mano, campo por campo.
+ * Contenido — índice de ideas generadas (salida NO-CRUD): se revisan, se
+ * marcan como UTILIZADAS (salen del filtro Pendientes) o se PODAN (borrar).
+ * Página de aterrizaje del módulo (el equipo de Marketing llega el lunes).
  *
  * Incluye arriba la barra del motor (CTA "Generar ideas nuevas" + estado de la
- * última corrida) para no depender de navegar a la pestaña Contenido.
+ * última corrida) para no depender de navegar a la sección Generación.
  */
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
@@ -22,6 +22,7 @@ interface IdeaRow {
   imageConcept: string;
   suggestedPillarName: string | null;
   pillar: { id: string; name: string } | null;
+  usedAt: string | null;
   sources: Array<{
     post: { id: string; url: string | null; authorName: string | null; text: string };
   }>;
@@ -32,22 +33,33 @@ interface PillarOption {
   name: string;
 }
 
-export default function IdeasClient({ canEdit }: { canEdit: boolean }) {
+type UsedFilter = "pending" | "used";
+
+const TABS: Array<{ key: UsedFilter; label: string }> = [
+  { key: "pending", label: "Pendientes" },
+  { key: "used", label: "Utilizadas" },
+];
+
+export default function ContentClient({ canEdit }: { canEdit: boolean }) {
   const toast = useToast();
+  const [tab, setTab] = useState<UsedFilter>("pending");
   const [ideas, setIdeas] = useState<IdeaRow[]>([]);
   const [pillars, setPillars] = useState<PillarOption[]>([]);
   const [pillarFilter, setPillarFilter] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const engine = useMarketingEngine();
 
   const load = useCallback(async () => {
     try {
-      const qs = pillarFilter ? `?pillarId=${encodeURIComponent(pillarFilter)}` : "";
+      const params = new URLSearchParams();
+      params.set("used", tab === "used" ? "true" : "false");
+      if (pillarFilter) params.set("pillarId", pillarFilter);
       const [ideasRes, pillarsRes] = await Promise.all([
-        fetchJson<{ ideas: IdeaRow[] }>(`/api/marketing/ideas${qs}`),
+        fetchJson<{ ideas: IdeaRow[] }>(`/api/marketing/ideas?${params.toString()}`),
         fetchJson<{ pillars: PillarOption[] }>("/api/marketing/pillars"),
       ]);
       setIdeas(ideasRes.ideas);
@@ -57,7 +69,7 @@ export default function IdeasClient({ canEdit }: { canEdit: boolean }) {
     } finally {
       setLoading(false);
     }
-  }, [toast, pillarFilter]);
+  }, [toast, pillarFilter, tab]);
   useEffect(() => {
     load();
   }, [load]);
@@ -69,6 +81,24 @@ export default function IdeasClient({ canEdit }: { canEdit: boolean }) {
     if (!engineBusy) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engineBusy]);
+
+  const setUsed = async (id: string, used: boolean) => {
+    if (busyId) return;
+    setBusyId(id);
+    try {
+      await fetchJson(`/api/marketing/ideas/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ used }),
+      });
+      toast.info(used ? "Marcada como utilizada." : "Vuelve a Pendientes.");
+      load();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar.");
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const remove = async (id: string) => {
     try {
@@ -111,7 +141,7 @@ export default function IdeasClient({ canEdit }: { canEdit: boolean }) {
                   }`
                 : "Todavía no corriste el motor."}
           </p>
-          <Link href="/marketing/contenido" className="text-xs text-brand hover:underline">
+          <Link href="/marketing/generacion" className="text-xs text-brand hover:underline">
             Ver detalle del motor →
           </Link>
         </div>
@@ -127,16 +157,27 @@ export default function IdeasClient({ canEdit }: { canEdit: boolean }) {
       </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-xs text-fg-muted">
-          Revisá y <span className="font-medium text-fg-secondary">borrá las que no sirven</span>.
-          Las buenas se migran a HubSpot copiando campo por campo.
-        </p>
+        <div className="flex gap-1">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                tab === t.key
+                  ? "border-brand text-brand bg-brand/5 font-medium"
+                  : "border-line text-fg-muted hover:text-fg-secondary"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <select
           value={pillarFilter}
           onChange={(e) => setPillarFilter(e.target.value)}
           className="px-3 py-1.5 text-xs bg-surface border border-line rounded-lg text-fg"
         >
-          <option value="">Todos los pilares</option>
+          <option value="">Todos los temas</option>
           {pillars.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -150,17 +191,34 @@ export default function IdeasClient({ canEdit }: { canEdit: boolean }) {
       ) : ideas.length === 0 ? (
         <EmptyState
           variant="dashed"
-          title="Todavía no hay ideas"
-          description="Generá la primera tanda con el botón de arriba."
+          title={tab === "pending" ? "No hay ideas pendientes" : "Todavía no marcaste ideas como utilizadas"}
+          description={
+            tab === "pending"
+              ? "Generá la primera tanda con el botón de arriba."
+              : "Cuando publiques una idea, marcala como utilizada desde Pendientes."
+          }
         />
       ) : (
         <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {ideas.map((idea) => {
             const expanded = expandedId === idea.id;
+            const used = !!idea.usedAt;
             return (
-              <li key={idea.id} className="rounded-2xl border border-line bg-surface p-4 flex flex-col gap-2">
+              <li key={idea.id} className={`rounded-2xl border border-line bg-surface p-4 flex flex-col gap-2 ${used ? "opacity-70" : ""}`}>
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-semibold text-fg leading-snug">{idea.title}</p>
+                  <label className="flex items-start gap-2 min-w-0 cursor-pointer">
+                    {canEdit && (
+                      <input
+                        type="checkbox"
+                        checked={used}
+                        disabled={busyId === idea.id}
+                        onChange={(e) => setUsed(idea.id, e.target.checked)}
+                        title={used ? "Marcar como pendiente" : "Marcar como utilizada"}
+                        className="mt-0.5 flex-shrink-0 accent-brand"
+                      />
+                    )}
+                    <p className="text-sm font-semibold text-fg leading-snug">{idea.title}</p>
+                  </label>
                   {canEdit && (
                     <button
                       onClick={() => setConfirmDeleteId(idea.id)}
@@ -173,14 +231,19 @@ export default function IdeasClient({ canEdit }: { canEdit: boolean }) {
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-wrap">
+                  {used && (
+                    <Badge size="xs" variant="success">
+                      Utilizada
+                    </Badge>
+                  )}
                   {idea.pillar ? (
                     <Badge size="xs">{idea.pillar.name}</Badge>
                   ) : idea.suggestedPillarName ? (
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/30">
-                      Pilar sugerido: {idea.suggestedPillarName}
+                      Tema sugerido: {idea.suggestedPillarName}
                     </span>
                   ) : (
-                    <span className="text-[11px] text-fg-muted">Sin pilar</span>
+                    <span className="text-[11px] text-fg-muted">Sin tema</span>
                   )}
                   <span className="text-[11px] text-fg-muted">
                     {new Date(idea.createdAt).toLocaleDateString("es-CR")}
