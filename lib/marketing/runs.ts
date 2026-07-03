@@ -19,7 +19,7 @@
 import { prisma } from "@/lib/db/prisma";
 import type { MarketingRunKind, MarketingRunTrigger } from "@prisma/client";
 import { getInspirationProvider, InspirationProviderError } from "./inspiration";
-import { runGenerateIdeasAgent } from "./agents/generate-ideas";
+import { runGenerateIdeasAgent, GenerationParseError } from "./agents/generate-ideas";
 
 const POSTS_PER_SOURCE = 20;
 /** Un run RUNNING más viejo que esto se considera zombi (proceso reiniciado). */
@@ -156,6 +156,13 @@ async function runGenerate(runId: string): Promise<void> {
   } catch (e) {
     if (e instanceof Error && e.message === "NO_POSTS") {
       throw new Error("No hay posts de inspiración guardados. Corré la ingesta primero.");
+    }
+    // Si Claude respondió pero el JSON no parseó, guardar la respuesta CRUDA en
+    // el run — si no, la evidencia del fallo se pierde y no se puede diagnosticar.
+    if (e instanceof GenerationParseError) {
+      await prisma.marketingRun
+        .update({ where: { id: runId }, data: { rawOutput: e.rawOutput.slice(0, 100_000) } })
+        .catch(() => {});
     }
     throw e;
   }

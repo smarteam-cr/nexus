@@ -108,23 +108,67 @@ export async function buildGenerationInput(): Promise<{
   return { input, postIds: new Set(sorted.map((p) => p.id)), postsInWindow: posts.length };
 }
 
-// ── Parse (calcado de lib/business-cases/agent.ts, adaptado a objeto) ──────────
+// ── Parse ────────────────────────────────────────────────────────────────────
+// Extracción del primer "{" al fin del texto (calcado de parseJsonArray de
+// lib/business-cases/agent.ts, adaptado a objeto) + reparación LIFO si quedó
+// truncado por max_tokens.
 
-function parseJsonObject(text: string): Record<string, unknown> | null {
-  let s = text.trim();
-  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fence) s = fence[1].trim();
-  const start = s.indexOf("{");
-  const end = s.lastIndexOf("}");
-  if (start === -1 || end === -1 || end < start) return null;
+/**
+ * Repara un JSON truncado (stop_reason=max_tokens): cierra comillas/objetos/
+ * arrays abiertos en el orden CORRECTO usando una pila (el último abierto es
+ * el primero en cerrarse) — a diferencia de un simple conteo de profundidad,
+ * que cierra en el orden equivocado en cuanto hay un array anidado dentro de
+ * un objeto (exactamente la forma de esta respuesta: contentIdeas[]/
+ * pillarSuggestions[] dentro del objeto raíz). El último ítem incompleto queda
+ * con campos truncados — lo descarta después el Zod per-item de
+ * `normalizeCollection`, sin tumbar el resto de la tanda.
+ */
+function repairTruncatedJson(s: string): string | null {
+  const stack: Array<"{" | "["> = [];
+  let inStr = false;
+  let esc = false;
+  for (const ch of s) {
+    if (esc) {
+      esc = false;
+      continue;
+    }
+    if (ch === "\\" && inStr) {
+      esc = true;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = !inStr;
+      continue;
+    }
+    if (inStr) continue;
+    if (ch === "{" || ch === "[") stack.push(ch);
+    else if (ch === "}" || ch === "]") stack.pop();
+  }
+  if (stack.length === 0 && !inStr) return null; // nada que reparar
+  let suffix = inStr ? '"' : "";
+  for (let i = stack.length - 1; i >= 0; i--) suffix += stack[i] === "{" ? "}" : "]";
+  return s + suffix;
+}
+
+function tryParse(candidate: string): Record<string, unknown> | null {
   try {
-    const obj: unknown = JSON.parse(s.slice(start, end + 1));
+    const obj: unknown = JSON.parse(candidate);
     return obj && typeof obj === "object" && !Array.isArray(obj)
       ? (obj as Record<string, unknown>)
       : null;
   } catch {
     return null;
   }
+}
+
+function parseJsonObject(text: string): Record<string, unknown> | null {
+  let s = text.trim();
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) s = fence[1].trim();
+  const start = s.indexOf("{");
+  if (start === -1) return null;
+  const candidate = s.slice(start);
+  return tryParse(candidate) ?? tryParse(repairTruncatedJson(candidate) ?? "");
 }
 
 function normalizeCollection<T>(raw: unknown, schema: { safeParse: (v: unknown) => { success: boolean; data?: T } }): T[] {
@@ -144,6 +188,18 @@ export interface GenerationResult {
   rawOutput: string;
 }
 
+/** El rawOutput sobrevive a un parseo fallido — se adjunta al Error para que el
+ * caller lo persista en el run (si no, se pierde la evidencia del fallo). */
+export class GenerationParseError extends Error {
+  constructor(
+    message: string,
+    readonly rawOutput: string,
+  ) {
+    super(message);
+    this.name = "GenerationParseError";
+  }
+}
+
 // ── Run ────────────────────────────────────────────────────────────────────────
 
 export async function runGenerateIdeasAgent(runId: string): Promise<GenerationResult> {
@@ -156,13 +212,20 @@ export async function runGenerateIdeasAgent(runId: string): Promise<GenerationRe
 
   const { input, postIds } = await buildGenerationInput();
 
-  const msg = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 8000,
-    temperature: 0,
-    system: agent.systemPrompt,
-    messages: [{ role: "user", content: input }],
-  });
+  // 16000 tokens: 15 ideas con copys de hasta 1300 chars + conceptos de imagen +
+  // campañas + sugerencias de pilar no entran en 8000 (medido: se truncaba a
+  // mitad de pillarSuggestions). Streaming porque el SDK lo exige para llamadas
+  // de más de ~10min estimados con max_tokens alto (mismo patrón que
+  // app/api/clients/[id]/analyze/route.ts para CARDS_AND_FLOWCHARTS).
+  const msg = await anthropic.messages
+    .stream({
+      model: "claude-sonnet-4-6",
+      max_tokens: 16000,
+      temperature: 0,
+      system: agent.systemPrompt,
+      messages: [{ role: "user", content: input }],
+    })
+    .finalMessage();
   const rawOutput = msg.content
     .map((b) => (b.type === "text" ? b.text : ""))
     .join("")
@@ -170,7 +233,13 @@ export async function runGenerateIdeasAgent(runId: string): Promise<GenerationRe
 
   const obj = parseJsonObject(rawOutput);
   if (!obj) {
-    throw new Error("El agente no devolvió un JSON parseable (reintentá la generación).");
+    const truncated = msg.stop_reason === "max_tokens";
+    throw new GenerationParseError(
+      truncated
+        ? "El agente cortó la respuesta por límite de tokens y no se pudo reparar el JSON parcial. Reintentá — si persiste, hay que acotar el máximo de ideas."
+        : "El agente no devolvió un JSON parseable (reintentá la generación).",
+      rawOutput,
+    );
   }
 
   const ideas = normalizeCollection<GeneratedContentIdea>(obj.contentIdeas, generatedContentIdeaSchema).slice(0, MAX_IDEAS);
