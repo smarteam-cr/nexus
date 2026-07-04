@@ -2,48 +2,19 @@
 
 /**
  * Ítem "Marketing" del sidebar con submenú flyout (hover/click), como el patrón
- * de HubSpot: al pasar el mouse se abre un panel con las secciones del área,
- * agrupadas. Reemplaza la fila de tabs in-page (MarketingNav, retirada) — la
- * navegación entre secciones de Marketing vive acá. El trigger respeta la
- * estética del resto del rail (grises literales, como los demás NavItem); el
- * panel flyout en sí usa tokens semánticos para adaptarse a claro/oscuro
- * (portal a document.body, por eso no puede heredar el fondo oscuro fijo del
- * rail — y no debería: HubSpot inspira la ESTRUCTURA, no los colores fijos).
+ * de HubSpot: al pasar el mouse se abre un panel con SOLO los 3 grupos del
+ * área (sin sus hijos — la navegación entre sub-secciones de un grupo vive
+ * como tabs in-page, MarketingSectionTabs). El trigger respeta la estética
+ * del resto del rail (grises literales, como los demás NavItem); el panel
+ * flyout en sí usa tokens semánticos para adaptarse a claro/oscuro (portal a
+ * document.body, por eso no puede heredar el fondo oscuro fijo del rail — y
+ * no debería: HubSpot inspira la ESTRUCTURA, no los colores fijos).
  */
 import { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-interface FlyoutLink {
-  href: string;
-  label: string;
-}
-interface FlyoutSection {
-  label: string;
-  items: FlyoutLink[];
-}
-
-const SECTIONS: FlyoutSection[] = [
-  {
-    label: "Generación de contenido",
-    items: [
-      { href: "/marketing/contenido", label: "Contenido" },
-      { href: "/marketing/generacion", label: "Generación" },
-      { href: "/marketing/ideas-de-campana", label: "Ideas de campaña" },
-      { href: "/marketing/temas", label: "Temas" },
-      { href: "/marketing/fuentes", label: "Fuentes" },
-    ],
-  },
-  {
-    label: "Audiencia",
-    items: [
-      { href: "/marketing/icp", label: "ICP" },
-      { href: "/marketing/personas", label: "Buyer personas" },
-    ],
-  },
-];
-const DIRECT_ITEM: FlyoutLink = { href: "/marketing/voz", label: "Voz de marca" };
+import { MARKETING_NAV_GROUPS } from "@/components/marketing/nav-config";
 
 export default function MarketingFlyout({ isOpen }: { isOpen: boolean }) {
   const pathname = usePathname();
@@ -103,46 +74,26 @@ export default function MarketingFlyout({ isOpen }: { isOpen: boolean }) {
             onMouseEnter={openFlyout}
             onMouseLeave={scheduleClose}
             style={{ position: "fixed", top: coords.top, left: coords.left }}
-            className="z-[70] w-64 rounded-xl border border-line bg-surface shadow-2xl py-2"
+            className="z-[70] w-56 rounded-xl border border-line bg-surface shadow-2xl py-1.5"
           >
-            {SECTIONS.map((section) => (
-              <div key={section.label} className="px-2 py-1.5">
-                <p className="px-2 mb-1 text-2xs font-semibold uppercase tracking-widest text-fg-muted">
-                  {section.label}
-                </p>
-                {section.items.map((item) => {
-                  const isActive = pathname.startsWith(item.href);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setOpen(false)}
-                      className={`block px-2 py-1.5 rounded-lg text-sm transition-colors ${
-                        isActive
-                          ? "bg-brand/10 text-brand font-medium"
-                          : "text-fg-secondary hover:bg-surface-hover hover:text-fg"
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            ))}
-            <div className="my-1 border-t border-line" />
-            <div className="px-2 py-1.5">
-              <Link
-                href={DIRECT_ITEM.href}
-                onClick={() => setOpen(false)}
-                className={`block px-2 py-1.5 rounded-lg text-sm transition-colors ${
-                  pathname.startsWith(DIRECT_ITEM.href)
-                    ? "bg-brand/10 text-brand font-medium"
-                    : "text-fg-secondary hover:bg-surface-hover hover:text-fg"
-                }`}
-              >
-                {DIRECT_ITEM.label}
-              </Link>
-            </div>
+            {MARKETING_NAV_GROUPS.map((group) => {
+              const isActive =
+                pathname.startsWith(group.href) || group.children.some((c) => pathname.startsWith(c.href));
+              return (
+                <Link
+                  key={group.key}
+                  href={group.href}
+                  onClick={() => setOpen(false)}
+                  className={`block px-3 py-2 mx-1.5 rounded-lg text-sm transition-colors ${
+                    isActive
+                      ? "bg-brand/10 text-brand font-medium"
+                      : "text-fg-secondary hover:bg-surface-hover hover:text-fg"
+                  }`}
+                >
+                  {group.label}
+                </Link>
+              );
+            })}
           </div>,
           document.body,
         )}
