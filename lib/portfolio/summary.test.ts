@@ -6,13 +6,12 @@
  *   B) sin baseline → alcance "no medible" (sin línea base).
  *   C) fase con plannedEnd pasado y no DONE → atrasada (riesgo).
  *   D) override de salud prevalece sobre la derivada.
+ *   E) SUSPENDED fuera del denominador.
+ *   F) fase DONE no ensucia con tareas PENDING vencidas.
  *
- * No hay runner de TS instalado (tsx/vitest) — tsc igual los type-chequea. Para EJECUTAR:
- * `node --import tsx --test lib/portfolio/summary.test.ts` cuando se agregue tsx, o el
- * patrón de transpile on-the-fly con `typescript`. (Verificados a mano en esta entrega.)
+ * Correr: `npm test` (Vitest, proyecto unit).
  */
-import { test } from "node:test";
-import assert from "node:assert/strict";
+import { test, expect } from "vitest";
 import { computeProjectSummary } from "./summary";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 
@@ -57,12 +56,12 @@ test("A — baseline + agregados: diff de alcance y avance correctos", () => {
     healthOverride: null,
     now: NOW,
   });
-  assert.equal(s.scope.measurable, true);
-  assert.equal(s.scope.addedTasks, 2); // t3, t4
-  assert.equal(s.scope.addedPhases, 1); // p2
-  assert.equal(s.scope.weeksDelta, 1); // 3 - 2
-  assert.equal(s.scope.exceeded, true);
-  assert.ok(Math.abs(s.progress.pct - 0.25) < 1e-9); // 1/4 tareas DONE
+  expect(s.scope.measurable).toBe(true);
+  expect(s.scope.addedTasks).toBe(2); // t3, t4
+  expect(s.scope.addedPhases).toBe(1); // p2
+  expect(s.scope.weeksDelta).toBe(1); // 3 - 2
+  expect(s.scope.exceeded).toBe(true);
+  expect(Math.abs(s.progress.pct - 0.25) < 1e-9).toBeTruthy(); // 1/4 tareas DONE
 });
 
 test("B — sin baseline: alcance no medible", () => {
@@ -75,8 +74,8 @@ test("B — sin baseline: alcance no medible", () => {
     healthOverride: null,
     now: NOW,
   });
-  assert.equal(s.scope.measurable, false);
-  assert.equal(s.hasBaseline, false);
+  expect(s.scope.measurable).toBe(false);
+  expect(s.hasBaseline).toBe(false);
 });
 
 test("C — fase vencida y no DONE: atrasada → EN_RIESGO", () => {
@@ -96,12 +95,12 @@ test("C — fase vencida y no DONE: atrasada → EN_RIESGO", () => {
     healthOverride: null,
     now: NOW,
   });
-  assert.equal(s.overduePhases, 1);
-  assert.equal(s.overdueTasks, 1);
-  assert.ok(s.worstDaysLate >= 50);
-  assert.equal(s.worstOverduePhase?.name, "Arquitectura"); // la fase peor-atrasada por nombre
-  assert.ok((s.worstOverduePhase?.daysLate ?? 0) >= 50);
-  assert.equal(s.health.resolved, "EN_RIESGO");
+  expect(s.overduePhases).toBe(1);
+  expect(s.overdueTasks).toBe(1);
+  expect(s.worstDaysLate >= 50).toBeTruthy();
+  expect(s.worstOverduePhase?.name).toBe("Arquitectura"); // la fase peor-atrasada por nombre
+  expect((s.worstOverduePhase?.daysLate ?? 0) >= 50).toBeTruthy();
+  expect(s.health.resolved).toBe("EN_RIESGO");
 });
 
 test("D — override prevalece sobre la derivada", () => {
@@ -114,8 +113,8 @@ test("D — override prevalece sobre la derivada", () => {
     healthOverride: "SALUDABLE",
     now: NOW,
   });
-  assert.equal(s.health.resolved, "SALUDABLE");
-  assert.equal(s.health.source, "override");
+  expect(s.health.resolved).toBe("SALUDABLE");
+  expect(s.health.source).toBe("override");
 });
 
 test("E — SUSPENDED: fuera del denominador del avance y no cuenta como vencida", () => {
@@ -141,8 +140,8 @@ test("E — SUSPENDED: fuera del denominador del avance y no cuenta como vencida
     healthOverride: null,
     now: NOW,
   });
-  assert.ok(Math.abs(s.progress.pct - 1) < 1e-9); // 1 DONE / 1 no-suspendida = 100% (et2 fuera del denominador)
-  assert.equal(s.overdueTasks, 0); // et2 suspendida: su plannedEnd pasó pero NO cuenta como vencida
+  expect(Math.abs(s.progress.pct - 1) < 1e-9).toBeTruthy(); // 1 DONE / 1 no-suspendida = 100% (et2 fuera del denominador)
+  expect(s.overdueTasks).toBe(0); // et2 suspendida: su plannedEnd pasó pero NO cuenta como vencida
 });
 
 test("F — fase DONE con tarea PENDING vencida: la guarda evita el falso atraso", () => {
@@ -166,6 +165,6 @@ test("F — fase DONE con tarea PENDING vencida: la guarda evita el falso atraso
     healthOverride: null,
     now: NOW,
   });
-  assert.equal(s.overdueTasks, 0); // la fase ya está DONE → su tarea PENDING vencida no ensucia el panel
-  assert.equal(s.overduePhases, 0); // la fase DONE tampoco cuenta (guarda de fase ya existente)
+  expect(s.overdueTasks).toBe(0); // la fase ya está DONE → su tarea PENDING vencida no ensucia el panel
+  expect(s.overduePhases).toBe(0); // la fase DONE tampoco cuenta (guarda de fase ya existente)
 });
