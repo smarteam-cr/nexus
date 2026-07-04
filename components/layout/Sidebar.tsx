@@ -236,7 +236,7 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
   const canSeeConfig = isSuperAdmin || ["CSL", "MARKETING"].includes(role);            // super admin + CSL/Marketing
 
   return (
-    <aside className="w-full bg-gray-950 border-r border-gray-800 flex flex-col min-h-screen sticky top-0 h-screen">
+    <aside className="w-full bg-gray-950 border-r border-gray-800 flex flex-col sticky top-0 h-screen overflow-hidden">
 
       {/* ── Brand ── */}
       <div className={`h-14 border-b border-gray-800 flex-shrink-0 flex items-center ${isOpen ? "px-4 justify-between" : "justify-center"}`}>
@@ -276,9 +276,11 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
       </div>
 
 
-      {/* ── Nav principal ── */}
-      <nav className="flex-1 flex flex-col py-3 overflow-y-auto">
-        <div className={`flex-shrink-0 space-y-0.5 mb-3 ${isOpen ? "px-3" : "px-2"}`}>
+      {/* ── Nav principal: no scrollea con la lista de clientes (por eso el
+          menú ya no se corta y el flyout de Marketing queda anclado). En una
+          pantalla normal toma su alto natural; si es muy baja se encoge y
+          scrollea SOLO él (min-h-0), nunca se recorta. ── */}
+      <nav className={`space-y-0.5 py-3 overflow-y-auto min-h-0 ${isOpen ? "px-3" : "px-2"}`}>
           <NavItem
             href="/clients"
             active={pathname.startsWith("/clients")}
@@ -393,15 +395,17 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
               }
             />
           )}
-        </div>
+        </nav>
 
+        {/* ── Clientes recientes: ocupa el espacio restante y scrollea SOLO
+            ella (ya no arrastra el menú ni queda comprimida en 150px fijos). ── */}
         {isOpen && clients.length > 0 && (
-          <div className="flex flex-col" style={{ minHeight: 150 }}>
-            <div className="border-t border-gray-800/60 mx-3 mb-2" />
-            <p className="px-6 pb-1.5 text-2xs font-semibold text-gray-600 uppercase tracking-widest">
+          <div className="flex-1 min-h-0 flex flex-col">
+            <div className="border-t border-gray-800/60 mx-3 mb-2 flex-shrink-0" />
+            <p className="px-6 pb-1.5 text-2xs font-semibold text-gray-600 uppercase tracking-widest flex-shrink-0">
               Clientes recientes
             </p>
-            <div className="flex-1 min-h-0 overflow-y-auto px-3 space-y-0.5">
+            <div className="flex-1 min-h-0 overflow-y-auto px-3 space-y-0.5 pb-2">
               {clients.slice(0, 8).map((client) => {
                 const isActive = pathname.startsWith(`/clients/${client.id}`);
                 return (
@@ -433,14 +437,17 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
           </div>
         )}
 
-        {/* ── Avatar del usuario logueado (al fondo, con dropdown hacia arriba
-                que incluye Configuración + Cerrar sesión) ── */}
-        <div className="flex-shrink-0 border-t border-gray-800/60 mt-2 pt-2">
-          <div className={isOpen ? "px-2" : "px-1"}>
-            <UserAvatar user={user} isOpen={isOpen} />
-          </div>
+        {/* Si no hay clientes recientes (colapsado o lista vacía), un
+            espaciador ocupa el hueco y empuja el avatar al fondo igual. */}
+        {(!isOpen || clients.length === 0) && <div className="flex-1 min-h-0" />}
+
+      {/* ── Avatar del usuario logueado (FIJO al fondo, siempre visible; con
+              dropdown hacia arriba que incluye Configuración + Cerrar sesión). ── */}
+      <div className="flex-shrink-0 border-t border-gray-800/60 py-2">
+        <div className={isOpen ? "px-2" : "px-1"}>
+          <UserAvatar user={user} isOpen={isOpen} />
         </div>
-      </nav>
+      </div>
     </aside>
   );
 }
