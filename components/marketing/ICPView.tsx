@@ -45,6 +45,36 @@ function itemsOf(groups: IcpViewGroup[], section: IcpSection): Array<{ id: strin
   return groups.find((g) => g.section === section)?.items ?? [];
 }
 
+// ── Íconos de edición (SVG, no emoji — se ven consistentes en claro/oscuro) ──
+function IconPencil() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+    </svg>
+  );
+}
+function IconTrash() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+    </svg>
+  );
+}
+function IconCheck() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+    </svg>
+  );
+}
+function IconX({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-2xs font-semibold uppercase tracking-widest text-gray-600 mb-2">{children}</p>
@@ -111,23 +141,23 @@ function EditableList({
                   className="flex-1 min-w-0 bg-gray-800 text-white text-xs px-1.5 py-0.5 rounded border border-gray-700"
                   autoFocus
                 />
-                <button onClick={saveEdit} className="flex-shrink-0 text-brand-light hover:opacity-80" title="Guardar">
-                  ✓
+                <button onClick={saveEdit} className="flex-shrink-0 p-1 rounded-md text-brand-light hover:bg-gray-800 transition-colors" title="Guardar">
+                  <IconCheck />
                 </button>
-                <button onClick={() => setEditingId(null)} className="flex-shrink-0 text-gray-500 hover:text-gray-300" title="Cancelar">
-                  ✕
+                <button onClick={() => setEditingId(null)} className="flex-shrink-0 p-1 rounded-md text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors" title="Cancelar">
+                  <IconX />
                 </button>
               </span>
             ) : (
               <>
                 <span className="flex-1">{item.label}</span>
                 {editable && (
-                  <span className="flex-shrink-0 flex gap-1.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                    <button onClick={() => startEdit(item)} title="Editar" className="text-gray-500 hover:text-white">
-                      ✎
+                  <span className="flex-shrink-0 flex gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                    <button onClick={() => startEdit(item)} title="Editar" className="p-1 rounded-md text-gray-500 hover:text-white hover:bg-gray-800 transition-colors">
+                      <IconPencil />
                     </button>
-                    <button onClick={() => onDelete?.(item.id)} title="Borrar" className="text-gray-500 hover:text-red-400">
-                      🗑
+                    <button onClick={() => onDelete?.(item.id)} title="Borrar" className="p-1 rounded-md text-gray-500 hover:text-red-400 hover:bg-gray-800 transition-colors">
+                      <IconTrash />
                     </button>
                   </span>
                 )}
@@ -207,9 +237,9 @@ function EditableIndustries({
             <button
               onClick={() => onDelete?.(item.id)}
               title="Borrar"
-              className="opacity-0 group-hover/pill:opacity-100 transition-opacity text-brand-light/70 hover:text-red-400 leading-none"
+              className="opacity-0 group-hover/pill:opacity-100 transition-opacity text-brand-light/70 hover:text-red-400"
             >
-              ×
+              <IconX className="w-3 h-3" />
             </button>
           )}
         </span>
@@ -278,7 +308,7 @@ function ICPCard({ groups, editable, onAdd, onEdit, onDelete, busy }: { groups: 
       </div>
 
       {/* Body: 3 columnas en desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-gray-800">
+      <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-line">
         <div className="p-5 space-y-5">
           <div>
             <SectionTitle>Firmográfica</SectionTitle>
@@ -413,8 +443,8 @@ function TierCard({ tier, label, color }: { tier: string; label: string; color: 
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
         </div>
-        <p className="text-xs text-gray-600 text-center max-w-[180px]">
-          Los criterios para este tier se definirán próximamente.
+        <p className="text-xs text-gray-600 text-center max-w-[190px]">
+          Próximamente vas a poder generar y editar los criterios de este tier.
         </p>
       </div>
     </div>

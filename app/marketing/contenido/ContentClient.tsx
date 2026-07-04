@@ -97,6 +97,13 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
   const setUsed = async (id: string, used: boolean) => {
     if (busyId) return;
     setBusyId(id);
+    // Optimista: seteá usedAt local YA. Combinado con el filtro de render por
+    // tab (visibleIdeas), la idea sale del tab actual al instante, sin depender
+    // de que el load() reconcilie a tiempo. load() al final reconcilia con el
+    // server (y revierte si el PATCH falló).
+    setIdeas((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, usedAt: used ? new Date().toISOString() : null } : i)),
+    );
     try {
       await fetchJson(`/api/marketing/ideas/${id}`, {
         method: "PATCH",
@@ -107,6 +114,7 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
       load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar.");
+      load(); // revertí el optimismo con la verdad del server
     } finally {
       setBusyId(null);
     }
@@ -132,6 +140,13 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
   };
 
   const lastRun = engine.lastRun;
+
+  // Filtro de render por tab: garantía DURA de que una idea nunca se muestre en
+  // el tab equivocado, aunque el estado local traiga datos que ya no
+  // corresponden (respuesta en vuelo, optimismo recién aplicado, etc.). El
+  // servidor ya filtra; esto es la red que evita el bug de "usada aparece en
+  // Pendientes".
+  const visibleIdeas = ideas.filter((i) => (tab === "used" ? i.usedAt != null : i.usedAt == null));
 
   return (
     <div className="space-y-4">
@@ -200,7 +215,7 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
 
       {loading ? (
         <p className="text-sm text-fg-muted">Cargando…</p>
-      ) : ideas.length === 0 ? (
+      ) : visibleIdeas.length === 0 ? (
         <EmptyState
           variant="dashed"
           title={tab === "pending" ? "No hay ideas pendientes" : "Todavía no marcaste ideas como utilizadas"}
@@ -212,7 +227,7 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
         />
       ) : (
         <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {ideas.map((idea) => {
+          {visibleIdeas.map((idea) => {
             const expanded = expandedId === idea.id;
             const used = !!idea.usedAt;
             return (
