@@ -123,7 +123,7 @@ export async function buildGenerationInput(): Promise<{
  * con campos truncados — lo descarta después el Zod per-item de
  * `normalizeCollection`, sin tumbar el resto de la tanda.
  */
-function repairTruncatedJson(s: string): string | null {
+export function repairTruncatedJson(s: string): string | null {
   const stack: Array<"{" | "["> = [];
   let inStr = false;
   let esc = false;
@@ -161,7 +161,7 @@ function tryParse(candidate: string): Record<string, unknown> | null {
   }
 }
 
-function parseJsonObject(text: string): Record<string, unknown> | null {
+export function parseJsonObject(text: string): Record<string, unknown> | null {
   let s = text.trim();
   const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fence) s = fence[1].trim();
@@ -171,7 +171,7 @@ function parseJsonObject(text: string): Record<string, unknown> | null {
   return tryParse(candidate) ?? tryParse(repairTruncatedJson(candidate) ?? "");
 }
 
-function normalizeCollection<T>(raw: unknown, schema: { safeParse: (v: unknown) => { success: boolean; data?: T } }): T[] {
+export function normalizeCollection<T>(raw: unknown, schema: { safeParse: (v: unknown) => { success: boolean; data?: T } }): T[] {
   if (!Array.isArray(raw)) return [];
   const out: T[] = [];
   for (const item of raw) {

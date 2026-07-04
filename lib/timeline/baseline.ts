@@ -151,7 +151,8 @@ export function buildBaselineSnapshot(
 
 // Proyección "PROMESA" para dedup de versiones: ignora `status` (ejecución), compara
 // solo lo que define lo vendido (estructura + fechas planeadas + needsValidation + source).
-function planFingerprint(s: BaselineSnapshot): string {
+// Exportada SOLO para tests unitarios (baseline.test.ts) — no la consuma otro módulo.
+export function planFingerprint(s: BaselineSnapshot): string {
   return JSON.stringify({
     anchorStartDate: s.anchorStartDate,
     phases: s.phases.map((p) => ({
