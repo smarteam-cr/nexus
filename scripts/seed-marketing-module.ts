@@ -17,6 +17,7 @@ import { Pool } from "pg";
 import "dotenv/config";
 import {
   ICP_SEED,
+  PERSONAS_SEED,
   BRAND_VOICE_SEED,
   MARKETING_AGENT_PROMPT,
   MARKETING_AGENT_ID,
@@ -49,7 +50,26 @@ async function main() {
     console.log(`• IcpItem: ya hay ${icpCount} ítems — no se toca (borrados no se resucitan)`);
   }
 
-  // 3. Agente de generación (upsert; prompt se actualiza en re-corridas)
+  // 3. Buyer personas — solo si la tabla está vacía (no resucita borrados)
+  const personaCount = await prisma.buyerPersona.count();
+  if (personaCount === 0) {
+    const created = await prisma.buyerPersona.createMany({
+      data: PERSONAS_SEED.map((p, order) => ({
+        name: p.name,
+        role: p.role,
+        description: p.description,
+        pains: p.pains,
+        goals: p.goals,
+        active: true,
+        order,
+      })),
+    });
+    console.log(`✓ BuyerPersona: ${created.count} personas sembradas`);
+  } else {
+    console.log(`• BuyerPersona: ya hay ${personaCount} — no se toca (borrados no se resucitan)`);
+  }
+
+  // 4. Agente de generación (upsert; prompt se actualiza en re-corridas)
   const agent = await prisma.agent.upsert({
     where: { id: MARKETING_AGENT_ID },
     update: {

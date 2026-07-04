@@ -143,6 +143,63 @@ export const ICP_SECTION_ORDER: readonly IcpSection[] = [
   "SIGNAL_DEBIL",
 ];
 
+// ── Buyer personas ─────────────────────────────────────────────────────────────
+
+/**
+ * Buyer personas semilla. `name` = cargo; `role` = arquetipo en el ciclo de
+ * compra (el badge de la tarjeta de referencia); `pains` = el "dolor principal"
+ * dado + enriquecido; `description` y `goals` = inferidos, alineados al ICP
+ * (RevOps, CRM/CDP, empresa mediana-grande LATAM). Editables en /marketing/personas.
+ */
+export const PERSONAS_SEED: ReadonlyArray<{
+  name: string;
+  role: string;
+  description: string;
+  pains: string;
+  goals: string;
+}> = [
+  {
+    name: "Director de Ventas",
+    role: "Punta de lanza",
+    description:
+      "Lidera el equipo comercial de una empresa mediana-grande en LATAM y responde ante la dirección por el número. Conoce a su gente y el mercado, pero el equipo trabaja con hojas de cálculo y procesos informales. Suele ser el primer contacto y el que empuja internamente la adopción de un CRM para ordenar el pipeline y liberar a sus vendedores de lo administrativo.",
+    pains:
+      "Presión diaria para cerrar más. Equipo sin sistema. 67% del tiempo en tareas administrativas en vez de vender. Pronósticos poco confiables y pipeline desordenado, sin visibilidad de qué deals realmente van a cerrar.",
+    goals:
+      "Cerrar más y más rápido con el mismo equipo. Tener un pipeline confiable y pronósticos que se cumplan. Que sus vendedores dediquen el tiempo a vender, no a cargar datos. Reportar a dirección con números claros.",
+  },
+  {
+    name: "Director de Tecnología",
+    role: "Habilitador",
+    description:
+      "Responsable de la tecnología y los sistemas de la empresa (CTO / IT Manager). Ya vio proyectos de software que se compraron con expectativas altas y terminaron sin adopción o con integraciones a medio hacer. No decide la compra solo, pero puede frenarla: valida factibilidad técnica, seguridad y encaje con el stack actual (CRM, ERP, data).",
+    pains:
+      "Implementaciones fallidas que nadie adopta. Software subutilizado. Integraciones rotas entre CRM, ERP y las demás herramientas. Miedo a sumar otra plataforma que genere más deuda técnica y más tickets.",
+    goals:
+      "Que lo que se implemente realmente se adopte y se integre bien con el stack existente. Minimizar deuda técnica y riesgo. Integraciones estables y mantenibles. Un proveedor que entienda de arquitectura, no solo de configurar la herramienta.",
+  },
+  {
+    name: "Gerente de Marketing",
+    role: "Alto potencial",
+    description:
+      "Lidera marketing en una empresa mediana-grande. Genera demanda y contenido, pero trabaja con datos desconectados de ventas, así que no puede demostrar el impacto en revenue de lo que hace. Ve en un CRM bien integrado y en RevOps la forma de atribuir, medir y alinearse con ventas — es quien más rápido percibe el valor.",
+    pains:
+      "No puede calcular el ROI de sus campañas. Datos aislados entre marketing, ventas y servicio. Campañas sin impacto medible; no sabe qué canal genera pipeline real. Fricción con ventas por la calidad y el seguimiento de los leads.",
+    goals:
+      "Atribuir revenue a sus campañas y demostrar ROI. Unificar los datos de marketing, ventas y servicio. Alinear con ventas el traspaso de leads. Reasignar la inversión hacia los canales que sí generan pipeline.",
+  },
+  {
+    name: "Dueño / CEO de PYME",
+    role: "Decisor final",
+    description:
+      "Dueño o CEO de una PYME que factura bien pero llegó a un techo operativo. Toma la decisión final de invertir en consultoría y tecnología. No busca el proveedor más barato: valora metodología, adopción y resultados medibles (pipeline, conversión, eficiencia). Quiere una operación que no dependa de héroes y que le dé visibilidad para decidir.",
+    pains:
+      "La empresa factura bien pero no escala. No tiene visibilidad de su operación. Depende demasiado de personas clave en vez de procesos. Presión por crecer sin inflar la estructura en la misma proporción.",
+    goals:
+      "Escalar sin que se rompa la operación. Ganar visibilidad end-to-end del negocio. Pasar de depender de personas a depender de procesos. Crecer el revenue de forma eficiente, con datos para decidir.",
+  },
+];
+
 // ── Voz de marca ───────────────────────────────────────────────────────────────
 
 export const BRAND_VOICE_SEED = `Posicionar a Smarteam como REFERENTE en el ecosistema de CRMs y CDPs, como consultor experto en transformación empresarial. Enfoque de autoridad y educación (AEO), NO venta directa.`;
