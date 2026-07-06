@@ -96,6 +96,44 @@ const cap = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) : s);
  * Muestra la notificación OS de "agente terminado". No hace nada si: el agente no es
  * notifiable, no hay permiso concedido, o la pestaña está en foco (ahí basta el toast).
  */
+/** Resultado de notifyCsAlert — el caller decide el fallback:
+ *  "shown" = notificación OS disparada · "focused" = suprimida porque el usuario
+ *  está mirando Nexus · "unavailable" = sin soporte/permiso (la OS no puede mostrar). */
+export type CsNotifyOutcome = "shown" | "focused" | "unavailable";
+
+/** Notificación OS de una ALERTA del watchdog de Éxito del cliente (severidad alta).
+ *  Mismos gates que notifyAgentDone (permiso + pestaña desenfocada); `tag` por
+ *  alerta → re-notificar la misma alerta reemplaza, no duplica. Devuelve el outcome
+ *  para que el caller haga fallback in-app (toast) cuando la OS no mostró nada. */
+export async function notifyCsAlert(a: {
+  alertId: string;
+  title: string;
+  clientName: string;
+  url?: string;
+}): Promise<CsNotifyOutcome> {
+  if (!notifSupported() || Notification.permission !== "granted") return "unavailable";
+  const lookingAtNexus =
+    typeof document !== "undefined" && document.visibilityState === "visible" && document.hasFocus();
+  if (lookingAtNexus) return "focused";
+
+  const options: NotificationOptions = {
+    body: a.title,
+    icon: "/logo-smarteam.png",
+    badge: "/logo-smarteam.png",
+    tag: `nexus-cs-alert-${a.alertId}`,
+    data: { url: a.url ?? "/customer-success" },
+  };
+  try {
+    const reg = swRegistration ?? (await registerServiceWorker());
+    if (reg) await reg.showNotification(`🚨 ${a.clientName}: alerta de éxito del cliente`, options);
+    else new Notification(`🚨 ${a.clientName}: alerta de éxito del cliente`, options);
+    return "shown";
+  } catch (e) {
+    console.warn("[notif] no se pudo mostrar la alerta CS", e);
+    return "unavailable";
+  }
+}
+
 export async function notifyAgentDone(n: AgentDoneNotice): Promise<void> {
   const meta = notifyMetaForGroup(n.group);
   if (!meta.notifiable) return;

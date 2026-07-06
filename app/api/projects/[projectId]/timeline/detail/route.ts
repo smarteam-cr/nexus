@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
 
 export async function DELETE(
   _req: NextRequest,
@@ -26,7 +27,7 @@ export async function DELETE(
 
   const tl = await prisma.projectTimeline.findUnique({
     where: { projectId },
-    select: { id: true },
+    select: { id: true, project: { select: { clientId: true } } },
   });
   if (!tl) {
     return NextResponse.json({ deleted: false, reason: "no_timeline" }, { status: 404 });
@@ -39,6 +40,28 @@ export async function DELETE(
       data: { detailConfirmedAt: null, detailGeneratedByAgentRunId: null },
     }),
   ]);
+
+  // Evento crudo del watchdog (best-effort): borrar TODO el detalle de tareas
+  // (válvula de regeneración) es una acción que la líder de CS debe poder ver.
+  await emitTimelineEventsSafe(
+    prisma,
+    {
+      projectId,
+      clientId: tl.project.clientId,
+      timelineId: tl.id,
+      actorEmail: guard.user.email ?? null,
+      source: "UI_PATCH",
+    },
+    [
+      {
+        entityType: "TIMELINE",
+        entityId: tl.id,
+        label: "Detalle del cronograma",
+        action: "DETAIL_DELETED",
+        before: { tasksDeleted: count },
+      },
+    ],
+  );
 
   return NextResponse.json({ deleted: true, tasksDeleted: count });
 }

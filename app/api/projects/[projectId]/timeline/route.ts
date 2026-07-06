@@ -48,6 +48,19 @@ import type {
 // Validador + tipos del body compartidos con POST /timeline/assist (la IA
 // emite exactamente este shape para que aplicar su propuesta sea un PUT normal).
 import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
+// Eventos crudos para el watchdog de Éxito del cliente. El PUT los acumula
+// mientras camina su propio diff y los emite DESPUÉS de la tx (best-effort):
+// la tx ya sufrió P2028 contra el pooler — no se engorda con más writes.
+import { emitTimelineEventsSafe, diffFields, type DraftEvent } from "@/lib/cs/timeline-events";
+
+// Normaliza un string de fecha entrante al MISMO ISO que produce el lado DB
+// (Date.toISOString()). El validador acepta cualquier formato parseable: comparar
+// el string crudo generaba updates no-op y eventos MOVED espurios hacia el watchdog.
+const isoDate = (v: string | null | undefined): string | null => {
+  if (!v) return null;
+  const t = Date.parse(v);
+  return Number.isNaN(t) ? v : new Date(t).toISOString();
+};
 
 // ── Helpers de respuesta ─────────────────────────────────────────────────────
 
@@ -258,10 +271,16 @@ export async function PUT(
   const now = new Date();
   const anchorDate = anchorStartDate ? new Date(anchorStartDate) : null;
   let timelineId = ""; // #4 — capturado dentro de la tx para registrar el cambio después
+  const draftEvents: DraftEvent[] = []; // eventos crudos del watchdog (se emiten post-tx)
 
   // Transacción: upsert del timeline + diff de phases + diff de tasks por phase
   try {
     await prisma.$transaction(async (tx) => {
+      // Anchor previo (solo para detectar ANCHOR_CHANGED — select trivial por PK).
+      const prevTl = await tx.projectTimeline.findUnique({
+        where: { projectId },
+        select: { anchorStartDate: true },
+      });
       // 1. Upsert del timeline
       const tl = await tx.projectTimeline.upsert({
         where: { projectId },
@@ -282,6 +301,18 @@ export async function PUT(
         select: { id: true },
       });
       timelineId = tl.id; // #4 — para registrar el TimelineChange tras la transacción
+
+      // ANCHOR_CHANGED: solo si el timeline ya existía y la fecha de arranque cambió.
+      if (prevTl && (prevTl.anchorStartDate?.getTime() ?? null) !== (anchorDate?.getTime() ?? null)) {
+        draftEvents.push({
+          entityType: "TIMELINE",
+          entityId: tl.id,
+          label: "Fecha de arranque",
+          action: "ANCHOR_CHANGED",
+          before: { anchorStartDate: prevTl.anchorStartDate?.toISOString() ?? null },
+          after: { anchorStartDate: anchorDate?.toISOString() ?? null },
+        });
+      }
 
       // 2. Phases existentes en DB (con sus tasks para el diff anidado).
       // Se seleccionan TODOS los campos editables para detectar no-ops: el PUT
@@ -331,6 +362,16 @@ export async function PUT(
         await tx.timelinePhase.deleteMany({
           where: { id: { in: idsToDelete } },
         });
+        for (const pid of idsToDelete) {
+          const prev = existingById.get(pid);
+          draftEvents.push({
+            entityType: "PHASE",
+            entityId: pid,
+            label: prev?.name ?? "(fase)",
+            action: "DELETED",
+            before: { order: prev?.order, durationWeeks: prev?.durationWeeks, tasks: prev?.tasks.length ?? 0 },
+          });
+        }
       }
 
       // Tareas nuevas de TODAS las fases — se insertan en un solo createMany
@@ -385,6 +426,37 @@ export async function PUT(
                 needsValidation: false, // humano revisó la fase → se limpia el flag "estimada"
               },
             });
+            // Evento del watchdog: diff MATERIAL (notes = cosmético, se ignora).
+            // MOVED si cambió el timing (duración/inicio/orden); EDITED el resto.
+            const d = diffFields(
+              {
+                name: existing.name,
+                order: existing.order,
+                durationWeeks: existing.durationWeeks,
+                startWeek: existing.startWeek ?? null,
+                sessionCount: existing.sessionCount ?? null,
+                activityType: existing.activityType ?? null,
+              },
+              {
+                name: p.name,
+                order: p.order,
+                durationWeeks: p.durationWeeks,
+                startWeek: p.startWeek !== undefined ? (p.startWeek ?? null) : (existing.startWeek ?? null),
+                sessionCount: p.sessionCount ?? null,
+                activityType: p.activityType !== undefined ? p.activityType : (existing.activityType ?? null),
+              },
+            );
+            if (d) {
+              const moved = ["durationWeeks", "startWeek", "order"].some((k) => k in d.after);
+              draftEvents.push({
+                entityType: "PHASE",
+                entityId: p.id,
+                label: p.name,
+                action: moved ? "MOVED" : "EDITED",
+                before: d.before,
+                after: d.after,
+              });
+            }
           }
           phaseId = p.id;
         } else {
@@ -404,6 +476,13 @@ export async function PUT(
             select: { id: true },
           });
           phaseId = created.id;
+          draftEvents.push({
+            entityType: "PHASE",
+            entityId: created.id,
+            label: p.name,
+            action: "CREATED",
+            after: { order: p.order, durationWeeks: p.durationWeeks, startWeek: p.startWeek ?? null },
+          });
         }
 
         // ── Diff de tasks (solo si el body trae el array; undefined = no tocar) ──
@@ -421,6 +500,16 @@ export async function PUT(
           .map((t) => t.id);
         if (taskIdsToDelete.length > 0) {
           await tx.timelineTask.deleteMany({ where: { id: { in: taskIdsToDelete } } });
+          for (const tid of taskIdsToDelete) {
+            const prev = existingTaskById.get(tid);
+            draftEvents.push({
+              entityType: "TASK",
+              entityId: tid,
+              label: prev?.title ?? "(tarea)",
+              action: "DELETED",
+              before: { weekIndex: prev?.weekIndex, party: prev?.party ?? null, type: prev?.type ?? null },
+            });
+          }
         }
 
         for (const t of p.tasks) {
@@ -441,8 +530,8 @@ export async function PUT(
               (existingTask.notes ?? null) !== (t.notes ?? null) ||
               (t.party !== undefined && (existingTask.party ?? null) !== (t.party ?? null)) ||
               (t.type !== undefined && (existingTask.type ?? null) !== (t.type ?? null)) ||
-              (t.startDateOverride !== undefined && (existingTask.startDateOverride?.toISOString() ?? null) !== (t.startDateOverride ?? null)) ||
-              (t.dueDateOverride !== undefined && (existingTask.dueDateOverride?.toISOString() ?? null) !== (t.dueDateOverride ?? null));
+              (t.startDateOverride !== undefined && (existingTask.startDateOverride?.toISOString() ?? null) !== isoDate(t.startDateOverride)) ||
+              (t.dueDateOverride !== undefined && (existingTask.dueDateOverride?.toISOString() ?? null) !== isoDate(t.dueDateOverride));
             if (contentChanged) {
               await tx.timelineTask.update({
                 where: { id: t.id },
@@ -460,6 +549,43 @@ export async function PUT(
                   needsValidation: false, // humano revisó el contenido
                 },
               });
+              // Evento del watchdog: diff MATERIAL (order intra-semana y notes =
+              // cosméticos, se ignoran). MOVED si cambió semana/fechas; EDITED el resto.
+              const d = diffFields(
+                {
+                  title: existingTask.title,
+                  weekIndex: existingTask.weekIndex,
+                  party: existingTask.party ?? null,
+                  type: existingTask.type ?? null,
+                  startDateOverride: existingTask.startDateOverride?.toISOString() ?? null,
+                  dueDateOverride: existingTask.dueDateOverride?.toISOString() ?? null,
+                },
+                {
+                  title: t.title,
+                  weekIndex: t.weekIndex,
+                  party: t.party !== undefined ? (t.party ?? null) : (existingTask.party ?? null),
+                  type: t.type !== undefined ? (t.type ?? null) : (existingTask.type ?? null),
+                  startDateOverride:
+                    t.startDateOverride !== undefined
+                      ? isoDate(t.startDateOverride)
+                      : (existingTask.startDateOverride?.toISOString() ?? null),
+                  dueDateOverride:
+                    t.dueDateOverride !== undefined
+                      ? isoDate(t.dueDateOverride)
+                      : (existingTask.dueDateOverride?.toISOString() ?? null),
+                },
+              );
+              if (d) {
+                const moved = ["weekIndex", "startDateOverride", "dueDateOverride"].some((k) => k in d.after);
+                draftEvents.push({
+                  entityType: "TASK",
+                  entityId: t.id,
+                  label: t.title,
+                  action: moved ? "MOVED" : "EDITED",
+                  before: d.before,
+                  after: d.after,
+                });
+              }
             }
           } else {
             // CREATE: task nueva del CSE — se acumula para un único createMany
@@ -476,6 +602,14 @@ export async function PUT(
               source: "HUMAN",
               status: "PENDING",
               needsValidation: false,
+            });
+            // Evento del watchdog (sin entityId: createMany no devuelve ids; el
+            // label + weekIndex alcanzan para el triage).
+            draftEvents.push({
+              entityType: "TASK",
+              label: t.title,
+              action: "CREATED",
+              after: { weekIndex: t.weekIndex, party: t.party ?? null, type: t.type ?? null },
             });
           }
         }
@@ -496,6 +630,29 @@ export async function PUT(
       return NextResponse.json({ error: (err as Error).message }, { status: 400 });
     }
     throw err;
+  }
+
+  // Eventos crudos del watchdog — DESPUÉS de la tx, best-effort (perder un evento
+  // es aceptable; alargar la tx no). Incluye los guardados skipAudit (auto-guardados:
+  // son ediciones reales del CSE) y el apply de propuesta IA (source distinto).
+  if (draftEvents.length > 0) {
+    const proj = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { clientId: true },
+    });
+    if (proj) {
+      await emitTimelineEventsSafe(
+        prisma,
+        {
+          projectId,
+          clientId: proj.clientId,
+          timelineId,
+          actorEmail: guard.user.email ?? null,
+          source: changeKind === "AI_ASSIST" ? "AI_ASSIST_APPLY" : "UI_PUT",
+        },
+        draftEvents,
+      );
+    }
   }
 
   // 5. Re-cargar el estado final
@@ -552,7 +709,7 @@ export async function DELETE(
 
   const existing = await prisma.projectTimeline.findUnique({
     where: { projectId },
-    select: { id: true },
+    select: { id: true, project: { select: { clientId: true } } },
   });
   if (!existing) {
     return NextResponse.json({ deleted: false, reason: "no_timeline" }, { status: 404 });
@@ -561,6 +718,21 @@ export async function DELETE(
   await prisma.projectTimeline.delete({
     where: { projectId },
   });
+
+  // Evento crudo del watchdog: borrar el cronograma ENTERO es exactamente el tipo
+  // de acción que la líder de CS debe poder ver (best-effort; timelineId queda
+  // como string — el evento sobrevive al borrado).
+  await emitTimelineEventsSafe(
+    prisma,
+    {
+      projectId,
+      clientId: existing.project.clientId,
+      timelineId: existing.id,
+      actorEmail: guard.user.email ?? null,
+      source: "UI_PATCH",
+    },
+    [{ entityType: "TIMELINE", entityId: existing.id, label: "Cronograma", action: "TIMELINE_DELETED" }],
+  );
 
   return NextResponse.json({ deleted: true });
 }

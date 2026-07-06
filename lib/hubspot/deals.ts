@@ -6,6 +6,9 @@ export interface AvailableDeal {
   amount: string | null;
   closedate: string | null;
   isWon: boolean;
+  /** true = cerrado (ganado O perdido). Distingue "abierto" de "perdido viejo" —
+   *  lo usa la señal de renovación/expansión del panel de Éxito del cliente. */
+  isClosed: boolean;
   pipeline: string | null; // label del pipeline (resuelto del id), ej. "Sales Pipeline"
 }
 
@@ -51,7 +54,7 @@ export async function fetchCompanyDeals(hsClient: HsClient, companyId: string): 
       path: "/crm/v3/objects/deals/batch/read",
       body: {
         inputs: dealIds.slice(0, 100).map((id) => ({ id })),
-        properties: ["dealname", "amount", "closedate", "hs_is_closed_won", "pipeline"],
+        properties: ["dealname", "amount", "closedate", "hs_is_closed_won", "hs_is_closed", "pipeline"],
       },
     }),
     dealPipelineLabels(hsClient),
@@ -64,6 +67,7 @@ export async function fetchCompanyDeals(hsClient: HsClient, companyId: string): 
         amount?: string | null;
         closedate?: string | null;
         hs_is_closed_won?: string | null;
+        hs_is_closed?: string | null;
         pipeline?: string | null;
       };
     }[];
@@ -84,6 +88,7 @@ export async function fetchCompanyDeals(hsClient: HsClient, companyId: string): 
     amount: d.properties.amount ?? null,
     closedate: d.properties.closedate ?? null,
     isWon: d.properties.hs_is_closed_won === "true",
+    isClosed: d.properties.hs_is_closed === "true" || d.properties.hs_is_closed_won === "true",
     pipeline: d.properties.pipeline ? (pipelines.get(d.properties.pipeline) ?? d.properties.pipeline) : null,
   }));
 }

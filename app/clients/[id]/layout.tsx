@@ -1,4 +1,5 @@
 import { requireAccessToClient } from "@/lib/auth/access";
+import { requireCapability } from "@/lib/auth/roles";
 import { UnauthorizedError, ForbiddenError } from "@/lib/auth/supabase";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
@@ -92,6 +93,10 @@ export default async function ClientLayout({
 
   const displayCompany = hsCompanyName ?? client.company;
 
+  // CS360 — link a la vista de cuenta de Customer Success (solo roles see-all;
+  // el CSE no tiene acceso a esa sección).
+  const canSeeCs = await requireCapability("seeAllClients").then(() => true).catch(() => false);
+
   // Dominio del cliente (para filtrar sesiones de Fireflies)
   const clientDomain = (() => {
     const raw = client.company?.trim();
@@ -152,6 +157,15 @@ export default async function ClientLayout({
 
           {/* Right: settings (los agentes ahora se disparan por canvas, sin pop-up) */}
           <div className="flex items-center gap-2 flex-shrink-0">
+            {canSeeCs && (
+              <Link
+                href={`/customer-success/${id}`}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                title="Estado de la cuenta en Customer Success"
+              >
+                🧭 Ver portal del cliente
+              </Link>
+            )}
             <Link
               href={`/clients/${id}/settings`}
               className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
