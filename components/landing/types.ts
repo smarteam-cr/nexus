@@ -126,6 +126,8 @@ export interface WebInvestmentData {
   extras: WebInvestLine[];
   recurrentes: WebInvestLine[];
   nota: string; // exclusiones ("impuestos no contemplados") — badge arriba
+  /** Ancho de la card de recurrente mensual — "ancho" ocupa 2 columnas del grid. */
+  anchoRecurrente?: "normal" | "ancho";
 }
 
 // 8) Por qué Smarteam — cards + siguiente paso. `buttonUrl`/`buttonTarget`: ver CtaData.

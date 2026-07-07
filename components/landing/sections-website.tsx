@@ -399,7 +399,7 @@ export const WebInvestmentSection: FC<SectionProps<WebInvestmentData>> = ({ data
           )}
 
           {(recurrentes.length > 0 || editable) && (
-            <div className="stl-inv-monthly">
+            <div className={`stl-inv-monthly${data.anchoRecurrente === "ancho" ? " stl-inv-monthly--wide" : ""}`}>
               <div className="stl-inv-monthly-title">{t(lang, "recurrenteMensual")}</div>
               <SortableItems items={recurrentes} disabled={!editable} onReorder={(next) => set({ recurrentes: next })}
                 container={(nodes) => <>{nodes}</>}>

@@ -10,7 +10,7 @@
  *      PublishBar "Subir al cliente" arriba. Edición inline del motor de landing.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchJson, ApiError } from "@/lib/api/fetch-json";
+import { fetchJson, ApiError, extractErrorMessage } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { Modal, ConfirmDialog } from "@/components/ui";
 import DeleteBusinessCaseButton from "@/components/business-cases/DeleteBusinessCaseButton";
@@ -67,6 +67,7 @@ export default function BusinessCaseWorkspace({
   brandLogos,
   publishedAt,
   templateId,
+  language,
 }: {
   bcId: string;
   /** Para subir el logo del cliente desde el hero (POST /api/clients/[id]/logo). */
@@ -81,6 +82,8 @@ export default function BusinessCaseWorkspace({
   publishedAt: string | null;
   /** Template del caso (por su tipo). Ausente/null = hubspot_v1 (legacy). */
   templateId?: string | null;
+  /** Idioma persistente del caso (BusinessCase.language). Fallback: __lang del hero. */
+  language?: string | null;
 }) {
   const toast = useToast();
   const [versions, setVersions] = useState<VersionMeta[]>([]);
@@ -132,10 +135,14 @@ export default function BusinessCaseWorkspace({
   // importa es que NO estén en blanco, no el status).
   const hasContent = hook.sections.some((s) => s.blocks.some((b) => !blockBlank(b.data)));
 
-  // Idioma de la propuesta (lo declara el agente en `__lang` del hero) → traduce
-  // los rótulos fijos de los componentes (i18n.ts). Ausente = español.
+  // Idioma de la propuesta: PRIMERO el campo persistente `language` del caso; si es
+  // null (casos viejos pre-migración a este campo), cae al `__lang` no-schema del
+  // hero, como se leía antes. Traduce los rótulos fijos de los componentes (i18n.ts).
+  // Ausente = español.
   const proposalLang =
-    ((sectionByKey.get("hero")?.blocks[0]?.data as { __lang?: string } | null)?.__lang) ?? null;
+    language ??
+    ((sectionByKey.get("hero")?.blocks[0]?.data as { __lang?: string } | null)?.__lang) ??
+    null;
 
   // Config del template en el ORDEN del canvas (habilita el drag & drop) e
   // INTERSECADA con sus secciones reales: un canvas viejo sembrado con menos
@@ -321,6 +328,7 @@ export default function BusinessCaseWorkspace({
           </button>
         </div>
         <div className="flex items-center gap-2">
+          <DownloadPdfButton bcId={bcId} canvasId={canvasId} />
           <BcAccessButton bcId={bcId} refreshKey={accessNonce} onRevoked={() => setPublished(false)} />
           <DeleteBusinessCaseButton
             bcId={bcId}
@@ -555,8 +563,13 @@ function SectionTools({
     color: "#6b7280", backdropFilter: "blur(4px)", boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
   };
 
+  // `position: relative` acá + popover `absolute` anclado a ESTE wrapper (no al de
+  // `.stl-overlay`): así el popover deja de aportar altura al item flex de SectionTools
+  // dentro de `.stl-overlay` (que es `align-items:center`) — sin esto, al abrir el
+  // popover el wrapper crecía de 1 fila a 2, y ese crecimiento recentraba visualmente
+  // a los OTROS hermanos del overlay ("👁 Visible" y el drag-handle "⠿").
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+    <div style={{ position: "relative", display: "flex", alignItems: "flex-end" }}>
       <div style={{ display: "flex", gap: 6 }}>
         {aiAllowed && (
           <button style={{ ...pill, color: "#168CF6" }} onClick={() => setOpen((o) => !o)} title="Editar con IA">
@@ -568,7 +581,7 @@ function SectionTools({
         </button>
       </div>
       {open && (
-        <div style={{ display: "flex", gap: 6, background: "#fff", border: "1px solid rgba(15,23,42,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px -8px rgba(15,23,42,0.35)", width: 280 }}>
+        <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 6, display: "flex", gap: 6, background: "#fff", border: "1px solid rgba(15,23,42,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px -8px rgba(15,23,42,0.35)", width: 280, zIndex: 10 }}>
           <input
             value={instr}
             onChange={(e) => setInstr(e.target.value)}
@@ -582,6 +595,62 @@ function SectionTools({
         </div>
       )}
     </div>
+  );
+}
+
+// ── Descargar PDF (contenido vivo del canvas activo, mismo diseño de la landing) ──
+function DownloadPdfButton({ bcId, canvasId }: { bcId: string; canvasId: string }) {
+  const toast = useToast();
+  const [working, setWorking] = useState(false);
+
+  const download = async () => {
+    if (working) return;
+    setWorking(true);
+    try {
+      const res = await fetch(`/api/business-cases/${bcId}/export-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ canvasId }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new ApiError(extractErrorMessage(payload), res.status, payload);
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition") ?? "";
+      const filename = /filename="([^"]+)"/.exec(cd)?.[1] ?? "business-case.pdf";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDF descargado.");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo generar el PDF.");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={download}
+      disabled={working}
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium bg-surface-muted border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-50 transition-colors"
+      title="Descargar el caso como PDF (contenido actual del canvas)"
+    >
+      {working ? (
+        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      ) : (
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      )}
+      {working ? "Generando…" : "Descargar PDF"}
+    </button>
   );
 }
 

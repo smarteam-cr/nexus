@@ -278,6 +278,10 @@ export async function POST(
         hiddenByKey: prevHiddenByKey,
         orderedKeys: prevBlocks.map((s) => s.key),
       });
+      // Idioma de esta corrida: fuente de verdad persistente en el caso — no atada
+      // al hero (que puede perder `__lang` en una edición manual o regeneración parcial).
+      await tx.businessCase.update({ where: { id }, data: { language: gen.lang || "es" } });
+
       const sections = await tx.canvasSection.findMany({
         where: { canvasId: cid },
         select: { id: true, key: true, blocks: { select: { id: true }, orderBy: { order: "asc" }, take: 1 } },

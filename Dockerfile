@@ -57,7 +57,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 # openssl + ca-certificates: requeridos por Prisma y por el TLS hacia Supabase.
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+# chromium + libs de sistema: export PDF de Business Cases (puppeteer-core headless,
+# sin descarga propia — apunta directo a /usr/bin/chromium). Una sola fuente de
+# verdad en ESTE stage, sin copiar binarios entre stages (a diferencia de `puppeteer`
+# completo, que descargaría su Chromium en el stage `deps` a una ruta que la salida
+# standalone de Next probablemente no traza ni copia).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      openssl ca-certificates chromium fonts-liberation \
+      libasound2 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdbus-1-3 \
+      libgbm1 libgtk-3-0 libnss3 libxss1 libxrandr2 libxkbcommon0 xdg-utils \
   && rm -rf /var/lib/apt/lists/*
 
 # Salida standalone de Next (server.js + node_modules trazado).

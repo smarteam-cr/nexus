@@ -938,6 +938,15 @@ model BusinessCase {
   slug             String             @unique // referencia interna (URLs de admin)
   status           BusinessCaseStatus @default(DRAFT)
 
+  // Idioma del caso (código ISO 639-1, ej. "es"/"en") — fuente de verdad persistente
+  // para que TODAS las secciones generen/editen en el mismo idioma. Antes vivía solo
+  // como key no-schema `__lang` en el data del bloque hero (frágil); ahora se persiste
+  // acá y el hero queda como fallback para casos viejos pre-migración.
+  // SIN @default: si tuviera default, Postgres lo aplicaría (virtualmente) a las filas
+  // YA EXISTENTES sin rewrite de tabla — casos viejos en inglés leerían "es" acá y
+  // el fallback al __lang del hero (que sí tiene el idioma correcto) nunca se activaría.
+  language String?
+
   // Clasificación (tira de tags) — MISMO catálogo y modalidad que Project (lib/tags/catalog.ts).
   // El agente del BC los detecta; el CSE corrige. Se PROPAGAN al Project al crear el handoff
   // (match por hubspotDealId). tags = slugs de product+scope; implementationType = modalidad.
@@ -1078,6 +1087,25 @@ model BusinessCaseExternalAccess {
 
   @@index([accessToken])
   @@index([businessCaseId])
+}
+
+// Token de un solo uso, de vida ultra-corta, para que Puppeteer (server-to-server,
+// mismo contenedor) autentique su navegación a /print/business-case/[id] SIN
+// reenviar las cookies reales de sesión Supabase (que pueden venir partidas en
+// varias cookies `sb-*`) — mismo principio que BusinessCaseExternalAccess, pero
+// de un solo uso y con TTL de segundos en vez de una sesión de acceso duradera.
+model PrintJobToken {
+  id             String    @id @default(cuid())
+  token          String    @unique // 64 hex (crypto.randomBytes(32))
+  businessCaseId String
+  canvasId       String? // null = canvas activo al momento de generar
+  createdByEmail String?
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([token])
+  @@index([expiresAt])
 }
 
 // ─── TeamMember ───────────────────────────────────────────────────────────────
