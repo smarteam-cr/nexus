@@ -64,7 +64,21 @@ export async function POST(
     browser = await puppeteer.launch({
       executablePath: CHROMIUM_EXECUTABLE,
       headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        // El sistema de reporte de crashes de Chromium (crashpad) necesita ptrace()
+        // sobre el proceso del browser para monitorearlo — Docker NO da CAP_SYS_PTRACE
+        // por defecto (distinta de CAP_SYS_ADMIN, que sí está disponible). Cuando ese
+        // ptrace falla ("Operation not permitted"), crashpad queda en un estado roto
+        // y el propio Chromium termina en SIGTRAP (exit 133) — confirmado con strace
+        // en producción: los procesos renderer/worker corrían y salían limpio (exit 0),
+        // era crashpad el que fallaba. No necesitamos sus minidumps (el error ya se
+        // maneja en el catch de este endpoint), así que lo desactivamos por completo
+        // en vez de ensanchar permisos del contenedor con cap_add: SYS_PTRACE.
+        "--disable-crash-reporter",
+      ],
       timeout: NAV_TIMEOUT_MS,
     });
     const page = await browser.newPage();

@@ -22,6 +22,14 @@ services:
     container_name: nexus
     restart: unless-stopped
     init: true
+    # Export PDF de Business Cases (puppeteer-core + Chromium headless): margen
+    # de /dev/shm (--disable-dev-shm-usage ya evita depender de él para la mayoría,
+    # pero un poco de espacio de respaldo no hace daño). NOTA: se probó también
+    # `security_opt: seccomp=unconfined` como remedio — CONFIRMADO CON STRACE que
+    # NO era la causa (la causa real era crashpad necesitando ptrace, resuelto en
+    # el código con --disable-crash-reporter) → se revirtió el seccomp:unconfined
+    # a propósito, no dejarlo sin beneficio real (innecesariamente ancho).
+    shm_size: "1gb"
     ports:
       - "${PORT:-3004}:3004"
     # Inyecta DATABASE_URL, claves de servicio, Anthropic, HubSpot, Google,
