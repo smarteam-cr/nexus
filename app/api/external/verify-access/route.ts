@@ -13,77 +13,18 @@
  * kickoffPublishedAt (ver lib/external/kickoff-view.ts). El cliente redirige a
  * /external/kickoff tras el éxito (el token sale de la URL).
  *
- * Rate limiting in-memory por token: 5 fallos en 5 min → bloqueo de 10 min (429).
+ * Rate limiting PERSISTIDO por token (lib/external/verify-rate-limit.ts,
+ * tabla ExternalVerifyAttempt): 5 fallos en 5 min → bloqueo de 10 min (429).
  * Es protección mínima contra brute-force online. Para defensa real frente a
  * brute-force, la entropía de la password (12 chars del alphabet sin ambiguos
- * → ~71 bits) y el costo de bcrypt(12) son lo que cuenta. Esto solo evita
- * spam casual.
+ * → ~71 bits) y el costo de bcrypt(12) son lo que cuenta. Antes era un Map en
+ * memoria: cada deploy le reseteaba el contador al atacante.
  */
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/db/prisma";
 import { EXTERNAL_ACCESS_COOKIE } from "@/lib/external/access";
-
-// ── Rate limiting in-memory ──────────────────────────────────────────────────
-// Map por accessToken (no por IP — IP es trivial de rotar y queremos atar el
-// bloqueo a la credencial atacada, no al atacante). El Map vive en el proceso
-// del server; si Next.js levanta múltiples workers el contador es por worker,
-// lo cual es aceptable para esta fase con tráfico mínimo de pruebas.
-
-interface AttemptRecord {
-  count: number;          // fallos en la ventana actual
-  windowStartAt: number;  // ms desde epoch del primer fallo de la ventana
-  blockedUntil: number;   // ms desde epoch hasta cuándo está bloqueado (0 = no bloqueado)
-}
-
-const MAX_FAILURES = 5;
-const WINDOW_MS = 5 * 60 * 1000;   // ventana de 5 minutos para contar fallos
-const BLOCK_MS = 10 * 60 * 1000;   // 10 minutos de bloqueo tras alcanzar el límite
-
-const attempts = new Map<string, AttemptRecord>();
-
-/**
- * Chequea si el token está bloqueado AHORA. Devuelve segundos restantes de
- * bloqueo (>0) o 0 si no está bloqueado.
- */
-function getRemainingBlockSeconds(token: string, now: number): number {
-  const rec = attempts.get(token);
-  if (!rec || rec.blockedUntil <= now) return 0;
-  return Math.ceil((rec.blockedUntil - now) / 1000);
-}
-
-/**
- * Registra un fallo. Si supera el umbral en la ventana, activa el bloqueo.
- */
-function registerFailure(token: string, now: number): void {
-  const rec = attempts.get(token);
-  if (!rec) {
-    attempts.set(token, { count: 1, windowStartAt: now, blockedUntil: 0 });
-    return;
-  }
-
-  // Si la ventana actual expiró, arrancar una ventana nueva con este fallo.
-  if (now - rec.windowStartAt > WINDOW_MS) {
-    rec.count = 1;
-    rec.windowStartAt = now;
-    rec.blockedUntil = 0;
-    return;
-  }
-
-  // Dentro de la ventana → incrementar.
-  rec.count += 1;
-  if (rec.count >= MAX_FAILURES) {
-    rec.blockedUntil = now + BLOCK_MS;
-    // Reset del contador — al expirar el bloqueo, arranca una ventana nueva.
-    rec.count = 0;
-    rec.windowStartAt = now + BLOCK_MS;
-  }
-}
-
-/** Borra el rate-limit del token (lo usamos tras un éxito). */
-function clearAttempts(token: string): void {
-  attempts.delete(token);
-}
+import { getRemainingBlockSeconds, registerFailure, clearAttempts } from "@/lib/external/verify-rate-limit";
 
 // ── Handler ──────────────────────────────────────────────────────────────────
 
@@ -106,7 +47,7 @@ export async function POST(req: NextRequest) {
   }
 
   const now = Date.now();
-  const remaining = getRemainingBlockSeconds(token, now);
+  const remaining = await getRemainingBlockSeconds(token, now);
   if (remaining > 0) {
     return NextResponse.json(
       { ok: false, reason: "rate_limited", retryAfterSeconds: remaining },
@@ -129,26 +70,26 @@ export async function POST(req: NextRequest) {
   // uno existente con password mala, lo cual filtra qué tokens son válidos).
   if (!access) {
     await bcrypt.compare(password, "$2b$12$ZxYzZxYzZxYzZxYzZxYzZ.PadPadPadPadPadPadPadPadPadPadPadPa");
-    registerFailure(token, now);
+    await registerFailure(token, now);
     return NextResponse.json(GENERIC_INVALID, { status: 401 });
   }
 
   // Caso 2: acceso revocado. Mismo mensaje genérico — no revelamos el estado.
   if (access.revokedAt) {
     await bcrypt.compare(password, access.passwordHash);
-    registerFailure(token, now);
+    await registerFailure(token, now);
     return NextResponse.json(GENERIC_INVALID, { status: 401 });
   }
 
   // Caso 3: comparar contraseña real.
   const passwordOk = await bcrypt.compare(password, access.passwordHash);
   if (!passwordOk) {
-    registerFailure(token, now);
+    await registerFailure(token, now);
     return NextResponse.json(GENERIC_INVALID, { status: 401 });
   }
 
   // Éxito: limpiar el rate-limit del token + actualizar lastUsedAt en DB.
-  clearAttempts(token);
+  await clearAttempts(token);
   await prisma.projectExternalAccess.update({
     where: { id: access.id },
     data: { lastUsedAt: new Date() },

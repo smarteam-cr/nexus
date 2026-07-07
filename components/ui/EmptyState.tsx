@@ -26,22 +26,25 @@ export function EmptyState({
   variant = "default",
   className,
 }: EmptyStateProps) {
+  // Tokens semánticos (regla del repo) — la versión anterior usaba grises
+  // hardcodeados pre-migración de tema y se veía rota en modo claro (motivo
+  // por el que casi nadie la usaba).
   return (
     <div
       className={cn(
         "flex flex-col items-center justify-center text-center px-6 py-16",
-        variant === "dashed" && "rounded-xl border border-dashed border-gray-800",
+        variant === "dashed" && "rounded-xl border border-dashed border-line",
         className
       )}
     >
       {icon && (
-        <div className="w-14 h-14 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center text-gray-600 mb-4">
+        <div className="w-14 h-14 rounded-2xl bg-surface-muted border border-line flex items-center justify-center text-fg-muted mb-4">
           {icon}
         </div>
       )}
-      <p className="text-sm font-medium text-gray-300">{title}</p>
+      <p className="text-sm font-medium text-fg">{title}</p>
       {description && (
-        <p className="text-xs text-gray-600 mt-1 max-w-sm leading-relaxed">{description}</p>
+        <p className="text-xs text-fg-muted mt-1 max-w-sm leading-relaxed">{description}</p>
       )}
       {action && <div className="mt-4">{action}</div>}
     </div>

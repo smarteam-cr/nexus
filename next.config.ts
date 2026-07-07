@@ -16,13 +16,13 @@ const nextConfig: NextConfig = {
   // start-nexus-dev.js setea NEXT_DIST_DIR=.next-alt. Sin la env no cambia nada
   // (default .next); el build de prod no la setea.
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
-  // ⚠️ TEMPORAL — el build de producción salta el type-check y el lint para no
-  // frenarse con ~26 errores de tipo PREEXISTENTES (Json de Prisma 7, ContentBlock
-  // del SDK de Anthropic, scripts de seed). `npm run dev` no se ve afectado. Quitar
-  // estos dos flags cuando se resuelvan las causas raíz para recuperar la red de
-  // seguridad de tipos en el build.
-  typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
+  // El type-check del build está ACTIVO (2026-07-07): el baseline de 26 errores
+  // históricos se limpió a 0 — entre ellos un bug REAL en runtime que el flag
+  // ignoreBuildErrors escondía (send-to-canvas creaba CanvasSuggestion sin el
+  // campo requerido `suggested` → throw de Prisma en cada uso). No volver a
+  // apagarlo: un error de tipos nuevo debe FRENAR el build, no llegar a prod.
+  // (La key `eslint` se quitó: Next 16 ya no la soporta — era un warning en
+  // cada build y un error de tipos.)
   // echarts-for-react y echarts son paquetes ESM que necesitan transpilación en Next.js
   transpilePackages: ["echarts", "echarts-for-react", "zrender"],
   // Los DOS bundlers conviven a propósito: `next build` corre con TURBOPACK (la vía
@@ -48,6 +48,14 @@ const nextConfig: NextConfig = {
     // SDK de HubSpot, que hace require('querystring'/'stream') — external como pg
     // para que ni Turbopack (build) ni webpack (dev, hook de abajo) lo bundleen.
     "@hubspot/api-client",
+    // Sentry (server): bundleado, Turbopack emite chunks externos con nombres
+    // tipo "[externals]_node:inspector_…" — y NTFS no acepta ":" en nombres de
+    // archivo → el copiado del standalone falla en builds locales de Windows
+    // (EINVAL copyfile). External = se copia desde node_modules con nombres
+    // normales. El bundle de CLIENTE (instrumentation-client, report-error) no
+    // se ve afectado: serverExternalPackages solo aplica al server.
+    "@sentry/nextjs",
+    "@sentry/node",
   ],
   // `serverExternalPackages` NO cubre la compilación de instrumentation.ts: al
   // convivir con middleware.ts (edge), Next también arma un bundle EDGE de

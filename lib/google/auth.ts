@@ -102,7 +102,9 @@ export async function listDomainUsers(): Promise<DomainUser[]> {
 
   do {
     try {
-      const res = await admin.users.list({
+      // Anotación explícita: sin ella, `res` queda implícitamente `any` porque
+      // `pageToken` (asignado desde res abajo) crea una inferencia circular.
+      const res: { data: import("googleapis").admin_directory_v1.Schema$Users } = await admin.users.list({
         domain,
         maxResults: 500,
         orderBy: "email",

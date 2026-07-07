@@ -108,13 +108,19 @@ export async function POST(
       return NextResponse.json({ error: "invalid client section" }, { status: 400 });
     }
 
-    // Crear CanvasSuggestion
+    // Crear CanvasSuggestion. `suggested` (Json, REQUERIDO) es el valor que el
+    // flujo de aprobación aplica a canvas[section] — faltaba y este create
+    // LANZABA en runtime siempre (bug real que el ignoreBuildErrors escondía:
+    // "Enviar al canvas de empresa" desde un card estaba roto en prod).
     const suggestion = await prisma.canvasSuggestion.create({
       data: {
         clientId: original.clientId,
         section,
         field: original.title,
+        suggested: original.content,
         suggestedValue: original.content,
+        source: "manual",
+        sourceLabel: original.title,
         status: "pending",
       },
     });

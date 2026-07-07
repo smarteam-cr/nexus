@@ -6,7 +6,7 @@ dotenv.config();
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter } as Parameters<typeof PrismaClient>[0]);
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const clients = await prisma.client.findMany({ select: { id: true, name: true } });

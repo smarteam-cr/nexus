@@ -29,6 +29,24 @@ import {
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { fetchCompanyTimeline } from "@/lib/hubspot/company-timeline";
 
+// Timeout envolvente del LLM: el SDK de Anthropic tiene su propio timeout (10min)
+// + 2 reintentos — sin envoltura, un cuelgue de la API puede dejar esta request
+// abierta ~30 min saturando un worker de Next. 3 min cubre con margen una
+// generación real de 8-12 secciones; al vencer, el catch de abajo marca el
+// AgentRun como ERROR y responde un mensaje humano.
+const GEN_TIMEOUT_MS = 180_000;
+async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    t = setTimeout(() => reject(new Error(label)), ms);
+  });
+  try {
+    return await Promise.race([p, timeout]);
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -176,9 +194,14 @@ export async function POST(
       status: "RUNNING",
       agentSlug: "business-case",
       stepLabel: "Generación",
+      currentPhase: "Leyendo el contexto…",
     },
     select: { id: true },
   });
+  // Fase visible para el polling del workspace (F5.2) — fire-and-forget: si el
+  // update de fase falla, la generación sigue (es solo feedback).
+  const setPhase = (phase: string) =>
+    prisma.agentRun.update({ where: { id: run.id }, data: { currentPhase: phase } }).catch(() => {});
 
   try {
     // Guía efectiva por sección: el override del CSE en la Plantilla gana; si no, el
@@ -209,7 +232,13 @@ export async function POST(
         .map((d) => d.key),
     );
 
-    const gen = await generateCanvasSections(contextForAgent, briefsByKey, resolved.templateId, skipKeys); // LLM, FUERA de la tx
+    await setPhase("Generando las secciones con IA…");
+    const gen = await withTimeout(
+      generateCanvasSections(contextForAgent, briefsByKey, resolved.templateId, skipKeys), // LLM, FUERA de la tx
+      GEN_TIMEOUT_MS,
+      "La generación con IA superó los 3 minutos — reintentá.",
+    );
+    await setPhase("Guardando el caso…");
     const generated = gen.sections;
 
     // Carry-forward (a): keys NO-schema de CADA sección — coerceToSchema las descarta

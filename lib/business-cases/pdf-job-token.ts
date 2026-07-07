@@ -7,7 +7,10 @@
  * BusinessCaseExternalAccess (randomBytes(32).toString("hex")), pero de un solo
  * uso: consumePdfJobToken() lo marca usado y valida expiración + businessCaseId.
  */
-import { randomBytes } from "node:crypto";
+// "crypto" (sin prefijo node:): con el prefijo, Turbopack emite un chunk externo
+// llamado "[externals]_node:crypto_…" y NTFS no acepta ":" en nombres de archivo
+// → el copiado del standalone falla en builds locales de Windows (EINVAL).
+import { randomBytes } from "crypto";
 import { prisma } from "@/lib/db/prisma";
 
 const TTL_MS = 60_000;

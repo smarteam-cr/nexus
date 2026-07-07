@@ -681,27 +681,34 @@ export async function syncProjectsForClient(clientId: string): Promise<SyncResul
       });
       result.updated++;
     } else {
-      const newProject = await prisma.project.create({
-        data: {
-          clientId,
-          name: projectName,
-          hubspotServiceId: project.id,
-          serviceType: mapping.serviceType,
-          projectType: mapping.projectType,
-          tags: mapping.hubTag ? [mapping.hubTag] : [],
-          hubspotOwnerId:      hubOwnerId,
-          hubspotOwnerName:    ownerName,
-          hubspotOwnerEmail:   ownerEmail,
-          hubspotCreatedAt:    hubCreatedAtValid,
-          hubspotPipelineName: pipelineName,
-          hubspotPipelineStageId:    stageId,
-          hubspotPipelineStageLabel: stageLabel,
-          hubspotStageSyncedAt:      stageId ? new Date() : null,
-          ...csOps,
-          status: "active",
-        },
+      // Proyecto + canvases default en UNA transacción: si el proceso muere entre
+      // ambos, quedaba un proyecto SIN canvases para siempre (la próxima corrida
+      // lo encuentra existente → rama update → nunca los crea). Todo-o-nada:
+      // si algo falla, el próximo sync lo re-crea completo.
+      const newProject = await prisma.$transaction(async (tx) => {
+        const created = await tx.project.create({
+          data: {
+            clientId,
+            name: projectName,
+            hubspotServiceId: project.id,
+            serviceType: mapping.serviceType,
+            projectType: mapping.projectType,
+            tags: mapping.hubTag ? [mapping.hubTag] : [],
+            hubspotOwnerId:      hubOwnerId,
+            hubspotOwnerName:    ownerName,
+            hubspotOwnerEmail:   ownerEmail,
+            hubspotCreatedAt:    hubCreatedAtValid,
+            hubspotPipelineName: pipelineName,
+            hubspotPipelineStageId:    stageId,
+            hubspotPipelineStageLabel: stageLabel,
+            hubspotStageSyncedAt:      stageId ? new Date() : null,
+            ...csOps,
+            status: "active",
+          },
+        });
+        await createDefaultCanvases(created.id, tx);
+        return created;
       });
-      await createDefaultCanvases(newProject.id);
       result.created++;
       // Proyecto NUEVO → adoptar las sesiones existentes del cliente (huérfanas:
       // matcheadas al cliente, sin SessionProject) para que el handoff / la pestaña de

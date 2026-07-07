@@ -18,6 +18,9 @@ services:
         # Compose interpola estos desde el .env de esta carpeta.
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+        # Sentry del navegador (opcional): sin valor, el cliente no inicializa
+        # Sentry. El del server (SENTRY_DSN) va por env_file en runtime.
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
     image: nexus:latest
     container_name: nexus
     restart: unless-stopped

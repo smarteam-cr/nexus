@@ -95,7 +95,29 @@ const csWatchdogDebounce: JobDef = {
   run: watchdogJobs.debounce.run,
 };
 
+// Mantenimiento diario (NO gated por CS: es limpieza de la app, no opt-in).
+// Hoy: barre PrintJobToken expirados — el export PDF crea un token de 60s por
+// descarga y sin sweeper la tabla acumulaba filas muertas indefinidamente.
+const maintenanceDaily: JobDef = {
+  key: "maintenance-daily",
+  shouldRun: () => true, // una vez al día, a cualquier hora (claimDateKey adentro)
+  run: async (now) => {
+    const { dateKey } = (await import("./time")).crDateParts(now);
+    if (!(await claimDateKey("maintenance-daily", dateKey, now))) return;
+    const [tokens, attempts] = await Promise.all([
+      prisma.printJobToken.deleteMany({ where: { expiresAt: { lt: now } } }),
+      // Rate-limit de verify-access: filas sin actividad en 24h ya no acotan nada.
+      prisma.externalVerifyAttempt.deleteMany({
+        where: { updatedAt: { lt: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
+      }),
+    ]);
+    console.log(
+      `[jobs/maintenance] ${dateKey} — ${tokens.count} PrintJobToken expirados, ${attempts.count} ExternalVerifyAttempt viejos barridos`,
+    );
+  },
+};
+
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily];
 }

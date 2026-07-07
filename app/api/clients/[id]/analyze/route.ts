@@ -1188,7 +1188,7 @@ ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}` : ""}
 ${classificationLabel ? `Clasificación del proyecto: ${classificationLabel}` : ""}
 
 ${(() => {
-  const escala = (clientCanvas as Record<string, unknown>)?.escala_rendimiento as { general?: number; por_hub?: { marketing?: number; sales?: number; service?: number }; objetivo?: number } | undefined;
+  const escala = (clientCanvas as unknown as Record<string, unknown>)?.escala_rendimiento as { general?: number; por_hub?: { marketing?: number; sales?: number; service?: number }; objetivo?: number } | undefined;
   if (!escala || (escala.general ?? 0) === 0) return "";
   const hubLines = [];
   if (escala.por_hub?.marketing) hubLines.push(`  - Marketing Hub: nivel ${escala.por_hub.marketing}/4`);
@@ -1441,7 +1441,7 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
               if (analysisJson?.sections) {
                 // Filter sections with at least one block that has content
                 analysisJson.sections = analysisJson.sections.filter(
-                  (s: { blocks?: Array<{ type?: string }> }) => s.blocks?.length > 0
+                  (s: { blocks?: Array<{ type?: string }> }) => (s.blocks?.length ?? 0) > 0
                 );
                 console.log(`[analyze blocks] Reparado: ${analysisJson.sections.length} secciones válidas`);
               }
@@ -1563,13 +1563,19 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
 
   // ── 13. Si es FLOWCHART, crear ClientContextCard tipo FLOWCHART ──────────────
   if (isFlowchart) {
-    // analysisJson puede tener un solo flowchart o un array de flowcharts
-    const flowcharts: Array<{ title?: string; description?: string; nodes: unknown[]; edges: unknown[] }> =
-      analysisJson?.flowcharts ?? (analysisJson?.nodes ? [analysisJson] : []);
+    // analysisJson puede tener un solo flowchart o un array de flowcharts.
+    // (cast: analysisJson viene tipado con el shape de "sections" del otro modo
+    // de análisis — acá isFlowchart garantiza el shape de flowcharts.)
+    const flowcharts = (analysisJson?.flowcharts ?? (analysisJson?.nodes ? [analysisJson] : [])) as Array<{
+      title?: string;
+      description?: string;
+      nodes: unknown[];
+      edges: unknown[];
+    }>;
 
     if (flowcharts.length > 0) {
       await prisma.clientContextCard.createMany({
-        data: flowcharts.map((fc: { title?: string; description?: string; nodes: unknown[]; edges: unknown[] }, i: number) => ({
+        data: flowcharts.map((fc, i) => ({
           clientId,
           projectId:   bodyProjectId,
           agentRunId:  run.id,
@@ -1578,7 +1584,7 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
           order:       i,
           source:      "AGENT" as const,
           cardType:    "FLOWCHART" as const,
-          diagramData: { nodes: fc.nodes, edges: fc.edges },
+          diagramData: { nodes: fc.nodes, edges: fc.edges } as Prisma.InputJsonValue,
         })),
         skipDuplicates: true,
       });

@@ -7,7 +7,7 @@
  * Ejecución: npx tsx scripts/migrate-orphan-flowcharts.ts
  */
 
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -103,7 +103,7 @@ async function main() {
           order: existingTextCards + i,
           source: "AGENT",
           cardType: "FLOWCHART",
-          diagramData: { nodes: fc.nodes, edges: fc.edges },
+          diagramData: { nodes: fc.nodes, edges: fc.edges } as Prisma.InputJsonValue,
         },
       });
       totalCardsCreated++;

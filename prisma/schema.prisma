@@ -903,6 +903,10 @@ model AgentRun {
   sectionLabel   String? // sección dentro de la subetapa (ej. "Contexto del cliente")
   serviceType    String? // tipo de servicio al momento de la ejecución
   status         AgentRunStatus @default(PENDING)
+  // Fase actual legible para el polling de UI en operaciones largas
+  // ("Leyendo contexto…", "Generando secciones…"). Aditivo, opcional — los
+  // flujos que no la escriben siguen igual (F5.2 del plan de mejoras).
+  currentPhase   String?
   output         String?        @db.Text // JSON raw de Claude (backup)
 
   // ── Análisis contextuales desde /sessions (Fase 9) ──────────────────────────
@@ -1094,6 +1098,18 @@ model BusinessCaseExternalAccess {
 // reenviar las cookies reales de sesión Supabase (que pueden venir partidas en
 // varias cookies `sb-*`) — mismo principio que BusinessCaseExternalAccess, pero
 // de un solo uso y con TTL de segundos en vez de una sesión de acceso duradera.
+// Rate-limit PERSISTIDO del verify-access externo (proyecto y business case).
+// Antes era un Map en memoria: cada deploy lo reseteaba y un atacante podía
+// re-intentar tras cada restart. Una fila por token atacado; el job
+// maintenance-daily barre filas viejas.
+model ExternalVerifyAttempt {
+  token         String    @id // el accessToken al que se intenta entrar (64 hex)
+  count         Int       @default(0)
+  windowStartAt DateTime
+  blockedUntil  DateTime?
+  updatedAt     DateTime  @updatedAt
+}
+
 model PrintJobToken {
   id             String    @id @default(cuid())
   token          String    @unique // 64 hex (crypto.randomBytes(32))

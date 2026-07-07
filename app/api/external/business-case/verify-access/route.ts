@@ -4,50 +4,15 @@
  * Endpoint público (sin sesión) que verifica token (de la URL) + contraseña del
  * prospecto. En el éxito setea la cookie httpOnly `nexus_bc_access` (path
  * /external/business-case) y devuelve el nombre del caso. Mismo patrón que el
- * verify del kickoff: rate-limit in-memory por token + bcrypt timing-safe.
+ * verify del kickoff: rate-limit PERSISTIDO por token (verify-rate-limit.ts,
+ * compartido — antes cada ruta tenía su copia in-memory que se reseteaba en
+ * cada deploy) + bcrypt timing-safe.
  */
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/db/prisma";
 import { BUSINESS_CASE_COOKIE, BC_TOKEN_RE } from "@/lib/external/business-case-view";
-
-interface AttemptRecord {
-  count: number;
-  windowStartAt: number;
-  blockedUntil: number;
-}
-const MAX_FAILURES = 5;
-const WINDOW_MS = 5 * 60 * 1000;
-const BLOCK_MS = 10 * 60 * 1000;
-const attempts = new Map<string, AttemptRecord>();
-
-function getRemainingBlockSeconds(token: string, now: number): number {
-  const rec = attempts.get(token);
-  if (!rec || rec.blockedUntil <= now) return 0;
-  return Math.ceil((rec.blockedUntil - now) / 1000);
-}
-function registerFailure(token: string, now: number): void {
-  const rec = attempts.get(token);
-  if (!rec) {
-    attempts.set(token, { count: 1, windowStartAt: now, blockedUntil: 0 });
-    return;
-  }
-  if (now - rec.windowStartAt > WINDOW_MS) {
-    rec.count = 1;
-    rec.windowStartAt = now;
-    rec.blockedUntil = 0;
-    return;
-  }
-  rec.count += 1;
-  if (rec.count >= MAX_FAILURES) {
-    rec.blockedUntil = now + BLOCK_MS;
-    rec.count = 0;
-    rec.windowStartAt = now + BLOCK_MS;
-  }
-}
-function clearAttempts(token: string): void {
-  attempts.delete(token);
-}
+import { getRemainingBlockSeconds, registerFailure, clearAttempts } from "@/lib/external/verify-rate-limit";
 
 const GENERIC_INVALID = { ok: false, reason: "invalid" } as const;
 
@@ -66,7 +31,7 @@ export async function POST(req: NextRequest) {
   }
 
   const now = Date.now();
-  const remaining = getRemainingBlockSeconds(token, now);
+  const remaining = await getRemainingBlockSeconds(token, now);
   if (remaining > 0) {
     return NextResponse.json(
       { ok: false, reason: "rate_limited", retryAfterSeconds: remaining },
@@ -86,21 +51,21 @@ export async function POST(req: NextRequest) {
 
   if (!access) {
     await bcrypt.compare(password, "$2b$12$ZxYzZxYzZxYzZxYzZxYzZ.PadPadPadPadPadPadPadPadPadPadPadPa");
-    registerFailure(token, now);
+    await registerFailure(token, now);
     return NextResponse.json(GENERIC_INVALID, { status: 401 });
   }
   if (access.revokedAt) {
     await bcrypt.compare(password, access.passwordHash);
-    registerFailure(token, now);
+    await registerFailure(token, now);
     return NextResponse.json(GENERIC_INVALID, { status: 401 });
   }
   const passwordOk = await bcrypt.compare(password, access.passwordHash);
   if (!passwordOk) {
-    registerFailure(token, now);
+    await registerFailure(token, now);
     return NextResponse.json(GENERIC_INVALID, { status: 401 });
   }
 
-  clearAttempts(token);
+  await clearAttempts(token);
   await prisma.businessCaseExternalAccess.update({
     where: { id: access.id },
     data: { lastUsedAt: new Date() },

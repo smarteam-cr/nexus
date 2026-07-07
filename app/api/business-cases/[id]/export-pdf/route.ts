@@ -26,6 +26,30 @@ import { createPdfJobToken } from "@/lib/business-cases/pdf-job-token";
 const CHROMIUM_EXECUTABLE = process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/local/bin/chrome-pdf";
 const NAV_TIMEOUT_MS = 20_000;
 const READY_TIMEOUT_MS = 15_000;
+
+// ── Semáforo de concurrencia (módulo-level, válido en el deploy single-instance;
+// ver docs/RUNBOOK.md). Cada export lanza un Chromium (~150-300MB): sin cap, N
+// vendedores exportando a la vez = N Chromiums en el VPS. Cap 2 + cola corta;
+// si la cola también está llena, 429 inmediato con mensaje humano (mejor que
+// encolar minutos en silencio).
+const MAX_CONCURRENT_PDF = 2;
+const MAX_QUEUED_PDF = 4;
+let activePdf = 0;
+const pdfQueue: Array<() => void> = [];
+
+/** null = cola llena (el caller responde 429). Si no, espera turno y devuelve
+ *  el release — llamarlo SIEMPRE en finally. */
+async function acquirePdfSlot(): Promise<(() => void) | null> {
+  if (activePdf >= MAX_CONCURRENT_PDF && pdfQueue.length >= MAX_QUEUED_PDF) return null;
+  if (activePdf >= MAX_CONCURRENT_PDF) {
+    await new Promise<void>((resolve) => pdfQueue.push(resolve));
+  }
+  activePdf++;
+  return () => {
+    activePdf--;
+    pdfQueue.shift()?.();
+  };
+}
 // Ancho del documento (px): coincide con el viewport para que el layout responsive
 // se resuelva igual que se mide. 1000px conserva los grids multi-columna del diseño.
 const DOC_WIDTH = 1000;
@@ -59,12 +83,21 @@ export async function POST(
   const body = (await req.json().catch(() => ({}))) as { canvasId?: unknown };
   const canvasId = typeof body.canvasId === "string" ? body.canvasId : null;
 
-  const token = await createPdfJobToken(id, { canvasId, createdByEmail: guard.teamMember.email ?? null });
-  const port = process.env.PORT || "3000";
-  const printUrl = `http://127.0.0.1:${port}/print/business-case/${id}?pdfToken=${token}`;
+  // Cap de concurrencia ANTES de mintear el token (el token dura 60s — no
+  // quemarlo esperando en cola).
+  const release = await acquirePdfSlot();
+  if (!release) {
+    return NextResponse.json(
+      { error: "Hay varias exportaciones de PDF en curso — esperá unos segundos y reintentá." },
+      { status: 429 },
+    );
+  }
 
   let browser: Browser | null = null;
   try {
+    const token = await createPdfJobToken(id, { canvasId, createdByEmail: guard.teamMember.email ?? null });
+    const port = process.env.PORT || "3000";
+    const printUrl = `http://127.0.0.1:${port}/print/business-case/${id}?pdfToken=${token}`;
     browser = await puppeteer.launch({
       executablePath: CHROMIUM_EXECUTABLE,
       headless: true,
@@ -139,5 +172,6 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 500 });
   } finally {
     await browser?.close().catch(() => {});
+    release();
   }
 }

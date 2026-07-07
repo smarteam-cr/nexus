@@ -45,11 +45,14 @@ RUN node -e "require('@puppeteer/browsers').install({browser:'chrome',buildId:'$
 COPY . .
 
 # NEXT_PUBLIC_* se INLINEAN en el bundle del navegador en build-time → hay que
-# pasarlas como build args (son públicas; la anon key es segura de exponer).
+# pasarlas como build args (son públicas; la anon key y el DSN de Sentry son
+# seguros de exponer — el DSN solo permite ENVIAR eventos, no leerlos).
 ARG NEXT_PUBLIC_SUPABASE_URL=""
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=""
+ARG NEXT_PUBLIC_SENTRY_DSN=""
 ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
 
 # Placeholder solo para que el build no truene si algún módulo lee la URL al
 # evaluarse. La conexión REAL ocurre en runtime con la env del contenedor — este
