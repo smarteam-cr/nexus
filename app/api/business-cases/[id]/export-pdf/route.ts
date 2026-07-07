@@ -19,7 +19,11 @@ import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { createPdfJobToken } from "@/lib/business-cases/pdf-job-token";
 
-const CHROMIUM_EXECUTABLE = process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium";
+// En prod (Docker) el default es el symlink a Chrome for Testing de Google (ver
+// Dockerfile: /usr/local/bin/chrome-pdf) — el `chromium` de Debian crashea con
+// SIGILL en el CPU virtualizado del VPS. En dev local se setea
+// PUPPETEER_EXECUTABLE_PATH en .env.local (ruta a chrome.exe).
+const CHROMIUM_EXECUTABLE = process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/local/bin/chrome-pdf";
 const NAV_TIMEOUT_MS = 20_000;
 const READY_TIMEOUT_MS = 15_000;
 // Ancho del documento (px): coincide con el viewport para que el layout responsive
@@ -68,15 +72,10 @@ export async function POST(
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
-        // El sistema de reporte de crashes de Chromium (crashpad) necesita ptrace()
-        // sobre el proceso del browser para monitorearlo — Docker NO da CAP_SYS_PTRACE
-        // por defecto (distinta de CAP_SYS_ADMIN, que sí está disponible). Cuando ese
-        // ptrace falla ("Operation not permitted"), crashpad queda en un estado roto
-        // y el propio Chromium termina en SIGTRAP (exit 133) — confirmado con strace
-        // en producción: los procesos renderer/worker corrían y salían limpio (exit 0),
-        // era crashpad el que fallaba. No necesitamos sus minidumps (el error ya se
-        // maneja en el catch de este endpoint), así que lo desactivamos por completo
-        // en vez de ensanchar permisos del contenedor con cap_add: SYS_PTRACE.
+        // Silencia el handler de crashes (crashpad) — en Docker no puede hacer su
+        // ptrace y llena el stderr de ruido inofensivo; no necesitamos sus minidumps
+        // (el error ya se maneja en el catch). NOTA: esto NO era el fix del bug de
+        // arranque — ese era el binario de Debian; ver el comentario de CHROMIUM_EXECUTABLE.
         "--disable-crash-reporter",
       ],
       timeout: NAV_TIMEOUT_MS,
