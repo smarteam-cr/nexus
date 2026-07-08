@@ -1725,6 +1725,8 @@ model ContentIdea {
   selectedAt          DateTime? // nullable porque la idea arranca sugerida; set = "seleccionada" (en trabajo)
   usedAt              DateTime? // nullable; set = "aprobada" (lista para publicar). Estado derivado, ver lib/marketing/schema.ts ideaState()
   discardedAt         DateTime? // nullable; set = "descartada" (rechazada, reversible). Gana sobre selected/used → reabrir vuelve al estado previo
+  hubspotDraftAt      DateTime? // nullable; set = ya se envió a HubSpot como borrador social (API broadcast). Ver lib/hubspot/social-broadcast.ts
+  hubspotDraftGuids   String[]       @default([]) // broadcastGuid(s) de los borradores creados en HubSpot (uno por canal)
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @default(now()) @updatedAt // rastrea la edición manual/IA del copy (default cubre filas existentes)
 

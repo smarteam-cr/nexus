@@ -27,6 +27,7 @@ interface IdeaRow {
   selectedAt: string | null;
   usedAt: string | null;
   discardedAt: string | null;
+  hubspotDraftAt: string | null;
   sources: Array<{
     post: { id: string; url: string | null; authorName: string | null; text: string };
   }>;
@@ -36,10 +37,27 @@ interface PillarOption {
   id: string;
   name: string;
 }
+interface SocialChannel {
+  channelKey: string;
+  type: string;
+  name: string;
+}
 
+// Etiqueta amable del canal a partir del type de HubSpot.
+const CHANNEL_LABEL: Record<string, string> = {
+  LinkedInCompanyPage: "LinkedIn",
+  LinkedInProfile: "LinkedIn (perfil)",
+  FacebookPage: "Facebook",
+  Instagram: "Instagram",
+};
+const channelLabel = (c: SocialChannel) => `${CHANNEL_LABEL[c.type] ?? c.type} · ${c.name}`;
+
+// Flujo: Publicaciones sugeridas → Aceptadas (editable) → Aprobadas (aprobar o
+// enviar a HubSpot) · Descartadas (reversible, alcanzable desde cualquier paso).
+// Los keys internos siguen siendo sugerida/seleccionada/aprobada/descartada.
 const TABS: Array<{ key: ContentIdeaState; label: string }> = [
-  { key: "sugerida", label: "Sugeridas" },
-  { key: "seleccionada", label: "Seleccionadas" },
+  { key: "sugerida", label: "Publicaciones sugeridas" },
+  { key: "seleccionada", label: "Aceptadas" },
   { key: "aprobada", label: "Aprobadas" },
   { key: "descartada", label: "Descartadas" },
 ];
@@ -55,6 +73,9 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
   const [loading, setLoading] = useState(true);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Canales sociales de HubSpot (para "Enviar a HubSpot"). supported=false → sin scope social.
+  const [channels, setChannels] = useState<SocialChannel[]>([]);
+  const [channelsSupported, setChannelsSupported] = useState(true);
 
   const engine = useMarketingEngine();
 
@@ -82,6 +103,17 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Canales sociales de HubSpot: una vez al montar (portal-wide, no por tarjeta).
+  useEffect(() => {
+    if (!canEdit) return;
+    fetchJson<{ supported: boolean; channels: SocialChannel[] }>("/api/marketing/social-channels")
+      .then((r) => {
+        setChannelsSupported(r.supported);
+        setChannels(r.channels ?? []);
+      })
+      .catch(() => setChannelsSupported(false)); // silencioso: la feature simplemente no aparece
+  }, [canEdit]);
 
   const wasEngineBusyRef = useRef(false);
   const engineBusy = engine.busy;
@@ -116,10 +148,9 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
-  const select = (id: string) => patchState(id, { selected: true }, { selectedAt: nowIso() }, "Movida a Seleccionadas.");
-  const unselect = (id: string) => patchState(id, { selected: false }, { selectedAt: null }, "Vuelve a Sugeridas.");
+  const accept = (id: string) => patchState(id, { selected: true }, { selectedAt: nowIso() }, "Aceptada.");
   const approve = (id: string) => patchState(id, { used: true }, { usedAt: nowIso() }, "Aprobada.");
-  const unapprove = (id: string) => patchState(id, { used: false }, { usedAt: null }, "Reabierta en Seleccionadas.");
+  const unapprove = (id: string) => patchState(id, { used: false }, { usedAt: null }, "Reabierta en Aceptadas.");
   const discard = (id: string) => patchState(id, { discarded: true }, { discardedAt: nowIso() }, "Descartada.");
   const restore = (id: string) => patchState(id, { discarded: false }, { discardedAt: null }, "Restaurada.");
 
@@ -153,6 +184,25 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
+  // Enviar la idea a HubSpot como borrador social (uno por canal elegido).
+  const sendHubspotDraft = async (id: string, channelKeys: string[]): Promise<boolean> => {
+    try {
+      const r = await fetchJson<{ created: number; total: number }>(
+        `/api/marketing/ideas/${id}/hubspot-draft`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ channelKeys }) },
+      );
+      const partial = r.created < r.total ? ` (${r.created}/${r.total} canales)` : "";
+      toast.success(`Borrador${r.created === 1 ? "" : "es"} creado${r.created === 1 ? "" : "s"} en HubSpot${partial}. Revisalo en el compositor social.`);
+      // Enviar a HubSpot también APRUEBA (usedAt): la publicación pasa a Aprobadas.
+      setIdeas((cur) => cur.map((i) => (i.id === id ? { ...i, hubspotDraftAt: nowIso(), usedAt: i.usedAt ?? nowIso() } : i)));
+      load();
+      return true;
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo enviar a HubSpot.");
+      return false;
+    }
+  };
+
   const remove = async (id: string) => {
     try {
       await fetchJson(`/api/marketing/ideas/${id}`, { method: "DELETE" });
@@ -176,13 +226,16 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
   const visibleIdeas = ideas.filter((i) => ideaState(i) === tab);
 
   const emptyCopy: Record<ContentIdeaState, { title: string; description: string }> = {
-    sugerida: { title: "No hay ideas sugeridas", description: "Generá la primera tanda con el botón de arriba." },
+    sugerida: { title: "No hay publicaciones sugeridas", description: "Generá la primera tanda con el botón de arriba." },
     seleccionada: {
-      title: "No hay ideas seleccionadas",
-      description: "Seleccioná una idea desde Sugeridas para trabajarla (editarla y ajustarla con IA).",
+      title: "No hay publicaciones aceptadas",
+      description: "Aceptá una publicación desde las sugeridas para trabajarla (editarla y ajustarla con IA).",
     },
-    aprobada: { title: "No hay ideas aprobadas", description: "Aprobá una idea seleccionada cuando esté lista para publicar." },
-    descartada: { title: "No hay ideas descartadas", description: "Las ideas que descartes aparecen acá (podés restaurarlas)." },
+    aprobada: {
+      title: "No hay publicaciones aprobadas",
+      description: "Desde Aceptadas, aprobá o enviá a HubSpot una publicación cuando esté lista.",
+    },
+    descartada: { title: "No hay publicaciones descartadas", description: "Las que descartes aparecen acá (podés restaurarlas)." },
   };
 
   return (
@@ -263,8 +316,7 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
               idea={idea}
               canEdit={canEdit}
               busy={busyId === idea.id}
-              onSelect={() => select(idea.id)}
-              onUnselect={() => unselect(idea.id)}
+              onAccept={() => accept(idea.id)}
               onApprove={() => approve(idea.id)}
               onUnapprove={() => unapprove(idea.id)}
               onDiscard={() => discard(idea.id)}
@@ -273,6 +325,9 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
               onSaveField={(field, value) => saveField(idea.id, field, value)}
               onAdjust={(instruction) => adjust(idea.id, instruction)}
               onCopy={copyToClipboard}
+              channels={channels}
+              channelsSupported={channelsSupported}
+              onSendHubspot={(channelKeys) => sendHubspotDraft(idea.id, channelKeys)}
             />
           ))}
         </ul>
@@ -300,8 +355,7 @@ function IdeaCard({
   idea,
   canEdit,
   busy,
-  onSelect,
-  onUnselect,
+  onAccept,
   onApprove,
   onUnapprove,
   onDiscard,
@@ -310,12 +364,14 @@ function IdeaCard({
   onSaveField,
   onAdjust,
   onCopy,
+  channels,
+  channelsSupported,
+  onSendHubspot,
 }: {
   idea: IdeaRow;
   canEdit: boolean;
   busy: boolean;
-  onSelect: () => void;
-  onUnselect: () => void;
+  onAccept: () => void;
   onApprove: () => void;
   onUnapprove: () => void;
   onDiscard: () => void;
@@ -324,6 +380,9 @@ function IdeaCard({
   onSaveField: (field: "title" | "copy" | "imageConcept", value: string) => void;
   onAdjust: (instruction: string) => Promise<string | null>;
   onCopy: (text: string) => void;
+  channels: SocialChannel[];
+  channelsSupported: boolean;
+  onSendHubspot: (channelKeys: string[]) => Promise<boolean>;
 }) {
   const state = ideaState(idea);
   const editable = canEdit && (state === "seleccionada" || state === "aprobada");
@@ -358,8 +417,9 @@ function IdeaCard({
             <p className="text-sm font-semibold text-fg leading-tight">Smarteam</p>
             <p className="text-[11px] text-fg-muted leading-tight">
               Justo ahora · 🌐
-              {state === "seleccionada" && " · Seleccionada"}
+              {state === "seleccionada" && " · Aceptada"}
               {state === "aprobada" && " · Aprobada"}
+              {idea.hubspotDraftAt && " · ✓ Borrador en HubSpot"}
               {state === "descartada" && " · Descartada"}
             </p>
           </div>
@@ -417,10 +477,15 @@ function IdeaCard({
       {/* Acciones reales (gestión de la idea) — DEBAJO del post */}
       {canEdit && (
         <div className="flex items-center gap-2 flex-wrap mt-2 px-1">
+          {/* Enviar a HubSpot: disponible en Aceptadas y Aprobadas (si el scope social está activo).
+              Desde Aceptadas, enviar TAMBIÉN aprueba → pasa a Aprobadas. */}
+          {(state === "seleccionada" || state === "aprobada") && channelsSupported && channels.length > 0 && (
+            <HubspotDraftPopover channels={channels} alreadySent={!!idea.hubspotDraftAt} onSend={onSendHubspot} />
+          )}
           {state === "sugerida" && (
             <>
-              <button onClick={onSelect} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90">
-                Seleccionar
+              <button onClick={onAccept} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90">
+                Aceptar
               </button>
               <button onClick={onDiscard} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg border border-line text-fg-muted hover:text-fg-secondary disabled:opacity-40">
                 Descartar
@@ -431,9 +496,6 @@ function IdeaCard({
             <>
               <button onClick={onApprove} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90">
                 Aprobar
-              </button>
-              <button onClick={onUnselect} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg border border-line text-fg-muted hover:text-fg-secondary disabled:opacity-40">
-                Volver a Sugeridas
               </button>
               <button onClick={onDiscard} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg border border-line text-fg-muted hover:text-fg-secondary disabled:opacity-40">
                 Descartar
@@ -597,6 +659,92 @@ function AdjustPopover({
               className="px-2.5 py-1 text-[11px] rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
             >
               {busy ? "Ajustando…" : "Aplicar"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Enviar a HubSpot como borrador social (popover: elegir canal[es]) ───────────
+
+function HubspotDraftPopover({
+  channels,
+  alreadySent,
+  onSend,
+}: {
+  channels: SocialChannel[];
+  alreadySent: boolean;
+  onSend: (channelKeys: string[]) => Promise<boolean>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // Default: LinkedIn marcado si existe; si no, el primer canal.
+  const [selected, setSelected] = useState<Set<string>>(() => {
+    const li = channels.find((c) => /linkedin/i.test(c.type));
+    return new Set(li ? [li.channelKey] : channels[0] ? [channels[0].channelKey] : []);
+  });
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const toggle = (key: string) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(key)) n.delete(key);
+      else n.add(key);
+      return n;
+    });
+
+  const send = async () => {
+    if (selected.size === 0 || busy) return;
+    setBusy(true);
+    const ok = await onSend([...selected]);
+    setBusy(false);
+    if (ok) setOpen(false);
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="px-3 py-1.5 text-xs rounded-lg border border-brand/30 text-brand hover:bg-brand/5"
+      >
+        {alreadySent ? "Reenviar a HubSpot" : "Enviar a HubSpot"}
+      </button>
+      {open && (
+        <div className="absolute left-0 bottom-full mb-1 z-20 w-64 rounded-xl border border-line bg-surface p-3 shadow-xl">
+          <p className="text-[11px] font-semibold text-fg-muted mb-2">Crear borrador en HubSpot en:</p>
+          <div className="space-y-1.5 mb-3">
+            {channels.map((c) => (
+              <label key={c.channelKey} className="flex items-center gap-2 text-xs text-fg-secondary cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selected.has(c.channelKey)}
+                  onChange={() => toggle(c.channelKey)}
+                  className="accent-brand"
+                />
+                {channelLabel(c)}
+              </label>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setOpen(false)} className="px-2.5 py-1 text-[11px] rounded-lg text-fg-muted hover:text-fg-secondary">
+              Cancelar
+            </button>
+            <button
+              onClick={send}
+              disabled={busy || selected.size === 0}
+              className="px-2.5 py-1 text-[11px] rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
+            >
+              {busy ? "Enviando…" : "Crear borrador"}
             </button>
           </div>
         </div>

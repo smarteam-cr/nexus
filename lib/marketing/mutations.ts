@@ -109,6 +109,22 @@ export async function patchIdea(
   return prisma.contentIdea.update({ where: { id }, data });
 }
 
+/**
+ * Marca una idea como enviada a HubSpot (borrador social) y acumula los guids.
+ * Enviar a HubSpot TAMBIÉN aprueba (usedAt): la publicación pasa a "Aprobadas".
+ */
+export async function markIdeaHubspotDraft(id: string, newGuids: string[]) {
+  const now = new Date();
+  return prisma.contentIdea.update({
+    where: { id },
+    data: {
+      hubspotDraftAt: now,
+      hubspotDraftGuids: { push: newGuids },
+      usedAt: now, // aprobar al enviar; si ya estaba aprobada, solo re-sella (sigue aprobada)
+    },
+  });
+}
+
 export async function reviewCampaign(id: string, action: "approve" | "discard") {
   return prisma.campaignIdea.update({
     where: { id },

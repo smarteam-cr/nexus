@@ -86,3 +86,28 @@ cs-signals-daily, cs-partner-daily, cs-watchdog-daily, cs-watchdog-debounce,
   virtualizado de este VPS (ver historia en el commit `dabfc20`).
 - Dev local Windows: `PUPPETEER_EXECUTABLE_PATH` en `.env.local` → chrome.exe.
 - Concurrencia: máx 2 simultáneos + cola de 4 → después 429.
+
+## Marketing → Borrador social en HubSpot (API DEPRECADA — at-risk)
+
+"Enviar a HubSpot" (en las ideas **Aprobadas** de `/marketing/contenido`) crea un
+post como **BORRADOR** en el compositor social de HubSpot (LinkedIn/FB/IG), vía el
+**API LEGACY de broadcast** (`/broadcast/v1`). `lib/hubspot/social-broadcast.ts`.
+
+⚠️ **HubSpot marcó el API de Social como DEPRECADO** (sin sucesor). Funciona hoy y
+soporte confirmó a un usuario que no lo apagan "como excepción", pero **no hay SLA**
+— puede cortarse sin aviso. Por eso:
+
+- El scope OAuth **`social` está marcado OPCIONAL** en la app pública Y como
+  `optional_scope` en `app/api/auth/hubspot/route.ts` — si HubSpot lo elimina, NO
+  rompe el resto de la conexión (CRM/tickets/proyectos).
+- Todo degrada con **403 → `{ supported: false }`** (patrón `ticketsSupported`): sin
+  el scope, el botón "Enviar a HubSpot" simplemente NO aparece.
+- Requiere que los canales sociales estén **conectados en el Social de HubSpot**
+  (LinkedIn/FB/IG de Smarteam). El endpoint `/api/marketing/social-channels` los lista.
+- Diagnóstico/validación manual: `npx tsx scripts/spike-hubspot-social.ts`
+  (Fase A read-only: scopes + canales; `--create-draft --channel=<key>` crea un
+  borrador de prueba — acordate de borrarlo del compositor).
+- Los `broadcastGuid` creados se guardan en `ContentIdea.hubspotDraftGuids`.
+
+Si algún día HubSpot corta el API: el botón devuelve 403/error humano y se puede
+retirar la feature sin tocar el resto (es aditiva y aislada).

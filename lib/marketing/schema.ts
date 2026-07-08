@@ -111,6 +111,11 @@ export const ideaAdjustSchema = z.object({
   instruction: z.string().trim().min(1).max(500),
 });
 
+// Enviar una idea a HubSpot como borrador social: canal(es) destino (channelKey).
+export const hubspotDraftSchema = z.object({
+  channelKeys: z.array(z.string().trim().min(1).max(120)).min(1).max(6),
+});
+
 // ── Estado derivado de una idea (client-safe) ──────────────────────────────────
 // Prioridad: descartada (gana, reversible) → aprobada (usedAt) → seleccionada
 // (selectedAt) → sugerida. Reabrir una descartada limpia discardedAt y la idea
