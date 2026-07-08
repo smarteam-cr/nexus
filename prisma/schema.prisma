@@ -1633,6 +1633,7 @@ model ContentPillar {
   description String?      @db.Text // nullable porque un pilar puede ser solo un nombre al alta
   origin      PillarOrigin @default(HUMAN)
   active      Boolean      @default(true)
+  isCampaign  Boolean      @default(false) // énfasis de campaña: sesga la generación hacia este tema (activa = isCampaign && active)
   order       Int          @default(0)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -1721,8 +1722,11 @@ model ContentIdea {
   title               String
   copy                String         @db.Text // copy listo para red social
   imageConcept        String         @db.Text // descripción TEXTUAL del concepto de imagen (no se genera)
-  usedAt              DateTime? // nullable = pendiente; set = ya se publicó/usó — sale del filtro "Pendientes"
+  selectedAt          DateTime? // nullable porque la idea arranca sugerida; set = "seleccionada" (en trabajo)
+  usedAt              DateTime? // nullable; set = "aprobada" (lista para publicar). Estado derivado, ver lib/marketing/schema.ts ideaState()
+  discardedAt         DateTime? // nullable; set = "descartada" (rechazada, reversible). Gana sobre selected/used → reabrir vuelve al estado previo
   createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @default(now()) @updatedAt // rastrea la edición manual/IA del copy (default cubre filas existentes)
 
   sources ContentIdeaSource[]
 

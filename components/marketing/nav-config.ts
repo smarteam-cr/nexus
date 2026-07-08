@@ -23,7 +23,7 @@ export const MARKETING_NAV_GROUPS: readonly MarketingNavGroup[] = [
     children: [
       { href: "/marketing/contenido", label: "Contenido" },
       { href: "/marketing/generacion", label: "Generación" },
-      { href: "/marketing/ideas-de-campana", label: "Ideas de campaña" },
+      { href: "/marketing/ideas-de-campana", label: "Ideas de SEM" },
       { href: "/marketing/temas", label: "Temas" },
       { href: "/marketing/fuentes", label: "Fuentes" },
     ],

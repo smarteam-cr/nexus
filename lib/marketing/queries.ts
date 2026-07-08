@@ -59,13 +59,29 @@ export async function getSettings() {
 
 // ── Salidas del agente ─────────────────────────────────────────────────────────
 
-export async function getIdeas(filter?: { pillarId?: string; runId?: string; used?: boolean }) {
+export async function getIdeas(filter?: {
+  pillarId?: string;
+  runId?: string;
+  state?: "sugerida" | "seleccionada" | "aprobada" | "descartada";
+}) {
+  // Estado derivado (misma prioridad que ideaState): descartada=discardedAt set ·
+  // aprobada=usedAt set y no descartada · seleccionada=selectedAt set y no aprobada
+  // ni descartada · sugerida=todos null.
+  const stateWhere =
+    filter?.state === "descartada"
+      ? { discardedAt: { not: null } }
+      : filter?.state === "aprobada"
+        ? { discardedAt: null, usedAt: { not: null } }
+        : filter?.state === "seleccionada"
+          ? { discardedAt: null, usedAt: null, selectedAt: { not: null } }
+          : filter?.state === "sugerida"
+            ? { discardedAt: null, usedAt: null, selectedAt: null }
+            : {};
   return prisma.contentIdea.findMany({
     where: {
       ...(filter?.pillarId ? { pillarId: filter.pillarId } : {}),
       ...(filter?.runId ? { runId: filter.runId } : {}),
-      ...(filter?.used === true ? { usedAt: { not: null } } : {}),
-      ...(filter?.used === false ? { usedAt: null } : {}),
+      ...stateWhere,
     },
     orderBy: { createdAt: "desc" },
     include: {

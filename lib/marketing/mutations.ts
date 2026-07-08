@@ -82,12 +82,31 @@ export async function deleteIdea(id: string) {
   return prisma.contentIdea.delete({ where: { id } });
 }
 
-/** Marca/desmarca una idea como utilizada — sale de "Pendientes", entra a "Utilizadas". */
-export async function markIdeaUsed(id: string, used: boolean) {
-  return prisma.contentIdea.update({
-    where: { id },
-    data: { usedAt: used ? new Date() : null },
-  });
+/**
+ * Patch de una idea en UN solo update (atómico): transiciones de estado
+ * (selected/used → sus timestamps) y/o edición de campos (title/copy/imageConcept).
+ * Un solo write evita estados parciales (p.ej. "reabrir" = selected+used juntos).
+ * Los campos ausentes NO se tocan; `updatedAt` se maneja solo.
+ */
+export async function patchIdea(
+  id: string,
+  fields: {
+    selected?: boolean;
+    used?: boolean;
+    discarded?: boolean;
+    title?: string;
+    copy?: string;
+    imageConcept?: string;
+  },
+) {
+  const data: Prisma.ContentIdeaUpdateInput = {};
+  if (fields.selected !== undefined) data.selectedAt = fields.selected ? new Date() : null;
+  if (fields.used !== undefined) data.usedAt = fields.used ? new Date() : null;
+  if (fields.discarded !== undefined) data.discardedAt = fields.discarded ? new Date() : null;
+  if (fields.title !== undefined) data.title = fields.title;
+  if (fields.copy !== undefined) data.copy = fields.copy;
+  if (fields.imageConcept !== undefined) data.imageConcept = fields.imageConcept;
+  return prisma.contentIdea.update({ where: { id }, data });
 }
 
 export async function reviewCampaign(id: string, action: "approve" | "discard") {

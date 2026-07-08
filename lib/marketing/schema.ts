@@ -55,6 +55,7 @@ export const pillarCreateSchema = z.object({
 });
 export const pillarPatchSchema = pillarCreateSchema.partial().extend({
   active: z.boolean().optional(),
+  isCampaign: z.boolean().optional(),
   order: z.number().int().min(0).optional(),
 });
 
@@ -90,9 +91,43 @@ export const campaignPatchSchema = z.object({
   action: z.enum(["approve", "discard"]),
 });
 
-export const ideaPatchSchema = z.object({
-  used: z.boolean(),
+// PATCH de una idea: transiciones de estado (selected/used/discarded) y/o edición
+// de campos. Todos opcionales pero al menos uno presente. Límites = los del agente.
+export const ideaPatchSchema = z
+  .object({
+    used: z.boolean().optional(),
+    selected: z.boolean().optional(),
+    discarded: z.boolean().optional(),
+    title: z.string().trim().min(1).max(300).optional(),
+    copy: z.string().trim().min(1).max(4000).optional(),
+    imageConcept: z.string().trim().min(1).max(2000).optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
+    message: "Nada que actualizar.",
+  });
+
+// Ajuste con IA del copy de una idea: instrucción libre (o un preset del front).
+export const ideaAdjustSchema = z.object({
+  instruction: z.string().trim().min(1).max(500),
 });
+
+// ── Estado derivado de una idea (client-safe) ──────────────────────────────────
+// Prioridad: descartada (gana, reversible) → aprobada (usedAt) → seleccionada
+// (selectedAt) → sugerida. Reabrir una descartada limpia discardedAt y la idea
+// vuelve al estado previo que dictan selectedAt/usedAt.
+export const CONTENT_IDEA_STATES = ["sugerida", "seleccionada", "aprobada", "descartada"] as const;
+export type ContentIdeaState = (typeof CONTENT_IDEA_STATES)[number];
+
+export function ideaState(idea: {
+  selectedAt?: Date | string | null;
+  usedAt?: Date | string | null;
+  discardedAt?: Date | string | null;
+}): ContentIdeaState {
+  if (idea.discardedAt) return "descartada";
+  if (idea.usedAt) return "aprobada";
+  if (idea.selectedAt) return "seleccionada";
+  return "sugerida";
+}
 
 // ── Output del agente de generación ────────────────────────────────────────────
 

@@ -218,6 +218,17 @@ VOZ (del insumo "VOZ DE MARCA" del mensaje — es ley):
 - Los copys hablan como consultor que enseña y abre conversación, no como vendedor. Nada de "contáctanos hoy", "agenda una demo" ni CTAs de venta dura. CTA de conversación/reflexión está OK.
 - TUTEO neutro (tú: tienes, necesitas), nunca voseo ni ustedeo. Español LATAM claro y directo.
 
+GANCHO (la PRIMERA línea decide si se lee o no — es lo MÁS importante del copy):
+- La primera línea (máx ~12 palabras) debe frenar el scroll: específica, con tensión o curiosidad, sin preámbulos. Debe leerse sola y dar ganas de tocar "…más".
+- Técnicas que funcionan (variá entre ideas, NO repitas la misma fórmula en toda la tanda):
+  · Rompe-patrón / contraste: la creencia común vs. lo que realmente pasa ("Los titulares dicen que la IA reemplazará a los humanos. Los líderes con los que hablo dicen algo muy distinto.").
+  · Pregunta provocadora y concreta ("¿Qué pasaría si mañana tu empresa duplicara la cantidad de leads?").
+  · Afirmación contraintuitiva o incómoda: una verdad que el lector preferiría no admitir.
+  · Observación de campo / mini-anécdota ("Una pregunta que me gusta hacer cuando converso con líderes comerciales:…").
+  · Dato o consecuencia puntual — SOLO si sale de la inspiración/insumos (nunca inventar cifras).
+- PROHIBIDO abrir con saludos, "Hoy quiero hablarte de…", definiciones de diccionario, o generalidades tibias ("En el mundo actual…").
+- El resto del copy debe SOSTENER la promesa del gancho: si el gancho promete una brecha/insight, entregalo.
+
 QUÉ PRODUCES (un solo JSON, sin markdown ni fences, con esta forma EXACTA):
 {
   "contentIdeas": [
