@@ -25,3 +25,24 @@
 - **`publishedSnapshot`**: foto client-safe (staging) que ve el cliente externo; el contenido vivo
   es borrador hasta "Subir".
 - **Capability** (RBAC): permiso por rol (`lib/auth/roles.ts`) — ej. `createHandoff`, `handoffAnywhere`.
+- **Cobranza**: módulo de CONTROL de cobros de Admin & Finanzas (solo roles ADMIN + SUPER_ADMIN).
+  Estados/cronograma/alertas viven en Nexus; la contabilidad en Odoo/Mercury.
+- **`CuentaFinanciera`**: perfil de cobro de un cliente (1:1 con `Client`) — tipo nacional/
+  internacional, vía de cobro, moneda, términos, día ancla del ciclo.
+- **`ServicioContratado`**: un servicio facturable de la cuenta (suscripción, implementación…);
+  un contrato puede traer varios, cada uno con su plan y cronograma.
+- **`PlanDePago` / `CuotaPlan`**: el "arreglo de pago" con que se vendió el monto (plantillas:
+  parejo, entrada+resto, suscripción, personalizado). NO es siempre monto÷N.
+- **`Cobro`**: una obligación de cobro concreta (cuota N, período, fecha, monto, semáforo),
+  materializada por el engine desde el plan. COBRADO exige `confirmadoPor` (INV3).
+- **catch-up** (Cobranza): cobros de períodos YA pasados generados cuando la facturación arranca
+  retroactiva (caso Teamnet: arrancó junio, contrato aprobado julio). Nacen PROGRAMADO + alerta;
+  la persona confirma.
+- **semáforo** (Cobranza): verde=cobrado · amarillo=por cobrar · gris=programado futuro ·
+  rojo=vencido (>3 días de la fecha programada sin cobrar). Mapeo directo del Sheet de Finanzas.
+- **ancla de facturación**: `fechaInicioFacturacion` del servicio — nace como copia editable del
+  `anchorStartDate` del cronograma; si divergen después, alerta ARRANQUE_CAMBIADO (no se re-sincroniza).
+- **digest / `SnapshotCartera`** (Cobranza): el corte semanal (lunes) computa las alertas de
+  cartera y solo avisa el DIFF vs la corrida anterior; cada corrida queda como snapshot.
+- **bitácora** (`BitacoraCobro`): registro de gestión de la cuenta — llamadas/correos/notas de la
+  persona + actualizaciones automáticas del sistema (ej. resumen de una materialización).

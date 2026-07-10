@@ -1,0 +1,547 @@
+/**
+ * lib/cobranza/engine.ts
+ *
+ * MOTOR PURO del módulo Cobranza: materialización de cobros desde el plan de
+ * pago, reconciliación idempotente, catch-up, semáforos y cómputo de alertas.
+ *
+ * Reglas de la casa (patrón lib/portfolio/summary.ts + lib/timeline/weeks.ts):
+ *  - CERO Prisma/red/env: inputs y outputs son tipos propios serializables.
+ *  - TODA la matemática de fechas en UTC (getUTC* / setUTC*) — las fechas de
+ *    calendario viven como instantes UTC (patrón anchorStartDate); mezclar
+ *    getters locales reproduce el hydration mismatch que ya nos quemó.
+ *  - Montos como number redondeado a 2 decimales; la última cuota absorbe el
+ *    residuo de redondeo (invariante: la suma de un plan completo === montoTotal).
+ *  - Autonomía en la derivación, confirmación en el dinero: este motor PROPONE
+ *    (drafts); nunca marca nada COBRADO — eso es de la persona (INV3).
+ */
+
+// ── Tipos de input (client-safe, sin Prisma) ────────────────────────────────────
+
+export interface ServicioEngineInput {
+  id: string;
+  montoTotal: number; // para SUSCRIPCION = monto MENSUAL
+  moneda: "CRC" | "USD";
+  fechaInicioFacturacion: string | null; // ISO date (YYYY-MM-DD o ISO completo)
+  duracionMeses: number | null;
+  diaCobroAncla: number | null; // de la cuenta (ej. 15); null = día del arranque
+}
+
+export interface CuotaPlanInput {
+  orden: number; // 1-based
+  base: "PORCENTAJE" | "MONTO_FIJO";
+  valor: number; // 0-100 si PORCENTAJE; monto absoluto si MONTO_FIJO
+  offsetMeses: number; // 0 = mes de arranque
+  descripcion?: string | null;
+}
+
+export interface PlanEngineInput {
+  template: "PAREJO" | "ENTRADA_Y_RESTO" | "SUSCRIPCION" | "PERSONALIZADO";
+  numCuotas: number | null;
+  cuotas: CuotaPlanInput[];
+}
+
+export interface CobroDraft {
+  numCuota: number;
+  periodo: string; // "YYYY-MM"
+  fechaProgramadaISO: string; // "YYYY-MM-DD"
+  monto: number;
+  descripcion?: string;
+}
+
+export interface CobroExistente {
+  id: string;
+  numCuota: number | null;
+  estado: string; // CobranzaEstadoCobro
+  origen: string; // CobranzaOrigenCobro
+  fechaEmision: string | null;
+  fechaProgramadaISO: string;
+  monto: number;
+}
+
+export interface ReconcileResult {
+  toCreate: CobroDraft[];
+  toUpdate: Array<{ id: string; fechaProgramadaISO: string; monto: number; periodo: string }>;
+  toDelete: string[]; // ids de PROGRAMADO origen PLAN que el plan ya no contempla
+  untouched: string[]; // ids intocables (cobrados/emitidos/manuales) o sin cambios
+}
+
+export type Semaforo = "verde" | "amarillo" | "gris" | "rojo";
+
+export interface AlertaDraft {
+  dedupeKey: string;
+  tipo:
+    | "COBRO_PROXIMO"
+    | "COBRO_VENCIDO"
+    | "CUENTA_SIN_DATOS"
+    | "INCONSISTENCIA_CICLO"
+    | "ARRANQUE_CAMBIADO";
+  urgencia: "ALTA" | "MEDIA" | "BAJA";
+  cuentaId: string;
+  cobroId?: string;
+  mensaje: string;
+  evidencia?: Record<string, unknown>;
+}
+
+/** Input del cómputo de alertas: la cartera aplanada (la arma queries.ts). */
+export interface CarteraEngineInput {
+  cuentas: Array<{
+    cuentaId: string;
+    clienteNombre: string;
+    excluidaOperacion: boolean;
+    tieneCuenta: boolean; // false = cliente con proyecto activo SIN CuentaFinanciera
+    servicios: Array<{
+      servicioId: string;
+      descripcion: string | null;
+      estado: string; // CobranzaEstadoServicio
+      fechaInicioFacturacion: string | null;
+      anchorActualISO: string | null; // anchorStartDate ACTUAL del project vinculado
+    }>;
+    cobros: Array<{
+      cobroId: string;
+      servicioId: string;
+      estado: string;
+      origen: string;
+      fechaProgramadaISO: string;
+      monto: number;
+    }>;
+  }>;
+}
+
+export interface DiffAlertas {
+  nuevas: AlertaDraft[];
+  resueltas: AlertaDraft[];
+  persistentes: number;
+  sinCambios: boolean;
+}
+
+// ── Constantes del preview (hardcodeadas a propósito; configurables post-demo) ──
+
+/** Días después de fechaProgramada sin cobrar → rojo/COBRO_VENCIDO. */
+export const UMBRAL_VENCIDO_DIAS = 3;
+/** Ventana de "entra a la quincena" para COBRO_PROXIMO. */
+export const VENTANA_PROXIMA_DIAS = 15;
+/** Meses de horizonte rolling para SUSCRIPCION (se extiende en cada digest). */
+export const HORIZONTE_SUSCRIPCION_MESES = 3;
+
+// ── Helpers de fecha (UTC estricto) ─────────────────────────────────────────────
+
+function toUTCDate(iso: string): Date {
+  // Acepta "YYYY-MM-DD" o ISO completo; normaliza a medianoche UTC del día.
+  const d = new Date(iso);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+function toISODate(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function daysInMonthUTC(year: number, monthIndex0: number): number {
+  // Día 0 del mes siguiente = último día del mes pedido.
+  return new Date(Date.UTC(year, monthIndex0 + 1, 0)).getUTCDate();
+}
+
+/** Diferencia en días (b - a), sobre medianoches UTC. */
+function diffDays(aISO: string, bISO: string): number {
+  const a = toUTCDate(aISO).getTime();
+  const b = toUTCDate(bISO).getTime();
+  return Math.round((b - a) / 86_400_000);
+}
+
+/** Meses calendario completos entre dos fechas (piso; 0 si b < a). */
+export function monthsBetween(aISO: string, bISO: string): number {
+  const a = toUTCDate(aISO);
+  const b = toUTCDate(bISO);
+  let months = (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth());
+  if (b.getUTCDate() < a.getUTCDate()) months -= 1;
+  return Math.max(0, months);
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// ── 1-2. Expansión del plan + fecha de cada cobro ───────────────────────────────
+
+export class PlanInvalidoError extends Error {}
+
+interface CuotaExpandida {
+  numCuota: number;
+  offsetMeses: number;
+  monto: number;
+  descripcion?: string;
+}
+
+/**
+ * Expande el plan a cuotas {numCuota, offsetMeses, monto}. Reglas por template:
+ *  - PAREJO: N = numCuotas ?? duracionMeses (error si ambos null). División pareja;
+ *    la ÚLTIMA absorbe el residuo (sum === montoTotal exacto).
+ *  - ENTRADA_Y_RESTO: cuotas[0] = entrada (PORCENTAJE, offset 0); el resto se
+ *    reparte parejo en numCuotas mensualidades desde offset 1 (mismo residuo).
+ *  - SUSCRIPCION: rolling — desde offset 0 hasta monthsBetween(inicio, hoy) +
+ *    horizonte. Monto = montoTotal (mensual) cada una.
+ *  - PERSONALIZADO: mapea las cuotas tal cual (sin invariante de suma — puede ser
+ *    parcial a propósito; la UI muestra plan-vs-montoTotal como dato).
+ */
+export function expandPlanCuotas(
+  servicio: ServicioEngineInput,
+  plan: PlanEngineInput,
+  opts: { todayISO: string; horizonMeses?: number },
+): CuotaExpandida[] {
+  const total = servicio.montoTotal;
+
+  switch (plan.template) {
+    case "PAREJO": {
+      const n = plan.numCuotas ?? servicio.duracionMeses;
+      if (!n || n < 1) {
+        throw new PlanInvalidoError("PAREJO necesita numCuotas o duracionMeses del servicio.");
+      }
+      const base = round2(total / n);
+      const out: CuotaExpandida[] = [];
+      let acumulado = 0;
+      for (let i = 1; i <= n; i++) {
+        const monto = i === n ? round2(total - acumulado) : base;
+        acumulado = round2(acumulado + monto);
+        out.push({ numCuota: i, offsetMeses: i - 1, monto });
+      }
+      return out;
+    }
+    case "ENTRADA_Y_RESTO": {
+      const entrada = plan.cuotas.find((c) => c.orden === 1);
+      if (!entrada || entrada.base !== "PORCENTAJE" || entrada.valor <= 0 || entrada.valor >= 100) {
+        throw new PlanInvalidoError(
+          "ENTRADA_Y_RESTO necesita cuota 1 PORCENTAJE con 0 < valor < 100.",
+        );
+      }
+      const n = plan.numCuotas;
+      if (!n || n < 1) throw new PlanInvalidoError("ENTRADA_Y_RESTO necesita numCuotas del resto.");
+      const montoEntrada = round2((total * entrada.valor) / 100);
+      const resto = round2(total - montoEntrada);
+      const base = round2(resto / n);
+      const out: CuotaExpandida[] = [
+        { numCuota: 1, offsetMeses: 0, monto: montoEntrada, descripcion: `Entrada ${entrada.valor}%` },
+      ];
+      let acumulado = 0;
+      for (let i = 1; i <= n; i++) {
+        const monto = i === n ? round2(resto - acumulado) : base;
+        acumulado = round2(acumulado + monto);
+        out.push({ numCuota: i + 1, offsetMeses: i, monto });
+      }
+      return out;
+    }
+    case "SUSCRIPCION": {
+      if (!servicio.fechaInicioFacturacion) return [];
+      const horizonte = opts.horizonMeses ?? HORIZONTE_SUSCRIPCION_MESES;
+      const transcurridos = monthsBetween(servicio.fechaInicioFacturacion, opts.todayISO);
+      const hasta = transcurridos + horizonte;
+      const out: CuotaExpandida[] = [];
+      for (let off = 0; off <= hasta; off++) {
+        out.push({ numCuota: off + 1, offsetMeses: off, monto: round2(total) });
+      }
+      return out;
+    }
+    case "PERSONALIZADO": {
+      if (plan.cuotas.length === 0) {
+        throw new PlanInvalidoError("PERSONALIZADO necesita al menos una cuota.");
+      }
+      return [...plan.cuotas]
+        .sort((a, b) => a.orden - b.orden)
+        .map((c) => ({
+          numCuota: c.orden,
+          offsetMeses: c.offsetMeses,
+          monto: c.base === "PORCENTAJE" ? round2((total * c.valor) / 100) : round2(c.valor),
+          descripcion: c.descripcion ?? undefined,
+        }));
+    }
+  }
+}
+
+/**
+ * Fecha programada de un cobro: fechaInicio + offsetMeses, con el día del mes =
+ * diaCobroAncla (o el día del arranque si no hay ancla), CLAMPEADO al largo del
+ * mes destino (ancla 31 en febrero → 28/29). Devuelve también el periodo YYYY-MM.
+ */
+export function cobroDateFor(
+  fechaInicioISO: string,
+  offsetMeses: number,
+  diaCobroAncla: number | null,
+): { periodo: string; fechaProgramadaISO: string } {
+  const inicio = toUTCDate(fechaInicioISO);
+  const targetYear = inicio.getUTCFullYear();
+  const targetMonth0 = inicio.getUTCMonth() + offsetMeses; // Date.UTC normaliza overflow
+  const diaDeseado = diaCobroAncla ?? inicio.getUTCDate();
+  // Normalizar año/mes con un Date intermedio (día 1 para no arrastrar el día).
+  const primerDia = new Date(Date.UTC(targetYear, targetMonth0, 1));
+  const y = primerDia.getUTCFullYear();
+  const m0 = primerDia.getUTCMonth();
+  const dia = Math.min(diaDeseado, daysInMonthUTC(y, m0));
+  const fecha = new Date(Date.UTC(y, m0, dia));
+  return {
+    periodo: `${y}-${String(m0 + 1).padStart(2, "0")}`,
+    fechaProgramadaISO: toISODate(fecha),
+  };
+}
+
+// ── 3. Materialización ──────────────────────────────────────────────────────────
+
+/**
+ * Materializa los drafts de Cobro desde el plan. Devuelve [] si el servicio no
+ * tiene fechaInicioFacturacion (la cuenta queda PENDIENTE_DATOS — cero fabricación).
+ */
+export function materializeCobros(
+  servicio: ServicioEngineInput,
+  plan: PlanEngineInput,
+  opts: { todayISO: string; horizonMeses?: number },
+): CobroDraft[] {
+  if (!servicio.fechaInicioFacturacion) return [];
+  const cuotas = expandPlanCuotas(servicio, plan, opts);
+  return cuotas.map((c) => {
+    const { periodo, fechaProgramadaISO } = cobroDateFor(
+      servicio.fechaInicioFacturacion!,
+      c.offsetMeses,
+      servicio.diaCobroAncla,
+    );
+    return { numCuota: c.numCuota, periodo, fechaProgramadaISO, monto: c.monto, descripcion: c.descripcion };
+  });
+}
+
+// ── 4. Reconciliación idempotente ───────────────────────────────────────────────
+
+/**
+ * Diff drafts-vs-existentes por numCuota. INTOCABLES (van a untouched y su draft
+ * colisionante se DESCARTA — jamás se pisa ni duplica): estado ≠ PROGRAMADO, o
+ * fechaEmision seteada, u origen MANUAL. PROGRAMADO con fecha/monto distinto →
+ * toUpdate. PROGRAMADO origen PLAN sin draft (el plan se achicó) → toDelete.
+ * Re-run sin cambios ⇒ cero mutaciones (idempotencia: el botón se aprieta 2 veces
+ * sin efecto — y el @@unique([servicioId, numCuota]) es la red dura en DB).
+ */
+export function reconcileCobros(drafts: CobroDraft[], existing: CobroExistente[]): ReconcileResult {
+  const result: ReconcileResult = { toCreate: [], toUpdate: [], toDelete: [], untouched: [] };
+  const byNumCuota = new Map<number, CobroExistente>();
+  for (const e of existing) {
+    if (e.numCuota !== null) byNumCuota.set(e.numCuota, e);
+  }
+
+  const esIntocable = (e: CobroExistente) =>
+    e.estado !== "PROGRAMADO" || e.fechaEmision !== null || e.origen === "MANUAL";
+
+  const draftNums = new Set<number>();
+  for (const d of drafts) {
+    draftNums.add(d.numCuota);
+    const match = byNumCuota.get(d.numCuota);
+    if (!match) {
+      result.toCreate.push(d);
+    } else if (esIntocable(match)) {
+      result.untouched.push(match.id);
+    } else if (match.fechaProgramadaISO !== d.fechaProgramadaISO || match.monto !== d.monto) {
+      result.toUpdate.push({
+        id: match.id,
+        fechaProgramadaISO: d.fechaProgramadaISO,
+        monto: d.monto,
+        periodo: d.periodo,
+      });
+    } else {
+      result.untouched.push(match.id);
+    }
+  }
+
+  for (const e of existing) {
+    if (e.numCuota === null) {
+      result.untouched.push(e.id); // manuales sin orden: nunca se tocan
+      continue;
+    }
+    if (!draftNums.has(e.numCuota)) {
+      if (esIntocable(e)) result.untouched.push(e.id);
+      else if (e.origen === "PLAN" || e.origen === "CATCH_UP") result.toDelete.push(e.id);
+      else result.untouched.push(e.id);
+    }
+  }
+
+  return result;
+}
+
+// ── 5. Catch-up ─────────────────────────────────────────────────────────────────
+
+/**
+ * Separa los drafts a crear en regulares vs catch-up (fechaProgramada < hoy —
+ * períodos ya pasados sin cobro, caso Teamnet). Los catch-up se persisten con
+ * origen=CATCH_UP + estado PROGRAMADO y disparan la alerta INCONSISTENCIA_CICLO:
+ * Alex los revisa y confirma (autonomía en la derivación, confirmación en el dinero).
+ */
+export function splitCatchUp(
+  toCreate: CobroDraft[],
+  todayISO: string,
+): { regulares: CobroDraft[]; catchUp: CobroDraft[] } {
+  const regulares: CobroDraft[] = [];
+  const catchUp: CobroDraft[] = [];
+  for (const d of toCreate) {
+    if (diffDays(d.fechaProgramadaISO, todayISO) > 0) catchUp.push(d);
+    else regulares.push(d);
+  }
+  return { regulares, catchUp };
+}
+
+// ── 6. Semáforos ────────────────────────────────────────────────────────────────
+
+/**
+ * Semáforo de un cobro: cobrado → verde · por_cobrar → amarillo · programado
+ * futuro → gris · no-cobrado con fecha + umbral < hoy → rojo (mapeo del Sheet
+ * de Alex: verde=cobrado, amarillo=por cobrar).
+ */
+export function semaforoCobro(
+  cobro: { estado: string; fechaProgramadaISO: string },
+  todayISO: string,
+  umbralVencidoDias: number = UMBRAL_VENCIDO_DIAS,
+): Semaforo {
+  if (cobro.estado === "COBRADO") return "verde";
+  const diasPasados = diffDays(cobro.fechaProgramadaISO, todayISO);
+  if (diasPasados > umbralVencidoDias) return "rojo";
+  if (cobro.estado === "POR_COBRAR") return "amarillo";
+  return "gris"; // PROGRAMADO futuro (o SIN_DATO sin vencer)
+}
+
+const SEMAFORO_PESO: Record<Semaforo, number> = { rojo: 3, amarillo: 2, gris: 1, verde: 0 };
+
+/** Semáforo agregado de la cuenta: el PEOR entre sus cobros no-verdes vivos. */
+export function semaforoCuenta(
+  cobros: Array<{ estado: string; fechaProgramadaISO: string }>,
+  todayISO: string,
+  umbralVencidoDias: number = UMBRAL_VENCIDO_DIAS,
+): Semaforo {
+  let peor: Semaforo = "verde";
+  for (const c of cobros) {
+    const s = semaforoCobro(c, todayISO, umbralVencidoDias);
+    if (SEMAFORO_PESO[s] > SEMAFORO_PESO[peor]) peor = s;
+  }
+  return peor;
+}
+
+// ── 7. Cómputo del set de alertas ───────────────────────────────────────────────
+
+/**
+ * Computa el set completo de alertas de la cartera. dedupeKey estable entre
+ * corridas: `${tipo}:${cuentaId}:${cobroId | servicioId | "cuenta"}` — es la
+ * base del merge/supresión en DB y del diff del digest.
+ */
+export function computeAlertSet(
+  cartera: CarteraEngineInput,
+  opts: {
+    todayISO: string;
+    ventanaProximaDias?: number;
+    umbralVencidoDias?: number;
+  },
+): AlertaDraft[] {
+  const ventana = opts.ventanaProximaDias ?? VENTANA_PROXIMA_DIAS;
+  const umbral = opts.umbralVencidoDias ?? UMBRAL_VENCIDO_DIAS;
+  const out: AlertaDraft[] = [];
+
+  for (const cuenta of cartera.cuentas) {
+    if (cuenta.excluidaOperacion) continue; // Colby: fuera de la operación estándar
+
+    // CUENTA_SIN_DATOS — cliente con proyecto sin cuenta / sin servicios / servicio sin arranque
+    if (!cuenta.tieneCuenta) {
+      out.push({
+        dedupeKey: `CUENTA_SIN_DATOS:${cuenta.cuentaId}:cuenta`,
+        tipo: "CUENTA_SIN_DATOS",
+        urgencia: "MEDIA",
+        cuentaId: cuenta.cuentaId,
+        mensaje: `${cuenta.clienteNombre}: tiene proyecto activo pero no tiene cuenta financiera configurada.`,
+      });
+      continue; // sin cuenta no hay servicios/cobros que evaluar
+    }
+    if (cuenta.servicios.length === 0) {
+      out.push({
+        dedupeKey: `CUENTA_SIN_DATOS:${cuenta.cuentaId}:cuenta`,
+        tipo: "CUENTA_SIN_DATOS",
+        urgencia: "MEDIA",
+        cuentaId: cuenta.cuentaId,
+        mensaje: `${cuenta.clienteNombre}: la cuenta no tiene servicios contratados configurados.`,
+      });
+    }
+
+    for (const s of cuenta.servicios) {
+      if (s.estado !== "ACTIVO") continue;
+      if (!s.fechaInicioFacturacion) {
+        out.push({
+          dedupeKey: `CUENTA_SIN_DATOS:${cuenta.cuentaId}:${s.servicioId}`,
+          tipo: "CUENTA_SIN_DATOS",
+          urgencia: "MEDIA",
+          cuentaId: cuenta.cuentaId,
+          mensaje: `${cuenta.clienteNombre}: el servicio${s.descripcion ? ` "${s.descripcion}"` : ""} no tiene fecha de inicio de facturación — no se generan cobros.`,
+          evidencia: { servicioId: s.servicioId },
+        });
+      } else if (
+        s.anchorActualISO &&
+        toISODate(toUTCDate(s.fechaInicioFacturacion)) !== toISODate(toUTCDate(s.anchorActualISO))
+      ) {
+        // ARRANQUE_CAMBIADO — el CSE movió el anchor DESPUÉS de configurar el servicio.
+        // Detección en el cómputo (sin plumbing de eventos): Alex decide si ajustar.
+        out.push({
+          dedupeKey: `ARRANQUE_CAMBIADO:${cuenta.cuentaId}:${s.servicioId}`,
+          tipo: "ARRANQUE_CAMBIADO",
+          urgencia: "ALTA",
+          cuentaId: cuenta.cuentaId,
+          mensaje: `${cuenta.clienteNombre}: el arranque del proyecto cambió (cronograma: ${toISODate(toUTCDate(s.anchorActualISO))}) y difiere de la facturación configurada (${toISODate(toUTCDate(s.fechaInicioFacturacion))}). Los cobros emitidos/cobrados NO se regeneran — revisá si hay que ajustar.`,
+          evidencia: {
+            servicioId: s.servicioId,
+            fechaFacturacion: toISODate(toUTCDate(s.fechaInicioFacturacion)),
+            anchorActual: toISODate(toUTCDate(s.anchorActualISO)),
+          },
+        });
+      }
+    }
+
+    for (const c of cuenta.cobros) {
+      if (c.estado === "COBRADO") continue;
+      const diasPasados = diffDays(c.fechaProgramadaISO, opts.todayISO);
+
+      if (diasPasados > umbral) {
+        out.push({
+          dedupeKey: `COBRO_VENCIDO:${cuenta.cuentaId}:${c.cobroId}`,
+          tipo: "COBRO_VENCIDO",
+          urgencia: "ALTA",
+          cuentaId: cuenta.cuentaId,
+          cobroId: c.cobroId,
+          mensaje: `${cuenta.clienteNombre}: cobro de ${c.monto.toLocaleString("es-CR")} vencido hace ${diasPasados} días (programado ${c.fechaProgramadaISO}).`,
+          evidencia: { servicioId: c.servicioId, fechaProgramada: c.fechaProgramadaISO, monto: c.monto },
+        });
+      } else if (diasPasados >= -ventana && diasPasados <= umbral) {
+        out.push({
+          dedupeKey: `COBRO_PROXIMO:${cuenta.cuentaId}:${c.cobroId}`,
+          tipo: "COBRO_PROXIMO",
+          urgencia: "MEDIA",
+          cuentaId: cuenta.cuentaId,
+          cobroId: c.cobroId,
+          mensaje: `${cuenta.clienteNombre}: cobro de ${c.monto.toLocaleString("es-CR")} entra a la quincena (programado ${c.fechaProgramadaISO}).`,
+          evidencia: { servicioId: c.servicioId, fechaProgramada: c.fechaProgramadaISO, monto: c.monto },
+        });
+      }
+
+      if (c.origen === "CATCH_UP" && c.estado === "PROGRAMADO") {
+        out.push({
+          dedupeKey: `INCONSISTENCIA_CICLO:${cuenta.cuentaId}:${c.cobroId}`,
+          tipo: "INCONSISTENCIA_CICLO",
+          urgencia: "MEDIA",
+          cuentaId: cuenta.cuentaId,
+          cobroId: c.cobroId,
+          mensaje: `${cuenta.clienteNombre}: cobro de catch-up generado por desfase de arranque (${c.fechaProgramadaISO}) — pendiente de tu confirmación.`,
+          evidencia: { servicioId: c.servicioId, fechaProgramada: c.fechaProgramadaISO, monto: c.monto },
+        });
+      }
+    }
+  }
+
+  return out;
+}
+
+// ── 8. Diff del digest ──────────────────────────────────────────────────────────
+
+/** Diff por dedupeKey entre la corrida anterior y la actual (el digest del lunes). */
+export function diffAlertSets(prev: AlertaDraft[], current: AlertaDraft[]): DiffAlertas {
+  const prevKeys = new Set(prev.map((a) => a.dedupeKey));
+  const currKeys = new Set(current.map((a) => a.dedupeKey));
+  const nuevas = current.filter((a) => !prevKeys.has(a.dedupeKey));
+  const resueltas = prev.filter((a) => !currKeys.has(a.dedupeKey));
+  const persistentes = current.length - nuevas.length;
+  return { nuevas, resueltas, persistentes, sinCambios: nuevas.length === 0 && resueltas.length === 0 };
+}

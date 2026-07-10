@@ -10,6 +10,7 @@ const ROLE_OPTIONS = [
   { value: "DEV", label: "Dev" },
   { value: "CSL", label: "CSL" },
   { value: "MARKETING", label: "Marketing" },
+  { value: "ADMIN", label: "Admin" }, // Finanzas: solo Cobranza (no ve clientes)
   { value: "SUPER_ADMIN", label: "Super Admin" },
 ] as const;
 const ROLE_LABEL: Record<string, string> = Object.fromEntries(

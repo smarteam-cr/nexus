@@ -10,6 +10,8 @@ const WIDTH = {
   sm: "w-[380px]",
   md: "w-[440px]",
   lg: "w-[560px]",
+  // Mitad de la pantalla (full-width en mobile; nunca más angosto que lg).
+  xl: "w-full sm:w-[50vw] sm:min-w-[560px]",
 } as const;
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────

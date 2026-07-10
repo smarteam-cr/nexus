@@ -45,7 +45,7 @@ const ALL_CAPS: Capability[] = [
   "deleteTimeline",
 ];
 
-const ALL_ROLES: TeamRole[] = ["CSE", "VENTAS", "DEV", "CSL", "MARKETING", "SUPER_ADMIN"];
+const ALL_ROLES: TeamRole[] = ["CSE", "VENTAS", "DEV", "CSL", "MARKETING", "ADMIN", "SUPER_ADMIN"];
 
 test("A — DEV ≡ VENTAS: mismas capacidades, capacidad por capacidad", () => {
   for (const cap of ALL_CAPS) {
@@ -61,6 +61,13 @@ test("B — SUPER_ADMIN tiene TODAS; manageTeam es exclusiva suya", () => {
   }
   for (const role of ALL_ROLES.filter((r) => r !== "SUPER_ADMIN")) {
     expect(hasCapability(role, "manageTeam")).toBe(false);
+  }
+});
+
+test("B2 — ADMIN (Finanzas): CERO capacidades de la matriz — su acceso es SOLO Cobranza (whitelist)", () => {
+  expect(capabilitiesFor("ADMIN")).toEqual([]);
+  for (const cap of ALL_CAPS) {
+    expect(hasCapability("ADMIN", cap)).toBe(false);
   }
 });
 

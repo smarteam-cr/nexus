@@ -1,0 +1,218 @@
+/**
+ * lib/cobranza/schema.ts
+ *
+ * Schemas Zod de las fronteras HTTP del módulo Cobranza + ESPEJOS client-safe de
+ * los enums Prisma (arrays const — patrón lib/marketing/schema.ts) para que los
+ * Client Components (selects, badges) no importen @prisma/client.
+ */
+import { z } from "zod";
+
+// ── Espejos client-safe de los enums (mantener en sync con prisma/schema.prisma) ──
+
+export const COBRANZA_TIPOS_CUENTA = ["NACIONAL", "INTERNACIONAL"] as const;
+export const COBRANZA_VIAS_COBRO = ["MERCURY", "ODOO", "OTRA"] as const;
+export const COBRANZA_MONEDAS = ["CRC", "USD"] as const;
+export const COBRANZA_TERMINOS_PAGO = ["ANTICIPADO", "VENCIDO"] as const;
+export const COBRANZA_ESTADOS_CUENTA = [
+  "PENDIENTE_DATOS",
+  "PENDIENTE_CONTRATO",
+  "ACTIVA",
+  "CON_ATRASO",
+  "SUSPENDIDA",
+] as const;
+export const COBRANZA_TIPOS_SERVICIO = [
+  "SUSCRIPCION",
+  "IMPLEMENTACION",
+  "WEB",
+  "SOPORTE",
+  "CRM",
+  "OTRO",
+] as const;
+export const COBRANZA_MODALIDADES = ["RECURRENTE", "PROYECTO"] as const;
+export const COBRANZA_ESTADOS_SERVICIO = ["ACTIVO", "FINALIZADO", "PAUSADO"] as const;
+export const COBRANZA_PLAN_TEMPLATES = [
+  "PAREJO",
+  "ENTRADA_Y_RESTO",
+  "SUSCRIPCION",
+  "PERSONALIZADO",
+] as const;
+export const COBRANZA_CUOTA_BASES = ["PORCENTAJE", "MONTO_FIJO"] as const;
+export const COBRANZA_ESTADOS_COBRO = ["PROGRAMADO", "POR_COBRAR", "COBRADO", "SIN_DATO"] as const;
+export const COBRANZA_TIPOS_ALERTA = [
+  "COBRO_PROXIMO",
+  "COBRO_VENCIDO",
+  "CUENTA_SIN_DATOS",
+  "INCONSISTENCIA_CICLO",
+  "ARRANQUE_CAMBIADO",
+] as const;
+export const COBRANZA_URGENCIAS = ["ALTA", "MEDIA", "BAJA"] as const;
+export const COBRANZA_ALERTA_ESTADOS = ["ABIERTA", "VISTA", "RESUELTA", "DESCARTADA"] as const;
+export const BITACORA_TIPOS = ["LLAMADA", "CORREO", "NOTA"] as const; // ACTUALIZACION_IA solo la escribe el sistema
+
+// Labels legibles para la UI (tuteo/español operativo).
+export const TIPO_CUENTA_LABEL: Record<string, string> = {
+  NACIONAL: "Nacional",
+  INTERNACIONAL: "Internacional",
+};
+export const ESTADO_CUENTA_LABEL: Record<string, string> = {
+  PENDIENTE_DATOS: "Pendiente de datos",
+  PENDIENTE_CONTRATO: "Pendiente de contrato",
+  ACTIVA: "Activa",
+  CON_ATRASO: "Con atraso",
+  SUSPENDIDA: "Suspendida",
+};
+export const TIPO_SERVICIO_LABEL: Record<string, string> = {
+  SUSCRIPCION: "Suscripción",
+  IMPLEMENTACION: "Implementación",
+  WEB: "Web",
+  SOPORTE: "Soporte",
+  CRM: "CRM",
+  OTRO: "Otro",
+};
+export const PLAN_TEMPLATE_LABEL: Record<string, string> = {
+  PAREJO: "Cuotas parejas",
+  ENTRADA_Y_RESTO: "Entrada + resto",
+  SUSCRIPCION: "Suscripción mensual",
+  PERSONALIZADO: "Personalizado",
+};
+export const ESTADO_COBRO_LABEL: Record<string, string> = {
+  PROGRAMADO: "Programado",
+  POR_COBRAR: "Por cobrar",
+  COBRADO: "Cobrado",
+  SIN_DATO: "Sin dato",
+};
+export const TIPO_ALERTA_LABEL: Record<string, string> = {
+  COBRO_PROXIMO: "Cobro próximo",
+  COBRO_VENCIDO: "Cobro vencido",
+  CUENTA_SIN_DATOS: "Cuenta sin datos",
+  INCONSISTENCIA_CICLO: "Inconsistencia de ciclo",
+  ARRANQUE_CAMBIADO: "Arranque cambiado",
+};
+
+// ── Zod: fronteras HTTP ─────────────────────────────────────────────────────────
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (esperado YYYY-MM-DD)");
+const monto = z.number().positive("El monto debe ser positivo").multipleOf(0.01, "Máximo 2 decimales");
+
+export const cuentaCreateSchema = z.object({
+  clientId: z.string().cuid(),
+  tipo: z.enum(COBRANZA_TIPOS_CUENTA).default("NACIONAL"),
+  viaCobro: z.enum(COBRANZA_VIAS_COBRO).default("ODOO"),
+  moneda: z.enum(COBRANZA_MONEDAS).default("CRC"),
+  terminosPago: z.enum(COBRANZA_TERMINOS_PAGO).default("ANTICIPADO"),
+  diaCobroAncla: z.number().int().min(1).max(31).nullish(),
+  notas: z.string().max(4000).nullish(),
+});
+
+export const cuentaPatchSchema = z
+  .object({
+    tipo: z.enum(COBRANZA_TIPOS_CUENTA),
+    viaCobro: z.enum(COBRANZA_VIAS_COBRO),
+    moneda: z.enum(COBRANZA_MONEDAS),
+    terminosPago: z.enum(COBRANZA_TERMINOS_PAGO),
+    diaCobroAncla: z.number().int().min(1).max(31).nullable(),
+    estadoCuenta: z.enum(COBRANZA_ESTADOS_CUENTA),
+    excluidaOperacion: z.boolean(),
+    responsableCobroTerceros: z.string().max(500).nullable(),
+    notas: z.string().max(4000).nullable(),
+  })
+  .partial();
+
+export const servicioCreateSchema = z.object({
+  tipoServicio: z.enum(COBRANZA_TIPOS_SERVICIO),
+  modalidad: z.enum(COBRANZA_MODALIDADES),
+  montoTotal: monto,
+  moneda: z.enum(COBRANZA_MONEDAS),
+  fechaInicioFacturacion: isoDate.nullish(), // sin valor + projectId → se lee del anchor
+  duracionMeses: z.number().int().min(1).max(120).nullish(),
+  projectId: z.string().cuid().nullish(),
+  descripcion: z.string().max(500).nullish(),
+});
+
+export const servicioPatchSchema = z
+  .object({
+    tipoServicio: z.enum(COBRANZA_TIPOS_SERVICIO),
+    modalidad: z.enum(COBRANZA_MODALIDADES),
+    montoTotal: monto,
+    moneda: z.enum(COBRANZA_MONEDAS),
+    fechaInicioFacturacion: isoDate.nullable(),
+    duracionMeses: z.number().int().min(1).max(120).nullable(),
+    projectId: z.string().cuid().nullable(),
+    estado: z.enum(COBRANZA_ESTADOS_SERVICIO),
+    descripcion: z.string().max(500).nullable(),
+  })
+  .partial();
+
+const cuotaPlanSchema = z.object({
+  orden: z.number().int().min(1),
+  base: z.enum(COBRANZA_CUOTA_BASES),
+  valor: z.number().positive(),
+  offsetMeses: z.number().int().min(0).max(120),
+  descripcion: z.string().max(300).nullish(),
+});
+
+/**
+ * PUT del plan activo. Refinamientos por template:
+ *  - PAREJO: numCuotas ≥ 1 O el servicio tiene duracionMeses (eso se valida en la
+ *    mutación, que ve el servicio).
+ *  - ENTRADA_Y_RESTO: exige cuota orden 1 PORCENTAJE 0<valor<100 + numCuotas ≥ 1.
+ *  - PERSONALIZADO: cuotas no vacías, órdenes únicos.
+ *  - SUSCRIPCION: sin requisitos extra (montoTotal = mensual).
+ */
+export const planPutSchema = z
+  .object({
+    template: z.enum(COBRANZA_PLAN_TEMPLATES),
+    numCuotas: z.number().int().min(1).max(120).nullish(),
+    cuotas: z.array(cuotaPlanSchema).max(60).default([]),
+    notas: z.string().max(2000).nullish(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.template === "ENTRADA_Y_RESTO") {
+      const entrada = val.cuotas.find((c) => c.orden === 1);
+      if (!entrada || entrada.base !== "PORCENTAJE" || entrada.valor <= 0 || entrada.valor >= 100) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Entrada + resto necesita una cuota 1 de tipo porcentaje entre 0 y 100.",
+          path: ["cuotas"],
+        });
+      }
+      if (!val.numCuotas) {
+        ctx.addIssue({ code: "custom", message: "Indicá en cuántas cuotas va el resto.", path: ["numCuotas"] });
+      }
+    }
+    if (val.template === "PERSONALIZADO") {
+      if (val.cuotas.length === 0) {
+        ctx.addIssue({ code: "custom", message: "Personalizado necesita al menos una cuota.", path: ["cuotas"] });
+      }
+      const ordenes = val.cuotas.map((c) => c.orden);
+      if (new Set(ordenes).size !== ordenes.length) {
+        ctx.addIssue({ code: "custom", message: "Los órdenes de cuota deben ser únicos.", path: ["cuotas"] });
+      }
+    }
+  });
+
+/**
+ * PATCH de un cobro. fechaProgramada/monto solo se aceptan si el cobro está
+ * PROGRAMADO (lo valida la mutación, que ve el estado actual). COBRADO exige
+ * confirmación (la mutación setea confirmadoPor desde el guard — INV3).
+ */
+export const cobroPatchSchema = z
+  .object({
+    estado: z.enum(COBRANZA_ESTADOS_COBRO),
+    fechaProgramada: isoDate,
+    monto,
+    fechaEmision: isoDate.nullable(),
+    fechaCobro: isoDate.nullable(),
+    notas: z.string().max(2000).nullable(),
+  })
+  .partial();
+
+export const alertaPatchSchema = z.object({
+  estado: z.enum(COBRANZA_ALERTA_ESTADOS),
+});
+
+export const bitacoraCreateSchema = z.object({
+  tipo: z.enum(BITACORA_TIPOS),
+  contenido: z.string().min(1).max(4000),
+  cobroId: z.string().cuid().nullish(),
+});

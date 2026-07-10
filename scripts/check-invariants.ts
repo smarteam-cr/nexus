@@ -54,6 +54,20 @@ async function main(): Promise<number> {
     console.error("⚠ INV2 no verificable (¿HubSpot/DB caído?):", e instanceof Error ? e.message : e);
   }
 
+  // ── Inv 3: ningún Cobro COBRADO sin confirmadoPor (Cobranza — el humano confirma
+  //    lo que mueve dinero; chokepoint: lib/cobranza/mutations.ts#cambiarEstadoCobro) ──
+  const cobradosSinConfirmar = await prisma.cobro.count({
+    where: { estado: "COBRADO", confirmadoPor: null },
+  });
+  if (cobradosSinConfirmar > 0) {
+    violations++;
+    console.error(
+      `✗ INV3 VIOLADO: ${cobradosSinConfirmar} Cobro(s) en estado COBRADO sin confirmadoPor (¿alguien escribió estado sin pasar por el chokepoint?).`,
+    );
+  } else {
+    console.log("✓ INV3: todo Cobro COBRADO tiene confirmadoPor.");
+  }
+
   return violations;
 }
 
