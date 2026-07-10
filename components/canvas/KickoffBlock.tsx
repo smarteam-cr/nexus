@@ -229,7 +229,7 @@ function BlockSkeleton() {
   );
 }
 
-function Prose({ content }: { content: string }) {
+export function Prose({ content }: { content: string }) {
   return (
     <div className="kl-prose">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
@@ -238,7 +238,7 @@ function Prose({ content }: { content: string }) {
 }
 
 /** Markdown inline (sin <p> envolvente) — para celdas de tabla: parsea **bold**, *italic*, links. */
-function InlineMD({ children }: { children: string }) {
+export function InlineMD({ children }: { children: string }) {
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ p: (props) => <>{props.children}</> }}>
       {children}

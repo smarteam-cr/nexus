@@ -4,8 +4,10 @@ import {
   type CanvasDefinition,
   HANDOFF_CANVAS,
   BUSINESS_CASE_CANVAS,
+  KICKOFF_CANVAS,
   DEFAULT_PROJECT_CANVASES,
   AGENT_GROUP_TO_CANVAS,
+  kickoffSectionSequence,
 } from "./canvas-defs";
 import { templateById, templateDefsByKey } from "@/components/landing/configs/templates.defs";
 import { HUBSPOT_TEMPLATE_ID } from "@/lib/business-cases/case-types";
@@ -15,7 +17,7 @@ import { buildTemplateMetaEntry } from "@/lib/business-cases/template-meta";
 // que los importadores de servidor existentes (analyze/route.ts, etc.) sigan
 // funcionando sin cambios. La separación evita que un componente cliente que
 // importe estos datos arrastre `pg`/`fs` al bundle del navegador.
-export { HANDOFF_CANVAS, BUSINESS_CASE_CANVAS, DEFAULT_PROJECT_CANVASES, AGENT_GROUP_TO_CANVAS };
+export { HANDOFF_CANVAS, BUSINESS_CASE_CANVAS, KICKOFF_CANVAS, DEFAULT_PROJECT_CANVASES, AGENT_GROUP_TO_CANVAS };
 export type { CanvasDefinition };
 
 // Acepta el cliente global o un cliente de transacción ($transaction) para que la
@@ -32,7 +34,9 @@ export async function createDefaultCanvases(projectId: string, db: Db = prisma) 
       name: c.name,
       isDefault: c.isDefault,
       order: c.order,
-      sections: c.sections, // Keep JSON for backward compat
+      // Keep JSON for backward compat. Cast: `defaultData?` hace que CanvasSectionDef
+      // no sea structuralmente InputJsonValue, pero es JSON-serializable de verdad.
+      sections: c.sections as unknown as Prisma.InputJsonValue,
     })),
   });
 
@@ -54,6 +58,30 @@ export async function createDefaultCanvases(projectId: string, db: Db = prisma) 
         order: i,
       })),
     });
+
+    // Secciones CURADAS (con `defaultData`, ej. equipo/horarios/canales del Kickoff):
+    // sembrar 1 bloque CONFIRMED con su data default para que arranquen con la
+    // estructura lista (el agente de IA no las genera). Las demás secciones quedan
+    // sin bloque (el agente del kickoff las crea al generar su prosa).
+    const curated = def.sections.filter((s) => s.defaultData);
+    if (!curated.length) continue;
+    const curatedKeys = curated.map((s) => s.key);
+    const sections = await db.canvasSection.findMany({
+      where: { canvasId: canvas.id, key: { in: curatedKeys } },
+      select: { id: true, key: true },
+    });
+    const dataByKey = new Map(curated.map((s) => [s.key, s.defaultData]));
+    await db.canvasBlock.createMany({
+      data: sections.map((s) => ({
+        sectionId: s.id,
+        blockType: "CARD" as const, // neutro: el render se elige por section.key en KickoffLanding
+        content: null,
+        data: (dataByKey.get(s.key) ?? {}) as Prisma.InputJsonValue,
+        order: 0,
+        source: "HUMAN" as const,
+        status: "CONFIRMED" as const,
+      })),
+    });
   }
 }
 
@@ -67,7 +95,7 @@ export async function createHandoffCanvas(projectId: string, db: Db = prisma): P
       name: HANDOFF_CANVAS.name,
       isDefault: HANDOFF_CANVAS.isDefault,
       order: HANDOFF_CANVAS.order,
-      sections: HANDOFF_CANVAS.sections,
+      sections: HANDOFF_CANVAS.sections as unknown as Prisma.InputJsonValue,
     },
     select: { id: true },
   });
@@ -209,4 +237,81 @@ export async function reconcileHandoffCanvasSections(canvasId: string, db: Db = 
       await db.canvasSection.update({ where: { id: cur.id }, data: { order: i, label } });
     }
   }
+}
+
+/**
+ * Reconcilia un canvas "Kickoff" YA EXISTENTE a la estructura canónica actual: crea las
+ * secciones que falten y siembra su bloque `defaultData` cuando lo tengan. NUNCA borra
+ * secciones ni bloques, ni pisa data existente. Idempotente.
+ *
+ * Lo llama la rama kickoff de POST /analyze ANTES de generar: un kickoff creado con un
+ * canon viejo (sin `hoy_vs_sistema`, sin `cierre`) se auto-sana al regenerar, en vez de
+ * perder en silencio esas secciones (`buildKickoffConfig` filtra por las keys que existen).
+ *
+ * DIFERENCIA con el handoff: acá el CSE puede REORDENAR las secciones (drag & drop del
+ * motor), y ese orden es el del render. Por eso NO se renormaliza al orden canónico: se
+ * parte del orden vivo y cada key faltante se inserta detrás de su predecesora canónica.
+ */
+export async function reconcileKickoffCanvasSections(canvasId: string, db: Db = prisma): Promise<void> {
+  const canon = KICKOFF_CANVAS.sections;
+  const existing = await db.canvasSection.findMany({
+    where: { canvasId },
+    orderBy: { order: "asc" },
+    select: { id: true, key: true, order: true, _count: { select: { blocks: true } } },
+  });
+  const existingKeys = new Set(existing.map((s) => s.key));
+  const seq = kickoffSectionSequence(existing.map((s) => s.key));
+  const missing = canon.filter((s) => !existingKeys.has(s.key));
+
+  if (missing.length) {
+    const labelByKey = new Map(canon.map((s) => [s.key, s.label]));
+    await db.canvasSection.createMany({
+      // `skipDuplicates`: dos regeneraciones simultáneas del mismo kickoff llegan acá con el
+      // mismo set de faltantes. Sin esto la segunda choca contra @@unique([canvasId,key]) y la
+      // request entera muere con P2002 en vez de ser un no-op.
+      skipDuplicates: true,
+      data: missing.map((s) => ({ canvasId, key: s.key, label: labelByKey.get(s.key)!, order: seq.indexOf(s.key) })),
+    });
+    // Densificar `order` a 0..n-1 respetando la secuencia (preserva el orden del CSE).
+    const byKey = new Map(existing.map((s) => [s.key, s]));
+    for (let i = 0; i < seq.length; i++) {
+      const cur = byKey.get(seq[i]);
+      if (cur && cur.order !== i) await db.canvasSection.update({ where: { id: cur.id }, data: { order: i } });
+    }
+  }
+
+  // Sembrar el bloque de las secciones CURADAS (equipo/horarios/canales/cierre) que no
+  // tengan ninguno: sin bloque, el editor no persiste (`KickoffWorkspace` exige el CARD)
+  // y el agente no las genera (`agentGenerated:false`) → quedarían muertas.
+  const curated = canon.filter((s) => s.defaultData);
+  const needSeed = curated.filter((s) => !existingKeys.has(s.key) || byBlockCount(existing, s.key) === 0);
+  if (!needSeed.length) return;
+  const rows = await db.canvasSection.findMany({
+    where: { canvasId, key: { in: needSeed.map((s) => s.key) } },
+    select: { id: true, key: true },
+  });
+  const dataByKey = new Map(curated.map((s) => [s.key, s.defaultData]));
+  // `id` determinístico + `skipDuplicates`: CanvasBlock no tiene unique por sección, y dos
+  // reconciles simultáneos leen `existing` (0 bloques) antes de escribir, así que ambos
+  // sembrarían un CARD. El duplicado NO es inocuo: los lectores toman `blocks.find(CARD)` sobre
+  // un `orderBy: order` con empate en 0 — Postgres no garantiza cuál sale primero — de modo que
+  // el CSE podría editar un CARD y que después se lea el otro (su CTA "no se guarda"). Derivando
+  // el id de la sección, el segundo insert choca contra la PK y es un no-op.
+  await db.canvasBlock.createMany({
+    skipDuplicates: true,
+    data: rows.map((s) => ({
+      id: `${s.id}-seed`,
+      sectionId: s.id,
+      blockType: "CARD" as const,
+      content: null,
+      data: (dataByKey.get(s.key) ?? {}) as Prisma.InputJsonValue,
+      order: 0,
+      source: "HUMAN" as const,
+      status: "CONFIRMED" as const,
+    })),
+  });
+}
+
+function byBlockCount(rows: Array<{ key: string; _count: { blocks: number } }>, key: string): number {
+  return rows.find((r) => r.key === key)?._count.blocks ?? 0;
 }

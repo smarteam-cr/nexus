@@ -11,12 +11,45 @@
  * servidor existentes siguen funcionando sin cambios.
  */
 
+export type CanvasSectionDef = {
+  key: string;
+  label: string;
+  /**
+   * Data por defecto con la que se SIEMBRA el bloque de la sección (secciones
+   * CURADAS por el CSE, ej. equipo/horarios/canales del Kickoff). Si está
+   * presente, `createDefaultCanvases` crea un bloque CONFIRMED con esta data en
+   * vez de dejar la sección vacía. JSON-serializable (se castea a Prisma.InputJsonValue).
+   */
+  defaultData?: Record<string, unknown>;
+};
+
 export type CanvasDefinition = {
   name: string;
   isDefault: boolean;
   order: number;
-  sections: Array<{ key: string; label: string }>;
+  sections: CanvasSectionDef[];
 };
+
+// Defaults de las secciones CURADAS del Kickoff (equipo/horarios/canales). Fuente
+// ÚNICA — la usan el seed (createDefaultCanvases) y el backfill de proyectos viejos.
+export const KICKOFF_CANALES_DEFAULT = {
+  horario: "Lunes a viernes de 8 a.m. a 5 p.m.",
+  canales: ["WhatsApp (grupos asignados)", "Correo electrónico", "Google Meet"],
+  soporteEmail: "soporte@smarteamcr.com",
+} as const;
+
+// Default del CIERRE (CTA de cara al cliente, como el `cta` del Business Case). El
+// CSE edita el titular/subtítulo y configura el botón (texto + enlace, ej. agenda o
+// grupo). Fuente ÚNICA — la usan el seed, el backfill y el `empty` de kickoff.defs.
+export const KICKOFF_CIERRE_DEFAULT = {
+  eyebrow: "El siguiente paso",
+  headline: "¡Estamos listos para empezar!",
+  subhead:
+    "Tu equipo de Smarteam ya tiene todo lo necesario para arrancar. Coordinamos la primera sesión y damos juntos el primer paso.",
+  buttonLabel: "",
+  buttonUrl: "",
+  buttonTarget: "_blank",
+} as const;
 
 // ── Canvas Handoff (traspaso Sales→CS) ────────────────────────────────────────
 // YA NO se crea con createDefaultCanvases: el handoff es una entidad cliente-level
@@ -81,10 +114,25 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     sections: [
       { key: "bienvenida",     label: "Bienvenida y contexto" },
       { key: "objetivos",      label: "Objetivos del proyecto" },
+      { key: "hoy_vs_sistema", label: "Del hoy al nuevo sistema" },
       { key: "alcance",        label: "Alcance: qué incluye" },
+      // Secciones CURADAS por el CSE (el agente de IA NO las genera): datos
+      // estructurados/interactivos. Se siembran con `defaultData` → sobreviven a
+      // las regeneraciones del kickoff (que solo tocan sus 6 keys de prosa).
+      { key: "equipo",         label: "Equipo del proyecto",       defaultData: { members: [] } },
       { key: "tu_rol",         label: "Lo que necesitamos de tu equipo" },
       { key: "metricas_exito", label: "Cómo mediremos el éxito" },
+      { key: "horarios",       label: "Sesiones y horarios",       defaultData: { intro: "", options: [], sessions: [] } },
+      { key: "canales",        label: "Canales de atención",       defaultData: { ...KICKOFF_CANALES_DEFAULT } },
+      // Cronograma y procesos NO llevan bloque: su contenido sale de ProjectTimeline y de
+      // los flowcharts del cliente (`ctxDriven` en kickoff.defs). Existen como CanvasSection
+      // solo para tener un `order` propio → el CSE puede arrastrarlas como a cualquier otra.
+      { key: "cronograma",     label: "Cronograma del proyecto" },
+      { key: "procesos",       label: "Nuestros procesos" },
       { key: "proximos_pasos", label: "Próximos pasos" },
+      // Cierre = CTA de cara al cliente (curada por el CSE; el agente NO la genera).
+      // Data-driven pero se pinta al final full-bleed (pinned/ctxDriven en kickoff.defs).
+      { key: "cierre",         label: "Cierre y llamado a la acción", defaultData: { ...KICKOFF_CIERRE_DEFAULT } },
     ],
   },
   {
@@ -140,3 +188,35 @@ export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
   // de detalle (la persistencia real va a ProjectTimeline, no a bloques).
   cronograma: "Cronograma",
 };
+
+/** Definición canónica del canvas Kickoff (fuente única del seed, la reconciliación y el backfill). */
+export const KICKOFF_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c) => c.name === "Kickoff")!;
+
+/**
+ * Secuencia destino de las secciones de un canvas Kickoff: parte del orden VIVO
+ * (`existingKeys`, tal como las ve el CSE — que puede haberlas reordenado con drag)
+ * y agrega cada key canónica faltante justo detrás de su predecesora canónica
+ * presente. Si ninguna predecesora existe, va al principio.
+ *
+ * PURA: la comparten `reconcileKickoffCanvasSections` (runtime, al regenerar) y
+ * `scripts/backfill-kickoff-sections.ts` (los kickoffs viejos) → mismo resultado.
+ * NUNCA quita keys: las secciones custom del CSE sobreviven en su lugar.
+ */
+export function kickoffSectionSequence(existingKeys: string[]): string[] {
+  const canon = KICKOFF_CANVAS.sections.map((s) => s.key);
+  const seq = [...existingKeys];
+  for (const key of canon) {
+    if (seq.includes(key)) continue;
+    const canonIdx = canon.indexOf(key);
+    let at = 0;
+    for (let i = canonIdx - 1; i >= 0; i--) {
+      const pos = seq.indexOf(canon[i]);
+      if (pos !== -1) {
+        at = pos + 1;
+        break;
+      }
+    }
+    seq.splice(at, 0, key);
+  }
+  return seq;
+}
