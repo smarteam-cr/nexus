@@ -8,6 +8,7 @@ import { loadCsPanel } from "@/lib/cs/load-panel";
 import { loadCsDashboard } from "@/lib/cs/load-dashboard";
 import CsPanel from "@/components/cs/CsPanel";
 import CsDashboard from "@/components/cs/dashboard/CsDashboard";
+import AlertsFeed from "@/components/cs/AlertsFeed";
 
 // Depende del usuario logueado (rol) → no cacheable.
 export const dynamic = "force-dynamic";
@@ -45,7 +46,24 @@ export default async function CustomerSuccessPage() {
               : `${data.rows.length} proyecto${data.rows.length !== 1 ? "s" : ""}${openAlerts > 0 ? ` · ${openAlerts} alerta${openAlerts !== 1 ? "s" : ""} sin ver` : " · sin alertas nuevas"}`
           }
         />
-        <CsDashboard data={dashboard} />
+        {/* Las alertas del watchdog (incluidas las derivadas de datos de partner:
+            UUS, licencias, renovaciones) son visibles a TODO rol seeAllClients a
+            propósito: son insight DERIVADO ("llamá a X porque su uso cae"), no el
+            dashboard crudo de uso/MRR, que sí queda gateado por canSeePartnerData.
+            Decisión consciente de producto — no es un gate olvidado. El feed va
+            ARRIBA de los charts vía slot: es el único ranking accionable por riesgo. */}
+        <CsDashboard
+          data={dashboard}
+          alertsSlot={
+            <section>
+              <div className="flex items-baseline gap-2 mb-2">
+                <h2 className="text-sm font-semibold text-fg">🚨 Alertas</h2>
+                <span className="text-[11px] text-fg-muted">triadas por el watchdog — severidad, razón y acción sugerida</span>
+              </div>
+              <AlertsFeed initialAlerts={data.alerts} />
+            </section>
+          }
+        />
         <CsPanel data={data} canSyncPartner={canSeePartnerData} />
       </div>
     </AppShell>

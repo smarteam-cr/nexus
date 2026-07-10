@@ -10,8 +10,9 @@
  *      partner no está autorizado, muestra el estado degradado.
  */
 import Link from "next/link";
-import SourceChip from "@/components/cs/SourceChip";
+import SourceChip, { fmtChipDate } from "@/components/cs/SourceChip";
 import { ADOPTION_META, usageScoreColor } from "./chart-theme";
+import { isStale, STALE_AFTER_DAYS } from "@/lib/cs/partner-state";
 import type { CsDashboardData } from "@/lib/cs/load-dashboard";
 
 function fmtMoney(n: number | null): string {
@@ -39,11 +40,13 @@ function ScoreCell({ score }: { score: number | null }) {
 export default function AdoptionSection({
   adoptionStates,
   adoption,
+  adoptionNoData,
   freshness,
   partnerVisible,
 }: {
   adoptionStates: CsDashboardData["adoptionStates"];
   adoption: CsDashboardData["adoption"];
+  adoptionNoData: CsDashboardData["adoptionNoData"];
   freshness: CsDashboardData["freshness"];
   /** Uso/UUS por cuenta es confidencial (términos de partner): solo CSL/SUPER_ADMIN.
    *  El estado de adopción POR PROYECTO (0-970, lo llena el CSE) sí es visible. */
@@ -89,7 +92,7 @@ export default function AdoptionSection({
         <div className="flex items-center gap-2 mb-1.5">
           <span className="text-[11px] font-semibold text-fg-secondary uppercase tracking-wide">Uso por cuenta (HubSpot Partner)</span>
           {freshness.partnerSupported ? (
-            <SourceChip label="HubSpot Partner" date={freshness.partnerFetchedAt} />
+            <SourceChip label="HubSpot Partner" date={freshness.partnerFetchedAt} staleAfterDays={STALE_AFTER_DAYS.partner} />
           ) : (
             <SourceChip label="sin permiso de partner" tone="missing" />
           )}
@@ -100,9 +103,32 @@ export default function AdoptionSection({
             acá aparecen la calificación de uso (UUS), puntuación por hub, tendencia, licencias y renovaciones de cada cuenta.
           </p>
         ) : adoption.length === 0 ? (
-          <p className="text-xs text-fg-muted">Sin snapshots de partner todavía — corré «Actualizar partner».</p>
+          <p className="text-xs text-fg-muted">
+            {freshness.lastSyncAt
+              ? `El último sync trajo ${freshness.lastSyncTotal ?? "?"} cuentas de partner, pero ninguna está vinculada a clientes visibles para vos.`
+              : "Sin snapshots de partner todavía — corré «Actualizar partner»."}
+          </p>
         ) : (
-          <div className="overflow-x-auto border border-line rounded-lg">
+          <div className="space-y-2">
+            {/* Cuentas SIN datos ARRIBA — la cuenta nunca onboardeada es probablemente
+                la de mayor riesgo; antes ni aparecía (sesgo de supervivencia). */}
+            {adoptionNoData.length > 0 && (
+              <div className="text-[11px] bg-surface-muted border border-dashed border-line rounded-lg px-3 py-2">
+                <span className="font-semibold text-fg-secondary uppercase tracking-wide text-[10px]">
+                  Sin datos de uso ({adoptionNoData.length})
+                </span>
+                <span className="text-fg-muted"> — activas sin partner client vinculado: </span>
+                {adoptionNoData.map((c, i) => (
+                  <span key={c.clientId}>
+                    {i > 0 && " · "}
+                    <Link href={`/customer-success/${c.clientId}`} className="text-fg hover:text-brand font-medium">
+                      {c.clientName}
+                    </Link>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="overflow-x-auto border border-line rounded-lg">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="text-[10px] uppercase tracking-wide text-fg-muted bg-surface-muted">
@@ -114,6 +140,7 @@ export default function AdoptionSection({
                   <th className="px-2 py-1.5 font-medium text-center" title="Tendencia últimas 4 semanas">Tend.</th>
                   <th className="px-2 py-1.5 font-medium">Renovación</th>
                   <th className="px-2 py-1.5 font-medium text-right">MRR</th>
+                  <th className="px-2 py-1.5 font-medium text-right" title="Cuándo se sincronizó ESTA cuenta">Datos</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -131,10 +158,24 @@ export default function AdoptionSection({
                     <td className="px-2 py-1.5 text-center text-sm"><TrendArrow trend={a.trend} /></td>
                     <td className="px-2 py-1.5 text-[11px] text-fg-secondary whitespace-nowrap">{fmtDate(a.nextRenewalAt)}</td>
                     <td className="px-2 py-1.5 text-[11px] text-fg text-right whitespace-nowrap">{fmtMoney(a.mrrTotal)}</td>
+                    {/* Frescura POR FILA: el chip global usa el máximo — si una cuenta
+                        sincronizó hoy y otra hace 2 meses, "toda la tabla decía hoy". */}
+                    <td
+                      className={`px-2 py-1.5 text-[10px] text-right whitespace-nowrap ${
+                        isStale(a.fetchedAt, STALE_AFTER_DAYS.partner, new Date()) || a.fetchStatus === "partial"
+                          ? "text-amber-600 font-medium"
+                          : "text-fg-muted"
+                      }`}
+                      title={a.fetchStatus === "partial" ? "Última corrida parcial (sin asociaciones)" : undefined}
+                    >
+                      {fmtChipDate(a.fetchedAt) ?? "—"}
+                      {a.fetchStatus === "partial" && " ⚠"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </div>
