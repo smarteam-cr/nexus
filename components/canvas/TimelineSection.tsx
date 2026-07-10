@@ -23,10 +23,12 @@
  * sobre el contenedor (las .reveal arrancan opacity:0).
  */
 import { useState } from "react";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 import {
   addWeeks,
   fmtDay,
   fmtFull,
+  fmtLocalDay,
   plural,
   computePhaseRanges,
   timelineSpan,
@@ -108,6 +110,12 @@ export default function TimelineSection({
   showProgress?: boolean;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // "Hoy" es hora de pared del USUARIO: calcularlo en el server rompería la
+  // hidratación (lo evalúa en otro instante y en otra zona horaria, y `curInRange`
+  // gatea nodos → cambia la ESTRUCTURA, no solo el texto). SSR y primer paint pintan
+  // la variante neutra (sin chip "Hoy" ni resaltado de la semana actual).
+  const hydrated = useHydrated();
+  const now = hydrated ? new Date() : null;
 
   if (!phases.length) return null;
   const sorted = [...phases].sort((a, b) => a.order - b.order);
@@ -115,9 +123,8 @@ export default function TimelineSection({
   const total = timelineSpan(sorted);
   if (total === 0) return null;
 
-  const curWeek = currentWeekIndex(anchor);
+  const curWeek = now ? currentWeekIndex(anchor, now) : null;
   const curInRange = curWeek !== null && curWeek >= 0 && curWeek < total;
-  const todayIso = new Date().toISOString();
 
   const toggleExpand = (key: string) => {
     setExpanded((prev) => {
@@ -144,32 +151,35 @@ export default function TimelineSection({
 
         {/* Banner de hoy + leyenda de tipos (estructura del Gantt interno) */}
         <div className="reveal" data-stagger="2" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px 16px", marginBottom: 14 }}>
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 12,
-              fontWeight: 700,
-              color: "var(--brand-blue-dark)",
-              background: "var(--brand-blue-soft)",
-              border: "1px solid rgba(22, 140, 246, 0.3)",
-              borderRadius: 10,
-              padding: "6px 12px",
-            }}
-          >
-            {curInRange && (
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--brand-blue)", flexShrink: 0 }} />
-            )}
-            Hoy: {fmtFull(todayIso)}
-            {curInRange && <span style={{ fontWeight: 800 }}>· Semana S{curWeek as number}</span>}
-            {anchor && curWeek !== null && curWeek < 0 && (
-              <span style={{ fontWeight: 600, opacity: 0.85 }}>· el proyecto arranca el {fmtFull(anchor)}</span>
-            )}
-            {anchor && curWeek !== null && curWeek >= total && (
-              <span style={{ fontWeight: 600, opacity: 0.85 }}>· cronograma finalizado</span>
-            )}
-          </span>
+          {/* Solo tras montar (`now`): en SSR no se pinta → sin hydration mismatch. */}
+          {now && (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 12,
+                fontWeight: 700,
+                color: "var(--brand-blue-dark)",
+                background: "var(--brand-blue-soft)",
+                border: "1px solid rgba(22, 140, 246, 0.3)",
+                borderRadius: 10,
+                padding: "6px 12px",
+              }}
+            >
+              {curInRange && (
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--brand-blue)", flexShrink: 0 }} />
+              )}
+              Hoy: {fmtLocalDay(now)}
+              {curInRange && <span style={{ fontWeight: 800 }}>· Semana S{curWeek as number}</span>}
+              {anchor && curWeek !== null && curWeek < 0 && (
+                <span style={{ fontWeight: 600, opacity: 0.85 }}>· el proyecto arranca el {fmtFull(anchor)}</span>
+              )}
+              {anchor && curWeek !== null && curWeek >= total && (
+                <span style={{ fontWeight: 600, opacity: 0.85 }}>· cronograma finalizado</span>
+              )}
+            </span>
+          )}
 
           <span style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 16px" }}>
             {Object.values(ACTIVITY_META).map((m) => (

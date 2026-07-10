@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Badge,
   Avatar,
@@ -20,6 +20,8 @@ interface TeamMember {
   area: string | null;
   /** Rol de PERMISO (TeamRole). */
   roleEnum: "CSE" | "VENTAS" | "DEV" | "CSL" | "MARKETING" | "SUPER_ADMIN" | string;
+  /** Foto de la persona (bucket público). Se muestra en el selector de equipo del Kickoff. */
+  photoUrl: string | null;
   createdAt: string;
 }
 
@@ -33,9 +35,79 @@ const ROLE_LABEL: Record<string, string> = {
   SUPER_ADMIN: "Super Admin",
 };
 
-// ── Componente principal (solo lectura esta etapa) ──────────────────────────────
+// ── Avatar con edición de foto (lápiz al hover) ─────────────────────────────────
+/**
+ * Muestra la foto (o iniciales) del miembro. Si `editable`, al pasar el mouse
+ * aparece un CTA de lápiz ENCIMA de la foto → abre el file picker y sube a
+ * /api/team/[id]/photo. Sin columna aparte: el avatar ES el control de subida.
+ */
+function TeamPhotoAvatar({
+  member,
+  editable,
+  onUploaded,
+}: {
+  member: TeamMember;
+  editable: boolean;
+  onUploaded: (id: string, photoUrl: string | null) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-export default function TeamManager() {
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/team/${member.id}/photo`, { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.photoUrl) onUploaded(member.id, data.photoUrl);
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  const avatar = <Avatar name={member.name} src={member.photoUrl ?? undefined} colorSeed={member.id} size="lg" />;
+
+  if (!editable) return avatar;
+
+  return (
+    <div className="group/photo relative h-11 w-11 flex-shrink-0">
+      {avatar}
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={busy}
+        title={member.photoUrl ? "Cambiar foto" : "Subir foto"}
+        className="absolute inset-0 flex items-center justify-center rounded-full bg-black/55 text-white opacity-0 transition-opacity group-hover/photo:opacity-100 focus-visible:opacity-100 disabled:cursor-wait"
+      >
+        {busy ? (
+          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          </svg>
+        ) : (
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 11l6.586-6.586a2 2 0 112.828 2.828L11.828 13.83a4 4 0 01-1.414.94l-2.83.943.943-2.83a4 4 0 01.94-1.414z" />
+          </svg>
+        )}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        onChange={onFile}
+        className="hidden"
+      />
+    </div>
+  );
+}
+
+// ── Componente principal ────────────────────────────────────────────────────────
+
+export default function TeamManager({ canManage = false }: { canManage?: boolean }) {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -54,6 +126,10 @@ export default function TeamManager() {
     load();
   }, [load]);
 
+  const onUploaded = useCallback((id: string, photoUrl: string | null) => {
+    setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, photoUrl } : m)));
+  }, []);
+
   const columns: TableColumn<TeamMember>[] = [
     {
       key: "member",
@@ -61,7 +137,7 @@ export default function TeamManager() {
       sortValue: (m) => m.name,
       render: (m) => (
         <Table.IdentityCell
-          leading={<Avatar name={m.name} colorSeed={m.id} size="sm" />}
+          leading={<TeamPhotoAvatar member={m} editable={canManage} onUploaded={onUploaded} />}
           primary={m.name}
           secondary={m.email}
         />
@@ -88,7 +164,7 @@ export default function TeamManager() {
         m.area ? (
           <span className="text-xs text-fg-muted">{m.area}</span>
         ) : (
-          <span className="text-gray-600">—</span>
+          <span className="text-fg-muted">—</span>
         ),
     },
   ];
@@ -96,9 +172,11 @@ export default function TeamManager() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-xs text-fg-muted">
-        Vista de solo lectura. Los <strong className="text-fg-secondary">roles de permiso</strong> y
-        las <strong className="text-fg-secondary">áreas</strong> se gestionan por scripts en esta
-        etapa; la edición desde la app llega en una próxima iteración.
+        Los <strong className="text-fg-secondary">roles de permiso</strong> y las{" "}
+        <strong className="text-fg-secondary">áreas</strong> se gestionan por scripts en esta etapa.
+        {canManage
+          ? " Pasá el mouse sobre una foto para cambiarla; se usan en el selector de equipo del Kickoff."
+          : " La edición desde la app llega en una próxima iteración."}
       </div>
 
       {loading ? (

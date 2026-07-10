@@ -55,6 +55,69 @@ export async function GET(
   return NextResponse.json({ sections });
 }
 
+// PATCH: reorder SECTIONS of a canvas (drag&drop). Espejo del de business-cases;
+// el kickoff (editor nuevo sobre LandingView) lo usa vía useCanvasSections.reorderSections.
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
+  const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
+  let body: { canvasId?: unknown; orderedIds?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+  }
+  const canvasId = typeof body.canvasId === "string" ? body.canvasId : "";
+  // Set (dedup): un id repetido dejaría dos secciones con el mismo `order`.
+  const orderedIds = Array.isArray(body.orderedIds)
+    ? [...new Set(body.orderedIds.filter((x): x is string => typeof x === "string"))]
+    : [];
+  if (!canvasId || orderedIds.length === 0) {
+    return NextResponse.json({ error: "canvasId y orderedIds requeridos" }, { status: 400 });
+  }
+
+  const canvas = await prisma.projectCanvas.findUnique({
+    where: { id: canvasId },
+    select: { projectId: true, name: true },
+  });
+  if (!canvas || canvas.projectId !== projectId) {
+    return NextResponse.json({ error: "canvas not found" }, { status: 404 });
+  }
+  const denied = await denyHandoffCanvasEditForCse(canvas.name);
+  if (denied) return denied;
+
+  // Solo secciones del PROPIO canvas (ids ajenos se ignoran); las no incluidas
+  // conservan su posición relativa al final.
+  const rows = await prisma.canvasSection.findMany({
+    where: { canvasId },
+    orderBy: { order: "asc" },
+    select: { id: true },
+  });
+  const valid = new Set(rows.map((r) => r.id));
+  const ordered = orderedIds.filter((sid) => valid.has(sid));
+  const rest = rows.map((r) => r.id).filter((sid) => !ordered.includes(sid));
+  const finalOrder = [...ordered, ...rest];
+
+  await prisma.$transaction(
+    finalOrder.map((sid, i) =>
+      prisma.canvasSection.update({ where: { id: sid }, data: { order: i } }),
+    ),
+  );
+
+  // Marca "cambios sin subir" (reordenar cambia lo que se publicará en el snapshot).
+  try {
+    await prisma.projectCanvas.update({ where: { id: canvasId }, data: { contentUpdatedAt: new Date() } });
+  } catch {
+    /* flag secundario */
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 // PUT: reorder blocks within/between sections
 export async function PUT(
   req: NextRequest,

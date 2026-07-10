@@ -33,6 +33,8 @@ import { readPublishedClientTimeline } from "./timeline-view";
 import { readClientProcesos } from "@/lib/canvas/read-procesos";
 import type { KickoffLandingData } from "./kickoff-view-types";
 import { getBrandLogos, platformLogosFor } from "./smarteam-logo";
+import { applyAssignments, normalizeAssignments, HORARIOS_KEY } from "@/lib/kickoff/horario-assignments";
+import { comparaSectionHasContent, stripProseCompara, COMPARA_KEY } from "@/components/canvas/kickoff-landing-adapter";
 
 /**
  * Resuelve un token de acceso externo al Kickoff publicado de SU proyecto.
@@ -56,9 +58,18 @@ export async function getPublishedKickoffForToken(
   // un proceso individual). El cliente NO ve nada cuya clave esté en este set.
   const proj = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { clientId: true, hiddenKickoffKeys: true, tags: true },
+    select: {
+      clientId: true,
+      hiddenKickoffKeys: true,
+      kickoffHorarioAssignments: true,
+      tags: true,
+      client: { select: { name: true } },
+    },
   });
   const hidden = new Set(proj?.hiddenKickoffKeys ?? []);
+  // Overlay VIVO de la asignación franja→sesión: se lee FUERA del snapshot congelado,
+  // para que lo que el cliente arrastra (y lo que el CSE cambia) se vea sin publicar.
+  const assignments = normalizeAssignments(proj?.kickoffHorarioAssignments);
 
   // 3. Canvas Kickoff del proyecto (se identifica por nombre, igual que el panel interno).
   const canvas = await prisma.projectCanvas.findFirst({
@@ -120,6 +131,12 @@ export async function getPublishedKickoffForToken(
   const sections: SectionRow[] = snap.sections ?? [];
   const procesosAll: ProcesoRow[] = snap.procesos ?? [];
 
+  // De-duplicación de la comparación "Hoy / Con el sistema": se calcula sobre TODAS las
+  // secciones del snapshot — incluidas las que el CSE ocultó — porque el filtro `hidden` de
+  // abajo las saca. Con el set ya filtrado, ocultar `hoy_vs_sistema` haría que la comparación
+  // volviera a pintarse desde la prosa, que es exactamente lo contrario de lo pedido.
+  const dropProseCompara = comparaSectionHasContent(sections);
+
   // 5. Cronograma embebido — regla unificada D.1.5: SOLO si timelinePublishedAt != null.
   //    Sale del SNAPSHOT del timeline (fuente única, mismo staging). "cronograma" en
   //    hiddenKickoffKeys lo oculta solo del kickoff (la página standalone se rige por su flag).
@@ -137,10 +154,22 @@ export async function getPublishedKickoffForToken(
   // 7. Marcar uso (no bloquea el render si falla).
   await touchAccess(access.accessId);
 
+  // Marca del hero: las MISMAS piezas que consume el hero del Business Case
+  // (`components/landing/hero-parts.tsx`). Nada sensible: el nombre del cliente y su
+  // logo ya se le muestran al propio cliente. `BrandLogos` es un tipo cerrado → se
+  // aplana a un Record<string,string> (el hero indexa por nombre de marca en minúsculas).
+  const logos = await getBrandLogos();
+  const brandLogos: Record<string, string> = Object.fromEntries(
+    Object.entries(logos).filter((e): e is [string, string] => typeof e[1] === "string" && !!e[1]),
+  );
+
   return {
     projectName: access.project.name,
+    clientName: proj?.client?.name ?? "",
     clientLogoUrl: access.project.client.logoUrl,
-    platformLogos: platformLogosFor(proj?.tags ?? [], await getBrandLogos()),
+    smarteamLogoUrl: logos.smarteam ?? null,
+    brandLogos,
+    platformLogos: platformLogosFor(proj?.tags ?? [], logos),
     procesos,
     sections: sections.filter((s) => !hidden.has(s.id)).map((s) => ({
       id: s.id,
@@ -153,7 +182,15 @@ export async function getPublishedKickoffForToken(
         id: b.id,
         blockType: b.blockType,
         content: b.content,
-        data: b.data,
+        // La asignación de horarios NO viaja congelada en el snapshot: se superpone el overlay vivo.
+        // La comparación legacy embebida en la prosa se descarta acá (no en el componente cliente)
+        // porque el gate depende del set COMPLETO: si `hoy_vs_sistema` está OCULTA, ya se filtró
+        // abajo y el cliente la vería reaparecer desde la prosa.
+        data: s.key === HORARIOS_KEY
+          ? applyAssignments(b.data, assignments)
+          : dropProseCompara && s.key !== COMPARA_KEY
+            ? stripProseCompara(b.data)
+            : b.data,
       })),
     })),
     timeline,

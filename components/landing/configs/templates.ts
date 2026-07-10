@@ -58,8 +58,15 @@ export const SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
   why_us: WhyUsSection,
 };
 
-function toSectionDef(d: BCSectionDef): SectionDef | null {
-  const Component = SECTION_COMPONENTS[d.sectionType ?? d.key];
+/** Convierte una def server-safe a SectionDef (con Component) usando un registro de
+ *  renderers por sectionType. `components` default = SECTION_COMPONENTS (BC); el kickoff
+ *  pasa su propio mapa (KICKOFF_SECTION_COMPONENTS) reusando esta misma función. */
+export function toSectionDef(
+  d: BCSectionDef,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  components: Record<string, FC<SectionProps<any>>> = SECTION_COMPONENTS,
+): SectionDef | null {
+  const Component = components[d.sectionType ?? d.key];
   if (!Component) return null; // def sin renderer registrado → no se renderiza (nunca romper)
   return {
     key: d.key,
@@ -68,6 +75,10 @@ function toSectionDef(d: BCSectionDef): SectionDef | null {
     theme: d.theme,
     backdrop: d.backdrop,
     selfTitled: d.selfTitled,
+    ctxDriven: d.ctxDriven,
+    ctxEmpty: d.ctxEmpty,
+    pinned: d.pinned,
+    noHide: d.noHide,
     schema: d.schema,
     agentHint: d.agentHint,
     brief: d.brief,
@@ -79,7 +90,7 @@ function toSectionDef(d: BCSectionDef): SectionDef | null {
 function toLandingConfig(tpl: BcTemplateDef): LandingConfig {
   return {
     type: "business-case",
-    sections: tpl.sections.map(toSectionDef).filter((s): s is SectionDef => s !== null),
+    sections: tpl.sections.map((d) => toSectionDef(d)).filter((s): s is SectionDef => s !== null),
   };
 }
 

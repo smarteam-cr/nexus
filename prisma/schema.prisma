@@ -251,6 +251,14 @@ model Project {
   // Legacy — reemplazado por hiddenKickoffKeys (se mantiene la columna por compat; sin uso en código).
   procesosHiddenFromKickoff Boolean  @default(false)
 
+  // Asignación franja→sesión de "Sesiones y horarios" del kickoff: { [sessionId]: optionId | null }.
+  // Es COORDINACIÓN, no contenido: como hiddenKickoffKeys, es un overlay VIVO que modula lo que ve
+  // el cliente por encima del publishedSnapshot congelado. Lo escriben las DOS puntas — el CSE desde
+  // Nexus y el cliente desde su página (server action, auto-save) — y ninguna necesita "Subir al
+  // cliente". La DEFINICIÓN de franjas y sesiones sigue viviendo en el bloque CARD de la sección.
+  // null = overlay sin sembrar → se migra perezosamente desde los `sessions[].optionId` del bloque.
+  kickoffHorarioAssignments Json?
+
   // Propiedades sincronizadas desde HubSpot (objeto Service)
   hubspotOwnerId      String? // hubspot_owner_id (ID del owner en HubSpot)
   hubspotOwnerName    String? // Nombre del owner (CSE encargado) resuelto desde /owners/{id}
@@ -1141,6 +1149,9 @@ model TeamMember {
   area                String?
   // ROL DE PERMISO — única fuente de verdad de acceso/capacidades. Ver lib/auth/roles.ts.
   roleEnum            TeamRole  @default(CSE)
+  // Foto de la persona (bucket público, subida desde /team). Se muestra en el
+  // selector de equipo del Kickoff (snapshoteada al seleccionar). nullable = sin foto → iniciales.
+  photoUrl            String?
   // Visibilidad total HOY se deriva del rol (todos menos CSE ven todo). Este flag
   // queda como override excepcional (ej. un CSE con acceso temporal a todo).
   canViewAllClients   Boolean   @default(false)

@@ -27,6 +27,10 @@ import { useCanvasSections } from "./useCanvasSections";
 import PublishBar from "./PublishBar";
 import KickoffBlock from "./KickoffBlock";
 import TimelineSection from "./TimelineSection";
+import EquipoSection from "./kickoff-sections/EquipoSection";
+import HorariosSection from "./kickoff-sections/HorariosSection";
+import CanalesSection from "./kickoff-sections/CanalesSection";
+import type { EquipoData, HorariosData, CanalesData } from "./kickoff-sections/types";
 import { useReveal, useHeroParallax } from "./useLandingMotion";
 import type {
   KickoffLandingData,
@@ -73,10 +77,17 @@ function Accent({ children }: { children: ReactNode }) {
 const SECTION_META: Record<string, { eyebrow: string; title: ReactNode; titleText: string }> = {
   objetivos:      { eyebrow: "Lo que buscamos", title: <>Objetivos del <Accent>proyecto</Accent></>, titleText: "Objetivos del proyecto" },
   alcance:        { eyebrow: "El trabajo",      title: <>Alcance: qué <Accent>incluye</Accent></>, titleText: "Alcance: qué incluye" },
+  equipo:         { eyebrow: "Quiénes somos",   title: <>El <Accent>equipo</Accent> del proyecto</>, titleText: "El equipo del proyecto" },
   tu_rol:         { eyebrow: "Tu parte",        title: <>Lo que necesitamos de tu <Accent>equipo</Accent></>, titleText: "Lo que necesitamos de tu equipo" },
   metricas_exito: { eyebrow: "La medición",     title: <>Cómo mediremos el <Accent>éxito</Accent></>, titleText: "Cómo mediremos el éxito" },
+  horarios:       { eyebrow: "La cadencia",     title: <>Sesiones y <Accent>horarios</Accent></>, titleText: "Sesiones y horarios" },
+  canales:        { eyebrow: "El acompañamiento", title: <>Canales de <Accent>atención</Accent></>, titleText: "Canales de atención" },
   proximos_pasos: { eyebrow: "El arranque",     title: <><Accent>Próximos</Accent> pasos</>, titleText: "Próximos pasos" },
 };
+
+/** Secciones CURADAS por el CSE (data estructurada en 1 CanvasBlock; el agente NO las
+ *  genera). Se renderizan con componentes propios en vez del loop genérico de bloques. */
+const CURATED_KEYS = new Set(["equipo", "horarios", "canales"]);
 
 /* ── Handlers del modo interno (todos opcionales: ausentes en modo externo) ──── */
 interface LandingHandlers {
@@ -384,7 +395,14 @@ export function KickoffLandingView({
   useHeroParallax(heroRef);
 
   const hero = sections.find((s) => s.key === "bienvenida");
-  const body = sections.filter((s) => s.key !== "bienvenida");
+  // `cierre` es una CanvasSection nueva (CTA data-driven del motor nuevo). El renderer
+  // VIEJO tiene su propio bookend dark estático → excluir la sección para no duplicarla
+  // ni pintar su CtaData como bloque genérico (coexistencia hasta el flip).
+  // `cronograma` y `procesos` son CanvasSections SIN bloque (su contenido sale de
+  // ProjectTimeline y de los flowcharts, que este renderer pinta en sus propios bloques
+  // dedicados más abajo). Sin excluirlas, el loop les pintaría un encabezado vacío con "—".
+  const SKIP = new Set(["bienvenida", "cierre", "cronograma", "procesos"]);
+  const body = sections.filter((s) => !SKIP.has(s.key));
   const hasProximos = body.some((s) => s.key === "proximos_pasos");
   // Procesos sin confirmar: el cliente solo ve los CONFIRMED → CTA para subirlos.
   const draftProcesos = editable ? procesos.filter((p) => p.status === "DRAFT") : [];
@@ -556,20 +574,26 @@ export function KickoffLandingView({
                   style={{ fontSize: "clamp(24px, 3.4vw, 34px)", color: "var(--text)", lineHeight: 1.15, marginTop: 8, marginBottom: 24 }}
                 />
                 <div className={`reveal${section.key === "tu_rol" ? " kl-panel" : ""}`} data-stagger="2" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                  {section.blocks.length === 0 && !editable && <p style={{ color: "var(--text-muted)", fontSize: 14 }}>—</p>}
-                  {section.blocks.map((block) => (
-                    <BlockRow
-                      key={block.id}
-                      block={block}
-                      editable={editable}
-                      onSave={saveBlock ? (u) => saveBlock(section.id, block.id, u) : undefined}
-                      onRegenerate={regenerateBlock ? (instr, base) => regenerateBlock(section.id, block.id, instr, base) : undefined}
-                      onAccept={acceptBlock ? () => acceptBlock(section.id, block.id) : undefined}
-                      onDelete={deleteBlock ? () => deleteBlock(section.id, block.id) : undefined}
-                      onUndo={undoBlock ? () => undoBlock(section.id, block.id) : undefined}
-                    />
-                  ))}
-                  {editable && addBlock && <AddBlock onClick={() => addBlock(section.id)} />}
+                  {CURATED_KEYS.has(section.key) ? (
+                    <CuratedSection section={section} editable={editable} saveBlock={saveBlock} addBlock={addBlock} />
+                  ) : (
+                    <>
+                      {section.blocks.length === 0 && !editable && <p style={{ color: "var(--text-muted)", fontSize: 14 }}>—</p>}
+                      {section.blocks.map((block) => (
+                        <BlockRow
+                          key={block.id}
+                          block={block}
+                          editable={editable}
+                          onSave={saveBlock ? (u) => saveBlock(section.id, block.id, u) : undefined}
+                          onRegenerate={regenerateBlock ? (instr, base) => regenerateBlock(section.id, block.id, instr, base) : undefined}
+                          onAccept={acceptBlock ? () => acceptBlock(section.id, block.id) : undefined}
+                          onDelete={deleteBlock ? () => deleteBlock(section.id, block.id) : undefined}
+                          onUndo={undoBlock ? () => undoBlock(section.id, block.id) : undefined}
+                        />
+                      ))}
+                      {editable && addBlock && <AddBlock onClick={() => addBlock(section.id)} />}
+                    </>
+                  )}
                 </div>
               </div>
             </section>
@@ -645,6 +669,38 @@ export function KickoffLandingView({
 }
 
 /* ── Sub-componentes ──────────────────────────────────────────────────────── */
+
+/** Render de una sección CURADA (equipo/horarios/canales): 1 CanvasBlock con `data`
+ *  estructurada. Edita el CSE (onSave → saveBlock); el cliente solo la ve. Si aún no
+ *  hay bloque (kickoff viejo sin backfill), ofrece prepararla (addBlock). */
+function CuratedSection({
+  section,
+  editable,
+  saveBlock,
+  addBlock,
+}: {
+  section: KickoffSection;
+  editable: boolean;
+  saveBlock?: LandingHandlers["saveBlock"];
+  addBlock?: LandingHandlers["addBlock"];
+}) {
+  const block = section.blocks[0];
+  const onSave = block && saveBlock ? (data: unknown) => { saveBlock(section.id, block.id, { data }); } : undefined;
+
+  if (!block) {
+    if (editable && addBlock) {
+      return <AddBlock onClick={() => addBlock(section.id)} />;
+    }
+    return <p style={{ color: "var(--text-muted)", fontSize: 14 }}>—</p>;
+  }
+
+  // Las secciones curadas migraron a la firma del motor (SectionProps): ctx + onChange.
+  // El renderer viejo (rollback) les pasa un ctx mínimo (no lo usan) y onChange=onSave.
+  const common = { editable, ctx: { clientName: "" }, onChange: onSave };
+  if (section.key === "equipo") return <EquipoSection data={block.data as EquipoData} {...common} />;
+  if (section.key === "horarios") return <HorariosSection data={block.data as HorariosData} {...common} />;
+  return <CanalesSection data={block.data as CanalesData} {...common} />;
+}
 
 function Stat({ value, unit, label }: { value: string; unit?: string; label: string }) {
   return (

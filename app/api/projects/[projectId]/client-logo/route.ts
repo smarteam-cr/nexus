@@ -1,10 +1,15 @@
 /**
  * /api/projects/[projectId]/client-logo  (GET)
  *
- * Devuelve el logo del cliente del proyecto + los logos de PLATAFORMA (HubSpot /
- * Insider One, config global según tags del proyecto) → { logoUrl, platformLogos }.
- * Lo consume el PREVIEW INTERNO del Kickoff (KickoffLandingInternal) para mostrar
- * el mismo chip que ve el cliente externo, sin tener que publicar.
+ * Alimenta el `ctx` del hero del Kickoff, que usa las MISMAS piezas que el hero del
+ * Business Case (`components/landing/hero-parts.tsx`):
+ *   - `logoUrl`         → logo del cliente (imagen de la brand-row)
+ *   - `platformLogos`   → HubSpot / Insider One según los tags (chip legacy)
+ *   - `smarteamLogoUrl` → logo de Smarteam (config global)
+ *   - `brandLogos`      → mapa nombre→logo para pintar marcas de texto como imagen
+ *   - `clientId` / `clientName` → subir el logo (`POST /api/clients/[id]/logo`) y
+ *     derivar los defaults de la brand-row.
+ *
  * Guarded con guardAccessToProject.
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -18,12 +23,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
   if (guard instanceof NextResponse) return guard;
 
   const [client, project, brandLogos] = await Promise.all([
-    prisma.client.findUnique({ where: { id: guard.clientId }, select: { logoUrl: true } }),
+    prisma.client.findUnique({ where: { id: guard.clientId }, select: { logoUrl: true, name: true } }),
     prisma.project.findUnique({ where: { id: projectId }, select: { tags: true } }),
     getBrandLogos(),
   ]);
   return NextResponse.json({
+    clientId: guard.clientId,
+    clientName: client?.name ?? "",
     logoUrl: client?.logoUrl ?? null,
     platformLogos: platformLogosFor(project?.tags ?? [], brandLogos),
+    smarteamLogoUrl: brandLogos.smarteam ?? null,
+    brandLogos,
   });
 }

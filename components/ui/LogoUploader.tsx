@@ -8,18 +8,31 @@
  * en claro y oscuro sin depender de la whitelist.
  */
 import { useState, useRef } from "react";
+import { cn } from "@/lib/cn";
 
 export function LogoUploader({
   currentUrl,
   endpoint,
   label = "Logo",
   hint,
+  responseKey = "logoUrl",
+  round = false,
+  uploadLabel,
+  emptyLabel = "Sin logo",
 }: {
   currentUrl: string | null;
   /** Endpoint POST (subir) / DELETE (quitar). Ej: `/api/clients/abc/logo`. */
   endpoint: string;
   label?: string;
   hint?: string;
+  /** Clave del JSON de respuesta que trae la URL (logo → "logoUrl", foto → "photoUrl"). */
+  responseKey?: string;
+  /** Preview redondo tipo avatar (para fotos de persona) en vez del rectángulo de logo. */
+  round?: boolean;
+  /** Texto del botón de subida cuando no hay imagen (default "Subir " + label). */
+  uploadLabel?: string;
+  /** Texto del placeholder cuando no hay imagen. */
+  emptyLabel?: string;
 }) {
   const [url, setUrl] = useState<string | null>(currentUrl);
   const [busy, setBusy] = useState(false);
@@ -37,12 +50,12 @@ export function LogoUploader({
       const res = await fetch(endpoint, { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data?.error ?? "No se pudo subir el logo.");
+        setError(data?.error ?? "No se pudo subir la imagen.");
         return;
       }
-      setUrl(data.logoUrl ?? null);
+      setUrl(data[responseKey] ?? null);
     } catch {
-      setError("Error de red al subir el logo.");
+      setError("Error de red al subir la imagen.");
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -55,7 +68,7 @@ export function LogoUploader({
     try {
       const res = await fetch(endpoint, { method: "DELETE" });
       if (!res.ok) {
-        setError("No se pudo quitar el logo.");
+        setError("No se pudo quitar la imagen.");
         return;
       }
       setUrl(null);
@@ -68,12 +81,21 @@ export function LogoUploader({
 
   return (
     <div className="flex items-center gap-4">
-      <div className="flex h-16 w-28 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-surface-muted">
+      <div
+        className={cn(
+          "flex flex-shrink-0 items-center justify-center overflow-hidden border border-line bg-surface-muted",
+          round ? "h-16 w-16 rounded-full" : "h-16 w-28 rounded-lg"
+        )}
+      >
         {url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt={label} className="max-h-12 max-w-24 object-contain" />
+          <img
+            src={url}
+            alt={label}
+            className={round ? "h-full w-full object-cover" : "max-h-12 max-w-24 object-contain"}
+          />
         ) : (
-          <span className="text-xs text-fg-muted">Sin logo</span>
+          <span className="px-1 text-center text-xs text-fg-muted">{emptyLabel}</span>
         )}
       </div>
       <div className="min-w-0">
@@ -83,7 +105,7 @@ export function LogoUploader({
             disabled={busy}
             className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-light disabled:opacity-50"
           >
-            {busy ? "Subiendo…" : url ? "Cambiar" : "Subir logo"}
+            {busy ? "Subiendo…" : url ? "Cambiar" : (uploadLabel ?? "Subir logo")}
           </button>
           {url && (
             <button

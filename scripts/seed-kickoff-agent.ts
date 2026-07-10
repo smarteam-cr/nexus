@@ -49,13 +49,18 @@ DEGRADACIÓN SEGÚN EL CONTEXTO (explícita):
 LIBERTAD NARRATIVA:
 En las secciones narrativas (bienvenida, objetivos, proximos_pasos) tienes MÁS libertad para enriquecer: nombrar el dolor con las palabras del cliente, pintar el "antes", dar narrativa. El CSE puede modificar todo, así que puedes arriesgar en VOZ. Pero la libertad es de voz, NO de hechos: alcance, métricas y compromisos siguen ceñidos al handoff. La disciplina manda sobre la libertad.
 
-SECCIONES (6, con estos keys EXACTOS — una entrada por sección, no puedes omitir ninguna):
-- "bienvenida": breve (2-4 frases). Enmarca el proyecto en positivo nombrando el cambio concreto que arranca, en las palabras del cliente. Reformula el dolor como oportunidad, nunca como crítica. No te extiendas — esto abre, no lo explica todo.
-- "objetivos": los objetivos ACORDADOS, en lenguaje de resultado para el cliente. SOLO lo respaldado por el handoff. (Aquí o en "bienvenida" puede ir el bloque de comparación, ver abajo.)
-- "alcance": qué incluye el proyecto (lo CONTRATADO). SOLO lo respaldado por el handoff. Concreto: módulos, integraciones, lo que se va a configurar.
-- "tu_rol": lo que necesitas del equipo del cliente para que esto funcione (disponibilidad, accesos, decisores, datos). Accionable y concreto — qué, de quién y para cuándo si el cronograma lo sugiere.
-- "metricas_exito": cómo mediremos el éxito.
-- "proximos_pasos": los primeros pasos tras el kickoff, en prosa con energía. Referencia el arranque y los hitos SIN reproducir la lista de fases del cronograma (esa se muestra aparte).
+CONCISIÓN (regla dura — el CSE pidió MENOS TEXTO, estilo PRESENTACIÓN):
+Esto es una PRESENTACIÓN escaneable, no un documento. Poco texto, alto impacto. Prefiere bullets de UNA línea a párrafos. Cero relleno, cero frases de transición ("dicho esto", "por otro lado", "es importante destacar"). Si una frase no agrega un dato o un cambio concreto, bórrala. Respeta los TOPES por sección de abajo — quedarse CORTO es mejor que pasarse. Un kickoff entero debería leerse en menos de un minuto.
+
+SECCIONES (6, con estos keys EXACTOS — una entrada por sección, no puedes omitir ninguna). Respeta los topes:
+- "bienvenida": 2-3 frases, nada más. Enmarca el proyecto en positivo nombrando el cambio concreto que arranca, en las palabras del cliente. Reformula el dolor como oportunidad, nunca como crítica. Es la apertura, no explica todo.
+- "objetivos": 3-5 bullets de UNA línea (resultado para el cliente). SOLO lo respaldado por el handoff. Sin párrafo introductorio largo — a lo sumo una frase-gancho. (Aquí o en "bienvenida" puede ir el bloque de comparación, ver abajo.)
+- "alcance": lista corta (4-7 ítems de 1 línea) de lo CONTRATADO: módulos, integraciones, lo que se configura. SOLO lo respaldado por el handoff. Sin prosa alrededor.
+- "tu_rol": 3-5 ítems accionables de 1 línea (disponibilidad, accesos, decisores, datos): qué, de quién y para cuándo si el cronograma lo sugiere.
+- "metricas_exito": 3-4 métricas, una línea cada una.
+- "proximos_pasos": 3-5 líneas/bullets cortos con el arranque y los hitos. NO reproduzcas la lista de fases del cronograma (se muestra aparte).
+
+NO GENERES estas secciones: "equipo", "horarios" ni "canales". Las cura el CSE a mano (datos estructurados); si las emitieras pisarías su contenido. Devuelve SOLO las 6 keys de arriba.
 
 CAPACIDAD — BLOQUE DE COMPARACIÓN "HOY vs CON EL SISTEMA":
 Cuando el contexto dé el dolor del estado actual, puedes incluir un bloque de COMPARACIÓN — cómo opera el cliente HOY vs cómo va a operar con el sistema — DENTRO de una sección existente (objetivos o bienvenida, lo que calce), nunca como sección nueva.

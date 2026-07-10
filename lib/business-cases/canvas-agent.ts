@@ -125,7 +125,24 @@ export async function generateCanvasSections(
   templateId: string = HUBSPOT_TEMPLATE_ID,
   skipKeys?: Set<string>,
 ): Promise<GeneratedCanvas> {
-  const tpl = templateById(templateId);
+  return generateSectionsForTemplate(templateById(templateId), context, briefsByKey, skipKeys);
+}
+
+/** Núcleo template-driven de la generación: recibe el BcTemplateDef directo (en vez de
+ *  un templateId que indexa BC_TEMPLATES) → lo reusa el KICKOFF_TEMPLATE (canvas de
+ *  Kickoff) sin acoplarse al registry de Business Cases. `generateCanvasSections` es un
+ *  wrapper de esto (BC no cambia comportamiento). */
+export async function generateSectionsForTemplate(
+  tpl: BcTemplateDef,
+  context: string,
+  briefsByKey?: Record<string, string>,
+  skipKeys?: Set<string>,
+  /** Data ACTUAL por sección (kickoff): sus keys fuera-de-schema se preservan en la
+   *  salida — la generación del kickoff sobreescribe los bloques en el lugar y sin
+   *  esto borraría `hero.coverImageUrl`/`brands`/`eyebrow`. El BC no lo pasa (cada
+   *  "Generar" crea un canvas nuevo) → comportamiento idéntico al de antes. */
+  prevDataByKey?: Record<string, unknown>,
+): Promise<GeneratedCanvas> {
   const sections = generableSections(tpl, skipKeys);
 
   const msg = await anthropic.messages.create({
@@ -158,7 +175,11 @@ export async function generateCanvasSections(
   const validKeys = new Set(tpl.sections.map((d) => d.key));
   const rawLang = obj["__lang"];
   return {
-    sections: sections.map((d) => ({ key: d.key, data: coerceToSchema(d.schema, obj[d.key]) })),
+    sections: sections.map((d) => {
+      const coerced = coerceToSchema(d.schema, obj[d.key]) as Record<string, unknown>;
+      const prev = prevDataByKey?.[d.key];
+      return { key: d.key, data: prev ? preserveNonSchemaKeys(d.schema, prev, coerced) : coerced };
+    }),
     titleOverrides: stringMapFor(obj["__titles"], validKeys),
     eyebrowOverrides: stringMapFor(obj["__eyebrows"], validKeys),
     lang: typeof rawLang === "string" && rawLang.trim() ? rawLang.trim().toLowerCase() : null,
@@ -180,7 +201,19 @@ export async function regenerateSectionData(
 ): Promise<unknown> {
   const def = templateDefsByKey(templateId)[sectionKey] ?? findDefAcrossTemplates(sectionKey);
   if (!def) return coerceToSchema({ type: "object", properties: {} }, currentData);
+  return regenerateSectionDataForDef(def, currentData, instruction, brief, lang);
+}
 
+/** Núcleo de la regeneración por sección: recibe la DEF directo (schema/brief/label).
+ *  Lo reusa el regenerate del Kickoff (con las defs de KICKOFF_TEMPLATE) sin depender
+ *  del registry de BC. `regenerateSectionData` resuelve la def y llama a esto. */
+export async function regenerateSectionDataForDef(
+  def: BCSectionDef,
+  currentData: unknown,
+  instruction: string,
+  brief?: string,
+  lang?: string | null,
+): Promise<unknown> {
   // Regla de idioma: si la propuesta declara idioma no-español, TODO el contenido va
   // en ese idioma; en español (o sin declarar) aplica el estilo tuteo del repo.
   // AUTO-CORRECCIÓN (obligatoria en ambas ramas): el `currentData` puede venir de una
@@ -213,15 +246,31 @@ ${langRule}`,
 
   const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
   const coerced = coerceToSchema(def.schema, parseObject(text)) as Record<string, unknown>;
-  // Preservar los campos del data ACTUAL que NO están en el schema (p.ej. hero.brands: la
-  // brand-row la edita el CSE, el agente no la genera). coerceToSchema los descartaría →
-  // se perdería el trabajo del CSE al usar "✨ IA" sobre esa sección.
-  const schemaKeys = new Set(Object.keys((def.schema as { properties?: Record<string, unknown> }).properties ?? {}));
-  const cur = (currentData && typeof currentData === "object" ? currentData : {}) as Record<string, unknown>;
+  return preserveNonSchemaKeys(def.schema, currentData, coerced);
+}
+
+/**
+ * Copia al `next` los campos del `prev` que NO están en el schema del agente.
+ *
+ * `coerceToSchema` deja SOLO las keys del schema, así que sin esto se perdería todo
+ * lo que cura el CSE y el agente nunca genera: `hero.brands`, `hero.coverImageUrl`,
+ * `hero.eyebrow`, `cta.buttonUrl`/`buttonTarget`, `__lang`…
+ *
+ * LOAD-BEARING en el KICKOFF: su generación completa **sobreescribe los bloques en el
+ * lugar** (a diferencia del Business Case, que crea un canvas nuevo por versión). Sin
+ * este merge, regenerar un kickoff borraría la portada y la brand-row del hero.
+ */
+export function preserveNonSchemaKeys(
+  schema: unknown,
+  prev: unknown,
+  next: Record<string, unknown>,
+): Record<string, unknown> {
+  const schemaKeys = new Set(Object.keys((schema as { properties?: Record<string, unknown> })?.properties ?? {}));
+  const cur = (prev && typeof prev === "object" ? prev : {}) as Record<string, unknown>;
   for (const k of Object.keys(cur)) {
-    if (!schemaKeys.has(k)) coerced[k] = cur[k];
+    if (!schemaKeys.has(k)) next[k] = cur[k];
   }
-  return coerced;
+  return next;
 }
 
 function parseObject(text: string): Record<string, unknown> {

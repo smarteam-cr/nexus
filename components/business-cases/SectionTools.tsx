@@ -5,28 +5,41 @@ import { useToast } from "@/components/ui/Toast";
 import { templateDefsByKey } from "@/components/landing/configs/templates.defs";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
 
-// ── Controles por sección (overlay): IA + ocultar + limpiar. Solo en casos, no en la Plantilla. ──
+/** Defs mínimas que necesita el overlay: el `empty` para "Limpiar" y `agentGenerated`
+ *  para decidir si se ofrece ✨IA. El BC pasa `templateDefsByKey(templateId)`; el
+ *  Kickoff pasa `KICKOFF_DEF_BY_KEY`. Así el mismo overlay sirve a los dos canvas. */
+export type SectionToolsDefs = Record<string, { empty?: unknown; agentGenerated?: boolean } | undefined>;
+
+// ── Controles por sección (overlay): IA + limpiar. (Ocultar y mover los pinta el motor.) ──
 export default function SectionTools({
   section,
   hook,
   isTemplate,
   templateId,
+  defsByKey,
 }: {
   section: SectionWithBlocks | undefined;
   hook: ReturnType<typeof useCanvasSections>;
   isTemplate: boolean;
+  /** BC: resuelve las defs por template. Ignorado si viene `defsByKey`. */
   templateId?: string | null;
+  /** Kickoff (u otro canvas): defs explícitas. Tiene prioridad sobre `templateId`. */
+  defsByKey?: SectionToolsDefs;
 }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [instr, setInstr] = useState("");
   const [busy, setBusy] = useState(false);
-  const block = section?.blocks[0];
+  const defs: SectionToolsDefs = defsByKey ?? templateDefsByKey(templateId);
+  // El bloque TIPADO de la sección. El kickoff puede tener bloques TEXT legacy
+  // delante del CARD → preferir siempre el CARD.
+  const block = section?.blocks.find((b) => b.blockType === "CARD") ?? section?.blocks[0];
   // En la Plantilla se editan las GUÍAS (no el contenido) → sin controles de sección.
+  // Sin bloque (secciones ctxDriven: cronograma/procesos) → tampoco hay qué regenerar.
   if (isTemplate || !section || !block) return null;
-  // Secciones determinísticas (agentGenerated:false, p.ej. casos_de_uso): sin ✨ IA
-  // (el server igual devuelve 400) — se editan a mano o desde el checklist.
-  const aiAllowed = templateDefsByKey(templateId)[section.key]?.agentGenerated !== false;
+  // Secciones determinísticas (agentGenerated:false, p.ej. casos_de_uso, equipo): sin
+  // ✨ IA (el server igual devuelve 400) — se editan a mano.
+  const aiAllowed = defs[section.key]?.agentGenerated !== false;
 
   const regen = async () => {
     if (!instr.trim() || busy) return;
@@ -46,7 +59,7 @@ export default function SectionTools({
 
   // Vaciar la sección → vuelve al placeholder (no se ve en el cliente). Undo vía previousData.
   const clear = async () => {
-    const empty = (templateDefsByKey(templateId)[section.key]?.empty ?? {}) as Record<string, unknown>;
+    const empty = (defs[section.key]?.empty ?? {}) as Record<string, unknown>;
     const ok = await hook.saveBlock(section.id, block.id, { data: empty });
     if (ok) toast.info("Sección vaciada (el cliente no la verá).");
   };

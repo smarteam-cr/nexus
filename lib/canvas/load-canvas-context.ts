@@ -60,11 +60,16 @@ function blockToText(b: BlockLite): string {
  * Lee un canvas por (projectId, name) y lo serializa a markdown agrupado por
  * sección. Si `onlyConfirmed`, solo incluye bloques con status CONFIRMED.
  * Devuelve "" si el canvas no existe o no tiene bloques que incluir.
+ *
+ * `includeKeys` (opcional): ALLOWLIST de keys de sección. Lo usa el agente del
+ * KICKOFF para no ver las secciones INTERNAS del handoff (riesgos, "por qué
+ * vendimos", acuerdos comerciales, estado interno) — el kickoff lo lee el CLIENTE.
+ * Sin `includeKeys` el comportamiento es idéntico al de antes (todos los callers).
  */
 export async function loadCanvasContext(
   projectId: string,
   canvasName: string,
-  opts: { onlyConfirmed?: boolean } = {},
+  opts: { onlyConfirmed?: boolean; includeKeys?: readonly string[] } = {},
 ): Promise<string> {
   const canvas = await prisma.projectCanvas.findFirst({
     where: { projectId, name: canvasName },
@@ -76,6 +81,7 @@ export async function loadCanvasContext(
     where: { canvasId: canvas.id },
     orderBy: { order: "asc" },
     select: {
+      key: true,
       label: true,
       blocks: {
         orderBy: { order: "asc" },
@@ -84,8 +90,10 @@ export async function loadCanvasContext(
     },
   });
 
+  const allow = opts.includeKeys ? new Set(opts.includeKeys) : null;
   const parts: string[] = [];
   for (const s of sections) {
+    if (allow && !allow.has(s.key)) continue;
     const blocks = opts.onlyConfirmed
       ? s.blocks.filter((b) => b.status === "CONFIRMED")
       : s.blocks;

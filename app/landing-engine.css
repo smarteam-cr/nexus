@@ -74,6 +74,33 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); touch-action: none;
 }
 .stl .stl-drag-handle:active { cursor: grabbing; }
+
+/* Contenedor de las secciones `ctxDriven` en EDICIÓN (cronograma / procesos): solo aporta
+   el ancla del overlay. El cliente las ve sin este wrapper (mismo DOM que antes). */
+.stl .stl-ctx-sec { position: relative; }
+.stl .stl-ctx-sec.stl-hidden {
+  outline: 2px dashed rgba(245, 158, 11, 0.55); outline-offset: -4px; border-radius: 10px;
+}
+.stl .stl-ctx-sec.stl-hidden > :not(.stl-overlay) { opacity: 0.42; filter: grayscale(0.55); }
+
+/* Sección OCULTA y COLAPSADA: se reduce a una barra con su título (clic = desplegar). */
+.stl .stl-collapsed { padding-top: 0; padding-bottom: 0; }
+.stl .stl-sec.stl-collapsed { padding: 14px 24px; }
+.stl .stl-ctx-sec.stl-collapsed { padding: 14px 24px; background: var(--bg-soft); }
+.stl .stl-collapsed > .stl-wrap { opacity: 1; filter: none; }
+.stl .stl-collapsed-bar {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 0;
+  border: none; background: transparent; cursor: pointer; text-align: left;
+  color: var(--text-2); font-size: 13px; line-height: 1;
+}
+.stl .stl-collapsed-bar:hover { color: var(--text); }
+.stl .stl-collapsed-title {
+  font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.01em;
+}
+/* La barra colapsada nunca se atenúa (es el único asidero para volver a mostrarla). */
+.stl .stl-hidden.stl-collapsed > .stl-wrap,
+.stl .stl-ctx-sec.stl-hidden.stl-collapsed > :not(.stl-overlay) { opacity: 1; filter: none; }
+
 .stl .stl-light { background: var(--bg);       color: var(--text); --accent: var(--blue); --accent-soft: var(--blue-soft); }
 .stl .stl-soft  { background: var(--bg-soft);  color: var(--text); --accent: var(--blue); --accent-soft: var(--blue-soft); border-top: 1px solid var(--border); }
 .stl .stl-dark  { background: var(--dark-bg);  color: var(--dark-text); --accent: var(--teal); --accent-soft: var(--teal-soft); }
@@ -547,12 +574,21 @@
 .stl .stl-item:hover .stl-drag-item { opacity: 1; }
 .stl .stl-drag-item:active { cursor: grabbing; }
 .stl .stl-drag-item:hover { color: var(--blue); border-color: var(--blue); }
-/* En chips compactos (tags/marcas), inline como el × */
-.stl .stl-tag .stl-drag-item, .stl .stl-brand-badge .stl-drag-item {
+/* En chips compactos (tags/marcas) y en los logos de la brand-row, inline como el × */
+.stl .stl-tag .stl-drag-item,
+.stl .stl-brand-badge .stl-drag-item,
+.stl .stl-brand-logo-wrap .stl-drag-item {
   position: static; opacity: 0.6; width: 16px; height: 16px; border: none;
   background: transparent; box-shadow: none; color: inherit;
 }
-.stl .stl-tag:hover .stl-drag-item, .stl .stl-brand-badge:hover .stl-drag-item { opacity: 1; }
+.stl .stl-tag:hover .stl-drag-item,
+.stl .stl-brand-badge:hover .stl-drag-item,
+.stl .stl-brand-logo-wrap:hover .stl-drag-item { opacity: 1; }
+/* El × de quitar un logo también inline (el absoluto se comería la imagen). */
+.stl .stl-brand-logo-wrap .stl-remove {
+  position: static; width: 16px; height: 16px; border: none; background: transparent;
+  box-shadow: none; color: inherit; font-size: 12px; margin-right: 2px;
+}
 .stl .stl-add {
   display: inline-flex; align-items: center; gap: 6px; margin-top: 14px;
   padding: 8px 14px; border: 1px dashed var(--border-strong); border-radius: 8px;

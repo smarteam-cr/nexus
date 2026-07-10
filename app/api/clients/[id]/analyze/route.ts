@@ -14,8 +14,11 @@ import { getOutputFormatInstructions, getBlockOutputFormatInstructions } from "@
 import { DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN, type BlockType } from "@/lib/canvas/block-types";
 import { postProcessCards } from "@/lib/canvas/post-process";
 import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
-import { AGENT_GROUP_TO_CANVAS } from "@/lib/canvas/default-canvases";
+import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
+import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
+import { KICKOFF_TEMPLATE, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
+import { syncHorariosSessionsFromHubs } from "@/lib/canvas/kickoff-hubs";
 import { syncFlowchartsToProcesos } from "@/lib/canvas/sync-procesos-blocks";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
@@ -970,6 +973,15 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     if (targetCanvas) targetCanvasId = targetCanvas.id;
   }
 
+  // ── 9a3. Auto-sanar el canvas Kickoff antes de generar ────────────────────────
+  // Los kickoffs creados con un canon viejo no tienen las secciones nuevas
+  // (`hoy_vs_sistema`, `cierre`), y `buildKickoffConfig` filtra por las keys que
+  // EXISTEN → se perderían en silencio. Las crea (idempotente) y siembra el bloque
+  // de las curadas. Mismo patrón que el "ensure" del handoff (POST /handoff).
+  if (targetCanvasId && agent.agentGroup === "kickoff") {
+    await reconcileKickoffCanvasSections(targetCanvasId);
+  }
+
   // ── 9b. System prompt efectivo ────────────────────────────────────────────────
   let effectiveSystemPrompt = agent.additionalInstructions
     ? `${agent.systemPrompt}\n\n${agent.additionalInstructions}`
@@ -1236,15 +1248,26 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     // El kickoff es interno: usa el handoff GENERADO aunque esté en borrador (no se
     // exige aceptación). El guard de arriba ya cortó si no hay handoff, así que el
     // fallback de abajo es una red de seguridad inalcanzable en la práctica.
-    const handoffCtx = await loadCanvasContext(bodyProjectId, "Handoff", { onlyConfirmed: false });
+    //
+    // ALLOWLIST: el kickoff lo lee el CLIENTE. Las secciones internas del handoff
+    // (riesgos_banderas, motivacion_decision "por qué vendimos", acuerdos_promesas
+    // comerciales, estado_en_flight) NO se le mandan al modelo — ni siquiera para que
+    // las "ignore". El prompt además se lo prohíbe, pero la fuente es el gate real.
+    const handoffCtx = await loadCanvasContext(bodyProjectId, "Handoff", {
+      onlyConfirmed: false,
+      includeKeys: KICKOFF_HANDOFF_KEYS,
+    });
     const timelineCtx = await loadTimelineContext(bodyProjectId);
+    // Los TAGS son la fuente de los hubs del titular ("implementación de HubSpot…") y
+    // de los chips del hero; el handoff aporta las integraciones por nombre (Aircall…).
+    const tagsLabel = tagLabels(dealProject?.tags ?? []).join(", ");
     userMessage = `Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
-${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}
+${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}${tagsLabel ? `Alcance etiquetado (tags del proyecto): ${tagsLabel}\n` : ""}
 === HANDOFF DEL PROYECTO (ESTA ES TU ÚNICA FUENTE) ===
-${handoffCtx || "(Sin handoff todavía. Indicá en cada sección que falta el handoff; no inventes contenido.)"}
+${handoffCtx || "(Sin handoff todavía. Dejá vacías las secciones sin respaldo; no inventes contenido.)"}
 
-${timelineCtx ? `${timelineCtx}\n\n` : ""}Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: tono cliente, sin inflar alcance/objetivos (solo lo respaldado por el handoff), métricas como propuesta de Smarteam si no están explícitas, y NO reproduzcas el cronograma en prosa (la plantilla lo muestra aparte).`;
+${timelineCtx ? `${timelineCtx}\n\n` : ""}Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: es una PRESENTACIÓN (poco texto, cards con título corto y detalle de una línea), tono post-venta, sin inflar alcance/objetivos (solo lo respaldado por el handoff), métricas como propuesta de Smarteam si no están explícitas, y NO reproduzcas el cronograma en prosa (la plantilla lo muestra aparte).`;
   }
 
   // ── 10b''. Input del agente de Planificación ─────────────────────────────────
@@ -1370,6 +1393,46 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   } | null = null;
 
   try {
+    // ── Kickoff: generación TIPADA (motor de secciones, igual que los Business Cases) ──
+    // En vez del LLM markdown genérico, el kickoff usa generateSectionsForTemplate con
+    // KICKOFF_TEMPLATE → data estructurada por sección. Se envuelve como 1 bloque "card"
+    // por sección para que la persistencia isBlockFormat de abajo lo guarde como CARD
+    // con `data` (born-CONFIRMED). Solo las 6 secciones de prosa (agentGenerated) — las
+    // curadas equipo/horarios/canales (HUMAN) sobreviven al deleteMany source:AGENT.
+    //
+    // FLIP: el kickoff SIEMPRE genera tipado (data estructurada → 1 CARD/sección). El
+    // render default es el motor nuevo; los kickoffs viejos (markdown) se siguen viendo
+    // por el fallback tolerante del adaptador. El renderer viejo queda como escape
+    // (?kve=old / ?engine=old). Ver plan F4/F5 (flip ejecutado).
+    if (isKickoffAgent) {
+      // CARRY-FORWARD (load-bearing): la generación del kickoff sobreescribe los bloques
+      // EN EL LUGAR (borra y recrea). Sin pasar la data previa, `coerceToSchema` dejaría
+      // solo las keys del schema y se perderían `hero.coverImageUrl`, `hero.brands` y
+      // `hero.eyebrow` — todo lo que cura el CSE y el agente nunca genera.
+      const prevDataByKey: Record<string, unknown> = {};
+      if (targetCanvasId) {
+        const prevSecs = await prisma.canvasSection.findMany({
+          where: { canvasId: targetCanvasId },
+          select: { key: true, blocks: { where: { blockType: "CARD" }, select: { data: true }, take: 1 } },
+        });
+        for (const s of prevSecs) {
+          const d = s.blocks[0]?.data;
+          if (d && typeof d === "object") prevDataByKey[s.key] = d;
+        }
+        // NO purgar acá el `compara` legacy de la prosa (la comparación vivía dentro de
+        // `objetivos` antes de tener sección propia). Si el handoff no trae el contraste, el
+        // agente deja `hoy_vs_sistema` VACÍA — y sin el carry-forward el kickoff se quedaría
+        // sin comparación. La de-duplicación la hace el RENDER (`buildKickoffSections`), que
+        // descarta el `compara` de la prosa solo cuando la sección propia tiene contenido.
+      }
+      const gen = await generateSectionsForTemplate(KICKOFF_TEMPLATE, userMessage, undefined, undefined, prevDataByKey);
+      analysisJson = {
+        sections: gen.sections.map((s) => ({ key: s.key, blocks: [{ type: "card", data: s.data }] })),
+      };
+      // Auto-poblar las sesiones de "horarios" desde los hubs del handoff (Marketing/Sales
+      // Hub…). Best-effort, no bloquea la generación; preserva sesiones/asignaciones previas.
+      if (targetCanvasId) await syncHorariosSessionsFromHubs(targetCanvasId, dealProject?.tags);
+    } else {
     // CARDS_AND_FLOWCHARTS usa max_tokens alto (32k) → el SDK de Anthropic EXIGE
     // streaming para requests que podrían tardar >10 min en no-streaming ("Streaming
     // is required for operations that may take longer than 10 minutes"). .stream()
@@ -1469,6 +1532,7 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
         }
       }
     }
+    } // ── fin del else (agentes no-kickoff) ──
   } catch (e: unknown) {
     console.error("[analyze] Claude error:", e);
     const msg = e instanceof Error ? e.message : String(e);
@@ -1684,12 +1748,19 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
           agentRunId: run.id,
         };
       });
+      // KICKOFF (tipado): regenerar = prosa FRESCA → reemplazo LIMPIO de la sección
+      // (borra TODOS sus bloques y deja 1 CARD) → garantiza 1 bloque/sección, sin el
+      // doble-bloque no determinista (AGENT + MODIFIED viejo). Solo corre sobre las
+      // secciones de prosa que el agente generó; las curadas (equipo/horarios/canales/
+      // cierre) NO están en `outputSections` → intactas. HANDOFF conserva MODIFIED/HUMAN
+      // (el CSE lo cura a mano) → sigue borrando solo AGENT.
+      const deleteWhere = bornConfirmed
+        ? agent.agentGroup === "kickoff"
+          ? { sectionId }
+          : { sectionId, source: "AGENT" as const }
+        : { sectionId, status: "DRAFT" as const, source: "AGENT" as const };
       await prisma.$transaction([
-        prisma.canvasBlock.deleteMany({
-          where: bornConfirmed
-            ? { sectionId, source: "AGENT" }
-            : { sectionId, status: "DRAFT", source: "AGENT" },
-        }),
+        prisma.canvasBlock.deleteMany({ where: deleteWhere }),
         prisma.canvasBlock.createMany({ data: blockData }),
       ]);
       totalBlocks += section.blocks.length;

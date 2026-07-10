@@ -9,10 +9,10 @@
  * quitar. Branded Smarteam; estilos en app/landing-engine.css (scope .stl, hex
  * literal → theme-safe en el render externo).
  */
-import { Fragment, useEffect, useRef, useState, type FC } from "react";
-import { useToast } from "@/components/ui/Toast";
+import { useEffect, useRef, useState, type FC } from "react";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
+import { HeroUploadButtons, BrandRow, TagRow } from "./hero-parts";
 import { landingLang, t } from "./i18n";
 import type {
   SectionProps,
@@ -65,194 +65,23 @@ function TextCard({
   );
 }
 
-/** Botón "Portada" del hero (solo edición): sube una imagen al endpoint del BC
- *  (`ctx.imageUploadUrl`) y la guarda en `data.coverImageUrl` (fuera del schema del
- *  agente — sobrevive regeneraciones vía carry-forward, patrón `brands`). */
-function CoverButton({
-  coverImageUrl, uploadUrl, onSet,
-}: { coverImageUrl?: string | null; uploadUrl: string; onSet: (url: string | null) => void }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const toast = useToast();
-  const pill: React.CSSProperties = {
-    display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px",
-    borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
-    background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.22)", color: "#fff",
-  };
-  const upload = async (file: File) => {
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch(uploadUrl, { method: "POST", body: fd });
-      const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-      if (res.ok && body.url) onSet(body.url);
-      else toast.error(body.error ?? "No se pudo subir la imagen.");
-    } catch {
-      toast.error("No se pudo subir la imagen (error de red).");
-    } finally {
-      setBusy(false);
-      if (inputRef.current) inputRef.current.value = "";
-    }
-  };
-  return (
-    <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }}
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
-      <button type="button" style={pill} disabled={busy} onClick={() => inputRef.current?.click()}>
-        🖼 {busy ? "Subiendo…" : coverImageUrl ? "Cambiar portada" : "Portada"}
-      </button>
-      {coverImageUrl && (
-        <button type="button" style={{ ...pill, background: "transparent" }} disabled={busy} onClick={() => onSet(null)}>
-          ✕ Quitar
-        </button>
-      )}
-    </div>
-  );
-}
-
-/** Botón "Logo del cliente" (solo edición): sube al endpoint del CLIENTE
- *  (`ctx.clientLogoUploadUrl` → Client.logoUrl) y avisa vía ctx.onClientLogoChange. */
-function ClientLogoButton({
-  hasLogo, uploadUrl, onChanged,
-}: { hasLogo: boolean; uploadUrl: string; onChanged: (url: string | null) => void }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const toast = useToast();
-  const pill: React.CSSProperties = {
-    display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px",
-    borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
-    background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.22)", color: "#fff",
-  };
-  const upload = async (file: File) => {
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch(uploadUrl, { method: "POST", body: fd });
-      const body = (await res.json().catch(() => ({}))) as { logoUrl?: string; error?: string };
-      if (res.ok && body.logoUrl) onChanged(body.logoUrl);
-      else toast.error(body.error ?? "No se pudo subir el logo.");
-    } catch {
-      toast.error("No se pudo subir el logo (error de red).");
-    } finally {
-      setBusy(false);
-      if (inputRef.current) inputRef.current.value = "";
-    }
-  };
-  return (
-    <>
-      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style={{ display: "none" }}
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
-      <button type="button" style={pill} disabled={busy} onClick={() => inputRef.current?.click()}>
-        ⛭ {busy ? "Subiendo…" : hasLogo ? "Cambiar logo del cliente" : "Logo del cliente"}
-      </button>
-    </>
-  );
-}
-
 // ── 1) Hero ──────────────────────────────────────────────────────────────────
+// Compuesto con las primitivas COMPARTIDAS de `hero-parts.tsx` (las mismas que usa
+// el hero del Kickoff). Layout del BC: left-aligned, sin eyebrow ni stats.
 export const HeroSection: FC<SectionProps<HeroData>> = ({ data, ctx, editable, onChange }) => {
   const tags = data.tags ?? [];
   const set = (next: Partial<HeroData>) => onChange?.({ ...data, ...next });
-  // Brand-row EDITABLE: si el CSE no la tocó (brands vacío) cae a los defaults.
-  // Los LOGOS reales (cliente + Smarteam de la config global) van como imagen;
-  // los defaults de texto solo cubren lo que no tiene logo.
-  const hasLogo = !!ctx.clientLogoUrl;
-  const hasSmarteamLogo = !!ctx.smarteamLogoUrl;
-  const brands =
-    data.brands && data.brands.length
-      ? data.brands
-      : [
-          ...(hasLogo ? [] : [ctx.clientName || "Cliente"]),
-          ...(hasSmarteamLogo ? [] : ["Smarteam"]),
-          "HubSpot",
-        ];
   return (
     <div style={{ maxWidth: 900 }}>
-      {editable && (ctx.imageUploadUrl || ctx.clientLogoUploadUrl) && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {ctx.imageUploadUrl && (
-            <CoverButton coverImageUrl={data.coverImageUrl} uploadUrl={ctx.imageUploadUrl}
-              onSet={(url) => set({ coverImageUrl: url })} />
-          )}
-          {ctx.clientLogoUploadUrl && ctx.onClientLogoChange && (
-            <div style={{ marginBottom: 18 }}>
-              <ClientLogoButton hasLogo={hasLogo} uploadUrl={ctx.clientLogoUploadUrl} onChanged={ctx.onClientLogoChange} />
-            </div>
-          )}
-        </div>
+      {editable && (
+        <HeroUploadButtons ctx={ctx} coverImageUrl={data.coverImageUrl} onCover={(url) => set({ coverImageUrl: url })} />
       )}
-      {/* key: el fallback de brands se RE-DERIVA (y cambia de largo desde la cabeza)
-          cuando aparece un logo — remontar el sortable realinea sus ids internos. */}
-      <SortableItems key={`brands-${hasLogo}-${hasSmarteamLogo}`} items={brands} disabled={!editable}
-        onReorder={(next) => set({ brands: next })}
-        itemStyle={{ display: "inline-flex", alignItems: "center", gap: 12 }}
-        container={(nodes) => (
-          <div className="stl-brandrow">
-            {hasLogo && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img className="stl-brand-logo" src={ctx.clientLogoUrl!} alt={ctx.clientName} />
-            )}
-            {hasSmarteamLogo && (
-              <>
-                {hasLogo && <span className="stl-brand-x">×</span>}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className="stl-brand-logo" src={ctx.smarteamLogoUrl!} alt="Smarteam" />
-              </>
-            )}
-            {nodes}
-            {editable && <AddBtn label="Marca" onClick={() => set({ brands: appendItem(brands, "") })} />}
-          </div>
-        )}>
-        {(b, i, handle) => {
-          // Brand de texto con logo configurado (HubSpot / Insider One / Smarteam) →
-          // se pinta la imagen. Sin logo → badge de texto editable, como siempre.
-          const brandLogo = ctx.brandLogos?.[b.trim().toLowerCase()];
-          return (
-            <Fragment>
-              {(i > 0 || hasLogo || hasSmarteamLogo) && <span className="stl-brand-x">×</span>}
-              {brandLogo ? (
-                <span className="stl-item" style={{ display: "inline-flex", alignItems: "center" }}>
-                  {handle}
-                  {editable && <RemoveBtn onClick={() => set({ brands: removeAt(brands, i) })} />}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img className="stl-brand-logo" src={brandLogo} alt={b} />
-                </span>
-              ) : (
-                <span className="stl-item stl-brand-badge">
-                  {handle}
-                  {editable && <RemoveBtn onClick={() => set({ brands: removeAt(brands, i) })} />}
-                  <Editable as="span" editable={editable} value={b} placeholder="Marca / plataforma…"
-                    onCommit={(v) => set({ brands: replaceAt(brands, i, v) })} />
-                </span>
-              )}
-            </Fragment>
-          );
-        }}
-      </SortableItems>
+      <BrandRow brands={data.brands} ctx={ctx} editable={editable} onChange={(next) => set({ brands: next })} />
       <Editable as="h1" className="stl-hero-title" editable={editable} value={data.headline}
         placeholder="[Verbo de transformación] la [operación / proceso] de [cliente]…" onCommit={(v) => set({ headline: v })} />
       <Editable as="p" className="stl-lead" editable={editable} value={data.subhead}
         placeholder="Una frase que resume el dolor central y la apuesta…" onCommit={(v) => set({ subhead: v })} />
-      {(tags.length > 0 || editable) && (
-        <SortableItems items={tags} disabled={!editable} onReorder={(next) => set({ tags: next })}
-          container={(nodes) => (
-            <div className="stl-tags">
-              {nodes}
-              {editable && <AddBtn label="Tag" onClick={() => set({ tags: appendItem(tags, "") })} />}
-            </div>
-          )}>
-          {(tag, i, handle) => (
-            <span className="stl-item stl-tag">
-              {handle}
-              {editable && <RemoveBtn onClick={() => set({ tags: removeAt(tags, i) })} />}
-              <Editable as="span" editable={editable} value={tag} placeholder="Hub / integración / diferenciador…"
-                onCommit={(v) => set({ tags: replaceAt(tags, i, v) })} />
-            </span>
-          )}
-        </SortableItems>
-      )}
+      <TagRow tags={tags} editable={editable} onChange={(next) => set({ tags: next })} />
     </div>
   );
 };
@@ -439,7 +268,7 @@ export const PartnerSection: FC<SectionProps<PartnerData>> = ({ data, ctx, edita
  *  ".../external/smarteamcr.com/contacto". Antepone "https://" salvo que ya traiga
  *  un esquema (http/https/mailto/tel/...), sea protocol-relative ("//") o una ruta
  *  interna intencional ("/algo"). */
-function normalizeUrl(raw: string): string {
+export function normalizeUrl(raw: string): string {
   const v = raw.trim();
   // Whitelist de esquemas (no "cualquier palabra:") — un genérico [a-z][a-z0-9+.-]*:
   // también matchearía "localhost:3004/x" o "cliente:8080/ruta" (host:puerto sin
@@ -451,19 +280,21 @@ function normalizeUrl(raw: string): string {
 /** Botón del CTA en LECTURA: con `buttonUrl` navega (pestaña nueva por default,
  *  misma pestaña con `target="_self"`); sin URL, span. Normaliza defensivamente
  *  (dato ya guardado sin esquema, de antes del fix). */
-export function CtaButton({ label, url, target }: { label?: string; url?: string; target?: string }) {
+export function CtaButton({
+  label, url, target, style,
+}: { label?: string; url?: string; target?: string; style?: React.CSSProperties }) {
   if (!label) return null;
   const href = url ? normalizeUrl(url) : "";
   if (href) {
     const self = target === "_self";
     return (
-      <a className="stl-btn" href={href} target={self ? undefined : "_blank"}
+      <a className="stl-btn" style={style} href={href} target={self ? undefined : "_blank"}
         rel={self ? undefined : "noopener noreferrer"}>
         {label}
       </a>
     );
   }
-  return <span className="stl-btn">{label}</span>;
+  return <span className="stl-btn" style={style}>{label}</span>;
 }
 
 /** Input de texto que comitea en blur / Enter (como `Editable`), para los popovers
@@ -472,7 +303,14 @@ function PopInput({
   value, placeholder, onCommit, style,
 }: { value: string; placeholder: string; onCommit: (v: string) => void; style?: React.CSSProperties }) {
   const [v, setV] = useState(value);
-  useEffect(() => setV(value), [value]);
+  // Re-sincronizar con la prop cuando cambia por afuera, SIN efecto (patrón oficial de
+  // "ajustar estado durante el render"): un useEffect acá dispara `set-state-in-effect`
+  // y además pinta un frame con el valor viejo.
+  const [prevValue, setPrevValue] = useState(value);
+  if (prevValue !== value) {
+    setPrevValue(value);
+    setV(value);
+  }
   return (
     <input
       type="text"
@@ -491,7 +329,7 @@ function PopInput({
  *  cierra. `buttonUrl`/`buttonTarget` viven fuera del schema del agente (el CSE los
  *  configura; sobreviven regeneraciones por carry-forward de keys no-schema). */
 export function CtaEditor({
-  label, url, target, labelPlaceholder, onLabel, onUrl, onTarget,
+  label, url, target, labelPlaceholder, onLabel, onUrl, onTarget, style, wrapStyle,
 }: {
   label?: string;
   url?: string;
@@ -500,15 +338,33 @@ export function CtaEditor({
   onLabel: (v: string) => void;
   onUrl: (v: string) => void;
   onTarget: (v: string) => void;
+  /** Estilo del disparador — para superficies con su propio botón (pill teal del kickoff). */
+  style?: React.CSSProperties;
+  /** Estilo del contenedor (por defecto `marginTop: 26`, el del CTA del Business Case). */
+  wrapStyle?: React.CSSProperties;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    /**
+     * Cerrar el popover DESMONTA sus inputs, y un input que se desmonta NO dispara
+     * `blur` — que es donde `PopInput` comitea. Sin este `blur()` explícito, escribir
+     * el enlace y cerrar con un clic afuera perdía el valor EN SILENCIO (el texto del
+     * botón sobrevivía solo porque el CSE hacía blur al tocar otro campo del popover).
+     * Blur ANTES de cerrar: el commit corre sincrónicamente y recién después desmonta.
+     */
+    const commitFocused = () => {
+      const el = document.activeElement;
+      if (el instanceof HTMLElement && wrapRef.current?.contains(el)) el.blur();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        commitFocused();
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { commitFocused(); setOpen(false); } };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -533,9 +389,9 @@ export function CtaEditor({
   });
 
   return (
-    <div ref={wrapRef} style={{ position: "relative", display: "inline-block", marginTop: 26 }}>
+    <div ref={wrapRef} style={{ position: "relative", display: "inline-block", marginTop: 26, ...wrapStyle }}>
       <button type="button" className="stl-btn" onClick={() => setOpen((o) => !o)}
-        title="Editar botón (texto, enlace, destino)" style={{ cursor: "pointer" }}>
+        title="Editar botón (texto, enlace, destino)" style={{ ...style, cursor: "pointer" }}>
         {label ? label : <span style={{ opacity: 0.6 }}>{labelPlaceholder}</span>}
         <span aria-hidden style={{ marginLeft: 8, opacity: 0.7, fontSize: "0.85em" }}>✎</span>
       </button>

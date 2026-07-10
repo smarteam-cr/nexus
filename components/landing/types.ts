@@ -10,6 +10,7 @@
  * matcheada por `key` contra CanvasSection.key) — NO por el enum BlockType.
  */
 import type { FC } from "react";
+import type { KickoffTimelineData, KickoffProceso } from "@/lib/external/kickoff-view-types";
 
 // ── Datos estructurados por sección (lo que llena el agente) ─────────────────
 
@@ -163,6 +164,28 @@ export interface LandingContext {
   /** Callback de edición: el hero avisa que cambió el logo del cliente (el workspace
    *  refresca su estado local — el logo vive en Client, no en el data de la sección). */
   onClientLogoChange?: (url: string | null) => void;
+  /** Solo KICKOFF: datos derivados/curados que viven FUERA de CanvasBlock (cronograma
+   *  de ProjectTimeline, procesos de flowcharts) + callbacks del editor. Las secciones
+   *  `ctxDriven` (cronograma/procesos) y el hero (Stats) los leen de acá. Ausente en BC. */
+  kickoff?: {
+    timeline?: KickoffTimelineData | null;
+    procesos?: KickoffProceso[];
+    /** Logos de plataforma (HubSpot/Insider) para el chip del hero. */
+    platformLogos?: string[];
+    /** Solo edición: confirmar/desconfirmar un proceso (DRAFT↔CONFIRMED). */
+    onProcesoStatusChange?: (id: string, confirmed: boolean) => void;
+    /** Solo edición: ocultar/mostrar una clave sintética (cronograma/procesos/idProceso). */
+    hiddenKeys?: Set<string>;
+    onToggleHidden?: (key: string, hidden: boolean) => void;
+    /**
+     * Asignar (o desasignar, con `optionId = null`) una franja a una sesión de horarios.
+     * Presente en las DOS superficies que pueden escribir — el editor del CSE y la página
+     * del cliente (server action) — y ausente en las de solo lectura (PDF, preview). Es lo
+     * que habilita el drag: la asignación se guarda al instante en `kickoffHorarioAssignments`,
+     * sin pasar por "Subir al cliente". Rechaza (throw) si el servidor la rechaza.
+     */
+    onAssignSession?: (sessionId: string, optionId: string | null) => Promise<void>;
+  };
 }
 
 /** Props que recibe TODA sección. `onChange` emite el nuevo `data` (estado local
@@ -193,6 +216,19 @@ export interface SectionDef {
   brief?: string;              // guía del spec (descripción + regla "Fuente:") — ayuda editable
                                // en el editor; el agente la lee al generar (override por sección la gana)
   empty: unknown;              // data inicial (template vacío)
+  /** La sección se alimenta de `ctx` (no de `data`): NO se omite en read por `isBlank`
+   *  (el Component decide si devuelve null). Ej. kickoff: cronograma/procesos/cierre. */
+  ctxDriven?: boolean;
+  /** Solo `ctxDriven`: `true` si NO hay nada que renderizar (su Component devolvería null).
+   *  El motor lo consulta ANTES de pintar el chrome de edición — sin esto, una sección sin
+   *  cronograma dejaría el ojo y el handle de arrastre flotando sobre la nada. */
+  ctxEmpty?: (ctx: LandingContext) => boolean;
+  /** La sección NO participa del drag&drop de reordenar (posición fija en el config).
+   *  Ej. kickoff: hero (primero) y cierre (último). BC no la usa. */
+  pinned?: boolean;
+  /** La sección NO se puede ocultar (sin toggle de ojo): estructural, ocultarla rompería
+   *  la página. Ej. kickoff: hero (bienvenida) y cierre. BC no la usa. */
+  noHide?: boolean;
 }
 
 export interface LandingConfig {
