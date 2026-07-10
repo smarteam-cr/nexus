@@ -17,21 +17,41 @@
 
 export const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
-/** Fecha resultante de sumar `w` semanas a una fecha ISO. */
+/**
+ * ZONAS HORARIAS — regla del archivo:
+ *
+ * El `anchorStartDate` es una FECHA DE CALENDARIO guardada como instante UTC
+ * (`new Date("2026-05-19").toISOString()`). Todo lo derivado del anchor se lee e
+ * imprime en **UTC** (`getUTC*`). Con getters LOCALES el día "salta" en cualquier
+ * zona detrás de UTC: el server (contenedor en UTC) y el browser (p.ej. UTC-6)
+ * renderizaban días distintos → **hydration mismatch** + la fecha se mostraba un
+ * día antes.
+ *
+ * La única excepción es la fecha de HOY del usuario, que sí es hora de pared local
+ * → `fmtLocalDay`, y SOLO puede usarse en el cliente (nunca en SSR).
+ */
+
+/** Fecha resultante de sumar `w` semanas al anchor (aritmética de calendario, UTC). */
 export function addWeeks(iso: string, w: number): Date {
   const d = new Date(iso);
-  d.setDate(d.getDate() + w * 7);
+  d.setUTCDate(d.getUTCDate() + w * 7);
   return d;
 }
 
-/** "14 ago" */
+/** "14 ago" — día de calendario del anchor (UTC, estable server↔cliente). */
 export function fmtDay(d: Date): string {
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 }
 
-/** "14 ago 2026" */
+/** "14 ago 2026" — día de calendario del anchor (UTC, estable server↔cliente). */
 export function fmtFull(iso: string): string {
   const d = new Date(iso);
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+/** "9 jul 2026" para la fecha de HOY del usuario (hora de pared LOCAL).
+ *  SOLO cliente, después de montar — usarlo en SSR reintroduce el mismatch. */
+export function fmtLocalDay(d: Date): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
@@ -100,11 +120,13 @@ export function fmtPhaseRange(anchor: string | null | undefined, range: PhaseRan
  */
 export function currentWeekIndex(anchor: string | null | undefined, now: Date = new Date()): number | null {
   if (!anchor) return null;
-  const start = new Date(anchor);
-  start.setHours(0, 0, 0, 0);
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  return Math.floor((today.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  const a = new Date(anchor);
+  // Día de calendario del anchor (UTC) vs día de hoy del usuario (hora de pared
+  // LOCAL), ambos normalizados a la misma escala para restar sin sesgo de zona.
+  // `now` debe venir del CLIENTE (ver la nota de zonas horarias arriba).
+  const start = Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate());
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.floor((today - start) / (7 * 24 * 60 * 60 * 1000));
 }
 
 /** Semana absoluta de una tarea: inicio de su fase + weekIndex relativo. */

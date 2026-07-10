@@ -49,6 +49,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   fmtDay,
   fmtFull,
+  fmtLocalDay,
   addWeeks,
   plural,
   computePhaseRanges,
@@ -58,6 +59,7 @@ import {
   absoluteWeek,
   isOverdue,
 } from "@/lib/timeline/weeks";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
@@ -280,9 +282,15 @@ export default function TimelineGantt({
 
   const ranges = computePhaseRanges(phases);
   const total = timelineSpan(phases); // ancho de calendario (max end) — soporta fases en paralelo
-  const curWeek = currentWeekIndex(anchor);
+  // "Hoy" es hora de pared LOCAL del usuario (a diferencia de las fechas derivadas
+  // del anchor, que son días de calendario en UTC — ver lib/timeline/weeks.ts).
+  // Por eso NO puede calcularse en el servidor: `curInRange` gatea nodos y el
+  // Gantt viaja al cliente externo dentro de TimelineSection → mismatch de
+  // hidratación. Hasta montar, `today` es null y la variante neutra no lo usa.
+  const hydrated = useHydrated();
+  const today = hydrated ? new Date() : null;
+  const curWeek = today ? currentWeekIndex(anchor, today) : null;
   const curInRange = curWeek !== null && curWeek >= 0 && curWeek < total;
-  const todayIso = new Date().toISOString();
   const editable = !readOnly && !!onUpdateTask;
 
   const sensors = useSensors(
@@ -480,24 +488,26 @@ export default function TimelineGantt({
     // a este subárbol vía `:is(html.light, [data-fixed-light])`, así la viz queda clara también
     // en modo oscuro.
     <div className="space-y-3" data-fixed-light>
-      {/* Fecha de hoy — SIEMPRE visible — + leyenda */}
+      {/* Fecha de hoy — visible apenas hidrata (depende de la zona del usuario) + leyenda */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <span className="flex items-center gap-2 text-xs font-bold text-blue-300 bg-blue-900/30 border border-blue-700/40 rounded-lg px-3 py-1.5">
-          {curInRange && (
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-400" />
-            </span>
-          )}
-          Hoy: {fmtFull(todayIso)}
-          {curInRange && <span className="font-extrabold">· Semana S{curWeek as number}</span>}
-          {anchor && curWeek !== null && curWeek < 0 && (
-            <span className="font-medium text-blue-400/90">· el proyecto arranca el {fmtFull(anchor)}</span>
-          )}
-          {anchor && curWeek !== null && curWeek >= total && (
-            <span className="font-medium text-blue-400/90">· cronograma finalizado</span>
-          )}
-        </span>
+        {today && (
+          <span className="flex items-center gap-2 text-xs font-bold text-blue-300 bg-blue-900/30 border border-blue-700/40 rounded-lg px-3 py-1.5">
+            {curInRange && (
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-400" />
+              </span>
+            )}
+            Hoy: {fmtLocalDay(today)}
+            {curInRange && <span className="font-extrabold">· Semana S{curWeek as number}</span>}
+            {anchor && curWeek !== null && curWeek < 0 && (
+              <span className="font-medium text-blue-400/90">· el proyecto arranca el {fmtFull(anchor)}</span>
+            )}
+            {anchor && curWeek !== null && curWeek >= total && (
+              <span className="font-medium text-blue-400/90">· cronograma finalizado</span>
+            )}
+          </span>
+        )}
         {onSetAnchor && <AnchorDatePicker value={anchor ?? ""} onChange={onSetAnchor} />}
 
         {/* Sugerencia: fecha de la sesión de kickoff. Aparece si difiere del anchor
