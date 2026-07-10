@@ -20,6 +20,8 @@ interface HistoryItem {
   isPrimary: boolean;
   source: string;
   confidence: number | null;
+  /** false = excluida por humano de la membresía del proyecto (se muestra con badge, no se oculta). */
+  included?: boolean;
   hasTranscript: boolean;
   minuteStatus: "DRAFT" | "REVIEWED" | "EDITED" | null;
 }
@@ -82,6 +84,11 @@ export default function SessionHistoryDrawer({
                       {h.isPrimary && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-brand/20 text-brand">
                           PRIMARIO
+                        </span>
+                      )}
+                      {h.included === false && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                          EXCLUIDA
                         </span>
                       )}
                     </div>

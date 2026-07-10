@@ -9,6 +9,7 @@
  *   - el transcript (reusa fetchTranscriptContent, misma fuente que el handoff).
  */
 import { prisma } from "@/lib/db/prisma";
+import { belongsToClient } from "@/lib/sessions/project-sources";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 
 export interface PastSessionContext {
@@ -31,16 +32,32 @@ export async function getPastSessionsForProject(
   opts: { limit?: number } = {},
 ): Promise<PastSessionContext[]> {
   const now = new Date();
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { clientId: true },
+  });
+  if (!project) return [];
+
   const links = await prisma.sessionProject.findMany({
-    where: { projectId, session: { date: { lte: now } } },
+    // `included: true`: las sesiones excluidas por humano (tombstone) no alimentan el avance.
+    where: { projectId, included: true, session: { date: { lte: now } } },
     orderBy: { session: { date: "desc" } },
     take: opts.limit ?? 12,
-    select: { session: { select: { id: true, title: true, date: true, participants: true } } },
+    select: {
+      session: {
+        select: {
+          id: true, title: true, date: true, participants: true,
+          resolvedClientId: true, manualClientId: true,
+        },
+      },
+    },
   });
 
   // De más antigua a más reciente (el avance se lee mejor en orden cronológico).
+  // belongsToClient: misma defensa de runtime que el chokepoint (links cross-client stale).
   const sessions = links
     .map((l) => l.session)
+    .filter((s) => belongsToClient(s, project.clientId))
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const out: PastSessionContext[] = [];
@@ -63,6 +80,7 @@ export async function getKickoffSessionDate(projectId: string): Promise<Date | n
   const link = await prisma.sessionProject.findFirst({
     where: {
       projectId,
+      included: true,
       session: {
         OR: [
           { title: { contains: "kickoff", mode: "insensitive" } },

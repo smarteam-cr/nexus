@@ -25,6 +25,10 @@ export interface ProjectSourceSession {
   date: number; // epoch ms
   participants: string[]; // organizerEmail incluido (para detectar Ventas/roles)
   handoffOverride: boolean | null; // solo significativo en getProjectHandoffSessions
+  /** Link primario de la sesión en ESTE proyecto (política linkFeedsHandoff aguas abajo). */
+  isPrimary: boolean;
+  /** Confianza del clasificador para este link (null si manual/legacy). */
+  confidence: number | null;
 }
 
 export interface DroppedLink {
@@ -54,12 +58,13 @@ function foldOrganizer(participants: string[], organizerEmail: string | null): s
 }
 
 /**
- * Sesiones vinculadas a ESTE proyecto que ADEMÁS pertenecen a su cliente. Las que
- * cruzan cliente se descartan (→ `dropped` + console.warn). NO decide relevancia de
- * handoff (eso sigue en classifyForHandoff/handoffOverride aguas abajo) — solo
- * garantiza que el material es del cliente correcto.
+ * MIEMBROS del contexto del proyecto: sesiones vinculadas a ESTE proyecto con
+ * `included: true` (la exclusión humana — tombstone — no alimenta NADA) que ADEMÁS
+ * pertenecen a su cliente. Las que cruzan cliente se descartan (→ `dropped` +
+ * console.warn). Esta es la noción ÚNICA de membresía que todo consumidor
+ * (handoff, cronograma, watchdog, análisis) debe respetar.
  */
-export async function getProjectHandoffSessions(projectId: string): Promise<ProjectSourcesResult> {
+export async function getProjectMemberSessions(projectId: string): Promise<ProjectSourcesResult> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: { clientId: true },
@@ -67,9 +72,11 @@ export async function getProjectHandoffSessions(projectId: string): Promise<Proj
   if (!project) return { sessions: [], dropped: [] };
 
   const links = await prisma.sessionProject.findMany({
-    where: { projectId },
+    where: { projectId, included: true },
     select: {
       handoffOverride: true,
+      isPrimary: true,
+      confidence: true,
       session: {
         select: {
           id: true,
@@ -98,6 +105,8 @@ export async function getProjectHandoffSessions(projectId: string): Promise<Proj
       date: s.date.getTime(),
       participants: foldOrganizer(s.participants, s.organizerEmail),
       handoffOverride: l.handoffOverride,
+      isPrimary: l.isPrimary,
+      confidence: l.confidence,
     });
   }
 
@@ -109,6 +118,20 @@ export async function getProjectHandoffSessions(projectId: string): Promise<Proj
     );
   }
   return { sessions, dropped };
+}
+
+/**
+ * Sesiones-fuente del HANDOFF: hoy es la misma membresía (`getProjectMemberSessions`).
+ * NO decide qué alimenta el handoff — eso ocurre aguas abajo con `linkFeedsHandoff`
+ * (lib/handoff/session-relevance: link primario / secundario de confianza alta /
+ * forzado con `handoffOverride`) + la regla de relevancia; para eso expone
+ * `isPrimary`/`confidence`/`handoffOverride`. Membresía ("¿es de este proyecto?") ≠
+ * feeding de handoff ("¿cuenta la historia de venta de ESTE proyecto?"). El cronograma
+ * (lib/timeline/delivery-sessions) y demás consumidores usan la membresía pura y NO
+ * respetan la política de handoff (por diseño).
+ */
+export async function getProjectHandoffSessions(projectId: string): Promise<ProjectSourcesResult> {
+  return getProjectMemberSessions(projectId);
 }
 
 /**
@@ -134,6 +157,11 @@ export async function getClientSessions(
     title: s.title,
     date: s.date.getTime(),
     participants: foldOrganizer(s.participants, s.organizerEmail),
+    // Valores neutros: el camino client-wide (handoff legacy sin proyecto, análisis)
+    // NO usa la política de link `linkFeedsHandoff` — sin SessionProject no hay
+    // primario/confianza; estos campos existen solo para satisfacer la interface.
     handoffOverride: null,
+    isPrimary: false,
+    confidence: null,
   }));
 }

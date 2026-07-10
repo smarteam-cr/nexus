@@ -172,7 +172,8 @@ export async function buildWatchdogContext(
   // Sesiones REALES recientes del proyecto (fechas pasadas — hay sesiones con
   // fecha corrupta 2037+, anomalía conocida del sync).
   const recentSessions = await prisma.sessionProject.findMany({
-    where: { projectId, session: { date: { lte: now } } },
+    // included: las sesiones excluidas por humano no alimentan el contexto del watchdog
+    where: { projectId, included: true, session: { date: { lte: now } } },
     orderBy: { session: { date: "desc" } },
     take: 5,
     select: {

@@ -12,6 +12,7 @@ import SectionBlockList from "@/components/canvas/SectionBlockList";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import KickoffLanding from "@/components/canvas/KickoffLanding";
 import KickoffWorkspace from "@/components/canvas/KickoffWorkspace";
+import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
@@ -435,6 +436,12 @@ export default function ProjectCanvasPanel({
             {activeCanvas?.name === "Cronograma" && (
               <div ref={setCronogramaSlot} className="flex items-center gap-2" />
             )}
+            {/* Aviso (nunca bloqueo): en clientes multi-proyecto, links de IA sin revisar
+                pueden mezclar contexto de otro proyecto en el handoff/kickoff. */}
+            {!isResumenCanvas &&
+              (activeCanvas?.name === "Handoff" || activeCanvas?.name === "Kickoff") && (
+                <UnreviewedSessionsChip projectId={projectId} />
+              )}
           </div>
           {isResumenCanvas && (
             <p className="text-sm text-gray-400 mt-0.5">

@@ -192,6 +192,12 @@ export async function POST(req: NextRequest) {
         });
         return { projectId: project.id, handoffId: handoff.id, handoffCanvasId };
       });
+      // Proyecto nuevo (stepper) → cambió el panorama del cliente: re-clasificar sus
+      // sesiones en background (huérfanas + links de IA sin revisar), así el stepper
+      // muestra las sesiones del proyecto al toque. Fire-and-forget.
+      void import("@/lib/sessions/reclassify")
+        .then((m) => m.reclassifyClientSessions(clientId))
+        .catch(() => {});
     }
 
     return NextResponse.json({ clientId, ...result }, { status: 201 });

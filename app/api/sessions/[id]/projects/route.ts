@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardInternalUser } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { belongsToClient } from "@/lib/sessions/project-sources";
 
 /**
  * GET /api/sessions/[id]/projects
@@ -68,12 +69,21 @@ export async function POST(
   const guard = await guardAccessToProject(body.projectId);
   if (guard instanceof NextResponse) return guard;
 
-  const project = await prisma.project.findUnique({
-    where: { id: body.projectId },
-    select: { id: true },
+  // Hardening INV1 (escritura): la sesión debe pertenecer al cliente del proyecto
+  // (misma regla que el chokepoint de lectura). Se permite si la sesión aún no está
+  // resuelta (resolvedClientId null y sin override) — mismo criterio que el invariante.
+  const session = await prisma.firefliesSession.findUnique({
+    where: { id: sessionId },
+    select: { resolvedClientId: true, manualClientId: true },
   });
-  if (!project) {
-    return NextResponse.json({ error: "Proyecto no existe" }, { status: 404 });
+  if (!session) {
+    return NextResponse.json({ error: "Sesión no existe" }, { status: 404 });
+  }
+  if (session.resolvedClientId !== null && !belongsToClient(session, guard.clientId)) {
+    return NextResponse.json(
+      { error: "La sesión pertenece a otro cliente — no se puede vincular a este proyecto." },
+      { status: 400 },
+    );
   }
 
   const makePrimary = body.makePrimary === true;
@@ -98,6 +108,9 @@ export async function POST(
     },
     update: {
       source: "manual",
+      // Asignación manual explícita resucita un tombstone (included=false): el humano
+      // que hoy la vincula pisa la exclusión de ayer.
+      included: true,
       isPrimary: makePrimary ? true : undefined,
     },
   });

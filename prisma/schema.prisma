@@ -345,6 +345,10 @@ model Handoff {
 
   generatedByAgentRunId String? // trazabilidad de la corrida del agente de handoff
 
+  // Exclusiones de contexto del CSE (texto libre, ej. "ignorá el proyecto DocuSign").
+  // Se inyectan como reglas negativas duras en el prompt del agente de handoff.
+  contextExclusions String? @db.Text
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1487,6 +1491,19 @@ model SessionProject {
 
   generatedByAgentRunId String? // FK suave al AgentRun del clasificador
   createdAt             DateTime @default(now())
+
+  // ── Membresía de contexto (plan "contexto por proyecto", 2026-07-10) ──
+  // included: LA verdad de "¿esta sesión alimenta este proyecto?" que respetan
+  // TODOS los consumidores (handoff/cronograma/entregas/minutas vía chokepoints).
+  // false = excluida por un humano — TOMBSTONE durable: la fila queda como memoria
+  // para que el clasificador IA no re-proponga el link (un DELETE sí se re-crearía).
+  // handoffOverride sigue siendo el único afinado POR CONSUMIDOR (solo handoff):
+  // "¿es de este proyecto?" ≠ "¿cuenta la historia de venta?".
+  included   Boolean   @default(true)
+  // Confirmación humana del link (IA propone, CSE confirma). Un link con reviewedAt
+  // NUNCA es modificado/borrado por el clasificador (lock por link, no por sesión).
+  reviewedAt DateTime?
+  reviewedBy String? // email de quien curó
 
   @@unique([sessionId, projectId])
   @@index([projectId, isPrimary])

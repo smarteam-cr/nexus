@@ -17,6 +17,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import SessionHistoryDrawer from "./SessionHistoryDrawer";
+import ProjectSessionsReview from "./ProjectSessionsReview";
 import { useToast } from "@/components/ui/Toast";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────
@@ -31,6 +32,8 @@ interface HistoryItem {
   isPrimary: boolean;
   source: string;
   confidence: number | null;
+  /** false = excluida por humano de la membresía del proyecto (badge en el drawer). */
+  included?: boolean;
   hasTranscript: boolean;
   minuteStatus: "DRAFT" | "REVIEWED" | "EDITED" | null;
 }
@@ -73,7 +76,7 @@ interface MeetingsData {
   } | null;
 }
 
-type SubTab = "minute" | "participants";
+type SubTab = "minute" | "participants" | "sessions";
 
 // ── Dialog principal ───────────────────────────────────────────────────────
 
@@ -174,6 +177,9 @@ export default function MinuteDialog({
                 <TabButton active={tab === "participants"} onClick={() => setTab("participants")}>
                   Participantes
                 </TabButton>
+                <TabButton active={tab === "sessions"} onClick={() => setTab("sessions")}>
+                  Sesiones
+                </TabButton>
               </div>
               <div className="flex items-center gap-2">
                 {data && data.history.length > 0 && (
@@ -208,6 +214,9 @@ export default function MinuteDialog({
               <p className="text-sm text-gray-500">Error al cargar datos del proyecto.</p>
             ) : tab === "minute" ? (
               <MinuteContent data={data} generating={generating} onReload={reload} />
+            ) : tab === "sessions" ? (
+              // Curación de la membresía de contexto (qué sesiones alimentan el proyecto)
+              <ProjectSessionsReview projectId={projectId} onChange={reload} />
             ) : (
               <ParticipantsContent
                 projectId={projectId}

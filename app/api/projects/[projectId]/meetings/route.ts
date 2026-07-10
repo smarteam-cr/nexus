@@ -45,6 +45,7 @@ export async function GET(
       isPrimary: true,
       source: true,
       confidence: true,
+      included: true,
       session: {
         select: {
           id: true,
@@ -73,9 +74,10 @@ export async function GET(
       : [];
   const hasTranscriptSet = new Set(sessionsWithTranscript.map((s) => s.id));
 
-  // Sesión primaria más reciente con minuta
+  // Sesión primaria más reciente con minuta (solo miembros: las excluidas por humano
+  // no representan el contexto del proyecto — en el timeline sí se listan, con badge)
   const lastWithMinute = sessionLinks
-    .filter((l) => l.isPrimary && l.session.minute)
+    .filter((l) => l.included && l.isPrimary && l.session.minute)
     .map((l) => l.session)
     .sort((a, b) => b.date.getTime() - a.date.getTime())[0];
 
@@ -122,9 +124,10 @@ export async function GET(
     }
   }
 
-  // 2. Sesión más reciente del proyecto SIN minuta (para auto-trigger del loader)
+  // 2. Sesión más reciente del proyecto SIN minuta (para auto-trigger del loader);
+  //    las excluidas no disparan generación de minuta desde este proyecto
   const latestSessionWithTranscript = sessionLinks
-    .filter((l) => hasTranscriptSet.has(l.session.id))
+    .filter((l) => l.included && hasTranscriptSet.has(l.session.id))
     .map((l) => l.session)
     .sort((a, b) => b.date.getTime() - a.date.getTime())[0];
 
@@ -148,6 +151,7 @@ export async function GET(
     isPrimary: l.isPrimary,
     source: l.source,
     confidence: l.confidence,
+    included: l.included, // false → la UI muestra badge "excluida" (no se oculta)
     hasTranscript: hasTranscriptSet.has(l.session.id),
     minuteStatus: l.session.minute?.status ?? null,
   }));

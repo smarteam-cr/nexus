@@ -710,12 +710,14 @@ export async function syncProjectsForClient(clientId: string): Promise<SyncResul
         return created;
       });
       result.created++;
-      // Proyecto NUEVO → adoptar las sesiones existentes del cliente (huérfanas:
-      // matcheadas al cliente, sin SessionProject) para que el handoff / la pestaña de
-      // reuniones no queden vacíos. Fire-and-forget (no bloquea el sync) + dynamic
-      // import (no arrastra el clasificador al grafo del sync).
-      void import("@/lib/projects/analyze-participants")
-        .then((m) => m.autoClassifyOrphanSessions(clientId))
+      // Proyecto NUEVO → cambió el panorama del cliente: re-clasificar sus sesiones
+      // recientes (huérfanas + links de IA sin revisar; los locks humanos se respetan).
+      // Superset de autoClassifyOrphanSessions: además de adoptar huérfanas, reconsidera
+      // los links del atajo "único proyecto" que antes quedaban permanentes. Fire-and-
+      // forget (no bloquea el sync) + dynamic import (no arrastra el clasificador al
+      // grafo del sync).
+      void import("@/lib/sessions/reclassify")
+        .then((m) => m.reclassifyClientSessions(clientId))
         .catch(() => {});
     }
   }

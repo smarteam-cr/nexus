@@ -55,5 +55,12 @@ export async function POST(
 
   await createDefaultCanvases(project.id);
 
+  // Proyecto nuevo → cambió el panorama del cliente: re-clasificar sus sesiones
+  // recientes (huérfanas + links de IA sin revisar; los locks humanos se respetan).
+  // Fire-and-forget: no bloquea la respuesta.
+  void import("@/lib/sessions/reclassify")
+    .then((m) => m.reclassifyClientSessions(clientId))
+    .catch(() => {});
+
   return NextResponse.json({ project }, { status: 201 });
 }

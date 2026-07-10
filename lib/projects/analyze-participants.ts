@@ -45,9 +45,10 @@ export async function analyzeProjectParticipants(
   });
   if (!project) return { status: "error", reason: "Project not found" };
 
-  // Cargar últimas sesiones vinculadas al proyecto
+  // Cargar últimas sesiones vinculadas al proyecto (solo miembros: included=true;
+  // las excluidas por humano no alimentan el análisis)
   let links = await prisma.sessionProject.findMany({
-    where: { projectId },
+    where: { projectId, included: true },
     orderBy: { session: { date: "desc" } },
     take: MAX_SESSIONS_TO_ANALYZE,
     select: {
@@ -70,7 +71,7 @@ export async function analyzeProjectParticipants(
     if (autoClassified > 0) {
       // Releer links después de la auto-clasificación
       links = await prisma.sessionProject.findMany({
-        where: { projectId },
+        where: { projectId, included: true },
         orderBy: { session: { date: "desc" } },
         take: MAX_SESSIONS_TO_ANALYZE,
         select: {

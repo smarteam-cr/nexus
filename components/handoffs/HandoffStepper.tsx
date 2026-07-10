@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { Modal, Button, Input } from "@/components/ui";
 import { useMe } from "@/hooks/useMe";
 import SessionSelectionReview from "@/components/clients/SessionSelectionReview";
+import { UnreviewedSessionsChip } from "@/components/clients/ProjectSessionsReview";
 
 interface AvailableDeal {
   id: string;
@@ -481,6 +482,9 @@ export default function HandoffStepper() {
                 Revisá las sesiones que lo van a armar y después generá el handoff en el proyecto.
               </p>
             </div>
+            {/* Aviso (nunca bloqueo): en clientes multi-proyecto, links de IA sin confirmar
+                pueden mezclar contexto de otro proyecto. Abre el panel de curación. */}
+            <UnreviewedSessionsChip projectId={created.projectId} />
             <SessionSelectionReview projectId={created.projectId} />
           </div>
         )}
