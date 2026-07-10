@@ -180,6 +180,15 @@ function materialKey(s: {
   });
 }
 
+/**
+ * Records de partner que NUNCA se convierten en Client aunque no matcheen:
+ * los portales internos de Smarteam y los records sin nombre real. Post-mortem
+ * 2026-07-10: crearlos rompió el resolver de sesiones (dos "Smarteam" = token
+ * ambiguo → el cliente Smarteam cayó de 1313 sesiones resueltas a 1). Sus
+ * snapshots se sincronizan igual, solo que sin vincular (invisibles en CS).
+ */
+export const PARTNER_CREATE_SKIP = /^(smarteam([ _].*)?|hub id:.*)$/i;
+
 export async function syncPartnerClients(
   options: { createClients?: boolean } = {},
 ): Promise<PartnerSyncResult> {
@@ -259,6 +268,20 @@ export async function syncPartnerClients(
           if (!clientId && scalars.domain) {
             const hit = byDomain.get(scalars.domain);
             if (hit) { clientId = hit; result.matchedByDomain++; }
+          }
+
+          // Los portales INTERNOS de Smarteam y los records basura NO se convierten
+          // en Client: el resolver de sesiones matchea por nombre/dominio, y un
+          // segundo "Smarteam" vuelve ambiguo el token — el 2026-07-10 eso desplomó
+          // la resolución del cliente Smarteam de 1313 sesiones a 1 (INV1/INV2 rojos).
+          // Tampoco los records SIN dominio NI company asociada: no hay nada con qué
+          // matchearlos — un Client solo-nombre roba sesiones por el fallback débil
+          // de título (caso real: "Alejandro Rodríguez" se llevó 57 sesiones internas).
+          // El snapshot igual se sincroniza (queda sin vincular, invisible en CS).
+          const unmatchable = !scalars.domain && rec.associatedCompanyIds.length === 0;
+          if (!clientId && (PARTNER_CREATE_SKIP.test(name) || unmatchable)) {
+            result.unmatched++;
+            continue;
           }
 
           // Crear Client si no hay match (decisión de producto).
