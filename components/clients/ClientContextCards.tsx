@@ -695,7 +695,7 @@ export default function ClientContextCards({
                 key={run.id}
                 onClick={() => handleOpenHistory(run)}
                 disabled={loadingHistory}
-                title={`${run.agent?.name ?? "Agente"} — ${new Date(run.createdAt).toLocaleString("es-ES")}`}
+                title={`${run.agent?.name ?? "Agente"} — ${new Date(run.createdAt).toLocaleString("es-ES", { hour12: false })}`}
                 className={`shrink-0 flex items-center gap-1 text-2xs px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 ${
                   idx === 0
                     ? "border-brand/40 text-brand/80 bg-brand/5 hover:bg-brand/10"
@@ -712,7 +712,7 @@ export default function ClientContextCards({
                 <span>
                   {new Date(run.createdAt).toLocaleDateString("es-ES", {
                     day: "numeric", month: "short",
-                    hour: "2-digit", minute: "2-digit",
+                    hour: "2-digit", minute: "2-digit", hour12: false,
                   })}
                 </span>
               </button>
@@ -808,6 +808,7 @@ function HistoryModal({
                 year: "numeric",
                 hour: "2-digit",
                 minute: "2-digit",
+                hour12: false,
               })}
             </p>
           </div>

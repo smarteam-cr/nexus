@@ -6,7 +6,7 @@ dotenv.config();
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter } as Parameters<typeof PrismaClient>[0]);
+const prisma = new PrismaClient({ adapter });
 
 // `area` = eje de ANÁLISIS (Ventas/CSE/…). El roleEnum (permiso) arranca en CSE
 // y se asigna por scripts/assign-team-roles.ts.

@@ -59,6 +59,12 @@ async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS
 
     const timeMin = new Date();
     timeMin.setDate(timeMin.getDate() - daysBack);
+    // timeMax = mañana. Sin este tope, `singleEvents: true` expande los eventos
+    // RECURRENTES años hacia el futuro → la DB se llenó de sesiones fechadas
+    // 2037-2038 (65% de la tabla) y la paginación quemaba su presupuesto
+    // (MAX_PAGES_PER_USER) en instancias futuras en vez de eventos reales.
+    const timeMax = new Date();
+    timeMax.setDate(timeMax.getDate() + 1);
 
     const events: MeetEvent[] = [];
     let pageToken: string | undefined = undefined;
@@ -69,6 +75,7 @@ async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS
       const res: { data: { items?: import("googleapis").calendar_v3.Schema$Event[]; nextPageToken?: string | null } } = await calendar.events.list({
         calendarId: "primary",
         timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
         maxResults: PAGE_SIZE,
         singleEvents: true,
         orderBy: "startTime",
@@ -77,7 +84,7 @@ async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS
       });
 
       const items = res.data.items ?? [];
-      processItems(items, userEmail, events);
+      processItems(items, userEmail, events, { timeMin, timeMax });
 
       pageToken = res.data.nextPageToken ?? undefined;
       pagesFetched += 1;
@@ -101,8 +108,10 @@ async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS
 function processItems(
   items: import("googleapis").calendar_v3.Schema$Event[],
   userEmail: string,
-  events: MeetEvent[]
+  events: MeetEvent[],
+  bounds: { timeMin: Date; timeMax: Date }
 ): void {
+  let outOfRange = 0;
   for (const item of items) {
     // Solo eventos con Google Meet
     const confType = item.conferenceData?.conferenceSolution?.key?.type;
@@ -118,6 +127,14 @@ function processItems(
     if (!startStr) continue;
 
     const startDate = new Date(startStr);
+    // Validación de rango (defensa en profundidad del timeMax del fetch): NUNCA
+    // persistir fechas inválidas o fuera de [timeMin, timeMax] — así es imposible
+    // que vuelvan a entrar sesiones futuras (2037-2038) aunque la API o el parseo
+    // cambien. Se cuenta y loguea al final (no por evento, para no inundar logs).
+    if (isNaN(startDate.getTime()) || startDate < bounds.timeMin || startDate > bounds.timeMax) {
+      outOfRange++;
+      continue;
+    }
     const durationMinutes = endStr
       ? Math.round((new Date(endStr).getTime() - startDate.getTime()) / 60000)
       : 0;
@@ -141,6 +158,9 @@ function processItems(
       googleDocId,
       organizerEmail,
     });
+  }
+  if (outOfRange > 0) {
+    console.log(`[google/sync] WARN ${userEmail}: ${outOfRange} eventos con fecha inválida/fuera de rango descartados.`);
   }
 }
 
@@ -187,14 +207,21 @@ export async function syncGoogleMeetSessions(
   // 2. Cargar sesiones ya en DB (con googleDocId actual) → Map O(1) por eventId.
   //    Necesitamos el googleDocId actual para detectar si apareció uno NUEVO
   //    post-reunión y resetear `enrichedAt: null` para que el enrich lo procese.
+  //    IMPORTANTE: se incluyen también las filas PRE-REFACTOR (id "gmeet_…" pero
+  //    googleEventId nulo o source distinto) — antes quedaban fuera del mapa y el
+  //    create() de abajo chocaba con P2002 contra ellas EN CADA corrida, para
+  //    siempre (visible en logs de prod: los mismos IDs fallando en cada boot).
+  //    Para esas filas el eventId se deriva del propio id; el UPDATE las "sana"
+  //    (les escribe googleEventId) preservando su manualClientId.
   const existingByEventId = new Map<string, { id: string; googleDocId: string | null; manualClientId: string | null }>();
   const existingSessions = await prisma.firefliesSession.findMany({
-    where: { source: "google_meet" },
+    where: { OR: [{ source: "google_meet" }, { id: { startsWith: "gmeet_" } }] },
     select: { id: true, googleEventId: true, googleDocId: true, manualClientId: true },
   });
   for (const s of existingSessions) {
-    if (s.googleEventId) {
-      existingByEventId.set(s.googleEventId, { id: s.id, googleDocId: s.googleDocId, manualClientId: s.manualClientId });
+    const eventId = s.googleEventId ?? (s.id.startsWith("gmeet_") ? s.id.slice("gmeet_".length) : null);
+    if (eventId) {
+      existingByEventId.set(eventId, { id: s.id, googleDocId: s.googleDocId, manualClientId: s.manualClientId });
     }
   }
 
@@ -257,9 +284,16 @@ export async function syncGoogleMeetSessions(
               console.log(`[google/sync] Doc descubierto post-sync para ${event.eventId} (${event.title}). enrichedAt reset.`);
             }
           } else {
-            // Sesión nueva
-            await prisma.firefliesSession.create({
-              data: {
+            // Sesión nueva. UPSERT (no create): si otra corrida concurrente creó la
+            // fila entre nuestra precarga del mapa y este write (cooldown reseteado
+            // por deploy, disparo manual en paralelo…), el create fallaba con P2002.
+            // En la rama update NO se toca resolvedClientId: no conocemos el
+            // manualClientId de esa fila (no estaba en el mapa) y recalcularlo con
+            // null podría pisar una asignación manual — la próxima corrida la ve
+            // en el mapa y la actualiza completa por la rama de arriba.
+            await prisma.firefliesSession.upsert({
+              where: { id: sessionId },
+              create: {
                 id: sessionId,
                 title: event.title,
                 date: event.date,
@@ -272,6 +306,16 @@ export async function syncGoogleMeetSessions(
                 // PERF #1: resolver el cliente al crear (sesión nueva → sin override).
                 resolvedClientId: resolveSessionClientId({ title: event.title, participants: allParticipants, manualClientId: null }, categorizeCtx),
               },
+              update: {
+                title: event.title,
+                date: event.date,
+                duration: event.durationMinutes,
+                participants: allParticipants,
+                source: "google_meet",
+                googleEventId: event.eventId,
+                googleDocId: eventDocId,
+                organizerEmail: event.organizerEmail,
+              },
             });
 
             existingByEventId.set(event.eventId, { id: sessionId, googleDocId: eventDocId, manualClientId: null });
@@ -279,7 +323,7 @@ export async function syncGoogleMeetSessions(
           }
         } catch (err) {
           console.log(
-            `[google/sync] Error upserting sesión ${event.eventId}:`,
+            `[google/sync] WARN error persistiendo sesión ${event.eventId} ("${event.title}", ${event.date.toISOString()}):`,
             err instanceof Error ? err.message : err
           );
         }

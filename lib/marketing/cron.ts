@@ -19,30 +19,15 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { findActiveRun, startMarketingRun } from "./runs";
+import { crDateParts } from "@/lib/jobs/time";
 
-const CR_TIMEZONE = "America/Costa_Rica";
 const TICK_MS = 60_000;
 
 let interval: ReturnType<typeof setInterval> | null = null;
 
-/** Partes de fecha/hora en zona CR, sin dependencias nuevas. */
-export function crDateParts(now: Date): { weekday: string; hour: number; dateKey: string } {
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: CR_TIMEZONE,
-    weekday: "short",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    hour12: false,
-  });
-  const parts = Object.fromEntries(fmt.formatToParts(now).map((p) => [p.type, p.value]));
-  return {
-    weekday: parts.weekday ?? "",
-    hour: Number(parts.hour ?? "0") % 24, // hourCycle puede devolver "24" para medianoche
-    dateKey: `${parts.year}-${parts.month}-${parts.day}`,
-  };
-}
+// Movido a lib/jobs/time.ts al generalizar el cron a un registry de jobs —
+// re-export para no romper importadores existentes (scripts).
+export { crDateParts } from "@/lib/jobs/time";
 
 export type CronTickDecision =
   | { fired: true; runId: string }
@@ -83,7 +68,9 @@ export async function tickMarketingCron(now: Date, opts?: { dryRun?: boolean }):
   return { fired: true, runId: run.id };
 }
 
-/** Arranca el intervalo (idempotente). Lo llama instrumentation.ts en el boot. */
+/** LEGACY — reemplazado por el scheduler genérico (lib/jobs/scheduler.ts), que
+ *  registra este tick como job "marketing-weekly" con mecánica idéntica. Se
+ *  conserva por si hay que revertir a una línea en instrumentation.ts. */
 export function startMarketingCron(): void {
   if (interval) return;
   // Asegurar la fila singleton para que el claim del tick siempre tenga contra qué comparar.

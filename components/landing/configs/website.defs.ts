@@ -138,10 +138,10 @@ export const WEBSITE_SECTION_DEFS: BCSectionDef[] = [
     eyebrow: "Inversión",
     theme: "soft",
     sectionType: "web_investment",
-    empty: { moneda: "", lineas: [], extras: [], recurrentes: [], nota: "" },
+    empty: { moneda: "", lineas: [], extras: [], recurrentes: [], nota: "", anchoRecurrente: "normal" },
     agentHint: "Moneda + líneas fase 1 (montos numéricos: el total se suma solo) + extras + recurrente mensual + nota de exclusiones.",
     brief:
-      "Inversión: `moneda` = código de la moneda discutida (ej. 'USD'; si no se mencionó, 'USD'). `lineas` de la fase 1 con `concepto` corto, `detalle` de una línea y `monto` NUMÉRICO limpio con formato '$1,800' o rango '$5,600–6,650' — el sistema SUMA los montos automáticamente para el total, así que NO agregues texto dentro del monto (nada de 'por página' ni 'aprox'); si no hay precio discutido ni derivable, dejá el monto como string vacío \"\". `extras`: opcionales cotizados aparte (mismo formato de monto, con '+' opcional). `recurrentes`: costos mensuales (licencias, mantenimiento) SIEMPRE separados de la inversión única. `nota`: exclusiones o condiciones en pocas palabras (ej. 'impuestos no contemplados'). Fuente / regla: SOLO montos discutidos en el contexto o derivables del alcance — NUNCA números inventados.",
+      "Inversión: `moneda` = código de la moneda discutida (ej. 'USD'; si no se mencionó, 'USD'). `lineas` de la fase 1 con `concepto` corto, `detalle` de una línea y `monto` NUMÉRICO limpio con formato '$1,800' o rango '$5,600–6,650' — el sistema SUMA los montos automáticamente para el total, así que NO agregues texto dentro del monto (nada de 'por página' ni 'aprox'); si no hay precio discutido ni derivable, dejá el monto como string vacío \"\". `extras`: opcionales cotizados aparte (mismo formato de monto, con '+' opcional). `recurrentes`: costos mensuales (licencias, mantenimiento) SIEMPRE separados de la inversión única. `nota`: exclusiones o condiciones en pocas palabras (ej. 'impuestos no contemplados'). `anchoRecurrente`: 'normal' (default) o 'ancho' — poné 'ancho' SOLO si te lo piden explícitamente (ej. 'hacé la card de recurrente mensual más ancha'), para que ocupe más espacio visual. Fuente / regla: SOLO montos discutidos en el contexto o derivables del alcance — NUNCA números inventados.",
     schema: {
       type: "object",
       properties: {
@@ -150,6 +150,7 @@ export const WEBSITE_SECTION_DEFS: BCSectionDef[] = [
         extras: arrayOf({ concepto: str, monto: str, detalle: str }, ["concepto"]),
         recurrentes: arrayOf({ concepto: str, monto: str, detalle: str }, ["concepto"]),
         nota: str,
+        anchoRecurrente: str,
       },
       required: ["lineas"],
     },

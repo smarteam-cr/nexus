@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { withAuth, apiError } from "@/lib/api";
 import { guardInternalUser } from "@/lib/auth/api-guards";
 import { enrichGoogleMeetSessions } from "@/lib/google/meet-enrichment";
@@ -29,7 +30,8 @@ export const POST = withAuth(async (req) => {
     // para que el re-enriquecimiento parta de cero y no quede contenido incorrecto.
     await prisma.firefliesSession.updateMany({
       where: { source: "google_meet", enrichedAt: { not: null } },
-      data: { enrichedAt: null, transcript: null, summary: null },
+      // summary es Json nullable → NULL de SQL requiere el sentinel DbNull.
+      data: { enrichedAt: null, transcript: null, summary: Prisma.DbNull },
     });
   }
 

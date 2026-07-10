@@ -51,6 +51,12 @@ const PROJECT_PROPERTIES = [
   "hs_pipeline",
   "hs_pipeline_stage",    // D.2: etapa actual del pipeline de CS (ancla del cronograma vivo)
   "csl_encargado",        // propiedad custom OWNER = CSE encargado (fuente de verdad de la asignación → visibilidad)
+  // CS360 — dashboard de la CSL (internal names confirmados por discover-partner-clients.ts):
+  "hs_priority",          // low | medium | high
+  "motivo_de_bloqueo",    // enum radio 7 valores ("Cliente pidió pausa", "Atraso por Smarteam", …)
+  "detalle_del_motivo_de_bloqueo", // texto libre "| Desarrollo"
+  "detalle_del_motivo_de_bloqueo__implementaciones", // texto libre "| Implementaciones"
+  "estado_de_adopcion",   // No iniciado | Bajo | Medio | Alto
 ];
 
 // ── Slugs del objeto Proyectos ───────────────────────────────────────────────
@@ -512,12 +518,15 @@ export async function syncProjectsForClient(clientId: string): Promise<SyncResul
         method: "POST",
         path: `/crm/v3/objects/${readSlug}/search`,
         body: {
+          // IN con values: los filtros DENTRO de un filterGroup se AND-ean —
+          // N filtros EQ sobre hs_object_id era insatisfacible para N>1 (y HubSpot
+          // rechaza >6 filtros por grupo), así que el fallback devolvía 0 siempre.
           filterGroups: [{
-            filters: projectIds.map((id) => ({
+            filters: [{
               propertyName: "hs_object_id",
-              operator: "EQ",
-              value: id,
-            })),
+              operator: "IN",
+              values: projectIds.slice(0, 100),
+            }],
           }],
           properties: PROJECT_PROPERTIES,
           limit: 100,
@@ -627,6 +636,21 @@ export async function syncProjectsForClient(clientId: string): Promise<SyncResul
     const hubCreatedAt = createdAtRaw ? new Date(createdAtRaw) : null;
     const hubCreatedAtValid = hubCreatedAt && !isNaN(hubCreatedAt.getTime()) ? hubCreatedAt : null;
 
+    // ── CS360: propiedades operativas para el dashboard de la CSL ─────────
+    // Valores CRUDOS de HubSpot (labels ES en la UI, no acá). Ausente → null
+    // (un select sin valor NO es "low"/"on_track"). El detalle prefiere el campo
+    // "| Desarrollo" y cae al "| Implementaciones" si aquel está vacío.
+    const trimOrNull = (v: string | null | undefined) => (v ?? "").trim() || null;
+    const csOps = {
+      hubspotPriority: trimOrNull(props.hs_priority),
+      hubspotStatus: trimOrNull(props.hs_status),
+      hubspotBlockReason: trimOrNull(props.motivo_de_bloqueo),
+      hubspotBlockDetail:
+        trimOrNull(props.detalle_del_motivo_de_bloqueo) ??
+        trimOrNull(props.detalle_del_motivo_de_bloqueo__implementaciones),
+      hubspotAdoptionState: trimOrNull(props.estado_de_adopcion),
+    };
+
     // Buscar existente por hubspotServiceId o por nombre (evitar duplicados)
     const existing =
       (await prisma.project.findUnique({ where: { hubspotServiceId: project.id } })) ??
@@ -652,30 +676,39 @@ export async function syncProjectsForClient(clientId: string): Promise<SyncResul
           hubspotPipelineStageId:    stageId,
           hubspotPipelineStageLabel: stageLabel,
           hubspotStageSyncedAt:      stageId ? new Date() : null,
+          ...csOps,
         },
       });
       result.updated++;
     } else {
-      const newProject = await prisma.project.create({
-        data: {
-          clientId,
-          name: projectName,
-          hubspotServiceId: project.id,
-          serviceType: mapping.serviceType,
-          projectType: mapping.projectType,
-          tags: mapping.hubTag ? [mapping.hubTag] : [],
-          hubspotOwnerId:      hubOwnerId,
-          hubspotOwnerName:    ownerName,
-          hubspotOwnerEmail:   ownerEmail,
-          hubspotCreatedAt:    hubCreatedAtValid,
-          hubspotPipelineName: pipelineName,
-          hubspotPipelineStageId:    stageId,
-          hubspotPipelineStageLabel: stageLabel,
-          hubspotStageSyncedAt:      stageId ? new Date() : null,
-          status: "active",
-        },
+      // Proyecto + canvases default en UNA transacción: si el proceso muere entre
+      // ambos, quedaba un proyecto SIN canvases para siempre (la próxima corrida
+      // lo encuentra existente → rama update → nunca los crea). Todo-o-nada:
+      // si algo falla, el próximo sync lo re-crea completo.
+      const newProject = await prisma.$transaction(async (tx) => {
+        const created = await tx.project.create({
+          data: {
+            clientId,
+            name: projectName,
+            hubspotServiceId: project.id,
+            serviceType: mapping.serviceType,
+            projectType: mapping.projectType,
+            tags: mapping.hubTag ? [mapping.hubTag] : [],
+            hubspotOwnerId:      hubOwnerId,
+            hubspotOwnerName:    ownerName,
+            hubspotOwnerEmail:   ownerEmail,
+            hubspotCreatedAt:    hubCreatedAtValid,
+            hubspotPipelineName: pipelineName,
+            hubspotPipelineStageId:    stageId,
+            hubspotPipelineStageLabel: stageLabel,
+            hubspotStageSyncedAt:      stageId ? new Date() : null,
+            ...csOps,
+            status: "active",
+          },
+        });
+        await createDefaultCanvases(created.id, tx);
+        return created;
       });
-      await createDefaultCanvases(newProject.id);
       result.created++;
       // Proyecto NUEVO → adoptar las sesiones existentes del cliente (huérfanas:
       // matcheadas al cliente, sin SessionProject) para que el handoff / la pestaña de

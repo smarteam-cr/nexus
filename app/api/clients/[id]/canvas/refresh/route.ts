@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
@@ -104,7 +105,9 @@ export async function POST(
   const sessionParts: string[] = [];
   for (const s of sessions) {
     const date = s.date?.toLocaleDateString("es-ES", { day: "numeric", month: "short" }) ?? "";
-    sessionParts.push(`--- ${s.title} (${date}) ---\n${(s.summary ?? "").slice(0, 500)}`);
+    // summary es Json (string u objeto según la fuente) — normalizar a texto.
+    const summaryText = typeof s.summary === "string" ? s.summary : s.summary != null ? JSON.stringify(s.summary) : "";
+    sessionParts.push(`--- ${s.title} (${date}) ---\n${summaryText.slice(0, 500)}`);
   }
 
   const manualParts = recentCards.map((c) => `**${c.title}:** ${c.content.slice(0, 300)}`);
@@ -184,10 +187,9 @@ Analiza toda la información y genera sugerencias para el canvas de empresa. Sol
       messages: [{ role: "user", content: userMessage }],
     });
 
-    const text = msg.content
-      .filter((b): b is { type: "text"; text: string } => b.type === "text")
-      .map((b) => b.text)
-      .join("");
+    // (b.type === "text" narrowea al TextBlock del SDK — un predicate custom con
+    // shape propio deja de compilar cuando el SDK agrega campos requeridos.)
+    const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
@@ -220,15 +222,19 @@ Analiza toda la información y genera sugerencias para el canvas de empresa. Sol
 
     if (validSuggestions.length > 0) {
       await prisma.canvasSuggestion.createMany({
-        data: validSuggestions.map((s) => ({
-          clientId,
-          section: s.section,
-          current: (clientCanvas as Record<string, unknown>)[s.section] ?? null,
-          suggested: s.suggested as object,
-          source: "refresh",
-          sourceLabel: s.source_label ?? "Actualización con IA",
-          status: "pending",
-        })),
+        data: validSuggestions.map((s) => {
+          const cur = (clientCanvas as unknown as Record<string, unknown>)[s.section];
+          return {
+            clientId,
+            section: s.section,
+            // Json nullable: null explícito requiere el sentinel de Prisma.
+            current: cur == null ? Prisma.JsonNull : (cur as Prisma.InputJsonValue),
+            suggested: s.suggested as Prisma.InputJsonValue,
+            source: "refresh",
+            sourceLabel: s.source_label ?? "Actualización con IA",
+            status: "pending",
+          };
+        }),
       });
     }
 

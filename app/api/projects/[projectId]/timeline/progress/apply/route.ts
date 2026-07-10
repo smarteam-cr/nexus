@@ -30,6 +30,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
+import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
 
 type ProgressRow = { id: string; status: string; actualStart: Date | null; actualEnd: Date | null };
 
@@ -62,7 +63,7 @@ export async function POST(
 
   const tl = await prisma.projectTimeline.findUnique({
     where: { projectId },
-    select: { id: true },
+    select: { id: true, project: { select: { clientId: true } } },
   });
   if (!tl) return NextResponse.json({ error: "No hay cronograma" }, { status: 404 });
 
@@ -219,6 +220,28 @@ export async function POST(
       }
     },
     { maxWait: 10000, timeout: 30000 },
+  );
+
+  // Evento RESUMEN para el watchdog (best-effort, post-tx). Un solo evento por
+  // confirmación — el detalle fino ya quedó en el TimelineChange kind=PROGRESS.
+  await emitTimelineEventsSafe(
+    prisma,
+    {
+      projectId,
+      clientId: tl.project.clientId,
+      timelineId: tl.id,
+      actorEmail: guard.user.email ?? null,
+      source: "PROGRESS_APPLY",
+    },
+    [
+      {
+        entityType: "TIMELINE",
+        entityId: tl.id,
+        label: "Avance confirmado",
+        action: "PROGRESS_APPLIED",
+        after: { phasesDone, tasksDone, tasksSuspended, currentPhaseId },
+      },
+    ],
   );
 
   return NextResponse.json({ applied: true, phasesDone, tasksDone, tasksSuspended });

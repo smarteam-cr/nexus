@@ -40,6 +40,13 @@ const HUBSPOT_SCOPES = [
   "settings.users.read",
 ].join(" ");
 
+// Scopes OPCIONALES (optional_scope): se piden pero NO rompen el OAuth si el
+// portal no los concede. `social` es un scope DEPRECADO de HubSpot (API legacy de
+// broadcast, para dejar posts sociales como borrador) — va acá a propósito para
+// que, si HubSpot lo elimina algún día, no tumbe la conexión entera (CRM/tickets/
+// proyectos). Marcado como Opcional también en la config de la app pública.
+const HUBSPOT_OPTIONAL_SCOPES = ["social"].join(" ");
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const clientId = searchParams.get("clientId");
@@ -63,6 +70,7 @@ export async function GET(request: NextRequest) {
     client_id: process.env.HUBSPOT_CLIENT_ID!,
     redirect_uri: process.env.HUBSPOT_REDIRECT_URI!,
     scope: HUBSPOT_SCOPES,
+    optional_scope: HUBSPOT_OPTIONAL_SCOPES,
     response_type: "code",
     ...(state ? { state } : {}),
   });

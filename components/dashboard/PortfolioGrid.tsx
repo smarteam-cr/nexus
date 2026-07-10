@@ -69,6 +69,22 @@ function severityScore(r: PortfolioRow): number {
   return v;
 }
 
+// Cuántos "agentes"/artefactos de setup tiene el proyecto — handoff/kickoff/
+// cronograma (publicado pesa más que borrador)/procesos (a nivel cliente). Ordena
+// "Sin datos" y "Saludable" con los más avanzados arriba: antes era alfabético puro,
+// y un cliente con trabajo real generado (handoff+kickoff+cronograma) podía terminar
+// hundido al fondo de una lista larga — o en el caso de "Saludable", dentro de una
+// sección que además arranca colapsada.
+function setupScore(r: PortfolioRow): number {
+  const s = r.setup;
+  return (
+    (s.handoff ? 1 : 0) +
+    (s.kickoff ? 1 : 0) +
+    (s.cronograma === "publicado" ? 1 : s.cronograma === "borrador" ? 0.5 : 0) +
+    (s.procesos ? 1 : 0)
+  );
+}
+
 // Atraso concreto para la tarjeta. null si no hay atraso real (p.ej. flag manual sin vencimiento).
 function delayLabel(s: Summary): string | null {
   // plural() ya incluye el número (ej. "12 días"), no anteponer otro.
@@ -110,13 +126,24 @@ function groupByClient(items: PortfolioRow[]): ClientGroup[] {
   });
 }
 
-export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRow[] }) {
+export default function PortfolioGrid({
+  rows: initialRows,
+  renderClientChips,
+}: {
+  rows: PortfolioRow[];
+  /** Éxito del cliente: chips de señales HubSpot por cliente (🧊 frío, 🎫 tickets,
+   *  🔄 renovación…) junto al nombre. Opcional — el /dashboard clásico no lo pasa. */
+  renderClientChips?: (clientId: string) => ReactNode;
+}) {
   const toast = useToast();
   const [rows, setRows] = useState(initialRows);
   const [q, setQ] = useState("");
   const [cseFilter, setCseFilter] = useState("all");
   const [editing, setEditing] = useState<string | null>(null);
-  const [showHealthy, setShowHealthy] = useState(false);
+  // Expandida por defecto: colapsada escondía clientes reales (p.ej. uno con
+  // handoff+kickoff+cronograma ya generados pero sin atrasos) detrás de un clic
+  // extra — el toggle se conserva para quien quiera plegarla.
+  const [showHealthy, setShowHealthy] = useState(true);
 
   const cseOptions = useMemo(
     () => [...new Set(rows.map((r) => r.cseName).filter((n): n is string => !!n))].sort(),
@@ -147,8 +174,8 @@ export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRo
       else if (!isScopeAlert(r)) healthy.push(r); // on-time pero con alcance excedido → solo Sección 2, no "sano"
     }
     action.sort((a, b) => severityScore(b) - severityScore(a));
-    nodata.sort((a, b) => a.projectName.localeCompare(b.projectName));
-    healthy.sort((a, b) => a.projectName.localeCompare(b.projectName));
+    nodata.sort((a, b) => setupScore(b) - setupScore(a) || a.projectName.localeCompare(b.projectName));
+    healthy.sort((a, b) => setupScore(b) - setupScore(a) || a.projectName.localeCompare(b.projectName));
     const scopeAlerts = filtered.filter(isScopeAlert).sort((a, b) => scopeMag(b) - scopeMag(a));
     return { action, nodata, healthy, scopeAlerts };
   }, [filtered]);
@@ -231,7 +258,7 @@ export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRo
           <div className="space-y-5">
             {groupByClient(action).map((g) => (
               <div key={g.clientId} className="space-y-2">
-                <ClientLabel g={g} />
+                <ClientLabel g={g} chips={renderClientChips?.(g.clientId)} />
                 {g.items.map((r) => (
                   <ActionCard key={r.projectId} r={r} editing={editing} setEditing={setEditing} onSetHealth={setHealth} />
                 ))}
@@ -247,7 +274,7 @@ export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRo
           <SectionHeader icon="💰" title="Entregando de más" count={scopeAlerts.length} sub="alcance excedido vs lo vendido" />
           <div className="bg-surface border border-line rounded-xl divide-y divide-line overflow-hidden">
             {groupByClient(scopeAlerts).flatMap((g) => [
-              <ClientHeaderRow key={`h-${g.clientId}`} g={g} />,
+              <ClientHeaderRow key={`h-${g.clientId}`} g={g} chips={renderClientChips?.(g.clientId)} />,
               ...g.items.map((r) => <ScopeRow key={r.projectId} r={r} />),
             ])}
           </div>
@@ -263,6 +290,7 @@ export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRo
               <ClientHeaderRow
                 key={`h-${g.clientId}`}
                 g={g}
+                chips={renderClientChips?.(g.clientId)}
                 right={<SetupPill state={g.items[0].setup.procesos ? "done" : "missing"} label={g.items[0].setup.procesos ? "✓ Procesos" : "Sin procesos"} />}
               />,
               ...g.items.map((r) => <NodataRow key={r.projectId} r={r} />),
@@ -296,7 +324,7 @@ export default function PortfolioGrid({ rows: initialRows }: { rows: PortfolioRo
         {showHealthy && healthy.length > 0 && (
           <div className="mt-2 bg-surface border border-line rounded-xl divide-y divide-line overflow-hidden">
             {groupByClient(healthy).flatMap((g) => [
-              <ClientHeaderRow key={`h-${g.clientId}`} g={g} />,
+              <ClientHeaderRow key={`h-${g.clientId}`} g={g} chips={renderClientChips?.(g.clientId)} />,
               ...g.items.map((r) => <HealthyRow key={r.projectId} r={r} />),
             ])}
           </div>
@@ -333,22 +361,26 @@ function SectionHeader({ icon, title, count, sub }: { icon: string; title: strin
 }
 
 // Encabezado de cliente para la sección de tarjetas (label arriba del grupo).
-function ClientLabel({ g }: { g: ClientGroup }) {
+function ClientLabel({ g, chips }: { g: ClientGroup; chips?: ReactNode }) {
   return (
-    <Link href={`/clients/${g.clientId}`} className="inline-flex items-baseline gap-1.5 px-2 py-0.5 rounded bg-blue-500/[0.06] text-[11px] font-semibold uppercase tracking-wide text-fg-secondary hover:bg-blue-500/10 hover:text-brand transition-colors">
-      {g.clientCompany || g.clientName}
-      {g.items.length > 1 && <span className="text-[10px] font-normal normal-case text-fg-muted">· {plural(g.items.length, "proyecto", "proyectos")}</span>}
-    </Link>
+    <span className="inline-flex items-center gap-2">
+      <Link href={`/clients/${g.clientId}`} className="inline-flex items-baseline gap-1.5 px-2 py-0.5 rounded bg-blue-500/[0.06] text-[11px] font-semibold uppercase tracking-wide text-fg-secondary hover:bg-blue-500/10 hover:text-brand transition-colors">
+        {g.clientCompany || g.clientName}
+        {g.items.length > 1 && <span className="text-[10px] font-normal normal-case text-fg-muted">· {plural(g.items.length, "proyecto", "proyectos")}</span>}
+      </Link>
+      {chips}
+    </span>
   );
 }
 
 // Encabezado de cliente para las secciones de filas compactas (fila con fondo azul muy tenue).
 // `right` permite colgar info a nivel CLIENTE (p.ej. el pill de procesos, que es compartido).
-function ClientHeaderRow({ g, right }: { g: ClientGroup; right?: ReactNode }) {
+function ClientHeaderRow({ g, right, chips }: { g: ClientGroup; right?: ReactNode; chips?: ReactNode }) {
   return (
     <Link href={`/clients/${g.clientId}`} className="flex items-center gap-2 px-4 py-1.5 bg-blue-500/[0.06] hover:bg-blue-500/10 transition-colors">
       <span className="text-[11px] font-semibold uppercase tracking-wide text-fg-secondary truncate">{g.clientCompany || g.clientName}</span>
       {g.items.length > 1 && <span className="text-[10px] text-fg-muted">· {g.items.length}</span>}
+      {chips}
       {right && <span className="ml-auto flex-shrink-0">{right}</span>}
     </Link>
   );
@@ -369,6 +401,22 @@ function SetupPill({ state, label }: { state: "done" | "draft" | "missing"; labe
 // ?tab= al montar y restaura ese proyecto — el filtro de visibles del cliente coincide con el
 // del panel, así que el projectId siempre existe en el rail.
 const projectHref = (r: PortfolioRow) => `/clients/${r.clientId}?tab=${r.projectId}`;
+
+// CTA hacia el portal de Customer Success del cliente (/customer-success/[clientId]) —
+// distinto del link al workspace interno (projectHref). Nunca anidado dentro de otro
+// <Link> (HTML inválido): en las filas que eran un <Link> de fila completa, ese <Link>
+// ahora envuelve solo el contenido principal y este CTA queda como hermano.
+function ClientPortalLink({ clientId }: { clientId: string }) {
+  return (
+    <Link
+      href={`/customer-success/${clientId}`}
+      className="inline-flex items-center gap-1 text-[10px] font-medium text-fg-muted hover:text-brand transition-colors whitespace-nowrap flex-shrink-0"
+      title="Ver portal del cliente"
+    >
+      🧭 Portal
+    </Link>
+  );
+}
 
 // ── Sección 1: tarjeta rica ──
 function ActionCard({
@@ -398,7 +446,10 @@ function ActionCard({
           </Link>
           <div className="text-[11px] text-fg-muted truncate">{r.cseName || "sin CSE"}</div>
         </div>
-        <HealthChip r={r} editing={editing} setEditing={setEditing} onSetHealth={onSetHealth} />
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <ClientPortalLink clientId={r.clientId} />
+          <HealthChip r={r} editing={editing} setEditing={setEditing} onSetHealth={onSetHealth} />
+        </div>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
@@ -446,13 +497,16 @@ function ScopeRow({ r }: { r: PortfolioRow }) {
     s.weeksDelta > 0 && `+${s.weeksDelta} sem`,
   ].filter(Boolean).join(" · ");
   return (
-    <Link href={projectHref(r)} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors">
-      <div className="min-w-0">
-        <span className="text-sm font-medium text-fg">{r.projectName}</span>
-        <span className="text-[11px] text-fg-muted"> · {r.cseName || "sin CSE"}</span>
-      </div>
-      <span className="text-xs font-semibold text-amber-600 whitespace-nowrap">{parts} <span className="text-fg-muted font-normal">vs vendido</span></span>
-    </Link>
+    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors">
+      <Link href={projectHref(r)} className="flex-1 min-w-0 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <span className="text-sm font-medium text-fg">{r.projectName}</span>
+          <span className="text-[11px] text-fg-muted"> · {r.cseName || "sin CSE"}</span>
+        </div>
+        <span className="text-xs font-semibold text-amber-600 whitespace-nowrap">{parts} <span className="text-fg-muted font-normal">vs vendido</span></span>
+      </Link>
+      <ClientPortalLink clientId={r.clientId} />
+    </div>
   );
 }
 
@@ -461,33 +515,39 @@ function NodataRow({ r }: { r: PortfolioRow }) {
   // weakBaseline (tiene línea base pero débil) NO es setup pendiente → nota simple, sin checklist.
   if (r.summary.hasBaseline) {
     return (
-      <Link href={projectHref(r)} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors">
-        <div className="min-w-0">
-          <span className="text-sm text-fg">{r.projectName}</span>
-          <span className="text-[11px] text-fg-muted"> · {r.cseName || "sin CSE"}</span>
-        </div>
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-fg-muted whitespace-nowrap">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400/50" />Línea base sin validar
-        </span>
-      </Link>
+      <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors">
+        <Link href={projectHref(r)} className="flex-1 min-w-0 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <span className="text-sm text-fg">{r.projectName}</span>
+            <span className="text-[11px] text-fg-muted"> · {r.cseName || "sin CSE"}</span>
+          </div>
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-fg-muted whitespace-nowrap">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400/50" />Línea base sin validar
+          </span>
+        </Link>
+        <ClientPortalLink clientId={r.clientId} />
+      </div>
     );
   }
   const s = r.setup;
   return (
-    <Link href={projectHref(r)} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors">
-      <div className="min-w-0">
-        <span className="text-sm text-fg">{r.projectName}</span>
-        <span className="text-[11px] text-fg-muted"> · {r.cseName || "sin CSE"}</span>
-      </div>
-      <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
-        <SetupPill state={s.handoff ? "done" : "missing"} label={s.handoff ? "✓ Handoff" : "Sin handoff"} />
-        <SetupPill state={s.kickoff ? "done" : "missing"} label={s.kickoff ? "✓ Kickoff" : "Sin kickoff"} />
-        <SetupPill
-          state={s.cronograma === "publicado" ? "done" : s.cronograma === "borrador" ? "draft" : "missing"}
-          label={s.cronograma === "publicado" ? "✓ Cronograma" : s.cronograma === "borrador" ? "Cronograma sin subir" : "Sin cronograma"}
-        />
-      </div>
-    </Link>
+    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors">
+      <Link href={projectHref(r)} className="flex-1 min-w-0 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <span className="text-sm text-fg">{r.projectName}</span>
+          <span className="text-[11px] text-fg-muted"> · {r.cseName || "sin CSE"}</span>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+          <SetupPill state={s.handoff ? "done" : "missing"} label={s.handoff ? "✓ Handoff" : "Sin handoff"} />
+          <SetupPill state={s.kickoff ? "done" : "missing"} label={s.kickoff ? "✓ Kickoff" : "Sin kickoff"} />
+          <SetupPill
+            state={s.cronograma === "publicado" ? "done" : s.cronograma === "borrador" ? "draft" : "missing"}
+            label={s.cronograma === "publicado" ? "✓ Cronograma" : s.cronograma === "borrador" ? "Cronograma sin subir" : "Sin cronograma"}
+          />
+        </div>
+      </Link>
+      <ClientPortalLink clientId={r.clientId} />
+    </div>
   );
 }
 
@@ -499,15 +559,18 @@ function HealthyRow({ r }: { r: PortfolioRow }) {
     ? { label: "Completado", dot: "bg-gray-400", chip: "text-fg-muted bg-surface-muted border border-line" }
     : HEALTH_META[r.summary.health.resolved as Health];
   return (
-    <Link href={projectHref(r)} className="flex items-center justify-between gap-3 px-4 py-2 hover:bg-surface-muted/40 transition-colors opacity-85">
-      <div className="min-w-0">
-        <span className="text-sm text-fg">{r.projectName}</span>
-        <span className="text-[11px] text-fg-muted"> · {r.cseName || "—"}</span>
-      </div>
-      <span className={`inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full ${badge.chip}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />{badge.label}
-      </span>
-    </Link>
+    <div className="flex items-center gap-3 px-4 py-2 hover:bg-surface-muted/40 transition-colors opacity-85">
+      <Link href={projectHref(r)} className="flex-1 min-w-0 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <span className="text-sm text-fg">{r.projectName}</span>
+          <span className="text-[11px] text-fg-muted"> · {r.cseName || "—"}</span>
+        </div>
+        <span className={`inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full ${badge.chip}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />{badge.label}
+        </span>
+      </Link>
+      <ClientPortalLink clientId={r.clientId} />
+    </div>
   );
 }
 

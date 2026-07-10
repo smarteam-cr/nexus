@@ -27,7 +27,9 @@ export interface EnrichedClientMatcher {
 // ── Matcher para un solo cliente ──────────────────────────────────────────────
 
 export function sessionMatchesClient(
-  session: RawTranscript,
+  // Solo usa título + participantes — el Pick permite pasar filas de
+  // FirefliesSession directamente sin casts (los callers no tienen id/date/duration).
+  session: Pick<RawTranscript, "title" | "participants">,
   matcher: EnrichedClientMatcher,
   teamEmails?: Set<string>
 ): boolean {

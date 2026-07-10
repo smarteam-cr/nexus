@@ -183,10 +183,15 @@ export async function regenerateSectionData(
 
   // Regla de idioma: si la propuesta declara idioma no-español, TODO el contenido va
   // en ese idioma; en español (o sin declarar) aplica el estilo tuteo del repo.
+  // AUTO-CORRECCIÓN (obligatoria en ambas ramas): el `currentData` puede venir de una
+  // generación previa que quedó en un idioma distinto al declarado (deriva entre
+  // secciones) — la edición por IA es la oportunidad de corregirlo, no de perpetuarlo.
   const langRule =
     lang && !lang.startsWith("es") // startsWith: "es-419"/"es-mx" son español (simetría con i18n.ts)
-      ? `IDIOMA (OBLIGATORIO): TODO el contenido va en el idioma de la propuesta: "${lang}" (código ISO 639-1). Mantené el idioma del contenido actual — NO lo traduzcas al español.`
-      : `IDIOMA: mantené el idioma del contenido actual (por defecto, español).
+      ? `IDIOMA (OBLIGATORIO): TODO el contenido va en el idioma de la propuesta: "${lang}" (código ISO 639-1).
+Si el contenido ACTUAL de esta sección está en un idioma distinto (p.ej. quedó en español por error), TRADUCILO por completo a "${lang}" como parte de esta edición — no lo dejes mixto ni lo dejes en el idioma incorrecto.`
+      : `IDIOMA: la propuesta es en español.
+Si el contenido ACTUAL de esta sección está en OTRO idioma (p.ej. quedó en inglés por error), TRADUCILO por completo al español como parte de esta edición — no lo dejes mixto ni lo dejes en el idioma incorrecto.
 ESTILO en español (OBLIGATORIO): TUTEO neutro (segunda persona con "tú"): "Transforma", "centraliza", "optimiza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "centralizá", "tenés", "querés", "podés" ni "vos".`;
 
   const msg = await anthropic.messages.create({

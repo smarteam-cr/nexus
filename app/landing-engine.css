@@ -382,6 +382,9 @@
 .stl .stl-inv-extra-detail { font-size: 12px; color: var(--text-2); line-height: 1.5; margin: 8px 0 0; }
 .stl .stl-inv-extra-amount { font-family: var(--font-montserrat), system-ui, sans-serif; font-weight: 700; font-size: 15px; color: var(--blue); margin-top: 10px; }
 .stl .stl-inv-monthly { background: var(--dark-bg); border-radius: 14px; padding: 18px 20px; color: var(--dark-text); }
+/* anchoRecurrente: "ancho" — la card ocupa 2 columnas del grid .stl-inv-below
+   (auto-fit minmax(240px,1fr)) cuando hay espacio disponible en la fila. */
+.stl .stl-inv-monthly--wide { grid-column: span 2; }
 .stl .stl-inv-monthly-title { font-family: var(--font-montserrat), system-ui, sans-serif; font-weight: 700; font-size: 14px; color: var(--teal); margin-bottom: 10px; }
 .stl .stl-inv-monthly-row { font-size: 13px; line-height: 1.6; color: var(--dark-text-2); }
 .stl .stl-inv-monthly-row strong { color: #fff; }
@@ -564,4 +567,36 @@
 @media (prefers-reduced-motion: reduce) {
   .stl .reveal { opacity: 1 !important; transform: none !important; }
   .stl .hero-backdrop::before, .stl .hero-backdrop::after { transform: none !important; }
+}
+
+/* ── Modo PDF (Puppeteer, export de Business Case) ──────────────────────────
+   Aplicada por app/print/business-case/[id]/page.tsx a un wrapper propio (NO
+   @media print: page.pdf() de Puppeteer ya emula "print" internamente, pero
+   controlarlo con una clase explícita evita afectar accidentalmente un futuro
+   Ctrl+P del navegador sobre esta misma vista). */
+.stl-pdf-mode, .stl-pdf-mode * {
+  animation: none !important;
+  transition: none !important;
+}
+.stl-pdf-mode .reveal { opacity: 1 !important; transform: none !important; }
+.stl-pdf-mode .hero-backdrop::before, .stl-pdf-mode .hero-backdrop::after { transform: none !important; }
+.stl-pdf-mode, .stl-pdf-mode * {
+  /* Fuerza que los fondos oscuros/degradados SÍ se impriman — el default de casi
+     todos los motores de impresión es "ahorrar tinta" quitando fondos. */
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+  color-adjust: exact;
+}
+/* El PDF se genera CORRIDO (una sola página continua del alto exacto del contenido
+   — ver export-pdf/route.ts), NO paginado en A4. Por eso NO hay reglas de
+   break-inside/orphans/widows: no hay cortes de página que evitar. El padding del
+   diseño web (`clamp(48px,7vw,88px)`/`clamp(80px,12vh,140px)`) es generoso para el
+   scroll con sensación de lujo; en el PDF lo compactamos un poco para un ritmo más
+   apretado entre secciones sin huecos exagerados. */
+.stl-pdf-mode .stl-sec { padding: 30px 0 !important; }
+.stl-pdf-mode .stl-sec.hero-backdrop { padding: 44px 0 !important; }
+.stl-pdf-mode .stl-overlay,
+.stl-pdf-mode .stl-drag-handle,
+.stl-pdf-mode .stl-hidden-badge {
+  display: none !important; /* cinturón y tiradores: mode="read" ya no los renderiza */
 }

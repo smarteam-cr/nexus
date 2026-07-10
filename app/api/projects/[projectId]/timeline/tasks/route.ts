@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import type { TaskParty, TimelineTaskType } from "@prisma/client";
+import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
 
 const PARTIES = ["CLIENTE", "SMARTEAM", "AMBOS", "DEV"] as const;
 const TYPES = ["SESSION", "TASK"] as const;
@@ -59,7 +60,11 @@ export async function POST(
   // Ownership por traversal: la fase debe pertenecer al timeline de ESTE proyecto.
   const phase = await prisma.timelinePhase.findFirst({
     where: { id: phaseId, timeline: { projectId } },
-    select: { id: true, durationWeeks: true },
+    select: {
+      id: true,
+      durationWeeks: true,
+      timeline: { select: { id: true, project: { select: { clientId: true } } } },
+    },
   });
   if (!phase) {
     return NextResponse.json({ error: "Fase no encontrada en este proyecto" }, { status: 404 });
@@ -73,6 +78,27 @@ export async function POST(
     data: { phaseId, title, weekIndex, order, party, type, source: "HUMAN", status: "PENDING" },
     select: { id: true, title: true, weekIndex: true, order: true, party: true, type: true, status: true, source: true },
   });
+
+  // Evento crudo para el watchdog (best-effort).
+  await emitTimelineEventsSafe(
+    prisma,
+    {
+      projectId,
+      clientId: phase.timeline.project.clientId,
+      timelineId: phase.timeline.id,
+      actorEmail: guard.user.email ?? null,
+      source: "UI_PATCH",
+    },
+    [
+      {
+        entityType: "TASK",
+        entityId: created.id,
+        label: created.title,
+        action: "CREATED",
+        after: { weekIndex: created.weekIndex, party: created.party, type: created.type },
+      },
+    ],
+  );
 
   return NextResponse.json({ task: created }, { status: 201 });
 }

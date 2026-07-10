@@ -1,6 +1,8 @@
 "use client";
 
-/** Ideas de campañas (PPC / Google Search) — aprobar / descartar / borrar. */
+/** Ideas de SEM (campañas de pago: PPC / Google Search) — aprobar / descartar / borrar.
+ * El modelo Prisma sigue siendo CampaignIdea; esto es relabel de UI ("campaña"
+ * queda reservado para el concepto cross-área, ver ContentPillar.isCampaign). */
 import { useState, useEffect, useCallback } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
@@ -43,7 +45,7 @@ export default function CampaignsClient({ canEdit }: { canEdit: boolean }) {
       const d = await fetchJson<{ campaigns: CampaignRow[] }>(`/api/marketing/campaigns?status=${tab}`);
       setRows(d.campaigns);
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudieron cargar las campañas.");
+      toast.error(e instanceof ApiError ? e.message : "No se pudieron cargar las ideas de SEM.");
     } finally {
       setLoading(false);
     }
@@ -61,7 +63,7 @@ export default function CampaignsClient({ canEdit }: { canEdit: boolean }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      toast.success(action === "approve" ? "Campaña aprobada." : "Campaña descartada.");
+      toast.success(action === "approve" ? "Idea de SEM aprobada." : "Idea de SEM descartada.");
       load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo procesar.");
@@ -73,7 +75,7 @@ export default function CampaignsClient({ canEdit }: { canEdit: boolean }) {
   const remove = async (id: string) => {
     try {
       await fetchJson(`/api/marketing/campaigns/${id}`, { method: "DELETE" });
-      toast.info("Campaña eliminada.");
+      toast.info("Idea de SEM eliminada.");
       load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar.");
@@ -103,8 +105,8 @@ export default function CampaignsClient({ canEdit }: { canEdit: boolean }) {
       ) : rows.length === 0 ? (
         <EmptyState
           variant="dashed"
-          title={tab === "PENDING" ? "No hay campañas pendientes" : tab === "APPROVED" ? "No hay campañas aprobadas" : "No hay campañas descartadas"}
-          description={tab === "PENDING" ? "Corré el motor desde Contenido para generar ideas de campañas." : undefined}
+          title={tab === "PENDING" ? "No hay ideas de SEM pendientes" : tab === "APPROVED" ? "No hay ideas de SEM aprobadas" : "No hay ideas de SEM descartadas"}
+          description={tab === "PENDING" ? "Corré el motor desde Contenido para generar ideas de SEM." : undefined}
         />
       ) : (
         <ul className="space-y-2">
@@ -162,7 +164,7 @@ export default function CampaignsClient({ canEdit }: { canEdit: boolean }) {
           setConfirmDeleteId(null);
           if (id) await remove(id);
         }}
-        title="¿Borrar esta campaña?"
+        title="¿Borrar esta idea de SEM?"
         description="Se borra definitivamente. Esta acción no se puede deshacer."
         confirmLabel="Borrar"
       />

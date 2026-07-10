@@ -17,6 +17,7 @@ interface PillarRow {
   description: string | null;
   origin: "HUMAN" | "AGENT";
   active: boolean;
+  isCampaign: boolean;
   _count: { ideas: number };
 }
 interface SuggestionRow {
@@ -143,6 +144,22 @@ export default function TemasClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
+  // Marca/desmarca el tema como campaña. Solo sesga la generación si además está
+  // activo (buildGenerationInput filtra active primero, luego isCampaign).
+  const toggleCampaign = async (r: PillarRow) => {
+    try {
+      await fetchJson(`/api/marketing/pillars/${r.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isCampaign: !r.isCampaign }),
+      });
+      toast.info(!r.isCampaign ? "Tema marcado como campaña — la generación lo priorizará." : "Campaña desactivada.");
+      load();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar.");
+    }
+  };
+
   const remove = async (id: string) => {
     try {
       await fetchJson(`/api/marketing/pillars/${id}`, { method: "DELETE" });
@@ -235,6 +252,11 @@ export default function TemasClient({ canEdit }: { canEdit: boolean }) {
                         Inactivo
                       </Badge>
                     )}
+                    {r.isCampaign && (
+                      <Badge size="xs" variant="primary" className="ml-2">
+                        Campaña
+                      </Badge>
+                    )}
                     <span className="ml-2 text-xs text-fg-muted">{r._count.ideas} idea(s)</span>
                   </p>
                   {r.description && <p className="mt-0.5 text-xs text-fg-secondary">{r.description}</p>}
@@ -243,6 +265,12 @@ export default function TemasClient({ canEdit }: { canEdit: boolean }) {
                   <span className="flex-shrink-0 flex items-center gap-2">
                     <button onClick={() => startEdit(r)} className="text-xs text-fg-muted hover:text-fg">
                       Editar
+                    </button>
+                    <button
+                      onClick={() => toggleCampaign(r)}
+                      className={`text-xs hover:text-fg ${r.isCampaign ? "text-brand" : "text-fg-muted"}`}
+                    >
+                      {r.isCampaign ? "Quitar campaña" : "Marcar campaña"}
                     </button>
                     <button onClick={() => toggleActive(r)} className="text-xs text-fg-muted hover:text-fg">
                       {r.active ? "Desactivar" : "Activar"}

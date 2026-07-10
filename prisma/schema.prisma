@@ -59,34 +59,34 @@ enum AgentScope {
 }
 
 enum AgentType {
-  SECTION           // Agente de subetapa — genera cards/flowcharts para una sección
-  CANVAS_PROJECT    // Agente transversal — actualiza canvas de proyecto
-  CANVAS_CLIENT     // Agente transversal — actualiza canvas de empresa
+  SECTION // Agente de subetapa — genera cards/flowcharts para una sección
+  CANVAS_PROJECT // Agente transversal — actualiza canvas de proyecto
+  CANVAS_CLIENT // Agente transversal — actualiza canvas de empresa
   SESSION_PROCESSOR // Agente de procesamiento de sesión — lee Fireflies y genera cards
 }
 
 enum ProjectType {
   BASE_IMPLEMENTATION // Implementación base — activación de herramientas, superficial y general
-  USE_CASE            // Caso de uso — específico y profundo, resolución de un reto particular
+  USE_CASE // Caso de uso — específico y profundo, resolución de un reto particular
 }
 
 // El agente de handoff lo infiere (¿el cliente ya usa HubSpot?); el CSE puede corregirlo.
 // Define qué plantilla de fases/tareas usa el cronograma (uso futuro). Interno.
 enum ImplementationType {
-  IMPLEMENTATION   // Nueva implementación — el cliente arranca con HubSpot por primera vez
+  IMPLEMENTATION // Nueva implementación — el cliente arranca con HubSpot por primera vez
   REIMPLEMENTATION // Re-implementación — ya usa HubSpot o viene de otro CRM
 }
 
 enum CardSource {
-  AGENT    // Generada íntegramente por el agente
-  HUMAN    // Creada manualmente por el consultor
+  AGENT // Generada íntegramente por el agente
+  HUMAN // Creada manualmente por el consultor
   MODIFIED // Generada por el agente y luego editada por el consultor
 }
 
 enum CardType {
-  TEXT      // Card de texto (default)
+  TEXT // Card de texto (default)
   FLOWCHART // Diagrama de React Flow (nodos + edges guardados en diagramData)
-  CHART     // Gráfico de ECharts (configuración en chartConfig)
+  CHART // Gráfico de ECharts (configuración en chartConfig)
 }
 
 // ─── Block system (canvases no-default) ─────────────────────────────────────
@@ -147,9 +147,9 @@ model Client {
   company          String?
   industry         String?
   notes            String?  @db.Text
-  hubspotCompanyId String?  // ID de la empresa vinculada en HubSpot CRM
+  hubspotCompanyId String? // ID de la empresa vinculada en HubSpot CRM
   emailDomains     String[] // dominios de email para matching automático de sesiones (ej: "ice.go.cr")
-  logoUrl          String?  // URL pública del logo del cliente (bucket public-assets) — se muestra en kickoff/cronograma externos
+  logoUrl          String? // URL pública del logo del cliente (bucket public-assets) — se muestra en kickoff/cronograma externos
   // Prospecto de Ventas: Client creado lazily desde una empresa HubSpot para un
   // business case (puede no ser cliente real todavía). Se EXCLUYE de los listados
   // de CS (clientes, sidebar, portafolio).
@@ -158,8 +158,8 @@ model Client {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  canvas           Json?   // Client Canvas — conocimiento a nivel empresa
-  canvasConfidence Json?   // { section: "confirmed" | "inferred" } per section
+  canvas           Json? // Client Canvas — conocimiento a nivel empresa
+  canvasConfidence Json? // { section: "confirmed" | "inferred" } per section
 
   hubspotAccount    HubspotAccount?
   audits            Audit[]
@@ -172,10 +172,14 @@ model Client {
   projects          Project[]
   canvasSuggestions CanvasSuggestion[]
   actionItems       ActionItem[]
-  appUsers          AppUser[]              // F2: usuarios externos vinculados (kind=EXTERNAL)
-  assignments       ClientAssignment[]     // F2: overrides manuales CSE↔Cliente
-  handoffs          Handoff[]              // entidad Handoff (1:N por cliente, ver model Handoff)
-  businessCases     BusinessCase[]         // Ventas: casos de negocio (1:N por cliente)
+  appUsers          AppUser[] // F2: usuarios externos vinculados (kind=EXTERNAL)
+  assignments       ClientAssignment[] // F2: overrides manuales CSE↔Cliente
+  handoffs          Handoff[] // entidad Handoff (1:N por cliente, ver model Handoff)
+  businessCases     BusinessCase[] // Ventas: casos de negocio (1:N por cliente)
+  csAlerts          CsAlert[] // Éxito del cliente: alertas del watchdog
+  csSignals         ClientCsSignals? // Éxito del cliente: snapshot de señales HubSpot
+  partnerSnapshot   ClientPartnerSnapshot? // CS360: snapshot del objeto Partner Clients de HubSpot
+  accountBrief      CsAccountBrief? // CS360: resumen ejecutivo citado (agente)
 }
 
 // ─── SystemConfig (config GLOBAL de Nexus, singleton — no por usuario) ─────────
@@ -183,9 +187,9 @@ model Client {
 // configurable (se muestra en el chrome externo, con fallback a /logo-smarteam.png).
 model SystemConfig {
   id              String   @id @default("system")
-  smarteamLogoUrl String?  // URL pública del logo de Smarteam (bucket public-assets)
-  hubspotLogoUrl  String?  // logo de HubSpot — brand-row de business cases + kickoffs
-  insiderLogoUrl  String?  // logo de Insider One — ídem
+  smarteamLogoUrl String? // URL pública del logo de Smarteam (bucket public-assets)
+  hubspotLogoUrl  String? // logo de HubSpot — brand-row de business cases + kickoffs
+  insiderLogoUrl  String? // logo de Insider One — ídem
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -193,35 +197,35 @@ model SystemConfig {
 // ─── Project ──────────────────────────────────────────────────────────────────
 
 model Project {
-  id               String  @id @default(cuid())
-  clientId         String
-  client           Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  name             String
-  status           String  @default("active") // active | paused | completed
-  projectType      ProjectType @default(USE_CASE) // Tipo de proyecto: implementación base o caso de uso
+  id                 String              @id @default(cuid())
+  clientId           String
+  client             Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name               String
+  status             String              @default("active") // active | paused | completed
+  projectType        ProjectType         @default(USE_CASE) // Tipo de proyecto: implementación base o caso de uso
   implementationType ImplementationType? // ¿nueva impl o re-impl? Lo infiere el handoff; el CSE corrige. Interno (no cruza al cliente).
-  serviceType      String? // loop_marketing | loop_sales | loop_service | proyecto_temporal
-  hubspotDealId    String? // ID del deal de HubSpot asociado a este proyecto
-  hubspotServiceId String? @unique // ID del objeto Service en HubSpot (para sync)
-  currentStage     Int     @default(1) // Última etapa visitada/modificada (1-3)
-  currentStep      Int     @default(0) // Último paso visitado/modificado dentro de la etapa (0-indexed)
-  canvas           Json?   // DEPRECATED — ya no se lee para renderizar el canvas
-  tags             String[] @default([]) // Tags generales del proyecto (e.g. "Marketing Hub", "Sales Hub")
-  shareToken       String?  @unique     // Token para vista pública del cliente
+  serviceType        String? // loop_marketing | loop_sales | loop_service | proyecto_temporal
+  hubspotDealId      String? // ID del deal de HubSpot asociado a este proyecto
+  hubspotServiceId   String?             @unique // ID del objeto Service en HubSpot (para sync)
+  currentStage       Int                 @default(1) // Última etapa visitada/modificada (1-3)
+  currentStep        Int                 @default(0) // Último paso visitado/modificado dentro de la etapa (0-indexed)
+  canvas             Json? // DEPRECATED — ya no se lee para renderizar el canvas
+  tags               String[]            @default([]) // Tags generales del proyecto (e.g. "Marketing Hub", "Sales Hub")
+  shareToken         String?             @unique // Token para vista pública del cliente
 
   // GPS del proyecto
   nextSessionDate    DateTime? // LEGACY (project-wide) — reemplazado por los overrides por frente de abajo
-  nextSessionNote    String?   // LEGACY (project-wide)
+  nextSessionNote    String? // LEGACY (project-wide)
   lastSessionSummary String?   @db.Text // LEGACY — resumen manual de la última sesión (el widget ya no lo edita)
-  pendingItems       Json?     // Array de { text: string, done: boolean }
+  pendingItems       Json? // Array de { text: string, done: boolean }
 
   // Override manual de la PRÓXIMA sesión POR FRENTE — para reuniones "ajenas a meets"
   // (no capturadas por el sync de Google Workspace). El widget GPS muestra dos frentes
   // (Ventas / CS); si hay override manual para un frente, precede al auto-detectado.
   salesNextSessionDate DateTime? // Próxima sesión de VENTAS agendada a mano
-  salesNextSessionNote String?   // Nota de la próxima sesión de ventas
+  salesNextSessionNote String? // Nota de la próxima sesión de ventas
   csNextSessionDate    DateTime? // Próxima sesión de CS (entrega de servicio) agendada a mano
-  csNextSessionNote    String?   // Nota de la próxima sesión de CS
+  csNextSessionNote    String? // Nota de la próxima sesión de CS
 
   // Fase C — publish del Kickoff al cliente externo. Acción SEPARADA del acceso:
   // null = no publicado (el cliente, aunque tenga credenciales, no ve el Kickoff);
@@ -243,47 +247,57 @@ model Project {
   //   · "procesos" → oculta toda la sección de procesos,
   //   · el id de un flowchart de proceso → oculta ESE proceso.
   // El chokepoint (lib/external/kickoff-view.ts) filtra por este set. Reversible, no borra datos.
-  hiddenKickoffKeys String[] @default([])
+  hiddenKickoffKeys         String[] @default([])
   // Legacy — reemplazado por hiddenKickoffKeys (se mantiene la columna por compat; sin uso en código).
-  procesosHiddenFromKickoff Boolean @default(false)
+  procesosHiddenFromKickoff Boolean  @default(false)
 
   // Propiedades sincronizadas desde HubSpot (objeto Service)
-  hubspotOwnerId      String?   // hubspot_owner_id (ID del owner en HubSpot)
-  hubspotOwnerName    String?   // Nombre del owner (CSE encargado) resuelto desde /owners/{id}
-  hubspotOwnerEmail   String?   // Email del owner
+  hubspotOwnerId      String? // hubspot_owner_id (ID del owner en HubSpot)
+  hubspotOwnerName    String? // Nombre del owner (CSE encargado) resuelto desde /owners/{id}
+  hubspotOwnerEmail   String? // Email del owner
   hubspotCreatedAt    DateTime? // hs_createdate del servicio en HubSpot
-  hubspotPipelineName String?   // Nombre del pipeline resuelto desde hs_pipeline
+  hubspotPipelineName String? // Nombre del pipeline resuelto desde hs_pipeline
 
   // D.2 — etapa actual del pipeline de Customer Success (híbrido: materializada acá
   // por sync-projects y revalidada en vivo al disparar la regeneración del cronograma).
   // El label es lo que el agente de avance razona (ancla #1); el id permite comparar.
-  hubspotPipelineStageLabel String?   // label legible de hs_pipeline_stage (p.ej. "Onboarding")
-  hubspotPipelineStageId    String?   // id de la etapa (hs_pipeline_stage) para comparar/revalidar
+  hubspotPipelineStageLabel String? // label legible de hs_pipeline_stage (p.ej. "Onboarding")
+  hubspotPipelineStageId    String? // id de la etapa (hs_pipeline_stage) para comparar/revalidar
   hubspotStageSyncedAt      DateTime? // última vez que se materializó/revalidó la etapa
+
+  // CS360 — propiedades operativas del 0-970 para el dashboard de la CSL (valores
+  // CRUDOS de HubSpot; el mapeo a labels ES vive en lib/cs). null = sin valor en HS.
+  hubspotPriority      String? // hs_priority: low | medium | high
+  hubspotStatus        String? // hs_status: on_track | delayed | blocked | completed | on_hold | at_risk
+  hubspotBlockReason   String? // motivo_de_bloqueo (label del enum radio, 7 valores)
+  hubspotBlockDetail   String? @db.Text // detalle_del_motivo_de_bloqueo (Desarrollo, fallback Implementaciones)
+  hubspotAdoptionState String? // estado_de_adopcion: No iniciado | Bajo | Medio | Alto
 
   // D.3 panel — SALUD del proyecto, HÍBRIDA: el panel de cartera PROPONE una salud derivada
   // de señales (atrasos/inactividad/firmeza) calculada al vuelo en lib/portfolio; este override
   // es la versión CURADA por CSL/Ventas/SA. Si hay override prevalece; null = se usa la derivada.
   healthStatusOverride       ProjectHealth?
-  healthStatusOverrideReason String?        // por qué el humano fijó este estado
-  healthStatusOverrideAt     DateTime?      // cuándo
-  healthStatusOverrideBy     String?        // email de quien lo fijó (del guard)
+  healthStatusOverrideReason String? // por qué el humano fijó este estado
+  healthStatusOverrideAt     DateTime? // cuándo
+  healthStatusOverrideBy     String? // email de quien lo fijó (del guard)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  stageNotes   StageNote[]
-  contextCards ClientContextCard[]
-  documents    ClientDocument[]
-  agentRuns    AgentRun[]
-  canvases     ProjectCanvas[]
-  actionItems  ActionItem[]
-  sessions     SessionProject[]
+  stageNotes          StageNote[]
+  contextCards        ClientContextCard[]
+  documents           ClientDocument[]
+  agentRuns           AgentRun[]
+  canvases            ProjectCanvas[]
+  actionItems         ActionItem[]
+  sessions            SessionProject[]
   participantSnapshot ProjectParticipantSnapshot?
   externalAccess      ProjectExternalAccess?
   timeline            ProjectTimeline?
   handoff             Handoff?
   handoffSources      HandoffSource[]
+  timelineEvents      TimelineEvent[] // Éxito del cliente: eventos crudos del cronograma
+  csAlerts            CsAlert[] // Éxito del cliente: alertas del watchdog
 }
 
 // D.3 panel — salud del proyecto para el panel de cartera. Es el OVERRIDE curado; la salud
@@ -311,9 +325,9 @@ model Handoff {
   hubspotDealId String? @unique // deal ancla de HubSpot (1 handoff por deal)
 
   // Sync a HubSpot (eventual + reintentable; ver decisión #2 del plan)
-  hubspotProjectId  String? // id del record "projects" creado en HubSpot (post-sync)
-  hubspotSyncStatus String  @default("pending") // pending | synced | failed
-  hubspotSyncError  String? @db.Text
+  hubspotProjectId       String? // id del record "projects" creado en HubSpot (post-sync)
+  hubspotSyncStatus      String  @default("pending") // pending | synced | failed
+  hubspotSyncError       String? @db.Text
   // Owner de HubSpot a setear en el record "projects" SOLO cuando el sync lo CREA de
   // cero (handoff nacido del stepper de ventas). null = sin owner forzado (handoffs
   // viejos / generados in-project). Se aplica una sola vez, en CASO B del sync.
@@ -339,13 +353,13 @@ model HandoffSource {
   id             String    @id @default(cuid())
   projectId      String
   project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title          String?                          // etiqueta opcional para identificarla
-  content        String    @db.Text               // el texto pegado (transcript/resumen)
-  kind           String    @default("manual")     // futuro-proof: otros tipos de fuente manual
-  createdByEmail String?                           // quién la pegó (del guard de sesión)
+  title          String? // etiqueta opcional para identificarla
+  content        String    @db.Text // el texto pegado (transcript/resumen)
+  kind           String    @default("manual") // futuro-proof: otros tipos de fuente manual
+  createdByEmail String? // quién la pegó (del guard de sesión)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
-  deletedAt      DateTime?                         // soft-delete (auditable; el read filtra deletedAt:null)
+  deletedAt      DateTime? // soft-delete (auditable; el read filtra deletedAt:null)
 
   @@index([projectId, createdAt])
 }
@@ -365,76 +379,76 @@ model HandoffSource {
 // no se aplica — para regenerar, el CSE borra explícitamente y vuelve a correr.
 
 model ProjectTimeline {
-  id                    String          @id @default(cuid())
-  projectId             String          @unique
-  project               Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  anchorStartDate       DateTime?       // null hasta que el CSE la fije; cuando exista, define la conversión semanas → fechas
-  lastEditedByHuman     DateTime?       // se actualiza en cada PUT que toca fases (no en el create del agente)
+  id                          String    @id @default(cuid())
+  projectId                   String    @unique
+  project                     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  anchorStartDate             DateTime? // null hasta que el CSE la fije; cuando exista, define la conversión semanas → fechas
+  lastEditedByHuman           DateTime? // se actualiza en cada PUT que toca fases (no en el create del agente)
   // D.3 staging — el cliente ve SOLO este SNAPSHOT (shape client-safe de readClientTimeline)
   // congelado al "Subir". La vista externa NUNCA lee en vivo: si está publicado y el snapshot
   // es null (timeline pre-D.3), readPublishedClientTimeline hace un backfill perezoso (congela
   // el vivo actual una vez); si no hay timeline, devuelve vacío (fail-closed).
-  publishedSnapshot     Json?
-  generatedByAgentRunId String?         // de qué AgentRun salió la propuesta inicial (trazabilidad)
-  generatedByAgentRun   AgentRun?       @relation(fields: [generatedByAgentRunId], references: [id], onDelete: SetNull)
+  publishedSnapshot           Json?
+  generatedByAgentRunId       String? // de qué AgentRun salió la propuesta inicial (trazabilidad)
+  generatedByAgentRun         AgentRun? @relation(fields: [generatedByAgentRunId], references: [id], onDelete: SetNull)
   // D.1 — cronograma detallado:
   detailConfirmedAt           DateTime? // gate de la vista cliente: las tareas solo cruzan al kickoff externo si != null
-  detailGeneratedByAgentRunId String?   // de qué AgentRun salió el detalle (tareas/tipos) — trazabilidad
+  detailGeneratedByAgentRunId String? // de qué AgentRun salió el detalle (tareas/tipos) — trazabilidad
   detailGeneratedByAgentRun   AgentRun? @relation("TimelineDetailGenerator", fields: [detailGeneratedByAgentRunId], references: [id], onDelete: SetNull)
   // Re-generación en proyectos en curso: cuando el agente re-deriva un cronograma y YA existe uno,
   // la propuesta NO se aplica (protege ediciones/progreso) — se guarda acá, reconciliada al shape del
   // PUT (fases con id existente cuando matchean, SIN `tasks` para preservar el detalle), y el canvas
   // la muestra como vista previa aplicable. null = sin propuesta pendiente. Se limpia al aplicar/descartar.
-  pendingProposal       Json?
-  pendingProposalRunId  String?         // AgentRun del que salió la propuesta pendiente (trazabilidad)
+  pendingProposal             Json?
+  pendingProposalRunId        String? // AgentRun del que salió la propuesta pendiente (trazabilidad)
   // D.2 — BORRADOR DE AVANCE (hermano de pendingProposal; NO se mezcla). El agente de
   // avance detecta qué fases/tareas están hechas y dónde cae el "hoy", y lo guarda acá
   // SIN tocar status (eso lo confirma el CSE). Shape: { currentPhaseId, asOfSessionId,
   // reasoning, phases:[{id,done}], tasks:[{id,done}] }. Se reemplaza en cada corrida;
   // se limpia al aplicar (timeline/progress/apply) o descartar (DELETE timeline/progress).
-  pendingProgress       Json?
-  pendingProgressRunId  String?         // AgentRun del que salió el borrador de avance (trazabilidad)
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
+  pendingProgress             Json?
+  pendingProgressRunId        String? // AgentRun del que salió el borrador de avance (trazabilidad)
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
 
-  phases                TimelinePhase[]
-  changes               TimelineChange[] // #4 — historial de ediciones (razón + snapshot) para D.3
-  baselines             TimelineBaseline[] // D.3 — baselines "vendidos" congelados al publicar (versionados)
+  phases    TimelinePhase[]
+  changes   TimelineChange[] // #4 — historial de ediciones (razón + snapshot) para D.3
+  baselines TimelineBaseline[] // D.3 — baselines "vendidos" congelados al publicar (versionados)
 
   @@index([projectId])
 }
 
 model TimelinePhase {
-  id            String                @id @default(cuid())
-  timelineId    String
-  timeline      ProjectTimeline       @relation(fields: [timelineId], references: [id], onDelete: Cascade)
-  name          String                                  // "Kick-off", "Arquitectura", etc.
-  order         Int                                     // 0-indexed, posición en la secuencia
-  durationWeeks Int                   @default(1)       // 1+
+  id              String                @id @default(cuid())
+  timelineId      String
+  timeline        ProjectTimeline       @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  name            String // "Kick-off", "Arquitectura", etc.
+  order           Int // 0-indexed, posición en la secuencia
+  durationWeeks   Int                   @default(1) // 1+
   // Inicio EXPLÍCITO (offset 0-based desde anchorStartDate). null = contigua tras la fase anterior
   // (comportamiento por defecto). Habilita fases EN PARALELO (dos con el mismo inicio se solapan):
   // típico, una integración/desarrollo que corre en paralelo a la implementación del hub.
-  startWeek     Int?
-  sessionCount  Int?                                    // opcional — algunas fases no son por sesiones
-  notes         String?               @db.Text          // texto libre opcional (contexto editable)
-  activityType  TimelineActivityType?                   // D.1: tipo de actividad (nullable — fases pre-D.1 quedan sin tipo, render neutro)
-  source        TimelinePhaseSource   @default(AGENT)
+  startWeek       Int?
+  sessionCount    Int? // opcional — algunas fases no son por sesiones
+  notes           String?               @db.Text // texto libre opcional (contexto editable)
+  activityType    TimelineActivityType? // D.1: tipo de actividad (nullable — fases pre-D.1 quedan sin tipo, render neutro)
+  source          TimelinePhaseSource   @default(AGENT)
   // El agente del handoff marca true cuando ESTIMÓ la fase/duración sin dato real en ventas
   // (badge "estimada" + banner). Se limpia cuando el CSE edita la fase (PUT). Interno — NO cruza al cliente.
-  needsValidation Boolean             @default(false)
+  needsValidation Boolean               @default(false)
   // D.2 — avance a nivel fase (reusa el enum de tarea). DONE = fase completada;
   // IN_PROGRESS = la fase en curso (el "hoy"); PENDING = por delante. Lo escribe SOLO
   // el CSE (mismo invariante que TimelineTask.status); el agente lo PROPONE en pendingProgress.
-  status        TimelineTaskStatus    @default(PENDING)
+  status          TimelineTaskStatus    @default(PENDING)
   // D.3 fundación — fechas REALES de ejecución, MONÓTONAS (no se auto-borran):
   // actualStart la 1ra vez que va a IN_PROGRESS/DONE; actualEnd al DONE. Volver a
   // PENDING/IN_PROGRESS NO las borra — el status manda para "¿hecho hoy?", las fechas son histórico.
-  actualStart   DateTime?
-  actualEnd     DateTime?
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
+  actualStart     DateTime?
+  actualEnd       DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 
-  tasks         TimelineTask[]
+  tasks TimelineTask[]
 
   @@index([timelineId, order])
 }
@@ -445,13 +459,13 @@ model TimelinePhase {
 // contenido preservando estados humanos por id. Invariante D.1: el agente
 // solo crea PENDING → todo status != PENDING es humano por definición.
 model TimelineTask {
-  id              String              @id @default(cuid())
-  phaseId         String
-  phase           TimelinePhase       @relation(fields: [phaseId], references: [id], onDelete: Cascade)
-  title           String
-  weekIndex       Int                                   // 0-indexed, relativo a la fase
-  order           Int                 @default(0)       // orden dentro de la semana
-  status          TimelineTaskStatus  @default(PENDING)
+  id                String              @id @default(cuid())
+  phaseId           String
+  phase             TimelinePhase       @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  title             String
+  weekIndex         Int // 0-indexed, relativo a la fase
+  order             Int                 @default(0) // orden dentro de la semana
+  status            TimelineTaskStatus  @default(PENDING)
   // #4 — override manual de fechas por tarea. INTENCIÓN: cuando estén seteadas deben
   // ganar sobre la fecha DERIVADA de la semana (anchor + offset de fase + weekIndex) y
   // cruzar al cronograma compartible como fecha efectiva. Se editan con datepicker en el
@@ -461,44 +475,44 @@ model TimelineTask {
   startDateOverride DateTime?
   dueDateOverride   DateTime?
   // D.3 fundación — fechas REALES de ejecución (ver TimelinePhase).
-  actualStart     DateTime?
-  actualEnd       DateTime?
-  notes           String?             @db.Text
-  needsValidation Boolean             @default(false)   // tarea típica inventada por el agente con handoff flaco — el Gantt la grita; NUNCA cruza al cliente
+  actualStart       DateTime?
+  actualEnd         DateTime?
+  notes             String?             @db.Text
+  needsValidation   Boolean             @default(false) // tarea típica inventada por el agente con handoff flaco — el Gantt la grita; NUNCA cruza al cliente
   // B — dueño de la tarea en el plan de alineación compartido. CLIENTE entrega/hace;
   // SMARTEAM configura; AMBOS trabajo conjunto. Nullable = sin asignar (data pre-B).
   // Cruza al cronograma compartible del cliente (gated por "Subir"); el Kickoff embebido NO lo muestra.
-  party           TaskParty?
+  party             TaskParty?
   // ¿la tarea es una SESIÓN (reunión con el cliente) o una TASK (acción/entregable)?
   // Nullable = sin tipar (efectivo = TASK). Cruza al cronograma compartible SOLO si es SESSION.
   // Mapeo a futuro (NO se sincroniza hoy): SESSION → HubSpot Meeting (0-47); TASK → HubSpot Task (0-27).
-  type            TimelineTaskType?
-  source          TimelinePhaseSource @default(AGENT)   // reuso consciente del enum (mismo ciclo AGENT→MODIFIED/HUMAN); renombrarlo = recrear tipo en PG por cero ganancia
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  type              TimelineTaskType?
+  source            TimelinePhaseSource @default(AGENT) // reuso consciente del enum (mismo ciclo AGENT→MODIFIED/HUMAN); renombrarlo = recrear tipo en PG por cero ganancia
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   @@index([phaseId, weekIndex, order])
 }
 
 enum TimelinePhaseSource {
-  AGENT      // generada por la IA, sin tocar humano
-  MODIFIED   // generada por IA, editada por humano (al pasar por PUT con id existente)
-  HUMAN      // creada desde cero por humano (PUT con phase sin id)
+  AGENT // generada por la IA, sin tocar humano
+  MODIFIED // generada por IA, editada por humano (al pasar por PUT con id existente)
+  HUMAN // creada desde cero por humano (PUT con phase sin id)
 }
 
 // B — dueño de una tarea del cronograma, desde la óptica del plan compartido con el cliente.
 enum TaskParty {
-  CLIENTE   // lo entrega o hace el cliente (insumos: documentación, bases, listados, accesos)
-  SMARTEAM  // configuración técnica en HubSpot (pipeline, propiedades, automatizaciones, integraciones)
-  AMBOS     // trabajo conjunto (sesiones, talleres, validaciones, onboarding, seguimiento)
-  DEV       // #7 — desarrollo/integración (equipo técnico). Tareas de la fase "Desarrollo / Integración".
+  CLIENTE // lo entrega o hace el cliente (insumos: documentación, bases, listados, accesos)
+  SMARTEAM // configuración técnica en HubSpot (pipeline, propiedades, automatizaciones, integraciones)
+  AMBOS // trabajo conjunto (sesiones, talleres, validaciones, onboarding, seguimiento)
+  DEV // #7 — desarrollo/integración (equipo técnico). Tareas de la fase "Desarrollo / Integración".
 }
 
 // Tipo de tarea del cronograma. Mapea a futuro (sin sync hoy):
 // SESSION → HubSpot Meeting (objeto 0-47); TASK → HubSpot Task (objeto 0-27, hs_task_type=TODO).
 enum TimelineTaskType {
-  SESSION   // reunión / sesión de trabajo con el cliente (kickoff, revisión, demo, capacitación)
-  TASK      // acción / entregable / configuración (no es una reunión)
+  SESSION // reunión / sesión de trabajo con el cliente (kickoff, revisión, demo, capacitación)
+  TASK // acción / entregable / configuración (no es una reunión)
 }
 
 // #4 — historial de cambios del cronograma. Cada edición lleva una razón OBLIGATORIA
@@ -509,20 +523,20 @@ model TimelineChange {
   id             String             @id @default(cuid())
   timelineId     String
   timeline       ProjectTimeline    @relation(fields: [timelineId], references: [id], onDelete: Cascade)
-  reason         String             @db.Text          // obligatoria — el "por qué" del cambio
+  reason         String             @db.Text // obligatoria — el "por qué" del cambio
   kind           TimelineChangeKind @default(MANUAL)
-  instruction    String?            @db.Text          // si kind=AI_ASSIST, la instrucción dada al asistente
-  changedByEmail String?                              // quién hizo el cambio (del guard de sesión)
-  snapshot       Json                                 // estado resultante: { anchorStartDate, phases:[{...,tasks:[...]}] }
+  instruction    String?            @db.Text // si kind=AI_ASSIST, la instrucción dada al asistente
+  changedByEmail String? // quién hizo el cambio (del guard de sesión)
+  snapshot       Json // estado resultante: { anchorStartDate, phases:[{...,tasks:[...]}] }
   createdAt      DateTime           @default(now())
 
   @@index([timelineId, createdAt])
 }
 
 enum TimelineChangeKind {
-  MANUAL     // edición manual del CSE ("Guardar cronograma")
-  AI_ASSIST  // aplicada desde una propuesta del asistente de IA
-  PROGRESS   // D.3 — confirmación de avance (D.2): registra qué se marcó y quién (delta compacto, sin snapshot completo)
+  MANUAL // edición manual del CSE ("Guardar cronograma")
+  AI_ASSIST // aplicada desde una propuesta del asistente de IA
+  PROGRESS // D.3 — confirmación de avance (D.2): registra qué se marcó y quién (delta compacto, sin snapshot completo)
 }
 
 // D.3 fundación — BASELINE "vendido" congelado al PUBLICAR el cronograma al cliente.
@@ -535,12 +549,12 @@ model TimelineBaseline {
   id               String          @id @default(cuid())
   timelineId       String
   timeline         ProjectTimeline @relation(fields: [timelineId], references: [id], onDelete: Cascade)
-  version          Int                              // 1, 2, 3… (max+1 por timeline)
-  isActive         Boolean         @default(true)   // la última publicada; D.3 compara contra esta
-  anchorStartDate  DateTime?                        // ancla al momento de congelar
-  snapshot         Json                             // estructura frozen: fases+tareas con planned dates, needsValidation, source
-  firmness         Json                             // resumen de firmeza: { taskCount, needsValidationCount, firmPct, label, ... }
-  publishedByEmail String?                          // quién publicó (del guard)
+  version          Int // 1, 2, 3… (max+1 por timeline)
+  isActive         Boolean         @default(true) // la última publicada; D.3 compara contra esta
+  anchorStartDate  DateTime? // ancla al momento de congelar
+  snapshot         Json // estructura frozen: fases+tareas con planned dates, needsValidation, source
+  firmness         Json // resumen de firmeza: { taskCount, needsValidationCount, firmPct, label, ... }
+  publishedByEmail String? // quién publicó (del guard)
   capturedAt       DateTime        @default(now())
 
   @@index([timelineId, isActive])
@@ -573,19 +587,19 @@ enum TimelineTaskStatus {
 // Coexiste con Project.shareToken (vista pública sin contraseña, feature aparte).
 
 model ProjectExternalAccess {
-  id            String    @id @default(cuid())
-  projectId     String    @unique
-  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  accessToken   String    @unique           // 64 chars hex (crypto.randomBytes(32))
-  passwordHash  String                       // bcrypt(12 rounds) — lo usa verify-access
-  accessPassword String?                     // texto plano (visible para el CSE en el panel; igual se entrega al cliente en claro). Null en accesos viejos pre-migración.
-  enabledAt     DateTime  @default(now())
-  revokedAt     DateTime?                    // si != null → acceso bloqueado
-  lastUsedAt    DateTime?                    // se actualiza en cada verify OK
-  createdById   String?                      // FK a TeamMember que generó el acceso (auditoría)
-  createdBy     TeamMember? @relation("ExternalAccessCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id             String      @id @default(cuid())
+  projectId      String      @unique
+  project        Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  accessToken    String      @unique // 64 chars hex (crypto.randomBytes(32))
+  passwordHash   String // bcrypt(12 rounds) — lo usa verify-access
+  accessPassword String? // texto plano (visible para el CSE en el panel; igual se entrega al cliente en claro). Null en accesos viejos pre-migración.
+  enabledAt      DateTime    @default(now())
+  revokedAt      DateTime? // si != null → acceso bloqueado
+  lastUsedAt     DateTime? // se actualiza en cada verify OK
+  createdById    String? // FK a TeamMember que generó el acceso (auditoría)
+  createdBy      TeamMember? @relation("ExternalAccessCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   @@index([accessToken])
   @@index([projectId])
@@ -593,23 +607,23 @@ model ProjectExternalAccess {
 
 // Canvas dentro de un proyecto (default = "Canvas de servicio", custom = secciones libres)
 model ProjectCanvas {
-  id        String   @id @default(cuid())
+  id             String        @id @default(cuid())
   // Dueño flexible: el canvas cuelga de un Project (kickoff/diagnóstico/…) O de un
   // BusinessCase (Ventas). Exactamente uno seteado (validado en código).
-  projectId String?
-  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   businessCaseId String?
   businessCase   BusinessCase? @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
-  name      String
-  isDefault Boolean  @default(false)
-  order     Int      @default(0) // orden de aparición en el dropdown de canvases
+  name           String
+  isDefault      Boolean       @default(false)
+  order          Int           @default(0) // orden de aparición en el dropdown de canvases
   // Versionado (business case): cada "Generar" crea un canvas nuevo; isActive marca
   // el vivo/editable. En proyectos queda version=1/isActive=true (sin uso).
-  version   Int      @default(1)
-  isActive  Boolean  @default(true)
-  sections  Json     @default("[]") // Array de { key, label, brief?, previousBrief? } — brief = guía del agente por sección (BC), acá y no en columna para sobrevivir db push entre las 2 PCs (ver lib/business-cases/section-briefs.ts)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  version        Int           @default(1)
+  isActive       Boolean       @default(true)
+  sections       Json          @default("[]") // Array de { key, label, brief?, previousBrief? } — brief = guía del agente por sección (BC), acá y no en columna para sobrevivir db push entre las 2 PCs (ver lib/business-cases/section-briefs.ts)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   // D.3 staging — el cliente ve el SNAPSHOT publicado; el contenido vivo es borrador hasta "Subir".
   // publishedSnapshot = foto client-safe al subir; contentUpdatedAt se toca al editar/confirmar bloques
@@ -618,8 +632,8 @@ model ProjectCanvas {
   publishedSnapshotAt DateTime?
   contentUpdatedAt    DateTime?
 
-  cards           ClientContextCard[]
-  canvasSections  CanvasSection[]
+  cards          ClientContextCard[]
+  canvasSections CanvasSection[]
 
   @@index([projectId])
   @@index([businessCaseId])
@@ -627,24 +641,24 @@ model ProjectCanvas {
 
 // Sección de un canvas no-default (entidad de primer nivel)
 model CanvasSection {
-  id        String   @id @default(cuid())
-  canvasId  String
-  canvas    ProjectCanvas @relation(fields: [canvasId], references: [id], onDelete: Cascade)
-  key       String
-  label     String
-  titleOverride String? // Título de cara al cliente editado por el CSE (landing Kickoff). null = título por defecto de la plantilla (SECTION_META).
-  eyebrowOverride String? // Eyebrow (título pequeño) editado por el CSE. null = eyebrow por defecto de la plantilla.
+  id                      String        @id @default(cuid())
+  canvasId                String
+  canvas                  ProjectCanvas @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+  key                     String
+  label                   String
+  titleOverride           String? // Título de cara al cliente editado por el CSE (landing Kickoff). null = título por defecto de la plantilla (SECTION_META).
+  eyebrowOverride         String? // Eyebrow (título pequeño) editado por el CSE. null = eyebrow por defecto de la plantilla.
   // NOTA: la "guía del agente" por sección (business case) NO vive acá. Se guarda en
   // ProjectCanvas.sections (Json) para sobrevivir db push entre las 2 PCs que comparten
   // la DB de prod. Ver lib/business-cases/section-briefs.ts.
   // Deshacer de 1 nivel (persistido): valor inmediatamente anterior de title/eyebrow. null = nada que deshacer.
   previousTitleOverride   String?
   previousEyebrowOverride String?
-  order     Int      @default(0)
-  layout    Json?    // RGL layout: [{ i: blockId, x, y, w, h }]
-  createdAt DateTime @default(now())
+  order                   Int           @default(0)
+  layout                  Json? // RGL layout: [{ i: blockId, x, y, w, h }]
+  createdAt               DateTime      @default(now())
 
-  blocks    CanvasBlock[]
+  blocks CanvasBlock[]
 
   @@unique([canvasId, key])
   @@index([canvasId])
@@ -652,24 +666,24 @@ model CanvasSection {
 
 // Bloque de contenido dentro de una sección (text, heading, table, metric, callout, etc.)
 model CanvasBlock {
-  id         String      @id @default(cuid())
-  sectionId  String
-  section    CanvasSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  blockType  BlockType   @default(TEXT)
-  content    String?     @db.Text
-  data       Json?
+  id              String        @id @default(cuid())
+  sectionId       String
+  section         CanvasSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  blockType       BlockType     @default(TEXT)
+  content         String?       @db.Text
+  data            Json?
   // Deshacer de 1 nivel (persistido): contenido/data inmediatamente anterior. null = nada que deshacer.
-  previousContent String? @db.Text
+  previousContent String?       @db.Text
   previousData    Json?
-  order      Int         @default(0)
-  colSpan    Int         @default(4) // 1-4 columns width
-  colStart   Int?        // 1-4 column start position (null = auto)
-  rowSpan    Int         @default(4) // height in grid rows
-  source     BlockSource @default(AGENT)
-  status     BlockStatus @default(DRAFT)
-  agentRunId String?
-  agentRun   AgentRun?   @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
-  createdAt  DateTime    @default(now())
+  order           Int           @default(0)
+  colSpan         Int           @default(4) // 1-4 columns width
+  colStart        Int? // 1-4 column start position (null = auto)
+  rowSpan         Int           @default(4) // height in grid rows
+  source          BlockSource   @default(AGENT)
+  status          BlockStatus   @default(DRAFT)
+  agentRunId      String?
+  agentRun        AgentRun?     @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  createdAt       DateTime      @default(now())
 
   @@index([sectionId])
   @@index([agentRunId])
@@ -682,9 +696,9 @@ model StageNote {
   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  stage     Int      // 1 = Diagnóstico | 2 = MVP | 3 = Adopción
-  step      Int      // número de paso dentro de la etapa (1-indexed)
-  content   String   @db.Text @default("")
+  stage     Int // 1 = Diagnóstico | 2 = MVP | 3 = Adopción
+  step      Int // número de paso dentro de la etapa (1-indexed)
+  content   String   @default("") @db.Text
 
   updatedAt DateTime @updatedAt
 
@@ -698,15 +712,15 @@ model ClientDocument {
   client    Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
   projectId String?
   project   Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  stage     Int?         // null = global (tab Documentos), 1 o 2 o 3 = etapa específica
-  step      Int?         // paso específico (opcional)
+  stage     Int? // null = global (tab Documentos), 1 o 2 o 3 = etapa específica
+  step      Int? // paso específico (opcional)
   title     String
   type      DocumentType
   content   String?      @db.Text // para FREE_TEXT / CALL_TRANSCRIPT pegado / texto extraído de FILE
-  url       String?               // para URL, Fireflies links, o Supabase Storage URL
-  fileName  String?               // nombre original del archivo (para FILE)
-  fileSize  Int?                  // tamaño en bytes (para FILE)
-  mimeType  String?               // tipo MIME (para FILE)
+  url       String? // para URL, Fireflies links, o Supabase Storage URL
+  fileName  String? // nombre original del archivo (para FILE)
+  fileSize  Int? // tamaño en bytes (para FILE)
+  mimeType  String? // tipo MIME (para FILE)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -714,39 +728,39 @@ model ClientDocument {
 
 // Cards de contexto del cliente (sección editable sobre la relación comercial, dolor, etc.)
 model ClientContextCard {
-  id         String    @id @default(cuid())
+  id         String     @id @default(cuid())
   clientId   String
-  client     Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client     Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
   projectId  String?
-  project    Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project    Project?   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   // null = card manual/legacy; set = generada por un AgentRun específico
   agentRunId String?
-  agentRun   AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  agentRun   AgentRun?  @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
   title      String
-  content    String    @db.Text @default("")
-  order      Int       @default(0)
+  content    String     @default("") @db.Text
+  order      Int        @default(0)
   source     CardSource @default(HUMAN)
   cardType   CardType   @default(TEXT)
 
   // Canvas integration
-  canvasId      String?  // null = canvas default del proyecto
+  canvasId      String? // null = canvas default del proyecto
   canvas        ProjectCanvas? @relation(fields: [canvasId], references: [id], onDelete: SetNull)
-  canvasSection String?  // Sección del canvas donde vive (null = no está en canvas)
-  canvasOrder   Int?     // Orden dentro de la sección del canvas (para drag & drop)
-  canvasStatus  String   @default("confirmed") // "draft" = auto-poblado por agente, pendiente de revisión; "confirmed" = aceptado por CSE
+  canvasSection String? // Sección del canvas donde vive (null = no está en canvas)
+  canvasOrder   Int? // Orden dentro de la sección del canvas (para drag & drop)
+  canvasStatus  String         @default("confirmed") // "draft" = auto-poblado por agente, pendiente de revisión; "confirmed" = aceptado por CSE
 
   // Card hierarchy (para clones al enviar al canvas)
-  parentCardId  String?
-  parentCard    ClientContextCard?  @relation("CardClones", fields: [parentCardId], references: [id], onDelete: SetNull)
-  clones        ClientContextCard[] @relation("CardClones")
+  parentCardId String?
+  parentCard   ClientContextCard?  @relation("CardClones", fields: [parentCardId], references: [id], onDelete: SetNull)
+  clones       ClientContextCard[] @relation("CardClones")
 
   // Datos estructurados por tipo
-  diagramData   Json?    // Para FLOWCHART: { nodes: [...], edges: [...] }
-  chartConfig   Json?    // Para CHART: configuración de ECharts
+  diagramData Json? // Para FLOWCHART: { nodes: [...], edges: [...] }
+  chartConfig Json? // Para CHART: configuración de ECharts
 
   // Vista del cliente
   publishedToClient Boolean @default(false) // Si true, visible en la vista externa del cliente
-  publishedContent  String? @db.Text        // Versión alternativa del contenido para el cliente (lenguaje suavizado)
+  publishedContent  String? @db.Text // Versión alternativa del contenido para el cliente (lenguaje suavizado)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -763,19 +777,19 @@ model ClientContextCard {
 // ─── HubspotAccount (ahora hijo de Client) ───────────────────────────────────
 
 model HubspotAccount {
-  id              String   @id @default(cuid())
-  isSystem        Boolean  @default(false) // true = cuenta del sistema (Smarteam), false = cuenta de cliente
-  clientId        String?  @unique // nullable en transición — se hará NOT NULL en Fase 5
-  client          Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  hubspotPortalId String   @unique
-  hubName         String?
-  accessToken     String
-  refreshToken    String
-  expiresAt       DateTime
+  id               String    @id @default(cuid())
+  isSystem         Boolean   @default(false) // true = cuenta del sistema (Smarteam), false = cuenta de cliente
+  clientId         String?   @unique // nullable en transición — se hará NOT NULL en Fase 5
+  client           Client?   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  hubspotPortalId  String    @unique
+  hubName          String?
+  accessToken      String
+  refreshToken     String
+  expiresAt        DateTime
   portalSnapshot   Json?
   portalSnapshotAt DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   // Relaciones legacy (se eliminan en Fase 5 una vez migrada toda la data)
   implementations Implementation[]
@@ -789,7 +803,7 @@ model Knowledge {
   id        String         @id @default(cuid())
   accountId String
   account   HubspotAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  clientId  String?        // se poblará en migración de datos (Fase 5)
+  clientId  String? // se poblará en migración de datos (Fase 5)
   client    Client?        @relation(fields: [clientId], references: [id], onDelete: Cascade)
   title     String
   content   String         @db.Text
@@ -801,24 +815,24 @@ model Knowledge {
 // ─── Audit ────────────────────────────────────────────────────────────────────
 
 model Audit {
-  id        String         @id @default(cuid())
-  accountId String?        // nullable en transición (Fase 3 lo migra a clientId)
+  id        String          @id @default(cuid())
+  accountId String? // nullable en transición (Fase 3 lo migra a clientId)
   account   HubspotAccount? @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  clientId  String?        // nuevo FK a Client (se poblará en Fase 3)
-  client    Client?        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId  String? // nuevo FK a Client (se poblará en Fase 3)
+  client    Client?         @relation(fields: [clientId], references: [id], onDelete: Cascade)
   name      String
   data      Json?
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
 }
 
 // ─── Implementation ───────────────────────────────────────────────────────────
 
 model Implementation {
   id        String               @id @default(cuid())
-  accountId String?              // nullable en transición (Fase 4 lo migra a clientId)
+  accountId String? // nullable en transición (Fase 4 lo migra a clientId)
   account   HubspotAccount?      @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  clientId  String?              // nuevo FK a Client (se poblará en Fase 4)
+  clientId  String? // nuevo FK a Client (se poblará en Fase 4)
   client    Client?              @relation(fields: [clientId], references: [id], onDelete: Cascade)
   name      String
   status    ImplementationStatus @default(PLANNING)
@@ -854,19 +868,19 @@ model Agent {
   // Etapas asociadas: [] = aplica a todas, [1] = solo Etapa 1, [1,2] = ambas
   associatedStages       Int[]
   associatedStep         Int?
-  sectionLabel           String?         // Bloque visual dentro de la subetapa (ej. "Contexto del cliente")
+  sectionLabel           String? // Bloque visual dentro de la subetapa (ej. "Contexto del cliente")
   outputType             AgentOutputType @default(CARDS)
   scope                  AgentScope      @default(CLIENT)
   agentType              AgentType       @default(SECTION)
-  defaultCanvasSection   String?         // Sección del canvas de proyecto sugerida al enviar cards (ej. "procesos")
+  defaultCanvasSection   String? // Sección del canvas de proyecto sugerida al enviar cards (ej. "procesos")
   // Agrupación por propósito (reemplaza stages/steps para la UI)
-  agentGroup             String?         // handoff | preparacion | diagnostico | planificacion | ejecucion | adopcion (ver lib/agent-groups.ts)
+  agentGroup             String? // handoff | preparacion | diagnostico | planificacion | ejecucion | adopcion (ver lib/agent-groups.ts)
   groupOrder             Int             @default(0) // Orden DENTRO de su grupo (no del grupo). Para chaining: agentes con groupOrder menor se inyectan como contexto a los mayores del mismo grupo.
   // IDs de KnowledgeDocument inyectados sin truncar al prompt del agente (referencia principal)
   pinnedKnowledgeIds     String[]        @default([])
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   runs AgentRun[]
 
@@ -874,27 +888,31 @@ model Agent {
 }
 
 model AgentRun {
-  id          String         @id @default(cuid())
-  agentId     String?
-  agent       Agent?         @relation(fields: [agentId], references: [id], onDelete: SetNull)
-  clientId    String
-  client      Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  projectId   String?
-  project     Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id             String         @id @default(cuid())
+  agentId        String?
+  agent          Agent?         @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  clientId       String
+  client         Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   businessCaseId String?
-  businessCase   BusinessCase? @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
-  stage       Int?
-  step        Int?
-  stepLabel    String?        // nombre legible de la subetapa (ej. "Análisis inicial")
-  sectionLabel String?        // sección dentro de la subetapa (ej. "Contexto del cliente")
-  serviceType  String?        // tipo de servicio al momento de la ejecución
-  status      AgentRunStatus @default(PENDING)
-  output      String?        @db.Text // JSON raw de Claude (backup)
+  businessCase   BusinessCase?  @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
+  stage          Int?
+  step           Int?
+  stepLabel      String? // nombre legible de la subetapa (ej. "Análisis inicial")
+  sectionLabel   String? // sección dentro de la subetapa (ej. "Contexto del cliente")
+  serviceType    String? // tipo de servicio al momento de la ejecución
+  status         AgentRunStatus @default(PENDING)
+  // Fase actual legible para el polling de UI en operaciones largas
+  // ("Leyendo contexto…", "Generando secciones…"). Aditivo, opcional — los
+  // flujos que no la escriben siguen igual (F5.2 del plan de mejoras).
+  currentPhase   String?
+  output         String?        @db.Text // JSON raw de Claude (backup)
 
   // ── Análisis contextuales desde /sessions (Fase 9) ──────────────────────────
-  sourceSessionIds String[] @default([])         // ids de FirefliesSession usados como input
-  filters          Json?                         // snapshot de filtros: { from, to, teamRoles[], onlyWithContent }
-  agentSlug        String?                       // identificador estable: "sales-analysis" | "service-analysis"
+  sourceSessionIds String[] @default([]) // ids de FirefliesSession usados como input
+  filters          Json? // snapshot de filtros: { from, to, teamRoles[], onlyWithContent }
+  agentSlug        String? // identificador estable: "sales-analysis" | "service-analysis"
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -902,7 +920,8 @@ model AgentRun {
   cards                    ClientContextCard[]
   blocks                   CanvasBlock[]
   generatedTimelines       ProjectTimeline[]
-  detailGeneratedTimelines ProjectTimeline[] @relation("TimelineDetailGenerator")
+  detailGeneratedTimelines ProjectTimeline[]   @relation("TimelineDetailGenerator")
+  csAlerts                 CsAlert[] // Éxito del cliente: alertas emitidas por esta corrida
 
   @@index([status])
   @@index([clientId, agentSlug, createdAt])
@@ -917,11 +936,20 @@ model BusinessCase {
   id               String             @id @default(cuid())
   clientId         String
   client           Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  hubspotCompanyId String?            // empresa de HubSpot asociada al caso
-  hubspotDealId    String?            // deal de HubSpot (opcional)
+  hubspotCompanyId String? // empresa de HubSpot asociada al caso
+  hubspotDealId    String? // deal de HubSpot (opcional)
   name             String
   slug             String             @unique // referencia interna (URLs de admin)
   status           BusinessCaseStatus @default(DRAFT)
+
+  // Idioma del caso (código ISO 639-1, ej. "es"/"en") — fuente de verdad persistente
+  // para que TODAS las secciones generen/editen en el mismo idioma. Antes vivía solo
+  // como key no-schema `__lang` en el data del bloque hero (frágil); ahora se persiste
+  // acá y el hero queda como fallback para casos viejos pre-migración.
+  // SIN @default: si tuviera default, Postgres lo aplicaría (virtualmente) a las filas
+  // YA EXISTENTES sin rewrite de tabla — casos viejos en inglés leerían "es" acá y
+  // el fallback al __lang del hero (que sí tiene el idioma correcto) nunca se activaría.
+  language String?
 
   // Clasificación (tira de tags) — MISMO catálogo y modalidad que Project (lib/tags/catalog.ts).
   // El agente del BC los detecta; el CSE corrige. Se PROPAGAN al Project al crear el handoff
@@ -945,11 +973,11 @@ model BusinessCase {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  blocks      BusinessCaseBlock[]          // (v1 — se elimina en la limpieza F7)
-  canvases    ProjectCanvas[]              // canvases versionados (cada "Generar" = uno nuevo)
-  sessions    BusinessCaseSession[]        // sesiones de contexto incluidas/excluidas
+  blocks      BusinessCaseBlock[] // (v1 — se elimina en la limpieza F7)
+  canvases    ProjectCanvas[] // canvases versionados (cada "Generar" = uno nuevo)
+  sessions    BusinessCaseSession[] // sesiones de contexto incluidas/excluidas
   transcripts BusinessCaseTranscript[]
-  useCases    BusinessCaseUseCase[]        // checklist del catálogo de casos de uso
+  useCases    BusinessCaseUseCase[] // checklist del catálogo de casos de uso
   access      BusinessCaseExternalAccess?
   agentRuns   AgentRun[]
 
@@ -966,7 +994,7 @@ model UseCase {
   id             String   @id @default(cuid())
   title          String
   description    String   @db.Text // markdown corto (checklist + landing)
-  price          String?  // TEXTO libre mostrable ("USD 1.200", "desde $X/mes") — NUNCA numérico (sin calculadora, por diseño)
+  price          String? // TEXTO libre mostrable ("USD 1.200", "desde $X/mes") — NUNCA numérico (sin calculadora, por diseño)
   appliesTo      String[] @default([]) // slugs de caseType (case-types.ts); [] = aplica a TODOS los tipos
   tags           String[] @default([]) // slugs del catálogo lib/tags (mismo vocabulario que BusinessCase.tags)
   active         Boolean  @default(true)
@@ -991,7 +1019,7 @@ model BusinessCaseUseCase {
   useCaseId      String
   useCase        UseCase      @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
   selected       Boolean      @default(true)
-  priceOverride  String?      // precio negociado para ESTE caso (texto)
+  priceOverride  String? // precio negociado para ESTE caso (texto)
   createdAt      DateTime     @default(now())
 
   @@unique([businessCaseId, useCaseId])
@@ -1002,7 +1030,7 @@ model BusinessCaseSession {
   id             String       @id @default(cuid())
   businessCaseId String
   businessCase   BusinessCase @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
-  sessionId      String       // FirefliesSession.id (sin FK dura: la sesión puede no existir aún)
+  sessionId      String // FirefliesSession.id (sin FK dura: la sesión puede no existir aún)
   included       Boolean      @default(true) // el vendedor incluye/excluye del contexto de generación
   createdAt      DateTime     @default(now())
 
@@ -1011,22 +1039,22 @@ model BusinessCaseSession {
 }
 
 model BusinessCaseBlock {
-  id              String                @id @default(cuid())
-  businessCaseId  String
-  businessCase    BusinessCase          @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
-  blockType       BusinessCaseBlockType
-  order           Int                   @default(0)
-  content         Json                  // estructurado por blockType (ver lib/business-cases/schema.ts)
-  previousContent Json?                 // deshacer de 1 nivel
-  status          BlockStatus           @default(DRAFT)
-  source          BlockSource           @default(AGENT)
-  isVisible       Boolean               @default(true)
-  needsValidation Boolean               @default(false) // el agente no tuvo contexto suficiente
-  confirmedAt     DateTime?
+  id               String                @id @default(cuid())
+  businessCaseId   String
+  businessCase     BusinessCase          @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
+  blockType        BusinessCaseBlockType
+  order            Int                   @default(0)
+  content          Json // estructurado por blockType (ver lib/business-cases/schema.ts)
+  previousContent  Json? // deshacer de 1 nivel
+  status           BlockStatus           @default(DRAFT)
+  source           BlockSource           @default(AGENT)
+  isVisible        Boolean               @default(true)
+  needsValidation  Boolean               @default(false) // el agente no tuvo contexto suficiente
+  confirmedAt      DateTime?
   confirmedByEmail String?
-  agentRunId      String?               // provenance (sin FK dura)
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  agentRunId       String? // provenance (sin FK dura)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
 
   @@index([businessCaseId])
 }
@@ -1038,7 +1066,7 @@ model BusinessCaseTranscript {
   source         BusinessCaseTranscriptSource
   rawText        String                       @db.Text // pegado, o texto extraído del archivo
   fileName       String?
-  fileUrl        String?                      // path en Supabase Storage (UPLOADED)
+  fileUrl        String? // path en Supabase Storage (UPLOADED)
   fileSize       Int?
   mimeType       String?
   processedAt    DateTime?
@@ -1052,8 +1080,8 @@ model BusinessCaseExternalAccess {
   businessCaseId String       @unique
   businessCase   BusinessCase @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
   accessToken    String       @unique // 64 hex (crypto.randomBytes(32))
-  passwordHash   String                // bcrypt(12)
-  accessPassword String?               // texto plano para que el vendedor lo comparta
+  passwordHash   String // bcrypt(12)
+  accessPassword String? // texto plano para que el vendedor lo comparta
   enabledAt      DateTime     @default(now())
   revokedAt      DateTime?
   lastUsedAt     DateTime?
@@ -1063,6 +1091,37 @@ model BusinessCaseExternalAccess {
 
   @@index([accessToken])
   @@index([businessCaseId])
+}
+
+// Token de un solo uso, de vida ultra-corta, para que Puppeteer (server-to-server,
+// mismo contenedor) autentique su navegación a /print/business-case/[id] SIN
+// reenviar las cookies reales de sesión Supabase (que pueden venir partidas en
+// varias cookies `sb-*`) — mismo principio que BusinessCaseExternalAccess, pero
+// de un solo uso y con TTL de segundos en vez de una sesión de acceso duradera.
+// Rate-limit PERSISTIDO del verify-access externo (proyecto y business case).
+// Antes era un Map en memoria: cada deploy lo reseteaba y un atacante podía
+// re-intentar tras cada restart. Una fila por token atacado; el job
+// maintenance-daily barre filas viejas.
+model ExternalVerifyAttempt {
+  token         String    @id // el accessToken al que se intenta entrar (64 hex)
+  count         Int       @default(0)
+  windowStartAt DateTime
+  blockedUntil  DateTime?
+  updatedAt     DateTime  @updatedAt
+}
+
+model PrintJobToken {
+  id             String    @id @default(cuid())
+  token          String    @unique // 64 hex (crypto.randomBytes(32))
+  businessCaseId String
+  canvasId       String? // null = canvas activo al momento de generar
+  createdByEmail String?
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([token])
+  @@index([expiresAt])
 }
 
 // ─── TeamMember ───────────────────────────────────────────────────────────────
@@ -1094,18 +1153,18 @@ model TeamMember {
   updatedAt           DateTime  @updatedAt
 
   // Inversas
-  appUser                  AppUser?
-  clientAssignments        ClientAssignment[]      @relation("AssignedTo")
-  grantedAssignments       ClientAssignment[]      @relation("GrantedBy")
-  externalAccessesCreated  ProjectExternalAccess[] @relation("ExternalAccessCreator")
+  appUser                 AppUser?
+  clientAssignments       ClientAssignment[]      @relation("AssignedTo")
+  grantedAssignments      ClientAssignment[]      @relation("GrantedBy")
+  externalAccessesCreated ProjectExternalAccess[] @relation("ExternalAccessCreator")
 }
 
 enum TeamRole {
-  CSE         // scoped: solo sus clientes asignados (owner) + los compartidos
-  VENTAS      // ve todo + handoff en cualquiera; NO comparte
-  CSL         // ve todo + handoff en cualquiera + comparte; NO gestiona equipo
-  MARKETING   // capacidades = CSL (etiqueta distinta para análisis/UI)
-  DEV         // equipo técnico: capacidades = VENTAS (ve todo + cronogramas + handoffs) + área Ventas
+  CSE // scoped: solo sus clientes asignados (owner) + los compartidos
+  VENTAS // ve todo + handoff en cualquiera; NO comparte
+  CSL // ve todo + handoff en cualquiera + comparte; NO gestiona equipo
+  MARKETING // capacidades = CSL (etiqueta distinta para análisis/UI)
+  DEV // equipo técnico: capacidades = VENTAS (ve todo + cronogramas + handoffs) + área Ventas
   SUPER_ADMIN // todo + ÚNICO que gestiona el equipo (alta/baja/cambio de rol)
 }
 
@@ -1118,7 +1177,7 @@ enum TeamRole {
 
 model AppUser {
   id           String      @id @default(cuid())
-  authUserId   String?     @unique          // FK suave a auth.users.id de Supabase (null hasta primer login)
+  authUserId   String?     @unique // FK suave a auth.users.id de Supabase (null hasta primer login)
   email        String      @unique
   kind         AppUserKind
   teamMemberId String?     @unique
@@ -1153,7 +1212,7 @@ model ClientAssignment {
   teamMember   TeamMember?    @relation("AssignedTo", fields: [teamMemberId], references: [id], onDelete: Cascade)
   targetRole   TeamRole?
   kind         AssignmentKind
-  grantedById  String         // FK al TeamMember (CSL/SUPER_ADMIN) que compartió
+  grantedById  String // FK al TeamMember (CSL/SUPER_ADMIN) que compartió
   grantedBy    TeamMember     @relation("GrantedBy", fields: [grantedById], references: [id], onDelete: Restrict)
   reason       String?        @db.Text
   createdAt    DateTime       @default(now())
@@ -1188,36 +1247,36 @@ model ExecutionLog {
 // ============================================
 
 enum KnowledgeType {
-  PROCESS       // Procesos operativos (cómo ejecutar una fase, cadencia semanal, etc.)
-  METHODOLOGY   // Metodologías (Inbound, Loop Framework, gestión del cambio)
-  HUBSPOT_SPEC  // Features y specs de HubSpot (releases, capacidades, limitaciones)
+  PROCESS // Procesos operativos (cómo ejecutar una fase, cadencia semanal, etc.)
+  METHODOLOGY // Metodologías (Inbound, Loop Framework, gestión del cambio)
+  HUBSPOT_SPEC // Features y specs de HubSpot (releases, capacidades, limitaciones)
   BEST_PRACTICE // Mejores prácticas descubiertas en proyectos anteriores
-  TEMPLATE      // Plantillas reutilizables (agendas, estructuras de informes, etc.)
+  TEMPLATE // Plantillas reutilizables (agendas, estructuras de informes, etc.)
 }
 
 enum KnowledgeStatus {
-  DRAFT     // En borrador, no visible para agentes
+  DRAFT // En borrador, no visible para agentes
   PUBLISHED // Activo, los agentes lo consultan
-  ARCHIVED  // Obsoleto, no se consulta pero se conserva
+  ARCHIVED // Obsoleto, no se consulta pero se conserva
 }
 
 enum TagCategory {
-  SERVICE      // Servicio: loop_marketing, loop_sales, loop_service, proyecto_temporal
-  STAGE        // Etapa: diagnostico, mvp, adopcion
-  SUBSTAGE     // Subetapa: analisis_inicial, funnel, mapeo, kickoff, piloto, escalamiento, etc.
-  DOMAIN       // Dominio funcional: marketing, sales, service, cross_department
+  SERVICE // Servicio: loop_marketing, loop_sales, loop_service, proyecto_temporal
+  STAGE // Etapa: diagnostico, mvp, adopcion
+  SUBSTAGE // Subetapa: analisis_inicial, funnel, mapeo, kickoff, piloto, escalamiento, etc.
+  DOMAIN // Dominio funcional: marketing, sales, service, cross_department
   HUBSPOT_AREA // Área de HubSpot: crm, automation, reporting, breeze, workflows, pipelines
-  TOPIC        // Tema libre: gestion_cambio, liderazgo, onboarding, data_quality, etc.
+  TOPIC // Tema libre: gestion_cambio, liderazgo, onboarding, data_quality, etc.
 }
 
 model KnowledgeDocument {
-  id      String          @id @default(cuid())
-  type    KnowledgeType
-  status  KnowledgeStatus @default(DRAFT)
+  id     String          @id @default(cuid())
+  type   KnowledgeType
+  status KnowledgeStatus @default(DRAFT)
 
   title   String
-  summary String?   // Resumen corto para listados y contexto rápido de agentes
-  content String    @db.Text // Contenido completo en Markdown
+  summary String? // Resumen corto para listados y contexto rápido de agentes
+  content String  @db.Text // Contenido completo en Markdown
 
   version Int @default(1)
 
@@ -1242,8 +1301,8 @@ model KnowledgeDocument {
 model KnowledgeTag {
   id       String      @id @default(cuid())
   category TagCategory
-  value    String      // Ej: "loop_marketing"
-  label    String      // Ej: "Loop Marketing"
+  value    String // Ej: "loop_marketing"
+  label    String // Ej: "Loop Marketing"
 
   documents KnowledgeDocument[]
 
@@ -1274,22 +1333,22 @@ model KnowledgeEmbedding {
 // ── FirefliesSession — caché local de sesiones de Fireflies y Google Meet ─────
 
 model FirefliesSession {
-  id             String    @id
-  title          String
-  date           DateTime
-  duration       Float     @default(0)
-  participants   String[]
-  summary        Json?
-  transcript     String?   @db.Text
-  enrichedAt     DateTime?           // cuándo se trajo transcript/summary (null = pendiente)
-  syncedAt       DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  source         String    @default("google_meet") // "google_meet" (Fireflies eliminado; "fireflies" solo en filas históricas)
-  googleDocId    String?               // ID del Google Doc de la reunión (Meet)
-  googleEventId  String?               // ID del evento de Google Calendar (Meet)
-  organizerEmail String?               // Email del organizador (para impersonación en enriquecimiento)
-  manualClientId String?               // override manual del matching automático de cliente
-  resolvedClientId String?             // PERF #1: cliente resuelto (materializado de categorizeSession) para "última actividad"/bookends sin cargar todas las sesiones. Re-resuelto en write/override/mutación de Client.
+  id               String    @id
+  title            String
+  date             DateTime
+  duration         Float     @default(0)
+  participants     String[]
+  summary          Json?
+  transcript       String?   @db.Text
+  enrichedAt       DateTime? // cuándo se trajo transcript/summary (null = pendiente)
+  syncedAt         DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  source           String    @default("google_meet") // "google_meet" (Fireflies eliminado; "fireflies" solo en filas históricas)
+  googleDocId      String? // ID del Google Doc de la reunión (Meet)
+  googleEventId    String? // ID del evento de Google Calendar (Meet)
+  organizerEmail   String? // Email del organizador (para impersonación en enriquecimiento)
+  manualClientId   String? // override manual del matching automático de cliente
+  resolvedClientId String? // PERF #1: cliente resuelto (materializado de categorizeSession) para "última actividad"/bookends sin cargar todas las sesiones. Re-resuelto en write/override/mutación de Client.
 
   // F5: sub-topics detectados por IA (lead-scoring, workflow-builder, etc.).
   // Lista canónica viva en lib/sessions/topic-vocabulary.ts y se sesga por
@@ -1318,9 +1377,9 @@ model FirefliesSession {
 //   4. La siguiente sesión vuelve a iterar
 
 enum MinuteStatus {
-  DRAFT     // generada por agente, esperando revisión del CSE
-  REVIEWED  // CSE la revisó y aceptó sin cambios
-  EDITED    // CSE la editó manualmente (también implica aceptada)
+  DRAFT // generada por agente, esperando revisión del CSE
+  REVIEWED // CSE la revisó y aceptó sin cambios
+  EDITED // CSE la editó manualmente (también implica aceptada)
 }
 
 enum ActionStatus {
@@ -1336,17 +1395,17 @@ model SessionMinute {
   session   FirefliesSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   // Síntesis estructurada de la reunión
-  summary    String  @db.Text       // resumen ejecutivo (1-2 párrafos)
-  agreements Json?                  // [{ text, source? }]
-  decisions  Json?                  // [{ text, rationale? }]
-  risks      Json?                  // [{ text, severity? "low" | "med" | "high" }]
-  topics     Json?                  // ["bullet 1", "bullet 2"]
+  summary    String @db.Text // resumen ejecutivo (1-2 párrafos)
+  agreements Json? // [{ text, source? }]
+  decisions  Json? // [{ text, rationale? }]
+  risks      Json? // [{ text, severity? "low" | "med" | "high" }]
+  topics     Json? // ["bullet 1", "bullet 2"]
 
   // Estado y trazabilidad
-  status               MinuteStatus @default(DRAFT)
-  generatedByAgentRunId String?     // FK suave (no cascade) al AgentRun que la creó
-  reviewedAt           DateTime?
-  reviewedByEmail      String?      // email del CSE que aceptó/editó
+  status                MinuteStatus @default(DRAFT)
+  generatedByAgentRunId String? // FK suave (no cascade) al AgentRun que la creó
+  reviewedAt            DateTime?
+  reviewedByEmail       String? // email del CSE que aceptó/editó
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1403,10 +1462,10 @@ model SessionProject {
   projectId String
   project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  isPrimary  Boolean @default(false)
-  source     String  @default("agent") // "agent" | "manual" | "legacy"
-  confidence Float?                    // 0..1, solo si source="agent"
-  rationale  String? @db.Text          // por qué la IA lo asignó
+  isPrimary       Boolean  @default(false)
+  source          String   @default("agent") // "agent" | "manual" | "legacy"
+  confidence      Float? // 0..1, solo si source="agent"
+  rationale       String?  @db.Text // por qué la IA lo asignó
   // Override del humano para el HANDOFF, independiente del filtro automático (título de
   // venta/handoff/kickoff o Ventas en la sala): null = seguí la regla; true = forzá
   // incluir (agregada a mano desde el pop-up); false = forzá excluir (la "X" del panel).
@@ -1424,34 +1483,34 @@ model SessionProject {
 // Generado periódicamente por agent-participants-analyzer. Sobreescribible.
 
 model ProjectParticipantSnapshot {
-  id         String   @id @default(cuid())
-  projectId  String   @unique
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  stats      Json     // { clientSponsorAttendance, lastSeenByRole, averageHeadcount, ... }
-  sessionsAnalyzed Int @default(0)
+  stats                 Json // { clientSponsorAttendance, lastSeenByRole, averageHeadcount, ... }
+  sessionsAnalyzed      Int     @default(0)
   generatedByAgentRunId String?
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ─── Canvas Suggestions (aprobación de cambios al Client Canvas) ─────────────
 
 model CanvasSuggestion {
-  id         String   @id @default(cuid())
-  clientId   String
-  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  agentRunId String?
-  section    String   // key del canvas: "perfil", "stakeholders", etc.
-  field      String?  // campo específico dentro de la sección (para sugerencias granulares)
-  current    Json?    // valor actual de la sección al momento de la sugerencia
-  suggested  Json     // valor sugerido por el agente
-  suggestedValue String? @db.Text // valor sugerido como texto (alternativa a JSON)
-  status     String   @default("pending") // pending | accepted | rejected
-  source     String?  // de dónde viene: "run:ID", "fireflies:TITLE", "manual"
-  sourceLabel String? // label legible: "Análisis inicial · 24 mar", "Sesión kickoff UCI"
-  createdAt  DateTime @default(now())
+  id             String   @id @default(cuid())
+  clientId       String
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  agentRunId     String?
+  section        String // key del canvas: "perfil", "stakeholders", etc.
+  field          String? // campo específico dentro de la sección (para sugerencias granulares)
+  current        Json? // valor actual de la sección al momento de la sugerencia
+  suggested      Json // valor sugerido por el agente
+  suggestedValue String?  @db.Text // valor sugerido como texto (alternativa a JSON)
+  status         String   @default("pending") // pending | accepted | rejected
+  source         String? // de dónde viene: "run:ID", "fireflies:TITLE", "manual"
+  sourceLabel    String? // label legible: "Análisis inicial · 24 mar", "Sesión kickoff UCI"
+  createdAt      DateTime @default(now())
 
   @@index([clientId, status])
 }
@@ -1463,13 +1522,13 @@ model CanvasSuggestion {
 
 model SessionCategory {
   id        String   @id @default(cuid())
-  name      String   @unique              // "Interna", "Partner HubSpot", "Partner AtomChat"
-  slug      String   @unique              // "interna", "partner-hubspot" (URL-safe)
-  domains   String[]                      // ["smarteamcr.com"], ["hubspot.com", "hubspotcr.com"]
-  kind      String   @default("custom")   // "internal" | "partner" | "custom" — semántica para UI/orden
-  color     String?                       // hex (#94A3B8) para tag visual en sidebar
-  order     Int      @default(0)          // orden de aparición en sidebar
-  isDefault Boolean  @default(false)      // las default no se pueden eliminar (sí editar)
+  name      String   @unique // "Interna", "Partner HubSpot", "Partner AtomChat"
+  slug      String   @unique // "interna", "partner-hubspot" (URL-safe)
+  domains   String[] // ["smarteamcr.com"], ["hubspot.com", "hubspotcr.com"]
+  kind      String   @default("custom") // "internal" | "partner" | "custom" — semántica para UI/orden
+  color     String? // hex (#94A3B8) para tag visual en sidebar
+  order     Int      @default(0) // orden de aparición en sidebar
+  isDefault Boolean  @default(false) // las default no se pueden eliminar (sí editar)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -1483,15 +1542,15 @@ model SessionCategory {
 
 enum IcpSection {
   FIRMOGRAFICA_DESCRIPTOR // Firmográfica — descriptores
-  FIRMOGRAFICA_INDUSTRIA  // Firmográfica — industrias con validación real
-  BEHAVIORAL_REVENUE      // Behavioral — revenue intelligence
-  BEHAVIORAL_CANALES      // Behavioral — canales y comportamiento
-  BEHAVIORAL_ORG          // Behavioral — la organización
-  BEHAVIORAL_DECISION     // Behavioral — estructura de decisión
-  SIGNAL_ANTI             // Señales — Anti-ICP
-  SIGNAL_FUERTE           // Señales fuertes
-  SIGNAL_MEDIA            // Señales medias
-  SIGNAL_DEBIL            // Señales débiles
+  FIRMOGRAFICA_INDUSTRIA // Firmográfica — industrias con validación real
+  BEHAVIORAL_REVENUE // Behavioral — revenue intelligence
+  BEHAVIORAL_CANALES // Behavioral — canales y comportamiento
+  BEHAVIORAL_ORG // Behavioral — la organización
+  BEHAVIORAL_DECISION // Behavioral — estructura de decisión
+  SIGNAL_ANTI // Señales — Anti-ICP
+  SIGNAL_FUERTE // Señales fuertes
+  SIGNAL_MEDIA // Señales medias
+  SIGNAL_DEBIL // Señales débiles
 }
 
 enum PillarOrigin {
@@ -1513,14 +1572,14 @@ enum CampaignChannel {
 }
 
 enum MarketingRunKind {
-  INGEST   // solo scraping de fuentes
+  INGEST // solo scraping de fuentes
   GENERATE // solo agente de generación (sobre lo guardado)
-  CHAIN    // ingesta → generación (si hubo posts nuevos)
+  CHAIN // ingesta → generación (si hubo posts nuevos)
 }
 
 enum MarketingRunTrigger {
   MANUAL // CTA en /contenido
-  CRON   // viernes 6:00 America Costa Rica
+  CRON // viernes 6:00 America Costa Rica
 }
 
 enum MarketingRunStatus {
@@ -1534,7 +1593,7 @@ model MarketingSettings {
   id              String    @id @default("marketing")
   brandVoice      String    @db.Text // voz/posicionamiento (markdown) — editable en /marketing/voz
   lastCronRunAt   DateTime? // nullable porque nunca corrió — display en /contenido
-  lastCronDateKey String?   // nullable ídem — "YYYY-MM-DD" (día CR) del último disparo; claim atómico anti-doble-fire
+  lastCronDateKey String? // nullable ídem — "YYYY-MM-DD" (día CR) del último disparo; claim atómico anti-doble-fire
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
@@ -1555,7 +1614,7 @@ model IcpItem {
 model BuyerPersona {
   id          String   @id @default(cuid())
   name        String
-  role        String?  // nullable porque el cargo/segmento puede cargarse después
+  role        String? // nullable porque el cargo/segmento puede cargarse después
   description String   @db.Text // quién es, contexto (markdown)
   pains       String?  @db.Text // nullable porque se carga incremental
   goals       String?  @db.Text // nullable ídem
@@ -1574,6 +1633,7 @@ model ContentPillar {
   description String?      @db.Text // nullable porque un pilar puede ser solo un nombre al alta
   origin      PillarOrigin @default(HUMAN)
   active      Boolean      @default(true)
+  isCampaign  Boolean      @default(false) // énfasis de campaña: sesga la generación hacia este tema (activa = isCampaign && active)
   order       Int          @default(0)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -1586,7 +1646,7 @@ model ContentPillar {
 model InspirationSource {
   id             String    @id @default(cuid())
   profileUrl     String    @unique
-  label          String?   // nullable porque al alta a veces solo hay URL
+  label          String? // nullable porque al alta a veces solo hay URL
   active         Boolean   @default(true)
   lastFetchedAt  DateTime? // nullable hasta la primera ingesta
   lastFetchError String?   @db.Text // nullable = última ingesta OK; error del provider si falló
@@ -1605,8 +1665,8 @@ model InspirationPost {
   sourceId     String
   source       InspirationSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   externalId   String            @unique // id/URN del post en LinkedIn — DEDUP KEY
-  url          String?           // nullable porque algunos actors no devuelven permalink
-  authorName   String?           // nullable ídem
+  url          String? // nullable porque algunos actors no devuelven permalink
+  authorName   String? // nullable ídem
   text         String            @db.Text
   likeCount    Int               @default(0)
   commentCount Int               @default(0)
@@ -1628,18 +1688,18 @@ model MarketingRun {
   kind                   MarketingRunKind
   trigger                MarketingRunTrigger @default(MANUAL)
   status                 MarketingRunStatus  @default(RUNNING)
-  phase                  String?   // nullable cuando terminó — copy de progreso ("ingesta 3/8")
-  newPostsCount          Int?      // nullable hasta terminar la ingesta — posts NUEVOS post-dedup
-  fetchedPostsCount      Int?      // total traído del provider
+  phase                  String? // nullable cuando terminó — copy de progreso ("ingesta 3/8")
+  newPostsCount          Int? // nullable hasta terminar la ingesta — posts NUEVOS post-dedup
+  fetchedPostsCount      Int? // total traído del provider
   sourcesOkCount         Int?
   sourcesErrorCount      Int?
-  contentIdeasCount      Int?      // nullable hasta terminar la generación
+  contentIdeasCount      Int? // nullable hasta terminar la generación
   campaignIdeasCount     Int?
   pillarSuggestionsCount Int?
-  error                  String?   @db.Text // mensaje REAL cuando status=ERROR
-  rawOutput              String?   @db.Text // JSON crudo de Claude (backup/debug)
-  startedByEmail         String?   // nullable porque el CRON no tiene usuario
-  createdAt              DateTime  @default(now())
+  error                  String?             @db.Text // mensaje REAL cuando status=ERROR
+  rawOutput              String?             @db.Text // JSON crudo de Claude (backup/debug)
+  startedByEmail         String? // nullable porque el CRON no tiene usuario
+  createdAt              DateTime            @default(now())
   finishedAt             DateTime?
 
   contentIdeas      ContentIdea[]
@@ -1654,16 +1714,21 @@ model MarketingRun {
 // Registro estructurado por campo para migrar a HubSpot copiando campo a campo.
 model ContentIdea {
   id                  String         @id @default(cuid())
-  runId               String?        // nullable porque la idea sobrevive si se borra la corrida
+  runId               String? // nullable porque la idea sobrevive si se borra la corrida
   run                 MarketingRun?  @relation(fields: [runId], references: [id], onDelete: SetNull)
-  pillarId            String?        // nullable porque puede referir a un pilar SUGERIDO aún no aprobado
+  pillarId            String? // nullable porque puede referir a un pilar SUGERIDO aún no aprobado
   pillar              ContentPillar? @relation(fields: [pillarId], references: [id], onDelete: SetNull)
-  suggestedPillarName String?        // nullable — nombre del pilar NUEVO propuesto; se linkea al aprobar
+  suggestedPillarName String? // nullable — nombre del pilar NUEVO propuesto; se linkea al aprobar
   title               String
   copy                String         @db.Text // copy listo para red social
   imageConcept        String         @db.Text // descripción TEXTUAL del concepto de imagen (no se genera)
-  usedAt              DateTime?      // nullable = pendiente; set = ya se publicó/usó — sale del filtro "Pendientes"
+  selectedAt          DateTime? // nullable porque la idea arranca sugerida; set = "seleccionada" (en trabajo)
+  usedAt              DateTime? // nullable; set = "aprobada" (lista para publicar). Estado derivado, ver lib/marketing/schema.ts ideaState()
+  discardedAt         DateTime? // nullable; set = "descartada" (rechazada, reversible). Gana sobre selected/used → reabrir vuelve al estado previo
+  hubspotDraftAt      DateTime? // nullable; set = ya se envió a HubSpot como borrador social (API broadcast). Ver lib/hubspot/social-broadcast.ts
+  hubspotDraftGuids   String[]       @default([]) // broadcastGuid(s) de los borradores creados en HubSpot (uno por canal)
   createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @default(now()) @updatedAt // rastrea la edición manual/IA del copy (default cubre filas existentes)
 
   sources ContentIdeaSource[]
 
@@ -1685,14 +1750,14 @@ model ContentIdeaSource {
 // Idea de campaña (PPC / Google Search) — aprobable / descartable.
 model CampaignIdea {
   id          String                  @id @default(cuid())
-  runId       String?                 // nullable porque sobrevive a la corrida
+  runId       String? // nullable porque sobrevive a la corrida
   run         MarketingRun?           @relation(fields: [runId], references: [id], onDelete: SetNull)
   title       String
   channel     CampaignChannel
   description String                  @db.Text // objetivo, audiencia, ángulo, keywords si aplica
   status      MarketingApprovalStatus @default(PENDING)
   reviewedAt  DateTime? // nullable hasta aprobar/descartar
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime                @default(now())
 
   @@index([status, createdAt])
 }
@@ -1700,7 +1765,7 @@ model CampaignIdea {
 // Sugerencia de pilar NUEVO del agente. PENDING → approve (crea ContentPillar) / discard.
 model PillarSuggestion {
   id               String                  @id @default(cuid())
-  runId            String?                 // nullable porque sobrevive a la corrida
+  runId            String? // nullable porque sobrevive a la corrida
   run              MarketingRun?           @relation(fields: [runId], references: [id], onDelete: SetNull)
   name             String
   description      String?                 @db.Text
@@ -1712,4 +1777,286 @@ model PillarSuggestion {
   createdAt        DateTime                @default(now())
 
   @@index([status])
+}
+
+// ─── Éxito del cliente (módulo CS) ───────────────────────────────────────────
+// Panel /exito-cliente: eventos crudos del cronograma (cola del watchdog),
+// alertas triadas por el agente, snapshot de señales HubSpot por cliente, y
+// estado de jobs del scheduler. TODO ADITIVO (regla dual-PC).
+
+// Qué entidad del cronograma cambió.
+enum CsEventEntity {
+  TIMELINE
+  PHASE
+  TASK
+}
+
+// Qué pasó. STATUS_CHANGED cubre suspender (→SUSPENDED); MOVED = cambio de
+// semana/orden material; EDITED = otros campos (título, party, type, fechas).
+enum CsEventAction {
+  STATUS_CHANGED
+  CREATED
+  DELETED
+  MOVED
+  EDITED
+  ANCHOR_CHANGED
+  PROGRESS_APPLIED
+  TIMELINE_DELETED
+  DETAIL_DELETED
+}
+
+// Desde qué superficie se mutó (para que el watchdog distinga edición humana
+// granular, guardado bulk del editor, apply de propuesta IA y apply de avance).
+enum CsEventSource {
+  UI_PATCH
+  UI_PUT
+  AI_ASSIST_APPLY
+  PROGRESS_APPLY
+}
+
+enum CsAlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum CsAlertCategory {
+  TIMELINE_OVERDUE
+  TASK_MODIFICATION
+  SESSION_MISSED
+  PIPELINE_MISMATCH
+  ENGAGEMENT_COLD
+  SUPPORT_TICKETS
+  RENEWAL_RISK
+  CHURN_RISK
+  EXPANSION_OPPORTUNITY
+  PROACTIVE_ACTION
+  OTHER
+  // CS360 (agregados AL FINAL — ADD VALUE es aditivo, jamás reordenar):
+  ADOPTION_RISK // uso bajo / tendencia negativa / adopción baja
+  LICENSE_UNUSED // licencias pagadas sin asignar
+  PROJECT_BLOCKED // proyecto bloqueado/atrasado según HubSpot (hs_status + motivo)
+}
+
+enum CsAlertStatus {
+  OPEN
+  SEEN
+  RESOLVED
+  DISMISSED
+}
+
+// Evento CRUDO de mutación del cronograma — lo emiten los endpoints de timeline
+// (helper lib/cs/timeline-events.ts). NO reemplaza a TimelineChange (auditoría
+// D.3 por snapshot con reason): esto es la COLA del watchdog, granular y barata.
+// label denormalizado → el evento se entiende aunque la tarea/fase se haya borrado.
+model TimelineEvent {
+  id         String        @id @default(cuid())
+  projectId  String
+  project    Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clientId   String // denormalizado: triage por cliente sin join
+  timelineId String? // sin FK dura: el timeline puede borrarse y el evento debe sobrevivir
+  entityType CsEventEntity
+  entityId   String? // id de la tarea/fase (puede ya no existir)
+  label      String // título de tarea / nombre de fase al momento del cambio
+  action     CsEventAction
+  before     Json? // SOLO los campos que cambiaron (compacto)
+  after      Json?
+  actorEmail String? // del guard (quién lo hizo)
+  source     CsEventSource
+  createdAt  DateTime      @default(now())
+
+  // Cola del watchdog: null = pendiente de triage. processedByRunId se setea
+  // primero (claim atómico por updateMany); processedAt al cerrar el run.
+  processedAt      DateTime?
+  processedByRunId String?
+
+  @@index([projectId, processedAt])
+  @@index([createdAt])
+}
+
+// Alerta TRIADA por el watchdog (agent-cs-watchdog) para la líder de CS.
+// El agente decide severidad + razón; el runner deduplica por dedupeKey
+// (OPEN/SEEN existente → occurrences++/lastDetectedAt, no fila nueva).
+model CsAlert {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId String? // null = alerta a nivel cliente (frialdad, renovación)
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  severity        CsAlertSeverity
+  category        CsAlertCategory
+  title           String
+  reason          String          @db.Text // el "por qué" del agente
+  suggestedAction String?         @db.Text // acción proactiva propuesta (expansión, rescate…)
+  evidence        Json // { eventIds?, taskIds?, dealIds?, sessionIds?, … } para drill
+
+  // Dedup (lo aplica el runner en código; index no-unique a propósito: una
+  // alerta RESUELTA vieja puede reaparecer como fila nueva).
+  dedupeKey       String
+  occurrences     Int      @default(1)
+  firstDetectedAt DateTime @default(now())
+  lastDetectedAt  DateTime @default(now())
+
+  // Ciclo de vida en el feed.
+  status          CsAlertStatus @default(OPEN)
+  seenAt          DateTime?
+  seenByEmail     String?
+  resolvedAt      DateTime?
+  resolvedByEmail String?
+
+  agentRunId String?
+  agentRun   AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, severity, lastDetectedAt])
+  @@index([clientId, status])
+  @@index([dedupeKey, status])
+}
+
+// Snapshot/cache de señales HubSpot por cliente (1:1). Los Json guardan el crudo
+// procesado; los escalares habilitan sort/filtros del panel sin parsear Json.
+model ClientCsSignals {
+  id          String   @id @default(cuid())
+  clientId    String   @unique
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  fetchedAt   DateTime @default(now())
+  fetchStatus String   @default("ok") // ok | partial | error
+  errors      Json? // detalle por señal cuando fetchStatus != ok
+
+  deals      Json? // { open: [...], renewals: [...], expansion: [...] }
+  engagement Json? // { lastAt, counts30d/90d, lastItems: [...] }
+  tickets    Json? // { supported, open: [...], recent: [...] }
+
+  lastEngagementAt    DateTime?
+  engagements90d      Int?
+  openTicketCount     Int?
+  ticketsSupported    Boolean   @default(false) // false = scope no autorizado (degradación)
+  nextRenewalCloseAt  DateTime?
+  openExpansionAmount Float?
+  openDealCount       Int?
+
+  updatedAt DateTime @updatedAt
+}
+
+// CS360 — snapshot del objeto PARTNER CLIENTS de HubSpot (portal de Smarteam como
+// Solutions Partner): uso/adopción por hub, licencias, MRR, renovaciones, equipo de
+// HubSpot asignado. La clave natural es el record de HubSpot (existe ANTES del match
+// con Client); clientId se llena al matchear por Associated Company ID o dominio.
+// `properties` guarda el crudo COMPLETO (tolerancia a internal names); los escalares
+// se completan desde las properties confirmadas y alimentan charts/sorts sin parsear Json.
+// ⚠ El scope del objeto NO está autorizado hoy (403) — el sync degrada con supported:false
+// y todo arranca solo al re-autorizar la app OAuth (contrato ticketsSupported).
+model ClientPartnerSnapshot {
+  id                     String    @id @default(cuid())
+  hubspotPartnerClientId String    @unique // id del record partner_clients en HubSpot
+  clientId               String?   @unique // null = huérfano transitorio (pre-match)
+  client                 Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  fetchedAt              DateTime  @default(now())
+  fetchStatus            String    @default("ok") // ok | partial
+  properties             Json // crudo completo del record
+
+  domain                 String?
+  associatedCompanyIds   String[]  @default([])
+  uusScore               Float? // Calificación de uso unificada (UUS)
+  uusTrend               Json? // tendencia últimas 4 semanas (número o serie — según API)
+  // Componentes del UUS (managed only; nombres reales se confirman al autorizar el scope):
+  activationScore        Float? // binario 0/100: ¿usó las herramientas core en los primeros 3 meses?
+  toolUsageScore         Float? // 0-100: uso activo vs empresas similares
+  valueMetricsScore      Float? // 0-100: resultados (deals, contactos, tráfico)
+  consumptionScore       Float? // 0-100: consumo de lo pagado (seats/contactos vs límite)
+  marketingScore         Float?
+  salesScore             Float?
+  serviceScore           Float?
+  commerceScore          Float?
+  seats                  Json? // { core|sales|service: { assigned, available, limit } }
+  marketingContactsLimit Int?
+  marketingContactsUsed  Int?
+  mrrTotal               Float?
+  mrrManaged             Float?
+  mrrUpForRenewal        Float?
+  nextRenewalAt          DateTime?
+  renewalsByHub          Json? // { marketing|sales|service|ops: fecha }
+  managedExpiryAt        DateTime? // caducidad estimada de la relación gestionada
+  cancellationHubs       String? // hubs de próxima cancelación (señal de churn)
+  revenueSignal          String? // señal de ingresos (ej. "Límite de créditos")
+  revenueSignalDetail    String?   @db.Text // explicación de la señal
+  hubEditions            Json? // { marketing|sales|service|ops|content|commerce: edition }
+  activeProducts         String? // todos los productos activos
+  hsCsmName              String? // Customer Success Manager de HubSpot
+  hsCsmEmail             String?
+  hsGrowthName           String? // especialista en crecimiento de HubSpot
+  hsGrowthEmail          String?
+  cslImplementaciones    String? // custom "CSL | Implementaciones"
+  country                String?
+
+  updatedAt DateTime @updatedAt
+}
+
+// CS360 — HISTORIAL semanal de uso por partner client (el UUS se recalcula
+// semanalmente en HubSpot): una fila por (record, semana ISO) — el sync diario
+// upsertea la fila de la semana en curso, así queda la última foto de cada semana.
+// Permite calcular tendencia PROPIA (subiendo/bajando/estancado) más allá del
+// campo de tendencia que reporta HubSpot. CONFIDENCIAL (términos de partner):
+// solo superficies internas CSL/SUPER_ADMIN, jamás vistas externas del cliente.
+model PartnerUsageSnapshot {
+  id                     String   @id @default(cuid())
+  hubspotPartnerClientId String // record de partner_clients (sin FK dura)
+  clientId               String? // denormalizado al momento de la captura
+  weekKey                String // "YYYY-Www" (semana ISO)
+  capturedAt             DateTime @default(now())
+  uusScore               Float?
+  activationScore        Float?
+  toolUsageScore         Float?
+  valueMetricsScore      Float?
+  consumptionScore       Float?
+  marketingScore         Float?
+  salesScore             Float?
+  serviceScore           Float?
+  marketingContactsUsed  Int?
+  marketingContactsLimit Int?
+  seats                  Json?
+  mrrTotal               Float?
+  nextRenewalAt          DateTime?
+
+  @@unique([hubspotPartnerClientId, weekKey])
+  @@index([clientId, weekKey])
+}
+
+// CS360 — resumen ejecutivo POR CUENTA generado por agente (agent-cs-account-brief,
+// prompt en DB). Cada statement CITA su fuente con fecha ("Minuta kickoff · 2 jul",
+// "HubSpot Partner · hoy") — regla dura: sin fuente no hay afirmación. staleAt lo
+// marca el partner-sync cuando cambian los inputs; la regeneración es on-demand.
+model CsAccountBrief {
+  id          String    @id @default(cuid())
+  clientId    String    @unique
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  headline    String?   @db.Text // una línea: el estado de la cuenta
+  statements  Json // [{ text, source: { kind, id, label, date } }]
+  agentRunId  String? // AgentRun que lo generó (trazabilidad)
+  generatedAt DateTime  @default(now())
+  staleAt     DateTime? // inputs cambiaron después de generar → banner "desactualizado"
+  updatedAt   DateTime  @updatedAt
+}
+
+// Config singleton del módulo CS (id="cs"). watchdogEnabled = kill-switch en DB
+// (apagar el watchdog sin redeploy). El estado de cron vive en CronJobState.
+model CsSettings {
+  id              String   @id @default("cs")
+  watchdogEnabled Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Estado genérico de jobs del scheduler (lib/jobs) — claim atómico anti-doble-fire
+// por compare-and-set de lastRunDateKey (patrón de MarketingSettings.lastCronDateKey,
+// generalizado por jobKey). Marketing conserva su claim propio por ahora.
+model CronJobState {
+  id             String    @id // jobKey ("cs-signals", "cs-watchdog-daily", …)
+  lastRunDateKey String? // "YYYY-MM-DD" (día CR) del último disparo
+  lastRunAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }

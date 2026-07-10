@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-alt/
 /out/
 
 # production
@@ -47,3 +48,4 @@ next-env.d.ts
 # Claude Code / IDE
 .claude/
 .env.local
+backups/

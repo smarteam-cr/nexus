@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { EMPTY_CLIENT_CANVAS, EMPTY_PROJECT_CANVAS } from "./template";
@@ -105,10 +106,9 @@ Extrae la información relevante de las cards para actualizar ambos canvas.`;
       messages: [{ role: "user", content: userMessage }],
     });
 
-    const text = msg.content
-      .filter((b): b is { type: "text"; text: string } => b.type === "text")
-      .map((b) => b.text)
-      .join("");
+    // (b.type === "text" narrowea al TextBlock del SDK — un predicate custom con
+    // shape propio deja de compilar cuando el SDK agrega campos requeridos.)
+    const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return;
@@ -152,13 +152,17 @@ Extrae la información relevante de las cards para actualizar ambos canvas.`;
         });
 
         await prisma.canvasSuggestion.createMany({
-          data: entries.map(([section, suggested]) => ({
-            clientId,
-            agentRunId,
-            section,
-            current: (clientCanvas as Record<string, unknown>)[section] ?? null,
-            suggested: suggested as object,
-          })),
+          data: entries.map(([section, suggested]) => {
+            const cur = (clientCanvas as unknown as Record<string, unknown>)[section];
+            return {
+              clientId,
+              agentRunId,
+              section,
+              // Json nullable: null explícito requiere el sentinel de Prisma.
+              current: cur == null ? Prisma.JsonNull : (cur as Prisma.InputJsonValue),
+              suggested: suggested as Prisma.InputJsonValue,
+            };
+          }),
         });
       }
     }

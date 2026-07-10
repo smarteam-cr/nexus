@@ -17,6 +17,7 @@ import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import type { TimelineTaskStatus } from "@prisma/client";
 import { actualDatesPatch } from "@/lib/timeline/actual-dates";
+import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
 
 const STATUSES = ["PENDING", "IN_PROGRESS", "DONE", "SUSPENDED"] as const;
 
@@ -45,10 +46,18 @@ export async function PATCH(
   }
 
   // Ownership por traversal: la task debe pertenecer a una fase del timeline
-  // de ESTE proyecto (no alcanza con que exista el id).
+  // de ESTE proyecto (no alcanza con que exista el id). title/status/clientId
+  // extra alimentan el evento del watchdog (Éxito del cliente).
   const task = await prisma.timelineTask.findFirst({
     where: { id: taskId, phase: { timeline: { projectId } } },
-    select: { id: true, actualStart: true, phaseId: true },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      actualStart: true,
+      phaseId: true,
+      phase: { select: { timeline: { select: { id: true, project: { select: { clientId: true } } } } } },
+    },
   });
   if (!task) {
     return NextResponse.json({ error: "Tarea no encontrada en este proyecto" }, { status: 404 });
@@ -85,8 +94,37 @@ export async function PATCH(
         await tx.timelinePhase.update({ where: { id: task.phaseId }, data: { status: "IN_PROGRESS" } });
       }
     }
+
     return u;
   });
+
+  // Evento crudo para el watchdog — POST-tx y best-effort (como los otros 6 endpoints
+  // instrumentados): un fallo del insert de telemetría NUNCA rollbackea ni 500ea el
+  // cambio de status, que es la interacción más frecuente del Gantt. Skip si no-op.
+  // El auto-cierre/reapertura de fase NO se emite: es derivativo (el watchdog lo
+  // infiere del estado de las tareas).
+  if (task.status !== status) {
+    await emitTimelineEventsSafe(
+      prisma,
+      {
+        projectId,
+        clientId: task.phase.timeline.project.clientId,
+        timelineId: task.phase.timeline.id,
+        actorEmail: guard.user.email ?? null,
+        source: "UI_PATCH",
+      },
+      [
+        {
+          entityType: "TASK",
+          entityId: task.id,
+          label: task.title,
+          action: "STATUS_CHANGED",
+          before: { status: task.status },
+          after: { status },
+        },
+      ],
+    );
+  }
 
   return NextResponse.json(updated);
 }

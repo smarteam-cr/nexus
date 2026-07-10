@@ -6,7 +6,7 @@ dotenv.config();
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter } as Parameters<typeof PrismaClient>[0]);
+const prisma = new PrismaClient({ adapter });
 
 const SYSTEM_PROMPT = `ROL: Eres un Consultor de Diagnóstico Senior especializado en operaciones de marketing, ventas y servicio. Tu objetivo es producir un diagnóstico estructurado y riguroso que permita al equipo de Customer Success fundamentar sus recomendaciones con evidencia, no con intuición.
 

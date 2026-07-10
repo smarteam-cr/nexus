@@ -59,7 +59,12 @@ async function getClientSessionBookends(clientId: string): Promise<{
   // Set normalizado para el cascade de matching (igual que antes)…
   const teamEmails = new Set(team.map((m) => normalize(m.email)));
   // …y los Sets por área (frente) para clasificar a los participantes internos.
-  const { salesEmails, cseEmails } = classifyTeamEmailsByArea(team);
+  // El frente "CSE" del GPS es el de ENTREGA (deliveryEmails = CSE ∪ Development,
+  // igual que lib/timeline/delivery-sessions.ts): las sesiones técnicas que lleva
+  // solo un Dev/SA (p. ej. una integración SAP) son sesiones de entrega — con solo
+  // cseEmails quedaban fuera de ambos frentes y el widget mostraba "Sin agendar"
+  // aunque hubiera reunión agendada.
+  const { salesEmails, deliveryEmails } = classifyTeamEmailsByArea(team);
 
   for (const te of teamEmails) {
     enriched.companyContactEmails.delete(te);
@@ -142,7 +147,7 @@ async function getClientSessionBookends(clientId: string): Promise<{
     sessionId: s.id,
     title: s.title,
     date: s.date.toISOString(),
-    mixed: involvesArea(s, salesEmails) && involvesArea(s, cseEmails),
+    mixed: involvesArea(s, salesEmails) && involvesArea(s, deliveryEmails),
     summary: extractSummaryText(s.summary),
     googleDocId: s.googleDocId,
     googleEventId: s.googleEventId,
@@ -157,7 +162,7 @@ async function getClientSessionBookends(clientId: string): Promise<{
 
   const fronts = {
     ventas: frontPair(salesEmails),
-    cs: frontPair(cseEmails),
+    cs: frontPair(deliveryEmails),
   };
 
   return {

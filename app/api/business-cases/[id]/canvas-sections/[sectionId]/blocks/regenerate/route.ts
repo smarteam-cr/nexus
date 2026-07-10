@@ -46,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
               id: true,
               businessCaseId: true,
               sections: true,
-              businessCase: { select: { id: true, caseType: true, caseSubtype: true } },
+              businessCase: { select: { id: true, caseType: true, caseSubtype: true, language: true } },
             },
           },
         },
@@ -81,18 +81,23 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
         { status: 400 },
       );
     }
-    // Idioma de la propuesta: `__lang` (key no-schema) del hero de ESTE canvas —
-    // el ✨ IA debe reescribir la sección en el idioma en que está la propuesta.
-    const hero = await prisma.canvasSection.findFirst({
-      where: { canvasId: block.section.canvas.id, key: "hero" },
-      select: { blocks: { orderBy: { order: "asc" }, take: 1, select: { data: true } } },
-    });
-    const heroData = hero?.blocks[0]?.data;
-    const rawLang =
-      heroData && typeof heroData === "object" && !Array.isArray(heroData)
-        ? (heroData as Record<string, unknown>).__lang
-        : null;
-    const lang = typeof rawLang === "string" && rawLang.trim() ? rawLang.trim().toLowerCase() : null;
+    // Idioma de la propuesta: PRIMERO `businessCase.language` (fuente de verdad
+    // persistente); si es null (casos viejos pre-migración a este campo), cae al
+    // `__lang` (key no-schema) del hero de ESTE canvas, como se leía antes.
+    const bcLang = block.section.canvas.businessCase?.language ?? null;
+    let lang = typeof bcLang === "string" && bcLang.trim() ? bcLang.trim().toLowerCase() : null;
+    if (!lang) {
+      const hero = await prisma.canvasSection.findFirst({
+        where: { canvasId: block.section.canvas.id, key: "hero" },
+        select: { blocks: { orderBy: { order: "asc" }, take: 1, select: { data: true } } },
+      });
+      const heroData = hero?.blocks[0]?.data;
+      const rawLang =
+        heroData && typeof heroData === "object" && !Array.isArray(heroData)
+          ? (heroData as Record<string, unknown>).__lang
+          : null;
+      lang = typeof rawLang === "string" && rawLang.trim() ? rawLang.trim().toLowerCase() : null;
+    }
 
     const data = await regenerateSectionData(
       block.section.key,

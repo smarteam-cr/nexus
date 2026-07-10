@@ -41,6 +41,15 @@ export async function middleware(request: NextRequest) {
   if (PUBLIC_PATHS.includes(pathname)) return NextResponse.next();
   if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
+  // Bypass puntual: Puppeteer (export-pdf/route.ts, mismo contenedor) navega acá
+  // server-to-server y no tiene cookies de sesión Supabase. La autorización REAL
+  // la hace la propia página validando `?pdfToken=` contra PrintJobToken (un solo
+  // uso, 60s) — el middleware solo evita el redirect a "/", no autoriza nada. Sin
+  // el query param, la ruta sigue exigiendo sesión normal (bloque de abajo).
+  if (pathname.startsWith("/print/business-case/") && request.nextUrl.searchParams.has("pdfToken")) {
+    return NextResponse.next();
+  }
+
   // Importante: el middleware tiene que RETORNAR la response que Supabase
   // pueda haber modificado (token refresh setea cookies nuevas).
   let response = NextResponse.next({ request });

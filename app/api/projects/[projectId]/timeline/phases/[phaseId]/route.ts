@@ -13,6 +13,7 @@ import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import type { TimelineTaskStatus } from "@prisma/client";
 import { actualDatesPatch } from "@/lib/timeline/actual-dates";
+import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
 
 const STATUSES = ["PENDING", "IN_PROGRESS", "DONE"] as const;
 
@@ -38,10 +39,17 @@ export async function PATCH(
     );
   }
 
-  // Ownership: la fase debe pertenecer al timeline de ESTE proyecto.
+  // Ownership: la fase debe pertenecer al timeline de ESTE proyecto. name/status/
+  // clientId extra alimentan el evento del watchdog (Éxito del cliente).
   const phase = await prisma.timelinePhase.findFirst({
     where: { id: phaseId, timeline: { projectId } },
-    select: { id: true, actualStart: true },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      actualStart: true,
+      timeline: { select: { id: true, project: { select: { clientId: true } } } },
+    },
   });
   if (!phase) {
     return NextResponse.json({ error: "Fase no encontrada en este proyecto" }, { status: 404 });
@@ -56,6 +64,30 @@ export async function PATCH(
     },
     select: { id: true, status: true, actualStart: true, actualEnd: true, updatedAt: true },
   });
+
+  // Evento crudo para el watchdog (best-effort; skip si no-op).
+  if (phase.status !== status) {
+    await emitTimelineEventsSafe(
+      prisma,
+      {
+        projectId,
+        clientId: phase.timeline.project.clientId,
+        timelineId: phase.timeline.id,
+        actorEmail: guard.user.email ?? null,
+        source: "UI_PATCH",
+      },
+      [
+        {
+          entityType: "PHASE",
+          entityId: phase.id,
+          label: phase.name,
+          action: "STATUS_CHANGED",
+          before: { status: phase.status },
+          after: { status },
+        },
+      ],
+    );
+  }
 
   return NextResponse.json(updated);
 }

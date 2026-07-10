@@ -10,6 +10,8 @@ export default defineConfig({
   },
   datasource: {
     url: process.env["DATABASE_URL"],
-    directUrl: process.env["DIRECT_URL"],
+    // (directUrl NO es una opción de prisma.config — solo url/shadowDatabaseUrl.
+    //  Estaba acá por el scaffold generado; DIRECT_URL ni siquiera está en .env,
+    //  era un no-op que además rompía el type-check.)
   },
 });

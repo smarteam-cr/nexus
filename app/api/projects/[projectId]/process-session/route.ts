@@ -68,9 +68,7 @@ export async function POST(
     titleTerms: extractTitleTerms(client.name ?? ""),
     enriched,
   };
-  const matchedSessions = recentSessions.filter((s) =>
-    sessionMatchesClient(s as unknown as { title: string; participants: string[] }, postMatcher)
-  );
+  const matchedSessions = recentSessions.filter((s) => sessionMatchesClient(s, postMatcher));
 
   if (matchedSessions.length === 0) {
     return NextResponse.json({ error: "No hay sesiones nuevas por procesar", cards: [] });
@@ -137,10 +135,9 @@ Procesa las sesiones y genera los cards correspondientes. Solo incluye cards que
       messages: [{ role: "user", content: userMessage }],
     });
 
-    const text = msg.content
-      .filter((b): b is { type: "text"; text: string } => b.type === "text")
-      .map((b) => b.text)
-      .join("");
+    // (b.type === "text" narrowea al TextBlock del SDK — un predicate custom con
+    // shape propio deja de compilar cuando el SDK agrega campos requeridos.)
+    const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
@@ -258,9 +255,7 @@ export async function GET(
       titleTerms: extractTitleTerms(client.name ?? ""),
       enriched,
     };
-    unprocessed = recentSessions.filter((s) =>
-      sessionMatchesClient(s as unknown as { title: string; participants: string[] }, matcher)
-    ).length;
+    unprocessed = recentSessions.filter((s) => sessionMatchesClient(s, matcher)).length;
   } catch {
     // If matching fails, return 0
   }

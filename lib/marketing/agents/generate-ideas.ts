@@ -91,19 +91,32 @@ export async function buildGenerationInput(): Promise<{
           .join("\n")
       : "(sin buyer personas cargadas)";
 
+  const pillarLine = (p: (typeof pillars)[number]) => `- ${p.name}${p.description ? `: ${p.description}` : ""}`;
   const pillarsText =
     pillars.length > 0
-      ? pillars.map((p) => `- ${p.name}${p.description ? `: ${p.description}` : ""}`).join("\n")
+      ? pillars.map(pillarLine).join("\n")
       : "(sin pilares cargados — todas las ideas necesitarán pilares nuevos vía pillarSuggestions)";
+
+  // Temas-campaña activos (isCampaign && active): sesgan la generación. La mayoría
+  // de las ideas deben servirlos. El listado normal de pilares sigue arriba para que
+  // el resto de las ideas pueda cubrir otros temas.
+  const campaignPillars = pillars.filter((p) => p.isCampaign);
+  const campaignBlock =
+    campaignPillars.length > 0
+      ? `== CAMPAÑA ACTIVA (PRIORIDAD) ==\nHay ${campaignPillars.length === 1 ? "un tema marcado" : "temas marcados"} como campaña activa. La MAYORÍA de las contentIdeas que generes deben servir a ${campaignPillars.length === 1 ? "este enfoque" : "estos enfoques"}; el resto puede cubrir otros pilares.\n${campaignPillars.map(pillarLine).join("\n")}`
+      : null;
 
   const input = [
     `== VOZ DE MARCA ==\n${settings?.brandVoice ?? ""}`,
     `== ICP (perfil de cliente ideal) ==\n${icpText || "(sin ítems)"}`,
     `== BUYER PERSONAS ==\n${personasText}`,
     `== PILARES DE CONTENIDO EXISTENTES ==\n${pillarsText}`,
+    campaignBlock,
     `== POSTS DE INSPIRACIÓN (${sorted.length} de los últimos 3 meses, ordenados por engagement) ==\n\n${postLines.join("\n\n")}`,
     `Genera el JSON con contentIdeas (máx ${MAX_IDEAS}), pillarSuggestions y campaignIdeas.`,
-  ].join("\n\n");
+  ]
+    .filter((x): x is string => x !== null)
+    .join("\n\n");
 
   return { input, postIds: new Set(sorted.map((p) => p.id)), postsInWindow: posts.length };
 }

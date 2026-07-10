@@ -40,6 +40,7 @@ export default async function BusinessCasePage({
       hubspotDealId: true,
       caseType: true,
       caseSubtype: true,
+      language: true,
       client: { select: { id: true, name: true, isProspect: true, logoUrl: true } },
     },
   });
@@ -94,6 +95,7 @@ export default async function BusinessCasePage({
             status={bc.status}
             publishedAt={bc.publishedAt ? bc.publishedAt.toISOString() : null}
             templateId={resolved.templateId}
+            language={bc.language}
           />
         </div>
       </div>

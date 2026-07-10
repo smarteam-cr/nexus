@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { CLIENT_CANVAS_LABELS } from "@/lib/canvas/template";
 import HubBadge from "@/components/ui/HubBadge";
 import ProjectTypeBadge from "@/components/ui/ProjectTypeBadge";
+import { useToast } from "@/components/ui/Toast";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface Suggestion {
   id: string;
@@ -25,6 +27,7 @@ const CONFIDENCE_STYLES: Record<Confidence, { dot: string; border: string; bg: s
 };
 
 export default function ClientCanvasPanel({ clientId, embedded }: { clientId: string; embedded?: boolean }) {
+  const toast = useToast();
   const [canvas, setCanvas] = useState<ClientCanvas | null>(null);
   const [confidence, setConfidence] = useState<Record<string, Confidence>>({});
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -33,7 +36,18 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
+  // Race guards (mismo patrón que useCanvasSections.refetch):
+  //  · fetchSeq — un fetch viejo que resuelve DESPUÉS de uno más nuevo no debe pisar.
+  //  · writeSeq — se incrementa en cada guardado; un fetch que arrancó ANTES del
+  //    último guardado trae un snapshot stale del canvas → no revertir lo recién
+  //    escrito. Se snapshotea al ARRANCAR el fetch (no al resolver) para atrapar
+  //    también el PUT que arranca y termina dentro del vuelo del GET.
+  const fetchSeq = useRef(0);
+  const writeSeq = useRef(0);
+
   const fetchCanvas = useCallback(async () => {
+    const seq = ++fetchSeq.current;
+    const writeAtStart = writeSeq.current;
     try {
       const [canvasRes, suggestionsRes] = await Promise.all([
         fetch(`/api/clients/${clientId}/canvas`),
@@ -41,12 +55,25 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
       ]);
       const canvasData = await canvasRes.json();
       const suggestionsData = await suggestionsRes.json();
-      setCanvas(canvasData.canvas);
-      setConfidence(canvasData.confidence ?? {});
+      if (seq !== fetchSeq.current) return; // llegó un fetch más nuevo: que gane ese
+      // Sugerencias: NINGÚN PUT de sección las toca → son ortogonales al guard de
+      // escrituras. Aplicarlas siempre (si las gateáramos por writeSeq, un guardado
+      // durante el refetch post-"Actualizar con IA" descartaría el banner de
+      // sugerencias sin re-fetch posterior — quedaban invisibles pese a existir en DB).
       setSuggestions(suggestionsData.suggestions ?? []);
-    } catch { /* ignore */ }
+      // Canvas/confidence: si hubo un guardado optimista mientras el fetch estaba
+      // en vuelo, su respuesta ya trajo el estado más fresco → no pisar con el stale.
+      if (writeSeq.current === writeAtStart) {
+        setCanvas(canvasData.canvas);
+        setConfidence(canvasData.confidence ?? {});
+      }
+    } catch {
+      // El estado !canvas de abajo muestra el error con retry; el toast avisa
+      // también cuando el canvas ya estaba cargado (refetch fallido silencioso).
+      if (seq === fetchSeq.current) toast.error("No se pudo cargar la estrategia del cliente.");
+    }
     setLoading(false);
-  }, [clientId]);
+  }, [clientId, toast]);
 
   useEffect(() => { fetchCanvas(); }, [fetchCanvas]);
 
@@ -69,20 +96,26 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
 
   const saveSection = async (section: string, value: unknown) => {
     setSaving(true);
+    writeSeq.current++; // marca este guardado: invalida cualquier refetch en vuelo
     try {
       const res = await fetch(`/api/clients/${clientId}/canvas`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ canvas: { [section]: value }, confidence: { [section]: "confirmed" } }),
       });
+      if (!res.ok) throw new Error(`PUT canvas ${res.status}`);
       const data = await res.json();
       if (data.canvas) setCanvas(data.canvas);
       if (data.confidence) setConfidence(data.confidence);
-    } catch { /* ignore */ }
+    } catch {
+      // Antes era silencioso: el CSE creía que guardó y el cambio se perdía.
+      toast.error("No se pudo guardar la sección — reintentá.");
+    }
     setSaving(false);
   };
 
   const handleSuggestion = async (suggestionId: string, action: "accept" | "reject") => {
+    writeSeq.current++; // aceptar/rechazar muta el canvas del server → invalida refetch en vuelo
     try {
       const suggestion = suggestions.find((s) => s.id === suggestionId);
       const res = await fetch(`/api/clients/${clientId}/canvas/suggestions`, {
@@ -90,11 +123,14 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ suggestionId, action }),
       });
+      if (!res.ok) throw new Error(`POST suggestion ${res.status}`);
       const data = await res.json();
       if (data.canvas) setCanvas(data.canvas);
       if (data.confidence) setConfidence(data.confidence);
       setSuggestions((prev) => prev.filter((s) => s.id !== suggestionId));
-    } catch { /* ignore */ }
+    } catch {
+      toast.error(action === "accept" ? "No se pudo aceptar la sugerencia." : "No se pudo descartar la sugerencia.");
+    }
   };
 
   if (loading) {
@@ -109,7 +145,26 @@ export default function ClientCanvasPanel({ clientId, embedded }: { clientId: st
     );
   }
 
-  if (!canvas) return <p className="p-5 text-sm text-gray-400">Error al cargar el canvas.</p>;
+  if (!canvas)
+    return (
+      <EmptyState
+        variant="dashed"
+        className="m-5 py-10"
+        title="No se pudo cargar la estrategia"
+        description="Falló la carga del canvas del cliente — puede ser un problema puntual de conexión."
+        action={
+          <button
+            onClick={() => {
+              setLoading(true);
+              fetchCanvas();
+            }}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
+          >
+            Reintentar
+          </button>
+        }
+      />
+    );
 
   const sections = Object.keys(canvas) as (keyof ClientCanvas)[];
   const filledCount = sections.filter((k) => !checkEmpty(canvas[k])).length;

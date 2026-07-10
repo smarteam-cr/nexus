@@ -1,11 +1,17 @@
 /**
- * /api/marketing/ideas/[id] — PATCH { used: boolean } (marcar/desmarcar
- * utilizada) · DELETE (podar). Editores.
+ * /api/marketing/ideas/[id] — PATCH (transición de estado used/selected y/o
+ * edición de copy/title/imageConcept) · DELETE (podar). Editores.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { guardMarketingEditor } from "@/lib/auth/api-guards";
-import { deleteIdea, markIdeaUsed } from "@/lib/marketing/mutations";
+import { deleteIdea, patchIdea } from "@/lib/marketing/mutations";
 import { ideaPatchSchema } from "@/lib/marketing/schema";
+
+/** ¿El error de Prisma es "no se encontró la fila"? (P2025) */
+function isNotFound(e: unknown): boolean {
+  return e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025";
+}
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -22,14 +28,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
   const parsed = ideaPatchSchema.safeParse(raw);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Body inválido (used: boolean)" }, { status: 400 });
+    return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
-
   try {
-    const idea = await markIdeaUsed(id, parsed.data.used);
+    // Un solo update atómico (transiciones + edición); campos ausentes no se tocan.
+    const idea = await patchIdea(id, parsed.data);
     return NextResponse.json({ idea });
-  } catch {
-    return NextResponse.json({ error: "La idea no existe" }, { status: 404 });
+  } catch (e) {
+    if (isNotFound(e)) return NextResponse.json({ error: "La idea no existe" }, { status: 404 });
+    return NextResponse.json({ error: "No se pudo actualizar la idea." }, { status: 500 });
   }
 }
 

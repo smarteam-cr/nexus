@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getClientsForSidebar } from "@/lib/cache/clients";
 import { requireUser, UnauthorizedError } from "@/lib/auth/supabase";
 import SidebarShell from "./SidebarShell";
+import CsAlertNotifier from "@/components/cs/CsAlertNotifier";
 
 export default async function AppShell({
   children,
@@ -33,6 +34,9 @@ export default async function AppShell({
 
   return (
     <SidebarShell clients={clients} user={userLite}>
+      {/* Alertas HIGH del watchdog CS → notificación de navegador. Solo CSL/SUPER_ADMIN
+          (el componente se auto-apaga para otros roles; render null). */}
+      <CsAlertNotifier role={userLite.role} />
       {children}
     </SidebarShell>
   );

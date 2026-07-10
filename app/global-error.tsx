@@ -9,6 +9,7 @@
  * El caso común (errores de render del workspace) lo atrapa app/clients/[id]/error.tsx;
  * esto es solo el backstop.
  */
+import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
 
 export default function GlobalError({
@@ -19,6 +20,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
+    Sentry.captureException(error); // no-op sin DSN configurado
     console.error("[global error boundary]", error);
   }, [error]);
 
