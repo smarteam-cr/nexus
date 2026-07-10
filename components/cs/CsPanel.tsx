@@ -15,7 +15,6 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import PortfolioGrid from "@/components/dashboard/PortfolioGrid";
-import AlertsFeed from "./AlertsFeed";
 import ExpansionSection from "./ExpansionSection";
 import type { CsPanelData, ClientSignalsRow } from "@/lib/cs/load-panel";
 
@@ -104,7 +103,10 @@ export default function CsPanel({
     try {
       const r = await fetchJson<{ supported: boolean; total: number; createdClients: unknown[] }>(
         "/api/cs/partner/refresh",
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) },
+        // createClients EXPLÍCITO: el endpoint pasó a default false (defensivo) y la
+        // decisión de producto —auto-crear Clients para partner records sin match—
+        // la declara cada caller que la quiere. Este botón la quiere.
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ createClients: true }) },
       );
       if (!r.supported) {
         toast.error("El scope de Partner Clients no está autorizado en la app de HubSpot — hay que re-autorizarla.", { duration: 0 });
@@ -174,16 +176,11 @@ export default function CsPanel({
         )}
       </div>
 
-      {/* 1. Alertas del watchdog */}
-      <section>
-        <div className="flex items-baseline gap-2 mb-2">
-          <h2 className="text-sm font-semibold text-fg">🚨 Alertas</h2>
-          <span className="text-[11px] text-fg-muted">triadas por el watchdog — severidad, razón y acción sugerida</span>
-        </div>
-        <AlertsFeed initialAlerts={data.alerts} />
-      </section>
+      {/* Las alertas del watchdog se renderizan ARRIBA del dashboard (slot en
+          CsDashboard, inyectado por la page): son el ranking accionable y no
+          deben quedar detrás de los charts. Acá solo queda lo secundario. */}
 
-      {/* 2. Expansión y renovaciones */}
+      {/* 1. Expansión y renovaciones */}
       <ExpansionSection signalsByClient={data.signalsByClient} clientNames={clientNames} />
 
       {/* 3. Cartera (motor existente, con chips de señales) */}

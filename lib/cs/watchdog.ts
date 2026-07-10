@@ -414,7 +414,7 @@ export async function runWatchdogSweep(now: Date): Promise<{ candidates: number;
   const opsByProject = new Map(opsRows.map((o) => [o.id, o]));
   const partnerRows = await prisma.clientPartnerSnapshot.findMany({
     where: { clientId: { not: null } },
-    select: { clientId: true, uusScore: true, uusTrend: true, seats: true, nextRenewalAt: true, cancellationHubs: true },
+    select: { clientId: true, uusScore: true, uusTrend: true, seats: true, nextRenewalAt: true, cancellationHubs: true, revenueSignal: true },
   });
   const partnerByClient = new Map(partnerRows.map((p) => [p.clientId as string, p]));
 
@@ -479,6 +479,11 @@ export async function runWatchdogSweep(now: Date): Promise<{ candidates: number;
     const partnerRisk =
       hsBlocked ||
       !!partner?.cancellationHubs ||
+      // Señal de ingresos de HubSpot (upsell/cross-sell/renovación de competidor…):
+      // antes vivía solo en el CONTEXTO del agente — un cliente cuya única novedad
+      // fuera la señal nunca se volvía candidato. El dedup (alerted/triagedToday +
+      // categorías de cuenta por cliente) evita que dispare todos los días.
+      !!partner?.revenueSignal ||
       (uusLowOrFalling && renewalSoon) ||
       (hasUnusedSeats && partnerRenewalSoon);
     const hasRisk =

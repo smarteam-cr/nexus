@@ -41,11 +41,20 @@ const HUBSPOT_SCOPES = [
 ].join(" ");
 
 // Scopes OPCIONALES (optional_scope): se piden pero NO rompen el OAuth si el
-// portal no los concede. `social` es un scope DEPRECADO de HubSpot (API legacy de
-// broadcast, para dejar posts sociales como borrador) — va acá a propósito para
-// que, si HubSpot lo elimina algún día, no tumbe la conexión entera (CRM/tickets/
-// proyectos). Marcado como Opcional también en la config de la app pública.
-const HUBSPOT_OPTIONAL_SCOPES = ["social"].join(" ");
+// portal no los concede. Los dos tienen que estar marcados como "Opcional" en la
+// config de la app pública: HubSpot rechaza la instalación si la URL manda un scope
+// que no está declarado con ese tipo.
+//
+// · `social` es un scope DEPRECADO de HubSpot (API legacy de broadcast, para dejar
+//   posts sociales como borrador) — va acá a propósito para que, si HubSpot lo
+//   elimina algún día, no tumbe la conexión entera (CRM/tickets/proyectos).
+// · `crm.objects.partner-clients.read` (objeto 0-145, CS360) SOLO lo puede conceder
+//   el portal de Smarteam, que es Solutions Partner. Esta MISMA lista se usa para
+//   conectar los portales de los CLIENTES, así que como obligatorio rompería su
+//   instalación. Lectura nada más: el sync hace GET properties + POST search +
+//   associations batch/read, nunca escribe. Sin él, `partner-clients.ts` degrada
+//   con `supported:false` y el panel de CS muestra el aviso de "sin permiso".
+const HUBSPOT_OPTIONAL_SCOPES = ["social", "crm.objects.partner-clients.read"].join(" ");
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

@@ -3,11 +3,12 @@
 /**
  * components/cs/dashboard/PipelineStageChart.tsx
  *
- * Desglose de proyectos por ETAPA del pipeline de CS, con dos vistas:
- *   - apilada por CSE (espejo del dashboard manual de HubSpot)
- *   - dona por etapa (proporciones de la cartera)
+ * Desglose de proyectos por ETAPA del pipeline de CS, apilado por CSE.
+ * (La vista "Dona" se quitó a propósito: era espejo del dashboard viejo de
+ * HubSpot y la proporción de etapas casi nunca cambia una decisión de CS —
+ * la vista por CSE ya cubre lo útil. Decisión del usuario, plan CS360 F3.)
  */
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import EChartRenderer from "@/components/charts/EChartRenderer";
 import { useChartColors } from "@/hooks/useChartColors";
 import { SERIES_PALETTE, baseTooltip } from "./chart-theme";
@@ -15,7 +16,6 @@ import type { CsDashboardData } from "@/lib/cs/load-dashboard";
 
 export default function PipelineStageChart({ byStage }: { byStage: CsDashboardData["byStage"] }) {
   const c = useChartColors();
-  const [view, setView] = useState<"stacked" | "donut">("stacked");
 
   const cses = useMemo(
     () => [...new Set(byStage.flatMap((s) => Object.keys(s.byCse)))].sort(),
@@ -52,42 +52,5 @@ export default function PipelineStageChart({ byStage }: { byStage: CsDashboardDa
     })),
   };
 
-  const donutOption = {
-    tooltip: { trigger: "item", ...baseTooltip(c) },
-    legend: { top: 0, textStyle: { color: c.legendText, fontSize: 11 }, itemWidth: 12, itemHeight: 8 },
-    series: [
-      {
-        type: "pie",
-        radius: ["45%", "70%"],
-        center: ["50%", "56%"],
-        avoidLabelOverlap: true,
-        itemStyle: { borderRadius: 4 },
-        label: { color: c.axisLabelStrong, fontSize: 11, formatter: "{b}\n{c} ({d}%)" },
-        data: byStage.map((s, i) => ({
-          name: s.stageLabel,
-          value: s.total,
-          itemStyle: { color: SERIES_PALETTE[i % SERIES_PALETTE.length] },
-        })),
-      },
-    ],
-  };
-
-  return (
-    <div className="relative">
-      <div className="absolute right-2 top-0 z-10 flex gap-1">
-        {(["stacked", "donut"] as const).map((v) => (
-          <button
-            key={v}
-            onClick={() => setView(v)}
-            className={`text-[10px] px-2 py-1 rounded border transition-colors ${
-              view === v ? "bg-brand/10 border-brand/40 text-brand font-medium" : "bg-surface border-line text-fg-muted hover:text-fg"
-            }`}
-          >
-            {v === "stacked" ? "Por CSE" : "Dona"}
-          </button>
-        ))}
-      </div>
-      <EChartRenderer option={view === "stacked" ? stackedOption : donutOption} height={300} className="overflow-hidden" />
-    </div>
-  );
+  return <EChartRenderer option={stackedOption} height={300} className="overflow-hidden" />;
 }

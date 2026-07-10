@@ -13,10 +13,10 @@ import type { ReactNode } from "react";
 import SourceChip, { fmtChipDate } from "@/components/cs/SourceChip";
 import AlertsFeed from "@/components/cs/AlertsFeed";
 import ActiveProjectsSection from "./ActiveProjectsSection";
-import LicensesSection from "./LicensesSection";
-import AccountAdoptionSection from "./AccountAdoptionSection";
+import AccountUsageReport from "./AccountUsageReport";
 import AccountBriefSection from "./AccountBriefSection";
 import type { CsAccountData } from "@/lib/cs/load-account";
+import { PARTNER_STATE_META } from "@/lib/cs/partner-state";
 
 function Section({ title, children, source }: { title: string; children: ReactNode; source?: ReactNode }) {
   return (
@@ -52,7 +52,16 @@ export default function AccountView({ data }: { data: CsAccountData }) {
         {p?.country && <span className="text-fg-secondary">{p.country}</span>}
         <span className="ml-auto flex items-center gap-1.5">
           {data.partnerVisible &&
-            (p ? <SourceChip label="HubSpot Partner" date={p.fetchedAt} /> : <SourceChip label="sin permiso de partner" tone="missing" />)}
+            (p ? (
+              <SourceChip label="HubSpot Partner" date={p.fetchedAt} />
+            ) : (
+              // La CAUSA real del vacío (no_scope / never_synced / no_match), no un
+              // texto ambiguo: la resuelve el loader contra cs-partner-sync-status.
+              <SourceChip
+                label={data.partnerState === "ok" ? "HubSpot Partner" : PARTNER_STATE_META[data.partnerState].chip}
+                tone="missing"
+              />
+            ))}
           {data.signals && <SourceChip label="Señales" date={data.signals.fetchedAt} />}
           <Link href={`/clients/${data.clientId}`} className="text-[11px] font-medium text-brand hover:text-brand/80">
             Workspace →
@@ -79,23 +88,14 @@ export default function AccountView({ data }: { data: CsAccountData }) {
         <ActiveProjectsSection projects={data.projects} projectOps={data.projectOps} />
       </Section>
 
-      {/* Uso/licencias/MRR: CONFIDENCIAL (términos de partner) — solo CSL/SUPER_ADMIN. */}
+      {/* Uso/licencias/MRR: CONFIDENCIAL (términos de partner) — solo CSL/SUPER_ADMIN.
+          Una sola sección tipo REPORTE (antes eran dos cajas que duplicaban el dato). */}
       {data.partnerVisible && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Section title="🪪 Utilización de licencias">
-            <div className="bg-surface border border-line rounded-xl p-4">
-              <LicensesSection partner={data.partner} />
-            </div>
-          </Section>
-          <Section title="📊 Adopción y uso">
-            <div className="bg-surface border border-line rounded-xl p-4">
-              <AccountAdoptionSection partner={data.partner} />
-              {!data.partner && (
-                <p className="text-xs text-fg-muted">Sin datos de uso — requiere el snapshot de Partner Clients.</p>
-              )}
-            </div>
-          </Section>
-        </div>
+        <Section title="📊 Uso, adopción y licencias">
+          <div className="bg-surface border border-line rounded-xl p-4">
+            <AccountUsageReport partner={data.partner} partnerState={data.partnerState} />
+          </div>
+        </Section>
       )}
 
       {/* Últimas minutas (fuente citable) */}

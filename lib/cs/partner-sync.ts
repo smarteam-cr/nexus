@@ -131,7 +131,8 @@ function buildScalars(rec: PartnerClientRecord) {
     domain,
     associatedCompanyIds: rec.associatedCompanyIds,
     uusScore: numOrNull(r.uusScore),
-    uusTrend: r.uusTrend !== undefined ? (numOrNull(r.uusTrend) ?? r.uusTrend) : null,
+    // Float directo: sondeado contra los 157 records (2026-07-10) — siempre número plano.
+    uusTrend: numOrNull(r.uusTrend),
     activationScore: numOrNull(r.activationScore),
     toolUsageScore: numOrNull(r.toolUsageScore),
     valueMetricsScore: numOrNull(r.valueMetricsScore),
@@ -160,6 +161,7 @@ function buildScalars(rec: PartnerClientRecord) {
     hsGrowthEmail: r.hsGrowthEmail ?? null,
     cslImplementaciones: r.cslImplementaciones ?? null,
     country: r.country ?? null,
+    portalLink: r.portalLink ?? null,
   };
 }
 
@@ -302,14 +304,15 @@ export async function syncPartnerClients(
         }
 
         // ── Upsert + staleAt del brief si cambió lo material ────────────────
-        const changedMaterially = !!existing && materialKey(existing) !== materialKey(scalars);
+        // La CREACIÓN también cuenta como cambio material: un brief redactado antes
+        // del primer sync no cita el bloque entero de partner que acaba de aparecer.
+        const changedMaterially = !existing || materialKey(existing) !== materialKey(scalars);
 
         const base = {
           fetchedAt: new Date(),
           fetchStatus: fetched.associationsOk ? "ok" : "partial",
           properties: rec.properties as Prisma.InputJsonValue,
           ...scalars,
-          uusTrend: scalars.uusTrend as Prisma.InputJsonValue,
           seats: scalars.seats as Prisma.InputJsonValue,
           renewalsByHub: scalars.renewalsByHub as Prisma.InputJsonValue,
           hubEditions: scalars.hubEditions as Prisma.InputJsonValue,
@@ -379,5 +382,47 @@ export async function syncPartnerClients(
     return result;
   } finally {
     await releaseSyncLock();
+    // Persistir el resultado del ÚLTIMO run CONCLUYENTE — la fuente de verdad de
+    // "¿el scope está autorizado?" para los paneles de CS (fila cs-partner-sync-status).
+    // Concluyente = 403 de scope (supported:false) o una corrida real con records.
+    // Las corridas locked y los "0 records" transitorios NO pisan el último resultado
+    // bueno (el propio job los trata como transitorios y reintenta, lib/jobs/defs.ts).
+    await persistSyncStatus(result);
   }
+}
+
+/** Escribe cs-partner-sync-status.lastResult si la corrida fue concluyente. Best-effort:
+ *  un fallo acá no debe tumbar el sync (los datos ya están persistidos). */
+async function persistSyncStatus(result: PartnerSyncResult): Promise<void> {
+  const conclusive = !result.locked && (!result.supported || result.total > 0);
+  if (!conclusive) return;
+  const lastResult = {
+    supported: result.supported,
+    total: result.total,
+    matched: result.matchedByCompany + result.matchedByDomain + result.alreadyLinked,
+    unmatched: result.unmatched,
+    wouldCreate: result.wouldCreateClients.length,
+    created: result.createdClients.length,
+    errors: result.errors.length,
+    at: new Date().toISOString(),
+  };
+  await prisma.cronJobState
+    .upsert({
+      where: { id: "cs-partner-sync-status" },
+      create: { id: "cs-partner-sync-status", lastResult },
+      update: { lastResult },
+    })
+    .catch((e) => console.error("[partner-sync] no se pudo persistir cs-partner-sync-status:", e));
+}
+
+/** Shape del lastResult de cs-partner-sync-status (lo leen los loaders de CS). */
+export interface PartnerSyncStatus {
+  supported: boolean;
+  total: number;
+  matched: number;
+  unmatched: number;
+  wouldCreate: number;
+  created: number;
+  errors: number;
+  at: string;
 }

@@ -30,7 +30,11 @@ export async function POST(req: NextRequest) {
   } catch {
     /* sin body = defaults */
   }
-  const createClients = body.createClients !== false; // default true (decisión de producto)
+  // Default FALSE: crear Clients es opt-in explícito del caller. La decisión de
+  // producto de auto-crear se mantiene en el régimen diario (el cron pasa true) y
+  // en el botón del panel (manda {createClients:true}); el default defensivo evita
+  // que un caller nuevo cree ~100 Clients en la DB compartida sin decirlo.
+  const createClients = body.createClients === true;
 
   if (syncInFlight) {
     return NextResponse.json({ error: "Ya hay un sync de partner corriendo — esperá a que termine." }, { status: 409 });

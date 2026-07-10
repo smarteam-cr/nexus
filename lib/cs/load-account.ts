@@ -13,6 +13,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import { loadPortfolio, type PortfolioRow } from "@/lib/portfolio/load";
 import { serializeAlert, type CsAlertRow } from "@/lib/cs/load-panel";
+import { resolvePartnerState, type PartnerState } from "@/lib/cs/partner-state";
 
 export interface AccountMinute {
   sessionId: string;
@@ -25,6 +26,7 @@ export interface AccountMinute {
 
 export interface AccountPartner {
   fetchedAt: string;
+  fetchStatus: string; // "ok" | "partial" (corrida degradada sin asociaciones)
   uusScore: number | null;
   uusTrend: number | null;
   activationScore: number | null;
@@ -55,6 +57,7 @@ export interface AccountPartner {
   hsGrowthEmail: string | null;
   cslImplementaciones: string | null;
   country: string | null;
+  portalLink: string | null; // hs_account_link — deep-link al portal del cliente en HubSpot
 }
 
 export interface AccountBriefStatement {
@@ -77,7 +80,10 @@ export interface CsAccountData {
   projects: PortfolioRow[];
   projectOps: Record<string, AccountProjectOps>; // by projectId
   alerts: CsAlertRow[];
-  partner: AccountPartner | null; // null = sin snapshot (scope no autorizado o sin match)
+  partner: AccountPartner | null; // null = sin snapshot; la CAUSA la dice partnerState
+  /** Por qué partner viene null (o "ok" si hay datos) — ver lib/cs/partner-state.ts.
+   *  La UI muestra el mensaje de la causa REAL en vez del texto ambiguo de antes. */
+  partnerState: PartnerState;
   brief: {
     headline: string | null;
     statements: AccountBriefStatement[];
@@ -109,7 +115,7 @@ export async function loadCsAccount(
   });
   if (!client) return null;
 
-  const [projects, alerts, partner, brief, csSignals, minuteSessions] = await Promise.all([
+  const [projects, alerts, partner, brief, csSignals, anySnapshotCount, syncStatusRow, minuteSessions] = await Promise.all([
     loadPortfolio({ id: clientId }),
     prisma.csAlert.findMany({
       where: { clientId, status: { in: ["OPEN", "SEEN"] } },
@@ -120,6 +126,12 @@ export async function loadCsAccount(
     includePartner ? prisma.clientPartnerSnapshot.findUnique({ where: { clientId } }) : Promise.resolve(null),
     prisma.csAccountBrief.findUnique({ where: { clientId } }),
     prisma.clientCsSignals.findUnique({ where: { clientId } }),
+    // Para distinguir las TRES causas de "sin datos de partner" (no_scope /
+    // never_synced / no_match) en vez del mensaje ambiguo de antes:
+    includePartner ? prisma.clientPartnerSnapshot.count() : Promise.resolve(0),
+    includePartner
+      ? prisma.cronJobState.findUnique({ where: { id: "cs-partner-sync-status" }, select: { lastResult: true } })
+      : Promise.resolve(null),
     prisma.firefliesSession.findMany({
       where: {
         OR: [{ resolvedClientId: clientId }, { manualClientId: clientId }],
@@ -168,8 +180,9 @@ export async function loadCsAccount(
     partner: partner
       ? {
           fetchedAt: partner.fetchedAt.toISOString(),
+          fetchStatus: partner.fetchStatus,
           uusScore: partner.uusScore,
-          uusTrend: typeof partner.uusTrend === "number" ? partner.uusTrend : null,
+          uusTrend: partner.uusTrend,
           activationScore: partner.activationScore,
           toolUsageScore: partner.toolUsageScore,
           valueMetricsScore: partner.valueMetricsScore,
@@ -198,8 +211,17 @@ export async function loadCsAccount(
           hsGrowthEmail: partner.hsGrowthEmail,
           cslImplementaciones: partner.cslImplementaciones,
           country: partner.country,
+          portalLink: partner.portalLink,
         }
       : null,
+    partnerState: resolvePartnerState({
+      hasSnapshot: !!partner,
+      anySnapshots: anySnapshotCount > 0,
+      lastSync: (() => {
+        const lr = (syncStatusRow?.lastResult ?? null) as { supported?: boolean } | null;
+        return lr && typeof lr.supported === "boolean" ? { supported: lr.supported } : null;
+      })(),
+    }),
     brief: brief
       ? {
           headline: brief.headline,

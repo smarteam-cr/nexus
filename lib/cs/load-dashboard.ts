@@ -13,6 +13,7 @@
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import { loadPortfolio, type PortfolioRow } from "@/lib/portfolio/load";
+import { compareAdoptionRisk } from "@/lib/cs/partner-state";
 
 export interface CsDashboardData {
   byCse: Array<{
@@ -26,7 +27,9 @@ export interface CsDashboardData {
     overdueTimeline: number; // fases/tareas vencidas según cronograma (fuente: Nexus)
     blocked: number; // hs_status = blocked O etapa "Bloqueado"
     openAlerts: number;
+    openAlertsHigh: number; // subset HIGH — lo único que dispara acción esta semana
     renewals90d: number; // renovaciones ≤90 días (fuente: HubSpot Partner)
+    renewalsMrr90d: number; // $ en riesgo: suma de mrrUpForRenewal de esas renovaciones
   };
   blockReasons: Array<{
     reason: string;
@@ -45,11 +48,18 @@ export interface CsDashboardData {
     nextRenewalAt: string | null;
     mrrTotal: number | null;
     mrrUpForRenewal: number | null;
+    fetchedAt: string; // frescura POR FILA (antes: un solo máximo global mentía por cuenta)
+    fetchStatus: string; // "ok" | "partial"
   }>;
+  /** Cuentas activas SIN snapshot de partner — antes eran invisibles en la tabla
+   *  de uso (sesgo de supervivencia: la cuenta nunca onboardeada no aparecía). */
+  adoptionNoData: Array<{ clientId: string; clientName: string }>;
   freshness: {
     partnerSupported: boolean;
     partnerFetchedAt: string | null; // el más reciente
     stageSyncedAt: string | null; // sync de proyectos más reciente (hubspotStageSyncedAt)
+    lastSyncAt: string | null; // cs-partner-sync-status.at (último run concluyente)
+    lastSyncTotal: number | null; // records que trajo ese run
   };
   /** CONFIDENCIALIDAD (términos de partner de HubSpot): los datos de uso/UUS/MRR
    *  solo se muestran a CSL y SUPER_ADMIN. false = la UI OCULTA las secciones de
@@ -78,7 +88,7 @@ export async function loadCsDashboard(
   const active = rows.filter((r) => r.status === "active");
   const projectIds = active.map((r) => r.projectId);
 
-  const [ops, snapshots, openAlerts, anySnapshotCount] = await Promise.all([
+  const [ops, snapshots, openAlerts, openAlertsHigh, anySnapshotCount, syncStatusRow] = await Promise.all([
     prisma.project.findMany({
       where: { id: { in: projectIds } },
       select: {
@@ -100,11 +110,21 @@ export async function loadCsDashboard(
     prisma.csAlert.count({
       where: { status: "OPEN", ...(clientWhere ? { client: clientWhere } : {}) },
     }),
+    prisma.csAlert.count({
+      where: { status: "OPEN", severity: "HIGH", ...(clientWhere ? { client: clientWhere } : {}) },
+    }),
     // SIN filtros: distingue "el scope nunca funcionó" (0 snapshots en toda la DB)
     // de "este usuario no ve snapshots vinculados" — el mensaje de 403 solo aplica
     // al primer caso.
     includePartner ? prisma.clientPartnerSnapshot.count() : Promise.resolve(0),
+    // Resultado del último sync CONCLUYENTE (lo escribe syncPartnerClients): la
+    // fuente de verdad de "¿el scope está autorizado?" — inferirlo de los conteos
+    // mentía con el scope recién autorizado y el sync sin correr.
+    includePartner
+      ? prisma.cronJobState.findUnique({ where: { id: "cs-partner-sync-status" }, select: { lastResult: true } })
+      : Promise.resolve(null),
   ]);
+  const lastSync = (syncStatusRow?.lastResult ?? null) as { supported?: boolean; total?: number; at?: string } | null;
   const opsById = new Map(ops.map((o) => [o.id, o]));
 
   // ── Por CSE: activos + apilado por prioridad ────────────────────────────
@@ -151,9 +171,13 @@ export async function loadCsDashboard(
   }
   // Solo FUTURAS ≤90d (una renovación vencida sin actualizar no es "próxima" —
   // se ve en la tabla de adopción con su fecha en el pasado).
-  const renewals90d = snapshots.filter(
+  const renewingSoon = snapshots.filter(
     (s) => s.nextRenewalAt && s.nextRenewalAt.getTime() <= now + 90 * DAY_MS && s.nextRenewalAt.getTime() >= now,
-  ).length;
+  );
+  const renewals90d = renewingSoon.length;
+  // "$ en riesgo" — mucho más accionable que el conteo: es lo que se pierde si
+  // esas renovaciones no cierran. El conteo queda como texto secundario del KPI.
+  const renewalsMrr90d = renewingSoon.reduce((sum, s) => sum + (s.mrrUpForRenewal ?? 0), 0);
 
   // ── Razones de bloqueo (motivo_de_bloqueo + detalle, con drill) ─────────
   const reasonMap = new Map<string, CsDashboardData["blockReasons"][number]>();
@@ -195,12 +219,30 @@ export async function loadCsDashboard(
       marketingScore: s.marketingScore,
       salesScore: s.salesScore,
       serviceScore: s.serviceScore,
-      trend: typeof s.uusTrend === "number" ? s.uusTrend : null,
+      trend: s.uusTrend,
       nextRenewalAt: s.nextRenewalAt?.toISOString() ?? null,
       mrrTotal: s.mrrTotal,
       mrrUpForRenewal: s.mrrUpForRenewal,
+      fetchedAt: s.fetchedAt.toISOString(),
+      fetchStatus: s.fetchStatus,
     }))
-    .sort((a, b) => (a.uusScore ?? 999) - (b.uusScore ?? 999)); // los de menor uso primero (accionables)
+    // Más riesgo primero: sin dato pesa PEOR que cualquier score (el `?? 999` viejo
+    // rankeaba el dato faltante como la cuenta más sana) y la tendencia negativa
+    // sube posiciones. Comparator puro + tests en lib/cs/partner-state.
+    .sort((a, b) => compareAdoptionRisk({ uusScore: a.uusScore, uusTrend: a.trend }, { uusScore: b.uusScore, uusTrend: b.trend }));
+
+  // Cuentas activas SIN snapshot: visibles como bucket propio (los rows del
+  // portfolio son POR PROYECTO → dedupe por clientId).
+  const snapshotClientIds = new Set(snapshots.map((s) => s.clientId as string));
+  const noDataById = new Map<string, { clientId: string; clientName: string }>();
+  if (includePartner) {
+    for (const r of active) {
+      if (!snapshotClientIds.has(r.clientId) && !noDataById.has(r.clientId)) {
+        noDataById.set(r.clientId, { clientId: r.clientId, clientName: r.clientName });
+      }
+    }
+  }
+  const adoptionNoData = [...noDataById.values()].sort((a, b) => a.clientName.localeCompare(b.clientName));
 
   const partnerFetchedAt =
     snapshots.length > 0
@@ -212,16 +254,19 @@ export async function loadCsDashboard(
   return {
     byCse,
     byStage,
-    counters: { delayedHs, overdueTimeline, blocked, openAlerts, renewals90d },
+    counters: { delayedHs, overdueTimeline, blocked, openAlerts, openAlertsHigh, renewals90d, renewalsMrr90d },
     blockReasons,
     adoptionStates,
     adoption,
+    adoptionNoData,
     freshness: {
-      // "el sync de partner corrió alguna vez con scope OK" (conteo global sin
-      // filtros) — NO "este usuario ve snapshots".
-      partnerSupported: anySnapshotCount > 0,
+      // Del último sync CONCLUYENTE (cs-partner-sync-status). Fallback al conteo
+      // global para instalaciones que aún no persistieron ningún resultado.
+      partnerSupported: lastSync ? lastSync.supported === true : anySnapshotCount > 0,
       partnerFetchedAt,
       stageSyncedAt,
+      lastSyncAt: lastSync?.at ?? null,
+      lastSyncTotal: typeof lastSync?.total === "number" ? lastSync.total : null,
     },
     partnerVisible: includePartner,
   };

@@ -39,11 +39,17 @@ function DashCard({
   );
 }
 
-export default function CsDashboard({ data }: { data: CsDashboardData }) {
+export default function CsDashboard({ data, alertsSlot }: { data: CsDashboardData; alertsSlot?: ReactNode }) {
   const hs = { label: "HubSpot", date: data.freshness.stageSyncedAt };
   return (
     <div className="space-y-4 mb-8">
       <KpiCards counters={data.counters} freshness={data.freshness} partnerVisible={data.partnerVisible} />
+
+      {/* Las ALERTAS (el único ranking accionable por riesgo) van ANTES de los
+          charts: la CSL decide "a quién llamo hoy" acá, los gráficos son contexto.
+          Slot porque las alertas viven en CsPanelData (otro loader) — la page las
+          inyecta sin acoplar los dos shapes. */}
+      {alertsSlot}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <DashCard title="Carga de proyectos por CSE" source={hs}>
@@ -59,6 +65,7 @@ export default function CsDashboard({ data }: { data: CsDashboardData }) {
           <AdoptionSection
             adoptionStates={data.adoptionStates}
             adoption={data.adoption}
+            adoptionNoData={data.adoptionNoData}
             freshness={data.freshness}
             partnerVisible={data.partnerVisible}
           />
