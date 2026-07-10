@@ -1,9 +1,20 @@
 import AppShell from "@/components/layout/AppShell";
 import TeamManager from "@/components/team/TeamManager";
+import { requireInternalUser } from "@/lib/auth/supabase";
+import { hasCapability } from "@/lib/auth/roles";
 
 export const metadata = { title: "Equipo" };
 
-export default function TeamPage() {
+export default async function TeamPage() {
+  // Solo quien puede gestionar el equipo (SUPER_ADMIN) sube fotos desde acá.
+  let canManage = false;
+  try {
+    const { role } = await requireInternalUser();
+    canManage = hasCapability(role, "manageTeam");
+  } catch {
+    canManage = false;
+  }
+
   return (
     <AppShell>
       <div className="max-w-3xl mx-auto px-6 py-8">
@@ -13,7 +24,7 @@ export default function TeamPage() {
             Gestiona los miembros del equipo que participan en las implementaciones.
           </p>
         </div>
-        <TeamManager />
+        <TeamManager canManage={canManage} />
       </div>
     </AppShell>
   );
