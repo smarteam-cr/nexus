@@ -55,6 +55,35 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   NO toca el snapshot. *SUSPENDED sigue oculto* (tarea descartada del plan). *No sensible:*
   estado y responsable no lo son; `notes`/`source`/`needsValidation` de tarea siguen internos.
 
+## Cobranza
+- **Frontera: Nexus = capa de CONTROL de cobros** ("¿a quién le toca cobrar y cómo va?"):
+  estados, cronograma proyectado, alertas, bitácora. La facturación fiscal, conciliación
+  bancaria y contabilidad viven en Odoo/Mercury — Nexus NO emite facturas ni registra pagos
+  contables. Regla mental: "¿a quién le toca y cómo va?" → Nexus; "¿cuánto entró y contra
+  qué factura?" → Odoo/Mercury.
+- **Autonomía en la derivación, confirmación en el dinero.** El engine (lib/cobranza/engine.ts)
+  materializa cobros, genera catch-up y detecta divergencias SIN frenos; pero TODO estado con
+  consecuencia monetaria (marcar COBRADO, oficializar un catch-up) lo confirma la persona.
+  INV3 (check-invariants): ningún Cobro COBRADO sin `confirmadoPor`. Chokepoint único:
+  `cambiarEstadoCobro` en lib/cobranza/mutations.ts.
+- **Gate de acceso = whitelist client-safe** `lib/auth/cobranza-roles.ts` (`COBRANZA_ROLES` =
+  ADMIN + SUPER_ADMIN). El rol ADMIN (asistente administrativo de Finanzas) nació con el módulo,
+  con CERO capacidades de la matriz de roles — su único acceso es Cobranza. Se asigna SOLO
+  después de deployar el código (lección DEV). Cambios de acceso van SOLO en la whitelist.
+- **Ancla de facturación = `anchorStartDate` LEÍDA, no duplicada.** `fechaInicioFacturacion`
+  nace como copia editable del anchor del cronograma al configurar el servicio; NO se sincroniza
+  después. Si el CSE mueve el arranque, la divergencia la detecta la alerta ARRANQUE_CAMBIADO
+  en el cómputo de cartera (sin plumbing de eventos) y los cobros emitidos/cobrados JAMÁS se
+  regeneran — Alex decide.
+- **Naming en ESPAÑOL en el schema de Cobranza** (CuentaFinanciera, Cobro, CuotaPlan…):
+  desviación deliberada de la convención inglesa — el dominio se opera en español y los términos
+  no traducen 1:1. No "corregir" a inglés.
+- **Dinero = Decimal(12,2)** (primer uso en el repo — Float acumula error en montos).
+  `Prisma.Decimal` NUNCA cruza la frontera de lib/cobranza/queries.ts: los serializadores lo
+  convierten a number ahí, único punto.
+- **Digest diff-based**: el corte (lunes 7:00 CR vía scheduler, opt-in `COBRANZA_CRON_ENABLED`,
+  o manual) solo avisa CAMBIOS vs el SnapshotCartera anterior. Si nada cambió, no molesta.
+
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos
   dry-run-first; el usuario aprueba el `--apply`.

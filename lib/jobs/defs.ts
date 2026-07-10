@@ -117,7 +117,26 @@ const maintenanceDaily: JobDef = {
   },
 };
 
+// Corte semanal de Cobranza (lunes ≥ 7:00 CR): computa alertas de cartera, las
+// diffea contra el snapshot anterior y guarda el digest (solo-cambios). OPT-IN
+// por env como los de CS — el disparo manual (POST /api/cobranza/digest) siempre
+// está disponible aunque el cron esté apagado.
+const cobranzaWeekly: JobDef = {
+  key: "cobranza-weekly",
+  shouldRun: (_now, parts) =>
+    process.env.COBRANZA_CRON_ENABLED === "1" && parts.weekday === "Mon" && parts.hour >= 7,
+  run: async (now) => {
+    const { dateKey } = (await import("./time")).crDateParts(now);
+    if (!(await claimDateKey("cobranza-weekly", dateKey, now))) return;
+    const { runCobranzaDigest } = await import("@/lib/cobranza/digest");
+    const digest = await runCobranzaDigest(now, "cron");
+    console.log(
+      `[jobs/cobranza] ${dateKey} — corte semanal: ${digest.diff.nuevas.length} nuevas, ${digest.diff.resueltas.length} resueltas, ${digest.diff.persistentes} persistentes${digest.diff.sinCambios ? " (sin cambios)" : ""}`,
+    );
+  },
+};
+
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaWeekly];
 }

@@ -15,7 +15,9 @@ import { resolveAllSessions } from "@/lib/sessions/resolve-client";
  *   2. Materialización fresca: `resolveAllSessions({dryRun}).changed === 0`. Si != 0,
  *      alguien editó clientes/categorías (o el resolver) y no re-resolvió → resolvedClientId
  *      quedó desactualizado y los reads por resolvedClientId mienten.
- *   3. Enums del CLIENTE GENERADO ⊆ enums de Postgres. Atrapa el bug de las "migraciones
+ *   3. Ningún Cobro COBRADO sin confirmadoPor (Cobranza: el humano confirma lo que
+ *      mueve dinero; chokepoint único lib/cobranza/mutations.ts#cambiarEstadoCobro).
+ *   4. Enums del CLIENTE GENERADO ⊆ enums de Postgres. Atrapa el bug de las "migraciones
  *      silenciosas" (BlockSource.MODIFIED, post-mortem en ARCHITECTURE.md): si el código
  *      conoce un valor que la DB no tiene, el próximo write con ese valor revienta. Se
  *      compara `$Enums` de @prisma/client (lo que el código EJECUTA — el dmmf del client
@@ -61,7 +63,21 @@ async function main(): Promise<number> {
     console.error("⚠ INV2 no verificable (¿HubSpot/DB caído?):", e instanceof Error ? e.message : e);
   }
 
-  // ── Inv 3: enums del cliente generado ⊆ enums de Postgres ──
+  // ── Inv 3: ningún Cobro COBRADO sin confirmadoPor (Cobranza — el humano confirma
+  //    lo que mueve dinero; chokepoint: lib/cobranza/mutations.ts#cambiarEstadoCobro) ──
+  const cobradosSinConfirmar = await prisma.cobro.count({
+    where: { estado: "COBRADO", confirmadoPor: null },
+  });
+  if (cobradosSinConfirmar > 0) {
+    violations++;
+    console.error(
+      `✗ INV3 VIOLADO: ${cobradosSinConfirmar} Cobro(s) en estado COBRADO sin confirmadoPor (¿alguien escribió estado sin pasar por el chokepoint?).`,
+    );
+  } else {
+    console.log("✓ INV3: todo Cobro COBRADO tiene confirmadoPor.");
+  }
+
+  // ── Inv 4: enums del cliente generado ⊆ enums de Postgres ──
   const dbEnums = await prisma.$queryRaw<Array<{ typname: string; enumlabel: string }>>`
     SELECT t.typname, e.enumlabel
     FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
@@ -89,14 +105,14 @@ async function main(): Promise<number> {
   }
   if (missing.length > 0) {
     violations++;
-    console.error(`✗ INV3 VIOLADO: el cliente Prisma conoce ${missing.length} valor(es) de enum que la DB NO tiene — un write con ellos falla:`);
+    console.error(`✗ INV4 VIOLADO: el cliente Prisma conoce ${missing.length} valor(es) de enum que la DB NO tiene — un write con ellos falla:`);
     for (const m of missing.slice(0, 15)) console.error(`    - ${m}`);
     console.error('  Corré `npm run db:sync` (¡nunca `db push` solo!) y reiniciá el server. Ver ARCHITECTURE.md ("migraciones silenciosas").');
   } else {
-    console.log(`✓ INV3: los ${Object.keys($Enums).length} enums del cliente generado existen completos en la DB.`);
+    console.log(`✓ INV4: los ${Object.keys($Enums).length} enums del cliente generado existen completos en la DB.`);
   }
   if (extra.length > 0) {
-    console.warn(`⚠ INV3 (no bloquea): la DB tiene ${extra.length} valor(es) de enum que este cliente no conoce (¿drift de la otra PC sin mergear?): ${extra.slice(0, 8).join(", ")}`);
+    console.warn(`⚠ INV4 (no bloquea): la DB tiene ${extra.length} valor(es) de enum que este cliente no conoce (¿drift de la otra PC sin mergear?): ${extra.slice(0, 8).join(", ")}`);
   }
 
   return violations;

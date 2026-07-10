@@ -19,7 +19,7 @@ interface TeamMember {
   /** Área funcional (eje de ANÁLISIS de sesiones): Ventas / CSE / Marketing / … */
   area: string | null;
   /** Rol de PERMISO (TeamRole). */
-  roleEnum: "CSE" | "VENTAS" | "DEV" | "CSL" | "MARKETING" | "SUPER_ADMIN" | string;
+  roleEnum: "CSE" | "VENTAS" | "DEV" | "CSL" | "MARKETING" | "ADMIN" | "SUPER_ADMIN" | string;
   /** Foto de la persona (bucket público). Se muestra en el selector de equipo del Kickoff. */
   photoUrl: string | null;
   createdAt: string;
@@ -32,6 +32,7 @@ const ROLE_LABEL: Record<string, string> = {
   DEV: "Dev",
   CSL: "CSL",
   MARKETING: "Marketing",
+  ADMIN: "Admin", // asistente administrativo (Finanzas): solo Cobranza
   SUPER_ADMIN: "Super Admin",
 };
 

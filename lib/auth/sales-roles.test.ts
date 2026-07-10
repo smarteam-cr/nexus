@@ -23,16 +23,16 @@ test("A — incluye VENTAS, DEV, CSL y SUPER_ADMIN", () => {
   expect([...SALES_AREA_ROLES].sort()).toEqual(["CSL", "DEV", "SUPER_ADMIN", "VENTAS"]);
 });
 
-test("B — excluye CSE y MARKETING", () => {
+test("B — excluye CSE, MARKETING y ADMIN (Finanzas: solo Cobranza)", () => {
   expect(isSalesAreaRole("CSE")).toBe(false);
   expect(isSalesAreaRole("MARKETING")).toBe(false);
+  expect(isSalesAreaRole("ADMIN")).toBe(false); // rol de Finanzas — no ve el área de Ventas
 });
 
 test("C — inputs no-rol: null / undefined / vacío / basura / casing → false", () => {
   expect(isSalesAreaRole(null)).toBe(false);
   expect(isSalesAreaRole(undefined)).toBe(false);
   expect(isSalesAreaRole("")).toBe(false);
-  expect(isSalesAreaRole("ADMIN")).toBe(false);
   expect(isSalesAreaRole("ventas")).toBe(false); // case-sensitive a propósito (enum exacto)
   expect(isSalesAreaRole("VENTAS ")).toBe(false); // sin trims mágicos
 });

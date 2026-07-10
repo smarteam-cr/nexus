@@ -5,19 +5,22 @@
  * es solo para análisis de sesiones y NO se decide acá.
  *
  * Matriz de capacidades (fuente real = el objeto CAPABILITIES más abajo):
- *   | capacidad        | CSE | VENTAS | DEV | CSL | MARKETING | SUPER_ADMIN |
- *   | seeAllClients    |  ✗  |   ✓    |  ✓  |  ✓  |     ✓     |      ✓      |
- *   | handoffAnywhere  |  ✗  |   ✓    |  ✓  |  ✓  |     ✓     |      ✓      |
- *   | createHandoff    |  ✗  |   ✓    |  ✓  |  ✗  |     ✗     |      ✓      |
- *   | shareClients     |  ✗  |   ✗    |  ✗  |  ✓  |     ✓     |      ✓      |
- *   | deleteClients    |  ✗  |   ✗    |  ✗  |  ✓  |     ✗     |      ✓      |
- *   | manageTeam       |  ✗  |   ✗    |  ✗  |  ✗  |     ✗     |      ✓      |
- *   | editTimeline     |  ✓  |   ✓    |  ✓  |  ✓  |     ✓     |      ✓      |
- *   | deleteTimeline   |  ✗  |   ✓    |  ✓  |  ✓  |     ✓     |      ✓      |
+ *   | capacidad        | CSE | VENTAS | DEV | CSL | MARKETING | ADMIN | SUPER_ADMIN |
+ *   | seeAllClients    |  ✗  |   ✓    |  ✓  |  ✓  |     ✓     |   ✗   |      ✓      |
+ *   | handoffAnywhere  |  ✗  |   ✓    |  ✓  |  ✓  |     ✓     |   ✗   |      ✓      |
+ *   | createHandoff    |  ✗  |   ✓    |  ✓  |  ✗  |     ✗     |   ✗   |      ✓      |
+ *   | shareClients     |  ✗  |   ✗    |  ✗  |  ✓  |     ✓     |   ✗   |      ✓      |
+ *   | deleteClients    |  ✗  |   ✗    |  ✗  |  ✓  |     ✗     |   ✗   |      ✓      |
+ *   | manageTeam       |  ✗  |   ✗    |  ✗  |  ✗  |     ✗     |   ✗   |      ✓      |
+ *   | editTimeline     |  ✓  |   ✓    |  ✓  |  ✓  |     ✓     |   ✗   |      ✓      |
+ *   | deleteTimeline   |  ✗  |   ✓    |  ✓  |  ✓  |     ✓     |   ✗   |      ✓      |
  *
  * CSE es el único "scoped" (ve solo sus clientes asignados + compartidos).
  * MARKETING ≡ CSL en capacidades (etiqueta distinta). DEV ≡ VENTAS en capacidades
  * (rol técnico: ve todo + cronogramas + handoffs; + acceso al área de Ventas).
+ * ADMIN (asistente administrativo de Finanzas) tiene CERO capacidades de esta
+ * matriz: su ÚNICO acceso es el módulo Cobranza, gateado por la whitelist
+ * lib/auth/cobranza-roles.ts (no por capability — mismo patrón que el área Ventas).
  * SUPER_ADMIN es el único que gestiona el equipo.
  */
 import type { TeamRole } from "@prisma/client";
@@ -44,11 +47,15 @@ const CAPABILITIES: Record<TeamRole, ReadonlyArray<Capability>> = {
   DEV: ["seeAllClients", "handoffAnywhere", "createHandoff", "editTimeline", "deleteTimeline"],
   CSL: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients", "editTimeline", "deleteTimeline"],
   MARKETING: ["seeAllClients", "handoffAnywhere", "shareClients", "editTimeline", "deleteTimeline"],
+  // ADMIN (Finanzas): CERO capacidades de la matriz — su único acceso es Cobranza,
+  // gateado por COBRANZA_ROLES (lib/auth/cobranza-roles.ts), no por capability.
+  ADMIN: [],
   SUPER_ADMIN: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients", "manageTeam", "createHandoff", "editTimeline", "deleteTimeline"],
 };
 
 /** Rango lineal — para gates simples de "rol mínimo". */
 export const ROLE_RANK: Record<TeamRole, number> = {
+  ADMIN: 1, // scoped a Cobranza — no "supera" a nadie en los gates por rango
   CSE: 1,
   VENTAS: 2,
   DEV: 2,
@@ -64,6 +71,7 @@ export const ROLE_LABEL: Record<TeamRole, string> = {
   DEV: "Dev",
   CSL: "CSL",
   MARKETING: "Marketing",
+  ADMIN: "Admin",
   SUPER_ADMIN: "Super Admin",
 };
 

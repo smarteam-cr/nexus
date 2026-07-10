@@ -29,6 +29,7 @@ import {
 import { requireCapability, requireRole, type Capability } from "./roles";
 import { isSalesAreaRole } from "./sales-roles";
 import { isMarketingEditor } from "./marketing-roles";
+import { isCobranzaRole } from "./cobranza-roles";
 import type { TeamRole } from "@prisma/client";
 
 function toErrorResponse(e: unknown): NextResponse | null {
@@ -276,6 +277,27 @@ export async function guardMarketingEditor(): Promise<
   if (!isMarketingEditor(guard.role)) {
     return NextResponse.json(
       { error: "Tu rol no puede editar el área de Marketing." },
+      { status: 403 },
+    );
+  }
+  return guard;
+}
+
+/**
+ * Acceso al módulo COBRANZA (cartera de cobros — Admin & Finanzas). Whitelist de
+ * roles = fuente única `COBRANZA_ROLES` (lib/auth/cobranza-roles.ts): ADMIN y
+ * SUPER_ADMIN, nadie más (info sensible de Finanzas). La MISMA lista gatea la
+ * página y el Sidebar — no re-declarar el array acá.
+ * Devuelve el bundle de usuario interno o una NextResponse 401/403.
+ */
+export async function guardCobranzaAccess(): Promise<
+  Awaited<ReturnType<typeof requireInternalUser>> | NextResponse
+> {
+  const guard = await guardInternalUser();
+  if (guard instanceof NextResponse) return guard;
+  if (!isCobranzaRole(guard.role)) {
+    return NextResponse.json(
+      { error: "Tu rol no tiene acceso a Cobranza." },
       { status: 403 },
     );
   }

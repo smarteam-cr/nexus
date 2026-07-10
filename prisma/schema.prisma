@@ -180,6 +180,7 @@ model Client {
   csSignals         ClientCsSignals? // Éxito del cliente: snapshot de señales HubSpot
   partnerSnapshot   ClientPartnerSnapshot? // CS360: snapshot del objeto Partner Clients de HubSpot
   accountBrief      CsAccountBrief? // CS360: resumen ejecutivo citado (agente)
+  cuentaFinanciera  CuentaFinanciera? // Cobranza: perfil de cobro 1:1 (ver sección Cobranza)
 }
 
 // ─── SystemConfig (config GLOBAL de Nexus, singleton — no por usuario) ─────────
@@ -306,6 +307,7 @@ model Project {
   handoffSources      HandoffSource[]
   timelineEvents      TimelineEvent[] // Éxito del cliente: eventos crudos del cronograma
   csAlerts            CsAlert[] // Éxito del cliente: alertas del watchdog
+  serviciosCobranza   ServicioContratado[] // Cobranza: servicios facturables ligados a este proyecto
 }
 
 // D.3 panel — salud del proyecto para el panel de cartera. Es el OVERRIDE curado; la salud
@@ -1176,6 +1178,7 @@ enum TeamRole {
   CSL // ve todo + handoff en cualquiera + comparte; NO gestiona equipo
   MARKETING // capacidades = CSL (etiqueta distinta para análisis/UI)
   DEV // equipo técnico: capacidades = VENTAS (ve todo + cronogramas + handoffs) + área Ventas
+  ADMIN // asistente administrativo (Finanzas): SOLO Cobranza (via COBRANZA_ROLES) — 0 capacidades de la matriz
   SUPER_ADMIN // todo + ÚNICO que gestiona el equipo (alta/baja/cambio de rol)
 }
 
@@ -2080,4 +2083,338 @@ model CronJobState {
   lastResult     Json?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ═══ COBRANZA — control de cartera de cobros (Admin & Finanzas) ════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+// Nexus es la capa de CONTROL de cobros ("¿a quién le toca cobrar y cómo va?");
+// la facturación fiscal, conciliación bancaria y contabilidad viven en Odoo/Mercury
+// (ver docs/DECISIONS.md § Cobranza). Acceso: SOLO roles ADMIN + SUPER_ADMIN
+// (whitelist lib/auth/cobranza-roles.ts, enforcement server-side).
+//
+// NAMING EN ESPAÑOL A PROPÓSITO (desviación deliberada de la convención inglesa
+// del resto del schema): el dominio se opera en español (Alex/Finanzas) y los
+// términos (cobro, cuota, arranque, catch-up) no traducen 1:1 sin perder
+// precisión. Documentado en DECISIONS — no "corregir" a inglés.
+
+enum CobranzaTipoCuenta {
+  NACIONAL
+  INTERNACIONAL
+}
+
+enum CobranzaViaCobro {
+  MERCURY
+  ODOO
+  OTRA
+}
+
+enum CobranzaMoneda {
+  CRC
+  USD
+}
+
+enum CobranzaTerminosPago {
+  ANTICIPADO
+  VENCIDO
+}
+
+enum CobranzaEstadoCuenta {
+  PENDIENTE_DATOS // falta info para operar (ej. sin fecha de arranque) — no genera cobros
+  PENDIENTE_CONTRATO
+  ACTIVA
+  CON_ATRASO
+  SUSPENDIDA
+}
+
+enum CobranzaTipoServicio {
+  SUSCRIPCION
+  IMPLEMENTACION
+  WEB
+  SOPORTE
+  CRM
+  OTRO
+}
+
+enum CobranzaModalidad {
+  RECURRENTE // sin fin (suscripciones)
+  PROYECTO // con fin (implementaciones)
+}
+
+enum CobranzaEstadoServicio {
+  ACTIVO
+  FINALIZADO
+  PAUSADO
+}
+
+enum CobranzaPlanTemplate {
+  PAREJO // N cuotas iguales mensuales desde el arranque
+  ENTRADA_Y_RESTO // entrada X% + resto parejo en N cuotas
+  SUSCRIPCION // recurrente mensual sin fin (rolling)
+  PERSONALIZADO // cuotas arbitrarias (% o monto fijo + offset)
+}
+
+enum CobranzaPlanOrigen {
+  AUTO_HANDOFF // pre-configurado desde el contexto de ventas (Fase 3 — enum listo, v1 no lo usa)
+  MANUAL
+}
+
+enum CobranzaCuotaBase {
+  PORCENTAJE // valor = % del montoTotal (0-100)
+  MONTO_FIJO // valor = monto absoluto
+}
+
+enum CobranzaEstadoCobro {
+  PROGRAMADO // futuro según plan (semáforo gris) o catch-up pendiente de revisión
+  POR_COBRAR // toca cobrarlo / factura en curso (amarillo)
+  COBRADO // plata entró — EXIGE confirmadoPor (INV3; verde)
+  SIN_DATO // falta info para determinarlo (cero fabricación)
+}
+
+enum CobranzaOrigenCobro {
+  PLAN // materializado desde PlanDePago
+  CATCH_UP // generado por desfase arranque-vs-hoy (caso Teamnet) — requiere confirmación
+  MANUAL // creado a mano por la persona
+}
+
+enum CobranzaTipoAlerta {
+  COBRO_PROXIMO // entra a la ventana de la quincena
+  COBRO_VENCIDO // pasó el umbral sin cobrarse
+  CUENTA_SIN_DATOS // cliente con proyecto sin cuenta/servicios/arranque
+  INCONSISTENCIA_CICLO // catch-up generado pendiente de confirmación
+  ARRANQUE_CAMBIADO // fechaInicioFacturacion divergió del anchorStartDate actual
+}
+
+enum CobranzaUrgencia {
+  ALTA
+  MEDIA
+  BAJA
+}
+
+enum CobranzaAlertaEstado {
+  ABIERTA
+  VISTA
+  RESUELTA
+  DESCARTADA
+}
+
+enum BitacoraCobroTipo {
+  LLAMADA
+  CORREO
+  NOTA
+  ACTUALIZACION_IA // escrita por el sistema (ej. resumen de una materialización)
+}
+
+// ─── CuentaFinanciera ───────────────────────────────────────────────────────────
+// Perfil de cobro de un cliente (1:1 con Client — idioma ClientCsSignals). Concern
+// separado del Client operativo: acá vive TODO lo que Finanzas necesita saber.
+model CuentaFinanciera {
+  id       String @id @default(cuid())
+  clientId String @unique
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  tipo          CobranzaTipoCuenta   @default(NACIONAL)
+  viaCobro      CobranzaViaCobro     @default(ODOO)
+  moneda        CobranzaMoneda       @default(CRC)
+  terminosPago  CobranzaTerminosPago @default(ANTICIPADO)
+  diaCobroAncla Int? // nullable porque el día del ciclo puede no estar definido aún (ej. 15, 16)
+  estadoCuenta  CobranzaEstadoCuenta @default(PENDIENTE_DATOS)
+  // Caso Colby: cuenta fuera del estándar — oculta del panel y del cronograma automático.
+  excluidaOperacion        Boolean @default(false)
+  // Licencias de terceros (ej. Hotspot): el cliente paga directo al tercero — esto
+  // documenta qué explicarle. nullable porque solo aplica a esos casos.
+  responsableCobroTerceros String?
+  notas                    String? @db.Text
+  // Curaduría manual del estado (idioma healthStatusOverride{By,At}): quién/cuándo
+  // cambió estadoCuenta a mano por última vez (email del guard).
+  estadoActualizadoPor String?
+  estadoActualizadoEn  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  servicios ServicioContratado[]
+  cobros    Cobro[] // vía cuentaId denormalizado en Cobro (panel sin doble join)
+  alertas   AlertaCobro[]
+  bitacora  BitacoraCobro[]
+
+  @@index([estadoCuenta])
+}
+
+// ─── ServicioContratado ─────────────────────────────────────────────────────────
+// Un servicio facturable de la cuenta (un contrato puede traer varios: suscripción
+// perpetua + implementación de 4 meses). Cada uno lleva su propio plan y cronograma.
+model ServicioContratado {
+  id       String           @id @default(cuid())
+  cuentaId String
+  cuenta   CuentaFinanciera @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+
+  tipoServicio CobranzaTipoServicio
+  modalidad    CobranzaModalidad
+  // Dinero: primer uso de Decimal en el repo (a propósito — Float acumula error en
+  // montos). Prisma.Decimal NO cruza a Client Components: se serializa a number en
+  // lib/cobranza/queries.ts (único punto). Para SUSCRIPCION = monto MENSUAL.
+  montoTotal Decimal        @db.Decimal(12, 2)
+  moneda     CobranzaMoneda
+  // COPIA EDITABLE del ancla: default = ProjectTimeline.anchorStartDate del proyecto
+  // al configurar (se LEE una vez, no se sincroniza). Si el CSE cambia el arranque
+  // después, la divergencia la detecta la alerta ARRANQUE_CAMBIADO — nunca se
+  // regeneran cobros emitidos/cobrados. nullable: sin ancla ⇒ PENDIENTE_DATOS, sin cobros.
+  fechaInicioFacturacion DateTime?
+  duracionMeses          Int? // nullable porque las suscripciones abiertas no tienen fin
+  projectId              String? // nullable porque puede haber servicios sin proyecto en Nexus
+  project                Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  estado                 CobranzaEstadoServicio @default(ACTIVO)
+  descripcion            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  planes PlanDePago[]
+  cobros Cobro[]
+
+  @@index([cuentaId, estado])
+  @@index([projectId])
+}
+
+// ─── PlanDePago ─────────────────────────────────────────────────────────────────
+// El "arreglo de pago" con que se vendió el monto. NO es siempre monto÷N: plantillas
+// configurables. Solo 1 activo por servicio (lo garantiza setPlanActivo por transacción).
+model PlanDePago {
+  id         String             @id @default(cuid())
+  servicioId String
+  servicio   ServicioContratado @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+
+  template  CobranzaPlanTemplate
+  origen    CobranzaPlanOrigen @default(MANUAL)
+  numCuotas Int? // nullable porque SUSCRIPCION no tiene N fijo
+  activo    Boolean            @default(true)
+  notas     String?            @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cuotas CuotaPlan[]
+  cobros Cobro[] // trazabilidad: de qué plan salió cada cobro materializado
+
+  @@index([servicioId, activo])
+}
+
+// ─── CuotaPlan ──────────────────────────────────────────────────────────────────
+// La definición de cada cuota del plan (para PERSONALIZADO; las plantillas simples
+// las expanden en el engine sin filas explícitas salvo la entrada de ENTRADA_Y_RESTO).
+model CuotaPlan {
+  id          String     @id @default(cuid())
+  planId      String
+  plan        PlanDePago @relation(fields: [planId], references: [id], onDelete: Cascade)
+  orden       Int // 1-based
+  base        CobranzaCuotaBase
+  valor       Decimal    @db.Decimal(12, 2) // 0-100 si PORCENTAJE; monto absoluto si MONTO_FIJO
+  offsetMeses Int        @default(0) // 0 = mes de arranque
+  descripcion String?
+
+  @@unique([planId, orden])
+}
+
+// ─── Cobro ──────────────────────────────────────────────────────────────────────
+// El corazón del módulo: una obligación de cobro concreta, materializada desde el
+// plan (o catch-up/manual). INV3: estado=COBRADO exige confirmadoPor (chokepoint
+// lib/cobranza/mutations.ts#cambiarEstadoCobro; red dura en check-invariants.ts).
+model Cobro {
+  id         String             @id @default(cuid())
+  servicioId String
+  servicio   ServicioContratado @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+  cuentaId   String // denormalizado: última/próxima fecha del panel sin doble join
+  cuenta     CuentaFinanciera   @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  planId     String? // nullable porque los MANUAL pueden no salir de un plan
+  plan       PlanDePago?        @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  // El engine SIEMPRE asigna numCuota; los MANUAL van null. En Postgres los NULL no
+  // colisionan en el unique compuesto → los manuales conviven sin límite y los del
+  // engine quedan protegidos contra duplicación (idempotencia). NO "arreglar" con
+  // un unique parcial.
+  numCuota        Int?
+  periodo         String // "YYYY-MM" (mes calendario UTC que cubre)
+  fechaProgramada DateTime // fecha de CALENDARIO como instante UTC (patrón anchorStartDate)
+  monto           Decimal  @db.Decimal(12, 2)
+  moneda          CobranzaMoneda
+  estado          CobranzaEstadoCobro @default(PROGRAMADO)
+  origen          CobranzaOrigenCobro @default(PLAN)
+  fechaEmision    DateTime? // cuándo se emitió la factura (en Odoo/Mercury)
+  fechaCobro      DateTime? // cuándo entró la plata
+  confirmadoPor   String? // email del guard que confirmó el estado con consecuencia monetaria
+  confirmadoEn    DateTime?
+  notas           String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([servicioId, numCuota])
+  @@index([cuentaId, fechaProgramada])
+  @@index([estado, fechaProgramada])
+}
+
+// ─── AlertaCobro ────────────────────────────────────────────────────────────────
+// Alerta generada por el cómputo de cartera (clon del ciclo de vida de CsAlert):
+// dedup por dedupeKey (merge si sigue ABIERTA/VISTA; supresión 7d si RESUELTA/DESCARTADA).
+model AlertaCobro {
+  id       String           @id @default(cuid())
+  cuentaId String
+  cuenta   CuentaFinanciera @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  cobroId  String? // nullable porque CUENTA_SIN_DATOS es a nivel cuenta (sin cobro)
+
+  tipo      CobranzaTipoAlerta
+  urgencia  CobranzaUrgencia
+  mensaje   String @db.Text
+  evidencia Json? // { cobroIds?, servicioId?, fechas? } para drill desde la UI
+
+  // Index no-unique a propósito: una alerta RESUELTA vieja puede reaparecer como fila nueva.
+  dedupeKey       String
+  occurrences     Int      @default(1)
+  firstDetectedAt DateTime @default(now())
+  lastDetectedAt  DateTime @default(now())
+
+  estado      CobranzaAlertaEstado @default(ABIERTA)
+  vistaEn     DateTime?
+  vistaPor    String? // email del guard
+  resueltaEn  DateTime?
+  resueltaPor String? // email del guard
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([estado, urgencia, lastDetectedAt])
+  @@index([cuentaId, estado])
+  @@index([dedupeKey, estado])
+}
+
+// ─── SnapshotCartera ────────────────────────────────────────────────────────────
+// Foto del set de alertas de cada corrida del corte (lunes o disparo manual). El
+// digest semanal es el DIFF contra la corrida anterior — si nada cambió, no molesta.
+// Fila-por-corrida con payload Json (no hash): el demo puede correr N veces el mismo
+// día sin colisión y el digest histórico queda legible. ~52 filas/año — trivial.
+model SnapshotCartera {
+  id          String   @id @default(cuid())
+  capturedAt  DateTime @default(now())
+  alertSet    Json // [{ dedupeKey, tipo, urgencia, cuentaId, cobroId?, mensaje }]
+  resumen     Json // digest computado: { nuevas, resueltas, persistentes, sinCambios }
+  triggeredBy String? // "cron" | email del disparo manual
+
+  @@index([capturedAt])
+}
+
+// ─── BitacoraCobro ──────────────────────────────────────────────────────────────
+// Registro de gestión de la cuenta (llamadas, correos, notas de la persona +
+// actualizaciones automáticas del sistema como los resúmenes de materialización).
+model BitacoraCobro {
+  id           String           @id @default(cuid())
+  cuentaId     String
+  cuenta       CuentaFinanciera @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  cobroId      String? // nullable porque hay entradas a nivel cuenta
+  tipo         BitacoraCobroTipo
+  contenido    String  @db.Text
+  usuarioEmail String? // nullable porque ACTUALIZACION_IA no tiene usuario
+  createdAt    DateTime @default(now())
+
+  @@index([cuentaId, createdAt])
 }
