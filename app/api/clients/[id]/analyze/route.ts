@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { withClientAccess, apiError } from "@/lib/api";
 import { guardCapability } from "@/lib/auth/api-guards";
-import { HANDOFF_EXCLUDE_TITLE_KEYWORDS, HANDOFF_INCLUDE_TITLE_KEYWORDS } from "@/lib/handoff/session-relevance";
+import { HANDOFF_EXCLUDE_TITLE_KEYWORDS, HANDOFF_INCLUDE_TITLE_KEYWORDS, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
 import { extractTitleTerms } from "@/lib/utils/matching";
@@ -24,8 +24,9 @@ import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { autoClassifyOrphanSessions } from "@/lib/projects/analyze-participants";
+import { computeHandoffReadiness } from "@/lib/handoff/feeding";
 import { getProjectHandoffSessions, getClientSessions } from "@/lib/sessions/project-sources";
-import { fetchCompanyTimeline } from "@/lib/hubspot/company-timeline";
+import { fetchCompanyTimeline, fetchCompanyTimelineSplit, serializeTimeline, projectEraSince } from "@/lib/hubspot/company-timeline";
 import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT } from "@/lib/tags/catalog";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
@@ -279,7 +280,11 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // ── Handoff scopeado al proyecto: sin sesiones clasificadas a ESTE proyecto no
   //    hay nada que investigar → cortar antes de crear el run (sin fallback client-wide).
   if (agent.agentGroup === "handoff" && bodyProjectId) {
-    let projSessionCount = await prisma.sessionProject.count({ where: { projectId: bodyProjectId } });
+    // Solo miembros (included=true): un proyecto cuyas sesiones fueron todas excluidas
+    // por humano NO tiene material — cortar acá, no en el prompt vacío.
+    let projSessionCount = await prisma.sessionProject.count({
+      where: { projectId: bodyProjectId, included: true },
+    });
     if (projSessionCount === 0) {
       // Auto-sanar: adoptar las sesiones HUÉRFANAS del cliente (matcheadas a nivel
       // cliente pero sin SessionProject) y reclasificarlas. Cubre el caso del proyecto
@@ -287,11 +292,30 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       // funciona sin que el CSE tenga que clasificar a mano. El clasificador decide el
       // proyecto correcto, así que en multi-proyecto no asigna a ciegas a este.
       await autoClassifyOrphanSessions(clientId).catch(() => {});
-      projSessionCount = await prisma.sessionProject.count({ where: { projectId: bodyProjectId } });
+      projSessionCount = await prisma.sessionProject.count({
+        where: { projectId: bodyProjectId, included: true },
+      });
     }
     if (projSessionCount === 0) {
       return NextResponse.json(
         { error: "NO_PROJECT_SESSIONS", message: "Este proyecto no tiene sesiones clasificadas. Clasificá sesiones al proyecto antes de generar el handoff." },
+        { status: 400 },
+      );
+    }
+
+    // ── Gate de MATERIAL: sin al menos una sesión-feeding con transcript real o una
+    //    fuente manual, el handoff saldría vacío/pobre — cortar ANTES de crear el run
+    //    (sin runs ERROR fantasma) con un mensaje accionable en vez de generar a ciegas.
+    const readiness = await computeHandoffReadiness(bodyProjectId);
+    if (readiness.withTranscript === 0 && readiness.manualSources === 0) {
+      return NextResponse.json(
+        {
+          error: "NO_HANDOFF_SOURCES",
+          message:
+            readiness.feedingCount === 0
+              ? "Ninguna sesión alimenta este handoff (se usan la primaria del proyecto, secundarias de alta confianza o las forzadas a mano). Agregá sesiones desde la columna Google Meet del Contexto, o pegá una fuente manual."
+              : `Las ${readiness.feedingCount} sesiones que alimentan este handoff no tienen transcripción todavía. Esperá el enriquecimiento de Meet o pegá el transcript como fuente manual.`,
+        },
         { status: 400 },
       );
     }
@@ -346,7 +370,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       }),
       // Buscar el deal asociado al proyecto (si hay projectId)
       bodyProjectId
-        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true, tags: true, implementationType: true } })
+        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true, tags: true, implementationType: true, createdAt: true, hubspotCreatedAt: true } })
         : Promise.resolve(null),
     ]);
 
@@ -364,6 +388,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   let dealContent = "";
   let acquisitionContent = "";
   let companyTimelineContent = "";
+  // Historial de engagements ANTERIOR a la era del proyecto (solo handoff por-proyecto):
+  // trasfondo comprimido de implementaciones pasadas — se inyecta en un bloque aparte.
+  let companyTimelinePrevContent = "";
   try {
     const { getSystemHubspotClient, getHubspotClient } = await import("@/lib/hubspot/client");
     // Buscar la cuenta HubSpot del cliente (o la del sistema)
@@ -561,9 +588,51 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         ? await fetchHubspotNotes("companies", client.hubspotCompanyId)
         : [];
 
+      // ── Handoff por-proyecto: excluir deals que pertenecen a OTRO proyecto activo del
+      // cliente. La tabla de deals es client-wide (associations de la company) y metía el
+      // deal del proyecto vecino con monto/entregable/notas — dato tan fuerte que ninguna
+      // instrucción de exclusión del CSE podía contra él (visto en RC: el handoff de CRM
+      // documentaba el conector DocuSign). Matching determinista por NOMBRE normalizado
+      // (los Services de HubSpot nacen con el mismo nombre que su deal), mismo espíritu
+      // que la ventana temporal del timeline: filtrar datos, no rogarle al modelo.
+      let isForeignProjectDeal: (dealName: string) => boolean = () => false;
+      if (agent.agentGroup === "handoff" && bodyProjectId) {
+        const activeProjects = await prisma.project.findMany({
+          where: { clientId, status: "active", serviceType: { not: "__strategy__" } },
+          select: { id: true, name: true },
+        });
+        const norm = (s: string) =>
+          s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
+        // Solapa si son iguales o uno contiene al otro COMPLETO (mín. 10 chars el contenido,
+        // para que un nombre genérico corto tipo "CRM" no dispare falsos positivos).
+        const overlaps = (a: string, b: string) =>
+          a === b || (b.length >= 10 && a.includes(b)) || (a.length >= 10 && b.includes(a));
+        const currentName = norm(activeProjects.find((p) => p.id === bodyProjectId)?.name ?? "");
+        const otherNames = activeProjects
+          .filter((p) => p.id !== bodyProjectId)
+          .map((p) => norm(p.name))
+          .filter(Boolean);
+        isForeignProjectDeal = (dealName: string) => {
+          const dn = norm(dealName);
+          if (!dn) return false;
+          // Si matchea el proyecto ACTUAL, se queda (aunque se parezca a otro).
+          if (currentName && overlaps(dn, currentName)) return false;
+          return otherNames.some((on) => overlaps(dn, on));
+        };
+      }
+
       // Construir el bloque de deals
+      const foreignDeals: string[] = [];
       const dealBlocks = dealsData
         .filter((d) => d.deal?.properties?.dealname)
+        .filter((d) => {
+          const name = d.deal!.properties!.dealname!;
+          if (isForeignProjectDeal(name)) {
+            foreignDeals.push(name);
+            return false;
+          }
+          return true;
+        })
         .map((d, i) => {
           const p = d.deal!.properties!;
           const name = p.dealname ?? `Deal ${d.id}`;
@@ -583,6 +652,11 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
           return lines.join("\n");
         });
 
+      if (foreignDeals.length > 0) {
+        console.log(
+          `[analyze handoff] deals de OTROS proyectos excluidos del contexto: ${foreignDeals.join(" · ")}`,
+        );
+      }
       if (dealBlocks.length > 0) {
         dealContent = `## Deals en HubSpot (${dealBlocks.length} total)\n\n` + dealBlocks.join("\n\n---\n\n");
       }
@@ -601,7 +675,29 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     // construido arriba. El kickoff usa el handoff curado (no fuentes crudas), así que no lo ve.
     if (client.hubspotCompanyId) {
       try {
-        companyTimelineContent = await fetchCompanyTimeline(hsClient, client.hubspotCompanyId);
+        // Handoff por-proyecto: los engagements se PARTEN por la ERA del proyecto — los
+        // de la era entran completos como material; los ANTERIORES entran comprimidos y
+        // etiquetados como trasfondo (clave en re-implementaciones: describen lo que YA
+        // existe construido, sin volver a mezclar el historial completo idéntico en
+        // todos los proyectos del cliente). Legacy sin proyecto y demás agentes:
+        // historial completo (comportamiento previo).
+        if (agent.agentGroup === "handoff" && dealProject) {
+          const { current, previous } = await fetchCompanyTimelineSplit(
+            hsClient,
+            client.hubspotCompanyId,
+            projectEraSince(dealProject),
+          );
+          companyTimelineContent = serializeTimeline(current);
+          companyTimelinePrevContent =
+            previous.length > 0 ? serializeTimeline(previous, { perItemChars: 400 }) : "";
+          if (previous.length > 0) {
+            console.log(
+              `[analyze handoff] historial previo a la era del proyecto: ${previous.length} engagements (comprimidos como trasfondo)`,
+            );
+          }
+        } else {
+          companyTimelineContent = await fetchCompanyTimeline(hsClient, client.hubspotCompanyId);
+        }
       } catch (e) {
         console.error("[analyze] HubSpot company timeline error:", e);
       }
@@ -629,23 +725,19 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   );
 
   // ── Filtro especial para el agente Handoff Sales→CS ─────────────────────────
-  // Estrategia híbrida en 3 niveles para decidir qué sesiones son "input válido
-  // para handoff":
+  // Fuente ÚNICA de la política: lib/handoff/session-relevance.ts. Dos capas:
   //
-  //   1. EXCLUDE por título (precedencia máxima): keywords como "kickoff",
-  //      "implementación", "adopción", "review" → la sesión es post-handoff
-  //      o irrelevante. Se excluye AUNQUE tenga participantes de Sales (ej.
-  //      un Kickoff donde Sales aparece para presentar al CSE).
+  //   1. RELEVANCIA de la sesión (classifyForHandoff, con las listas importadas):
+  //      EXCLUDE por título gana ("implementación", "adopción", "review", weekly…);
+  //      luego INCLUDE por título ("hand off", "traspaso", "kickoff" — el kickoff SÍ
+  //      alimenta el handoff); título neutro → "Ventas en la sala".
   //
-  //   2. INCLUDE por título: keywords como "hand off", "discovery", "demo",
-  //      "propuesta", "cierre" → la sesión es claramente pre-venta o handoff.
-  //      Se incluye AUNQUE tenga muchos CSE/PM (caso típico de la sesión
-  //      "Hand Off" mixta — Sales+CSE juntos al momento del traspaso).
+  //   2. POLÍTICA del LINK (linkFeedsHandoff, solo camino con proyecto): la sesión
+  //      alimenta el handoff de ESTE proyecto solo si su link es PRIMARIO, secundario
+  //      con confianza alta, o forzado a mano (handoffOverride). Evita que dos
+  //      handoffs del mismo cliente repitan las mismas sesiones.
   //
-  //   3. NEUTRO (título no matchea ningún keyword): cae al fallback de
-  //      "al menos un participante de Sales".
-  //
-  // Más filtro temporal: solo últimos 90 días.
+  // El camino legacy sin proyecto además filtra: solo últimos 90 días.
   const isHandoffAgent = agent.agentGroup === "handoff";
   const HANDOFF_LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000;
   const handoffCutoffMs = Date.now() - HANDOFF_LOOKBACK_MS;
@@ -716,9 +808,12 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
 
   try {
     let matchingSessions: RawTranscript[] = [];
-    // Override por sesión para el handoff (true=forzar incluir, false=forzar excluir,
-    // null/ausente=seguir la regla automática). Solo aplica al camino con proyecto.
-    const handoffOverrideById = new Map<string, boolean | null>();
+    // Link sesión↔proyecto para la política de feeding del handoff (isPrimary +
+    // confidence + override). Solo aplica al camino con proyecto.
+    const linkById = new Map<
+      string,
+      { isPrimary: boolean; confidence: number | null; handoffOverride: boolean | null }
+    >();
 
     // ── 4a. Fuente de sesiones ────────────────────────────────────────────────
     // Handoff scopeado al proyecto: la fuente son EXACTAMENTE las sesiones
@@ -734,7 +829,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       // Fuente = sesiones del proyecto que PERTENECEN a su cliente (chokepoint único;
       // descarta links cross-client stale/legacy). El override por sesión viene incluido.
       const { sessions } = await getProjectHandoffSessions(bodyProjectId);
-      for (const s of sessions) handoffOverrideById.set(s.id, s.handoffOverride);
+      for (const s of sessions) {
+        linkById.set(s.id, { isPrimary: s.isPrimary, confidence: s.confidence, handoffOverride: s.handoffOverride });
+      }
       matchingSessions = sessions.map(({ id, title, date, participants }) => ({ id, title, date, participants }));
     } else {
       // Resto de agentes (y handoff legacy sin proyecto): TODAS las sesiones del
@@ -748,15 +845,15 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     let csSessions: RawTranscript[];
 
     if (isHandoffAgent && bodyProjectId) {
-      // Handoff scopeado al proyecto: de las sesiones linkeadas entran las de HANDOFF o
-      // KICKOFF (por título) O las que tienen Ventas en la sala. El resto (levantamientos
-      // semanales, implementación, marketing/service…) son entrega de servicio y se
-      // excluyen aunque estén linkeadas. organizerEmail ya viene en participants (arriba).
+      // Handoff scopeado al proyecto — política de LINK (linkFeedsHandoff): solo el link
+      // PRIMARIO de la sesión, secundarios con confianza alta o forzados a mano; y de
+      // esos, los que la regla de relevancia incluye (HANDOFF/KICKOFF por título, o
+      // Ventas en la sala). Evita que dos handoffs del mismo cliente repitan las mismas
+      // sesiones vía links secundarios. organizerEmail ya viene en participants (arriba).
       salesSessions = matchingSessions.filter((s) => {
-        const ov = handoffOverrideById.get(s.id);
-        if (ov === false) return false; // la "X" del panel: forzar excluir
-        if (ov === true) return true; // agregada a mano desde el pop-up: forzar incluir
-        return classifyForHandoff(s).include; // regla automática
+        const link = linkById.get(s.id);
+        if (!link) return false; // no debería pasar: matchingSessions salió del mismo fetch
+        return linkFeedsHandoff(link, classifyForHandoff(s).include);
       });
       csSessions = [];
     } else if (isHandoffAgent) {
@@ -855,10 +952,15 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       for (const s of excluded.slice(0, 8)) {
         const dateStr = new Date(s.date).toISOString().slice(0, 10);
         const inSales = salesSessions.some((sl) => sl.id === s.id);
+        const link = bodyProjectId ? linkById.get(s.id) : undefined;
         const reason = inSales
           ? `no usada (cap de ${isHandoffAgent ? 10 : CTX.maxSales})`
           : bodyProjectId
-          ? "vinculada pero no usada"
+          ? link?.handoffOverride === false
+            ? "excluida a mano (la X del panel)"
+            : link && !link.isPrimary && (link.confidence ?? 0) < HANDOFF_MIN_SECONDARY_CONFIDENCE
+            ? `secundaria de baja confianza (${link.confidence ?? "sin confidence"})`
+            : `regla: ${classifyForHandoff(s).reason}`
           : s.date < handoffCutoffMs
           ? "fuera de 90d"
           : classifyForHandoff(s).reason;
@@ -1193,7 +1295,36 @@ ${companyTimelineContent.slice(0, CTX.timelineCap)}
 `
     : "";
 
-  const baseUserMessage = `Empresa: ${companyName}
+  // Trasfondo previo a la era del proyecto (comprimido) — solo handoff por-proyecto.
+  const hubspotPrevTimelineBlock = companyTimelinePrevContent.trim()
+    ? `=== HISTORIAL PREVIO EN HUBSPOT (interacciones ANTERIORES a este proyecto) ===
+Trasfondo de implementaciones y gestiones pasadas del cliente: describe lo que YA existe construido o configurado. Usalo SOLO como referencia de punto de partida — NO es alcance, promesa ni pendiente de este handoff.
+${companyTimelinePrevContent.slice(0, 3000)}
+
+`
+    : "";
+
+  // Exclusiones del CSE (reglas duras) — solo handoff por-proyecto; persistidas en
+  // Handoff.contextExclusions vía PATCH /api/projects/[projectId]/handoff. El kickoff
+  // NO las re-inyecta: consume el canvas Handoff ya curado (si cambian, regenerar el
+  // handoff antes del kickoff).
+  let cseExclusionsBlock = "";
+  if (isHandoffAgent && bodyProjectId) {
+    const h = await prisma.handoff.findUnique({
+      where: { projectId: bodyProjectId },
+      select: { contextExclusions: true },
+    });
+    const excl = h?.contextExclusions?.trim();
+    if (excl) {
+      cseExclusionsBlock = `=== EXCLUSIONES DEL CSE (reglas duras — cumplilas SIEMPRE, ganan sobre cualquier fuente) ===
+${excl}
+
+`;
+      console.log(`[analyze handoff] exclusiones del CSE aplicadas (${excl.length} chars)`);
+    }
+  }
+
+  const baseUserMessage = `${cseExclusionsBlock}Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
 Notas base: ${client.notes ?? "Sin notas"}
 ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}` : ""}
@@ -1235,7 +1366,7 @@ ${[
     return `${tag} **${c.title}:**\n${c.content}`;
   }),
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
-].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${hubspotTimelineBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, isHandoffAgent ? 12000 : CTX.salesBlockCap)}\n\n` : ""}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}
+].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, isHandoffAgent ? 12000 : CTX.salesBlockCap)}\n\n` : ""}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verificá que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omitilos.\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 10b. Input del agente Kickoff ─────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardProjectEditHandoff } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { computeHandoffReadiness } from "@/lib/handoff/feeding";
 import { createHandoffCanvas, reconcileHandoffCanvasSections } from "@/lib/canvas/default-canvases";
 
 type Params = { params: Promise<{ projectId: string }> };
@@ -22,7 +23,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     where: { id: projectId },
     select: {
       implementationType: true,
-      handoff: { select: { id: true } },
+      handoff: { select: { id: true, contextExclusions: true } },
       canvases: { where: { name: "Handoff" }, select: { id: true }, take: 1 },
     },
   });
@@ -52,7 +53,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
     }));
   }
 
-  const projectSessionCount = await prisma.sessionProject.count({ where: { projectId } });
+  // Solo miembros (included=true): las excluidas por humano no cuentan como material.
+  const projectSessionCount = await prisma.sessionProject.count({
+    where: { projectId, included: true },
+  });
+
+  // Readiness: qué alimentaría el handoff HOY (política + regla) y si hay material real.
+  // El front lo muestra antes de generar ("N sesiones alimentarán este handoff…").
+  const handoffReadiness = await computeHandoffReadiness(projectId);
 
   // Id del agente de handoff resuelto por grupo (no hardcodeado) — el front lo usa
   // para disparar /analyze sin embeber el cuid.
@@ -71,8 +79,46 @@ export async function GET(_req: NextRequest, { params }: Params) {
     lastRunStatus: lastRun?.status ?? null,
     sourceSessions,
     projectSessionCount,
+    handoffReadiness,
+    contextExclusions: project.handoff?.contextExclusions ?? null,
     implementationType: project.implementationType,
   });
+}
+
+/**
+ * PATCH /api/projects/[projectId]/handoff
+ *
+ * Guarda las EXCLUSIONES DE CONTEXTO del CSE (texto libre, ej. "ignorá el proyecto
+ * DocuSign") — se inyectan como reglas duras en el prompt del agente al generar.
+ * Body: { contextExclusions: string | null }. Mismo guard de edición que el POST.
+ */
+export async function PATCH(req: NextRequest, { params }: Params) {
+  const { projectId } = await params;
+  const guard = await guardProjectEditHandoff(projectId);
+  if (guard instanceof NextResponse) return guard;
+
+  let body: { contextExclusions?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+  }
+  if (typeof body.contextExclusions !== "string" && body.contextExclusions !== null) {
+    return NextResponse.json({ error: "contextExclusions (string|null) requerido" }, { status: 400 });
+  }
+  const value =
+    typeof body.contextExclusions === "string"
+      ? body.contextExclusions.trim().slice(0, 5000) || null
+      : null;
+
+  // Upsert: el Handoff 1:1 puede no existir todavía (lo crea el ensure POST al generar).
+  await prisma.handoff.upsert({
+    where: { projectId },
+    create: { clientId: guard.clientId, projectId, contextExclusions: value },
+    update: { contextExclusions: value },
+  });
+
+  return NextResponse.json({ ok: true, contextExclusions: value });
 }
 
 /**

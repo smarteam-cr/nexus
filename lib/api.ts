@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { requireConsultantSession } from "@/lib/auth";
 import {
   guardAccessToClient,
@@ -15,6 +16,32 @@ type Handler<C extends RouteContext = RouteContext> = (
   req: NextRequest,
   ctx: C
 ) => Promise<NextResponse | Response>;
+
+/**
+ * Un throw no capturado en un handler produce un 500 CRUDO (no-JSON) → el front cae a
+ * mensajes genéricos mudos (visto con el PrismaClientValidationError del client stale:
+ * "No se pudo generar el handoff." sin causa). Este helper lo convierte en JSON
+ * estructurado {error, message} + console.error + Sentry (sin DSN es no-op).
+ */
+async function runHandlerSafely<C extends RouteContext>(
+  handler: Handler<C>,
+  req: NextRequest,
+  ctx: C,
+): Promise<NextResponse | Response> {
+  try {
+    return await handler(req, ctx);
+  } catch (e) {
+    console.error(`[api] ${req.method} ${req.nextUrl.pathname}:`, e);
+    Sentry.captureException(e instanceof Error ? e : new Error(String(e)));
+    return NextResponse.json(
+      {
+        error: "INTERNAL_ERROR",
+        message: "Error interno al procesar la solicitud. Reintentá; si persiste, avisá al equipo.",
+      },
+      { status: 500 },
+    );
+  }
+}
 
 /**
  * Wrapper que solo verifica autenticación (no ownership). Para endpoints
@@ -49,7 +76,7 @@ export function withClientAccess<
     const { id } = await ctx.params;
     const guard = await guardAccessToClient(id);
     if (guard instanceof NextResponse) return guard;
-    return handler(req, ctx);
+    return runHandlerSafely(handler, req, ctx);
   };
 }
 
@@ -64,7 +91,7 @@ export function withProjectAccess<
     const { projectId } = await ctx.params;
     const guard = await guardAccessToProject(projectId);
     if (guard instanceof NextResponse) return guard;
-    return handler(req, ctx);
+    return runHandlerSafely(handler, req, ctx);
   };
 }
 

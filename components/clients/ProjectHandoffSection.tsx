@@ -30,6 +30,10 @@ interface HandoffStatus {
   lastRunStatus: string | null;
   sourceSessions: { id: string; title: string; date: string }[];
   projectSessionCount: number;
+  /** Qué alimentaría el handoff HOY (política de link + regla) y si hay material real. */
+  handoffReadiness: { feedingCount: number; withTranscript: number; manualSources: number };
+  /** Exclusiones de contexto del CSE (texto libre → reglas duras del prompt). */
+  contextExclusions: string | null;
   implementationType: "IMPLEMENTATION" | "REIMPLEMENTATION" | null;
 }
 
@@ -50,10 +54,24 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   const me = useMe();
   const canEdit = me?.capabilities.includes("handoffAnywhere") ?? false;
 
+  // Exclusiones de contexto del CSE (textarea colapsable). El draft vive aparte del
+  // status para no pisar lo tipeado en cada refetch; se sincroniza al cargar.
+  const [exclusions, setExclusions] = useState("");
+  const [exclusionsLoaded, setExclusionsLoaded] = useState(false);
+  const [savingExcl, setSavingExcl] = useState(false);
+  const [showExcl, setShowExcl] = useState(false);
+
   const fetchStatus = useCallback(async () => {
     try {
       const r = await fetch(`/api/projects/${projectId}/handoff`);
-      if (r.ok) setStatus(await r.json());
+      if (r.ok) {
+        const d = (await r.json()) as HandoffStatus;
+        setStatus(d);
+        setExclusionsLoaded((loaded) => {
+          if (!loaded) setExclusions(d.contextExclusions ?? "");
+          return true;
+        });
+      }
     } catch { /* ignore */ }
     setLoading(false);
   }, [projectId]);
@@ -97,6 +115,23 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     }
   }, [projectId, fetchStatus]);
 
+  // Guardar exclusiones (mismo patrón que setModality: fetch + error visible + refetch).
+  const saveExclusions = useCallback(async () => {
+    setSavingExcl(true);
+    try {
+      const r = await fetch(`/api/projects/${projectId}/handoff`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contextExclusions: exclusions.trim() || null }),
+      });
+      if (!r.ok) setError("No se pudieron guardar las exclusiones.");
+      else fetchStatus();
+    } catch {
+      setError("Error de conexión al guardar las exclusiones.");
+    }
+    setSavingExcl(false);
+  }, [projectId, exclusions, fetchStatus]);
+
   const handleGenerate = useCallback(async () => {
     const agentId = status?.agentId;
     if (!agentId) { setError("No se encontró el agente de handoff."); return; }
@@ -105,6 +140,18 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     setError(null);
     const notifyUrl = `/clients/${clientId}`;
     try {
+      // 0. Guardar exclusiones PENDIENTES del textarea: escribir y regenerar directo
+      //    (sin apretar "Guardar") perdía el texto en silencio y el prompt corría sin
+      //    la regla (visto en RC). Best-effort: si falla, la generación sigue igual.
+      const pendingExcl = exclusions.trim() || null;
+      if (pendingExcl !== (status?.contextExclusions ?? null)) {
+        await fetch(`/api/projects/${projectId}/handoff`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contextExclusions: pendingExcl }),
+        }).catch(() => {});
+      }
+
       // 1. Asegurar entidad Handoff + canvas
       const ensure = await fetch(`/api/projects/${projectId}/handoff`, { method: "POST" });
       const ensureData = await ensure.json().catch(() => ({}));
@@ -126,7 +173,8 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
       if (data.runId) {
         const result = await pollAgentRun(clientId, data.runId);
         if (result.status === "ERROR") {
-          setError("El handoff falló durante la generación. Reintentá.");
+          // result.error viene humanizado desde AgentRun.output.error (créditos/429/timeout…).
+          setError(result.error ?? "El handoff falló durante la generación. Reintentá.");
           void notifyAgentDone({ group: "handoff", ok: false, url: notifyUrl });
           return;
         }
@@ -151,12 +199,17 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     } finally {
       setGenerating(false);
     }
-  }, [projectId, clientId, fetchStatus, fetchTags, status?.agentId, bumpTimelineRefresh, bumpGpsRefresh]);
+  }, [projectId, clientId, fetchStatus, fetchTags, status?.agentId, status?.contextExclusions, exclusions, bumpTimelineRefresh, bumpGpsRefresh]);
 
   if (loading) return <div className="h-14 rounded-2xl skeleton-shimmer" />;
   if (!status) return null;
 
-  const { generated, projectSessionCount } = status;
+  const { generated } = status;
+  const readiness = status.handoffReadiness ?? { feedingCount: 0, withTranscript: 0, manualSources: 0 };
+  // Hay quién alimente, pero nada con transcript ni fuentes manuales → generaría vacío
+  // (el gate del server igual corta con mensaje claro; esto evita el click a ciegas).
+  const noMaterial =
+    readiness.feedingCount > 0 && readiness.withTranscript === 0 && readiness.manualSources === 0;
 
   const badge = generating
     ? <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">Generando…</span>
@@ -178,10 +231,15 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
           <p className="text-xs text-fg-muted mt-0.5 truncate">
             {generated
               ? `Armado con ${status.sourceSessions.length} sesión${status.sourceSessions.length === 1 ? "" : "es"} del proyecto${status.lastRunAt ? ` · ${fmtDate(status.lastRunAt)}` : ""}`
-              : projectSessionCount > 0
-              ? `${projectSessionCount} sesión${projectSessionCount === 1 ? "" : "es"} clasificada${projectSessionCount === 1 ? "" : "s"} a este proyecto`
-              : "Al generar se clasifican las sesiones del cliente a este proyecto"}
+              : readiness.feedingCount > 0 || readiness.manualSources > 0
+              ? `${readiness.feedingCount} sesión${readiness.feedingCount === 1 ? "" : "es"} alimentarán este handoff (${readiness.withTranscript} con transcript${readiness.manualSources > 0 ? `, ${readiness.manualSources} fuente${readiness.manualSources === 1 ? "" : "s"} manual${readiness.manualSources === 1 ? "" : "es"}` : ""})`
+              : "Ninguna sesión alimenta este handoff todavía — revisá el Contexto o pegá una fuente manual"}
           </p>
+          {noMaterial && !generated && (
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-1.5 inline-block">
+              Las sesiones que alimentan este handoff aún no tienen transcripción — el handoff saldría vacío.
+            </p>
+          )}
           {/* #5 — clasificación del proyecto (modalidad + productos/alcance), compartida con el BC. */}
           <div className="mt-2">
             <TagsStrip
@@ -234,6 +292,60 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
           generated={generated}
           onSessionsChange={fetchStatus}
         />
+      )}
+
+      {/* Exclusiones para el handoff — texto libre del CSE que el agente debe ignorar
+          (temas de OTROS proyectos del cliente). Se inyecta como regla dura al generar. */}
+      {canEdit && (
+        <div className="border-t border-line px-5 py-3">
+          <button
+            onClick={() => setShowExcl((v) => !v)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-fg hover:text-brand transition-colors"
+          >
+            <svg
+              className={`w-3 h-3 transition-transform ${showExcl ? "rotate-90" : ""}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            Exclusiones para el handoff
+            {exclusions.trim() !== (status.contextExclusions ?? "") ? (
+              <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
+                sin guardar — se guardan al regenerar
+              </span>
+            ) : status.contextExclusions ? (
+              <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">
+                activas
+              </span>
+            ) : null}
+          </button>
+          {showExcl && (
+            <div className="mt-2 space-y-2">
+              <p className="text-[11px] text-fg-muted leading-relaxed">
+                Temas que el agente debe IGNORAR al generar — útil cuando el cliente tiene varios
+                proyectos (ej. &quot;ignorá el proyecto DocuSign&quot;, &quot;no hables de contratos&quot;).
+                Si las cambiás, regenerá el handoff (y después el kickoff).
+              </p>
+              <textarea
+                value={exclusions}
+                onChange={(e) => setExclusions(e.target.value)}
+                rows={3}
+                maxLength={5000}
+                placeholder='Ej.: "Ignorá todo lo relativo al proyecto de contratos en DocuSign."'
+                className="w-full px-3 py-2 text-xs bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand resize-y"
+              />
+              <div className="flex justify-end">
+                <button
+                  onClick={saveExclusions}
+                  disabled={savingExcl || exclusions.trim() === (status.contextExclusions ?? "")}
+                  className="text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  {savingExcl ? "Guardando…" : "Guardar exclusiones"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {generated && showDoc && status.canvasId && (

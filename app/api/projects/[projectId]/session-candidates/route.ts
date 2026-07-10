@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { classifyHandoffSession } from "@/lib/handoff/session-relevance";
+import { classifyHandoffSession, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { belongsToClient } from "@/lib/sessions/project-sources";
 
 /**
  * GET /api/projects/[projectId]/session-candidates
  *
  * Para la selección revisable del handoff (A2 rediseñado). Devuelve:
- *   - feeding: las sesiones que ALIMENTAN el handoff (panel limpio). Una sesión alimenta
- *     si su override es true, o (sin override) si la regla la incluye —título de
- *     handoff/kickoff o Ventas en la sala (lib/handoff/session-relevance). Las override=false
- *     no entran.
+ *   - feeding: las sesiones que ALIMENTAN el handoff (panel limpio) según la política
+ *     de link `linkFeedsHandoff` (session-relevance): override=true fuerza; override=false
+ *     excluye; sin override, solo links PRIMARIOS o secundarios de confianza alta cuya
+ *     regla de relevancia aplique (título handoff/kickoff o Ventas en la sala).
  *   - candidates: las DEMÁS sesiones del cliente (pop-up "Buscar más"), con `applies`
  *     (¿la regla la incluiría?) para destacarlas. Agregar una la fuerza al handoff.
  *
@@ -41,6 +41,9 @@ export async function GET(
       confidence: true,
       rationale: true,
       handoffOverride: true,
+      included: true,
+      reviewedAt: true,
+      isPrimary: true,
       session: {
         select: {
           id: true, title: true, date: true, participants: true, organizerEmail: true,
@@ -59,13 +62,15 @@ export async function GET(
     );
   }
 
-  // ¿Esta sesión linkeada alimenta el handoff? override gana; sino, la regla.
+  // ¿Esta sesión linkeada alimenta el handoff? Excluida de la membresía del proyecto
+  // (included=false, tombstone humano) no alimenta NADA; si es miembro, aplica la
+  // política de link (primario / confianza alta / forzada) + la regla de relevancia.
   const feeds = (r: (typeof linkedRows)[number]): boolean =>
-    r.handoffOverride === false
-      ? false
-      : r.handoffOverride === true
-        ? true
-        : applies(r.session.title, r.session.participants, r.session.organizerEmail);
+    r.included &&
+    linkFeedsHandoff(
+      { isPrimary: r.isPrimary, confidence: r.confidence, handoffOverride: r.handoffOverride },
+      applies(r.session.title, r.session.participants, r.session.organizerEmail),
+    );
 
   const feeding = safeRows
     .filter(feeds)
@@ -79,14 +84,21 @@ export async function GET(
       confidence: r.confidence,
       rationale: r.rationale,
       forced: r.handoffOverride === true,
+      // Por qué alimenta (con la política nueva no hay otro caso): la UI lo muestra en la fila.
+      origin: r.handoffOverride === true ? "forzada a mano" : r.isPrimary ? "primaria" : "confianza alta",
     }));
   const feedingIds = new Set(feeding.map((f) => f.sessionId));
 
   // Candidatas para el pop-up: todas las sesiones del cliente que NO alimentan ya el
   // handoff (incluye las linkeadas-pero-excluidas y las no linkeadas). `applies` marca
-  // las que entrarían por regla, para destacarlas arriba.
+  // las que entrarían por regla, para destacarlas arriba. Ownership = misma regla que
+  // belongsToClient (resolvedClientId O manualClientId) — antes solo resolvedClientId
+  // y una sesión asignada a mano desaparecía de la columna Y del modal.
   const clientSessions = await prisma.firefliesSession.findMany({
-    where: { resolvedClientId: clientId, date: { lte: new Date() } },
+    where: {
+      OR: [{ resolvedClientId: clientId }, { manualClientId: clientId }],
+      date: { lte: new Date() },
+    },
     orderBy: { date: "desc" },
     take: 100,
     select: {
@@ -101,15 +113,27 @@ export async function GET(
 
   const candidates = clientSessions
     .filter((s) => !feedingIds.has(s.id))
-    .map((s) => ({
-      sessionId: s.id,
-      title: s.title,
-      date: s.date,
-      participants: s.participants,
-      applies: applies(s.title, s.participants, s.organizerEmail),
-      linkedElsewhere: s.projects.some((p) => p.projectId !== projectId),
-    }))
+    .map((s) => {
+      const cls = classifyHandoffSession(s.title, s.participants, s.organizerEmail, salesEmails);
+      return {
+        sessionId: s.id,
+        title: s.title,
+        date: s.date,
+        participants: s.participants,
+        applies: cls.include,
+        // Por qué (no) aplica la regla — tooltip del modal (antes era opaco).
+        reason: cls.reason,
+        linkedElsewhere: s.projects.some((p) => p.projectId !== projectId),
+      };
+    })
     .sort((a, b) => Number(b.applies) - Number(a.applies)); // las que aplican, primero (date ya viene desc)
 
-  return NextResponse.json({ feeding, candidates });
+  // Links de IA que ningún humano confirmó todavía (estado "revisado" DERIVADO:
+  // curado ⇔ no existe link included+agent+reviewedAt=null). Alimenta el chip de
+  // aviso "N sesiones sin revisar" del stepper (solo se muestra en multi-proyecto).
+  const unreviewedCount = safeRows.filter(
+    (r) => r.included && r.source === "agent" && r.reviewedAt === null,
+  ).length;
+
+  return NextResponse.json({ feeding, candidates, unreviewedCount });
 }

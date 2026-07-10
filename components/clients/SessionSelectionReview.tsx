@@ -4,10 +4,13 @@
  * components/clients/SessionSelectionReview.tsx
  *
  * Selección revisable de las sesiones que alimentan un handoff (A2 rediseñado).
- *   - Panel limpio: SOLO las sesiones que alimentan el handoff (handoff/kickoff/Ventas, o
- *     forzadas a mano). La "X" las saca del handoff sin desvincularlas del proyecto.
+ *   - Panel limpio: SOLO las que alimentan según la política de link (primaria del
+ *     proyecto / secundaria de confianza alta / forzada a mano) + la regla de
+ *     relevancia (handoff/kickoff por título o Ventas en sala). La "X" las saca del
+ *     handoff sin desvincularlas del proyecto.
  *   - "Buscar más sesiones": pop-up con las demás sesiones del cliente (buscador +
- *     las que aplican destacadas). "Agregar" fuerza la inclusión (lo manual manda).
+ *     las que aplican destacadas, con el porqué en tooltip). "Agregar" fuerza la
+ *     inclusión (lo manual manda — así entra una mixta al handoff de su 2º proyecto).
  *
  * Componente COMPARTIDO (ProjectContextSection en columnMode + stepper). Reusa el override
  * por sesión vía POST /api/projects/[projectId]/handoff-sessions.
@@ -25,6 +28,8 @@ interface FeedingSession {
   confidence: number | null;
   rationale: string | null;
   forced: boolean;
+  /** Por qué alimenta: "primaria" | "confianza alta" | "forzada a mano". */
+  origin: string;
 }
 interface CandidateSession {
   sessionId: string;
@@ -32,6 +37,8 @@ interface CandidateSession {
   date: string;
   participants: string[];
   applies: boolean;
+  /** Por qué (no) aplica la regla de relevancia — tooltip. */
+  reason: string;
   linkedElsewhere: boolean;
 }
 
@@ -137,6 +144,7 @@ export default function SessionSelectionReview({
           {filtered.map((c) => (
             <li
               key={c.sessionId}
+              title={c.reason ? (c.applies ? c.reason : `No aplica: ${c.reason}`) : undefined}
               className={`flex items-center gap-2 rounded-lg border border-line px-3 py-2 ${c.applies ? "" : "opacity-60"}`}
             >
               <div className="flex-1 min-w-0">
@@ -173,12 +181,15 @@ export default function SessionSelectionReview({
   if (columnMode) {
     return (
       <>
-        <ContextColumnList loading={loading} empty="Sin sesiones de Meet clasificadas.">
+        <ContextColumnList
+          loading={loading}
+          empty="Ninguna sesión alimenta este handoff. Agregala con “Buscar más sesiones”."
+        >
           {feeding.map((s) => (
             <ContextRow
               key={s.sessionId}
               icon={CTX_ICONS.meet}
-              meta={`${fmtDate(s.date)} · ${s.forced ? "a mano" : s.source === "manual" ? "manual" : "IA"}`}
+              meta={`${fmtDate(s.date)} · ${s.origin ?? (s.forced ? "forzada a mano" : "primaria")}`}
               title={s.title || "Sin título"}
               onRemove={!readOnly ? () => setFeeds(s.sessionId, false) : undefined}
               removeTitle="Quitar del handoff (no la desvincula del proyecto)"
@@ -207,7 +218,8 @@ export default function SessionSelectionReview({
         Sesiones que alimentan el handoff{feeding.length > 0 ? ` (${feeding.length})` : ""}
       </p>
       <p className="text-[11px] text-fg-muted leading-relaxed">
-        Detectamos las sesiones de handoff, kickoff o con Ventas en la sala. Revisá y podá antes de generar.
+        Entran la sesión primaria del proyecto y las secundarias de alta confianza que sean de
+        handoff/kickoff o tengan Ventas en la sala. Revisá y podá antes de generar.
       </p>
 
       {feeding.length === 0 ? (
@@ -227,7 +239,7 @@ export default function SessionSelectionReview({
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-fg truncate">{s.title || "Sin título"}</p>
                 <p className="text-[11px] text-fg-muted truncate">
-                  {fmtDate(s.date)} · {s.forced ? "agregada a mano" : s.source === "manual" ? "agregada manualmente" : "clasificada por IA"}
+                  {fmtDate(s.date)} · {s.origin ?? (s.forced ? "agregada a mano" : "primaria")}
                 </p>
               </div>
               {!readOnly && (

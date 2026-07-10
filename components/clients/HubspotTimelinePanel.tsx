@@ -15,7 +15,14 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { ContextColumnList, ContextRow, CTX_ICONS } from "./context-column";
 
-type HsTimelineItem = { type: "NOTE" | "CALL" | "MEETING"; title: string; date: string | null; snippet: string };
+type HsTimelineItem = {
+  type: "NOTE" | "CALL" | "MEETING";
+  title: string;
+  date: string | null;
+  snippet: string;
+  /** true = anterior a la era del proyecto (trasfondo comprimido — se muestra atenuado). */
+  previous?: boolean;
+};
 const HS_TYPE_LABEL: Record<string, string> = { NOTE: "Nota", CALL: "Llamada", MEETING: "Reunión" };
 
 export default function HubspotTimelinePanel({
@@ -61,7 +68,7 @@ export default function HubspotTimelinePanel({
           <ContextRow
             key={i}
             icon={it.type === "NOTE" ? CTX_ICONS.note : CTX_ICONS.calendar}
-            meta={`${HS_TYPE_LABEL[it.type] ?? it.type}${it.date ? ` · ${it.date}` : ""}`}
+            meta={`${HS_TYPE_LABEL[it.type] ?? it.type}${it.date ? ` · ${it.date}` : ""}${it.previous ? " · historial previo" : ""}`}
             title={it.title}
             snippet={it.snippet}
           />
@@ -90,11 +97,19 @@ export default function HubspotTimelinePanel({
           </p>
           <ul className="space-y-2">
             {hubspot.map((it, i) => (
-              <li key={i} className="rounded-lg border border-line bg-surface-muted px-3 py-2">
+              <li
+                key={i}
+                className={`rounded-lg border border-line bg-surface-muted px-3 py-2${it.previous ? " opacity-60" : ""}`}
+              >
                 <p className="text-xs font-medium text-fg truncate">
                   {HS_TYPE_LABEL[it.type] ?? it.type}
                   {it.date ? ` · ${it.date}` : ""}
                   {it.title ? ` · ${it.title}` : ""}
+                  {it.previous && (
+                    <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-fg-muted bg-surface border border-line rounded-full px-1.5 py-0.5 align-middle">
+                      historial previo
+                    </span>
+                  )}
                 </p>
                 {it.snippet && <p className="text-[11px] text-fg-muted mt-0.5 line-clamp-2">{it.snippet}</p>}
               </li>

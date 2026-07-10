@@ -1,16 +1,23 @@
 /**
  * lib/handoff/session-relevance.ts
  *
- * Relevancia de una sesión para el HANDOFF (Sales→CS). Regla: una sesión alimenta el
- * handoff si su título es de HANDOFF o KICKOFF, O si participó alguien de VENTAS en la
- * sala. El resto (levantamientos/diagnósticos semanales, implementación, review, etc.)
- * son ENTREGA DE SERVICIO y NO alimentan — aunque tengan "Sales/Marketing/Service" en el
- * título o un CSE como organizador. (Para clientes donde no se grabaron sesiones de
- * ventas, el handoff y el kickoff son la fuente; las llamadas de venta reales se cubren
- * por "Ventas en la sala".)
+ * Qué alimenta el HANDOFF (Sales→CS), en DOS capas:
  *
- * Fuente ÚNICA de las listas de keywords — la usan la generación (analyze, vía su
- * classifyForHandoff inline) y la revisión de sesiones (A2 · session-candidates).
+ *   1. RELEVANCIA de la sesión (`classifyHandoffSession`): una sesión es material de
+ *      handoff si su título es de HANDOFF o KICKOFF, O si participó alguien de VENTAS
+ *      en la sala. El resto (levantamientos/diagnósticos semanales, implementación,
+ *      review, etc.) son ENTREGA DE SERVICIO y NO alimentan — aunque tengan
+ *      "Sales/Marketing/Service" en el título o un CSE como organizador.
+ *
+ *   2. POLÍTICA del LINK sesión↔proyecto (`linkFeedsHandoff`): en clientes
+ *      multi-proyecto, la historia de venta de una sesión la cuenta SU proyecto
+ *      (link primario); a otro proyecto solo entra por confianza alta del
+ *      clasificador o forzada a mano. Evita que los handoffs de dos proyectos del
+ *      mismo cliente repitan las mismas sesiones vía links secundarios.
+ *
+ * Fuente ÚNICA de keywords y política — la usan la generación (analyze, vía su
+ * classifyForHandoff inline), la revisión de sesiones (A2 · session-candidates) y
+ * el readiness del handoff (lib/handoff/feeding.ts).
  */
 
 // Títulos de entrega/CS que NUNCA alimentan el handoff. Se chequean PRIMERO (ganan).
@@ -56,4 +63,27 @@ export function classifyHandoffSession(
   const all = organizerEmail ? [...participants, organizerEmail] : participants;
   if (all.some((p) => salesEmails.has(p.toLowerCase()))) return { include: true, reason: "Ventas en la sala" };
   return { include: false, reason: "sin Ventas y título neutro" };
+}
+
+/** Umbral de confianza para que un link SECUNDARIO alimente el handoff (decisión 2026-07-10). */
+export const HANDOFF_MIN_SECONDARY_CONFIDENCE = 0.6;
+
+/**
+ * ¿Este LINK sesión↔proyecto alimenta el handoff del proyecto?
+ * Política ÚNICA (analyze + session-candidates + readiness — NO cronograma/minutas):
+ *   1. handoffOverride=false → nunca (la "X" del panel).
+ *   2. handoffOverride=true  → siempre (agregada a mano).
+ *   3. Sin override: solo links PRIMARIOS o secundarios con confianza alta, y de
+ *      esos, los que la regla de relevancia (`appliesRule`) incluye.
+ * `confidence ?? 0` ⇒ un secundario manual/legacy sin confidence NO alimenta salvo
+ * forzado — intencional: primario / alta confianza / forzado, nada más.
+ */
+export function linkFeedsHandoff(
+  link: { isPrimary: boolean; confidence: number | null; handoffOverride: boolean | null },
+  appliesRule: boolean,
+): boolean {
+  if (link.handoffOverride === false) return false;
+  if (link.handoffOverride === true) return true;
+  if (!link.isPrimary && (link.confidence ?? 0) < HANDOFF_MIN_SECONDARY_CONFIDENCE) return false;
+  return appliesRule;
 }
