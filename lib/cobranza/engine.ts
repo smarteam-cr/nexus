@@ -74,7 +74,8 @@ export interface AlertaDraft {
     | "COBRO_VENCIDO"
     | "CUENTA_SIN_DATOS"
     | "INCONSISTENCIA_CICLO"
-    | "ARRANQUE_CAMBIADO";
+    | "ARRANQUE_CAMBIADO"
+    | "MONTOS_DESCUADRADOS";
   urgencia: "ALTA" | "MEDIA" | "BAJA";
   cuentaId: string;
   cobroId?: string;
@@ -89,12 +90,22 @@ export interface CarteraEngineInput {
     clienteNombre: string;
     excluidaOperacion: boolean;
     tieneCuenta: boolean; // false = cliente con proyecto activo SIN CuentaFinanciera
+    /**
+     * false = empresa creada/importada en Cobranza SIN proyecto en Nexus: sus
+     * CUENTA_SIN_DATOS bajan a urgencia BAJA (backlog de datos, no operación en
+     * riesgo — evita inundar el digest tras un import). Ausente = true (compat).
+     */
+    tieneProyectoReal?: boolean;
     servicios: Array<{
       servicioId: string;
       descripcion: string | null;
       estado: string; // CobranzaEstadoServicio
       fechaInicioFacturacion: string | null;
       anchorActualISO: string | null; // anchorStartDate ACTUAL del project vinculado
+      /** Para MONTOS_DESCUADRADOS (queries los computa con sumaPlanExpandido). Ausentes = no evaluar. */
+      montoTotal?: number | null;
+      planTemplate?: string | null;
+      sumaPlan?: number | null;
     }>;
     cobros: Array<{
       cobroId: string;
@@ -257,6 +268,36 @@ export function expandPlanCuotas(
 }
 
 /**
+ * Suma de la expansión del plan (para la alerta MONTOS_DESCUADRADOS): cuánto
+ * suman las cuotas del plan vs el montoTotal del servicio. null si no aplica:
+ * SUSCRIPCION (rolling, sin total), plan inválido, o datos insuficientes.
+ * No necesita "hoy" — las plantillas no-SUSCRIPCION lo ignoran.
+ */
+export function sumaPlanExpandido(
+  servicio: Pick<ServicioEngineInput, "montoTotal" | "duracionMeses">,
+  plan: PlanEngineInput,
+): number | null {
+  if (plan.template === "SUSCRIPCION") return null;
+  try {
+    const cuotas = expandPlanCuotas(
+      {
+        id: "suma-check",
+        montoTotal: servicio.montoTotal,
+        moneda: "CRC", // irrelevante para la suma
+        fechaInicioFacturacion: null, // no-SUSCRIPCION no la usa para expandir
+        duracionMeses: servicio.duracionMeses,
+        diaCobroAncla: null,
+      },
+      plan,
+      { todayISO: "2000-01-01" }, // ignorado por las plantillas no-SUSCRIPCION
+    );
+    return round2(cuotas.reduce((acc, c) => acc + c.monto, 0));
+  } catch {
+    return null; // PlanInvalidoError → la alerta de descuadre no aplica (otro flujo lo reporta)
+  }
+}
+
+/**
  * Fecha programada de un cobro: fechaInicio + offsetMeses, con el día del mes =
  * diaCobroAncla (o el día del arranque si no hay ancla), CLAMPEADO al largo del
  * mes destino (ancla 31 en febrero → 28/29). Devuelve también el periodo YYYY-MM.
@@ -402,12 +443,17 @@ export function semaforoCobro(
 
 const SEMAFORO_PESO: Record<Semaforo, number> = { rojo: 3, amarillo: 2, gris: 1, verde: 0 };
 
-/** Semáforo agregado de la cuenta: el PEOR entre sus cobros no-verdes vivos. */
+/**
+ * Semáforo agregado de la cuenta: el PEOR entre sus cobros no-verdes vivos.
+ * Cuenta SIN cobros → GRIS (neutro): verde significa "al día", no "vacío" — una
+ * cuenta recién configurada o pendiente de datos no puede verse como cobrada.
+ */
 export function semaforoCuenta(
   cobros: Array<{ estado: string; fechaProgramadaISO: string }>,
   todayISO: string,
   umbralVencidoDias: number = UMBRAL_VENCIDO_DIAS,
 ): Semaforo {
+  if (cobros.length === 0) return "gris";
   let peor: Semaforo = "verde";
   for (const c of cobros) {
     const s = semaforoCobro(c, todayISO, umbralVencidoDias);
@@ -438,12 +484,16 @@ export function computeAlertSet(
   for (const cuenta of cartera.cuentas) {
     if (cuenta.excluidaOperacion) continue; // Colby: fuera de la operación estándar
 
+    // Sin proyecto real (empresa creada/importada en Cobranza), los "sin datos" son
+    // backlog de captura, no operación en riesgo → urgencia BAJA (no inundar el digest).
+    const urgenciaSinDatos = cuenta.tieneProyectoReal === false ? "BAJA" : "MEDIA";
+
     // CUENTA_SIN_DATOS — cliente con proyecto sin cuenta / sin servicios / servicio sin arranque
     if (!cuenta.tieneCuenta) {
       out.push({
         dedupeKey: `CUENTA_SIN_DATOS:${cuenta.cuentaId}:cuenta`,
         tipo: "CUENTA_SIN_DATOS",
-        urgencia: "MEDIA",
+        urgencia: urgenciaSinDatos,
         cuentaId: cuenta.cuentaId,
         mensaje: `${cuenta.clienteNombre}: tiene proyecto activo pero no tiene cuenta financiera configurada.`,
       });
@@ -453,7 +503,7 @@ export function computeAlertSet(
       out.push({
         dedupeKey: `CUENTA_SIN_DATOS:${cuenta.cuentaId}:cuenta`,
         tipo: "CUENTA_SIN_DATOS",
-        urgencia: "MEDIA",
+        urgencia: urgenciaSinDatos,
         cuentaId: cuenta.cuentaId,
         mensaje: `${cuenta.clienteNombre}: la cuenta no tiene servicios contratados configurados.`,
       });
@@ -465,12 +515,35 @@ export function computeAlertSet(
         out.push({
           dedupeKey: `CUENTA_SIN_DATOS:${cuenta.cuentaId}:${s.servicioId}`,
           tipo: "CUENTA_SIN_DATOS",
-          urgencia: "MEDIA",
+          urgencia: urgenciaSinDatos,
           cuentaId: cuenta.cuentaId,
           mensaje: `${cuenta.clienteNombre}: el servicio${s.descripcion ? ` "${s.descripcion}"` : ""} no tiene fecha de inicio de facturación — no se generan cobros.`,
           evidencia: { servicioId: s.servicioId },
         });
-      } else if (
+      }
+
+      // MONTOS_DESCUADRADOS — el plan activo no suma el montoTotal del servicio
+      // (aviso, NO invariante: PERSONALIZADO parcial es legal — Alex decide).
+      if (
+        s.planTemplate &&
+        s.planTemplate !== "SUSCRIPCION" &&
+        s.sumaPlan != null &&
+        s.montoTotal != null &&
+        Math.abs(s.sumaPlan - s.montoTotal) > 0.01
+      ) {
+        const diferencia = Math.round((s.sumaPlan - s.montoTotal) * 100) / 100;
+        out.push({
+          dedupeKey: `MONTOS_DESCUADRADOS:${cuenta.cuentaId}:${s.servicioId}`,
+          tipo: "MONTOS_DESCUADRADOS",
+          urgencia: "MEDIA",
+          cuentaId: cuenta.cuentaId,
+          mensaje: `${cuenta.clienteNombre}: el plan de pago${s.descripcion ? ` de "${s.descripcion}"` : ""} suma ${s.sumaPlan.toLocaleString("es-CR")} pero el servicio vale ${s.montoTotal.toLocaleString("es-CR")} (diferencia ${diferencia.toLocaleString("es-CR")}).`,
+          evidencia: { servicioId: s.servicioId, montoTotal: s.montoTotal, sumaPlan: s.sumaPlan, diferencia },
+        });
+      }
+
+      if (
+        s.fechaInicioFacturacion &&
         s.anchorActualISO &&
         toISODate(toUTCDate(s.fechaInicioFacturacion)) !== toISODate(toUTCDate(s.anchorActualISO))
       ) {
@@ -544,4 +617,152 @@ export function diffAlertSets(prev: AlertaDraft[], current: AlertaDraft[]): Diff
   const resueltas = prev.filter((a) => !currKeys.has(a.dedupeKey));
   const persistentes = current.length - nuevas.length;
   return { nuevas, resueltas, persistentes, sinCambios: nuevas.length === 0 && resueltas.length === 0 };
+}
+
+// ── 9. Proyección de ingresos ("plata que viene") ───────────────────────────────
+
+/** Meses de horizonte de la proyección (rango pedido: 3-6). */
+export const PROYECCION_HORIZONTE_MESES = 6;
+/** Cuántos meses (desde el actual) se desglosan por QUINCENA; el resto va mensual. */
+export const PROYECCION_MESES_EN_QUINCENAS = 2;
+
+export interface CobroProyeccionInput {
+  cobroId: string;
+  cuentaId: string;
+  clienteNombre: string;
+  estado: string; // COBRADO se excluye adentro
+  fechaProgramadaISO: string;
+  monto: number;
+  moneda: "CRC" | "USD";
+}
+
+/** Totales por moneda SEPARADOS — jamás se convierten ni suman entre sí. */
+export interface TotalesMoneda {
+  CRC: number;
+  USD: number;
+}
+
+export interface BucketProyeccion {
+  key: string; // "2026-07-Q2" | "2026-09"
+  etiqueta: string; // "16–31 jul" | "sep 2026"
+  granularidad: "quincena" | "mes";
+  desdeISO: string;
+  hastaISO: string;
+  totales: TotalesMoneda;
+  cobros: CobroProyeccionInput[];
+}
+
+export interface ProyeccionIngresos {
+  /** Vencidos (> umbral) "en riesgo" — APARTE de los buckets futuros. */
+  vencidos: { totales: TotalesMoneda; cobros: CobroProyeccionInput[] };
+  buckets: BucketProyeccion[]; // quincenas del horizonte cercano, luego meses; vacíos SÍ se emiten
+  fueraDeHorizonte: number; // count informativo de cobros más allá del horizonte
+}
+
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/**
+ * Proyección de ingresos por QUINCENA (horizonte cercano) + MES (resto), con
+ * totales CRC y USD SEPARADOS (sin tipo de cambio — otra iteración). Reglas:
+ *  - COBRADO se excluye (ya entró).
+ *  - vencido (> umbral días pasado) → `vencidos` (en riesgo), NO a los buckets.
+ *  - pasado dentro del umbral (gracia) → bucket de la quincena ACTUAL (entra ya).
+ *  - quincena = día 1–15 / 16–fin de mes (fin clampeado: febrero 16–28/29).
+ *  - buckets vacíos intermedios SÍ se emiten (la línea de tiempo no salta meses).
+ *  - más allá del horizonte → `fueraDeHorizonte` (contador).
+ */
+export function proyectarIngresos(
+  cobros: CobroProyeccionInput[],
+  opts: {
+    todayISO: string;
+    horizonteMeses?: number;
+    mesesEnQuincenas?: number;
+    umbralVencidoDias?: number;
+  },
+): ProyeccionIngresos {
+  const horizonteMeses = opts.horizonteMeses ?? PROYECCION_HORIZONTE_MESES;
+  const mesesEnQuincenas = Math.min(opts.mesesEnQuincenas ?? PROYECCION_MESES_EN_QUINCENAS, horizonteMeses);
+  const umbral = opts.umbralVencidoDias ?? UMBRAL_VENCIDO_DIAS;
+
+  const hoy = toUTCDate(opts.todayISO);
+  const hoyISO = toISODate(hoy);
+  const y0 = hoy.getUTCFullYear();
+  const m0 = hoy.getUTCMonth();
+  const dia0 = hoy.getUTCDate();
+
+  // Esqueleto de buckets: quincenas del mes actual (desde la quincena de HOY) y
+  // del/los siguientes `mesesEnQuincenas`, luego meses hasta el horizonte.
+  const buckets: BucketProyeccion[] = [];
+  const mk = (y: number, mIdx: number) => new Date(Date.UTC(y, mIdx, 1));
+  for (let off = 0; off < mesesEnQuincenas; off++) {
+    const base = mk(y0, m0 + off);
+    const y = base.getUTCFullYear();
+    const mi = base.getUTCMonth();
+    const mm = String(mi + 1).padStart(2, "0");
+    const fin = daysInMonthUTC(y, mi);
+    const mitades: Array<{ q: 1 | 2; desde: number; hasta: number }> = [
+      { q: 1, desde: 1, hasta: 15 },
+      { q: 2, desde: 16, hasta: fin },
+    ];
+    for (const { q, desde, hasta } of mitades) {
+      if (off === 0 && q === 1 && dia0 > 15) continue; // la quincena YA pasada del mes actual no se emite
+      buckets.push({
+        key: `${y}-${mm}-Q${q}`,
+        etiqueta: `${desde}–${hasta} ${MESES_CORTOS[mi]}`,
+        granularidad: "quincena",
+        desdeISO: `${y}-${mm}-${String(desde).padStart(2, "0")}`,
+        hastaISO: `${y}-${mm}-${String(hasta).padStart(2, "0")}`,
+        totales: { CRC: 0, USD: 0 },
+        cobros: [],
+      });
+    }
+  }
+  for (let off = mesesEnQuincenas; off < horizonteMeses; off++) {
+    const base = mk(y0, m0 + off);
+    const y = base.getUTCFullYear();
+    const mi = base.getUTCMonth();
+    const mm = String(mi + 1).padStart(2, "0");
+    const fin = daysInMonthUTC(y, mi);
+    buckets.push({
+      key: `${y}-${mm}`,
+      etiqueta: `${MESES_CORTOS[mi]} ${y}`,
+      granularidad: "mes",
+      desdeISO: `${y}-${mm}-01`,
+      hastaISO: `${y}-${mm}-${String(fin).padStart(2, "0")}`,
+      totales: { CRC: 0, USD: 0 },
+      cobros: [],
+    });
+  }
+  const finHorizonteISO = buckets.length > 0 ? buckets[buckets.length - 1].hastaISO : hoyISO;
+
+  const vencidos: ProyeccionIngresos["vencidos"] = { totales: { CRC: 0, USD: 0 }, cobros: [] };
+  let fueraDeHorizonte = 0;
+
+  const ordenados = [...cobros].sort(
+    (a, b) => a.fechaProgramadaISO.localeCompare(b.fechaProgramadaISO) || a.cobroId.localeCompare(b.cobroId),
+  );
+  for (const c of ordenados) {
+    if (c.estado === "COBRADO") continue;
+    const diasPasados = diffDays(c.fechaProgramadaISO, opts.todayISO);
+    if (diasPasados > umbral) {
+      vencidos.cobros.push(c);
+      vencidos.totales[c.moneda] = round2(vencidos.totales[c.moneda] + c.monto);
+      continue;
+    }
+    // Gracia (pasado dentro del umbral) cuenta como "entra ya": quincena actual.
+    const fechaEfectiva = diasPasados > 0 ? hoyISO : toISODate(toUTCDate(c.fechaProgramadaISO));
+    if (fechaEfectiva > finHorizonteISO) {
+      fueraDeHorizonte++;
+      continue;
+    }
+    const bucket = buckets.find((b) => fechaEfectiva >= b.desdeISO && fechaEfectiva <= b.hastaISO);
+    if (!bucket) {
+      fueraDeHorizonte++; // no debería pasar (esqueleto continuo), red de seguridad
+      continue;
+    }
+    bucket.cobros.push(c);
+    bucket.totales[c.moneda] = round2(bucket.totales[c.moneda] + c.monto);
+  }
+
+  return { vencidos, buckets, fueraDeHorizonte };
 }

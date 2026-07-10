@@ -3,25 +3,27 @@
 /**
  * components/cobranza/CobranzaClient.tsx
  *
- * Contenedor client del módulo: 3 tabs in-page (useState local, no rutas —
- * variante del patrón MarketingSectionTabs). El estado de alertas Y el de
- * cartera viven acá: el badge del tab se actualiza cuando AlertasCobranza
- * resuelve, el digest puede refrescarlas tras un corte, y cambiar de tab no
- * pierde la cartera (los tabs desmontan; si viviera en PanelCartera, volver
- * al panel lo remontaría con las props stale del server render — fue el bug
- * del doble "Configurar cuenta").
+ * Contenedor client del módulo: 4 tabs in-page (useState local, no rutas —
+ * variante del patrón MarketingSectionTabs). El estado de alertas, el de
+ * cartera Y el de proyección viven acá: el badge del tab se actualiza cuando
+ * AlertasCobranza resuelve, el digest puede refrescarlas tras un corte, y
+ * cambiar de tab no pierde nada (los tabs desmontan; si el estado viviera en
+ * PanelCartera/ProyeccionPanel, volver al tab lo remontaría con las props
+ * stale del server render — fue el bug del doble "Configurar cuenta").
  */
 import { useCallback, useState } from "react";
-import type { AlertaDTO, CarteraRow, SnapshotDTO } from "@/lib/cobranza";
+import type { AlertaDTO, CarteraRow, ProyeccionIngresos, SnapshotDTO } from "@/lib/cobranza";
 import { fetchJson } from "@/lib/api/fetch-json";
 import PanelCartera from "./PanelCartera";
 import AlertasCobranza from "./AlertasCobranza";
 import DigestPanel from "./DigestPanel";
+import ProyeccionPanel from "./ProyeccionPanel";
 
-type Tab = "cartera" | "alertas" | "digest";
+type Tab = "cartera" | "proyeccion" | "alertas" | "digest";
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: "cartera", label: "Panel de cartera" },
+  { key: "proyeccion", label: "Proyección" },
   { key: "alertas", label: "Alertas" },
   { key: "digest", label: "Digest semanal" },
 ];
@@ -30,16 +32,19 @@ export default function CobranzaClient({
   initialCartera,
   initialAlertas,
   initialSnapshot,
+  initialProyeccion,
   todayISO,
 }: {
   initialCartera: CarteraRow[];
   initialAlertas: AlertaDTO[];
   initialSnapshot: SnapshotDTO | null;
+  initialProyeccion: ProyeccionIngresos;
   todayISO: string;
 }) {
   const [tab, setTab] = useState<Tab>("cartera");
   const [cartera, setCartera] = useState(initialCartera);
   const [alertas, setAlertas] = useState(initialAlertas);
+  const [proyeccion, setProyeccion] = useState(initialProyeccion);
   const abiertas = alertas.filter((a) => a.estado === "ABIERTA").length;
 
   // Tras un corte manual el set de alertas puede cambiar → re-sincronizar el tab.
@@ -49,6 +54,16 @@ export default function CobranzaClient({
         "/api/cobranza/alertas?estados=ABIERTA,VISTA",
       );
       setAlertas(d.alertas);
+    } catch {
+      // best-effort: si falla, el tab conserva lo que tenía
+    }
+  }, []);
+
+  // Cambios de cobros (drawer, materialización) pueden mover la proyección.
+  const refreshProyeccion = useCallback(async () => {
+    try {
+      const d = await fetchJson<{ proyeccion: ProyeccionIngresos }>("/api/cobranza/proyeccion");
+      setProyeccion(d.proyeccion);
     } catch {
       // best-effort: si falla, el tab conserva lo que tenía
     }
@@ -82,6 +97,7 @@ export default function CobranzaClient({
       </div>
 
       {tab === "cartera" && <PanelCartera rows={cartera} setRows={setCartera} todayISO={todayISO} />}
+      {tab === "proyeccion" && <ProyeccionPanel proyeccion={proyeccion} onRefresh={refreshProyeccion} />}
       {tab === "alertas" && <AlertasCobranza alertas={alertas} setAlertas={setAlertas} />}
       {tab === "digest" && (
         <DigestPanel initialSnapshot={initialSnapshot} onDigestDone={refreshAlertas} />

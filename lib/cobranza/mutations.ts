@@ -354,6 +354,8 @@ export async function cambiarEstadoCobro(
   if (patch.monto !== undefined) data.monto = patch.monto;
   if (patch.fechaEmision !== undefined)
     data.fechaEmision = patch.fechaEmision ? dayUTC(patch.fechaEmision) : null;
+  // ReconciliationPort v1: referencia externa opcional (id transacción Mercury / factura Odoo).
+  if (patch.referenciaExterna !== undefined) data.referenciaExterna = patch.referenciaExterna;
   if (patch.notas !== undefined) data.notas = patch.notas;
 
   if (patch.estado !== undefined && patch.estado !== cobro.estado) {

@@ -57,6 +57,7 @@ interface CuentaForm {
   estadoCuenta: string;
   excluidaOperacion: boolean;
   responsableCobroTerceros: string;
+  correoCobro: string;
   notas: string;
 }
 
@@ -70,6 +71,7 @@ function formFrom(c: CuentaDetailDTO): CuentaForm {
     estadoCuenta: c.estadoCuenta,
     excluidaOperacion: c.excluidaOperacion,
     responsableCobroTerceros: c.responsableCobroTerceros ?? "",
+    correoCobro: c.correoCobro ?? "",
     notas: c.notas ?? "",
   };
 }
@@ -150,6 +152,7 @@ export default function CuentaDrawer({
           estadoCuenta: form.estadoCuenta,
           excluidaOperacion: form.excluidaOperacion,
           responsableCobroTerceros: form.responsableCobroTerceros.trim() || null,
+          correoCobro: form.correoCobro.trim().toLowerCase() || null,
           notas: form.notas.trim() || null,
         }),
       });
@@ -288,9 +291,13 @@ export default function CuentaDrawer({
                     max={31}
                     value={form.diaCobroAncla}
                     onChange={(e) => setForm({ ...form, diaCobroAncla: e.target.value })}
-                    placeholder="Día del arranque"
+                    placeholder="1–31 · vacío = día del arranque"
                     className={INPUT_CLS}
                   />
+                  <p className="mt-1 text-[10px] text-fg-muted">
+                    Día del mes en que se cobra. Si lo dejás vacío, cada servicio usa el día de su
+                    fecha de arranque.
+                  </p>
                 </div>
                 <div>
                   <label className={LABEL_CLS}>Estado de la cuenta</label>
@@ -322,6 +329,18 @@ export default function CuentaDrawer({
                   />
                 </div>
               )}
+              <div>
+                <label className={LABEL_CLS}>Correo de cobro</label>
+                <input
+                  value={form.correoCobro}
+                  onChange={(e) => setForm({ ...form, correoCobro: e.target.value })}
+                  placeholder="pagos@empresa.com"
+                  className={INPUT_CLS}
+                />
+                <p className="mt-1 text-[10px] text-fg-muted">
+                  Destino del borrador de cobro (&quot;Abrir en correo&quot;).
+                </p>
+              </div>
               <div>
                 <label className={LABEL_CLS}>Notas</label>
                 <textarea

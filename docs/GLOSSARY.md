@@ -46,3 +46,25 @@
   cartera y solo avisa el DIFF vs la corrida anterior; cada corrida queda como snapshot.
 - **bitácora** (`BitacoraCobro`): registro de gestión de la cuenta — llamadas/correos/notas de la
   persona + actualizaciones automáticas del sistema (ej. resumen de una materialización).
+- **puerto / adaptador** (Cobranza): interfaz por la que TODO entra o sale del módulo
+  (`lib/cobranza/ports.ts`): `AccountSource` (empresas/cuentas), `CommunicationPort` (contexto
+  + entrega de mensajes), `ReconciliationPort` (¿se pagó?). Los adaptadores (implementaciones)
+  viven en `lib/cobranza/adapters/`; el motor puro nunca los conoce.
+- **fuente + id_externo**: procedencia de una entidad que vino de afuera (`Client.source/
+  sourceExternalId`, `CuentaFinanciera.fuente/fuenteIdExterno`) — clave del upsert idempotente:
+  re-sincronizar la misma fuente actualiza la MISMA fila, no duplica.
+- **importador / cola de revisión** (`ImportacionCobranza`/`ImportacionFila`): staging del CSV —
+  parseo → mapeo columna→campo canónico (configurable) → validación; las filas inválidas quedan
+  REVISAR (se corrigen u omiten a mano), NUNCA se ingieren en silencio.
+- **proyección de ingresos** (`proyectarIngresos`): "la plata que viene" — cobros futuros
+  agrupados por QUINCENA (cercano) y MES (resto), totales CRC y USD SEPARADOS, vencidos
+  "en riesgo" aparte. Cuarto tab del módulo.
+- **quincena** (Cobranza): mitad de mes calendario (1–15 / 16–fin, fin clampeado) — la unidad
+  operativa del ciclo de cobro de Alex.
+- **referencia externa** (`Cobro.referenciaExterna`): id de transacción Mercury / factura Odoo
+  pegado OPCIONALMENTE al confirmar COBRADO — trazabilidad hacia contabilidad sin acoplarse.
+- **correoCobro** (`CuentaFinanciera`): el correo al que se le cobra a ese cliente — destino del
+  mailto del borrador de cobro.
+- **borrador de cobro** (`agent-cobranza-borrador`): correo de cobro redactado por IA desde el
+  contexto real de la cuenta (bitácora); la persona lo edita y lo envía a mano — sin envío
+  automático (regla de no-fabricación en el prompt, calibrable en DB).

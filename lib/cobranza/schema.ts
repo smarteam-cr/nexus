@@ -44,10 +44,13 @@ export const COBRANZA_TIPOS_ALERTA = [
   "CUENTA_SIN_DATOS",
   "INCONSISTENCIA_CICLO",
   "ARRANQUE_CAMBIADO",
+  "MONTOS_DESCUADRADOS",
 ] as const;
 export const COBRANZA_URGENCIAS = ["ALTA", "MEDIA", "BAJA"] as const;
 export const COBRANZA_ALERTA_ESTADOS = ["ABIERTA", "VISTA", "RESUELTA", "DESCARTADA"] as const;
 export const BITACORA_TIPOS = ["LLAMADA", "CORREO", "NOTA"] as const; // ACTUALIZACION_IA solo la escribe el sistema
+export const COBRANZA_IMPORT_ESTADOS = ["BORRADOR", "EN_REVISION", "APLICADO", "DESCARTADO"] as const;
+export const COBRANZA_IMPORT_FILA_ESTADOS = ["VALIDA", "REVISAR", "APLICADA", "OMITIDA"] as const;
 
 // Labels legibles para la UI (tuteo/español operativo).
 export const TIPO_CUENTA_LABEL: Record<string, string> = {
@@ -87,12 +90,29 @@ export const TIPO_ALERTA_LABEL: Record<string, string> = {
   CUENTA_SIN_DATOS: "Cuenta sin datos",
   INCONSISTENCIA_CICLO: "Inconsistencia de ciclo",
   ARRANQUE_CAMBIADO: "Arranque cambiado",
+  MONTOS_DESCUADRADOS: "Montos descuadrados",
+};
+export const IMPORT_ESTADO_LABEL: Record<string, string> = {
+  BORRADOR: "Borrador",
+  EN_REVISION: "En revisión",
+  APLICADO: "Aplicado",
+  DESCARTADO: "Descartado",
+};
+export const IMPORT_FILA_ESTADO_LABEL: Record<string, string> = {
+  VALIDA: "Válida",
+  REVISAR: "Revisar",
+  APLICADA: "Aplicada",
+  OMITIDA: "Omitida",
 };
 
 // ── Zod: fronteras HTTP ─────────────────────────────────────────────────────────
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (esperado YYYY-MM-DD)");
 const monto = z.number().positive("El monto debe ser positivo").multipleOf(0.01, "Máximo 2 decimales");
+// Dominio ya NORMALIZADO (lowercase, sin @, sin protocolo — lo normaliza import-core).
+const dominio = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/, "Dominio inválido (esperado ej. empresa.com)");
 
 export const cuentaCreateSchema = z.object({
   clientId: z.string().cuid(),
@@ -114,6 +134,7 @@ export const cuentaPatchSchema = z
     estadoCuenta: z.enum(COBRANZA_ESTADOS_CUENTA),
     excluidaOperacion: z.boolean(),
     responsableCobroTerceros: z.string().max(500).nullable(),
+    correoCobro: z.string().email("Correo inválido").max(200).nullable(),
     notas: z.string().max(4000).nullable(),
   })
   .partial();
@@ -203,6 +224,8 @@ export const cobroPatchSchema = z
     monto,
     fechaEmision: isoDate.nullable(),
     fechaCobro: isoDate.nullable(),
+    // ReconciliationPort v1: id de transacción Mercury / factura Odoo al confirmar COBRADO.
+    referenciaExterna: z.string().max(200).nullable(),
     notas: z.string().max(2000).nullable(),
   })
   .partial();
@@ -216,3 +239,94 @@ export const bitacoraCreateSchema = z.object({
   contenido: z.string().min(1).max(4000),
   cobroId: z.string().cuid().nullish(),
 });
+
+// ── Crear empresa (AccountSource "manual" — puerto 1) ───────────────────────────
+
+export const crearEmpresaSchema = z.object({
+  nombre: z.string().trim().min(2).max(200),
+  dominio: dominio.nullish(),
+  correoCobro: z.string().email("Correo inválido").max(200).nullish(),
+  tipo: z.enum(COBRANZA_TIPOS_CUENTA).default("NACIONAL"),
+  viaCobro: z.enum(COBRANZA_VIAS_COBRO).default("ODOO"),
+  moneda: z.enum(COBRANZA_MONEDAS).default("CRC"),
+  terminosPago: z.enum(COBRANZA_TERMINOS_PAGO).default("ANTICIPADO"),
+  diaCobroAncla: z.number().int().min(1).max(31).nullish(),
+  notas: z.string().max(4000).nullish(),
+});
+
+// ── Importador CSV (AccountSource "sheet" — puerto 1) ───────────────────────────
+
+/** Campos canónicos del importador — el mapeo asigna una columna del CSV a cada uno. */
+export const IMPORT_CAMPOS_CANONICOS = [
+  "clienteNombre",
+  "dominio",
+  "correoCobro",
+  "idExterno",
+  "tipo",
+  "viaCobro",
+  "moneda",
+  "terminosPago",
+  "diaCobroAncla",
+  "suscripcionMonto",
+  "suscripcionMoneda",
+  "suscripcionInicio",
+  "notas",
+] as const;
+export type ImportCampoCanonico = (typeof IMPORT_CAMPOS_CANONICOS)[number];
+
+export const IMPORT_CAMPO_LABEL: Record<ImportCampoCanonico, string> = {
+  clienteNombre: "Nombre del cliente (obligatorio)",
+  dominio: "Dominio (ej. empresa.com)",
+  correoCobro: "Correo de cobro",
+  idExterno: "Id externo (columna id del sheet)",
+  tipo: "Tipo (nacional / internacional)",
+  viaCobro: "Vía de cobro (Mercury / Odoo)",
+  moneda: "Moneda (CRC / USD)",
+  terminosPago: "Términos (anticipado / vencido)",
+  diaCobroAncla: "Día de cobro (1–31)",
+  suscripcionMonto: "Monto mensual de suscripción",
+  suscripcionMoneda: "Moneda de la suscripción",
+  suscripcionInicio: "Inicio de la suscripción (fecha)",
+  notas: "Notas",
+};
+
+/** { campoCanonico: nombreColumnaCSV | null } — todas opcionales salvo que el apply exige clienteNombre. */
+export const importMapeoSchema = z
+  .object({
+    clienteNombre: z.string().max(200).nullable(),
+    dominio: z.string().max(200).nullable(),
+    correoCobro: z.string().max(200).nullable(),
+    idExterno: z.string().max(200).nullable(),
+    tipo: z.string().max(200).nullable(),
+    viaCobro: z.string().max(200).nullable(),
+    moneda: z.string().max(200).nullable(),
+    terminosPago: z.string().max(200).nullable(),
+    diaCobroAncla: z.string().max(200).nullable(),
+    suscripcionMonto: z.string().max(200).nullable(),
+    suscripcionMoneda: z.string().max(200).nullable(),
+    suscripcionInicio: z.string().max(200).nullable(),
+    notas: z.string().max(200).nullable(),
+  })
+  .partial();
+
+/**
+ * Payload CANÓNICO de una fila (post-mapeo + normalización de import-core; este
+ * schema valida lo ya normalizado — la coerción de formatos locales vive en
+ * lib/cobranza/import-core.ts).
+ */
+export const importFilaCanonicaSchema = z.object({
+  clienteNombre: z.string().trim().min(2, "Nombre muy corto").max(200),
+  dominio: dominio.nullish(),
+  correoCobro: z.string().email("Correo inválido").max(200).nullish(),
+  idExterno: z.string().max(200).nullish(),
+  tipo: z.enum(COBRANZA_TIPOS_CUENTA).nullish(),
+  viaCobro: z.enum(COBRANZA_VIAS_COBRO).nullish(),
+  moneda: z.enum(COBRANZA_MONEDAS).nullish(),
+  terminosPago: z.enum(COBRANZA_TERMINOS_PAGO).nullish(),
+  diaCobroAncla: z.number().int().min(1, "Día 1–31").max(31, "Día 1–31").nullish(),
+  suscripcionMonto: monto.nullish(),
+  suscripcionMoneda: z.enum(COBRANZA_MONEDAS).nullish(),
+  suscripcionInicio: isoDate.nullish(),
+  notas: z.string().max(4000).nullish(),
+});
+export type ImportFilaCanonica = z.infer<typeof importFilaCanonicaSchema>;

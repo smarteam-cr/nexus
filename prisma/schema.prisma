@@ -154,6 +154,10 @@ model Client {
   // business case (puede no ser cliente real todavía). Se EXCLUYE de los listados
   // de CS (clientes, sidebar, portafolio).
   isProspect       Boolean  @default(false)
+  // Procedencia de fuente externa (regla Cobranza fuente + id_externo → upsert
+  // idempotente: re-sincronizar NO duplica). null = creado por flujos previos.
+  source           String? // "manual" | "sheet" (futuro: "hubspot" | "odoo")
+  sourceExternalId String? // id estable en la fuente (columna id del sheet o slug del nombre)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -181,6 +185,9 @@ model Client {
   partnerSnapshot   ClientPartnerSnapshot? // CS360: snapshot del objeto Partner Clients de HubSpot
   accountBrief      CsAccountBrief? // CS360: resumen ejecutivo citado (agente)
   cuentaFinanciera  CuentaFinanciera? // Cobranza: perfil de cobro 1:1 (ver sección Cobranza)
+  importFilasAplicadas ImportacionFila[] // Cobranza: trazabilidad del importador
+
+  @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
 }
 
 // ─── SystemConfig (config GLOBAL de Nexus, singleton — no por usuario) ─────────
@@ -1488,6 +1495,13 @@ model SessionProject {
   // venta/handoff/kickoff o Ventas en la sala): null = seguí la regla; true = forzá
   // incluir (agregada a mano desde el pop-up); false = forzá excluir (la "X" del panel).
   handoffOverride Boolean?
+  // ⚠ PRE-SYNC de la otra PC (plan clientes/proyectos en vuelo, 2026-07-10): estas 3
+  // columnas YA existen en la DB compartida aplicadas desde allá; se declaran acá tal
+  // cual para que `db push` no las droppee. La definición canónica (comentarios y
+  // semántica) llega con el commit de ese plan — reconciliar en el merge.
+  included   Boolean   @default(true)
+  reviewedAt DateTime?
+  reviewedBy String?
 
   generatedByAgentRunId String? // FK suave al AgentRun del clasificador
   createdAt             DateTime @default(now())
@@ -2200,6 +2214,7 @@ enum CobranzaTipoAlerta {
   CUENTA_SIN_DATOS // cliente con proyecto sin cuenta/servicios/arranque
   INCONSISTENCIA_CICLO // catch-up generado pendiente de confirmación
   ARRANQUE_CAMBIADO // fechaInicioFacturacion divergió del anchorStartDate actual
+  MONTOS_DESCUADRADOS // plan activo cuya expansión no suma el montoTotal (aviso, no invariante)
 }
 
 enum CobranzaUrgencia {
@@ -2246,6 +2261,13 @@ model CuentaFinanciera {
   // cambió estadoCuenta a mano por última vez (email del guard).
   estadoActualizadoPor String?
   estadoActualizadoEn  DateTime?
+  // Procedencia (regla fuente + id_externo — upsert idempotente del importador).
+  // null = cuenta configurada a mano desde el panel antes de esta regla.
+  fuente          String? // "manual" | "sheet" (futuro: "hubspot" | "odoo")
+  fuenteIdExterno String?
+  // Correo al que se le cobra (destino del mailto del borrador de cobro).
+  // nullable porque el import puede no traerlo — se completa a mano.
+  correoCobro     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2255,6 +2277,7 @@ model CuentaFinanciera {
   alertas   AlertaCobro[]
   bitacora  BitacoraCobro[]
 
+  @@unique([fuente, fuenteIdExterno]) // NULLs no colisionan — las cuentas manuales legacy conviven
   @@index([estadoCuenta])
 }
 
@@ -2361,6 +2384,9 @@ model Cobro {
   fechaCobro      DateTime? // cuándo entró la plata
   confirmadoPor   String? // email del guard que confirmó el estado con consecuencia monetaria
   confirmadoEn    DateTime?
+  // ReconciliationPort v1: referencia externa OPCIONAL al confirmar COBRADO (id de
+  // transacción Mercury / factura Odoo). Solo metadata — la conciliación real vive allá.
+  referenciaExterna String?
   notas           String? @db.Text
 
   createdAt DateTime @default(now())
@@ -2434,4 +2460,68 @@ model BitacoraCobro {
   createdAt    DateTime @default(now())
 
   @@index([cuentaId, createdAt])
+}
+
+enum CobranzaImportEstado {
+  BORRADOR // subido + parseado; mapeo en curso
+  EN_REVISION // mapeo aplicado; cola de revisión abierta
+  APLICADO
+  DESCARTADO
+}
+
+enum CobranzaImportFilaEstado {
+  VALIDA // pasa Zod + dedup resuelto → se aplicará
+  REVISAR // inválida o dudosa → edición inline en la cola
+  APLICADA
+  OMITIDA // descartada a mano por la persona
+}
+
+// ─── ImportacionCobranza (staging del importador CSV) ───────────────────────────
+// Un batch por archivo subido. El mapeo columna→campo canónico vive acá (Json
+// configurable — NO cableado al Excel de Alex: el modelo canónico manda). Las
+// filas inválidas NUNCA se ingieren en silencio: quedan REVISAR hasta corregirse
+// u omitirse. AccountSource "sheet" del puerto 1 (lib/cobranza/ports.ts).
+model ImportacionCobranza {
+  id            String               @id @default(cuid())
+  archivoNombre String
+  fuente        String               @default("sheet") // se estampa en Client.source / CuentaFinanciera.fuente
+  mapeo         Json // { campoCanonico: nombreColumnaCSV } — editable en el wizard
+  columnas      Json // string[] headers detectados por el parser
+  estado        CobranzaImportEstado @default(BORRADOR)
+  totalFilas    Int                  @default(0)
+  creadoPor     String // email del guard
+  aplicadoEn    DateTime? // nullable porque solo se setea al aplicar
+  aplicadoPor   String?
+  resumen       Json? // { clientsCreados, cuentasCreadas, cuentasVinculadas, serviciosCreados, omitidas, fallidas }
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  filas ImportacionFila[]
+}
+
+// ─── ImportacionFila ────────────────────────────────────────────────────────────
+// Una fila del CSV: cruda (raw) + canónica (post-mapeo/edición) + resultado del
+// dedup. `dedup` es Json a propósito (sugerencia efímera de staging, no vínculo
+// durable) — la FK real es aplicadoClientId, que se setea recién al aplicar.
+model ImportacionFila {
+  id       String              @id @default(cuid())
+  importId String
+  import   ImportacionCobranza @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  numFila   Int // 1-based en el CSV
+  raw       Json // fila cruda parseada { header: valor }
+  canonico  Json? // payload canónico (shape importFilaCanonicaSchema) — post-mapeo + ediciones inline
+  estado    CobranzaImportFilaEstado @default(REVISAR)
+  errores   Json? // string[] mensajes de validación (Zod + reglas de negocio)
+  dedup     Json? // { clientId, tipo: "fuente_id"|"dominio"|"nombre_exacto", clienteNombre } | null
+  idExterno String? // id estable resuelto (columna id del sheet o slug del nombre)
+
+  aplicadoClientId String? // nullable porque solo se setea al aplicar
+  aplicadoClient   Client? @relation(fields: [aplicadoClientId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([importId, numFila])
+  @@index([importId, estado])
 }
