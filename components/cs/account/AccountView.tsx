@@ -13,8 +13,7 @@ import type { ReactNode } from "react";
 import SourceChip, { fmtChipDate } from "@/components/cs/SourceChip";
 import AlertsFeed from "@/components/cs/AlertsFeed";
 import ActiveProjectsSection from "./ActiveProjectsSection";
-import LicensesSection from "./LicensesSection";
-import AccountAdoptionSection from "./AccountAdoptionSection";
+import AccountUsageReport from "./AccountUsageReport";
 import AccountBriefSection from "./AccountBriefSection";
 import type { CsAccountData } from "@/lib/cs/load-account";
 import { PARTNER_STATE_META } from "@/lib/cs/partner-state";
@@ -89,23 +88,14 @@ export default function AccountView({ data }: { data: CsAccountData }) {
         <ActiveProjectsSection projects={data.projects} projectOps={data.projectOps} />
       </Section>
 
-      {/* Uso/licencias/MRR: CONFIDENCIAL (términos de partner) — solo CSL/SUPER_ADMIN. */}
+      {/* Uso/licencias/MRR: CONFIDENCIAL (términos de partner) — solo CSL/SUPER_ADMIN.
+          Una sola sección tipo REPORTE (antes eran dos cajas que duplicaban el dato). */}
       {data.partnerVisible && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Section title="🪪 Utilización de licencias">
-            <div className="bg-surface border border-line rounded-xl p-4">
-              <LicensesSection partner={data.partner} />
-            </div>
-          </Section>
-          <Section title="📊 Adopción y uso">
-            <div className="bg-surface border border-line rounded-xl p-4">
-              <AccountAdoptionSection partner={data.partner} />
-              {!data.partner && (
-                <p className="text-xs text-fg-muted">Sin datos de uso — requiere el snapshot de Partner Clients.</p>
-              )}
-            </div>
-          </Section>
-        </div>
+        <Section title="📊 Uso, adopción y licencias">
+          <div className="bg-surface border border-line rounded-xl p-4">
+            <AccountUsageReport partner={data.partner} partnerState={data.partnerState} />
+          </div>
+        </Section>
       )}
 
       {/* Últimas minutas (fuente citable) */}
