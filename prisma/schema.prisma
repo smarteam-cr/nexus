@@ -1495,13 +1495,6 @@ model SessionProject {
   // venta/handoff/kickoff o Ventas en la sala): null = seguí la regla; true = forzá
   // incluir (agregada a mano desde el pop-up); false = forzá excluir (la "X" del panel).
   handoffOverride Boolean?
-  // ⚠ PRE-SYNC de la otra PC (plan clientes/proyectos en vuelo, 2026-07-10): estas 3
-  // columnas YA existen en la DB compartida aplicadas desde allá; se declaran acá tal
-  // cual para que `db push` no las droppee. La definición canónica (comentarios y
-  // semántica) llega con el commit de ese plan — reconciliar en el merge.
-  included   Boolean   @default(true)
-  reviewedAt DateTime?
-  reviewedBy String?
 
   generatedByAgentRunId String? // FK suave al AgentRun del clasificador
   createdAt             DateTime @default(now())
