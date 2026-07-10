@@ -17,6 +17,7 @@ import LicensesSection from "./LicensesSection";
 import AccountAdoptionSection from "./AccountAdoptionSection";
 import AccountBriefSection from "./AccountBriefSection";
 import type { CsAccountData } from "@/lib/cs/load-account";
+import { PARTNER_STATE_META } from "@/lib/cs/partner-state";
 
 function Section({ title, children, source }: { title: string; children: ReactNode; source?: ReactNode }) {
   return (
@@ -52,7 +53,16 @@ export default function AccountView({ data }: { data: CsAccountData }) {
         {p?.country && <span className="text-fg-secondary">{p.country}</span>}
         <span className="ml-auto flex items-center gap-1.5">
           {data.partnerVisible &&
-            (p ? <SourceChip label="HubSpot Partner" date={p.fetchedAt} /> : <SourceChip label="sin permiso de partner" tone="missing" />)}
+            (p ? (
+              <SourceChip label="HubSpot Partner" date={p.fetchedAt} />
+            ) : (
+              // La CAUSA real del vacío (no_scope / never_synced / no_match), no un
+              // texto ambiguo: la resuelve el loader contra cs-partner-sync-status.
+              <SourceChip
+                label={data.partnerState === "ok" ? "HubSpot Partner" : PARTNER_STATE_META[data.partnerState].chip}
+                tone="missing"
+              />
+            ))}
           {data.signals && <SourceChip label="Señales" date={data.signals.fetchedAt} />}
           <Link href={`/clients/${data.clientId}`} className="text-[11px] font-medium text-brand hover:text-brand/80">
             Workspace →

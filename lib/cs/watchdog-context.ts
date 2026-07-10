@@ -322,9 +322,14 @@ export async function buildWatchdogContext(
       : null;
   const partnerBlock = partner
     ? [
-        `- Calificación de uso unificada (UUS): ${partner.uusScore ?? "sin dato"} · tendencia 4 semanas: ${typeof partner.uusTrend === "number" ? partner.uusTrend : "sin dato"} (negativa = uso cayendo)`,
+        `- Calificación de uso unificada (UUS): ${partner.uusScore ?? "sin dato"} · tendencia 4 semanas: ${partner.uusTrend ?? "sin dato"} (negativa = uso cayendo)`,
         historyLine,
-        `- Componentes del UUS — Activación: ${partner.activationScore ?? "—"} (0 = no usó las herramientas core en los primeros 3 meses) · Uso de herramientas: ${partner.toolUsageScore ?? "—"} · Métricas de valor: ${partner.valueMetricsScore ?? "—"} · Consumo: ${partner.consumptionScore ?? "—"} (% de lo pagado que usa)`,
+        // Componentes del UUS: el portal NO los expone hoy (verificado 2026-07-10) —
+        // la línea entra solo si HubSpot los agrega, para no meter ruido "—" al agente.
+        partner.activationScore !== null || partner.toolUsageScore !== null ||
+        partner.valueMetricsScore !== null || partner.consumptionScore !== null
+          ? `- Componentes del UUS — Activación: ${partner.activationScore ?? "—"} (0 = no usó las herramientas core en los primeros 3 meses) · Uso de herramientas: ${partner.toolUsageScore ?? "—"} · Métricas de valor: ${partner.valueMetricsScore ?? "—"} · Consumo: ${partner.consumptionScore ?? "—"} (% de lo pagado que usa)`
+          : null,
         partner.marketingContactsUsed !== null && partner.marketingContactsLimit
           ? `- Contactos de marketing: ${partner.marketingContactsUsed}/${partner.marketingContactsLimit} (${Math.round((partner.marketingContactsUsed / partner.marketingContactsLimit) * 100)}% del límite)`
           : null,

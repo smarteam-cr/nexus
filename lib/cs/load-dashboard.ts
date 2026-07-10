@@ -78,7 +78,7 @@ export async function loadCsDashboard(
   const active = rows.filter((r) => r.status === "active");
   const projectIds = active.map((r) => r.projectId);
 
-  const [ops, snapshots, openAlerts, anySnapshotCount] = await Promise.all([
+  const [ops, snapshots, openAlerts, anySnapshotCount, syncStatusRow] = await Promise.all([
     prisma.project.findMany({
       where: { id: { in: projectIds } },
       select: {
@@ -104,7 +104,14 @@ export async function loadCsDashboard(
     // de "este usuario no ve snapshots vinculados" — el mensaje de 403 solo aplica
     // al primer caso.
     includePartner ? prisma.clientPartnerSnapshot.count() : Promise.resolve(0),
+    // Resultado del último sync CONCLUYENTE (lo escribe syncPartnerClients): la
+    // fuente de verdad de "¿el scope está autorizado?" — inferirlo de los conteos
+    // mentía con el scope recién autorizado y el sync sin correr.
+    includePartner
+      ? prisma.cronJobState.findUnique({ where: { id: "cs-partner-sync-status" }, select: { lastResult: true } })
+      : Promise.resolve(null),
   ]);
+  const lastSync = (syncStatusRow?.lastResult ?? null) as { supported?: boolean } | null;
   const opsById = new Map(ops.map((o) => [o.id, o]));
 
   // ── Por CSE: activos + apilado por prioridad ────────────────────────────
@@ -195,7 +202,7 @@ export async function loadCsDashboard(
       marketingScore: s.marketingScore,
       salesScore: s.salesScore,
       serviceScore: s.serviceScore,
-      trend: typeof s.uusTrend === "number" ? s.uusTrend : null,
+      trend: s.uusTrend,
       nextRenewalAt: s.nextRenewalAt?.toISOString() ?? null,
       mrrTotal: s.mrrTotal,
       mrrUpForRenewal: s.mrrUpForRenewal,
@@ -217,9 +224,9 @@ export async function loadCsDashboard(
     adoptionStates,
     adoption,
     freshness: {
-      // "el sync de partner corrió alguna vez con scope OK" (conteo global sin
-      // filtros) — NO "este usuario ve snapshots".
-      partnerSupported: anySnapshotCount > 0,
+      // Del último sync CONCLUYENTE (cs-partner-sync-status). Fallback al conteo
+      // global para instalaciones que aún no persistieron ningún resultado.
+      partnerSupported: lastSync ? lastSync.supported === true : anySnapshotCount > 0,
       partnerFetchedAt,
       stageSyncedAt,
     },

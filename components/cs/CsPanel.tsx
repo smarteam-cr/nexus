@@ -104,7 +104,10 @@ export default function CsPanel({
     try {
       const r = await fetchJson<{ supported: boolean; total: number; createdClients: unknown[] }>(
         "/api/cs/partner/refresh",
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) },
+        // createClients EXPLÍCITO: el endpoint pasó a default false (defensivo) y la
+        // decisión de producto —auto-crear Clients para partner records sin match—
+        // la declara cada caller que la quiere. Este botón la quiere.
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ createClients: true }) },
       );
       if (!r.supported) {
         toast.error("El scope de Partner Clients no está autorizado en la app de HubSpot — hay que re-autorizarla.", { duration: 0 });

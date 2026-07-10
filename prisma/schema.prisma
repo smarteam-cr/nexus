@@ -1972,8 +1972,12 @@ model ClientPartnerSnapshot {
   domain                 String?
   associatedCompanyIds   String[]  @default([])
   uusScore               Float? // Calificación de uso unificada (UUS)
-  uusTrend               Json? // tendencia últimas 4 semanas (número o serie — según API)
-  // Componentes del UUS (managed only; nombres reales se confirman al autorizar el scope):
+  // Tendencia últimas 4 semanas. Float directo: sondeado contra los 157 records reales
+  // (2026-07-10) — todos los valores no vacíos de hs_last_4_weeks_usage_score_trend son
+  // números planos (-0.18…0.01). Tipo endurecido con la tabla en 0 filas (sin migración).
+  uusTrend               Float?
+  // Componentes del UUS: el portal NO los expone (0 de 172 properties, verificado
+  // 2026-07-10). Las columnas quedan por si HubSpot los agrega; hoy siempre null.
   activationScore        Float? // binario 0/100: ¿usó las herramientas core en los primeros 3 meses?
   toolUsageScore         Float? // 0-100: uso activo vs empresas similares
   valueMetricsScore      Float? // 0-100: resultados (deals, contactos, tráfico)
@@ -2002,6 +2006,7 @@ model ClientPartnerSnapshot {
   hsGrowthEmail          String?
   cslImplementaciones    String? // custom "CSL | Implementaciones"
   country                String?
+  portalLink             String? // hs_account_link: deep-link al portal del cliente en HubSpot
 
   updatedAt DateTime @updatedAt
 }
@@ -2068,6 +2073,11 @@ model CronJobState {
   id             String    @id // jobKey ("cs-signals", "cs-watchdog-daily", …)
   lastRunDateKey String? // "YYYY-MM-DD" (día CR) del último disparo
   lastRunAt      DateTime?
+  // Resultado del último run CONCLUYENTE del job (lo escribe el propio job, no el
+  // scheduler). Primer uso: fila `cs-partner-sync-status` con {supported, total,
+  // matched, unmatched, error?, at} — las corridas locked/transitorias NO lo pisan.
+  // Es la fuente de verdad de "¿el scope está autorizado?" para los paneles de CS.
+  lastResult     Json?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
