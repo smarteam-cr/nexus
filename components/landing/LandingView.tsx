@@ -17,7 +17,7 @@
  * Reusa los motion hooks del kickoff (useReveal / useHeroParallax) buscando
  * `.reveal` / `.hero-backdrop` dentro del contenedor.
  */
-import { useEffect, useRef } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -93,6 +93,26 @@ function HideToggle({ hidden, label, onToggle }: { hidden: boolean; label: strin
   );
 }
 
+/** Caret ▸/▾ de una sección OCULTA: la colapsa a solo el título, o la vuelve a abrir. */
+function CollapseToggle({ collapsed, label, onToggle }: { collapsed: boolean; label: string; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      title={collapsed ? `Ver ${label}` : `Contraer ${label}`}
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26,
+        borderRadius: 999, cursor: "pointer", fontSize: 11, lineHeight: 1,
+        border: "1px solid rgba(0,0,0,0.12)", background: "rgba(255,255,255,0.92)", color: "#6b7280",
+        backdropFilter: "blur(4px)", boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+      }}
+    >
+      {collapsed ? "▸" : "▾"}
+    </button>
+  );
+}
+
 type DragHandleProps = Record<string, unknown> | null;
 
 /** Wrapper sortable de una sección (drag & drop). Hook incondicional adentro →
@@ -160,7 +180,9 @@ export default function LandingView({
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLElement>(null);
-  useReveal(rootRef, [sections.length, mode]);
+  // `mode === "edit"` → revelar al instante (sin animación de entrada) y captar el
+  // contenido async (cronograma/procesos/cierre del editor) vía MutationObserver.
+  useReveal(rootRef, [sections.length, mode], mode === "edit");
   useHeroParallax(heroRef);
 
   // Red de seguridad: si el IntersectionObserver no dispara (pestaña en segundo
@@ -179,20 +201,42 @@ export default function LandingView({
   const editable = mode === "edit";
   const sortEnabled = editable && !!onReorder;
 
+  // Secciones OCULTAS que el CSE desplegó a mano. Efímero (no se persiste): una sección
+  // oculta arranca colapsada en cada visita.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpanded = useCallback((key: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+  /** Ocultar SIEMPRE colapsa (si no, la sección quedaría abierta y "oculta" a la vez). */
+  const setHidden = useCallback(
+    (key: string, hide: boolean) => {
+      if (hide) setExpanded((prev) => (prev.has(key) ? new Set([...prev].filter((k) => k !== key)) : prev));
+      onToggleHidden?.(key, hide);
+    },
+    [onToggleHidden],
+  );
+
   // Sensor con umbral: un clic normal (editar texto inline) no inicia drag.
   // + teclado en el handle (Enter/Space levanta, flechas mueven) — accesibilidad.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-  const orderedKeys = config.sections.map((d) => d.key);
+  // Solo las secciones NO-pinneadas se reordenan (el kickoff pinnea hero/cronograma/
+  // procesos/cierre; el BC no pinnea nada → sortableKeys === todas las keys).
+  const sortableKeys = config.sections.filter((d) => !d.pinned).map((d) => d.key);
   const onDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
-    const from = orderedKeys.indexOf(String(active.id));
-    const to = orderedKeys.indexOf(String(over.id));
+    const from = sortableKeys.indexOf(String(active.id));
+    const to = sortableKeys.indexOf(String(over.id));
     if (from === -1 || to === -1) return;
-    onReorder?.(arrayMove(orderedKeys, from, to));
+    onReorder?.(arrayMove(sortableKeys, from, to));
   };
 
   const renderSection = (def: SectionDef, dragHandle: DragHandleProps = null) => {
@@ -208,9 +252,15 @@ export default function LandingView({
       ...(def.empty as Record<string, unknown>),
       ...((raw as Record<string, unknown>) ?? {}),
     };
-    // En lectura, omitir secciones sin contenido o que el CSE ocultó.
-    if (!editable && (isBlank(data) || hidden)) return null;
+    // En lectura, omitir secciones sin contenido o que el CSE ocultó. Las `pinned`
+    // (hero/cierre) y `ctxDriven` (cronograma/procesos: se alimentan de ctx, no de
+    // data) NUNCA se omiten por isBlank — su Component decide si devuelve null.
+    const alwaysRender = def.pinned || def.ctxDriven;
+    if (!editable && ((!alwaysRender && isBlank(data)) || hidden)) return null;
     const isHero = !!def.backdrop;
+    // Una sección OCULTA se colapsa a su título: el CSE la sigue viendo en su lugar (puede
+    // arrastrarla y volver a mostrarla) sin que le coma la pantalla. El caret la despliega.
+    const collapsed = editable && hidden && !expanded.has(def.key);
     // Portada con imagen (hero): capa de fondo + degradado a nivel SECCIÓN
     // (hermana de .stl-wrap — dentro del wrap no cubriría el full-bleed).
     const coverUrl =
@@ -218,38 +268,81 @@ export default function LandingView({
         ? (data.coverImageUrl as string)
         : null;
     const Comp = def.Component;
+
+    /* Chrome ESTANDARIZADO: badge de oculto + controles del workspace + caret de
+       colapsar + toggle de ojo + handle de drag, arriba a la derecha. */
+    const chrome = editable && (renderOverlay || onToggleHidden || dragHandle) && (
+      <div className="stl-overlay" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {hidden && <span className="stl-hidden-badge">No visible para el cliente</span>}
+        {!collapsed && renderOverlay?.(def.key)}
+        {hidden && <CollapseToggle collapsed={collapsed} label={effTitle} onToggle={() => toggleExpanded(def.key)} />}
+        {onToggleHidden && !def.noHide && (
+          <HideToggle hidden={hidden} label={effTitle} onToggle={() => setHidden(def.key, !hidden)} />
+        )}
+        {dragHandle && (
+          <button
+            type="button"
+            className="stl-drag-handle"
+            title="Arrastrá para reordenar la sección"
+            aria-label={`Reordenar la sección ${effTitle}`}
+            {...dragHandle}
+          >
+            ⠿
+          </button>
+        )}
+      </div>
+    );
+
+    /* Barra de una sección colapsada: solo el título, clickeable para desplegarla.
+       El cuerpo NO se desmonta (se esconde con display:none) — desmontarlo perdería lo
+       que el CSE está tipeando (los campos comitean en `blur`, y un input que se desmonta
+       no lo dispara) y re-dispararía los fetch de las secciones curadas al reabrirlas. */
+    const collapsedBar = collapsed && (
+      <button type="button" className="stl-collapsed-bar" aria-expanded={false} onClick={() => toggleExpanded(def.key)}>
+        <span aria-hidden>▸</span>
+        <span className="stl-collapsed-title">{effTitle}</span>
+      </button>
+    );
+    const hideWhenCollapsed = collapsed ? ({ display: "none" } as const) : undefined;
+
+    // Secciones `ctxDriven` (kickoff: cronograma/procesos/cierre): se alimentan de ctx, no de
+    // data, y rinden su PROPIA sección full-bleed (o `null` si están vacías) — SIN el wrapper
+    // `.stl-sec` del motor. En LECTURA se pintan peladas (DOM del cliente idéntico al de antes).
+    // En EDICIÓN, las que se pueden ocultar o arrastrar reciben el chrome del motor dentro de un
+    // contenedor relativo; `ctxEmpty` evita dejar ese chrome flotando sobre la nada.
+    if (def.ctxDriven) {
+      const body = (
+        <Comp
+          data={data}
+          ctx={ctx}
+          editable={editable}
+          onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
+        />
+      );
+      const needsChrome = editable && (!def.pinned || !def.noHide);
+      if (!needsChrome) return <Fragment key={def.key}>{body}</Fragment>;
+      if (def.ctxEmpty?.(ctx)) return null; // nada que envolver (sin cronograma / sin procesos)
+      return (
+        <div key={def.key} className={`stl-ctx-sec${hidden ? " stl-hidden" : ""}${collapsed ? " stl-collapsed" : ""}`}>
+          {chrome}
+          {collapsedBar}
+          <div style={hideWhenCollapsed}>{body}</div>
+        </div>
+      );
+    }
+
     return (
       <section
         key={def.key}
         ref={isHero ? heroRef : undefined}
-        className={`stl-sec stl-${def.theme}${isHero ? " hero-backdrop" : ""}${editable && hidden ? " stl-hidden" : ""}`}
+        className={`stl-sec stl-${def.theme}${isHero ? " hero-backdrop" : ""}${editable && hidden ? " stl-hidden" : ""}${collapsed ? " stl-collapsed" : ""}`}
       >
-        {coverUrl && (
+        {coverUrl && !collapsed && (
           <div className="stl-sec-cover" style={{ backgroundImage: `url(${coverUrl})` }} aria-hidden />
         )}
-        {/* Chrome ESTANDARIZADO (mismo patrón que el kickoff): badge de oculto +
-            controles del workspace + toggle de ojo + handle de drag, arriba a la derecha. */}
-        {editable && (renderOverlay || onToggleHidden || dragHandle) && (
-          <div className="stl-overlay" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {hidden && <span className="stl-hidden-badge">No visible para el cliente</span>}
-            {renderOverlay?.(def.key)}
-            {onToggleHidden && (
-              <HideToggle hidden={hidden} label={effTitle} onToggle={() => onToggleHidden(def.key, !hidden)} />
-            )}
-            {dragHandle && (
-              <button
-                type="button"
-                className="stl-drag-handle"
-                title="Arrastrá para reordenar la sección"
-                aria-label={`Reordenar la sección ${effTitle}`}
-                {...dragHandle}
-              >
-                ⠿
-              </button>
-            )}
-          </div>
-        )}
-        <div className={`stl-wrap${editable ? "" : " reveal"}`}>
+        {chrome}
+        {collapsed && <div className="stl-wrap">{collapsedBar}</div>}
+        <div className={`stl-wrap${editable ? "" : " reveal"}`} style={hideWhenCollapsed}>
           {!def.selfTitled && (
             <header className="stl-sec-head">
               {editable ? (
@@ -291,12 +384,17 @@ export default function LandingView({
 
   const body = sortEnabled ? (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-      <SortableContext items={orderedKeys} strategy={verticalListSortingStrategy}>
-        {config.sections.map((def) => (
-          <SortableSection key={def.key} id={def.key}>
-            {(handleProps) => renderSection(def, handleProps)}
-          </SortableSection>
-        ))}
+      <SortableContext items={sortableKeys} strategy={verticalListSortingStrategy}>
+        {config.sections.map((def) =>
+          def.pinned ? (
+            // Pinneada: posición fija, sin handle ni wrapper sortable.
+            <Fragment key={def.key}>{renderSection(def)}</Fragment>
+          ) : (
+            <SortableSection key={def.key} id={def.key}>
+              {(handleProps) => renderSection(def, handleProps)}
+            </SortableSection>
+          ),
+        )}
       </SortableContext>
     </DndContext>
   ) : (

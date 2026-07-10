@@ -63,8 +63,15 @@ export interface KickoffProceso {
 /** Lo que la ruta pública pasa como `data` a <KickoffLanding/>. */
 export interface KickoffLandingData {
   projectName: string;
+  /** Nombre de la EMPRESA cliente — fallback de texto de la brand-row del hero. */
+  clientName?: string;
   /** Logo de la EMPRESA cliente (Client.logoUrl, bucket público) o null. */
   clientLogoUrl: string | null;
+  /** Logo de Smarteam (config global) — imagen de la brand-row. */
+  smarteamLogoUrl?: string | null;
+  /** Mapa nombre→logo (hubspot / insider / smarteam): una marca de TEXTO cuyo nombre
+   *  matchee se pinta como imagen en la brand-row. */
+  brandLogos?: Record<string, string>;
   /** Logos de PLATAFORMA (HubSpot / Insider One, config global según tags del
    *  proyecto — platformLogosFor). Se pintan junto al logo del cliente en el hero. */
   platformLogos?: string[];

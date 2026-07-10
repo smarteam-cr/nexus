@@ -12,6 +12,8 @@
  * el registry es la fuente de composición; BC_SECTION_DEFS/BC_DEF_BY_KEY se mantienen
  * exportados por compatibilidad.
  */
+import type { LandingContext } from "../types";
+
 export interface BCSectionDef {
   key: string;
   label: string;       // título grande de la sección (no-selfTitled)
@@ -35,6 +37,16 @@ export interface BCSectionDef {
   /** false = el agente NO genera esta sección (se llena determinísticamente o a mano);
    *  generateCanvasSections la saltea y blocks/regenerate la rechaza. */
   agentGenerated?: boolean;
+  /** (kickoff) la sección se alimenta de ctx, no de data → no se omite por isBlank en read. */
+  ctxDriven?: boolean;
+  /** (kickoff) solo `ctxDriven`: true si no hay NADA que renderizar (el Component daría null).
+   *  El motor lo consulta antes de pintar el chrome de edición. Función PURA — no rompe
+   *  el server-safe de este archivo (no toca React ni el DOM). */
+  ctxEmpty?: (ctx: LandingContext) => boolean;
+  /** (kickoff) posición fija: no participa del drag&drop de reordenar. */
+  pinned?: boolean;
+  /** (kickoff) no se puede ocultar (sin toggle de ojo): hero y cierre. */
+  noHide?: boolean;
 }
 
 const str = { type: "string" } as const;

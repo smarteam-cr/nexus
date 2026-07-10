@@ -370,20 +370,33 @@ export function useCanvasSections(
   );
 
   const addBlock = useCallback(
-    async (sectionId: string, blockType: string = "TEXT", content: string = "") => {
+    async (sectionId: string, blockType: string = "TEXT", content: string = "", data?: unknown): Promise<string | undefined> => {
       // Fetch directo (no `mutate`) para capturar el id del bloque creado → habilita el undo (borrarlo).
+      // Cuenta como escritura EN VUELO igual que `mutate`: si no, `flushPending` volvería al
+      // instante y "Subir al cliente" congelaría un snapshot sin el bloque recién creado.
+      pendingWrites.current++;
       try {
         const res = await fetch(blocksUrl(sectionId), {
           method: "POST",
           headers: JSON_HEADERS,
-          body: JSON.stringify({ blockType, content }),
+          body: JSON.stringify({ blockType, content, data }),
         });
         if (!res.ok) {
           setError("No se pudo agregar el bloque. Reintentá.");
-          return;
+          return undefined;
         }
         setError(null);
-        const created = (await res.json().catch(() => null)) as { id?: string } | null;
+        const created = (await res.json().catch(() => null)) as BlockData | null;
+        // OPTIMISTA (como saveBlock): meter el bloque creado en el estado local ANTES de
+        // que aterrice el refetch. Sin esto, una edición inmediatamente posterior seguiría
+        // viendo la sección SIN bloque y dispararía un SEGUNDO POST → dos CARD, y el render
+        // (que toma el primero) perdería el campo del segundo.
+        if (created?.id) {
+          writeSeq.current++;
+          setSections((prev) =>
+            prev.map((s) => (s.id !== sectionId ? s : { ...s, blocks: [...s.blocks, created] })),
+          );
+        }
         refetch();
         onContentChangeRef.current?.();
         if (created?.id) {
@@ -394,11 +407,58 @@ export function useCanvasSections(
             undo: () => deleteBlock(sectionId, newId, true),
           });
         }
+        return created?.id;
       } catch {
         setError("Error de conexión al agregar el bloque.");
+        return undefined;
+      } finally {
+        pendingWrites.current--;
       }
     },
     [blocksUrl, refetch, pushUndo, undoScope, deleteBlock],
+  );
+
+  /**
+   * Guarda `data` en el bloque CARD de una sección, CREÁNDOLO si no existe.
+   *
+   * Serializa la creación por sección: el POST tarda un round-trip, así que dos ediciones
+   * seguidas sobre una sección vacía (escribir el texto del botón y después el enlace) verían
+   * las dos `blocks.length === 0` y crearían DOS bloques CARD. El render usa solo el primero
+   * → el segundo campo se perdía. Acá el segundo edit no dispara otro POST: se acumula en
+   * `latest` y se guarda sobre el bloque que está naciendo. Tras el POST, la inserción
+   * optimista de `addBlock` hace que los edits siguientes ya encuentren el CARD.
+   */
+  const creatingCard = useRef(new Map<string, { latest: unknown }>());
+  const upsertCardData = useCallback(
+    async (sectionId: string, cardBlockId: string | null, data: unknown) => {
+      if (cardBlockId) {
+        await saveBlockRef.current(sectionId, cardBlockId, { data });
+        return;
+      }
+      const inflight = creatingCard.current.get(sectionId);
+      if (inflight) {
+        inflight.latest = data; // el create en curso persistirá esta data al terminar
+        return;
+      }
+      const entry = { latest: data };
+      creatingCard.current.set(sectionId, entry);
+      try {
+        const newId = await addBlock(sectionId, "CARD", "", data);
+        if (!newId) return;
+        // BUCLE, no un solo `if`: mientras se guarda `latest` puede llegar OTRO edit (el
+        // await suspende y `upsertCardData` vuelve a entrar por la rama `inflight`). Con un
+        // único guardado, ese último edit se escribiría en `latest` y jamás se persistiría.
+        let saved = data;
+        while (entry.latest !== saved) {
+          const pending = entry.latest;
+          await saveBlockRef.current(sectionId, newId, { data: pending });
+          saved = pending;
+        }
+      } finally {
+        creatingCard.current.delete(sectionId);
+      }
+    },
+    [addBlock],
   );
 
   // Recrea un bloque borrado (undo): POST con su tipo + contenido + data. Vuelve como
@@ -636,6 +696,7 @@ export function useCanvasSections(
     regenerateBlock,
     undoBlock,
     addBlock,
+    upsertCardData,
     restoreBlock,
     renameSection,
     setEyebrow,

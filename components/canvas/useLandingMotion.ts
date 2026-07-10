@@ -37,32 +37,59 @@ function prefersReducedMotion(): boolean {
  * scroll-parent del panel como `root`. Re-corre cuando cambian `deps` (los
  * `.reveal` aparecen recién después de cargar los datos).
  */
-export function useReveal(containerRef: RefObject<HTMLElement | null>, deps: unknown[] = []) {
+export function useReveal(
+  containerRef: RefObject<HTMLElement | null>,
+  deps: unknown[] = [],
+  // `immediate` (edición): sin animación de entrada → revelar al instante, incluido el
+  // contenido que aparece async. Editar debe mostrar todo ya, no depender del scroll.
+  immediate = false,
+) {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const els = Array.from(container.querySelectorAll<HTMLElement>(".reveal"));
-    if (els.length === 0) return;
 
-    if (prefersReducedMotion() || typeof IntersectionObserver === "undefined") {
-      els.forEach((el) => el.classList.add("is-visible"));
-      return;
-    }
+    const noAnim = immediate || prefersReducedMotion() || typeof IntersectionObserver === "undefined";
+    const observer = noAnim
+      ? null
+      : new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                entry.target.classList.add("is-visible");
+                observer!.unobserve(entry.target);
+              }
+            });
+          },
+          { root: findScrollParent(container), threshold: 0.12, rootMargin: "0px 0px -8% 0px" },
+        );
 
-    const root = findScrollParent(container); // null → viewport
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("is-visible");
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      { root, threshold: 0.12, rootMargin: "0px 0px -8% 0px" },
-    );
-    els.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
+    const arm = (el: HTMLElement) => {
+      if (el.classList.contains("is-visible")) return;
+      if (noAnim) el.classList.add("is-visible");
+      else observer!.observe(el);
+    };
+    container.querySelectorAll<HTMLElement>(".reveal").forEach(arm);
+
+    // Contenido que se monta DESPUÉS del effect (ctx async del editor: cronograma/
+    // procesos/cierre se pintan al volver el fetch). Sin esto sus `.reveal` nunca se
+    // observan → quedan en opacity:0 y la sección se ve VACÍA. El renderer viejo lo
+    // evitaba re-corriendo el effect con timeline/procesos en sus deps; acá lo cubre un
+    // MutationObserver general (sirve para cualquier contenido async, no solo kickoff).
+    const mo = new MutationObserver((muts) => {
+      for (const m of muts) {
+        for (const node of m.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue;
+          if (node.classList.contains("reveal")) arm(node);
+          node.querySelectorAll?.<HTMLElement>(".reveal").forEach(arm);
+        }
+      }
+    });
+    mo.observe(container, { childList: true, subtree: true });
+
+    return () => {
+      observer?.disconnect();
+      mo.disconnect();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 }
