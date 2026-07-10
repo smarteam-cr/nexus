@@ -9,7 +9,7 @@ import AppShell from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/ui";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCobranzaRole } from "@/lib/auth/cobranza-roles";
-import { loadCartera, loadAlertas, getLatestSnapshot } from "@/lib/cobranza";
+import { loadCartera, loadAlertas, getLatestSnapshot, loadProyeccion } from "@/lib/cobranza";
 import { crDateParts } from "@/lib/jobs/time";
 import CobranzaClient from "@/components/cobranza/CobranzaClient";
 
@@ -20,10 +20,11 @@ export default async function CobranzaPage() {
   if (!ctx || !isCobranzaRole(ctx.role)) redirect("/clients");
 
   const todayISO = crDateParts(new Date()).dateKey; // "hoy" = día calendario CR
-  const [cartera, alertas, snapshot] = await Promise.all([
+  const [cartera, alertas, snapshot, proyeccion] = await Promise.all([
     loadCartera(todayISO),
     loadAlertas({ estados: ["ABIERTA", "VISTA"] }),
     getLatestSnapshot(),
+    loadProyeccion(todayISO),
   ]);
 
   return (
@@ -37,6 +38,7 @@ export default async function CobranzaPage() {
           initialCartera={cartera}
           initialAlertas={alertas}
           initialSnapshot={snapshot}
+          initialProyeccion={proyeccion}
           todayISO={todayISO}
         />
       </div>

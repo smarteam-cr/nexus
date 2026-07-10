@@ -24,8 +24,10 @@ import {
   TIPO_SERVICIO_LABEL,
   ESTADO_CUENTA_LABEL,
 } from "@/lib/cobranza/schema";
+import Link from "next/link";
 import { fmtFecha, fmtMonto, SEMAFORO_META, FILTER_SELECT_CLS } from "./format";
 import CuentaDrawer from "./CuentaDrawer";
+import NuevaEmpresaModal from "./NuevaEmpresaModal";
 
 const ESTADO_CHIP: Record<string, string> = {
   ACTIVA: "text-emerald-600 bg-emerald-500/10 border-emerald-500/30",
@@ -66,6 +68,7 @@ export default function PanelCartera({
   const [fSemaforo, setFSemaforo] = useState("all");
   const [openCuentaId, setOpenCuentaId] = useState<string | null>(null);
   const [configurando, setConfigurando] = useState<string | null>(null); // clientId en vuelo
+  const [showNuevaEmpresa, setShowNuevaEmpresa] = useState(false);
 
   const conteos = useMemo(() => {
     const configuradas = rows.filter((r) => r.cuentaId !== null).length;
@@ -156,7 +159,8 @@ export default function PanelCartera({
 
   return (
     <div className="space-y-3">
-      {/* ── Pestañas de vista (configuración) ── */}
+      {/* ── Pestañas de vista (configuración) + acciones ── */}
+      <div className="flex flex-wrap items-center gap-2">
       <div className="inline-flex items-center gap-0.5 rounded-lg border border-line bg-surface-muted p-0.5">
         {VISTAS.map((v) => {
           const active = vista === v.key;
@@ -178,6 +182,23 @@ export default function PanelCartera({
             </button>
           );
         })}
+      </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          <Link
+            href="/cobranza/importar"
+            className="text-[11px] font-medium px-2.5 py-1.5 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
+          >
+            Importar CSV
+          </Link>
+          <button
+            type="button"
+            onClick={() => setShowNuevaEmpresa(true)}
+            className="text-[11px] font-medium px-2.5 py-1.5 rounded-md border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors"
+          >
+            + Nueva empresa
+          </button>
+        </div>
       </div>
 
       {/* ── Filtros ── */}
@@ -255,6 +276,14 @@ export default function PanelCartera({
                   >
                     <td className="px-4 py-3">
                       <span className="font-medium text-fg">{r.clienteNombre}</span>
+                      {!r.tieneProyectoReal && (
+                        <span
+                          title="Empresa de cobranza sin proyecto en Nexus"
+                          className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded border border-line text-fg-muted"
+                        >
+                          sin proyecto
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {r.tiposServicio.length === 0 ? (
@@ -329,6 +358,16 @@ export default function PanelCartera({
         onClose={() => {
           setOpenCuentaId(null);
           refresh(); // el drawer pudo cambiar estados/cobros → re-sincronizar la tabla
+        }}
+      />
+
+      <NuevaEmpresaModal
+        open={showNuevaEmpresa}
+        onClose={() => setShowNuevaEmpresa(false)}
+        onCreated={(cuentaId) => {
+          setShowNuevaEmpresa(false);
+          refresh();
+          setOpenCuentaId(cuentaId); // seguir configurando servicios en el drawer
         }}
       />
     </div>

@@ -9,8 +9,12 @@
 import { prisma } from "@/lib/db/prisma";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import {
+  proyectarIngresos,
   semaforoCuenta,
+  sumaPlanExpandido,
   type CarteraEngineInput,
+  type CobroProyeccionInput,
+  type ProyeccionIngresos,
   type Semaforo,
 } from "./engine";
 import type { Prisma } from "@prisma/client";
@@ -31,6 +35,7 @@ export interface CobroDTO {
   fechaCobro: string | null;
   confirmadoPor: string | null;
   confirmadoEn: string | null;
+  referenciaExterna: string | null;
   notas: string | null;
 }
 
@@ -88,6 +93,7 @@ export interface CuentaDetailDTO {
   estadoCuenta: string;
   excluidaOperacion: boolean;
   responsableCobroTerceros: string | null;
+  correoCobro: string | null;
   notas: string | null;
   estadoActualizadoPor: string | null;
   estadoActualizadoEn: string | null;
@@ -105,6 +111,7 @@ export interface CarteraRow {
   moneda: string | null;
   estadoCuenta: string | null;
   excluidaOperacion: boolean;
+  tieneProyectoReal: boolean; // false = empresa creada/importada en Cobranza sin proyecto en Nexus
   tiposServicio: string[];
   ultimoCobro: string | null; // max fechaCobro
   proximoCobro: string | null; // min fechaProgramada no cobrada
@@ -151,6 +158,7 @@ type CobroRow = {
   fechaCobro: Date | null;
   confirmadoPor: string | null;
   confirmadoEn: Date | null;
+  referenciaExterna: string | null;
   notas: string | null;
 };
 
@@ -169,6 +177,7 @@ function serializeCobro(c: CobroRow): CobroDTO {
     fechaCobro: isoDay(c.fechaCobro),
     confirmadoPor: c.confirmadoPor,
     confirmadoEn: iso(c.confirmadoEn),
+    referenciaExterna: c.referenciaExterna,
     notas: c.notas,
   };
 }
@@ -204,10 +213,31 @@ async function clientIdsConProyectoReal(): Promise<Map<string, { name: string }>
   return map;
 }
 
+/**
+ * Universo del panel de Cobranza: clientes con proyecto REAL ∪ clientes con
+ * CuentaFinanciera (empresas creadas a mano o importadas — pueden no tener
+ * proyecto en Nexus). Lo consumen loadCartera Y buildCarteraEngineInput: si se
+ * cambia el criterio, cambia en AMBAS o el panel y el digest divergen.
+ */
+async function universoCobranza(): Promise<Map<string, { name: string; tieneProyectoReal: boolean }>> {
+  const conProyecto = await clientIdsConProyectoReal();
+  const conCuenta = await prisma.cuentaFinanciera.findMany({
+    select: { clientId: true, client: { select: { name: true } } },
+  });
+  const map = new Map<string, { name: string; tieneProyectoReal: boolean }>();
+  for (const [clientId, { name }] of conProyecto) {
+    map.set(clientId, { name, tieneProyectoReal: true });
+  }
+  for (const c of conCuenta) {
+    if (!map.has(c.clientId)) map.set(c.clientId, { name: c.client.name, tieneProyectoReal: false });
+  }
+  return map;
+}
+
 // ── Panel de cartera ────────────────────────────────────────────────────────────
 
 export async function loadCartera(todayISO: string): Promise<CarteraRow[]> {
-  const clientes = await clientIdsConProyectoReal();
+  const clientes = await universoCobranza();
 
   const cuentas = await prisma.cuentaFinanciera.findMany({
     where: { clientId: { in: [...clientes.keys()] } },
@@ -228,7 +258,7 @@ export async function loadCartera(todayISO: string): Promise<CarteraRow[]> {
   const cuentaByClient = new Map(cuentas.map((c) => [c.clientId, c]));
 
   const rows: CarteraRow[] = [];
-  for (const [clientId, { name }] of clientes) {
+  for (const [clientId, { name, tieneProyectoReal }] of clientes) {
     const cuenta = cuentaByClient.get(clientId);
     if (!cuenta) {
       rows.push({
@@ -239,6 +269,7 @@ export async function loadCartera(todayISO: string): Promise<CarteraRow[]> {
         moneda: null,
         estadoCuenta: null,
         excluidaOperacion: false,
+        tieneProyectoReal,
         tiposServicio: [],
         ultimoCobro: null,
         proximoCobro: null,
@@ -263,6 +294,7 @@ export async function loadCartera(todayISO: string): Promise<CarteraRow[]> {
       moneda: cuenta.moneda,
       estadoCuenta: cuenta.estadoCuenta,
       excluidaOperacion: false,
+      tieneProyectoReal,
       tiposServicio: [...new Set(cuenta.servicios.filter((s) => s.estado === "ACTIVO").map((s) => s.tipoServicio))],
       ultimoCobro: isoDay(ultimo),
       proximoCobro: proximo ? isoDay(proximo.fechaProgramada) : null,
@@ -275,9 +307,8 @@ export async function loadCartera(todayISO: string): Promise<CarteraRow[]> {
   }
 
   // Orden: cuentas CONFIGURADAS primero (peor semáforo arriba, como el Sheet);
-  // las "sin configurar" son backlog de setup y van al final. Sin esto, una
-  // cuenta recién configurada (sin cobros aún ⇒ semáforo verde) se hundía
-  // debajo de todas las filas grises "sin configurar".
+  // las "sin configurar" son backlog de setup y van al final. (Las cuentas sin
+  // cobros son GRIS — vacío ≠ al día — y ordenan junto a las programadas.)
   const peso: Record<Semaforo, number> = { rojo: 0, amarillo: 1, gris: 2, verde: 3 };
   rows.sort(
     (a, b) =>
@@ -331,6 +362,7 @@ export async function getCuentaDetail(cuentaId: string): Promise<CuentaDetailDTO
     estadoCuenta: cuenta.estadoCuenta,
     excluidaOperacion: cuenta.excluidaOperacion,
     responsableCobroTerceros: cuenta.responsableCobroTerceros,
+    correoCobro: cuenta.correoCobro,
     notas: cuenta.notas,
     estadoActualizadoPor: cuenta.estadoActualizadoPor,
     estadoActualizadoEn: iso(cuenta.estadoActualizadoEn),
@@ -446,7 +478,7 @@ export async function getLatestSnapshot(): Promise<SnapshotDTO | null> {
  * upsertAlertas las salta; el panel ya las muestra como fila "sin configurar".
  */
 export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
-  const clientes = await clientIdsConProyectoReal();
+  const clientes = await universoCobranza(); // MISMO universo que loadCartera (panel y digest no divergen)
   const cuentas = await prisma.cuentaFinanciera.findMany({
     where: { clientId: { in: [...clientes.keys()] } },
     select: {
@@ -459,7 +491,21 @@ export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
           descripcion: true,
           estado: true,
           fechaInicioFacturacion: true,
+          montoTotal: true,
+          duracionMeses: true,
           project: { select: { timeline: { select: { anchorStartDate: true } } } },
+          planes: {
+            where: { activo: true },
+            take: 1,
+            select: {
+              template: true,
+              numCuotas: true,
+              cuotas: {
+                orderBy: { orden: "asc" },
+                select: { orden: true, base: true, valor: true, offsetMeses: true, descripcion: true },
+              },
+            },
+          },
         },
       },
       cobros: {
@@ -477,7 +523,7 @@ export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
   const cuentaByClient = new Map(cuentas.map((c) => [c.clientId, c]));
 
   const input: CarteraEngineInput = { cuentas: [] };
-  for (const [clientId, { name }] of clientes) {
+  for (const [clientId, { name, tieneProyectoReal }] of clientes) {
     const cuenta = cuentaByClient.get(clientId);
     if (!cuenta) {
       input.cuentas.push({
@@ -485,6 +531,7 @@ export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
         clienteNombre: name,
         excluidaOperacion: false,
         tieneCuenta: false,
+        tieneProyectoReal,
         servicios: [],
         cobros: [],
       });
@@ -495,13 +542,39 @@ export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
       clienteNombre: name,
       excluidaOperacion: cuenta.excluidaOperacion,
       tieneCuenta: true,
-      servicios: cuenta.servicios.map((s) => ({
-        servicioId: s.id,
-        descripcion: s.descripcion,
-        estado: s.estado,
-        fechaInicioFacturacion: isoDay(s.fechaInicioFacturacion),
-        anchorActualISO: isoDay(s.project?.timeline?.anchorStartDate ?? null),
-      })),
+      tieneProyectoReal,
+      servicios: cuenta.servicios.map((s) => {
+        const plan = s.planes[0] ?? null;
+        const montoTotal = num(s.montoTotal);
+        // Suma de la expansión del plan activo (alerta MONTOS_DESCUADRADOS).
+        const sumaPlan =
+          plan && montoTotal != null
+            ? sumaPlanExpandido(
+                { montoTotal, duracionMeses: s.duracionMeses },
+                {
+                  template: plan.template as "PAREJO" | "ENTRADA_Y_RESTO" | "SUSCRIPCION" | "PERSONALIZADO",
+                  numCuotas: plan.numCuotas,
+                  cuotas: plan.cuotas.map((q) => ({
+                    orden: q.orden,
+                    base: q.base as "PORCENTAJE" | "MONTO_FIJO",
+                    valor: num(q.valor)!,
+                    offsetMeses: q.offsetMeses,
+                    descripcion: q.descripcion,
+                  })),
+                },
+              )
+            : null;
+        return {
+          servicioId: s.id,
+          descripcion: s.descripcion,
+          estado: s.estado,
+          fechaInicioFacturacion: isoDay(s.fechaInicioFacturacion),
+          anchorActualISO: isoDay(s.project?.timeline?.anchorStartDate ?? null),
+          montoTotal,
+          planTemplate: plan?.template ?? null,
+          sumaPlan,
+        };
+      }),
       cobros: cuenta.cobros.map((c) => ({
         cobroId: c.id,
         servicioId: c.servicioId,
@@ -513,4 +586,37 @@ export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
     });
   }
   return input;
+}
+
+// ── Proyección de ingresos ──────────────────────────────────────────────────────
+
+/**
+ * Proyección "plata que viene": todos los cobros NO cobrados de cuentas dentro
+ * de la operación → proyectarIngresos (vencidos en riesgo APARTE + buckets por
+ * quincena/mes con CRC y USD separados). Decimal/Date se serializan ACÁ (regla
+ * de oro del archivo) — el engine recibe tipos planos.
+ */
+export async function loadProyeccion(todayISO: string): Promise<ProyeccionIngresos> {
+  const cobros = await prisma.cobro.findMany({
+    where: { estado: { not: "COBRADO" }, cuenta: { excluidaOperacion: false } },
+    select: {
+      id: true,
+      cuentaId: true,
+      estado: true,
+      fechaProgramada: true,
+      monto: true,
+      moneda: true,
+      cuenta: { select: { client: { select: { name: true } } } },
+    },
+  });
+  const input: CobroProyeccionInput[] = cobros.map((c) => ({
+    cobroId: c.id,
+    cuentaId: c.cuentaId,
+    clienteNombre: c.cuenta.client.name,
+    estado: c.estado,
+    fechaProgramadaISO: isoDay(c.fechaProgramada)!,
+    monto: num(c.monto)!,
+    moneda: c.moneda,
+  }));
+  return proyectarIngresos(input, { todayISO });
 }

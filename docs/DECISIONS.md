@@ -83,6 +83,50 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   convierten a number ahí, único punto.
 - **Digest diff-based**: el corte (lunes 7:00 CR vía scheduler, opt-in `COBRANZA_CRON_ENABLED`,
   o manual) solo avisa CAMBIOS vs el SnapshotCartera anterior. Si nada cambió, no molesta.
+- **Arquitectura de TRES PUERTOS** (`lib/cobranza/ports.ts` — fase 2): el módulo se conecta a
+  HubSpot/Odoo/Gmail/WhatsApp sin reescribir el motor. (1) `AccountSource` provee/crea empresas
+  y cuentas (impl: manual + CSV); (2) `CommunicationPort` da el contexto de la última
+  comunicación y entrega el mensaje (impl: bitácora + copiar/mailto — SIN envío automático;
+  slots gmail/meetings definidos NO cableados); (3) `ReconciliationPort` dice si un cobro se
+  pagó (impl: confirmación humana). Los puertos cortan en la CAPA DE SERVICIOS, no en el motor
+  — engine.ts es matemática pura y jamás importa un adaptador; las routes son el composition
+  root y resuelven implementaciones vía la factory `lib/cobranza/adapters/`. TODA
+  reconciliación (incluidas las futuras automáticas) embuda en `cambiarEstadoCobro` (INV3).
+- **Regla transversal `(fuente + id_externo)`**: toda entidad que venga de una fuente externa
+  lleva su procedencia — `Client.source/sourceExternalId` (inglés: modelo compartido) y
+  `CuentaFinanciera.fuente/fuenteIdExterno` (español: modelo de Cobranza), ambos con
+  `@@unique` compuesto (NULLs no colisionan → lo legacy convive). Habilita UPSERT idempotente
+  (re-correr el mismo import/sync NO duplica) y el mapeo futuro de HubSpot/Odoo sobre la
+  MISMA fila. El import JAMÁS pisa curaduría manual (solo completa campos null).
+- **Importador: el modelo canónico manda, no el Excel.** El mapeo columna→campo es configurable
+  (Json del batch); las filas inválidas van a COLA DE REVISIÓN, nunca se ingieren en silencio.
+  Guardas del resolver (post-mortem 2026-07-10): skip-list de nombres internos/basura, jamás
+  dominios compartidos en emailDomains, empresas sin dominio se crean SIN dominios (solo el
+  title-match exacto las alcanza — trade-off aceptado), y UN solo `resolveAllSessions` al
+  final del batch (nunca por fila). SIN backfill de historia: la fecha de inicio de una
+  suscripción importada se CLAMPEA al ciclo corriente (catch-up máx 1 cuota; la fecha original
+  queda en descripción/bitácora).
+- **Universo del panel = proyecto-real ∪ tiene-cuenta** (`universoCobranza` en queries.ts):
+  las empresas creadas/importadas en Cobranza sin proyecto en Nexus SÍ aparecen (chip "sin
+  proyecto"); sus alertas CUENTA_SIN_DATOS bajan a urgencia BAJA (backlog de captura, no
+  operación en riesgo — no inundan el digest). `loadCartera` y `buildCarteraEngineInput`
+  cambian SIEMPRE juntas o el panel y el digest divergen.
+- **Semáforo: vacío ≠ al día.** Cuenta sin cobros → GRIS (una cuenta recién configurada o
+  pendiente de datos no puede verse "cobrada"). Verde exige cobros y todos cobrados.
+- **MONTOS_DESCUADRADOS es ALERTA, no invariante**: un plan activo cuya expansión no suma el
+  montoTotal (excepto SUSCRIPCION) se avisa (urgencia media) y se muestra en vivo en el form —
+  pero PERSONALIZADO parcial sigue siendo LEGAL (decisión del usuario 2026-07-10). La
+  validación dura de montos vive en el importador (Zod).
+- **Proyección de ingresos por moneda SEPARADA**: quincena (cercano) + mes (resto), horizonte
+  6 meses, CRC y USD jamás se suman ni convierten (tipo de cambio = otra iteración); los
+  vencidos "en riesgo" van APARTE de los buckets futuros. Motor puro `proyectarIngresos`.
+- **Borrador de cobro con IA = borrador, JAMÁS envío**: patrón account-brief (sync, prompt en
+  DB para que Alex calibre el tono, AgentRun trazable), regla de NO-FABRICACIÓN (contexto
+  delgado ⇒ recordatorio genérico; nada de datos internos), la persona edita y envía a mano
+  (copiar / mailto a `correoCobro`). La generación queda registrada en la bitácora.
+- **Referencia de conciliación opcional** al confirmar COBRADO (`Cobro.referenciaExterna`, id
+  de transacción Mercury / factura Odoo): trazabilidad del puente control↔contabilidad sin
+  volver a Nexus contabilidad.
 
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos

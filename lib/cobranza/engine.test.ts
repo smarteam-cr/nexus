@@ -68,8 +68,10 @@ import {
   splitCatchUp,
   semaforoCobro,
   semaforoCuenta,
+  sumaPlanExpandido,
   computeAlertSet,
   diffAlertSets,
+  proyectarIngresos,
   PlanInvalidoError,
 } from "./engine";
 import type {
@@ -79,6 +81,7 @@ import type {
   CobroExistente,
   CarteraEngineInput,
   AlertaDraft,
+  CobroProyeccionInput,
 } from "./engine";
 
 const HOY = "2026-07-10";
@@ -534,7 +537,7 @@ test("I4 — umbral custom mueve el corte del rojo", () => {
   expect(semaforoCobro(unDiaPasado, HOY, 0)).toBe("rojo"); // umbral 0: 1 día ya es rojo
 });
 
-test("I5 — semaforoCuenta: el peor gana; lista vacía → verde", () => {
+test("I5 — semaforoCuenta: el peor gana; lista vacía → gris (vacío ≠ al día)", () => {
   const cobrado = { estado: "COBRADO", fechaProgramadaISO: "2026-06-01" };
   const futuro = { estado: "PROGRAMADO", fechaProgramadaISO: "2026-08-01" };
   const porCobrar = { estado: "POR_COBRAR", fechaProgramadaISO: "2026-07-20" };
@@ -542,7 +545,10 @@ test("I5 — semaforoCuenta: el peor gana; lista vacía → verde", () => {
   expect(semaforoCuenta([cobrado, futuro], HOY)).toBe("gris"); // gris > verde
   expect(semaforoCuenta([cobrado, futuro, porCobrar], HOY)).toBe("amarillo"); // amarillo > gris
   expect(semaforoCuenta([cobrado, futuro, porCobrar, vencido], HOY)).toBe("rojo"); // rojo gana
-  expect(semaforoCuenta([], HOY)).toBe("verde");
+  // Cuenta sin cobros = GRIS: verde significa "al día", no "vacío" (una cuenta
+  // recién configurada / pendiente de datos no puede verse cobrada).
+  expect(semaforoCuenta([], HOY)).toBe("gris");
+  expect(semaforoCuenta([cobrado], HOY)).toBe("verde"); // con cobros y todo cobrado SÍ es verde
 });
 
 // ── J) computeAlertSet ───────────────────────────────────────────────────────────
@@ -758,4 +764,183 @@ test("K2 — sin cambios: mismos sets → sinCambios true (también con ambos va
   const vacios = diffAlertSets([], []);
   expect(vacios.sinCambios).toBe(true);
   expect(vacios.persistentes).toBe(0);
+});
+
+// ── L) MONTOS_DESCUADRADOS + sumaPlanExpandido ───────────────────────────────────
+
+test("L1 — sumaPlanExpandido: PAREJO suma exacto; SUSCRIPCION → null; plan inválido → null", () => {
+  expect(sumaPlanExpandido({ montoTotal: 1000, duracionMeses: null }, plan({ template: "PAREJO", numCuotas: 3 }))).toBe(1000);
+  expect(sumaPlanExpandido({ montoTotal: 800, duracionMeses: null }, plan({ template: "SUSCRIPCION" }))).toBeNull();
+  // PAREJO sin numCuotas ni duracionMeses = PlanInvalidoError → null (no revienta)
+  expect(sumaPlanExpandido({ montoTotal: 1000, duracionMeses: null }, plan({ template: "PAREJO", numCuotas: null }))).toBeNull();
+  // PERSONALIZADO parcial: suma lo que hay (la alerta la decide computeAlertSet)
+  expect(
+    sumaPlanExpandido(
+      { montoTotal: 1000, duracionMeses: null },
+      plan({
+        template: "PERSONALIZADO",
+        cuotas: [{ orden: 1, base: "MONTO_FIJO", valor: 400, offsetMeses: 0 }],
+      }),
+    ),
+  ).toBe(400);
+});
+
+test("L2 — computeAlertSet: plan descuadrado emite MONTOS_DESCUADRADOS con la diferencia", () => {
+  const cartera: CarteraEngineInput = {
+    cuentas: [
+      cuenta({
+        servicios: [servicioCartera({ montoTotal: 1000, planTemplate: "PERSONALIZADO", sumaPlan: 400 })],
+      }),
+    ],
+  };
+  const alertas = computeAlertSet(cartera, { todayISO: HOY });
+  const desc = alertas.filter((a) => a.tipo === "MONTOS_DESCUADRADOS");
+  expect(desc).toHaveLength(1);
+  expect(desc[0].dedupeKey).toBe("MONTOS_DESCUADRADOS:c1:s1");
+  expect(desc[0].urgencia).toBe("MEDIA");
+  expect(desc[0].evidencia).toMatchObject({ montoTotal: 1000, sumaPlan: 400, diferencia: -600 });
+});
+
+test("L3 — computeAlertSet: plan que cuadra NO alerta; SUSCRIPCION exenta; tolerancia 1 centavo", () => {
+  const cartera: CarteraEngineInput = {
+    cuentas: [
+      cuenta({
+        servicios: [
+          servicioCartera({ servicioId: "ok", montoTotal: 1000, planTemplate: "PAREJO", sumaPlan: 1000 }),
+          servicioCartera({ servicioId: "sub", montoTotal: 800, planTemplate: "SUSCRIPCION", sumaPlan: null }),
+          servicioCartera({ servicioId: "centavo", montoTotal: 1000, planTemplate: "PAREJO", sumaPlan: 1000.01 }),
+        ],
+      }),
+    ],
+  };
+  const alertas = computeAlertSet(cartera, { todayISO: HOY });
+  expect(alertas.filter((a) => a.tipo === "MONTOS_DESCUADRADOS")).toHaveLength(0);
+});
+
+test("L4 — computeAlertSet: cuenta SIN proyecto real baja CUENTA_SIN_DATOS a urgencia BAJA", () => {
+  const cartera: CarteraEngineInput = {
+    cuentas: [
+      cuenta({ cuentaId: "imp", tieneProyectoReal: false, servicios: [] }), // sin servicios
+      cuenta({ cuentaId: "real", servicios: [] }), // con proyecto (default true)
+    ],
+  };
+  const alertas = computeAlertSet(cartera, { todayISO: HOY });
+  const imp = alertas.find((a) => a.cuentaId === "imp");
+  const real = alertas.find((a) => a.cuentaId === "real");
+  expect(imp?.tipo).toBe("CUENTA_SIN_DATOS");
+  expect(imp?.urgencia).toBe("BAJA");
+  expect(real?.urgencia).toBe("MEDIA");
+});
+
+// ── M) proyectarIngresos ─────────────────────────────────────────────────────────
+
+function cobroProy(over: Partial<CobroProyeccionInput> = {}): CobroProyeccionInput {
+  return {
+    cobroId: "p1",
+    cuentaId: "c1",
+    clienteNombre: "Acme",
+    estado: "PROGRAMADO",
+    fechaProgramadaISO: "2026-07-20",
+    monto: 100,
+    moneda: "USD",
+    ...over,
+  };
+}
+
+test("M1 — CRC y USD nunca se suman entre sí (totales separados en el mismo bucket)", () => {
+  const p = proyectarIngresos(
+    [
+      cobroProy({ cobroId: "a", moneda: "USD", monto: 100, fechaProgramadaISO: "2026-07-20" }),
+      cobroProy({ cobroId: "b", moneda: "CRC", monto: 50000, fechaProgramadaISO: "2026-07-20" }),
+    ],
+    { todayISO: HOY },
+  );
+  const q2jul = p.buckets.find((b) => b.key === "2026-07-Q2")!;
+  expect(q2jul.totales).toEqual({ CRC: 50000, USD: 100 });
+});
+
+test("M2 — COBRADO se excluye; vencido (> umbral) va a vencidos y NO a buckets", () => {
+  const p = proyectarIngresos(
+    [
+      cobroProy({ cobroId: "cobrado", estado: "COBRADO", fechaProgramadaISO: "2026-07-20" }),
+      cobroProy({ cobroId: "venc", estado: "POR_COBRAR", fechaProgramadaISO: "2026-07-01", monto: 300 }),
+    ],
+    { todayISO: HOY },
+  );
+  expect(p.vencidos.cobros.map((c) => c.cobroId)).toEqual(["venc"]);
+  expect(p.vencidos.totales.USD).toBe(300);
+  expect(p.buckets.every((b) => b.cobros.length === 0)).toBe(true);
+});
+
+test("M3 — gracia: pasado dentro del umbral cae en la quincena ACTUAL", () => {
+  // HOY = 2026-07-10; fecha 2026-07-08 → 2 días pasados (≤ umbral 3) → Q1 de julio.
+  const p = proyectarIngresos([cobroProy({ fechaProgramadaISO: "2026-07-08" })], { todayISO: HOY });
+  expect(p.buckets.find((b) => b.key === "2026-07-Q1")!.cobros).toHaveLength(1);
+  expect(p.vencidos.cobros).toHaveLength(0);
+});
+
+test("M4 — bordes de quincena: día 15 → Q1; día 16 → Q2", () => {
+  const p = proyectarIngresos(
+    [
+      cobroProy({ cobroId: "d15", fechaProgramadaISO: "2026-07-15" }),
+      cobroProy({ cobroId: "d16", fechaProgramadaISO: "2026-07-16" }),
+    ],
+    { todayISO: HOY },
+  );
+  expect(p.buckets.find((b) => b.key === "2026-07-Q1")!.cobros.map((c) => c.cobroId)).toEqual(["d15"]);
+  expect(p.buckets.find((b) => b.key === "2026-07-Q2")!.cobros.map((c) => c.cobroId)).toEqual(["d16"]);
+});
+
+test("M5 — febrero: la Q2 clampea al fin de mes (16–28)", () => {
+  const p = proyectarIngresos([], { todayISO: "2026-01-20", mesesEnQuincenas: 2 });
+  const febQ2 = p.buckets.find((b) => b.key === "2026-02-Q2")!;
+  expect(febQ2.hastaISO).toBe("2026-02-28");
+  expect(febQ2.etiqueta).toBe("16–28 feb");
+});
+
+test("M6 — tras los meses en quincenas, los buckets son MENSUALES", () => {
+  const p = proyectarIngresos([cobroProy({ fechaProgramadaISO: "2026-09-05" })], { todayISO: HOY });
+  const sep = p.buckets.find((b) => b.key === "2026-09")!;
+  expect(sep.granularidad).toBe("mes");
+  expect(sep.cobros).toHaveLength(1);
+});
+
+test("M7 — más allá del horizonte → fueraDeHorizonte (contador), no bucket", () => {
+  // Horizonte default 6 meses desde julio → termina 2026-12-31.
+  const p = proyectarIngresos([cobroProy({ fechaProgramadaISO: "2027-02-01" })], { todayISO: HOY });
+  expect(p.fueraDeHorizonte).toBe(1);
+  expect(p.buckets.every((b) => b.cobros.length === 0)).toBe(true);
+});
+
+test("M8 — buckets vacíos SÍ se emiten y en orden cronológico (la línea no salta)", () => {
+  const p = proyectarIngresos([], { todayISO: HOY });
+  // jul Q1+Q2, ago Q1+Q2, sep, oct, nov, dic = 8 buckets
+  expect(p.buckets.map((b) => b.key)).toEqual([
+    "2026-07-Q1",
+    "2026-07-Q2",
+    "2026-08-Q1",
+    "2026-08-Q2",
+    "2026-09",
+    "2026-10",
+    "2026-11",
+    "2026-12",
+  ]);
+});
+
+test("M9 — hoy en la segunda quincena: la Q1 del mes actual NO se emite", () => {
+  const p = proyectarIngresos([], { todayISO: "2026-07-20" });
+  expect(p.buckets[0].key).toBe("2026-07-Q2");
+  expect(p.buckets.some((b) => b.key === "2026-07-Q1")).toBe(false);
+});
+
+test("M10 — determinismo: mismo input → mismo output (orden estable por fecha y id)", () => {
+  const cobros = [
+    cobroProy({ cobroId: "b", fechaProgramadaISO: "2026-07-20" }),
+    cobroProy({ cobroId: "a", fechaProgramadaISO: "2026-07-20" }),
+    cobroProy({ cobroId: "c", fechaProgramadaISO: "2026-07-18" }),
+  ];
+  const p1 = proyectarIngresos(cobros, { todayISO: HOY });
+  const p2 = proyectarIngresos([...cobros].reverse(), { todayISO: HOY });
+  expect(p1).toEqual(p2);
+  expect(p1.buckets.find((b) => b.key === "2026-07-Q2")!.cobros.map((c) => c.cobroId)).toEqual(["c", "a", "b"]);
 });

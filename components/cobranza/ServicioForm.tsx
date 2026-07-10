@@ -9,10 +9,12 @@
  * El plan tiene campos dinámicos por template; guardar hace POST/PATCH del
  * servicio + PUT del plan. "Generar cobros" es explícito y aparte.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import DatePickerField from "@/components/ui/DatePickerField";
+// Motor puro (sin Prisma) — suma-vs-total en vivo para avisar descuadres al capturar.
+import { sumaPlanExpandido, type PlanEngineInput } from "@/lib/cobranza/engine";
 import type { CuentaDetailDTO, ServicioDTO } from "@/lib/cobranza";
 import {
   COBRANZA_TIPOS_SERVICIO,
@@ -94,6 +96,37 @@ export default function ServicioForm({
   );
   const [planNotas, setPlanNotas] = useState(plan?.notas ?? "");
   const [saving, setSaving] = useState(false);
+
+  // Suma en vivo del plan vs monto total (aviso de MONTOS_DESCUADRADOS al capturar).
+  const sumaPlan = useMemo(() => {
+    const total = round2(Number(montoTotal));
+    if (!total || total <= 0 || template === "SUSCRIPCION") return null;
+    const planInput: PlanEngineInput = {
+      template: template as PlanEngineInput["template"],
+      numCuotas: numCuotas.trim() ? Number(numCuotas) : null,
+      cuotas:
+        template === "ENTRADA_Y_RESTO"
+          ? Number(pctEntrada) > 0
+            ? [{ orden: 1, base: "PORCENTAJE" as const, valor: Number(pctEntrada), offsetMeses: 0 }]
+            : []
+          : template === "PERSONALIZADO"
+            ? cuotas
+                .filter((c) => c.orden && c.valor)
+                .map((c) => ({
+                  orden: Number(c.orden),
+                  base: c.base as "PORCENTAJE" | "MONTO_FIJO",
+                  valor: Number(c.valor),
+                  offsetMeses: Number(c.offsetMeses) || 0,
+                }))
+            : [],
+    };
+    return sumaPlanExpandido(
+      { montoTotal: total, duracionMeses: duracionMeses.trim() ? Number(duracionMeses) : null },
+      planInput,
+    );
+  }, [montoTotal, template, numCuotas, pctEntrada, cuotas, duracionMeses]);
+  const totalNum = round2(Number(montoTotal));
+  const descuadre = sumaPlan != null && totalNum > 0 && Math.abs(sumaPlan - totalNum) > 0.01;
 
   function elegirProyecto(id: string) {
     setProjectId(id);
@@ -443,6 +476,15 @@ export default function ServicioForm({
               + Agregar cuota
             </button>
           </div>
+        )}
+
+        {sumaPlan != null && totalNum > 0 && (
+          <p className={`text-[11px] ${descuadre ? "text-amber-600 font-medium" : "text-fg-muted"}`}>
+            Suma del plan: {sumaPlan.toLocaleString("es-CR")} de {totalNum.toLocaleString("es-CR")}
+            {descuadre
+              ? ` — descuadre de ${(Math.round((sumaPlan - totalNum) * 100) / 100).toLocaleString("es-CR")} (el corte lo va a marcar como alerta)`
+              : " ✓"}
+          </p>
         )}
 
         <div>

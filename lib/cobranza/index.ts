@@ -7,6 +7,7 @@ export {
   getCuentaDetail,
   loadAlertas,
   getLatestSnapshot,
+  loadProyeccion,
   type CarteraRow,
   type CuentaDetailDTO,
   type ServicioDTO,
@@ -15,4 +16,27 @@ export {
   type SnapshotDTO,
 } from "./queries";
 export { runCobranzaDigest, type DigestResult } from "./digest";
-export { semaforoCobro, semaforoCuenta, type Semaforo } from "./engine";
+export {
+  semaforoCobro,
+  semaforoCuenta,
+  type Semaforo,
+  type ProyeccionIngresos,
+  type BucketProyeccion,
+  type TotalesMoneda,
+  type CobroProyeccionInput,
+} from "./engine";
+// Puertos (interfaces client-safe) + factory de adaptadores (server-side).
+export type {
+  AccountSource,
+  BorradorMensaje,
+  CobranzaFuente,
+  ComContexto,
+  CommunicationPort,
+  ConfirmacionPago,
+  CuentaEntrante,
+  EntregaResultado,
+  FuenteRef,
+  IngestResultado,
+  ReconciliationPort,
+} from "./ports";
+export { getAccountSource, getCommunicationPort, getReconciliationPort } from "./adapters";

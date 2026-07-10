@@ -132,8 +132,11 @@ function extractDomainFromCompany(company: string | null | undefined): string | 
  *
  * Esto permite reconocer clientes como "Wherex" (con `company: "wherex.com"`)
  * sin necesidad de poblar manualmente `emailDomains` para cada cliente.
+ *
+ * Exportada: el ingest de Cobranza (lib/cobranza/ingest.ts) la usa para armar su
+ * índice dominio→cliente al deduplicar empresas importadas (patrón partner-sync).
  */
-function effectiveDomainsForClient(
+export function effectiveDomainsForClient(
   c: Pick<Client, "emailDomains" | "company">
 ): string[] {
   const explicit = (c.emailDomains ?? []).map((d) => d.toLowerCase());
