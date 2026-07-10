@@ -5,6 +5,8 @@ import { anthropic } from "@/lib/anthropic";
 import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { getSingleBlockOutputInstructions } from "@/lib/canvas/agent-output-schema";
 import { validateBlockPayload } from "@/lib/canvas/validate-block-payload";
+import { regenerateSectionDataForDef } from "@/lib/business-cases/canvas-agent";
+import { KICKOFF_DEF_BY_KEY } from "@/components/landing/configs/kickoff.defs";
 
 /**
  * POST /api/projects/[projectId]/canvas-sections/[sectionId]/blocks/regenerate
@@ -49,7 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       blockType: true,
       content: true,
       data: true,
-      section: { select: { label: true, canvas: { select: { name: true, projectId: true } } } },
+      section: { select: { key: true, label: true, canvas: { select: { name: true, projectId: true } } } },
     },
   });
   if (!block || block.section.canvas.projectId !== projectId) {
@@ -57,6 +59,24 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   }
   if (block.section.canvas.name !== "Kickoff") {
     return NextResponse.json({ error: "Regeneración por IA solo soportada en el canvas Kickoff" }, { status: 400 });
+  }
+
+  // ── Kickoff TIPADO: bloque CARD de una sección de prosa generable → regen por SCHEMA
+  // (motor de secciones, igual que Business Cases). Devuelve {data}. El markdown legacy
+  // (bloques TEXT viejos) sigue por el camino de abajo hasta que se regenere el kickoff. ──
+  const def = KICKOFF_DEF_BY_KEY[block.section.key];
+  if (block.blockType === "CARD" && def) {
+    if (def.agentGenerated === false) {
+      return NextResponse.json({ error: "Esta sección se cura a mano; no se regenera con IA." }, { status: 400 });
+    }
+    try {
+      const currentData = (base ? base.data : block.data) ?? {};
+      const newData = await regenerateSectionDataForDef(def, currentData, instruction, def.brief);
+      return NextResponse.json({ blockType: "CARD", data: newData });
+    } catch (e) {
+      console.error("[blocks/regenerate typed] error:", e);
+      return NextResponse.json({ error: "regenerate_failed" }, { status: 500 });
+    }
   }
 
   // Mismo contexto que usa el agente de kickoff.

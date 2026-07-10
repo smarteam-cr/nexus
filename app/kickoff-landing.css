@@ -75,6 +75,22 @@
 .kickoff-landing .section-soft  { background: var(--bg-soft); color: var(--text); }
 .kickoff-landing .section-dark  { background: var(--dark-bg); color: var(--dark-text); }
 
+/* Hero del kickoff: reusa las piezas del hero del BC (`hero-parts.tsx`) pero CENTRADAS.
+   Scope `.kickoff-landing` → el hero del business case no se toca. */
+.kickoff-landing .stl-brandrow,
+.kickoff-landing .stl-tags { justify-content: center; }
+.kickoff-landing .kickoff-hero-title { text-align: center; }
+.kickoff-landing .stl-lead { margin-inline: auto; text-align: center; }
+
+/* Titular del CTA (cierre): mismo tamaño en edición y lectura (el Editable no acepta
+   estilos inline, así que el tamaño vive acá para que el CSE lo vea igual al editar). */
+.kickoff-landing .cta-title {
+  font-size: clamp(28px, 4vw, 44px); line-height: 1.1; color: var(--dark-text); margin-top: 14px;
+}
+
+/* (El CTA del cierre se edita con el popover `CtaEditor` del motor — ya no hay
+   campos inline propios acá.) */
+
 /* ── Botones ─────────────────────────────────────────────────────────────── */
 .kickoff-landing .btn-primary {
   display: inline-flex; align-items: center; gap: 0.6rem;
