@@ -1,11 +1,15 @@
 # CI de Nexus — corre en cada push/PR.
 #
 # Job build-and-unit (hoy):
-#   - Ratchet de tsc: NO bloquea por los errores preexistentes (tsc-baseline.txt),
-#     pero FALLA si el conteo SUBE — implementa la regla de ARCHITECTURE.md §9
-#     ("un cambio que suba el número se considera incompleto"). Al bajar errores,
-#     bajá el número del baseline en el mismo PR.
-#   - ESLint solo sobre los archivos cambiados (el repo tiene warnings legacy).
+#   - Ratchet de tsc y de eslint: NO bloquean por los errores preexistentes
+#     (tsc-baseline.txt / eslint-baseline.txt), pero FALLAN si el conteo SUBE —
+#     implementa la regla de ARCHITECTURE.md §9 ("un cambio que suba el número
+#     se considera incompleto"). Al bajar errores, bajá el baseline en el mismo PR.
+#     El de eslint cuenta TODO el repo (no solo lo tocado) porque el repo tiene
+#     ~70 errores legacy de reglas nuevas (react-hooks/static-components,
+#     react-hooks/purity) que salieron a la luz al endurecer la config — no son
+#     de un cambio puntual, así que "solo lo tocado" no los hubiera atrapado
+#     igual y este enfoque es más simple y determinístico.
 #   - Vitest proyecto "unit" (funciones puras, sin DB ni servicios).
 #
 # Jobs futuros (llegan con sus fases del plan de testing):
@@ -24,9 +28,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # fetch-depth 2 para poder diffear contra HEAD~1 en pushes (eslint cambiados)
-          fetch-depth: 2
 
       - uses: actions/setup-node@v4
         with:
@@ -54,21 +55,22 @@ jobs:
             echo "::notice::Bajaron los errores ($COUNT < $BASELINE) — actualizá tsc-baseline.txt a $COUNT en este PR para trabar la mejora."
           fi
 
-      - name: ESLint (solo archivos cambiados)
+      - name: ESLint (ratchet contra baseline, todo el repo)
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch origin "${{ github.base_ref }}" --depth=1
-            BASE="origin/${{ github.base_ref }}"
-          else
-            BASE="HEAD~1"
+          COUNT=$(npx eslint . --format json 2>/dev/null | node -e "
+            const data = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+            console.log(data.reduce((n, f) => n + f.errorCount, 0));
+          ")
+          BASELINE=$(tr -d '[:space:]' < eslint-baseline.txt)
+          echo "Errores eslint: $COUNT · baseline permitido: $BASELINE"
+          if [ "$COUNT" -gt "$BASELINE" ]; then
+            echo "::error::El conteo de errores de ESLint SUBIÓ ($COUNT > $BASELINE). Arreglá los nuevos o justificá bajando la deuda en otro lado."
+            npx eslint . 2>&1 | grep -B1 "error " | head -60
+            exit 1
           fi
-          FILES=$(git diff --name-only --diff-filter=ACMR "$BASE" -- '*.ts' '*.tsx' | tr '\n' ' ')
-          if [ -n "$FILES" ]; then
-            echo "Lint sobre: $FILES"
-            npx eslint $FILES
-          else
-            echo "Sin archivos TS cambiados."
+          if [ "$COUNT" -lt "$BASELINE" ]; then
+            echo "::notice::Bajaron los errores ($COUNT < $BASELINE) — actualizá eslint-baseline.txt a $COUNT en este PR para trabar la mejora."
           fi
 
       - name: Unit tests (Vitest)
