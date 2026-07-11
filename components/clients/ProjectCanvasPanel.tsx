@@ -18,6 +18,7 @@ import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import ProjectHandoffSection from "./ProjectHandoffSection";
+import ProjectLifecyclePanel from "@/components/lifecycle/ProjectLifecyclePanel";
 import { useWorkspace } from "./WorkspaceContext";
 
 const FlowchartViewer = dynamic(
@@ -380,6 +381,9 @@ export default function ProjectCanvasPanel({
 
       {/* Handoff por-proyecto — sección dedicada siempre visible (estado + generar + doc). */}
       <ProjectHandoffSection projectId={projectId} clientId={clientId} />
+
+      {/* Ciclo de vida — etapa efectiva + validaciones de salida + modalidad de adopción. */}
+      <ProjectLifecyclePanel projectId={projectId} />
 
       {/* Header */}
       <div className="flex items-center justify-between">

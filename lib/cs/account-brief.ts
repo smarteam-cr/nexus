@@ -108,16 +108,38 @@ export async function buildAccountBriefContext(clientId: string): Promise<Accoun
     );
   }
 
-  // ── Por proyecto: cronograma (Nexus) + operativa (HubSpot) ────────────────
+  // ── Por proyecto: ciclo de vida + cronograma (Nexus) + operativa (HubSpot) ──
   for (const pr of data.projects) {
     const s = pr.summary;
+
+    // Ciclo de vida (lib/lifecycle): en qué etapa está el proyecto y por qué.
+    const lc = pr.lifecycle;
+    if (lc) {
+      const lastGateAt = lc.gates.length
+        ? lc.gates.reduce((max, g) => (g.markedAt > max ? g.markedAt : max), lc.gates[0].markedAt)
+        : null;
+      addSource(
+        { kind: "lifecycle", id: pr.projectId, label: `Ciclo de vida · ${pr.projectName}`, date: lastGateAt?.toISOString() ?? null },
+        [
+          `Etapa: ${lc.label} (${lc.position.index}/${lc.position.total} del ciclo ${lc.cycle === "short" ? "corto" : "completo"}) · ${lc.source === "override" ? `fijada a mano${lc.override?.reason ? `: "${lc.override.reason}"` : ""}` : "inferida"}`,
+          lc.reasons.join(" · "),
+          s.stageAlarms.length ? `Alarmas de etapa: ${s.stageAlarms.map((a) => a.label).join(" · ")}` : "",
+        ].filter(Boolean).join("\n"),
+      );
+    }
+
     addSource(
       { kind: "cronograma", id: pr.projectId, label: `Cronograma · ${pr.projectName}`, date: null },
       [
         `Avance: ${Math.round(s.progress.pct * 100)}% (${s.progress.tasksDone}/${s.progress.tasksTotal} tareas, ${s.progress.phasesDone}/${s.progress.phasesTotal} fases) · salud: ${s.health.resolved}${s.health.source === "override" ? " (curada por humano)" : ""}`,
-        s.overduePhases > 0 ? `Fases vencidas: ${s.overduePhases}${s.worstOverduePhase ? ` (peor: "${s.worstOverduePhase.name}" con ${s.worstOverduePhase.daysLate} días)` : ""}` : "",
-        s.overdueTasks > 0 ? `Tareas vencidas: ${s.overdueTasks}` : "",
-        s.stalled ? `ESTANCADO: sin actividad hace ${s.daysSinceActivity} días` : "",
+        // Ciclo de vida: en etapas tempranas el cronograma es tentativo — los vencimientos
+        // no son atraso real y NO deben citarse como riesgo.
+        !s.scheduleAlarmsActive
+          ? "Cronograma TENTATIVO (etapa temprana, sin consensuar): los vencimientos no aplican aún."
+          : "",
+        s.scheduleAlarmsActive && s.overduePhases > 0 ? `Fases vencidas: ${s.overduePhases}${s.worstOverduePhase ? ` (peor: "${s.worstOverduePhase.name}" con ${s.worstOverduePhase.daysLate} días)` : ""}` : "",
+        s.scheduleAlarmsActive && s.overdueTasks > 0 ? `Tareas vencidas: ${s.overdueTasks}` : "",
+        s.scheduleAlarmsActive && s.stalled ? `ESTANCADO: sin actividad hace ${s.daysSinceActivity} días` : "",
         s.scope.exceeded && !s.scope.attenuated ? `Alcance excedido vs baseline: +${s.scope.addedTasks} tareas, +${s.scope.weeksDelta} semanas` : "",
         !s.hasBaseline ? "Sin baseline activa (avance no contrastable contra lo vendido)" : "",
       ].filter(Boolean).join("\n") || "Sin señales de riesgo en el cronograma.",

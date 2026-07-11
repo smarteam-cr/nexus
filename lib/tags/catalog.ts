@@ -4,25 +4,32 @@
  * Catálogo ÚNICO de tags de clasificación de un proyecto / business case. Es la fuente
  * de verdad del vocabulario: agregar un producto futuro = una línea acá.
  *
- * Dos grupos viven en el array `tags String[]` (Project + BusinessCase):
- *   - `product`: hubs de HubSpot + productos propios (Insider One).
- *   - `scope`:   características del alcance (integración/desarrollo, migración de CRM).
- * La MODALIDAD (implementación vs re-implementación) NO va al array — es el enum
- * `implementationType`; el catálogo solo expone sus labels para que la tira de tags la
- * pinte como un chip más (selección única).
+ * Tres grupos viven en el array `tags String[]` (Project + BusinessCase):
+ *   - `product`:   hubs de HubSpot + productos propios (Insider One).
+ *   - `scope`:     características del alcance (integración/desarrollo, migración de CRM).
+ *   - `modalidad`: `recurrente` = el servicio es de continuidad (soporte, retainer, bolsa
+ *                  de horas, sin fin definido). Su PRESENCIA en `tags` define el ciclo de
+ *                  vida corto (lib/lifecycle). Lo infiere el HANDOFF (isRecurrent); el CSE
+ *                  lo corrige quitándolo/agregándolo en la tira. Ausencia = implementación.
+ * La MODALIDAD DE IMPLEMENTACIÓN (implementación vs re-implementación) NO va al array — es el
+ * enum `implementationType`; el catálogo solo expone sus labels para que la tira de tags la
+ * pinte como un chip más (selección única). No confundir con el grupo `modalidad` de tags.
  *
  * Compat: el storage histórico guardó LABELS ("Marketing Hub"). `normalizeTag` acepta
  * slug o label y normaliza a slug, así no hace falta backfill — se normaliza al leer/escribir.
  */
 import type { ImplementationType } from "@prisma/client";
 
-export type TagGroup = "product" | "scope";
+export type TagGroup = "product" | "scope" | "modalidad";
 
 export interface TagDef {
   slug: string;
   label: string;
   group: TagGroup;
 }
+
+/** Slug del tag de recurrencia — su presencia en `Project.tags` = ciclo de vida corto. */
+export const RECURRENTE_TAG = "recurrente";
 
 export const TAG_CATALOG: readonly TagDef[] = [
   // ── Productos ──────────────────────────────────────────────────────────────
@@ -37,6 +44,8 @@ export const TAG_CATALOG: readonly TagDef[] = [
   // ── Alcance / características ────────────────────────────────────────────────
   { slug: "custom_dev", label: "Integración / Desarrollo a medida", group: "scope" },
   { slug: "crm_migration", label: "Migración desde otro CRM", group: "scope" },
+  // ── Modalidad del servicio ──────────────────────────────────────────────────
+  { slug: RECURRENTE_TAG, label: "Servicio recurrente", group: "modalidad" },
 ] as const;
 
 const BY_SLUG = new Map(TAG_CATALOG.map((t) => [t.slug, t]));
@@ -56,6 +65,13 @@ export function productTags(): TagDef[] {
 }
 export function scopeTags(): TagDef[] {
   return TAG_CATALOG.filter((t) => t.group === "scope");
+}
+export function modalidadTags(): TagDef[] {
+  return TAG_CATALOG.filter((t) => t.group === "modalidad");
+}
+/** ¿La lista marca el servicio como recurrente? → ciclo de vida corto (lib/lifecycle). */
+export function isRecurrente(slugs: string[]): boolean {
+  return sanitizeTags(slugs).includes(RECURRENTE_TAG);
 }
 
 /** Acepta slug o label conocido → devuelve el slug canónico; null si no está en el catálogo. */

@@ -3,8 +3,8 @@
  *
  * Una sola vez: rellena ProjectTimeline.anchorStartDate (la "fecha de arranque" del
  * cronograma) en los cronogramas que la tienen VACÍA, derivándola de la sesión de
- * KICKOFF del proyecto (la más antigua cuyo título matchee kickoff). Espeja la
- * heurística de `getKickoffSessionDate` (lib/sessions/project-sessions.ts).
+ * KICKOFF del proyecto vía `getKickoffSessionDate` (lib/sessions/project-sessions.ts,
+ * fuente de verdad de la heurística: kickoff más CERCANO a la creación del proyecto).
  *
  * NUNCA pisa una fecha ya puesta (filtra `anchorStartDate: null`). Si un proyecto no
  * tiene sesión de kickoff, se deja vacío (manual).
@@ -12,39 +12,11 @@
  * Dry-run (default):  npx tsx scripts/backfill-timeline-anchor.ts
  * Aplicar:            npx tsx scripts/backfill-timeline-anchor.ts --apply
  */
-import { config } from "dotenv";
-config({ path: ".env.local" });
-config({ path: ".env" });
-
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
-});
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+import "dotenv/config";
+import { prisma } from "@/lib/db/prisma";
+import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 
 const APPLY = process.argv.includes("--apply");
-
-async function kickoffDate(projectId: string): Promise<Date | null> {
-  const link = await prisma.sessionProject.findFirst({
-    where: {
-      projectId,
-      session: {
-        OR: [
-          { title: { contains: "kickoff", mode: "insensitive" } },
-          { title: { contains: "kick-off", mode: "insensitive" } },
-          { title: { contains: "kick off", mode: "insensitive" } },
-        ],
-      },
-    },
-    orderBy: { session: { date: "asc" } },
-    select: { session: { select: { date: true } } },
-  });
-  return link?.session.date ?? null;
-}
 
 async function main() {
   console.log(APPLY ? "── MODO APPLY (escribe) ──\n" : "── DRY-RUN (no escribe; usá --apply) ──\n");
@@ -60,7 +32,7 @@ async function main() {
   let skipped = 0;
   for (const tl of timelines) {
     const label = `${tl.project.client?.name ?? "?"} / ${tl.project.name}`;
-    const date = await kickoffDate(tl.projectId);
+    const date = await getKickoffSessionDate(tl.projectId);
     if (!date) {
       console.log(`  ·  ${label} — sin sesión de kickoff → se deja vacío`);
       skipped++;
@@ -89,5 +61,4 @@ main()
   .catch((e) => console.error(e))
   .finally(async () => {
     await prisma.$disconnect();
-    await pool.end();
   });

@@ -33,6 +33,7 @@ import { readPublishedClientTimeline } from "./timeline-view";
 import { readClientProcesos } from "@/lib/canvas/read-procesos";
 import type { KickoffLandingData } from "./kickoff-view-types";
 import { getBrandLogos, platformLogosFor } from "./smarteam-logo";
+import { RECURRENTE_TAG } from "@/lib/tags/catalog";
 import { applyAssignments, normalizeAssignments, HORARIOS_KEY } from "@/lib/kickoff/horario-assignments";
 import { comparaSectionHasContent, stripProseCompara, COMPARA_KEY } from "@/components/canvas/kickoff-landing-adapter";
 
@@ -170,6 +171,7 @@ export async function getPublishedKickoffForToken(
     smarteamLogoUrl: logos.smarteam ?? null,
     brandLogos,
     platformLogos: platformLogosFor(proj?.tags ?? [], logos),
+    recurrent: (proj?.tags ?? []).includes(RECURRENTE_TAG),
     procesos,
     sections: sections.filter((s) => !hidden.has(s.id)).map((s) => ({
       id: s.id,

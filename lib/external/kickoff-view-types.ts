@@ -79,4 +79,7 @@ export interface KickoffLandingData {
   timeline: KickoffTimelineData;
   /** Procesos del cliente (solo CONFIRMED en la vista externa). */
   procesos: KickoffProceso[];
+  /** Servicio recurrente (tag `recurrente` del handoff) — badge sutil client-facing.
+   *  El CSE lo quita sacando el tag del proyecto en el editor. */
+  recurrent: boolean;
 }

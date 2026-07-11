@@ -49,7 +49,14 @@ export default function KickoffClientView({
   };
 
   return (
-    <div className="kickoff-landing">
+    <div className="kickoff-landing relative">
+      {/* Servicio recurrente (tag `recurrente` del handoff): badge sutil client-facing.
+          El CSE lo saca quitando el tag del proyecto en el editor. Texto amable — no "recurrente". */}
+      {data.recurrent && (
+        <div className="absolute top-3 right-3 z-20 rounded-full border border-teal-200 bg-teal-50/90 px-3 py-1 text-[11px] font-medium text-teal-700 shadow-sm backdrop-blur">
+          Servicio de continuidad
+        </div>
+      )}
       <LandingView
         config={config}
         ctx={{

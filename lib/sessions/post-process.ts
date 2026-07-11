@@ -20,6 +20,7 @@ import {
   type CategorizeContext,
 } from "@/lib/sessions/categorize";
 import { classifySessionToProjects } from "@/lib/sessions/classify-session-project";
+import { maybeReanchorToKickoff } from "@/lib/timeline/reanchor";
 
 const AGENT_ID_POST_SESSION = "agent-post-session";
 
@@ -140,6 +141,18 @@ export async function postProcessSession(
   //     tiene 2+, llama al agente IA. Si tiene 0, primaryProjectId=null.
   const classify = await classifySessionToProjects(sessionId, client.id);
   const primaryProjectId = classify.primaryProjectId ?? null;
+
+  // Ciclo de vida: si ESTA sesión es el Kick Off del proyecto, re-anclar el
+  // cronograma al Kick Off real (best-effort; las guardas —sin avance, sin
+  // baseline— viven en maybeReanchorToKickoff). Cubre el flujo real: el Kick Off
+  // ocurre → Fireflies la ingiere → se clasifica → el ancla se corrige sola.
+  if (primaryProjectId && /kick[\s-]?off/i.test(session.title ?? "")) {
+    try {
+      await maybeReanchorToKickoff(primaryProjectId);
+    } catch (e) {
+      console.error("[post-process] re-anclaje best-effort falló:", e);
+    }
+  }
 
   // 4b. Cargar proyecto primario para usarlo en el prompt + metadata
   const project = primaryProjectId

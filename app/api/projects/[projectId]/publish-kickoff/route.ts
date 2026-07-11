@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { freezeKickoffSnapshot } from "@/lib/canvas/kickoff-snapshot";
+import { maybeReanchorToKickoff } from "@/lib/timeline/reanchor";
 
 export async function GET(
   _req: NextRequest,
@@ -66,6 +67,14 @@ export async function POST(
     data: { kickoffPublishedAt: new Date() },
     select: { kickoffPublishedAt: true },
   });
+
+  // Ciclo de vida: publicar suele preceder al Kick Off real por poco — chequeo
+  // barato e idempotente del ancla (best-effort; guardas en el helper).
+  try {
+    await maybeReanchorToKickoff(projectId);
+  } catch (e) {
+    console.error("[publish-kickoff] re-anclaje best-effort falló:", e);
+  }
 
   return NextResponse.json({
     published: true,

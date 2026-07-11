@@ -8,6 +8,8 @@
 import { prisma } from "@/lib/db/prisma";
 import type { TimelineEvent, CsAlert } from "@prisma/client";
 import { computeProjectSummary, type ProjectSummary } from "@/lib/portfolio/summary";
+import { toSummaryLifecycle } from "@/lib/portfolio/load";
+import { getProjectLifecycle, type ProjectLifecycle } from "@/lib/lifecycle";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 import { computePhaseRanges, addWeeks } from "@/lib/timeline/weeks";
 
@@ -20,6 +22,8 @@ export interface WatchdogContext {
   serialized: string;
   /** Resumen determinístico (para el pre-filtro del sweep y la evidencia). */
   summary: ProjectSummary | null;
+  /** Ciclo de vida (etapa efectiva + propuesta de riesgo pendiente) — insumo del runner. */
+  lifecycle: ProjectLifecycle | null;
 }
 
 function fmtDate(d: Date | null | undefined): string {
@@ -75,6 +79,8 @@ export async function buildWatchdogContext(
       hubspotAdoptionState: true,
       healthStatusOverride: true,
       healthStatusOverrideReason: true,
+      healthProposed: true,
+      healthProposedAt: true,
       client: { select: { name: true, industry: true } },
       timeline: {
         select: {
@@ -113,6 +119,9 @@ export async function buildWatchdogContext(
   });
   if (!project) return null;
 
+  // ── Ciclo de vida (etapa efectiva) — modula qué alarmas aplican ─────────────
+  const lifecycle = await getProjectLifecycle(projectId);
+
   // ── Resumen determinístico de salud (reuso del motor del panel) ─────────────
   const tl = project.timeline;
   const activeBaseline = tl?.baselines?.[0] ?? null;
@@ -146,6 +155,7 @@ export async function buildWatchdogContext(
           : null,
         lastProgressAt: tl.changes?.[0]?.createdAt ?? null,
         healthOverride: project.healthStatusOverride,
+        lifecycle: toSummaryLifecycle(lifecycle),
         now,
       })
     : null;
@@ -345,11 +355,29 @@ export async function buildWatchdogContext(
         .join("\n")
     : "(sin datos de partner — scope no autorizado o cuenta sin match; omití las señales de uso/licencias)";
 
+  // ── Etapa del ciclo de vida (Nexus) — gobierna qué alarmas aplican ──────────
+  const lifecycleBlock = lifecycle
+    ? [
+        `- Etapa: ${lifecycle.label} (${lifecycle.position.index}/${lifecycle.position.total} del ciclo ${lifecycle.cycle === "short" ? "corto" : "completo"}) · fuente: ${lifecycle.source === "override" ? `curada por humano${lifecycle.override?.reason ? ` — "${lifecycle.override.reason}"` : ""}` : "inferida"}`,
+        `- Por qué: ${lifecycle.reasons.join(" · ")}`,
+        `- Alarmas de cronograma vencido: ${summary?.scheduleAlarmsActive !== false ? "APLICAN (el cronograma está consensuado o la etapa es de ejecución)" : "NO APLICAN AÚN — el cronograma es tentativo (sin consensuar). NO emitas TIMELINE_OVERDUE; las señales de etapa temprana van como STAGE_STALLED."}`,
+        summary?.stageAlarms.length
+          ? `- Alarmas de etapa temprana activas: ${summary.stageAlarms.map((a) => a.label).join(" · ")}`
+          : null,
+        `- EN RIESGO PROPUESTO pendiente de confirmación del CSE: ${project.healthProposed ? `SÍ (desde ${fmtDate(project.healthProposedAt)}) — no dupliques el hecho` : "no"}`,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "(sin datos de ciclo de vida)";
+
   const serialized = [
     `PROYECTO: ${project.name} (projectId=${project.id})`,
     `CLIENTE: ${project.client.name}${project.client.industry ? ` · ${project.client.industry}` : ""} (clientId=${project.clientId})`,
     project.serviceType ? `SERVICIO: ${project.serviceType}` : null,
     `ETAPA EN PIPELINE CS DE HUBSPOT: ${project.hubspotPipelineStageLabel ?? "(sin etapa)"}`,
+    "",
+    "=== ETAPA DEL CICLO DE VIDA (Nexus — fuente de verdad de qué alarmas aplican) ===",
+    lifecycleBlock,
     "",
     "=== OPERATIVA DEL PROYECTO EN HUBSPOT (status/prioridad/bloqueo/adopción) ===",
     hsOpsBlock,
@@ -385,5 +413,5 @@ export async function buildWatchdogContext(
     .filter((x) => x !== null)
     .join("\n");
 
-  return { clientId: project.clientId, projectId, serialized, summary };
+  return { clientId: project.clientId, projectId, serialized, summary, lifecycle };
 }

@@ -9,11 +9,17 @@
  * Reusa la convención semanas→fechas de lib/timeline/weeks.ts. `import type` para los tipos
  * de Prisma/baseline → este módulo NO arrastra Prisma en runtime (queda puro).
  */
-import type { ProjectHealth } from "@prisma/client";
+import type { ProjectHealth, ProjectLifecycleStage } from "@prisma/client";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
+// Import DIRECTO del motor puro (no de lib/lifecycle/index): el index re-exporta el
+// loader con Prisma y este módulo debe quedar puro (unit-testeable) — ver nota en el index.
+import { stageAtOrAfter, STAGE_LABEL_ES } from "@/lib/lifecycle/stage-engine";
 import { computePhaseRanges, addWeeks } from "@/lib/timeline/weeks";
 
 export const STALL_DAYS = 14; // "sin avance" por defecto (configurable después)
+/** Días de gracia de las alarmas tempranas: kickoff sin publicar / cronograma sin consensuar. */
+export const KICKOFF_PUBLISH_GRACE_DAYS = 7;
+export const CRONOGRAMA_CONSENSUS_GRACE_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ── Input (lean, desacoplado de los tipos exactos de Prisma) ──────────────────
@@ -37,6 +43,28 @@ export interface SummaryPhase {
   actualEnd: Date | null;
   tasks: SummaryTask[];
 }
+/**
+ * Conciencia de ETAPA del ciclo de vida (lib/lifecycle). OPCIONAL: ausente = el
+ * comportamiento histórico (todas las alarmas de cronograma aplican) — los callers
+ * no migrados y los tests viejos no se rompen.
+ */
+export interface SummaryLifecycleInput {
+  /** El handoff CORRIÓ y clasificó el proyecto. Si es false → sin juicios de ciclo de
+   *  vida: nada de etapas, alarmas ni riesgo (el portal muestra un aviso). La barra de
+   *  avance se sigue mostrando. */
+  defined: boolean;
+  /** Etapa EFECTIVA (override del CSE ?? inferida). */
+  stage: ProjectLifecycleStage;
+  source: "override" | "inferred";
+  kickoffPublishedAt: Date | null;
+  /** Gate CRONOGRAMA_CONSENSUADO (null = el cliente aún no lo aprobó). */
+  cronogramaConsensuadoAt: Date | null;
+  /** Última señal de salida cumplida (gate más reciente o kickoff) — referencia del "hace Nd" de las alarmas tempranas. */
+  lastGateAt: Date | null;
+  /** hubspotCreatedAt ?? createdAt — edad del proyecto. */
+  projectCreatedAt: Date | null;
+}
+
 export interface SummaryInput {
   status: string; // Project.status: active | paused | completed
   anchorStartDate: Date | null;
@@ -44,6 +72,7 @@ export interface SummaryInput {
   baseline: { snapshot: BaselineSnapshot; firmnessLabel: string } | null;
   lastProgressAt: Date | null; // último TimelineChange kind=PROGRESS
   healthOverride: ProjectHealth | null;
+  lifecycle?: SummaryLifecycleInput | null;
   now?: Date;
 }
 
@@ -73,6 +102,21 @@ export interface ProjectSummary {
     resolved: ProjectHealth; // override ?? derived
     source: "override" | "derived";
   };
+  // ── Ciclo de vida ──
+  /** ¿Las alarmas de cronograma vencido APLICAN? false solo cuando la etapa es
+   *  anterior a CONFIGURACION_TECNICA (el cronograma es tentativo, no consensuado).
+   *  Sin input lifecycle = true (comportamiento histórico). */
+  scheduleAlarmsActive: boolean;
+  stage: { effective: ProjectLifecycleStage; source: "override" | "inferred"; label: string } | null;
+  /** Alarmas PROPIAS de etapas tempranas (reemplazan a las de cronograma cuando no aplican). */
+  stageAlarms: Array<{
+    key: "kickoff_sin_publicar" | "cronograma_sin_consensuar" | "sin_baseline";
+    label: string;
+    days: number;
+  }>;
+  /** Señales que ANTES derivaban EN_RIESGO. Hoy el sistema no lo decide: el watchdog
+   *  las usa para PROPONER EN_RIESGO y el CSE confirma (healthStatusOverride). */
+  riskCandidate: boolean;
 }
 
 const totalWeeks = (phases: Array<{ durationWeeks: number }>): number =>
@@ -187,15 +231,71 @@ export function computeProjectSummary(input: SummaryInput): ProjectSummary {
     scope = { measurable: true, addedPhases, addedTasks, weeksDelta, attenuated: weakBaseline, exceeded };
   }
 
+  // ── Ciclo de vida: ¿las alarmas de cronograma aplican en esta etapa? ──
+  // Sin handoff generado (lc.defined === false) NO hay juicios de ciclo de vida: ni etapa,
+  // ni alarmas, ni riesgo (el portal muestra un aviso). La barra de avance se sigue mostrando.
+  // Caller legacy sin lifecycle (lc === null) = comportamiento histórico (todo activo).
+  const lc = input.lifecycle ?? null;
+  const lcActive = !!lc && lc.defined;
+  const scheduleAlarmsActive = !lc ? true : lcActive && stageAtOrAfter(lc.stage, "CONFIGURACION_TECNICA");
+  const stage = lcActive
+    ? { effective: lc!.stage, source: lc!.source, label: STAGE_LABEL_ES[lc!.stage] }
+    : null;
+
+  // Alarmas PROPIAS de etapas tempranas (con gracia — lo que hace "con sentido" a la alarma).
+  const stageAlarms: ProjectSummary["stageAlarms"] = [];
+  if (lcActive && lc && !isCompleted && input.status !== "paused") {
+    const daysSince = (d: Date | null) =>
+      d ? Math.floor((now.getTime() - d.getTime()) / DAY_MS) : null;
+    if (lc.stage === "HAND_OFF" && !lc.kickoffPublishedAt) {
+      const age = daysSince(lc.projectCreatedAt);
+      if (age !== null && age >= KICKOFF_PUBLISH_GRACE_DAYS) {
+        stageAlarms.push({
+          key: "kickoff_sin_publicar",
+          label: `Kickoff sin publicar hace ${age}d`,
+          days: age,
+        });
+      }
+    }
+    if (lc.stage === "PLANIFICACION" && !lc.cronogramaConsensuadoAt) {
+      const idle = daysSince(lc.lastGateAt ?? lc.projectCreatedAt);
+      if (idle !== null && idle >= CRONOGRAMA_CONSENSUS_GRACE_DAYS) {
+        stageAlarms.push({
+          key: "cronograma_sin_consensuar",
+          label: `Cronograma sin consensuar hace ${idle}d`,
+          days: idle,
+        });
+      }
+    }
+    if (scheduleAlarmsActive && !hasBaseline) {
+      const idle = daysSince(lc.cronogramaConsensuadoAt ?? lc.lastGateAt) ?? 0;
+      stageAlarms.push({
+        key: "sin_baseline",
+        label: "Cronograma sin línea base publicada",
+        days: idle,
+      });
+    }
+  }
+
   // ── Salud derivada ──
+  // CAMBIO DE CONTRATO (ciclo de vida): la cascada derivada YA NO produce EN_RIESGO.
+  // Las señales duras (fases vencidas / sin avance) derivan EN_FRICCION + riskCandidate
+  // — el watchdog PROPONE EN_RIESGO (Project.healthProposed) y el CSE lo confirma
+  // escribiendo healthStatusOverride. EN_RIESGO solo existe curado por humano.
+  const riskCandidate = scheduleAlarmsActive && !isCompleted && input.status !== "paused" && (overduePhases > 0 || stalled);
   let derived: ProjectHealth;
   if (input.status === "paused") {
     derived = "PAUSADO";
   } else if (isCompleted) {
     derived = "SALUDABLE"; // terminado → no se marca como riesgo
-  } else if (overduePhases > 0 || stalled) {
-    derived = "EN_RIESGO";
-  } else if (overdueTasks > 0 || weakBaseline || (scope.exceeded && !scope.attenuated)) {
+  } else if (riskCandidate) {
+    derived = "EN_FRICCION";
+  } else if (
+    scheduleAlarmsActive &&
+    (overdueTasks > 0 || weakBaseline || (scope.exceeded && !scope.attenuated))
+  ) {
+    derived = "EN_FRICCION";
+  } else if (stageAlarms.length > 0) {
     derived = "EN_FRICCION";
   } else {
     derived = "SALUDABLE";
@@ -216,5 +316,9 @@ export function computeProjectSummary(input: SummaryInput): ProjectSummary {
     hasBaseline,
     scope,
     health: { derived, override, resolved, source: override ? "override" : "derived" },
+    scheduleAlarmsActive,
+    stage,
+    stageAlarms,
+    riskCandidate,
   };
 }

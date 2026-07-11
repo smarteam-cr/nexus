@@ -84,6 +84,11 @@ IMPLEMENTACIÓN vs RE-IMPLEMENTACIÓN:
 - Determiná si el proyecto es IMPLEMENTATION (el cliente arranca con HubSpot por primera vez) o REIMPLEMENTATION (ya usa HubSpot, o viene de otro CRM/herramienta que va a migrar o reemplazar). Deducilo de las fuentes (sesiones, deal, notas: "ya tienen HubSpot", "vienen de Salesforce/Pipedrive", "limpiar el portal actual", etc.). Si no hay señal clara, asumí IMPLEMENTATION.
 - Devolvelo en el campo top-level "implementationType" del JSON.
 
+SERVICIO RECURRENTE vs IMPLEMENTACIÓN CON FIN DEFINIDO — campo top-level "isRecurrent" (true/false):
+- Determiná si el servicio contratado es RECURRENTE / de CONTINUIDAD (soporte continuo, retainer mensual, bolsa de horas, mantenimiento, acompañamiento sin fecha de fin definida — típico de los servicios "loop") vs una IMPLEMENTACIÓN con alcance y FIN DEFINIDO (un proyecto que arranca, se construye y se entrega).
+- Basate en el deal + line items (¿es una suscripción/recurrencia mensual, o un proyecto puntual?) Y en la conversación de ventas (¿hablan de "acompañamiento continuo", "soporte mensual", "bolsa de horas", o de "entregar el proyecto", "poner en marcha y cerrar"?). Los "loop_*" suelen ser recurrentes; "proyecto_temporal" suele tener fin definido — pero la conversación manda.
+- Ante duda, devolvé false (implementación con fin definido). Esto define el CICLO DE VIDA del proyecto en CS: recurrente = ciclo corto (Hand Off → Operación continua → Entrega); implementación = las 8 etapas completas.
+
 CLASIFICACIÓN (TAGS) — campo top-level "tags" (array de slugs, podés devolver []):
 - PRODUCTOS HubSpot involucrados (uno por cada uno que entre en el alcance): "marketing_hub", "sales_hub", "service_hub", "content_hub", "operations_hub", "commerce_hub", "data_hub". Si es Insider One: "insider_one".
 - ALCANCE técnico: "custom_dev" si hay integración o desarrollo a medida; "crm_migration" si se migran datos desde OTRO CRM (Salesforce, Pipedrive, Zoho, etc.) hacia HubSpot.
@@ -99,6 +104,7 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
 
 {
   "implementationType": "<IMPLEMENTATION o REIMPLEMENTATION segun la regla>",
+  "isRecurrent": "<true si el servicio es recurrente/de continuidad; false si es una implementación con fin definido>",
   "tags": ["<slugs del catálogo: marketing_hub|sales_hub|service_hub|content_hub|operations_hub|commerce_hub|data_hub|insider_one|custom_dev|crm_migration — solo los que apliquen, o []>"],
   "sections": [
     {

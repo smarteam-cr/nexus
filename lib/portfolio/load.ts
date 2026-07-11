@@ -10,10 +10,11 @@
  * por si en el futuro un rol scopeado lo usa.
  */
 import { prisma } from "@/lib/db/prisma";
-import type { Prisma } from "@prisma/client";
-import { computeProjectSummary, type ProjectSummary } from "./summary";
+import type { Prisma, ProjectHealth } from "@prisma/client";
+import { computeProjectSummary, type ProjectSummary, type SummaryLifecycleInput } from "./summary";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
+import { loadLifecycleBatch, type ProjectLifecycle } from "@/lib/lifecycle";
 import {
   SETUP_CANVAS_NAMES,
   blockCountsForStep,
@@ -43,6 +44,33 @@ export interface PortfolioRow {
   // Estado del setup del proyecto (qué artefactos se generaron) — para el checklist de "Sin datos"
   // y las action cards. handoff/kickoff/cronograma son por proyecto; procesos es por CLIENTE.
   setup: SetupSignals;
+  // Ciclo de vida (lib/lifecycle) — la etapa efectiva viaja en summary.stage; acá va el
+  // detalle para la UI (stepper/tooltip/curación) y la propuesta de riesgo pendiente.
+  lifecycle: ProjectLifecycle | null;
+  healthProposed: ProjectHealth | null;
+  healthProposedReason: string | null;
+  healthProposedAt: string | null;
+}
+
+/**
+ * ProjectLifecycle (loader) → input de conciencia de etapa del summary.
+ * `lastGateAt` = señal cumplida más reciente (gates o kickoff) — referencia del
+ * "hace Nd" de las alarmas tempranas. Lo reusa watchdog-context (mismo mapeo).
+ */
+export function toSummaryLifecycle(lc: ProjectLifecycle | null): SummaryLifecycleInput | null {
+  if (!lc) return null;
+  const signalTimes = lc.gates.map((g) => g.markedAt.getTime());
+  const kickoffAt = lc.kickoffPublishedAt ?? lc.kickoffSessionAt;
+  if (kickoffAt) signalTimes.push(kickoffAt.getTime());
+  return {
+    defined: lc.defined,
+    stage: lc.effective,
+    source: lc.source,
+    kickoffPublishedAt: lc.kickoffPublishedAt,
+    cronogramaConsensuadoAt: lc.cronogramaConsensuadoAt,
+    lastGateAt: signalTimes.length ? new Date(Math.max(...signalTimes)) : null,
+    projectCreatedAt: lc.projectCreatedAt,
+  };
 }
 
 export async function loadPortfolio(
@@ -84,6 +112,9 @@ export async function loadPortfolio(
       healthStatusOverrideReason: true,
       healthStatusOverrideAt: true,
       healthStatusOverrideBy: true,
+      healthProposed: true,
+      healthProposedReason: true,
+      healthProposedAt: true,
       client: { select: { name: true, company: true } },
       timeline: {
         select: {
@@ -141,6 +172,10 @@ export async function loadPortfolio(
 
   const projectIds = projects.map((p) => p.id);
   const clientIds = [...new Set(projects.map((p) => p.clientId))];
+
+  // Ciclo de vida en batch (gates + snapshot Partner + umbral UUS) — la etapa efectiva
+  // entra al summary para que las alarmas de cronograma apliquen SOLO donde corresponde.
+  const lifecycleByProject = await loadLifecycleBatch(projectIds);
 
   // Nombre canónico del CSE desde el roster (TeamMember por email). HubSpot puede traer un display
   // name desfasado del owner (ej. "Deiver Acuña Salas" para asalas@, que en el roster es "Alejandro
@@ -226,6 +261,7 @@ export async function loadPortfolio(
         : null,
       lastProgressAt: tl?.changes?.[0]?.createdAt ?? null,
       healthOverride: p.healthStatusOverride,
+      lifecycle: toSummaryLifecycle(lifecycleByProject.get(p.id) ?? null),
       now,
     });
     return {
@@ -253,6 +289,10 @@ export async function loadPortfolio(
         hasPhases: (tl?.phases?.length ?? 0) > 0,
         hasProcesos: clientsWithProcesos.has(p.clientId),
       }),
+      lifecycle: lifecycleByProject.get(p.id) ?? null,
+      healthProposed: p.healthProposed,
+      healthProposedReason: p.healthProposedReason,
+      healthProposedAt: p.healthProposedAt?.toISOString() ?? null,
     };
   });
 }

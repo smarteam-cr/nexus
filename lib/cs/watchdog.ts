@@ -48,6 +48,8 @@ const CATEGORIES = new Set<string>([
   "EXPANSION_OPPORTUNITY", "PROACTIVE_ACTION", "OTHER",
   // CS360:
   "ADOPTION_RISK", "LICENSE_UNUSED", "PROJECT_BLOCKED",
+  // Ciclo de vida:
+  "STAGE_STALLED",
 ]);
 const LOW_UUS_THRESHOLD = 35; // score de uso bajo (0-100) — candidato si además renueva pronto
 
@@ -143,7 +145,7 @@ async function runForProjectInner(
 ): Promise<WatchdogRunResult> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { id: true, clientId: true },
+    select: { id: true, clientId: true, healthStatusOverride: true, healthProposed: true },
   });
   if (!project) return { status: "skipped", reason: "no_project", projectId };
 
@@ -190,6 +192,37 @@ async function runForProjectInner(
   try {
     const ctx = await buildWatchdogContext(projectId, events);
     if (!ctx) throw new Error("no se pudo armar el contexto");
+
+    // ── EN_RIESGO propuesto→confirmado (determinista, NO lo decide el LLM) ────
+    // riskCandidate = las señales duras que antes derivaban EN_RIESGO directo
+    // (fases vencidas / estancado, con las alarmas de cronograma APLICANDO).
+    // El sistema PROPONE (Project.healthProposed) y el CSE confirma/descarta en
+    // /health-proposal. Si la señal desaparece, la propuesta caduca sola acá.
+    const s = ctx.summary;
+    if (s) {
+      if (s.riskCandidate && !project.healthStatusOverride && !project.healthProposed) {
+        const parts = [
+          s.overduePhases > 0
+            ? `${s.overduePhases} fase(s) vencida(s)${s.worstOverduePhase ? ` — peor: "${s.worstOverduePhase.name}" (+${s.worstOverduePhase.daysLate}d)` : ""}`
+            : null,
+          s.stalled ? `sin avance hace ${s.daysSinceActivity ?? "?"} días` : null,
+        ].filter(Boolean);
+        await prisma.project.update({
+          where: { id: projectId },
+          data: {
+            healthProposed: "EN_RIESGO",
+            healthProposedReason: parts.join(" · ") || "señales duras del cronograma",
+            healthProposedAt: new Date(),
+            healthProposedByRunId: run.id,
+          },
+        });
+      } else if (!s.riskCandidate && project.healthProposed) {
+        await prisma.project.update({
+          where: { id: projectId },
+          data: { healthProposed: null, healthProposedReason: null, healthProposedAt: null, healthProposedByRunId: null },
+        });
+      }
+    }
 
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -486,8 +519,14 @@ export async function runWatchdogSweep(now: Date): Promise<{ candidates: number;
       !!partner?.revenueSignal ||
       (uusLowOrFalling && renewalSoon) ||
       (hasUnusedSeats && partnerRenewalSoon);
+    // Ciclo de vida: los atrasos/estancamiento del cronograma solo son riesgo cuando
+    // las alarmas de cronograma APLICAN (etapa >= configuración técnica). En etapas
+    // tempranas el candidato viene de las alarmas de etapa (kickoff sin publicar, etc.).
+    const scheduleRisk =
+      s.scheduleAlarmsActive && (s.overduePhases > 0 || s.overdueTasks > 0 || s.stalled);
+    const earlyStageRisk = s.stageAlarms.length > 0;
     const hasRisk =
-      s.overduePhases > 0 || s.overdueTasks > 0 || s.stalled || s.scope.exceeded ||
+      scheduleRisk || earlyStageRisk || s.scope.exceeded ||
       (coldDays !== null && coldDays > COLD_DAYS_THRESHOLD) ||
       (sig?.openTicketCount ?? 0) > 0 || renewalSoon || partnerRisk;
     const hasNews =

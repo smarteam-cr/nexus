@@ -9,6 +9,9 @@
  */
 import Link from "next/link";
 import SourceChip from "@/components/cs/SourceChip";
+import StageBadge from "@/components/lifecycle/StageBadge";
+import HealthProposalChip from "@/components/lifecycle/HealthProposalChip";
+import RecurrenteBadge from "@/components/lifecycle/RecurrenteBadge";
 import { PRIORITY_META, HS_STATUS_LABEL } from "@/components/cs/dashboard/chart-theme";
 import type { PortfolioRow } from "@/lib/portfolio/load";
 import type { AccountProjectOps } from "@/lib/cs/load-account";
@@ -48,6 +51,32 @@ export default function ActiveProjectsSection({
               {p.summary.health.source === "override" && (
                 <span className="text-[9px] text-fg-muted uppercase tracking-wide" title={p.healthOverrideReason ?? undefined}>curada</span>
               )}
+              {/* Ciclo de vida: solo con handoff generado. Sin él → aviso, sin etapa. */}
+              {p.lifecycle?.defined && p.summary.stage ? (
+                <StageBadge
+                  stage={p.summary.stage.effective}
+                  cycle={p.lifecycle.cycle}
+                  source={p.summary.stage.source}
+                  reasons={p.lifecycle.reasons}
+                  overrideReason={p.lifecycle.override?.reason}
+                />
+              ) : (
+                <Link
+                  href={`/clients/${p.clientId}?tab=${p.projectId}`}
+                  className="text-[10px] font-medium px-1.5 py-0.5 rounded border text-amber-600 bg-amber-500/10 border-amber-500/30"
+                  title="Generá el handoff para activar el ciclo de vida (etapas + recurrencia)."
+                >
+                  Handoff sin generar
+                </Link>
+              )}
+              <RecurrenteBadge recurrent={!!p.lifecycle?.recurrent} />
+              {p.healthProposed && (
+                <HealthProposalChip
+                  projectId={p.projectId}
+                  reason={p.healthProposedReason}
+                  proposedAt={p.healthProposedAt}
+                />
+              )}
               {prio && (
                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-line" style={{ color: prio.color }}>
                   Prioridad {prio.label}
@@ -72,14 +101,26 @@ export default function ActiveProjectsSection({
                 </span>
                 {pct}% · {p.summary.progress.tasksDone}/{p.summary.progress.tasksTotal} tareas
               </span>
-              {p.summary.overduePhases > 0 && (
-                <span className="text-red-600">
-                  {p.summary.overduePhases} fase{p.summary.overduePhases !== 1 ? "s" : ""} vencida{p.summary.overduePhases !== 1 ? "s" : ""}
-                  {p.summary.worstOverduePhase ? ` (${p.summary.worstOverduePhase.name}, ${p.summary.worstOverduePhase.daysLate}d)` : ""}
-                </span>
-              )}
-              {p.summary.overdueTasks > 0 && <span className="text-amber-600">{p.summary.overdueTasks} tareas vencidas</span>}
-              {p.summary.stalled && <span className="text-amber-600">sin actividad {p.summary.daysSinceActivity}d</span>}
+              {/* Alarmas de cronograma SOLO cuando aplican (etapa >= configuración técnica);
+                  antes, el cronograma es tentativo y lo que se muestra son las alarmas de etapa. */}
+              {p.summary.scheduleAlarmsActive ? (
+                <>
+                  {p.summary.overduePhases > 0 && (
+                    <span className="text-red-600">
+                      {p.summary.overduePhases} fase{p.summary.overduePhases !== 1 ? "s" : ""} vencida{p.summary.overduePhases !== 1 ? "s" : ""}
+                      {p.summary.worstOverduePhase ? ` (${p.summary.worstOverduePhase.name}, ${p.summary.worstOverduePhase.daysLate}d)` : ""}
+                    </span>
+                  )}
+                  {p.summary.overdueTasks > 0 && <span className="text-amber-600">{p.summary.overdueTasks} tareas vencidas</span>}
+                  {p.summary.stalled && <span className="text-amber-600">sin actividad {p.summary.daysSinceActivity}d</span>}
+                </>
+              ) : p.lifecycle?.defined ? (
+                // Con handoff pero etapa temprana: el cronograma aún no es promesa.
+                <span className="text-fg-muted">cronograma tentativo (sin consensuar)</span>
+              ) : null /* sin handoff → el badge "Handoff sin generar" ya lo comunica */}
+              {p.summary.stageAlarms.map((a) => (
+                <span key={a.key} className="text-amber-600">{a.label}</span>
+              ))}
               {p.summary.scope.exceeded && !p.summary.scope.attenuated && (
                 <span className="text-purple-600">
                   alcance +{p.summary.scope.addedTasks} tareas{p.summary.scope.weeksDelta > 0 ? ` / +${p.summary.scope.weeksDelta} sem` : ""}

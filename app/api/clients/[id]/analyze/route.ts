@@ -27,7 +27,7 @@ import { autoClassifyOrphanSessions } from "@/lib/projects/analyze-participants"
 import { computeHandoffReadiness } from "@/lib/handoff/feeding";
 import { getProjectHandoffSessions, getClientSessions } from "@/lib/sessions/project-sources";
 import { fetchCompanyTimeline, fetchCompanyTimelineSplit, serializeTimeline, projectEraSince } from "@/lib/hubspot/company-timeline";
-import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT } from "@/lib/tags/catalog";
+import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT, RECURRENTE_TAG } from "@/lib/tags/catalog";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -1900,7 +1900,7 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
     console.log(`[analyze blocks] Saved ${totalBlocks} blocks across ${outputSections.length} sections`);
 
     // Persistir el cronograma si el agente lo devolvió (mismo helper que el path de cards)
-    await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id);
+    await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent);
 
     const savedBlocks = await prisma.canvasBlock.findMany({
       where: { agentRunId: run.id },
@@ -2167,7 +2167,7 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
 
   // ── 14c. Persistir cronograma sugerido por el agente (Fase 2 módulo externo) ─
   // Se llama desde ambos paths (cards y block format) — ver función helper abajo.
-  await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id);
+  await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent);
 
   // ── 15. Retornar las cards recién creadas + metadata del run ─────────────────
   const runCards = await prisma.clientContextCard.findMany({
@@ -2262,6 +2262,7 @@ async function persistTimelineFromAgentOutput(
   bodyProjectId: string | null,
   analysisJson: unknown,
   agentRunId: string,
+  isHandoff: boolean,
 ): Promise<void> {
   try {
     // Implementación vs re-implementación: el agente lo infiere; el CSE puede corregir luego.
@@ -2278,7 +2279,10 @@ async function persistTimelineFromAgentOutput(
     // Tags de producto/alcance (mismo catálogo que la tira). Co-locado con la modalidad porque
     // ambos son "la clasificación" y este helper corre en AMBOS paths (block format y cards) —
     // el branch block-format del handoff retorna ANTES de la auto-derivación de la sección 14.
-    // ADITIVO + slug-based: deriva del serviceType, une lo que el agente emita, normaliza legacy.
+    // ADITIVO + slug-based para producto/alcance: deriva del serviceType, une lo que el agente
+    // emita, normaliza legacy. EXCEPCIÓN — el tag `recurrente` (grupo modalidad) es del HANDOFF y
+    // BIDIRECCIONAL: `isRecurrent` decide add/remove (el aditivo no puede borrar; ver plan). Ciclo
+    // de vida: presencia de `recurrente` = ciclo corto. Solo el handoff clasifica esto.
     if (bodyProjectId) {
       try {
         const proj = await prisma.project.findUnique({
@@ -2290,12 +2294,30 @@ async function persistTimelineFromAgentOutput(
         const push = (slug: string | undefined) => { if (slug && !next.includes(slug)) next.push(slug); };
         if (proj?.serviceType) push(SERVICE_TO_PRODUCT[proj.serviceType]);
         sanitizeTags((analysisJson as { tags?: unknown } | null)?.tags).forEach(push);
+
+        // Tag manejado `recurrente`: SOLO el handoff, y solo si trajo un booleano `isRecurrent`.
+        const isRecurrent = (analysisJson as { isRecurrent?: unknown } | null)?.isRecurrent;
+        if (isHandoff && typeof isRecurrent === "boolean") {
+          const i = next.indexOf(RECURRENTE_TAG);
+          if (isRecurrent && i === -1) next.push(RECURRENTE_TAG);
+          if (!isRecurrent && i !== -1) next.splice(i, 1);
+        }
+
         if (JSON.stringify(next) !== JSON.stringify(proj?.tags ?? [])) {
           await prisma.project.update({ where: { id: bodyProjectId }, data: { tags: next } });
         }
       } catch (e) {
         console.warn("[analyze] tags no guardados:", e instanceof Error ? e.message : e);
       }
+    }
+
+    // Sello "handoff generado": el handoff corrió y clasificó este proyecto. Compuerta del ciclo
+    // de vida (lib/lifecycle) — sin esto el portal CS muestra un aviso en vez de etapas. Idempotente
+    // (una vez sellado no cambia); solo el agente de handoff lo pone.
+    if (bodyProjectId && isHandoff) {
+      await prisma.project
+        .update({ where: { id: bodyProjectId }, data: { handoffGeneratedAt: new Date() } })
+        .catch((e) => console.warn("[analyze] handoffGeneratedAt no guardado:", e instanceof Error ? e.message : e));
     }
 
     const timelineRaw = (analysisJson as { timeline?: { phases?: unknown } } | null)

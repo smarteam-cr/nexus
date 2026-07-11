@@ -9,6 +9,7 @@
  *   - el transcript (reusa fetchTranscriptContent, misma fuente que el handoff).
  */
 import { prisma } from "@/lib/db/prisma";
+import { KICKOFF_TITLE_FILTERS, pickKickoffSessionDate } from "@/lib/sessions/kickoff-pick";
 import { belongsToClient } from "@/lib/sessions/project-sources";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 
@@ -69,28 +70,30 @@ export async function getPastSessionsForProject(
 }
 
 /**
- * Fecha de la sesión de KICKOFF del proyecto (la más antigua cuyo título matchee
- * kickoff), o null si no hay. Fuente de verdad de la heurística "kickoff" — la
- * reusan: la derivación del anchor del cronograma al generar (analyze), el GET del
- * timeline (para sugerirla en la UI) y el backfill. Se matchea por TÍTULO (no por la
- * primera sesión: la primera suele ser el Hand Off de Sales→CS, no el kickoff).
- * Mismas variantes que HANDOFF_EXCLUDE_TITLE_KEYWORDS (analyze/route.ts).
+ * Fecha de la sesión de KICKOFF del proyecto (la titulada kickoff más cercana a la
+ * creación del proyecto — ver pickKickoffSessionDate en kickoff-pick.ts), o null si
+ * no hay. Fuente de verdad de la heurística "kickoff" — la reusan: la derivación del
+ * anchor del cronograma al generar (analyze), el GET del timeline (para sugerirla en
+ * la UI) y el backfill. Se matchea por TÍTULO (no por la primera sesión: la primera
+ * suele ser el Hand Off de Sales→CS, no el kickoff).
  */
 export async function getKickoffSessionDate(projectId: string): Promise<Date | null> {
-  const link = await prisma.sessionProject.findFirst({
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { createdAt: true, hubspotCreatedAt: true },
+  });
+  if (!project) return null;
+
+  const links = await prisma.sessionProject.findMany({
     where: {
       projectId,
       included: true,
-      session: {
-        OR: [
-          { title: { contains: "kickoff", mode: "insensitive" } },
-          { title: { contains: "kick-off", mode: "insensitive" } },
-          { title: { contains: "kick off", mode: "insensitive" } },
-        ],
-      },
+      session: { OR: KICKOFF_TITLE_FILTERS },
     },
-    orderBy: { session: { date: "asc" } },
     select: { session: { select: { date: true } } },
   });
-  return link?.session.date ?? null;
+  return pickKickoffSessionDate(
+    links.map((l) => l.session.date),
+    project.hubspotCreatedAt ?? project.createdAt,
+  );
 }

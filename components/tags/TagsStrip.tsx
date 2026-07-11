@@ -13,6 +13,7 @@ import type { ImplementationType } from "@prisma/client";
 import {
   productTags,
   scopeTags,
+  modalidadTags,
   labelForTag,
   tagDef,
   MODALITY_LABEL,
@@ -24,6 +25,7 @@ type Modality = ImplementationType | null;
 const CHIP = "inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2.5 py-1 border";
 const PRODUCT_CLS = "text-sky-300 bg-sky-900/30 border-sky-700/40";
 const SCOPE_CLS = "text-violet-300 bg-violet-900/30 border-violet-700/40";
+const MODALIDAD_CLS = "text-teal-300 bg-teal-900/30 border-teal-700/40";
 const MODALITY_CLS: Record<"IMPLEMENTATION" | "REIMPLEMENTATION", string> = {
   IMPLEMENTATION: "text-brand bg-brand/10 border-brand/30",
   REIMPLEMENTATION: "text-amber-300 bg-amber-500/10 border-amber-500/30",
@@ -60,7 +62,7 @@ export default function TagsStrip({
     if (!selected.includes(slug)) onSetTags([...selected, slug]);
     setOpen(null);
   };
-  const available = [...productTags(), ...scopeTags()].filter((t) => !selected.includes(t.slug));
+  const available = [...productTags(), ...scopeTags(), ...modalidadTags()].filter((t) => !selected.includes(t.slug));
 
   return (
     <div ref={ref} className="relative flex flex-wrap items-center gap-1.5">
@@ -105,7 +107,7 @@ export default function TagsStrip({
       {/* ── Tags de producto / alcance ── */}
       {selected.map((slug) => {
         const def = tagDef(slug);
-        const cls = def?.group === "scope" ? SCOPE_CLS : PRODUCT_CLS;
+        const cls = def?.group === "modalidad" ? MODALIDAD_CLS : def?.group === "scope" ? SCOPE_CLS : PRODUCT_CLS;
         return (
           <span key={slug} className={`${CHIP} ${cls}`}>
             {labelForTag(slug)}
@@ -144,6 +146,14 @@ export default function TagsStrip({
               {scopeTags().filter((t) => !selected.includes(t.slug)).map((t) => (
                 <button key={t.slug} type="button" onClick={() => add(t.slug)} className="w-full text-left px-3 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover">{t.label}</button>
               ))}
+              {modalidadTags().filter((t) => !selected.includes(t.slug)).length > 0 && (
+                <>
+                  <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-fg-muted border-t border-line mt-1">Modalidad</p>
+                  {modalidadTags().filter((t) => !selected.includes(t.slug)).map((t) => (
+                    <button key={t.slug} type="button" onClick={() => add(t.slug)} className="w-full text-left px-3 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover">{t.label}</button>
+                  ))}
+                </>
+              )}
             </div>
           )}
         </div>

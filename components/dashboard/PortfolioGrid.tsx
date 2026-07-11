@@ -40,15 +40,19 @@ const GENERIC_REASONS = new Set([
 type Group = "action" | "nodata" | "healthy";
 
 // Ruteo por SEÑALES crudas (no por health.resolved): un proyecto sin baseline pero "stalled"
-// (que el motor deriva EN_RIESGO) cae en "sin datos", no en rojo.
+// cae en "sin datos", no en rojo. Ciclo de vida: los atrasos de cronograma solo mandan a
+// "Requiere acción" cuando las alarmas APLICAN (etapa >= configuración técnica); en etapas
+// tempranas accionan las alarmas de etapa (kickoff sin publicar, cronograma sin consensuar).
 function classify(r: PortfolioRow): Group {
   const s = r.summary;
   if (s.health.source === "override") {
     return s.health.override === "EN_RIESGO" || s.health.override === "EN_FRICCION" ? "action" : "healthy";
   }
   if (r.status === "completed" || r.status === "paused") return "healthy";
+  if (r.healthProposed) return "action"; // propuesta EN_RIESGO pendiente: la líder debe decidir
+  if (s.stageAlarms.length > 0) return "action";
   if (!s.hasBaseline) return "nodata";
-  if (s.overduePhases > 0 || s.overdueTasks > 0 || s.stalled) return "action";
+  if (s.scheduleAlarmsActive && (s.overduePhases > 0 || s.overdueTasks > 0 || s.stalled)) return "action";
   if (s.weakBaseline) return "nodata";
   return "healthy";
 }
@@ -63,9 +67,13 @@ function severityScore(r: PortfolioRow): number {
   const s = r.summary;
   let v = 0;
   if (s.health.source === "override") v += 100000; // flags manuales primero
-  if (s.overduePhases > 0) v += 50000 + s.worstDaysLate;
-  else if (s.stalled) v += 30000 + (s.daysSinceActivity ?? 0);
-  else if (s.overdueTasks > 0) v += 10000 + s.worstDaysLate;
+  if (r.healthProposed) v += 80000; // propuesta EN_RIESGO pendiente de decisión
+  if (s.scheduleAlarmsActive) {
+    if (s.overduePhases > 0) v += 50000 + s.worstDaysLate;
+    else if (s.stalled) v += 30000 + (s.daysSinceActivity ?? 0);
+    else if (s.overdueTasks > 0) v += 10000 + s.worstDaysLate;
+  }
+  for (const a of s.stageAlarms) v += 20000 + a.days;
   return v;
 }
 
@@ -87,11 +95,13 @@ function setupScore(r: PortfolioRow): number {
 
 // Atraso concreto para la tarjeta. null si no hay atraso real (p.ej. flag manual sin vencimiento).
 function delayLabel(s: Summary): string | null {
+  // Etapa temprana: el "atraso" del cronograma es tentativo — la tarjeta muestra la alarma de etapa.
+  if (!s.scheduleAlarmsActive) return s.stageAlarms[0]?.label ?? null;
   // plural() ya incluye el número (ej. "12 días"), no anteponer otro.
   if (s.worstOverduePhase) return `${s.worstOverduePhase.name} · ${plural(s.worstOverduePhase.daysLate, "día", "días")} tarde`;
   if (s.overdueTasks > 0) return `${plural(s.overdueTasks, "tarea atrasada", "tareas atrasadas")}${s.worstDaysLate > 0 ? ` · ${plural(s.worstDaysLate, "día", "días")}` : ""}`;
   if (s.stalled) return `Sin avance · ${s.daysSinceActivity} días`;
-  return null;
+  return s.stageAlarms[0]?.label ?? null;
 }
 
 function relTime(iso: string | null): string {

@@ -4,15 +4,18 @@
  * Tests del MOTOR de cartera (computeProjectSummary, puro). Casos:
  *   A) baseline + tareas/fase agregadas post-baseline → el diff de alcance cuenta bien.
  *   B) sin baseline → alcance "no medible" (sin línea base).
- *   C) fase con plannedEnd pasado y no DONE → atrasada (riesgo).
+ *   C) fase con plannedEnd pasado y no DONE → atrasada (fricción + riskCandidate;
+ *      la derivada YA NO produce EN_RIESGO — eso lo confirma el CSE vía override).
  *   D) override de salud prevalece sobre la derivada.
  *   E) SUSPENDED fuera del denominador.
  *   F) fase DONE no ensucia con tareas PENDING vencidas.
+ *   G-I) ciclo de vida: etapa temprana suprime las alarmas de cronograma; etapa
+ *      tardía las mantiene; HAND_OFF viejo alarma "kickoff sin publicar".
  *
  * Correr: `npm test` (Vitest, proyecto unit).
  */
 import { test, expect } from "vitest";
-import { computeProjectSummary } from "./summary";
+import { computeProjectSummary, type SummaryLifecycleInput } from "./summary";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 
 const NOW = new Date("2026-06-21T00:00:00Z");
@@ -78,7 +81,7 @@ test("B — sin baseline: alcance no medible", () => {
   expect(s.hasBaseline).toBe(false);
 });
 
-test("C — fase vencida y no DONE: atrasada → EN_RIESGO", () => {
+test("C — fase vencida y no DONE: atrasada → EN_FRICCION + riskCandidate", () => {
   const baseline = {
     snapshot: {
       anchorStartDate: "2026-04-01",
@@ -100,7 +103,11 @@ test("C — fase vencida y no DONE: atrasada → EN_RIESGO", () => {
   expect(s.worstDaysLate >= 50).toBeTruthy();
   expect(s.worstOverduePhase?.name).toBe("Arquitectura"); // la fase peor-atrasada por nombre
   expect((s.worstOverduePhase?.daysLate ?? 0) >= 50).toBeTruthy();
-  expect(s.health.resolved).toBe("EN_RIESGO");
+  // Cambio de contrato: la derivada tope es EN_FRICCION; el riesgo queda como CANDIDATO
+  // (el watchdog lo propone, el CSE lo confirma escribiendo el override).
+  expect(s.health.resolved).toBe("EN_FRICCION");
+  expect(s.riskCandidate).toBe(true);
+  expect(s.scheduleAlarmsActive).toBe(true); // sin input lifecycle = comportamiento histórico
 });
 
 test("D — override prevalece sobre la derivada", () => {
@@ -167,4 +174,107 @@ test("F — fase DONE con tarea PENDING vencida: la guarda evita el falso atraso
   });
   expect(s.overdueTasks).toBe(0); // la fase ya está DONE → su tarea PENDING vencida no ensucia el panel
   expect(s.overduePhases).toBe(0); // la fase DONE tampoco cuenta (guarda de fase ya existente)
+});
+
+// ── Ciclo de vida ──────────────────────────────────────────────────────────────
+
+function lifecycle(overrides: Partial<SummaryLifecycleInput> = {}): SummaryLifecycleInput {
+  return {
+    defined: true,
+    stage: "CONFIGURACION_TECNICA",
+    source: "inferred",
+    kickoffPublishedAt: d("2026-04-01"),
+    cronogramaConsensuadoAt: d("2026-04-10"),
+    lastGateAt: d("2026-04-10"),
+    projectCreatedAt: d("2026-03-25"),
+    ...overrides,
+  };
+}
+
+/** Proyecto con fase vencida (mismo shape que el caso C) para variar la etapa. */
+function overdueInput(lc: SummaryLifecycleInput) {
+  const baseline = {
+    snapshot: {
+      anchorStartDate: "2026-04-01",
+      phases: [{ id: "c1", durationWeeks: 4, plannedEnd: "2026-05-01", tasks: [] }],
+    } as unknown as BaselineSnapshot,
+    firmnessLabel: "FIRM",
+  };
+  return {
+    status: "active",
+    anchorStartDate: d("2026-04-01"),
+    phases: [{ id: "c1", name: "Arquitectura", status: "PENDING", order: 0, durationWeeks: 4, actualStart: null, actualEnd: null, tasks: [] }],
+    baseline,
+    lastProgressAt: null,
+    healthOverride: null,
+    lifecycle: lc,
+    now: NOW,
+  };
+}
+
+test("G — etapa TEMPRANA (Diagnóstico): las fases vencidas se calculan pero NO escalan salud", () => {
+  const s = computeProjectSummary(overdueInput(lifecycle({ stage: "DIAGNOSTICO", cronogramaConsensuadoAt: null })));
+  expect(s.scheduleAlarmsActive).toBe(false);
+  expect(s.overduePhases).toBe(1); // se sigue calculando (info tentativa)
+  expect(s.riskCandidate).toBe(false);
+  expect(s.health.resolved).toBe("SALUDABLE"); // el atraso "tentativo" no ensucia
+  expect(s.stage?.label).toBe("Diagnóstico");
+});
+
+test("H — etapa TARDÍA (Configuración técnica): vencida deriva EN_FRICCION + riskCandidate (nunca EN_RIESGO derivado)", () => {
+  const s = computeProjectSummary(overdueInput(lifecycle()));
+  expect(s.scheduleAlarmsActive).toBe(true);
+  expect(s.riskCandidate).toBe(true);
+  expect(s.health.derived).toBe("EN_FRICCION");
+});
+
+test("I — HAND_OFF viejo sin kickoff publicado: alarma de etapa con gracia de 7d", () => {
+  const s = computeProjectSummary({
+    status: "active",
+    anchorStartDate: null,
+    phases: [],
+    baseline: null,
+    lastProgressAt: null,
+    healthOverride: null,
+    lifecycle: lifecycle({
+      stage: "HAND_OFF",
+      kickoffPublishedAt: null,
+      cronogramaConsensuadoAt: null,
+      lastGateAt: null,
+      projectCreatedAt: d("2026-06-09"), // 12 días antes de NOW
+    }),
+    now: NOW,
+  });
+  expect(s.stageAlarms.map((a) => a.key)).toEqual(["kickoff_sin_publicar"]);
+  expect(s.stageAlarms[0].days).toBe(12);
+  expect(s.health.derived).toBe("EN_FRICCION"); // la alarma temprana sí deriva fricción
+  // Recién creado (2d): la gracia lo calla
+  const fresh = computeProjectSummary({
+    status: "active",
+    anchorStartDate: null,
+    phases: [],
+    baseline: null,
+    lastProgressAt: null,
+    healthOverride: null,
+    lifecycle: lifecycle({
+      stage: "HAND_OFF",
+      kickoffPublishedAt: null,
+      cronogramaConsensuadoAt: null,
+      lastGateAt: null,
+      projectCreatedAt: d("2026-06-19"),
+    }),
+    now: NOW,
+  });
+  expect(fresh.stageAlarms).toEqual([]);
+  expect(fresh.health.derived).toBe("SALUDABLE");
+});
+
+test("J — SIN handoff generado (defined=false): sin etapa, sin alarmas, sin riesgo (aunque haya vencidas)", () => {
+  const s = computeProjectSummary(overdueInput(lifecycle({ defined: false })));
+  expect(s.scheduleAlarmsActive).toBe(false);
+  expect(s.stage).toBeNull(); // el portal muestra "handoff sin generar" en vez de la etapa
+  expect(s.stageAlarms).toEqual([]);
+  expect(s.riskCandidate).toBe(false);
+  expect(s.overduePhases).toBe(1); // se sigue calculando, pero NO escala salud
+  expect(s.health.derived).toBe("SALUDABLE");
 });

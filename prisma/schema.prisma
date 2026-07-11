@@ -235,6 +235,12 @@ model Project {
   csNextSessionDate    DateTime? // Próxima sesión de CS (entrega de servicio) agendada a mano
   csNextSessionNote    String? // Nota de la próxima sesión de CS
 
+  // El handoff (agente que analiza las llamadas de ventas) CORRIÓ y clasificó este
+  // proyecto. Compuerta del ciclo de vida (lib/lifecycle): sin handoff generado, el
+  // portal CS no muestra etapas — solo un aviso. La recurrencia (tag `recurrente`) y
+  // la etapa solo son confiables cuando esto != null. Lo sella persistTimelineFromAgentOutput.
+  handoffGeneratedAt DateTime?
+
   // Fase C — publish del Kickoff al cliente externo. Acción SEPARADA del acceso:
   // null = no publicado (el cliente, aunque tenga credenciales, no ve el Kickoff);
   // fecha = publicado. El chokepoint externo (lib/external/kickoff-view.ts) exige
@@ -297,6 +303,28 @@ model Project {
   healthStatusOverrideAt     DateTime? // cuándo
   healthStatusOverrideBy     String? // email de quien lo fijó (del guard)
 
+  // Ciclo de vida (lib/lifecycle) — la etapa EFECTIVA = override ?? inferida por el
+  // motor al vuelo (NO se materializa, igual que la salud derivada). Override = curación
+  // del CSE (mismo patrón que healthStatusOverride).
+  lifecycleStageOverride       ProjectLifecycleStage?
+  lifecycleStageOverrideReason String?
+  lifecycleStageOverrideAt     DateTime?
+  lifecycleStageOverrideBy     String? // email de quien lo fijó (del guard)
+  lifecycleCycle               String? // "full" | "short" — null = inferido de serviceType/projectType
+  // Modalidad de adopción (etapa ADOPCION): el sistema SUGIERE por el tamaño de la
+  // cuenta (snapshot Partner de HubSpot), el CSE confirma. null = sin confirmar.
+  adoptionMode                 String? // "directa" | "por_pilotos" (confirmada)
+  adoptionModeConfirmedAt     DateTime?
+  adoptionModeConfirmedBy     String?
+  isSuccessCase                Boolean   @default(false) // flag "Caso de éxito" al FINALIZAR
+  // Estado EN_RIESGO PROPUESTO (eje de Estado: el agente PROPONE, el CSE confirma).
+  // Confirmar = escribir healthStatusOverride=EN_RIESGO y limpiar esto; descartar =
+  // limpiar. Si la señal desaparece, el watchdog lo limpia solo (caduca).
+  healthProposed          ProjectHealth?
+  healthProposedReason    String?   @db.Text
+  healthProposedAt        DateTime?
+  healthProposedByRunId   String? // AgentRun del watchdog que lo propuso (trazabilidad)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -315,6 +343,7 @@ model Project {
   timelineEvents      TimelineEvent[] // Éxito del cliente: eventos crudos del cronograma
   csAlerts            CsAlert[] // Éxito del cliente: alertas del watchdog
   serviciosCobranza   ServicioContratado[] // Cobranza: servicios facturables ligados a este proyecto
+  stageGates          ProjectStageGate[] // Ciclo de vida: validaciones de salida cumplidas
 }
 
 // D.3 panel — salud del proyecto para el panel de cartera. Es el OVERRIDE curado; la salud
@@ -325,6 +354,55 @@ enum ProjectHealth {
   EN_FRICCION
   EN_RIESGO
   PAUSADO
+}
+
+// ─── Ciclo de vida del proyecto (lib/lifecycle) ───────────────────────────────
+// Fuente de verdad: Nexus. La etapa NO se materializa: se INFIERE al vuelo de los
+// gates cumplidos (cascada en lib/lifecycle/stage-engine.ts) y el CSE puede pisarla
+// con Project.lifecycleStageOverride. Slugs ESTABLES: son el internal value de la
+// futura propiedad de HubSpot (sync bidireccional) — NO renombrar.
+// Distinto de TimelineActivityType (tipos de actividad del Gantt) y de
+// Project.currentStage (navegación del editor 1-3).
+enum ProjectLifecycleStage {
+  HAND_OFF // Ventas transfiere; sale cuando el kickoff se publica (kickoffPublishedAt)
+  EXPLORACION // entender el negocio; sale con ENTENDIMIENTO_CERRADO
+  DIAGNOSTICO // entregable de valor; sale con DIAGNOSTICO_COMPARTIDO
+  PLANIFICACION // arquitectura + cronograma; sale con CRONOGRAMA_CONSENSUADO
+  CONFIGURACION_TECNICA // construcción sobre HubSpot; sale con DEMO_APROBADA
+  ADOPCION // directa o por pilotos (adoptionMode); sale con CLIENTE_OPERANDO
+  VALIDACION_USO // sale con USO_VALIDADO (UUS >= umbral, o CSE)
+  ENTREGA // cierre formal + handoff comercial; sale con ENTREGA_REALIZADA
+  OPERACION_CONTINUA // ciclo corto (continuidad/soporte/bolsa de horas)
+  FINALIZADO // cierre; isSuccessCase marca "Caso de éxito"
+}
+
+// Validaciones de SALIDA de cada etapa ("lo que mueve la tarjeta"). La salida de
+// HAND_OFF no necesita gate: es Project.kickoffPublishedAt (señal dura existente).
+enum ProjectStageGateKey {
+  ENTENDIMIENTO_CERRADO // salida EXPLORACION (CSE marca; señal blanda: sesión + minuta REVIEWED)
+  DIAGNOSTICO_COMPARTIDO // salida DIAGNOSTICO (CSE marca; señal: canvas "Diagnóstico" con bloques)
+  CRONOGRAMA_CONSENSUADO // salida PLANIFICACION (v1: CSE marca cuando el cliente aprueba)
+  DEMO_APROBADA // salida CONFIGURACION_TECNICA (CSE marca)
+  CLIENTE_OPERANDO // salida ADOPCION (CSE marca; señales: sesiones adopción + hubspotAdoptionState)
+  USO_VALIDADO // salida VALIDACION_USO (sistema: UUS >= umbral; o CSE)
+  ENTREGA_REALIZADA // salida ENTREGA (CSE marca; note lleva la sugerencia para Ventas)
+}
+
+// Gate cumplido = EVENTO duro con fecha + quién + origen (tabla, no JSON: unicidad
+// por proyecto+gate, queryable para backfill/motor batch, reversible por DELETE).
+model ProjectStageGate {
+  id        String              @id @default(cuid())
+  projectId String
+  project   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  gate      ProjectStageGateKey
+  markedAt  DateTime            @default(now())
+  markedBy  String? // email del CSE; null = sistema
+  source    String              @default("cse") // "cse" | "system" | "backfill"
+  note      String?             @db.Text // p.ej. sugerencia de cross-selling en ENTREGA_REALIZADA
+  evidence  Json? // { sessionId?, canvasId?, uusScore? } — drill a la señal que lo justificó
+
+  @@unique([projectId, gate])
+  @@index([projectId])
 }
 
 // ─── Handoff (entidad cliente-level) ──────────────────────────────────────────
@@ -558,6 +636,7 @@ enum TimelineChangeKind {
   MANUAL // edición manual del CSE ("Guardar cronograma")
   AI_ASSIST // aplicada desde una propuesta del asistente de IA
   PROGRESS // D.3 — confirmación de avance (D.2): registra qué se marcó y quién (delta compacto, sin snapshot completo)
+  REANCHOR // ciclo de vida — re-anclaje automático al Kick Off real (reason lleva el before; reversible en el Gantt)
 }
 
 // D.3 fundación — BASELINE "vendido" congelado al PUBLICAR el cronograma al cliente.
@@ -1852,6 +1931,7 @@ enum CsEventSource {
   UI_PUT
   AI_ASSIST_APPLY
   PROGRESS_APPLY
+  SYSTEM // mutación automática del sistema (ej. re-anclaje al Kick Off real) — agregado AL FINAL (aditivo)
 }
 
 enum CsAlertSeverity {
@@ -1876,6 +1956,8 @@ enum CsAlertCategory {
   ADOPTION_RISK // uso bajo / tendencia negativa / adopción baja
   LICENSE_UNUSED // licencias pagadas sin asignar
   PROJECT_BLOCKED // proyecto bloqueado/atrasado según HubSpot (hs_status + motivo)
+  // Ciclo de vida:
+  STAGE_STALLED // etapa temprana estancada (kickoff sin publicar / cronograma sin consensuar / entendimiento sin cerrar)
 }
 
 enum CsAlertStatus {
@@ -2091,6 +2173,9 @@ model CsAccountBrief {
 model CsSettings {
   id              String   @id @default("cs")
   watchdogEnabled Boolean  @default(true)
+  // Ciclo de vida — umbral UUS (0-100) para dar por cumplida VALIDACION_USO (gate
+  // USO_VALIDADO). Política global del módulo, como watchdogEnabled.
+  uusValidationThreshold Float @default(60)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

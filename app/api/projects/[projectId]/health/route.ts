@@ -67,6 +67,12 @@ export async function PATCH(
       healthStatusOverrideReason: reason,
       healthStatusOverrideAt: new Date(),
       healthStatusOverrideBy: guard.user.email ?? null,
+      // Cualquier override zanja la propuesta pendiente del watchdog (coherencia:
+      // el humano ya decidió — confirmar EN_RIESGO también pasa por acá).
+      healthProposed: null,
+      healthProposedReason: null,
+      healthProposedAt: null,
+      healthProposedByRunId: null,
     },
   });
   return NextResponse.json({ ok: true });
