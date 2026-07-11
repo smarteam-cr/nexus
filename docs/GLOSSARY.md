@@ -99,3 +99,10 @@
 - **reporter de finanzas** (`agent-finanzas-reporter`): reporte narrado por IA desde las
   métricas/serie/riesgo/alertas REALES, en dos voces — operativa (accionable) y ejecutiva
   (agregados; solo SUPER_ADMIN). Declara cobertura e historia; no fabrica números.
+- **cola de cobros** (`loadColaCobros` → tab "Cobros", el landing): todos los cobros pendientes
+  planos y accionables, agrupados Vencidos / Esta quincena / Más adelante, con registrar pago,
+  promesa y borrador inline. Mismo universo que la proyección. "Registrar pago" (global, por
+  fila o desde el drawer) = marcar COBRADO con fecha del pago retroactiva y referencia opcional.
+- **corte semanal** (tab, ex "Digest semanal"): el corte de cartera diff-based de los lunes
+  (o manual con "Hacer el corte ahora") — solo avisa cambios; el backlog de configuración va
+  colapsado en una línea.

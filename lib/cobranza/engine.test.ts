@@ -81,6 +81,9 @@
  *      P4 COBRADO con promesa pasada → nada.
  *      P5 catch-up: INCONSISTENCIA_CICLO se sigue emitiendo aunque la promesa calle el vencido.
  *      P6 regresión: fixture sin el campo → comportamiento idéntico al de siempre.
+ *   Q) finQuincenaISO + diffDays (cola de cobros):
+ *      Q1 día 1 y 15 → día 15; día 16 y fin de mes → fin de mes; febrero clampeado.
+ *      Q2 diffDays exportado: signo y cero.
  *
  * Correr: `npx vitest run lib/cobranza/engine.test.ts --project unit`.
  */
@@ -96,6 +99,8 @@ import {
   sumaPlanExpandido,
   computeAlertSet,
   diffAlertSets,
+  diffDays,
+  finQuincenaISO,
   proyectarIngresos,
   computeMetricasCartera,
   computeRiesgoPago,
@@ -1400,4 +1405,21 @@ test("P6 — regresión: fixture SIN el campo promesa → comportamiento idénti
     { todayISO: HOY },
   );
   expect(keysOf(alertas)).toEqual(["COBRO_VENCIDO:c1:co1"]);
+});
+
+// ── Q) finQuincenaISO + diffDays (cola de cobros) ────────────────────────────────
+
+test("Q1 — finQuincenaISO: 1-15 → día 15; 16+ → fin de mes; febrero clampeado", () => {
+  expect(finQuincenaISO("2026-07-01")).toBe("2026-07-15");
+  expect(finQuincenaISO("2026-07-15")).toBe("2026-07-15");
+  expect(finQuincenaISO("2026-07-16")).toBe("2026-07-31");
+  expect(finQuincenaISO("2026-07-31")).toBe("2026-07-31");
+  expect(finQuincenaISO("2026-02-20")).toBe("2026-02-28"); // no bisiesto
+  expect(finQuincenaISO("2028-02-20")).toBe("2028-02-29"); // bisiesto
+});
+
+test("Q2 — diffDays exportado: signo y cero", () => {
+  expect(diffDays("2026-07-01", "2026-07-10")).toBe(9);
+  expect(diffDays("2026-07-10", "2026-07-01")).toBe(-9);
+  expect(diffDays("2026-07-10", "2026-07-10")).toBe(0);
 });

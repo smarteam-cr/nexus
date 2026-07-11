@@ -6,7 +6,6 @@
  */
 import { redirect } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
-import { PageHeader } from "@/components/ui";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCobranzaRole } from "@/lib/auth/cobranza-roles";
 import {
@@ -16,6 +15,7 @@ import {
   loadProyeccion,
   loadSnapshotSeries,
   loadRiesgo,
+  loadColaCobros,
 } from "@/lib/cobranza";
 import { crDateParts } from "@/lib/jobs/time";
 import CobranzaClient from "@/components/cobranza/CobranzaClient";
@@ -27,7 +27,8 @@ export default async function CobranzaPage() {
   if (!ctx || !isCobranzaRole(ctx.role)) redirect("/clients");
 
   const todayISO = crDateParts(new Date()).dateKey; // "hoy" = día calendario CR
-  const [cartera, alertas, snapshot, proyeccion, series, riesgo] = await Promise.all([
+  const [cola, cartera, alertas, snapshot, proyeccion, series, riesgo] = await Promise.all([
+    loadColaCobros(todayISO),
     loadCartera(todayISO),
     loadAlertas({ estados: ["ABIERTA", "VISTA"] }),
     getLatestSnapshot(),
@@ -36,14 +37,13 @@ export default async function CobranzaPage() {
     loadRiesgo(todayISO),
   ]);
 
+  // El PageHeader vive en CobranzaClient: su slot `action` carga el botón global
+  // "Registrar pago", que necesita el estado del contenedor.
   return (
     <AppShell>
       <div className="px-6 py-8">
-        <PageHeader
-          title="Cobranza"
-          description="Controlá a quién le toca cobrar y cómo va: cartera, alertas y el corte semanal."
-        />
         <CobranzaClient
+          initialCola={cola}
           initialCartera={cartera}
           initialAlertas={alertas}
           initialSnapshot={snapshot}

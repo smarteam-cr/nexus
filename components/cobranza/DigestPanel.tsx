@@ -1,12 +1,18 @@
 "use client";
 
 /**
- * components/cobranza/DigestPanel.tsx
+ * components/cobranza/DigestPanel.tsx — tab "Corte semanal".
  *
  * El corte de cartera (diff-based): muestra el resumen del último
  * SnapshotCartera — Nuevas / Resueltas / persistentes, o "sin cambios" — y el
- * botón "Correr corte ahora" (POST /api/cobranza/digest). El corte automático
+ * botón "Hacer el corte ahora" (POST /api/cobranza/digest). El corte automático
  * corre los lunes 7:00 CR vía scheduler; esto es el disparo manual.
+ *
+ * Las CUENTA_SIN_DATOS (backlog de configuración) se COLAPSAN a una línea
+ * expandible en Nuevas y Resueltas: 30 "sin cuenta configurada" no son 30
+ * novedades operativas. Los AlertaDraft del resumen ya traen `tipo`; si un
+ * snapshot viejo no lo trajera, la alerta cae al listado normal (comportamiento
+ * de siempre).
  */
 import { useState } from "react";
 import { EmptyState } from "@/components/ui";
@@ -49,6 +55,17 @@ const URG_CHIP: Record<string, string> = {
   MEDIA: "text-amber-600 bg-amber-500/10 border-amber-500/30",
   BAJA: "text-sky-600 bg-sky-500/10 border-sky-500/30",
 };
+
+/** Separa el backlog de configuración de lo operativo (sin `tipo` → operativa). */
+function partirPorConfig(items: ResumenAlerta[]): {
+  operativas: ResumenAlerta[];
+  config: ResumenAlerta[];
+} {
+  const operativas: ResumenAlerta[] = [];
+  const config: ResumenAlerta[] = [];
+  for (const a of items) (a.tipo === "CUENTA_SIN_DATOS" ? config : operativas).push(a);
+  return { operativas, config };
+}
 
 function toResumenAlertas(value: unknown): ResumenAlerta[] {
   if (!Array.isArray(value)) return [];
@@ -102,6 +119,7 @@ export default function DigestPanel({
   const toast = useToast();
   const [view, setView] = useState<DigestView | null>(() => fromSnapshot(initialSnapshot));
   const [busy, setBusy] = useState(false);
+  const [configAbierta, setConfigAbierta] = useState<Record<string, boolean>>({});
 
   async function correrCorte() {
     if (busy) return;
@@ -129,7 +147,7 @@ export default function DigestPanel({
       disabled={busy}
       className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-50"
     >
-      {busy ? "Corriendo corte…" : "Correr corte ahora"}
+      {busy ? "Haciendo el corte…" : "Hacer el corte ahora"}
     </button>
   );
 
@@ -138,14 +156,42 @@ export default function DigestPanel({
       <div className="space-y-3">
         <EmptyState
           variant="dashed"
-          title="Todavía no hay cortes de cartera"
-          description="Corré el primer corte para arrancar el registro semanal de cambios."
+          title="Todavía no hay cortes"
+          description="Hacé el primer corte para arrancar el registro semanal de cambios."
           action={botonCorte}
         />
         <p className="text-[11px] text-fg-muted text-center">El corte automático corre los lunes a las 7:00.</p>
       </div>
     );
   }
+
+  /** Línea colapsable del backlog de configuración dentro de una sección. */
+  const lineaConfig = (key: string, config: ResumenAlerta[]) => {
+    if (config.length === 0) return null;
+    const abierta = !!configAbierta[key];
+    return (
+      <li className="rounded-lg border border-line bg-surface-muted/50 px-3 py-2">
+        <button
+          type="button"
+          onClick={() => setConfigAbierta((s) => ({ ...s, [key]: !abierta }))}
+          className="flex items-center gap-1.5 text-xs text-fg-muted hover:text-fg-secondary transition-colors"
+        >
+          <span className={`transition-transform ${abierta ? "rotate-90" : ""}`}>▸</span>
+          {config.length} cuenta{config.length !== 1 ? "s" : ""} pendiente{config.length !== 1 ? "s" : ""} de
+          configuración
+        </button>
+        {abierta && (
+          <ul className="mt-2 space-y-1">
+            {config.map((a, i) => (
+              <li key={i} className="text-[11px] text-fg-muted pl-4">
+                {a.mensaje}
+              </li>
+            ))}
+          </ul>
+        )}
+      </li>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -172,41 +218,51 @@ export default function DigestPanel({
         </p>
       ) : (
         <div className="space-y-4">
-          {view.nuevas.length > 0 && (
-            <section>
-              <h3 className="text-[11px] font-semibold text-fg-muted uppercase tracking-widest mb-2">
-                Nuevas ({view.nuevas.length})
-              </h3>
-              <ul className="space-y-1.5">
-                {view.nuevas.map((a, i) => (
-                  <li key={i} className="flex items-start gap-2 rounded-lg border border-line bg-surface px-3 py-2">
-                    <span
-                      className={`mt-px text-[10px] font-medium px-1.5 py-0.5 rounded border flex-shrink-0 ${URG_CHIP[a.urgencia] ?? URG_CHIP.MEDIA}`}
-                    >
-                      {a.urgencia === "ALTA" ? "Alta" : a.urgencia === "BAJA" ? "Baja" : "Media"}
-                    </span>
-                    <span className="text-xs text-fg-secondary">{a.mensaje}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          {view.nuevas.length > 0 &&
+            (() => {
+              const { operativas, config } = partirPorConfig(view.nuevas);
+              return (
+                <section>
+                  <h3 className="text-[11px] font-semibold text-fg-muted uppercase tracking-widest mb-2">
+                    Nuevas ({view.nuevas.length})
+                  </h3>
+                  <ul className="space-y-1.5">
+                    {operativas.map((a, i) => (
+                      <li key={i} className="flex items-start gap-2 rounded-lg border border-line bg-surface px-3 py-2">
+                        <span
+                          className={`mt-px text-[10px] font-medium px-1.5 py-0.5 rounded border flex-shrink-0 ${URG_CHIP[a.urgencia] ?? URG_CHIP.MEDIA}`}
+                        >
+                          {a.urgencia === "ALTA" ? "Alta" : a.urgencia === "BAJA" ? "Baja" : "Media"}
+                        </span>
+                        <span className="text-xs text-fg-secondary">{a.mensaje}</span>
+                      </li>
+                    ))}
+                    {lineaConfig("nuevas", config)}
+                  </ul>
+                </section>
+              );
+            })()}
 
-          {view.resueltas.length > 0 && (
-            <section>
-              <h3 className="text-[11px] font-semibold text-fg-muted uppercase tracking-widest mb-2">
-                Resueltas ({view.resueltas.length})
-              </h3>
-              <ul className="space-y-1.5">
-                {view.resueltas.map((a, i) => (
-                  <li key={i} className="flex items-start gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
-                    <span className="text-emerald-600 text-xs flex-shrink-0">✓</span>
-                    <span className="text-xs text-fg-muted">{a.mensaje}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          {view.resueltas.length > 0 &&
+            (() => {
+              const { operativas, config } = partirPorConfig(view.resueltas);
+              return (
+                <section>
+                  <h3 className="text-[11px] font-semibold text-fg-muted uppercase tracking-widest mb-2">
+                    Resueltas ({view.resueltas.length})
+                  </h3>
+                  <ul className="space-y-1.5">
+                    {operativas.map((a, i) => (
+                      <li key={i} className="flex items-start gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                        <span className="text-emerald-600 text-xs flex-shrink-0">✓</span>
+                        <span className="text-xs text-fg-muted">{a.mensaje}</span>
+                      </li>
+                    ))}
+                    {lineaConfig("resueltas", config)}
+                  </ul>
+                </section>
+              );
+            })()}
 
           <p className="text-xs text-fg-muted">
             {view.persistentes} alerta{view.persistentes !== 1 ? "s" : ""} persistente{view.persistentes !== 1 ? "s" : ""} desde el corte anterior.

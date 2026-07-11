@@ -12,7 +12,6 @@ import { useEffect, useRef, useState } from "react";
 import { Modal, Spinner } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
-import type { CobroDTO } from "@/lib/cobranza";
 import { fmtFecha, fmtMonto, INPUT_CLS, LABEL_CLS } from "./format";
 
 interface BorradorResponse {
@@ -21,11 +20,20 @@ interface BorradorResponse {
   correoCobro: string | null;
 }
 
+/** Shape mínimo del cobro — CobroDTO y ColaCobroRow lo satisfacen (el contexto
+ *  real del borrador lo arma el server por id). */
+export interface CobroBorradorRef {
+  id: string;
+  monto: number;
+  moneda: string;
+  fechaProgramada: string;
+}
+
 export default function BorradorCobroModal({
   cobro,
   onClose,
 }: {
-  cobro: CobroDTO;
+  cobro: CobroBorradorRef;
   onClose: () => void;
 }) {
   const toast = useToast();

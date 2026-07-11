@@ -10,6 +10,8 @@ export {
   loadSnapshotSeries,
   loadRiesgo,
   loadProyeccion,
+  loadColaCobros,
+  type ColaCobroRow,
   type CarteraRow,
   type CuentaDetailDTO,
   type ServicioDTO,

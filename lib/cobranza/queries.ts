@@ -10,6 +10,7 @@ import { prisma } from "@/lib/db/prisma";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import {
   computeRiesgoPago,
+  diffDays,
   proyectarIngresos,
   semaforoCuenta,
   sumaPlanExpandido,
@@ -674,4 +675,77 @@ export async function loadProyeccion(todayISO: string): Promise<ProyeccionIngres
     moneda: c.moneda,
   }));
   return proyectarIngresos(input, { todayISO });
+}
+
+// ── Cola de cobros (landing del módulo) ─────────────────────────────────────────
+
+/** Una fila accionable de la cola: un cobro pendiente con su contexto plano.
+ *  `id` (no `cobroId`) a propósito: satisface estructuralmente los props mínimos
+ *  de los diálogos compartidos (RegistrarPago/Promesa/Borrador) igual que CobroDTO. */
+export interface ColaCobroRow {
+  id: string;
+  servicioId: string;
+  cuentaId: string;
+  clientId: string;
+  clienteNombre: string;
+  servicioTipo: string;
+  servicioDescripcion: string | null;
+  numCuota: number | null;
+  periodo: string;
+  fechaProgramada: string; // ISO date
+  diasAtraso: number; // diffDays(fechaProgramada, hoy) — positivo = ya pasó
+  monto: number;
+  moneda: string;
+  estado: string; // PROGRAMADO | POR_COBRAR | SIN_DATO (COBRADO excluido)
+  origen: string; // PLAN | CATCH_UP | MANUAL
+  promesaPago: string | null;
+}
+
+/**
+ * Todos los cobros PENDIENTES de cuentas dentro de la operación, planos y listos
+ * para accionar (la cola agrupa/ordena client-side con las reglas del engine).
+ * El `where` es ESPEJO de loadProyeccion — si cambia el universo de uno, cambia
+ * el del otro o la cola y la proyección divergen.
+ */
+export async function loadColaCobros(todayISO: string): Promise<ColaCobroRow[]> {
+  const cobros = await prisma.cobro.findMany({
+    where: { estado: { not: "COBRADO" }, cuenta: { excluidaOperacion: false } },
+    select: {
+      id: true,
+      servicioId: true,
+      cuentaId: true,
+      numCuota: true,
+      periodo: true,
+      fechaProgramada: true,
+      monto: true,
+      moneda: true,
+      estado: true,
+      origen: true,
+      promesaPago: true,
+      servicio: { select: { tipoServicio: true, descripcion: true } },
+      cuenta: { select: { clientId: true, client: { select: { name: true } } } },
+    },
+    orderBy: { fechaProgramada: "asc" },
+  });
+  return cobros.map((c) => {
+    const fecha = isoDay(c.fechaProgramada)!;
+    return {
+      id: c.id,
+      servicioId: c.servicioId,
+      cuentaId: c.cuentaId,
+      clientId: c.cuenta.clientId,
+      clienteNombre: c.cuenta.client.name,
+      servicioTipo: c.servicio.tipoServicio,
+      servicioDescripcion: c.servicio.descripcion,
+      numCuota: c.numCuota,
+      periodo: c.periodo,
+      fechaProgramada: fecha,
+      diasAtraso: diffDays(fecha, todayISO),
+      monto: num(c.monto)!,
+      moneda: c.moneda,
+      estado: c.estado,
+      origen: c.origen,
+      promesaPago: isoDay(c.promesaPago),
+    };
+  });
 }

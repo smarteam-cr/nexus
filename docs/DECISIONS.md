@@ -174,6 +174,28 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   de cambio, cuentas bancarias, egresos). La costura hacia Odoo/Mercury sigue siendo
   ReconciliationPort + referenciaExterna + el Json extensible de métricas — lista para conectar
   tesorería sin construirla.
+- **La COLA DE COBROS es el landing del módulo** (rediseño UX 2026-07-11): la acción #1 de quien
+  cobra es REGISTRAR PAGOS y ver qué está vencido — no navegar una tabla de clientes. El tab
+  "Cobros" agrupa los pendientes (Vencidos → Esta quincena → Más adelante, con la regla del
+  semáforo y `finQuincenaISO` del engine) con acciones inline; la tabla de clientes ("Clientes",
+  ex Panel de cartera) queda como superficie de administración/configuración. Los cards de
+  resumen se computan de la cola COMPLETA (los filtros solo estrechan la lista) y CRC/USD van
+  SIEMPRE separados. `loadColaCobros` es espejo del universo de `loadProyeccion` — si cambia
+  uno, cambia el otro.
+- **Registro de pago DUAL con fecha retroactiva**: botón global "Registrar pago" (buscador
+  client-side sobre la cola cargada) + 1-click por fila de la cola + el select del cronograma
+  del drawer — los TRES caminos embudan en el mismo `RegistrarPagoDialog` (fecha del pago
+  default hoy, capada a hoy — la plata suele entrar días antes de registrarse) y en el PATCH →
+  `cambiarEstadoCobro` (INV3 intacto). El diálogo es presentacional; el optimista vive donde
+  viven los datos (contenedor para cola/buscador, CronogramaCobros para el drawer). El
+  semáforo de la cartera JAMÁS se parchea a mano en el cliente (depende de todos los cobros
+  de la cuenta): optimista solo en la cola, el resto re-fetch best-effort.
+- **Alertas: operativas ≠ backlog de configuración**: CUENTA_SIN_DATOS es trabajo de setup, no
+  urgencia del día → segmento propio en el feed ("Configuración", con CTA que abre la cuenta),
+  fuera del badge del tab, y colapsadas a una línea expandible en las Nuevas/Resueltas del
+  corte semanal. El engine no cambia — es presentación.
+- **CuentaDrawer único en el contenedor**: lo abren la cola, la tabla de clientes y las alertas
+  de configuración vía `onOpenCuenta(cuentaId)` — tres instancias eran tres bugs de refresh.
 
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos

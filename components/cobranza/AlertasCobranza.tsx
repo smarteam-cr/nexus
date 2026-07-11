@@ -4,9 +4,12 @@
  * components/cobranza/AlertasCobranza.tsx
  *
  * Feed de alertas de cobranza — clon adaptado de components/cs/AlertsFeed.tsx.
- * Acciones Vista/Resolver/Descartar optimistas con revert POR ALERTA (no
- * snapshot del array: dos PATCH en vuelo no se pisan); filtros por urgencia y
- * estado; evidencia expandible. El estado vive en CobranzaClient (badge del tab).
+ * Dos segmentos: OPERATIVAS (gestión de cobro del día) y CONFIGURACIÓN (el
+ * backlog de CUENTA_SIN_DATOS — cuentas a las que les faltan datos; no es
+ * urgencia del día y no infla el badge del tab). Acciones Vista/Resolver/
+ * Descartar/Posponer optimistas con revert POR ALERTA (no snapshot del array:
+ * dos PATCH en vuelo no se pisan); filtros por urgencia y estado dentro del
+ * segmento; evidencia expandible. El estado vive en CobranzaClient.
  */
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useToast } from "@/components/ui/Toast";
@@ -47,14 +50,21 @@ function tieneEvidencia(evidencia: unknown): evidencia is Record<string, unknown
   return !!evidencia && typeof evidencia === "object" && Object.keys(evidencia).length > 0;
 }
 
+type Segmento = "operativas" | "configuracion";
+
+const esConfiguracion = (a: AlertaDTO) => a.tipo === "CUENTA_SIN_DATOS";
+
 export default function AlertasCobranza({
   alertas,
   setAlertas,
+  onOpenCuenta,
 }: {
   alertas: AlertaDTO[];
   setAlertas: Dispatch<SetStateAction<AlertaDTO[]>>;
+  onOpenCuenta: (cuentaId: string) => void;
 }) {
   const toast = useToast();
+  const [seg, setSeg] = useState<Segmento>("operativas");
   const [urgFilter, setUrgFilter] = useState<string>("all");
   const [estadoFilter, setEstadoFilter] = useState<string>("all");
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -64,13 +74,22 @@ export default function AlertasCobranza({
     () => alertas.filter((a) => a.estado === "ABIERTA" || a.estado === "VISTA"),
     [alertas],
   );
+  const conteos = useMemo(
+    () => ({
+      operativas: vigentes.filter((a) => !esConfiguracion(a)).length,
+      configuracion: vigentes.filter(esConfiguracion).length,
+    }),
+    [vigentes],
+  );
 
   const visible = useMemo(() => {
-    let list = vigentes;
+    let list = vigentes.filter((a) =>
+      seg === "configuracion" ? esConfiguracion(a) : !esConfiguracion(a),
+    );
     if (urgFilter !== "all") list = list.filter((a) => a.urgencia === urgFilter);
     if (estadoFilter !== "all") list = list.filter((a) => a.estado === estadoFilter);
     return list;
-  }, [vigentes, urgFilter, estadoFilter]);
+  }, [vigentes, seg, urgFilter, estadoFilter]);
 
   async function setEstado(id: string, estado: "VISTA" | "RESUELTA" | "DESCARTADA") {
     const prevEstado = alertas.find((a) => a.id === id)?.estado;
@@ -118,6 +137,34 @@ export default function AlertasCobranza({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
+        {/* Segmentos: la gestión del día vs el backlog de datos (no se mezclan). */}
+        <div className="inline-flex items-center gap-0.5 rounded-lg border border-line bg-surface-muted p-0.5">
+          {(
+            [
+              { key: "operativas" as const, label: "Operativas" },
+              { key: "configuracion" as const, label: "Configuración" },
+            ]
+          ).map((s) => {
+            const active = seg === s.key;
+            return (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setSeg(s.key)}
+                className={`px-3 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${
+                  active
+                    ? "bg-surface text-fg shadow-sm border-line"
+                    : "border-transparent text-fg-muted hover:text-fg-secondary"
+                }`}
+              >
+                {s.label}
+                <span className={`ml-1.5 tabular-nums ${active ? "text-fg-secondary" : "text-fg-muted"}`}>
+                  {conteos[s.key]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
         <select value={urgFilter} onChange={(e) => setUrgFilter(e.target.value)} className={FILTER_SELECT_CLS}>
           <option value="all">Toda urgencia</option>
           <option value="ALTA">Alta</option>
@@ -133,6 +180,14 @@ export default function AlertasCobranza({
           {visible.length} vigente{visible.length !== 1 ? "s" : ""}
         </span>
       </div>
+
+      {visible.length === 0 && (
+        <p className="text-sm text-emerald-600 bg-emerald-500/5 border border-emerald-500/20 rounded-xl px-4 py-3">
+          {seg === "operativas"
+            ? "✓ Nada pendiente de gestión de cobro."
+            : "✓ Todas las cuentas tienen sus datos completos."}
+        </p>
+      )}
 
       <div className="space-y-2">
         {visible.map((a) => {
@@ -170,6 +225,15 @@ export default function AlertasCobranza({
                 </div>
                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
                   <div className="flex items-center gap-1">
+                    {esConfiguracion(a) && (
+                      <button
+                        onClick={() => onOpenCuenta(a.cuentaId)}
+                        title="Abrir la cuenta para completar los datos que faltan"
+                        className="text-[10px] font-medium px-2 py-1 rounded-md border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors"
+                      >
+                        Abrir cuenta
+                      </button>
+                    )}
                     {a.estado === "ABIERTA" && (
                       <button
                         onClick={() => setEstado(a.id, "VISTA")}

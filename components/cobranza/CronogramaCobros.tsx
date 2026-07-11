@@ -3,12 +3,12 @@
 /**
  * components/cobranza/CronogramaCobros.tsx
  *
- * Cronograma de cobros de un servicio: cuota, período, fecha, monto, semáforo,
- * badge de catch-up y select de estado. Cambios optimistas con revert en error
- * (patrón AlertsFeed). Marcar COBRADO pide confirmación — se registra a nombre
- * de quien confirma (INV3: autonomía en la derivación, confirmación en el dinero)
- * y acepta una referencia externa OPCIONAL (id de transacción Mercury / factura
- * Odoo — ReconciliationPort v1: trazabilidad sin volver a Nexus contabilidad).
+ * Cronograma de cobros de un servicio (superficie de ADMINISTRACIÓN — la vía
+ * rápida del día a día es la cola de cobros del landing): cuota, período, fecha,
+ * monto, semáforo, badge de catch-up y select de estado. Cambios optimistas con
+ * revert en error (patrón AlertsFeed). Marcar COBRADO abre el RegistrarPagoDialog
+ * compartido — se registra a nombre de quien confirma (INV3) con fecha del pago
+ * y referencia externa opcional.
  *
  * NOTA: `semaforoCobro` se importa de lib/cobranza/engine (motor puro, sin
  * Prisma) y NO del barrel lib/cobranza, que re-exporta módulos `server-only`.
@@ -19,8 +19,10 @@ import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { semaforoCobro } from "@/lib/cobranza/engine";
 import type { CobroDTO } from "@/lib/cobranza";
 import { COBRANZA_ESTADOS_COBRO, ESTADO_COBRO_LABEL } from "@/lib/cobranza/schema";
-import { fmtFecha, fmtMonto, SEMAFORO_META, INPUT_CLS } from "./format";
+import { fmtFecha, fmtMonto, SEMAFORO_META } from "./format";
 import BorradorCobroModal from "./BorradorCobroModal";
+import RegistrarPagoDialog from "./RegistrarPagoDialog";
+import PromesaDialog from "./PromesaDialog";
 
 export default function CronogramaCobros({
   cobros,
@@ -49,7 +51,7 @@ export default function CronogramaCobros({
   async function applyEstado(
     cobro: CobroDTO,
     estado: string,
-    extra?: { referenciaExterna?: string | null },
+    extra?: { referenciaExterna?: string | null; fechaCobro?: string },
   ) {
     const prevEstado = items.find((c) => c.id === cobro.id)?.estado;
     setItems((cs) => cs.map((c) => (c.id === cobro.id ? { ...c, estado } : c)));
@@ -60,7 +62,7 @@ export default function CronogramaCobros({
         body: JSON.stringify({ estado, ...(extra ?? {}) }),
       });
       if (estado === "COBRADO") {
-        toast.success("Cobro confirmado a tu nombre.");
+        toast.success("Pago registrado a tu nombre.");
         onRefresh(); // trae confirmadoPor/confirmadoEn frescos
       }
     } catch (e) {
@@ -186,13 +188,14 @@ export default function CronogramaCobros({
       </ul>
 
       {confirmCobro && (
-        <ConfirmCobradoDialog
+        <RegistrarPagoDialog
           cobro={confirmCobro}
+          todayISO={todayISO}
           onCancel={() => setConfirmCobro(null)}
-          onConfirm={async (referenciaExterna) => {
+          onConfirm={async ({ fechaCobro, referenciaExterna }) => {
             const cobro = confirmCobro;
             setConfirmCobro(null);
-            await applyEstado(cobro, "COBRADO", { referenciaExterna });
+            await applyEstado(cobro, "COBRADO", { fechaCobro, referenciaExterna });
           }}
         />
       )}
@@ -213,139 +216,5 @@ export default function CronogramaCobros({
         />
       )}
     </>
-  );
-}
-
-/**
- * Diálogo LOCAL de promesa de pago (clon estructural de ConfirmCobradoDialog):
- * fecha prometida + quitar promesa. La promesa solo calla alertas — semáforos y
- * métricas NO cambian; si la fecha pasa sin cobro, el corte emite PROMESA_INCUMPLIDA.
- */
-function PromesaDialog({
-  cobro,
-  onCancel,
-  onSave,
-}: {
-  cobro: CobroDTO;
-  onCancel: () => void;
-  onSave: (promesaPago: string | null) => void;
-}) {
-  const [fecha, setFecha] = useState(cobro.promesaPago ?? "");
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30" onMouseDown={onCancel} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative w-full max-w-sm rounded-xl border border-line bg-surface shadow-2xl p-4 space-y-3"
-      >
-        <h3 className="text-sm font-semibold text-fg">¿Para cuándo prometió pagar?</h3>
-        <p className="text-xs text-fg-secondary">
-          {fmtMonto(cobro.monto, cobro.moneda)} · programado {fmtFecha(cobro.fechaProgramada)}. Sus
-          alertas se callan hasta la fecha prometida; el semáforo no cambia.
-        </p>
-        <div>
-          <label className="block text-[11px] font-medium text-fg-muted mb-1">Fecha prometida</label>
-          <input
-            type="date"
-            value={fecha}
-            onChange={(e) => setFecha(e.target.value)}
-            className={INPUT_CLS}
-            autoFocus
-          />
-        </div>
-        <div className="flex items-center justify-between gap-2 pt-1">
-          {cobro.promesaPago ? (
-            <button
-              type="button"
-              onClick={() => onSave(null)}
-              className="text-xs text-red-600 hover:underline px-1 py-1.5"
-            >
-              Quitar promesa
-            </button>
-          ) : (
-            <span />
-          )}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="text-xs text-fg-muted hover:text-fg px-2 py-1.5"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              disabled={!fecha}
-              onClick={() => onSave(fecha)}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Guardar promesa
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Diálogo LOCAL de confirmación de COBRADO (no se toca el ConfirmDialog compartido):
- * mismo copy + input opcional de referencia externa (ReconciliationPort manual).
- */
-function ConfirmCobradoDialog({
-  cobro,
-  onCancel,
-  onConfirm,
-}: {
-  cobro: CobroDTO;
-  onCancel: () => void;
-  onConfirm: (referenciaExterna: string | null) => void;
-}) {
-  const [referencia, setReferencia] = useState("");
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30" onMouseDown={onCancel} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative w-full max-w-sm rounded-xl border border-line bg-surface shadow-2xl p-4 space-y-3"
-      >
-        <h3 className="text-sm font-semibold text-fg">¿Confirmás que este cobro ya entró?</h3>
-        <p className="text-xs text-fg-secondary">
-          {fmtMonto(cobro.monto, cobro.moneda)} · programado {fmtFecha(cobro.fechaProgramada)}. Se
-          registrará a tu nombre.
-        </p>
-        <div>
-          <label className="block text-[11px] font-medium text-fg-muted mb-1">
-            Referencia externa (opcional)
-          </label>
-          <input
-            value={referencia}
-            onChange={(e) => setReferencia(e.target.value)}
-            placeholder="Id de transacción Mercury / factura Odoo"
-            maxLength={200}
-            className={INPUT_CLS}
-            autoFocus
-          />
-        </div>
-        <div className="flex items-center justify-end gap-2 pt-1">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="text-xs text-fg-muted hover:text-fg px-2 py-1.5"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={() => onConfirm(referencia.trim() || null)}
-            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors"
-          >
-            Sí, ya entró
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }

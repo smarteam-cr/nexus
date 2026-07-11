@@ -10,11 +10,14 @@
  * filtros client-side (servicio, tipo, estado, semáforo) + búsqueda por nombre.
  * Las filas viven en CobranzaClient (rows/setRows): los tabs desmontan este
  * componente y un useState local volvería stale al cambiar de tab y volver.
+ * El CuentaDrawer también vive en el contenedor (lo abren la cola, esta tabla
+ * y las alertas de configuración) — acá solo se pide con onOpenCuenta.
  */
 import { useMemo, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { EmptyState } from "@/components/ui";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
+import { diffDays } from "@/lib/cobranza/engine";
 import type { CarteraRow } from "@/lib/cobranza";
 import {
   COBRANZA_TIPOS_CUENTA,
@@ -26,7 +29,6 @@ import {
 } from "@/lib/cobranza/schema";
 import Link from "next/link";
 import { fmtFecha, fmtMonto, SEMAFORO_META, FILTER_SELECT_CLS } from "./format";
-import CuentaDrawer from "./CuentaDrawer";
 import NuevaEmpresaModal from "./NuevaEmpresaModal";
 
 const ESTADO_CHIP: Record<string, string> = {
@@ -52,12 +54,14 @@ const SEMAFOROS_ORDEN = ["rojo", "amarillo", "gris", "verde"] as const;
 
 export default function PanelCartera({
   rows,
-  setRows,
   todayISO,
+  onOpenCuenta,
+  onRefresh,
 }: {
   rows: CarteraRow[];
-  setRows: (rows: CarteraRow[]) => void;
   todayISO: string;
+  onOpenCuenta: (cuentaId: string) => void;
+  onRefresh: () => void;
 }) {
   const toast = useToast();
   const [vista, setVista] = useState<Vista>("todas");
@@ -66,7 +70,6 @@ export default function PanelCartera({
   const [fTipo, setFTipo] = useState("all");
   const [fEstado, setFEstado] = useState("all");
   const [fSemaforo, setFSemaforo] = useState("all");
-  const [openCuentaId, setOpenCuentaId] = useState<string | null>(null);
   const [configurando, setConfigurando] = useState<string | null>(null); // clientId en vuelo
   const [showNuevaEmpresa, setShowNuevaEmpresa] = useState(false);
 
@@ -96,15 +99,6 @@ export default function PanelCartera({
     return list;
   }, [rows, vista, q, fServicio, fTipo, fEstado, fSemaforo]);
 
-  async function refresh() {
-    try {
-      const d = await fetchJson<{ rows: CarteraRow[] }>("/api/cobranza/cuentas");
-      setRows(d.rows);
-    } catch {
-      // best-effort: la tabla conserva lo que tenía
-    }
-  }
-
   async function configurarCuenta(clientId: string) {
     if (configurando) return;
     setConfigurando(clientId);
@@ -118,11 +112,11 @@ export default function PanelCartera({
       });
       if (d.created) toast.success("Cuenta creada. Completá los datos de cobro.");
       else toast.info("Este cliente ya tenía una cuenta — se abrió la existente.");
-      setOpenCuentaId(d.cuenta.id);
-      refresh();
+      onOpenCuenta(d.cuenta.id);
+      onRefresh();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo crear la cuenta.");
-      refresh(); // best-effort: traer el estado real de la tabla
+      onRefresh(); // best-effort: traer el estado real de la tabla
     } finally {
       setConfigurando(null);
     }
@@ -267,7 +261,7 @@ export default function PanelCartera({
                 return (
                   <tr
                     key={r.clientId}
-                    onClick={sinCuenta ? undefined : () => setOpenCuentaId(r.cuentaId)}
+                    onClick={sinCuenta ? undefined : () => onOpenCuenta(r.cuentaId!)}
                     className={
                       sinCuenta
                         ? "opacity-60"
@@ -305,7 +299,15 @@ export default function PanelCartera({
                       {r.tipo ? TIPO_CUENTA_LABEL[r.tipo] ?? r.tipo : "—"}
                     </td>
                     <td className="px-4 py-3 text-fg-secondary whitespace-nowrap">{fmtFecha(r.ultimoCobro)}</td>
-                    <td className="px-4 py-3 text-fg-secondary whitespace-nowrap">{fmtFecha(r.proximoCobro)}</td>
+                    <td className="px-4 py-3 text-fg-secondary whitespace-nowrap">
+                      {fmtFecha(r.proximoCobro)}
+                      {/* "Próximo" con fecha pasada = vencido: la fecha pelada confunde. */}
+                      {r.proximoCobro && r.proximoCobro < todayISO && (
+                        <span className="ml-1.5 text-red-600 font-medium">
+                          · hace {diffDays(r.proximoCobro, todayISO)} d
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right text-fg whitespace-nowrap tabular-nums">
                       {fmtMonto(r.proximoMonto, r.moneda)}
                     </td>
@@ -352,22 +354,13 @@ export default function PanelCartera({
         </div>
       )}
 
-      <CuentaDrawer
-        cuentaId={openCuentaId}
-        todayISO={todayISO}
-        onClose={() => {
-          setOpenCuentaId(null);
-          refresh(); // el drawer pudo cambiar estados/cobros → re-sincronizar la tabla
-        }}
-      />
-
       <NuevaEmpresaModal
         open={showNuevaEmpresa}
         onClose={() => setShowNuevaEmpresa(false)}
         onCreated={(cuentaId) => {
           setShowNuevaEmpresa(false);
-          refresh();
-          setOpenCuentaId(cuentaId); // seguir configurando servicios en el drawer
+          onRefresh();
+          onOpenCuenta(cuentaId); // seguir configurando servicios en el drawer
         }}
       />
     </div>

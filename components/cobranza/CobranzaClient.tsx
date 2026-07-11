@@ -3,41 +3,58 @@
 /**
  * components/cobranza/CobranzaClient.tsx
  *
- * Contenedor client del módulo: 4 tabs in-page (useState local, no rutas —
- * variante del patrón MarketingSectionTabs). El estado de alertas, el de
- * cartera Y el de proyección viven acá: el badge del tab se actualiza cuando
- * AlertasCobranza resuelve, el digest puede refrescarlas tras un corte, y
- * cambiar de tab no pierde nada (los tabs desmontan; si el estado viviera en
- * PanelCartera/ProyeccionPanel, volver al tab lo remontaría con las props
- * stale del server render — fue el bug del doble "Configurar cuenta").
+ * Contenedor client del módulo: 6 tabs in-page (useState local, no rutas) con
+ * la COLA DE COBROS como landing — la vista de trabajo diaria de quien cobra.
+ * TODO el estado de datos vive acá (cola, cartera, alertas, proyección, serie,
+ * riesgo): los tabs desmontan y un useState local en el hijo volvería stale al
+ * cambiar de tab y volver (fue el bug del doble "Configurar cuenta").
+ *
+ * También viven acá, porque los comparten varios tabs:
+ *  - el CuentaDrawer (lo abren la cola, la tabla de clientes y las alertas),
+ *  - el chokepoint client `registrarPago` (cola + buscador global → PATCH
+ *    estado=COBRADO vía cambiarEstadoCobro, INV3 intacto),
+ *  - el botón global "Registrar pago" (slot action del PageHeader) y sus
+ *    modales (BuscarPagoModal → RegistrarPagoDialog).
  */
 import { useCallback, useState } from "react";
+import { PageHeader } from "@/components/ui";
+import { useToast } from "@/components/ui/Toast";
 import type {
   AlertaDTO,
   CarteraRow,
+  ColaCobroRow,
   ProyeccionIngresos,
   RiesgoPagoItem,
   SnapshotDTO,
   SnapshotSerieDTO,
 } from "@/lib/cobranza";
-import { fetchJson } from "@/lib/api/fetch-json";
+import { fetchJson, ApiError } from "@/lib/api/fetch-json";
+import ColaCobros from "./ColaCobros";
 import PanelCartera from "./PanelCartera";
 import AlertasCobranza from "./AlertasCobranza";
 import DigestPanel from "./DigestPanel";
 import ProyeccionPanel from "./ProyeccionPanel";
 import ReportesPanel from "./ReportesPanel";
+import CuentaDrawer from "./CuentaDrawer";
+import BuscarPagoModal from "./BuscarPagoModal";
+import RegistrarPagoDialog from "./RegistrarPagoDialog";
 
-type Tab = "cartera" | "proyeccion" | "alertas" | "reportes" | "digest";
+type Tab = "cobros" | "clientes" | "proyeccion" | "alertas" | "reportes" | "corte";
 
 const TABS: Array<{ key: Tab; label: string }> = [
-  { key: "cartera", label: "Panel de cartera" },
+  { key: "cobros", label: "Cobros" },
+  { key: "clientes", label: "Clientes" },
   { key: "proyeccion", label: "Proyección" },
   { key: "alertas", label: "Alertas" },
   { key: "reportes", label: "Reportes" },
-  { key: "digest", label: "Digest semanal" },
+  { key: "corte", label: "Corte semanal" },
 ];
 
+const porFecha = (a: ColaCobroRow, b: ColaCobroRow) =>
+  a.fechaProgramada.localeCompare(b.fechaProgramada) || a.id.localeCompare(b.id);
+
 export default function CobranzaClient({
+  initialCola,
   initialCartera,
   initialAlertas,
   initialSnapshot,
@@ -47,6 +64,7 @@ export default function CobranzaClient({
   role,
   todayISO,
 }: {
+  initialCola: ColaCobroRow[];
   initialCartera: CarteraRow[];
   initialAlertas: AlertaDTO[];
   initialSnapshot: SnapshotDTO | null;
@@ -56,37 +74,57 @@ export default function CobranzaClient({
   role: string;
   todayISO: string;
 }) {
-  const [tab, setTab] = useState<Tab>("cartera");
+  const toast = useToast();
+  const [tab, setTab] = useState<Tab>("cobros");
+  const [cola, setCola] = useState(initialCola);
   const [cartera, setCartera] = useState(initialCartera);
   const [alertas, setAlertas] = useState(initialAlertas);
   const [proyeccion, setProyeccion] = useState(initialProyeccion);
   const [series, setSeries] = useState(initialSeries);
   const [riesgo, setRiesgo] = useState(initialRiesgo);
-  const abiertas = alertas.filter((a) => a.estado === "ABIERTA").length;
 
-  // Tras un corte manual el set de alertas puede cambiar → re-sincronizar el tab.
+  // UI compartida entre tabs (drawer + flujo global de registrar pago).
+  const [openCuentaId, setOpenCuentaId] = useState<string | null>(null);
+  const [pagoTarget, setPagoTarget] = useState<ColaCobroRow | null>(null);
+  const [buscadorOpen, setBuscadorOpen] = useState(false);
+
+  // Badge del tab: solo lo OPERATIVO abierto — el backlog de configuración
+  // (CUENTA_SIN_DATOS) no es urgencia del día.
+  const abiertas = alertas.filter(
+    (a) => a.estado === "ABIERTA" && a.tipo !== "CUENTA_SIN_DATOS",
+  ).length;
+
+  // ── Refresh best-effort por dataset (si falla, el tab conserva lo que tenía) ──
+  const refreshCola = useCallback(async () => {
+    try {
+      const d = await fetchJson<{ cola: ColaCobroRow[] }>("/api/cobranza/cola");
+      setCola(d.cola);
+    } catch {}
+  }, []);
+
+  const refreshCartera = useCallback(async () => {
+    try {
+      const d = await fetchJson<{ rows: CarteraRow[] }>("/api/cobranza/cuentas");
+      setCartera(d.rows);
+    } catch {}
+  }, []);
+
   const refreshAlertas = useCallback(async () => {
     try {
       const d = await fetchJson<{ alertas: AlertaDTO[] }>(
         "/api/cobranza/alertas?estados=ABIERTA,VISTA",
       );
       setAlertas(d.alertas);
-    } catch {
-      // best-effort: si falla, el tab conserva lo que tenía
-    }
+    } catch {}
   }, []);
 
-  // Cambios de cobros (drawer, materialización) pueden mover la proyección.
   const refreshProyeccion = useCallback(async () => {
     try {
       const d = await fetchJson<{ proyeccion: ProyeccionIngresos }>("/api/cobranza/proyeccion");
       setProyeccion(d.proyeccion);
-    } catch {
-      // best-effort: si falla, el tab conserva lo que tenía
-    }
+    } catch {}
   }, []);
 
-  // Un corte nuevo agrega un punto a la serie y puede mover el riesgo.
   const refreshReportes = useCallback(async () => {
     try {
       const [s, r] = await Promise.all([
@@ -95,18 +133,60 @@ export default function CobranzaClient({
       ]);
       setSeries(s.series);
       setRiesgo(r.riesgo);
-    } catch {
-      // best-effort: si falla, el tab conserva lo que tenía
-    }
+    } catch {}
   }, []);
 
   const onDigestDone = useCallback(() => {
     void refreshAlertas();
     void refreshReportes();
-  }, [refreshAlertas, refreshReportes]);
+    void refreshCola();
+  }, [refreshAlertas, refreshReportes, refreshCola]);
+
+  /**
+   * CHOKEPOINT client de registrar pago (cola + buscador global): optimista en
+   * la cola (la fila sale YA, los cards se recalculan solos), PATCH al server
+   * (cambiarEstadoCobro — INV3), revert + toast si falla. La cartera/proyección/
+   * riesgo se re-fetchean best-effort (su semáforo depende de TODOS los cobros
+   * de la cuenta — jamás se parchea a mano).
+   */
+  const registrarPago = useCallback(
+    async (row: ColaCobroRow, data: { fechaCobro: string; referenciaExterna: string | null }) => {
+      setCola((rs) => rs.filter((r) => r.id !== row.id));
+      try {
+        await fetchJson(`/api/cobranza/cobros/${row.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ estado: "COBRADO", ...data }),
+        });
+        toast.success("Pago registrado a tu nombre.");
+        void refreshCola();
+        void refreshCartera();
+        void refreshProyeccion();
+        void refreshReportes();
+      } catch (e) {
+        setCola((rs) => [...rs, row].sort(porFecha));
+        toast.error(e instanceof ApiError ? e.message : "No se pudo registrar el pago.");
+      }
+    },
+    [toast, refreshCola, refreshCartera, refreshProyeccion, refreshReportes],
+  );
 
   return (
     <div>
+      <PageHeader
+        title="Cobranza"
+        description="Registrá los pagos que entran, mirá qué está vencido y llevá el control de cada cliente."
+        action={
+          <button
+            type="button"
+            onClick={() => setBuscadorOpen(true)}
+            className="text-sm font-medium px-4 py-2 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors"
+          >
+            💰 Registrar pago
+          </button>
+        }
+      />
+
       <div className="flex flex-wrap gap-1 border-b border-line mb-6">
         {TABS.map((t) => {
           const active = tab === t.key;
@@ -132,12 +212,68 @@ export default function CobranzaClient({
         })}
       </div>
 
-      {tab === "cartera" && <PanelCartera rows={cartera} setRows={setCartera} todayISO={todayISO} />}
+      {tab === "cobros" && (
+        <ColaCobros
+          rows={cola}
+          setRows={setCola}
+          riesgo={riesgo}
+          todayISO={todayISO}
+          onRegistrarPago={setPagoTarget}
+          onOpenCuenta={setOpenCuentaId}
+        />
+      )}
+      {tab === "clientes" && (
+        <PanelCartera
+          rows={cartera}
+          todayISO={todayISO}
+          onOpenCuenta={setOpenCuentaId}
+          onRefresh={refreshCartera}
+        />
+      )}
       {tab === "proyeccion" && <ProyeccionPanel proyeccion={proyeccion} onRefresh={refreshProyeccion} />}
-      {tab === "alertas" && <AlertasCobranza alertas={alertas} setAlertas={setAlertas} />}
+      {tab === "alertas" && (
+        <AlertasCobranza alertas={alertas} setAlertas={setAlertas} onOpenCuenta={setOpenCuentaId} />
+      )}
       {tab === "reportes" && <ReportesPanel series={series} riesgo={riesgo} role={role} />}
-      {tab === "digest" && (
+      {tab === "corte" && (
         <DigestPanel initialSnapshot={initialSnapshot} onDigestDone={onDigestDone} />
+      )}
+
+      {/* ── Superficies compartidas entre tabs ── */}
+      <CuentaDrawer
+        cuentaId={openCuentaId}
+        todayISO={todayISO}
+        onClose={() => {
+          setOpenCuentaId(null);
+          // El drawer pudo cambiar cobros/estados → re-sincronizar lo visible.
+          void refreshCola();
+          void refreshCartera();
+          void refreshProyeccion();
+        }}
+      />
+
+      {buscadorOpen && (
+        <BuscarPagoModal
+          rows={cola}
+          onClose={() => setBuscadorOpen(false)}
+          onSelect={(row) => {
+            setBuscadorOpen(false);
+            setPagoTarget(row);
+          }}
+        />
+      )}
+
+      {pagoTarget && (
+        <RegistrarPagoDialog
+          cobro={pagoTarget}
+          todayISO={todayISO}
+          onCancel={() => setPagoTarget(null)}
+          onConfirm={(data) => {
+            const target = pagoTarget;
+            setPagoTarget(null);
+            void registrarPago(target, data);
+          }}
+        />
       )}
     </div>
   );

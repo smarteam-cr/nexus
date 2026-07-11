@@ -161,11 +161,24 @@ function daysInMonthUTC(year: number, monthIndex0: number): number {
   return new Date(Date.UTC(year, monthIndex0 + 1, 0)).getUTCDate();
 }
 
-/** Diferencia en días (b - a), sobre medianoches UTC. */
-function diffDays(aISO: string, bISO: string): number {
+/** Diferencia en días (b - a), sobre medianoches UTC. Exportado: la cola de cobros
+ * (server y UI) muestra "hace N d" con la MISMA aritmética del motor. */
+export function diffDays(aISO: string, bISO: string): number {
   const a = toUTCDate(aISO).getTime();
   const b = toUTCDate(bISO).getTime();
   return Math.round((b - a) / 86_400_000);
+}
+
+/**
+ * Último día de la quincena que contiene la fecha: día 1–15 → día 15; día 16+ →
+ * fin de mes (clampeado — febrero 28/29). Misma regla de quincenas de
+ * proyectarIngresos; la cola de cobros agrupa "Esta quincena" con esto.
+ */
+export function finQuincenaISO(iso: string): string {
+  const d = toUTCDate(iso);
+  const fin =
+    d.getUTCDate() <= 15 ? 15 : daysInMonthUTC(d.getUTCFullYear(), d.getUTCMonth());
+  return toISODate(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), fin)));
 }
 
 /** Meses calendario completos entre dos fechas (piso; 0 si b < a). */
