@@ -21,7 +21,7 @@
  *     "no tocar" no existe en este flujo).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardTimelineEdit } from "@/lib/auth/api-guards";
+import { guardTimelineEdit, guardCapability } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
@@ -80,6 +80,7 @@ export async function POST(
   const tl = await prisma.projectTimeline.findUnique({
     where: { projectId },
     select: {
+      id: true,
       anchorStartDate: true,
       phases: {
         orderBy: { order: "asc" },
@@ -104,6 +105,28 @@ export async function POST(
       { error: "NO_TIMELINE", message: "No hay cronograma para actualizar." },
       { status: 400 },
     );
+  }
+
+  // RBAC — cambiar el cronograma CON IA una vez que YA está generado queda para
+  // CSL/Super Admin (capacidad regenerateTimeline). El resto (CSE, Ventas, DEV,
+  // Marketing) puede armarlo con IA la PRIMERA vez (sin detalle IA aún) y editarlo a
+  // mano después (editTimeline), pero no rehacerlo con IA. Señal "ya generado" =
+  // tareas source ∈ {AGENT, MODIFIED} (mismo predicado que hasAiDetail / el skip del
+  // agente de detalle). Antes de gastar tokens de Claude.
+  const aiDetailCount = await prisma.timelineTask.count({
+    where: { phase: { timelineId: tl.id }, source: { in: ["AGENT", "MODIFIED"] } },
+  });
+  if (aiDetailCount > 0) {
+    const regen = await guardCapability("regenerateTimeline");
+    if (regen instanceof NextResponse) {
+      return NextResponse.json(
+        {
+          error: "TIMELINE_ALREADY_GENERATED",
+          message: "El cronograma ya está generado. Cambiarlo con IA queda para CSL o Super Admin — vos podés seguir ajustándolo a mano.",
+        },
+        { status: 403 },
+      );
+    }
   }
 
   const currentJson = JSON.stringify(

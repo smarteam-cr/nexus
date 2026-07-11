@@ -14,6 +14,7 @@
  *   | manageTeam       |  ✗  |   ✗    |  ✗  |  ✗  |     ✗     |   ✗   |      ✓      |
  *   | editTimeline     |  ✓  |   ✓    |  ✓  |  ✓  |     ✓     |   ✗   |      ✓      |
  *   | deleteTimeline   |  ✗  |   ✓    |  ✓  |  ✓  |     ✓     |   ✗   |      ✓      |
+ *   | regenerateTimeline| ✗  |   ✗    |  ✗  |  ✓  |     ✗     |   ✗   |      ✓      |
  *
  * CSE es el único "scoped" (ve solo sus clientes asignados + compartidos).
  * MARKETING ≡ CSL en capacidades (etiqueta distinta). DEV ≡ VENTAS en capacidades
@@ -38,19 +39,23 @@ export type Capability =
   // borra → suspende.
   | "editTimeline"
   // BORRAR tareas/fases/cronograma. El CSE NO la tiene (solo suspende). CSL = como super admin.
-  | "deleteTimeline";
+  | "deleteTimeline"
+  // REGENERAR/cambiar el cronograma CON IA una vez ya generado (agente de detalle /
+  // "Pedir cambio con IA"). Solo CSL + SUPER_ADMIN. El resto (incluido el CSE) genera el
+  // cronograma la PRIMERA vez y lo edita a MANO (editTimeline), pero no lo rehace con IA.
+  | "regenerateTimeline";
 
 const CAPABILITIES: Record<TeamRole, ReadonlyArray<Capability>> = {
   CSE: ["editTimeline"],
   VENTAS: ["seeAllClients", "handoffAnywhere", "createHandoff", "editTimeline", "deleteTimeline"],
   // DEV (equipo técnico) = mismas capacidades que VENTAS. Ver la matriz arriba.
   DEV: ["seeAllClients", "handoffAnywhere", "createHandoff", "editTimeline", "deleteTimeline"],
-  CSL: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients", "editTimeline", "deleteTimeline"],
+  CSL: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients", "editTimeline", "deleteTimeline", "regenerateTimeline"],
   MARKETING: ["seeAllClients", "handoffAnywhere", "shareClients", "editTimeline", "deleteTimeline"],
   // ADMIN (Finanzas): CERO capacidades de la matriz — su único acceso es Cobranza,
   // gateado por COBRANZA_ROLES (lib/auth/cobranza-roles.ts), no por capability.
   ADMIN: [],
-  SUPER_ADMIN: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients", "manageTeam", "createHandoff", "editTimeline", "deleteTimeline"],
+  SUPER_ADMIN: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients", "manageTeam", "createHandoff", "editTimeline", "deleteTimeline", "regenerateTimeline"],
 };
 
 /** Rango lineal — para gates simples de "rol mínimo". */

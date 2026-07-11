@@ -166,6 +166,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const me = useMe();
   const canEdit = me?.capabilities.includes("editTimeline") ?? false;
   const canDelete = me?.capabilities.includes("deleteTimeline") ?? false;
+  // Cambiar el cronograma CON IA una vez generado queda para CSL/Super Admin. El resto lo
+  // arma con IA la primera vez y lo edita a mano; "Pedir cambio con IA" se oculta una vez
+  // que hay detalle IA (hasAiDetail). Espeja el gate del server (timeline/assist).
+  const canRegenerateTimeline = me?.capabilities.includes("regenerateTimeline") ?? false;
   const [lastEditedAt, setLastEditedAt] = useState<string | null>(null);
   const [publishWorking, setPublishWorking] = useState(false);
   // Modal de razón del cambio — SOLO al "Subir al cliente" (no en el auto-guardado).
@@ -1121,7 +1125,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               <CronogramaProgressButton projectId={projectId} onDone={load} />
             )
           )}
-          {canEdit && phases.length > 0 && !proposal && (
+          {canEdit && phases.length > 0 && !proposal && (canRegenerateTimeline || !hasAiDetail) && (
             <button
               onClick={() => { setAssistScopePhaseId(null); setAssistOpen(true); }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800 hover:border-gray-700"
@@ -1400,7 +1404,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             onMoveTask={moveTask}
             onReorderPhases={reorderPhases}
             onSetAnchor={setAnchorFromGantt}
-            onAssistPhase={(phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }}
+            onAssistPhase={
+              canRegenerateTimeline || !hasAiDetail
+                ? (phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }
+                : undefined
+            }
             onOpenTask={(pk, tk) => setSelectedTask({ phaseKey: pk, taskKey: tk })}
             kickoffDate={kickoffDate || null}
           />
