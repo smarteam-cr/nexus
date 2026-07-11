@@ -49,9 +49,13 @@ Anthropic SDK · HubSpot/Google/Fireflies.
 - Commits: mensaje vía `-F archivo`, **sin BOM** y **sin "/" suelto** (un hook los rechaza).
 
 ## Flujo de trabajo
-- `tsc --noEmit` + `eslint` sobre lo **tocado** antes de cerrar. El build tiene
-  `ignoreBuildErrors` / `ignoreDuringBuilds` ON → tsc/lint NO son red de seguridad; el gate
-  real es `npm run check:invariants` + el ojo.
+- `tsc --noEmit` + `eslint` sobre lo **tocado** antes de cerrar. **`next build` type-checkea**
+  (`ignoreBuildErrors` se DESACTIVÓ el 2026-07-07 — ver el comentario en `next.config`): un
+  error de `tsc` en CUALQUIER archivo (`tsconfig` incluye `scripts/`) FRENA el build de prod
+  (`docker compose up -d --build`). Baseline real = **0 errores**; nunca descartes un error de
+  `tsc` como "baseline/ajeno" sin verificar que ya existía. Antes de pushear algo que roce tipos,
+  `npm run build` verde (o `tsc --noEmit` en 0 en todo el proyecto). El gate de datos sigue
+  siendo `npm run check:invariants` + el ojo.
 - Antes de commitear: correr **`/ship-nexus`** (invariantes + tsc/lint en lo tocado + checklist).
 - **No push hasta que el usuario lo pida.**
 - Tras `npm run db:sync` (cambio de schema): **reiniciar el dev server** (el Prisma client viejo
