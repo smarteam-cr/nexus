@@ -49,6 +49,9 @@ async function main() {
   let runsWithOrphans = 0;
 
   for (const run of runs) {
+    // clientId es nullable desde fase 3 (reportes de cartera agregada); un run sin
+    // cliente no tiene diagramas que migrar a una card de cliente → se salta.
+    if (!run.clientId) continue;
     // Si ya tiene cards FLOWCHART, no es huérfano
     if (run.cards.length > 0) continue;
 

@@ -120,7 +120,9 @@ export async function computeClientActivityMap(
   }
   const runsMaxByClient = new Map<string, Date>();
   for (const r of agentRunsMax) {
-    if (r._max.createdAt) runsMaxByClient.set(r.clientId, r._max.createdAt);
+    // clientId es nullable desde fase 3 (reportes de cartera agregada sin cliente);
+    // el where { in: clientIds } ya los excluye en runtime, el guard narrowea el tipo.
+    if (r._max.createdAt && r.clientId) runsMaxByClient.set(r.clientId, r._max.createdAt);
   }
 
   // Próxima sesión agendada manual por cliente (Project.nextSessionDate)
