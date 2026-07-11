@@ -68,3 +68,34 @@
 - **borrador de cobro** (`agent-cobranza-borrador`): correo de cobro redactado por IA desde el
   contexto real de la cuenta (bitácora); la persona lo edita y lo envía a mano — sin envío
   automático (regla de no-fabricación en el prompt, calibrable en DB).
+- **métricas de cartera** (`SnapshotCartera.metricas`, Json): la foto numérica del corte, POR
+  MONEDA — vencido/por-cobrar/programado (mapeo 1:1 al semáforo), aging, DSO, días promedio de
+  cobro, cobrado en la ventana y proyectado al próximo corte — más cobertura y cuentas
+  rojas/amarillas. Json extensible; null = snapshot pre-fase-3 (sin backfill).
+- **cobertura** (Cobranza): cuánto de la cartera está realmente medido — cuentas totales /
+  configuradas / pendiente de datos / sin cobros. Toda métrica y todo reporte la declaran:
+  una cuenta vacía no cuenta como sana.
+- **DSO** (proxy de control): promedio ponderado por monto de la antigüedad en días
+  (hoy − fechaProgramada) de los cobros exigibles no cobrados, por moneda. null = sin
+  exigibles. NO es el DSO contable (no hay ventas facturadas en Nexus).
+- **aging**: los montos VENCIDOS repartidos por edad en buckets 0-30/31-60/61-90/90+ días,
+  por moneda. Invariante: la suma de los buckets es exactamente el total vencido.
+- **diasPromedioCobro**: promedio de (fechaCobro − fechaProgramada) de los COBRADOs, por
+  moneda. Negativo = pagan antes de la fecha. Insumo del riesgo de pago.
+- **cobrado-vs-proyectado**: comparación entre lo que un corte proyectó que entraría hasta el
+  corte siguiente (`proyectadoProximoCorte`) y lo que ese corte siguiente midió como cobrado
+  en su ventana (`totalCobradoDesdeUltimoCorte`).
+- **promesa de pago** (`Cobro.promesaPago`): fecha en que el cliente prometió pagar. Vigente
+  calla las alertas de ese cobro (auto-snooze incluido); NO cambia semáforos ni métricas.
+  Vencida sin cobro → alerta PROMESA_INCUMPLIDA (reemplaza al vencido del cobro).
+- **PROMESA_INCUMPLIDA**: alerta ALTA emitida en el corte cuando la fecha prometida pasó y el
+  cobro sigue sin entrar — dedupeKey `PROMESA_INCUMPLIDA:{cuentaId}:{cobroId}`.
+- **posponerHasta / snooze** (`AlertaCobro.posponerHasta`): pausa temporal de una alerta — sale
+  del feed sin cambiar de estado y vuelve sola cuando la fecha llega. Lo setea la persona
+  ("Posponer") o el auto-snooze al registrar una promesa.
+- **riesgo de pago** (regla V1): cobro pendiente cuyo atraso supera el comportamiento histórico
+  de su cuenta más el umbral (`RIESGO_UMBRAL_DIAS` = 15): "este cliente suele pagar a N días;
+  ya va en N+15+". Sin historia, el umbral aplica a secas. Tabla en el tab Reportes.
+- **reporter de finanzas** (`agent-finanzas-reporter`): reporte narrado por IA desde las
+  métricas/serie/riesgo/alertas REALES, en dos voces — operativa (accionable) y ejecutiva
+  (agregados; solo SUPER_ADMIN). Declara cobertura e historia; no fabrica números.

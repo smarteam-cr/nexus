@@ -75,7 +75,8 @@ export interface AlertaDraft {
     | "CUENTA_SIN_DATOS"
     | "INCONSISTENCIA_CICLO"
     | "ARRANQUE_CAMBIADO"
-    | "MONTOS_DESCUADRADOS";
+    | "MONTOS_DESCUADRADOS"
+    | "PROMESA_INCUMPLIDA";
   urgencia: "ALTA" | "MEDIA" | "BAJA";
   cuentaId: string;
   cobroId?: string;
@@ -96,6 +97,8 @@ export interface CarteraEngineInput {
      * riesgo — evita inundar el digest tras un import). Ausente = true (compat).
      */
     tieneProyectoReal?: boolean;
+    /** FASE 3 (opcional — compat): estado de la cuenta para la cobertura de métricas. */
+    estadoCuenta?: string | null;
     servicios: Array<{
       servicioId: string;
       descripcion: string | null;
@@ -114,6 +117,10 @@ export interface CarteraEngineInput {
       origen: string;
       fechaProgramadaISO: string;
       monto: number;
+      /** FASE 3 (opcionales — compat con fixtures): métricas por moneda, historia de pago y promesa. */
+      moneda?: "CRC" | "USD";
+      fechaCobroISO?: string | null;
+      promesaPagoISO?: string | null;
     }>;
   }>;
 }
@@ -568,7 +575,32 @@ export function computeAlertSet(
       if (c.estado === "COBRADO") continue;
       const diasPasados = diffDays(c.fechaProgramadaISO, opts.todayISO);
 
-      if (diasPasados > umbral) {
+      // Promesa de pago: VIGENTE (>= hoy) calla COBRO_VENCIDO/COBRO_PROXIMO de este
+      // cobro (el humano ya gestionó — semáforos y métricas NO cambian); PASADA sin
+      // COBRADO → PROMESA_INCUMPLIDA que REEMPLAZA al vencido/próximo (1 alerta por
+      // cobro). INCONSISTENCIA_CICLO (catch-up) se sigue emitiendo aparte.
+      const promesaISO = c.promesaPagoISO ?? null;
+      if (promesaISO) {
+        const diasDesdePromesa = diffDays(promesaISO, opts.todayISO);
+        if (diasDesdePromesa > 0) {
+          out.push({
+            dedupeKey: `PROMESA_INCUMPLIDA:${cuenta.cuentaId}:${c.cobroId}`,
+            tipo: "PROMESA_INCUMPLIDA",
+            urgencia: "ALTA",
+            cuentaId: cuenta.cuentaId,
+            cobroId: c.cobroId,
+            mensaje: `${cuenta.clienteNombre}: prometió pagar ${c.monto.toLocaleString("es-CR")} el ${promesaISO} y ya pasaron ${diasDesdePromesa} día(s) sin cobro.`,
+            evidencia: {
+              servicioId: c.servicioId,
+              promesaPago: promesaISO,
+              fechaProgramada: c.fechaProgramadaISO,
+              monto: c.monto,
+              diasDesdePromesa,
+            },
+          });
+        }
+        // promesa vigente: silencio (ni vencido ni próximo)
+      } else if (diasPasados > umbral) {
         out.push({
           dedupeKey: `COBRO_VENCIDO:${cuenta.cuentaId}:${c.cobroId}`,
           tipo: "COBRO_VENCIDO",
@@ -765,4 +797,253 @@ export function proyectarIngresos(
   }
 
   return { vencidos, buckets, fueraDeHorizonte };
+}
+
+// ── 10. Métricas de cartera + riesgo de pago (fase 3 — analítica) ───────────────
+
+/** Suma `days` días a una fecha ISO (UTC estricto). Exportado: el digest calcula el próximo corte. */
+export function addDaysISO(iso: string, days: number): string {
+  const d = toUTCDate(iso);
+  d.setUTCDate(d.getUTCDate() + days);
+  return toISODate(d);
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+export interface AgingBuckets {
+  d0_30: number;
+  d31_60: number;
+  d61_90: number;
+  d90mas: number;
+}
+
+export interface MetricasMoneda {
+  /** Montos por semáforo del cobro (mapeo 1:1 — cero definiciones nuevas de "vencido"). */
+  totalVencido: number; // rojos
+  totalPorCobrar: number; // amarillos
+  totalProgramado: number; // grises
+  /** COBRADOs con fechaCobro dentro de la ventana (desde el corte anterior, exclusivo → hoy]. */
+  totalCobradoDesdeUltimoCorte: number;
+  /** SOLO vencidos, por días de atraso. Invariante: Σ buckets === totalVencido. */
+  aging: AgingBuckets;
+  /**
+   * DSO proxy de control (sin ventas contables): promedio ponderado por monto de
+   * la antigüedad en días de los cobros no-COBRADO EXIGIBLES (fecha ≤ hoy).
+   * null = sin cobros elegibles (honestidad: no es 0).
+   */
+  dso: number | null;
+  /** Comportamiento realizado: promedio de (fechaCobro − fechaProgramada) de los COBRADOs. Puede ser negativo. */
+  diasPromedioCobro: number | null;
+  /** Lo que la cartera dice que entra hasta el próximo corte (regla de gracia de proyectarIngresos). */
+  proyectadoProximoCorte: number;
+}
+
+export interface MetricasCartera {
+  version: 1;
+  /** Ventana del corte — desdeISO null = primer corte (sin historia, declarado). */
+  ventana: { desdeISO: string | null; hastaISO: string; proximoCorteISO: string };
+  moneda: { CRC: MetricasMoneda; USD: MetricasMoneda };
+  cuentasRojas: number;
+  cuentasAmarillas: number;
+  /** Honestidad de datos: cuánto de la cartera está realmente medido. */
+  cobertura: {
+    cuentasTotales: number; // en el universo (excluidas de operación fuera de TODO)
+    cuentasConfiguradas: number;
+    cuentasPendienteDatos: number;
+    cuentasSinCobros: number; // configuradas pero sin nada que medir — NO cuentan como sanas
+  };
+}
+
+/**
+ * Computa las métricas agregadas de la cartera para el SnapshotCartera del corte.
+ * Reglas de honestidad (constraint de la fase): cuentas excluidas de operación
+ * fuera de TODO; sin configurar / sin cobros NO aportan a totales, DSO ni aging
+ * (la cobertura lo declara); cobros sin `moneda` no entran (no se adivina).
+ */
+export function computeMetricasCartera(
+  cartera: CarteraEngineInput,
+  opts: {
+    todayISO: string;
+    desdeUltimoCorteISO: string | null;
+    proximoCorteISO: string;
+    umbralVencidoDias?: number;
+  },
+): MetricasCartera {
+  const umbral = opts.umbralVencidoDias ?? UMBRAL_VENCIDO_DIAS;
+  const mkMoneda = (): MetricasMoneda => ({
+    totalVencido: 0,
+    totalPorCobrar: 0,
+    totalProgramado: 0,
+    totalCobradoDesdeUltimoCorte: 0,
+    aging: { d0_30: 0, d31_60: 0, d61_90: 0, d90mas: 0 },
+    dso: null,
+    diasPromedioCobro: null,
+    proyectadoProximoCorte: 0,
+  });
+  const moneda = { CRC: mkMoneda(), USD: mkMoneda() };
+  const dsoAcc = { CRC: { peso: 0, suma: 0 }, USD: { peso: 0, suma: 0 } };
+  const cobroAcc = { CRC: { n: 0, suma: 0 }, USD: { n: 0, suma: 0 } };
+
+  let cuentasRojas = 0;
+  let cuentasAmarillas = 0;
+  const cobertura = {
+    cuentasTotales: 0,
+    cuentasConfiguradas: 0,
+    cuentasPendienteDatos: 0,
+    cuentasSinCobros: 0,
+  };
+
+  for (const cuenta of cartera.cuentas) {
+    if (cuenta.excluidaOperacion) continue;
+    cobertura.cuentasTotales++;
+    if (!cuenta.tieneCuenta) continue; // sin configurar: cuenta en el universo, nada que medir
+    cobertura.cuentasConfiguradas++;
+    if (cuenta.estadoCuenta === "PENDIENTE_DATOS") cobertura.cuentasPendienteDatos++;
+    if (cuenta.cobros.length === 0) {
+      cobertura.cuentasSinCobros++;
+      continue; // vacía ≠ sana: no aporta ni al verde ni a los denominadores
+    }
+
+    const sem = semaforoCuenta(cuenta.cobros, opts.todayISO, umbral);
+    if (sem === "rojo") cuentasRojas++;
+    else if (sem === "amarillo") cuentasAmarillas++;
+
+    for (const c of cuenta.cobros) {
+      if (!c.moneda) continue; // sin moneda no se adivina
+      const m = moneda[c.moneda];
+
+      if (c.estado === "COBRADO") {
+        if (c.fechaCobroISO) {
+          const acc = cobroAcc[c.moneda];
+          acc.n++;
+          acc.suma += diffDays(c.fechaProgramadaISO, c.fechaCobroISO);
+          if (
+            opts.desdeUltimoCorteISO &&
+            c.fechaCobroISO > opts.desdeUltimoCorteISO &&
+            c.fechaCobroISO <= opts.todayISO
+          ) {
+            m.totalCobradoDesdeUltimoCorte = round2(m.totalCobradoDesdeUltimoCorte + c.monto);
+          }
+        }
+        continue;
+      }
+
+      const s = semaforoCobro(c, opts.todayISO, umbral);
+      const edad = diffDays(c.fechaProgramadaISO, opts.todayISO); // >0 = pasado
+
+      if (s === "rojo") {
+        m.totalVencido = round2(m.totalVencido + c.monto);
+        const bucket = edad <= 30 ? "d0_30" : edad <= 60 ? "d31_60" : edad <= 90 ? "d61_90" : "d90mas";
+        m.aging[bucket] = round2(m.aging[bucket] + c.monto);
+      } else if (s === "amarillo") {
+        m.totalPorCobrar = round2(m.totalPorCobrar + c.monto);
+      } else if (s === "gris") {
+        m.totalProgramado = round2(m.totalProgramado + c.monto);
+      }
+
+      // DSO: exigibles = la fecha programada ya llegó (los futuros no diluyen).
+      if (edad >= 0) {
+        dsoAcc[c.moneda].peso += c.monto;
+        dsoAcc[c.moneda].suma += edad * c.monto;
+      }
+
+      // Proyectado al próximo corte: no-vencidos con fecha efectiva (gracia → hoy)
+      // dentro de la ventana — el corte SIGUIENTE lo compara contra su cobrado real.
+      if (s !== "rojo") {
+        const fechaEfectiva = edad > 0 ? opts.todayISO : c.fechaProgramadaISO;
+        if (fechaEfectiva <= opts.proximoCorteISO) {
+          m.proyectadoProximoCorte = round2(m.proyectadoProximoCorte + c.monto);
+        }
+      }
+    }
+  }
+
+  for (const mon of ["CRC", "USD"] as const) {
+    if (dsoAcc[mon].peso > 0) moneda[mon].dso = round1(dsoAcc[mon].suma / dsoAcc[mon].peso);
+    if (cobroAcc[mon].n > 0) moneda[mon].diasPromedioCobro = round1(cobroAcc[mon].suma / cobroAcc[mon].n);
+  }
+
+  return {
+    version: 1,
+    ventana: {
+      desdeISO: opts.desdeUltimoCorteISO,
+      hastaISO: opts.todayISO,
+      proximoCorteISO: opts.proximoCorteISO,
+    },
+    moneda,
+    cuentasRojas,
+    cuentasAmarillas,
+    cobertura,
+  };
+}
+
+/** Umbral del riesgo de pago: días de atraso POR ENCIMA del comportamiento histórico. */
+export const RIESGO_UMBRAL_DIAS = 15;
+
+export interface RiesgoPagoItem {
+  cobroId: string;
+  cuentaId: string;
+  servicioId: string;
+  clienteNombre: string;
+  moneda: "CRC" | "USD" | null;
+  monto: number;
+  fechaProgramadaISO: string;
+  diasAtraso: number;
+  /** Comportamiento histórico de la cuenta (promedio fechaCobro−fechaProgramada de sus COBRADOs). null = sin historia. */
+  promedioHistoricoDias: number | null;
+  umbralAplicado: number; // (promedio ?? 0) + umbral
+  excedenteDias: number; // diasAtraso − umbralAplicado
+}
+
+/**
+ * Riesgo de pago V1 — REGLA SIMPLE, sin ML (documentada en DECISIONS): una cuenta
+ * que suele pagar a N días de la fecha y lleva N + umbral sin pagar está en riesgo.
+ * Sin historia de COBRADOs → bandera si el atraso supera el umbral a secas. El
+ * promedio NO se clampea: el buen pagador (promedio negativo) se bandera antes —
+ * esa ES la señal. El patrón aprendido por cliente queda para cuando haya historia.
+ */
+export function computeRiesgoPago(
+  cartera: CarteraEngineInput,
+  opts: { todayISO: string; umbralDias?: number },
+): RiesgoPagoItem[] {
+  const umbral = opts.umbralDias ?? RIESGO_UMBRAL_DIAS;
+  const out: RiesgoPagoItem[] = [];
+
+  for (const cuenta of cartera.cuentas) {
+    if (cuenta.excluidaOperacion || !cuenta.tieneCuenta) continue;
+
+    const cobrados = cuenta.cobros.filter((c) => c.estado === "COBRADO" && c.fechaCobroISO);
+    const promedio =
+      cobrados.length > 0
+        ? round1(
+            cobrados.reduce((acc, c) => acc + diffDays(c.fechaProgramadaISO, c.fechaCobroISO!), 0) /
+              cobrados.length,
+          )
+        : null;
+    const umbralAplicado = round1((promedio ?? 0) + umbral);
+
+    for (const c of cuenta.cobros) {
+      if (c.estado === "COBRADO") continue;
+      const diasAtraso = diffDays(c.fechaProgramadaISO, opts.todayISO);
+      if (diasAtraso > umbralAplicado) {
+        out.push({
+          cobroId: c.cobroId,
+          cuentaId: cuenta.cuentaId,
+          servicioId: c.servicioId,
+          clienteNombre: cuenta.clienteNombre,
+          moneda: c.moneda ?? null,
+          monto: c.monto,
+          fechaProgramadaISO: c.fechaProgramadaISO,
+          diasAtraso,
+          promedioHistoricoDias: promedio,
+          umbralAplicado,
+          excedenteDias: round1(diasAtraso - umbralAplicado),
+        });
+      }
+    }
+  }
+
+  return out.sort(
+    (a, b) => b.excedenteDias - a.excedenteDias || a.cobroId.localeCompare(b.cobroId),
+  );
 }

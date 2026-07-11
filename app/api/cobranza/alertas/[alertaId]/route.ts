@@ -1,6 +1,7 @@
 /**
  * /api/cobranza/alertas/[alertaId] — ciclo de vida de una alerta.
- *   PATCH { estado } → ABIERTA→VISTA→RESUELTA|DESCARTADA (registra quién/cuándo).
+ *   PATCH { estado?, posponerHasta? } → estado ABIERTA→VISTA→RESUELTA|DESCARTADA
+ *   (registra quién/cuándo) y/o snooze (posponer sin cambiar estado; null lo quita).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardCobranzaAccess } from "@/lib/auth/api-guards";
@@ -29,7 +30,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   try {
-    await patchAlerta(alertaId, parsed.data.estado, guard.user.email);
+    await patchAlerta(alertaId, parsed.data, guard.user.email);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "La alerta no existe" }, { status: 404 });

@@ -14,6 +14,7 @@ import {
   materializeCobros,
   reconcileCobros,
   splitCatchUp,
+  sumaPlanExpandido,
   type AlertaDraft,
   type CobroExistente,
   type PlanEngineInput,
@@ -27,6 +28,7 @@ import type {
   servicioPatchSchema,
   planPutSchema,
   cobroPatchSchema,
+  alertaPatchSchema,
   bitacoraCreateSchema,
 } from "./schema";
 
@@ -255,6 +257,22 @@ export async function generateCobros(
     monto: Number(c.monto),
   }));
 
+  // Guardarraíl de montos (fase 3): un plan descuadrado puede GUARDARSE (sigue
+  // editable y la alerta MONTOS_DESCUADRADOS avisa), pero NO se materializa —
+  // cobros que no suman el total del servicio jamás cuadran después. SUSCRIPCION
+  // y planes inválidos devuelven null y pasan (materializeCobros ya los maneja);
+  // el rolling del digest es inmune por la misma razón.
+  const sumaPlan = sumaPlanExpandido(
+    { montoTotal: servicioInput.montoTotal, duracionMeses: servicioInput.duracionMeses },
+    planInput,
+  );
+  if (sumaPlan != null && Math.abs(sumaPlan - servicioInput.montoTotal) > 0.01) {
+    throw new CobranzaError(
+      `El plan suma ${sumaPlan.toLocaleString("es-CR")} pero el servicio vale ${servicioInput.montoTotal.toLocaleString("es-CR")} ${servicioInput.moneda} — cuadrá el plan antes de generar cobros.`,
+      409,
+    );
+  }
+
   const drafts = materializeCobros(servicioInput, planInput, { todayISO });
   const rec = reconcileCobros(drafts, existentes);
   const { regulares, catchUp } = splitCatchUp(rec.toCreate, todayISO);
@@ -358,6 +376,16 @@ export async function cambiarEstadoCobro(
   if (patch.referenciaExterna !== undefined) data.referenciaExterna = patch.referenciaExterna;
   if (patch.notas !== undefined) data.notas = patch.notas;
 
+  // Promesa de pago (fase 3): fecha en que el cliente prometió pagar. No aplica
+  // sobre un COBRADO (ya llegó) y NO se limpia al cobrar (trazabilidad de si
+  // cumplió). Semáforos y métricas NO cambian — la promesa solo calla alertas.
+  if (patch.promesaPago !== undefined) {
+    if (cobro.estado === "COBRADO") {
+      throw new CobranzaError("El cobro ya está COBRADO — la promesa no aplica.", 409);
+    }
+    data.promesaPago = patch.promesaPago ? dayUTC(patch.promesaPago) : null;
+  }
+
   if (patch.estado !== undefined && patch.estado !== cobro.estado) {
     if (patch.estado === "COBRADO") {
       if (!byEmail) throw new CobranzaError("Marcar COBRADO exige confirmación de un usuario.", 400);
@@ -378,7 +406,30 @@ export async function cambiarEstadoCobro(
     data.fechaCobro = patch.fechaCobro ? dayUTC(patch.fechaCobro) : null;
   }
 
-  return prisma.cobro.update({ where: { id: cobroId }, data });
+  const updated = await prisma.cobro.update({ where: { id: cobroId }, data });
+
+  if (patch.promesaPago !== undefined) {
+    // AUTO-SNOOZE: registrar la promesa calla YA las alertas vivas de este cobro
+    // hasta la fecha prometida (el humano ya gestionó — sin esto el ruido viejo
+    // sigue en el feed hasta el próximo corte); quitarla las despierta.
+    await prisma.alertaCobro.updateMany({
+      where: { cobroId, estado: { in: ["ABIERTA", "VISTA"] } },
+      data: { posponerHasta: patch.promesaPago ? dayUTC(patch.promesaPago) : null },
+    });
+    await prisma.bitacoraCobro.create({
+      data: {
+        cuentaId: cobro.cuentaId,
+        cobroId,
+        tipo: "NOTA",
+        contenido: patch.promesaPago
+          ? `Promesa de pago registrada: el cliente prometió pagar el ${patch.promesaPago}.`
+          : "Promesa de pago retirada.",
+        usuarioEmail: byEmail,
+      },
+    });
+  }
+
+  return updated;
 }
 
 // ── Alertas: upsert con dedup (clon del runner del watchdog CS) ─────────────────
@@ -452,21 +503,33 @@ export async function upsertAlertas(drafts: AlertaDraft[]): Promise<{ created: n
   return { created, merged, suppressed };
 }
 
-export async function patchAlerta(alertaId: string, estado: string, byEmail: string) {
-  const data: Prisma.AlertaCobroUpdateInput = { estado: estado as never };
-  if (estado === "VISTA") {
-    data.vistaEn = new Date();
-    data.vistaPor = byEmail;
+export async function patchAlerta(
+  alertaId: string,
+  patch: z.infer<typeof alertaPatchSchema>,
+  byEmail: string,
+) {
+  const data: Prisma.AlertaCobroUpdateInput = {};
+  if (patch.estado !== undefined) {
+    data.estado = patch.estado as never;
+    if (patch.estado === "VISTA") {
+      data.vistaEn = new Date();
+      data.vistaPor = byEmail;
+    }
+    if (patch.estado === "RESUELTA" || patch.estado === "DESCARTADA") {
+      data.resueltaEn = new Date();
+      data.resueltaPor = byEmail;
+    }
+    if (patch.estado === "ABIERTA") {
+      data.vistaEn = null;
+      data.vistaPor = null;
+      data.resueltaEn = null;
+      data.resueltaPor = null;
+    }
   }
-  if (estado === "RESUELTA" || estado === "DESCARTADA") {
-    data.resueltaEn = new Date();
-    data.resueltaPor = byEmail;
-  }
-  if (estado === "ABIERTA") {
-    data.vistaEn = null;
-    data.vistaPor = null;
-    data.resueltaEn = null;
-    data.resueltaPor = null;
+  // Snooze manual: posponer NO cambia el estado — la alerta sale del feed
+  // (filtro en loadAlertas) y vuelve sola cuando la fecha llega.
+  if (patch.posponerHasta !== undefined) {
+    data.posponerHasta = patch.posponerHasta ? dayUTC(patch.posponerHasta) : null;
   }
   return prisma.alertaCobro.update({ where: { id: alertaId }, data });
 }

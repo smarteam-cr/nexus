@@ -56,6 +56,31 @@
  *   K) diffAlertSets:
  *      K1 nuevas/resueltas/persistentes por dedupeKey.
  *      K2 sin cambios → sinCambios true (también con ambos sets vacíos).
+ *   N) computeMetricasCartera (fase 3):
+ *      N1 cartera vacía → ceros/nulls honestos (dso null, no 0) + ventana declarada.
+ *      N2 CRC y USD jamás se suman; cobro sin moneda no entra a ninguna.
+ *      N3 mapeo 1:1 al semáforo: rojo→vencido, amarillo→porCobrar, gris→programado; COBRADO fuera.
+ *      N4 aging con bordes 30/31/60/61/90/91 + invariante Σ buckets === totalVencido.
+ *      N5 DSO ponderado por monto; los futuros no diluyen.
+ *      N6 DSO null sin exigibles (solo futuros) — honestidad: no es 0.
+ *      N7 ventana de cobrado (desde, hoy]: borde exclusivo/inclusivo; primer corte (null) → 0.
+ *      N8 proyectadoProximoCorte: vencido fuera; gracia (amarillo pasado → hoy); futuro fuera de ventana no.
+ *      N9 cobertura (excluida fuera de TODO, sin configurar, PENDIENTE_DATOS, sin cobros) + rojas/amarillas.
+ *      N10 diasPromedioCobro negativo (paga antes).
+ *   R) computeRiesgoPago (fase 3):
+ *      R1 sin historia → umbral a secas (15): atraso 16 sí, 15 no; promedio null.
+ *      R2 con historia → (promedio + umbral): 26 sí, 25 no con promedio 10.
+ *      R3 promedio negativo NO se clampea: el buen pagador se bandera antes.
+ *      R4 COBRADO / excluida / sin cuenta → fuera.
+ *      R5 orden: excedente desc, empate por cobroId.
+ *      R6 umbral custom + constante exportada.
+ *   P) promesa de pago en computeAlertSet (fase 3):
+ *      P1 promesa vigente (futura) suprime VENCIDO y PROXIMO de ese cobro.
+ *      P2 promesa == hoy sigue vigente (silencio).
+ *      P3 promesa pasada → PROMESA_INCUMPLIDA (ALTA) que REEMPLAZA al vencido (1 alerta por cobro).
+ *      P4 COBRADO con promesa pasada → nada.
+ *      P5 catch-up: INCONSISTENCIA_CICLO se sigue emitiendo aunque la promesa calle el vencido.
+ *      P6 regresión: fixture sin el campo → comportamiento idéntico al de siempre.
  *
  * Correr: `npx vitest run lib/cobranza/engine.test.ts --project unit`.
  */
@@ -72,6 +97,9 @@ import {
   computeAlertSet,
   diffAlertSets,
   proyectarIngresos,
+  computeMetricasCartera,
+  computeRiesgoPago,
+  RIESGO_UMBRAL_DIAS,
   PlanInvalidoError,
 } from "./engine";
 import type {
@@ -943,4 +971,433 @@ test("M10 — determinismo: mismo input → mismo output (orden estable por fech
   const p2 = proyectarIngresos([...cobros].reverse(), { todayISO: HOY });
   expect(p1).toEqual(p2);
   expect(p1.buckets.find((b) => b.key === "2026-07-Q2")!.cobros.map((c) => c.cobroId)).toEqual(["c", "a", "b"]);
+});
+
+// ── N) computeMetricasCartera (fase 3) ───────────────────────────────────────────
+
+/** Corte estándar de los tests de métricas: ventana (2026-07-03, hoy], próximo corte +7. */
+function metricasDe(
+  cuentas: Cuenta[],
+  over: Partial<{
+    todayISO: string;
+    desdeUltimoCorteISO: string | null;
+    proximoCorteISO: string;
+    umbralVencidoDias: number;
+  }> = {},
+) {
+  return computeMetricasCartera(
+    { cuentas },
+    { todayISO: HOY, desdeUltimoCorteISO: "2026-07-03", proximoCorteISO: "2026-07-17", ...over },
+  );
+}
+
+test("N1 — cartera vacía: ceros/nulls honestos (dso null, NO 0) y ventana declarada", () => {
+  const m = metricasDe([], { desdeUltimoCorteISO: null });
+  expect(m.version).toBe(1);
+  expect(m.ventana).toEqual({ desdeISO: null, hastaISO: HOY, proximoCorteISO: "2026-07-17" });
+  for (const mon of ["CRC", "USD"] as const) {
+    expect(m.moneda[mon].totalVencido).toBe(0);
+    expect(m.moneda[mon].totalPorCobrar).toBe(0);
+    expect(m.moneda[mon].totalProgramado).toBe(0);
+    expect(m.moneda[mon].totalCobradoDesdeUltimoCorte).toBe(0);
+    expect(m.moneda[mon].aging).toEqual({ d0_30: 0, d31_60: 0, d61_90: 0, d90mas: 0 });
+    expect(m.moneda[mon].dso).toBeNull();
+    expect(m.moneda[mon].diasPromedioCobro).toBeNull();
+    expect(m.moneda[mon].proyectadoProximoCorte).toBe(0);
+  }
+  expect(m.cuentasRojas).toBe(0);
+  expect(m.cuentasAmarillas).toBe(0);
+  expect(m.cobertura).toEqual({
+    cuentasTotales: 0,
+    cuentasConfiguradas: 0,
+    cuentasPendienteDatos: 0,
+    cuentasSinCobros: 0,
+  });
+});
+
+test("N2 — CRC y USD jamás se suman; cobro sin moneda no entra a ninguna", () => {
+  const m = metricasDe([
+    cuenta({
+      cobros: [
+        cobroCartera({ cobroId: "co1", moneda: "CRC", monto: 100, fechaProgramadaISO: "2026-07-09" }),
+        cobroCartera({ cobroId: "co2", moneda: "USD", monto: 200, fechaProgramadaISO: "2026-07-09" }),
+        cobroCartera({ cobroId: "co3", monto: 400, fechaProgramadaISO: "2026-07-09" }), // sin moneda
+      ],
+    }),
+  ]);
+  expect(m.moneda.CRC.totalPorCobrar).toBe(100);
+  expect(m.moneda.USD.totalPorCobrar).toBe(200);
+  // los 400 sin moneda no aparecen en NINGÚN total (no se adivina)
+  const totales = (["CRC", "USD"] as const).flatMap((mon) => [
+    m.moneda[mon].totalVencido,
+    m.moneda[mon].totalPorCobrar,
+    m.moneda[mon].totalProgramado,
+  ]);
+  expect(totales.reduce((a, b) => a + b, 0)).toBe(300);
+});
+
+test("N3 — mapeo 1:1 al semáforo: rojo→vencido, amarillo→porCobrar, gris→programado; COBRADO fuera", () => {
+  const m = metricasDe([
+    cuenta({
+      cobros: [
+        cobroCartera({ cobroId: "co1", moneda: "USD", monto: 500, fechaProgramadaISO: "2026-07-01" }), // rojo (9d)
+        cobroCartera({ cobroId: "co2", moneda: "USD", monto: 200, fechaProgramadaISO: "2026-07-09" }), // amarillo
+        cobroCartera({ cobroId: "co3", moneda: "USD", monto: 300, estado: "PROGRAMADO", fechaProgramadaISO: "2026-08-01" }), // gris
+        cobroCartera({ cobroId: "co4", moneda: "USD", monto: 100, estado: "COBRADO", fechaProgramadaISO: "2026-07-01", fechaCobroISO: "2026-07-05" }),
+      ],
+    }),
+  ]);
+  expect(m.moneda.USD.totalVencido).toBe(500);
+  expect(m.moneda.USD.totalPorCobrar).toBe(200);
+  expect(m.moneda.USD.totalProgramado).toBe(300);
+  expect(m.moneda.USD.diasPromedioCobro).toBe(4); // cobró 4 días tarde
+});
+
+test("N4 — aging con bordes 30/31/60/61/90/91 + invariante Σ buckets === totalVencido", () => {
+  const m = metricasDe([
+    cuenta({
+      cobros: [
+        cobroCartera({ cobroId: "a", moneda: "USD", monto: 10, fechaProgramadaISO: "2026-06-10" }), // 30d → d0_30
+        cobroCartera({ cobroId: "b", moneda: "USD", monto: 20, fechaProgramadaISO: "2026-06-09" }), // 31d → d31_60
+        cobroCartera({ cobroId: "c", moneda: "USD", monto: 30, fechaProgramadaISO: "2026-05-11" }), // 60d → d31_60
+        cobroCartera({ cobroId: "d", moneda: "USD", monto: 40, fechaProgramadaISO: "2026-05-10" }), // 61d → d61_90
+        cobroCartera({ cobroId: "e", moneda: "USD", monto: 50, fechaProgramadaISO: "2026-04-11" }), // 90d → d61_90
+        cobroCartera({ cobroId: "f", moneda: "USD", monto: 60, fechaProgramadaISO: "2026-04-10" }), // 91d → d90mas
+      ],
+    }),
+  ]);
+  expect(m.moneda.USD.aging).toEqual({ d0_30: 10, d31_60: 50, d61_90: 90, d90mas: 60 });
+  const suma = Object.values(m.moneda.USD.aging).reduce((a, b) => a + b, 0);
+  expect(suma).toBe(m.moneda.USD.totalVencido);
+});
+
+test("N5 — DSO ponderado por monto; los futuros no diluyen", () => {
+  const m = metricasDe([
+    cuenta({
+      cobros: [
+        cobroCartera({ cobroId: "a", moneda: "USD", monto: 100, fechaProgramadaISO: "2026-06-30" }), // edad 10
+        cobroCartera({ cobroId: "b", moneda: "USD", monto: 300, fechaProgramadaISO: "2026-05-31" }), // edad 40
+        cobroCartera({ cobroId: "c", moneda: "USD", monto: 1000, estado: "PROGRAMADO", fechaProgramadaISO: "2026-08-01" }), // futuro: fuera
+      ],
+    }),
+  ]);
+  // (10·100 + 40·300) / 400 = 32.5
+  expect(m.moneda.USD.dso).toBe(32.5);
+});
+
+test("N6 — DSO null sin exigibles (solo futuros): honestidad, no es 0", () => {
+  const m = metricasDe([
+    cuenta({
+      cobros: [cobroCartera({ moneda: "USD", monto: 500, estado: "PROGRAMADO", fechaProgramadaISO: "2026-09-01" })],
+    }),
+  ]);
+  expect(m.moneda.USD.totalProgramado).toBe(500); // hay cartera, pero nada exigible
+  expect(m.moneda.USD.dso).toBeNull();
+});
+
+test("N7 — ventana de cobrado (desde, hoy]: bordes exclusivo/inclusivo; primer corte (null) → 0", () => {
+  const cuentas = [
+    cuenta({
+      cobros: [
+        cobroCartera({ cobroId: "a", moneda: "USD", monto: 100, estado: "COBRADO", fechaProgramadaISO: "2026-07-01", fechaCobroISO: "2026-07-03" }), // == desde: fuera
+        cobroCartera({ cobroId: "b", moneda: "USD", monto: 200, estado: "COBRADO", fechaProgramadaISO: "2026-07-01", fechaCobroISO: "2026-07-04" }), // dentro
+        cobroCartera({ cobroId: "c", moneda: "USD", monto: 300, estado: "COBRADO", fechaProgramadaISO: "2026-07-01", fechaCobroISO: "2026-07-10" }), // == hoy: dentro
+        cobroCartera({ cobroId: "d", moneda: "USD", monto: 400, estado: "COBRADO", fechaProgramadaISO: "2026-07-01", fechaCobroISO: "2026-07-02" }), // antes: fuera
+      ],
+    }),
+  ];
+  expect(metricasDe(cuentas).moneda.USD.totalCobradoDesdeUltimoCorte).toBe(500);
+  // primer corte: sin ventana anterior no se declara cobrado (nada que comparar)
+  expect(metricasDe(cuentas, { desdeUltimoCorteISO: null }).moneda.USD.totalCobradoDesdeUltimoCorte).toBe(0);
+});
+
+test("N8 — proyectadoProximoCorte: vencido fuera; gracia (pasado no-rojo cuenta como hoy); futuro fuera de ventana no", () => {
+  const m = metricasDe([
+    cuenta({
+      cobros: [
+        cobroCartera({ cobroId: "a", moneda: "USD", monto: 500, fechaProgramadaISO: "2026-07-01" }), // rojo: fuera
+        cobroCartera({ cobroId: "b", moneda: "USD", monto: 100, fechaProgramadaISO: "2026-07-08" }), // amarillo pasado → gracia (hoy ≤ corte)
+        cobroCartera({ cobroId: "c", moneda: "USD", monto: 200, estado: "PROGRAMADO", fechaProgramadaISO: "2026-07-15" }), // dentro
+        cobroCartera({ cobroId: "d", moneda: "USD", monto: 400, estado: "PROGRAMADO", fechaProgramadaISO: "2026-07-20" }), // después del corte: fuera
+      ],
+    }),
+  ]);
+  expect(m.moneda.USD.proyectadoProximoCorte).toBe(300);
+});
+
+test("N9 — cobertura: excluida fuera de TODO; sin configurar / PENDIENTE_DATOS / sin cobros declaradas; rojas/amarillas", () => {
+  const m = metricasDe([
+    cuenta({
+      cuentaId: "cx",
+      excluidaOperacion: true,
+      cobros: [cobroCartera({ moneda: "USD", monto: 999, fechaProgramadaISO: "2026-07-01" })], // rojo, pero excluida
+    }),
+    cuenta({ cuentaId: "cb", tieneCuenta: false }),
+    cuenta({ cuentaId: "cc", estadoCuenta: "PENDIENTE_DATOS", cobros: [] }),
+    cuenta({ cuentaId: "cd", cobros: [cobroCartera({ cobroId: "d1", moneda: "USD", monto: 100, fechaProgramadaISO: "2026-07-01" })] }), // roja
+    cuenta({ cuentaId: "ce", cobros: [cobroCartera({ cobroId: "e1", moneda: "USD", monto: 50, fechaProgramadaISO: "2026-07-09" })] }), // amarilla
+  ]);
+  expect(m.cobertura).toEqual({
+    cuentasTotales: 4, // la excluida NO cuenta ni en el universo medido
+    cuentasConfiguradas: 3,
+    cuentasPendienteDatos: 1,
+    cuentasSinCobros: 1,
+  });
+  expect(m.cuentasRojas).toBe(1);
+  expect(m.cuentasAmarillas).toBe(1);
+  expect(m.moneda.USD.totalVencido).toBe(100); // los 999 de la excluida no entran
+});
+
+test("N10 — diasPromedioCobro negativo: el que paga antes se ve (round1)", () => {
+  const m = metricasDe([
+    cuenta({
+      cobros: [
+        cobroCartera({ cobroId: "a", moneda: "USD", monto: 100, estado: "COBRADO", fechaProgramadaISO: "2026-07-05", fechaCobroISO: "2026-07-01" }), // -4
+        cobroCartera({ cobroId: "b", moneda: "USD", monto: 100, estado: "COBRADO", fechaProgramadaISO: "2026-07-05", fechaCobroISO: "2026-07-04" }), // -1
+      ],
+    }),
+  ]);
+  expect(m.moneda.USD.diasPromedioCobro).toBe(-2.5);
+});
+
+// ── R) computeRiesgoPago (fase 3) ────────────────────────────────────────────────
+
+test("R1 — sin historia: umbral a secas (15) — atraso 16 sí, 15 no; promedio null", () => {
+  const r = computeRiesgoPago(
+    {
+      cuentas: [
+        cuenta({
+          cobros: [
+            cobroCartera({ cobroId: "a", moneda: "USD", fechaProgramadaISO: "2026-06-24" }), // 16d
+            cobroCartera({ cobroId: "b", moneda: "USD", fechaProgramadaISO: "2026-06-25" }), // 15d = umbral: no
+          ],
+        }),
+      ],
+    },
+    { todayISO: HOY },
+  );
+  expect(r).toHaveLength(1);
+  expect(r[0]).toMatchObject({
+    cobroId: "a",
+    diasAtraso: 16,
+    promedioHistoricoDias: null,
+    umbralAplicado: RIESGO_UMBRAL_DIAS,
+    excedenteDias: 1,
+  });
+});
+
+test("R2 — con historia: promedio 10 → umbral 25 — atraso 26 sí, 25 no", () => {
+  const r = computeRiesgoPago(
+    {
+      cuentas: [
+        cuenta({
+          cobros: [
+            cobroCartera({ cobroId: "h1", estado: "COBRADO", fechaProgramadaISO: "2026-01-01", fechaCobroISO: "2026-01-11" }), // +10
+            cobroCartera({ cobroId: "h2", estado: "COBRADO", fechaProgramadaISO: "2026-02-01", fechaCobroISO: "2026-02-11" }), // +10
+            cobroCartera({ cobroId: "a", moneda: "USD", fechaProgramadaISO: "2026-06-14" }), // 26d
+            cobroCartera({ cobroId: "b", moneda: "USD", fechaProgramadaISO: "2026-06-15" }), // 25d: no
+          ],
+        }),
+      ],
+    },
+    { todayISO: HOY },
+  );
+  expect(r.map((i) => i.cobroId)).toEqual(["a"]);
+  expect(r[0].promedioHistoricoDias).toBe(10);
+  expect(r[0].umbralAplicado).toBe(25);
+});
+
+test("R3 — promedio negativo NO se clampea: el buen pagador se bandera antes (esa ES la señal)", () => {
+  const r = computeRiesgoPago(
+    {
+      cuentas: [
+        cuenta({
+          cobros: [
+            cobroCartera({ cobroId: "h1", estado: "COBRADO", fechaProgramadaISO: "2026-01-10", fechaCobroISO: "2026-01-05" }), // -5
+            cobroCartera({ cobroId: "a", moneda: "USD", fechaProgramadaISO: "2026-06-29" }), // 11d > 10
+            cobroCartera({ cobroId: "b", moneda: "USD", fechaProgramadaISO: "2026-06-30" }), // 10d: no
+          ],
+        }),
+      ],
+    },
+    { todayISO: HOY },
+  );
+  expect(r.map((i) => i.cobroId)).toEqual(["a"]);
+  expect(r[0].umbralAplicado).toBe(10); // (-5) + 15, sin clamp a 15
+});
+
+test("R4 — COBRADO no se bandera; cuenta excluida o sin configurar quedan fuera", () => {
+  const r = computeRiesgoPago(
+    {
+      cuentas: [
+        cuenta({
+          cuentaId: "cx",
+          excluidaOperacion: true,
+          cobros: [cobroCartera({ cobroId: "x", fechaProgramadaISO: "2026-01-01" })],
+        }),
+        cuenta({
+          cuentaId: "cb",
+          tieneCuenta: false,
+          cobros: [cobroCartera({ cobroId: "y", fechaProgramadaISO: "2026-01-01" })],
+        }),
+        cuenta({
+          cuentaId: "cc",
+          cobros: [cobroCartera({ cobroId: "z", estado: "COBRADO", fechaProgramadaISO: "2026-01-01", fechaCobroISO: "2026-07-01" })],
+        }),
+      ],
+    },
+    { todayISO: HOY },
+  );
+  expect(r).toEqual([]);
+});
+
+test("R5 — orden: excedente desc; empate se desempata por cobroId (determinismo)", () => {
+  const r = computeRiesgoPago(
+    {
+      cuentas: [
+        cuenta({
+          cobros: [
+            cobroCartera({ cobroId: "b", fechaProgramadaISO: "2026-06-10" }), // 30d → exc 15
+            cobroCartera({ cobroId: "a", fechaProgramadaISO: "2026-06-10" }), // 30d → exc 15 (empate)
+            cobroCartera({ cobroId: "c", fechaProgramadaISO: "2026-05-31" }), // 40d → exc 25
+          ],
+        }),
+      ],
+    },
+    { todayISO: HOY },
+  );
+  expect(r.map((i) => i.cobroId)).toEqual(["c", "a", "b"]);
+});
+
+test("R6 — umbral custom cambia el corte", () => {
+  const cartera: CarteraEngineInput = {
+    cuentas: [
+      cuenta({
+        cobros: [
+          cobroCartera({ cobroId: "a", fechaProgramadaISO: "2026-07-04" }), // 6d
+          cobroCartera({ cobroId: "b", fechaProgramadaISO: "2026-07-05" }), // 5d
+        ],
+      }),
+    ],
+  };
+  const r = computeRiesgoPago(cartera, { todayISO: HOY, umbralDias: 5 });
+  expect(r.map((i) => i.cobroId)).toEqual(["a"]); // 6 > 5; 5 no
+  expect(computeRiesgoPago(cartera, { todayISO: HOY })).toEqual([]); // con el default 15, ninguno
+});
+
+// ── P) Promesa de pago en computeAlertSet (fase 3) ───────────────────────────────
+
+test("P1 — promesa VIGENTE (futura) suprime VENCIDO y PROXIMO de ese cobro", () => {
+  const alertas = computeAlertSet(
+    {
+      cuentas: [
+        cuenta({
+          servicios: [servicioCartera()],
+          cobros: [
+            cobroCartera({ cobroId: "co1", fechaProgramadaISO: "2026-06-30", promesaPagoISO: "2026-07-15" }), // vencido, prometido
+            cobroCartera({ cobroId: "co2", fechaProgramadaISO: "2026-07-15", promesaPagoISO: "2026-07-20" }), // próximo, prometido
+          ],
+        }),
+      ],
+    },
+    { todayISO: HOY },
+  );
+  expect(alertas).toEqual([]);
+});
+
+test("P2 — promesa que vence HOY sigue vigente (silencio)", () => {
+  const alertas = computeAlertSet(
+    {
+      cuentas: [
+        cuenta({
+          servicios: [servicioCartera()],
+          cobros: [cobroCartera({ cobroId: "co1", fechaProgramadaISO: "2026-06-30", promesaPagoISO: HOY })],
+        }),
+      ],
+    },
+    { todayISO: HOY },
+  );
+  expect(alertas).toEqual([]);
+});
+
+test("P3 — promesa PASADA → PROMESA_INCUMPLIDA (ALTA) que REEMPLAZA al vencido: 1 sola alerta por cobro", () => {
+  const alertas = computeAlertSet(
+    {
+      cuentas: [
+        cuenta({
+          servicios: [servicioCartera()],
+          cobros: [cobroCartera({ cobroId: "co1", monto: 250, fechaProgramadaISO: "2026-06-30", promesaPagoISO: "2026-07-05" })],
+        }),
+      ],
+    },
+    { todayISO: HOY },
+  );
+  expect(alertas).toHaveLength(1);
+  expect(alertas[0]).toMatchObject({
+    dedupeKey: "PROMESA_INCUMPLIDA:c1:co1",
+    tipo: "PROMESA_INCUMPLIDA",
+    urgencia: "ALTA",
+    cobroId: "co1",
+    evidencia: {
+      promesaPago: "2026-07-05",
+      fechaProgramada: "2026-06-30",
+      monto: 250,
+      diasDesdePromesa: 5,
+    },
+  });
+});
+
+test("P4 — COBRADO con promesa pasada → nada (el cobro llegó, la promesa ya no importa)", () => {
+  const alertas = computeAlertSet(
+    {
+      cuentas: [
+        cuenta({
+          servicios: [servicioCartera()],
+          cobros: [
+            cobroCartera({ cobroId: "co1", estado: "COBRADO", fechaProgramadaISO: "2026-06-30", promesaPagoISO: "2026-07-05" }),
+          ],
+        }),
+      ],
+    },
+    { todayISO: HOY },
+  );
+  expect(alertas).toEqual([]);
+});
+
+test("P5 — catch-up: INCONSISTENCIA_CICLO se sigue emitiendo aunque la promesa calle el vencido", () => {
+  const alertas = computeAlertSet(
+    {
+      cuentas: [
+        cuenta({
+          servicios: [servicioCartera()],
+          cobros: [
+            cobroCartera({
+              cobroId: "co1",
+              origen: "CATCH_UP",
+              estado: "PROGRAMADO",
+              fechaProgramadaISO: "2026-06-30",
+              promesaPagoISO: "2026-07-20",
+            }),
+          ],
+        }),
+      ],
+    },
+    { todayISO: HOY },
+  );
+  expect(keysOf(alertas)).toEqual(["INCONSISTENCIA_CICLO:c1:co1"]);
+});
+
+test("P6 — regresión: fixture SIN el campo promesa → comportamiento idéntico al de siempre", () => {
+  const alertas = computeAlertSet(
+    {
+      cuentas: [
+        cuenta({
+          servicios: [servicioCartera()],
+          cobros: [cobroCartera({ cobroId: "co1", fechaProgramadaISO: "2026-06-30" })],
+        }),
+      ],
+    },
+    { todayISO: HOY },
+  );
+  expect(keysOf(alertas)).toEqual(["COBRO_VENCIDO:c1:co1"]);
 });

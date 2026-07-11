@@ -912,8 +912,10 @@ model AgentRun {
   id             String         @id @default(cuid())
   agentId        String?
   agent          Agent?         @relation(fields: [agentId], references: [id], onDelete: SetNull)
-  clientId       String
-  client         Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  // nullable porque los reportes de cartera agregada (Cobranza fase 3) no
+  // pertenecen a UN cliente — todos los demás writers siguen seteándolo.
+  clientId       String?
+  client         Client?        @relation(fields: [clientId], references: [id], onDelete: Cascade)
   projectId      String?
   project        Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   businessCaseId String?
@@ -2208,6 +2210,7 @@ enum CobranzaTipoAlerta {
   INCONSISTENCIA_CICLO // catch-up generado pendiente de confirmación
   ARRANQUE_CAMBIADO // fechaInicioFacturacion divergió del anchorStartDate actual
   MONTOS_DESCUADRADOS // plan activo cuya expansión no suma el montoTotal (aviso, no invariante)
+  PROMESA_INCUMPLIDA // la promesa de pago pasó sin que el cobro llegara a COBRADO
 }
 
 enum CobranzaUrgencia {
@@ -2380,6 +2383,10 @@ model Cobro {
   // ReconciliationPort v1: referencia externa OPCIONAL al confirmar COBRADO (id de
   // transacción Mercury / factura Odoo). Solo metadata — la conciliación real vive allá.
   referenciaExterna String?
+  // Promesa de pago: calla COBRO_VENCIDO y COBRO_PROXIMO de ESTE cobro hasta la
+  // fecha (semáforos y métricas NO cambian — honestidad); pasada sin COBRADO →
+  // alerta PROMESA_INCUMPLIDA. nullable porque la mayoría no tiene promesa.
+  promesaPago     DateTime?
   notas           String? @db.Text
 
   createdAt DateTime @default(now())
@@ -2415,6 +2422,9 @@ model AlertaCobro {
   vistaPor    String? // email del guard
   resueltaEn  DateTime?
   resueltaPor String? // email del guard
+  // Snooze manual (o auto-snooze al registrar promesa de pago): loadAlertas la
+  // excluye hasta esta fecha; el merge del upsert NO la resucita. No cambia estado.
+  posponerHasta DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2434,6 +2444,11 @@ model SnapshotCartera {
   capturedAt  DateTime @default(now())
   alertSet    Json // [{ dedupeKey, tipo, urgencia, cuentaId, cobroId?, mensaje }]
   resumen     Json // digest computado: { nuevas, resueltas, persistentes, sinCambios }
+  // FASE 3: métricas agregadas del corte (shape MetricasCartera del engine, con
+  // `version`). Json EXTENSIBLE a propósito — el día que se absorba tesorería
+  // (FX realizado, burn) se agregan llaves sin tocar schema. null = snapshot
+  // pre-fase-3 (SIN backfill — la serie histórica arranca de cero hacia adelante).
+  metricas    Json?
   triggeredBy String? // "cron" | email del disparo manual
 
   @@index([capturedAt])

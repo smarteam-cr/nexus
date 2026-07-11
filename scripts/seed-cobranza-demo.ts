@@ -19,9 +19,21 @@
  *                 fechaInicioFacturacion del servicio se corre 1 mes → alerta
  *                 ARRANQUE_CAMBIADO en el próximo corte. (No toca el cronograma.)
  *
+ * FASE 2 (puertos + proyección + borrador):
+ *   F) EMPRESA SIN PROYECTO — "Suscripciones Demo SA" vía AccountSource manual
+ *                 (fuente=manual, idExterno demo-*): entra al panel con chip
+ *                 "sin proyecto" + suscripción USD → alimenta la proyección.
+ *   G) CONTEXTO DE BORRADOR — al escenario B se le agrega correoCobro + una
+ *                 entrada de bitácora CORREO (hilo pegado) → el botón ✉ Borrador
+ *                 genera con contexto real y el mailto tiene destino.
+ *   H) DESCUADRE — servicio PERSONALIZADO en el escenario A cuyas cuotas NO
+ *                 suman el montoTotal → alerta MONTOS_DESCUADRADOS en el corte.
+ *   Además el primer COBRADO del escenario A lleva referenciaExterna (Mercury).
+ *
  * Idempotente: salta clientes que ya tienen cuenta. Marca notas "[demo cobranza]"
- * para limpieza posterior. DRY-RUN por default; escribe SOLO con --apply
- * (invariante 3: local == PROD — el usuario revisa y aprueba).
+ * y los Clients demo llevan sourceExternalId "demo-*". DRY-RUN por default;
+ * escribe SOLO con --apply (local == PROD — el usuario revisa y aprueba).
+ * LIMPIEZA: scripts/cleanup-cobranza-demo.ts (dry-run-first).
  *
  * Uso:
  *   npx tsx scripts/seed-cobranza-demo.ts            # dry-run
@@ -36,7 +48,10 @@ import {
   setPlanActivo,
   generateCobros,
   cambiarEstadoCobro,
+  addBitacora,
+  updateCuenta,
 } from "@/lib/cobranza/mutations";
+import { ingestCuentasEntrantes } from "@/lib/cobranza/ingest";
 import { crDateParts } from "@/lib/jobs/time";
 
 const APPLY = process.argv.includes("--apply");
@@ -94,6 +109,7 @@ async function main() {
   ];
 
   const todayISO = crDateParts(new Date()).dateKey;
+  const creadas: Array<{ key: string; cuentaId: string }> = [];
 
   for (let i = 0; i < candidatos.length; i++) {
     const cliente = candidatos[i];
@@ -121,6 +137,7 @@ async function main() {
       console.log("   ⤫ el cliente ganó una cuenta en el medio — escenario salteado.");
       continue;
     }
+    creadas.push({ key: esc.key, cuentaId: cuenta.id });
 
     // Divergencia (escenario A): si el proyecto tiene anchor, la facturación se
     // configura 1 mes DESPUÉS → el corte emite ARRANQUE_CAMBIADO. Sin tocar el cronograma.
@@ -158,7 +175,18 @@ async function main() {
         take: esc.cobrar + (esc.porCobrar ?? 0),
       });
       for (let k = 0; k < esc.cobrar && k < cobros.length; k++) {
-        await cambiarEstadoCobro(cobros[k].id, { estado: "COBRADO" }, SEED_EMAIL);
+        await cambiarEstadoCobro(
+          cobros[k].id,
+          {
+            estado: "COBRADO",
+            // El primer COBRADO del escenario A lleva referencia externa (demo
+            // del ReconciliationPort manual: id de transacción Mercury).
+            ...(k === 0 && esc.key === "A-VERDE"
+              ? { referenciaExterna: "MERCURY-TX-2026-0147-DEMO" }
+              : {}),
+          },
+          SEED_EMAIL,
+        );
       }
       if (esc.porCobrar) {
         const siguiente = cobros[esc.cobrar];
@@ -173,8 +201,103 @@ async function main() {
     });
   }
 
+  // ── FASE 2: empresa sin proyecto + contexto de borrador + descuadre ──────────
+  console.log(`\n■ F-SIN-PROYECTO → empresa "Suscripciones Demo SA" (AccountSource manual, fuente=manual + idExterno demo-*)`);
+  console.log(`   suscripción USD 450 mensual · correo de cobro · chip "sin proyecto" en el panel · alimenta la proyección`);
+  console.log(`■ G-CONTEXTO → correoCobro + hilo de CORREO en la bitácora del escenario B (el botón ✉ Borrador genera con contexto real)`);
+  console.log(`■ H-DESCUADRE → servicio PERSONALIZADO en el escenario A: vale $5.000 pero las cuotas suman $2.000 → alerta MONTOS_DESCUADRADOS en el corte`);
+
+  if (APPLY) {
+    // F — empresa sin proyecto vía el puerto (idempotente por fuente + idExterno).
+    // Sin dominio a propósito: no toca el resolver de sesiones.
+    const [f] = await ingestCuentasEntrantes(
+      [
+        {
+          fuenteRef: { fuente: "manual", idExterno: "demo-cobranza-sin-proyecto" },
+          clienteNombre: "Suscripciones Demo SA",
+          dominio: null,
+          correoCobro: "pagos@suscripcionesdemo.test",
+          tipo: "INTERNACIONAL",
+          viaCobro: "MERCURY",
+          moneda: "USD",
+          terminosPago: "ANTICIPADO",
+          diaCobroAncla: 5,
+          notas: MARK,
+          suscripcion: { montoMensual: 450, moneda: "USD", fechaInicio: mesesDesdeHoy(-1) },
+        },
+      ],
+      { byEmail: SEED_EMAIL, todayISO },
+    );
+    if (f.error) {
+      console.log(`   ⤫ F falló: ${f.error}`);
+    } else {
+      const servF = await prisma.servicioContratado.findFirst({
+        where: { cuentaId: f.cuentaId, tipoServicio: "SUSCRIPCION", estado: "ACTIVO" },
+        select: { id: true },
+      });
+      if (servF) {
+        const gen = await generateCobros(servF.id, SEED_EMAIL, todayISO);
+        console.log(`   → F: empresa ${f.clientCreado ? "creada" : "ya existía (vinculada)"} · ${gen.created} cobros de suscripción generados`);
+      }
+    }
+
+    // G — contexto de borrador sobre el escenario B.
+    const b = creadas.find((c) => c.key === "B-AMARILLO");
+    if (b) {
+      await updateCuenta(b.cuentaId, { correoCobro: "facturacion@clinicademo.test" }, SEED_EMAIL);
+      await addBitacora(
+        b.cuentaId,
+        {
+          tipo: "CORREO",
+          contenido: `${MARK} Hilo pegado a mano — Cliente (7 jul): "Buenas, ¿nos pueden mover el cobro de este mes para después del 20? Estamos cerrando el cambio de cuenta bancaria." Alex (7 jul): "Claro, lo coordinamos para el 22 sin recargo. Quedamos atentos."`,
+        },
+        SEED_EMAIL,
+      );
+      console.log("   → G: correoCobro + hilo de bitácora agregados al escenario B");
+    } else {
+      console.log("   ⤫ G salteado (el escenario B no se creó en esta corrida)");
+    }
+
+    // H — servicio descuadrado sobre el escenario A.
+    const a = creadas.find((c) => c.key === "A-VERDE");
+    if (a) {
+      const servH = await createServicio(a.cuentaId, {
+        tipoServicio: "SOPORTE",
+        modalidad: "PROYECTO",
+        montoTotal: 5000,
+        moneda: "USD",
+        fechaInicioFacturacion: mesesDesdeHoy(0),
+        duracionMeses: null,
+        projectId: null,
+        descripcion: `${MARK} H-DESCUADRE soporte anual`,
+      });
+      await setPlanActivo(servH.id, {
+        template: "PERSONALIZADO",
+        numCuotas: null,
+        cuotas: [
+          { orden: 1, base: "MONTO_FIJO", valor: 1000, offsetMeses: 0 },
+          { orden: 2, base: "MONTO_FIJO", valor: 1000, offsetMeses: 1 },
+        ],
+        notas: MARK,
+      });
+      // FASE 3: el guardarraíl de montos FRENA la materialización de planes
+      // descuadrados (409) — ese ES el demo: apretar "Generar cobros" y ver el
+      // error claro. El servicio queda sin cobros a propósito.
+      try {
+        await generateCobros(servH.id, SEED_EMAIL, todayISO);
+        console.log("   ⚠ H: generateCobros NO frenó el plan descuadrado — revisá el guardarraíl.");
+      } catch (e) {
+        console.log(
+          `   → H: servicio descuadrado creado (suma $2.000 de $5.000); guardarraíl activo: "${e instanceof Error ? e.message : e}"`,
+        );
+      }
+    } else {
+      console.log("   ⤫ H salteado (el escenario A no se creó en esta corrida)");
+    }
+  }
+
   console.log(
-    `\n${APPLY ? "✓ Aplicado" : "Dry-run"}: ${Math.min(candidatos.length, escenarios.length)} escenario(s).${APPLY ? " Corré el corte (POST /api/cobranza/digest o el botón) para ver las alertas." : " Corré con --apply para escribir."}`,
+    `\n${APPLY ? "✓ Aplicado" : "Dry-run"}: ${Math.min(candidatos.length, escenarios.length)} escenario(s) base + fase 2.${APPLY ? " Corré el corte (botón del tab Digest) para ver las alertas, y mirá el tab Proyección." : " Corré con --apply para escribir."}\nLimpieza posterior: npx tsx scripts/cleanup-cobranza-demo.ts (dry-run) → --apply`,
   );
 }
 

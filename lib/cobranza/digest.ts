@@ -11,7 +11,15 @@
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import { crDateParts } from "@/lib/jobs/time";
-import { computeAlertSet, diffAlertSets, type AlertaDraft, type DiffAlertas } from "./engine";
+import {
+  addDaysISO,
+  computeAlertSet,
+  computeMetricasCartera,
+  diffAlertSets,
+  type AlertaDraft,
+  type DiffAlertas,
+  type MetricasCartera,
+} from "./engine";
 import { buildCarteraEngineInput } from "./queries";
 import { generateCobros, upsertAlertas } from "./mutations";
 
@@ -21,6 +29,7 @@ export interface DigestResult {
   diff: DiffAlertas;
   totalAlertas: number;
   horizonteExtendido: number; // servicios SUSCRIPCION cuyo rolling se extendió
+  metricas: MetricasCartera;
 }
 
 export async function runCobranzaDigest(now: Date, triggeredBy: string): Promise<DigestResult> {
@@ -56,6 +65,18 @@ export async function runCobranzaDigest(now: Date, triggeredBy: string): Promise
   const prevSet: AlertaDraft[] = anterior ? (anterior.alertSet as unknown as AlertaDraft[]) : [];
   const diff = diffAlertSets(prevSet, alertSet);
 
+  // 3b. Métricas del corte (fase 3): ventana desde el corte anterior (null en el
+  //     primero — sin backfill, la historia arranca acá) hasta hoy; el proyectado
+  //     apunta al corte siguiente (+7d) y ese corte lo comparará con su cobrado.
+  const desdeUltimoCorteISO = anterior
+    ? anterior.capturedAt.toISOString().slice(0, 10)
+    : null;
+  const metricas = computeMetricasCartera(cartera, {
+    todayISO,
+    desdeUltimoCorteISO,
+    proximoCorteISO: addDaysISO(todayISO, 7),
+  });
+
   // 4. Guardar el snapshot de esta corrida (fila-por-corrida, payload completo).
   const snap = await prisma.snapshotCartera.create({
     data: {
@@ -67,6 +88,7 @@ export async function runCobranzaDigest(now: Date, triggeredBy: string): Promise
         sinCambios: diff.sinCambios,
         totalAlertas: alertSet.length,
       } as unknown as Prisma.InputJsonValue,
+      metricas: metricas as unknown as Prisma.InputJsonValue,
       triggeredBy,
     },
   });
@@ -77,5 +99,6 @@ export async function runCobranzaDigest(now: Date, triggeredBy: string): Promise
     diff,
     totalAlertas: alertSet.length,
     horizonteExtendido,
+    metricas,
   };
 }

@@ -45,6 +45,7 @@ export const COBRANZA_TIPOS_ALERTA = [
   "INCONSISTENCIA_CICLO",
   "ARRANQUE_CAMBIADO",
   "MONTOS_DESCUADRADOS",
+  "PROMESA_INCUMPLIDA",
 ] as const;
 export const COBRANZA_URGENCIAS = ["ALTA", "MEDIA", "BAJA"] as const;
 export const COBRANZA_ALERTA_ESTADOS = ["ABIERTA", "VISTA", "RESUELTA", "DESCARTADA"] as const;
@@ -91,6 +92,7 @@ export const TIPO_ALERTA_LABEL: Record<string, string> = {
   INCONSISTENCIA_CICLO: "Inconsistencia de ciclo",
   ARRANQUE_CAMBIADO: "Arranque cambiado",
   MONTOS_DESCUADRADOS: "Montos descuadrados",
+  PROMESA_INCUMPLIDA: "Promesa incumplida",
 };
 export const IMPORT_ESTADO_LABEL: Record<string, string> = {
   BORRADOR: "Borrador",
@@ -226,12 +228,28 @@ export const cobroPatchSchema = z
     fechaCobro: isoDate.nullable(),
     // ReconciliationPort v1: id de transacción Mercury / factura Odoo al confirmar COBRADO.
     referenciaExterna: z.string().max(200).nullable(),
+    // Promesa de pago: calla las alertas de este cobro hasta la fecha (null = quitarla).
+    promesaPago: isoDate.nullable(),
     notas: z.string().max(2000).nullable(),
   })
   .partial();
 
-export const alertaPatchSchema = z.object({
-  estado: z.enum(COBRANZA_ALERTA_ESTADOS),
+export const alertaPatchSchema = z
+  .object({
+    estado: z.enum(COBRANZA_ALERTA_ESTADOS),
+    // Snooze manual: la alerta desaparece del feed hasta esta fecha (null = quitar snooze).
+    posponerHasta: isoDate.nullable(),
+  })
+  .partial()
+  .refine((v) => v.estado !== undefined || v.posponerHasta !== undefined, {
+    message: "Indicá el estado o la fecha de posposición.",
+  });
+
+// ── Reporte de finanzas (agente reporter, fase 3) ──────────────────────────────
+
+export const REPORTE_VOCES = ["operativa", "ejecutiva"] as const;
+export const reporteFinanzasSchema = z.object({
+  voz: z.enum(REPORTE_VOCES),
 });
 
 export const bitacoraCreateSchema = z.object({

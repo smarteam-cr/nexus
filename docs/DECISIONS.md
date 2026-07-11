@@ -113,10 +113,12 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   cambian SIEMPRE juntas o el panel y el digest divergen.
 - **Semáforo: vacío ≠ al día.** Cuenta sin cobros → GRIS (una cuenta recién configurada o
   pendiente de datos no puede verse "cobrada"). Verde exige cobros y todos cobrados.
-- **MONTOS_DESCUADRADOS es ALERTA, no invariante**: un plan activo cuya expansión no suma el
-  montoTotal (excepto SUSCRIPCION) se avisa (urgencia media) y se muestra en vivo en el form —
-  pero PERSONALIZADO parcial sigue siendo LEGAL (decisión del usuario 2026-07-10). La
-  validación dura de montos vive en el importador (Zod).
+- **MONTOS_DESCUADRADOS: guardar SÍ, materializar NO** (actualiza la decisión 2026-07-10 en
+  fase 3): un plan descuadrado puede GUARDARSE (sigue editable, la alerta avisa y el form lo
+  muestra en vivo — PERSONALIZADO parcial sigue siendo legal como borrador), pero
+  `generateCobros` FRENA la materialización con 409 si |sumaPlanExpandido − montoTotal| > 0.01.
+  SUSCRIPCION y planes inválidos → null → pasan (el rolling del digest es inmune). La
+  validación dura de montos del importador (Zod) no cambia.
 - **Proyección de ingresos por moneda SEPARADA**: quincena (cercano) + mes (resto), horizonte
   6 meses, CRC y USD jamás se suman ni convierten (tipo de cambio = otra iteración); los
   vencidos "en riesgo" van APARTE de los buckets futuros. Motor puro `proyectarIngresos`.
@@ -127,6 +129,51 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
 - **Referencia de conciliación opcional** al confirmar COBRADO (`Cobro.referenciaExterna`, id
   de transacción Mercury / factura Odoo): trazabilidad del puente control↔contabilidad sin
   volver a Nexus contabilidad.
+- **Métricas de cartera en `SnapshotCartera.metricas` (Json, fase 3)**: cada corte captura las
+  métricas agregadas POR MONEDA (vencido/por-cobrar/programado mapeados 1:1 al semáforo, aging,
+  DSO, días promedio de cobro, cobrado-en-ventana, proyectado al próximo corte) + cobertura.
+  Json EXTENSIBLE a propósito: el día que llegue tesorería (montos recibidos, FX) se agregan
+  llaves sin tocar schema. SIN backfill — los snapshots pre-fase-3 tienen `metricas` null y las
+  vistas de tendencia los excluyen: la historia comparable arranca del primer corte que las
+  capturó (fabricar historia rompería la honestidad de datos).
+- **Honestidad de datos (constraint transversal de fase 3)**: toda métrica declara su
+  COBERTURA (cuentas totales/configuradas/pendiente-datos/sin-cobros); una cuenta vacía o
+  PENDIENTE_DATOS no cuenta como sana ni entra a denominadores; DSO/aging excluyen cuentas sin
+  cobros; DSO sin elegibles = null (no 0); el reporter declara cuántos cortes de historia hay
+  antes de hablar de tendencia. CRC y USD JAMÁS se suman (regla previa, aplica a todo lo nuevo).
+- **DSO = proxy de CONTROL, no el DSO contable**: sin ventas facturadas no existe el DSO
+  clásico; el nuestro es el promedio ponderado por monto de la antigüedad (hoy − fechaProgramada)
+  de los cobros no-COBRADO EXIGIBLES (fecha ≤ hoy), por moneda. Los PROGRAMADO futuros no diluyen.
+- **Cobrado-vs-proyectado por pares de cortes**: cada corte guarda `proyectadoProximoCorte`
+  (lo que la cartera dice que entra hasta el corte siguiente, con la gracia de los no-vencidos
+  pasados contados como "hoy"); el corte SIGUIENTE lo compara contra su
+  `totalCobradoDesdeUltimoCorte` (ventana exclusiva-inclusiva `(anterior, hoy]`).
+- **Promesa de pago calla alertas, NO números**: `Cobro.promesaPago` vigente suprime
+  COBRO_VENCIDO/COBRO_PROXIMO de ESE cobro en los cortes (el humano ya gestionó) y AUTO-SNOOZEA
+  sus alertas vivas al registrarse (posponerHasta = fecha prometida; quitarla las despierta).
+  Semáforos, métricas y proyección NO cambian — el dinero sigue vencido hasta que entre. Fecha
+  pasada sin COBRADO → PROMESA_INCUMPLIDA (ALTA) que REEMPLAZA al vencido/próximo (1 alerta por
+  cobro, dedupeKey propio). No se limpia al cobrar (trazabilidad de si cumplió). Gmail inbound
+  para detectarla automática = slot futuro del CommunicationPort, NO cableado.
+- **Snooze manual de alertas (`posponerHasta`) no cambia el estado**: la alerta sale del feed
+  (filtro en loadAlertas) y vuelve SOLA cuando la fecha llega; el merge de upsertAlertas no toca
+  posponerHasta, así el snooze sobrevive a los cortes.
+- **Riesgo de pago V1 = regla conductual simple, sin ML**: por cuenta, comportamiento = promedio
+  de (fechaCobro − fechaProgramada) de sus COBRADOs (monedas juntas — es conducta del cliente);
+  se bandera todo cobro pendiente con `diasAtraso > (promedio ?? 0) + RIESGO_UMBRAL_DIAS (15)`.
+  El promedio NO se clampea: el buen pagador (promedio negativo) se bandera antes — esa ES la
+  señal. Sin historia → umbral a secas. Patrón aprendido por cliente = iteración futura.
+- **Reporter de finanzas con DOS voces y gate server-side**: `operativa` (accionable, para quien
+  cobra — cualquier rol con acceso a Cobranza) y `ejecutiva` (agregados/tendencia/caja, para
+  dirección — SOLO SUPER_ADMIN, verificado en la API además de la UI). Prompt en DB (fila Agent,
+  calibrable sin redeploy), regla de no-fabricación + declarar cobertura e historia. Es un
+  REPORTE, no un envío: la persona copia y comparte.
+- **`AgentRun.clientId` nullable**: los reportes de cartera agregada no pertenecen a un cliente;
+  todos los writers existentes lo siguen seteando.
+- **La línea de control se MANTIENE en fase 3**: cero campos de tesorería (montoRecibido, tipo
+  de cambio, cuentas bancarias, egresos). La costura hacia Odoo/Mercury sigue siendo
+  ReconciliationPort + referenciaExterna + el Json extensible de métricas — lista para conectar
+  tesorería sin construirla.
 
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos

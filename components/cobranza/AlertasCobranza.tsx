@@ -13,7 +13,7 @@ import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { AlertaDTO } from "@/lib/cobranza";
 import { TIPO_ALERTA_LABEL } from "@/lib/cobranza/schema";
-import { FILTER_SELECT_CLS } from "./format";
+import { FILTER_SELECT_CLS, fmtFecha, INPUT_CLS } from "./format";
 
 const URG_META: Record<string, { label: string; chip: string; dot: string; border: string }> = {
   ALTA: {
@@ -58,6 +58,7 @@ export default function AlertasCobranza({
   const [urgFilter, setUrgFilter] = useState<string>("all");
   const [estadoFilter, setEstadoFilter] = useState<string>("all");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [snoozeFor, setSnoozeFor] = useState<string | null>(null); // alerta con date-picker abierto
 
   const vigentes = useMemo(
     () => alertas.filter((a) => a.estado === "ABIERTA" || a.estado === "VISTA"),
@@ -85,6 +86,24 @@ export default function AlertasCobranza({
         setAlertas((as) => as.map((a) => (a.id === id ? { ...a, estado: prevEstado } : a)));
       }
       toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar la alerta.");
+    }
+  }
+
+  // Snooze: la alerta sale del feed YA (optimista) y vuelve sola cuando la fecha
+  // llega (filtro server-side en loadAlertas) — el estado NO cambia.
+  async function posponer(a: AlertaDTO, hastaISO: string) {
+    setSnoozeFor(null);
+    setAlertas((as) => as.filter((x) => x.id !== a.id));
+    try {
+      await fetchJson(`/api/cobranza/alertas/${a.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ posponerHasta: hastaISO }),
+      });
+      toast.success(`Alerta pospuesta hasta ${fmtFecha(hastaISO)} — vuelve sola, sin cambiar de estado.`);
+    } catch (e) {
+      setAlertas((as) => [a, ...as]);
+      toast.error(e instanceof ApiError ? e.message : "No se pudo posponer la alerta.");
     }
   }
 
@@ -172,7 +191,38 @@ export default function AlertasCobranza({
                     >
                       Descartar
                     </button>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!v) return;
+                        if (v === "fecha") setSnoozeFor(snoozeFor === a.id ? null : a.id);
+                        else
+                          posponer(
+                            a,
+                            new Date(Date.now() + Number(v) * 86_400_000).toISOString().slice(0, 10),
+                          );
+                      }}
+                      title="Posponer: sale del feed y vuelve sola en la fecha — no cambia el estado"
+                      className="text-[10px] font-medium px-1 py-1 rounded-md border border-line text-fg-secondary bg-surface hover:bg-surface-hover transition-colors"
+                    >
+                      <option value="">Posponer…</option>
+                      <option value="3">3 días</option>
+                      <option value="7">7 días</option>
+                      <option value="14">14 días</option>
+                      <option value="fecha">Elegir fecha…</option>
+                    </select>
                   </div>
+                  {snoozeFor === a.id && (
+                    <input
+                      type="date"
+                      autoFocus
+                      onChange={(e) => {
+                        if (e.target.value) posponer(a, e.target.value);
+                      }}
+                      className={`${INPUT_CLS} !w-auto text-[10px]`}
+                    />
+                  )}
                   {tieneEvidencia(a.evidencia) && (
                     <button
                       onClick={() => setExpanded(expanded === a.id ? null : a.id)}

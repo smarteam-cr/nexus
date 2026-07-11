@@ -12,19 +12,28 @@
  * stale del server render — fue el bug del doble "Configurar cuenta").
  */
 import { useCallback, useState } from "react";
-import type { AlertaDTO, CarteraRow, ProyeccionIngresos, SnapshotDTO } from "@/lib/cobranza";
+import type {
+  AlertaDTO,
+  CarteraRow,
+  ProyeccionIngresos,
+  RiesgoPagoItem,
+  SnapshotDTO,
+  SnapshotSerieDTO,
+} from "@/lib/cobranza";
 import { fetchJson } from "@/lib/api/fetch-json";
 import PanelCartera from "./PanelCartera";
 import AlertasCobranza from "./AlertasCobranza";
 import DigestPanel from "./DigestPanel";
 import ProyeccionPanel from "./ProyeccionPanel";
+import ReportesPanel from "./ReportesPanel";
 
-type Tab = "cartera" | "proyeccion" | "alertas" | "digest";
+type Tab = "cartera" | "proyeccion" | "alertas" | "reportes" | "digest";
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: "cartera", label: "Panel de cartera" },
   { key: "proyeccion", label: "Proyección" },
   { key: "alertas", label: "Alertas" },
+  { key: "reportes", label: "Reportes" },
   { key: "digest", label: "Digest semanal" },
 ];
 
@@ -33,18 +42,26 @@ export default function CobranzaClient({
   initialAlertas,
   initialSnapshot,
   initialProyeccion,
+  initialSeries,
+  initialRiesgo,
+  role,
   todayISO,
 }: {
   initialCartera: CarteraRow[];
   initialAlertas: AlertaDTO[];
   initialSnapshot: SnapshotDTO | null;
   initialProyeccion: ProyeccionIngresos;
+  initialSeries: SnapshotSerieDTO[];
+  initialRiesgo: RiesgoPagoItem[];
+  role: string;
   todayISO: string;
 }) {
   const [tab, setTab] = useState<Tab>("cartera");
   const [cartera, setCartera] = useState(initialCartera);
   const [alertas, setAlertas] = useState(initialAlertas);
   const [proyeccion, setProyeccion] = useState(initialProyeccion);
+  const [series, setSeries] = useState(initialSeries);
+  const [riesgo, setRiesgo] = useState(initialRiesgo);
   const abiertas = alertas.filter((a) => a.estado === "ABIERTA").length;
 
   // Tras un corte manual el set de alertas puede cambiar → re-sincronizar el tab.
@@ -68,6 +85,25 @@ export default function CobranzaClient({
       // best-effort: si falla, el tab conserva lo que tenía
     }
   }, []);
+
+  // Un corte nuevo agrega un punto a la serie y puede mover el riesgo.
+  const refreshReportes = useCallback(async () => {
+    try {
+      const [s, r] = await Promise.all([
+        fetchJson<{ series: SnapshotSerieDTO[] }>("/api/cobranza/series"),
+        fetchJson<{ riesgo: RiesgoPagoItem[] }>("/api/cobranza/riesgo"),
+      ]);
+      setSeries(s.series);
+      setRiesgo(r.riesgo);
+    } catch {
+      // best-effort: si falla, el tab conserva lo que tenía
+    }
+  }, []);
+
+  const onDigestDone = useCallback(() => {
+    void refreshAlertas();
+    void refreshReportes();
+  }, [refreshAlertas, refreshReportes]);
 
   return (
     <div>
@@ -99,8 +135,9 @@ export default function CobranzaClient({
       {tab === "cartera" && <PanelCartera rows={cartera} setRows={setCartera} todayISO={todayISO} />}
       {tab === "proyeccion" && <ProyeccionPanel proyeccion={proyeccion} onRefresh={refreshProyeccion} />}
       {tab === "alertas" && <AlertasCobranza alertas={alertas} setAlertas={setAlertas} />}
+      {tab === "reportes" && <ReportesPanel series={series} riesgo={riesgo} role={role} />}
       {tab === "digest" && (
-        <DigestPanel initialSnapshot={initialSnapshot} onDigestDone={refreshAlertas} />
+        <DigestPanel initialSnapshot={initialSnapshot} onDigestDone={onDigestDone} />
       )}
     </div>
   );

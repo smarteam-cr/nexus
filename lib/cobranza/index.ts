@@ -7,6 +7,8 @@ export {
   getCuentaDetail,
   loadAlertas,
   getLatestSnapshot,
+  loadSnapshotSeries,
+  loadRiesgo,
   loadProyeccion,
   type CarteraRow,
   type CuentaDetailDTO,
@@ -14,6 +16,7 @@ export {
   type CobroDTO,
   type AlertaDTO,
   type SnapshotDTO,
+  type SnapshotSerieDTO,
 } from "./queries";
 export { runCobranzaDigest, type DigestResult } from "./digest";
 export {
@@ -24,6 +27,10 @@ export {
   type BucketProyeccion,
   type TotalesMoneda,
   type CobroProyeccionInput,
+  type MetricasCartera,
+  type MetricasMoneda,
+  type AgingBuckets,
+  type RiesgoPagoItem,
 } from "./engine";
 // Puertos (interfaces client-safe) + factory de adaptadores (server-side).
 export type {

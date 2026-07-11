@@ -9,15 +9,18 @@
 import { prisma } from "@/lib/db/prisma";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import {
+  computeRiesgoPago,
   proyectarIngresos,
   semaforoCuenta,
   sumaPlanExpandido,
   type CarteraEngineInput,
   type CobroProyeccionInput,
+  type MetricasCartera,
   type ProyeccionIngresos,
+  type RiesgoPagoItem,
   type Semaforo,
 } from "./engine";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 // ── DTOs serializables (lo ÚNICO que sale de este módulo hacia la UI) ───────────
 
@@ -36,6 +39,7 @@ export interface CobroDTO {
   confirmadoPor: string | null;
   confirmadoEn: string | null;
   referenciaExterna: string | null;
+  promesaPago: string | null; // ISO date — fecha en que el cliente prometió pagar
   notas: string | null;
 }
 
@@ -134,6 +138,7 @@ export interface AlertaDTO {
   estado: string;
   vistaPor: string | null;
   resueltaPor: string | null;
+  posponerHasta: string | null; // snooze vigente = la alerta no aparece en el feed
 }
 
 // ── Serializadores (Decimal → number, Date → ISO) ───────────────────────────────
@@ -159,6 +164,7 @@ type CobroRow = {
   confirmadoPor: string | null;
   confirmadoEn: Date | null;
   referenciaExterna: string | null;
+  promesaPago: Date | null;
   notas: string | null;
 };
 
@@ -178,6 +184,7 @@ function serializeCobro(c: CobroRow): CobroDTO {
     confirmadoPor: c.confirmadoPor,
     confirmadoEn: iso(c.confirmadoEn),
     referenciaExterna: c.referenciaExterna,
+    promesaPago: isoDay(c.promesaPago),
     notas: c.notas,
   };
 }
@@ -426,6 +433,10 @@ export async function loadAlertas(filters?: {
         : {}),
       ...(filters?.urgencia ? { urgencia: filters.urgencia as never } : {}),
       ...(filters?.cuentaId ? { cuentaId: filters.cuentaId } : {}),
+      // Snooze: pospuesta a futuro = fuera del feed hasta que la fecha llegue.
+      // upsertAlertas NO toca posponerHasta en el merge → el snooze sobrevive
+      // a los cortes; la alerta vuelve sola sin cambiar de estado.
+      OR: [{ posponerHasta: null }, { posponerHasta: { lte: new Date() } }],
     },
     orderBy: [{ urgencia: "asc" }, { lastDetectedAt: "desc" }],
     take: 200,
@@ -446,6 +457,7 @@ export async function loadAlertas(filters?: {
     estado: a.estado,
     vistaPor: a.vistaPor,
     resueltaPor: a.resueltaPor,
+    posponerHasta: iso(a.posponerHasta),
   }));
 }
 
@@ -469,6 +481,41 @@ export async function getLatestSnapshot(): Promise<SnapshotDTO | null> {
   };
 }
 
+export interface SnapshotSerieDTO {
+  id: string;
+  capturedAt: string;
+  metricas: MetricasCartera;
+}
+
+/**
+ * Serie histórica para las vistas de tendencia: solo snapshots CON métricas
+ * (los pre-fase-3 tienen metricas null y no son comparables — sin backfill,
+ * la historia arranca del primer corte que las capturó). Ascendente para
+ * graficar directo; default un año de cortes semanales.
+ */
+export async function loadSnapshotSeries(limit = 52): Promise<SnapshotSerieDTO[]> {
+  const snaps = await prisma.snapshotCartera.findMany({
+    where: { metricas: { not: Prisma.DbNull } },
+    orderBy: { capturedAt: "desc" },
+    take: limit,
+    select: { id: true, capturedAt: true, metricas: true },
+  });
+  return snaps.reverse().map((s) => ({
+    id: s.id,
+    capturedAt: iso(s.capturedAt)!,
+    metricas: s.metricas as unknown as MetricasCartera,
+  }));
+}
+
+/**
+ * Riesgo de pago en vivo (no depende de cortes): MISMA fuente que el digest y
+ * el reporter — buildCarteraEngineInput → computeRiesgoPago (regla V1).
+ */
+export async function loadRiesgo(todayISO: string): Promise<RiesgoPagoItem[]> {
+  const cartera = await buildCarteraEngineInput();
+  return computeRiesgoPago(cartera, { todayISO });
+}
+
 // ── Input del engine (lo comparten el digest y cualquier recomputación) ─────────
 
 /**
@@ -485,6 +532,7 @@ export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
       id: true,
       clientId: true,
       excluidaOperacion: true,
+      estadoCuenta: true,
       servicios: {
         select: {
           id: true,
@@ -516,6 +564,9 @@ export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
           origen: true,
           fechaProgramada: true,
           monto: true,
+          moneda: true,
+          fechaCobro: true,
+          promesaPago: true,
         },
       },
     },
@@ -543,6 +594,7 @@ export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
       excluidaOperacion: cuenta.excluidaOperacion,
       tieneCuenta: true,
       tieneProyectoReal,
+      estadoCuenta: cuenta.estadoCuenta,
       servicios: cuenta.servicios.map((s) => {
         const plan = s.planes[0] ?? null;
         const montoTotal = num(s.montoTotal);
@@ -582,6 +634,9 @@ export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
         origen: c.origen,
         fechaProgramadaISO: isoDay(c.fechaProgramada)!,
         monto: num(c.monto)!,
+        moneda: c.moneda,
+        fechaCobroISO: isoDay(c.fechaCobro),
+        promesaPagoISO: isoDay(c.promesaPago),
       })),
     });
   }
