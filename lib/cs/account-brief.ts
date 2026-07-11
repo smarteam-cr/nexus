@@ -16,11 +16,32 @@
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { anthropic } from "@/lib/anthropic";
+import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { loadCsAccount, type CsAccountData, type AccountBriefStatement } from "./load-account";
 import { HS_STATUS_LABEL } from "@/components/cs/dashboard/chart-theme";
 
 const AGENT_ID = "agent-cs-account-brief";
 const AGENT_SLUG = "cs-account-brief";
+const BRIEF_MODEL = "claude-sonnet-4-6";
+// Holgura de tokens: 3000 truncaba en cuentas cargadas (varias minutas + partner +
+// señales) → el output quedaba a medias y el parse tiraba error genérico.
+const BRIEF_MAX_TOKENS = 5000;
+// Caps del contexto de entrada: menos truncación, menos costo, más señal.
+const MAX_MINUTAS = 6;
+const MAX_BLOCK_CHARS = 1800;
+
+/**
+ * Mensaje accionable para el usuario según la causa. Las fallas de "mala salida del
+ * agente" (JSON/parse/truncado/sin fuente) piden reintentar; el resto delega en
+ * humanizeAgentError (créditos/timeout/genérico). Lo usa el endpoint y el output del run.
+ */
+export function humanizeBriefError(e: unknown): string {
+  const raw = (e instanceof Error ? e.message : String(e)).toLowerCase();
+  if (raw.includes("output del agente") || raw.includes("statement con fuente") || raw.includes("truncado")) {
+    return "La IA devolvió un resumen incompleto o mal formado. Probá de nuevo.";
+  }
+  return humanizeAgentError(e);
+}
 
 export interface BriefSource {
   kind: string;
@@ -46,7 +67,8 @@ export async function buildAccountBriefContext(clientId: string): Promise<Accoun
   const blocks: string[] = [];
   const addSource = (s: BriefSource, content: string) => {
     sources.set(`${s.kind}:${s.id}`, s);
-    blocks.push(`### FUENTE [${s.kind}:${s.id}] — ${s.label} (${fmtShort(s.date)})\n${content}`);
+    // Cap por bloque: una minuta larga no puede comerse el presupuesto de tokens.
+    blocks.push(`### FUENTE [${s.kind}:${s.id}] — ${s.label} (${fmtShort(s.date)})\n${content.slice(0, MAX_BLOCK_CHARS)}`);
   };
 
   blocks.push(`# CUENTA: ${data.clientName}${data.clientCompany ? ` (${data.clientCompany})` : ""}`);
@@ -114,8 +136,8 @@ export async function buildAccountBriefContext(clientId: string): Promise<Accoun
     }
   }
 
-  // ── Minutas recientes ─────────────────────────────────────────────────────
-  for (const m of data.minutes) {
+  // ── Minutas recientes (cap: las más recientes; evita inflar cuentas cargadas) ──
+  for (const m of data.minutes.slice(0, MAX_MINUTAS)) {
     addSource(
       { kind: "minuta", id: m.sessionId, label: `Minuta · ${m.sessionTitle.slice(0, 60)}`, date: m.date },
       [
@@ -210,39 +232,66 @@ function parseBrief(
   };
 }
 
+/** Llama al agente; si el output se TRUNCA (max_tokens), reintenta UNA vez pidiendo
+ *  ser más conciso antes de rendirse. Los errores transitorios de la API (429/5xx/529)
+ *  ya los reintenta el SDK de Anthropic (maxRetries default). Devuelve el texto crudo. */
+async function generateBriefText(systemPrompt: string, serialized: string): Promise<string> {
+  const ask = (extra: string) =>
+    anthropic.messages.create({
+      model: BRIEF_MODEL,
+      max_tokens: BRIEF_MAX_TOKENS,
+      system: systemPrompt,
+      messages: [
+        {
+          role: "user",
+          content: `${serialized}\n\nRedactá el resumen ejecutivo de esta cuenta según tus instrucciones. Devolvé SOLO el JSON.${extra}`,
+        },
+      ],
+    });
+  const textOf = (msg: Awaited<ReturnType<typeof ask>>) =>
+    msg.content.map((b) => (b.type === "text" ? (b as { text: string }).text : "")).join("").trim();
+
+  let msg = await ask("");
+  if (msg.stop_reason === "max_tokens") {
+    // Reintento conciso: menos afirmaciones para no volver a truncar.
+    msg = await ask("\n\nIMPORTANTE: sé conciso — máximo 8 afirmaciones, sin repetir.");
+    if (msg.stop_reason === "max_tokens") throw new Error("output del agente truncado (max_tokens)");
+  }
+  return textOf(msg);
+}
+
 /** Genera (o regenera) el brief citado de la cuenta. El caller maneja concurrencia. */
 export async function runAccountBrief(clientId: string): Promise<AccountBriefResult> {
   const agent = await prisma.agent.findUnique({ where: { id: AGENT_ID }, select: { systemPrompt: true } });
   if (!agent) return { status: "skipped", reason: "agent_not_seeded" };
 
-  // Marca temporal ANTES de leer el contexto: un staleAt seteado por el sync
-  // DURANTE la generación (2 PCs) debe SOBREVIVIR al upsert de abajo.
-  const contextBuiltAt = new Date();
-  const ctx = await buildAccountBriefContext(clientId);
-  if (!ctx) return { status: "skipped", reason: "no_client" };
+  // El cliente debe existir ANTES de crear el run (AgentRun.clientId tiene FK a Client):
+  // sin esto, un clientId inválido reventaría el create con FK violation en vez de
+  // devolver skipped. El endpoint ya lo valida, pero esto blinda a cualquier otro caller.
+  const client = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true } });
+  if (!client) return { status: "skipped", reason: "no_client" };
 
+  // Run creado PRIMERO: cualquier falla posterior (incluido armar el contexto o un error
+  // de Prisma) queda con su causa en AgentRun.output — auditable, nunca un fallo mudo.
   const run = await prisma.agentRun.create({
     data: { agentId: AGENT_ID, agentSlug: AGENT_SLUG, clientId, status: "RUNNING", stepLabel: "Resumen de cuenta (CS)" },
     select: { id: true },
   });
 
   try {
-    const msg = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 3000,
-      system: agent.systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content: `${ctx.serialized}\n\nRedactá el resumen ejecutivo de esta cuenta según tus instrucciones. Devolvé SOLO el JSON.`,
-        },
-      ],
-    });
-    if (msg.stop_reason === "max_tokens") throw new Error("output del agente truncado (max_tokens)");
-    const rawText = msg.content
-      .map((b) => (b.type === "text" ? (b as { text: string }).text : ""))
-      .join("")
-      .trim();
+    // Marca temporal ANTES de leer el contexto: un staleAt seteado por el sync
+    // DURANTE la generación (2 PCs) debe SOBREVIVIR al upsert de abajo.
+    const contextBuiltAt = new Date();
+    const ctx = await buildAccountBriefContext(clientId);
+    if (!ctx) {
+      await prisma.agentRun.update({
+        where: { id: run.id },
+        data: { status: "ERROR", output: JSON.stringify({ error: "No se pudo armar el contexto de la cuenta." }) },
+      });
+      return { status: "skipped", reason: "no_client", runId: run.id };
+    }
+
+    const rawText = await generateBriefText(agent.systemPrompt, ctx.serialized);
     const { headline, statements, discarded } = parseBrief(rawText, ctx.sources);
 
     await prisma.csAccountBrief.upsert({
@@ -274,8 +323,15 @@ export async function runAccountBrief(clientId: string): Promise<AccountBriefRes
     console.log(`[cs-brief] ✓ ${clientId}: ${statements.length} statements (${discarded} descartados por cita inválida) — run ${run.id}`);
     return { status: "ok", runId: run.id, headline: headline ?? undefined, statements, discarded };
   } catch (e) {
+    // Persistir la causa (humanizada + cruda) en el run — el fallo deja rastro auditable.
     await prisma.agentRun
-      .update({ where: { id: run.id }, data: { status: "ERROR", output: e instanceof Error ? e.message : "error" } })
+      .update({
+        where: { id: run.id },
+        data: {
+          status: "ERROR",
+          output: JSON.stringify({ error: humanizeBriefError(e), raw: e instanceof Error ? e.message : String(e) }),
+        },
+      })
       .catch(() => {});
     throw e;
   }

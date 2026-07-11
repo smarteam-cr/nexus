@@ -120,7 +120,7 @@ export function withCapability<C extends RouteContext = RouteContext>(
   return async (req, ctx) => {
     const guard = await guardCapability(cap);
     if (guard instanceof NextResponse) return guard;
-    return handler(req, ctx);
+    return runHandlerSafely(handler, req, ctx);
   };
 }
 

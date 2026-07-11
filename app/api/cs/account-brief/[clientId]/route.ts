@@ -11,11 +11,11 @@
  * Gateado con seeAllClients.
  */
 import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { guardCapability } from "@/lib/auth/api-guards";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
-import { runAccountBrief } from "@/lib/cs/account-brief";
-import { humanizeAgentError } from "@/lib/agents/anthropic-error";
+import { runAccountBrief, humanizeBriefError } from "@/lib/cs/account-brief";
 
 const inFlight = new Set<string>();
 
@@ -59,8 +59,13 @@ export async function POST(
     }
     return NextResponse.json({ ok: true, statements: result.statements?.length ?? 0, discarded: result.discarded ?? 0 });
   } catch (e) {
+    // Este endpoint usa guardCapability directo (no el wrapper withClientAccess con
+    // Sentry) → capturamos acá para que el fallo NO sea un punto ciego en prod.
     console.error("[cs/account-brief] error:", e);
-    return NextResponse.json({ error: humanizeAgentError(e) }, { status: 500 });
+    Sentry.captureException(e instanceof Error ? e : new Error(String(e)), {
+      extra: { clientId, feature: "cs-account-brief" },
+    });
+    return NextResponse.json({ error: humanizeBriefError(e) }, { status: 500 });
   } finally {
     inFlight.delete(clientId);
   }
