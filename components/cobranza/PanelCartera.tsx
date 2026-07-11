@@ -245,13 +245,13 @@ export default function PanelCartera({
             <thead>
               <tr className="bg-surface-muted border-b border-line">
                 <th className={TH_CLS}>Cliente</th>
+                <th className={TH_CLS}>Cobros</th>
                 <th className={TH_CLS}>Servicios</th>
                 <th className={TH_CLS}>Tipo</th>
                 <th className={TH_CLS}>Último cobro</th>
                 <th className={TH_CLS}>Próximo cobro</th>
                 <th className={`${TH_CLS} text-right`}>Monto próximo</th>
-                <th className={`${TH_CLS} text-center`}>Semáforo</th>
-                <th className={TH_CLS}>Estado</th>
+                <th className={TH_CLS}>Estado de cuenta</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -276,6 +276,21 @@ export default function PanelCartera({
                           className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded border border-line text-fg-muted"
                         >
                           sin proyecto
+                        </span>
+                      )}
+                    </td>
+                    {/* Cobros: el semáforo como tag legible (rojo→Vencido, etc.). */}
+                    <td className="px-4 py-3">
+                      {sinCuenta ? (
+                        <span
+                          title="Sin cuenta configurada"
+                          className="text-[10px] font-medium px-1.5 py-0.5 rounded border text-fg-muted bg-surface-muted border-line"
+                        >
+                          Sin configurar
+                        </span>
+                      ) : (
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${sem.chip}`}>
+                          {sem.label}
                         </span>
                       )}
                     </td>
@@ -310,18 +325,6 @@ export default function PanelCartera({
                     </td>
                     <td className="px-4 py-3 text-right text-fg whitespace-nowrap tabular-nums">
                       {fmtMonto(r.proximoMonto, r.moneda)}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {sinCuenta ? (
-                        // El gris del loader es sintético — sin cuenta no hay
-                        // semáforo real que mostrar.
-                        <span className="text-fg-muted" title="Sin configurar">—</span>
-                      ) : (
-                        <span
-                          title={sem.label}
-                          className={`inline-block w-2.5 h-2.5 rounded-full ${sem.dot}`}
-                        />
-                      )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {sinCuenta ? (

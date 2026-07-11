@@ -338,7 +338,7 @@ export default function ReportesPanel({
             title="Reporte accionable para quien cobra: vencidos, riesgo y a quién apretar"
             className="text-xs font-medium px-3 py-1.5 rounded-lg border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
           >
-            📋 Reporte operativo
+            Reporte operativo
           </button>
           {role === "SUPER_ADMIN" && (
             <button
@@ -347,7 +347,7 @@ export default function ReportesPanel({
               title="Reporte para dirección: agregados, tendencia, riesgo y caja proyectada"
               className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors"
             >
-              📈 Reporte ejecutivo
+              Reporte ejecutivo
             </button>
           )}
         </div>

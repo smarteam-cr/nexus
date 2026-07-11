@@ -106,3 +106,7 @@
 - **corte semanal** (tab, ex "Digest semanal"): el corte de cartera diff-based de los lunes
   (o manual con "Hacer el corte ahora") — solo avisa cambios; el backlog de configuración va
   colapsado en una línea.
+- **pago manual** (`createCobroManual` → `POST /api/cobranza/cobros`): registrar un pago que no
+  salió de un plan. Crea un cobro `origen=MANUAL` sobre un servicio existente del cliente y lo
+  marca COBRADO por el chokepoint (INV3). Entrada desde el buscador de "Registrar pago" →
+  "Registrar un pago que no está en la lista". Nace cobrado (no entra a la cola).

@@ -28,6 +28,7 @@ import type {
   servicioPatchSchema,
   planPutSchema,
   cobroPatchSchema,
+  cobroManualSchema,
   alertaPatchSchema,
   bitacoraCreateSchema,
 } from "./schema";
@@ -430,6 +431,61 @@ export async function cambiarEstadoCobro(
   }
 
   return updated;
+}
+
+// ── Pago manual: un cobro que no salió de un plan ───────────────────────────────
+
+/**
+ * Registra un pago MANUAL: crea un Cobro origen=MANUAL (numCuota=null → intocable
+ * por reconcileCobros, sobrevive a re-generate) sobre un servicio EXISTENTE, y lo
+ * marca COBRADO por el chokepoint `cambiarEstadoCobro` (INV3: confirmadoPor del
+ * guard). No hay pago flotante — el schema exige servicioId + cuentaId.
+ */
+export async function createCobroManual(
+  input: z.infer<typeof cobroManualSchema>,
+  byEmail: string,
+) {
+  const servicio = await prisma.servicioContratado.findUnique({
+    where: { id: input.servicioId },
+    select: { id: true, cuentaId: true },
+  });
+  if (!servicio) throw new CobranzaError("El servicio no existe.", 404);
+
+  const periodo = input.periodo ?? input.fechaCobro.slice(0, 7);
+  const cobro = await prisma.cobro.create({
+    data: {
+      servicioId: servicio.id,
+      cuentaId: servicio.cuentaId,
+      planId: null,
+      numCuota: null, // MANUAL: reconcileCobros nunca lo toca
+      periodo,
+      fechaProgramada: dayUTC(input.fechaCobro),
+      monto: input.monto,
+      moneda: input.moneda,
+      origen: "MANUAL",
+      // estado default PROGRAMADO — el chokepoint lo pasa a COBRADO abajo.
+      notas: "Pago manual",
+    },
+  });
+
+  // Chokepoint INV3: única vía que escribe estado=COBRADO (setea confirmadoPor).
+  await cambiarEstadoCobro(
+    cobro.id,
+    { estado: "COBRADO", fechaCobro: input.fechaCobro, referenciaExterna: input.referenciaExterna ?? null },
+    byEmail,
+  );
+
+  await addBitacora(
+    servicio.cuentaId,
+    {
+      tipo: "NOTA",
+      contenido: `Pago manual registrado: ${input.monto.toLocaleString("es-CR")} ${input.moneda} (${input.fechaCobro})${input.referenciaExterna ? ` · ref. ${input.referenciaExterna}` : ""}.`,
+      cobroId: cobro.id,
+    },
+    byEmail,
+  );
+
+  return cobro;
 }
 
 // ── Alertas: upsert con dedup (clon del runner del watchdog CS) ─────────────────

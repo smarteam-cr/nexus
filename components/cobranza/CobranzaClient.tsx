@@ -38,6 +38,7 @@ import ReportesPanel from "./ReportesPanel";
 import CuentaDrawer from "./CuentaDrawer";
 import BuscarPagoModal from "./BuscarPagoModal";
 import RegistrarPagoDialog from "./RegistrarPagoDialog";
+import RegistrarPagoManualDialog from "./RegistrarPagoManualDialog";
 
 type Tab = "cobros" | "clientes" | "proyeccion" | "alertas" | "reportes" | "corte";
 
@@ -87,6 +88,12 @@ export default function CobranzaClient({
   const [openCuentaId, setOpenCuentaId] = useState<string | null>(null);
   const [pagoTarget, setPagoTarget] = useState<ColaCobroRow | null>(null);
   const [buscadorOpen, setBuscadorOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+
+  // Cuentas configuradas para el pago manual (fuente = el cartera ya cargado).
+  const cuentasConfiguradas = cartera
+    .filter((r) => r.cuentaId !== null)
+    .map((r) => ({ cuentaId: r.cuentaId as string, clienteNombre: r.clienteNombre }));
 
   // Badge del tab: solo lo OPERATIVO abierto — el backlog de configuración
   // (CUENTA_SIN_DATOS) no es urgencia del día.
@@ -182,7 +189,7 @@ export default function CobranzaClient({
             onClick={() => setBuscadorOpen(true)}
             className="text-sm font-medium px-4 py-2 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors"
           >
-            💰 Registrar pago
+            Registrar pago
           </button>
         }
       />
@@ -260,6 +267,10 @@ export default function CobranzaClient({
             setBuscadorOpen(false);
             setPagoTarget(row);
           }}
+          onManual={() => {
+            setBuscadorOpen(false);
+            setManualOpen(true);
+          }}
         />
       )}
 
@@ -272,6 +283,25 @@ export default function CobranzaClient({
             const target = pagoTarget;
             setPagoTarget(null);
             void registrarPago(target, data);
+          }}
+        />
+      )}
+
+      {manualOpen && (
+        <RegistrarPagoManualDialog
+          cuentas={cuentasConfiguradas}
+          todayISO={todayISO}
+          onCancel={() => setManualOpen(false)}
+          onDone={() => {
+            setManualOpen(false);
+            void refreshCola();
+            void refreshCartera();
+            void refreshProyeccion();
+            void refreshReportes();
+          }}
+          onOpenCuenta={(id) => {
+            setManualOpen(false);
+            setOpenCuentaId(id);
           }}
         />
       )}

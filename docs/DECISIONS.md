@@ -196,6 +196,14 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   corte semanal. El engine no cambia — es presentación.
 - **CuentaDrawer único en el contenedor**: lo abren la cola, la tabla de clientes y las alertas
   de configuración vía `onOpenCuenta(cuentaId)` — tres instancias eran tres bugs de refresh.
+- **Pago manual = cobro `origen=MANUAL` sobre servicio EXISTENTE** (2026-07-11): un pago que no
+  salió de un plan se registra creando un `Cobro` `origen=MANUAL`, `numCuota=null` (intocable por
+  `reconcileCobros` → sobrevive a re-generate) y marcándolo COBRADO por `cambiarEstadoCobro`
+  (INV3 + chokepoint único intactos — nunca se escribe estado=COBRADO directo en el create). NO
+  hay pago flotante: el schema exige `servicioId` + `cuentaId`, así que el flujo obliga a elegir
+  cliente → servicio; si el cliente no tiene servicios, se lo manda a configurarlo (sin alta al
+  vuelo). Nace COBRADO → no aparece en la cola; sí en el cronograma del drawer, la bitácora y las
+  métricas. La UI capa la fecha del pago a hoy (retroactiva, para conciliar contra el banco).
 
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos

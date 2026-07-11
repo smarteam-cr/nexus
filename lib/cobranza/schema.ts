@@ -234,6 +234,23 @@ export const cobroPatchSchema = z
   })
   .partial();
 
+/**
+ * Pago manual: registrar un pago que NO salió de un plan. Crea un Cobro
+ * origen=MANUAL sobre un servicio EXISTENTE y lo marca COBRADO (por el chokepoint
+ * cambiarEstadoCobro — INV3). El schema exige servicioId: no hay pago flotante.
+ */
+export const cobroManualSchema = z.object({
+  servicioId: z.string().cuid(),
+  monto,
+  moneda: z.enum(COBRANZA_MONEDAS),
+  fechaCobro: isoDate, // cuándo entró la plata (la UI la capa a hoy)
+  periodo: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, "Período inválido (esperado YYYY-MM)")
+    .optional(),
+  referenciaExterna: z.string().max(200).nullable().optional(),
+});
+
 export const alertaPatchSchema = z
   .object({
     estado: z.enum(COBRANZA_ALERTA_ESTADOS),

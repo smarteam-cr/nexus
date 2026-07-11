@@ -17,10 +17,12 @@ const CAP = 30;
 export default function BuscarPagoModal({
   rows,
   onSelect,
+  onManual,
   onClose,
 }: {
   rows: ColaCobroRow[];
   onSelect: (row: ColaCobroRow) => void;
+  onManual: () => void;
   onClose: () => void;
 }) {
   const [q, setQ] = useState("");
@@ -102,6 +104,15 @@ export default function BuscarPagoModal({
         {deMas > 0 && (
           <p className="text-[11px] text-fg-muted px-1">y {deMas} más — afiná la búsqueda.</p>
         )}
+        <div className="border-t border-line pt-2">
+          <button
+            type="button"
+            onClick={onManual}
+            className="w-full text-left px-2 py-1.5 text-xs font-medium text-brand hover:bg-surface-hover rounded-md transition-colors"
+          >
+            Registrar un pago que no está en la lista
+          </button>
+        </div>
       </div>
     </div>
   );

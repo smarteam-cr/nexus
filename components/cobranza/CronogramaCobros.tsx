@@ -147,7 +147,7 @@ export default function CronogramaCobros({
                       title="Registrar la fecha en que el cliente prometió pagar (calla sus alertas hasta entonces)"
                       className="ml-auto text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors flex-shrink-0"
                     >
-                      🤝 Prometió
+                      Prometió
                     </button>
                     <button
                       type="button"
@@ -155,7 +155,7 @@ export default function CronogramaCobros({
                       title="Generar borrador de correo de cobro (lo revisás y lo enviás vos)"
                       className="text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors flex-shrink-0"
                     >
-                      ✉ Borrador
+                      Borrador
                     </button>
                   </>
                 )}

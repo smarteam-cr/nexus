@@ -354,22 +354,22 @@ export default function ColaCobros({
                   type="button"
                   onClick={() => setPromesaCobro(r)}
                   title="Registrar la fecha en que el cliente prometió pagar"
-                  className="text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
+                  className="text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors whitespace-nowrap"
                 >
-                  🤝
+                  Promesa
                 </button>
                 <button
                   type="button"
                   onClick={() => setBorradorCobro(r)}
                   title="Generar borrador de correo de cobro (lo revisás y lo enviás vos)"
-                  className="text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
+                  className="text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors whitespace-nowrap"
                 >
-                  ✉
+                  Borrador
                 </button>
                 <button
                   type="button"
                   onClick={() => onRegistrarPago(r)}
-                  className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors"
+                  className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors whitespace-nowrap"
                 >
                   Registrar pago
                 </button>
