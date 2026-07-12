@@ -13,6 +13,7 @@ import {
   computeRiesgoPago,
   diffDays,
   proyectarCostos,
+  proyectarGastos,
   proyectarIngresos,
   semaforoCuenta,
   sumaPlanExpandido,
@@ -20,6 +21,7 @@ import {
   type CarteraEngineInput,
   type CobroProyeccionInput,
   type CostoProyeccionInput,
+  type GastoProyeccionInput,
   type MetricasCartera,
   type ProyeccionIngresos,
   type RiesgoPagoItem,
@@ -152,6 +154,7 @@ export interface AlertaDTO {
 const iso = (d: Date | null | undefined): string | null => (d ? d.toISOString() : null);
 const isoDay = (d: Date | null | undefined): string | null =>
   d ? d.toISOString().slice(0, 10) : null;
+const dayUTC = (isoDate: string) => new Date(`${isoDate}T00:00:00.000Z`);
 const num = (d: Prisma.Decimal | null | undefined): number | null =>
   d == null ? null : Number(d);
 
@@ -772,7 +775,9 @@ export interface CostoRecurrenteDTO {
   montoBase: number | null;
   factorCargas: number | null;
   activo: boolean;
+  finalizadoEl: string | null; // baja definitiva (≠ pausa); null = vigente
   notas: string | null;
+  createdAt: string;
   updatedAt: string;
 }
 
@@ -793,23 +798,94 @@ export async function loadCostos(): Promise<CostoRecurrenteDTO[]> {
     montoBase: num(c.montoBase),
     factorCargas: num(c.factorCargas),
     activo: c.activo,
+    finalizadoEl: isoDay(c.finalizadoEl),
     notas: c.notas,
+    createdAt: iso(c.createdAt)!,
     updatedAt: iso(c.updatedAt)!,
+  }));
+}
+
+// ── Gastos puntuales + movimientos de costos ────────────────────────────────────
+
+export interface GastoPuntualDTO {
+  id: string;
+  nombre: string;
+  monto: number;
+  moneda: string;
+  fecha: string; // YYYY-MM-DD
+  tags: string[];
+  notas: string | null;
+  createdAt: string;
+}
+
+export async function loadGastos(): Promise<GastoPuntualDTO[]> {
+  const filas = await prisma.gastoPuntual.findMany({ orderBy: [{ fecha: "desc" }, { createdAt: "desc" }] });
+  return filas.map((g) => ({
+    id: g.id,
+    nombre: g.nombre,
+    monto: num(g.monto)!,
+    moneda: g.moneda,
+    fecha: isoDay(g.fecha)!,
+    tags: g.tags,
+    notas: g.notas,
+    createdAt: iso(g.createdAt)!,
+  }));
+}
+
+export interface CostoMovimientoDTO {
+  id: string;
+  costoId: string | null; // null = el costo se borró (la historia sobrevive)
+  tipo: string;
+  nombre: string;
+  categoria: string;
+  moneda: string;
+  frecuencia: string;
+  monto: number;
+  montoAnterior: number | null;
+  fechaEfectiva: string; // YYYY-MM-DD
+  usuarioEmail: string | null;
+  notas: string | null;
+  createdAt: string;
+}
+
+export async function loadMovimientosCostos(): Promise<CostoMovimientoDTO[]> {
+  const filas = await prisma.costoMovimiento.findMany({
+    orderBy: [{ fechaEfectiva: "desc" }, { createdAt: "desc" }],
+  });
+  return filas.map((m) => ({
+    id: m.id,
+    costoId: m.costoId,
+    tipo: m.tipo,
+    nombre: m.nombre,
+    categoria: m.categoria,
+    moneda: m.moneda,
+    frecuencia: m.frecuencia,
+    monto: num(m.monto)!,
+    montoAnterior: num(m.montoAnterior),
+    fechaEfectiva: isoDay(m.fechaEfectiva)!,
+    usuarioEmail: m.usuarioEmail,
+    notas: m.notas,
+    createdAt: iso(m.createdAt)!,
   }));
 }
 
 export interface CajaNetaDTO extends CajaNeta {
   /** Burn mensual estimado de los costos activos — lo consumen ambos paneles. */
   totalMensualCostos: TotalesMoneda;
+  /** Gastos puntuales FUTUROS que caen dentro del horizonte (ya incluidos en el
+   *  lado sale de los buckets) — para el banner de honestidad del panel. */
+  gastosPlanificados: { count: number; totales: TotalesMoneda };
 }
 
 /**
- * ÚNICO compositor de la caja neta: entra (loadProyeccion) + sale (costos
- * activos → proyectarCostos) con LOS MISMOS opts por construcción (defaults del
- * engine en ambos lados) → keys de bucket idénticas para computeCajaNeta.
+ * ÚNICO compositor de la caja neta: entra (loadProyeccion) + sale (costos activos
+ * → proyectarCostos + gastos futuros → proyectarGastos) con LOS MISMOS opts por
+ * construcción (defaults del engine) → keys de bucket idénticas para
+ * computeCajaNeta. Los gastos PASADOS (fecha < hoy) NO viajan a la caja neta —
+ * son solo registro/reporting en el tab.
  */
 export async function loadCajaNeta(todayISO: string): Promise<CajaNetaDTO> {
-  const [entra, filas] = await Promise.all([
+  const [entra, filasCostos, filasGastos] = await Promise.all([
     loadProyeccion(todayISO),
     prisma.costoRecurrente.findMany({
       where: { activo: true },
@@ -821,10 +897,15 @@ export async function loadCajaNeta(todayISO: string): Promise<CajaNetaDTO> {
         moneda: true,
         frecuencia: true,
         activo: true,
+        finalizadoEl: true,
       },
     }),
+    prisma.gastoPuntual.findMany({
+      where: { fecha: { gte: dayUTC(todayISO) } }, // el pasado no entra al neto
+      select: { id: true, nombre: true, monto: true, moneda: true, fecha: true },
+    }),
   ]);
-  const costos: CostoProyeccionInput[] = filas.map((c) => ({
+  const costos: CostoProyeccionInput[] = filasCostos.map((c) => ({
     costoId: c.id,
     nombre: c.nombre,
     categoria: c.categoria,
@@ -832,7 +913,21 @@ export async function loadCajaNeta(todayISO: string): Promise<CajaNetaDTO> {
     moneda: c.moneda,
     frecuencia: c.frecuencia,
     activo: c.activo,
+    finalizadoEl: isoDay(c.finalizadoEl),
+  }));
+  const gastos: GastoProyeccionInput[] = filasGastos.map((g) => ({
+    gastoId: g.id,
+    nombre: g.nombre,
+    monto: num(g.monto)!,
+    moneda: g.moneda,
+    fechaISO: isoDay(g.fecha)!,
   }));
   const sale = proyectarCostos(costos, { todayISO });
-  return { ...computeCajaNeta(entra, sale), totalMensualCostos: sale.totalMensual };
+  const saleGastos = proyectarGastos(gastos, { todayISO });
+  const bucketizados = saleGastos.buckets.reduce((n, b) => n + b.gastos.length, 0);
+  return {
+    ...computeCajaNeta(entra, sale, saleGastos),
+    totalMensualCostos: sale.totalMensual,
+    gastosPlanificados: { count: bucketizados, totales: saleGastos.totalFuturo },
+  };
 }

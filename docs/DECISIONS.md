@@ -267,6 +267,40 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   no-SUPER_ADMIN, ni a `BitacoraCobro`, ni a `AgentRun.output`. Sin alertas de costos por
   `AlertaCobro`. Los mensajes de `CobranzaError` de costos no llevan montos, y los
   `console.error` de sus routes no loguean el body.
+- **Costo fijo vs gasto puntual = entidades SEPARADAS** (fase 4.5, 2026-07-11): regla mental
+  "¿se repite? → costo fijo (`CostoRecurrente`, alimenta el burn); ¿pasa una vez? → gasto
+  (`GastoPuntual`, con fecha)". No una entidad unificada con `tipo`: los campos casi no se
+  solapan (frecuencia/activo/persona/base+factor no aplican a un gasto; fecha/tags no aplican
+  a un recurrente) y la matemática es opuesta (el recurrente se EXPANDE a todos los buckets;
+  el gasto cae ENTERO en el bucket de su fecha, sin mensualizar ni split). Ambos comparten la
+  línea dura (referencia estimada, sin tracking de pago, sin fiscal) y la superficie
+  SUPER_ADMIN-only. Viven bajo el mismo tab "Costos y gastos" (sub-nav Costos fijos | Gastos
+  | Movimientos).
+- **Gastos: futuro → caja neta, pasado → solo registro** (fase 4.5): un gasto con `fecha >=
+  hoy` entra al lado sale de su bucket en la caja neta (`proyectarGastos` reusa el mismo
+  `esqueletoBuckets`); un gasto pasado NO se bucketiza (`pasados`) — es solo reporting en el
+  tab (totales por tag y por mes). Los buckets NUNCA arrancan al pasado (invariante del
+  esqueleto compartido con ingresos). `loadCajaNeta` filtra `fecha >= hoy` antes de proyectar.
+- **Tags de gastos = vocabulario ABIERTO normalizado a slug** (fase 4.5): NO el catálogo
+  cerrado de proyectos (`lib/tags/catalog.ts`) — los eventos/campañas nacen todo el tiempo y
+  un catálogo obligaría a deploy por cada uno. `normalizeGastoTag` (client-safe, en
+  `lib/cobranza/schema.ts`: sin diacríticos, lower, espacios→guion, solo `[a-z0-9-]`, máx 40)
+  corre en el form (preview) Y en el server (Zod) — lo que ves es lo que se guarda. Máx 8 por
+  gasto, dedupe. El autocomplete es client-side sobre los gastos ya cargados (sin endpoint).
+- **`finalizadoEl` (baja definitiva) ≠ `activo` (pausa)** (fase 4.5): son ortogonales.
+  `activo=false` es pausa temporal (chip "Pausado", fuera del burn, reversible sin fecha);
+  `finalizadoEl` es baja definitiva (chip "Finalizado", con fecha, va al Histórico). El motor
+  proyecta un costo finalizado hasta el bucket que CONTIENE la fecha (entero, sin prorrateo —
+  es referencia) y lo excluye después; el `totalMensual` lo incluye solo si `finalizadoEl >=
+  hoy`. El burn del tile del panel aplica LA MISMA regla que el engine (si divergen, mienten).
+- **Movimientos de costos = tabla APPEND-ONLY escrita SOLO por las mutations** (fase 4.5,
+  patrón `BitacoraCobro`): `CostoMovimiento` registra ALTA/BAJA/REACTIVACION/PAUSA/
+  CAMBIO_MONTO/ELIMINACION dentro de la MISMA `$transaction` que el cambio del costo, con un
+  SNAPSHOT autosuficiente (nombre/categoria/moneda/frecuencia/monto) para leerse aunque el
+  costo se borre (FK SetNull → costoId null tras el hard delete; el ELIMINACION se inserta
+  ANTES del delete). Responde "en julio se fueron X, Y, Z y entró W". Un PATCH puede emitir
+  varios movimientos (cambió monto Y pausó). Lleva montos de salarios → mismas 3 capas + RLS
+  deny que `CostoRecurrente`; jamás se expone fuera de la superficie SUPER_ADMIN.
 
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos

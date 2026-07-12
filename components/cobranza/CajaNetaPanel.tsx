@@ -152,7 +152,8 @@ export default function CajaNetaPanel({
   const [moneda, setMoneda] = useState<Moneda>("CRC");
   const colors = useChartColors();
 
-  const { buckets, vencidosAparte, totalesHorizonte, totalMensualCostos } = cajaNeta;
+  const { buckets, vencidosAparte, totalesHorizonte, totalMensualCostos, gastosPlanificados } =
+    cajaNeta;
 
   // Último corte CON métricas — la cobertura del lado entra sale de ahí.
   const ultimoConMetricas = useMemo(() => {
@@ -293,6 +294,21 @@ export default function CajaNetaPanel({
         <p className="text-[11px] font-medium text-amber-600">
           El lado sale son costos ESTIMADOS de referencia, no contabilidad.
         </p>
+        {gastosPlanificados.count > 0 && (
+          <p className="text-[11px] text-fg-muted">
+            El lado sale incluye {gastosPlanificados.count} gasto
+            {gastosPlanificados.count !== 1 ? "s" : ""} planificado
+            {gastosPlanificados.count !== 1 ? "s" : ""}:{" "}
+            <span className="tabular-nums text-fg-secondary">
+              {fmtMonto(gastosPlanificados.totales.CRC, "CRC")}
+            </span>{" "}
+            ·{" "}
+            <span className="tabular-nums text-fg-secondary">
+              {fmtMonto(gastosPlanificados.totales.USD, "USD")}
+            </span>
+            .
+          </p>
+        )}
       </div>
 
       {buckets.length === 0 ? (
@@ -325,7 +341,8 @@ export default function CajaNetaPanel({
                   <MonedaToggle value={moneda} onChange={setMoneda} />
                 </div>
                 <p className="w-full text-[11px] text-fg-muted">
-                  Barras: cobros proyectados y costos estimados. Línea: neto — puede ser negativo.
+                  Barras: entra (cobros proyectados) y sale (costos fijos + gastos planificados).
+                  Línea: neto — puede ser negativo.
                 </p>
               </div>
               <EChartRenderer option={chartOption} height={240} className="bg-surface" />

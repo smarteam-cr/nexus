@@ -122,5 +122,21 @@
   dirección estima el all-in de un salario desde el bruto (`monto = base × factor`). Lo
   escribe el usuario — Nexus no trae tasas ni calcula cargas. Solo memoria de reedición: el
   canónico es `monto`.
-- **burn mensual estimado**: suma mensualizada de los costos recurrentes ACTIVOS (ANUAL/12),
-  por moneda. El "sale" fijo del negocio; tile en Costos y Caja neta.
+- **burn mensual estimado**: suma mensualizada de los costos recurrentes ACTIVOS y NO
+  finalizados (ANUAL/12), por moneda. El "sale" fijo del negocio; tile en Costos y Caja neta.
+- **gasto puntual** (`GastoPuntual` → sub-vista "Gastos" del tab, SOLO SUPER_ADMIN): un gasto
+  único/circunstancial con fecha (compra de equipo, evento, mantenimiento) y tags libres.
+  Fecha futura = compra planificada → entra a la caja neta en el bucket de su fecha (entero,
+  sin mensualizar); fecha pasada = solo registro (totales por tag y por mes). NO es
+  contabilidad: sin estado de pago.
+- **tag de gasto** (`GastoPuntual.tags`, `normalizeGastoTag`): etiqueta libre normalizada a
+  slug ("Evento San José" → `evento-san-jose`) para agrupar gastos por contexto (evento,
+  campaña). Vocabulario ABIERTO con autocomplete de los ya usados; máx 8 por gasto. NO usa el
+  catálogo cerrado de proyectos.
+- **movimiento de costo** (`CostoMovimiento` → sub-vista "Movimientos"): entrada append-only
+  de la historia de un costo recurrente — ALTA, BAJA, REACTIVACION, PAUSA, CAMBIO_MONTO,
+  ELIMINACION — con snapshot autosuficiente + fechaEfectiva + usuario + motivo. La escriben
+  solo las mutations, en la misma transacción. Responde "quién entró y quién se fue, cuándo".
+- **finalizado / baja** (`CostoRecurrente.finalizadoEl`): baja DEFINITIVA de un costo
+  (renuncia, desvinculación, cancelación) — distinta de la pausa (`activo=false`, temporal).
+  Sale del burn pasada la fecha, va al Histórico, y genera un movimiento BAJA.

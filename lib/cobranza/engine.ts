@@ -1109,6 +1109,14 @@ export interface CostoProyeccionInput {
   moneda: "CRC" | "USD";
   frecuencia: "MENSUAL" | "ANUAL"; // ANUAL → round2(monto/12)
   activo: boolean; // false se excluye adentro (pausado)
+  /**
+   * Baja DEFINITIVA (opcional): fecha ISO a partir de la cual el costo deja de
+   * existir. El bucket que CONTIENE la baja entra ENTERO (referencia estimada, sin
+   * prorrateo diario) y los buckets posteriores lo excluyen; el burn mensual lo
+   * cuenta solo mientras siga quemando hoy (baja >= todayISO). Ausente/null =
+   * costo vivo indefinido (output idéntico al histórico — regresión O26).
+   */
+  finalizadoEl?: string | null;
 }
 
 export interface CostoBucketItem {
@@ -1157,6 +1165,7 @@ export function proyectarCostos(
   costos: CostoProyeccionInput[],
   opts: { todayISO: string; horizonteMeses?: number; mesesEnQuincenas?: number },
 ): ProyeccionCostos {
+  const hoyISO = toISODate(toUTCDate(opts.todayISO));
   const { base } = esqueletoBuckets(
     opts.todayISO,
     opts.horizonteMeses ?? PROYECCION_HORIZONTE_MESES,
@@ -1166,14 +1175,18 @@ export function proyectarCostos(
   const activos = costos
     .filter((c) => c.activo)
     .sort((a, b) => a.nombre.localeCompare(b.nombre) || a.costoId.localeCompare(b.costoId));
-  // Mensualizar UNA sola vez (round2 único — no re-redondear por bucket).
+  // Mensualizar UNA sola vez (round2 único — no re-redondear por bucket). La baja
+  // `finalizadoEl` se normaliza a fecha de calendario para comparar lexicográfico.
   const mensualizados = activos.map((c) => ({
     c,
     m: c.frecuencia === "ANUAL" ? round2(c.monto / 12) : round2(c.monto),
+    finalizadoEl: c.finalizadoEl ? toISODate(toUTCDate(c.finalizadoEl)) : null,
   }));
 
+  // El burn cuenta el costo SOLO si sigue quemando hoy (sin baja, o baja >= hoy).
   const totalMensual: TotalesMoneda = { CRC: 0, USD: 0 };
-  for (const { c, m } of mensualizados) {
+  for (const { c, m, finalizadoEl } of mensualizados) {
+    if (finalizadoEl !== null && finalizadoEl < hoyISO) continue;
     totalMensual[c.moneda] = round2(totalMensual[c.moneda] + m);
   }
 
@@ -1183,7 +1196,10 @@ export function proyectarCostos(
     costos: [],
   }));
   for (const b of buckets) {
-    for (const { c, m } of mensualizados) {
+    for (const { c, m, finalizadoEl } of mensualizados) {
+      // El bucket que CONTIENE la baja entra ENTERO (sin prorrateo diario — referencia
+      // estimada); los buckets que arrancan DESPUÉS de la baja la excluyen.
+      if (finalizadoEl !== null && b.desdeISO > finalizadoEl) continue;
       const monto =
         b.granularidad === "mes" ? m : montoQuincena(m, b.key.endsWith("-Q1") ? 1 : 2);
       if (monto === 0) continue;
@@ -1199,6 +1215,99 @@ export function proyectarCostos(
   }
 
   return { buckets, totalMensual };
+}
+
+// ── 11b. Gastos puntuales ("la plata que sale, one-off") ─────────────────────────
+//
+// Espejo chico de proyectarIngresos: un gasto NO recurre — cae el día que cae, sin
+// mensualizar ni partir en quincenas. Comparte el MISMO esqueleto de buckets que
+// ingresos y costos → keys idénticas por construcción (matcheo trivial en la caja
+// neta). Sin gracia, sin vencidos, sin semáforo: un gasto no vence.
+
+export interface GastoProyeccionInput {
+  gastoId: string;
+  nombre: string;
+  monto: number; // en la moneda dada, YA en number (Decimal murió en queries)
+  moneda: "CRC" | "USD";
+  fechaISO: string; // "2026-08-15"
+}
+
+export interface GastoBucketItem {
+  gastoId: string;
+  nombre: string;
+  moneda: "CRC" | "USD";
+  monto: number;
+}
+
+export interface BucketGasto {
+  key: string; // MISMAS keys que BucketProyeccion / BucketCosto (esqueleto compartido)
+  etiqueta: string;
+  granularidad: "quincena" | "mes";
+  desdeISO: string;
+  hastaISO: string;
+  totales: TotalesMoneda;
+  gastos: GastoBucketItem[];
+}
+
+export interface ProyeccionGastos {
+  buckets: BucketGasto[];
+  pasados: number; // count de gastos con fecha < hoy (NUNCA bucketizados)
+  fueraDeHorizonte: number; // count de gastos con fecha > finHorizonteISO (o sin bucket)
+  totalFuturo: TotalesMoneda; // Σ round2 de lo bucketizado, por moneda SEPARADA
+}
+
+/**
+ * Proyección de gastos puntuales sobre el esqueleto compartido. Un gasto cae ENTERO
+ * el día de su fecha (sin mensualizar ni split de quincena):
+ *  - fecha < hoy → `pasados` (nunca a un bucket — la historia no se proyecta).
+ *  - fecha > finHorizonteISO (o ningún bucket lo contiene) → `fueraDeHorizonte`.
+ *  - hoy y futuro dentro del horizonte → al bucket que lo contiene, en su moneda.
+ * Determinista: orden estable por fecha + id. CRC y USD JAMÁS se suman.
+ */
+export function proyectarGastos(
+  gastos: GastoProyeccionInput[],
+  opts: { todayISO: string; horizonteMeses?: number; mesesEnQuincenas?: number },
+): ProyeccionGastos {
+  const hoyISO = toISODate(toUTCDate(opts.todayISO));
+  const { base, finHorizonteISO } = esqueletoBuckets(
+    opts.todayISO,
+    opts.horizonteMeses ?? PROYECCION_HORIZONTE_MESES,
+    opts.mesesEnQuincenas ?? PROYECCION_MESES_EN_QUINCENAS,
+  );
+  const buckets: BucketGasto[] = base.map((b) => ({
+    ...b,
+    totales: { CRC: 0, USD: 0 },
+    gastos: [],
+  }));
+
+  const totalFuturo: TotalesMoneda = { CRC: 0, USD: 0 };
+  let pasados = 0;
+  let fueraDeHorizonte = 0;
+
+  const ordenados = [...gastos].sort(
+    (a, b) => a.fechaISO.localeCompare(b.fechaISO) || a.gastoId.localeCompare(b.gastoId),
+  );
+  for (const g of ordenados) {
+    const fechaISO = toISODate(toUTCDate(g.fechaISO));
+    if (fechaISO < hoyISO) {
+      pasados++; // estricto: el gasto de HOY no es pasado (el primer bucket lo contiene)
+      continue;
+    }
+    if (fechaISO > finHorizonteISO) {
+      fueraDeHorizonte++;
+      continue;
+    }
+    const bucket = buckets.find((b) => fechaISO >= b.desdeISO && fechaISO <= b.hastaISO);
+    if (!bucket) {
+      fueraDeHorizonte++; // borde raro (esqueleto continuo): no se pierde en silencio
+      continue;
+    }
+    bucket.gastos.push({ gastoId: g.gastoId, nombre: g.nombre, moneda: g.moneda, monto: g.monto });
+    bucket.totales[g.moneda] = round2(bucket.totales[g.moneda] + g.monto);
+    totalFuturo[g.moneda] = round2(totalFuturo[g.moneda] + g.monto);
+  }
+
+  return { buckets, pasados, fueraDeHorizonte, totalFuturo };
 }
 
 export interface BucketCajaNeta {
@@ -1221,19 +1330,33 @@ export interface CajaNeta {
 
 /**
  * Caja neta = entra − sale por bucket y por moneda (CRC y USD JAMÁS se suman
- * ni convierten — sin FX). Matchea por key: como ambos lados salen del mismo
- * esqueleto con los mismos opts, la lista es idéntica; un key ausente del lado
- * sale cuenta 0 (red de seguridad, no camino esperado). Los vencidos del lado
- * entra viajan APARTE — el neto proyectado no los incluye.
+ * ni convierten — sin FX). Matchea por key: como todos los lados salen del mismo
+ * esqueleto con los mismos opts, la lista es idéntica; un key ausente de un lado
+ * cuenta 0 (red de seguridad, no camino esperado). El `sale` de cada bucket suma
+ * los costos recurrentes + los gastos puntuales (`gastos`, opcional) de esa key;
+ * el desglose costos-vs-gastos NO vive acá (viaja en el DTO de queries.ts). Omitir
+ * `gastos` da output profundamente idéntico a pasar `proyectarGastos([])` (O21).
+ * Los vencidos del lado entra viajan APARTE — el neto proyectado no los incluye.
  */
-export function computeCajaNeta(entra: ProyeccionIngresos, sale: ProyeccionCostos): CajaNeta {
+export function computeCajaNeta(
+  entra: ProyeccionIngresos,
+  sale: ProyeccionCostos,
+  gastos?: ProyeccionGastos,
+): CajaNeta {
   const salePorKey = new Map(sale.buckets.map((b) => [b.key, b]));
+  const gastosPorKey = new Map((gastos?.buckets ?? []).map((b) => [b.key, b]));
   const cero = (): TotalesMoneda => ({ CRC: 0, USD: 0 });
 
   const totalesHorizonte = { entra: cero(), sale: cero(), neto: cero() };
   const buckets: BucketCajaNeta[] = entra.buckets.map((be) => {
     const bs = salePorKey.get(be.key);
-    const saleTotales: TotalesMoneda = bs ? bs.totales : cero();
+    const bg = gastosPorKey.get(be.key);
+    const costoTotales: TotalesMoneda = bs ? bs.totales : cero();
+    const gastoTotales: TotalesMoneda = bg ? bg.totales : cero();
+    const saleTotales: TotalesMoneda = {
+      CRC: round2(costoTotales.CRC + gastoTotales.CRC),
+      USD: round2(costoTotales.USD + gastoTotales.USD),
+    };
     const neto: TotalesMoneda = {
       CRC: round2(be.totales.CRC - saleTotales.CRC),
       USD: round2(be.totales.USD - saleTotales.USD),

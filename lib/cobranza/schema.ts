@@ -110,6 +110,12 @@ export const IMPORT_FILA_ESTADO_LABEL: Record<string, string> = {
 // ── Zod: fronteras HTTP ─────────────────────────────────────────────────────────
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (esperado YYYY-MM-DD)");
+// isoDate valida el FORMATO; este refine valida que la fecha EXISTA de verdad
+// (2026-02-30 pasa el regex pero no es un día real) — roundtrip UTC.
+const isoDateReal = isoDate.refine((s) => {
+  const d = new Date(`${s}T00:00:00.000Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}, "Fecha inexistente");
 const monto = z.number().positive("El monto debe ser positivo").multipleOf(0.01, "Máximo 2 decimales");
 // Dominio ya NORMALIZADO (lowercase, sin @, sin protocolo — lo normaliza import-core).
 const dominio = z
@@ -313,6 +319,15 @@ const costoBase = z.object({
   factorCargas: factorCargas.nullable().optional(),
   activo: z.boolean().optional(),
   notas: z.string().trim().max(2000).nullable().optional(),
+  // Baja DEFINITIVA (≠ pausa): la mutación emite un movimiento BAJA con esta fecha
+  // y el motor excluye el costo pasada la fecha. null = reactivar. (fase 4.5)
+  finalizadoEl: isoDateReal.nullable().optional(),
+  // Fecha efectiva del movimiento que genera este cambio (ALTA retroactiva al
+  // crear, o la fecha de la baja); default hoy en la mutación. NO se persiste en
+  // CostoRecurrente — solo alimenta CostoMovimiento.
+  fechaEfectiva: isoDateReal.optional(),
+  // Motivo libre del movimiento ("renuncia", "desvinculación", "contratación").
+  motivoMovimiento: z.string().trim().max(500).nullable().optional(),
 });
 
 export const costoCreateSchema = costoBase
@@ -328,6 +343,48 @@ export const costoCreateSchema = costoBase
 // Los cross-field del PATCH se re-validan en updateCosto sobre la fila MERGEADA
 // (con un partial, `categoria` puede venir ausente y `teamMemberId` presente).
 export const costoPatchSchema = costoBase.partial();
+
+// ── Gastos puntuales (fase 4.5 — SUPER_ADMIN-only) ─────────────────────────────
+// Vocabulario ABIERTO de tags: se normaliza a slug al escribir (sin catálogo).
+// La función es client-safe (la usa el preview del TagsInput) — mismo resultado
+// en el form y en el server para que lo que ves sea lo que se guarda.
+
+/** "Evento San José!" → "evento-san-jose". Vacío tras normalizar = descartar. */
+export function normalizeGastoTag(raw: string): string {
+  return raw
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // sin diacríticos (marcas combinantes)
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-") // espacios/underscore → guion
+    .replace(/[^a-z0-9-]/g, "") // solo alfanumérico + guion
+    .replace(/-+/g, "-") // colapsar guiones
+    .slice(0, 40)
+    .replace(/^-+|-+$/g, ""); // sin guiones al borde
+}
+
+/** Normaliza + dedupe + tope de 8 tags. */
+export function normalizeGastoTags(raw: string[]): string[] {
+  const out: string[] = [];
+  for (const t of raw) {
+    const n = normalizeGastoTag(t);
+    if (n && !out.includes(n)) out.push(n);
+  }
+  return out.slice(0, 8);
+}
+
+const gastoTags = z.array(z.string().max(60)).max(32).transform(normalizeGastoTags).default([]);
+
+const gastoBase = z.object({
+  nombre: z.string().trim().min(1, "El nombre es requerido").max(120),
+  monto,
+  moneda: z.enum(COBRANZA_MONEDAS),
+  fecha: isoDateReal, // día del gasto (pasado = ejecutado; futuro = planificado)
+  tags: gastoTags,
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
+export const gastoCreateSchema = gastoBase;
+export const gastoPatchSchema = gastoBase.partial();
 
 // ── Crear empresa (AccountSource "manual" — puerto 1) ───────────────────────────
 

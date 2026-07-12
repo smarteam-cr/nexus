@@ -82,6 +82,23 @@ CREATE POLICY deny_all_non_superuser ON "CostoRecurrente"
   TO PUBLIC
   USING (false);
 
+-- 5) Ídem para GastoPuntual y CostoMovimiento (Cobranza fase 4.5): los gastos
+--    puntuales y la historia de movimientos de costos llevan los MISMOS montos
+--    sensibles (salarios estimados, bajas de personal). Deny-all RESTRICTIVE.
+DROP POLICY IF EXISTS deny_all_non_superuser ON "GastoPuntual";
+CREATE POLICY deny_all_non_superuser ON "GastoPuntual"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "CostoMovimiento";
+CREATE POLICY deny_all_non_superuser ON "CostoMovimiento"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- VERIFICACIÓN (el runner con --apply ya la corre):
 --   SELECT tablename FROM pg_tables

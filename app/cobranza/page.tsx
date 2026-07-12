@@ -21,6 +21,7 @@ import {
   loadColaCobros,
   loadCostos,
   loadCajaNeta,
+  loadGastos,
 } from "@/lib/cobranza";
 import { crDateParts } from "@/lib/jobs/time";
 import CobranzaClient from "@/components/cobranza/CobranzaClient";
@@ -36,7 +37,7 @@ export default async function CobranzaPage() {
   const canCostos = isCostosRole(ctx.role);
 
   const todayISO = crDateParts(new Date()).dateKey; // "hoy" = día calendario CR
-  const [cola, cartera, alertas, snapshot, proyeccion, series, riesgo, costos, cajaNeta] =
+  const [cola, cartera, alertas, snapshot, proyeccion, series, riesgo, costos, cajaNeta, gastos] =
     await Promise.all([
       loadColaCobros(todayISO),
       loadCartera(todayISO),
@@ -47,6 +48,7 @@ export default async function CobranzaPage() {
       loadRiesgo(todayISO),
       canCostos ? loadCostos() : Promise.resolve(null),
       canCostos ? loadCajaNeta(todayISO) : Promise.resolve(null),
+      canCostos ? loadGastos() : Promise.resolve(null),
     ]);
 
   // El PageHeader vive en CobranzaClient: su slot `action` carga el botón global
@@ -64,6 +66,7 @@ export default async function CobranzaPage() {
           initialRiesgo={riesgo}
           initialCostos={costos}
           initialCajaNeta={cajaNeta}
+          initialGastos={gastos}
           role={ctx.role}
           todayISO={todayISO}
         />

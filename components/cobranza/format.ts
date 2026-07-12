@@ -48,6 +48,21 @@ export const SEMAFORO_META: Record<Semaforo, { label: string; dot: string; chip:
   },
 };
 
+/** Monto mensualizado de un costo: ANUAL → monto/12 (round 2), MENSUAL → monto. */
+export function mensualizado(monto: number, frecuencia: string): number {
+  return frecuencia === "ANUAL" ? Math.round((monto / 12) * 100) / 100 : monto;
+}
+
+/** Movimientos de costos (fase 4.5): label + colores de estado (patrón SEMAFORO_META). */
+export const MOVIMIENTO_TIPO_META: Record<string, { label: string; chip: string }> = {
+  ALTA: { label: "Alta", chip: "text-emerald-600 bg-emerald-500/10 border-emerald-500/30" },
+  BAJA: { label: "Baja", chip: "text-red-600 bg-red-500/10 border-red-500/30" },
+  REACTIVACION: { label: "Reactivación", chip: "text-emerald-600 bg-emerald-500/10 border-emerald-500/30" },
+  PAUSA: { label: "Pausa", chip: "text-amber-600 bg-amber-500/10 border-amber-500/30" },
+  CAMBIO_MONTO: { label: "Cambio de monto", chip: "text-amber-600 bg-amber-500/10 border-amber-500/30" },
+  ELIMINACION: { label: "Eliminación", chip: "text-fg-muted bg-surface-muted border-line" },
+};
+
 // Labels que lib/cobranza/schema.ts no trae (espejos chicos de la UI).
 export const VIA_COBRO_LABEL: Record<string, string> = {
   MERCURY: "Mercury",

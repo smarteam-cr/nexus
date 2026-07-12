@@ -1,0 +1,189 @@
+{
+  "cajaNeta": {
+    "buckets": [
+      {
+        "key": "2026-07-Q1",
+        "etiqueta": "1–15 jul",
+        "granularidad": "quincena",
+        "desdeISO": "2026-07-01",
+        "hastaISO": "2026-07-15",
+        "entra": {
+          "CRC": 500000,
+          "USD": 0
+        },
+        "sale": {
+          "CRC": 780000,
+          "USD": 50
+        },
+        "neto": {
+          "CRC": -280000,
+          "USD": -50
+        }
+      },
+      {
+        "key": "2026-07-Q2",
+        "etiqueta": "16–31 jul",
+        "granularidad": "quincena",
+        "desdeISO": "2026-07-16",
+        "hastaISO": "2026-07-31",
+        "entra": {
+          "CRC": 0,
+          "USD": 300
+        },
+        "sale": {
+          "CRC": 840000,
+          "USD": 50
+        },
+        "neto": {
+          "CRC": -840000,
+          "USD": 250
+        }
+      },
+      {
+        "key": "2026-08-Q1",
+        "etiqueta": "1–15 ago",
+        "granularidad": "quincena",
+        "desdeISO": "2026-08-01",
+        "hastaISO": "2026-08-15",
+        "entra": {
+          "CRC": 0,
+          "USD": 0
+        },
+        "sale": {
+          "CRC": 750000,
+          "USD": 500
+        },
+        "neto": {
+          "CRC": -750000,
+          "USD": -500
+        }
+      },
+      {
+        "key": "2026-08-Q2",
+        "etiqueta": "16–31 ago",
+        "granularidad": "quincena",
+        "desdeISO": "2026-08-16",
+        "hastaISO": "2026-08-31",
+        "entra": {
+          "CRC": 800000,
+          "USD": 0
+        },
+        "sale": {
+          "CRC": 750000,
+          "USD": 50
+        },
+        "neto": {
+          "CRC": 50000,
+          "USD": -50
+        }
+      },
+      {
+        "key": "2026-09",
+        "etiqueta": "sep 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-09-01",
+        "hastaISO": "2026-09-30",
+        "entra": {
+          "CRC": 0,
+          "USD": 1200
+        },
+        "sale": {
+          "CRC": 900000,
+          "USD": 100
+        },
+        "neto": {
+          "CRC": -900000,
+          "USD": 1100
+        }
+      },
+      {
+        "key": "2026-10",
+        "etiqueta": "oct 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-10-01",
+        "hastaISO": "2026-10-31",
+        "entra": {
+          "CRC": 0,
+          "USD": 0
+        },
+        "sale": {
+          "CRC": 900000,
+          "USD": 100
+        },
+        "neto": {
+          "CRC": -900000,
+          "USD": -100
+        }
+      },
+      {
+        "key": "2026-11",
+        "etiqueta": "nov 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-11-01",
+        "hastaISO": "2026-11-30",
+        "entra": {
+          "CRC": 0,
+          "USD": 0
+        },
+        "sale": {
+          "CRC": 900000,
+          "USD": 100
+        },
+        "neto": {
+          "CRC": -900000,
+          "USD": -100
+        }
+      },
+      {
+        "key": "2026-12",
+        "etiqueta": "dic 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-12-01",
+        "hastaISO": "2026-12-31",
+        "entra": {
+          "CRC": 0,
+          "USD": 0
+        },
+        "sale": {
+          "CRC": 900000,
+          "USD": 100
+        },
+        "neto": {
+          "CRC": -900000,
+          "USD": -100
+        }
+      }
+    ],
+    "vencidosAparte": {
+      "totales": {
+        "CRC": 0,
+        "USD": 0
+      },
+      "count": 0
+    },
+    "totalesHorizonte": {
+      "entra": {
+        "CRC": 1300000,
+        "USD": 1500
+      },
+      "sale": {
+        "CRC": 6720000,
+        "USD": 1050
+      },
+      "neto": {
+        "CRC": -5420000,
+        "USD": 450
+      }
+    }
+  },
+  "saleTotalMensual": {
+    "CRC": 1500000,
+    "USD": 100
+  },
+  "gastosTotalFuturo": {
+    "CRC": 120000,
+    "USD": 450
+  },
+  "gastosPasados": 1,
+  "gastosFueraDeHorizonte": 1
+}

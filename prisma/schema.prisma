@@ -2688,8 +2688,84 @@ model CostoRecurrente {
   activo Boolean @default(true) // false = pausado (fuera de la proyección, sin borrar)
   notas  String? @db.Text
 
+  // Baja DEFINITIVA (renuncia/desvinculación/cancelación) — distinta de la pausa
+  // (activo=false, temporal). El motor proyecta el costo hasta el bucket que
+  // CONTIENE esta fecha (entero, sin prorrateo diario — es referencia) y lo
+  // excluye después; pasada la fecha sale del burn. nullable porque un costo
+  // vigente no tiene baja.
+  finalizadoEl DateTime? @db.Date
+
+  movimientos CostoMovimiento[] @relation("MovimientosDeCosto")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([activo, categoria])
+}
+
+enum CostoMovimientoTipo {
+  ALTA
+  BAJA // finalizadoEl seteado (baja definitiva, ≠ pausa)
+  REACTIVACION // finalizadoEl limpiado, o activo false→true
+  PAUSA // activo true→false
+  CAMBIO_MONTO
+  ELIMINACION // hard delete — la última huella (queda con costoId null)
+}
+
+// ─── CostoMovimiento ─────────────────────────────────────────────────────────
+// Historia APPEND-ONLY de altas/bajas/cambios de los costos recurrentes (patrón
+// BitacoraCobro). La escriben SOLO las mutations de costos, en la misma
+// transacción — nunca desde la UI. Lleva un SNAPSHOT autosuficiente
+// (nombre/categoria/moneda/frecuencia/monto) para leerse sola aunque el costo
+// cambie o se borre (hard delete → costoId queda null vía SetNull).
+// ⚠ PRIVACIDAD: lleva montos de SALARIOS — mismas 3 capas + RLS deny que
+// CostoRecurrente. JAMÁS se expone fuera de las superficies SUPER_ADMIN.
+model CostoMovimiento {
+  id String @id @default(cuid())
+  // nullable porque la historia SOBREVIVE al hard delete del costo (SetNull).
+  costoId String?
+  costo   CostoRecurrente? @relation("MovimientosDeCosto", fields: [costoId], references: [id], onDelete: SetNull)
+
+  tipo CostoMovimientoTipo
+
+  // Snapshot del costo al momento del movimiento (autosuficiente).
+  nombre     String
+  categoria  CobranzaCategoriaCosto
+  moneda     CobranzaMoneda
+  frecuencia CobranzaFrecuenciaCosto
+  monto      Decimal                 @db.Decimal(12, 2) // monto DESPUÉS del movimiento, en su frecuencia
+  // nullable porque solo CAMBIO_MONTO lo lleva.
+  montoAnterior Decimal? @db.Decimal(12, 2)
+
+  fechaEfectiva DateTime @db.Date // cuándo ocurrió de verdad (retroactiva permitida)
+  usuarioEmail  String? // nullable por simetría con BitacoraCobro (hoy siempre viene del guard)
+  notas         String? @db.Text // motivo libre ("renuncia", "desvinculación", "contratación")
+
+  createdAt DateTime @default(now())
+
+  @@index([fechaEfectiva])
+  @@index([costoId, createdAt])
+}
+
+// ─── GastoPuntual ────────────────────────────────────────────────────────────
+// Gasto ÚNICO/circunstancial de REFERENCIA estimada (compra de equipo, evento,
+// mantenimiento) — MISMA línea dura que CostoRecurrente: no es contabilidad, sin
+// estado de pago (fecha pasada = ejecutado; futura = compra planificada → entra a
+// la caja neta en el bucket de su fecha), sin lógica fiscal, sin FX. Los `tags`
+// son vocabulario ABIERTO normalizado a slug al escribir (normalizeGastoTag en
+// lib/cobranza/schema.ts) — NO usa el catálogo cerrado de proyectos.
+// ⚠ PRIVACIDAD: superficie SOLO SUPER_ADMIN (guardCostosAccess) + RLS deny.
+model GastoPuntual {
+  id     String         @id @default(cuid())
+  nombre String
+  monto  Decimal        @db.Decimal(12, 2)
+  moneda CobranzaMoneda
+  fecha  DateTime       @db.Date // día del gasto (único campo temporal con semántica)
+  tags   String[]       @default([])
+  notas  String?        @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fecha])
 }

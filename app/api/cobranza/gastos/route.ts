@@ -1,21 +1,20 @@
 /**
- * /api/cobranza/costos — registro de costos recurrentes (fase 4).
- *   GET  → { costos: CostoRecurrenteDTO[] } (referencia ESTIMADA, incl. salarios).
- *   POST → crea un CostoRecurrente (201).
+ * /api/cobranza/gastos — gastos puntuales/circunstanciales (fase 4.5).
+ *   GET  → { gastos: GastoPuntualDTO[] } (orden fecha desc).
+ *   POST → crea un GastoPuntual (201). tags libres → normalizados a slug en Zod.
  * ⚠ PRIVACIDAD: guardCostosAccess (SOLO SUPER_ADMIN) como PRIMERA línea de cada
- * handler — es LA barrera (Prisma bypassa RLS). Hay un test estructural que
- * verifica su presencia. Los console.error no loguean el body (montos).
+ * handler — es LA barrera (Prisma bypassa RLS). Test estructural lo verifica.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardCostosAccess } from "@/lib/auth/api-guards";
-import { loadCostos } from "@/lib/cobranza/queries";
-import { createCosto, CobranzaError } from "@/lib/cobranza/mutations";
-import { costoCreateSchema } from "@/lib/cobranza/schema";
+import { loadGastos } from "@/lib/cobranza/queries";
+import { createGasto, CobranzaError } from "@/lib/cobranza/mutations";
+import { gastoCreateSchema } from "@/lib/cobranza/schema";
 
 export async function GET() {
   const guard = await guardCostosAccess();
   if (guard instanceof NextResponse) return guard;
-  return NextResponse.json({ costos: await loadCostos() });
+  return NextResponse.json({ gastos: await loadGastos() });
 }
 
 export async function POST(req: NextRequest) {
@@ -28,7 +27,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
-  const parsed = costoCreateSchema.safeParse(raw);
+  const parsed = gastoCreateSchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Input inválido" },
@@ -37,13 +36,13 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const costo = await createCosto(parsed.data, guard.user.email);
-    return NextResponse.json({ costo }, { status: 201 });
+    const gasto = await createGasto(parsed.data);
+    return NextResponse.json({ gasto }, { status: 201 });
   } catch (e) {
     if (e instanceof CobranzaError) {
       return NextResponse.json({ error: e.message }, { status: e.status });
     }
-    console.error("[cobranza/costos] error al crear (detalle omitido a propósito)");
+    console.error("[cobranza/gastos] error al crear (detalle omitido a propósito)");
     throw e;
   }
 }

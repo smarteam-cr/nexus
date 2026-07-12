@@ -26,6 +26,7 @@ import type {
   CarteraRow,
   ColaCobroRow,
   CostoRecurrenteDTO,
+  GastoPuntualDTO,
   ProyeccionIngresos,
   RiesgoPagoItem,
   SnapshotDTO,
@@ -64,7 +65,7 @@ const TABS: Array<{ key: Tab; label: string; superAdminOnly?: boolean }> = [
   { key: "alertas", label: "Alertas" },
   { key: "reportes", label: "Reportes" },
   { key: "corte", label: "Corte semanal" },
-  { key: "costos", label: "Costos", superAdminOnly: true },
+  { key: "costos", label: "Costos y gastos", superAdminOnly: true },
   { key: "caja", label: "Caja neta", superAdminOnly: true },
 ];
 
@@ -81,6 +82,7 @@ export default function CobranzaClient({
   initialRiesgo,
   initialCostos,
   initialCajaNeta,
+  initialGastos,
   role,
   todayISO,
 }: {
@@ -94,6 +96,7 @@ export default function CobranzaClient({
   // null para todo rol que no sea SUPER_ADMIN (la page ni ejecuta las queries).
   initialCostos: CostoRecurrenteDTO[] | null;
   initialCajaNeta: CajaNetaDTO | null;
+  initialGastos: GastoPuntualDTO[] | null;
   role: string;
   todayISO: string;
 }) {
@@ -108,6 +111,7 @@ export default function CobranzaClient({
   const [riesgo, setRiesgo] = useState(initialRiesgo);
   const [costos, setCostos] = useState(initialCostos);
   const [cajaNeta, setCajaNeta] = useState(initialCajaNeta);
+  const [gastos, setGastos] = useState(initialGastos);
 
   // UI compartida entre tabs (drawer + flujo global de registrar pago).
   const [openCuentaId, setOpenCuentaId] = useState<string | null>(null);
@@ -183,6 +187,14 @@ export default function CobranzaClient({
     try {
       const d = await fetchJson<{ cajaNeta: CajaNetaDTO }>("/api/cobranza/caja-neta");
       setCajaNeta(d.cajaNeta);
+    } catch {}
+  }, [canCostos]);
+
+  const refreshGastos = useCallback(async () => {
+    if (!canCostos) return;
+    try {
+      const d = await fetchJson<{ gastos: GastoPuntualDTO[] }>("/api/cobranza/gastos");
+      setGastos(d.gastos);
     } catch {}
   }, [canCostos]);
 
@@ -292,11 +304,17 @@ export default function CobranzaClient({
       )}
       {/* Doble candado (privacidad): además del filtro del nav, el body exige
           rol + datos — forzar el tab por devtools renderiza NADA. */}
-      {tab === "costos" && canCostos && costos && (
+      {tab === "costos" && canCostos && costos && gastos && (
         <CostosPanel
           costos={costos}
-          onChanged={() => {
+          gastos={gastos}
+          todayISO={todayISO}
+          onCostosChanged={() => {
             void refreshCostos();
+            void refreshCajaNeta();
+          }}
+          onGastosChanged={() => {
+            void refreshGastos();
             void refreshCajaNeta();
           }}
         />

@@ -63,6 +63,9 @@ import { TEAM_MEMBER_SAFE_SELECT } from "@/lib/cache/team";
 import * as costosRoute from "@/app/api/cobranza/costos/route";
 import * as costoIdRoute from "@/app/api/cobranza/costos/[costoId]/route";
 import * as cajaNetaRoute from "@/app/api/cobranza/caja-neta/route";
+import * as gastosRoute from "@/app/api/cobranza/gastos/route";
+import * as gastoIdRoute from "@/app/api/cobranza/gastos/[gastoId]/route";
+import * as movimientosRoute from "@/app/api/cobranza/costos/movimientos/route";
 
 const MENSAJE_GUARD = "Los costos y la caja neta son solo para dirección (Super Admin).";
 
@@ -116,7 +119,7 @@ describe("P1 · guardCostosAccess — 403 para todo rol que no sea SUPER_ADMIN",
 });
 
 // ── P2 · Handlers reales cableados ──────────────────────────────────────────
-describe("P2 · los 5 handlers responden 403 como ADMIN sin tocar Prisma", () => {
+describe("P2 · los 10 handlers responden 403 como ADMIN sin tocar Prisma", () => {
   const req = (method: string) =>
     new Request("http://test.local/api/cobranza", {
       method,
@@ -124,6 +127,7 @@ describe("P2 · los 5 handlers responden 403 como ADMIN sin tocar Prisma", () =>
       body: method === "GET" ? undefined : JSON.stringify({}),
     }) as unknown as NextRequest;
   const params = { params: Promise.resolve({ costoId: "clx-test-costo-id" }) };
+  const gastoParams = { params: Promise.resolve({ gastoId: "clx-test-gasto-id" }) };
 
   const superficies: Array<[string, () => Promise<Response>]> = [
     ["GET /api/cobranza/costos", () => costosRoute.GET()],
@@ -131,6 +135,11 @@ describe("P2 · los 5 handlers responden 403 como ADMIN sin tocar Prisma", () =>
     ["PATCH /api/cobranza/costos/[costoId]", () => costoIdRoute.PATCH(req("PATCH"), params)],
     ["DELETE /api/cobranza/costos/[costoId]", () => costoIdRoute.DELETE(req("DELETE"), params)],
     ["GET /api/cobranza/caja-neta", () => cajaNetaRoute.GET()],
+    ["GET /api/cobranza/gastos", () => gastosRoute.GET()],
+    ["POST /api/cobranza/gastos", () => gastosRoute.POST(req("POST"))],
+    ["PATCH /api/cobranza/gastos/[gastoId]", () => gastoIdRoute.PATCH(req("PATCH"), gastoParams)],
+    ["DELETE /api/cobranza/gastos/[gastoId]", () => gastoIdRoute.DELETE(req("DELETE"), gastoParams)],
+    ["GET /api/cobranza/costos/movimientos", () => movimientosRoute.GET()],
   ];
 
   for (const [nombre, invocar] of superficies) {
@@ -164,13 +173,14 @@ describe("P3 · estructurales", () => {
     return encontradas;
   }
 
-  it("toda route bajo costos/caja-neta invoca guardCostosAccess en CADA handler", () => {
+  it("toda route bajo costos/gastos/caja-neta invoca guardCostosAccess en CADA handler", () => {
     const rutas = [
       ...routesBajo("app/api/cobranza/costos"),
+      ...routesBajo("app/api/cobranza/gastos"),
       ...routesBajo("app/api/cobranza/caja-neta"),
     ];
     // Si alguien borra/renombra las carpetas, esto avisa en vez de pasar vacío.
-    expect(rutas.length).toBeGreaterThanOrEqual(3);
+    expect(rutas.length).toBeGreaterThanOrEqual(6);
 
     for (const ruta of rutas) {
       const src = fs.readFileSync(ruta, "utf8");
@@ -226,6 +236,20 @@ describe("P3 · estructurales", () => {
         false,
       );
       expect(src.includes("TEAM_MEMBER_SAFE_SELECT"), `${rel} no usa el select seguro`).toBe(true);
+    }
+  });
+
+  it("policies.sql tiene deny-all RESTRICTIVE para las tablas sensibles de costos", () => {
+    const sql = fs.readFileSync(path.join(raiz, "prisma/policies.sql"), "utf8");
+    // Un merge que agregue una tabla de costos sin su policy RLS ROMPE esto
+    // (RLS es la única capa ante el anon externo — Prisma bypassa para el interno).
+    for (const tabla of ["CostoRecurrente", "GastoPuntual", "CostoMovimiento"]) {
+      const re = new RegExp(
+        `CREATE POLICY deny_all_non_superuser ON "${tabla}"[\\s\\S]*?AS RESTRICTIVE`,
+      );
+      expect(re.test(sql), `${tabla} sin deny_all_non_superuser RESTRICTIVE en policies.sql`).toBe(
+        true,
+      );
     }
   });
 });

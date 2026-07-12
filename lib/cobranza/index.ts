@@ -13,8 +13,12 @@ export {
   loadColaCobros,
   loadCostos,
   loadCajaNeta,
+  loadGastos,
+  loadMovimientosCostos,
   type CostoRecurrenteDTO,
   type CajaNetaDTO,
+  type GastoPuntualDTO,
+  type CostoMovimientoDTO,
   type ColaCobroRow,
   type CarteraRow,
   type CuentaDetailDTO,
@@ -42,6 +46,9 @@ export {
   type BucketCosto,
   type BucketCajaNeta,
   type CajaNeta,
+  type GastoProyeccionInput,
+  type ProyeccionGastos,
+  type BucketGasto,
 } from "./engine";
 // Puertos (interfaces client-safe) + factory de adaptadores (server-side).
 export type {

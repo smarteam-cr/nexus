@@ -20,6 +20,7 @@ import {
   type PlanEngineInput,
   type ServicioEngineInput,
 } from "./engine";
+import { crDateParts } from "@/lib/jobs/time";
 import type { z } from "zod";
 import type {
   cuentaCreateSchema,
@@ -33,6 +34,8 @@ import type {
   bitacoraCreateSchema,
   costoCreateSchema,
   costoPatchSchema,
+  gastoCreateSchema,
+  gastoPatchSchema,
 } from "./schema";
 
 export class CobranzaError extends Error {
@@ -619,8 +622,51 @@ export async function addBitacora(
 
 const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
 const decimalONull = (d: Prisma.Decimal | null) => (d == null ? null : Number(d));
+const hoyCR = () => crDateParts(new Date()).dateKey;
 
-export async function createCosto(data: z.infer<typeof costoCreateSchema>) {
+type MovimientoTipo = "ALTA" | "BAJA" | "REACTIVACION" | "PAUSA" | "CAMBIO_MONTO" | "ELIMINACION";
+
+/**
+ * Escribe un CostoMovimiento (historia append-only) con SNAPSHOT autosuficiente
+ * del costo — SOLO desde las mutations de costos, en la MISMA transacción. Nunca
+ * toca BitacoraCobro ni ninguna superficie no-SUPER_ADMIN.
+ */
+async function registrarMovimiento(
+  tx: Prisma.TransactionClient,
+  m: {
+    costoId: string;
+    tipo: MovimientoTipo;
+    snapshot: {
+      nombre: string;
+      categoria: Prisma.CostoMovimientoCreateInput["categoria"];
+      moneda: Prisma.CostoMovimientoCreateInput["moneda"];
+      frecuencia: Prisma.CostoMovimientoCreateInput["frecuencia"];
+      monto: Prisma.Decimal | number;
+    };
+    fechaEfectivaISO: string;
+    usuarioEmail: string | null;
+    notas?: string | null;
+    montoAnterior?: number | null;
+  },
+) {
+  await tx.costoMovimiento.create({
+    data: {
+      costoId: m.costoId,
+      tipo: m.tipo,
+      nombre: m.snapshot.nombre,
+      categoria: m.snapshot.categoria,
+      moneda: m.snapshot.moneda,
+      frecuencia: m.snapshot.frecuencia,
+      monto: m.snapshot.monto,
+      montoAnterior: m.montoAnterior ?? null,
+      fechaEfectiva: dayUTC(m.fechaEfectivaISO),
+      usuarioEmail: m.usuarioEmail,
+      notas: m.notas ?? null,
+    },
+  });
+}
+
+export async function createCosto(data: z.infer<typeof costoCreateSchema>, usuarioEmail: string) {
   if (data.teamMemberId) {
     const persona = await prisma.teamMember.findUnique({
       where: { id: data.teamMemberId },
@@ -628,24 +674,42 @@ export async function createCosto(data: z.infer<typeof costoCreateSchema>) {
     });
     if (!persona) throw new CobranzaError("La persona vinculada no existe.", 400);
   }
-  return prisma.costoRecurrente.create({
-    data: {
-      categoria: data.categoria,
-      nombre: data.nombre,
-      monto: data.monto,
-      moneda: data.moneda,
-      frecuencia: data.frecuencia,
-      teamMemberId: data.teamMemberId ?? null,
-      montoBase: data.montoBase ?? null,
-      factorCargas: data.factorCargas != null ? round4(data.factorCargas) : null,
-      activo: data.activo ?? true,
-      notas: data.notas ?? null,
-    },
-    select: { id: true },
+  const finalizado = data.finalizadoEl != null;
+  return prisma.$transaction(async (tx) => {
+    const costo = await tx.costoRecurrente.create({
+      data: {
+        categoria: data.categoria,
+        nombre: data.nombre,
+        monto: data.monto,
+        moneda: data.moneda,
+        frecuencia: data.frecuencia,
+        teamMemberId: data.teamMemberId ?? null,
+        montoBase: data.montoBase ?? null,
+        factorCargas: data.factorCargas != null ? round4(data.factorCargas) : null,
+        activo: data.activo ?? true,
+        notas: data.notas ?? null,
+        finalizadoEl: finalizado ? dayUTC(data.finalizadoEl!) : null,
+      },
+    });
+    // Un costo que nace finalizado (carga histórica de una baja) registra BAJA;
+    // uno vigente registra ALTA (retroactiva si viene fechaEfectiva).
+    await registrarMovimiento(tx, {
+      costoId: costo.id,
+      tipo: finalizado ? "BAJA" : "ALTA",
+      snapshot: costo,
+      fechaEfectivaISO: finalizado ? data.finalizadoEl! : (data.fechaEfectiva ?? hoyCR()),
+      usuarioEmail,
+      notas: data.motivoMovimiento ?? null,
+    });
+    return { id: costo.id };
   });
 }
 
-export async function updateCosto(costoId: string, data: z.infer<typeof costoPatchSchema>) {
+export async function updateCosto(
+  costoId: string,
+  data: z.infer<typeof costoPatchSchema>,
+  usuarioEmail: string,
+) {
   const actual = await prisma.costoRecurrente.findUnique({ where: { id: costoId } });
   if (!actual) throw new CobranzaError("El costo no existe.", 404);
 
@@ -677,29 +741,115 @@ export async function updateCosto(costoId: string, data: z.infer<typeof costoPat
     if (!persona) throw new CobranzaError("La persona vinculada no existe.", 400);
   }
 
-  return prisma.costoRecurrente.update({
-    where: { id: costoId },
+  // Detectar transiciones que generan movimientos (antes de escribir).
+  const montoAnterior = Number(actual.monto);
+  const montoCambia = data.monto !== undefined && data.monto !== montoAnterior;
+  const activoCambia = data.activo !== undefined && data.activo !== actual.activo;
+  const finalizadoActualISO = isoDay(actual.finalizadoEl);
+  const finalizadoNuevoISO = data.finalizadoEl !== undefined ? data.finalizadoEl : undefined; // string|null|undefined
+  const bajaSet =
+    finalizadoNuevoISO !== undefined &&
+    finalizadoNuevoISO !== null &&
+    finalizadoNuevoISO !== finalizadoActualISO;
+  const bajaLimpia =
+    finalizadoNuevoISO !== undefined && finalizadoNuevoISO === null && finalizadoActualISO !== null;
+
+  return prisma.$transaction(async (tx) => {
+    const costo = await tx.costoRecurrente.update({
+      where: { id: costoId },
+      data: {
+        ...(data.categoria !== undefined ? { categoria: data.categoria } : {}),
+        ...(data.nombre !== undefined ? { nombre: data.nombre } : {}),
+        ...(data.monto !== undefined ? { monto: data.monto } : {}),
+        ...(data.moneda !== undefined ? { moneda: data.moneda } : {}),
+        ...(data.frecuencia !== undefined ? { frecuencia: data.frecuencia } : {}),
+        teamMemberId: merged.teamMemberId,
+        montoBase: merged.montoBase,
+        factorCargas: merged.factorCargas != null ? round4(merged.factorCargas) : null,
+        ...(data.activo !== undefined ? { activo: data.activo } : {}),
+        ...(data.notas !== undefined ? { notas: data.notas } : {}),
+        ...(finalizadoNuevoISO !== undefined
+          ? { finalizadoEl: finalizadoNuevoISO ? dayUTC(finalizadoNuevoISO) : null }
+          : {}),
+      },
+    });
+    const hoy = hoyCR();
+    const emit = (tipo: MovimientoTipo, fechaEfectivaISO: string, extra?: { montoAnterior?: number; notas?: string | null }) =>
+      registrarMovimiento(tx, {
+        costoId: costo.id,
+        tipo,
+        snapshot: costo,
+        fechaEfectivaISO,
+        usuarioEmail,
+        notas: extra?.notas ?? null,
+        montoAnterior: extra?.montoAnterior ?? null,
+      });
+    // Un PATCH puede disparar varios movimientos (cambió monto Y pausó).
+    if (montoCambia) await emit("CAMBIO_MONTO", hoy, { montoAnterior });
+    if (activoCambia) await emit(data.activo ? "REACTIVACION" : "PAUSA", hoy);
+    if (bajaSet) await emit("BAJA", finalizadoNuevoISO!, { notas: data.motivoMovimiento ?? null });
+    if (bajaLimpia) await emit("REACTIVACION", hoy, { notas: data.motivoMovimiento ?? null });
+    return { id: costo.id };
+  });
+}
+
+export async function deleteCosto(costoId: string, usuarioEmail: string) {
+  const actual = await prisma.costoRecurrente.findUnique({ where: { id: costoId } });
+  if (!actual) throw new CobranzaError("El costo no existe.", 404);
+  // ELIMINACION se registra ANTES del delete; el FK SetNull deja el movimiento
+  // con costoId null (el snapshot lo hace autosuficiente).
+  await prisma.$transaction(async (tx) => {
+    await registrarMovimiento(tx, {
+      costoId,
+      tipo: "ELIMINACION",
+      snapshot: actual,
+      fechaEfectivaISO: hoyCR(),
+      usuarioEmail,
+    });
+    await tx.costoRecurrente.delete({ where: { id: costoId } });
+  });
+}
+
+// ── Gastos puntuales (fase 4.5 — SUPER_ADMIN-only) ──────────────────────────────
+// Misma línea dura que los costos: sin tracking de pago, sin fuga de montos.
+
+export async function createGasto(data: z.infer<typeof gastoCreateSchema>) {
+  return prisma.gastoPuntual.create({
     data: {
-      ...(data.categoria !== undefined ? { categoria: data.categoria } : {}),
-      ...(data.nombre !== undefined ? { nombre: data.nombre } : {}),
-      ...(data.monto !== undefined ? { monto: data.monto } : {}),
-      ...(data.moneda !== undefined ? { moneda: data.moneda } : {}),
-      ...(data.frecuencia !== undefined ? { frecuencia: data.frecuencia } : {}),
-      teamMemberId: merged.teamMemberId,
-      montoBase: merged.montoBase,
-      factorCargas: merged.factorCargas != null ? round4(merged.factorCargas) : null,
-      ...(data.activo !== undefined ? { activo: data.activo } : {}),
-      ...(data.notas !== undefined ? { notas: data.notas } : {}),
+      nombre: data.nombre,
+      monto: data.monto,
+      moneda: data.moneda,
+      fecha: dayUTC(data.fecha),
+      tags: data.tags,
+      notas: data.notas ?? null,
     },
     select: { id: true },
   });
 }
 
-export async function deleteCosto(costoId: string) {
+export async function updateGasto(gastoId: string, data: z.infer<typeof gastoPatchSchema>) {
   try {
-    await prisma.costoRecurrente.delete({ where: { id: costoId } });
+    return await prisma.gastoPuntual.update({
+      where: { id: gastoId },
+      data: {
+        ...(data.nombre !== undefined ? { nombre: data.nombre } : {}),
+        ...(data.monto !== undefined ? { monto: data.monto } : {}),
+        ...(data.moneda !== undefined ? { moneda: data.moneda } : {}),
+        ...(data.fecha !== undefined ? { fecha: dayUTC(data.fecha) } : {}),
+        ...(data.tags !== undefined ? { tags: data.tags } : {}),
+        ...(data.notas !== undefined ? { notas: data.notas } : {}),
+      },
+      select: { id: true },
+    });
   } catch {
-    // P2025 (no existe) u otro error de borrado — sin detalles en el mensaje.
-    throw new CobranzaError("El costo no existe.", 404);
+    throw new CobranzaError("El gasto no existe.", 404);
+  }
+}
+
+export async function deleteGasto(gastoId: string) {
+  try {
+    await prisma.gastoPuntual.delete({ where: { id: gastoId } });
+  } catch {
+    throw new CobranzaError("El gasto no existe.", 404);
   }
 }

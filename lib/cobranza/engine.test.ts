@@ -84,7 +84,7 @@
  *   Q) finQuincenaISO + diffDays (cola de cobros):
  *      Q1 día 1 y 15 → día 15; día 16 y fin de mes → fin de mes; febrero clampeado.
  *      Q2 diffDays exportado: signo y cero.
- *   O) proyectarCostos + computeCajaNeta (fase 4 — la plata que sale):
+ *   O) proyectarCostos + proyectarGastos + computeCajaNeta (fase 4 — la plata que sale):
  *      O1 ANUAL se mensualiza /12 con round2 único.
  *      O2 inactivo excluido de buckets y de totalMensual.
  *      O3 bucket mes recibe el mensual completo; bucket quincena la mitad.
@@ -99,6 +99,18 @@
  *      O12 totalesHorizonte = Σ de los buckets (entra/sale/neto por moneda).
  *      O13 neto negativo se emite tal cual (sin clamp).
  *      O14 opts custom en ambos lados → mismas keys y matcheo correcto.
+ *      O15 proyectarGastos: gasto futuro cae ENTERO en su bucket (sin mensualizar ni partir).
+ *      O16 gasto de HOY cae en el primer bucket (quincena en curso: hoy ≤15 y hoy >15).
+ *      O17 gasto pasado (fecha < hoy) → pasados; cero en buckets y en totalFuturo.
+ *      O18 gasto > finHorizonteISO → fueraDeHorizonte, no bucket.
+ *      O19 keys de proyectarGastos idénticas a proyectarCostos con los mismos opts (clamp + hoy>15).
+ *      O20 computeCajaNeta(entra, sale, gastos): sale = costos+gastos por key/moneda; neto resta ambos.
+ *      O21 REGRESIÓN: computeCajaNeta sin 3er arg === con proyectarGastos([]) (toEqual profundo).
+ *      O22 CRC y USD jamás sumados en un bucket de gastos.
+ *      O23 determinismo de gastos: input desordenado → mismo output.
+ *      O24 costo con finalizadoEl PASADO (< hoy) → fuera de todos los buckets y del totalMensual.
+ *      O25 costo con finalizadoEl FUTURO → presente hasta el bucket de la baja (quincena entera); burn lo incluye.
+ *      O26 REGRESIÓN: proyectarCostos SIN finalizadoEl → output idéntico al histórico.
  *   G) GOLDEN de proyectarIngresos (fase 4 — números en producción):
  *      G1 el output completo sobre las fixtures congeladas (__fixtures__) es idéntico al
  *         JSON commiteado. Un refactor NO puede mover un número sin regenerar el golden
@@ -122,6 +134,7 @@ import {
   finQuincenaISO,
   proyectarIngresos,
   proyectarCostos,
+  proyectarGastos,
   computeCajaNeta,
   computeMetricasCartera,
   computeRiesgoPago,
@@ -137,6 +150,7 @@ import type {
   AlertaDraft,
   CobroProyeccionInput,
   CostoProyeccionInput,
+  GastoProyeccionInput,
 } from "./engine";
 
 const HOY = "2026-07-10";
@@ -1632,6 +1646,170 @@ test("O14 — opts custom en ambos lados → mismas keys y matcheo correcto", ()
   expect(ago.neto.CRC).toBe(700); // 900 − 200
 });
 
+// ── O bis) proyectarGastos (gastos puntuales) + baja definitiva de costos ─────────
+
+function gastoProy(
+  fechaISO: string,
+  monto: number,
+  moneda: "CRC" | "USD" = "CRC",
+  id = "g1",
+): GastoProyeccionInput {
+  return { gastoId: id, nombre: `Gasto ${id}`, monto, moneda, fechaISO };
+}
+
+test("O15 — gasto futuro cae ENTERO en el bucket de su fecha (sin mensualizar ni partir)", () => {
+  const p = proyectarGastos(
+    [
+      gastoProy("2026-08-10", 500, "CRC", "a"), // quincena 2026-08-Q1
+      gastoProy("2026-09-20", 750, "CRC", "b"), // mes 2026-09
+    ],
+    { todayISO: HOY },
+  );
+  const q1ago = p.buckets.find((b) => b.key === "2026-08-Q1")!;
+  const sep = p.buckets.find((b) => b.key === "2026-09")!;
+  expect(q1ago.totales.CRC).toBe(500); // entero, NO la mitad de quincena
+  expect(q1ago.gastos.map((g) => g.monto)).toEqual([500]);
+  expect(sep.totales.CRC).toBe(750);
+  expect(sep.gastos.map((g) => g.monto)).toEqual([750]);
+  expect(p.totalFuturo).toEqual({ CRC: 1250, USD: 0 });
+  expect(p.pasados).toBe(0);
+  expect(p.fueraDeHorizonte).toBe(0);
+});
+
+test("O16 — gasto de HOY cae en el primer bucket (quincena en curso): hoy ≤15 y hoy >15", () => {
+  const antes = proyectarGastos([gastoProy("2026-07-10", 100)], { todayISO: "2026-07-10" });
+  expect(antes.buckets[0].key).toBe("2026-07-Q1");
+  expect(antes.buckets[0].gastos.map((g) => g.monto)).toEqual([100]);
+  expect(antes.pasados).toBe(0);
+
+  const despues = proyectarGastos([gastoProy("2026-07-20", 100)], { todayISO: "2026-07-20" });
+  expect(despues.buckets[0].key).toBe("2026-07-Q2"); // la Q1 del mes actual no se emite
+  expect(despues.buckets[0].gastos.map((g) => g.monto)).toEqual([100]);
+  expect(despues.pasados).toBe(0);
+});
+
+test("O17 — gasto pasado (fecha < hoy): pasados incrementa, cero en buckets y en totalFuturo", () => {
+  const p = proyectarGastos([gastoProy("2026-07-09", 400)], { todayISO: HOY });
+  expect(p.pasados).toBe(1);
+  expect(p.totalFuturo).toEqual({ CRC: 0, USD: 0 });
+  expect(p.buckets.every((b) => b.gastos.length === 0)).toBe(true);
+});
+
+test("O18 — gasto más allá del horizonte → fueraDeHorizonte, no bucket", () => {
+  // Horizonte default 6 meses desde julio → termina 2026-12-31.
+  const p = proyectarGastos([gastoProy("2027-02-01", 300)], { todayISO: HOY });
+  expect(p.fueraDeHorizonte).toBe(1);
+  expect(p.totalFuturo).toEqual({ CRC: 0, USD: 0 });
+  expect(p.buckets.every((b) => b.gastos.length === 0)).toBe(true);
+});
+
+test("O19 — keys de proyectarGastos idénticas a proyectarCostos con los mismos opts (clamp + hoy>15)", () => {
+  const casos = [
+    { todayISO: HOY },
+    { todayISO: "2026-07-20" }, // hoy>15: la Q1 del mes actual no se emite
+    { todayISO: HOY, horizonteMeses: 2, mesesEnQuincenas: 6 }, // clamp compartido
+    { todayISO: HOY, mesesEnQuincenas: 0 },
+  ];
+  for (const opts of casos) {
+    const gastos = proyectarGastos([], opts).buckets.map((b) => b.key);
+    const costos = proyectarCostos([], opts).buckets.map((b) => b.key);
+    expect(gastos, JSON.stringify(opts)).toEqual(costos);
+  }
+});
+
+test("O20 — computeCajaNeta(entra, sale, gastos): sale = costos+gastos por key/moneda; neto resta ambos", () => {
+  const entra = proyectarIngresos(
+    [cobroProy({ cobroId: "in1", fechaProgramadaISO: "2026-09-05", monto: 1000, moneda: "CRC" })],
+    { todayISO: HOY },
+  );
+  const sale = proyectarCostos([costoProy({ monto: 300, moneda: "CRC" })], { todayISO: HOY }); // mes completo = 300
+  const gastos = proyectarGastos([gastoProy("2026-09-10", 200, "CRC")], { todayISO: HOY });
+  const caja = computeCajaNeta(entra, sale, gastos);
+  const sep = caja.buckets.find((b) => b.key === "2026-09")!;
+  expect(sep.entra.CRC).toBe(1000);
+  expect(sep.sale.CRC).toBe(500); // 300 costo + 200 gasto
+  expect(sep.neto.CRC).toBe(500); // 1000 − (300 + 200)
+  expect(sep.neto.USD).toBe(0);
+});
+
+test("O21 — regresión: computeCajaNeta sin 3er arg === con proyectarGastos([]) (toEqual profundo)", () => {
+  const opts = { todayISO: HOY };
+  const entra = proyectarIngresos(
+    [cobroProy({ cobroId: "in1", fechaProgramadaISO: "2026-08-20", monto: 500, moneda: "USD" })],
+    opts,
+  );
+  const sale = proyectarCostos([costoProy({ monto: 120 })], opts);
+  const sinGastos = computeCajaNeta(entra, sale);
+  const conVacios = computeCajaNeta(entra, sale, proyectarGastos([], opts));
+  expect(conVacios).toEqual(sinGastos);
+});
+
+test("O22 — CRC y USD jamás sumados en un bucket de gastos", () => {
+  const p = proyectarGastos(
+    [
+      gastoProy("2026-08-10", 200, "CRC", "a"),
+      gastoProy("2026-08-10", 300, "USD", "b"),
+    ],
+    { todayISO: HOY },
+  );
+  const q1ago = p.buckets.find((b) => b.key === "2026-08-Q1")!;
+  expect(q1ago.totales).toEqual({ CRC: 200, USD: 300 });
+  expect(p.totalFuturo).toEqual({ CRC: 200, USD: 300 });
+});
+
+test("O23 — determinismo de gastos: input desordenado → mismo output (orden estable por fecha e id)", () => {
+  const gastos = [
+    gastoProy("2026-08-10", 100, "CRC", "b"),
+    gastoProy("2026-08-10", 100, "CRC", "a"), // misma fecha → tie-break por id
+    gastoProy("2026-07-18", 50, "USD", "c"),
+  ];
+  const p1 = proyectarGastos(gastos, { todayISO: HOY });
+  const p2 = proyectarGastos([...gastos].reverse(), { todayISO: HOY });
+  expect(p1).toEqual(p2);
+  const q1ago = p1.buckets.find((b) => b.key === "2026-08-Q1")!;
+  expect(q1ago.gastos.map((g) => g.gastoId)).toEqual(["a", "b"]);
+});
+
+test("O24 — costo con finalizadoEl PASADO (< hoy): fuera de TODOS los buckets y del totalMensual", () => {
+  const p = proyectarCostos(
+    [costoProy({ monto: 500, moneda: "CRC", finalizadoEl: "2026-06-30" })], // baja antes de HOY
+    { todayISO: HOY },
+  );
+  expect(p.totalMensual).toEqual({ CRC: 0, USD: 0 });
+  expect(p.buckets.every((b) => b.costos.length === 0 && b.totales.CRC === 0)).toBe(true);
+});
+
+test("O25 — costo con finalizadoEl FUTURO: presente hasta el bucket de la baja (quincena entera); burn lo incluye", () => {
+  // baja 2026-08-20: entran jul entero + ago-Q1 (desde 08-01) + ago-Q2 (desde 08-16); sep NO.
+  const p = proyectarCostos(
+    [costoProy({ monto: 100, moneda: "CRC", finalizadoEl: "2026-08-20" })],
+    { todayISO: HOY },
+  );
+  const presentes = p.buckets.filter((b) => b.totales.CRC > 0).map((b) => b.key);
+  expect(presentes).toEqual(["2026-07-Q1", "2026-07-Q2", "2026-08-Q1", "2026-08-Q2"]);
+  // sep en adelante: el bucket mensual arranca 2026-09-01 > 2026-08-20 → excluido.
+  expect(p.buckets.find((b) => b.key === "2026-09")!.totales.CRC).toBe(0);
+  // la quincena de la baja entra ENTERA (mitad del mensual, sin prorrateo diario).
+  expect(p.buckets.find((b) => b.key === "2026-08-Q2")!.totales.CRC).toBe(50);
+  // sigue quemando hoy (baja >= hoy) → el burn lo cuenta.
+  expect(p.totalMensual).toEqual({ CRC: 100, USD: 0 });
+});
+
+test("O26 — regresión: proyectarCostos SIN finalizadoEl → output idéntico al histórico", () => {
+  const p = proyectarCostos(
+    [
+      costoProy({ costoId: "a", nombre: "Alfa", monto: 100, moneda: "CRC" }),
+      costoProy({ costoId: "b", nombre: "Beta", monto: 1200, moneda: "USD", frecuencia: "ANUAL" }),
+    ],
+    { todayISO: HOY },
+  );
+  expect(p.totalMensual).toEqual({ CRC: 100, USD: 100 }); // 1200/12 = 100
+  expect(p.buckets.find((b) => b.key === "2026-09")!.totales).toEqual({ CRC: 100, USD: 100 }); // mes completo
+  expect(p.buckets.find((b) => b.key === "2026-07-Q2")!.totales).toEqual({ CRC: 50, USD: 50 }); // quincena: mitad
+  // sin baja, el costo está en TODOS los buckets del horizonte.
+  expect(p.buckets.every((b) => b.costos.length === 2)).toBe(true);
+});
+
 // ── G) Golden de proyectarIngresos ───────────────────────────────────────────────
 
 test("G1 — golden: el refactor no mueve un solo número de la proyección", async () => {
@@ -1646,4 +1824,25 @@ test("G1 — golden: el refactor no mueve un solo número de la proyección", as
     expect(golden[gc.nombre], `caso ${gc.nombre}`).toBeDefined();
     expect(actual, `caso ${gc.nombre}`).toEqual(golden[gc.nombre]);
   }
+});
+
+test("G2 — golden: la caja neta (entra − costos − gastos) no mueve un número", async () => {
+  const { G2_COBROS, G2_COSTOS, G2_GASTOS, G2_OPTS } = await import(
+    "./__fixtures__/caja-neta-golden-input"
+  );
+  const golden = (await import("./__fixtures__/caja-neta-golden.json")).default as Record<
+    string,
+    unknown
+  >;
+  const entra = proyectarIngresos(G2_COBROS, G2_OPTS);
+  const sale = proyectarCostos(G2_COSTOS, G2_OPTS);
+  const gastos = proyectarGastos(G2_GASTOS, G2_OPTS);
+  const cajaNeta = computeCajaNeta(entra, sale, gastos);
+  expect({
+    cajaNeta,
+    saleTotalMensual: sale.totalMensual,
+    gastosTotalFuturo: gastos.totalFuturo,
+    gastosPasados: gastos.pasados,
+    gastosFueraDeHorizonte: gastos.fueraDeHorizonte,
+  }).toEqual(golden);
 });
