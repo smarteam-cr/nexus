@@ -10,6 +10,7 @@
  *     alertas y bitácora de esa cuenta.
  *  2. Clients creados por el seed (source="manual" + sourceExternalId "demo-*")
  *     SOLO si tienen 0 proyectos (guard duro — jamás borra un cliente real).
+ *  2b. CostoRecurrente cuyas notas contienen la marca (seed-costos-demo.ts, fase 4).
  *  3. SnapshotCartera con triggeredBy="seed-demo-historia" (la serie retroactiva).
  *  4. Con --snapshots-todos: TODOS los SnapshotCartera — reset total de la
  *     historia de cortes. ⚠ Los cortes que corriste DURANTE el demo (manual/
@@ -74,6 +75,17 @@ async function main() {
     if (APPLY) await prisma.client.delete({ where: { id: cl.id } });
   }
 
+  // 2b) Costos recurrentes demo (seed-costos-demo.ts, fase 4): por marca en notas.
+  const costosDemo = await prisma.costoRecurrente.findMany({
+    where: { notas: { contains: MARK } },
+    select: { id: true, nombre: true, categoria: true },
+  });
+  console.log(`\nCostos recurrentes demo: ${costosDemo.length}`);
+  for (const co of costosDemo) console.log(`  ✖ [${co.categoria}] ${co.nombre}`);
+  if (APPLY && costosDemo.length > 0) {
+    await prisma.costoRecurrente.deleteMany({ where: { id: { in: costosDemo.map((c) => c.id) } } });
+  }
+
   // 3) Snapshots de la serie retroactiva del seed de historia (fase 3).
   const snapsSeed = await prisma.snapshotCartera.count({ where: { triggeredBy: TRIGGER_HISTORIA } });
   console.log(`\nSnapshots del seed de historia (${TRIGGER_HISTORIA}): ${snapsSeed}`);
@@ -102,7 +114,7 @@ async function main() {
   if (imports > 0) console.log(`\nℹ Hay ${imports} batch(es) de importación en staging — revisalos en /cobranza/importar (no se tocan acá).`);
 
   console.log(
-    `\n${APPLY ? "✓ Limpieza aplicada." : `Dry-run: se borrarían ${cuentas.length} cuenta(s) + ${clientsDemo.filter((c) => c._count.projects === 0).length} client(s) demo + ${snapsSeed}${SNAPSHOTS_TODOS ? ` + ${snapsResto}` : ""} snapshot(s). Corré con --apply.`}`,
+    `\n${APPLY ? "✓ Limpieza aplicada." : `Dry-run: se borrarían ${cuentas.length} cuenta(s) + ${clientsDemo.filter((c) => c._count.projects === 0).length} client(s) demo + ${costosDemo.length} costo(s) demo + ${snapsSeed}${SNAPSHOTS_TODOS ? ` + ${snapsResto}` : ""} snapshot(s). Corré con --apply.`}`,
   );
 }
 
