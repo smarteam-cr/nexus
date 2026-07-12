@@ -114,15 +114,48 @@ prisma/schema.prisma       # los models del módulo viven acá con comentario de
   - `requireExternalUser()` → devuelve `{ user: AppUser, clientId: string }` o lanza 403.
 - **El selector "Soy X" se elimina.** Cada persona se loguea con su propia cuenta Supabase. No hay impersonación de "soy otro CSE" — ni siquiera para Super Admin. El Super Admin accede a todos los clientes a través de su rol (ver 4.2), no asumiendo otra identidad.
 
-### 4.2 Roles internos
+### 4.2 Roles internos y sistema de permisos sección×acción
 
-`TeamMember` gana `role: TeamRole`:
+`TeamMember.roleEnum` (los VALORES del enum de DB no cambian; solo las etiquetas de UI):
 ```prisma
-enum TeamRole { CSE PM SALES ADMIN SUPER_ADMIN }
+enum TeamRole { CSE VENTAS CSL MARKETING DEV ADMIN SUPER_ADMIN }
+// Labels UI: VENTAS="Sales", ADMIN="Asistente administrativo" (ROLE_LABEL, lib/auth/roles.ts)
 ```
 
-- **Super Admin / Admin**: acceso a todos los clientes y a otorgar permisos.
-- **CSE / PM / Sales**: acceso por defecto solo a clientes donde son owner o tienen override (ver 4.3).
+**Desde la migración PERM (2026-07) los permisos son una MATRIZ SECCIÓN×ACCIÓN
+editable por UI** (`/team`, solo SUPER_ADMIN), no una tabla estática en código:
+
+- **Registry** (`lib/auth/permissions/registry.ts`, client-safe): fuente única de
+  las 13 secciones y sus acciones (`clientes`, `handoff`, `kickoff`, `procesos`,
+  `cronograma`, `ventas`, `marketing`, `cobranza`, `conocimientos`, `equipo`,
+  `agentes`, `auditoria`, `configuracion`). Módulo nuevo = 1 entrada acá → aparece
+  solo en el modal de permisos. `enforced:false` = declarada pero sin guard aún
+  (el modal la oculta — nunca un switch mentiroso).
+- **Precedencia** (`engine.ts`, server-only): `DEFAULT_MATRIX` (código, = el
+  comportamiento histórico exacto; congelado por test) ← `RolePermission`
+  (plantilla por rol, DB, cache TTL 60s) ← `TeamMember.permissionOverrides`
+  (pines por usuario, Json sparse). **SUPER_ADMIN = all-true hardcodeado**
+  (anti-lockout: ni DB ni overrides lo recortan; tampoco se puede degradar al
+  último SA activo).
+- **Compat**: `requireCapability`/`guardCapability`/`withCapability` siguen
+  existiendo — sus entrañas traducen la capability legacy a su celda
+  (`CAPABILITY_TO_PERMISSION`, compat.ts) y consultan el engine. Los ~70 call
+  sites no se tocaron. `hasCapability` (sync) quedó @deprecated: solo ve el
+  default de código.
+- **Guards nuevos**: `guardPermission(section, action)` / `withPermission(...)` /
+  `requirePermission(...)`; validación de escritura con zod estricto contra el
+  registry (`schema.ts`), lectura de Json tolerante.
+- **Generación con IA**: los agentes que ESCRIBEN artefactos piden
+  `generate` (artefacto inexistente) o `regenerate` (ya existe) de su sección
+  (`lib/auth/permissions/artifact-gate.ts`, cableado en analyze y timeline/assist).
+- **UI**: `/api/me` expone `permissions` (mapa EFECTIVO); `useMe()` y el Sidebar
+  (vía AppShell server-side) gatean cosméticamente con él. Las viejas whitelists
+  (`sales-roles.ts`, `marketing-roles.ts`, `cobranza-roles.ts`) quedaron como
+  espejos congelados @deprecated.
+
+El ROW-LEVEL (qué CLIENTES ve cada uno) es ortogonal a esta matriz y sigue en
+`lib/auth/access.ts` (ver 4.3/4.4): CSE scoped por owner/GRANT/REVOKE; la celda
+`clientes.viewAll` reemplaza a la capability `seeAllClients` como "ve todo".
 
 ### 4.3 Asignación CSE ↔ Cliente — sistema dual
 
@@ -164,7 +197,7 @@ model TeamMember {
 // lib/auth/access.ts
 export async function requireAccessToClient(clientId: string): Promise<{
   user: AppUser;
-  reason: "super-admin" | "admin" | "view-all" | "hubspot-owner" | "granted" | "external-owner";
+  reason: "super-admin" | "view-all" | "hubspot-owner" | "granted" | "external-owner";
 }>
 ```
 
@@ -172,11 +205,13 @@ Lógica de resolución:
 1. Si el user no está logueado → 401.
 2. Si es `EXTERNAL` y `user.clientId === clientId` → OK (reason: external-owner). Si no, 403.
 3. Si es `INTERNAL` con role `SUPER_ADMIN` → OK.
-4. Si tiene `canViewAllClients=true` (y no expiró) → OK.
-5. Si existe `ClientAssignment(clientId, teamMemberId, kind=REVOKE)` → 403, fin.
-6. Si tiene `ClientAssignment(clientId, teamMemberId, kind=GRANT)` → OK.
-7. Si el cliente tiene algún `Project.hubspotOwnerEmail === user.email` → OK.
-8. Si no → 403.
+4. Si tiene el permiso EFECTIVO `clientes.viewAll` (default VENTAS/DEV/CSL/MARKETING;
+   editable por plantilla/overrides) → OK (reason: view-all).
+5. Si tiene el flag `canViewAllClients=true` (y no expiró) → OK (reason: view-all).
+6. Si existe `ClientAssignment(clientId, teamMemberId|targetRole, kind=REVOKE)` → 403, fin.
+7. Si tiene `ClientAssignment(clientId, teamMemberId|targetRole, kind=GRANT)` → OK.
+8. Si el cliente tiene algún `Project.hubspotOwnerEmail === user.email` → OK.
+9. Si no → 403.
 
 **Endpoints internos** llaman a `requireAccessToClient(clientId)` en la primera línea. **Endpoints externos** viven en `app/api/external/<modulo>/...` y filtran por `clientId` del JWT sin excepción.
 

@@ -8,14 +8,14 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/layout/AppShell";
 import { requireInternalUser } from "@/lib/auth/supabase";
-import { isSalesAreaRole } from "@/lib/auth/sales-roles";
+import { can } from "@/lib/auth/permissions/engine";
 import UseCasesAdminClient from "./UseCasesAdminClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function UseCasesAdminPage() {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !isSalesAreaRole(ctx.role)) redirect("/clients");
+  if (!ctx || !(await can(ctx.teamMember, "ventas", "read"))) redirect("/clients");
 
   return (
     <AppShell>

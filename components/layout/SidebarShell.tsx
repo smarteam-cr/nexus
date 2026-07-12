@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import type { PermissionMap } from "@/lib/auth/permissions/types";
 import Sidebar from "./Sidebar";
 
 interface ClientSummary {
@@ -16,6 +17,8 @@ interface UserLite {
   name: string;
   role: string | null;
   isSuperAdmin: boolean;
+  /** Mapa EFECTIVO sección×acción (resuelto en AppShell, server-side). */
+  permissions: PermissionMap;
 }
 
 interface Props {

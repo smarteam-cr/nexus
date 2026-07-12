@@ -27,7 +27,7 @@ interface ApiTeamMember {
 
 const ROLE_LABEL: Record<string, string> = {
   CSE: "CSE",
-  VENTAS: "Ventas",
+  VENTAS: "Sales",
   DEV: "Dev",
   CSL: "CSL",
   MARKETING: "Marketing",

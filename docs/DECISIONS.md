@@ -202,6 +202,31 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   (INV3 + chokepoint único intactos — nunca se escribe estado=COBRADO directo en el create). NO
   hay pago flotante: el schema exige `servicioId` + `cuentaId`, así que el flujo obliga a elegir
   cliente → servicio; si el cliente no tiene servicios, se lo manda a configurarlo (sin alta al
+
+## Permisos — matriz sección×acción (migración PERM, 2026-07-11)
+- **Sin CASL/casbin — registry homegrown tipado**: esas librerías brillan en abilities
+  condicionales row-level, y Nexus YA resuelve el row-level con `lib/auth/access.ts`
+  (GRANT/REVOKE/owner/viewAll). Lo que faltaba era una matriz coarse sección×acción → registry
+  propio (patrón TAG_CATALOG), cero deps nuevas, zod v4 solo en la frontera de escritura.
+- **Administrar permisos = SOLO SUPER_ADMIN, gate DURO no delegable**: ni `equipo.manage` por
+  plantilla habilita tocar permisos (los endpoints exigen `guardRole("SUPER_ADMIN")`). Anti-lockout
+  triple: SA = all-true hardcodeado en el engine ANTES de mirar DB/overrides; el PUT de plantillas
+  rechaza SUPER_ADMIN; el PATCH rechaza degradar al último SA activo y limpia overrides al
+  promover a SA.
+- **DEFAULT_MATRIX (código) = comportamiento histórico EXACTO, congelado por test** (compat.test).
+  El delta operativo (DEV a solo-lectura en handoff/kickoff/cronograma/procesos) vive SOLO en la
+  SEMILLA de DB (`seed-role-permissions.ts`) — así el fallback con tabla vacía es siempre
+  compat pura y el deploy es seguro en cualquier orden código/datos.
+- **Customer Success cabalga sobre `clientes.viewAll`** (vía compat de `seeAllClients`): cero churn
+  de sus ~12 endpoints; si algún día se necesita granularidad propia, es 1 entrada nueva en el
+  registry, no una migración.
+- **Visibilidad de clientes tiene DOS canales a propósito**: la celda `clientes.viewAll`
+  (rol/plantilla) y el flag por-persona `canViewAllClients(+ExpiresAt)` (override temporal, ej. un
+  CSE cubriendo vacaciones). El modal de /team muestra ambos; access.ts evalúa ambos.
+- **`enforced:false` = el modal OCULTA la acción**: una celda solo aparece cuando un guard real la
+  consulta — nunca un switch que no hace nada. Al cablear un gate nuevo, flipear `enforced`.
+- **Whitelists viejas (`sales/marketing/cobranza-roles.ts`) = espejos congelados @deprecated**: ya
+  nadie las consulta en runtime; quedan (con sus tests) como documentación del default histórico.
   vuelo). Nace COBRADO → no aparece en la cola; sí en el cronograma del drawer, la bitácora y las
   métricas. La UI capa la fecha del pago a hoy (retroactiva, para conciliar contra el banco).
 

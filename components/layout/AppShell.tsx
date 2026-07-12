@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getClientsForSidebar } from "@/lib/cache/clients";
 import { requireUser, UnauthorizedError } from "@/lib/auth/supabase";
+import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
+import type { PermissionMap } from "@/lib/auth/permissions/types";
 import SidebarShell from "./SidebarShell";
 import CsAlertNotifier from "@/components/cs/CsAlertNotifier";
 
@@ -24,12 +26,20 @@ export default async function AppShell({
   // revalidateTag("clients-sidebar") para invalidar.
   const clients = await getClientsForSidebar();
 
-  // Info compacta para el avatar del sidebar
+  // Permisos EFECTIVOS (default ← plantilla del rol ← overrides) — se resuelven
+  // acá en el server y bajan al Sidebar (sin fetch extra ni flash en el cliente).
+  // Sin TeamMember (EXTERNAL/edge) → mapa vacío: solo los ítems universales.
+  const permissions: PermissionMap = user.teamMember
+    ? await getEffectivePermissions(user.teamMember)
+    : { v: 1, sections: {} };
+
+  // Info compacta para el avatar del sidebar + gating de navegación.
   const userLite = {
     email: user.email,
     name: user.teamMember?.name ?? user.email,
     role: user.teamMember?.roleEnum ?? null,
     isSuperAdmin: user.teamMember?.roleEnum === "SUPER_ADMIN",
+    permissions,
   };
 
   return (

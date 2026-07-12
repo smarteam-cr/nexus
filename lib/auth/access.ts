@@ -10,8 +10,9 @@
  *   2. EXTERNAL: solo su propio clientId, sino 403
  *   3. INTERNAL sin TeamMember → 403
  *   4. SUPER_ADMIN → OK (reason: super-admin)
- *   5. ADMIN → OK (reason: admin)
- *   6. canViewAllClients (con expiración opcional) → OK (reason: view-all)
+ *   5. Permiso clientes.viewAll EFECTIVO (default VENTAS/DEV/CSL/MARKETING;
+ *      editable por plantilla/overrides) → OK (reason: view-all)
+ *   6. canViewAllClients flag (con expiración opcional) → OK (reason: view-all)
  *   7. ClientAssignment REVOKE → 403 (corta antes que cualquier otro permiso)
  *   8. ClientAssignment GRANT → OK (reason: granted)
  *   9. Owner en HubSpot (algún Project.hubspotOwnerEmail = email del user) → OK (reason: hubspot-owner)
@@ -25,7 +26,7 @@ import {
   ForbiddenError,
   type AppUserWithTeamMember,
 } from "./supabase";
-import { hasCapability } from "./roles";
+import { can } from "./permissions/engine";
 
 export type AccessReason =
   | "super-admin"
@@ -62,8 +63,8 @@ export async function requireAccessToClient(clientId: string): Promise<AccessRes
   // 4. SUPER_ADMIN ve todo
   if (tm.roleEnum === "SUPER_ADMIN") return { user, reason: "super-admin" };
 
-  // 5. Roles con "ve todos los clientes" (VENTAS / CSL / MARKETING)
-  if (hasCapability(tm.roleEnum, "seeAllClients")) return { user, reason: "view-all" };
+  // 5. Permiso "ve todos los clientes" EFECTIVO (default: VENTAS/DEV/CSL/MARKETING)
+  if (await can(tm, "clientes", "viewAll")) return { user, reason: "view-all" };
 
   // 6. Override excepcional por flag (ej. un CSE con acceso temporal a todo)
   if (tm.canViewAllClients) {
@@ -122,7 +123,7 @@ export async function accessibleClientWhere(
   // Ve todo: SUPER_ADMIN / VENTAS / CSL / MARKETING, o el flag override vigente.
   // NOTA: aun "ve todo" EXCLUYE prospectos de Ventas (Clients lazily creados para un
   // business case) — no son clientes reales y no deben aparecer en los listados de CS.
-  if (tm.roleEnum === "SUPER_ADMIN" || hasCapability(tm.roleEnum, "seeAllClients")) {
+  if (tm.roleEnum === "SUPER_ADMIN" || (await can(tm, "clientes", "viewAll"))) {
     return { isProspect: false };
   }
   if (tm.canViewAllClients && (!tm.canViewAllExpiresAt || tm.canViewAllExpiresAt > new Date())) {
@@ -188,12 +189,12 @@ export async function ownsClient(email: string, clientId: string): Promise<boole
 /**
  * Acceso para CREAR/EDITAR el handoff o el cronograma de un cliente.
  * Más estricto que requireAccessToClient: tener acceso (ej. cliente compartido)
- * NO alcanza — hace falta capacidad `handoffAnywhere` (VENTAS/CSL/MARKETING/
- * SUPER_ADMIN) O ser owner del cliente. Un CSE solo en SUS clientes.
+ * NO alcanza — hace falta el permiso `handoff.write` EFECTIVO (default VENTAS/
+ * DEV/CSL/MARKETING/SUPER_ADMIN) O ser owner del cliente. Un CSE solo en SUS clientes.
  */
 export async function requireHandoffAccess(clientId: string) {
   const ctx = await requireInternalUser(); // interno + activo (chequea deactivatedAt)
-  if (hasCapability(ctx.role, "handoffAnywhere")) return ctx;
+  if (await can(ctx.teamMember, "handoff", "write")) return ctx;
   if (await ownsClient(ctx.teamMember.email, clientId)) return ctx;
   throw new ForbiddenError(
     "Solo el owner del cliente (o un rol con permiso) puede editar el handoff/cronograma",

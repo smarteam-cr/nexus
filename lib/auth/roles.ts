@@ -1,31 +1,30 @@
 /**
  * lib/auth/roles.ts
  *
- * Fuente de verdad de PERMISOS por rol (eje `roleEnum`). El otro eje, `area`,
- * es solo para análisis de sesiones y NO se decide acá.
+ * Capa LEGACY de permisos por rol (eje `roleEnum`) — hoy es una FACHADA sobre el
+ * sistema de permisos sección×acción de lib/auth/permissions/ (registry + engine
+ * + plantillas editables en /team). El otro eje, `area`, es solo para análisis
+ * de sesiones y NO se decide acá.
  *
- * Matriz de capacidades (fuente real = el objeto CAPABILITIES más abajo):
- *   | capacidad        | CSE | VENTAS | DEV | CSL | MARKETING | ADMIN | SUPER_ADMIN |
- *   | seeAllClients    |  ✗  |   ✓    |  ✓  |  ✓  |     ✓     |   ✗   |      ✓      |
- *   | handoffAnywhere  |  ✗  |   ✓    |  ✓  |  ✓  |     ✓     |   ✗   |      ✓      |
- *   | createHandoff    |  ✗  |   ✓    |  ✓  |  ✗  |     ✗     |   ✗   |      ✓      |
- *   | shareClients     |  ✗  |   ✗    |  ✗  |  ✓  |     ✓     |   ✗   |      ✓      |
- *   | deleteClients    |  ✗  |   ✗    |  ✗  |  ✓  |     ✗     |   ✗   |      ✓      |
- *   | manageTeam       |  ✗  |   ✗    |  ✗  |  ✗  |     ✗     |   ✗   |      ✓      |
- *   | editTimeline     |  ✓  |   ✓    |  ✓  |  ✓  |     ✓     |   ✗   |      ✓      |
- *   | deleteTimeline   |  ✗  |   ✓    |  ✓  |  ✓  |     ✓     |   ✗   |      ✓      |
- *   | regenerateTimeline| ✗  |   ✗    |  ✗  |  ✓  |     ✗     |   ✗   |      ✓      |
+ * Cómo funciona desde la migración PERM (2026-07):
+ *   - `requireCapability` (y sus wrappers guardCapability/withCapability, ~70
+ *     call sites) consulta el mapa EFECTIVO del engine — DEFAULT_MATRIX (código)
+ *     ← RolePermission (plantilla por rol, DB) ← TeamMember.permissionOverrides —
+ *     traduciendo la capability a su celda vía CAPABILITY_TO_PERMISSION (compat.ts).
+ *   - `hasCapability`/`capabilitiesFor` (sync) quedan @deprecated: miran SOLO el
+ *     DEFAULT de código (no ven plantillas de DB ni overrides por usuario). Para
+ *     decisiones reales usar el engine (can/requirePermission); para gating
+ *     cosmético en UI usar useMe().permissions.
  *
- * CSE es el único "scoped" (ve solo sus clientes asignados + compartidos).
- * MARKETING ≡ CSL en capacidades (etiqueta distinta). DEV ≡ VENTAS en capacidades
- * (rol técnico: ve todo + cronogramas + handoffs; + acceso al área de Ventas).
- * ADMIN (asistente administrativo de Finanzas) tiene CERO capacidades de esta
- * matriz: su ÚNICO acceso es el módulo Cobranza, gateado por la whitelist
- * lib/auth/cobranza-roles.ts (no por capability — mismo patrón que el área Ventas).
- * SUPER_ADMIN es el único que gestiona el equipo.
+ * La matriz default por rol vive en lib/auth/permissions/defaults.ts
+ * (DEFAULT_MATRIX) — equivale celda a celda al comportamiento histórico; el test
+ * de compat la congela.
  */
 import type { TeamRole } from "@prisma/client";
 import { requireInternalUser, ForbiddenError } from "./supabase";
+import { CAPABILITY_TO_PERMISSION, capabilitiesFromPermissions } from "./permissions/compat";
+import { DEFAULT_MATRIX } from "./permissions/defaults";
+import { canCell } from "./permissions/engine";
 
 export type Capability =
   | "seeAllClients"
@@ -41,22 +40,9 @@ export type Capability =
   // BORRAR tareas/fases/cronograma. El CSE NO la tiene (solo suspende). CSL = como super admin.
   | "deleteTimeline"
   // REGENERAR/cambiar el cronograma CON IA una vez ya generado (agente de detalle /
-  // "Pedir cambio con IA"). Solo CSL + SUPER_ADMIN. El resto (incluido el CSE) genera el
-  // cronograma la PRIMERA vez y lo edita a MANO (editTimeline), pero no lo rehace con IA.
+  // "Pedir cambio con IA"). Por default CSL + SUPER_ADMIN. El resto (incluido el CSE)
+  // genera el cronograma la PRIMERA vez y lo edita a MANO (editTimeline).
   | "regenerateTimeline";
-
-const CAPABILITIES: Record<TeamRole, ReadonlyArray<Capability>> = {
-  CSE: ["editTimeline"],
-  VENTAS: ["seeAllClients", "handoffAnywhere", "createHandoff", "editTimeline", "deleteTimeline"],
-  // DEV (equipo técnico) = mismas capacidades que VENTAS. Ver la matriz arriba.
-  DEV: ["seeAllClients", "handoffAnywhere", "createHandoff", "editTimeline", "deleteTimeline"],
-  CSL: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients", "editTimeline", "deleteTimeline", "regenerateTimeline"],
-  MARKETING: ["seeAllClients", "handoffAnywhere", "shareClients", "editTimeline", "deleteTimeline"],
-  // ADMIN (Finanzas): CERO capacidades de la matriz — su único acceso es Cobranza,
-  // gateado por COBRANZA_ROLES (lib/auth/cobranza-roles.ts), no por capability.
-  ADMIN: [],
-  SUPER_ADMIN: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients", "manageTeam", "createHandoff", "editTimeline", "deleteTimeline", "regenerateTimeline"],
-};
 
 /** Rango lineal — para gates simples de "rol mínimo". */
 export const ROLE_RANK: Record<TeamRole, number> = {
@@ -69,24 +55,38 @@ export const ROLE_RANK: Record<TeamRole, number> = {
   SUPER_ADMIN: 4,
 };
 
-/** Etiqueta legible para UI. */
+/**
+ * Etiqueta legible para UI. OJO: los VALORES del enum de DB no cambian (lección
+ * REANCHOR: enum nuevo en filas rompe el prod viejo) — solo la etiqueta.
+ */
 export const ROLE_LABEL: Record<TeamRole, string> = {
   CSE: "CSE",
-  VENTAS: "Ventas",
+  VENTAS: "Sales",
   DEV: "Dev",
   CSL: "CSL",
   MARKETING: "Marketing",
-  ADMIN: "Admin",
+  ADMIN: "Asistente administrativo",
   SUPER_ADMIN: "Super Admin",
 };
 
+/**
+ * @deprecated Mira SOLO el DEFAULT de código — NO ve plantillas de DB ni
+ * overrides por usuario. Para decisiones de acceso reales usar el engine
+ * (lib/auth/permissions/engine.ts). Se conserva para checks sync legacy.
+ */
 export function hasCapability(role: TeamRole, cap: Capability): boolean {
-  return CAPABILITIES[role]?.includes(cap) ?? false;
+  const cell = CAPABILITY_TO_PERMISSION[cap];
+  if (!cell) return false;
+  return DEFAULT_MATRIX[role]?.sections[cell.section]?.[cell.action] === true;
 }
 
-/** Lista de capacidades del rol (para exponer al cliente, ej. /api/me). */
+/**
+ * @deprecated Derivadas del DEFAULT de código (sin DB/overrides). /api/me ya
+ * expone las capacidades EFECTIVAS — esto queda para usos sync legacy.
+ */
 export function capabilitiesFor(role: TeamRole): ReadonlyArray<Capability> {
-  return CAPABILITIES[role] ?? [];
+  const map = DEFAULT_MATRIX[role];
+  return map ? capabilitiesFromPermissions(map) : [];
 }
 
 export function roleRank(role: TeamRole): number {
@@ -100,10 +100,13 @@ export function roleAtLeast(role: TeamRole, min: TeamRole): boolean {
 /**
  * Exige un usuario interno con la capacidad dada. Lanza ForbiddenError (403).
  * Devuelve el bundle de requireInternalUser ({ user, teamMember, role }).
+ * Consulta el mapa EFECTIVO (default ← plantilla DB ← overrides) vía compat.
  */
 export async function requireCapability(cap: Capability) {
   const ctx = await requireInternalUser();
-  if (!hasCapability(ctx.role, cap)) {
+  const cell = CAPABILITY_TO_PERMISSION[cap];
+  const ok = cell ? await canCell(ctx.teamMember, cell) : false;
+  if (!ok) {
     throw new ForbiddenError(`Tu rol (${ctx.role}) no tiene el permiso requerido`);
   }
   return ctx;

@@ -21,7 +21,7 @@
  *     "no tocar" no existe en este flujo).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardTimelineEdit, guardCapability } from "@/lib/auth/api-guards";
+import { guardTimelineEdit, guardCapability, guardPermission } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
@@ -124,6 +124,17 @@ export async function POST(
           error: "TIMELINE_ALREADY_GENERATED",
           message: "El cronograma ya está generado. Cambiarlo con IA queda para CSL o Super Admin — vos podés seguir ajustándolo a mano.",
         },
+        { status: 403 },
+      );
+    }
+  } else {
+    // Rama VIRGEN (sin detalle IA aún): la primera pasada con IA pide el permiso
+    // cronograma.generate (default: todo interno menos el asistente administrativo;
+    // editable en /team — la semilla se lo quita a Dev).
+    const gen = await guardPermission("cronograma", "generate");
+    if (gen instanceof NextResponse) {
+      return NextResponse.json(
+        { error: "TIMELINE_GENERATION_FORBIDDEN", message: "Tu rol no puede generar el cronograma con IA." },
         { status: 403 },
       );
     }

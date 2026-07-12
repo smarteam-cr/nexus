@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withInternal, withCapability } from "@/lib/api";
+import { withInternal, withPermission } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { KnowledgeStatus, KnowledgeType, TagCategory } from "@prisma/client";
 
@@ -19,7 +19,7 @@ export const GET = withInternal(async (
 });
 
 // PUT /api/knowledge-docs/[id]
-export const PUT = withCapability("seeAllClients", async (
+export const PUT = withPermission("conocimientos", "write", async (
   req,
   { params }: { params: Promise<{ id: string }> }
 ) => {
@@ -70,7 +70,7 @@ export const PUT = withCapability("seeAllClients", async (
 });
 
 // DELETE /api/knowledge-docs/[id]
-export const DELETE = withCapability("seeAllClients", async (
+export const DELETE = withPermission("conocimientos", "write", async (
   _req,
   { params }: { params: Promise<{ id: string }> }
 ) => {

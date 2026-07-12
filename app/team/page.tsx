@@ -1,16 +1,20 @@
 import AppShell from "@/components/layout/AppShell";
 import TeamManager from "@/components/team/TeamManager";
 import { requireInternalUser } from "@/lib/auth/supabase";
-import { hasCapability } from "@/lib/auth/roles";
+import { can } from "@/lib/auth/permissions/engine";
 
 export const metadata = { title: "Equipo" };
 
 export default async function TeamPage() {
-  // Solo quien puede gestionar el equipo (SUPER_ADMIN) sube fotos desde acá.
+  // canManage (equipo.manage, editable por plantilla) habilita subir fotos.
+  // canAdminPermissions es el gate DURO de permisos: SOLO Super Admin, no
+  // delegable ni por plantilla (los endpoints lo exigen igual — esto es cosmético).
   let canManage = false;
+  let canAdminPermissions = false;
   try {
-    const { role } = await requireInternalUser();
-    canManage = hasCapability(role, "manageTeam");
+    const { teamMember, role } = await requireInternalUser();
+    canManage = await can(teamMember, "equipo", "manage");
+    canAdminPermissions = role === "SUPER_ADMIN";
   } catch {
     canManage = false;
   }
@@ -24,7 +28,7 @@ export default async function TeamPage() {
             Gestiona los miembros del equipo que participan en las implementaciones.
           </p>
         </div>
-        <TeamManager canManage={canManage} />
+        <TeamManager canManage={canManage} canAdminPermissions={canAdminPermissions} />
       </div>
     </AppShell>
   );

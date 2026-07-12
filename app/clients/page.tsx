@@ -12,8 +12,7 @@ import {
   ForbiddenError,
 } from "@/lib/auth/supabase";
 import { accessibleClientWhere, sharedClientIdsFor } from "@/lib/auth/access";
-import { hasCapability } from "@/lib/auth/roles";
-import { isSalesAreaRole } from "@/lib/auth/sales-roles";
+import { can } from "@/lib/auth/permissions/engine";
 import ClientsGrid, { type ClientRow } from "./ClientsGrid";
 
 // Render dinámico — la página depende del usuario logueado (sesión Supabase
@@ -33,16 +32,16 @@ export default async function ClientsPage() {
 
   // Shape compatible con el viejo ActiveCse para el ClientsGrid client component.
   const roleEnum = user.teamMember?.roleEnum;
-  // Acceso al área de Ventas (Business Cases) — mismo gate que /business-cases (incluye DEV).
-  const canSeeSales = isSalesAreaRole(roleEnum);
+  // Acceso al área de Ventas (Business Cases) — mismo gate que /business-cases (ventas.read).
+  const canSeeSales = user.teamMember ? await can(user.teamMember, "ventas", "read") : false;
   const activeCse = {
     email: user.email,
     name: user.teamMember?.name ?? user.email,
     role: roleEnum ?? "Miembro",
     isSuperAdmin: roleEnum === "SUPER_ADMIN",
-    // Roles "ven todo" (VENTAS/CSL/MARKETING/SUPER_ADMIN) → el índice abre en "Todos"
-    // y reordena las pestañas. CSE (sin la capacidad) queda igual que siempre.
-    canSeeAll: roleEnum ? hasCapability(roleEnum, "seeAllClients") : false,
+    // Permiso EFECTIVO "ve todo" (default VENTAS/DEV/CSL/MARKETING/SA) → el índice
+    // abre en "Todos" y reordena las pestañas. CSE (sin el permiso) queda igual que siempre.
+    canSeeAll: user.teamMember ? await can(user.teamMember, "clientes", "viewAll") : false,
   };
 
   // Filtro de acceso server-side: CSE ve solo sus clientes (owner) + compartidos;

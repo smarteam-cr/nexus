@@ -1250,6 +1250,11 @@ model TeamMember {
   // queda como override excepcional (ej. un CSE con acceso temporal a todo).
   canViewAllClients   Boolean   @default(false)
   canViewAllExpiresAt DateTime?
+  // Overrides de PERMISOS por usuario (matriz sección×acción, lib/auth/permissions):
+  // Json SPARSE {v:1, sections:{[seccion]:{[accion]:bool}}} — solo las celdas que el
+  // SUPER_ADMIN pineó para ESTE usuario; ausencia = hereda la plantilla del rol
+  // (RolePermission) o el default de código. null = hereda todo. Lectura tolerante.
+  permissionOverrides Json?
   // Baja blanda: si != null, el miembro pierde acceso (login bloqueado) y desaparece
   // de los listados de personas, pero su histórico (sesiones/handoffs/runs) queda intacto.
   deactivatedAt       DateTime?
@@ -1272,6 +1277,21 @@ enum TeamRole {
   DEV // equipo técnico: capacidades = VENTAS (ve todo + cronogramas + handoffs) + área Ventas
   ADMIN // asistente administrativo (Finanzas): SOLO Cobranza (via COBRANZA_ROLES) — 0 capacidades de la matriz
   SUPER_ADMIN // todo + ÚNICO que gestiona el equipo (alta/baja/cambio de rol)
+}
+
+// ─── RolePermission ───────────────────────────────────────────────────────────
+// PLANTILLA de permisos por rol, editable vía UI (/team, solo SUPER_ADMIN).
+// `permissions` = PermissionMap COMPLETO {v:1, sections:{[seccion]:{[accion]:bool}}}
+// validado contra el registry (lib/auth/permissions). Precedencia efectiva:
+// DEFAULT_MATRIX (código) ← esta fila (DB, cache TTL 60s) ← TeamMember.permissionOverrides.
+// Fila ausente o Json inválido → default de código (deploy-safe con tabla vacía).
+// SUPER_ADMIN nunca se lee de acá: all-true hardcodeado en el engine (anti-lockout).
+
+model RolePermission {
+  role           TeamRole @id
+  permissions    Json
+  updatedAt      DateTime @updatedAt
+  updatedByEmail String?
 }
 
 // ─── AppUser ──────────────────────────────────────────────────────────────────

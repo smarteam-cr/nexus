@@ -8,7 +8,7 @@ import AppShell from "@/components/layout/AppShell";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { prisma } from "@/lib/db/prisma";
 import DeleteBusinessCaseButton from "@/components/business-cases/DeleteBusinessCaseButton";
-import { isSalesAreaRole } from "@/lib/auth/sales-roles";
+import { can } from "@/lib/auth/permissions/engine";
 import { resolveBcType } from "@/lib/business-cases/case-types";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default async function BusinessCasesHubPage() {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !isSalesAreaRole(ctx.role)) redirect("/clients");
+  if (!ctx || !(await can(ctx.teamMember, "ventas", "read"))) redirect("/clients");
 
   const cases = await prisma.businessCase.findMany({
     orderBy: { updatedAt: "desc" },

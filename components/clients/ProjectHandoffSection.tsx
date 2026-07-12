@@ -53,6 +53,13 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   // handoffAnywhere). El CSE lo VE pero no lo genera ni edita.
   const me = useMe();
   const canEdit = me?.capabilities.includes("handoffAnywhere") ?? false;
+  // Generar/regenerar con IA es su propia celda (handoff.generate|regenerate),
+  // independiente de editar a mano (handoff.write = canEdit). El server lo exige así
+  // (resolveArtifactGate) — si gateáramos el botón por write podría verse un CTA que
+  // siempre da 403. Por default los tres van juntos, esto cubre config custom.
+  const canGenerateHandoff =
+    me?.permissions?.sections?.handoff?.generate === true ||
+    me?.permissions?.sections?.handoff?.regenerate === true;
 
   // Exclusiones de contexto del CSE (textarea colapsable). El draft vive aparte del
   // status para no pisar lo tipeado en cada refetch; se sincroniza al cargar.
@@ -260,7 +267,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
               {showDoc ? "Ocultar" : "Ver documento"}
             </button>
           )}
-          {canEdit && (
+          {canGenerateHandoff && (
             <button
               onClick={handleGenerate}
               disabled={generating}

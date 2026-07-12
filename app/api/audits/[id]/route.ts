@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withAuth, withRole } from "@/lib/api";
+import { withAuth, withPermission } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
 export const GET = withAuth(async (
@@ -22,7 +22,7 @@ export const GET = withAuth(async (
   }
 });
 
-export const DELETE = withRole("SUPER_ADMIN", async (
+export const DELETE = withPermission("auditoria", "delete", async (
   _request,
   { params }: { params: Promise<{ id: string }> }
 ) => {

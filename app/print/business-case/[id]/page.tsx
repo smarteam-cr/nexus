@@ -13,7 +13,7 @@
  */
 import { notFound, redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
-import { isSalesAreaRole } from "@/lib/auth/sales-roles";
+import { can } from "@/lib/auth/permissions/engine";
 import { prisma } from "@/lib/db/prisma";
 import { consumePdfJobToken } from "@/lib/business-cases/pdf-job-token";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
@@ -42,7 +42,7 @@ export default async function BusinessCasePrintPage({
     canvasIdFromToken = result.canvasId;
   } else {
     const ctx = await requireInternalUser().catch(() => null);
-    if (!ctx || !isSalesAreaRole(ctx.role)) redirect("/");
+    if (!ctx || !(await can(ctx.teamMember, "ventas", "read"))) redirect("/");
   }
 
   const bc = await prisma.businessCase.findUnique({

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { withClientAccess, apiError } from "@/lib/api";
-import { guardCapability } from "@/lib/auth/api-guards";
+import { guardPermission } from "@/lib/auth/api-guards";
+import { resolveArtifactGate, artifactGateMessage } from "@/lib/auth/permissions/artifact-gate";
 import { HANDOFF_EXCLUDE_TITLE_KEYWORDS, HANDOFF_INCLUDE_TITLE_KEYWORDS, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
@@ -242,12 +243,20 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     );
   }
 
-  // RBAC: generar/regenerar el HANDOFF exige la capacidad handoffAnywhere — un CSE
-  // NO edita handoffs (el cronograma y el resto de los agentes mantienen el acceso
-  // normal al cliente que ya validó withClientAccess).
-  if (agent.agentGroup === "handoff") {
-    const handoffGuard = await guardCapability("handoffAnywhere");
-    if (handoffGuard instanceof NextResponse) return handoffGuard;
+  // RBAC por SECCIÓN de artefacto (PERM-F5): los agentes que ESCRIBEN un artefacto
+  // (handoff / kickoff / procesos / cronograma) exigen el permiso `generate` (si el
+  // artefacto no existe) o `regenerate` (si ya existe) de su sección — matriz
+  // editable en /team. Los agentes de análisis interno y el de AVANCE del cronograma
+  // (solo propone, el CSE confirma) mantienen el acceso normal (withClientAccess).
+  const artifactGate = await resolveArtifactGate(agent, clientId, bodyProjectId ?? null);
+  if (artifactGate) {
+    const gateGuard = await guardPermission(artifactGate.section, artifactGate.action);
+    if (gateGuard instanceof NextResponse) {
+      return NextResponse.json(
+        { error: "GENERATION_FORBIDDEN", message: artifactGateMessage(artifactGate) },
+        { status: 403 },
+      );
+    }
   }
 
   // ── D.1: fail-fast del agente de detalle de cronograma ──────────────────────

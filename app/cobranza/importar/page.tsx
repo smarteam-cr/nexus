@@ -8,14 +8,14 @@ import { redirect } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/ui";
 import { requireInternalUser } from "@/lib/auth/supabase";
-import { isCobranzaRole } from "@/lib/auth/cobranza-roles";
+import { can } from "@/lib/auth/permissions/engine";
 import ImportWizard from "@/components/cobranza/ImportWizard";
 
 export const dynamic = "force-dynamic";
 
 export default async function ImportarCobranzaPage() {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !isCobranzaRole(ctx.role)) redirect("/clients");
+  if (!ctx || !(await can(ctx.teamMember, "cobranza", "read"))) redirect("/clients");
 
   return (
     <AppShell>

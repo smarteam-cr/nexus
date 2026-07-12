@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withInternal, withCapability } from "@/lib/api";
+import { withInternal, withPermission } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
 export const GET = withInternal(async () => {
@@ -14,7 +14,7 @@ export const GET = withInternal(async () => {
   }
 });
 
-export const POST = withCapability("seeAllClients", async (request) => {
+export const POST = withPermission("conocimientos", "write", async (request) => {
   try {
     const { title, content, category } = (await request.json()) as {
       title?: string;

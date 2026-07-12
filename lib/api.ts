@@ -6,9 +6,11 @@ import {
   guardAccessToProject,
   guardInternalUser,
   guardCapability,
+  guardPermission,
   guardRole,
 } from "@/lib/auth/api-guards";
 import type { Capability } from "@/lib/auth/roles";
+import type { ActionKeyOf, SectionKey } from "@/lib/auth/permissions/registry";
 import type { TeamRole } from "@prisma/client";
 
 type RouteContext = { params: Promise<Record<string, string>> };
@@ -119,6 +121,23 @@ export function withCapability<C extends RouteContext = RouteContext>(
 ): Handler<C> {
   return async (req, ctx) => {
     const guard = await guardCapability(cap);
+    if (guard instanceof NextResponse) return guard;
+    return runHandlerSafely(handler, req, ctx);
+  };
+}
+
+/**
+ * Wrapper que exige una celda sección.acción del sistema de permisos
+ * (lib/auth/permissions — default ← plantilla DB ← overrides por usuario).
+ * Uso: export const POST = withPermission("cobranza", "write", async (req, ctx) => {…})
+ */
+export function withPermission<S extends SectionKey, C extends RouteContext = RouteContext>(
+  section: S,
+  action: ActionKeyOf<S>,
+  handler: Handler<C>
+): Handler<C> {
+  return async (req, ctx) => {
+    const guard = await guardPermission(section, action);
     if (guard instanceof NextResponse) return guard;
     return runHandlerSafely(handler, req, ctx);
   };

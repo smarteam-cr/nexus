@@ -50,7 +50,10 @@ const TAG_CLASS = "inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded bor
 export default function AgentsClient({ agents }: { agents: Agent[] }) {
   const router = useRouter();
   const me = useMe();
-  const isSuperAdmin = me?.isSuperAdmin ?? false;
+  // Administrar agentes = celda agentes.manage del mapa efectivo (delegable por
+  // plantilla; SA la tiene por all-true). Antes era isSuperAdmin, que ocultaba la UI
+  // aunque el endpoint (withPermission("agentes","manage")) ya se lo permitiera al rol.
+  const isSuperAdmin = me?.permissions?.sections?.agentes?.manage === true;
   const [confirmTarget, setConfirmTarget] = useState<{ id: string; name: string } | null>(null);
 
   async function handleDelete() {

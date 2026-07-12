@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withInternal, withCapability } from "@/lib/api";
+import { withInternal, withPermission } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { KnowledgeStatus, KnowledgeType, TagCategory } from "@prisma/client";
 
@@ -28,7 +28,7 @@ export const GET = withInternal(async (req) => {
 });
 
 // POST /api/knowledge-docs — crear documento
-export const POST = withCapability("seeAllClients", async (req) => {
+export const POST = withPermission("conocimientos", "write", async (req) => {
   const body = (await req.json()) as {
     type?: string;
     status?: string;

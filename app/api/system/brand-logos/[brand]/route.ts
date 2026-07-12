@@ -10,7 +10,7 @@
  *   DELETE → quita (no se muestra; el BC cae al badge de texto)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardInternalUser, guardRole } from "@/lib/auth/api-guards";
+import { guardInternalUser, guardPermission } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageClient } from "@/lib/storage/client";
 import {
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
 
 export async function DELETE(_req: NextRequest, { params }: { params: Params }) {
   const { brand } = await params;
-  const guard = await guardRole("SUPER_ADMIN");
+  const guard = await guardPermission("configuracion", "manage");
   if (guard instanceof NextResponse) return guard;
   const def = BRANDS[brand];
   if (!def) return NextResponse.json({ error: "Marca desconocida" }, { status: 404 });

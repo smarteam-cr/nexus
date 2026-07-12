@@ -4,8 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "@/lib/theme";
-import { isSalesAreaRole } from "@/lib/auth/sales-roles";
-import { isCobranzaRole } from "@/lib/auth/cobranza-roles";
+import type { PermissionMap } from "@/lib/auth/permissions/types";
 import MarketingFlyout from "./MarketingFlyout";
 
 interface ClientSummary {
@@ -20,6 +19,8 @@ interface UserLite {
   name: string;
   role: string | null;
   isSuperAdmin: boolean;
+  /** Mapa EFECTIVO sección×acción (resuelto en AppShell, server-side). */
+  permissions: PermissionMap;
 }
 
 interface SidebarProps {
@@ -223,19 +224,20 @@ function UserAvatar({ user, isOpen }: { user: UserLite; isOpen: boolean }) {
 export default function Sidebar({ clients, user, onToggle, isOpen = true }: SidebarProps) {
   const pathname = usePathname();
 
-  // Visibilidad de ítems del menú por rol de permiso (roleEnum). Es cosmético:
-  // la seguridad real vive en cada página/endpoint; esto solo evita mostrar
-  // accesos que el rol no usa. Universales (todos): Clientes, Marketing (incluye
-  // ICP en su submenú), Sesiones, Conocimientos.
+  // Visibilidad de ítems del menú desde el mapa de PERMISOS EFECTIVO (default ←
+  // plantilla del rol ← overrides; editable en /team). Es cosmético: la seguridad
+  // real vive en cada página/endpoint. Universales (todos): Clientes, Marketing
+  // (incluye ICP en su submenú), Sesiones, Conocimientos.
   const role = user.role ?? "";
   const isSuperAdmin = user.isSuperAdmin || role === "SUPER_ADMIN";
-  const canSeeAgents = isSuperAdmin || ["VENTAS", "DEV", "CSL", "MARKETING"].includes(role); // todos menos CSE (DEV ≡ VENTAS)
-  const canSeePortfolio = isSuperAdmin || ["VENTAS", "DEV", "CSL", "MARKETING"].includes(role); // Cartera: seeAllClients (todos menos CSE)
-  const canSeeSales = isSalesAreaRole(role);                                            // Ventas/Business Cases (incluye DEV) — fuente única
-  const canSeeCobranza = isCobranzaRole(role);                                          // Cobranza (Admin & Finanzas) — whitelist client-safe
-  const canSeeAudits = isSuperAdmin || ["VENTAS", "DEV", "CSL"].includes(role);        // super admin, CSL, ventas, dev
-  const canSeeTeam = isSuperAdmin;                                                     // solo super admin
-  const canSeeConfig = isSuperAdmin || ["CSL", "MARKETING"].includes(role);            // super admin + CSL/Marketing
+  const perms = user.permissions?.sections ?? {};
+  const canSeeAgents = perms.agentes?.read === true; // catálogo /agents
+  const canSeePortfolio = perms.clientes?.viewAll === true; // Cartera (ve todos los clientes)
+  const canSeeSales = perms.ventas?.read === true; // Ventas / Business Cases
+  const canSeeCobranza = perms.cobranza?.read === true; // Cobranza (Admin & Finanzas)
+  const canSeeAudits = perms.auditoria?.read === true; // Auditorías
+  const canSeeTeam = isSuperAdmin; // gate DURO: solo Super Admin administra el equipo/permisos
+  const canSeeConfig = perms.configuracion?.read === true; // Configuración
 
   return (
     <aside className="w-full bg-gray-950 border-r border-gray-800 flex flex-col sticky top-0 h-screen overflow-hidden">

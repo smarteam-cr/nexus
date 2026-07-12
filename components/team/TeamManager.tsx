@@ -9,6 +9,8 @@ import {
   TableSkeleton,
   type TableColumn,
 } from "@/components/ui";
+import MemberPermissionsModal from "./MemberPermissionsModal";
+import RoleTemplatesPanel from "./RoleTemplatesPanel";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -26,13 +28,14 @@ interface TeamMember {
 }
 
 // Etiqueta inline (no se importa lib/auth/roles para no arrastrar Prisma al cliente).
+// Espejo de ROLE_LABEL de lib/auth/roles.ts — el VALOR del enum de DB no cambia.
 const ROLE_LABEL: Record<string, string> = {
   CSE: "CSE",
-  VENTAS: "Ventas",
+  VENTAS: "Sales",
   DEV: "Dev",
   CSL: "CSL",
   MARKETING: "Marketing",
-  ADMIN: "Admin", // asistente administrativo (Finanzas): solo Cobranza
+  ADMIN: "Asistente administrativo", // Finanzas: solo Cobranza
   SUPER_ADMIN: "Super Admin",
 };
 
@@ -79,7 +82,11 @@ function TeamPhotoAvatar({
       {avatar}
       <button
         type="button"
-        onClick={() => inputRef.current?.click()}
+        onClick={(e) => {
+          // La fila puede ser clickeable (abre el modal de permisos) — no burbujear.
+          e.stopPropagation();
+          inputRef.current?.click();
+        }}
         disabled={busy}
         title={member.photoUrl ? "Cambiar foto" : "Subir foto"}
         className="absolute inset-0 flex items-center justify-center rounded-full bg-black/55 text-white opacity-0 transition-opacity group-hover/photo:opacity-100 focus-visible:opacity-100 disabled:cursor-wait"
@@ -100,6 +107,9 @@ function TeamPhotoAvatar({
         type="file"
         accept="image/png,image/jpeg,image/webp"
         onChange={onFile}
+        // El .click() programático sobre este input dispara un evento que burbujea hasta
+        // el <tr> clickeable (abre el modal de permisos) — cortarlo acá.
+        onClick={(e) => e.stopPropagation()}
         className="hidden"
       />
     </div>
@@ -108,9 +118,18 @@ function TeamPhotoAvatar({
 
 // ── Componente principal ────────────────────────────────────────────────────────
 
-export default function TeamManager({ canManage = false }: { canManage?: boolean }) {
+export default function TeamManager({
+  canManage = false,
+  canAdminPermissions = false,
+}: {
+  canManage?: boolean;
+  /** SOLO Super Admin (gate duro, no delegable): filas clickeables + pestaña Plantillas. */
+  canAdminPermissions?: boolean;
+}) {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"miembros" | "plantillas">("miembros");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -172,32 +191,73 @@ export default function TeamManager({ canManage = false }: { canManage?: boolean
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-xs text-fg-muted">
-        Los <strong className="text-fg-secondary">roles de permiso</strong> y las{" "}
-        <strong className="text-fg-secondary">áreas</strong> se gestionan por scripts en esta etapa.
-        {canManage
-          ? " Pasá el mouse sobre una foto para cambiarla; se usan en el selector de equipo del Kickoff."
-          : " La edición desde la app llega en una próxima iteración."}
-      </div>
+      {/* Pestañas (Plantillas solo para Super Admin) */}
+      {canAdminPermissions && (
+        <div className="flex gap-1.5">
+          {(
+            [
+              ["miembros", "Miembros"],
+              ["plantillas", "Plantillas por rol"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={[
+                "rounded-lg border px-3 py-1.5 text-xs transition-colors",
+                tab === key
+                  ? "border-brand/40 bg-brand/10 text-brand"
+                  : "border-line bg-surface-muted text-fg-muted hover:text-fg-secondary",
+              ].join(" ")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {loading ? (
-        <TableSkeleton columns={3} rows={5} toolbar />
-      ) : members.length === 0 ? (
-        <EmptyState
-          variant="dashed"
-          title="Aún no hay miembros del equipo activos"
-          description="Los miembros se siembran/gestionan por scripts (seed-team, assign-team-roles)."
-        />
+      {tab === "plantillas" && canAdminPermissions ? (
+        <RoleTemplatesPanel />
       ) : (
-        <Table
-          columns={columns}
-          rows={members}
-          rowKey={(m) => m.id}
-          search={{
-            placeholder: "Buscar miembro…",
-            getText: (m) => `${m.name} ${m.email} ${m.area ?? ""} ${m.roleEnum}`,
-          }}
-          initialSort={{ key: "member", dir: "asc" }}
+        <>
+          <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-xs text-fg-muted">
+            {canAdminPermissions
+              ? "Clickeá un miembro para editar su rol, visibilidad y permisos (los pines pisan la plantilla del rol solo para esa persona). Pasá el mouse sobre una foto para cambiarla."
+              : canManage
+                ? "Pasá el mouse sobre una foto para cambiarla; se usan en el selector de equipo del Kickoff. Los permisos los administra un Super Admin."
+                : "Los roles y permisos los administra un Super Admin desde esta página."}
+          </div>
+
+          {loading ? (
+            <TableSkeleton columns={3} rows={5} toolbar />
+          ) : members.length === 0 ? (
+            <EmptyState
+              variant="dashed"
+              title="Aún no hay miembros del equipo activos"
+              description="Los miembros se siembran/gestionan por scripts (seed-team, assign-team-roles)."
+            />
+          ) : (
+            <Table
+              columns={columns}
+              rows={members}
+              rowKey={(m) => m.id}
+              onRowClick={canAdminPermissions ? (m) => setEditingId(m.id) : undefined}
+              search={{
+                placeholder: "Buscar miembro…",
+                getText: (m) => `${m.name} ${m.email} ${m.area ?? ""} ${m.roleEnum}`,
+              }}
+              initialSort={{ key: "member", dir: "asc" }}
+            />
+          )}
+        </>
+      )}
+
+      {editingId && (
+        <MemberPermissionsModal
+          memberId={editingId}
+          onClose={() => setEditingId(null)}
+          onSaved={load}
         />
       )}
     </div>

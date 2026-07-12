@@ -12,6 +12,10 @@ export async function GET() {
   const members = await prisma.teamMember.findMany({
     where: { deactivatedAt: null },
     orderBy: { createdAt: "asc" },
+    // permissionOverrides (los pines por-persona) son info de administración: solo
+    // el SUPER_ADMIN los ve, vía /api/team/[id]/permissions. Este GET lo consume
+    // TODO interno (selector de equipo del kickoff, compartir clientes) → omitir.
+    omit: { permissionOverrides: true },
   });
   return NextResponse.json({ members });
 }

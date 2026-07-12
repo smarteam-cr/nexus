@@ -7,7 +7,7 @@
 import { redirect } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { requireInternalUser } from "@/lib/auth/supabase";
-import { isCobranzaRole } from "@/lib/auth/cobranza-roles";
+import { can } from "@/lib/auth/permissions/engine";
 import {
   loadCartera,
   loadAlertas,
@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CobranzaPage() {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !isCobranzaRole(ctx.role)) redirect("/clients");
+  if (!ctx || !(await can(ctx.teamMember, "cobranza", "read"))) redirect("/clients");
 
   const todayISO = crDateParts(new Date()).dateKey; // "hoy" = día calendario CR
   const [cola, cartera, alertas, snapshot, proyeccion, series, riesgo] = await Promise.all([

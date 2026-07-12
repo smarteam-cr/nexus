@@ -166,10 +166,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const me = useMe();
   const canEdit = me?.capabilities.includes("editTimeline") ?? false;
   const canDelete = me?.capabilities.includes("deleteTimeline") ?? false;
-  // Cambiar el cronograma CON IA una vez generado queda para CSL/Super Admin. El resto lo
-  // arma con IA la primera vez y lo edita a mano; "Pedir cambio con IA" se oculta una vez
-  // que hay detalle IA (hasAiDetail). Espeja el gate del server (timeline/assist).
-  const canRegenerateTimeline = me?.capabilities.includes("regenerateTimeline") ?? false;
+  // Cambiar el cronograma CON IA una vez generado queda para quien tenga
+  // cronograma.regenerate (default CSL/Super Admin). La PRIMERA pasada con IA pide
+  // cronograma.generate (default todo interno). Espeja los gates del server
+  // (timeline/assist + analyze) — la matriz es editable desde /team.
+  const canRegenerateTimeline = me?.permissions?.sections?.cronograma?.regenerate === true;
+  const canGenerateTimeline = me?.permissions?.sections?.cronograma?.generate === true;
   const [lastEditedAt, setLastEditedAt] = useState<string | null>(null);
   const [publishWorking, setPublishWorking] = useState(false);
   // Modal de razón del cambio — SOLO al "Subir al cliente" (no en el auto-guardado).
@@ -1112,20 +1114,25 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               aun si se borraron las tareas post-publicación. */}
           {canEdit && phases.length > 0 && !proposal && (
             !hasPublishedOnce && !hasAiDetail ? (
-              <button
-                onClick={() => void generateDetail({ auto: false })}
-                disabled={generating}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"
-                title="Crea las tareas iniciales del cronograma con IA, sobre las fases del handoff"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                Generar cronograma
-              </button>
+              // Cronograma VIRGEN: "Generar cronograma" solo si tiene el permiso; si no,
+              // no mostrar nada (NO caer al botón de avance — no hay avance que chequear
+              // sobre un esqueleto sin tareas y el usuario no puede generarlas).
+              canGenerateTimeline ? (
+                <button
+                  onClick={() => void generateDetail({ auto: false })}
+                  disabled={generating}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"
+                  title="Crea las tareas iniciales del cronograma con IA, sobre las fases del handoff"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  Generar cronograma
+                </button>
+              ) : null
             ) : (
               <CronogramaProgressButton projectId={projectId} onDone={load} />
             )
           )}
-          {canEdit && phases.length > 0 && !proposal && (canRegenerateTimeline || !hasAiDetail) && (
+          {canEdit && phases.length > 0 && !proposal && (hasAiDetail ? canRegenerateTimeline : canGenerateTimeline) && (
             <button
               onClick={() => { setAssistScopePhaseId(null); setAssistOpen(true); }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800 hover:border-gray-700"
@@ -1373,7 +1380,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         />
       ) : (
         <>
-          {canEdit && !hasAiDetail && !hasPublishedOnce && (
+          {canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && (
             <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-700/50 text-amber-200">
               <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               <p className="text-xs leading-relaxed">
@@ -1405,7 +1412,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             onReorderPhases={reorderPhases}
             onSetAnchor={setAnchorFromGantt}
             onAssistPhase={
-              canRegenerateTimeline || !hasAiDetail
+              (hasAiDetail ? canRegenerateTimeline : canGenerateTimeline)
                 ? (phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }
                 : undefined
             }

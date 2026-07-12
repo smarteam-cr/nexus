@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
-import { isMarketingEditor } from "@/lib/auth/marketing-roles";
+import { can } from "@/lib/auth/permissions/engine";
 import ContentClient from "./ContentClient";
 
 export const dynamic = "force-dynamic";
@@ -8,5 +8,5 @@ export const dynamic = "force-dynamic";
 export default async function MarketingContenidoPage() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx) redirect("/");
-  return <ContentClient canEdit={isMarketingEditor(ctx.role)} />;
+  return <ContentClient canEdit={await can(ctx.teamMember, "marketing", "write")} />;
 }

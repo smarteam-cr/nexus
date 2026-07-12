@@ -12,9 +12,10 @@
  *   F) roleAtLeast: reflexivo, empates de rango en ambas direcciones, y gates.
  *   G) Rol desconocido en runtime (cast): defensivos ?? → false / [] / 0.
  *
- * NOTA: se mockea ./supabase (vi.mock) SOLO para cortar el import transitivo
- * de @/lib/db/prisma que arrastra roles.ts vía requireCapability/requireRole.
- * No se testea nada del mock — las funciones bajo test son puras.
+ * NOTA: se mockean ./supabase y @/lib/db/prisma (vi.mock) SOLO para cortar los
+ * imports transitivos que arrastra roles.ts (vía requireCapability/requireRole
+ * y el engine de permisos). No se testea nada de los mocks — las funciones bajo
+ * test son puras (hasCapability/capabilitiesFor miran el DEFAULT de código).
  *
  * Correr: `npx vitest run lib/auth/roles.test.ts --project unit`.
  */
@@ -25,6 +26,7 @@ vi.mock("./supabase", () => ({
   requireInternalUser: vi.fn(),
   ForbiddenError: class ForbiddenError extends Error {},
 }));
+vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
 
 import {
   hasCapability,
@@ -43,6 +45,7 @@ const ALL_CAPS: Capability[] = [
   "createHandoff",
   "editTimeline",
   "deleteTimeline",
+  "regenerateTimeline",
 ];
 
 const ALL_ROLES: TeamRole[] = ["CSE", "VENTAS", "DEV", "CSL", "MARKETING", "ADMIN", "SUPER_ADMIN"];

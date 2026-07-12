@@ -8,13 +8,13 @@ import AppShell from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/ui";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import BusinessCaseStepper from "@/components/business-cases/BusinessCaseStepper";
-import { isSalesAreaRole } from "@/lib/auth/sales-roles";
+import { can } from "@/lib/auth/permissions/engine";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewBusinessCasePage() {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !isSalesAreaRole(ctx.role)) redirect("/clients");
+  if (!ctx || !(await can(ctx.teamMember, "ventas", "read"))) redirect("/clients");
 
   return (
     <AppShell>

@@ -1,16 +1,11 @@
 /**
  * lib/auth/sales-roles.ts
  *
- * Roles con acceso al ÁREA de Ventas / Business Cases. Fuente ÚNICA — client-safe
- * (SIN imports de server ni de Prisma), para poder usarla también en Client
- * Components como el Sidebar sin arrastrar código de servidor.
- *
- * La usan el guard de API (`guardSalesAccess` en api-guards.ts) y TODOS los gates
- * de página/UI del área de Ventas, para que no vuelvan a divergir: cuando se sumó
- * el rol DEV, quedaron ~6 copias inline de este whitelist desactualizadas que
- * dejaban a DEV fuera del área (bug de mal-autorización UI vs API).
- *
- * DEV entra porque su alcance es "idéntico a Ventas". CSE nunca; MARKETING tampoco.
+ * @deprecated ESPEJO CONGELADO (migración PERM 2026-07): el gate real del área de
+ * Ventas es la celda `ventas.read` del sistema de permisos (lib/auth/permissions —
+ * default = esta misma lista, editable por plantilla/overrides en /team). Ya NADIE
+ * consulta esto en runtime (guards, páginas y Sidebar migrados); queda como
+ * documentación del default histórico junto a su test. No sumar usos nuevos.
  */
 export const SALES_AREA_ROLES = ["VENTAS", "DEV", "CSL", "SUPER_ADMIN"] as const;
 

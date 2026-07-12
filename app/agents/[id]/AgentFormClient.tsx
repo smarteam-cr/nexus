@@ -43,7 +43,9 @@ export default function AgentFormClient({ agentId, initialData }: AgentFormClien
   const router = useRouter();
   const isNew = agentId === "new";
   const me = useMe();
-  const isSuperAdmin = me?.isSuperAdmin ?? false;
+  // Editar agentes = celda agentes.manage del mapa efectivo (delegable; SA all-true).
+  // El endpoint PUT/DELETE ya usa withPermission("agentes","manage") — la UI lo espeja.
+  const isSuperAdmin = me?.permissions?.sections?.agentes?.manage === true;
 
   const [form, setForm] = useState<AgentForm>({
     name: initialData?.name ?? "",
@@ -381,7 +383,7 @@ export default function AgentFormClient({ agentId, initialData }: AgentFormClien
         ) : (
           <div className="flex items-center justify-between pt-2 pb-8">
             <p className="text-sm text-gray-500">
-              Solo lectura · solo un <span className="text-gray-300 font-medium">Super Admin</span> puede crear o editar agentes.
+              Solo lectura · tu rol no tiene el permiso <span className="text-gray-300 font-medium">Administrar agentes</span>.
             </p>
             <Link
               href="/agents"

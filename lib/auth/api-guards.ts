@@ -27,9 +27,8 @@ import {
   type AppUserWithTeamMember,
 } from "./supabase";
 import { requireCapability, requireRole, type Capability } from "./roles";
-import { isSalesAreaRole } from "./sales-roles";
-import { isMarketingEditor } from "./marketing-roles";
-import { isCobranzaRole } from "./cobranza-roles";
+import { can, requirePermission } from "./permissions/engine";
+import type { ActionKeyOf, SectionKey } from "./permissions/registry";
 import type { TeamRole } from "@prisma/client";
 
 function toErrorResponse(e: unknown): NextResponse | null {
@@ -243,10 +242,27 @@ export async function denyHandoffCanvasEditForCse(canvasName: string): Promise<N
 }
 
 /**
- * Acceso al área de VENTAS (Business Cases). Whitelist de roles = fuente única
- * `SALES_AREA_ROLES` (lib/auth/sales-roles.ts): VENTAS, DEV, CSL y SUPER_ADMIN
- * (CSE no; MARKETING tampoco). DEV entra porque su alcance es "idéntico a Ventas".
- * La MISMA lista gatea las páginas/UI del área — no re-declarar el array acá.
+ * Verifica que haya un usuario INTERNAL con la celda sección.acción del sistema
+ * de permisos (lib/auth/permissions — default ← plantilla DB ← overrides).
+ * Devuelve el bundle de requireInternalUser o una NextResponse 401/403.
+ */
+export async function guardPermission<S extends SectionKey>(
+  section: S,
+  action: ActionKeyOf<S>,
+): Promise<Awaited<ReturnType<typeof requirePermission>> | NextResponse> {
+  try {
+    return await requirePermission(section, action);
+  } catch (e) {
+    const r = toErrorResponse(e);
+    if (r) return r;
+    throw e;
+  }
+}
+
+/**
+ * Acceso al área de VENTAS (Business Cases). Consulta la celda `ventas.read`
+ * del mapa EFECTIVO (default = VENTAS/DEV/CSL/SUPER_ADMIN — la vieja whitelist
+ * SALES_AREA_ROLES; editable por plantilla/overrides desde /team).
  * Devuelve el bundle de usuario interno o una NextResponse 401/403.
  */
 export async function guardSalesAccess(): Promise<
@@ -254,7 +270,7 @@ export async function guardSalesAccess(): Promise<
 > {
   const guard = await guardInternalUser();
   if (guard instanceof NextResponse) return guard;
-  if (!isSalesAreaRole(guard.role)) {
+  if (!(await can(guard.teamMember, "ventas", "read"))) {
     return NextResponse.json(
       { error: "Tu rol no tiene acceso al área de Ventas." },
       { status: 403 },
@@ -265,16 +281,17 @@ export async function guardSalesAccess(): Promise<
 
 /**
  * ESCRITURA en el área de Marketing + Contenido (CRUD de insumos, correr
- * ingesta/agente, podar/aprobar salidas). Whitelist = fuente única
- * `MARKETING_EDITOR_ROLES` (lib/auth/marketing-roles.ts): MARKETING/CSL/SUPER_ADMIN.
- * La LECTURA del área es de todo rol interno → los GET usan `guardInternalUser`.
+ * ingesta/agente, podar/aprobar salidas). Consulta la celda `marketing.write`
+ * del mapa EFECTIVO (default = MARKETING/CSL/SUPER_ADMIN — la vieja whitelist
+ * MARKETING_EDITOR_ROLES). La LECTURA del área es de todo rol interno → los
+ * GET usan `guardInternalUser`.
  */
 export async function guardMarketingEditor(): Promise<
   Awaited<ReturnType<typeof requireInternalUser>> | NextResponse
 > {
   const guard = await guardInternalUser();
   if (guard instanceof NextResponse) return guard;
-  if (!isMarketingEditor(guard.role)) {
+  if (!(await can(guard.teamMember, "marketing", "write"))) {
     return NextResponse.json(
       { error: "Tu rol no puede editar el área de Marketing." },
       { status: 403 },
@@ -284,10 +301,9 @@ export async function guardMarketingEditor(): Promise<
 }
 
 /**
- * Acceso al módulo COBRANZA (cartera de cobros — Admin & Finanzas). Whitelist de
- * roles = fuente única `COBRANZA_ROLES` (lib/auth/cobranza-roles.ts): ADMIN y
- * SUPER_ADMIN, nadie más (info sensible de Finanzas). La MISMA lista gatea la
- * página y el Sidebar — no re-declarar el array acá.
+ * Acceso al módulo COBRANZA (cartera de cobros — Admin & Finanzas). Consulta la
+ * celda `cobranza.read` del mapa EFECTIVO (default = ADMIN/SUPER_ADMIN — la
+ * vieja whitelist COBRANZA_ROLES; info sensible de Finanzas).
  * Devuelve el bundle de usuario interno o una NextResponse 401/403.
  */
 export async function guardCobranzaAccess(): Promise<
@@ -295,7 +311,7 @@ export async function guardCobranzaAccess(): Promise<
 > {
   const guard = await guardInternalUser();
   if (guard instanceof NextResponse) return guard;
-  if (!isCobranzaRole(guard.role)) {
+  if (!(await can(guard.teamMember, "cobranza", "read"))) {
     return NextResponse.json(
       { error: "Tu rol no tiene acceso a Cobranza." },
       { status: 403 },

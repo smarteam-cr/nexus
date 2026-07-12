@@ -9,7 +9,7 @@ import AppShell from "@/components/layout/AppShell";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { prisma } from "@/lib/db/prisma";
 import BusinessCaseWorkspace from "@/components/business-cases/BusinessCaseWorkspace";
-import { isSalesAreaRole } from "@/lib/auth/sales-roles";
+import { can } from "@/lib/auth/permissions/engine";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { getBrandLogos, brandLogoMap } from "@/lib/external/smarteam-logo";
 
@@ -28,7 +28,7 @@ export default async function BusinessCasePage({
 }) {
   const { id } = await params;
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !isSalesAreaRole(ctx.role)) redirect("/clients");
+  if (!ctx || !(await can(ctx.teamMember, "ventas", "read"))) redirect("/clients");
 
   const bc = await prisma.businessCase.findUnique({
     where: { id },

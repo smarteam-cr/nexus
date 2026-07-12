@@ -12,6 +12,18 @@ import { useState } from "react";
 import { pollAgentRun, summarizeRun, summarizePollResult } from "@/lib/clients/poll-agent-run";
 import { useToast } from "@/components/ui/Toast";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
+import { useMe } from "@/hooks/useMe";
+
+// Gating COSMÉTICO por sección de permisos (PERM-F5): agentes que ESCRIBEN un
+// artefacto → si el usuario no puede NI generar NI regenerar esa sección, el CTA
+// no se muestra (la decisión fina generate-vs-regenerate la toma el server, que
+// es quien manda). Agentes fuera del mapa no se gatean acá.
+const AGENT_SECTION: Record<string, string> = {
+  "agent-mapeo-inicial": "procesos",
+  "agent-kickoff-canvas": "kickoff",
+  "agent-timeline-detail": "cronograma",
+  "agent-planificacion-canvas": "cronograma",
+};
 
 export default function CanvasAgentButton({
   clientId,
@@ -40,6 +52,14 @@ export default function CanvasAgentButton({
 }) {
   const [running, setRunning] = useState(false);
   const toast = useToast();
+  const me = useMe();
+
+  // Mientras carga /api/me se muestra (sin flash para el caso común permitido);
+  // con el mapa cargado, sin generate NI regenerate en la sección → ocultar.
+  const section = AGENT_SECTION[agentId];
+  const sectionPerms = section ? me?.permissions?.sections?.[section] : undefined;
+  const hiddenByPermissions =
+    !!section && !!me && !(sectionPerms?.generate === true || sectionPerms?.regenerate === true);
 
   // Notificación "agente terminado": etiqueta = notifyLabel o el label sin el verbo.
   const noun =
@@ -81,6 +101,8 @@ export default function CanvasAgentButton({
     }
     setRunning(false);
   };
+
+  if (hiddenByPermissions) return null;
 
   return (
     <button

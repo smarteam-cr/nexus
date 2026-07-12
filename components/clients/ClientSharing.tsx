@@ -6,11 +6,11 @@ import { useToast } from "@/components/ui/Toast";
 // Etiquetas inline (no se importa lib/auth/roles para no arrastrar Prisma al cliente).
 const ROLE_OPTIONS = [
   { value: "CSE", label: "CSE" },
-  { value: "VENTAS", label: "Ventas" },
+  { value: "VENTAS", label: "Sales" },
   { value: "DEV", label: "Dev" },
   { value: "CSL", label: "CSL" },
   { value: "MARKETING", label: "Marketing" },
-  { value: "ADMIN", label: "Admin" }, // Finanzas: solo Cobranza (no ve clientes)
+  { value: "ADMIN", label: "Asistente administrativo" }, // Finanzas: solo Cobranza (no ve clientes)
   { value: "SUPER_ADMIN", label: "Super Admin" },
 ] as const;
 const ROLE_LABEL: Record<string, string> = Object.fromEntries(

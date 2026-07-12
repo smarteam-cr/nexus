@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withInternal, withCapability } from "@/lib/api";
+import { withInternal, withPermission } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
 type Params = { params: Promise<{ id: string }> };
@@ -16,7 +16,7 @@ export const GET = withInternal(async (_req, { params }: Params) => {
   }
 });
 
-export const PUT = withCapability("seeAllClients", async (request, { params }: Params) => {
+export const PUT = withPermission("conocimientos", "write", async (request, { params }: Params) => {
   try {
     const { id } = await params;
     const { title, content, category } = (await request.json()) as {
@@ -45,7 +45,7 @@ export const PUT = withCapability("seeAllClients", async (request, { params }: P
   }
 });
 
-export const DELETE = withCapability("seeAllClients", async (_req, { params }: Params) => {
+export const DELETE = withPermission("conocimientos", "write", async (_req, { params }: Params) => {
   try {
     const { id } = await params;
     await prisma.knowledge.delete({ where: { id } });

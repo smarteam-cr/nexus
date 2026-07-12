@@ -1,15 +1,11 @@
 /**
  * lib/auth/marketing-roles.ts
  *
- * Roles EDITORES del área de Marketing + Contenido. Fuente ÚNICA — client-safe
- * (SIN imports de server ni de Prisma), como lib/auth/sales-roles.ts.
- *
- * Modelo de acceso del área (decisión del usuario):
- *   - LEER: cualquier rol interno (las secciones Marketing/Contenido son
- *     universales en el sidebar y las páginas no redirigen por rol).
- *   - ESCRIBIR (CRUD de insumos, correr ingesta/agente, podar ideas, aprobar
- *     sugerencias): SOLO estos roles. La API lo exige con `guardMarketingEditor`
- *     y la UI oculta las acciones con `canEdit`.
+ * @deprecated ESPEJO CONGELADO (migración PERM 2026-07): el gate real de escritura
+ * del área de Marketing es la celda `marketing.write` del sistema de permisos
+ * (lib/auth/permissions — default = esta misma lista, editable en /team). La
+ * LECTURA sigue siendo universal para todo rol interno. Ya nadie consulta esto en
+ * runtime; queda como documentación del default histórico junto a su test.
  */
 export const MARKETING_EDITOR_ROLES = ["MARKETING", "CSL", "SUPER_ADMIN"] as const;
 

@@ -10,7 +10,7 @@
  *   DELETE → quita (vuelve al fallback /logo-smarteam.png)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardInternalUser, guardRole } from "@/lib/auth/api-guards";
+import { guardInternalUser, guardPermission } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageClient } from "@/lib/storage/client";
 import {
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE() {
-  const guard = await guardRole("SUPER_ADMIN");
+  const guard = await guardPermission("configuracion", "manage");
   if (guard instanceof NextResponse) return guard;
 
   await removePublicAsset(LOGO_PATH);

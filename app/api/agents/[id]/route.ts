@@ -1,4 +1,4 @@
-import { withAuth, withRole } from "@/lib/api";
+import { withAuth, withPermission } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { NextResponse } from "next/server";
 
@@ -12,7 +12,7 @@ export const GET = withAuth(async (
   return NextResponse.json(agent);
 });
 
-export const PUT = withRole("SUPER_ADMIN", async (
+export const PUT = withPermission("agentes", "manage", async (
   request,
   { params }: { params: Promise<{ id: string }> }
 ) => {
@@ -54,7 +54,7 @@ export const PUT = withRole("SUPER_ADMIN", async (
   return NextResponse.json(agent);
 });
 
-export const DELETE = withRole("SUPER_ADMIN", async (
+export const DELETE = withPermission("agentes", "manage", async (
   _request,
   { params }: { params: Promise<{ id: string }> }
 ) => {
