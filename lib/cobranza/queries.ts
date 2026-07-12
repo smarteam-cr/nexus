@@ -9,17 +9,22 @@
 import { prisma } from "@/lib/db/prisma";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import {
+  computeCajaNeta,
   computeRiesgoPago,
   diffDays,
+  proyectarCostos,
   proyectarIngresos,
   semaforoCuenta,
   sumaPlanExpandido,
+  type CajaNeta,
   type CarteraEngineInput,
   type CobroProyeccionInput,
+  type CostoProyeccionInput,
   type MetricasCartera,
   type ProyeccionIngresos,
   type RiesgoPagoItem,
   type Semaforo,
+  type TotalesMoneda,
 } from "./engine";
 import { Prisma } from "@prisma/client";
 
@@ -748,4 +753,86 @@ export async function loadColaCobros(todayISO: string): Promise<ColaCobroRow[]> 
       promesaPago: isoDay(c.promesaPago),
     };
   });
+}
+
+// ── Costos recurrentes + caja neta (fase 4 — SUPER_ADMIN-only) ──────────────────
+// ⚠ PRIVACIDAD: estos DTOs llevan salarios estimados. Consumidos SOLO por routes
+// con `guardCostosAccess` y por el branch condicional de app/cobranza/page.tsx
+// (isCostosRole). JAMÁS importarlos desde un panel/endpoint visible para ADMIN.
+
+export interface CostoRecurrenteDTO {
+  id: string;
+  categoria: string;
+  nombre: string;
+  monto: number; // all-in estimado canónico
+  moneda: string;
+  frecuencia: string;
+  teamMemberId: string | null;
+  teamMemberName: string | null; // join solo para mostrar
+  montoBase: number | null;
+  factorCargas: number | null;
+  activo: boolean;
+  notas: string | null;
+  updatedAt: string;
+}
+
+export async function loadCostos(): Promise<CostoRecurrenteDTO[]> {
+  const filas = await prisma.costoRecurrente.findMany({
+    include: { teamMember: { select: { name: true } } },
+    orderBy: [{ categoria: "asc" }, { nombre: "asc" }],
+  });
+  return filas.map((c) => ({
+    id: c.id,
+    categoria: c.categoria,
+    nombre: c.nombre,
+    monto: num(c.monto)!,
+    moneda: c.moneda,
+    frecuencia: c.frecuencia,
+    teamMemberId: c.teamMemberId,
+    teamMemberName: c.teamMember?.name ?? null,
+    montoBase: num(c.montoBase),
+    factorCargas: num(c.factorCargas),
+    activo: c.activo,
+    notas: c.notas,
+    updatedAt: iso(c.updatedAt)!,
+  }));
+}
+
+export interface CajaNetaDTO extends CajaNeta {
+  /** Burn mensual estimado de los costos activos — lo consumen ambos paneles. */
+  totalMensualCostos: TotalesMoneda;
+}
+
+/**
+ * ÚNICO compositor de la caja neta: entra (loadProyeccion) + sale (costos
+ * activos → proyectarCostos) con LOS MISMOS opts por construcción (defaults del
+ * engine en ambos lados) → keys de bucket idénticas para computeCajaNeta.
+ */
+export async function loadCajaNeta(todayISO: string): Promise<CajaNetaDTO> {
+  const [entra, filas] = await Promise.all([
+    loadProyeccion(todayISO),
+    prisma.costoRecurrente.findMany({
+      where: { activo: true },
+      select: {
+        id: true,
+        nombre: true,
+        categoria: true,
+        monto: true,
+        moneda: true,
+        frecuencia: true,
+        activo: true,
+      },
+    }),
+  ]);
+  const costos: CostoProyeccionInput[] = filas.map((c) => ({
+    costoId: c.id,
+    nombre: c.nombre,
+    categoria: c.categoria,
+    monto: num(c.monto)!,
+    moneda: c.moneda,
+    frecuencia: c.frecuencia,
+    activo: c.activo,
+  }));
+  const sale = proyectarCostos(costos, { todayISO });
+  return { ...computeCajaNeta(entra, sale), totalMensualCostos: sale.totalMensual };
 }

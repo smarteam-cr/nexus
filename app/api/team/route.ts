@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { apiError } from "@/lib/api";
 import { guardInternalUser, guardCapability } from "@/lib/auth/api-guards";
-import { revalidateTeamMembers } from "@/lib/cache/team";
+import { revalidateTeamMembers, TEAM_MEMBER_SAFE_SELECT } from "@/lib/cache/team";
 
-// GET /api/team — lista miembros ACTIVOS (cualquier interno)
+// GET /api/team — lista miembros ACTIVOS (cualquier interno).
+// SELECT explícito (allowlist): TeamMember tiene una relación con los costos
+// (salarios estimados, SUPER_ADMIN-only) — acá NUNCA va un include.
 export async function GET() {
   const guard = await guardInternalUser();
   if (guard instanceof NextResponse) return guard;
@@ -12,10 +14,11 @@ export async function GET() {
   const members = await prisma.teamMember.findMany({
     where: { deactivatedAt: null },
     orderBy: { createdAt: "asc" },
-    // permissionOverrides (los pines por-persona) son info de administración: solo
-    // el SUPER_ADMIN los ve, vía /api/team/[id]/permissions. Este GET lo consume
-    // TODO interno (selector de equipo del kickoff, compartir clientes) → omitir.
-    omit: { permissionOverrides: true },
+    // SELECT explícito (allowlist escalar): excluye la relación de costos
+    // (salarios, SUPER_ADMIN-only) Y `permissionOverrides` (los pines por-persona,
+    // solo vía /api/team/[id]/permissions) — no está en la lista. Este GET lo
+    // consume TODO interno (selector del kickoff, compartir clientes).
+    select: TEAM_MEMBER_SAFE_SELECT,
   });
   return NextResponse.json({ members });
 }
@@ -36,6 +39,7 @@ export async function POST(req: NextRequest) {
         email: email.trim().toLowerCase(),
         area: (area ?? role)?.trim() || null,
       },
+      select: TEAM_MEMBER_SAFE_SELECT,
     });
     revalidateTeamMembers();
     return NextResponse.json({ member }, { status: 201 });

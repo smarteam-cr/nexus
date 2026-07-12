@@ -275,6 +275,60 @@ export const bitacoraCreateSchema = z.object({
   cobroId: z.string().cuid().nullish(),
 });
 
+// ── Costos recurrentes (fase 4 — SUPER_ADMIN-only) ─────────────────────────────
+// Espejos client-safe de los enums Prisma (mantener en sync con schema.prisma).
+// La superficie completa de costos/caja-neta está gateada por COSTOS_ROLES
+// (lib/auth/cobranza-roles.ts) — estos arrays/labels solo nombran categorías,
+// no llevan datos.
+
+export const COSTOS_CATEGORIAS = ["SALARIO", "HERRAMIENTA", "FIJO_OPERACION"] as const;
+export const COSTOS_FRECUENCIAS = ["MENSUAL", "ANUAL"] as const;
+
+export const CATEGORIA_COSTO_LABEL: Record<string, string> = {
+  SALARIO: "Salario",
+  HERRAMIENTA: "Herramienta",
+  FIJO_OPERACION: "Fijo de operación",
+};
+export const FRECUENCIA_COSTO_LABEL: Record<string, string> = {
+  MENSUAL: "Mensual",
+  ANUAL: "Anual",
+};
+
+/** Multiplicador EDITABLE del usuario (ej. 1.35) — NO es una tasa fiscal nuestra.
+ *  Sin multipleOf flotante (falsos negativos); la mutación redondea a 4 decimales. */
+const factorCargas = z
+  .number()
+  .positive("El factor debe ser positivo")
+  .max(9.9999, "Factor demasiado grande (máx 9.9999)");
+
+const costoBase = z.object({
+  categoria: z.enum(COSTOS_CATEGORIAS),
+  nombre: z.string().trim().min(1, "El nombre es requerido").max(120),
+  // El ALL-IN canónico SIEMPRE viaja (directo, o ya calculado base×factor en el client).
+  monto,
+  moneda: z.enum(COBRANZA_MONEDAS),
+  frecuencia: z.enum(COSTOS_FRECUENCIAS),
+  teamMemberId: z.string().cuid().nullable().optional(),
+  montoBase: monto.nullable().optional(),
+  factorCargas: factorCargas.nullable().optional(),
+  activo: z.boolean().optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
+export const costoCreateSchema = costoBase
+  .refine((d) => d.categoria === "SALARIO" || d.teamMemberId == null, {
+    message: "Solo un costo de salario liga persona del equipo",
+    path: ["teamMemberId"],
+  })
+  .refine((d) => (d.montoBase == null) === (d.factorCargas == null), {
+    message: "Base y factor van juntos (o ninguno)",
+    path: ["factorCargas"],
+  });
+
+// Los cross-field del PATCH se re-validan en updateCosto sobre la fila MERGEADA
+// (con un partial, `categoria` puede venir ausente y `teamMemberId` presente).
+export const costoPatchSchema = costoBase.partial();
+
 // ── Crear empresa (AccountSource "manual" — puerto 1) ───────────────────────────
 
 export const crearEmpresaSchema = z.object({

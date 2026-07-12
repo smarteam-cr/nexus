@@ -229,6 +229,44 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   nadie las consulta en runtime; quedan (con sus tests) como documentación del default histórico.
   vuelo). Nace COBRADO → no aparece en la cola; sí en el cronograma del drawer, la bitácora y las
   métricas. La UI capa la fecha del pago a hoy (retroactiva, para conciliar contra el banco).
+- **Costos recurrentes = REGISTRO DE REFERENCIA ESTIMADO, jamás contabilidad/planilla**
+  (fase 4, 2026-07-11): `CostoRecurrente` guarda el costo mensual/anual all-in que la
+  dirección YA conoce (salarios, herramientas, fijos). PROHIBIDO en el código: cualquier
+  lógica fiscal de Costa Rica (tasas de CCSS, cargas sociales, aguinaldo, renta), estructuras
+  de sociedades, timbrado, FX. El "factor de cargas" es un MULTIPLICADOR editable que escribe
+  el usuario (sin defaults ni tasas sugeridas); el canónico SIEMPRE es `monto` all-in —
+  base+factor son solo memoria de reedición (van juntos o ninguno). Del lado costos NO hay
+  tracking de pagos: sin "pagado", sin semáforo, sin alertas — un costo no vence.
+- **Caja neta REUSA el motor de proyección, no lo duplica**: `esqueletoBuckets` (privado del
+  engine) arma los buckets (quincenas→meses, clamp adentro) y lo consumen `proyectarIngresos`
+  Y `proyectarCostos` → keys idénticas POR CONSTRUCCIÓN y `computeCajaNeta` solo resta.
+  `loadCajaNeta` es el ÚNICO compositor (mismos defaults ambos lados). El refactor quedó
+  protegido por el golden test G1 (`__fixtures__/proyeccion-golden.json`, 37 cobros × 8
+  casos, generado con el engine PRE-refactor): si G1 se rompe, un número de ingresos EN
+  PRODUCCIÓN se movió — no tocar el JSON para "arreglar" el test.
+- **Split de quincena de un costo mensual = mitad y mitad** (decisión del usuario): burn
+  parejo, Q1 = round2(m/2), Q2 = m − Q1 (el residuo lo absorbe Q2; Q1+Q2 === m exacto).
+  ANUAL se mensualiza round2(monto/12) UNA sola vez. La decisión vive aislada en
+  `montoQuincena` (engine §11). El neto puede ser negativo y se muestra tal cual; los
+  vencidos "en riesgo" van APARTE del neto (regla previa de proyección, intacta).
+- **Privacidad de salarios = entidad aparte + 3 capas de guards + TESTS PERMANENTES; RLS NO
+  es capa** (fase 4): el salario NUNCA es columna de `TeamMember` — vive en `CostoRecurrente`
+  (FK nullable `teamMemberId`, SetNull). Solo SUPER_ADMIN: fuente única `COSTOS_ROLES`
+  (`isCostosRole` client-safe) → capa 1 `guardCostosAccess` PRIMERA línea de los 5 handlers
+  (403, nunca 404 — corta antes de la DB); capa 2 la page ni ejecuta las queries para
+  no-SUPER_ADMIN (props null, cero bytes en el RSC payload); capa 3 tabs filtrados + doble
+  candado en el body + refreshes con early-return por rol. Prisma conecta con rol BYPASSRLS →
+  la policy RESTRICTIVE deny-all de `CostoRecurrente` solo tapa el anon externo
+  (`scripts/verify-rls-anon.ts` lo verifica read-only). Lo que FRENA un merge es
+  `lib/cobranza/costos-privacy.test.ts` (guard por rol derivado del enum, handlers 403 sin
+  tocar Prisma, escaneo estructural de routes, allowlist `TEAM_MEMBER_SAFE_SELECT` en las
+  routes de team) — no un comentario.
+- **Prohibiciones de fuga de costos (transversales)**: los costos y el neto JAMÁS entran a
+  `SnapshotCartera.metricas`/`alertSet`/`resumen` ni a `DigestResult` (el corte es
+  ADMIN-visible), ni al contexto del reporter mientras exista una voz visible para
+  no-SUPER_ADMIN, ni a `BitacoraCobro`, ni a `AgentRun.output`. Sin alertas de costos por
+  `AlertaCobro`. Los mensajes de `CobranzaError` de costos no llevan montos, y los
+  `console.error` de sus routes no loguean el body.
 
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos

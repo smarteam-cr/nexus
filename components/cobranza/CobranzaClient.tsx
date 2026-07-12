@@ -19,10 +19,13 @@
 import { useCallback, useState } from "react";
 import { PageHeader } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
+import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import type {
   AlertaDTO,
+  CajaNetaDTO,
   CarteraRow,
   ColaCobroRow,
+  CostoRecurrenteDTO,
   ProyeccionIngresos,
   RiesgoPagoItem,
   SnapshotDTO,
@@ -35,20 +38,34 @@ import AlertasCobranza from "./AlertasCobranza";
 import DigestPanel from "./DigestPanel";
 import ProyeccionPanel from "./ProyeccionPanel";
 import ReportesPanel from "./ReportesPanel";
+import CostosPanel from "./CostosPanel";
+import CajaNetaPanel from "./CajaNetaPanel";
 import CuentaDrawer from "./CuentaDrawer";
 import BuscarPagoModal from "./BuscarPagoModal";
 import RegistrarPagoDialog from "./RegistrarPagoDialog";
 import RegistrarPagoManualDialog from "./RegistrarPagoManualDialog";
 
-type Tab = "cobros" | "clientes" | "proyeccion" | "alertas" | "reportes" | "corte";
+type Tab =
+  | "cobros"
+  | "clientes"
+  | "proyeccion"
+  | "alertas"
+  | "reportes"
+  | "corte"
+  | "costos"
+  | "caja";
 
-const TABS: Array<{ key: Tab; label: string }> = [
+// superAdminOnly (privacidad, capa 3 de 3): el nav FILTRA estos tabs con
+// isCostosRole — jamás comparar contra el literal "SUPER_ADMIN" acá.
+const TABS: Array<{ key: Tab; label: string; superAdminOnly?: boolean }> = [
   { key: "cobros", label: "Cobros" },
   { key: "clientes", label: "Clientes" },
   { key: "proyeccion", label: "Proyección" },
   { key: "alertas", label: "Alertas" },
   { key: "reportes", label: "Reportes" },
   { key: "corte", label: "Corte semanal" },
+  { key: "costos", label: "Costos", superAdminOnly: true },
+  { key: "caja", label: "Caja neta", superAdminOnly: true },
 ];
 
 const porFecha = (a: ColaCobroRow, b: ColaCobroRow) =>
@@ -62,6 +79,8 @@ export default function CobranzaClient({
   initialProyeccion,
   initialSeries,
   initialRiesgo,
+  initialCostos,
+  initialCajaNeta,
   role,
   todayISO,
 }: {
@@ -72,10 +91,14 @@ export default function CobranzaClient({
   initialProyeccion: ProyeccionIngresos;
   initialSeries: SnapshotSerieDTO[];
   initialRiesgo: RiesgoPagoItem[];
+  // null para todo rol que no sea SUPER_ADMIN (la page ni ejecuta las queries).
+  initialCostos: CostoRecurrenteDTO[] | null;
+  initialCajaNeta: CajaNetaDTO | null;
   role: string;
   todayISO: string;
 }) {
   const toast = useToast();
+  const canCostos = isCostosRole(role);
   const [tab, setTab] = useState<Tab>("cobros");
   const [cola, setCola] = useState(initialCola);
   const [cartera, setCartera] = useState(initialCartera);
@@ -83,6 +106,8 @@ export default function CobranzaClient({
   const [proyeccion, setProyeccion] = useState(initialProyeccion);
   const [series, setSeries] = useState(initialSeries);
   const [riesgo, setRiesgo] = useState(initialRiesgo);
+  const [costos, setCostos] = useState(initialCostos);
+  const [cajaNeta, setCajaNeta] = useState(initialCajaNeta);
 
   // UI compartida entre tabs (drawer + flujo global de registrar pago).
   const [openCuentaId, setOpenCuentaId] = useState<string | null>(null);
@@ -143,11 +168,30 @@ export default function CobranzaClient({
     } catch {}
   }, []);
 
+  // Costos/caja neta: early-return por rol — un no-SUPER_ADMIN jamás dispara
+  // estos fetches (cero 403s de fondo). Los call sites llaman sin gatear.
+  const refreshCostos = useCallback(async () => {
+    if (!canCostos) return;
+    try {
+      const d = await fetchJson<{ costos: CostoRecurrenteDTO[] }>("/api/cobranza/costos");
+      setCostos(d.costos);
+    } catch {}
+  }, [canCostos]);
+
+  const refreshCajaNeta = useCallback(async () => {
+    if (!canCostos) return;
+    try {
+      const d = await fetchJson<{ cajaNeta: CajaNetaDTO }>("/api/cobranza/caja-neta");
+      setCajaNeta(d.cajaNeta);
+    } catch {}
+  }, [canCostos]);
+
   const onDigestDone = useCallback(() => {
     void refreshAlertas();
     void refreshReportes();
     void refreshCola();
-  }, [refreshAlertas, refreshReportes, refreshCola]);
+    void refreshCajaNeta();
+  }, [refreshAlertas, refreshReportes, refreshCola, refreshCajaNeta]);
 
   /**
    * CHOKEPOINT client de registrar pago (cola + buscador global): optimista en
@@ -170,12 +214,13 @@ export default function CobranzaClient({
         void refreshCartera();
         void refreshProyeccion();
         void refreshReportes();
+        void refreshCajaNeta();
       } catch (e) {
         setCola((rs) => [...rs, row].sort(porFecha));
         toast.error(e instanceof ApiError ? e.message : "No se pudo registrar el pago.");
       }
     },
-    [toast, refreshCola, refreshCartera, refreshProyeccion, refreshReportes],
+    [toast, refreshCola, refreshCartera, refreshProyeccion, refreshReportes, refreshCajaNeta],
   );
 
   return (
@@ -195,7 +240,7 @@ export default function CobranzaClient({
       />
 
       <div className="flex flex-wrap gap-1 border-b border-line mb-6">
-        {TABS.map((t) => {
+        {TABS.filter((t) => !t.superAdminOnly || canCostos).map((t) => {
           const active = tab === t.key;
           return (
             <button
@@ -245,6 +290,20 @@ export default function CobranzaClient({
       {tab === "corte" && (
         <DigestPanel initialSnapshot={initialSnapshot} onDigestDone={onDigestDone} />
       )}
+      {/* Doble candado (privacidad): además del filtro del nav, el body exige
+          rol + datos — forzar el tab por devtools renderiza NADA. */}
+      {tab === "costos" && canCostos && costos && (
+        <CostosPanel
+          costos={costos}
+          onChanged={() => {
+            void refreshCostos();
+            void refreshCajaNeta();
+          }}
+        />
+      )}
+      {tab === "caja" && canCostos && cajaNeta && (
+        <CajaNetaPanel cajaNeta={cajaNeta} series={series} onRefresh={refreshCajaNeta} />
+      )}
 
       {/* ── Superficies compartidas entre tabs ── */}
       <CuentaDrawer
@@ -256,6 +315,7 @@ export default function CobranzaClient({
           void refreshCola();
           void refreshCartera();
           void refreshProyeccion();
+          void refreshCajaNeta();
         }}
       />
 
@@ -298,6 +358,7 @@ export default function CobranzaClient({
             void refreshCartera();
             void refreshProyeccion();
             void refreshReportes();
+            void refreshCajaNeta();
           }}
           onOpenCuenta={(id) => {
             setManualOpen(false);

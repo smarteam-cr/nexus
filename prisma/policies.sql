@@ -71,6 +71,17 @@ CREATE POLICY deny_all_non_superuser ON "HubspotAccount"
   TO PUBLIC
   USING (false);
 
+-- 4) Ídem para CostoRecurrente (Cobranza fase 4): salarios estimados — junto a
+--    los tokens de HubSpot, la información más sensible del sistema. Deny-all
+--    RESTRICTIVE contra cualquier policy permisiva futura. La privacidad ante
+--    roles INTERNOS vive en los guards de la app (Prisma bypassa RLS).
+DROP POLICY IF EXISTS deny_all_non_superuser ON "CostoRecurrente";
+CREATE POLICY deny_all_non_superuser ON "CostoRecurrente"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- VERIFICACIÓN (el runner con --apply ya la corre):
 --   SELECT tablename FROM pg_tables

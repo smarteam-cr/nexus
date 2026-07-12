@@ -706,6 +706,76 @@ export interface ProyeccionIngresos {
 
 const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
+/** Un bucket del esqueleto, ANTES de que cada lado lo decore (totales/items). */
+interface BucketBase {
+  key: string; // "2026-07-Q2" | "2026-09"
+  etiqueta: string; // "16–31 jul" | "sep 2026"
+  granularidad: "quincena" | "mes";
+  desdeISO: string;
+  hastaISO: string;
+}
+
+/**
+ * Esqueleto COMPARTIDO de buckets — lo consumen el lado ENTRA (proyectarIngresos)
+ * y el lado SALE (proyectarCostos, fase 4): quincenas del mes actual (la Q1 ya
+ * pasada del mes actual NO se emite si hoy > 15) y de los siguientes
+ * `mesesEnQuincenas`, luego meses hasta el horizonte. El clamp de
+ * mesesEnQuincenas vive ACÁ para que ambos lados lo hereden idéntico — es la
+ * garantía de que la caja neta matchea buckets por key.
+ */
+function esqueletoBuckets(
+  todayISO: string,
+  horizonteMeses: number,
+  mesesEnQuincenasRaw: number,
+): { base: BucketBase[]; finHorizonteISO: string } {
+  const mesesEnQuincenas = Math.min(mesesEnQuincenasRaw, horizonteMeses);
+  const hoy = toUTCDate(todayISO);
+  const hoyISO = toISODate(hoy);
+  const y0 = hoy.getUTCFullYear();
+  const m0 = hoy.getUTCMonth();
+  const dia0 = hoy.getUTCDate();
+
+  const base: BucketBase[] = [];
+  const mk = (y: number, mIdx: number) => new Date(Date.UTC(y, mIdx, 1));
+  for (let off = 0; off < mesesEnQuincenas; off++) {
+    const b = mk(y0, m0 + off);
+    const y = b.getUTCFullYear();
+    const mi = b.getUTCMonth();
+    const mm = String(mi + 1).padStart(2, "0");
+    const fin = daysInMonthUTC(y, mi);
+    const mitades: Array<{ q: 1 | 2; desde: number; hasta: number }> = [
+      { q: 1, desde: 1, hasta: 15 },
+      { q: 2, desde: 16, hasta: fin },
+    ];
+    for (const { q, desde, hasta } of mitades) {
+      if (off === 0 && q === 1 && dia0 > 15) continue; // la quincena YA pasada del mes actual no se emite
+      base.push({
+        key: `${y}-${mm}-Q${q}`,
+        etiqueta: `${desde}–${hasta} ${MESES_CORTOS[mi]}`,
+        granularidad: "quincena",
+        desdeISO: `${y}-${mm}-${String(desde).padStart(2, "0")}`,
+        hastaISO: `${y}-${mm}-${String(hasta).padStart(2, "0")}`,
+      });
+    }
+  }
+  for (let off = mesesEnQuincenas; off < horizonteMeses; off++) {
+    const b = mk(y0, m0 + off);
+    const y = b.getUTCFullYear();
+    const mi = b.getUTCMonth();
+    const mm = String(mi + 1).padStart(2, "0");
+    const fin = daysInMonthUTC(y, mi);
+    base.push({
+      key: `${y}-${mm}`,
+      etiqueta: `${MESES_CORTOS[mi]} ${y}`,
+      granularidad: "mes",
+      desdeISO: `${y}-${mm}-01`,
+      hastaISO: `${y}-${mm}-${String(fin).padStart(2, "0")}`,
+    });
+  }
+  const finHorizonteISO = base.length > 0 ? base[base.length - 1].hastaISO : hoyISO;
+  return { base, finHorizonteISO };
+}
+
 /**
  * Proyección de ingresos por QUINCENA (horizonte cercano) + MES (resto), con
  * totales CRC y USD SEPARADOS (sin tipo de cambio — otra iteración). Reglas:
@@ -726,59 +796,19 @@ export function proyectarIngresos(
   },
 ): ProyeccionIngresos {
   const horizonteMeses = opts.horizonteMeses ?? PROYECCION_HORIZONTE_MESES;
-  const mesesEnQuincenas = Math.min(opts.mesesEnQuincenas ?? PROYECCION_MESES_EN_QUINCENAS, horizonteMeses);
   const umbral = opts.umbralVencidoDias ?? UMBRAL_VENCIDO_DIAS;
+  const hoyISO = toISODate(toUTCDate(opts.todayISO));
 
-  const hoy = toUTCDate(opts.todayISO);
-  const hoyISO = toISODate(hoy);
-  const y0 = hoy.getUTCFullYear();
-  const m0 = hoy.getUTCMonth();
-  const dia0 = hoy.getUTCDate();
-
-  // Esqueleto de buckets: quincenas del mes actual (desde la quincena de HOY) y
-  // del/los siguientes `mesesEnQuincenas`, luego meses hasta el horizonte.
-  const buckets: BucketProyeccion[] = [];
-  const mk = (y: number, mIdx: number) => new Date(Date.UTC(y, mIdx, 1));
-  for (let off = 0; off < mesesEnQuincenas; off++) {
-    const base = mk(y0, m0 + off);
-    const y = base.getUTCFullYear();
-    const mi = base.getUTCMonth();
-    const mm = String(mi + 1).padStart(2, "0");
-    const fin = daysInMonthUTC(y, mi);
-    const mitades: Array<{ q: 1 | 2; desde: number; hasta: number }> = [
-      { q: 1, desde: 1, hasta: 15 },
-      { q: 2, desde: 16, hasta: fin },
-    ];
-    for (const { q, desde, hasta } of mitades) {
-      if (off === 0 && q === 1 && dia0 > 15) continue; // la quincena YA pasada del mes actual no se emite
-      buckets.push({
-        key: `${y}-${mm}-Q${q}`,
-        etiqueta: `${desde}–${hasta} ${MESES_CORTOS[mi]}`,
-        granularidad: "quincena",
-        desdeISO: `${y}-${mm}-${String(desde).padStart(2, "0")}`,
-        hastaISO: `${y}-${mm}-${String(hasta).padStart(2, "0")}`,
-        totales: { CRC: 0, USD: 0 },
-        cobros: [],
-      });
-    }
-  }
-  for (let off = mesesEnQuincenas; off < horizonteMeses; off++) {
-    const base = mk(y0, m0 + off);
-    const y = base.getUTCFullYear();
-    const mi = base.getUTCMonth();
-    const mm = String(mi + 1).padStart(2, "0");
-    const fin = daysInMonthUTC(y, mi);
-    buckets.push({
-      key: `${y}-${mm}`,
-      etiqueta: `${MESES_CORTOS[mi]} ${y}`,
-      granularidad: "mes",
-      desdeISO: `${y}-${mm}-01`,
-      hastaISO: `${y}-${mm}-${String(fin).padStart(2, "0")}`,
-      totales: { CRC: 0, USD: 0 },
-      cobros: [],
-    });
-  }
-  const finHorizonteISO = buckets.length > 0 ? buckets[buckets.length - 1].hastaISO : hoyISO;
+  const { base, finHorizonteISO } = esqueletoBuckets(
+    opts.todayISO,
+    horizonteMeses,
+    opts.mesesEnQuincenas ?? PROYECCION_MESES_EN_QUINCENAS,
+  );
+  const buckets: BucketProyeccion[] = base.map((b) => ({
+    ...b,
+    totales: { CRC: 0, USD: 0 },
+    cobros: [],
+  }));
 
   const vencidos: ProyeccionIngresos["vencidos"] = { totales: { CRC: 0, USD: 0 }, cobros: [] };
   let fueraDeHorizonte = 0;
@@ -1059,4 +1089,175 @@ export function computeRiesgoPago(
   return out.sort(
     (a, b) => b.excedenteDias - a.excedenteDias || a.cobroId.localeCompare(b.cobroId),
   );
+}
+
+// ── 11. Costos recurrentes + caja neta ("la plata que sale", fase 4 — solo dirección) ──
+//
+// REGISTRO DE REFERENCIA ESTIMADO: burn aproximado para la caja neta. NO es
+// contabilidad/planilla — cero lógica fiscal CR (tasas, cargas, aguinaldo,
+// renta), cero tracking de pago (un costo no vence: sin gracia, sin vencidos,
+// sin semáforo). El lado SALE comparte el esqueleto de buckets con el lado
+// ENTRA (esqueletoBuckets) — misma lista de keys por construcción, que es lo
+// que hace trivial y seguro el matcheo de computeCajaNeta.
+
+export interface CostoProyeccionInput {
+  costoId: string;
+  nombre: string;
+  categoria: "SALARIO" | "HERRAMIENTA" | "FIJO_OPERACION";
+  /** ALL-IN estimado canónico, en su frecuencia (el motor jamás ve base/factor). */
+  monto: number;
+  moneda: "CRC" | "USD";
+  frecuencia: "MENSUAL" | "ANUAL"; // ANUAL → round2(monto/12)
+  activo: boolean; // false se excluye adentro (pausado)
+}
+
+export interface CostoBucketItem {
+  costoId: string;
+  nombre: string;
+  categoria: CostoProyeccionInput["categoria"];
+  moneda: "CRC" | "USD";
+  monto: number; // lo asignado a ESTE bucket (mes completo / mitad de quincena)
+}
+
+export interface BucketCosto {
+  key: string; // MISMAS keys que BucketProyeccion (esqueleto compartido)
+  etiqueta: string;
+  granularidad: "quincena" | "mes";
+  desdeISO: string;
+  hastaISO: string;
+  totales: TotalesMoneda;
+  costos: CostoBucketItem[];
+}
+
+export interface ProyeccionCostos {
+  buckets: BucketCosto[];
+  /** Burn mensual estimado de los ACTIVOS (ANUAL /12), por moneda SEPARADA. */
+  totalMensual: TotalesMoneda;
+}
+
+/**
+ * DECISIÓN (usuario 2026-07-11): el costo mensual cae MITAD Y MITAD en las dos
+ * quincenas del mes — burn parejo (en CR los salarios suelen pagarse
+ * quincenal). Q2 absorbe el centavo de residuo: Q1 + Q2 === montoMensual
+ * exacto (idioma "la última cuota absorbe el residuo"). Cambiar SOLO acá si
+ * algún día se decide otra regla de reparto.
+ */
+function montoQuincena(montoMensual: number, q: 1 | 2): number {
+  const mitadQ1 = round2(montoMensual / 2);
+  return q === 1 ? mitadQ1 : round2(montoMensual - mitadQ1);
+}
+
+/**
+ * Proyección de costos ("sale") sobre el MISMO esqueleto de buckets que los
+ * ingresos: cada costo activo mensualizado aparece en cada mes del horizonte
+ * (expansión sintética — los costos NO materializan filas por período).
+ * Determinista: orden estable por nombre + id.
+ */
+export function proyectarCostos(
+  costos: CostoProyeccionInput[],
+  opts: { todayISO: string; horizonteMeses?: number; mesesEnQuincenas?: number },
+): ProyeccionCostos {
+  const { base } = esqueletoBuckets(
+    opts.todayISO,
+    opts.horizonteMeses ?? PROYECCION_HORIZONTE_MESES,
+    opts.mesesEnQuincenas ?? PROYECCION_MESES_EN_QUINCENAS,
+  );
+
+  const activos = costos
+    .filter((c) => c.activo)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre) || a.costoId.localeCompare(b.costoId));
+  // Mensualizar UNA sola vez (round2 único — no re-redondear por bucket).
+  const mensualizados = activos.map((c) => ({
+    c,
+    m: c.frecuencia === "ANUAL" ? round2(c.monto / 12) : round2(c.monto),
+  }));
+
+  const totalMensual: TotalesMoneda = { CRC: 0, USD: 0 };
+  for (const { c, m } of mensualizados) {
+    totalMensual[c.moneda] = round2(totalMensual[c.moneda] + m);
+  }
+
+  const buckets: BucketCosto[] = base.map((b) => ({
+    ...b,
+    totales: { CRC: 0, USD: 0 },
+    costos: [],
+  }));
+  for (const b of buckets) {
+    for (const { c, m } of mensualizados) {
+      const monto =
+        b.granularidad === "mes" ? m : montoQuincena(m, b.key.endsWith("-Q1") ? 1 : 2);
+      if (monto === 0) continue;
+      b.costos.push({
+        costoId: c.costoId,
+        nombre: c.nombre,
+        categoria: c.categoria,
+        moneda: c.moneda,
+        monto,
+      });
+      b.totales[c.moneda] = round2(b.totales[c.moneda] + monto);
+    }
+  }
+
+  return { buckets, totalMensual };
+}
+
+export interface BucketCajaNeta {
+  key: string;
+  etiqueta: string;
+  granularidad: "quincena" | "mes";
+  desdeISO: string;
+  hastaISO: string;
+  entra: TotalesMoneda;
+  sale: TotalesMoneda;
+  neto: TotalesMoneda; // entra − sale por moneda, round2 — puede ser NEGATIVO (sin clamp)
+}
+
+export interface CajaNeta {
+  buckets: BucketCajaNeta[];
+  /** Vencidos "en riesgo" del lado entra — APARTE, jamás dentro del neto. */
+  vencidosAparte: { totales: TotalesMoneda; count: number };
+  totalesHorizonte: { entra: TotalesMoneda; sale: TotalesMoneda; neto: TotalesMoneda };
+}
+
+/**
+ * Caja neta = entra − sale por bucket y por moneda (CRC y USD JAMÁS se suman
+ * ni convierten — sin FX). Matchea por key: como ambos lados salen del mismo
+ * esqueleto con los mismos opts, la lista es idéntica; un key ausente del lado
+ * sale cuenta 0 (red de seguridad, no camino esperado). Los vencidos del lado
+ * entra viajan APARTE — el neto proyectado no los incluye.
+ */
+export function computeCajaNeta(entra: ProyeccionIngresos, sale: ProyeccionCostos): CajaNeta {
+  const salePorKey = new Map(sale.buckets.map((b) => [b.key, b]));
+  const cero = (): TotalesMoneda => ({ CRC: 0, USD: 0 });
+
+  const totalesHorizonte = { entra: cero(), sale: cero(), neto: cero() };
+  const buckets: BucketCajaNeta[] = entra.buckets.map((be) => {
+    const bs = salePorKey.get(be.key);
+    const saleTotales: TotalesMoneda = bs ? bs.totales : cero();
+    const neto: TotalesMoneda = {
+      CRC: round2(be.totales.CRC - saleTotales.CRC),
+      USD: round2(be.totales.USD - saleTotales.USD),
+    };
+    for (const mon of ["CRC", "USD"] as const) {
+      totalesHorizonte.entra[mon] = round2(totalesHorizonte.entra[mon] + be.totales[mon]);
+      totalesHorizonte.sale[mon] = round2(totalesHorizonte.sale[mon] + saleTotales[mon]);
+      totalesHorizonte.neto[mon] = round2(totalesHorizonte.neto[mon] + neto[mon]);
+    }
+    return {
+      key: be.key,
+      etiqueta: be.etiqueta,
+      granularidad: be.granularidad,
+      desdeISO: be.desdeISO,
+      hastaISO: be.hastaISO,
+      entra: be.totales,
+      sale: saleTotales,
+      neto,
+    };
+  });
+
+  return {
+    buckets,
+    vencidosAparte: { totales: entra.vencidos.totales, count: entra.vencidos.cobros.length },
+    totalesHorizonte,
+  };
 }

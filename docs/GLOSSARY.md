@@ -110,3 +110,17 @@
   salió de un plan. Crea un cobro `origen=MANUAL` sobre un servicio existente del cliente y lo
   marca COBRADO por el chokepoint (INV3). Entrada desde el buscador de "Registrar pago" →
   "Registrar un pago que no está en la lista". Nace cobrado (no entra a la cola).
+- **`CostoRecurrente`**: un costo fijo del negocio registrado como REFERENCIA estimada —
+  salario all-in (opcionalmente ligado a un `TeamMember`), herramienta o fijo de operación,
+  mensual o anual, CRC o USD. SOLO SUPER_ADMIN (tab Costos). No es planilla ni contabilidad:
+  sin estados de pago, sin semáforo, sin lógica fiscal.
+- **caja neta** (`computeCajaNeta` → tab "Caja neta", SOLO SUPER_ADMIN): entra − sale por
+  bucket (quincena/mes) — los ingresos proyectados de la cartera menos los costos recurrentes
+  estimados, CRC y USD SIEMPRE separados. El neto puede ser negativo; los vencidos "en
+  riesgo" se muestran aparte y NUNCA dentro del neto.
+- **factor de cargas** (`CostoRecurrente.factorCargas`): multiplicador editable con el que la
+  dirección estima el all-in de un salario desde el bruto (`monto = base × factor`). Lo
+  escribe el usuario — Nexus no trae tasas ni calcula cargas. Solo memoria de reedición: el
+  canónico es `monto`.
+- **burn mensual estimado**: suma mensualizada de los costos recurrentes ACTIVOS (ANUAL/12),
+  por moneda. El "sale" fijo del negocio; tile en Costos y Caja neta.

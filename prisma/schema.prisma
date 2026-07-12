@@ -1267,6 +1267,9 @@ model TeamMember {
   clientAssignments       ClientAssignment[]      @relation("AssignedTo")
   grantedAssignments      ClientAssignment[]      @relation("GrantedBy")
   externalAccessesCreated ProjectExternalAccess[] @relation("ExternalAccessCreator")
+  // SUPER_ADMIN-only (salarios estimados, Cobranza fase 4) — JAMÁS incluir esta
+  // relación desde endpoints no-costos; Prisma no la trae sin include explícito.
+  costosRecurrentes       CostoRecurrente[]       @relation("CostosDePersona")
 }
 
 enum TeamRole {
@@ -2637,4 +2640,56 @@ model ImportacionFila {
 
   @@unique([importId, numFila])
   @@index([importId, estado])
+}
+
+enum CobranzaCategoriaCosto {
+  SALARIO
+  HERRAMIENTA
+  FIJO_OPERACION
+}
+
+enum CobranzaFrecuenciaCosto {
+  MENSUAL
+  ANUAL // se proyecta mensualizado (/12)
+}
+
+// ─── CostoRecurrente ────────────────────────────────────────────────────────────
+// REGISTRO DE REFERENCIA ESTIMADO de costos recurrentes (burn aproximado) para la
+// caja neta (entra − sale). NO es contabilidad/planilla/facturación: cero lógica
+// fiscal CR (CCSS/cargas/aguinaldo/renta), cero sociedades, cero tracking de pago
+// (un costo no tiene "pagado" ni semáforo — no vence). El CANÓNICO es `monto`
+// (all-in estimado); montoBase/factorCargas son memoria del helper de entrada de
+// salarios y el motor JAMÁS los lee. PRIVACIDAD DURA: superficie SOLO SUPER_ADMIN
+// (COSTOS_ROLES + guardCostosAccess, 3 capas server-side — RLS no cuenta: Prisma
+// bypassa) — los salarios son la información más sensible del sistema y por eso
+// viven en entidad APARTE, nunca como columna de TeamMember.
+model CostoRecurrente {
+  id         String                  @id @default(cuid())
+  categoria  CobranzaCategoriaCosto
+  nombre     String
+  // Monto ALL-IN ESTIMADO (lo único que proyecta el motor), en su frecuencia.
+  monto      Decimal                 @db.Decimal(12, 2)
+  moneda     CobranzaMoneda
+  frecuencia CobranzaFrecuenciaCosto @default(MENSUAL)
+
+  // nullable porque solo SALARIO liga persona (y un salario puede registrarse sin
+  // TeamMember, ej. contratación en curso). onDelete SetNull: dar de baja a la
+  // persona NO borra la historia de costos — el costo queda sin vínculo y quien
+  // mantiene Finanzas lo pausa o borra a mano.
+  teamMemberId String?
+  teamMember   TeamMember? @relation("CostosDePersona", fields: [teamMemberId], references: [id], onDelete: SetNull)
+
+  // Memoria del helper base+factor — NO es lógica fiscal: factorCargas es un
+  // multiplicador EDITABLE por el usuario (ej. 1.35), cero tasas hardcodeadas.
+  // Van juntos o ninguno; solo sirven para reabrir el form en ese modo.
+  montoBase    Decimal? @db.Decimal(12, 2)
+  factorCargas Decimal? @db.Decimal(6, 4)
+
+  activo Boolean @default(true) // false = pausado (fuera de la proyección, sin borrar)
+  notas  String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([activo, categoria])
 }

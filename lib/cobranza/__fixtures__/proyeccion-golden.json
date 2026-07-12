@@ -1,0 +1,2957 @@
+{
+  "defaults-jul10": {
+    "vencidos": {
+      "totales": {
+        "CRC": 912333.33,
+        "USD": 2129.93
+      },
+      "cobros": [
+        {
+          "cobroId": "bj",
+          "cuentaId": "cta-bj",
+          "clienteNombre": "Cliente BJ",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2025-12-01",
+          "monto": 9.99,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bk",
+          "cuentaId": "cta-bk",
+          "clienteNombre": "Cliente BK",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-01-15",
+          "monto": 500000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bd",
+          "cuentaId": "cta-bd",
+          "clienteNombre": "Cliente BD",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-14",
+          "monto": 55000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "be",
+          "cuentaId": "cta-be",
+          "clienteNombre": "Cliente BE",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-15",
+          "monto": 15,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bf",
+          "cuentaId": "cta-bf",
+          "clienteNombre": "Cliente BF",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-02-16",
+          "monto": 30000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bg",
+          "cuentaId": "cta-bg",
+          "clienteNombre": "Cliente BG",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-28",
+          "monto": 44.44,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bh",
+          "cuentaId": "cta-bh",
+          "clienteNombre": "Cliente BH",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-03-01",
+          "monto": 77000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bi",
+          "cuentaId": "cta-bi",
+          "clienteNombre": "Cliente BI",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-03-16",
+          "monto": 210,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "aa",
+          "cuentaId": "cta-aa",
+          "clienteNombre": "Cliente AA",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-04-01",
+          "monto": 250000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ab",
+          "cuentaId": "cta-ab",
+          "clienteNombre": "Cliente AB",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-05-10",
+          "monto": 1200,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ac",
+          "cuentaId": "cta-ac",
+          "clienteNombre": "Cliente AC",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-06-15",
+          "monto": 333.33,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ad",
+          "cuentaId": "cta-ad",
+          "clienteNombre": "Cliente AD",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-01",
+          "monto": 500,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ae",
+          "cuentaId": "cta-ae",
+          "clienteNombre": "Cliente AE",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-06",
+          "monto": 150.5,
+          "moneda": "USD"
+        }
+      ]
+    },
+    "buckets": [
+      {
+        "key": "2026-07-Q1",
+        "etiqueta": "1–15 jul",
+        "granularidad": "quincena",
+        "desdeISO": "2026-07-01",
+        "hastaISO": "2026-07-15",
+        "totales": {
+          "CRC": 1080099.99,
+          "USD": 795
+        },
+        "cobros": [
+          {
+            "cobroId": "af",
+            "cuentaId": "cta-af",
+            "clienteNombre": "Cliente AF",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-07",
+            "monto": 99.99,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "ag",
+            "cuentaId": "cta-ag",
+            "clienteNombre": "Cliente AG",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-07-08",
+            "monto": 80000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "ah",
+            "cuentaId": "cta-ah",
+            "clienteNombre": "Cliente AH",
+            "estado": "SIN_DATO",
+            "fechaProgramadaISO": "2026-07-09",
+            "monto": 45,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ai",
+            "cuentaId": "cta-ai",
+            "clienteNombre": "Cliente AI",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-10",
+            "monto": 1000000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "aj",
+            "cuentaId": "cta-aj",
+            "clienteNombre": "Cliente AJ",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-15",
+            "monto": 750,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-07-Q2",
+        "etiqueta": "16–31 jul",
+        "granularidad": "quincena",
+        "desdeISO": "2026-07-16",
+        "hastaISO": "2026-07-31",
+        "totales": {
+          "CRC": 380000,
+          "USD": 200.01
+        },
+        "cobros": [
+          {
+            "cobroId": "ak",
+            "cuentaId": "cta-ak",
+            "clienteNombre": "Cliente AK",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-16",
+            "monto": 320000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "am",
+            "cuentaId": "cta-am",
+            "clienteNombre": "Cliente AM",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 60000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "an",
+            "cuentaId": "cta-an",
+            "clienteNombre": "Cliente AN",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 200,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "al",
+            "cuentaId": "cta-al",
+            "clienteNombre": "Cliente AL",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-31",
+            "monto": 0.01,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-08-Q1",
+        "etiqueta": "1–15 ago",
+        "granularidad": "quincena",
+        "desdeISO": "2026-08-01",
+        "hastaISO": "2026-08-15",
+        "totales": {
+          "CRC": 90000,
+          "USD": 425.75
+        },
+        "cobros": [
+          {
+            "cobroId": "ao",
+            "cuentaId": "cta-ao",
+            "clienteNombre": "Cliente AO",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-08-01",
+            "monto": 425.75,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ap",
+            "cuentaId": "cta-ap",
+            "clienteNombre": "Cliente AP",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-15",
+            "monto": 90000,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-08-Q2",
+        "etiqueta": "16–31 ago",
+        "granularidad": "quincena",
+        "desdeISO": "2026-08-16",
+        "hastaISO": "2026-08-31",
+        "totales": {
+          "CRC": 12345.67,
+          "USD": 1500
+        },
+        "cobros": [
+          {
+            "cobroId": "aq",
+            "cuentaId": "cta-aq",
+            "clienteNombre": "Cliente AQ",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-16",
+            "monto": 1500,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ar",
+            "cuentaId": "cta-ar",
+            "clienteNombre": "Cliente AR",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-31",
+            "monto": 12345.67,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-09",
+        "etiqueta": "sep 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-09-01",
+        "hastaISO": "2026-09-30",
+        "totales": {
+          "CRC": 275000,
+          "USD": 800
+        },
+        "cobros": [
+          {
+            "cobroId": "as",
+            "cuentaId": "cta-as",
+            "clienteNombre": "Cliente AS",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-09-05",
+            "monto": 800,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "at",
+            "cuentaId": "cta-at",
+            "clienteNombre": "Cliente AT",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-09-30",
+            "monto": 275000,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-10",
+        "etiqueta": "oct 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-10-01",
+        "hastaISO": "2026-10-31",
+        "totales": {
+          "CRC": 0,
+          "USD": 65
+        },
+        "cobros": [
+          {
+            "cobroId": "au",
+            "cuentaId": "cta-au",
+            "clienteNombre": "Cliente AU",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-10-10",
+            "monto": 65,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-11",
+        "etiqueta": "nov 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-11-01",
+        "hastaISO": "2026-11-30",
+        "totales": {
+          "CRC": 111111.11,
+          "USD": 0
+        },
+        "cobros": [
+          {
+            "cobroId": "av",
+            "cuentaId": "cta-av",
+            "clienteNombre": "Cliente AV",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-11-11",
+            "monto": 111111.11,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-12",
+        "etiqueta": "dic 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-12-01",
+        "hastaISO": "2026-12-31",
+        "totales": {
+          "CRC": 40000,
+          "USD": 999.99
+        },
+        "cobros": [
+          {
+            "cobroId": "aw",
+            "cuentaId": "cta-aw",
+            "clienteNombre": "Cliente AW",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-12-15",
+            "monto": 999.99,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ax",
+            "cuentaId": "cta-ax",
+            "clienteNombre": "Cliente AX",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-12-31",
+            "monto": 40000,
+            "moneda": "CRC"
+          }
+        ]
+      }
+    ],
+    "fueraDeHorizonte": 3
+  },
+  "defaults-jul20-q1-skip": {
+    "vencidos": {
+      "totales": {
+        "CRC": 2312433.32,
+        "USD": 2924.93
+      },
+      "cobros": [
+        {
+          "cobroId": "bj",
+          "cuentaId": "cta-bj",
+          "clienteNombre": "Cliente BJ",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2025-12-01",
+          "monto": 9.99,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bk",
+          "cuentaId": "cta-bk",
+          "clienteNombre": "Cliente BK",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-01-15",
+          "monto": 500000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bd",
+          "cuentaId": "cta-bd",
+          "clienteNombre": "Cliente BD",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-14",
+          "monto": 55000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "be",
+          "cuentaId": "cta-be",
+          "clienteNombre": "Cliente BE",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-15",
+          "monto": 15,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bf",
+          "cuentaId": "cta-bf",
+          "clienteNombre": "Cliente BF",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-02-16",
+          "monto": 30000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bg",
+          "cuentaId": "cta-bg",
+          "clienteNombre": "Cliente BG",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-28",
+          "monto": 44.44,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bh",
+          "cuentaId": "cta-bh",
+          "clienteNombre": "Cliente BH",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-03-01",
+          "monto": 77000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bi",
+          "cuentaId": "cta-bi",
+          "clienteNombre": "Cliente BI",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-03-16",
+          "monto": 210,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "aa",
+          "cuentaId": "cta-aa",
+          "clienteNombre": "Cliente AA",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-04-01",
+          "monto": 250000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ab",
+          "cuentaId": "cta-ab",
+          "clienteNombre": "Cliente AB",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-05-10",
+          "monto": 1200,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ac",
+          "cuentaId": "cta-ac",
+          "clienteNombre": "Cliente AC",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-06-15",
+          "monto": 333.33,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ad",
+          "cuentaId": "cta-ad",
+          "clienteNombre": "Cliente AD",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-01",
+          "monto": 500,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ae",
+          "cuentaId": "cta-ae",
+          "clienteNombre": "Cliente AE",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-06",
+          "monto": 150.5,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "af",
+          "cuentaId": "cta-af",
+          "clienteNombre": "Cliente AF",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-07",
+          "monto": 99.99,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ag",
+          "cuentaId": "cta-ag",
+          "clienteNombre": "Cliente AG",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-07-08",
+          "monto": 80000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ah",
+          "cuentaId": "cta-ah",
+          "clienteNombre": "Cliente AH",
+          "estado": "SIN_DATO",
+          "fechaProgramadaISO": "2026-07-09",
+          "monto": 45,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ai",
+          "cuentaId": "cta-ai",
+          "clienteNombre": "Cliente AI",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-10",
+          "monto": 1000000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "aj",
+          "cuentaId": "cta-aj",
+          "clienteNombre": "Cliente AJ",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-15",
+          "monto": 750,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ak",
+          "cuentaId": "cta-ak",
+          "clienteNombre": "Cliente AK",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-16",
+          "monto": 320000,
+          "moneda": "CRC"
+        }
+      ]
+    },
+    "buckets": [
+      {
+        "key": "2026-07-Q2",
+        "etiqueta": "16–31 jul",
+        "granularidad": "quincena",
+        "desdeISO": "2026-07-16",
+        "hastaISO": "2026-07-31",
+        "totales": {
+          "CRC": 60000,
+          "USD": 200.01
+        },
+        "cobros": [
+          {
+            "cobroId": "am",
+            "cuentaId": "cta-am",
+            "clienteNombre": "Cliente AM",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 60000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "an",
+            "cuentaId": "cta-an",
+            "clienteNombre": "Cliente AN",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 200,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "al",
+            "cuentaId": "cta-al",
+            "clienteNombre": "Cliente AL",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-31",
+            "monto": 0.01,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-08-Q1",
+        "etiqueta": "1–15 ago",
+        "granularidad": "quincena",
+        "desdeISO": "2026-08-01",
+        "hastaISO": "2026-08-15",
+        "totales": {
+          "CRC": 90000,
+          "USD": 425.75
+        },
+        "cobros": [
+          {
+            "cobroId": "ao",
+            "cuentaId": "cta-ao",
+            "clienteNombre": "Cliente AO",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-08-01",
+            "monto": 425.75,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ap",
+            "cuentaId": "cta-ap",
+            "clienteNombre": "Cliente AP",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-15",
+            "monto": 90000,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-08-Q2",
+        "etiqueta": "16–31 ago",
+        "granularidad": "quincena",
+        "desdeISO": "2026-08-16",
+        "hastaISO": "2026-08-31",
+        "totales": {
+          "CRC": 12345.67,
+          "USD": 1500
+        },
+        "cobros": [
+          {
+            "cobroId": "aq",
+            "cuentaId": "cta-aq",
+            "clienteNombre": "Cliente AQ",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-16",
+            "monto": 1500,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ar",
+            "cuentaId": "cta-ar",
+            "clienteNombre": "Cliente AR",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-31",
+            "monto": 12345.67,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-09",
+        "etiqueta": "sep 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-09-01",
+        "hastaISO": "2026-09-30",
+        "totales": {
+          "CRC": 275000,
+          "USD": 800
+        },
+        "cobros": [
+          {
+            "cobroId": "as",
+            "cuentaId": "cta-as",
+            "clienteNombre": "Cliente AS",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-09-05",
+            "monto": 800,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "at",
+            "cuentaId": "cta-at",
+            "clienteNombre": "Cliente AT",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-09-30",
+            "monto": 275000,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-10",
+        "etiqueta": "oct 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-10-01",
+        "hastaISO": "2026-10-31",
+        "totales": {
+          "CRC": 0,
+          "USD": 65
+        },
+        "cobros": [
+          {
+            "cobroId": "au",
+            "cuentaId": "cta-au",
+            "clienteNombre": "Cliente AU",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-10-10",
+            "monto": 65,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-11",
+        "etiqueta": "nov 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-11-01",
+        "hastaISO": "2026-11-30",
+        "totales": {
+          "CRC": 111111.11,
+          "USD": 0
+        },
+        "cobros": [
+          {
+            "cobroId": "av",
+            "cuentaId": "cta-av",
+            "clienteNombre": "Cliente AV",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-11-11",
+            "monto": 111111.11,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-12",
+        "etiqueta": "dic 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-12-01",
+        "hastaISO": "2026-12-31",
+        "totales": {
+          "CRC": 40000,
+          "USD": 999.99
+        },
+        "cobros": [
+          {
+            "cobroId": "aw",
+            "cuentaId": "cta-aw",
+            "clienteNombre": "Cliente AW",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-12-15",
+            "monto": 999.99,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ax",
+            "cuentaId": "cta-ax",
+            "clienteNombre": "Cliente AX",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-12-31",
+            "monto": 40000,
+            "moneda": "CRC"
+          }
+        ]
+      }
+    ],
+    "fueraDeHorizonte": 3
+  },
+  "febrero-clamp": {
+    "vencidos": {
+      "totales": {
+        "CRC": 500000,
+        "USD": 9.99
+      },
+      "cobros": [
+        {
+          "cobroId": "bj",
+          "cuentaId": "cta-bj",
+          "clienteNombre": "Cliente BJ",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2025-12-01",
+          "monto": 9.99,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bk",
+          "cuentaId": "cta-bk",
+          "clienteNombre": "Cliente BK",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-01-15",
+          "monto": 500000,
+          "moneda": "CRC"
+        }
+      ]
+    },
+    "buckets": [
+      {
+        "key": "2026-02-Q1",
+        "etiqueta": "1–15 feb",
+        "granularidad": "quincena",
+        "desdeISO": "2026-02-01",
+        "hastaISO": "2026-02-15",
+        "totales": {
+          "CRC": 55000,
+          "USD": 15
+        },
+        "cobros": [
+          {
+            "cobroId": "bd",
+            "cuentaId": "cta-bd",
+            "clienteNombre": "Cliente BD",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-02-14",
+            "monto": 55000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "be",
+            "cuentaId": "cta-be",
+            "clienteNombre": "Cliente BE",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-02-15",
+            "monto": 15,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-02-Q2",
+        "etiqueta": "16–28 feb",
+        "granularidad": "quincena",
+        "desdeISO": "2026-02-16",
+        "hastaISO": "2026-02-28",
+        "totales": {
+          "CRC": 30000,
+          "USD": 44.44
+        },
+        "cobros": [
+          {
+            "cobroId": "bf",
+            "cuentaId": "cta-bf",
+            "clienteNombre": "Cliente BF",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-02-16",
+            "monto": 30000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "bg",
+            "cuentaId": "cta-bg",
+            "clienteNombre": "Cliente BG",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-02-28",
+            "monto": 44.44,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-03-Q1",
+        "etiqueta": "1–15 mar",
+        "granularidad": "quincena",
+        "desdeISO": "2026-03-01",
+        "hastaISO": "2026-03-15",
+        "totales": {
+          "CRC": 77000,
+          "USD": 0
+        },
+        "cobros": [
+          {
+            "cobroId": "bh",
+            "cuentaId": "cta-bh",
+            "clienteNombre": "Cliente BH",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-03-01",
+            "monto": 77000,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-03-Q2",
+        "etiqueta": "16–31 mar",
+        "granularidad": "quincena",
+        "desdeISO": "2026-03-16",
+        "hastaISO": "2026-03-31",
+        "totales": {
+          "CRC": 0,
+          "USD": 210
+        },
+        "cobros": [
+          {
+            "cobroId": "bi",
+            "cuentaId": "cta-bi",
+            "clienteNombre": "Cliente BI",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-03-16",
+            "monto": 210,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-04",
+        "etiqueta": "abr 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-04-01",
+        "hastaISO": "2026-04-30",
+        "totales": {
+          "CRC": 250000,
+          "USD": 0
+        },
+        "cobros": [
+          {
+            "cobroId": "aa",
+            "cuentaId": "cta-aa",
+            "clienteNombre": "Cliente AA",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-04-01",
+            "monto": 250000,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-05",
+        "etiqueta": "may 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-05-01",
+        "hastaISO": "2026-05-31",
+        "totales": {
+          "CRC": 0,
+          "USD": 1200
+        },
+        "cobros": [
+          {
+            "cobroId": "ab",
+            "cuentaId": "cta-ab",
+            "clienteNombre": "Cliente AB",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-05-10",
+            "monto": 1200,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-06",
+        "etiqueta": "jun 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-06-01",
+        "hastaISO": "2026-06-30",
+        "totales": {
+          "CRC": 333.33,
+          "USD": 0
+        },
+        "cobros": [
+          {
+            "cobroId": "ac",
+            "cuentaId": "cta-ac",
+            "clienteNombre": "Cliente AC",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-06-15",
+            "monto": 333.33,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-07",
+        "etiqueta": "jul 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-07-01",
+        "hastaISO": "2026-07-31",
+        "totales": {
+          "CRC": 1460099.99,
+          "USD": 1645.51
+        },
+        "cobros": [
+          {
+            "cobroId": "ad",
+            "cuentaId": "cta-ad",
+            "clienteNombre": "Cliente AD",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-01",
+            "monto": 500,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ae",
+            "cuentaId": "cta-ae",
+            "clienteNombre": "Cliente AE",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-06",
+            "monto": 150.5,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "af",
+            "cuentaId": "cta-af",
+            "clienteNombre": "Cliente AF",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-07",
+            "monto": 99.99,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "ag",
+            "cuentaId": "cta-ag",
+            "clienteNombre": "Cliente AG",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-07-08",
+            "monto": 80000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "ah",
+            "cuentaId": "cta-ah",
+            "clienteNombre": "Cliente AH",
+            "estado": "SIN_DATO",
+            "fechaProgramadaISO": "2026-07-09",
+            "monto": 45,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ai",
+            "cuentaId": "cta-ai",
+            "clienteNombre": "Cliente AI",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-10",
+            "monto": 1000000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "aj",
+            "cuentaId": "cta-aj",
+            "clienteNombre": "Cliente AJ",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-15",
+            "monto": 750,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ak",
+            "cuentaId": "cta-ak",
+            "clienteNombre": "Cliente AK",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-16",
+            "monto": 320000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "am",
+            "cuentaId": "cta-am",
+            "clienteNombre": "Cliente AM",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 60000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "an",
+            "cuentaId": "cta-an",
+            "clienteNombre": "Cliente AN",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 200,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "al",
+            "cuentaId": "cta-al",
+            "clienteNombre": "Cliente AL",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-31",
+            "monto": 0.01,
+            "moneda": "USD"
+          }
+        ]
+      }
+    ],
+    "fueraDeHorizonte": 13
+  },
+  "horizonte-3": {
+    "vencidos": {
+      "totales": {
+        "CRC": 912333.33,
+        "USD": 2129.93
+      },
+      "cobros": [
+        {
+          "cobroId": "bj",
+          "cuentaId": "cta-bj",
+          "clienteNombre": "Cliente BJ",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2025-12-01",
+          "monto": 9.99,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bk",
+          "cuentaId": "cta-bk",
+          "clienteNombre": "Cliente BK",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-01-15",
+          "monto": 500000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bd",
+          "cuentaId": "cta-bd",
+          "clienteNombre": "Cliente BD",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-14",
+          "monto": 55000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "be",
+          "cuentaId": "cta-be",
+          "clienteNombre": "Cliente BE",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-15",
+          "monto": 15,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bf",
+          "cuentaId": "cta-bf",
+          "clienteNombre": "Cliente BF",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-02-16",
+          "monto": 30000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bg",
+          "cuentaId": "cta-bg",
+          "clienteNombre": "Cliente BG",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-28",
+          "monto": 44.44,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bh",
+          "cuentaId": "cta-bh",
+          "clienteNombre": "Cliente BH",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-03-01",
+          "monto": 77000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bi",
+          "cuentaId": "cta-bi",
+          "clienteNombre": "Cliente BI",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-03-16",
+          "monto": 210,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "aa",
+          "cuentaId": "cta-aa",
+          "clienteNombre": "Cliente AA",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-04-01",
+          "monto": 250000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ab",
+          "cuentaId": "cta-ab",
+          "clienteNombre": "Cliente AB",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-05-10",
+          "monto": 1200,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ac",
+          "cuentaId": "cta-ac",
+          "clienteNombre": "Cliente AC",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-06-15",
+          "monto": 333.33,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ad",
+          "cuentaId": "cta-ad",
+          "clienteNombre": "Cliente AD",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-01",
+          "monto": 500,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ae",
+          "cuentaId": "cta-ae",
+          "clienteNombre": "Cliente AE",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-06",
+          "monto": 150.5,
+          "moneda": "USD"
+        }
+      ]
+    },
+    "buckets": [
+      {
+        "key": "2026-07-Q1",
+        "etiqueta": "1–15 jul",
+        "granularidad": "quincena",
+        "desdeISO": "2026-07-01",
+        "hastaISO": "2026-07-15",
+        "totales": {
+          "CRC": 1080099.99,
+          "USD": 795
+        },
+        "cobros": [
+          {
+            "cobroId": "af",
+            "cuentaId": "cta-af",
+            "clienteNombre": "Cliente AF",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-07",
+            "monto": 99.99,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "ag",
+            "cuentaId": "cta-ag",
+            "clienteNombre": "Cliente AG",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-07-08",
+            "monto": 80000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "ah",
+            "cuentaId": "cta-ah",
+            "clienteNombre": "Cliente AH",
+            "estado": "SIN_DATO",
+            "fechaProgramadaISO": "2026-07-09",
+            "monto": 45,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ai",
+            "cuentaId": "cta-ai",
+            "clienteNombre": "Cliente AI",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-10",
+            "monto": 1000000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "aj",
+            "cuentaId": "cta-aj",
+            "clienteNombre": "Cliente AJ",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-15",
+            "monto": 750,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-07-Q2",
+        "etiqueta": "16–31 jul",
+        "granularidad": "quincena",
+        "desdeISO": "2026-07-16",
+        "hastaISO": "2026-07-31",
+        "totales": {
+          "CRC": 380000,
+          "USD": 200.01
+        },
+        "cobros": [
+          {
+            "cobroId": "ak",
+            "cuentaId": "cta-ak",
+            "clienteNombre": "Cliente AK",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-16",
+            "monto": 320000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "am",
+            "cuentaId": "cta-am",
+            "clienteNombre": "Cliente AM",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 60000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "an",
+            "cuentaId": "cta-an",
+            "clienteNombre": "Cliente AN",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 200,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "al",
+            "cuentaId": "cta-al",
+            "clienteNombre": "Cliente AL",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-31",
+            "monto": 0.01,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-08-Q1",
+        "etiqueta": "1–15 ago",
+        "granularidad": "quincena",
+        "desdeISO": "2026-08-01",
+        "hastaISO": "2026-08-15",
+        "totales": {
+          "CRC": 90000,
+          "USD": 425.75
+        },
+        "cobros": [
+          {
+            "cobroId": "ao",
+            "cuentaId": "cta-ao",
+            "clienteNombre": "Cliente AO",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-08-01",
+            "monto": 425.75,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ap",
+            "cuentaId": "cta-ap",
+            "clienteNombre": "Cliente AP",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-15",
+            "monto": 90000,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-08-Q2",
+        "etiqueta": "16–31 ago",
+        "granularidad": "quincena",
+        "desdeISO": "2026-08-16",
+        "hastaISO": "2026-08-31",
+        "totales": {
+          "CRC": 12345.67,
+          "USD": 1500
+        },
+        "cobros": [
+          {
+            "cobroId": "aq",
+            "cuentaId": "cta-aq",
+            "clienteNombre": "Cliente AQ",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-16",
+            "monto": 1500,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ar",
+            "cuentaId": "cta-ar",
+            "clienteNombre": "Cliente AR",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-31",
+            "monto": 12345.67,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-09",
+        "etiqueta": "sep 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-09-01",
+        "hastaISO": "2026-09-30",
+        "totales": {
+          "CRC": 275000,
+          "USD": 800
+        },
+        "cobros": [
+          {
+            "cobroId": "as",
+            "cuentaId": "cta-as",
+            "clienteNombre": "Cliente AS",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-09-05",
+            "monto": 800,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "at",
+            "cuentaId": "cta-at",
+            "clienteNombre": "Cliente AT",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-09-30",
+            "monto": 275000,
+            "moneda": "CRC"
+          }
+        ]
+      }
+    ],
+    "fueraDeHorizonte": 7
+  },
+  "sin-quincenas": {
+    "vencidos": {
+      "totales": {
+        "CRC": 912333.33,
+        "USD": 2129.93
+      },
+      "cobros": [
+        {
+          "cobroId": "bj",
+          "cuentaId": "cta-bj",
+          "clienteNombre": "Cliente BJ",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2025-12-01",
+          "monto": 9.99,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bk",
+          "cuentaId": "cta-bk",
+          "clienteNombre": "Cliente BK",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-01-15",
+          "monto": 500000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bd",
+          "cuentaId": "cta-bd",
+          "clienteNombre": "Cliente BD",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-14",
+          "monto": 55000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "be",
+          "cuentaId": "cta-be",
+          "clienteNombre": "Cliente BE",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-15",
+          "monto": 15,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bf",
+          "cuentaId": "cta-bf",
+          "clienteNombre": "Cliente BF",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-02-16",
+          "monto": 30000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bg",
+          "cuentaId": "cta-bg",
+          "clienteNombre": "Cliente BG",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-28",
+          "monto": 44.44,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bh",
+          "cuentaId": "cta-bh",
+          "clienteNombre": "Cliente BH",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-03-01",
+          "monto": 77000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bi",
+          "cuentaId": "cta-bi",
+          "clienteNombre": "Cliente BI",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-03-16",
+          "monto": 210,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "aa",
+          "cuentaId": "cta-aa",
+          "clienteNombre": "Cliente AA",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-04-01",
+          "monto": 250000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ab",
+          "cuentaId": "cta-ab",
+          "clienteNombre": "Cliente AB",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-05-10",
+          "monto": 1200,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ac",
+          "cuentaId": "cta-ac",
+          "clienteNombre": "Cliente AC",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-06-15",
+          "monto": 333.33,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ad",
+          "cuentaId": "cta-ad",
+          "clienteNombre": "Cliente AD",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-01",
+          "monto": 500,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ae",
+          "cuentaId": "cta-ae",
+          "clienteNombre": "Cliente AE",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-06",
+          "monto": 150.5,
+          "moneda": "USD"
+        }
+      ]
+    },
+    "buckets": [
+      {
+        "key": "2026-07",
+        "etiqueta": "jul 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-07-01",
+        "hastaISO": "2026-07-31",
+        "totales": {
+          "CRC": 1460099.99,
+          "USD": 995.01
+        },
+        "cobros": [
+          {
+            "cobroId": "af",
+            "cuentaId": "cta-af",
+            "clienteNombre": "Cliente AF",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-07",
+            "monto": 99.99,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "ag",
+            "cuentaId": "cta-ag",
+            "clienteNombre": "Cliente AG",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-07-08",
+            "monto": 80000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "ah",
+            "cuentaId": "cta-ah",
+            "clienteNombre": "Cliente AH",
+            "estado": "SIN_DATO",
+            "fechaProgramadaISO": "2026-07-09",
+            "monto": 45,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ai",
+            "cuentaId": "cta-ai",
+            "clienteNombre": "Cliente AI",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-10",
+            "monto": 1000000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "aj",
+            "cuentaId": "cta-aj",
+            "clienteNombre": "Cliente AJ",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-15",
+            "monto": 750,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ak",
+            "cuentaId": "cta-ak",
+            "clienteNombre": "Cliente AK",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-16",
+            "monto": 320000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "am",
+            "cuentaId": "cta-am",
+            "clienteNombre": "Cliente AM",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 60000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "an",
+            "cuentaId": "cta-an",
+            "clienteNombre": "Cliente AN",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 200,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "al",
+            "cuentaId": "cta-al",
+            "clienteNombre": "Cliente AL",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-31",
+            "monto": 0.01,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-08",
+        "etiqueta": "ago 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-08-01",
+        "hastaISO": "2026-08-31",
+        "totales": {
+          "CRC": 102345.67,
+          "USD": 1925.75
+        },
+        "cobros": [
+          {
+            "cobroId": "ao",
+            "cuentaId": "cta-ao",
+            "clienteNombre": "Cliente AO",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-08-01",
+            "monto": 425.75,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ap",
+            "cuentaId": "cta-ap",
+            "clienteNombre": "Cliente AP",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-15",
+            "monto": 90000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "aq",
+            "cuentaId": "cta-aq",
+            "clienteNombre": "Cliente AQ",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-16",
+            "monto": 1500,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ar",
+            "cuentaId": "cta-ar",
+            "clienteNombre": "Cliente AR",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-31",
+            "monto": 12345.67,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-09",
+        "etiqueta": "sep 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-09-01",
+        "hastaISO": "2026-09-30",
+        "totales": {
+          "CRC": 275000,
+          "USD": 800
+        },
+        "cobros": [
+          {
+            "cobroId": "as",
+            "cuentaId": "cta-as",
+            "clienteNombre": "Cliente AS",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-09-05",
+            "monto": 800,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "at",
+            "cuentaId": "cta-at",
+            "clienteNombre": "Cliente AT",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-09-30",
+            "monto": 275000,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-10",
+        "etiqueta": "oct 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-10-01",
+        "hastaISO": "2026-10-31",
+        "totales": {
+          "CRC": 0,
+          "USD": 65
+        },
+        "cobros": [
+          {
+            "cobroId": "au",
+            "cuentaId": "cta-au",
+            "clienteNombre": "Cliente AU",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-10-10",
+            "monto": 65,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-11",
+        "etiqueta": "nov 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-11-01",
+        "hastaISO": "2026-11-30",
+        "totales": {
+          "CRC": 111111.11,
+          "USD": 0
+        },
+        "cobros": [
+          {
+            "cobroId": "av",
+            "cuentaId": "cta-av",
+            "clienteNombre": "Cliente AV",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-11-11",
+            "monto": 111111.11,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-12",
+        "etiqueta": "dic 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-12-01",
+        "hastaISO": "2026-12-31",
+        "totales": {
+          "CRC": 40000,
+          "USD": 999.99
+        },
+        "cobros": [
+          {
+            "cobroId": "aw",
+            "cuentaId": "cta-aw",
+            "clienteNombre": "Cliente AW",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-12-15",
+            "monto": 999.99,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ax",
+            "cuentaId": "cta-ax",
+            "clienteNombre": "Cliente AX",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-12-31",
+            "monto": 40000,
+            "moneda": "CRC"
+          }
+        ]
+      }
+    ],
+    "fueraDeHorizonte": 3
+  },
+  "quincenas-4": {
+    "vencidos": {
+      "totales": {
+        "CRC": 912333.33,
+        "USD": 2129.93
+      },
+      "cobros": [
+        {
+          "cobroId": "bj",
+          "cuentaId": "cta-bj",
+          "clienteNombre": "Cliente BJ",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2025-12-01",
+          "monto": 9.99,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bk",
+          "cuentaId": "cta-bk",
+          "clienteNombre": "Cliente BK",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-01-15",
+          "monto": 500000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bd",
+          "cuentaId": "cta-bd",
+          "clienteNombre": "Cliente BD",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-14",
+          "monto": 55000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "be",
+          "cuentaId": "cta-be",
+          "clienteNombre": "Cliente BE",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-15",
+          "monto": 15,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bf",
+          "cuentaId": "cta-bf",
+          "clienteNombre": "Cliente BF",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-02-16",
+          "monto": 30000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bg",
+          "cuentaId": "cta-bg",
+          "clienteNombre": "Cliente BG",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-28",
+          "monto": 44.44,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bh",
+          "cuentaId": "cta-bh",
+          "clienteNombre": "Cliente BH",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-03-01",
+          "monto": 77000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bi",
+          "cuentaId": "cta-bi",
+          "clienteNombre": "Cliente BI",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-03-16",
+          "monto": 210,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "aa",
+          "cuentaId": "cta-aa",
+          "clienteNombre": "Cliente AA",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-04-01",
+          "monto": 250000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ab",
+          "cuentaId": "cta-ab",
+          "clienteNombre": "Cliente AB",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-05-10",
+          "monto": 1200,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ac",
+          "cuentaId": "cta-ac",
+          "clienteNombre": "Cliente AC",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-06-15",
+          "monto": 333.33,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ad",
+          "cuentaId": "cta-ad",
+          "clienteNombre": "Cliente AD",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-01",
+          "monto": 500,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ae",
+          "cuentaId": "cta-ae",
+          "clienteNombre": "Cliente AE",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-06",
+          "monto": 150.5,
+          "moneda": "USD"
+        }
+      ]
+    },
+    "buckets": [
+      {
+        "key": "2026-07-Q1",
+        "etiqueta": "1–15 jul",
+        "granularidad": "quincena",
+        "desdeISO": "2026-07-01",
+        "hastaISO": "2026-07-15",
+        "totales": {
+          "CRC": 1080099.99,
+          "USD": 795
+        },
+        "cobros": [
+          {
+            "cobroId": "af",
+            "cuentaId": "cta-af",
+            "clienteNombre": "Cliente AF",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-07",
+            "monto": 99.99,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "ag",
+            "cuentaId": "cta-ag",
+            "clienteNombre": "Cliente AG",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-07-08",
+            "monto": 80000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "ah",
+            "cuentaId": "cta-ah",
+            "clienteNombre": "Cliente AH",
+            "estado": "SIN_DATO",
+            "fechaProgramadaISO": "2026-07-09",
+            "monto": 45,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ai",
+            "cuentaId": "cta-ai",
+            "clienteNombre": "Cliente AI",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-10",
+            "monto": 1000000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "aj",
+            "cuentaId": "cta-aj",
+            "clienteNombre": "Cliente AJ",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-15",
+            "monto": 750,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-07-Q2",
+        "etiqueta": "16–31 jul",
+        "granularidad": "quincena",
+        "desdeISO": "2026-07-16",
+        "hastaISO": "2026-07-31",
+        "totales": {
+          "CRC": 380000,
+          "USD": 200.01
+        },
+        "cobros": [
+          {
+            "cobroId": "ak",
+            "cuentaId": "cta-ak",
+            "clienteNombre": "Cliente AK",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-16",
+            "monto": 320000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "am",
+            "cuentaId": "cta-am",
+            "clienteNombre": "Cliente AM",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 60000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "an",
+            "cuentaId": "cta-an",
+            "clienteNombre": "Cliente AN",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 200,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "al",
+            "cuentaId": "cta-al",
+            "clienteNombre": "Cliente AL",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-31",
+            "monto": 0.01,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-08-Q1",
+        "etiqueta": "1–15 ago",
+        "granularidad": "quincena",
+        "desdeISO": "2026-08-01",
+        "hastaISO": "2026-08-15",
+        "totales": {
+          "CRC": 90000,
+          "USD": 425.75
+        },
+        "cobros": [
+          {
+            "cobroId": "ao",
+            "cuentaId": "cta-ao",
+            "clienteNombre": "Cliente AO",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-08-01",
+            "monto": 425.75,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ap",
+            "cuentaId": "cta-ap",
+            "clienteNombre": "Cliente AP",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-15",
+            "monto": 90000,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-08-Q2",
+        "etiqueta": "16–31 ago",
+        "granularidad": "quincena",
+        "desdeISO": "2026-08-16",
+        "hastaISO": "2026-08-31",
+        "totales": {
+          "CRC": 12345.67,
+          "USD": 1500
+        },
+        "cobros": [
+          {
+            "cobroId": "aq",
+            "cuentaId": "cta-aq",
+            "clienteNombre": "Cliente AQ",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-16",
+            "monto": 1500,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ar",
+            "cuentaId": "cta-ar",
+            "clienteNombre": "Cliente AR",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-31",
+            "monto": 12345.67,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-09-Q1",
+        "etiqueta": "1–15 sep",
+        "granularidad": "quincena",
+        "desdeISO": "2026-09-01",
+        "hastaISO": "2026-09-15",
+        "totales": {
+          "CRC": 0,
+          "USD": 800
+        },
+        "cobros": [
+          {
+            "cobroId": "as",
+            "cuentaId": "cta-as",
+            "clienteNombre": "Cliente AS",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-09-05",
+            "monto": 800,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-09-Q2",
+        "etiqueta": "16–30 sep",
+        "granularidad": "quincena",
+        "desdeISO": "2026-09-16",
+        "hastaISO": "2026-09-30",
+        "totales": {
+          "CRC": 275000,
+          "USD": 0
+        },
+        "cobros": [
+          {
+            "cobroId": "at",
+            "cuentaId": "cta-at",
+            "clienteNombre": "Cliente AT",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-09-30",
+            "monto": 275000,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-10-Q1",
+        "etiqueta": "1–15 oct",
+        "granularidad": "quincena",
+        "desdeISO": "2026-10-01",
+        "hastaISO": "2026-10-15",
+        "totales": {
+          "CRC": 0,
+          "USD": 65
+        },
+        "cobros": [
+          {
+            "cobroId": "au",
+            "cuentaId": "cta-au",
+            "clienteNombre": "Cliente AU",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-10-10",
+            "monto": 65,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-10-Q2",
+        "etiqueta": "16–31 oct",
+        "granularidad": "quincena",
+        "desdeISO": "2026-10-16",
+        "hastaISO": "2026-10-31",
+        "totales": {
+          "CRC": 0,
+          "USD": 0
+        },
+        "cobros": []
+      },
+      {
+        "key": "2026-11",
+        "etiqueta": "nov 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-11-01",
+        "hastaISO": "2026-11-30",
+        "totales": {
+          "CRC": 111111.11,
+          "USD": 0
+        },
+        "cobros": [
+          {
+            "cobroId": "av",
+            "cuentaId": "cta-av",
+            "clienteNombre": "Cliente AV",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-11-11",
+            "monto": 111111.11,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-12",
+        "etiqueta": "dic 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-12-01",
+        "hastaISO": "2026-12-31",
+        "totales": {
+          "CRC": 40000,
+          "USD": 999.99
+        },
+        "cobros": [
+          {
+            "cobroId": "aw",
+            "cuentaId": "cta-aw",
+            "clienteNombre": "Cliente AW",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-12-15",
+            "monto": 999.99,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ax",
+            "cuentaId": "cta-ax",
+            "clienteNombre": "Cliente AX",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-12-31",
+            "monto": 40000,
+            "moneda": "CRC"
+          }
+        ]
+      }
+    ],
+    "fueraDeHorizonte": 3
+  },
+  "umbral-7": {
+    "vencidos": {
+      "totales": {
+        "CRC": 912333.33,
+        "USD": 1979.43
+      },
+      "cobros": [
+        {
+          "cobroId": "bj",
+          "cuentaId": "cta-bj",
+          "clienteNombre": "Cliente BJ",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2025-12-01",
+          "monto": 9.99,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bk",
+          "cuentaId": "cta-bk",
+          "clienteNombre": "Cliente BK",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-01-15",
+          "monto": 500000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bd",
+          "cuentaId": "cta-bd",
+          "clienteNombre": "Cliente BD",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-14",
+          "monto": 55000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "be",
+          "cuentaId": "cta-be",
+          "clienteNombre": "Cliente BE",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-15",
+          "monto": 15,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bf",
+          "cuentaId": "cta-bf",
+          "clienteNombre": "Cliente BF",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-02-16",
+          "monto": 30000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bg",
+          "cuentaId": "cta-bg",
+          "clienteNombre": "Cliente BG",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-28",
+          "monto": 44.44,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bh",
+          "cuentaId": "cta-bh",
+          "clienteNombre": "Cliente BH",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-03-01",
+          "monto": 77000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bi",
+          "cuentaId": "cta-bi",
+          "clienteNombre": "Cliente BI",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-03-16",
+          "monto": 210,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "aa",
+          "cuentaId": "cta-aa",
+          "clienteNombre": "Cliente AA",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-04-01",
+          "monto": 250000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ab",
+          "cuentaId": "cta-ab",
+          "clienteNombre": "Cliente AB",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-05-10",
+          "monto": 1200,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ac",
+          "cuentaId": "cta-ac",
+          "clienteNombre": "Cliente AC",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-06-15",
+          "monto": 333.33,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ad",
+          "cuentaId": "cta-ad",
+          "clienteNombre": "Cliente AD",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-01",
+          "monto": 500,
+          "moneda": "USD"
+        }
+      ]
+    },
+    "buckets": [
+      {
+        "key": "2026-07-Q1",
+        "etiqueta": "1–15 jul",
+        "granularidad": "quincena",
+        "desdeISO": "2026-07-01",
+        "hastaISO": "2026-07-15",
+        "totales": {
+          "CRC": 1080099.99,
+          "USD": 945.5
+        },
+        "cobros": [
+          {
+            "cobroId": "ae",
+            "cuentaId": "cta-ae",
+            "clienteNombre": "Cliente AE",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-06",
+            "monto": 150.5,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "af",
+            "cuentaId": "cta-af",
+            "clienteNombre": "Cliente AF",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-07",
+            "monto": 99.99,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "ag",
+            "cuentaId": "cta-ag",
+            "clienteNombre": "Cliente AG",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-07-08",
+            "monto": 80000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "ah",
+            "cuentaId": "cta-ah",
+            "clienteNombre": "Cliente AH",
+            "estado": "SIN_DATO",
+            "fechaProgramadaISO": "2026-07-09",
+            "monto": 45,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ai",
+            "cuentaId": "cta-ai",
+            "clienteNombre": "Cliente AI",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-10",
+            "monto": 1000000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "aj",
+            "cuentaId": "cta-aj",
+            "clienteNombre": "Cliente AJ",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-15",
+            "monto": 750,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-07-Q2",
+        "etiqueta": "16–31 jul",
+        "granularidad": "quincena",
+        "desdeISO": "2026-07-16",
+        "hastaISO": "2026-07-31",
+        "totales": {
+          "CRC": 380000,
+          "USD": 200.01
+        },
+        "cobros": [
+          {
+            "cobroId": "ak",
+            "cuentaId": "cta-ak",
+            "clienteNombre": "Cliente AK",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-16",
+            "monto": 320000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "am",
+            "cuentaId": "cta-am",
+            "clienteNombre": "Cliente AM",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 60000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "an",
+            "cuentaId": "cta-an",
+            "clienteNombre": "Cliente AN",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 200,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "al",
+            "cuentaId": "cta-al",
+            "clienteNombre": "Cliente AL",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-31",
+            "monto": 0.01,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-08-Q1",
+        "etiqueta": "1–15 ago",
+        "granularidad": "quincena",
+        "desdeISO": "2026-08-01",
+        "hastaISO": "2026-08-15",
+        "totales": {
+          "CRC": 90000,
+          "USD": 425.75
+        },
+        "cobros": [
+          {
+            "cobroId": "ao",
+            "cuentaId": "cta-ao",
+            "clienteNombre": "Cliente AO",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-08-01",
+            "monto": 425.75,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ap",
+            "cuentaId": "cta-ap",
+            "clienteNombre": "Cliente AP",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-15",
+            "monto": 90000,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-08-Q2",
+        "etiqueta": "16–31 ago",
+        "granularidad": "quincena",
+        "desdeISO": "2026-08-16",
+        "hastaISO": "2026-08-31",
+        "totales": {
+          "CRC": 12345.67,
+          "USD": 1500
+        },
+        "cobros": [
+          {
+            "cobroId": "aq",
+            "cuentaId": "cta-aq",
+            "clienteNombre": "Cliente AQ",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-16",
+            "monto": 1500,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ar",
+            "cuentaId": "cta-ar",
+            "clienteNombre": "Cliente AR",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-31",
+            "monto": 12345.67,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-09",
+        "etiqueta": "sep 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-09-01",
+        "hastaISO": "2026-09-30",
+        "totales": {
+          "CRC": 275000,
+          "USD": 800
+        },
+        "cobros": [
+          {
+            "cobroId": "as",
+            "cuentaId": "cta-as",
+            "clienteNombre": "Cliente AS",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-09-05",
+            "monto": 800,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "at",
+            "cuentaId": "cta-at",
+            "clienteNombre": "Cliente AT",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-09-30",
+            "monto": 275000,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-10",
+        "etiqueta": "oct 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-10-01",
+        "hastaISO": "2026-10-31",
+        "totales": {
+          "CRC": 0,
+          "USD": 65
+        },
+        "cobros": [
+          {
+            "cobroId": "au",
+            "cuentaId": "cta-au",
+            "clienteNombre": "Cliente AU",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-10-10",
+            "monto": 65,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-11",
+        "etiqueta": "nov 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-11-01",
+        "hastaISO": "2026-11-30",
+        "totales": {
+          "CRC": 111111.11,
+          "USD": 0
+        },
+        "cobros": [
+          {
+            "cobroId": "av",
+            "cuentaId": "cta-av",
+            "clienteNombre": "Cliente AV",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-11-11",
+            "monto": 111111.11,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-12",
+        "etiqueta": "dic 2026",
+        "granularidad": "mes",
+        "desdeISO": "2026-12-01",
+        "hastaISO": "2026-12-31",
+        "totales": {
+          "CRC": 40000,
+          "USD": 999.99
+        },
+        "cobros": [
+          {
+            "cobroId": "aw",
+            "cuentaId": "cta-aw",
+            "clienteNombre": "Cliente AW",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-12-15",
+            "monto": 999.99,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ax",
+            "cuentaId": "cta-ax",
+            "clienteNombre": "Cliente AX",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-12-31",
+            "monto": 40000,
+            "moneda": "CRC"
+          }
+        ]
+      }
+    ],
+    "fueraDeHorizonte": 3
+  },
+  "clamp-quincenas": {
+    "vencidos": {
+      "totales": {
+        "CRC": 912333.33,
+        "USD": 2129.93
+      },
+      "cobros": [
+        {
+          "cobroId": "bj",
+          "cuentaId": "cta-bj",
+          "clienteNombre": "Cliente BJ",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2025-12-01",
+          "monto": 9.99,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bk",
+          "cuentaId": "cta-bk",
+          "clienteNombre": "Cliente BK",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-01-15",
+          "monto": 500000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bd",
+          "cuentaId": "cta-bd",
+          "clienteNombre": "Cliente BD",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-14",
+          "monto": 55000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "be",
+          "cuentaId": "cta-be",
+          "clienteNombre": "Cliente BE",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-15",
+          "monto": 15,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bf",
+          "cuentaId": "cta-bf",
+          "clienteNombre": "Cliente BF",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-02-16",
+          "monto": 30000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bg",
+          "cuentaId": "cta-bg",
+          "clienteNombre": "Cliente BG",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-02-28",
+          "monto": 44.44,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "bh",
+          "cuentaId": "cta-bh",
+          "clienteNombre": "Cliente BH",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-03-01",
+          "monto": 77000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "bi",
+          "cuentaId": "cta-bi",
+          "clienteNombre": "Cliente BI",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-03-16",
+          "monto": 210,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "aa",
+          "cuentaId": "cta-aa",
+          "clienteNombre": "Cliente AA",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-04-01",
+          "monto": 250000,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ab",
+          "cuentaId": "cta-ab",
+          "clienteNombre": "Cliente AB",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-05-10",
+          "monto": 1200,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ac",
+          "cuentaId": "cta-ac",
+          "clienteNombre": "Cliente AC",
+          "estado": "PROGRAMADO",
+          "fechaProgramadaISO": "2026-06-15",
+          "monto": 333.33,
+          "moneda": "CRC"
+        },
+        {
+          "cobroId": "ad",
+          "cuentaId": "cta-ad",
+          "clienteNombre": "Cliente AD",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-01",
+          "monto": 500,
+          "moneda": "USD"
+        },
+        {
+          "cobroId": "ae",
+          "cuentaId": "cta-ae",
+          "clienteNombre": "Cliente AE",
+          "estado": "POR_COBRAR",
+          "fechaProgramadaISO": "2026-07-06",
+          "monto": 150.5,
+          "moneda": "USD"
+        }
+      ]
+    },
+    "buckets": [
+      {
+        "key": "2026-07-Q1",
+        "etiqueta": "1–15 jul",
+        "granularidad": "quincena",
+        "desdeISO": "2026-07-01",
+        "hastaISO": "2026-07-15",
+        "totales": {
+          "CRC": 1080099.99,
+          "USD": 795
+        },
+        "cobros": [
+          {
+            "cobroId": "af",
+            "cuentaId": "cta-af",
+            "clienteNombre": "Cliente AF",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-07",
+            "monto": 99.99,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "ag",
+            "cuentaId": "cta-ag",
+            "clienteNombre": "Cliente AG",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-07-08",
+            "monto": 80000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "ah",
+            "cuentaId": "cta-ah",
+            "clienteNombre": "Cliente AH",
+            "estado": "SIN_DATO",
+            "fechaProgramadaISO": "2026-07-09",
+            "monto": 45,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ai",
+            "cuentaId": "cta-ai",
+            "clienteNombre": "Cliente AI",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-10",
+            "monto": 1000000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "aj",
+            "cuentaId": "cta-aj",
+            "clienteNombre": "Cliente AJ",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-15",
+            "monto": 750,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-07-Q2",
+        "etiqueta": "16–31 jul",
+        "granularidad": "quincena",
+        "desdeISO": "2026-07-16",
+        "hastaISO": "2026-07-31",
+        "totales": {
+          "CRC": 380000,
+          "USD": 200.01
+        },
+        "cobros": [
+          {
+            "cobroId": "ak",
+            "cuentaId": "cta-ak",
+            "clienteNombre": "Cliente AK",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-16",
+            "monto": 320000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "am",
+            "cuentaId": "cta-am",
+            "clienteNombre": "Cliente AM",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 60000,
+            "moneda": "CRC"
+          },
+          {
+            "cobroId": "an",
+            "cuentaId": "cta-an",
+            "clienteNombre": "Cliente AN",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-20",
+            "monto": 200,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "al",
+            "cuentaId": "cta-al",
+            "clienteNombre": "Cliente AL",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-07-31",
+            "monto": 0.01,
+            "moneda": "USD"
+          }
+        ]
+      },
+      {
+        "key": "2026-08-Q1",
+        "etiqueta": "1–15 ago",
+        "granularidad": "quincena",
+        "desdeISO": "2026-08-01",
+        "hastaISO": "2026-08-15",
+        "totales": {
+          "CRC": 90000,
+          "USD": 425.75
+        },
+        "cobros": [
+          {
+            "cobroId": "ao",
+            "cuentaId": "cta-ao",
+            "clienteNombre": "Cliente AO",
+            "estado": "PROGRAMADO",
+            "fechaProgramadaISO": "2026-08-01",
+            "monto": 425.75,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ap",
+            "cuentaId": "cta-ap",
+            "clienteNombre": "Cliente AP",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-15",
+            "monto": 90000,
+            "moneda": "CRC"
+          }
+        ]
+      },
+      {
+        "key": "2026-08-Q2",
+        "etiqueta": "16–31 ago",
+        "granularidad": "quincena",
+        "desdeISO": "2026-08-16",
+        "hastaISO": "2026-08-31",
+        "totales": {
+          "CRC": 12345.67,
+          "USD": 1500
+        },
+        "cobros": [
+          {
+            "cobroId": "aq",
+            "cuentaId": "cta-aq",
+            "clienteNombre": "Cliente AQ",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-16",
+            "monto": 1500,
+            "moneda": "USD"
+          },
+          {
+            "cobroId": "ar",
+            "cuentaId": "cta-ar",
+            "clienteNombre": "Cliente AR",
+            "estado": "POR_COBRAR",
+            "fechaProgramadaISO": "2026-08-31",
+            "monto": 12345.67,
+            "moneda": "CRC"
+          }
+        ]
+      }
+    ],
+    "fueraDeHorizonte": 9
+  }
+}

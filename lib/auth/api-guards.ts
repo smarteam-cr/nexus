@@ -29,6 +29,10 @@ import {
 import { requireCapability, requireRole, type Capability } from "./roles";
 import { can, requirePermission } from "./permissions/engine";
 import type { ActionKeyOf, SectionKey } from "./permissions/registry";
+// isCostosRole sigue vivo: el gate de COSTOS/caja neta es SUPER_ADMIN-only
+// hard-coded (más estricto que cobranza.read y NO editable por la matriz de
+// permisos — los salarios no se abren desde /team). guardCostosAccess lo usa.
+import { isCostosRole } from "./cobranza-roles";
 import type { TeamRole } from "@prisma/client";
 
 function toErrorResponse(e: unknown): NextResponse | null {
@@ -314,6 +318,28 @@ export async function guardCobranzaAccess(): Promise<
   if (!(await can(guard.teamMember, "cobranza", "read"))) {
     return NextResponse.json(
       { error: "Tu rol no tiene acceso a Cobranza." },
+      { status: 403 },
+    );
+  }
+  return guard;
+}
+
+/**
+ * COSTOS RECURRENTES + CAJA NETA (Cobranza fase 4): SOLO dirección
+ * (SUPER_ADMIN, fuente única `COSTOS_ROLES`). Los salarios estimados son la
+ * información más sensible del sistema — ADMIN NO pasa ni por API, y esta capa
+ * es LA barrera (Prisma conecta con rol BYPASSRLS: RLS no protege del interno).
+ * PRIMERA línea de TODO handler bajo /api/cobranza/costos* y /caja-neta — hay
+ * un test estructural que lo verifica.
+ */
+export async function guardCostosAccess(): Promise<
+  Awaited<ReturnType<typeof requireInternalUser>> | NextResponse
+> {
+  const guard = await guardInternalUser();
+  if (guard instanceof NextResponse) return guard;
+  if (!isCostosRole(guard.role)) {
+    return NextResponse.json(
+      { error: "Los costos y la caja neta son solo para dirección (Super Admin)." },
       { status: 403 },
     );
   }

@@ -31,6 +31,8 @@ import type {
   cobroManualSchema,
   alertaPatchSchema,
   bitacoraCreateSchema,
+  costoCreateSchema,
+  costoPatchSchema,
 } from "./schema";
 
 export class CobranzaError extends Error {
@@ -606,4 +608,98 @@ export async function addBitacora(
       usuarioEmail: byEmail,
     },
   });
+}
+
+// ── Costos recurrentes (fase 4 — SUPER_ADMIN-only) ──────────────────────────────
+// ⚠ PRIVACIDAD: llamadas SOLO desde routes con guardCostosAccess. Reglas duras:
+//  - Los mensajes de CobranzaError de costos NO llevan montos (van a logs/toasts).
+//  - El CRUD de costos JAMÁS escribe en BitacoraCobro (ADMIN-visible) ni en
+//    ninguna otra superficie visible para no-SUPER_ADMIN.
+//  - Sin tracking de pago: un costo no tiene estado "pagado" ni semáforo.
+
+const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
+const decimalONull = (d: Prisma.Decimal | null) => (d == null ? null : Number(d));
+
+export async function createCosto(data: z.infer<typeof costoCreateSchema>) {
+  if (data.teamMemberId) {
+    const persona = await prisma.teamMember.findUnique({
+      where: { id: data.teamMemberId },
+      select: { id: true },
+    });
+    if (!persona) throw new CobranzaError("La persona vinculada no existe.", 400);
+  }
+  return prisma.costoRecurrente.create({
+    data: {
+      categoria: data.categoria,
+      nombre: data.nombre,
+      monto: data.monto,
+      moneda: data.moneda,
+      frecuencia: data.frecuencia,
+      teamMemberId: data.teamMemberId ?? null,
+      montoBase: data.montoBase ?? null,
+      factorCargas: data.factorCargas != null ? round4(data.factorCargas) : null,
+      activo: data.activo ?? true,
+      notas: data.notas ?? null,
+    },
+    select: { id: true },
+  });
+}
+
+export async function updateCosto(costoId: string, data: z.infer<typeof costoPatchSchema>) {
+  const actual = await prisma.costoRecurrente.findUnique({ where: { id: costoId } });
+  if (!actual) throw new CobranzaError("El costo no existe.", 404);
+
+  // Cross-field sobre la fila MERGEADA (un partial puede traer teamMemberId sin
+  // categoria, o base sin factor): la validación de forma la hizo Zod; acá se
+  // valida la COHERENCIA del resultado final.
+  const merged = {
+    categoria: data.categoria ?? actual.categoria,
+    teamMemberId: data.teamMemberId !== undefined ? data.teamMemberId : actual.teamMemberId,
+    montoBase: data.montoBase !== undefined ? data.montoBase : decimalONull(actual.montoBase),
+    factorCargas:
+      data.factorCargas !== undefined ? data.factorCargas : decimalONull(actual.factorCargas),
+  };
+  const esSalario = merged.categoria === "SALARIO";
+  if (!esSalario) {
+    // Salir de SALARIO fuerza a soltar persona y helper base+factor.
+    merged.teamMemberId = null;
+    merged.montoBase = null;
+    merged.factorCargas = null;
+  }
+  if ((merged.montoBase == null) !== (merged.factorCargas == null)) {
+    throw new CobranzaError("Base y factor van juntos (o ninguno).", 400);
+  }
+  if (merged.teamMemberId) {
+    const persona = await prisma.teamMember.findUnique({
+      where: { id: merged.teamMemberId },
+      select: { id: true },
+    });
+    if (!persona) throw new CobranzaError("La persona vinculada no existe.", 400);
+  }
+
+  return prisma.costoRecurrente.update({
+    where: { id: costoId },
+    data: {
+      ...(data.categoria !== undefined ? { categoria: data.categoria } : {}),
+      ...(data.nombre !== undefined ? { nombre: data.nombre } : {}),
+      ...(data.monto !== undefined ? { monto: data.monto } : {}),
+      ...(data.moneda !== undefined ? { moneda: data.moneda } : {}),
+      ...(data.frecuencia !== undefined ? { frecuencia: data.frecuencia } : {}),
+      teamMemberId: merged.teamMemberId,
+      montoBase: merged.montoBase,
+      factorCargas: merged.factorCargas != null ? round4(merged.factorCargas) : null,
+      ...(data.activo !== undefined ? { activo: data.activo } : {}),
+      ...(data.notas !== undefined ? { notas: data.notas } : {}),
+    },
+    select: { id: true },
+  });
+}
+
+export async function deleteCosto(costoId: string) {
+  try {
+    await prisma.costoRecurrente.delete({ where: { id: costoId } });
+  } catch {
+    // P2025 (no existe) u otro error de borrado — sin detalles en el mensaje.
+    throw new CobranzaError("El costo no existe.", 404);
+  }
 }

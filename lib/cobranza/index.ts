@@ -11,6 +11,10 @@ export {
   loadRiesgo,
   loadProyeccion,
   loadColaCobros,
+  loadCostos,
+  loadCajaNeta,
+  type CostoRecurrenteDTO,
+  type CajaNetaDTO,
   type ColaCobroRow,
   type CarteraRow,
   type CuentaDetailDTO,
@@ -33,6 +37,11 @@ export {
   type MetricasMoneda,
   type AgingBuckets,
   type RiesgoPagoItem,
+  type CostoProyeccionInput,
+  type ProyeccionCostos,
+  type BucketCosto,
+  type BucketCajaNeta,
+  type CajaNeta,
 } from "./engine";
 // Puertos (interfaces client-safe) + factory de adaptadores (server-side).
 export type {

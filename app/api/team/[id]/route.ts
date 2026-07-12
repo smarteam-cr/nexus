@@ -3,7 +3,7 @@ import type { TeamRole } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { apiError } from "@/lib/api";
 import { guardCapability } from "@/lib/auth/api-guards";
-import { revalidateTeamMembers } from "@/lib/cache/team";
+import { revalidateTeamMembers, TEAM_MEMBER_SAFE_SELECT } from "@/lib/cache/team";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -28,6 +28,7 @@ async function loadProtectedTarget(id: string, actorRole: TeamRole) {
 
 // PUT /api/team/[id] — actualizar nombre/email/area. Gate: equipo.manage (+ protección
 // de target SA arriba). El roleEnum/permisos se gestionan en /api/team/[id]/permissions.
+// SELECT explícito (allowlist): jamás devolver la relación de costos (salarios).
 export async function PUT(req: NextRequest, { params }: Params) {
   const guard = await guardCapability("manageTeam");
   if (guard instanceof NextResponse) return guard;
@@ -47,6 +48,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         email: email.trim().toLowerCase(),
         area: (area ?? role)?.trim() || null,
       },
+      select: TEAM_MEMBER_SAFE_SELECT,
     });
     revalidateTeamMembers();
     return NextResponse.json({ member });
