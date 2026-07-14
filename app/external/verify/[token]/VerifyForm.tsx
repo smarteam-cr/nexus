@@ -33,6 +33,7 @@ type State =
 const SURFACE_PATHS: Record<string, string> = {
   kickoff: "/external/kickoff",
   cronograma: "/external/cronograma",
+  desarrollo: "/external/desarrollo",
 };
 
 export function VerifyForm({ token, next }: { token: string; next?: string }) {

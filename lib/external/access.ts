@@ -26,6 +26,7 @@ export interface ActiveAccess {
     name: string;
     kickoffPublishedAt: Date | null;
     timelinePublishedAt: Date | null;
+    desarrolloPublishedAt: Date | null;
     /** Empresa cliente (Client) — nombre para titulares + logo para el chrome client-facing. */
     client: { name: string; logoUrl: string | null };
   };
@@ -53,6 +54,7 @@ export async function resolveActiveAccess(token: string): Promise<ActiveAccess |
           name: true,
           kickoffPublishedAt: true,
           timelinePublishedAt: true,
+          desarrolloPublishedAt: true,
           client: { select: { name: true, logoUrl: true } },
         },
       },

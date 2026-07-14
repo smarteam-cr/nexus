@@ -51,6 +51,18 @@ export const KICKOFF_CIERRE_DEFAULT = {
   buttonTarget: "_blank",
 } as const;
 
+// Default del CIERRE del canvas Desarrollo (notas de cierre + botón opcional, ej.
+// enlace al repo / doc técnica / agenda de arranque con el dev). Fuente ÚNICA — la
+// usan createDesarrolloCanvas, la reconciliación y el `empty` de desarrollo.defs.
+export const DESARROLLO_CIERRE_DEFAULT = {
+  eyebrow: "Siguiente paso",
+  headline: "Requerimiento listo para estimar",
+  subhead: "",
+  buttonLabel: "",
+  buttonUrl: "",
+  buttonTarget: "_blank",
+} as const;
+
 // ── Canvas Handoff (traspaso Sales→CS) ────────────────────────────────────────
 // YA NO se crea con createDefaultCanvases: el handoff es una entidad cliente-level
 // (model Handoff) que arranca el proyecto, y su canvas lo monta el FLUJO de
@@ -182,6 +194,9 @@ export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
   planificacion: "Planificación",
   handoff: "Handoff",
   kickoff: "Kickoff",
+  // Requerimiento técnico: canvas ON-DEMAND (solo si el handoff detecta trabajo técnico).
+  // Lo crea createDesarrolloCanvas; el agente "agent-desarrollo-canvas" escribe en él.
+  desarrollo: "Desarrollo",
   businesscase: "Business Case",
   // D.1: el canvas "Cronograma" no tiene secciones → resolver targetCanvasId acá
   // evita que analyze inyecte instrucciones de formato cards al prompt del agente
@@ -204,6 +219,48 @@ export const KICKOFF_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c
  */
 export function kickoffSectionSequence(existingKeys: string[]): string[] {
   const canon = KICKOFF_CANVAS.sections.map((s) => s.key);
+  const seq = [...existingKeys];
+  for (const key of canon) {
+    if (seq.includes(key)) continue;
+    const canonIdx = canon.indexOf(key);
+    let at = 0;
+    for (let i = canonIdx - 1; i >= 0; i--) {
+      const pos = seq.indexOf(canon[i]);
+      if (pos !== -1) {
+        at = pos + 1;
+        break;
+      }
+    }
+    seq.splice(at, 0, key);
+  }
+  return seq;
+}
+
+// ── Canvas Desarrollo (requerimiento técnico) ─────────────────────────────────
+// Canvas ON-DEMAND: NO va en DEFAULT_PROJECT_CANVASES ni se crea con
+// createDefaultCanvases. Lo monta createDesarrolloCanvas cuando el handoff detecta
+// trabajo técnico (hasTechnicalScope). Fuente ÚNICA de sus secciones (keys/labels 1:1
+// con DESARROLLO_SECTION_DEFS del motor). Solo `cierre` es curada (defaultData).
+export const DESARROLLO_CANVAS: CanvasDefinition = {
+  name: "Desarrollo",
+  isDefault: false,
+  order: 0,
+  sections: [
+    { key: "requerimiento",    label: "Requerimiento técnico" },
+    { key: "retos_cliente",    label: "Retos del cliente" },
+    { key: "criterios_exito",  label: "Criterios de éxito" },
+    { key: "arquitectura",     label: "Arquitectura (IDs y dedup)" },
+    { key: "relacion_objetos", label: "Relación entre objetos" },
+    { key: "comunicacion",     label: "Triggers y flujos" },
+    { key: "cierre",           label: "Notas de cierre", defaultData: { ...DESARROLLO_CIERRE_DEFAULT } },
+  ],
+};
+
+/** Secuencia destino de las secciones del canvas Desarrollo. Espeja
+ *  `kickoffSectionSequence` (orden vivo + inserta canónicas faltantes detrás de su
+ *  predecesora). La usan reconcileDesarrolloCanvasSections y el backfill futuro. */
+export function desarrolloSectionSequence(existingKeys: string[]): string[] {
+  const canon = DESARROLLO_CANVAS.sections.map((s) => s.key);
   const seq = [...existingKeys];
   for (const key of canon) {
     if (seq.includes(key)) continue;

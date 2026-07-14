@@ -21,6 +21,11 @@ interface WorkspaceContextValue {
   /** Contador que bumpea al generar el handoff → el cronograma (si está vacío) recarga sus fases. */
   timelineRefreshSignal: number;
   bumpTimelineRefresh: () => void;
+  /** Contador que bumpea cuando la LISTA de canvases del proyecto pudo cambiar (ej: el
+   *  handoff auto-creó el canvas "Desarrollo") → el panel refetchea la lista sin recargar.
+   *  Genérico: sirve para cualquier canvas auto-creado a futuro, no solo Desarrollo. */
+  canvasRefreshSignal: number;
+  bumpCanvasRefresh: () => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue>({
@@ -33,6 +38,8 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
   bumpGpsRefresh: () => {},
   timelineRefreshSignal: 0,
   bumpTimelineRefresh: () => {},
+  canvasRefreshSignal: 0,
+  bumpCanvasRefresh: () => {},
 });
 
 export function WorkspaceProvider({
@@ -46,6 +53,7 @@ export function WorkspaceProvider({
   const [agentModal, setAgentModal] = useState<AgentModalState | null>(null);
   const [gpsRefreshSignal, setGpsRefreshSignal] = useState(0);
   const [timelineRefreshSignal, setTimelineRefreshSignal] = useState(0);
+  const [canvasRefreshSignal, setCanvasRefreshSignal] = useState(0);
 
   // Cuando el initialProjectId cambia (ej: después de un router.refresh() post-sync),
   // seleccionar automáticamente el primer proyecto si no hay ninguno activo.
@@ -65,10 +73,11 @@ export function WorkspaceProvider({
 
   const bumpGpsRefresh = useCallback(() => setGpsRefreshSignal((n) => n + 1), []);
   const bumpTimelineRefresh = useCallback(() => setTimelineRefreshSignal((n) => n + 1), []);
+  const bumpCanvasRefresh = useCallback(() => setCanvasRefreshSignal((n) => n + 1), []);
 
   return (
     <WorkspaceContext.Provider
-      value={{ activeProjectId, setActiveProjectId, agentModal, openAgentModal, closeAgentModal, gpsRefreshSignal, bumpGpsRefresh, timelineRefreshSignal, bumpTimelineRefresh }}
+      value={{ activeProjectId, setActiveProjectId, agentModal, openAgentModal, closeAgentModal, gpsRefreshSignal, bumpGpsRefresh, timelineRefreshSignal, bumpTimelineRefresh, canvasRefreshSignal, bumpCanvasRefresh }}
     >
       {children}
     </WorkspaceContext.Provider>

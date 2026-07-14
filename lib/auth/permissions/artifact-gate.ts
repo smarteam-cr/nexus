@@ -22,7 +22,7 @@ import { prisma } from "@/lib/db/prisma";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 
 export type ArtifactGate = {
-  section: "handoff" | "kickoff" | "procesos" | "cronograma";
+  section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo";
   action: "generate" | "regenerate";
 };
 
@@ -70,6 +70,15 @@ export async function resolveArtifactGate(
         where: { source: "AGENT", section: { canvas: { projectId, name: "Kickoff" } } },
       });
       return { section: "kickoff", action: aiBlocks > 0 ? "regenerate" : "generate" };
+    }
+    case "desarrollo": {
+      // Canvas "Desarrollo" (requerimiento técnico). "Ya existe" = bloques source AGENT
+      // (el `cierre` curado nace HUMAN → no cuenta). Mismo criterio que kickoff.
+      if (!projectId) return { section: "desarrollo", action: "generate" };
+      const aiBlocks = await prisma.canvasBlock.count({
+        where: { source: "AGENT", section: { canvas: { projectId, name: "Desarrollo" } } },
+      });
+      return { section: "desarrollo", action: aiBlocks > 0 ? "regenerate" : "generate" };
     }
     // Planificación escribe el ESQUELETO del cronograma (persistTimelineFromAgentOutput).
     case "planificacion":
@@ -120,6 +129,7 @@ export function artifactGateMessage(gate: ArtifactGate): string {
     kickoff: "el kickoff",
     procesos: "los procesos",
     cronograma: "el cronograma",
+    desarrollo: "el requerimiento de desarrollo",
   }[gate.section];
   return gate.action === "regenerate"
     ? `Tu rol no puede regenerar ${label} con IA (ya está generado). Pedile a un CSL o Super Admin, o ajustalo a mano.`

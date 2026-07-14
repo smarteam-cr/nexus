@@ -48,7 +48,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDoc, setShowDoc] = useState(false);
-  const { bumpTimelineRefresh, bumpGpsRefresh } = useWorkspace();
+  const { bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh } = useWorkspace();
   // RBAC: solo VENTAS/CSL/MARKETING/SUPER_ADMIN editan el handoff (capacidad
   // handoffAnywhere). El CSE lo VE pero no lo genera ni edita.
   const me = useMe();
@@ -200,13 +200,14 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
       setShowDoc(true);
       bumpTimelineRefresh();
       bumpGpsRefresh(); // el widget del proyecto (pills de setup) se actualiza: handoff → ✓
+      bumpCanvasRefresh(); // el handoff pudo auto-crear el canvas "Desarrollo" → el panel lo muestra sin recargar
       void notifyAgentDone({ group: "handoff", ok: true, url: notifyUrl });
     } catch {
       setError("Error de conexión al generar el handoff.");
     } finally {
       setGenerating(false);
     }
-  }, [projectId, clientId, fetchStatus, fetchTags, status?.agentId, status?.contextExclusions, exclusions, bumpTimelineRefresh, bumpGpsRefresh]);
+  }, [projectId, clientId, fetchStatus, fetchTags, status?.agentId, status?.contextExclusions, exclusions, bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh]);
 
   if (loading) return <div className="h-14 rounded-2xl skeleton-shimmer" />;
   if (!status) return null;

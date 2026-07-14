@@ -21,6 +21,7 @@ import { useMe } from "@/hooks/useMe";
 const AGENT_SECTION: Record<string, string> = {
   "agent-mapeo-inicial": "procesos",
   "agent-kickoff-canvas": "kickoff",
+  "agent-desarrollo-canvas": "desarrollo",
   "agent-timeline-detail": "cronograma",
   "agent-planificacion-canvas": "cronograma",
 };
@@ -36,6 +37,7 @@ export default function CanvasAgentButton({
   className,
   notifyLabel,
   clientName,
+  disabled,
 }: {
   clientId: string;
   projectId: string;
@@ -49,6 +51,9 @@ export default function CanvasAgentButton({
   /** Sustantivo para la notificación ("diagnóstico"). Default: se deriva del `label`. */
   notifyLabel?: string;
   clientName?: string | null;
+  /** Deshabilitar desde afuera (ej: ya hay una generación en curso para este canvas
+   *  — evita que un click manual dispare una segunda corrida concurrente). */
+  disabled?: boolean;
 }) {
   const [running, setRunning] = useState(false);
   const toast = useToast();
@@ -68,7 +73,7 @@ export default function CanvasAgentButton({
   const notifyUrl = `/clients/${clientId}`;
 
   const run = async () => {
-    if (running) return;
+    if (running || disabled) return;
     maybeRequestPermission(); // gesto del usuario → ofrecer activar notificaciones (una vez)
     setRunning(true);
     try {
@@ -107,7 +112,7 @@ export default function CanvasAgentButton({
   return (
     <button
       onClick={run}
-      disabled={running}
+      disabled={running || disabled}
       className={
         className ??
         "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"

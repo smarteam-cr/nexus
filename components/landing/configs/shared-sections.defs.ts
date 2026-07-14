@@ -83,6 +83,39 @@ export const PROCESS_MAPPING_SCHEMA = {
 
 export const PROCESS_MAPPING_EMPTY = { intro: "", procesos: [] };
 
+// ── Schemas compartidos por sectionType (evitan que un nuevo template re-declare
+// el mismo shape a mano) ─────────────────────────────────────────────────────
+// NOTA: business-case.defs.ts y website.defs.ts todavía inlinean sus propias copias
+// de `web_diagnosis`/`roi`/`pain` (no se tocan acá para no arriesgar código ya
+// shippeado) — estos exports son para que templates NUEVOS (ej. Desarrollo) reusen
+// en vez de agregar una tercera copia hand-rolled.
+export const WEB_DIAGNOSIS_SCHEMA = {
+  type: "object",
+  properties: {
+    intro: str,
+    retos: arrayOf({ title: str, detail: str }, ["title"]),
+    plataforma: str,
+    porQueBullets: arrayOf({ title: str, detail: str }, ["title"]),
+    objetivo: str,
+  },
+  required: ["retos", "porQueBullets", "objetivo"],
+} as const;
+export const WEB_DIAGNOSIS_EMPTY = { intro: "", retos: [], plataforma: "", porQueBullets: [], objetivo: "" };
+
+export const ROI_SCHEMA = {
+  type: "object",
+  properties: { metrics: arrayOf({ value: str, label: str }, ["value", "label"]) },
+  required: ["metrics"],
+} as const;
+export const ROI_EMPTY = { metrics: [] };
+
+export const PAIN_SCHEMA = {
+  type: "object",
+  properties: { items: arrayOf({ title: str, detail: str }, ["title", "detail"]) },
+  required: ["items"],
+} as const;
+export const PAIN_EMPTY = { items: [] };
+
 export function makeProcessMappingDef(
   overrides: Pick<BCSectionDef, "key" | "label"> & Partial<BCSectionDef>,
 ): BCSectionDef {

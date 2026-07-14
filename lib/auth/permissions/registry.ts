@@ -51,6 +51,11 @@ export const PERMISSION_SECTIONS = [
     actions: [GENERATE, REGENERATE],
   },
   {
+    key: "desarrollo",
+    label: "Desarrollo (requerimiento técnico)",
+    actions: [GENERATE, REGENERATE],
+  },
+  {
     key: "procesos",
     label: "Procesos",
     actions: [

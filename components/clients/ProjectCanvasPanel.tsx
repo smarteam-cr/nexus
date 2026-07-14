@@ -12,6 +12,7 @@ import SectionBlockList from "@/components/canvas/SectionBlockList";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import KickoffLanding from "@/components/canvas/KickoffLanding";
 import KickoffWorkspace from "@/components/canvas/KickoffWorkspace";
+import DesarrolloWorkspace from "@/components/canvas/DesarrolloWorkspace";
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
@@ -101,7 +102,7 @@ export default function ProjectCanvasPanel({
   // activo (key) para que muestre los bloques nuevos sin recargar la página.
   const [agentNonce, setAgentNonce] = useState(0);
   // Para refrescar el widget del proyecto (ProjectGPS + pills de setup) al generar un canvas.
-  const { bumpGpsRefresh } = useWorkspace();
+  const { bumpGpsRefresh, canvasRefreshSignal } = useWorkspace();
   const [canvasDropdownOpen, setCanvasDropdownOpen] = useState(false);
   const [addingSectionName, setAddingSectionName] = useState<string | null>(null);
   const canvasDropdownRef = useRef<HTMLDivElement>(null);
@@ -130,20 +131,40 @@ export default function ProjectCanvasPanel({
     router.replace(url.pathname + url.search, { scroll: false });
   }, [canvases, router]);
 
-  // Fetch canvases — restore from URL param if present
-  useEffect(() => {
-    fetch(`/api/projects/${projectId}/canvases`)
+  // `canvasFromUrl` en un ref (no en las deps de `refetchCanvases`): `switchCanvas`
+  // reescribe el `?canvas=` en cada click de tab, así que si el callback dependiera
+  // de ese valor cambiaría de identidad en cada click → el effect de abajo dispararía
+  // un refetch innecesario por cada cambio de tab. El ref deja leer el valor vigente
+  // sin atarle la identidad del callback.
+  const canvasFromUrlRef = useRef(canvasFromUrl);
+  useEffect(() => { canvasFromUrlRef.current = canvasFromUrl; }, [canvasFromUrl]);
+
+  // Fetch (o REFETCH) la lista de canvases. PRESERVA la selección activa: al
+  // refrescar (ej: el handoff auto-creó "Desarrollo") no queremos saltar de canvas.
+  // Solo elige uno si aún no hay activo (primer load), respetando el ?canvas de la URL.
+  const refetchCanvases = useCallback(() => {
+    return fetch(`/api/projects/${projectId}/canvases`)
       .then((r) => r.json())
       .then((d) => {
-        const list = d.canvases ?? [];
+        const list: CanvasMeta[] = d.canvases ?? [];
         setCanvases(list);
-        if (!activeCanvasId && list.length > 0) {
-          const fromUrl = canvasFromUrl ? list.find((c: CanvasMeta) => c.id === canvasFromUrl) : null;
-          setActiveCanvasId(fromUrl ? fromUrl.id : list[0].id);
-        }
+        setActiveCanvasId((prev) => {
+          // Selección vigente que sigue existiendo → se mantiene.
+          if (prev && list.some((c) => c.id === prev)) return prev;
+          if (list.length === 0) return prev;
+          const fromUrl = canvasFromUrlRef.current ? list.find((c) => c.id === canvasFromUrlRef.current) : null;
+          return fromUrl ? fromUrl.id : list[0].id;
+        });
       })
       .catch(() => {});
-  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  // Primer load + refetch cuando la señal genérica de canvases bumpea (canvas
+  // auto-creado por un agente). La señal es el punto de escalabilidad: cualquier
+  // flujo que cree/borre un canvas la bumpea y el panel se re-sincroniza sin recargar.
+  useEffect(() => {
+    void refetchCanvases();
+  }, [refetchCanvases, canvasRefreshSignal]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -551,6 +572,15 @@ export default function ProjectCanvasPanel({
         </div>
       )}
 
+      {/* Desarrollo: requerimiento técnico editable in-situ (mismo motor que el Kickoff,
+          sin staging: la vista externa lee el canvas vivo). El canvas es on-demand — solo
+          aparece si el handoff detectó trabajo técnico (o se regenera con el botón). */}
+      {!isResumenCanvas && activeCanvas?.name === "Desarrollo" && activeCanvasId && (
+        <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
+          <DesarrolloWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} clientId={clientId} canvasId={activeCanvasId} />
+        </div>
+      )}
+
       {/* Cronograma: Gantt + editor del ProjectTimeline (fases/tareas/semanas).
           Fuente única — el Kickoff lo refleja read-only. clientId habilita el
           disparo del agente de detalle (POST /api/clients/[clientId]/analyze). */}
@@ -560,7 +590,7 @@ export default function ProjectCanvasPanel({
       )}
 
       {/* Resto de canvases custom: grilla de bloques (Diagnóstico, Planificación, …) */}
-      {!isResumenCanvas && activeCanvas?.name !== "Handoff" && activeCanvas?.name !== "Kickoff" && activeCanvas?.name !== "Cronograma" && activeCanvasId && (
+      {!isResumenCanvas && activeCanvas?.name !== "Handoff" && activeCanvas?.name !== "Kickoff" && activeCanvas?.name !== "Desarrollo" && activeCanvas?.name !== "Cronograma" && activeCanvasId && (
         // agentNonce remonta la grilla al terminar una corrida del CTA → refetch
         <SectionBlockList key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
       )}

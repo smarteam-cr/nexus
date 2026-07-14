@@ -16,6 +16,7 @@ import { DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN, type BlockType } from "@/lib/canvas
 import { postProcessCards } from "@/lib/canvas/post-process";
 import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
+import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
 import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { KICKOFF_TEMPLATE, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
@@ -28,7 +29,7 @@ import { autoClassifyOrphanSessions } from "@/lib/projects/analyze-participants"
 import { computeHandoffReadiness } from "@/lib/handoff/feeding";
 import { getProjectHandoffSessions, getClientSessions } from "@/lib/sessions/project-sources";
 import { fetchCompanyTimeline, fetchCompanyTimelineSplit, serializeTimeline, projectEraSince } from "@/lib/hubspot/company-timeline";
-import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT, RECURRENTE_TAG } from "@/lib/tags/catalog";
+import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT, RECURRENTE_TAG, hasTechnicalScope } from "@/lib/tags/catalog";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -259,6 +260,12 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     }
   }
 
+  // El agente de Desarrollo (requerimiento técnico) NO consume las fuentes crudas ni el
+  // flujo de cards/block-format de este handler: delega en el runner self-contained
+  // `runDesarrolloGeneration` (asegura el canvas + arma el input del handoff + genera +
+  // persiste). Se resuelve por id para no tocar a ningún otro agente.
+  const isDesarrolloAgent = agent.id === "agent-desarrollo-canvas";
+
   // ── D.1: fail-fast del agente de detalle de cronograma ──────────────────────
   // Este agente DETALLA un esqueleto existente (fases con ids). Sin proyecto o
   // sin timeline con fases no hay nada que detallar — se corta acá, antes de
@@ -352,6 +359,15 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // existingRunId != null → modo async: el AgentRun ya existe (RUNNING); en vez de
   // crear uno nuevo al final, se actualiza ese.
   const runAnalysisWork = async (existingRunId: string | null): Promise<NextResponse> => {
+
+  // ── Desarrollo: short-circuit al runner self-contained ────────────────────────
+  // El requerimiento técnico no necesita cards/docs/deal ni el path de block-format;
+  // el runner asegura el canvas, arma su input desde el handoff y persiste. El gating
+  // (artifact-gate) ya corrió arriba; acá solo se ejecuta el trabajo.
+  if (isDesarrolloAgent && bodyProjectId) {
+    const r = await runDesarrolloGeneration({ projectId: bodyProjectId, agentRunId: existingRunId });
+    return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
+  }
 
   // ── 3. Cargar notas, documentos, cards y deal en paralelo ────────────────────
   const [existingCardsResult, stageNotesResult, clientDocumentsResult, dealProjectResult] =
@@ -2327,6 +2343,28 @@ async function persistTimelineFromAgentOutput(
       await prisma.project
         .update({ where: { id: bodyProjectId }, data: { handoffGeneratedAt: new Date() } })
         .catch((e) => console.warn("[analyze] handoffGeneratedAt no guardado:", e instanceof Error ? e.message : e));
+
+      // AUTO-CHAIN: si el handoff detectó trabajo técnico (tag custom_dev/insider_one),
+      // crear el canvas "Desarrollo" y correr el requerimiento técnico con IA — FIRE-AND-FORGET
+      // (no bloquea ni rompe el handoff si la generación falla; el botón manual queda de respaldo).
+      // Se leen los tags recién resueltos (el update de arriba ya commiteó). Idempotente: el runner
+      // asegura el canvas (crea si falta) y regenera sus secciones en el lugar.
+      try {
+        const proj = await prisma.project.findUnique({ where: { id: bodyProjectId }, select: { tags: true } });
+        if (hasTechnicalScope(proj?.tags ?? [])) {
+          const pid = bodyProjectId;
+          // Crear el canvas SINCRÓNICAMENTE (rápido: find-or-create + reconcile) antes de que
+          // el run marque DONE → cuando el front refetchea la lista de canvases, "Desarrollo"
+          // ya existe y aparece sin recargar. La GENERACIÓN de contenido sigue fire-and-forget.
+          // Se pasa el canvasId ya resuelto para que runDesarrolloGeneration no lo re-asegure.
+          const desarrolloCanvasId = await ensureDesarrolloCanvas(pid);
+          void runDesarrolloGeneration({ projectId: pid, canvasId: desarrolloCanvasId }).catch((e) =>
+            console.warn("[analyze] auto-desarrollo falló:", e instanceof Error ? e.message : e),
+          );
+        }
+      } catch (e) {
+        console.warn("[analyze] auto-desarrollo (check) falló:", e instanceof Error ? e.message : e);
+      }
     }
 
     const timelineRaw = (analysisJson as { timeline?: { phases?: unknown } } | null)

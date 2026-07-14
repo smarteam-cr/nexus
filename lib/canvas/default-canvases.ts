@@ -5,9 +5,11 @@ import {
   HANDOFF_CANVAS,
   BUSINESS_CASE_CANVAS,
   KICKOFF_CANVAS,
+  DESARROLLO_CANVAS,
   DEFAULT_PROJECT_CANVASES,
   AGENT_GROUP_TO_CANVAS,
   kickoffSectionSequence,
+  desarrolloSectionSequence,
 } from "./canvas-defs";
 import { templateById, templateDefsByKey } from "@/components/landing/configs/templates.defs";
 import { HUBSPOT_TEMPLATE_ID } from "@/lib/business-cases/case-types";
@@ -17,7 +19,7 @@ import { buildTemplateMetaEntry } from "@/lib/business-cases/template-meta";
 // que los importadores de servidor existentes (analyze/route.ts, etc.) sigan
 // funcionando sin cambios. La separación evita que un componente cliente que
 // importe estos datos arrastre `pg`/`fs` al bundle del navegador.
-export { HANDOFF_CANVAS, BUSINESS_CASE_CANVAS, KICKOFF_CANVAS, DEFAULT_PROJECT_CANVASES, AGENT_GROUP_TO_CANVAS };
+export { HANDOFF_CANVAS, BUSINESS_CASE_CANVAS, KICKOFF_CANVAS, DESARROLLO_CANVAS, DEFAULT_PROJECT_CANVASES, AGENT_GROUP_TO_CANVAS };
 export type { CanvasDefinition };
 
 // Acepta el cliente global o un cliente de transacción ($transaction) para que la
@@ -314,4 +316,108 @@ export async function reconcileKickoffCanvasSections(canvasId: string, db: Db = 
 
 function byBlockCount(rows: Array<{ key: string; _count: { blocks: number } }>, key: string): number {
   return rows.find((r) => r.key === key)?._count.blocks ?? 0;
+}
+
+/** Crea el canvas "Desarrollo" (+7 secciones de DESARROLLO_CANVAS) para un proyecto.
+ *  ON-DEMAND: lo llama el auto-chain del handoff (createDesarrolloCanvas) y la rama
+ *  desarrollo de analyze cuando aún no existe. Siembra el bloque de la sección CURADA
+ *  (`cierre`, con defaultData) como CARD CONFIRMED — el resto lo genera el agente.
+ *  Asume que el proyecto aún no tiene canvas "Desarrollo" (los callers lo chequean). */
+export async function createDesarrolloCanvas(projectId: string, db: Db = prisma): Promise<string> {
+  const canvas = await db.projectCanvas.create({
+    data: {
+      projectId,
+      name: DESARROLLO_CANVAS.name,
+      isDefault: DESARROLLO_CANVAS.isDefault,
+      order: DESARROLLO_CANVAS.order,
+      sections: DESARROLLO_CANVAS.sections as unknown as Prisma.InputJsonValue,
+    },
+    select: { id: true },
+  });
+
+  await db.canvasSection.createMany({
+    data: DESARROLLO_CANVAS.sections.map((s, i) => ({
+      canvasId: canvas.id,
+      key: s.key,
+      label: s.label,
+      order: i,
+    })),
+  });
+
+  // Sembrar el bloque de las secciones CURADAS (hoy solo `cierre`): sin bloque el
+  // editor no persiste y el agente no las genera → quedarían muertas (igual que kickoff).
+  const curated = DESARROLLO_CANVAS.sections.filter((s) => s.defaultData);
+  if (curated.length) {
+    const rows = await db.canvasSection.findMany({
+      where: { canvasId: canvas.id, key: { in: curated.map((s) => s.key) } },
+      select: { id: true, key: true },
+    });
+    const dataByKey = new Map(curated.map((s) => [s.key, s.defaultData]));
+    await db.canvasBlock.createMany({
+      data: rows.map((s) => ({
+        sectionId: s.id,
+        blockType: "CARD" as const,
+        content: null,
+        data: (dataByKey.get(s.key) ?? {}) as Prisma.InputJsonValue,
+        order: 0,
+        source: "HUMAN" as const,
+        status: "CONFIRMED" as const,
+      })),
+    });
+  }
+
+  return canvas.id;
+}
+
+/**
+ * Reconcilia un canvas "Desarrollo" YA EXISTENTE a la estructura canónica: crea las
+ * secciones faltantes (respetando el orden vivo del CSE vía desarrolloSectionSequence)
+ * y siembra el bloque de las curadas sin bloque. NUNCA borra ni pisa data. Idempotente.
+ * La llama la rama desarrollo de analyze ANTES de generar (igual que kickoff).
+ */
+export async function reconcileDesarrolloCanvasSections(canvasId: string, db: Db = prisma): Promise<void> {
+  const canon = DESARROLLO_CANVAS.sections;
+  const existing = await db.canvasSection.findMany({
+    where: { canvasId },
+    orderBy: { order: "asc" },
+    select: { id: true, key: true, order: true, _count: { select: { blocks: true } } },
+  });
+  const existingKeys = new Set(existing.map((s) => s.key));
+  const seq = desarrolloSectionSequence(existing.map((s) => s.key));
+  const missing = canon.filter((s) => !existingKeys.has(s.key));
+
+  if (missing.length) {
+    const labelByKey = new Map(canon.map((s) => [s.key, s.label]));
+    await db.canvasSection.createMany({
+      skipDuplicates: true,
+      data: missing.map((s) => ({ canvasId, key: s.key, label: labelByKey.get(s.key)!, order: seq.indexOf(s.key) })),
+    });
+    const byKey = new Map(existing.map((s) => [s.key, s]));
+    for (let i = 0; i < seq.length; i++) {
+      const cur = byKey.get(seq[i]);
+      if (cur && cur.order !== i) await db.canvasSection.update({ where: { id: cur.id }, data: { order: i } });
+    }
+  }
+
+  const curated = canon.filter((s) => s.defaultData);
+  const needSeed = curated.filter((s) => !existingKeys.has(s.key) || byBlockCount(existing, s.key) === 0);
+  if (!needSeed.length) return;
+  const rows = await db.canvasSection.findMany({
+    where: { canvasId, key: { in: needSeed.map((s) => s.key) } },
+    select: { id: true, key: true },
+  });
+  const dataByKey = new Map(curated.map((s) => [s.key, s.defaultData]));
+  await db.canvasBlock.createMany({
+    skipDuplicates: true,
+    data: rows.map((s) => ({
+      id: `${s.id}-seed`,
+      sectionId: s.id,
+      blockType: "CARD" as const,
+      content: null,
+      data: (dataByKey.get(s.key) ?? {}) as Prisma.InputJsonValue,
+      order: 0,
+      source: "HUMAN" as const,
+      status: "CONFIRMED" as const,
+    })),
+  });
 }

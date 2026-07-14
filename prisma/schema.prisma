@@ -253,6 +253,14 @@ model Project {
   // puede estar publicada sin la otra. Chequeado en CADA lectura por los chokepoints.
   timelinePublishedAt DateTime?
 
+  // Publish del canvas DESARROLLO (requerimiento técnico) a un DEV externo. Mismo
+  // patrón que kickoffPublishedAt: null = no compartido; fecha = compartido. GATE de
+  // SEGURIDAD load-bearing — el token de acceso externo es POR PROYECTO y se comparte
+  // también con el CLIENTE (para el kickoff), así que sin este flag el cliente vería el
+  // requerimiento técnico interno. El chokepoint (lib/external/desarrollo-view.ts) lo
+  // exige NO-null en cada lectura; despublicar corta el acceso al instante.
+  desarrolloPublishedAt DateTime?
+
   // #3 — visibilidad de secciones/procesos en el kickoff del cliente, por proyecto.
   // hiddenKickoffKeys = claves OCULTAS del kickoff. Una clave puede ser:
   //   · el id de una CanvasSection del kickoff → oculta esa sección de contenido,
