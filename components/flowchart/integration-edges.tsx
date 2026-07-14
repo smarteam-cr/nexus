@@ -16,7 +16,7 @@
  *   → título "Sincronizar ventas" + campos ["Cliente","Orden","Productos"].
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, useReactFlow, useStore, type EdgeProps } from "@xyflow/react";
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, Position, useReactFlow, useStore, type EdgeProps } from "@xyflow/react";
 
 function parseLabel(label: string): { title: string; fields: string[] } {
   if (label.includes("·")) {
@@ -102,6 +102,7 @@ export function DataFlowEdge({
   label,
   style,
   data,
+  selected,
 }: EdgeProps) {
   const { setEdges, getZoom } = useReactFlow();
   // Interactivo solo cuando el diagrama es editable (fullscreen: elementsSelectable=true). En el
@@ -259,10 +260,12 @@ export function DataFlowEdge({
   const text = typeof label === "string" ? label : "";
   const { title, fields } = parseLabel(text);
   // Semántica de flujo: pending → ámbar; batch/manual → línea punteada; bidir → flecha en ambos extremos.
+  // Seleccionado (azul) GANA sobre la semántica — mismo criterio que el resaltado de nodos.
   const pending = !!extra.pending;
-  const color = pending ? "#d97706" : (style?.stroke as string) ?? "#94a3b8";
+  const baseColor = pending ? "#d97706" : (style?.stroke as string) ?? "#94a3b8";
+  const color = selected ? "#3b82f6" : baseColor;
   const dashed = extra.syncType === "batch" || extra.syncType === "manual";
-  const edgeStyle = { ...(style ?? {}), stroke: color, strokeWidth: 1.5, ...(dashed ? { strokeDasharray: "6 4" } : {}) };
+  const edgeStyle = { ...(style ?? {}), stroke: color, strokeWidth: selected ? 3 : 1.5, ...(dashed ? { strokeDasharray: "6 4" } : {}) };
   const bidir = extra.direction === "bidir";
 
   // Punta de flecha propia en el extremo destino (tangente de la curva en t=1).
@@ -385,6 +388,57 @@ export function DataFlowEdge({
           )}
         </div>
       </EdgeLabelRenderer>
+    </>
+  );
+}
+
+// ── SelectableSmoothStepEdge ──────────────────────────────────────────────────
+// Edge "smoothstep" clásico/pipeline (el que arma `buildGraph` para diagramas que NO
+// son de integración) con resaltado azul al seleccionar. Registrado en `EDGE_TYPES`
+// bajo la clave "smoothstep" — sobrescribe el renderer built-in de React Flow para
+// ese tipo en esta instancia (patrón oficial de la librería para "extender" un tipo
+// base). Sin esto, el `style` inline que arma `buildGraph` (color semántico yes/no/
+// default) queda fijo y la selección no se nota en la línea.
+export function SelectableSmoothStepEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style,
+  markerEnd,
+  selected,
+}: EdgeProps) {
+  const [edgePath] = getSmoothStepPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+  const edgeStyle = selected ? { ...(style ?? {}), stroke: "#3b82f6", strokeWidth: 3 } : style;
+
+  // La punta de flecha (`markerEnd`) llega acá ya resuelta a un string `url(#...)` que referencia
+  // un <marker> SVG cacheado por color — no es recoloreable por edge ni reacciona a `selected`.
+  // Sin esto la línea se pone azul pero la punta (lo más visible del conector) se queda con su
+  // color semántico de siempre. Dibujamos nuestro propio triángulo azul ENCIMA (mismo patrón que
+  // `DataFlowEdge`); la dirección de entrada al nodo destino en un path smoothstep siempre queda
+  // alineada al eje del lado del handle, así que no hace falta parsear la curva.
+  let arrowPts: string | null = null;
+  if (selected) {
+    let dx = 0;
+    let dy = 0;
+    if (targetPosition === Position.Top) dy = 1;
+    else if (targetPosition === Position.Bottom) dy = -1;
+    else if (targetPosition === Position.Left) dx = 1;
+    else dx = -1; // Position.Right
+    const bx = targetX - dx * AH_LEN;
+    const by = targetY - dy * AH_LEN;
+    const ox = -dy * (AH_W / 2);
+    const oy = dx * (AH_W / 2);
+    arrowPts = `${targetX},${targetY} ${bx + ox},${by + oy} ${bx - ox},${by - oy}`;
+  }
+
+  return (
+    <>
+      <BaseEdge id={id} path={edgePath} style={edgeStyle} markerEnd={markerEnd} />
+      {arrowPts && <polygon points={arrowPts} fill="#3b82f6" />}
     </>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useState, useRef } from "react";
+import { useEffect, useCallback, useMemo, useState, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -42,7 +42,7 @@ import {
   LeadStatusNode,
 } from "./pipeline-nodes";
 import { SystemNode } from "./integration-nodes";
-import { DataFlowEdge } from "./integration-edges";
+import { DataFlowEdge, SelectableSmoothStepEdge } from "./integration-edges";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +59,10 @@ export interface FlowchartData {
     icon?: string;
     pipelineName?: string;
     systemColor?: string;
+    // Tamaño de fuente de nodos redimensionables por texto (TextNode/PipelineTitleNode) —
+    // sin esto, el resize solo vivía en estado LOCAL del componente: se perdía al recargar
+    // y, sobre todo, al duplicar (la copia nace con un componente nuevo → vuelve al default).
+    fontSize?: number;
     position?: { x: number; y: number };
   }>;
   edges: Array<{
@@ -114,6 +118,10 @@ const NODE_TYPES = {
 const EDGE_TYPES = {
   // Etiqueta de flujo de datos: caja opaca compacta multilínea + arrastrable.
   dataflow: DataFlowEdge,
+  // Clásicos/pipeline: sobrescribe el "smoothstep" built-in para que la selección
+  // (azul) se vea en la línea — el `style` inline que arma buildGraph no reacciona
+  // por sí solo a `selected`.
+  smoothstep: SelectableSmoothStepEdge,
 };
 
 // ── Toolbar items (agrupados por categoría) ─────────────────────────────────
@@ -181,8 +189,6 @@ function ToolbarSidebar({
   nodePopupOpen,
   setNodePopupOpen,
   addNode,
-  direction,
-  onToggleDirection,
   diagramKind,
 }: {
   activeTool: "pointer" | "text" | "note" | "add";
@@ -190,8 +196,6 @@ function ToolbarSidebar({
   nodePopupOpen: boolean;
   setNodePopupOpen: (open: boolean) => void;
   addNode: (type: string) => void;
-  direction: "TB" | "LR";
-  onToggleDirection: () => void;
   diagramKind: "integration" | "pipeline" | "classic";
 }) {
   // Ofrecer solo los tipos de nodo coherentes con el diagrama (no mezclar system con pipeline).
@@ -309,30 +313,6 @@ function ToolbarSidebar({
             )}
           </div>
         ))}
-
-        {/* Separador */}
-        <div className="border-t border-gray-200 my-0.5" />
-
-        {/* Disposición */}
-        <button
-          onClick={onToggleDirection}
-          title={direction === "LR" ? "Cambiar a vertical" : "Cambiar a horizontal"}
-          className="p-2.5 rounded-lg transition-all text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-        >
-          {direction === "LR" ? (
-            <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="3" y="2" width="18" height="4" rx="1" />
-              <rect x="3" y="10" width="18" height="4" rx="1" />
-              <rect x="3" y="18" width="18" height="4" rx="1" />
-            </svg>
-          ) : (
-            <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="2" y="3" width="4" height="18" rx="1" />
-              <rect x="10" y="3" width="4" height="18" rx="1" />
-              <rect x="18" y="3" width="4" height="18" rx="1" />
-            </svg>
-          )}
-        </button>
       </div>
     </div>
   );
@@ -346,15 +326,21 @@ function FlowchartInner({
   onSave?: (updated: FlowchartData) => Promise<void>;
 }) {
   const { screenToFlowPosition } = useReactFlow();
-  const [nodes, setNodes, rawOnNodesChange] = useNodesState<Node>([]);
-  // Wrap onNodesChange to track dirty state for resize/position changes
-  const onNodesChange = useCallback((changes: Parameters<typeof rawOnNodesChange>[0]) => {
-    rawOnNodesChange(changes);
-    // Mark dirty for dimension/position changes (resize, drag handled separately)
-    if (changes.some((c: { type: string }) => c.type === "dimensions")) {
-      setIsDirty(true);
-    }
-  }, [rawOnNodesChange]);
+  // Clave por CONTENIDO (no por referencia): quien nos monta (p.ej. `FlowchartBlockView` en
+  // BlockRenderer.tsx) arma el objeto `data` inline en cada render, así que cualquier re-render
+  // suyo ajeno a este diagrama (p.ej. el que dispara el propio Guardar) nos manda una referencia
+  // NUEVA con el mismo contenido. Sin esto, `buildGraph` la tomaba como "cambió" y reconstruía
+  // nodos/edges desde cero → React Flow los vuelve a medir → dispara cambios de tipo "dimensions"
+  // → el wrapper de onNodesChange los toma por un resize real y reabre "Guardar" solo.
+  const dataKey = useMemo(() => JSON.stringify(data), [data]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  // NO se infiere "dirty" de eventos genéricos de tipo "dimensions": React Flow los dispara
+  // por CUALQUIER re-medición (selección que muestra el NodeResizer, un rebuild de buildGraph,
+  // etc.), no solo por un resize real del usuario — eso reabría "Guardar" solo sin ningún
+  // cambio real (bug reportado: reaparecía tras arrastrar+guardar, o tras editar+guardar).
+  // El resize real de TextNode YA marca dirty explícito al soltar (`onResize`/`makeOnResizeFor`
+  // → data.onResize), y el de PipelineTitleNode ni siquiera se persiste (nodo sintético
+  // excluido de getCurrentData) — no hay ningún resize legítimo que dependiera de este tracking.
   const [edges, setEdges, rawOnEdgesChange] = useEdgesState<Edge>([]);
   const onEdgesChange = useCallback((changes: Parameters<typeof rawOnEdgesChange>[0]) => {
     rawOnEdgesChange(changes);
@@ -362,8 +348,9 @@ function FlowchartInner({
       setIsDirty(true);
     }
   }, [rawOnEdgesChange]);
-  const [direction, setDirection] = useState<"TB" | "LR">("LR");
-  const [layoutTick, setLayoutTick] = useState(0);
+  // Orientación default del auto-layout inicial (diagramas nuevos sin posiciones guardadas
+  // todavía) — ya no es toggleable desde la UI (se quitó el botón de auto-alinear).
+  const direction: "TB" | "LR" = "LR";
   const [isDirty, setIsDirty]   = useState(false);
   const [saving, setSaving]     = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -378,7 +365,6 @@ function FlowchartInner({
 
   const rfInstance     = useRef<ReactFlowInstance | null>(null);
   const pendingFitView = useRef(false);
-  const forceLayoutRef = useRef(false);
 
   // Refs para acceso síncrono al estado sin stale closures
   const nodesRef = useRef<Node[]>([]);
@@ -397,7 +383,7 @@ function FlowchartInner({
     setCanUndo(false);
     setCanRedo(false);
     setIsDirty(false);
-  }, [data]);
+  }, [dataKey]);
 
   // Captura el estado completo ANTES de un cambio
   const captureSnapshot = useCallback((): HistoryEntry => ({
@@ -430,7 +416,148 @@ function FlowchartInner({
     setIsDirty(true);
   }, [captureSnapshot, applySnapshot]);
 
-  // Ctrl+Z / Ctrl+Shift+Z (igual que Miro)
+  // ── Duplicar (Ctrl+C / Ctrl+V) ─────────────────────────────────────────────
+  // Portapapeles INTERNO del diagrama (un ref, no la Clipboard API del navegador):
+  // alcanza para "duplicar" dentro del mismo diagrama —lo que se pidió— y evita permisos/
+  // async de la Clipboard API real. Los handlers de edición (onLabelChange/onLabelCommit/
+  // onLabelPos) quedan atados al ID del nodo/edge en el momento de crearlos (mismo patrón
+  // que `buildGraph`/`addNode`), así que no se pueden copiar tal cual del original — se
+  // regeneran acá, atados a los IDs NUEVOS, factorizados aparte para no tocar `buildGraph`
+  // (que ya evita a propósito depender de estos closures para no re-crearse en loop).
+  const makeOnLabelChangeFor = useCallback(
+    (nodeId: string) =>
+      (field: "label" | "sublabel" | "owner" | "detail", value: string) => {
+        undoStack.current.push(captureSnapshot());
+        if (undoStack.current.length > 50) undoStack.current.shift();
+        redoStack.current = [];
+        setCanUndo(true);
+        setCanRedo(false);
+        setIsDirty(true);
+        setNodes((nds) => nds.map((nd) => (nd.id === nodeId ? { ...nd, data: { ...nd.data, [field]: value } } : nd)));
+      },
+    [captureSnapshot, setNodes]
+  );
+
+  const makeOnEdgeLabelChangeFor = useCallback(
+    (edgeId: string) =>
+      (value: string) => {
+        undoStack.current.push(captureSnapshot());
+        if (undoStack.current.length > 50) undoStack.current.shift();
+        redoStack.current = [];
+        setCanUndo(true);
+        setCanRedo(false);
+        setIsDirty(true);
+        setEdges((eds) => eds.map((ed) => (ed.id === edgeId ? { ...ed, label: value.trim() || undefined } : ed)));
+      },
+    [captureSnapshot, setEdges]
+  );
+
+  const makeOnEdgeLabelPosFor = useCallback(
+    (edgeId: string) =>
+      (t: number, side: number) => {
+        undoStack.current.push(captureSnapshot());
+        if (undoStack.current.length > 50) undoStack.current.shift();
+        redoStack.current = [];
+        setCanUndo(true);
+        setCanRedo(false);
+        setIsDirty(true);
+        setEdges((eds) =>
+          eds.map((ed) => (ed.id === edgeId ? { ...ed, data: { ...(ed.data as object), labelT: t, labelSide: side } } : ed))
+        );
+      },
+    [captureSnapshot, setEdges]
+  );
+
+  // Commit del tamaño de fuente (TextNode) — espejo de `makeOnResize` dentro de buildGraph;
+  // acá también para nodos creados/duplicados en caliente (addNode/handlePaste), que no
+  // pasan por buildGraph. Sin undo (mismo criterio que el resize de ancho/alto, que tampoco
+  // empuja: son cambios de "dimensions" que React Flow aplica directo).
+  const makeOnResizeFor = useCallback(
+    (nodeId: string) =>
+      (fontSize: number) => {
+        setIsDirty(true);
+        setNodes((nds) => nds.map((nd) => (nd.id === nodeId ? { ...nd, data: { ...nd.data, fontSize } } : nd)));
+      },
+    [setNodes]
+  );
+
+  const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
+  const pasteCountRef = useRef(0);
+  const PASTE_OFFSET = 40;
+
+  // Copiar la selección vigente (nodos + los edges ENTRE nodos copiados — un edge hacia
+  // un nodo que quedó afuera de la selección no se copia, como en Miro/Figma). Excluye los
+  // sintéticos (__pipeline_title/__bg_col_*, no seleccionables por el usuario de verdad).
+  const handleCopy = useCallback(() => {
+    const selectedNodes = nodesRef.current.filter((n) => n.selected && !n.id.startsWith("__"));
+    if (selectedNodes.length === 0) return;
+    const ids = new Set(selectedNodes.map((n) => n.id));
+    const selectedEdges = edgesRef.current.filter((e) => ids.has(e.source) && ids.has(e.target));
+    clipboardRef.current = { nodes: selectedNodes, edges: selectedEdges };
+    pasteCountRef.current = 0;
+  }, []);
+
+  // Pegar = duplicar lo copiado con IDs nuevos + offset en cascada (cada Ctrl+V corre un
+  // poco más — como Miro/Figma; se resetea en el próximo Ctrl+C). Los pegados quedan
+  // seleccionados (y los demás se deseleccionan), mismo patrón que `addNode`.
+  const handlePaste = useCallback(() => {
+    const clip = clipboardRef.current;
+    if (!clip || clip.nodes.length === 0) return;
+    pasteCountRef.current += 1;
+    const offset = PASTE_OFFSET * pasteCountRef.current;
+    const stamp = Date.now();
+
+    const idMap = new Map<string, string>();
+    clip.nodes.forEach((n, i) => idMap.set(n.id, `node-${stamp}-${i}`));
+
+    undoStack.current.push(captureSnapshot());
+    if (undoStack.current.length > 50) undoStack.current.shift();
+    redoStack.current = [];
+    setCanUndo(true);
+    setCanRedo(false);
+    setIsDirty(true);
+
+    const newNodes: Node[] = clip.nodes.map((n) => {
+      const newId = idMap.get(n.id)!;
+      // Sin `onLabelChange`/`onResize` viejos: quedarían atados al ID original, no al
+      // duplicado. `fontSize` (el VALOR) sí queda — viaja en restData como cualquier campo.
+      const { onLabelChange: _oldLabel, onResize: _oldResize, ...restData } = (n.data ?? {}) as Record<string, unknown>;
+      void _oldLabel; void _oldResize;
+      return {
+        ...n,
+        id: newId,
+        position: { x: n.position.x + offset, y: n.position.y + offset },
+        selected: true,
+        data: { ...restData, onLabelChange: makeOnLabelChangeFor(newId), onResize: makeOnResizeFor(newId) },
+      };
+    });
+
+    const newEdges: Edge[] = clip.edges.map((e, i) => {
+      const newId = `edge-${stamp}-${i}`;
+      const source = idMap.get(e.source) ?? e.source;
+      const target = idMap.get(e.target) ?? e.target;
+      const d = (e.data ?? {}) as Record<string, unknown>;
+      const isDataflow = e.type === "dataflow";
+      return {
+        ...e,
+        id: newId,
+        source,
+        target,
+        selected: false,
+        data: isDataflow
+          ? { ...d, onLabelCommit: makeOnEdgeLabelChangeFor(newId), onLabelPos: makeOnEdgeLabelPosFor(newId) }
+          : d,
+      };
+    });
+
+    setNodes((nds) => [...nds.map((n) => (n.selected ? { ...n, selected: false } : n)), ...newNodes]);
+    setEdges((eds) => [...eds, ...newEdges]);
+  }, [captureSnapshot, setNodes, setEdges, makeOnLabelChangeFor, makeOnResizeFor, makeOnEdgeLabelChangeFor, makeOnEdgeLabelPosFor]);
+
+  // Ctrl+Z / Ctrl+Shift+Z (undo/redo) + Ctrl+C / Ctrl+V (duplicar selección) — igual que
+  // Miro. Se ignora si el foco está en un input/textarea (edición de etiqueta en curso) y,
+  // para copiar/pegar, si hay texto de verdad seleccionado en la página (no pisar un copy
+  // de texto nativo, ej. seleccionar una palabra de una etiqueta sin entrar en edición).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
@@ -441,10 +568,18 @@ function FlowchartInner({
       if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
         e.preventDefault(); handleRedo();
       }
+      if (!isFullscreen) return;
+      const hasTextSelection = !!window.getSelection?.()?.toString();
+      if ((e.ctrlKey || e.metaKey) && e.key === "c" && !hasTextSelection) {
+        e.preventDefault(); handleCopy();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "v" && !hasTextSelection) {
+        e.preventDefault(); handlePaste();
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, isFullscreen, handleCopy, handlePaste]);
 
   // ── Construcción del grafo ────────────────────────────────────────────────
   // makeOnLabelChange INSIDE buildGraph para evitar que su referencia entre en
@@ -471,6 +606,18 @@ function FlowchartInner({
             nds.map((nd) =>
               nd.id === nodeId ? { ...nd, data: { ...nd.data, [field]: value } } : nd
             )
+          );
+        };
+
+      // Commit del tamaño de fuente (TextNode) al terminar un resize (onResizeEnd, no en cada
+      // frame): sin esto el fontSize solo vivía en estado LOCAL del nodo — se perdía al
+      // recargar y, sobre todo, al duplicar (la copia nace con un componente nuevo → default).
+      const makeOnResize =
+        (nodeId: string) =>
+        (fontSize: number) => {
+          setIsDirty(true);
+          setNodes((nds) =>
+            nds.map((nd) => (nd.id === nodeId ? { ...nd, data: { ...nd.data, fontSize } } : nd))
           );
         };
 
@@ -513,7 +660,7 @@ function FlowchartInner({
         // plano ({ label, … }): los flowcharts del agente vienen anidados → sin esto los
         // labels salen vacíos (placeholders "Detalle…"/"Descripción…").
         const nd = (n as unknown as {
-          data?: { label?: string; sublabel?: string; owner?: string; detail?: string; icon?: string; pipelineName?: string; systemColor?: string };
+          data?: { label?: string; sublabel?: string; owner?: string; detail?: string; icon?: string; pipelineName?: string; systemColor?: string; fontSize?: number };
         }).data;
         return {
           id:       n.id,
@@ -527,8 +674,10 @@ function FlowchartInner({
             icon:          n.icon ?? nd?.icon,
             pipelineName:  n.pipelineName ?? nd?.pipelineName,
             systemColor:   n.systemColor ?? nd?.systemColor,
+            fontSize:      n.fontSize ?? nd?.fontSize,
             variant:       n.type,
             onLabelChange: makeOnLabelChange(n.id),
+            onResize:      makeOnResize(n.id),
           },
         };
       });
@@ -631,8 +780,6 @@ function FlowchartInner({
         });
 
       pendingFitView.current = true;
-      const shouldForce = forceLayoutRef.current;
-      forceLayoutRef.current = false;
 
       // Helper: add title node if diagram has a title and no pipeline_title already exists
       const addTitleNode = (layoutNodes: Node[]): Node[] => {
@@ -655,7 +802,7 @@ function FlowchartInner({
         return [titleNode, ...layoutNodes];
       };
 
-      if (hasSavedPositions && !shouldForce) {
+      if (hasSavedPositions) {
         const titled = addTitleNode(rawNodes);
         setNodes(titled);
         // Integración: recomputar el de-overlap de etiquetas desde las posiciones GUARDADAS
@@ -673,10 +820,7 @@ function FlowchartInner({
         }
       } else {
         try {
-          const cleanNodes = shouldForce
-            ? rawNodes.map((n) => ({ ...n, position: { x: 0, y: 0 } }))
-            : rawNodes;
-          const { nodes: ln, edges: le } = getLayoutedElements(cleanNodes, rawEdges, dir);
+          const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, dir);
           setNodes(addTitleNode(injectEditHandlers(ln)));
           setEdges(le);
         } catch {
@@ -685,12 +829,14 @@ function FlowchartInner({
         }
       }
     },
+    // `dataKey` (contenido) en vez de `data` (referencia) a propósito — ver comentario en su
+    // declaración: evita reconstruir el grafo (y disparar "dimensions" espurios) cuando quien
+    // nos monta re-renderiza con un objeto `data` nuevo pero de igual contenido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data, setNodes, setEdges, captureSnapshot]
+    [dataKey, setNodes, setEdges, captureSnapshot]
   );
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { buildGraph(direction); }, [buildGraph, direction, layoutTick]);
+  useEffect(() => { buildGraph(direction); }, [buildGraph, direction]);
 
   // fitView después de buildGraph — Strict Mode safe:
   // pendingFitView.current = false va DENTRO del timeout para que si el cleanup
@@ -1027,12 +1173,13 @@ function FlowchartInner({
             ...(type === "system" ? { sublabel: "Sistema" } : {}),
             variant: type,
             onLabelChange,
+            onResize: makeOnResizeFor(id),
           },
         } as Node,
       ]);
       setIsDirty(true);
     },
-    [screenToFlowPosition, setNodes, captureSnapshot]
+    [screenToFlowPosition, setNodes, captureSnapshot, makeOnResizeFor]
   );
 
   // ── Drop handler para drag desde toolbar ──────────────────────────────────
@@ -1055,15 +1202,14 @@ function FlowchartInner({
   // ── Serializar estado actual para guardar ─────────────────────────────────
   const getCurrentData = useCallback(
     (): FlowchartData => {
-      // Pipeline: NO persistir posiciones de nodos → al recargar corre getPipelineLayout de nuevo,
-      // regenerando los fondos de columna + el título (sintéticos, no serializados). El texto y los
-      // nodos agregados sí persisten. Integración/clásicos SÍ persisten posiciones.
-      const isPipeline = nodes.some((n) =>
-        ["pipeline_stage", "trigger", "action", "follow_up", "outcome_positive", "outcome_negative", "lifecycle_change", "lead_status"].includes(n.type ?? ""),
-      );
       return {
       title:       data.title,
       description: data.description,
+      // Canvas vivo: la posición del usuario (drag) SIEMPRE se persiste tal cual, para
+      // cualquier tipo de diagrama — incluido pipeline. Antes se descartaba a propósito acá
+      // para diagramas pipeline, forzando un re-layout automático en cada carga que pisaba
+      // cualquier reubicación manual. `buildGraph` ya sabe usar posiciones guardadas tal cual
+      // cuando existen (rama `hasSavedPositions`), así que alcanza con dejar de sabotear el payload.
       nodes: nodes.filter((n) => !n.id.startsWith("__bg_col_") && !n.id.startsWith("__pipeline_")).map((n) => ({
         id:           n.id,
         type:         n.type as string,
@@ -1074,7 +1220,8 @@ function FlowchartInner({
         icon:         (n.data.icon         as string | undefined) || undefined,
         pipelineName: (n.data.pipelineName as string | undefined) || undefined,
         systemColor:  (n.data.systemColor  as string | undefined) || undefined,
-        position:     isPipeline ? undefined : n.position,
+        fontSize:     (n.data.fontSize     as number | undefined) || undefined,
+        position:     n.position,
       })),
       edges: edges.map((e) => {
         const stroke = (e.style as { stroke?: string })?.stroke;
@@ -1152,6 +1299,23 @@ function FlowchartInner({
 
   const flowContent = (
     <div className="relative w-full h-full">
+      {/* Resaltado de selección — UNA sola regla cubre los ~18 tipos de nodo (cajas, texto,
+          notas) sin tocar cada componente; React Flow ya agrega la clase `selected` al
+          wrapper de cada nodo. El borde/radio queda algo "rectangular" en formas tipo
+          píldora (start/end, trigger) — aceptable, mismo criterio que Figma/Miro. */}
+      <style>{`
+        /* !important: la hoja de estilos de React Flow trae ".selectable:focus/:focus-visible { outline: none }"
+           con más especificidad (3 clases) que ".selected" (2 clases) — sin esto, el borde azul solo se ve
+           en el instante entre blur y la baja de la clase "selected" (parpadeo al deseleccionar), nunca
+           mientras el nodo está realmente seleccionado. */
+        .react-flow__node.selected,
+        .react-flow__node.selectable.selected:focus,
+        .react-flow__node.selectable.selected:focus-visible {
+          outline: 2px solid #3b82f6 !important;
+          outline-offset: 2px;
+          border-radius: 8px;
+        }
+      `}</style>
 
       {/* Toolbar lateral izquierda estilo Miro (solo en fullscreen) */}
       {onSave && isFullscreen && (
@@ -1162,14 +1326,6 @@ function FlowchartInner({
           setNodePopupOpen={setNodePopupOpen}
           addNode={addNode}
           diagramKind={diagramKind}
-          direction={direction}
-          onToggleDirection={() => {
-            const newDir = direction === "LR" ? "TB" : "LR";
-            forceLayoutRef.current = true;
-            setDirection(newDir);
-            setLayoutTick((t) => t + 1);
-            setIsDirty(true);
-          }}
         />
       )}
 
@@ -1200,7 +1356,11 @@ function FlowchartInner({
           </div>
         )}
 
-        {onSave && isDirty && isFullscreen && (
+        {/* `|| saving`: el CTA NO se va al hacer clic — se queda como "Guardando…" hasta que el
+            guardado termina, y recién ahí desaparece (isDirty=false). Sin esto, cualquier cosa que
+            baje isDirty mientras el PUT está en vuelo (p.ej. un refetch del padre que aterriza en
+            el medio) lo hacía desaparecer sin feedback. Vuelve a aparecer solo al modificar algo. */}
+        {onSave && (isDirty || saving) && isFullscreen && (
           <button
             onClick={handleSave} disabled={saving}
             title="Guardar cambios"

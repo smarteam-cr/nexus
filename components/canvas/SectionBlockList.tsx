@@ -46,6 +46,12 @@ export default function SectionBlockList({
   const sections = onlyKey
     ? allSections.filter((s) => s.key === onlyKey)
     : allSections;
+  // Última serialización aplicada — guard de igualdad (mismo patrón que useCanvasSections.ts):
+  // un refetch con contenido idéntico (el que dispara CADA guardado, no solo el polling) no debe
+  // reemplazar el array. Sin esto, cada save() re-crea `allSections` con una referencia nueva
+  // aunque el contenido sea igual → cascada de re-render hacia abajo (p.ej. FlowchartViewer
+  // reconstruye su grafo, React Flow re-mide nodos, y eso reabre "Guardar" solo).
+  const lastSectionsJson = useRef<string>("");
   const [loading, setLoading] = useState(true);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [interaction, setInteraction] = useState<GridInteraction | null>(null);
@@ -84,7 +90,12 @@ export default function SectionBlockList({
     try {
       const res = await fetch(`/api/projects/${projectId}/canvas-sections?canvasId=${canvasId}`);
       const data = await res.json();
-      setAllSections(data.sections ?? []);
+      const next = data.sections ?? [];
+      const serialized = JSON.stringify(next);
+      if (serialized !== lastSectionsJson.current) {
+        lastSectionsJson.current = serialized;
+        setAllSections(next);
+      }
     } catch { /* ignore */ }
     setLoading(false);
   }, [projectId, canvasId]);

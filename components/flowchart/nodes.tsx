@@ -284,8 +284,15 @@ export function AnnotationNode({ data }: { data: NodeData }) {
 
 // ── Nodo de texto libre (sin fondo, sin bordes) ──────────────────────────────
 
-export function TextNode({ data, selected }: { data: NodeData & { fontSize?: number }; selected?: boolean }) {
+export function TextNode({
+  data,
+  selected,
+}: {
+  data: NodeData & { fontSize?: number; onResize?: (fontSize: number) => void };
+  selected?: boolean;
+}) {
   const [fontSize, setFontSize] = useState(data.fontSize ?? 14);
+  const clampFontSize = (height: number) => Math.max(10, Math.min(64, height * 0.55));
 
   return (
     <>
@@ -295,10 +302,11 @@ export function TextNode({ data, selected }: { data: NodeData & { fontSize?: num
         minHeight={20}
         lineStyle={{ borderColor: "#cbd5e1", borderWidth: 1 }}
         handleStyle={{ width: 7, height: 7, borderRadius: 2, background: "#94a3b8", border: "1px solid white" }}
-        onResize={(_event, params) => {
-          const newSize = Math.max(10, Math.min(64, params.height * 0.55));
-          setFontSize(newSize);
-        }}
+        onResize={(_event, params) => setFontSize(clampFontSize(params.height))}
+        // Commit al SOLTAR (no en cada frame de `onResize`): sin esto el tamaño solo vivía en
+        // estado local del componente — se perdía al recargar y, sobre todo, al duplicar (la
+        // copia monta un componente NUEVO que arranca siempre del default 14).
+        onResizeEnd={(_event, params) => data.onResize?.(clampFontSize(params.height))}
       />
       <div className="group/node px-1 py-0.5 w-full h-full flex items-center">
         <Handle type="source" position={Position.Top}    id="t" style={{ opacity: 0, width: 6, height: 6 }} />
