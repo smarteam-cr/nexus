@@ -275,6 +275,24 @@ export default function TaskDetailDrawer({
               {task.source === "AGENT" ? "IA" : "CSE"}
             </span>
           </div>
+          {/* Procedencia del ESTADO/check (distinto del origen del contenido) — solo cuando la
+              tarea está resuelta (DONE/SUSPENDED): un PENDING no tiene "quién lo marcó". Hace
+              visible que el avance detectado por IA siempre pasa por confirmación humana. */}
+          {(task.status === "DONE" || task.status === "SUSPENDED") && task.statusSource && (
+            <div>
+              <div className={propLabel}>{task.status === "DONE" ? "Marcado" : "Suspendido"}</div>
+              <span
+                className={`text-[10px] font-semibold rounded px-2 py-1 border ${
+                  task.statusSource === "AI_CONFIRMED"
+                    ? "text-violet-300 bg-violet-900/30 border-violet-700/40"
+                    : "text-emerald-300 bg-emerald-900/30 border-emerald-700/40"
+                }`}
+                title={task.statusChangedByEmail ?? undefined}
+              >
+                {task.statusSource === "AI_CONFIRMED" ? "Detectado por IA · confirmado por vos" : "Por vos"}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Descripción (cuerpo principal) */}

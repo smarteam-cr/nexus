@@ -22,6 +22,14 @@ import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
 
 const AGENT_ID_PROGRESS = "agent-timeline-progress";
 
+// Estado TERMINAL decidido por un humano: DONE (hecha) o SUSPENDED (aparcada/descartada, no se
+// ejecutó). Ambos son resoluciones humanas — el detector de avance NUNCA los re-propone ni los
+// pisa. El principio: el avance solo opera sobre tareas ACTIVAS (PENDING/IN_PROGRESS); los estados
+// terminales solo los cambia el humano por acción directa (drawer/toggle). Antes solo se protegía
+// DONE, dejando una asimetría por la que una suspensión humana podía re-proponerse como hecha.
+const isTerminalHuman = (status: string | undefined): boolean =>
+  status === "DONE" || status === "SUSPENDED";
+
 export interface ProgressResult {
   status: "ok" | "skipped" | "error";
   reason?: string;
@@ -190,14 +198,14 @@ export async function regenerateTimelineProgress(
         ? prog.currentPhaseId
         : null;
 
-    // Fases que el agente marca completas (válidas, no ya DONE) — la PROPUESTA de avance.
+    // Fases que el agente marca completas (válidas, no ya resueltas por un humano) — la PROPUESTA.
     const phasesDone = (prog.phases ?? [])
-      .filter((p) => p?.done === true && typeof p.id === "string" && phaseStatus.has(p.id) && phaseStatus.get(p.id) !== "DONE")
+      .filter((p) => p?.done === true && typeof p.id === "string" && phaseStatus.has(p.id) && !isTerminalHuman(phaseStatus.get(p.id)))
       .map((p) => ({ id: p.id as string, done: true }));
-    // Ids de tareas que el agente infirió hechas (válidas, no ya DONE).
+    // Ids de tareas que el agente infirió hechas (válidas, no ya resueltas por un humano).
     const inferredDone = new Set(
       (prog.tasks ?? [])
-        .filter((t) => t?.done === true && typeof t.id === "string" && taskStatus.has(t.id) && taskStatus.get(t.id) !== "DONE")
+        .filter((t) => t?.done === true && typeof t.id === "string" && taskStatus.has(t.id) && !isTerminalHuman(taskStatus.get(t.id)))
         .map((t) => t.id as string),
     );
 
@@ -222,7 +230,7 @@ export async function regenerateTimelineProgress(
     for (const ph of project.timeline.phases) {
       if (!phasesInPlay.has(ph.id)) continue;
       for (const t of ph.tasks) {
-        if (t.status === "DONE") continue; // ya hecha, no re-proponer
+        if (isTerminalHuman(t.status)) continue; // ya resuelta por un humano (DONE/SUSPENDED), no re-proponer
         tasksDraft.push({ id: t.id, done: inferredDone.has(t.id) });
       }
     }

@@ -70,6 +70,11 @@ export async function PATCH(
       where: { id: taskId },
       data: {
         status: status as TimelineTaskStatus,
+        // Check manual del CSE → procedencia HUMAN (incluye el desmarcado a PENDING: decisión
+        // humana explícita). Hace explícito el invariante "status != PENDING ⟹ humano".
+        statusSource: "HUMAN",
+        statusChangedByEmail: guard.user.email ?? null,
+        statusChangedAt: now,
         ...actualDatesPatch(status as TimelineTaskStatus, { actualStart: task.actualStart }),
       },
       select: { id: true, status: true, actualStart: true, actualEnd: true, updatedAt: true },
@@ -85,13 +90,15 @@ export async function PATCH(
     });
     if (phase && phase.tasks.length > 0) {
       const allResolved = phase.tasks.every((t) => t.status === "DONE" || t.status === "SUSPENDED");
+      // El cambio de estado de la fase es DERIVADO de la acción humana del CSE → también HUMAN.
+      const phaseStatusMeta = { statusSource: "HUMAN" as const, statusChangedByEmail: guard.user.email ?? null, statusChangedAt: now };
       if (allResolved && phase.status !== "DONE") {
         await tx.timelinePhase.update({
           where: { id: task.phaseId },
-          data: { status: "DONE", actualEnd: now, ...(phase.actualStart ? {} : { actualStart: now }) },
+          data: { status: "DONE", actualEnd: now, ...(phase.actualStart ? {} : { actualStart: now }), ...phaseStatusMeta },
         });
       } else if (!allResolved && phase.status === "DONE") {
-        await tx.timelinePhase.update({ where: { id: task.phaseId }, data: { status: "IN_PROGRESS" } });
+        await tx.timelinePhase.update({ where: { id: task.phaseId }, data: { status: "IN_PROGRESS", ...phaseStatusMeta } });
       }
     }
 

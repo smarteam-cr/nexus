@@ -60,6 +60,10 @@ export async function PATCH(
     where: { id: phaseId },
     data: {
       status: status as TimelineTaskStatus,
+      // Cambio manual del CSE → procedencia HUMAN (ver TimelinePhase.statusSource).
+      statusSource: "HUMAN",
+      statusChangedByEmail: guard.user.email ?? null,
+      statusChangedAt: new Date(),
       ...actualDatesPatch(status as TimelineTaskStatus, { actualStart: phase.actualStart }),
     },
     select: { id: true, status: true, actualStart: true, actualEnd: true, updatedAt: true },

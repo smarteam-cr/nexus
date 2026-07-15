@@ -547,6 +547,12 @@ model TimelinePhase {
   // IN_PROGRESS = la fase en curso (el "hoy"); PENDING = por delante. Lo escribe SOLO
   // el CSE (mismo invariante que TimelineTask.status); el agente lo PROPONE en pendingProgress.
   status          TimelineTaskStatus    @default(PENDING)
+  // Procedencia del ESTADO actual (ortogonal a `source`, que describe el CONTENIDO): HUMAN = lo
+  // resolvió el CSE a mano; AI_CONFIRMED = el detector de avance lo detectó y el CSE lo confirmó en
+  // el banner. Hace explícito el invariante que antes era implícito ("status != PENDING ⟹ humano").
+  statusSource        TimelineStatusSource @default(HUMAN)
+  statusChangedByEmail String?
+  statusChangedAt      DateTime?
   // D.3 fundación — fechas REALES de ejecución, MONÓTONAS (no se auto-borran):
   // actualStart la 1ra vez que va a IN_PROGRESS/DONE; actualEnd al DONE. Volver a
   // PENDING/IN_PROGRESS NO las borra — el status manda para "¿hecho hoy?", las fechas son histórico.
@@ -564,7 +570,8 @@ model TimelinePhase {
 // (0-indexed, rango [0, durationWeeks)); en UI se muestra 1-based.
 // El estado vive separado del contenido a propósito: D.2 podrá regenerar
 // contenido preservando estados humanos por id. Invariante D.1: el agente
-// solo crea PENDING → todo status != PENDING es humano por definición.
+// solo crea PENDING → todo status != PENDING es humano por definición. `statusSource`
+// hace ese invariante EXPLÍCITO y auditable por-tarea (ver TimelinePhase.statusSource).
 model TimelineTask {
   id                String              @id @default(cuid())
   phaseId           String
@@ -573,6 +580,11 @@ model TimelineTask {
   weekIndex         Int // 0-indexed, relativo a la fase
   order             Int                 @default(0) // orden dentro de la semana
   status            TimelineTaskStatus  @default(PENDING)
+  // Procedencia del ESTADO (ver TimelinePhase.statusSource): HUMAN = check manual del CSE;
+  // AI_CONFIRMED = avance detectado por IA y confirmado por el CSE en el banner.
+  statusSource        TimelineStatusSource @default(HUMAN)
+  statusChangedByEmail String?
+  statusChangedAt      DateTime?
   // #4 — override manual de fechas por tarea. INTENCIÓN: cuando estén seteadas deben
   // ganar sobre la fecha DERIVADA de la semana (anchor + offset de fase + weekIndex) y
   // cruzar al cronograma compartible como fecha efectiva. Se editan con datepicker en el
@@ -605,6 +617,14 @@ enum TimelinePhaseSource {
   AGENT // generada por la IA, sin tocar humano
   MODIFIED // generada por IA, editada por humano (al pasar por PUT con id existente)
   HUMAN // creada desde cero por humano (PUT con phase sin id)
+}
+
+// Procedencia del ESTADO (status) de una fase/tarea — distinto de `source` (procedencia del
+// CONTENIDO). El detector de avance NUNCA escribe status directo: todo estado terminal nace de
+// una acción humana, sea directa (HUMAN) o confirmando una detección de IA en el banner (AI_CONFIRMED).
+enum TimelineStatusSource {
+  HUMAN // el CSE resolvió el estado a mano (check/desmarcado directo)
+  AI_CONFIRMED // el avance lo detectó la IA y el CSE lo confirmó (botón "Aplicar avance")
 }
 
 // B — dueño de una tarea del cronograma, desde la óptica del plan compartido con el cliente.

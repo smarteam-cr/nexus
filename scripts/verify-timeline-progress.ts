@@ -19,7 +19,7 @@ const ok = (b: boolean) => (b ? "✓" : "✗ FALLA");
 type Snap = {
   pendingProgress: unknown;
   pendingProgressRunId: string | null;
-  phases: { id: string; name: string; status: string; tasks: { id: string; title: string; status: string }[] }[];
+  phases: { id: string; name: string; status: string; statusSource: string; tasks: { id: string; title: string; status: string; statusSource: string }[] }[];
 };
 
 async function snapshot(): Promise<Snap> {
@@ -30,7 +30,7 @@ async function snapshot(): Promise<Snap> {
       pendingProgressRunId: true,
       phases: {
         orderBy: { order: "asc" },
-        select: { id: true, name: true, status: true, tasks: { select: { id: true, title: true, status: true } } },
+        select: { id: true, name: true, status: true, statusSource: true, tasks: { select: { id: true, title: true, status: true, statusSource: true } } },
       },
     },
   });
@@ -40,9 +40,9 @@ async function snapshot(): Promise<Snap> {
 
 async function restore(snap: Snap) {
   for (const p of snap.phases) {
-    await prisma.timelinePhase.update({ where: { id: p.id }, data: { status: p.status as never } });
+    await prisma.timelinePhase.update({ where: { id: p.id }, data: { status: p.status as never, statusSource: p.statusSource as never } });
     for (const t of p.tasks) {
-      await prisma.timelineTask.update({ where: { id: t.id }, data: { status: t.status as never } });
+      await prisma.timelineTask.update({ where: { id: t.id }, data: { status: t.status as never, statusSource: t.statusSource as never } });
     }
   }
   await prisma.projectTimeline.update({
@@ -76,12 +76,21 @@ async function main() {
   // sea de las que el agente probablemente proponga como hechas en fases tempranas).
   const lastPhase = before.phases[before.phases.length - 1];
   const handTask = lastPhase.tasks[0];
+  // Segunda tarea (cualquier fase con ≥1 tarea activa) para probar el blindaje de SUSPENDED:
+  // una tarea que el humano aparcó NUNCA debe entrar al borrador ni re-proponerse como hecha.
+  const suspTask = before.phases.flatMap((p) => p.tasks).find((t) => t.id !== handTask?.id);
 
   try {
     // ── Paso A: el CSE marca una tarea DONE a mano ──
     if (handTask) {
-      await prisma.timelineTask.update({ where: { id: handTask.id }, data: { status: "DONE" } });
+      await prisma.timelineTask.update({ where: { id: handTask.id }, data: { status: "DONE", statusSource: "HUMAN" } });
       console.log(`\n[A] Marca-a-mano del CSE: "${handTask.title}" → DONE (fase "${lastPhase.name}")`);
+    }
+
+    // ── Paso A2: el CSE SUSPENDE otra tarea (decisión terminal humana) ──
+    if (suspTask) {
+      await prisma.timelineTask.update({ where: { id: suspTask.id }, data: { status: "SUSPENDED", statusSource: "HUMAN" } });
+      console.log(`[A2] Suspensión del CSE: "${suspTask.title}" → SUSPENDED`);
     }
 
     // ── Paso B: el agente PROPONE (no escribe status) ──
@@ -100,9 +109,10 @@ async function main() {
       const statusUnchanged = afterB.phases.every(
         (p) => p.status === (before.phases.find((b) => b.id === p.id)?.status) &&
           p.tasks.every((t) => {
-            const wasHand = t.id === handTask?.id;
             const orig = before.phases.flatMap((b) => b.tasks).find((b) => b.id === t.id)?.status;
-            return wasHand ? t.status === "DONE" : t.status === orig;
+            if (t.id === handTask?.id) return t.status === "DONE";
+            if (t.id === suspTask?.id) return t.status === "SUSPENDED";
+            return t.status === orig;
           }),
       );
       console.log(`    ${ok(statusUnchanged)} el agente NO tocó ningún status (solo pendingProgress)`);
@@ -111,13 +121,21 @@ async function main() {
       const reproposesHand = handTask ? draft1.tasks.some((t) => t.id === handTask.id) : false;
       console.log(`    ${ok(!reproposesHand)} el borrador NO re-propone la tarea marcada a mano`);
 
+      // Invariante 2b (blindaje SUSPENDED): la tarea aparcada por el humano NO entra al borrador
+      // (ni como tarea ni implícita), aunque el agente la infiriera hecha.
+      const draftHasSusp = suspTask
+        ? draft1.tasks.some((t) => t.id === suspTask.id) || draft1.phases.some((p) => p.id === suspTask.id)
+        : false;
+      console.log(`    ${ok(!draftHasSusp)} el borrador NO incluye la tarea SUSPENDIDA por el humano`);
+
       // ── Paso C: el CSE APLICA el subconjunto propuesto (mirror del endpoint) ──
+      // Mirror del endpoint real: guardias de estado terminal + statusSource AI_CONFIRMED.
       const phaseIds = draft1.phases.map((p) => p.id);
       const taskIds = draft1.tasks.map((t) => t.id);
-      if (phaseIds.length) await prisma.timelinePhase.updateMany({ where: { id: { in: phaseIds } }, data: { status: "DONE" } });
-      if (taskIds.length) await prisma.timelineTask.updateMany({ where: { id: { in: taskIds } }, data: { status: "DONE" } });
+      if (phaseIds.length) await prisma.timelinePhase.updateMany({ where: { id: { in: phaseIds } }, data: { status: "DONE", statusSource: "AI_CONFIRMED" } });
+      if (taskIds.length) await prisma.timelineTask.updateMany({ where: { id: { in: taskIds }, status: { not: "SUSPENDED" } }, data: { status: "DONE", statusSource: "AI_CONFIRMED" } });
       if (draft1.currentPhaseId)
-        await prisma.timelinePhase.updateMany({ where: { id: draft1.currentPhaseId, status: { not: "DONE" } }, data: { status: "IN_PROGRESS" } });
+        await prisma.timelinePhase.updateMany({ where: { id: draft1.currentPhaseId, status: { not: "DONE" } }, data: { status: "IN_PROGRESS", statusSource: "AI_CONFIRMED" } });
       // El endpoint real limpia el borrador al aplicar — el mirror también.
       await prisma.projectTimeline.update({ where: { projectId: PROJECT_ID }, data: { pendingProgress: Prisma.DbNull, pendingProgressRunId: null } });
       console.log(`\n[C] Aplicado: ${phaseIds.length} fases→DONE, ${taskIds.length} tareas→DONE, hoy→IN_PROGRESS (borrador limpiado)`);
@@ -129,6 +147,8 @@ async function main() {
       console.log(`    ${ok(appliedOk)} las fases/tareas aceptadas quedaron en DONE`);
       const handStillDone = !handTask || afterC.phases.flatMap((p) => p.tasks).find((t) => t.id === handTask.id)?.status === "DONE";
       console.log(`    ${ok(handStillDone)} la marca-a-mano del CSE quedó intacta (no se pisó)`);
+      const suspStillSuspended = !suspTask || afterC.phases.flatMap((p) => p.tasks).find((t) => t.id === suspTask.id)?.status === "SUSPENDED";
+      console.log(`    ${ok(suspStillSuspended)} la suspensión del CSE quedó intacta (el avance no la pisó con DONE)`);
 
       // ── Paso D: realimentación — el agente re-corre y NO re-propone lo ya DONE ──
       console.log(`\n[D] Re-corriendo (realimentación)…`);

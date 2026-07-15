@@ -48,6 +48,9 @@ interface TaskDraft {
   status: GanttTaskStatus;
   needsValidation: boolean;
   source?: string;
+  statusSource?: string;
+  statusChangedByEmail?: string | null;
+  statusChangedAt?: string | null;
   party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null;
   type?: "SESSION" | "TASK" | null;
   startDateOverride?: string | null; // #4 — ISO o null (null = derivar de la semana)
@@ -107,6 +110,9 @@ interface ServerTask {
   notes: string | null;
   needsValidation: boolean;
   source: string;
+  statusSource?: string;
+  statusChangedByEmail?: string | null;
+  statusChangedAt?: string | null;
   party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null;
   type: "SESSION" | "TASK" | null;
   startDateOverride?: string | null; // #4
@@ -280,6 +286,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         status: t.status,
         needsValidation: t.needsValidation,
         source: t.source,
+        statusSource: t.statusSource,
+        statusChangedByEmail: t.statusChangedByEmail ?? null,
+        statusChangedAt: t.statusChangedAt ?? null,
         party: t.party,
         type: t.type,
         startDateOverride: t.startDateOverride ?? null,
@@ -971,6 +980,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       notes: t.notes,
       needsValidation: t.needsValidation,
       source: t.source,
+      statusSource: t.statusSource,
+      statusChangedByEmail: t.statusChangedByEmail ?? null,
+      statusChangedAt: t.statusChangedAt ?? null,
       party: t.party,
       type: t.type,
       startDateOverride: t.startDateOverride ?? null,

@@ -95,6 +95,9 @@ export async function POST(
   }
 
   const now = new Date();
+  // Procedencia del estado para todo lo que escribe este apply: detectado por IA, confirmado por
+  // el CSE en el banner → AI_CONFIRMED + quién confirmó + cuándo (ver TimelinePhase.statusSource).
+  const statusMeta = { statusSource: "AI_CONFIRMED" as const, statusChangedByEmail: guard.user.email ?? null, statusChangedAt: now };
   let phasesDone = 0;
   let tasksDone = 0;
   let tasksSuspended = 0;
@@ -105,7 +108,7 @@ export async function POST(
       if (phaseIds.length > 0) {
         const r = await tx.timelinePhase.updateMany({
           where: { id: { in: phaseIds }, timelineId: tl.id },
-          data: { status: "DONE", actualEnd: now },
+          data: { status: "DONE", actualEnd: now, ...statusMeta },
         });
         phasesDone = r.count;
         await tx.timelinePhase.updateMany({
@@ -124,13 +127,17 @@ export async function POST(
         });
         validTaskIds = valid.map((t) => t.id);
         if (validTaskIds.length > 0) {
+          // Defense-in-depth: el avance NUNCA pisa una suspensión humana con DONE (el body viene
+          // del cliente). SUSPENDED es terminal-humano; reactivarla es acción manual, no avance.
           const r = await tx.timelineTask.updateMany({
-            where: { id: { in: validTaskIds } },
-            data: { status: "DONE", actualEnd: now },
+            where: { id: { in: validTaskIds }, status: { not: "SUSPENDED" } },
+            data: { status: "DONE", actualEnd: now, ...statusMeta },
           });
           tasksDone = r.count;
+          // Inicio real solo para las que EFECTIVAMENTE pasaron a DONE (misma guardia SUSPENDED):
+          // una suspensión saltada arriba no debe recibir actualStart de un avance que no la tocó.
           await tx.timelineTask.updateMany({
-            where: { id: { in: validTaskIds }, actualStart: null },
+            where: { id: { in: validTaskIds }, status: "DONE", actualStart: null },
             data: { actualStart: now },
           });
         }
@@ -145,11 +152,12 @@ export async function POST(
         });
         validSuspendedIds = valid.map((t) => t.id);
         if (validSuspendedIds.length > 0) {
-          await tx.timelineTask.updateMany({
-            where: { id: { in: validSuspendedIds } },
-            data: { status: "SUSPENDED" },
+          // Defense-in-depth simétrica: el avance no pisa un DONE humano con SUSPENDED.
+          const r = await tx.timelineTask.updateMany({
+            where: { id: { in: validSuspendedIds }, status: { not: "DONE" } },
+            data: { status: "SUSPENDED", ...statusMeta },
           });
-          tasksSuspended = validSuspendedIds.length;
+          tasksSuspended = r.count;
         }
       }
 
@@ -158,7 +166,7 @@ export async function POST(
       if (currentPhaseId) {
         await tx.timelinePhase.updateMany({
           where: { id: currentPhaseId, timelineId: tl.id, status: { not: "DONE" } },
-          data: { status: "IN_PROGRESS" },
+          data: { status: "IN_PROGRESS", ...statusMeta },
         });
         await tx.timelinePhase.updateMany({
           where: { id: currentPhaseId, timelineId: tl.id, actualStart: null },
