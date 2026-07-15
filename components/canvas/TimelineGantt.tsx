@@ -59,6 +59,7 @@ import {
   absoluteWeek,
   isOverdue,
 } from "@/lib/timeline/weeks";
+import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 
@@ -76,6 +77,11 @@ export interface GanttTask {
   needsValidation: boolean;
   /** Procedencia (de `source`): AGENT → tag "IA", MODIFIED|HUMAN → tag "CSE". */
   source?: string;
+  /** Procedencia del ESTADO/check (de `statusSource`): HUMAN = marcado por el CSE a mano;
+   *  AI_CONFIRMED = avance detectado por IA y confirmado por el CSE. Distinto de `source`. */
+  statusSource?: string;
+  statusChangedByEmail?: string | null;
+  statusChangedAt?: string | null;
   /** B — dueño en el plan compartido (chip). null/undefined = sin asignar. */
   party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null;
   /** ¿la tarea es una SESIÓN (reunión con el cliente) o una TAREA (acción)? */
@@ -904,6 +910,50 @@ export default function TimelineGantt({
           </div>
         </div>
       </div>
+
+      {/* Pendientes del CLIENTE atrasados — al pie, para que el CSE señale de un vistazo lo que
+          frena la implementación. Mismo criterio de atraso (isOverdue por semana) que el tag rojo
+          inline. Solo aparece si hay ≥1 y tras hidratar (necesita el "hoy" del cliente). */}
+      {(() => {
+        const blockers = collectClientBlockers(phases, anchor, today);
+        if (blockers.length === 0) return null;
+        return (
+          <div className="rounded-2xl border border-amber-700/50 bg-amber-900/15 px-4 py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
+                Pendiente del cliente · atrasadas
+              </span>
+              <span className="text-[10px] font-semibold text-amber-400/80 bg-amber-900/40 border border-amber-700/40 rounded-full px-2 py-0.5">
+                {blockers.length}
+              </span>
+            </div>
+            <ul className="flex flex-col gap-1">
+              {blockers.map((b) => {
+                const clickable = !readOnly && !!onOpenTask && !!b.task.key;
+                return (
+                  <li key={b.task.key ?? `${b.phase.key}-${b.absWeek}-${b.task.title}`}>
+                    <button
+                      type="button"
+                      disabled={!clickable}
+                      onClick={clickable ? () => onOpenTask!(b.phase.key, b.task.key!) : undefined}
+                      className={`w-full flex flex-wrap items-center gap-2 text-left px-2 py-1.5 rounded-lg ${clickable ? "hover:bg-amber-900/25 cursor-pointer" : "cursor-default"}`}
+                    >
+                      <span className="text-sm text-gray-200 flex-1 min-w-0">{b.task.title}</span>
+                      <span className="text-[11px] text-gray-500">{b.phaseName}</span>
+                      <span className="text-[10px] font-semibold text-red-300">
+                        {b.weeksLate >= 1 ? `hace ${plural(b.weeksLate, "semana", "semanas")}` : ""}
+                      </span>
+                      <span className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${PARTY_META.CLIENTE.cls}`}>
+                        {PARTY_META.CLIENTE.label}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        );
+      })()}
     </div>
   );
 }

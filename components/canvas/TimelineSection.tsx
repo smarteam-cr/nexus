@@ -37,6 +37,7 @@ import {
   absoluteWeek,
   isOverdue,
 } from "@/lib/timeline/weeks";
+import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import type { ExternalTimelinePhase } from "@/lib/external/timeline-view-types";
 
 const MAXW = 1024; // el Gantt necesita ancho — bloque deliberadamente más ancho que las secciones de texto (760)
@@ -345,6 +346,45 @@ export default function TimelineSection({
             </div>
           </div>
         </div>
+
+        {/* Pendiente de tu parte — tareas del CLIENTE atrasadas, al pie del cronograma vivo para
+            que quede claro qué necesitamos para avanzar. Solo con showProgress (cronograma vivo, no
+            el kickoff) y tras hidratar (necesita el "hoy" del cliente). Sin atrasos → no se muestra. */}
+        {showProgress && (() => {
+          const blockers = collectClientBlockers(phases, anchor, now);
+          if (blockers.length === 0) return null;
+          return (
+            <div
+              className="reveal"
+              style={{
+                marginTop: 28,
+                padding: "18px 20px",
+                borderRadius: 16,
+                background: OVERDUE_META_LIGHT.bg,
+                border: `1px solid ${OVERDUE_META_LIGHT.border}`,
+              }}
+            >
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Pendiente de tu parte</div>
+              <p style={{ margin: "4px 0 14px", fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                Para seguir avanzando necesitamos esto de ustedes:
+              </p>
+              <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                {blockers.map((b, i) => (
+                  <li key={i} style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, fontSize: 13, color: "var(--text)" }}>
+                    <span style={{ fontWeight: 600 }}>{b.task.title}</span>
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{b.phaseName}</span>
+                    {b.dueDateIso && (
+                      <span style={{ fontSize: 12, color: OVERDUE_META_LIGHT.text, fontWeight: 600 }}>
+                        vencía el {fmtFull(b.dueDateIso)}
+                      </span>
+                    )}
+                    <span style={chipStyle(PARTY_META_LIGHT.CLIENTE)}>{PARTY_META_LIGHT.CLIENTE.label}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })()}
       </div>
     </section>
   );
