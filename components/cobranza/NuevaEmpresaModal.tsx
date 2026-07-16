@@ -16,10 +16,10 @@ import {
   COBRANZA_TIPOS_CUENTA,
   COBRANZA_VIAS_COBRO,
   COBRANZA_MONEDAS,
-  COBRANZA_TERMINOS_PAGO,
   TIPO_CUENTA_LABEL,
 } from "@/lib/cobranza/schema";
-import { VIA_COBRO_LABEL, TERMINOS_PAGO_LABEL, INPUT_CLS, SELECT_CLS, LABEL_CLS } from "./format";
+import { VIA_COBRO_LABEL, INPUT_CLS, SELECT_CLS, LABEL_CLS } from "./format";
+import { DEFAULT_CREDITO_DIAS } from "@/lib/cobranza/engine";
 
 export default function NuevaEmpresaModal({
   open,
@@ -38,8 +38,8 @@ export default function NuevaEmpresaModal({
   const [tipo, setTipo] = useState("NACIONAL");
   const [viaCobro, setViaCobro] = useState("ODOO");
   const [moneda, setMoneda] = useState("CRC");
-  const [terminosPago, setTerminosPago] = useState("ANTICIPADO");
   const [diaCobroAncla, setDiaCobroAncla] = useState("");
+  const [creditoDias, setCreditoDias] = useState("");
   const [saving, setSaving] = useState(false);
 
   function reset() {
@@ -49,8 +49,8 @@ export default function NuevaEmpresaModal({
     setTipo("NACIONAL");
     setViaCobro("ODOO");
     setMoneda("CRC");
-    setTerminosPago("ANTICIPADO");
     setDiaCobroAncla("");
+    setCreditoDias("");
   }
 
   async function crear() {
@@ -73,8 +73,8 @@ export default function NuevaEmpresaModal({
             tipo,
             viaCobro,
             moneda,
-            terminosPago,
             diaCobroAncla: diaCobroAncla.trim() ? Number(diaCobroAncla) : null,
+            creditoDias: creditoDias.trim() ? Number(creditoDias) : null,
           }),
         },
       );
@@ -179,12 +179,16 @@ export default function NuevaEmpresaModal({
             </select>
           </div>
           <div>
-            <label className={LABEL_CLS}>Términos de pago</label>
-            <select value={terminosPago} onChange={(e) => setTerminosPago(e.target.value)} className={SELECT_CLS}>
-              {COBRANZA_TERMINOS_PAGO.map((t) => (
-                <option key={t} value={t}>{TERMINOS_PAGO_LABEL[t] ?? t}</option>
-              ))}
-            </select>
+            <label className={LABEL_CLS}>Crédito (días, opcional)</label>
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={creditoDias}
+              onChange={(e) => setCreditoDias(e.target.value)}
+              placeholder={`Vacío = default (${DEFAULT_CREDITO_DIAS} días)`}
+              className={INPUT_CLS}
+            />
           </div>
         </div>
         <div>

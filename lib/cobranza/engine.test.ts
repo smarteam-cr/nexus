@@ -37,21 +37,28 @@
  *      G6 existente con numCuota null → untouched SIEMPRE (nunca update/delete).
  *   H) splitCatchUp:
  *      H1 estrictamente < hoy → catchUp; == hoy y > hoy → regulares.
- *   I) semáforos:
- *      I1 COBRADO → verde aunque esté vencido.
- *      I2 borde del umbral: exactamente umbral días pasados NO es rojo; umbral+1 sí.
- *      I3 no vencidos: POR_COBRAR → amarillo, PROGRAMADO futuro → gris.
- *      I4 umbral custom cambia el corte del rojo.
- *      I5 semaforoCuenta: el peor gana (rojo>amarillo>gris>verde); lista vacía → verde.
- *   J) computeAlertSet:
+ *   I) semáforos — DOS RELOJES (Tanda B, 2026-07 — facturar vs cobrar):
+ *      I1 COBRADO → verde aunque fechaEmisionISO sea null y la fecha esté vencida.
+ *      I2 Reloj 1 (sin facturar): en ventana (incl. atrasado) → amarillo; borde exacto
+ *         de la ventana (-15) → amarillo; -16 → gris (fix: antes nunca daba gris).
+ *      I3 Reloj 1: atrasado sin facturar NUNCA es rojo — sigue amarillo.
+ *      I4 Reloj 2 (facturado): dentro del crédito → azul; crédito vencido → rojo.
+ *      I5 crédito custom (90, caso Colby) sobre el mismo fechaEmision que I4 → azul.
+ *      I6 promesa vigente sobre un cobro FACTURADO que sin promesa sería rojo → azul.
+ *      I7 promesa VENCIDA sobre un cobro facturado → rojo (coherente con PROMESA_INCUMPLIDA).
+ *      I8 promesa sobre un cobro SIN facturar se IGNORA — Reloj 1 manda, sigue amarillo
+ *         (fix: antes una promesa eximía de facturar).
+ *      I9 semaforoCuenta: el peor gana (rojo>amarillo>azul>gris>verde); vacía → gris.
+ *   J) computeAlertSet — re-encuadrado a los dos relojes:
  *      J1 cuenta excluidaOperacion → CERO alertas aunque haya de todo.
  *      J2 tieneCuenta=false → exactamente 1 CUENTA_SIN_DATOS (media) y corta la evaluación.
  *      J3 cuenta sin servicios → CUENTA_SIN_DATOS a nivel cuenta.
  *      J4 servicio ACTIVO sin fechaInicio → CUENTA_SIN_DATOS por servicio; no-ACTIVO no alerta.
  *      J5 fechaInicio ≠ anchor (calendario) → ARRANQUE_CAMBIADO (alta); igual calendario o sin anchor → nada.
- *      J6 bordes vencido/próximo: +4 días → VENCIDO; +3 y -15 → PROXIMO; -16 → nada.
+ *      J6 Reloj 1, bordes de facturación: +1 día → FACTURACION_ATRASADA; 0 y -15 → COBRO_PROXIMO; -16 → nada.
+ *      J6b Reloj 2, bordes de crédito (facturado): vencimiento exacto → nada; +1 día → COBRO_VENCIDO.
  *      J7 cobro COBRADO → ninguna alerta.
- *      J8 CATCH_UP PROGRAMADO → INCONSISTENCIA_CICLO ADEMÁS del vencido; CATCH_UP no-PROGRAMADO no.
+ *      J8 CATCH_UP PROGRAMADO facturado y vencido → INCONSISTENCIA_CICLO ADEMÁS de COBRO_VENCIDO; no-PROGRAMADO no.
  *      J9 dedupeKey estable: mismo input dos veces → mismas keys.
  *   K) diffAlertSets:
  *      K1 nuevas/resueltas/persistentes por dedupeKey.
@@ -74,13 +81,14 @@
  *      R4 COBRADO / excluida / sin cuenta → fuera.
  *      R5 orden: excedente desc, empate por cobroId.
  *      R6 umbral custom + constante exportada.
- *   P) promesa de pago en computeAlertSet (fase 3):
- *      P1 promesa vigente (futura) suprime VENCIDO y PROXIMO de ese cobro.
+ *   P) promesa de pago en computeAlertSet (fase 3, re-encuadrado Tanda B):
+ *      P1 promesa vigente (futura) sobre cobro FACTURADO suprime COBRO_VENCIDO.
  *      P2 promesa == hoy sigue vigente (silencio).
- *      P3 promesa pasada → PROMESA_INCUMPLIDA (ALTA) que REEMPLAZA al vencido (1 alerta por cobro).
+ *      P3 promesa pasada (facturado) → PROMESA_INCUMPLIDA (ALTA) que REEMPLAZA al vencido.
  *      P4 COBRADO con promesa pasada → nada.
- *      P5 catch-up: INCONSISTENCIA_CICLO se sigue emitiendo aunque la promesa calle el vencido.
- *      P6 regresión: fixture sin el campo → comportamiento idéntico al de siempre.
+ *      P5 catch-up facturado: INCONSISTENCIA_CICLO se sigue emitiendo aunque la promesa calle el vencido.
+ *      P6 regresión: facturado y vencido SIN promesa → COBRO_VENCIDO de siempre.
+ *      P7 promesa sobre un cobro SIN facturar se IGNORA — sigue FACTURACION_ATRASADA (Reloj 1 manda).
  *   Q) finQuincenaISO + diffDays (cola de cobros):
  *      Q1 día 1 y 15 → día 15; día 16 y fin de mes → fin de mes; febrero clampeado.
  *      Q2 diffDays exportado: signo y cero.
@@ -581,39 +589,115 @@ test("H1 — estrictamente < hoy → catchUp; == hoy y > hoy → regulares", () 
   expect(regulares).toEqual([hoyMismo, maniana]);
 });
 
-// ── I) Semáforos ─────────────────────────────────────────────────────────────────
+// ── I) Semáforos — dos relojes (Tanda B) ────────────────────────────────────────
 
-test("I1 — COBRADO → verde aunque la fecha esté muy vencida", () => {
-  expect(semaforoCobro({ estado: "COBRADO", fechaProgramadaISO: "2026-01-01" }, HOY)).toBe("verde");
+test("I1 — COBRADO → verde aunque fechaEmisionISO sea null y la fecha esté muy vencida", () => {
+  expect(
+    semaforoCobro({ estado: "COBRADO", fechaProgramadaISO: "2026-01-01", fechaEmisionISO: null }, HOY),
+  ).toBe("verde");
 });
 
-test("I2 — borde del umbral: exactamente 3 días pasados NO es rojo; 4 sí", () => {
-  // HOY = 2026-07-10, umbral default 3
-  expect(semaforoCobro({ estado: "POR_COBRAR", fechaProgramadaISO: "2026-07-07" }, HOY)).toBe("amarillo");
-  expect(semaforoCobro({ estado: "PROGRAMADO", fechaProgramadaISO: "2026-07-07" }, HOY)).toBe("gris");
-  expect(semaforoCobro({ estado: "POR_COBRAR", fechaProgramadaISO: "2026-07-06" }, HOY)).toBe("rojo");
-  expect(semaforoCobro({ estado: "PROGRAMADO", fechaProgramadaISO: "2026-07-06" }, HOY)).toBe("rojo");
+test("I2 — Reloj 1 (sin facturar): ventana [-15,+∞) → amarillo; -16 → gris (fix: antes nunca daba gris)", () => {
+  // HOY = 2026-07-10, ventana default 15
+  expect(
+    semaforoCobro({ estado: "PROGRAMADO", fechaProgramadaISO: "2026-07-24", fechaEmisionISO: null }, HOY),
+  ).toBe("amarillo"); // -14: dentro de la ventana
+  expect(
+    semaforoCobro({ estado: "PROGRAMADO", fechaProgramadaISO: "2026-07-25", fechaEmisionISO: null }, HOY),
+  ).toBe("amarillo"); // -15: borde exacto, inclusive
+  expect(
+    semaforoCobro({ estado: "PROGRAMADO", fechaProgramadaISO: "2026-07-26", fechaEmisionISO: null }, HOY),
+  ).toBe("gris"); // -16: fuera de ventana — programado a futuro, nada que hacer todavía
 });
 
-test("I3 — no vencidos: POR_COBRAR → amarillo, PROGRAMADO futuro → gris", () => {
-  expect(semaforoCobro({ estado: "POR_COBRAR", fechaProgramadaISO: "2026-08-01" }, HOY)).toBe("amarillo");
-  expect(semaforoCobro({ estado: "PROGRAMADO", fechaProgramadaISO: "2026-08-01" }, HOY)).toBe("gris");
+test("I3 — Reloj 1: atrasado sin facturar NUNCA es rojo — sigue amarillo (no es mora del cliente)", () => {
+  expect(
+    semaforoCobro({ estado: "PROGRAMADO", fechaProgramadaISO: "2026-06-01", fechaEmisionISO: null }, HOY),
+  ).toBe("amarillo");
+  expect(
+    semaforoCobro({ estado: "POR_COBRAR", fechaProgramadaISO: "2026-01-01", fechaEmisionISO: null }, HOY),
+  ).toBe("amarillo");
 });
 
-test("I4 — umbral custom mueve el corte del rojo", () => {
-  const unDiaPasado = { estado: "POR_COBRAR", fechaProgramadaISO: "2026-07-09" };
-  expect(semaforoCobro(unDiaPasado, HOY)).toBe("amarillo"); // default 3: 1 día no alcanza
-  expect(semaforoCobro(unDiaPasado, HOY, 0)).toBe("rojo"); // umbral 0: 1 día ya es rojo
+test("I4 — Reloj 2 (facturado): dentro del crédito → azul; crédito vencido (default 15d) → rojo", () => {
+  expect(
+    semaforoCobro(
+      { estado: "POR_COBRAR", fechaProgramadaISO: "2026-06-01", fechaEmisionISO: "2026-06-26" },
+      HOY,
+    ),
+  ).toBe("azul"); // vence 2026-07-11 — falta 1 día
+  expect(
+    semaforoCobro(
+      { estado: "POR_COBRAR", fechaProgramadaISO: "2026-06-01", fechaEmisionISO: "2026-06-01" },
+      HOY,
+    ),
+  ).toBe("rojo"); // vence 2026-06-16 — 24 días vencido
 });
 
-test("I5 — semaforoCuenta: el peor gana; lista vacía → gris (vacío ≠ al día)", () => {
-  const cobrado = { estado: "COBRADO", fechaProgramadaISO: "2026-06-01" };
-  const futuro = { estado: "PROGRAMADO", fechaProgramadaISO: "2026-08-01" };
-  const porCobrar = { estado: "POR_COBRAR", fechaProgramadaISO: "2026-07-20" };
-  const vencido = { estado: "POR_COBRAR", fechaProgramadaISO: "2026-07-01" };
-  expect(semaforoCuenta([cobrado, futuro], HOY)).toBe("gris"); // gris > verde
-  expect(semaforoCuenta([cobrado, futuro, porCobrar], HOY)).toBe("amarillo"); // amarillo > gris
-  expect(semaforoCuenta([cobrado, futuro, porCobrar, vencido], HOY)).toBe("rojo"); // rojo gana
+test("I5 — crédito custom 90 (Colby) sobre el mismo fechaEmision que I4 → azul (no vencido)", () => {
+  expect(
+    semaforoCobro(
+      { estado: "POR_COBRAR", fechaProgramadaISO: "2026-06-01", fechaEmisionISO: "2026-06-01" },
+      HOY,
+      90,
+    ),
+  ).toBe("azul"); // vence 2026-08-30 con crédito 90 — el mismo cobro que en I4 daba rojo con 15
+});
+
+test("I6 — promesa VIGENTE sobre un cobro facturado que sin promesa sería rojo → azul", () => {
+  expect(
+    semaforoCobro(
+      {
+        estado: "POR_COBRAR",
+        fechaProgramadaISO: "2026-06-01",
+        fechaEmisionISO: "2026-06-01", // crédito default vencido hace 24 días
+        promesaPagoISO: "2026-07-20", // futura
+      },
+      HOY,
+    ),
+  ).toBe("azul");
+});
+
+test("I7 — promesa VENCIDA sobre un cobro facturado → rojo (coherente con PROMESA_INCUMPLIDA)", () => {
+  expect(
+    semaforoCobro(
+      {
+        estado: "POR_COBRAR",
+        fechaProgramadaISO: "2026-06-01",
+        fechaEmisionISO: "2026-06-01",
+        promesaPagoISO: "2026-07-01", // ya pasó
+      },
+      HOY,
+    ),
+  ).toBe("rojo");
+});
+
+test("I8 — promesa sobre un cobro SIN facturar se IGNORA: Reloj 1 manda, sigue amarillo", () => {
+  // fix: antes una promesa cargada sobre un cobro sin facturar devolvía "azul"
+  // ("nada que hacer") escondiendo que Alex todavía tiene que facturar.
+  expect(
+    semaforoCobro(
+      {
+        estado: "PROGRAMADO",
+        fechaProgramadaISO: "2026-06-01", // atrasadísimo, sin facturar
+        fechaEmisionISO: null,
+        promesaPagoISO: "2026-07-20", // vigente — no debe importar acá
+      },
+      HOY,
+    ),
+  ).toBe("amarillo");
+});
+
+test("I9 — semaforoCuenta: el peor gana (rojo>amarillo>azul>gris>verde); vacía → gris (vacío ≠ al día)", () => {
+  const cobrado = { estado: "COBRADO", fechaProgramadaISO: "2026-06-01", fechaEmisionISO: null };
+  const gris = { estado: "PROGRAMADO", fechaProgramadaISO: "2026-08-15", fechaEmisionISO: null }; // fuera de ventana
+  const amarillo = { estado: "PROGRAMADO", fechaProgramadaISO: "2026-07-20", fechaEmisionISO: null };
+  const azul = { estado: "POR_COBRAR", fechaProgramadaISO: "2026-06-01", fechaEmisionISO: "2026-06-26" };
+  const rojo = { estado: "POR_COBRAR", fechaProgramadaISO: "2026-06-01", fechaEmisionISO: "2026-06-01" };
+  expect(semaforoCuenta([cobrado, gris], HOY)).toBe("gris"); // gris > verde
+  expect(semaforoCuenta([cobrado, gris, azul], HOY)).toBe("azul"); // azul > gris
+  expect(semaforoCuenta([cobrado, gris, azul, amarillo], HOY)).toBe("amarillo"); // amarillo > azul
+  expect(semaforoCuenta([cobrado, gris, azul, amarillo, rojo], HOY)).toBe("rojo"); // rojo gana
   // Cuenta sin cobros = GRIS: verde significa "al día", no "vacío" (una cuenta
   // recién configurada / pendiente de datos no puede verse cobrada).
   expect(semaforoCuenta([], HOY)).toBe("gris");
@@ -726,14 +810,14 @@ test("J5 — fechaInicio ≠ anchor (calendario) → ARRANQUE_CAMBIADO alta; igu
   expect(sinAnchor).toEqual([]);
 });
 
-test("J6 — bordes vencido/próximo: +4 días → VENCIDO; +3 y -15 → PROXIMO; -16 → nada", () => {
+test("J6 — Reloj 1, bordes de facturación: +1 día → FACTURACION_ATRASADA; 0 y -15 → COBRO_PROXIMO; -16 → nada", () => {
   const cartera: CarteraEngineInput = {
     cuentas: [
       cuenta({
         servicios: [servicioCartera()],
         cobros: [
-          cobroCartera({ cobroId: "co1", fechaProgramadaISO: "2026-07-06" }), // 4 días pasados
-          cobroCartera({ cobroId: "co2", fechaProgramadaISO: "2026-07-07" }), // 3 = umbral exacto
+          cobroCartera({ cobroId: "co1", fechaProgramadaISO: "2026-07-09" }), // 1 día pasado, gracia=0
+          cobroCartera({ cobroId: "co2", fechaProgramadaISO: "2026-07-10" }), // hoy mismo
           cobroCartera({ cobroId: "co3", fechaProgramadaISO: "2026-07-25" }), // -15 = borde de ventana
           cobroCartera({ cobroId: "co4", fechaProgramadaISO: "2026-07-26" }), // -16: fuera de ventana
         ],
@@ -744,10 +828,29 @@ test("J6 — bordes vencido/próximo: +4 días → VENCIDO; +3 y -15 → PROXIMO
   expect(keysOf(alertas)).toEqual([
     "COBRO_PROXIMO:c1:co2",
     "COBRO_PROXIMO:c1:co3",
-    "COBRO_VENCIDO:c1:co1",
+    "FACTURACION_ATRASADA:c1:co1",
   ]);
-  expect(alertas.find((a) => a.tipo === "COBRO_VENCIDO")?.urgencia).toBe("ALTA");
+  expect(alertas.find((a) => a.tipo === "FACTURACION_ATRASADA")?.urgencia).toBe("ALTA");
   expect(alertas.find((a) => a.dedupeKey.endsWith("co2"))?.urgencia).toBe("MEDIA");
+});
+
+test("J6b — Reloj 2, bordes de crédito (facturado): vencimiento exacto → nada; +1 día → COBRO_VENCIDO", () => {
+  const cartera: CarteraEngineInput = {
+    cuentas: [
+      cuenta({
+        servicios: [servicioCartera()],
+        cobros: [
+          // crédito default 15d: vence exactamente HOY (2026-06-25 + 15 = 2026-07-10) → sano
+          cobroCartera({ cobroId: "co1", fechaEmisionISO: "2026-06-25" }),
+          // vence AYER (2026-06-24 + 15 = 2026-07-09) → 1 día vencido
+          cobroCartera({ cobroId: "co2", fechaEmisionISO: "2026-06-24" }),
+        ],
+      }),
+    ],
+  };
+  const alertas = computeAlertSet(cartera, { todayISO: HOY });
+  expect(keysOf(alertas)).toEqual(["COBRO_VENCIDO:c1:co2"]);
+  expect(alertas[0].urgencia).toBe("ALTA");
 });
 
 test("J7 — cobro COBRADO → ninguna alerta aunque la fecha esté vencida", () => {
@@ -762,14 +865,26 @@ test("J7 — cobro COBRADO → ninguna alerta aunque la fecha esté vencida", ()
   expect(computeAlertSet(cartera, { todayISO: HOY })).toEqual([]);
 });
 
-test("J8 — CATCH_UP PROGRAMADO → INCONSISTENCIA_CICLO ADEMÁS del vencido; no-PROGRAMADO no la dispara", () => {
+test("J8 — CATCH_UP PROGRAMADO facturado y vencido → INCONSISTENCIA_CICLO ADEMÁS de COBRO_VENCIDO; no-PROGRAMADO no la dispara", () => {
   const cartera: CarteraEngineInput = {
     cuentas: [
       cuenta({
         servicios: [servicioCartera()],
         cobros: [
-          cobroCartera({ cobroId: "co1", origen: "CATCH_UP", estado: "PROGRAMADO", fechaProgramadaISO: "2026-06-30" }),
-          cobroCartera({ cobroId: "co2", origen: "CATCH_UP", estado: "POR_COBRAR", fechaProgramadaISO: "2026-06-30" }),
+          cobroCartera({
+            cobroId: "co1",
+            origen: "CATCH_UP",
+            estado: "PROGRAMADO",
+            fechaProgramadaISO: "2026-06-30",
+            fechaEmisionISO: "2026-06-01", // facturado y vencido (crédito default 15d)
+          }),
+          cobroCartera({
+            cobroId: "co2",
+            origen: "CATCH_UP",
+            estado: "POR_COBRAR",
+            fechaProgramadaISO: "2026-06-30",
+            fechaEmisionISO: "2026-06-01",
+          }),
         ],
       }),
     ],
@@ -1326,17 +1441,24 @@ test("R6 — umbral custom cambia el corte", () => {
   expect(computeRiesgoPago(cartera, { todayISO: HOY })).toEqual([]); // con el default 15, ninguno
 });
 
-// ── P) Promesa de pago en computeAlertSet (fase 3) ───────────────────────────────
+// ── P) Promesa de pago en computeAlertSet (re-encuadrado a los dos relojes) ──────
+// La promesa SOLO se mira en el Reloj 2 (facturado) — sobre un cobro sin facturar
+// se ignora por completo (Reloj 1 manda, ver I8/P7). Todas las fixtures de abajo
+// facturan el cobro (fechaEmisionISO) para que la promesa tenga algo que callar.
 
-test("P1 — promesa VIGENTE (futura) suprime VENCIDO y PROXIMO de ese cobro", () => {
+test("P1 — promesa VIGENTE (futura) sobre cobro FACTURADO suprime COBRO_VENCIDO", () => {
   const alertas = computeAlertSet(
     {
       cuentas: [
         cuenta({
           servicios: [servicioCartera()],
           cobros: [
-            cobroCartera({ cobroId: "co1", fechaProgramadaISO: "2026-06-30", promesaPagoISO: "2026-07-15" }), // vencido, prometido
-            cobroCartera({ cobroId: "co2", fechaProgramadaISO: "2026-07-15", promesaPagoISO: "2026-07-20" }), // próximo, prometido
+            cobroCartera({
+              cobroId: "co1",
+              fechaProgramadaISO: "2026-06-01",
+              fechaEmisionISO: "2026-06-01", // crédito default vencido hace 24 días
+              promesaPagoISO: "2026-07-20", // futura
+            }),
           ],
         }),
       ],
@@ -1352,7 +1474,14 @@ test("P2 — promesa que vence HOY sigue vigente (silencio)", () => {
       cuentas: [
         cuenta({
           servicios: [servicioCartera()],
-          cobros: [cobroCartera({ cobroId: "co1", fechaProgramadaISO: "2026-06-30", promesaPagoISO: HOY })],
+          cobros: [
+            cobroCartera({
+              cobroId: "co1",
+              fechaProgramadaISO: "2026-06-01",
+              fechaEmisionISO: "2026-06-01",
+              promesaPagoISO: HOY,
+            }),
+          ],
         }),
       ],
     },
@@ -1361,13 +1490,21 @@ test("P2 — promesa que vence HOY sigue vigente (silencio)", () => {
   expect(alertas).toEqual([]);
 });
 
-test("P3 — promesa PASADA → PROMESA_INCUMPLIDA (ALTA) que REEMPLAZA al vencido: 1 sola alerta por cobro", () => {
+test("P3 — promesa PASADA (facturado) → PROMESA_INCUMPLIDA (ALTA) que REEMPLAZA al vencido: 1 sola alerta", () => {
   const alertas = computeAlertSet(
     {
       cuentas: [
         cuenta({
           servicios: [servicioCartera()],
-          cobros: [cobroCartera({ cobroId: "co1", monto: 250, fechaProgramadaISO: "2026-06-30", promesaPagoISO: "2026-07-05" })],
+          cobros: [
+            cobroCartera({
+              cobroId: "co1",
+              monto: 250,
+              fechaProgramadaISO: "2026-06-30",
+              fechaEmisionISO: "2026-06-30",
+              promesaPagoISO: "2026-07-05",
+            }),
+          ],
         }),
       ],
     },
@@ -1405,7 +1542,7 @@ test("P4 — COBRADO con promesa pasada → nada (el cobro llegó, la promesa ya
   expect(alertas).toEqual([]);
 });
 
-test("P5 — catch-up: INCONSISTENCIA_CICLO se sigue emitiendo aunque la promesa calle el vencido", () => {
+test("P5 — catch-up facturado: INCONSISTENCIA_CICLO se sigue emitiendo aunque la promesa calle el vencido", () => {
   const alertas = computeAlertSet(
     {
       cuentas: [
@@ -1417,7 +1554,8 @@ test("P5 — catch-up: INCONSISTENCIA_CICLO se sigue emitiendo aunque la promesa
               origen: "CATCH_UP",
               estado: "PROGRAMADO",
               fechaProgramadaISO: "2026-06-30",
-              promesaPagoISO: "2026-07-20",
+              fechaEmisionISO: "2026-06-01", // facturado y vencido
+              promesaPagoISO: "2026-07-20", // vigente — calla el COBRO_VENCIDO, no la inconsistencia
             }),
           ],
         }),
@@ -1428,19 +1566,45 @@ test("P5 — catch-up: INCONSISTENCIA_CICLO se sigue emitiendo aunque la promesa
   expect(keysOf(alertas)).toEqual(["INCONSISTENCIA_CICLO:c1:co1"]);
 });
 
-test("P6 — regresión: fixture SIN el campo promesa → comportamiento idéntico al de siempre", () => {
+test("P6 — regresión: facturado y vencido SIN el campo promesa → COBRO_VENCIDO de siempre", () => {
   const alertas = computeAlertSet(
     {
       cuentas: [
         cuenta({
           servicios: [servicioCartera()],
-          cobros: [cobroCartera({ cobroId: "co1", fechaProgramadaISO: "2026-06-30" })],
+          cobros: [
+            cobroCartera({ cobroId: "co1", fechaProgramadaISO: "2026-06-30", fechaEmisionISO: "2026-06-01" }),
+          ],
         }),
       ],
     },
     { todayISO: HOY },
   );
   expect(keysOf(alertas)).toEqual(["COBRO_VENCIDO:c1:co1"]);
+});
+
+test("P7 — promesa sobre un cobro SIN facturar se IGNORA: sigue FACTURACION_ATRASADA (Reloj 1 manda)", () => {
+  // fix del punto menor #2 de la revisión: antes una promesa cargada sobre un
+  // cobro sin facturar callaba también el "hay que facturar" — no debe eximir.
+  const alertas = computeAlertSet(
+    {
+      cuentas: [
+        cuenta({
+          servicios: [servicioCartera()],
+          cobros: [
+            cobroCartera({
+              cobroId: "co1",
+              fechaProgramadaISO: "2026-07-01", // atrasado, sin facturar
+              fechaEmisionISO: null,
+              promesaPagoISO: "2026-07-20", // vigente — no debe importar acá
+            }),
+          ],
+        }),
+      ],
+    },
+    { todayISO: HOY },
+  );
+  expect(keysOf(alertas)).toEqual(["FACTURACION_ATRASADA:c1:co1"]);
 });
 
 // ── Q) finQuincenaISO + diffDays (cola de cobros) ────────────────────────────────

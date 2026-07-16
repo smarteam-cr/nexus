@@ -40,6 +40,7 @@ export const COBRANZA_CUOTA_BASES = ["PORCENTAJE", "MONTO_FIJO"] as const;
 export const COBRANZA_ESTADOS_COBRO = ["PROGRAMADO", "POR_COBRAR", "COBRADO", "SIN_DATO"] as const;
 export const COBRANZA_TIPOS_ALERTA = [
   "COBRO_PROXIMO",
+  "FACTURACION_ATRASADA",
   "COBRO_VENCIDO",
   "CUENTA_SIN_DATOS",
   "INCONSISTENCIA_CICLO",
@@ -93,7 +94,8 @@ export const ESTADO_COBRO_LABEL: Record<string, string> = {
   SIN_DATO: "Sin dato",
 };
 export const TIPO_ALERTA_LABEL: Record<string, string> = {
-  COBRO_PROXIMO: "Cobro próximo",
+  COBRO_PROXIMO: "Falta facturar",
+  FACTURACION_ATRASADA: "Facturación atrasada",
   COBRO_VENCIDO: "Cobro vencido",
   CUENTA_SIN_DATOS: "Cuenta sin datos",
   INCONSISTENCIA_CICLO: "Inconsistencia de ciclo",
@@ -136,6 +138,9 @@ export const cuentaCreateSchema = z.object({
   moneda: z.enum(COBRANZA_MONEDAS).default("CRC"),
   terminosPago: z.enum(COBRANZA_TERMINOS_PAGO).default("ANTICIPADO"),
   diaCobroAncla: z.number().int().min(1).max(31).nullish(),
+  // Días de crédito tras facturar (Reloj 2 del semáforo). Vacío = default global
+  // (DEFAULT_CREDITO_DIAS en engine.ts). Rango 1-365 para que Colby (90) entre cómodo.
+  creditoDias: z.number().int().min(1).max(365).nullish(),
   notas: z.string().max(4000).nullish(),
 });
 
@@ -146,6 +151,7 @@ export const cuentaPatchSchema = z
     moneda: z.enum(COBRANZA_MONEDAS),
     terminosPago: z.enum(COBRANZA_TERMINOS_PAGO),
     diaCobroAncla: z.number().int().min(1).max(31).nullable(),
+    creditoDias: z.number().int().min(1).max(365).nullable(),
     estadoCuenta: z.enum(COBRANZA_ESTADOS_CUENTA),
     excluidaOperacion: z.boolean(),
     responsableCobroTerceros: z.string().max(500).nullable(),
@@ -407,6 +413,7 @@ export const crearEmpresaSchema = z.object({
   moneda: z.enum(COBRANZA_MONEDAS).default("CRC"),
   terminosPago: z.enum(COBRANZA_TERMINOS_PAGO).default("ANTICIPADO"),
   diaCobroAncla: z.number().int().min(1).max(31).nullish(),
+  creditoDias: z.number().int().min(1).max(365).nullish(),
   notas: z.string().max(4000).nullish(),
 });
 

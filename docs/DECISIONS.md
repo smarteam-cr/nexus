@@ -227,6 +227,70 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   (INV3 + chokepoint único intactos — nunca se escribe estado=COBRADO directo en el create). NO
   hay pago flotante: el schema exige `servicioId` + `cuentaId`, así que el flujo obliga a elegir
   cliente → servicio; si el cliente no tiene servicios, se lo manda a configurarlo (sin alta al
+- **Dos relojes independientes — facturar vs cobrar** (Tanda B, 2026-07 — el corazón del
+  módulo): antes había UN reloj (`fechaProgramada + 3 días → rojo`) que mezclaba "¿facturaste?"
+  (trabajo de Alex) con "¿te pagaron?" (mora del cliente). Cita de Alex: *"Nexus debería decir
+  próximos pagos... y usted ahí va: por facturar, por facturar, por facturar. Facturado,
+  facturado."* Un cobro sin facturar NUNCA es rojo — no es deuda del cliente, es backlog de
+  Alex. Reloj 1 (¿facturaste?): `fechaEmision == null` → amarillo si está en ventana (`±15`
+  días de `fechaProgramada`) o atrasado, gris si está lejos en el futuro. Reloj 2 (¿te
+  pagaron?): `fechaEmision` real → azul mientras el crédito no corrió, rojo si se venció
+  (`fechaEmision + creditoDias`). Semáforo (`semaforoCobro`/`semaforoCuenta`, `engine.ts`) y
+  alertas (`computeAlertSet`) comparten EXACTAMENTE el mismo criterio de ventana y de crédito —
+  nunca pueden divergir en cuál es la verdad de un cobro. `fechaEmision` (ya existía en el
+  schema, nunca era escrita desde la UI) pasa a ser el PIVOTE del semáforo — se decidió no
+  agregar un estado `FACTURADO` nuevo al enum `estado` porque ya existe el campo correcto y un
+  estado nuevo hubiera sido una segunda fuente de verdad.
+- **Crédito por cuenta, default global 15 días** (`CuentaFinanciera.creditoDias`, nullable →
+  cae a `DEFAULT_CREDITO_DIAS=15` en `engine.ts`): es el término real que opera Alex con la
+  mayoría de la cartera. Colby es la excepción conocida (90 días) y se carga a mano por cuenta.
+  Rango del input 1-365 (sin techo artificial para que Colby entre cómodo). Reemplaza
+  `terminosPago` como el dato que realmente alimenta el motor.
+- **`terminosPago` deprecado, NO eliminado** (`CuentaFinanciera.terminosPago`, comentario
+  `@deprecated` en el schema): confirmado por grep exhaustivo — 0 lectores en `engine.ts`,
+  nunca alimentó ningún cálculo, solo era texto decorativo en el prompt del borrador de cobro y
+  un dropdown en los 2 formularios de cuenta. Se saca de ambos formularios (`CuentaDrawer.tsx`,
+  `NuevaEmpresaModal.tsx`) y del prompt del agente (`borrador-cobro.ts`, ahora usa
+  `creditoDias`), pero la columna se queda escribible (importador, alta manual) para no romper
+  esos caminos sin necesidad real de tocarlos.
+- **`fechaProgramada` NO se hizo nullable** (evaluado y descartado): ≥5 usos de
+  `isoDay(c.fechaProgramada)!` en `queries.ts` (non-null assertion) que compilarían pero
+  reventarían en runtime el día que la columna aceptara null. Colby-style "sin fecha
+  programada" no hace falta resolverlo así — `fechaCobro` (cuándo entró la plata) ya es
+  nullable y cubre ese caso. `fechaEmision`, en cambio, sí era nullable desde antes — es el
+  campo correcto para modelar "todavía no pasó".
+- **Auditoría de "Marcar facturado" — mismo patrón que `confirmadoPor`/`confirmadoEn`**:
+  `Cobro.facturadoPor`/`facturadoEn` se setean/limpian dentro de `cambiarEstadoCobro` (mismo
+  chokepoint único que INV3) al transicionar `fechaEmision` de/hacia `null`; si solo se edita
+  la fecha (no-null → otro no-null) la autoría original NO se re-escribe. Invariante espejo de
+  INV3 en `check-invariants.ts` (INV5): ningún `Cobro` con `fechaEmision` sin `facturadoPor`.
+- **`POR_COBRAR` hoy es 100% manual y sin auditar** (hallazgo de la verificación V1 de Tanda B):
+  solo se alcanza por selección manual en el `<select>` del cronograma — nadie más lo dispara
+  (ni el digest, ni un cron, ni un cálculo derivado) y no tiene un `confirmadoPor` equivalente.
+  Confirma que antes de esta tanda NO existía ningún vínculo real entre "facturé" y el estado
+  del cobro — exactamente el hueco que cierra `fechaEmision` real, no el enum `estado`.
+- **2 bugs corregidos en revisión antes de implementar** (plan rechazado una vez, ver historial
+  de la tanda): (1) el primer borrador de `semaforoCobro` nunca devolvía gris — todo cobro sin
+  `fechaEmision` caía en amarillo sin mirar la ventana, `fechaProgramadaISO` era un parámetro
+  muerto; con la data real (~35 cuentas × 3-4 cuotas) el panel se hubiera llenado de amarillo
+  falso. Fix: la rama "sin `fechaEmision`" ahora chequea la ventana (`≥ -15` días) igual que
+  las alertas. (2) una promesa de pago sobre un cobro SIN facturar devolvía azul ("nada que
+  hacer"), escondiendo que Alex todavía tenía que facturar. Fix: el Reloj 1 es SIEMPRE
+  prioritario — la promesa solo se evalúa una vez que `fechaEmision` existe.
+- **Hallazgo para la Tanda C — el eje temporal de `proyectarIngresos` está corrido**: tras
+  Tanda B, el tab Cobros calcula "vencido" desde `fechaEmision + creditoDias`, pero
+  `Proyección`/`Reportes` siguen con `fechaProgramada + UMBRAL_VENCIDO_DIAS` (deliberadamente
+  intocado esta tanda — ver V4). Con crédito de 15 días, ese "vencido" aparece INFLADO
+  (incluye cobros que siguen dentro del crédito) — mitigado con un caveat textual en
+  `ProyeccionPanel.tsx`/`ReportesPanel.tsx` apuntando a la pestaña Cobros como fuente correcta,
+  NO con un fix de motor. El arreglo real no es un swap de predicado: `proyectarIngresos` HOY
+  agrupa por `fechaProgramada`, que asume implícitamente que la plata llega el día que se
+  factura — con crédito de 15 días, la proyección ENTERA (no solo el bucket de vencidos) está
+  corrida ~15 días temprano. El fix real es mover el eje temporal completo a la fecha ESPERADA
+  de cobro (`fechaEmision + creditoDias`) y decidir cómo tratar los cobros no facturados y
+  vencidos por fecha (backlog de Alex, no riesgo del cliente) — es rediseño de la
+  clasificación, se piensa en la Tanda C junto con aging/DSO. Es literalmente lo que Alex
+  necesita para planear el flujo de caja entre Mercury y Costa Rica.
 - **Costos/Caja neta salen a su propia unidad "Finanzas"** (Pieza 1, tanda 2026-07): Alex pidió
   poder analizar costos/caja neta separado de la operación diaria de cobros — "debería ser otra
   unidad completamente distinta". Sidebar: "Finanzas" agrupa Cobranza · Costos y gastos · Caja

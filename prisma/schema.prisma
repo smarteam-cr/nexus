@@ -2389,8 +2389,9 @@ enum CobranzaOrigenCobro {
 }
 
 enum CobranzaTipoAlerta {
-  COBRO_PROXIMO // entra a la ventana de la quincena
-  COBRO_VENCIDO // pasó el umbral sin cobrarse
+  COBRO_PROXIMO // falta facturar, en ventana (Tanda B: reencuadrado a los dos relojes)
+  FACTURACION_ATRASADA // falta facturar, pasó la gracia — trabajo pendiente de Alex, no mora del cliente
+  COBRO_VENCIDO // ya facturado, se venció el crédito (fechaEmision + creditoDias) sin cobrar
   CUENTA_SIN_DATOS // cliente con proyecto sin cuenta/servicios/arranque
   INCONSISTENCIA_CICLO // catch-up generado pendiente de confirmación
   ARRANQUE_CAMBIADO // fechaInicioFacturacion divergió del anchorStartDate actual
@@ -2430,8 +2431,16 @@ model CuentaFinanciera {
   tipo          CobranzaTipoCuenta   @default(NACIONAL)
   viaCobro      CobranzaViaCobro     @default(ODOO)
   moneda        CobranzaMoneda       @default(CRC)
+  // DEPRECATED — reemplazado por creditoDias (Tanda B, 2026-07). Nunca alimentó
+  // ningún cálculo del motor (0 lectores en engine.ts). Se mantiene escribible
+  // (importador, alta manual) para no romper esos caminos sin necesidad; sacado
+  // de los 2 formularios de configuración de cuenta.
   terminosPago  CobranzaTerminosPago @default(ANTICIPADO)
   diaCobroAncla Int? // nullable porque el día del ciclo puede no estar definido aún (ej. 15, 16)
+  // nullable → cae a DEFAULT_CREDITO_DIAS (engine.ts) cuando la cuenta no trae el
+  // suyo. Días de crédito otorgados al cliente desde que se emite la factura
+  // (Reloj 2 del semáforo — Tanda B). Normal 15, Colby 90.
+  creditoDias   Int?
   estadoCuenta  CobranzaEstadoCuenta @default(PENDIENTE_DATOS)
   // Caso Colby: cuenta fuera del estándar — oculta del panel y del cronograma automático.
   excluidaOperacion        Boolean @default(false)
@@ -2571,6 +2580,11 @@ model Cobro {
   estado          CobranzaEstadoCobro @default(PROGRAMADO)
   origen          CobranzaOrigenCobro @default(PLAN)
   fechaEmision    DateTime? // cuándo se emitió la factura (en Odoo/Mercury)
+  // Auditoría de "Marcar facturado" (Tanda B) — mismo patrón que confirmadoPor/
+  // confirmadoEn: se setea cuando fechaEmision pasa de null a no-null, se limpia
+  // al revertir. nullable porque solo tiene valor mientras fechaEmision existe.
+  facturadoPor    String?
+  facturadoEn     DateTime?
   fechaCobro      DateTime? // cuándo entró la plata
   confirmadoPor   String? // email del guard que confirmó el estado con consecuencia monetaria
   confirmadoEn    DateTime?

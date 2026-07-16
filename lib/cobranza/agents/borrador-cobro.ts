@@ -13,6 +13,7 @@ import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import type { BorradorMensaje, CommunicationPort } from "../ports";
 import { getCommunicationPort } from "../adapters";
+import { DEFAULT_CREDITO_DIAS } from "../engine";
 
 const AGENT_ID = "agent-cobranza-borrador";
 export const BORRADOR_AGENT_SLUG = "cobranza-borrador-cobro";
@@ -78,7 +79,7 @@ export async function runBorradorCobro(
         select: {
           id: true,
           clientId: true,
-          terminosPago: true,
+          creditoDias: true,
           viaCobro: true,
           responsableCobroTerceros: true,
           client: { select: { name: true } },
@@ -101,7 +102,7 @@ export async function runBorradorCobro(
     `Cliente: ${cobro.cuenta.client.name}`,
     `Monto: ${Number(cobro.monto).toLocaleString("es-CR")} ${cobro.moneda} · ${cobro.numCuota != null ? `cuota #${cobro.numCuota} · ` : ""}período ${cobro.periodo} · programado ${fechaISO} · ${estadoTexto}`,
     `Servicio: ${cobro.servicio.tipoServicio}${cobro.servicio.descripcion ? ` — ${cobro.servicio.descripcion}` : ""}`,
-    `Términos: ${cobro.cuenta.terminosPago} · vía de cobro: ${cobro.cuenta.viaCobro}${cobro.cuenta.responsableCobroTerceros ? ` · cobro de terceros a cargo de: ${cobro.cuenta.responsableCobroTerceros}` : ""}`,
+    `Crédito: ${cobro.cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS} días · vía de cobro: ${cobro.cuenta.viaCobro}${cobro.cuenta.responsableCobroTerceros ? ` · cobro de terceros a cargo de: ${cobro.cuenta.responsableCobroTerceros}` : ""}`,
     ``,
     `# CONTEXTO DE COMUNICACIÓN (fuente: ${comm.slot})`,
     ctxCom.ultimaComunicacion

@@ -25,6 +25,7 @@ import { TIPO_SERVICIO_LABEL } from "@/lib/cobranza/schema";
 import { fmtFecha, fmtMonto } from "./format";
 import BorradorCobroModal from "./BorradorCobroModal";
 import PromesaDialog from "./PromesaDialog";
+import MarcarFacturadoDialog from "./MarcarFacturadoDialog";
 
 type Grupo = "vencidos" | "quincena" | "adelante";
 type FiltroMoneda = "all" | "CRC" | "USD";
@@ -78,6 +79,7 @@ export default function ColaCobros({
   const [verAdelante, setVerAdelante] = useState(false);
   const [promesaCobro, setPromesaCobro] = useState<ColaCobroRow | null>(null);
   const [borradorCobro, setBorradorCobro] = useState<ColaCobroRow | null>(null);
+  const [facturarCobro, setFacturarCobro] = useState<ColaCobroRow | null>(null);
 
   const riesgoSet = useMemo(() => new Set(riesgo.map((r) => r.cobroId)), [riesgo]);
   const finQuincena = useMemo(() => finQuincenaISO(todayISO), [todayISO]);
@@ -88,7 +90,16 @@ export default function ColaCobros({
   const grupos = useMemo(() => {
     const out: Record<Grupo, ColaCobroRow[]> = { vencidos: [], quincena: [], adelante: [] };
     for (const r of rows) {
-      const sem = semaforoCobro({ estado: r.estado, fechaProgramadaISO: r.fechaProgramada }, todayISO);
+      const sem = semaforoCobro(
+        {
+          estado: r.estado,
+          fechaProgramadaISO: r.fechaProgramada,
+          fechaEmisionISO: r.fechaEmision,
+          promesaPagoISO: r.promesaPago,
+        },
+        todayISO,
+        r.creditoDias,
+      );
       if (sem === "rojo") out.vencidos.push(r);
       else if (r.fechaProgramada <= finQuincena) out.quincena.push(r);
       else out.adelante.push(r);
@@ -142,6 +153,23 @@ export default function ColaCobros({
     } catch (e) {
       setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, promesaPago: prev } : r)));
       toast.error(e instanceof ApiError ? e.message : "No se pudo guardar la promesa.");
+    }
+  }
+
+  // Marcar facturado / revertir: PATCH optimista sobre las filas (mismo patrón que applyPromesa).
+  async function applyFacturar(row: ColaCobroRow, fechaEmision: string | null) {
+    const prev = row.fechaEmision;
+    setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, fechaEmision } : r)));
+    try {
+      await fetchJson(`/api/cobranza/cobros/${row.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fechaEmision }),
+      });
+      toast.success(fechaEmision ? "Marcado como facturado." : "Factura revertida.");
+    } catch (e) {
+      setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, fechaEmision: prev } : r)));
+      toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar la factura.");
     }
   }
 
@@ -273,6 +301,19 @@ export default function ColaCobros({
       {borradorCobro && (
         <BorradorCobroModal cobro={borradorCobro} onClose={() => setBorradorCobro(null)} />
       )}
+
+      {facturarCobro && (
+        <MarcarFacturadoDialog
+          cobro={facturarCobro}
+          todayISO={todayISO}
+          onCancel={() => setFacturarCobro(null)}
+          onConfirm={async ({ fechaEmision }) => {
+            const row = facturarCobro;
+            setFacturarCobro(null);
+            await applyFacturar(row, fechaEmision);
+          }}
+        />
+      )}
     </div>
   );
 
@@ -350,6 +391,25 @@ export default function ColaCobros({
                 </span>
               )}
               <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+                {r.fechaEmision ? (
+                  <button
+                    type="button"
+                    onClick={() => applyFacturar(r, null)}
+                    title="Revertir la marca de facturado"
+                    className="text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors whitespace-nowrap"
+                  >
+                    Revertir factura
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setFacturarCobro(r)}
+                    title="Marcar que ya se emitió la factura de este cobro"
+                    className="text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors whitespace-nowrap"
+                  >
+                    Marcar facturado
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setPromesaCobro(r)}

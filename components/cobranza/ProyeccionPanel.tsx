@@ -242,8 +242,16 @@ export default function ProyeccionPanel({
           {/* ── Vencidos en riesgo ── */}
           {vencidos.cobros.length > 0 && (
             <div className="rounded-xl border border-red-500/30 overflow-hidden">
-              <div className="px-4 py-2.5 bg-red-500/5 border-b border-red-500/30 text-[11px] font-semibold text-red-600 uppercase tracking-wide">
-                En riesgo (vencidos) · {vencidos.cobros.length}
+              <div className="px-4 py-2.5 bg-red-500/5 border-b border-red-500/30">
+                <p className="text-[11px] font-semibold text-red-600 uppercase tracking-wide">
+                  En riesgo (vencidos) · {vencidos.cobros.length}
+                </p>
+                <p className="mt-1 text-[10px] text-fg-muted normal-case tracking-normal">
+                  Este &quot;vencido&quot; se calcula desde la fecha programada, no desde la
+                  factura — incluye cobros que todavía están dentro del crédito, así que aparece
+                  más alto de lo real. El dato correcto está en la pestaña Cobros. Se alinea en
+                  la próxima iteración.
+                </p>
               </div>
               <ul className="divide-y divide-line bg-surface">
                 {vencidos.cobros.map((c: CobroProyeccionInput) => (

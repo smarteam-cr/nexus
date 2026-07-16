@@ -60,8 +60,32 @@
 - **catch-up** (Cobranza): cobros de períodos YA pasados generados cuando la facturación arranca
   retroactiva (caso Teamnet: arrancó junio, contrato aprobado julio). Nacen PROGRAMADO + alerta;
   la persona confirma.
-- **semáforo** (Cobranza): verde=cobrado · amarillo=por cobrar · gris=programado futuro ·
-  rojo=vencido (>3 días de la fecha programada sin cobrar). Mapeo directo del Sheet de Finanzas.
+- **semáforo** (Cobranza — dos relojes, Tanda B 2026-07): cada color dice de quién es la
+  acción. **verde** = cobrado. **amarillo** = "por facturar" — sin `fechaEmision`, en ventana
+  (`±15` días de `fechaProgramada`) o ya atrasado; es trabajo de Alex, nunca del cliente.
+  **azul** = "facturado" — ya tiene `fechaEmision`, dentro del crédito; nadie tiene que actuar
+  todavía. **gris** = programado a futuro fuera de ventana, o cuenta sin cobros. **rojo** =
+  crédito corrido sin pago (`fechaEmision + creditoDias` ya pasó), o promesa de pago
+  incumplida — el único rojo legítimo, mora real del cliente. `semaforoCobro`/`semaforoCuenta`
+  (`lib/cobranza/engine.ts`) y `computeAlertSet` comparten el mismo criterio de ventana/crédito
+  a propósito — nunca pueden contar historias distintas del mismo cobro.
+- **crédito / días de crédito** (`CuentaFinanciera.creditoDias`): días que tiene el cliente
+  para pagar DESDE que se emite la factura (`fechaEmision`), no desde `fechaProgramada`.
+  Nullable → cae al default global `DEFAULT_CREDITO_DIAS=15`; Colby es la excepción con 90.
+- **facturado / "Marcar facturado"**: acción de un click sobre un cobro (cola de cobros o
+  cronograma del drawer) que setea `Cobro.fechaEmision` a una fecha real — pasa el cobro del
+  Reloj 1 (facturar) al Reloj 2 (cobrar). Auditado igual que `COBRADO`: `facturadoPor`/
+  `facturadoEn` (chokepoint `cambiarEstadoCobro`). Reversible ("Revertir factura" → vuelve a
+  `null`, se limpia la autoría).
+- **por facturar / por facturar atrasado**: estado de un cobro sin `fechaEmision` — mismo
+  color amarillo en el semáforo (la urgencia se expresa en la alerta, no en el color: "en
+  ventana" es `COBRO_PROXIMO`, atrasado sin gracia es `FACTURACION_ATRASADA`, urgencia ALTA).
+- **vencido** — OJO, dos definiciones distintas conviven a propósito (deuda registrada para la
+  Tanda C, ver DECISIONS.md): en el tab **Cobros** (semáforo/alertas, motor two-clock) es
+  `fechaEmision + creditoDias` ya pasado — el dato correcto. En **Proyección**/**Reportes**
+  sigue siendo `fechaProgramada + UMBRAL_VENCIDO_DIAS` (heredado, pre-Tanda-B) — aparece
+  INFLADO porque incluye cobros que todavía están dentro del crédito; ambos paneles llevan un
+  caveat textual apuntando a Cobros como la fuente correcta.
 - **ancla de facturación**: `fechaInicioFacturacion` del servicio — nace como copia editable del
   `anchorStartDate` del cronograma; si divergen después, alerta ARRANQUE_CAMBIADO (no se re-sincroniza).
 - **digest / `SnapshotCartera`** (Cobranza): el corte semanal (lunes) computa las alertas de

@@ -24,7 +24,12 @@ export function fmtMonto(monto: number | null | undefined, moneda: string | null
   return `${simbolo}${monto.toLocaleString("es-CR", { maximumFractionDigits: 2 })}`;
 }
 
-/** Colores del semáforo (tokens + colores de estado permitidos — patrón SEV_META). */
+/**
+ * Colores del semáforo (tokens + colores de estado permitidos — patrón SEV_META).
+ * Dos relojes (Tanda B, 2026-07): amarillo = "te toca facturar" (Reloj 1, en ventana
+ * o atrasado — mismo color, sin inflar la paleta); azul = facturado y dentro del
+ * crédito (nadie actúa); rojo = crédito corrido sin pago, o promesa incumplida.
+ */
 export const SEMAFORO_META: Record<Semaforo, { label: string; dot: string; chip: string }> = {
   verde: {
     label: "Cobrado",
@@ -32,9 +37,14 @@ export const SEMAFORO_META: Record<Semaforo, { label: string; dot: string; chip:
     chip: "text-emerald-600 bg-emerald-500/10 border-emerald-500/30",
   },
   amarillo: {
-    label: "Por cobrar",
+    label: "Por facturar",
     dot: "bg-amber-500",
     chip: "text-amber-600 bg-amber-500/10 border-amber-500/30",
+  },
+  azul: {
+    label: "Facturado",
+    dot: "bg-sky-500",
+    chip: "text-sky-600 bg-sky-500/10 border-sky-500/30",
   },
   rojo: {
     label: "Vencido",

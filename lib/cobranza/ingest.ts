@@ -137,6 +137,7 @@ export async function ingestCuentasEntrantes(
             moneda: cta.moneda ?? "CRC",
             terminosPago: cta.terminosPago ?? "ANTICIPADO",
             diaCobroAncla: cta.diaCobroAncla ?? null,
+            creditoDias: cta.creditoDias ?? null,
             correoCobro: cta.correoCobro ?? null,
             razonSocial: cta.razonSocial ?? null,
             cedulaJuridica: cta.cedulaJuridica ?? null,
@@ -158,6 +159,8 @@ export async function ingestCuentasEntrantes(
           completar.cedulaJuridica = cta.cedulaJuridica;
         if (cuenta.diaCobroAncla === null && cta.diaCobroAncla != null)
           completar.diaCobroAncla = cta.diaCobroAncla;
+        if (cuenta.creditoDias === null && cta.creditoDias != null)
+          completar.creditoDias = cta.creditoDias;
         if (Object.keys(completar).length > 0) {
           await tx.cuentaFinanciera
             .update({ where: { id: cuenta.id }, data: completar })

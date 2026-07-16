@@ -11,6 +11,7 @@ import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import {
   computeCajaNeta,
   computeRiesgoPago,
+  DEFAULT_CREDITO_DIAS,
   diffDays,
   proyectarCostos,
   proyectarGastos,
@@ -43,6 +44,8 @@ export interface CobroDTO {
   estado: string;
   origen: string;
   fechaEmision: string | null;
+  facturadoPor: string | null;
+  facturadoEn: string | null;
   fechaCobro: string | null;
   confirmadoPor: string | null;
   confirmadoEn: string | null;
@@ -100,8 +103,8 @@ export interface CuentaDetailDTO {
   tipo: string;
   viaCobro: string;
   moneda: string;
-  terminosPago: string;
   diaCobroAncla: number | null;
+  creditoDias: number | null;
   estadoCuenta: string;
   excluidaOperacion: boolean;
   responsableCobroTerceros: string | null;
@@ -171,6 +174,8 @@ type CobroRow = {
   estado: string;
   origen: string;
   fechaEmision: Date | null;
+  facturadoPor: string | null;
+  facturadoEn: Date | null;
   fechaCobro: Date | null;
   confirmadoPor: string | null;
   confirmadoEn: Date | null;
@@ -191,6 +196,8 @@ function serializeCobro(c: CobroRow): CobroDTO {
     estado: c.estado,
     origen: c.origen,
     fechaEmision: isoDay(c.fechaEmision),
+    facturadoPor: c.facturadoPor,
+    facturadoEn: iso(c.facturadoEn),
     fechaCobro: isoDay(c.fechaCobro),
     confirmadoPor: c.confirmadoPor,
     confirmadoEn: iso(c.confirmadoEn),
@@ -266,9 +273,17 @@ export async function loadCartera(todayISO: string): Promise<CarteraRow[]> {
       moneda: true,
       estadoCuenta: true,
       excluidaOperacion: true,
+      creditoDias: true,
       servicios: { select: { tipoServicio: true, estado: true } },
       cobros: {
-        select: { estado: true, fechaProgramada: true, fechaCobro: true, monto: true },
+        select: {
+          estado: true,
+          fechaProgramada: true,
+          fechaCobro: true,
+          fechaEmision: true,
+          promesaPago: true,
+          monto: true,
+        },
         orderBy: { fechaProgramada: "asc" },
       },
     },
@@ -318,8 +333,14 @@ export async function loadCartera(todayISO: string): Promise<CarteraRow[]> {
       proximoCobro: proximo ? isoDay(proximo.fechaProgramada) : null,
       proximoMonto: proximo ? num(proximo.monto) : null,
       semaforo: semaforoCuenta(
-        cuenta.cobros.map((c) => ({ estado: c.estado, fechaProgramadaISO: isoDay(c.fechaProgramada)! })),
+        cuenta.cobros.map((c) => ({
+          estado: c.estado,
+          fechaProgramadaISO: isoDay(c.fechaProgramada)!,
+          fechaEmisionISO: isoDay(c.fechaEmision),
+          promesaPagoISO: isoDay(c.promesaPago),
+        })),
         todayISO,
+        cuenta.creditoDias ?? undefined,
       ),
     });
   }
@@ -327,7 +348,7 @@ export async function loadCartera(todayISO: string): Promise<CarteraRow[]> {
   // Orden: cuentas CONFIGURADAS primero (peor semáforo arriba, como el Sheet);
   // las "sin configurar" son backlog de setup y van al final. (Las cuentas sin
   // cobros son GRIS — vacío ≠ al día — y ordenan junto a las programadas.)
-  const peso: Record<Semaforo, number> = { rojo: 0, amarillo: 1, gris: 2, verde: 3 };
+  const peso: Record<Semaforo, number> = { rojo: 0, amarillo: 1, azul: 2, gris: 3, verde: 4 };
   rows.sort(
     (a, b) =>
       Number(a.cuentaId === null) - Number(b.cuentaId === null) ||
@@ -375,7 +396,7 @@ export async function getCuentaDetail(cuentaId: string): Promise<CuentaDetailDTO
     tipo: cuenta.tipo,
     viaCobro: cuenta.viaCobro,
     moneda: cuenta.moneda,
-    terminosPago: cuenta.terminosPago,
+    creditoDias: cuenta.creditoDias,
     diaCobroAncla: cuenta.diaCobroAncla,
     estadoCuenta: cuenta.estadoCuenta,
     excluidaOperacion: cuenta.excluidaOperacion,
@@ -546,6 +567,7 @@ export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
       clientId: true,
       excluidaOperacion: true,
       estadoCuenta: true,
+      creditoDias: true,
       servicios: {
         select: {
           id: true,
@@ -579,6 +601,7 @@ export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
           monto: true,
           moneda: true,
           fechaCobro: true,
+          fechaEmision: true,
           promesaPago: true,
         },
       },
@@ -608,6 +631,7 @@ export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
       tieneCuenta: true,
       tieneProyectoReal,
       estadoCuenta: cuenta.estadoCuenta,
+      creditoDias: cuenta.creditoDias,
       servicios: cuenta.servicios.map((s) => {
         const plan = s.planes[0] ?? null;
         const montoTotal = num(s.montoTotal);
@@ -649,6 +673,7 @@ export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
         monto: num(c.monto)!,
         moneda: c.moneda,
         fechaCobroISO: isoDay(c.fechaCobro),
+        fechaEmisionISO: isoDay(c.fechaEmision),
         promesaPagoISO: isoDay(c.promesaPago),
       })),
     });
@@ -711,6 +736,11 @@ export interface ColaCobroRow {
   estado: string; // PROGRAMADO | POR_COBRAR | SIN_DATO (COBRADO excluido)
   origen: string; // PLAN | CATCH_UP | MANUAL
   promesaPago: string | null;
+  fechaEmision: string | null;
+  /** Resuelto (cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS) — nunca null acá,
+   *  para que el recálculo cliente-side del semáforo (ColaCobros.tsx) sea
+   *  consistente con el servidor sin tener que importar el default. */
+  creditoDias: number;
 }
 
 /**
@@ -734,8 +764,9 @@ export async function loadColaCobros(todayISO: string): Promise<ColaCobroRow[]> 
       estado: true,
       origen: true,
       promesaPago: true,
+      fechaEmision: true,
       servicio: { select: { tipoServicio: true, descripcion: true } },
-      cuenta: { select: { clientId: true, client: { select: { name: true } } } },
+      cuenta: { select: { clientId: true, creditoDias: true, client: { select: { name: true } } } },
     },
     orderBy: { fechaProgramada: "asc" },
   });
@@ -758,6 +789,8 @@ export async function loadColaCobros(todayISO: string): Promise<ColaCobroRow[]> 
       estado: c.estado,
       origen: c.origen,
       promesaPago: isoDay(c.promesaPago),
+      fechaEmision: isoDay(c.fechaEmision),
+      creditoDias: c.cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS,
     };
   });
 }

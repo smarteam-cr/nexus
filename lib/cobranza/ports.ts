@@ -41,6 +41,8 @@ export interface CuentaEntrante {
   moneda?: "CRC" | "USD";
   terminosPago?: "ANTICIPADO" | "VENCIDO";
   diaCobroAncla?: number | null;
+  // Días de crédito (Reloj 2 del semáforo, Tanda B) — null/ausente → default global.
+  creditoDias?: number | null;
   notas?: string | null;
   /** Si la fuente dice suscripción: se pre-arma el ServicioContratado + PlanDePago. */
   suscripcion?: {

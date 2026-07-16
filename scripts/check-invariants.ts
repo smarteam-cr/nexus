@@ -23,6 +23,9 @@ import { resolveAllSessions } from "@/lib/sessions/resolve-client";
  *      compara `$Enums` de @prisma/client (lo que el código EJECUTA — el dmmf del client
  *      de este setup viene vacío) contra pg_enum (lo que la DB acepta). Los valores que
  *      la DB tiene DE MÁS no violan (drift de la otra PC aún sin mergear: solo warning).
+ *   5. Ningún Cobro con fechaEmision sin facturadoPor (Cobranza, espejo de INV3 — Tanda B,
+ *      2026-07): "Marcar facturado" es auditable igual que COBRADO; mismo chokepoint
+ *      lib/cobranza/mutations.ts#cambiarEstadoCobro.
  */
 async function main(): Promise<number> {
   let violations = 0;
@@ -113,6 +116,19 @@ async function main(): Promise<number> {
   }
   if (extra.length > 0) {
     console.warn(`⚠ INV4 (no bloquea): la DB tiene ${extra.length} valor(es) de enum que este cliente no conoce (¿drift de la otra PC sin mergear?): ${extra.slice(0, 8).join(", ")}`);
+  }
+
+  // ── Inv 5: ningún Cobro con fechaEmision sin facturadoPor (espejo de INV3 — Tanda B) ──
+  const facturadosSinAutoria = await prisma.cobro.count({
+    where: { fechaEmision: { not: null }, facturadoPor: null },
+  });
+  if (facturadosSinAutoria > 0) {
+    violations++;
+    console.error(
+      `✗ INV5 VIOLADO: ${facturadosSinAutoria} Cobro(s) con fechaEmision sin facturadoPor (¿alguien escribió fechaEmision sin pasar por el chokepoint?).`,
+    );
+  } else {
+    console.log("✓ INV5: todo Cobro con fechaEmision tiene facturadoPor.");
   }
 
   return violations;

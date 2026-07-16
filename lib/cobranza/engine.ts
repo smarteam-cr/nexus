@@ -65,12 +65,13 @@ export interface ReconcileResult {
   untouched: string[]; // ids intocables (cobrados/emitidos/manuales) o sin cambios
 }
 
-export type Semaforo = "verde" | "amarillo" | "gris" | "rojo";
+export type Semaforo = "verde" | "amarillo" | "azul" | "gris" | "rojo";
 
 export interface AlertaDraft {
   dedupeKey: string;
   tipo:
     | "COBRO_PROXIMO"
+    | "FACTURACION_ATRASADA"
     | "COBRO_VENCIDO"
     | "CUENTA_SIN_DATOS"
     | "INCONSISTENCIA_CICLO"
@@ -99,6 +100,10 @@ export interface CarteraEngineInput {
     tieneProyectoReal?: boolean;
     /** FASE 3 (opcional — compat): estado de la cuenta para la cobertura de métricas. */
     estadoCuenta?: string | null;
+    /** Tanda B (opcional — compat): CuentaFinanciera.creditoDias resuelto por
+     *  queries.ts (ya con el fallback a DEFAULT_CREDITO_DIAS aplicado si hace
+     *  falta). Ausente = usa DEFAULT_CREDITO_DIAS acá mismo. */
+    creditoDias?: number | null;
     servicios: Array<{
       servicioId: string;
       descripcion: string | null;
@@ -121,6 +126,8 @@ export interface CarteraEngineInput {
       moneda?: "CRC" | "USD";
       fechaCobroISO?: string | null;
       promesaPagoISO?: string | null;
+      /** Tanda B (opcional — compat): ausente/null = nunca se facturó. */
+      fechaEmisionISO?: string | null;
     }>;
   }>;
 }
@@ -134,12 +141,28 @@ export interface DiffAlertas {
 
 // ── Constantes del preview (hardcodeadas a propósito; configurables post-demo) ──
 
-/** Días después de fechaProgramada sin cobrar → rojo/COBRO_VENCIDO. */
+/** Días después de fechaProgramada sin cobrar → rojo/COBRO_VENCIDO. SOLO lo usan
+ *  proyectarIngresos y computeMetricasCartera (aging/DSO, Tanda C) — semaforoCobro/
+ *  semaforoCuenta/computeAlertSet (Tanda B, dos relojes) NO la leen más. */
 export const UMBRAL_VENCIDO_DIAS = 3;
-/** Ventana de "entra a la quincena" para COBRO_PROXIMO. */
+/** Ventana de "entra a la quincena" — usada por COBRO_PROXIMO y por semaforoCobro
+ *  para decidir amarillo (en ventana) vs gris (todavía lejos) cuando falta facturar. */
 export const VENTANA_PROXIMA_DIAS = 15;
 /** Meses de horizonte rolling para SUSCRIPCION (se extiende en cada digest). */
 export const HORIZONTE_SUSCRIPCION_MESES = 3;
+
+// ── Constantes del motor de crédito (Tanda B — dos relojes) ─────────────────────
+
+/** Días de crédito por defecto tras fechaEmision cuando la cuenta no trae el suyo
+ *  (CuentaFinanciera.creditoDias null). 15 = el término real que opera Alex con la
+ *  mayoría de la cartera hoy (Colby es la excepción, con creditoDias=90 propio). */
+export const DEFAULT_CREDITO_DIAS = 15;
+/** Días de gracia tras fechaProgramada sin fechaEmision antes de escalar la alerta
+ *  de "falta facturar" a FACTURACION_ATRASADA (urgencia ALTA). 0 — deliberado: Alex
+ *  lo espera desde el primer día ("por facturar, por facturar... facturado,
+ *  facturado"), no hay colchón. NO afecta el color (semaforoCobro no distingue
+ *  "por facturar" de "por facturar atrasado" — mismo amarillo, ver Pieza 3). */
+export const GRACIA_FACTURACION_DIAS = 0;
 
 // ── Helpers de fecha (UTC estricto) ─────────────────────────────────────────────
 
@@ -445,38 +468,67 @@ export function splitCatchUp(
 // ── 6. Semáforos ────────────────────────────────────────────────────────────────
 
 /**
- * Semáforo de un cobro: cobrado → verde · por_cobrar → amarillo · programado
- * futuro → gris · no-cobrado con fecha + umbral < hoy → rojo (mapeo del Sheet
- * de Alex: verde=cobrado, amarillo=por cobrar).
+ * Semáforo de un cobro — DOS RELOJES independientes (Tanda B):
+ *   Reloj 1 (¿facturaste?): sin fechaEmision, la fecha programada manda — gris si
+ *     todavía falta mucho, amarillo si está en ventana o ya atrasado (mismo color,
+ *     la edad se expresa en la alerta, no en el semáforo). SIEMPRE prioritario:
+ *     una promesa de pago NO exime de facturar.
+ *   Reloj 2 (¿te pagaron?): ya facturado — azul mientras el crédito no corrió,
+ *     rojo si se venció. Una promesa vigente calla el rojo (azul); vencida sin
+ *     cobro → rojo (coherente con PROMESA_INCUMPLIDA en computeAlertSet).
+ * Fallback duro: un cobro SIN fechaEmision NUNCA es "vencido" — no facturar es
+ * trabajo pendiente de Alex, no mora del cliente.
  */
 export function semaforoCobro(
-  cobro: { estado: string; fechaProgramadaISO: string },
+  cobro: {
+    estado: string;
+    fechaProgramadaISO: string;
+    fechaEmisionISO: string | null;
+    promesaPagoISO?: string | null;
+  },
   todayISO: string,
-  umbralVencidoDias: number = UMBRAL_VENCIDO_DIAS,
+  creditoDias: number = DEFAULT_CREDITO_DIAS,
+  ventanaProximaDias: number = VENTANA_PROXIMA_DIAS,
 ): Semaforo {
   if (cobro.estado === "COBRADO") return "verde";
-  const diasPasados = diffDays(cobro.fechaProgramadaISO, todayISO);
-  if (diasPasados > umbralVencidoDias) return "rojo";
-  if (cobro.estado === "POR_COBRAR") return "amarillo";
-  return "gris"; // PROGRAMADO futuro (o SIN_DATO sin vencer)
+
+  if (!cobro.fechaEmisionISO) {
+    const diasPasados = diffDays(cobro.fechaProgramadaISO, todayISO);
+    return diasPasados >= -ventanaProximaDias ? "amarillo" : "gris";
+  }
+
+  const promesaISO = cobro.promesaPagoISO ?? null;
+  if (promesaISO) return diffDays(promesaISO, todayISO) > 0 ? "rojo" : "azul";
+
+  const vencimientoISO = addDaysISO(cobro.fechaEmisionISO, creditoDias);
+  return diffDays(vencimientoISO, todayISO) > 0 ? "rojo" : "azul";
 }
 
-const SEMAFORO_PESO: Record<Semaforo, number> = { rojo: 3, amarillo: 2, gris: 1, verde: 0 };
+const SEMAFORO_PESO: Record<Semaforo, number> =
+  { rojo: 4, amarillo: 3, azul: 2, gris: 1, verde: 0 };
 
 /**
  * Semáforo agregado de la cuenta: el PEOR entre sus cobros no-verdes vivos.
  * Cuenta SIN cobros → GRIS (neutro): verde significa "al día", no "vacío" — una
  * cuenta recién configurada o pendiente de datos no puede verse como cobrada.
+ * amarillo pesa más que azul: "por facturar" depende 100% de Alex, más urgente
+ * que una cuenta que ya factura y solo espera al cliente.
  */
 export function semaforoCuenta(
-  cobros: Array<{ estado: string; fechaProgramadaISO: string }>,
+  cobros: Array<{
+    estado: string;
+    fechaProgramadaISO: string;
+    fechaEmisionISO: string | null;
+    promesaPagoISO?: string | null;
+  }>,
   todayISO: string,
-  umbralVencidoDias: number = UMBRAL_VENCIDO_DIAS,
+  creditoDias: number = DEFAULT_CREDITO_DIAS,
+  ventanaProximaDias: number = VENTANA_PROXIMA_DIAS,
 ): Semaforo {
   if (cobros.length === 0) return "gris";
   let peor: Semaforo = "verde";
   for (const c of cobros) {
-    const s = semaforoCobro(c, todayISO, umbralVencidoDias);
+    const s = semaforoCobro(c, todayISO, creditoDias, ventanaProximaDias);
     if (SEMAFORO_PESO[s] > SEMAFORO_PESO[peor]) peor = s;
   }
   return peor;
@@ -494,11 +546,13 @@ export function computeAlertSet(
   opts: {
     todayISO: string;
     ventanaProximaDias?: number;
-    umbralVencidoDias?: number;
+    graciaFacturacionDias?: number;
+    creditoDiasDefault?: number;
   },
 ): AlertaDraft[] {
   const ventana = opts.ventanaProximaDias ?? VENTANA_PROXIMA_DIAS;
-  const umbral = opts.umbralVencidoDias ?? UMBRAL_VENCIDO_DIAS;
+  const gracia = opts.graciaFacturacionDias ?? GRACIA_FACTURACION_DIAS;
+  const creditoDefault = opts.creditoDiasDefault ?? DEFAULT_CREDITO_DIAS;
   const out: AlertaDraft[] = [];
 
   for (const cuenta of cartera.cuentas) {
@@ -507,6 +561,7 @@ export function computeAlertSet(
     // Sin proyecto real (empresa creada/importada en Cobranza), los "sin datos" son
     // backlog de captura, no operación en riesgo → urgencia BAJA (no inundar el digest).
     const urgenciaSinDatos = cuenta.tieneProyectoReal === false ? "BAJA" : "MEDIA";
+    const creditoDias = cuenta.creditoDias ?? creditoDefault;
 
     // CUENTA_SIN_DATOS — cliente con proyecto sin cuenta / sin servicios / servicio sin arranque
     if (!cuenta.tieneCuenta) {
@@ -586,53 +641,77 @@ export function computeAlertSet(
 
     for (const c of cuenta.cobros) {
       if (c.estado === "COBRADO") continue;
-      const diasPasados = diffDays(c.fechaProgramadaISO, opts.todayISO);
+      const fechaEmisionISO = c.fechaEmisionISO ?? null;
 
-      // Promesa de pago: VIGENTE (>= hoy) calla COBRO_VENCIDO/COBRO_PROXIMO de este
-      // cobro (el humano ya gestionó — semáforos y métricas NO cambian); PASADA sin
-      // COBRADO → PROMESA_INCUMPLIDA que REEMPLAZA al vencido/próximo (1 alerta por
-      // cobro). INCONSISTENCIA_CICLO (catch-up) se sigue emitiendo aparte.
-      const promesaISO = c.promesaPagoISO ?? null;
-      if (promesaISO) {
-        const diasDesdePromesa = diffDays(promesaISO, opts.todayISO);
-        if (diasDesdePromesa > 0) {
+      // Reloj 1 (¿facturaste?) SIEMPRE prioritario — misma prioridad que
+      // semaforoCobro: una promesa de pago NO exime de facturar, así que acá ni
+      // se mira c.promesaPagoISO. Fallback duro: sin fechaEmision, NUNCA vencido.
+      if (!fechaEmisionISO) {
+        const diasPasados = diffDays(c.fechaProgramadaISO, opts.todayISO);
+        if (diasPasados > gracia) {
           out.push({
-            dedupeKey: `PROMESA_INCUMPLIDA:${cuenta.cuentaId}:${c.cobroId}`,
-            tipo: "PROMESA_INCUMPLIDA",
+            dedupeKey: `FACTURACION_ATRASADA:${cuenta.cuentaId}:${c.cobroId}`,
+            tipo: "FACTURACION_ATRASADA",
             urgencia: "ALTA",
             cuentaId: cuenta.cuentaId,
             cobroId: c.cobroId,
-            mensaje: `${cuenta.clienteNombre}: prometió pagar ${c.monto.toLocaleString("es-CR")} el ${promesaISO} y ya pasaron ${diasDesdePromesa} día(s) sin cobro.`,
-            evidencia: {
-              servicioId: c.servicioId,
-              promesaPago: promesaISO,
-              fechaProgramada: c.fechaProgramadaISO,
-              monto: c.monto,
-              diasDesdePromesa,
-            },
+            mensaje: `${cuenta.clienteNombre}: sin facturar hace ${diasPasados} día(s) (programado ${c.fechaProgramadaISO}) — ${c.monto.toLocaleString("es-CR")}.`,
+            evidencia: { servicioId: c.servicioId, fechaProgramada: c.fechaProgramadaISO, monto: c.monto, diasPasados },
+          });
+        } else if (diasPasados >= -ventana) {
+          out.push({
+            dedupeKey: `COBRO_PROXIMO:${cuenta.cuentaId}:${c.cobroId}`,
+            tipo: "COBRO_PROXIMO",
+            urgencia: "MEDIA",
+            cuentaId: cuenta.cuentaId,
+            cobroId: c.cobroId,
+            mensaje: `${cuenta.clienteNombre}: falta facturar ${c.monto.toLocaleString("es-CR")} — entra a la quincena (programado ${c.fechaProgramadaISO}).`,
+            evidencia: { servicioId: c.servicioId, fechaProgramada: c.fechaProgramadaISO, monto: c.monto },
           });
         }
-        // promesa vigente: silencio (ni vencido ni próximo)
-      } else if (diasPasados > umbral) {
-        out.push({
-          dedupeKey: `COBRO_VENCIDO:${cuenta.cuentaId}:${c.cobroId}`,
-          tipo: "COBRO_VENCIDO",
-          urgencia: "ALTA",
-          cuentaId: cuenta.cuentaId,
-          cobroId: c.cobroId,
-          mensaje: `${cuenta.clienteNombre}: cobro de ${c.monto.toLocaleString("es-CR")} vencido hace ${diasPasados} días (programado ${c.fechaProgramadaISO}).`,
-          evidencia: { servicioId: c.servicioId, fechaProgramada: c.fechaProgramadaISO, monto: c.monto },
-        });
-      } else if (diasPasados >= -ventana && diasPasados <= umbral) {
-        out.push({
-          dedupeKey: `COBRO_PROXIMO:${cuenta.cuentaId}:${c.cobroId}`,
-          tipo: "COBRO_PROXIMO",
-          urgencia: "MEDIA",
-          cuentaId: cuenta.cuentaId,
-          cobroId: c.cobroId,
-          mensaje: `${cuenta.clienteNombre}: cobro de ${c.monto.toLocaleString("es-CR")} entra a la quincena (programado ${c.fechaProgramadaISO}).`,
-          evidencia: { servicioId: c.servicioId, fechaProgramada: c.fechaProgramadaISO, monto: c.monto },
-        });
+        // fuera de ventana hacia el futuro: silencio (gris, sin alerta)
+      } else {
+        // Reloj 2 (¿te pagaron?) — ya facturado, acá SÍ aplica la promesa. VIGENTE
+        // (>= hoy) calla COBRO_VENCIDO (el humano ya gestionó — semáforos y
+        // métricas NO cambian); PASADA sin COBRADO → PROMESA_INCUMPLIDA que
+        // REEMPLAZA al vencido (1 alerta por cobro).
+        const promesaISO = c.promesaPagoISO ?? null;
+        if (promesaISO) {
+          const diasDesdePromesa = diffDays(promesaISO, opts.todayISO);
+          if (diasDesdePromesa > 0) {
+            out.push({
+              dedupeKey: `PROMESA_INCUMPLIDA:${cuenta.cuentaId}:${c.cobroId}`,
+              tipo: "PROMESA_INCUMPLIDA",
+              urgencia: "ALTA",
+              cuentaId: cuenta.cuentaId,
+              cobroId: c.cobroId,
+              mensaje: `${cuenta.clienteNombre}: prometió pagar ${c.monto.toLocaleString("es-CR")} el ${promesaISO} y ya pasaron ${diasDesdePromesa} día(s) sin cobro.`,
+              evidencia: {
+                servicioId: c.servicioId,
+                promesaPago: promesaISO,
+                fechaProgramada: c.fechaProgramadaISO,
+                monto: c.monto,
+                diasDesdePromesa,
+              },
+            });
+          }
+          // promesa vigente: silencio (coherente con semaforoCobro = "azul" acá)
+        } else {
+          const vencimientoISO = addDaysISO(fechaEmisionISO, creditoDias);
+          const diasVencido = diffDays(vencimientoISO, opts.todayISO);
+          if (diasVencido > 0) {
+            out.push({
+              dedupeKey: `COBRO_VENCIDO:${cuenta.cuentaId}:${c.cobroId}`,
+              tipo: "COBRO_VENCIDO",
+              urgencia: "ALTA",
+              cuentaId: cuenta.cuentaId,
+              cobroId: c.cobroId,
+              mensaje: `${cuenta.clienteNombre}: cobro de ${c.monto.toLocaleString("es-CR")} vencido hace ${diasVencido} día(s) (facturado ${fechaEmisionISO}, crédito ${creditoDias}d).`,
+              evidencia: { servicioId: c.servicioId, fechaEmision: fechaEmisionISO, creditoDias, monto: c.monto, diasVencido },
+            });
+          }
+          // dentro del crédito: silencio — estado sano, no debe generar ruido
+        }
       }
 
       if (c.origen === "CATCH_UP" && c.estado === "PROGRAMADO") {
@@ -898,6 +977,42 @@ export interface MetricasCartera {
 }
 
 /**
+ * Réplica DELIBERADA del modelo de UN reloj pre-Tanda-B (fechaProgramada + umbral,
+ * sin fechaEmision/crédito) — SOLO para computeMetricasCartera (aging/DSO/Reportes).
+ * Tanda B decidió (opción C, "pregunta abierta") dejar esta clasificación en el
+ * reloj viejo por ahora: unificarla exige mover el eje temporal completo de
+ * proyectarIngresos, que es trabajo de la Tanda C (ver docs/DECISIONS.md). NO usar
+ * para nada nuevo — semaforoCobro/semaforoCuenta (arriba) son la fuente de verdad
+ * vigente en Cobros/Alertas.
+ */
+function semaforoLegacyPorFecha(
+  cobro: { estado: string; fechaProgramadaISO: string },
+  todayISO: string,
+  umbralVencidoDias: number,
+): Semaforo {
+  if (cobro.estado === "COBRADO") return "verde";
+  const diasPasados = diffDays(cobro.fechaProgramadaISO, todayISO);
+  if (diasPasados > umbralVencidoDias) return "rojo";
+  if (cobro.estado === "POR_COBRAR") return "amarillo";
+  return "gris";
+}
+
+/** Peor caso legacy (mismo criterio que semaforoLegacyPorFecha — nunca produce
+ *  "azul", así que reusar SEMAFORO_PESO para comparar es seguro). */
+function semaforoCuentaLegacyPorFecha(
+  cobros: Array<{ estado: string; fechaProgramadaISO: string }>,
+  todayISO: string,
+  umbralVencidoDias: number,
+): Semaforo {
+  let peor: Semaforo = "verde";
+  for (const c of cobros) {
+    const s = semaforoLegacyPorFecha(c, todayISO, umbralVencidoDias);
+    if (SEMAFORO_PESO[s] > SEMAFORO_PESO[peor]) peor = s;
+  }
+  return peor;
+}
+
+/**
  * Computa las métricas agregadas de la cartera para el SnapshotCartera del corte.
  * Reglas de honestidad (constraint de la fase): cuentas excluidas de operación
  * fuera de TODO; sin configurar / sin cobros NO aportan a totales, DSO ni aging
@@ -947,7 +1062,7 @@ export function computeMetricasCartera(
       continue; // vacía ≠ sana: no aporta ni al verde ni a los denominadores
     }
 
-    const sem = semaforoCuenta(cuenta.cobros, opts.todayISO, umbral);
+    const sem = semaforoCuentaLegacyPorFecha(cuenta.cobros, opts.todayISO, umbral);
     if (sem === "rojo") cuentasRojas++;
     else if (sem === "amarillo") cuentasAmarillas++;
 
@@ -971,7 +1086,7 @@ export function computeMetricasCartera(
         continue;
       }
 
-      const s = semaforoCobro(c, opts.todayISO, umbral);
+      const s = semaforoLegacyPorFecha(c, opts.todayISO, umbral);
       const edad = diffDays(c.fechaProgramadaISO, opts.todayISO); // >0 = pasado
 
       if (s === "rojo") {

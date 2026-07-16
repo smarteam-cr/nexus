@@ -43,6 +43,13 @@ const AGING_BUCKETS: Array<{ key: keyof AgingBuckets; label: string; color: stri
 
 const GRID = { left: 8, right: 8, top: 32, bottom: 8, containLabel: true };
 
+// Caveat de Tanda B (2026-07): este "vencido" sigue en fechaProgramada+umbral (no
+// fechaEmision+creditoDias como el tab Cobros) — hallazgo de Tanda C en DECISIONS.md.
+const VENCIDO_INFLADO_CAVEAT =
+  "Este \"vencido\" se calcula desde la fecha programada, no desde la factura — incluye " +
+  "cobros que todavía están dentro del crédito, así que aparece más alto de lo real. El dato " +
+  "correcto está en la pestaña Cobros. Se alinea en la próxima iteración.";
+
 const simbolo = (m: Moneda) => (m === "USD" ? "$" : "₡");
 
 /** Eje Y compacto: 1500000 → "1,5M" · 25000 → "25k" (espejo local de ProyeccionPanel). */
@@ -356,7 +363,10 @@ export default function ReportesPanel({
       {/* ── Tendencias (solo con ≥2 cortes: 1 punto no es tendencia) ── */}
       {hayTendencias && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <ChartCard titulo="Vencido en el tiempo" nota="Total vencido por corte — CRC en el eje ₡, USD en el eje $.">
+          <ChartCard
+            titulo="Vencido en el tiempo"
+            nota={`Total vencido por corte — CRC en el eje ₡, USD en el eje $. ${VENCIDO_INFLADO_CAVEAT}`}
+          >
             <EChartRenderer option={vencidoOption} height={240} className="bg-surface" />
           </ChartCard>
           <ChartCard
@@ -367,7 +377,7 @@ export default function ReportesPanel({
           </ChartCard>
           <ChartCard
             titulo="Aging del vencido"
-            nota="Monto vencido por antigüedad desde la fecha programada."
+            nota={`Monto vencido por antigüedad desde la fecha programada. ${VENCIDO_INFLADO_CAVEAT}`}
             extra={<MonedaToggle value={monedaAging} onChange={setMonedaAging} />}
           >
             <EChartRenderer option={agingOption} height={240} className="bg-surface" />

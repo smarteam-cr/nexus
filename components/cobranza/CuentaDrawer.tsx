@@ -17,7 +17,6 @@ import {
   COBRANZA_TIPOS_CUENTA,
   COBRANZA_VIAS_COBRO,
   COBRANZA_MONEDAS,
-  COBRANZA_TERMINOS_PAGO,
   COBRANZA_ESTADOS_CUENTA,
   BITACORA_TIPOS,
   TIPO_CUENTA_LABEL,
@@ -29,7 +28,6 @@ import {
   fmtFecha,
   fmtMonto,
   VIA_COBRO_LABEL,
-  TERMINOS_PAGO_LABEL,
   MODALIDAD_LABEL,
   ESTADO_SERVICIO_LABEL,
   BITACORA_TIPO_LABEL,
@@ -37,6 +35,7 @@ import {
   SELECT_CLS,
   LABEL_CLS,
 } from "./format";
+import { DEFAULT_CREDITO_DIAS } from "@/lib/cobranza/engine";
 import ServicioForm from "./ServicioForm";
 import CronogramaCobros from "./CronogramaCobros";
 
@@ -52,8 +51,8 @@ interface CuentaForm {
   tipo: string;
   viaCobro: string;
   moneda: string;
-  terminosPago: string;
   diaCobroAncla: string;
+  creditoDias: string;
   estadoCuenta: string;
   excluidaOperacion: boolean;
   responsableCobroTerceros: string;
@@ -68,8 +67,8 @@ function formFrom(c: CuentaDetailDTO): CuentaForm {
     tipo: c.tipo,
     viaCobro: c.viaCobro,
     moneda: c.moneda,
-    terminosPago: c.terminosPago,
     diaCobroAncla: c.diaCobroAncla != null ? String(c.diaCobroAncla) : "",
+    creditoDias: c.creditoDias != null ? String(c.creditoDias) : "",
     estadoCuenta: c.estadoCuenta,
     excluidaOperacion: c.excluidaOperacion,
     responsableCobroTerceros: c.responsableCobroTerceros ?? "",
@@ -151,8 +150,8 @@ export default function CuentaDrawer({
           tipo: form.tipo,
           viaCobro: form.viaCobro,
           moneda: form.moneda,
-          terminosPago: form.terminosPago,
           diaCobroAncla: form.diaCobroAncla.trim() ? Number(form.diaCobroAncla) : null,
+          creditoDias: form.creditoDias.trim() ? Number(form.creditoDias) : null,
           estadoCuenta: form.estadoCuenta,
           excluidaOperacion: form.excluidaOperacion,
           responsableCobroTerceros: form.responsableCobroTerceros.trim() || null,
@@ -296,16 +295,20 @@ export default function CuentaDrawer({
                   </select>
                 </div>
                 <div>
-                  <label className={LABEL_CLS}>Términos de pago</label>
-                  <select
-                    value={form.terminosPago}
-                    onChange={(e) => setForm({ ...form, terminosPago: e.target.value })}
-                    className={SELECT_CLS}
-                  >
-                    {COBRANZA_TERMINOS_PAGO.map((t) => (
-                      <option key={t} value={t}>{TERMINOS_PAGO_LABEL[t] ?? t}</option>
-                    ))}
-                  </select>
+                  <label className={LABEL_CLS}>Crédito (días)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={form.creditoDias}
+                    onChange={(e) => setForm({ ...form, creditoDias: e.target.value })}
+                    placeholder={`Vacío = default (${DEFAULT_CREDITO_DIAS} días)`}
+                    className={INPUT_CLS}
+                  />
+                  <p className="mt-1 text-[10px] text-fg-muted">
+                    Días que tiene el cliente para pagar desde que se emite la factura. Normal: 15.
+                    Colby: 90.
+                  </p>
                 </div>
                 <div>
                   <label className={LABEL_CLS}>Día de cobro ancla (1–31)</label>
@@ -689,7 +692,12 @@ function ServicioCard({
                 </button>
               </div>
 
-              <CronogramaCobros cobros={servicio.cobros} todayISO={todayISO} onRefresh={onRefresh} />
+              <CronogramaCobros
+                cobros={servicio.cobros}
+                todayISO={todayISO}
+                onRefresh={onRefresh}
+                creditoDias={cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS}
+              />
             </>
           )}
         </div>

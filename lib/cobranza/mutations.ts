@@ -376,8 +376,23 @@ export async function cambiarEstadoCobro(
   const data: Prisma.CobroUpdateInput = {};
   if (patch.fechaProgramada !== undefined) data.fechaProgramada = dayUTC(patch.fechaProgramada);
   if (patch.monto !== undefined) data.monto = patch.monto;
-  if (patch.fechaEmision !== undefined)
-    data.fechaEmision = patch.fechaEmision ? dayUTC(patch.fechaEmision) : null;
+  if (patch.fechaEmision !== undefined) {
+    const nuevaFecha = patch.fechaEmision ? dayUTC(patch.fechaEmision) : null;
+    data.fechaEmision = nuevaFecha;
+    // Auditoría de "Marcar facturado" (Tanda B) — mismo espíritu que COBRADO/
+    // confirmadoPor, patrón nuevo y paralelo (no toca la tripleta de COBRADO).
+    if (nuevaFecha !== null && cobro.fechaEmision === null) {
+      // null → seteada: se marca facturado ahora — exige autoría.
+      if (!byEmail) throw new CobranzaError("Marcar facturado exige confirmación de un usuario.", 400);
+      data.facturadoPor = byEmail;
+      data.facturadoEn = new Date();
+    } else if (nuevaFecha === null && cobro.fechaEmision !== null) {
+      // seteada → null: se revierte (error de captura) — limpia la tripleta.
+      data.facturadoPor = null;
+      data.facturadoEn = null;
+    }
+    // fecha A → fecha B (edición, no un toggle): la autoría original no cambia.
+  }
   // ReconciliationPort v1: referencia externa opcional (id transacción Mercury / factura Odoo).
   if (patch.referenciaExterna !== undefined) data.referenciaExterna = patch.referenciaExterna;
   if (patch.notas !== undefined) data.notas = patch.notas;

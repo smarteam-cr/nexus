@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
         moneda: d.moneda,
         terminosPago: d.terminosPago,
         diaCobroAncla: d.diaCobroAncla ?? null,
+        creditoDias: d.creditoDias ?? null,
         notas: d.notas ?? null,
       },
     ],

@@ -23,22 +23,27 @@ import { fmtFecha, fmtMonto, SEMAFORO_META } from "./format";
 import BorradorCobroModal from "./BorradorCobroModal";
 import RegistrarPagoDialog from "./RegistrarPagoDialog";
 import PromesaDialog from "./PromesaDialog";
+import MarcarFacturadoDialog from "./MarcarFacturadoDialog";
 
 export default function CronogramaCobros({
   cobros,
   todayISO,
   onRefresh,
+  creditoDias,
 }: {
   cobros: CobroDTO[];
   todayISO: string;
   /** Recarga el detalle (tras COBRADO trae confirmadoPor fresco). */
   onRefresh: () => void;
+  /** Crédito resuelto de la cuenta (cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS). */
+  creditoDias: number;
 }) {
   const toast = useToast();
   const [items, setItems] = useState(cobros);
   const [confirmCobro, setConfirmCobro] = useState<CobroDTO | null>(null);
   const [borradorCobro, setBorradorCobro] = useState<CobroDTO | null>(null);
   const [promesaCobro, setPromesaCobro] = useState<CobroDTO | null>(null);
+  const [facturarCobro, setFacturarCobro] = useState<CobroDTO | null>(null);
 
   // Re-sincronizar cuando el padre recarga el detalle (patrón oficial de
   // "adjusting state when props change" — setState durante render, sin effect).
@@ -93,6 +98,25 @@ export default function CronogramaCobros({
     }
   }
 
+  // Marcar facturado / revertir: sin gate de estado (única superficie que ve COBRADO — es
+  // donde se hace el backfill de facturación histórica).
+  async function applyFacturar(cobro: CobroDTO, fechaEmision: string | null) {
+    const prev = items.find((c) => c.id === cobro.id)?.fechaEmision ?? null;
+    setItems((cs) => cs.map((c) => (c.id === cobro.id ? { ...c, fechaEmision } : c)));
+    try {
+      await fetchJson(`/api/cobranza/cobros/${cobro.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fechaEmision }),
+      });
+      toast.success(fechaEmision ? "Marcado como facturado." : "Factura revertida.");
+      onRefresh(); // trae facturadoPor/facturadoEn frescos
+    } catch (e) {
+      setItems((cs) => cs.map((c) => (c.id === cobro.id ? { ...c, fechaEmision: prev } : c)));
+      toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar la factura.");
+    }
+  }
+
   if (items.length === 0) {
     return (
       <p className="text-xs text-fg-muted rounded-lg border border-dashed border-line px-3 py-3 text-center">
@@ -105,7 +129,18 @@ export default function CronogramaCobros({
     <>
       <ul className="space-y-1.5">
         {items.map((c) => {
-          const sem = SEMAFORO_META[semaforoCobro({ estado: c.estado, fechaProgramadaISO: c.fechaProgramada }, todayISO)];
+          const sem = SEMAFORO_META[
+            semaforoCobro(
+              {
+                estado: c.estado,
+                fechaProgramadaISO: c.fechaProgramada,
+                fechaEmisionISO: c.fechaEmision,
+                promesaPagoISO: c.promesaPago,
+              },
+              todayISO,
+              creditoDias,
+            )
+          ];
           return (
             <li key={c.id} className="rounded-lg border border-line bg-surface px-3 py-2">
               <div className="flex items-center gap-2 flex-wrap">
@@ -139,13 +174,32 @@ export default function CronogramaCobros({
                     prometió {fmtFecha(c.promesaPago)}
                   </span>
                 )}
+                {c.fechaEmision ? (
+                  <button
+                    type="button"
+                    onClick={() => applyFacturar(c, null)}
+                    title="Revertir la marca de facturado"
+                    className="ml-auto text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors flex-shrink-0"
+                  >
+                    Revertir factura
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setFacturarCobro(c)}
+                    title="Marcar que ya se emitió la factura de este cobro"
+                    className="ml-auto text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors flex-shrink-0"
+                  >
+                    Marcar facturado
+                  </button>
+                )}
                 {c.estado !== "COBRADO" && (
                   <>
                     <button
                       type="button"
                       onClick={() => setPromesaCobro(c)}
                       title="Registrar la fecha en que el cliente prometió pagar (calla sus alertas hasta entonces)"
-                      className="ml-auto text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors flex-shrink-0"
+                      className="text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors flex-shrink-0"
                     >
                       Prometió
                     </button>
@@ -167,13 +221,18 @@ export default function CronogramaCobros({
                     if (estado === "COBRADO") setConfirmCobro(c);
                     else applyEstado(c, estado);
                   }}
-                  className={`${c.estado === "COBRADO" ? "ml-auto " : ""}text-[11px] border border-line rounded-md px-1.5 py-1 bg-surface text-fg focus:outline-none focus:border-brand flex-shrink-0`}
+                  className="text-[11px] border border-line rounded-md px-1.5 py-1 bg-surface text-fg focus:outline-none focus:border-brand flex-shrink-0"
                 >
                   {COBRANZA_ESTADOS_COBRO.map((e) => (
                     <option key={e} value={e}>{ESTADO_COBRO_LABEL[e] ?? e}</option>
                   ))}
                 </select>
               </div>
+              {c.fechaEmision && c.facturadoPor && (
+                <p className="mt-1 text-[10px] text-sky-600">
+                  ✓ Facturado por {c.facturadoPor} · {fmtFecha(c.fechaEmision)}
+                </p>
+              )}
               {c.estado === "COBRADO" && c.confirmadoPor && (
                 <p className="mt-1 text-[10px] text-emerald-600">
                   ✓ Confirmado por {c.confirmadoPor}
@@ -212,6 +271,19 @@ export default function CronogramaCobros({
             const cobro = promesaCobro;
             setPromesaCobro(null);
             await applyPromesa(cobro, promesaPago);
+          }}
+        />
+      )}
+
+      {facturarCobro && (
+        <MarcarFacturadoDialog
+          cobro={facturarCobro}
+          todayISO={todayISO}
+          onCancel={() => setFacturarCobro(null)}
+          onConfirm={async ({ fechaEmision }) => {
+            const cobro = facturarCobro;
+            setFacturarCobro(null);
+            await applyFacturar(cobro, fechaEmision);
           }}
         />
       )}
