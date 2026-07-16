@@ -106,6 +106,8 @@ export interface CuentaDetailDTO {
   excluidaOperacion: boolean;
   responsableCobroTerceros: string | null;
   correoCobro: string | null;
+  razonSocial: string | null;
+  cedulaJuridica: string | null;
   notas: string | null;
   estadoActualizadoPor: string | null;
   estadoActualizadoEn: string | null;
@@ -379,6 +381,8 @@ export async function getCuentaDetail(cuentaId: string): Promise<CuentaDetailDTO
     excluidaOperacion: cuenta.excluidaOperacion,
     responsableCobroTerceros: cuenta.responsableCobroTerceros,
     correoCobro: cuenta.correoCobro,
+    razonSocial: cuenta.razonSocial,
+    cedulaJuridica: cuenta.cedulaJuridica,
     notas: cuenta.notas,
     estadoActualizadoPor: cuenta.estadoActualizadoPor,
     estadoActualizadoEn: iso(cuenta.estadoActualizadoEn),

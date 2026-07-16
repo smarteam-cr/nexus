@@ -138,6 +138,8 @@ export async function ingestCuentasEntrantes(
             terminosPago: cta.terminosPago ?? "ANTICIPADO",
             diaCobroAncla: cta.diaCobroAncla ?? null,
             correoCobro: cta.correoCobro ?? null,
+            razonSocial: cta.razonSocial ?? null,
+            cedulaJuridica: cta.cedulaJuridica ?? null,
             notas: cta.notas ?? null,
             fuente: cta.fuenteRef.fuente,
             fuenteIdExterno: cta.fuenteRef.idExterno,
@@ -151,6 +153,9 @@ export async function ingestCuentasEntrantes(
           completar.fuenteIdExterno = cta.fuenteRef.idExterno;
         }
         if (cuenta.correoCobro === null && cta.correoCobro) completar.correoCobro = cta.correoCobro;
+        if (cuenta.razonSocial === null && cta.razonSocial) completar.razonSocial = cta.razonSocial;
+        if (cuenta.cedulaJuridica === null && cta.cedulaJuridica)
+          completar.cedulaJuridica = cta.cedulaJuridica;
         if (cuenta.diaCobroAncla === null && cta.diaCobroAncla != null)
           completar.diaCobroAncla = cta.diaCobroAncla;
         if (Object.keys(completar).length > 0) {

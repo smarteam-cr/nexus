@@ -193,9 +193,13 @@ export function slugNombre(nombre: string): string {
 
 /** Heurística de headers (normalizados) → campo canónico. Solo SUGERENCIA editable. */
 const HEADER_HINTS: Array<{ campo: ImportCampoCanonico; re: RegExp }> = [
-  { campo: "clienteNombre", re: /^(cliente|empresa|nombre( del cliente)?|company|razon social)$/ },
+  { campo: "clienteNombre", re: /^(cliente|empresa|nombre( del cliente)?|company|nombre comercial)$/ },
   { campo: "dominio", re: /^(dominio|domain|sitio( web)?|web|website|url)$/ },
   { campo: "correoCobro", re: /^(correo( de cobro)?|email|e-?mail|contacto( de cobro)?)$/ },
+  // Identidad legal — distinta del nombre comercial (clienteNombre). "razon social"
+  // vivía antes como sinónimo de clienteNombre; ahora tiene su propio campo.
+  { campo: "razonSocial", re: /^(razon social|legal name|nombre legal)$/ },
+  { campo: "cedulaJuridica", re: /^(cedula( juridica)?|tax ?id|nit|rfc)$/ },
   { campo: "idExterno", re: /^(id|codigo|ref(erencia)?)$/ },
   { campo: "tipo", re: /^(tipo( de cuenta)?|nacional\/?internacional)$/ },
   { campo: "viaCobro", re: /^(via( de cobro)?|medio( de cobro)?|plataforma)$/ },
@@ -244,6 +248,8 @@ export function aplicarMapeo(
     clienteNombre: nombre,
     dominio: normalizarDominio(celda("dominio")),
     correoCobro: celda("correoCobro")?.toLowerCase() ?? null,
+    razonSocial: celda("razonSocial"),
+    cedulaJuridica: celda("cedulaJuridica"),
     idExterno: celda("idExterno") ?? (nombre ? slugNombre(nombre) : null),
     tipo: normalizarEnumLocal("tipo", celda("tipo")),
     viaCobro: normalizarEnumLocal("viaCobro", celda("viaCobro")),

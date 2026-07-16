@@ -204,6 +204,8 @@ test("I1 aplicarMapeo: fila cruda completa → canónico normalizado", () => {
     clienteNombre: "Ferretería Noelitto",
     dominio: "noelitto.cr",
     correoCobro: "pagos@noelitto.cr",
+    razonSocial: null,
+    cedulaJuridica: null,
     idExterno: "ferreteria-noelitto", // default = slug del nombre (sin columna id)
     tipo: "NACIONAL",
     viaCobro: "ODOO",

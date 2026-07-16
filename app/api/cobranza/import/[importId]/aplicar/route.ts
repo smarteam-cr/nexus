@@ -79,6 +79,8 @@ export async function POST(_req: NextRequest, { params }: Params) {
       clienteNombre: c.clienteNombre,
       dominio: c.dominio ?? null,
       correoCobro: c.correoCobro ?? null,
+      razonSocial: c.razonSocial ?? null,
+      cedulaJuridica: c.cedulaJuridica ?? null,
       tipo: c.tipo ?? undefined,
       viaCobro: c.viaCobro ?? undefined,
       moneda: c.moneda ?? undefined,

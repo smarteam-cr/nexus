@@ -720,6 +720,8 @@ interface FormFila {
   clienteNombre: string;
   dominio: string;
   correoCobro: string;
+  razonSocial: string;
+  cedulaJuridica: string;
   idExterno: string;
   tipo: string;
   viaCobro: string;
@@ -741,6 +743,8 @@ function formDesdeCanonico(c: Record<string, unknown> | null): FormFila {
     clienteNombre: s("clienteNombre"),
     dominio: s("dominio"),
     correoCobro: s("correoCobro"),
+    razonSocial: s("razonSocial"),
+    cedulaJuridica: s("cedulaJuridica"),
     idExterno: s("idExterno"),
     tipo: s("tipo"),
     viaCobro: s("viaCobro"),
@@ -792,6 +796,8 @@ function FilaForm({
       clienteNombre: form.clienteNombre.trim(),
       dominio: normalizarDominio(form.dominio),
       correoCobro: form.correoCobro.trim().toLowerCase() || null,
+      razonSocial: form.razonSocial.trim() || null,
+      cedulaJuridica: form.cedulaJuridica.trim() || null,
       idExterno: form.idExterno.trim() || null,
       tipo: form.tipo || null,
       viaCobro: form.viaCobro || null,
@@ -822,6 +828,14 @@ function FilaForm({
         <div>
           <label className={LABEL_CLS}>Correo de cobro</label>
           <input type="text" value={form.correoCobro} onChange={set("correoCobro")} className={INPUT_CLS} />
+        </div>
+        <div>
+          <label className={LABEL_CLS}>Razón social</label>
+          <input type="text" value={form.razonSocial} onChange={set("razonSocial")} className={INPUT_CLS} />
+        </div>
+        <div>
+          <label className={LABEL_CLS}>Cédula jurídica</label>
+          <input type="text" value={form.cedulaJuridica} onChange={set("cedulaJuridica")} className={INPUT_CLS} />
         </div>
         <div>
           <label className={LABEL_CLS}>Id externo</label>

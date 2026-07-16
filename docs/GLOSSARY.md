@@ -27,8 +27,22 @@
 - **Capability** (RBAC): permiso por rol (`lib/auth/roles.ts`) — ej. `createHandoff`, `handoffAnywhere`.
 - **Cobranza**: módulo de CONTROL de cobros de Admin & Finanzas (solo roles ADMIN + SUPER_ADMIN).
   Estados/cronograma/alertas viven en Nexus; la contabilidad en Odoo/Mercury.
+- **Finanzas** (sección del sidebar): agrupador de navegación con 3 hijos — Cobranza (`/cobranza`,
+  control de cobros), Costos y gastos (`/finanzas/costos`), Caja neta (`/finanzas/caja-neta`,
+  ambos SOLO SUPER_ADMIN) — separados a pedido de Alex para poder analizar costos/caja aparte de
+  la operación de cobranza diaria. Es puramente de navegación: no hay una entidad "Finanzas" en
+  el schema ni una sección propia en la matriz de permisos — el gate de Costos/Caja neta sigue
+  siendo la whitelist `COSTOS_ROLES` (ver `CostoRecurrente`), independiente de `cobranza.read`.
 - **`CuentaFinanciera`**: perfil de cobro de un cliente (1:1 con `Client`) — tipo nacional/
   internacional, vía de cobro, moneda, términos, día ancla del ciclo.
+- **razón social** (`CuentaFinanciera.razonSocial`): nombre legal de la empresa — distinto del
+  nombre comercial (`Client.name`, bajo el que opera de cara al cliente). Se usa para conciliar
+  con Odoo/Mercury. Nullable — se completa a mano o vía el importador.
+- **cédula jurídica** (`CuentaFinanciera.cedulaJuridica`): identificador legal/fiscal de la
+  empresa (Costa Rica). Sin restricción de unicidad a propósito: un mismo holding puede facturar
+  bajo varios nombres comerciales con la misma cédula.
+- **nombre comercial**: el nombre bajo el que una empresa opera de cara al cliente — es
+  `Client.name`, NO necesariamente igual a su razón social.
 - **`ServicioContratado`**: un servicio facturable de la cuenta (suscripción, implementación…);
   un contrato puede traer varios, cada uno con su plan y cronograma.
 - **`PlanDePago` / `CuotaPlan`**: el "arreglo de pago" con que se vendió el monto (plantillas:

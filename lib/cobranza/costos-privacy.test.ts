@@ -253,3 +253,27 @@ describe("P3 · estructurales", () => {
     }
   });
 });
+
+// ── P4 · Páginas de Finanzas (Pieza 1, tanda 2026-07) ───────────────────────
+describe("P4 · las páginas /finanzas/costos y /finanzas/caja-neta gatean ANTES de cargar datos", () => {
+  const raiz = process.cwd();
+
+  for (const rel of ["app/finanzas/costos/page.tsx", "app/finanzas/caja-neta/page.tsx"]) {
+    it(`${rel}: isCostosRole corta antes de cualquier load*`, () => {
+      const abs = path.join(raiz, rel);
+      expect(fs.existsSync(abs), `${rel} no existe`).toBe(true);
+      const src = fs.readFileSync(abs, "utf8");
+      expect(src.includes("isCostosRole("), `${rel} no invoca isCostosRole`).toBe(true);
+
+      const idxGate = src.indexOf("isCostosRole(");
+      const llamadasLoad = [...src.matchAll(/\bload(Costos|CajaNeta|Gastos)\(/g)];
+      expect(llamadasLoad.length, `${rel} no llama a ningún load*`).toBeGreaterThan(0);
+      for (const m of llamadasLoad) {
+        expect(
+          m.index! > idxGate,
+          `${rel} — ${m[0]} aparece ANTES del gate isCostosRole`,
+        ).toBe(true);
+      }
+    });
+  }
+});

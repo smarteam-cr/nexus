@@ -79,6 +79,13 @@ export const PLAN_TEMPLATE_LABEL: Record<string, string> = {
   SUSCRIPCION: "Suscripción mensual",
   PERSONALIZADO: "Personalizado",
 };
+// Ejemplo corto y concreto por plantilla (voseo) — plata real de la sesión con Alex.
+export const PLAN_TEMPLATE_HELP: Record<string, string> = {
+  PAREJO: "Ej.: $4.000 en 4 cuotas de $1.000, una por mes.",
+  ENTRADA_Y_RESTO: "Ej.: paga $3.000 de entrada y después $500 × 4.",
+  SUSCRIPCION: "El monto total se interpreta como monto mensual; el horizonte de cobros se extiende solo en cada corte.",
+  PERSONALIZADO: "Ej.: 70% de entrada por descuento y 30% al terminar la implementación (caso Actividad).",
+};
 export const ESTADO_COBRO_LABEL: Record<string, string> = {
   PROGRAMADO: "Programado",
   POR_COBRAR: "Por cobrar",
@@ -143,6 +150,9 @@ export const cuentaPatchSchema = z
     excluidaOperacion: z.boolean(),
     responsableCobroTerceros: z.string().max(500).nullable(),
     correoCobro: z.string().email("Correo inválido").max(200).nullable(),
+    // Identidad legal (distinta del nombre comercial) — ver DECISIONS.md.
+    razonSocial: z.string().max(200).nullable(),
+    cedulaJuridica: z.string().max(200).nullable(),
     notas: z.string().max(4000).nullable(),
   })
   .partial();
@@ -407,6 +417,8 @@ export const IMPORT_CAMPOS_CANONICOS = [
   "clienteNombre",
   "dominio",
   "correoCobro",
+  "razonSocial",
+  "cedulaJuridica",
   "idExterno",
   "tipo",
   "viaCobro",
@@ -424,6 +436,8 @@ export const IMPORT_CAMPO_LABEL: Record<ImportCampoCanonico, string> = {
   clienteNombre: "Nombre del cliente (obligatorio)",
   dominio: "Dominio (ej. empresa.com)",
   correoCobro: "Correo de cobro",
+  razonSocial: "Razón social",
+  cedulaJuridica: "Cédula jurídica",
   idExterno: "Id externo (columna id del sheet)",
   tipo: "Tipo (nacional / internacional)",
   viaCobro: "Vía de cobro (Mercury / Odoo)",
@@ -442,6 +456,8 @@ export const importMapeoSchema = z
     clienteNombre: z.string().max(200).nullable(),
     dominio: z.string().max(200).nullable(),
     correoCobro: z.string().max(200).nullable(),
+    razonSocial: z.string().max(200).nullable(),
+    cedulaJuridica: z.string().max(200).nullable(),
     idExterno: z.string().max(200).nullable(),
     tipo: z.string().max(200).nullable(),
     viaCobro: z.string().max(200).nullable(),
@@ -464,6 +480,8 @@ export const importFilaCanonicaSchema = z.object({
   clienteNombre: z.string().trim().min(2, "Nombre muy corto").max(200),
   dominio: dominio.nullish(),
   correoCobro: z.string().email("Correo inválido").max(200).nullish(),
+  razonSocial: z.string().max(200).nullish(),
+  cedulaJuridica: z.string().max(200).nullish(),
   idExterno: z.string().max(200).nullish(),
   tipo: z.enum(COBRANZA_TIPOS_CUENTA).nullish(),
   viaCobro: z.enum(COBRANZA_VIAS_COBRO).nullish(),

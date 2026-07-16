@@ -25,8 +25,9 @@ import {
   COBRANZA_ESTADOS_SERVICIO,
   TIPO_SERVICIO_LABEL,
   PLAN_TEMPLATE_LABEL,
+  PLAN_TEMPLATE_HELP,
 } from "@/lib/cobranza/schema";
-import { MODALIDAD_LABEL, ESTADO_SERVICIO_LABEL, INPUT_CLS, SELECT_CLS, LABEL_CLS } from "./format";
+import { MODALIDAD_LABEL, ESTADO_SERVICIO_LABEL, INPUT_CLS, SELECT_CLS, LABEL_CLS, fmtMonto } from "./format";
 
 interface CuotaRow {
   orden: string;
@@ -340,6 +341,9 @@ export default function ServicioForm({
       {/* ── Plan de pago ── */}
       <div className="rounded-lg border border-line bg-surface-muted/40 p-3 space-y-3">
         <p className="text-[11px] font-semibold text-fg-muted uppercase tracking-widest">Plan de pago</p>
+        <p className="text-[11px] text-fg-muted">
+          Total del servicio: <span className="font-medium text-fg-secondary">{fmtMonto(totalNum, moneda)}</span> — se reparte así:
+        </p>
         <div>
           <label className={LABEL_CLS}>Plantilla</label>
           <select value={template} onChange={(e) => setTemplate(e.target.value)} className={SELECT_CLS}>
@@ -351,6 +355,7 @@ export default function ServicioForm({
 
         {template === "PAREJO" && (
           <div>
+            <p className="text-[11px] text-fg-muted mb-1">{PLAN_TEMPLATE_HELP.PAREJO}</p>
             <label className={LABEL_CLS}>Número de cuotas</label>
             <input
               type="number"
@@ -365,30 +370,33 @@ export default function ServicioForm({
         )}
 
         {template === "ENTRADA_Y_RESTO" && (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={LABEL_CLS}>% de entrada</label>
-              <input
-                type="number"
-                min={1}
-                max={99}
-                value={pctEntrada}
-                onChange={(e) => setPctEntrada(e.target.value)}
-                placeholder="Ej. 40"
-                className={INPUT_CLS}
-              />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Cuotas del resto</label>
-              <input
-                type="number"
-                min={1}
-                max={120}
-                value={numCuotas}
-                onChange={(e) => setNumCuotas(e.target.value)}
-                placeholder="Ej. 3"
-                className={INPUT_CLS}
-              />
+          <div className="space-y-1">
+            <p className="text-[11px] text-fg-muted">{PLAN_TEMPLATE_HELP.ENTRADA_Y_RESTO}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={LABEL_CLS}>% de entrada</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={pctEntrada}
+                  onChange={(e) => setPctEntrada(e.target.value)}
+                  placeholder="Ej. 40"
+                  className={INPUT_CLS}
+                />
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Cuotas del resto</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={120}
+                  value={numCuotas}
+                  onChange={(e) => setNumCuotas(e.target.value)}
+                  placeholder="Ej. 3"
+                  className={INPUT_CLS}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -402,6 +410,7 @@ export default function ServicioForm({
 
         {template === "PERSONALIZADO" && (
           <div className="space-y-2">
+            <p className="text-[11px] text-fg-muted">{PLAN_TEMPLATE_HELP.PERSONALIZADO}</p>
             {cuotas.length > 0 && (
               <div className="grid grid-cols-[3rem_1fr_1fr_4.5rem_1.5rem] gap-1.5 text-[10px] text-fg-muted">
                 <span>Orden</span>

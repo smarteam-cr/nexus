@@ -8,9 +8,6 @@ import { redirect } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
-// El gate del MÓDULO es cobranza.read (permisos); el de COSTOS sigue siendo
-// isCostosRole (SUPER_ADMIN-only hard-coded — no editable por la matriz).
-import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import {
   loadCartera,
   loadAlertas,
@@ -19,9 +16,6 @@ import {
   loadSnapshotSeries,
   loadRiesgo,
   loadColaCobros,
-  loadCostos,
-  loadCajaNeta,
-  loadGastos,
 } from "@/lib/cobranza";
 import { crDateParts } from "@/lib/jobs/time";
 import CobranzaClient from "@/components/cobranza/CobranzaClient";
@@ -32,24 +26,16 @@ export default async function CobranzaPage() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !(await can(ctx.teamMember, "cobranza", "read"))) redirect("/clients");
 
-  // PRIVACIDAD (capa 2 de 3): para un no-SUPER_ADMIN las queries de costos NI SE
-  // EJECUTAN — las props llegan null y ni un byte de salarios entra al payload RSC.
-  const canCostos = isCostosRole(ctx.role);
-
   const todayISO = crDateParts(new Date()).dateKey; // "hoy" = día calendario CR
-  const [cola, cartera, alertas, snapshot, proyeccion, series, riesgo, costos, cajaNeta, gastos] =
-    await Promise.all([
-      loadColaCobros(todayISO),
-      loadCartera(todayISO),
-      loadAlertas({ estados: ["ABIERTA", "VISTA"] }),
-      getLatestSnapshot(),
-      loadProyeccion(todayISO),
-      loadSnapshotSeries(),
-      loadRiesgo(todayISO),
-      canCostos ? loadCostos() : Promise.resolve(null),
-      canCostos ? loadCajaNeta(todayISO) : Promise.resolve(null),
-      canCostos ? loadGastos() : Promise.resolve(null),
-    ]);
+  const [cola, cartera, alertas, snapshot, proyeccion, series, riesgo] = await Promise.all([
+    loadColaCobros(todayISO),
+    loadCartera(todayISO),
+    loadAlertas({ estados: ["ABIERTA", "VISTA"] }),
+    getLatestSnapshot(),
+    loadProyeccion(todayISO),
+    loadSnapshotSeries(),
+    loadRiesgo(todayISO),
+  ]);
 
   // El PageHeader vive en CobranzaClient: su slot `action` carga el botón global
   // "Registrar pago", que necesita el estado del contenedor.
@@ -64,9 +50,6 @@ export default async function CobranzaPage() {
           initialProyeccion={proyeccion}
           initialSeries={series}
           initialRiesgo={riesgo}
-          initialCostos={costos}
-          initialCajaNeta={cajaNeta}
-          initialGastos={gastos}
           role={ctx.role}
           todayISO={todayISO}
         />

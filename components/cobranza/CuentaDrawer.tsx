@@ -58,6 +58,8 @@ interface CuentaForm {
   excluidaOperacion: boolean;
   responsableCobroTerceros: string;
   correoCobro: string;
+  razonSocial: string;
+  cedulaJuridica: string;
   notas: string;
 }
 
@@ -72,6 +74,8 @@ function formFrom(c: CuentaDetailDTO): CuentaForm {
     excluidaOperacion: c.excluidaOperacion,
     responsableCobroTerceros: c.responsableCobroTerceros ?? "",
     correoCobro: c.correoCobro ?? "",
+    razonSocial: c.razonSocial ?? "",
+    cedulaJuridica: c.cedulaJuridica ?? "",
     notas: c.notas ?? "",
   };
 }
@@ -153,6 +157,8 @@ export default function CuentaDrawer({
           excluidaOperacion: form.excluidaOperacion,
           responsableCobroTerceros: form.responsableCobroTerceros.trim() || null,
           correoCobro: form.correoCobro.trim().toLowerCase() || null,
+          razonSocial: form.razonSocial.trim() || null,
+          cedulaJuridica: form.cedulaJuridica.trim() || null,
           notas: form.notas.trim() || null,
         }),
       });
@@ -235,6 +241,24 @@ export default function CuentaDrawer({
             <section className="space-y-3">
               <h3 className={SECTION_TITLE_CLS}>Datos de la cuenta</h3>
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={LABEL_CLS}>Razón social</label>
+                  <input
+                    value={form.razonSocial}
+                    onChange={(e) => setForm({ ...form, razonSocial: e.target.value })}
+                    placeholder="Nombre legal de la empresa"
+                    className={INPUT_CLS}
+                  />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Cédula jurídica</label>
+                  <input
+                    value={form.cedulaJuridica}
+                    onChange={(e) => setForm({ ...form, cedulaJuridica: e.target.value })}
+                    placeholder="Ej. 3-101-XXXXXX"
+                    className={INPUT_CLS}
+                  />
+                </div>
                 <div>
                   <label className={LABEL_CLS}>Tipo</label>
                   <select

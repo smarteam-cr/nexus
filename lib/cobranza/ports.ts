@@ -33,6 +33,9 @@ export interface CuentaEntrante {
   clienteNombre: string;
   dominio: string | null; // normalizado (lowercase, sin @); null = sin dominio (permitido)
   correoCobro?: string | null;
+  // Identidad legal (distinta del nombre comercial / clienteNombre) — ver DECISIONS.md.
+  razonSocial?: string | null;
+  cedulaJuridica?: string | null;
   tipo?: "NACIONAL" | "INTERNACIONAL";
   viaCobro?: "MERCURY" | "ODOO" | "OTRA";
   moneda?: "CRC" | "USD";

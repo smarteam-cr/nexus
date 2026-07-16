@@ -2400,6 +2400,14 @@ model CuentaFinanciera {
   // Correo al que se le cobra (destino del mailto del borrador de cobro).
   // nullable porque el import puede no traerlo — se completa a mano.
   correoCobro     String?
+  // Identidad legal (razón social + cédula jurídica), distinta del nombre
+  // comercial (Client.name). nullable porque no toda cuenta tiene esta
+  // identidad legal capturada aún — se completa a mano o vía el importador
+  // del histórico. Sin @unique en cedulaJuridica: un mismo holding puede
+  // facturar bajo varios nombres comerciales con la misma cédula (ver
+  // DECISIONS.md).
+  razonSocial     String?
+  cedulaJuridica  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

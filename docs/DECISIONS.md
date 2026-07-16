@@ -202,6 +202,41 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   (INV3 + chokepoint único intactos — nunca se escribe estado=COBRADO directo en el create). NO
   hay pago flotante: el schema exige `servicioId` + `cuentaId`, así que el flujo obliga a elegir
   cliente → servicio; si el cliente no tiene servicios, se lo manda a configurarlo (sin alta al
+- **Costos/Caja neta salen a su propia unidad "Finanzas"** (Pieza 1, tanda 2026-07): Alex pidió
+  poder analizar costos/caja neta separado de la operación diaria de cobros — "debería ser otra
+  unidad completamente distinta". Sidebar: "Finanzas" agrupa Cobranza · Costos y gastos · Caja
+  neta (`FinanzasFlyout.tsx`, mismo patrón que `MarketingFlyout.tsx`). Rutas nuevas top-level
+  `/finanzas/costos` y `/finanzas/caja-neta`; `/cobranza` NO se mueve — moverlo rompería los
+  imports RELATIVOS internos de `CostosPanel.tsx`/`CajaNetaPanel.tsx` (que se quedan en
+  `components/cobranza/` y se importan desde wrappers nuevos en `components/finanzas/`,
+  excepción deliberada al aislamiento por módulo) y hubiera obligado a tocar las 10 rutas de
+  API + su test estructural de privacidad — cero necesidad. El gate de las 2 páginas nuevas pasó
+  a ser AUTÓNOMO (`isCostosRole(role)` solo, ya no depende de `cobranza.read`): `COSTOS_ROLES`
+  (SUPER_ADMIN) siempre fue subconjunto estricto de `COBRANZA_ROLES` y SUPER_ADMIN es all-true
+  en el engine de permisos, así que desacoplar no mueve a nadie de acceso real — y es más
+  honesto conceptualmente para una unidad que ahora es "otra cosa". Trade-off aceptado: Caja
+  neta pierde el auto-refresh en vivo cuando se registra un pago desde OTRA pestaña del
+  navegador (antes vivían en el mismo tab-set de `CobranzaClient`); el dato sigue correcto, se
+  refresca con el botón "Actualizar" del panel — no es una regresión de datos.
+- **`razonSocial`/`cedulaJuridica` van en `CuentaFinanciera`, no en `Client`** (Pieza 4, tanda
+  2026-07): Alex las necesita para conciliar con Odoo/Mercury — un concern de Finanzas puro.
+  `CuentaFinanciera` ya se declara en su propio comentario de schema como "todo lo que Finanzas
+  necesita saber" y ya tiene el patrón `fuente`/`fuenteIdExterno` para matching con sistemas
+  externos — mismo lugar natural. `Client` lo tocan ~67 archivos de módulos no relacionados
+  (HubSpot sync, sesiones, handoff…); agregarle campos legal-only ahí aumentaba la superficie
+  que esos módulos podrían leer/exponer sin necesidad. Contra: no todo `Client` tiene una
+  `CuentaFinanciera` configurada todavía (1:1 opcional) — si otro módulo (legal, HubSpot) los
+  necesitara a futuro sin cuenta configurada, se resuelve entonces (mover o duplicar-sincronizar);
+  hoy el pedido es 100% de Finanzas. Sin `@unique` en `cedulaJuridica` a propósito: un holding
+  puede facturar bajo varios nombres comerciales con la misma cédula (caso real mencionado por
+  Alex — "Grupo Petróleo" / "Clínica Oceánica") y forzar unicidad rompería esa carga histórica.
+  Aplicado con `prisma db execute` (DDL aditivo a mano), no `db push`: el dry-run de
+  `migrate diff` reveló drift preexistente de Timeline (`statusChangedAt`/`statusChangedByEmail`/
+  `statusSource` + enum `TimelineStatusSource`) no relacionado con esta tanda — un `db push`
+  normal los hubiera DROPEADO de PROD. Resuelto minutos después por un `git pull` (la otra PC
+  había aplicado esos campos a mano a la misma DB y recién ahí pusheó el schema — commits
+  `9508a5a`/`11cf8a2`, "blindar el cronograma vivo"); `migrate diff` post-pull da "No difference
+  detected" — cero drift pendiente.
 
 ## Permisos — matriz sección×acción (migración PERM, 2026-07-11)
 - **Sin CASL/casbin — registry homegrown tipado**: esas librerías brillan en abilities
