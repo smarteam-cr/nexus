@@ -20,6 +20,7 @@ const TO_DEACTIVATE: { email: string; reason: string }[] = [
   { email: "rzuniga@smarteamcr.com", reason: "Ya no forma parte del equipo" },
   { email: "jarauz@smarteamcr.com", reason: "Ya no forma parte del equipo" },
   { email: "denriquez@smarteamcr.com", reason: "Ya no forma parte del equipo" },
+  { email: "asepulveda@smarteamcr.com", reason: "Ya no forma parte del equipo — cartera reasignada a Lorena Osorio" },
 ];
 
 const pool = new Pool({
