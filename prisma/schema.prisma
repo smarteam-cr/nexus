@@ -2397,7 +2397,6 @@ enum CobranzaTipoAlerta {
   ARRANQUE_CAMBIADO // fechaInicioFacturacion divergió del anchorStartDate actual
   MONTOS_DESCUADRADOS // plan activo cuya expansión no suma el montoTotal (aviso, no invariante)
   PROMESA_INCUMPLIDA // la promesa de pago pasó sin que el cobro llegara a COBRADO
-  FACTURACION_ATRASADA // (Cobranza, otra PC) — ya existe en la base; se refleja acá para que db push quede aditivo
 }
 
 enum CobranzaUrgencia {
