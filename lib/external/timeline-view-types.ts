@@ -43,8 +43,32 @@ export interface ExternalTimelinePhase {
   tasks?: ExternalTimelineTask[];
 }
 
+/**
+ * PARTICULARIDAD visible al cliente — desviación curada con atribución. Cruza SOLO si
+ * visibleExternal=true (gate por-registro en el chokepoint, como SUSPENDED). CLAVE DE
+ * SEGURIDAD: cruzan solo {kind, party, title, detail, weeksImpact, phaseId, occurredAt};
+ * NUNCA cruzan source/needsValidation/createdByEmail (fail-closed).
+ */
+export interface ExternalParticularidad {
+  /** ATRASO | SOLICITUD | COMPROMISO. */
+  kind: string;
+  /** CLIENTE | SMARTEAM | AMBOS | DEV — atribución de la causa. */
+  party: string;
+  title: string;
+  detail: string | null;
+  /** Semanas de corrimiento que causó; null si no movió fechas. */
+  weeksImpact: number | null;
+  /** Fase ancla (opcional); null si es a nivel cronograma. */
+  phaseId: string | null;
+  /** Cuándo ocurrió (ISO). */
+  occurredAt: string;
+}
+
 export interface ExternalTimelineData {
   exists: boolean;
   anchorStartDate: string | null;
   phases: ExternalTimelinePhase[];
+  /** Desviaciones curadas visibles al cliente (visibleExternal=true). Ausente en snapshots
+   *  viejos congelados antes de esta feature → el render trata undefined como []. */
+  particularidades?: ExternalParticularidad[];
 }

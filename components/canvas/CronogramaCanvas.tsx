@@ -27,12 +27,13 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { plural, computePhaseRanges, currentWeekIndex } from "@/lib/timeline/weeks";
+import { plural, computePhaseRanges } from "@/lib/timeline/weeks";
 import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
-import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus, PARTY_META, effParty } from "./TimelineGantt";
+import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus, type GanttParticularidad, PARTY_META, PARTICULARIDAD_KIND_META, effParty } from "./TimelineGantt";
+import ParticularidadEditModal, { type ParticularidadPatch } from "./ParticularidadEditModal";
 import TaskDetailDrawer from "./TaskDetailDrawer";
 import TimelineAssistDialog from "./TimelineAssistDialog";
 import PublishBar from "./PublishBar";
@@ -144,6 +145,16 @@ interface PendingProgress {
   tasks: Array<{ id: string; done: boolean }>;
 }
 
+// Borrador de una particularidad propuesta por el agente (el CSE acepta por-ítem en el banner).
+interface PendingParticularidadDraft {
+  kind: string;
+  party: string;
+  title: string;
+  detail: string | null;
+  weeksImpact: number | null;
+  phaseId: string | null;
+}
+
 export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { projectId: string; clientId: string; headerSlot?: HTMLElement | null }) {
   const toast = useToast();
   const { pushUndo, clearScope } = useUndo();
@@ -163,6 +174,19 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // ¿Se publicó al menos una vez? (publishedSnapshot != null). Gobierna: primera publicación
   // sin modal (#3) + bloquear "Generar cronograma" sobre un cronograma ya vivo (#2).
   const [hasPublishedOnce, setHasPublishedOnce] = useState(false);
+  // Gate del detalle: las tareas por semana solo cruzan al cliente si esto != null. Antes se
+  // seteaba SOLO como efecto oculto de "Subir al cliente" — ahora el CSE lo confirma explícito
+  // ("Confirmar detalle") sin verse obligado a publicar (son dos decisiones distintas).
+  const [detailConfirmedAt, setDetailConfirmedAt] = useState<string | null>(null);
+  const [confirmingDetail, setConfirmingDetail] = useState(false);
+  // Particularidades (desviaciones curadas) — el CSE ve todas; se pasan al Gantt para el resumen.
+  const [particularidades, setParticularidades] = useState<GanttParticularidad[]>([]);
+  // Cambió una particularidad VISIBLE (visibilidad/contenido/borrado) desde la última publicación
+  // → la barra "Subir" avisa que hay algo para re-publicar (lo ve el cliente recién al «Subir»).
+  const [particularidadesDirty, setParticularidadesDirty] = useState(false);
+  // Particularidad en edición (modal). null = cerrado.
+  const [editingParticularidadId, setEditingParticularidadId] = useState<string | null>(null);
+  const [savingParticularidad, setSavingParticularidad] = useState(false);
   // Señal del workspace: al generar el handoff, el cronograma (si está vacío) recarga sus fases.
   const { timelineRefreshSignal, bumpGpsRefresh } = useWorkspace();
   // #1/#3 — RBAC del cronograma. `editTimeline` lo tiene TODO interno (incl. CSE): editar,
@@ -182,6 +206,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [publishWorking, setPublishWorking] = useState(false);
   // Modal de razón del cambio — SOLO al "Subir al cliente" (no en el auto-guardado).
   const [publishReasonOpen, setPublishReasonOpen] = useState(false);
+  const [suggestingReason, setSuggestingReason] = useState(false); // fetch de la razón sugerida
   const [publishReasonText, setPublishReasonText] = useState("");
   // ── Asistente IA ──
   const [assistOpen, setAssistOpen] = useState(false);
@@ -207,6 +232,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [progressTaskSel, setProgressTaskSel] = useState<Set<string>>(new Set());
   const [progressSuspendedSel, setProgressSuspendedSel] = useState<Set<string>>(new Set());
   const [applyingProgress, setApplyingProgress] = useState(false);
+  // ── Particularidades propuestas por el agente — borrador separado (aceptación por-ítem) ──
+  const [pendingParticularidades, setPendingParticularidades] = useState<PendingParticularidadDraft[] | null>(null);
+  const [particSel, setParticSel] = useState<Set<number>>(new Set()); // índices aceptados
+  const [particVis, setParticVis] = useState<Set<number>>(new Set()); // índices marcados visibleExternal
+  const [applyingPartic, setApplyingPartic] = useState(false);
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
   const keyCounter = useRef(0);
   const nextKey = () => `new-${keyCounter.current++}`;
@@ -309,6 +339,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setKickoffDate(data.kickoffSessionDate ? String(data.kickoffSessionDate).slice(0, 10) : "");
         setPublishedAt(data.timelinePublishedAt ?? null);
         setHasPublishedOnce(!!data.hasPublishedOnce);
+        setDetailConfirmedAt(data.detailConfirmedAt ?? null);
+        setParticularidades((data.particularidades as GanttParticularidad[] | undefined) ?? []);
+        setParticularidadesDirty(false);
         setLastEditedAt(data.lastEditedByHuman ?? null);
         // Propuesta de re-generación del agente (re-run con cronograma ya existente):
         // se muestra como vista previa aplicable, reusando el mismo banner que el assist.
@@ -330,13 +363,24 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setProgressPhaseSel(new Set((pp?.phases ?? []).map((p) => p.id)));
         setProgressTaskSel(new Set((pp?.tasks ?? []).filter((t) => t.done).map((t) => t.id)));
         setProgressSuspendedSel(new Set());
+        // Borrador de particularidades propuesto por el agente — pre-tildá TODAS (el CSE destilda
+        // las que no quiera) y ninguna como visible por defecto (visibleExternal opt-in por ítem).
+        const ppartRaw = (data.pendingParticularidades as PendingParticularidadDraft[] | null) ?? null;
+        const ppart = ppartRaw && ppartRaw.length > 0 ? ppartRaw : null;
+        setPendingParticularidades(ppart);
+        setParticSel(new Set((ppart ?? []).map((_, i) => i)));
+        setParticVis(new Set());
       } else {
         setPhases([]);
         setAnchor("");
         setKickoffDate("");
         setPendingProgress(null);
+        setPendingParticularidades(null);
         setPublishedAt(null);
         setHasPublishedOnce(false);
+        setDetailConfirmedAt(null);
+        setParticularidades([]);
+        setParticularidadesDirty(false);
         setLastEditedAt(null);
       }
       setError(null);
@@ -406,6 +450,53 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       setError("Error de conexión al publicar el cronograma.");
     } finally {
       setPublishWorking(false);
+    }
+  };
+
+  // Abrir el modal de re-publicación precargando la razón sugerida (diff vs lo ya publicado).
+  // Best-effort: si falla el fetch, abre con el textarea vacío (comportamiento previo).
+  const openPublishModal = async () => {
+    setPublishReasonText("");
+    setPublishReasonOpen(true);
+    setSuggestingReason(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/publish-suggestion`);
+      if (res.ok) {
+        const d = await res.json().catch(() => ({}));
+        // No pisar lo que el CSE ya haya empezado a tipear mientras cargaba.
+        setPublishReasonText((cur) => (cur.trim() === "" && typeof d?.suggestion === "string" ? d.suggestion : cur));
+      }
+    } catch {
+      /* sin sugerencia */
+    } finally {
+      setSuggestingReason(false);
+    }
+  };
+
+  // ── Confirmar el DETALLE (tareas) sin publicar ─────────────────────────────────
+  // Acto de primera clase (antes escondido dentro de "Subir al cliente"): habilita que
+  // las acciones por semana crucen a la vista del cliente (gate detailConfirmedAt), pero
+  // NO publica — el CSE valida el detalle y decide publicar por separado. Feedback real
+  // (toast en éxito/error), no el `.catch(()=>{})` mudo que tenía el fetch incrustado.
+  const confirmDetail = async () => {
+    setConfirmingDetail(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/confirm-detail`, { method: "POST" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d?.error ?? "No se pudo confirmar el detalle del cronograma.");
+        toast.error("No se pudo confirmar el detalle.");
+        return;
+      }
+      const d = await res.json().catch(() => ({}));
+      setDetailConfirmedAt(d?.confirmedAt ?? new Date().toISOString());
+      toast.success("Detalle confirmado — las tareas por semana ya pueden cruzar al cliente al publicar.");
+    } catch {
+      setError("Error de conexión al confirmar el detalle.");
+      toast.error("Error de conexión al confirmar el detalle.");
+    } finally {
+      setConfirmingDetail(false);
     }
   };
 
@@ -829,6 +920,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         .filter((p) => p.id && (phaseToTaskIds.has(p.id) || proposedDone.has(p.id)))
         .map((p) => p.id as string)
     : [];
+  // Visibilidad de los DOS banners de propuesta del agente (avance + particularidades). Se
+  // muestran lado a lado (2 columnas) cuando ambos están; uno solo ocupa el ancho completo.
+  const showProgressBanner = !!pendingProgress && (bannerPhaseIds.length > 0 || !!pendingProgress.reasoning);
+  const showParticBanner = canEdit && !!pendingParticularidades && pendingParticularidades.length > 0;
   // Una fase de pendingProgress.phases solo cierra si TODAS sus tareas del borrador quedan
   // resueltas (Hecha o Suspendida). Refuerza el 400 del apply.
   const isPhaseResolvable = (phaseId: string): boolean =>
@@ -878,6 +973,117 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       /* limpiar local igual */
     }
     setPendingProgress(null);
+  };
+
+  // ── Particularidades (PT-5): aplicar las aceptadas / descartar el borrador ─────
+  const applyParticularidades = async () => {
+    if (!pendingParticularidades) return;
+    if (particSel.size === 0) { toast.info("No hay particularidades tildadas para crear."); return; }
+    setApplyingPartic(true);
+    setError(null);
+    try {
+      const accepted = [...particSel].map((index) => ({ index, visibleExternal: particVis.has(index) }));
+      const res = await fetch(`/api/projects/${projectId}/timeline/particularidades/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accepted }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d?.error ?? "No se pudieron crear las particularidades.");
+        toast.error("No se pudieron crear las particularidades.");
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setPendingParticularidades(null);
+        await load(); // trae las particularidades creadas → aparecen en el resumen
+        toast.success(`${d?.created ?? 0} ${(d?.created ?? 0) === 1 ? "particularidad creada" : "particularidades creadas"}.`);
+      }
+    } catch {
+      setError("Error de conexión al crear las particularidades.");
+      toast.error("Error de conexión al crear las particularidades.");
+    }
+    setApplyingPartic(false);
+  };
+
+  const discardParticularidades = async () => {
+    try {
+      await fetch(`/api/projects/${projectId}/timeline/particularidades/apply`, { method: "DELETE" });
+    } catch {
+      /* limpiar local igual */
+    }
+    setPendingParticularidades(null);
+  };
+
+  // Togglear la visibilidad de una particularidad YA creada (optimista + PATCH). La visibilidad
+  // recién llega al cliente al «Subir» → marcamos particularidadesDirty para que la barra invite a re-publicar.
+  const toggleParticularidadVisible = async (id: string, next: boolean) => {
+    const prev = particularidades;
+    setParticularidades((ps) => ps.map((p) => (p.id === id ? { ...p, visibleExternal: next } : p)));
+    setParticularidadesDirty(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/particularidades/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visibleExternal: next }),
+      });
+      if (!res.ok) {
+        setParticularidades(prev); // revertir
+        const d = await res.json().catch(() => ({}));
+        toast.error(d?.error ?? "No se pudo cambiar la visibilidad.");
+      }
+    } catch {
+      setParticularidades(prev);
+      toast.error("Error de conexión al cambiar la visibilidad.");
+    }
+  };
+
+  // Editar el CONTENIDO de una particularidad (desde el modal). PATCH con todos los campos; update
+  // local del estado. Marca particularidadesDirty si el cambio afecta al cliente (es o era visible).
+  const saveParticularidad = async (id: string, patch: ParticularidadPatch) => {
+    const before = particularidades.find((p) => p.id === id);
+    setSavingParticularidad(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/particularidades/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d?.error ?? "No se pudo guardar la particularidad.");
+        return;
+      }
+      const updated = await res.json();
+      setParticularidades((ps) => ps.map((p) => (p.id === id ? { ...p, ...updated } : p)));
+      if (before?.visibleExternal || patch.visibleExternal) setParticularidadesDirty(true);
+      setEditingParticularidadId(null);
+      toast.success("Particularidad actualizada.");
+    } catch {
+      toast.error("Error de conexión al guardar la particularidad.");
+    } finally {
+      setSavingParticularidad(false);
+    }
+  };
+
+  const deleteParticularidad = async (id: string) => {
+    const before = particularidades.find((p) => p.id === id);
+    setSavingParticularidad(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/particularidades/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d?.error ?? "No se pudo eliminar la particularidad.");
+        return;
+      }
+      setParticularidades((ps) => ps.filter((p) => p.id !== id));
+      if (before?.visibleExternal) setParticularidadesDirty(true);
+      setEditingParticularidadId(null);
+      toast.success("Particularidad eliminada.");
+    } catch {
+      toast.error("Error de conexión al eliminar la particularidad.");
+    } finally {
+      setSavingParticularidad(false);
+    }
   };
 
   const toggleSet = (s: Set<string>, id: string): Set<string> => {
@@ -1093,7 +1299,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // cliente todavía no ve el estado guardado → CTA "Subir al cliente".
   const hasUnpublishedChanges = !!(
     phases.length > 0 &&
-    (!publishedAt || (lastEditedAt && new Date(lastEditedAt) > new Date(publishedAt)))
+    (!publishedAt || (lastEditedAt && new Date(lastEditedAt) > new Date(publishedAt)) ||
+      // Cambiar la visibilidad de una particularidad NO toca lastEditedByHuman (no es edición
+      // estructural), pero sí requiere re-Subir para que el cliente lo vea → cuenta como "sin subir".
+      particularidadesDirty)
   );
   // Para la barra: si hay ediciones sin guardar pero el cronograma está inválido,
   // mostramos el motivo (el auto-guardado espera a que se completen los campos).
@@ -1154,6 +1363,21 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               Pedir cambio con IA
             </button>
           )}
+          {/* PT-0b — "Confirmar detalle" desacoplado de "Subir al cliente": habilita el gate
+              detailConfirmedAt (las tareas por semana pueden cruzar al cliente) SIN publicar.
+              Visible cuando hay tareas IA (source AGENT/MODIFIED) y el detalle aún no se confirmó.
+              "Subir al cliente" lo sigue confirmando como red de seguridad idempotente. */}
+          {canEdit && phases.length > 0 && !proposal && hasAiDetail && !detailConfirmedAt && (
+            <button
+              onClick={() => void confirmDetail()}
+              disabled={confirmingDetail}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors bg-emerald-900/30 border-emerald-700/50 text-emerald-300 hover:bg-emerald-900/50 hover:border-emerald-600 disabled:opacity-60"
+              title="Marca el detalle (tareas por semana) como validado para que pueda cruzar al cliente — no publica todavía"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              {confirmingDetail ? "Confirmando…" : "Confirmar detalle"}
+            </button>
+          )}
         </>,
         headerSlot,
       )}
@@ -1173,7 +1397,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             // default genérico ("Publicación al cliente"), que el panel ya muestra como "sin
             // motivo". Republicaciones (ya publicado antes) SÍ piden el motivo del cambio.
             if (!hasPublishedOnce) { void publishTimeline(true, ""); }
-            else { setPublishReasonText(""); setPublishReasonOpen(true); }
+            else { void openPublishModal(); }
           }}
           publishing={publishWorking}
           savedMessage="Cambios guardados — el cliente todavía no los ve."
@@ -1231,8 +1455,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       )}
 
       {/* ── Banner de AVANCE detectado por el agente (D.2) — propone, el CSE confirma ── */}
-      {pendingProgress &&
-        (bannerPhaseIds.length > 0 || !!pendingProgress.reasoning) && (
+      {/* ── Banners de propuesta del agente: avance + particularidades, lado a lado (2 columnas)
+          cuando ambos están; uno solo ocupa el ancho completo. Misma estructura de header
+          (tile de ícono + título + subtítulo + acciones a la derecha) para que se lean como un sistema. ── */}
+      {(showProgressBanner || showParticBanner) && (
+      <div className={`grid gap-4 items-start ${showProgressBanner && showParticBanner ? "lg:grid-cols-2" : "grid-cols-1"}`}>
+        {showProgressBanner && (
           <div className="rounded-2xl border border-line bg-surface-muted px-5 py-4 space-y-4">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-lg bg-emerald-900/30 border border-emerald-700/40 flex items-center justify-center flex-shrink-0">
@@ -1345,6 +1573,89 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           </div>
         )}
 
+        {/* ── Banner: PARTICULARIDADES propuestas por el agente (PT-5) ── */}
+        {/* Borrador SEPARADO del avance: el CSE tilda cuáles registrar y cuáles ve el cliente
+            (visibleExternal por ítem). "Crear" persiste como Particularidad; "Descartar" tira el borrador.
+            Misma estructura de header que "Avance detectado" (tile + título + subtítulo + acciones). */}
+        {showParticBanner && pendingParticularidades && (
+          <div className="rounded-2xl border border-line bg-surface-muted px-5 py-4 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-violet-900/30 border border-violet-700/40 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-violet-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-fg">Particularidades detectadas</p>
+                <p className="text-xs text-fg-muted mt-0.5">Tildá cuáles registrar y cuáles verá el cliente</p>
+              </div>
+              <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => void discardParticularidades()}
+                  disabled={applyingPartic}
+                  className="text-xs font-medium text-fg-muted hover:text-fg border border-line hover:bg-surface-hover rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
+                >
+                  Descartar
+                </button>
+                <button
+                  onClick={() => void applyParticularidades()}
+                  disabled={applyingPartic || particSel.size === 0}
+                  className="text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-50 px-3.5 py-1.5 rounded-lg transition-colors"
+                >
+                  {applyingPartic ? "Creando…" : `Crear ${particSel.size}`}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {pendingParticularidades.map((pt, i) => {
+                const kMeta = PARTICULARIDAD_KIND_META[pt.kind] ?? { label: pt.kind, cls: "text-fg-muted bg-surface-hover border-line" };
+                const pMeta = PARTY_META[pt.party] ?? PARTY_META.SMARTEAM;
+                const accepted = particSel.has(i);
+                const visible = particVis.has(i);
+                return (
+                  <div key={i} className={`rounded-xl border border-line px-3 py-2.5 transition-colors ${accepted ? "bg-surface" : "bg-surface/40 opacity-55"}`}>
+                    <div className="flex items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={accepted}
+                        onChange={() => setParticSel((s) => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+                        className="mt-0.5 h-3.5 w-3.5 accent-violet-500 flex-shrink-0"
+                        title="Registrar esta particularidad"
+                      />
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 border ${kMeta.cls}`}>{kMeta.label}</span>
+                          <span className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 border ${pMeta.cls}`}>{pMeta.label}</span>
+                          {pt.weeksImpact != null && pt.weeksImpact > 0 && (
+                            <span className="text-[11px] font-semibold text-red-300">+{plural(pt.weeksImpact, "semana", "semanas")}</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-fg font-medium leading-snug">{pt.title}</p>
+                        {pt.detail && <p className="text-[12.5px] text-fg-secondary leading-relaxed">{pt.detail}</p>}
+                        <label className={`inline-flex items-center gap-1.5 text-[11px] font-medium cursor-pointer select-none ${accepted ? "text-fg-muted hover:text-fg" : "text-fg-muted/40 pointer-events-none"}`} title="Que el cliente la vea en su cronograma compartido">
+                          <input
+                            type="checkbox"
+                            checked={visible}
+                            disabled={!accepted}
+                            onChange={() => setParticVis((s) => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+                            className="h-3.5 w-3.5 accent-emerald-500"
+                          />
+                          Visible al cliente
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="text-xs text-fg-muted pt-3 border-t border-line leading-relaxed">
+              El agente las infirió de las sesiones. Registrá solo las reales; marcá «Visible al cliente» las que quieras exponer en su cronograma.
+            </p>
+          </div>
+        )}
+      </div>
+      )}
+
       {/* ── Error ── */}
       {error && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-900/20 border border-red-700/50 text-red-300">
@@ -1430,6 +1741,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             }
             onOpenTask={(pk, tk) => setSelectedTask({ phaseKey: pk, taskKey: tk })}
             kickoffDate={kickoffDate || null}
+            particularidades={particularidades}
+            onToggleParticularidadVisible={canEdit ? toggleParticularidadVisible : undefined}
+            onEditParticularidad={canEdit ? setEditingParticularidadId : undefined}
           />
         </>
       )}
@@ -1442,7 +1756,6 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         phaseDurationWeeks={selPhase?.durationWeeks ?? 1}
         absolutePhaseStart={selPhaseIdx >= 0 ? drawerRanges[selPhaseIdx].start : 0}
         anchor={anchor || null}
-        currentWeek={currentWeekIndex(anchor || null)}
         onClose={() => setSelectedTask(null)}
         onToggleStatus={toggleStatus}
         onUpdateTask={(pk, tk, patch) => updateTask(pk, tk, patch)}
@@ -1452,6 +1765,21 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         hasPrev={flatIdx > 0}
         hasNext={flatIdx >= 0 && flatIdx < flatTasks.length - 1}
       />
+
+      {/* Editar una particularidad ya creada (contenido + visibilidad + borrar) */}
+      {(() => {
+        const editing = editingParticularidadId ? particularidades.find((p) => p.id === editingParticularidadId) : null;
+        if (!editing) return null;
+        return (
+          <ParticularidadEditModal
+            particularidad={editing}
+            saving={savingParticularidad}
+            onSave={(patch) => void saveParticularidad(editing.id, patch)}
+            onDelete={() => void deleteParticularidad(editing.id)}
+            onClose={() => setEditingParticularidadId(null)}
+          />
+        );
+      })()}
 
 
       <TimelineAssistDialog
@@ -1480,6 +1808,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 Indicá qué cambió en esta versión. Queda registrado con un snapshot de lo publicado
                 para comparar después lo planificado contra lo real.
               </p>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+              <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              {suggestingReason ? "Analizando los cambios…" : "Sugerencia automática según los cambios — editá si querés."}
             </div>
             <textarea
               value={publishReasonText}

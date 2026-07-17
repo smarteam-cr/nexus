@@ -84,6 +84,16 @@ export interface PendingProgress {
   tasks: Array<{ id: string; done: boolean }>;
 }
 
+// Borrador de una particularidad propuesta por el agente (el CSE acepta por-ítem en el banner).
+export interface PendingParticularidad {
+  kind: string;
+  party: string;
+  title: string;
+  detail: string | null;
+  weeksImpact: number | null;
+  phaseId: string | null;
+}
+
 interface TimelineResponse {
   exists: true;
   anchorStartDate: string | null;
@@ -108,6 +118,24 @@ interface TimelineResponse {
   // D.2 — borrador de avance (separado de pendingProposal; no es status real).
   pendingProgress: PendingProgress | null;
   pendingProgressRunId: string | null;
+  // Borrador de PARTICULARIDADES propuestas por el agente (separado de pendingProgress; apply propio).
+  pendingParticularidades: PendingParticularidad[] | null;
+  pendingParticularidadesRunId: string | null;
+  // Particularidades (desviaciones curadas) — el CSE ve TODAS (visibles y ocultas), con la
+  // marca visibleExternal para saber cuáles cruzan al cliente. Orden por occurredAt desc.
+  particularidades: Array<{
+    id: string;
+    kind: string;
+    party: string;
+    title: string;
+    detail: string | null;
+    weeksImpact: number | null;
+    visibleExternal: boolean;
+    source: string;
+    needsValidation: boolean;
+    phaseId: string | null;
+    occurredAt: string;
+  }>;
   phases: Array<{
     id: string;
     name: string;
@@ -141,8 +169,26 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
       pendingProposalRunId: true,
       pendingProgress: true,
       pendingProgressRunId: true,
+      pendingParticularidades: true,
+      pendingParticularidadesRunId: true,
       publishedSnapshot: true,
       project: { select: { timelinePublishedAt: true } },
+      particularidades: {
+        orderBy: { occurredAt: "desc" },
+        select: {
+          id: true,
+          kind: true,
+          party: true,
+          title: true,
+          detail: true,
+          weeksImpact: true,
+          visibleExternal: true,
+          source: true,
+          needsValidation: true,
+          phaseId: true,
+          occurredAt: true,
+        },
+      },
       phases: {
         orderBy: { order: "asc" },
         select: {
@@ -207,6 +253,12 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     pendingProposalRunId: tl.pendingProposalRunId,
     pendingProgress: (tl.pendingProgress as PendingProgress | null) ?? null,
     pendingProgressRunId: tl.pendingProgressRunId,
+    pendingParticularidades: (tl.pendingParticularidades as PendingParticularidad[] | null) ?? null,
+    pendingParticularidadesRunId: tl.pendingParticularidadesRunId,
+    particularidades: tl.particularidades.map((pt) => ({
+      ...pt,
+      occurredAt: pt.occurredAt.toISOString(),
+    })),
     phases,
   };
 }

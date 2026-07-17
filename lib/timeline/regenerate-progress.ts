@@ -50,6 +50,30 @@ interface ProgressOutput {
     phases?: Array<{ id?: string; done?: boolean }>;
     tasks?: Array<{ id?: string; done?: boolean }>;
   };
+  // Particularidades (desviaciones curadas) que el agente detecta del MISMO transcript. Borrador
+  // SEPARADO de progress (pendingParticularidades) con apply propio — aceptar avance ≠ aceptar
+  // desviaciones. Conservador: solo lo respaldado por el transcript, sin inventar semanas.
+  particularidades?: Array<{
+    kind?: string;
+    party?: string;
+    title?: string;
+    detail?: string | null;
+    weeksImpact?: number | null;
+    phaseId?: string | null;
+  }>;
+}
+
+const VALID_KINDS = new Set(["ATRASO", "SOLICITUD", "COMPROMISO"]);
+const VALID_PARTIES = new Set(["CLIENTE", "SMARTEAM", "AMBOS", "DEV"]);
+
+/** Borrador de una particularidad propuesta (validado; aún sin crear). */
+export interface PendingParticularidadDraft {
+  kind: string;
+  party: string;
+  title: string;
+  detail: string | null;
+  weeksImpact: number | null;
+  phaseId: string | null;
 }
 
 /**
@@ -163,6 +187,7 @@ export async function regenerateTimelineProgress(
       timelineCtx,
       "",
       "Detectá el avance real siguiendo tus instrucciones: ubicá el currentPhaseId, marcá las fases completadas y las tareas hechas. Usá ids EXACTOS. No re-propongas lo que ya está DONE. Sé conservador.",
+      "Además, si el transcript RESPALDA desviaciones del plan (algo se atrasó, se necesita un insumo del cliente, o se comprometió un acuerdo), proponelas en `particularidades` con su atribución (party) y — SOLO si el transcript lo respalda — las semanas de corrimiento (weeksImpact). No inventes semanas ni desviaciones: si no hay evidencia clara, dejá el array vacío.",
     ]
       .filter((x) => x !== null)
       .join("\n");
@@ -172,7 +197,7 @@ export async function regenerateTimelineProgress(
     try {
       const msg = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 2000,
+        max_tokens: 3000,
         system: `${agent.systemPrompt ?? ""}\n\nESTILO (OBLIGATORIO): TODO el texto en español con TUTEO neutro ("tú"): "Transforma", "centraliza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "centralizá", "tenés", "querés", "podés" ni "vos".`,
         messages: [{ role: "user", content: userMessage }],
       });
@@ -209,13 +234,34 @@ export async function regenerateTimelineProgress(
         .map((t) => t.id as string),
     );
 
+    // Particularidades propuestas — validadas y saneadas (borrador SEPARADO del avance).
+    // Conservador: kind/party válidos, title obligatorio, weeksImpact entero ≥0 o null, phaseId
+    // debe existir (o null). Se limitan a 12 por corrida para no inundar el banner.
+    const particularidadesDraft: PendingParticularidadDraft[] = (parsed.particularidades ?? [])
+      .map((pt): PendingParticularidadDraft | null => {
+        const kind = typeof pt?.kind === "string" ? pt.kind.toUpperCase() : "";
+        const party = typeof pt?.party === "string" ? pt.party.toUpperCase() : "";
+        const title = typeof pt?.title === "string" ? pt.title.trim() : "";
+        if (!VALID_KINDS.has(kind) || !VALID_PARTIES.has(party) || !title) return null;
+        const wRaw = pt?.weeksImpact;
+        const weeksImpact = typeof wRaw === "number" && Number.isFinite(wRaw) && wRaw > 0 ? Math.round(wRaw) : null;
+        const phaseId = typeof pt?.phaseId === "string" && phaseStatus.has(pt.phaseId) ? pt.phaseId : null;
+        const detail = typeof pt?.detail === "string" && pt.detail.trim() ? pt.detail.trim() : null;
+        return { kind, party, title, detail, weeksImpact, phaseId };
+      })
+      .filter((x): x is PendingParticularidadDraft => x !== null)
+      .slice(0, 12);
+
     // ¿Hay algo HECHO que confirmar? Si NO hay fases completas NI tareas inferidas hechas, el
-    // borrador sería "todo pendiente" → nada que confirmar, solo ruido → se OMITE el banner.
+    // borrador de AVANCE sería "todo pendiente" → nada que confirmar, solo ruido → se OMITE.
     // Antes había una excepción (currentIsNew: mostrar el banner si el agente ubicaba el "hoy" en
     // una fase nueva aunque no hubiera nada hecho); se quitó por pedido: mover el marcador sin
     // tareas/fases hechas no amerita confirmación (el "hoy" del Gantt es por fecha, y el CSE marca
-    // las tareas a mano cuando las haya).
-    if (phasesDone.length === 0 && inferredDone.size === 0) {
+    // las tareas a mano cuando las haya). Las particularidades son un borrador INDEPENDIENTE: si
+    // hay particularidades pero no avance, igual se persisten (su propio banner las ofrece).
+    const hasProgress = phasesDone.length > 0 || inferredDone.size > 0;
+    const hasParticularidades = particularidadesDraft.length > 0;
+    if (!hasProgress && !hasParticularidades) {
       return { status: "skipped", reason: "no_progress_detected", projectId, currentPhaseId, lastSessionDate, lastSessionArea };
     }
 
@@ -247,24 +293,31 @@ export async function regenerateTimelineProgress(
       },
     });
 
-    const pendingProgress = {
-      currentPhaseId,
-      asOfSessionId: opts.asOfSessionId ?? null,
-      reasoning: typeof prog.reasoning === "string" ? prog.reasoning : "",
-      phases: phasesDone,
-      tasks: tasksDraft,
-    };
+    // Persistir SOLO los borradores que corresponden: avance si lo hay, particularidades si las
+    // hay. Cada uno con el mismo runId (una sola corrida del agente) pero apply separado.
+    const updateData: Prisma.ProjectTimelineUpdateInput = {};
+    if (hasProgress) {
+      updateData.pendingProgress = {
+        currentPhaseId,
+        asOfSessionId: opts.asOfSessionId ?? null,
+        reasoning: typeof prog.reasoning === "string" ? prog.reasoning : "",
+        phases: phasesDone,
+        tasks: tasksDraft,
+      } as Prisma.InputJsonValue;
+      updateData.pendingProgressRunId = run.id;
+    }
+    if (hasParticularidades) {
+      updateData.pendingParticularidades = particularidadesDraft as unknown as Prisma.InputJsonValue;
+      updateData.pendingParticularidadesRunId = run.id;
+    }
 
     await prisma.projectTimeline.update({
       where: { projectId },
-      data: {
-        pendingProgress: pendingProgress as Prisma.InputJsonValue,
-        pendingProgressRunId: run.id,
-      },
+      data: updateData,
     });
 
     console.log(
-      `[timeline-progress] ✓ borrador de avance para project ${projectId}: ${phasesDone.length} fases, ${inferredDone.size} tareas hechas (${tasksDraft.length} a confirmar), hoy=${currentPhaseId ?? "—"} (run ${run.id})`,
+      `[timeline-progress] ✓ borrador para project ${projectId}: ${phasesDone.length} fases, ${inferredDone.size} tareas hechas (${tasksDraft.length} a confirmar), ${particularidadesDraft.length} particularidades, hoy=${currentPhaseId ?? "—"} (run ${run.id})`,
     );
     return {
       status: "ok",

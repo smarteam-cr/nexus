@@ -14,7 +14,7 @@ import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 // Import DIRECTO del motor puro (no de lib/lifecycle/index): el index re-exporta el
 // loader con Prisma y este módulo debe quedar puro (unit-testeable) — ver nota en el index.
 import { stageAtOrAfter, STAGE_LABEL_ES } from "@/lib/lifecycle/stage-engine";
-import { computePhaseRanges, addWeeks } from "@/lib/timeline/weeks";
+import { computePhaseRanges, addWeeks, isOverdueByDate } from "@/lib/timeline/weeks";
 
 export const STALL_DAYS = 14; // "sin avance" por defecto (configurable después)
 /** Días de gracia de las alarmas tempranas: kickoff sin publicar / cronograma sin consensuar. */
@@ -180,9 +180,10 @@ export function computeProjectSummary(input: SummaryInput): ProjectSummary {
     }
     for (const t of p.tasks) {
       const te = ends.task.get(t.id);
-      // E — no es vencida si está resuelta (DONE/SUSPENDED) ni si su fase ya está DONE
-      // (red barata para data vieja: fase cerrada con tareas PENDING sueltas).
-      if (te && te.getTime() < now.getTime() && t.status !== "DONE" && t.status !== "SUSPENDED" && p.status !== "DONE") {
+      // Predicado ÚNICO de atraso por-tarea (weeks.ts) — mismo que el Gantt/externo, para que
+      // los números no se contradigan. Excluye DONE/SUSPENDED (resueltas). El guard extra
+      // `p.status !== "DONE"` es red barata para data vieja (fase cerrada con tareas PENDING sueltas).
+      if (te && isOverdueByDate(te, now, t.status) && p.status !== "DONE") {
         overdueTasks++;
         worstMs = Math.max(worstMs, now.getTime() - te.getTime());
       }

@@ -515,12 +515,19 @@ model ProjectTimeline {
   // se limpia al aplicar (timeline/progress/apply) o descartar (DELETE timeline/progress).
   pendingProgress             Json?
   pendingProgressRunId        String? // AgentRun del que salió el borrador de avance (trazabilidad)
+  // Particularidades — BORRADOR (hermano de pendingProgress, NO se mezcla). El agente de avance
+  // propone desviaciones curadas (atraso/solicitud/compromiso) del transcript; el CSE acepta ítem
+  // por ítem en el banner y recién ahí se crean las filas Particularidad. Se limpia al aplicar
+  // (timeline/particularidades/apply) o descartar. Shape: { reasoning, items:[{kind,party,title,detail,weeksImpact}] }.
+  pendingParticularidades     Json?
+  pendingParticularidadesRunId String? // AgentRun del que salió el borrador de particularidades
   createdAt                   DateTime  @default(now())
   updatedAt                   DateTime  @updatedAt
 
-  phases    TimelinePhase[]
-  changes   TimelineChange[] // #4 — historial de ediciones (razón + snapshot) para D.3
-  baselines TimelineBaseline[] // D.3 — baselines "vendidos" congelados al publicar (versionados)
+  phases          TimelinePhase[]
+  changes         TimelineChange[] // #4 — historial de ediciones (razón + snapshot) para D.3
+  baselines       TimelineBaseline[] // D.3 — baselines "vendidos" congelados al publicar (versionados)
+  particularidades Particularidad[] // desviaciones curadas (atribución cliente/Smarteam), cara al cliente
 
   @@index([projectId])
 }
@@ -561,7 +568,8 @@ model TimelinePhase {
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
-  tasks TimelineTask[]
+  tasks            TimelineTask[]
+  particularidades Particularidad[] // desviaciones ancladas a esta fase (opcional; SetNull al borrar la fase)
 
   @@index([timelineId, order])
 }
@@ -640,6 +648,47 @@ enum TaskParty {
 enum TimelineTaskType {
   SESSION // reunión / sesión de trabajo con el cliente (kickoff, revisión, demo, capacitación)
   TASK // acción / entregable / configuración (no es una reunión)
+}
+
+// PARTICULARIDAD — desviación CURADA del cronograma, con atribución (¿quién la causó?).
+// El propósito: exponerle al cliente POR QUÉ y QUIÉN movió el cronograma, sin mostrarle el log
+// de auditoría crudo (TimelineChange, cuyos `reason` son autogenerados = ruido de máquina).
+// Scoped al timeline (mismo cascade/lifecycle que TimelineChange/TimelineBaseline). El CSE la
+// crea a mano o acepta una propuesta del agente; solo cruza al cliente si visibleExternal=true.
+model Particularidad {
+  id              String               @id @default(cuid())
+  timelineId      String
+  timeline        ProjectTimeline      @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  phaseId         String? // ancla opcional a una fase; SetNull para no perder la particularidad al borrar la fase
+  phase           TimelinePhase?       @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  kind            ParticularidadKind
+  party           TaskParty // reusa el enum de tarea (CLIENTE/SMARTEAM/AMBOS/DEV) — misma atribución/chips
+  title           String // corto, en lenguaje cliente
+  detail          String?              @db.Text
+  weeksImpact     Int? // semanas de corrimiento que causó; null si no movió fechas
+  visibleExternal Boolean              @default(false) // gate por-registro; se respeta en el chokepoint (como SUSPENDED)
+  source          ParticularidadSource @default(HUMAN)
+  needsValidation Boolean              @default(false) // true mientras es propuesta del agente sin confirmar
+  createdByEmail  String? // quién la creó/confirmó (del guard)
+  occurredAt      DateTime             @default(now()) // cuándo ocurrió la desviación (editable; default = ahora)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([timelineId, occurredAt])
+  @@index([timelineId, visibleExternal])
+}
+
+// Tipo de particularidad de cara al cliente:
+enum ParticularidadKind {
+  ATRASO // algo se atrasó (típicamente con weeksImpact y una party responsable)
+  SOLICITUD // se necesita algo del cliente para avanzar (insumo, acceso, decisión)
+  COMPROMISO // un acuerdo/hito comprometido en una sesión
+}
+
+// Procedencia de la particularidad (distinto de `party`, que es la ATRIBUCIÓN de la causa).
+enum ParticularidadSource {
+  AGENT // propuesta por el agente de avance y confirmada por el CSE
+  HUMAN // creada a mano por el CSE
 }
 
 // #4 — historial de cambios del cronograma. Cada edición lleva una razón OBLIGATORIA
@@ -2347,6 +2396,7 @@ enum CobranzaTipoAlerta {
   ARRANQUE_CAMBIADO // fechaInicioFacturacion divergió del anchorStartDate actual
   MONTOS_DESCUADRADOS // plan activo cuya expansión no suma el montoTotal (aviso, no invariante)
   PROMESA_INCUMPLIDA // la promesa de pago pasó sin que el cobro llegara a COBRADO
+  FACTURACION_ATRASADA // (Cobranza, otra PC) — ya existe en la base; se refleja acá para que db push quede aditivo
 }
 
 enum CobranzaUrgencia {

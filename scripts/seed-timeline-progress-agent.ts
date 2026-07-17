@@ -51,6 +51,18 @@ REGLAS DURAS:
 - CONSERVADOR: marcá done solo lo que tengas evidencia razonable (la etapa de HubSpot ya superó esa fase, o una sesión lo confirma). Ante la duda, NO lo marques — el CSE lo hará a mano. Es peor inflar el avance que quedarse corto.
 - Si NO hay evidencia de avance (proyecto que arranca, sin sesiones, etapa inicial): devolvé currentPhaseId = la primera fase (o null) y arrays vacíos.
 
+PARTICULARIDADES (desviaciones curadas — SEPARADO del avance):
+Además del avance, detectá DESVIACIONES del plan que el CSE querría comunicarle al cliente: por qué y quién movió el cronograma. Son CURADAS (lenguaje cliente), no el log crudo. Tres tipos ("kind"):
+- ATRASO: algo se atrasó. Lleva "party" (quién lo causó) y, SOLO si el transcript lo respalda, "weeksImpact" (semanas de corrimiento).
+- SOLICITUD: se necesita algo del cliente para avanzar (un insumo, un acceso, una decisión).
+- COMPROMISO: un acuerdo o hito comprometido en una sesión.
+"party" (atribución de la causa): CLIENTE | SMARTEAM | AMBOS | DEV.
+REGLAS DURAS de particularidades:
+- SOLO lo que el transcript RESPALDE. NO inventes desviaciones ni semanas. Ante la duda, NO la propongas (array vacío). Es peor inventar una particularidad que omitirla — el CSE la agrega a mano si hace falta.
+- "title" corto y en lenguaje cliente (ej. "Se atrasó la entrega de la base de contactos"). "detail" opcional, 1-2 frases.
+- "weeksImpact" SOLO en ATRASO y SOLO si hay evidencia clara del corrimiento; si no, omitilo/null. Nunca lo inventes.
+- "phaseId" opcional: si la desviación es de una fase concreta, poné su id EXACTO; si es general, omitilo/null.
+
 FORMATO DE RESPUESTA — JSON EXACTO, sin markdown wrapping, sin comentarios fuera del JSON:
 {
   "progress": {
@@ -62,9 +74,12 @@ FORMATO DE RESPUESTA — JSON EXACTO, sin markdown wrapping, sin comentarios fue
     "tasks": [
       { "id": "<id EXACTO de una tarea HECHA>", "done": true }
     ]
-  }
+  },
+  "particularidades": [
+    { "kind": "ATRASO|SOLICITUD|COMPROMISO", "party": "CLIENTE|SMARTEAM|AMBOS|DEV", "title": "<corto, lenguaje cliente>", "detail": "<opcional, 1-2 frases o null>", "weeksImpact": <entero o null>, "phaseId": "<id EXACTO o null>" }
+  ]
 }
-Incluí en "phases" y "tasks" SOLO lo que marcás done:true (no listes lo pendiente ni lo ya-DONE). "reasoning" es obligatorio.`;
+Incluí en "phases" y "tasks" SOLO lo que marcás done:true (no listes lo pendiente ni lo ya-DONE). "reasoning" es obligatorio. "particularidades" es un array (vacío [] si no detectás ninguna respaldada por el transcript).`;
 
 async function main() {
   console.log(`Sembrando agente Avance de cronograma (id=${AGENT_ID})...\n`);

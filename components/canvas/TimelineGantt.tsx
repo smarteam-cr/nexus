@@ -57,9 +57,11 @@ import {
   fmtPhaseRange,
   currentWeekIndex,
   absoluteWeek,
-  isOverdue,
+  overduePlannedEnd,
+  isOverdueByDate,
 } from "@/lib/timeline/weeks";
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
+import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 
@@ -132,6 +134,26 @@ interface Props {
   onReorderPhases?: (activeKey: string, overKey: string) => void;
   // Abre el drawer de detalle de una tarea (la edición completa vive ahí). Sin esto, la fila no abre.
   onOpenTask?: (phaseKey: string, taskKey: string) => void;
+  // Particularidades (desviaciones curadas). El CSE ve TODAS (visibles y ocultas); el chip
+  // "visible" marca las que cruzan al cliente. Vacío/undefined = no se renderiza el bloque.
+  particularidades?: GanttParticularidad[];
+  // Togglear la visibilidad al cliente de una particularidad ya creada. Sin esto, el estado
+  // se muestra estático (preview readOnly). La visibilidad recién llega al cliente al «Subir».
+  onToggleParticularidadVisible?: (id: string, next: boolean) => void;
+  // Abrir el modal de edición de contenido de una particularidad (tipo/party/título/detalle/semanas).
+  onEditParticularidad?: (id: string) => void;
+}
+
+// Forma mínima de una particularidad para el resumen + bitácora del Gantt interno.
+export interface GanttParticularidad {
+  id: string;
+  kind: string; // ATRASO | SOLICITUD | COMPROMISO
+  party: string; // CLIENTE | SMARTEAM | AMBOS | DEV
+  title: string;
+  detail: string | null;
+  weeksImpact: number | null;
+  visibleExternal: boolean;
+  occurredAt: string;
 }
 
 // ── Metadata de tipos de actividad (color de barra + chip) ────────────────────
@@ -223,6 +245,13 @@ export const effType = (t: "SESSION" | "TASK" | null | undefined): "SESSION" | "
   t === "SESSION" ? "SESSION" : "TASK";
 export const nextType = (t: "SESSION" | "TASK"): "SESSION" | "TASK" => (t === "SESSION" ? "TASK" : "SESSION");
 
+// Tipo de PARTICULARIDAD (desviación curada). Atraso rojo, solicitud ámbar, compromiso verde.
+export const PARTICULARIDAD_KIND_META: Record<string, { label: string; cls: string }> = {
+  ATRASO:     { label: "Atraso",     cls: "text-red-300 bg-red-900/30 border-red-700/40" },
+  SOLICITUD:  { label: "Solicitud",  cls: "text-amber-300 bg-amber-900/30 border-amber-700/50" },
+  COMPROMISO: { label: "Compromiso", cls: "text-emerald-300 bg-emerald-900/30 border-emerald-700/40" },
+};
+
 // ── Drag & drop de tareas: item sortable + contenedor de semana droppable ─────
 function SortableRow({
   id,
@@ -280,6 +309,9 @@ export default function TimelineGantt({
   onMoveTask,
   onReorderPhases,
   onOpenTask,
+  particularidades,
+  onToggleParticularidadVisible,
+  onEditParticularidad,
   // onRemoveTask removido del Gantt: el borrado de tarea vive en el TaskDetailDrawer.
 }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -570,7 +602,7 @@ export default function TimelineGantt({
               const meta = p.activityType ? ACTIVITY_META[p.activityType] : null;
               const isOpen = expanded.has(p.key);
               const hasOverdue = p.tasks.some((t) =>
-                isOverdue(absoluteWeek(range.start, t.weekIndex), curWeek, t.status),
+                isOverdueByDate(overduePlannedEnd(anchor, range.start, t.weekIndex), today, t.status),
               );
 
               const tasksByWeek = new Map<number, GanttTask[]>();
@@ -739,7 +771,7 @@ export default function TimelineGantt({
                       const allDone = weekTasks.length > 0 && weekTasks.every((t) => t.status === "DONE" || t.status === "SUSPENDED");
                       const isPast = curWeek !== null && w < curWeek;
                       const isCur = curWeek === w;
-                      const weekOverdue = weekTasks.some((t) => isOverdue(w, curWeek, t.status));
+                      const weekOverdue = weekTasks.some((t) => isOverdueByDate(overduePlannedEnd(anchor, range.start, relWeek), today, t.status));
 
                       return (
                         <div
@@ -787,7 +819,7 @@ export default function TimelineGantt({
                             <DroppableWeek id={`${p.key}::w${relWeek}`}>
                             <SortableContext items={weekTasks.map((wt) => wt.key)} strategy={verticalListSortingStrategy}>
                               {weekTasks.map((t) => {
-                                const overdue = isOverdue(absW, curWeek, t.status);
+                                const overdue = isOverdueByDate(overduePlannedEnd(anchor, range.start, relWeek), today, t.status);
                                 const canToggle = !readOnly && !!onToggleStatus && !!t.id;
                                 return (
                                   <SortableRow key={t.key} id={t.key} data={{ type: "task" }} disabled={!editable || !onMoveTask}>
@@ -951,6 +983,91 @@ export default function TimelineGantt({
                 );
               })}
             </ul>
+          </div>
+        );
+      })()}
+
+      {/* Particularidades — desviaciones curadas con atribución. Resumen (corrimiento acumulado
+          por responsable) + bitácora legible. El CSE ve TODAS; el chip "visible" marca las que
+          cruzan al cliente. Espejo light en TimelineSection (la matemática es única: helper puro). */}
+      {(() => {
+        const parts = particularidades ?? [];
+        if (parts.length === 0) return null;
+        const summary = summarizeParticularidades(parts);
+        const sentence = attributionSentence(summary);
+        return (
+          <div className="rounded-2xl border border-gray-800 bg-gray-900/40 px-4 py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
+                Particularidades del cronograma
+              </span>
+              <span className="text-[10px] font-semibold text-gray-400 bg-gray-800/60 border border-gray-700/50 rounded-full px-2 py-0.5">
+                {parts.length}
+              </span>
+            </div>
+            {sentence && (
+              <p className="text-sm text-gray-200 mb-3 leading-relaxed">{sentence}</p>
+            )}
+            <ul className="flex flex-col gap-1.5">
+              {parts.map((pt) => {
+                const kMeta = PARTICULARIDAD_KIND_META[pt.kind] ?? { label: pt.kind, cls: "text-gray-400 bg-gray-800/60 border-gray-700/50" };
+                const pMeta = PARTY_META[pt.party] ?? PARTY_META.SMARTEAM;
+                return (
+                  <li key={pt.id} className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded-lg">
+                    <span className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${kMeta.cls}`}>
+                      {kMeta.label}
+                    </span>
+                    <span className="text-sm text-gray-200 flex-1 min-w-0">{pt.title}</span>
+                    {pt.weeksImpact != null && pt.weeksImpact > 0 && (
+                      <span className="text-[11px] font-semibold text-red-300">
+                        +{plural(pt.weeksImpact, "semana", "semanas")}
+                      </span>
+                    )}
+                    <span className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${pMeta.cls}`}>
+                      {pMeta.label}
+                    </span>
+                    {/* Visibilidad al cliente: toggle interactivo cuando es editable; tag legible si no.
+                        Verde = cruza; neutro contrastado (gris claro) = solo interna. */}
+                    {onToggleParticularidadVisible ? (
+                      <button
+                        type="button"
+                        onClick={() => onToggleParticularidadVisible(pt.id, !pt.visibleExternal)}
+                        title={pt.visibleExternal ? "Visible al cliente (clic para ocultar). Se aplica al «Subir al cliente»." : "Solo interna (clic para mostrarla al cliente). Se aplica al «Subir al cliente»."}
+                        className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border transition-colors ${pt.visibleExternal ? "text-emerald-300 bg-emerald-900/30 border-emerald-700/50 hover:bg-emerald-900/50" : "text-gray-700 bg-gray-300 border-gray-400 hover:bg-gray-200"}`}
+                      >
+                        {pt.visibleExternal ? (
+                          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        ) : (
+                          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                        )}
+                        {pt.visibleExternal ? "Visible al cliente" : "Solo interna"}
+                      </button>
+                    ) : (
+                      !pt.visibleExternal && (
+                        <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-700 bg-gray-300 border border-gray-400 rounded px-1.5 py-0.5 flex-shrink-0" title="No cruza al cliente">
+                          Solo interna
+                        </span>
+                      )
+                    )}
+                    {onEditParticularidad && (
+                      <button
+                        type="button"
+                        onClick={() => onEditParticularidad(pt.id)}
+                        title="Editar particularidad"
+                        className="flex-shrink-0 text-gray-400 hover:text-gray-100 rounded p-1 hover:bg-gray-800 transition-colors"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {onToggleParticularidadVisible && (
+              <p className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-800 leading-relaxed">
+                La visibilidad al cliente se aplica al «Subir al cliente».
+              </p>
+            )}
           </div>
         );
       })()}

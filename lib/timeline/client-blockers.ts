@@ -9,10 +9,10 @@
  * Puro y client-safe (solo depende de `weeks.ts`). Genérico sobre el tipo de tarea para
  * servir a las DOS vistas sin duplicar el cálculo: la interna (GanttPhase/GanttTask, tema
  * oscuro) y la externa (ExternalTimelinePhase/ExternalTimelineTask, tema light). Cada vista
- * renderiza con su propio tema; el criterio de "atrasada" es idéntico (mismo `isOverdue` que
- * el tag rojo del Gantt) para que ambas coincidan.
+ * renderiza con su propio tema; el criterio de "atrasada" es idéntico (mismo `isOverdueByDate`
+ * que el tag rojo del Gantt, por FECHA de fin planeado) para que ambas coincidan.
  */
-import { addWeeks, absoluteWeek, computePhaseRanges, currentWeekIndex, isOverdue } from "./weeks";
+import { addWeeks, absoluteWeek, computePhaseRanges, currentWeekIndex, overduePlannedEnd, isOverdueByDate } from "./weeks";
 
 export interface BlockerTaskLike {
   title: string;
@@ -79,7 +79,7 @@ export function collectClientBlockers<P extends BlockerPhaseLike<BlockerTaskLike
     for (const task of (phase.tasks ?? []) as TaskOf<P>[]) {
       if (task.party !== "CLIENTE") continue;
       const absWeek = absoluteWeek(range.start, task.weekIndex);
-      if (!isOverdue(absWeek, curWeek, task.status ?? "")) continue;
+      if (!isOverdueByDate(overduePlannedEnd(anchor, range.start, task.weekIndex), now, task.status ?? "")) continue;
       out.push({
         task,
         phase,

@@ -54,6 +54,31 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   `publishedSnapshot` vía `readClientTimeline`); el flujo de avance interno (`progress/apply`)
   NO toca el snapshot. *SUSPENDED sigue oculto* (tarea descartada del plan). *No sensible:*
   estado y responsable no lo son; `notes`/`source`/`needsValidation` de tarea siguen internos.
+- **Particularidades = desviaciones CURADAS con atribución (modelo `Particularidad`, NO
+  `TimelineChange`).** *Por qué:* los gerentes del cliente veían el cronograma moverse pero no
+  POR QUÉ ni QUIÉN; el log de auditoría (`TimelineChange`, `reason` autogenerado) es ruido de
+  máquina. La particularidad es texto en lenguaje cliente + `party` (atribución) + `weeksImpact`.
+  *Cruce al cliente:* gate por-registro `visibleExternal=true` en el chokepoint `readClientTimeline`,
+  fail-closed, IGUAL que el filtro de SUSPENDED (el motor de permisos es sección×acción, no
+  resuelve granularidad de registro). NUNCA cruzan `source`/`needsValidation`/`createdByEmail`.
+  Van dentro de `publishedSnapshot` (congeladas al "Subir"). *Origen:* el CSE las crea a mano o
+  acepta una propuesta del agente de avance (borrador `pendingParticularidades`, hermano de
+  `pendingProgress` pero con apply SEPARADO — aceptar avance ≠ aceptar desviaciones; nada se crea
+  sin que el CSE apruebe). *Schema:* `db push` (aditivo), NO migración — el repo abandonó las
+  migraciones en marzo 2026 (carpeta congelada); una migración normal resetearía la base
+  compartida. Se sigue `npm run db:sync`.
+- **Un solo predicado de atraso, por FECHA (`isOverdueByDate` + `overduePlannedEnd` en
+  `weeks.ts`).** *Por qué:* antes había dos algoritmos (semana-vs-anchor en el Gantt/externo,
+  fecha-vs-baseline en el panel de cartera); en cuanto le mostramos un número al cliente se
+  contradecían. Ahora Gantt interno, vista externa, `client-blockers` y `summary.ts` comparten el
+  MISMO predicado (fin planeado de la semana < hoy, excluyendo DONE/SUSPENDED). Efecto observable
+  FLAGGED: el tag "Atrasada" del Gantt pasa de granularidad semanal a granularidad de día (más
+  preciso, no rompe nada). El sombreado de "semana pasada" (cosmético) queda igual.
+- **"Confirmar detalle" es un botón de primera clase, desacoplado de "Subir al cliente".**
+  *Por qué:* `detailConfirmedAt` (gate que deja cruzar las tareas por semana) se seteaba SOLO como
+  efecto secundario oculto de publicar; proyectos activos generaban el detalle y no lo confirmaban
+  porque nunca publicaban. Ahora el CSE valida el detalle sin verse obligado a publicar (dos
+  decisiones distintas); "Subir" lo sigue confirmando como red de seguridad idempotente.
 
 ## Cobranza
 - **Frontera: Nexus = capa de CONTROL de cobros** ("¿a quién le toca cobrar y cómo va?"):

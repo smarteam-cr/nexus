@@ -20,6 +20,11 @@
  * plan, no parte del cronograma del cliente. SÍ cruzan, by-design: las notas de
  * FASE (lenguaje cliente, D.1) y el activityType (D.1.5 — el Gantt del cliente
  * colorea y arma leyenda por tipo).
+ *
+ * PARTICULARIDADES (desviaciones curadas): cruzan SOLO las visibleExternal=true, y de
+ * ellas solo {kind, party, title, detail, weeksImpact, phaseId, occurredAt}. NUNCA cruzan
+ * source/needsValidation/createdByEmail. Gate por-registro (visibleExternal), fail-closed,
+ * igual que el filtro de SUSPENDED — quedan congeladas en publishedSnapshot al "Subir".
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -86,6 +91,28 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
     }
   }
 
+  // Particularidades visibles al cliente — gate por-registro visibleExternal=true (fail-closed:
+  // si dudo, no cruza), independiente de detailConfirmedAt (una desviación se comunica aunque el
+  // detalle de tareas no esté confirmado). Select EXPLÍCITO de los 7 campos client-safe: NUNCA
+  // cruzan source/needsValidation/createdByEmail. Se congelan dentro de publishedSnapshot al "Subir".
+  let particularidades: ExternalTimelineData["particularidades"] = [];
+  if (tl) {
+    const parts = await prisma.particularidad.findMany({
+      where: { timelineId: tl.id, visibleExternal: true },
+      orderBy: { occurredAt: "desc" },
+      select: { kind: true, party: true, title: true, detail: true, weeksImpact: true, phaseId: true, occurredAt: true },
+    });
+    particularidades = parts.map((p) => ({
+      kind: p.kind,
+      party: p.party,
+      title: p.title,
+      detail: p.detail,
+      weeksImpact: p.weeksImpact,
+      phaseId: p.phaseId,
+      occurredAt: p.occurredAt.toISOString(),
+    }));
+  }
+
   return {
     exists: !!tl,
     anchorStartDate: tl?.anchorStartDate?.toISOString() ?? null,
@@ -93,6 +120,7 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
       ...p,
       ...(tasksByPhase ? { tasks: tasksByPhase.get(p.id) ?? [] } : {}),
     })),
+    particularidades,
   };
 }
 

@@ -135,12 +135,32 @@ export function absoluteWeek(phaseStart: number, weekIndex: number): number {
 }
 
 /**
- * Una tarea está ATRASADA si su semana absoluta ya pasó por completo y todavía
- * no está resuelta — ni DONE ni SUSPENDED (sigue PENDING o IN_PROGRESS). Es ORTOGONAL al estado: el badge
- * muestra el estado real (pendiente / en curso / hecho) y "atrasada" se marca
- * aparte en rojo. Derivado en render — nunca se persiste (D.3 manejará alertas).
+ * Fecha de FIN PLANEADO de una tarea (fin de su semana absoluta) según el anchor.
+ * Convención "+1 = fin de semana" (misma que summary.ts): una tarea en la semana
+ * absoluta `w` se espera terminada al llegar la fecha `anchor + (w+1) semanas`.
+ * null si no hay anchor (sin anchor no hay fechas, solo números de semana).
  */
-export function isOverdue(absWeek: number, currentWeek: number | null, status: string): boolean {
-  if (currentWeek === null) return false;
-  return absWeek < currentWeek && status !== "DONE" && status !== "SUSPENDED";
+export function overduePlannedEnd(
+  anchor: string | null | undefined,
+  phaseStart: number,
+  weekIndex: number,
+): Date | null {
+  if (!anchor) return null;
+  return addWeeks(anchor, absoluteWeek(phaseStart, weekIndex) + 1);
+}
+
+/**
+ * Predicado ÚNICO de atraso, por FECHA (no por semana): una tarea está ATRASADA si
+ * su fin planeado ya pasó y todavía no está resuelta — ni DONE ni SUSPENDED (sigue
+ * PENDING o IN_PROGRESS). Mismo criterio que el panel de cartera (summary.ts), para
+ * que la vista interna, la del cliente y el resumen nunca muestren números que se
+ * contradigan. Es ORTOGONAL al estado: el badge muestra el estado real y "atrasada"
+ * se marca aparte en rojo. Derivado en render — nunca se persiste.
+ *
+ * `now` debe venir del CLIENTE (hora de pared local; ver nota de zonas horarias).
+ * Con `plannedEnd`/`now` null (sin anchor o sin montar) devuelve false.
+ */
+export function isOverdueByDate(plannedEnd: Date | null, now: Date | null, status: string): boolean {
+  if (!plannedEnd || !now) return false;
+  return plannedEnd < now && status !== "DONE" && status !== "SUSPENDED";
 }

@@ -16,6 +16,14 @@
   proyecto. Vive en `CanvasBlock`s del canvas "Handoff".
 - **Kickoff**: arranque del proyecto con el cliente (canvas "Kickoff"; tiene vista externa).
 - **Cronograma** (`ProjectTimeline`): plan del proyecto con fases/tareas/baselines/fechas reales/avances.
+- **Particularidad** (`Particularidad`): desviación CURADA del cronograma con atribución — el "por
+  qué y quién" movió el plan, en lenguaje cliente (a diferencia de `TimelineChange`, cuyo log es
+  ruido de máquina). Tres tipos (`kind`): ATRASO / SOLICITUD / COMPROMISO; `party` reusa el enum de
+  tarea (CLIENTE/SMARTEAM/AMBOS/DEV) para la atribución; `weeksImpact` = semanas de corrimiento.
+  Cruza al cliente SOLO si `visibleExternal=true` (gate por-registro en el chokepoint, como
+  SUSPENDED). El CSE la crea a mano o acepta una propuesta del agente de avance (borrador
+  `pendingParticularidades`, apply separado del avance). El resumen suma `weeksImpact` por party
+  ("N semanas de corrimiento acumulado; X al cliente, Y a Smarteam").
 - **Procesos**: bloques de la sección `procesos` del canvas "Información del cliente".
 - **Proyecto sentinel `__strategy__`**: proyecto especial por cliente que aloja el canvas de
   contexto/estrategia (no es un proyecto real de servicio).

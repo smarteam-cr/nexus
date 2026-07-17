@@ -14,7 +14,7 @@ import {
   effType,
   nextType,
 } from "./TimelineGantt";
-import { addWeeks, absoluteWeek, fmtDay, isOverdue } from "@/lib/timeline/weeks";
+import { addWeeks, absoluteWeek, fmtDay, overduePlannedEnd, isOverdueByDate } from "@/lib/timeline/weeks";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import DatePickerField from "@/components/ui/DatePickerField";
 
@@ -37,7 +37,6 @@ interface Props {
   /** Semana absoluta de inicio de la fase (range.start) — para derivar la fecha de la tarea. */
   absolutePhaseStart: number;
   anchor: string | null;
-  currentWeek: number | null;
   onClose: () => void;
   onToggleStatus: (taskId: string, next: GanttTaskStatus) => void;
   onUpdateTask: (phaseKey: string, taskKey: string, patch: TaskPatch) => void;
@@ -60,7 +59,6 @@ export default function TaskDetailDrawer({
   phaseDurationWeeks,
   absolutePhaseStart,
   anchor,
-  currentWeek,
   onClose,
   onToggleStatus,
   onUpdateTask,
@@ -112,7 +110,9 @@ export default function TaskDetailDrawer({
 
   const canToggle = !!task.id;
   const absW = absoluteWeek(absolutePhaseStart, task.weekIndex);
-  const overdue = isOverdue(absW, currentWeek, task.status);
+  // Drawer client-only (guard de `document` arriba + se abre por interacción, post-hidratación):
+  // `new Date()` acá no reintroduce mismatch de SSR. Criterio de atraso unificado (fecha vs fin planeado).
+  const overdue = isOverdueByDate(overduePlannedEnd(anchor, absolutePhaseStart, task.weekIndex), new Date(), task.status);
   const partyEff = effParty(task.party);
   const typeEff = effType(task.type);
   const dateLabel = anchor

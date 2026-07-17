@@ -8,8 +8,8 @@
  * chokepoint (getPublishedTimelineForToken) — read-only, sin nada interno.
  *
  * Estructura de la página: titular "Cronograma de proyecto · {cliente}"
- * arriba, el Gantt (TimelineSection SIN su header propio — el titular de la
- * página lo reemplaza), y el "Arrancamos el …" DEBAJO del cronograma.
+ * arriba y el Gantt (TimelineSection SIN su header propio — el titular de la
+ * página lo reemplaza). La fecha de arranque ya vive en la cabecera del Gantt.
  *
  * Es el wrapper que cumple los dos requisitos de TimelineSection:
  *   - className="kickoff-landing": scope del design system de landing
@@ -20,7 +20,6 @@
 import { useRef } from "react";
 import TimelineSection from "@/components/canvas/TimelineSection";
 import { useReveal } from "@/components/canvas/useLandingMotion";
-import { fmtFull } from "@/lib/timeline/weeks";
 import type { ExternalTimelineData } from "@/lib/external/timeline-view-types";
 
 const MAXW = 1024; // mismo ancho que el Gantt de TimelineSection
@@ -67,7 +66,7 @@ export default function TimelineLanding({
       </section>
 
       {timeline.phases.length > 0 ? (
-        <TimelineSection phases={timeline.phases} anchor={start} showHeader={false} showProgress />
+        <TimelineSection phases={timeline.phases} anchor={start} showHeader={false} showProgress particularidades={timeline.particularidades} />
       ) : (
         <section className="section-light" style={{ padding: "32px 24px 24px" }}>
           <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
@@ -77,15 +76,6 @@ export default function TimelineLanding({
           </div>
         </section>
       )}
-
-      {/* Fecha de arranque — DEBAJO del cronograma */}
-      <section className="section-light" style={{ padding: "0 24px clamp(40px, 6vw, 72px)" }}>
-        <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
-          <p className="reveal" style={{ color: "var(--text-secondary)", fontSize: 14, margin: 0 }}>
-            {start ? `Arrancamos el ${fmtFull(start)}.` : "Fecha de arranque por definir."}
-          </p>
-        </div>
-      </section>
     </div>
   );
 }

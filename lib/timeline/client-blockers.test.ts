@@ -3,7 +3,7 @@
  *
  * Tests de collectClientBlockers (pura) — deriva las tareas del CLIENTE atrasadas para la
  * sección "pendientes del cliente" al pie del cronograma (interno + externo). El criterio de
- * atraso es el mismo `isOverdue` del Gantt (semana absoluta < semana actual, no DONE/SUSPENDED).
+ * atraso es el mismo `isOverdueByDate` del Gantt (fin planeado de la semana < hoy, no DONE/SUSPENDED).
  * Casos:
  *   1) CLIENTE vencida y no hecha → incluida, con weeksLate y dueDateIso correctos.
  *   2) CLIENTE en el futuro → NO (aún no vence).

@@ -35,10 +35,12 @@ import {
   fmtPhaseRange,
   currentWeekIndex,
   absoluteWeek,
-  isOverdue,
+  overduePlannedEnd,
+  isOverdueByDate,
 } from "@/lib/timeline/weeks";
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
-import type { ExternalTimelinePhase } from "@/lib/external/timeline-view-types";
+import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
+import type { ExternalTimelinePhase, ExternalParticularidad } from "@/lib/external/timeline-view-types";
 
 const MAXW = 1024; // el Gantt necesita ancho — bloque deliberadamente más ancho que las secciones de texto (760)
 const SECTION_PAD = "clamp(40px, 6vw, 72px) 24px";
@@ -97,11 +99,19 @@ const SUB_LABEL: React.CSSProperties = {
   color: "var(--text-muted)",
 };
 
+// Tipo de PARTICULARIDAD (desviación curada), tema light. Espejo de PARTICULARIDAD_KIND_META del Gantt.
+const KIND_META_LIGHT: Record<string, { label: string; text: string; bg: string; border: string }> = {
+  ATRASO:     { label: "Atraso",     text: "#b91c1c", bg: "#fef2f2", border: "#fecaca" }, // rojo
+  SOLICITUD:  { label: "Solicitud",  text: "#b45309", bg: "#fffbeb", border: "#fde68a" }, // ámbar
+  COMPROMISO: { label: "Compromiso", text: "#0f766e", bg: "#f0fdfa", border: "#99f6e4" }, // verde
+};
+
 export default function TimelineSection({
   phases,
   anchor,
   showHeader = true,
   showProgress = false,
+  particularidades,
 }: {
   phases: ExternalTimelinePhase[];
   anchor: string | null;
@@ -109,6 +119,9 @@ export default function TimelineSection({
   showHeader?: boolean;
   /** true = muestra estado (hecho/en curso/pendiente + atrasada) y responsable por tarea. Solo el cronograma compartible. */
   showProgress?: boolean;
+  /** Desviaciones curadas visibles al cliente (visibleExternal=true, ya filtradas en el chokepoint).
+   *  Solo se renderiza con showProgress (el cronograma compartible, no el kickoff embebido). */
+  particularidades?: ExternalParticularidad[];
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // "Hoy" es hora de pared del USUARIO: calcularlo en el server rompería la
@@ -322,7 +335,7 @@ export default function TimelineSection({
                               <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 5 }}>
                                 {weekTasks.map((t, ti) => {
                                   const sMeta = showProgress && t.status ? STATUS_META_LIGHT[t.status] : null;
-                                  const overdue = showProgress && !!t.status && isOverdue(absW, curWeek, t.status);
+                                  const overdue = showProgress && !!t.status && isOverdueByDate(overduePlannedEnd(anchor, range.start, relWeek), now, t.status);
                                   const pMeta = showProgress && t.party ? PARTY_META_LIGHT[t.party] : null;
                                   return (
                                     <li key={ti} style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.5, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
@@ -381,6 +394,56 @@ export default function TimelineSection({
                     <span style={chipStyle(PARTY_META_LIGHT.CLIENTE)}>{PARTY_META_LIGHT.CLIENTE.label}</span>
                   </li>
                 ))}
+              </ul>
+            </div>
+          );
+        })()}
+
+        {/* Particularidades — por qué y quién movió el cronograma. Resumen con atribución
+            (corrimiento acumulado por responsable) + bitácora legible. Solo con showProgress
+            (el cronograma compartible) y solo las visibleExternal (ya filtradas en el chokepoint). */}
+        {showProgress && (() => {
+          const parts = particularidades ?? [];
+          if (parts.length === 0) return null;
+          const summary = summarizeParticularidades(parts);
+          const sentence = attributionSentence(summary);
+          return (
+            <div
+              className="reveal"
+              style={{
+                marginTop: 28,
+                padding: "18px 20px",
+                borderRadius: 16,
+                background: "var(--surface-2, #f8fafc)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Particularidades del cronograma</div>
+              {sentence && (
+                <p style={{ margin: "6px 0 14px", fontSize: 14, color: "var(--text)", lineHeight: 1.55, fontWeight: 500 }}>{sentence}</p>
+              )}
+              <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
+                {parts.map((pt, i) => {
+                  const kMeta = KIND_META_LIGHT[pt.kind] ?? { label: pt.kind, text: "var(--text-muted)", bg: "var(--surface-2, #f1f5f9)", border: "var(--border)" };
+                  const pMeta = PARTY_META_LIGHT[pt.party] ?? PARTY_META_LIGHT.SMARTEAM;
+                  return (
+                    <li key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, fontSize: 13, color: "var(--text)" }}>
+                        <span style={chipStyle(kMeta)}>{kMeta.label}</span>
+                        <span style={{ fontWeight: 600 }}>{pt.title}</span>
+                        {pt.weeksImpact != null && pt.weeksImpact > 0 && (
+                          <span style={{ fontSize: 12, color: OVERDUE_META_LIGHT.text, fontWeight: 600 }}>
+                            +{pt.weeksImpact} {pt.weeksImpact === 1 ? "semana" : "semanas"}
+                          </span>
+                        )}
+                        <span style={chipStyle(pMeta)}>{pMeta.label}</span>
+                      </div>
+                      {pt.detail && (
+                        <p style={{ margin: 0, paddingLeft: 2, fontSize: 12.5, color: "var(--text-secondary)", lineHeight: 1.5 }}>{pt.detail}</p>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           );
