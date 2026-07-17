@@ -291,6 +291,69 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   vencidos por fecha (backlog de Alex, no riesgo del cliente) — es rediseño de la
   clasificación, se piensa en la Tanda C junto con aging/DSO. Es literalmente lo que Alex
   necesita para planear el flujo de caja entre Mercury y Costa Rica.
+- **`GRACIA_FACTURACION_DIAS = 5`, no 0** (recalibración 2026-07, corrige a la Tanda B):
+  `GRACIA_FACTURACION_DIAS` es el colchón tras `fechaProgramada` sin `fechaEmision` antes de que
+  la alerta "falta facturar" escale de `COBRO_PROXIMO` (MEDIA) a `FACTURACION_ATRASADA` (ALTA).
+  La Tanda B lo dejó en 0 con el supuesto de que Alex factura desde el día 1 ("por facturar…
+  facturado, facturado"). **El supuesto era incorrecto:** Alex aclaró que facturar es un
+  **período de facturación + envío de ~5 días** (la fecha de cobro no siempre cae entre semana).
+  Con gracia 0, `FACTURACION_ATRASADA` saltaba en ALTA el día 1 del proceso normal, cada
+  quincena, en cada cobro — ruido puro que erosiona la confianza en el panel. Con 5, los días
+  1–5 son `COBRO_PROXIMO` (Alex en su ventana normal) y recién al día 6 escala a ALTA. Solo
+  cambia la urgencia de la ALERTA; NO cambia el color del semáforo (sigue amarillo sin facturar).
+  Blast radius: una línea (`engine.ts`) + un test (`J6`); los golden JSON no se mueven.
+
+## Cobranza — carga del histórico de Alex (diseño; ejecución en pase con gate)
+> Estas decisiones se tomaron para la carga del archivo histórico de Alex (~70 registros, estado
+> en el color de celda). El archivo AÚN NO EXISTE cuando se escriben — son el diseño acordado.
+> La construcción del loader, la limpieza de seeds y la carga corren en un segundo pase con gate
+> (Fase 0 inspección → dry-run → aprobación → apply). Regla dura: cero fabricación.
+- **El primer corte es honesto por diseño — no reporta un "cobrado" falso (V1).**
+  `computeMetricasCartera` guarda la ventana `(desdeUltimoCorteISO, hoy]` con
+  `if (opts.desdeUltimoCorteISO && …)`; en el primer corte no hay snapshot anterior →
+  `runCobranzaDigest` pasa `desdeUltimoCorteISO = null` → `totalCobradoDesdeUltimoCorte` queda en
+  **0** (no barre toda la historia). En cambio `diasPromedioCobro`/DSO SÍ acumulan sobre todos
+  los `COBRADO` de inmediato — eso es deseable ("ver quiénes fueron y qué dieron"), no un bug.
+  Aun así, el corte semanal NO se corre hasta que la carga esté aplicada y aprobada.
+- **El wizard CSV NO sirve para esta carga (V2).** (a) El estado vive en el color de celda y el
+  export a CSV lo pierde entero (el wizard es `accept=".csv"` + papaparse). (b) Aún con el color,
+  el pipeline de import nunca hace backfill de cobros: `clampInicioCicloCorriente` fuerza el
+  inicio al ciclo corriente (máx 1 catch-up) y solo crea `Cobro` vía `generateCobros`
+  (PROGRAMADO/catch-up — jamás `COBRADO`/`fechaEmision` histórico). Se necesita un camino de
+  lectura nuevo (que preserve color) + un apply por fila nuevo (estado/fechaEmision/fechaCobro
+  reales), **reusando** el staging (`ImportacionCobranza`/`ImportacionFila` + cola de revisión) y
+  los validadores de `import-core.ts`. Cómo leer el color se decide en la Fase 0 (con el archivo
+  en mano): recomendado = export `.xlsx` + `exceljs` (dev-dep, lee fills; `officeparser` es
+  text-only, SheetJS community no lee fills confiablemente); alternativa = Google Sheets API con
+  `includeGridData` (reusa la integración Google pero exige el scope `spreadsheets.readonly` +
+  re-consent — overkill para una carga única).
+- **Mapeo color → estado del cobro (V3):** sin color/futuro → `PROGRAMADO`, `fechaEmision=null`
+  (gris). Amarillo (facturado, esperando) → `PROGRAMADO` + `fechaEmision = fechaProgramada`:
+  aproximación consciente con error ≤ ~5 días, SIEMPRE en el lado seguro (la factura real sale
+  DESPUÉS de la programada → el crédito arranca antes de lo real → se persigue temprano, nunca se
+  deja pasar deuda), y se disuelve sola cuando el cobro se paga. Se registra la aproximación en
+  `Cobro.notas`, no como dato duro. `POR_COBRAR` NO se usa: quedó vestigial post-Tanda-B (solo lo
+  escribe el `<select>` manual del cronograma, solo lo lee `semaforoLegacyPorFecha` para el
+  aging/DSO legacy) — el estado ya no pinta el color, lo hace `fechaEmision`.
+- **Verde (pagado) → `COBRADO` con `fechaCobro` histórica EXPLÍCITA, nunca "hoy".**
+  `cambiarEstadoCobro` defaultea `fechaCobro = new Date()` si no se pasa — un backfill con ese
+  default diría que todos los pagos entraron hoy y envenenaría `diasPromedioCobro`/DSO. La fecha
+  de pago real y explícita es obligatoria. `confirmadoPor = "import:sheet-historico"` (INV3
+  exige no-null; un identificador de import auditable, no un humano falso). **Si el archivo no
+  trae fecha de pago por fila → PARAR y avisar; no se aproxima** (la decisión la toma el usuario).
+- **`CONECTOR` = valor nuevo del enum de tipo de servicio (V4).** Los tabs de Alex mapean a
+  `WEB` (sitio web CR/intl, continuidad web), `CRM` (continuidad CRM), `SOPORTE`, `IMPLEMENTACION`
+  (impl CR/intl). "Conectores" no tenía casa y NO se fuerza a `OTRO` en silencio → se agrega
+  `CONECTOR` al enum `CobranzaTipoServicio` + espejos + label (migración aditiva, en el pase de
+  carga). CR vs internacional NO va en el tipo — va en `CuentaFinanciera.tipo`
+  (`NACIONAL`/`INTERNACIONAL`). `modalidad`: continuidad/soporte/suscripción → `RECURRENTE`;
+  web/implementación/conectores → `PROYECTO`.
+- **Limpieza antes de cargar (V5):** hoy hay seeds demo (`[demo cobranza]`, `sourceExternalId`
+  `demo-`, snapshots `seed-demo-historia`); `scripts/cleanup-cobranza-demo.ts` es dry-run por
+  default y los borra (clientes solo si no tienen proyectos). El script NO contempla la cuenta
+  accidental **ALFA+ (LISJ)** (sin marca demo) — en el pase de carga se verifica en el dry-run si
+  esa fila existe y, si existe, se extiende el cleanup por id explícito. La limpieza se hace justo
+  antes de cargar, no antes, para no dejar el módulo vacío mientras se espera el archivo.
 - **Costos/Caja neta salen a su propia unidad "Finanzas"** (Pieza 1, tanda 2026-07): Alex pidió
   poder analizar costos/caja neta separado de la operación diaria de cobros — "debería ser otra
   unidad completamente distinta". Sidebar: "Finanzas" agrupa Cobranza · Costos y gastos · Caja

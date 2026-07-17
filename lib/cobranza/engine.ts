@@ -158,11 +158,14 @@ export const HORIZONTE_SUSCRIPCION_MESES = 3;
  *  mayoría de la cartera hoy (Colby es la excepción, con creditoDias=90 propio). */
 export const DEFAULT_CREDITO_DIAS = 15;
 /** Días de gracia tras fechaProgramada sin fechaEmision antes de escalar la alerta
- *  de "falta facturar" a FACTURACION_ATRASADA (urgencia ALTA). 0 — deliberado: Alex
- *  lo espera desde el primer día ("por facturar, por facturar... facturado,
- *  facturado"), no hay colchón. NO afecta el color (semaforoCobro no distingue
- *  "por facturar" de "por facturar atrasado" — mismo amarillo, ver Pieza 3). */
-export const GRACIA_FACTURACION_DIAS = 0;
+ *  de "falta facturar" a FACTURACION_ATRASADA (urgencia ALTA). 5 — facturar NO es un
+ *  acto puntual: es un período de facturación + envío de ~5 días (confirmado por Alex),
+ *  porque la fecha de cobro no siempre cae entre semana. Con gracia 0 la alerta ALTA
+ *  saltaba el día 1 del proceso normal de Alex, cada quincena, en cada cobro — ruido
+ *  puro. Recién al día 6 sin facturar escala a ALTA; días 1–5 son COBRO_PROXIMO (MEDIA).
+ *  NO afecta el color (semaforoCobro no distingue "por facturar" de "por facturar
+ *  atrasado" — mismo amarillo, ver Pieza 3). */
+export const GRACIA_FACTURACION_DIAS = 5;
 
 // ── Helpers de fecha (UTC estricto) ─────────────────────────────────────────────
 

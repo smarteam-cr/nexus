@@ -55,7 +55,7 @@
  *      J3 cuenta sin servicios → CUENTA_SIN_DATOS a nivel cuenta.
  *      J4 servicio ACTIVO sin fechaInicio → CUENTA_SIN_DATOS por servicio; no-ACTIVO no alerta.
  *      J5 fechaInicio ≠ anchor (calendario) → ARRANQUE_CAMBIADO (alta); igual calendario o sin anchor → nada.
- *      J6 Reloj 1, bordes de facturación: +1 día → FACTURACION_ATRASADA; 0 y -15 → COBRO_PROXIMO; -16 → nada.
+ *      J6 Reloj 1, borde de gracia en 5: +5 → COBRO_PROXIMO; +6 → FACTURACION_ATRASADA; -15 → COBRO_PROXIMO; -16 → nada.
  *      J6b Reloj 2, bordes de crédito (facturado): vencimiento exacto → nada; +1 día → COBRO_VENCIDO.
  *      J7 cobro COBRADO → ninguna alerta.
  *      J8 CATCH_UP PROGRAMADO facturado y vencido → INCONSISTENCIA_CICLO ADEMÁS de COBRO_VENCIDO; no-PROGRAMADO no.
@@ -810,14 +810,16 @@ test("J5 — fechaInicio ≠ anchor (calendario) → ARRANQUE_CAMBIADO alta; igu
   expect(sinAnchor).toEqual([]);
 });
 
-test("J6 — Reloj 1, bordes de facturación: +1 día → FACTURACION_ATRASADA; 0 y -15 → COBRO_PROXIMO; -16 → nada", () => {
+test("J6 — Reloj 1, borde de gracia en 5: +5 días → COBRO_PROXIMO; +6 → FACTURACION_ATRASADA; -15 → COBRO_PROXIMO; -16 → nada", () => {
+  // GRACIA_FACTURACION_DIAS = 5: la facturación es un período de ~5 días, no un acto
+  // puntual. diasPasados > 5 escala a ALTA; 1–5 días siguen siendo COBRO_PROXIMO (MEDIA).
   const cartera: CarteraEngineInput = {
     cuentas: [
       cuenta({
         servicios: [servicioCartera()],
         cobros: [
-          cobroCartera({ cobroId: "co1", fechaProgramadaISO: "2026-07-09" }), // 1 día pasado, gracia=0
-          cobroCartera({ cobroId: "co2", fechaProgramadaISO: "2026-07-10" }), // hoy mismo
+          cobroCartera({ cobroId: "co1", fechaProgramadaISO: "2026-07-05" }), // +5 = borde exacto, NO escala
+          cobroCartera({ cobroId: "co2", fechaProgramadaISO: "2026-07-04" }), // +6 = pasa la gracia
           cobroCartera({ cobroId: "co3", fechaProgramadaISO: "2026-07-25" }), // -15 = borde de ventana
           cobroCartera({ cobroId: "co4", fechaProgramadaISO: "2026-07-26" }), // -16: fuera de ventana
         ],
@@ -826,12 +828,12 @@ test("J6 — Reloj 1, bordes de facturación: +1 día → FACTURACION_ATRASADA; 
   };
   const alertas = computeAlertSet(cartera, { todayISO: HOY });
   expect(keysOf(alertas)).toEqual([
-    "COBRO_PROXIMO:c1:co2",
+    "COBRO_PROXIMO:c1:co1",
     "COBRO_PROXIMO:c1:co3",
-    "FACTURACION_ATRASADA:c1:co1",
+    "FACTURACION_ATRASADA:c1:co2",
   ]);
   expect(alertas.find((a) => a.tipo === "FACTURACION_ATRASADA")?.urgencia).toBe("ALTA");
-  expect(alertas.find((a) => a.dedupeKey.endsWith("co2"))?.urgencia).toBe("MEDIA");
+  expect(alertas.find((a) => a.dedupeKey.endsWith("co1"))?.urgencia).toBe("MEDIA");
 });
 
 test("J6b — Reloj 2, bordes de crédito (facturado): vencimiento exacto → nada; +1 día → COBRO_VENCIDO", () => {
