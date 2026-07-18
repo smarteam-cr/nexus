@@ -72,6 +72,7 @@ export function toSectionDef(
     key: d.key,
     label: d.label,
     eyebrow: d.eyebrow,
+    tip: d.tip,
     theme: d.theme,
     backdrop: d.backdrop,
     selfTitled: d.selfTitled,

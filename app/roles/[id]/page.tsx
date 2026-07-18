@@ -7,7 +7,7 @@ import { redirect, notFound } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { getRole } from "@/lib/roles/queries";
-import RolePage from "@/components/roles/RolePage";
+import RoleWorkspace from "@/components/roles/RoleWorkspace";
 
 export const dynamic = "force-dynamic";
 
@@ -19,25 +19,19 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ id:
   const role = await getRole(id);
   if (!role) notFound();
 
+  // El motor `.stl` trae su propio fondo/padding: RoleWorkspace lo renderiza dentro de
+  // una card, con el toggle "Editar" (lectura ↔ edición in-situ). SOLO SUPER_ADMIN.
   return (
     <AppShell>
-      <div className="px-6 pt-6 flex items-center justify-between gap-4">
+      <div className="px-6 pt-6">
         <Link href="/roles" className="text-sm text-fg-muted hover:text-fg">
           ← Roles
         </Link>
-        <Link
-          href={`/roles?edit=${role.id}`}
-          className="text-sm font-medium px-3 py-1.5 rounded-lg border border-line text-fg-secondary hover:bg-surface-hover"
-        >
-          Editar
-        </Link>
       </div>
-      {/* El motor `.stl` trae su propio fondo/padding: se renderiza full-bleed
-          dentro del área de contenido, como el business case. */}
       <div className="px-6 py-6">
-        <div className="overflow-hidden rounded-2xl border border-line">
-          <RolePage role={role} />
-        </div>
+        <RoleWorkspace
+          role={{ id: role.id, title: role.title, area: role.area, summary: role.summary, content: role.content }}
+        />
       </div>
     </AppShell>
   );

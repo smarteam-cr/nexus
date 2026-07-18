@@ -113,6 +113,21 @@ function CollapseToggle({ collapsed, label, onToggle }: { collapsed: boolean; la
   );
 }
 
+/** ⓘ junto al título de una sección: hover muestra `def.tip` (tooltip CSS-only,
+ *  `[data-tip]` en landing-engine.css). Enfocable por teclado (tabIndex) → el tooltip
+ *  también aparece con foco. Additivo: solo se pinta si la def trae `tip` (roles). */
+function TipIcon({ text }: { text: string }) {
+  return (
+    <span className="stl-tip" data-tip={text} tabIndex={0} role="note" aria-label={text}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <circle cx="12" cy="12" r="9.25" />
+        <path strokeLinecap="round" d="M12 11.5v4.5" />
+        <circle cx="12" cy="8" r="0.9" fill="currentColor" stroke="none" />
+      </svg>
+    </span>
+  );
+}
+
 type DragHandleProps = Record<string, unknown> | null;
 
 /** Wrapper sortable de una sección (drag & drop). Hook incondicional adentro →
@@ -351,12 +366,15 @@ export default function LandingView({
               ) : (
                 effEyebrow && <span className="stl-eyebrow">{effEyebrow}</span>
               )}
-              {editable ? (
-                <Editable as="h2" className="stl-title" editable value={effTitle}
-                  placeholder={def.label} onCommit={(v) => onTitleChange?.(def.key, v)} />
-              ) : (
-                <h2 className="stl-title">{effTitle}</h2>
-              )}
+              <div className="stl-title-line">
+                {editable ? (
+                  <Editable as="h2" className="stl-title" editable value={effTitle}
+                    placeholder={def.label} onCommit={(v) => onTitleChange?.(def.key, v)} />
+                ) : (
+                  <h2 className="stl-title">{effTitle}</h2>
+                )}
+                {def.tip && <TipIcon text={def.tip} />}
+              </div>
             </header>
           )}
           {/* Guía del agente — ayuda EDITABLE solo en la Plantilla del editor (el

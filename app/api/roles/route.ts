@@ -3,6 +3,7 @@
  * Superficie SOLO SUPER_ADMIN (guardRolesAdmin).
  */
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { guardRolesAdmin } from "@/lib/auth/api-guards";
 import { loadRoles } from "@/lib/roles/queries";
 import { createRole } from "@/lib/roles/mutations";
@@ -36,13 +37,7 @@ export async function POST(req: NextRequest) {
     title: d.title,
     area: d.area ?? null,
     summary: d.summary ?? null,
-    profile: d.profile ?? null,
-    responsibilities: d.responsibilities ?? null,
-    kpis: d.kpis ?? null,
-    successPaths: d.successPaths ?? null,
-    failurePaths: d.failurePaths ?? null,
-    maturityPath: d.maturityPath ?? null,
-    transitionPeriod: d.transitionPeriod ?? null,
+    content: (d.content ?? {}) as Prisma.InputJsonValue,
     createdByEmail: guard.user.email,
   });
   return NextResponse.json({ role: { id: role.id } }, { status: 201 });

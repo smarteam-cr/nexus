@@ -205,6 +205,8 @@ export interface SectionDef {
   key: string;                 // matchea CanvasSection.key
   label: string;               // rótulo interno + TÍTULO grande de la sección (no-selfTitled)
   eyebrow?: string;            // categoría/framing chico arriba del título (estilo kickoff)
+  tip?: string;                // ⓘ junto al título: hover con la explicación de la sección
+                               // (tooltip CSS-only, ver landing-engine.css [data-tip]). Roles lo usa.
   theme: "dark" | "light" | "soft";
   backdrop?: boolean;          // grid+glow del hero (dark)
   selfTitled?: boolean;        // el componente trae su propio encabezado (hero/partner/cta);

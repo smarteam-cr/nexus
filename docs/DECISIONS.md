@@ -525,25 +525,39 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
 - **Plantilla FIJA de 7 secciones** (fuente única `ROLE_SECTIONS` en `lib/roles/schema.ts`):
   Perfil de puesto · Responsabilidades · KPIs · Caminos de éxito · Caminos de fracaso · Ruta de
   madurez · Período de transición y crecimiento. (Arrancó en 6; se sumó "Período de transición"
-  al ver que los docs reales de Elías la traían como sección propia.) Cada sección es **markdown**
-  (viñetas/negrita/tablas) y es opcional (se completa de a poco; las vacías no se muestran en la
-  página). *Por qué fija y no flexible:* "MUY resumido y fácil de entender" pide consistencia —
-  todos los roles se leen igual. Para no repetir campos en el UI, el form/página se generan
-  mapeando `ROLE_SECTIONS` (agregar una sección = 1 columna + 1 entrada).
-- **Reusa el MOTOR VISUAL, no el motor de datos** (decisión clave, pedido explícito de Elías —
-  "que TODO Nexus use el mismo sistema visual"): `RolePage` renderiza con `.stl`
-  (`app/landing-engine.css`), el **mismo motor de landing** que el business case (el archivo se
-  declara a sí mismo "motor genérico: BC hoy; kickoff/diagnóstico a futuro"). Se reusa el look
-  (hero + bandas `stl-light`/`stl-soft` + `stl-eyebrow`/`stl-title`) + un helper nuevo `.stl-md`
-  (markdown genérico dentro del motor: listas/tablas/encabezados con las variables del motor). En
-  cambio, **NO se reusa el motor de DATOS** `LandingView`/`ProjectCanvas`/`useCanvasSections`
-  (owner polimórfico + configs de template + DRAFT/CONFIRMED + publish) — eso existe para
-  IA/versionado/publicación externa que Roles no tiene; forzarlo sería una god-abstraction. La
-  línea correcta: reusar la PRESENTACIÓN ampliamente, aislar los DATOS por módulo (ARCHITECTURE
-  §1/§5). Modelo plano de columnas típadas (`@db.Text`), sin IA (se llena a mano).
+  al ver que los docs reales de Elías la traían como sección propia.) *Por qué fija y no flexible:*
+  "MUY resumido y fácil de entender" pide consistencia — todos los roles se leen igual. El template
+  config del motor (`configs/roles.defs.ts`) DERIVA sus 7 defs de `ROLE_SECTIONS` (agregar una =
+  1 entrada en `ROLE_SECTIONS` + su presentación).
+- **Reusa el MOTOR DE RENDER/EDICIÓN, no el de DATOS** (decisión clave — evolución de la anterior;
+  Elías pidió estandarizar la UX de bs/kickoffs/perfiles y sumar cards/tablas/tooltips + edición +
+  drag&drop). La exploración encontró que el motor de **render/edición** (`LandingView` + un template
+  config `SectionDef` + componentes de sección con el contrato `SectionProps` + primitivas inline
+  `Editable`/`SortableItems` + dnd-kit) es **separable** del motor de DATOS pesado
+  (`ProjectCanvas`/`CanvasBlock`/`useCanvasSections`/publish). Roles adopta el PRIMERO: un template
+  config propio (`configs/roles.defs.ts` + `roles.ts` + `sections-roles.tsx`) sobre `LandingView` →
+  idéntica UX al BC (secciones ricas + edición WYSIWYG in-situ + drag&drop de ítems + tooltips ⓘ),
+  con `RoleWorkspace` (toggle Editar) persistiendo por el `/api/roles/[id]` que ya existe. **NO** se
+  adopta el motor de DATOS: sin FK en la tabla COMPARTIDA `ProjectCanvas` (evita churn + el riesgo
+  2-PC de la deriva de Particularidad), sin endpoints canvas paralelos, sin DRAFT/CONFIRMED/publish
+  (Roles no los usa). Mismo resultado visible, menos código y menos riesgo. La línea correcta:
+  reusar la PRESENTACIÓN/EDICIÓN ampliamente, aislar el STORAGE por módulo (ARCHITECTURE §1/§5).
+  *Supera* la decisión previa ("reusar solo el look `.stl`/`.stl-md`, no `LandingView`"): ahora sí
+  se reusa `LandingView`, porque separamos render de datos.
+- **Storage: `RoleProfile.content Json`** — un mapa `{ [sectionKey]: data }` con el shape que consume
+  cada componente (prose `{md}`, cards `{items}`, kpis, niveles). Reemplaza las 7 columnas markdown
+  `@db.Text` (migración `db execute` scoped a RoleProfile: ADD `content` aditivo → re-seed →
+  verificar → DROP de las 7; NUNCA `db push`/`migrate`, que dropearían la deriva `Particularidad.
+  sourceQuote` de la otra PC — el `migrate diff` lo confirmó). El hero (title/area/summary) sale de
+  los metadatos, no de `content`. Sin IA (se llena a mano); tooltips por sección via `[data-tip]` +
+  ⓘ (CSS-only en `landing-engine.css`, additivo, útil también a BC/kickoff).
 - **RLS lockdown** (tabla interna): `RoleProfile` con RLS habilitado sin policy SELECT — anon no
   la lee con la publishable key (regla operativa de ARCHITECTURE para tablas nuevas). Aplicada por
   `prisma db execute` (CREATE TABLE + ENABLE ROW LEVEL SECURITY), no `db push` (hazard 2-PC).
+- **Kickoff ya está en el motor** (ambos mount points defaultean a `LandingView`/`.stl`) → "un solo
+  sistema visual BC+kickoff+perfiles" queda cumplido al poner Roles en él. Borrar el viejo
+  `kickoff-landing.css` (re-tokenizar `TimelineSection.tsx`) queda **diferido** — es archivo caliente
+  de la otra PC; se coordina aparte.
 
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos

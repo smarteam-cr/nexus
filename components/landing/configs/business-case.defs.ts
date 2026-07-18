@@ -18,6 +18,7 @@ export interface BCSectionDef {
   key: string;
   label: string;       // título grande de la sección (no-selfTitled)
   eyebrow?: string;    // categoría chica arriba del título
+  tip?: string;        // ⓘ junto al título: explicación en hover (tooltip CSS-only). Roles lo usa.
   theme: "dark" | "light" | "soft";
   backdrop?: boolean;
   selfTitled?: boolean;

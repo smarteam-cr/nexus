@@ -193,7 +193,12 @@
   Sale del burn pasada la fecha, va al Histórico, y genera un movimiento BAJA.
 - **Roles** (sección del sidebar, `RoleProfile`): docs de los roles y responsabilidades del
   equipo, SOLO SUPER_ADMIN. Cada rol es un PUESTO libre (título + área, no atado al enum
-  `TeamRole` ni a una persona) que se renderiza como una página web resumida (`/roles/[id]`) con
-  una plantilla fija de 6 secciones en markdown: perfil de puesto, responsabilidades, KPIs,
-  caminos de éxito, caminos de fracaso y ruta de madurez. Sin IA (se llena a mano); gate
-  hardcodeado fuera de la matriz de permisos (mismo criterio que Costos); RLS deny (tabla interna).
+  `TeamRole` ni a una persona) que se renderiza y edita con el MISMO motor de landing
+  (`LandingView`) que el business case y el kickoff (`/roles/[id]`, con `RoleWorkspace` y su toggle
+  Editar): plantilla fija de **7** secciones ricas — perfil de puesto, responsabilidades (cards),
+  KPIs (tag predicción/arrastre + objetivo/medición), caminos de éxito y de fracaso (cards),
+  ruta de madurez (escalera L1→L5) y período de transición — con edición WYSIWYG in-situ,
+  drag&drop de ítems y tooltips ⓘ por sección. El contenido vive como JSON estructurado en
+  `RoleProfile.content` (NO en `CanvasBlock`: se reusa la PRESENTACIÓN/EDICIÓN del motor, no el
+  motor de datos — ver DECISIONS). Sin IA (se llena a mano); gate hardcodeado fuera de la matriz
+  de permisos (mismo criterio que Costos); RLS deny (tabla interna).

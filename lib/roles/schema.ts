@@ -3,25 +3,24 @@
  *
  * Schemas Zod + metadata de secciones del módulo Roles (perfiles de puesto del
  * equipo). Client-safe: solo `zod` y constantes — lo importan tanto las routes
- * (validación en la frontera, ARCHITECTURE §3) como los componentes de UI (para
- * las labels de la plantilla fija). NO importa Prisma ni nada server-only.
+ * (validación en la frontera, ARCHITECTURE §3) como los componentes de UI y el
+ * template config del motor de landing (`components/landing/configs/roles.defs.ts`).
+ * NO importa Prisma ni nada server-only.
+ *
+ * El contenido de cada rol vive como JSON estructurado por sección en
+ * `RoleProfile.content` — un mapa `{ [sectionKey]: data }` cuyo shape lo definen los
+ * componentes del motor (prose {md}, cards {items}, kpis, niveles). Acá el `content`
+ * se valida como objeto opaco (la forma la garantizan los componentes, no la API).
  */
 import { z } from "zod";
-
-/** Cuerpo markdown de una sección: opcional, hasta 8k, se permite vacío. */
-const mdBody = z.string().trim().max(8000);
 
 export const roleCreateSchema = z.object({
   title: z.string().trim().min(1).max(120),
   area: z.string().trim().max(120).nullish(),
   summary: z.string().trim().max(500).nullish(),
-  profile: mdBody.nullish(),
-  responsibilities: mdBody.nullish(),
-  kpis: mdBody.nullish(),
-  successPaths: mdBody.nullish(),
-  failurePaths: mdBody.nullish(),
-  maturityPath: mdBody.nullish(),
-  transitionPeriod: mdBody.nullish(),
+  // Contenido estructurado por sección (mapa key → data). Objeto opaco: la forma la
+  // garantizan los componentes de sección, no la frontera HTTP.
+  content: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const rolePatchSchema = roleCreateSchema.partial().extend({
@@ -33,8 +32,10 @@ export type RoleCreateInput = z.infer<typeof roleCreateSchema>;
 export type RolePatchInput = z.infer<typeof rolePatchSchema>;
 
 /**
- * Plantilla FIJA de secciones (fuente única de labels + orden) — la usan el form
- * de edición y la página de rol. El `key` matchea 1:1 la columna del modelo.
+ * Las 7 secciones de CONTENIDO de la plantilla (fuente única de labels + orden + las
+ * `key` del mapa `content`). El hero (title/area/summary) NO está acá — vive en las
+ * columnas de metadatos, no en `content`. El template config del motor
+ * (`roles.defs.ts`) deriva sus 7 defs de esta lista.
  */
 export const ROLE_SECTIONS = [
   { key: "profile", label: "Perfil de puesto" },

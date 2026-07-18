@@ -2876,20 +2876,20 @@ model GastoPuntual {
 // 6 secciones en markdown. Sin IA. Superficie SOLO SUPER_ADMIN (docs internos de
 // dirección) — RLS deny (tabla interna, sin policy SELECT).
 model RoleProfile {
-  id               String  @id @default(cuid())
-  title            String // nombre del puesto (ej. "CSE", "Asistente de Finanzas")
-  area             String? // área/equipo (ej. "Customer Success") — opcional
-  summary          String? @db.Text // resumen de 1 línea (subtítulo del hero)
-  profile          String? @db.Text // Perfil de puesto (markdown)
-  responsibilities String? @db.Text // Responsabilidades (markdown)
-  kpis             String? @db.Text // KPIs (markdown)
-  successPaths     String? @db.Text // Caminos de éxito (markdown)
-  failurePaths     String? @db.Text // Caminos de fracaso (markdown)
-  maturityPath     String? @db.Text // Ruta de madurez (markdown)
-  transitionPeriod String? @db.Text // Período de transición y crecimiento (markdown)
-  active           Boolean @default(true)
-  order            Int     @default(0)
-  createdByEmail   String? // quién lo creó (auditoría liviana)
+  id             String  @id @default(cuid())
+  title          String // nombre del puesto (ej. "CSE", "Asistente de Finanzas")
+  area           String? // área/equipo (ej. "Customer Success") — opcional
+  summary        String? @db.Text // resumen de 1 línea (subtítulo del hero)
+  // Contenido estructurado por sección: mapa { [sectionKey]: data } que consume el
+  // motor de landing (LandingView + config de roles). Reemplaza las 7 columnas markdown
+  // (perfil/responsabilidades/kpis/éxito/fracaso/madurez/transición) — cada sección
+  // guarda su propio shape (prose {md}, cards {items}, kpis, niveles). Ver
+  // components/landing/configs/roles.defs.ts. Reusa la PRESENTACIÓN/EDICIÓN del motor,
+  // NO el motor de datos (ProjectCanvas/CanvasBlock) — decisión en docs/DECISIONS.md.
+  content        Json    @default("{}")
+  active         Boolean @default(true)
+  order          Int     @default(0)
+  createdByEmail String? // quién lo creó (auditoría liviana)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

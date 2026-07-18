@@ -3,6 +3,7 @@
  * Superficie SOLO SUPER_ADMIN (guardRolesAdmin).
  */
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { guardRolesAdmin } from "@/lib/auth/api-guards";
 import { getRole } from "@/lib/roles/queries";
 import { updateRole, deleteRole } from "@/lib/roles/mutations";
@@ -38,8 +39,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     );
   }
 
+  // `content` es Json (objeto opaco): se castea a InputJsonValue aparte; el resto de los
+  // campos (title/area/summary/active/order) van tal cual al UpdateInput.
+  const { content, ...rest } = parsed.data;
+  const data: Prisma.RoleProfileUpdateInput = { ...rest };
+  if (content !== undefined) data.content = content as Prisma.InputJsonValue;
+
   try {
-    const role = await updateRole(id, parsed.data);
+    const role = await updateRole(id, data);
     return NextResponse.json({ role: { id: role.id } });
   } catch {
     return NextResponse.json({ error: "El rol no existe" }, { status: 404 });

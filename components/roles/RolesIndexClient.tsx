@@ -1,17 +1,17 @@
 "use client";
 
 /**
- * CRUD de perfiles de puesto (Roles). Crear/editar vive en un panel lateral
- * (Drawer). Cada rol se abre como su propia página web (/roles/[id]). Sin IA —
- * se llena a mano con markdown en las 6 secciones fijas de la plantilla.
+ * Índice de perfiles de puesto (Roles). Lista + alta de METADATOS (título, área,
+ * resumen) en un drawer; el CONTENIDO de cada rol se edita in-situ en su página
+ * (/roles/[id], con el motor de landing). Crear un rol navega directo a su página
+ * para llenarlo (patrón business case: crear el shell → editar en el workspace).
  */
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog, EmptyState, Badge, Drawer } from "@/components/ui";
-import { ROLE_SECTIONS, type RoleSectionKey } from "@/lib/roles/schema";
 
 type RoleRow = {
   id: string;
@@ -19,33 +19,28 @@ type RoleRow = {
   area: string | null;
   summary: string | null;
   active: boolean;
-} & Record<RoleSectionKey, string | null>;
+};
 
-type SectionForm = Record<RoleSectionKey, string>;
-interface RoleForm extends SectionForm {
+interface MetaForm {
   title: string;
   area: string;
   summary: string;
 }
 
-const EMPTY_SECTIONS = Object.fromEntries(ROLE_SECTIONS.map((s) => [s.key, ""])) as SectionForm;
-const EMPTY_FORM: RoleForm = { title: "", area: "", summary: "", ...EMPTY_SECTIONS };
+const EMPTY_FORM: MetaForm = { title: "", area: "", summary: "" };
 
 const INPUT_CLS =
   "w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted focus:outline-none focus:border-brand";
 
 export default function RolesIndexClient() {
   const toast = useToast();
+  const router = useRouter();
   const [rows, setRows] = useState<RoleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [form, setForm] = useState<RoleForm>(EMPTY_FORM);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<MetaForm>(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [editHandled, setEditHandled] = useState(false);
-  const searchParams = useSearchParams();
-  const editParam = searchParams.get("edit");
 
   const load = useCallback(async () => {
     try {
@@ -61,69 +56,30 @@ export default function RolesIndexClient() {
     load();
   }, [load]);
 
+  const openCreate = () => {
+    setForm(EMPTY_FORM);
+    setDrawerOpen(true);
+  };
   const closeDrawer = () => {
     setDrawerOpen(false);
     setForm(EMPTY_FORM);
-    setEditingId(null);
   };
 
-  const openCreate = () => {
-    setForm(EMPTY_FORM);
-    setEditingId(null);
-    setDrawerOpen(true);
-  };
-
-  const startEdit = (r: RoleRow) => {
-    setEditingId(r.id);
-    const sections = Object.fromEntries(
-      ROLE_SECTIONS.map((s) => [s.key, r[s.key] ?? ""]),
-    ) as SectionForm;
-    setForm({ title: r.title, area: r.area ?? "", summary: r.summary ?? "", ...sections });
-    setDrawerOpen(true);
-  };
-
-  // Abrir el drawer de edición si venimos de /roles/[id] con ?edit=<id> (una vez).
-  useEffect(() => {
-    if (editHandled || !editParam || rows.length === 0) return;
-    const r = rows.find((x) => x.id === editParam);
-    if (r) {
-      startEdit(r);
-      setEditHandled(true);
-    }
-  }, [editHandled, editParam, rows]);
-
-  const save = async () => {
+  // Crear el rol (solo metadatos) y navegar a su página para llenar el contenido in-situ.
+  const create = async () => {
     if (!form.title.trim() || busy) return;
     setBusy(true);
     try {
       const clean = (s: string) => s.trim() || null;
-      const sections = Object.fromEntries(ROLE_SECTIONS.map((s) => [s.key, clean(form[s.key])]));
-      const body = {
-        title: form.title.trim(),
-        area: clean(form.area),
-        summary: clean(form.summary),
-        ...sections,
-      };
-      if (editingId) {
-        await fetchJson(`/api/roles/${editingId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        toast.success("Rol actualizado.");
-      } else {
-        await fetchJson("/api/roles", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        toast.success("Rol creado.");
-      }
-      closeDrawer();
-      load();
+      const { role } = await fetchJson<{ role: { id: string } }>("/api/roles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: form.title.trim(), area: clean(form.area), summary: clean(form.summary) }),
+      });
+      toast.success("Rol creado. Completá su contenido.");
+      router.push(`/roles/${role.id}`);
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo guardar.");
-    } finally {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo crear.");
       setBusy(false);
     }
   };
@@ -192,11 +148,8 @@ export default function RolesIndexClient() {
                 </div>
                 <span className="flex-shrink-0 flex items-center gap-2">
                   <Link href={`/roles/${r.id}`} className="text-xs text-brand hover:underline">
-                    Ver página
+                    Abrir y editar
                   </Link>
-                  <button onClick={() => startEdit(r)} className="text-xs text-fg-muted hover:text-fg">
-                    Editar
-                  </button>
                   <button onClick={() => toggleActive(r)} className="text-xs text-fg-muted hover:text-fg">
                     {r.active ? "Desactivar" : "Activar"}
                   </button>
@@ -216,7 +169,7 @@ export default function RolesIndexClient() {
       <Drawer
         open={drawerOpen}
         onClose={closeDrawer}
-        title={editingId ? "Editar rol" : "Nuevo rol"}
+        title="Nuevo rol"
         footer={
           <>
             <button
@@ -226,11 +179,11 @@ export default function RolesIndexClient() {
               Cancelar
             </button>
             <button
-              onClick={save}
+              onClick={create}
               disabled={busy || !form.title.trim()}
               className="px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
             >
-              {busy ? "Guardando…" : editingId ? "Guardar cambios" : "Crear rol"}
+              {busy ? "Creando…" : "Crear y abrir"}
             </button>
           </>
         }
@@ -258,21 +211,10 @@ export default function RolesIndexClient() {
             className={INPUT_CLS}
           />
           <p className="pt-1 text-[11px] text-fg-muted">
-            Las 6 secciones aceptan markdown (viñetas con <code>-</code>, negrita con{" "}
-            <code>**texto**</code>). Dejá vacía la que no aplique.
+            Al crearlo se abre su página para llenar las secciones (perfil, responsabilidades,
+            KPIs, caminos de éxito y fracaso, ruta de madurez y transición) con cards, tablas y
+            edición directa.
           </p>
-          {ROLE_SECTIONS.map((s) => (
-            <div key={s.key}>
-              <label className="block text-[11px] font-medium text-fg-muted mb-1">{s.label}</label>
-              <textarea
-                value={form[s.key]}
-                onChange={(e) => setForm({ ...form, [s.key]: e.target.value })}
-                rows={4}
-                placeholder={`${s.label} (markdown)…`}
-                className={INPUT_CLS}
-              />
-            </div>
-          ))}
         </div>
       </Drawer>
 
