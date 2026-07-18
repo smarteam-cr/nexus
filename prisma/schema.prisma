@@ -2910,9 +2910,10 @@ model RoleProfile {
   area           String? // área/equipo (ej. "Customer Success") — opcional
   summary        String? @db.Text // resumen de 1 línea (subtítulo del hero)
   // Contenido estructurado por sección: mapa { [sectionKey]: data } que consume el
-  // motor de landing (LandingView + config de roles). Reemplaza las 7 columnas markdown
-  // (perfil/responsabilidades/kpis/éxito/fracaso/madurez/transición) — cada sección
-  // guarda su propio shape (prose {md}, cards {items}, kpis, niveles). Ver
+  // motor de landing (LandingView + config de roles). Reemplazó a las 7 columnas markdown;
+  // hoy son 12 secciones (ROLE_SECTIONS), con el bloque 4DX en el medio (metodología, WIG,
+  // medidas de arrastre y de predicción, marcador y cadencia). Cada sección guarda su
+  // propio shape (prose {md}, cards {items}, medidas, marcador, niveles). Ver
   // components/landing/configs/roles.defs.ts. Reusa la PRESENTACIÓN/EDICIÓN del motor,
   // NO el motor de datos (ProjectCanvas/CanvasBlock) — decisión en docs/DECISIONS.md.
   content        Json    @default("{}")

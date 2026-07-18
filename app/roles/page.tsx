@@ -20,7 +20,7 @@ export default async function RolesPage() {
       <div className="px-6 py-8">
         <PageHeader
           title="Roles"
-          description="Roles y responsabilidades del equipo. Cada puesto es una página resumida — creá, editá y abrí su documento."
+          description="Roles y responsabilidades del equipo. Cada puesto es una página resumida — crea, edita y abre su documento."
         />
         <RolesIndexClient />
       </div>

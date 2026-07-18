@@ -50,7 +50,7 @@ function SortableItem({
     <button
       type="button"
       className="stl-drag-item"
-      title="Arrastrá para reordenar"
+      title="Arrastra para reordenar"
       aria-label="Reordenar"
       {...attributes}
       {...listeners}

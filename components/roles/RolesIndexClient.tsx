@@ -124,7 +124,7 @@ export default function RolesIndexClient() {
         <EmptyState
           variant="dashed"
           title="Todavía no hay roles"
-          description="Creá el primero con el botón de arriba. Cada rol se ve como una página resumida del puesto."
+          description="Crea el primero con el botón de arriba. Cada rol se ve como una página resumida del puesto."
         />
       ) : (
         <ul className="space-y-2">

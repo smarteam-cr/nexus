@@ -670,6 +670,12 @@
 .stl [data-tip]:hover::before, .stl [data-tip]:focus-visible::before {
   opacity: 1; transform: translateX(-50%) translateY(0);
 }
+/* Sobre banda oscura (la WIG) el burbujo #0F172A queda casi igual que el fondo
+   (--dark-bg #0B1426) y la sombra no se ve: sin borde, el tooltip no tiene silueta. */
+.stl .stl-dark [data-tip]::after {
+  background: #1E293B; border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.stl .stl-dark [data-tip]::before { border-top-color: #1E293B; }
 
 /* ── Roles: KPIs (tag predicción/arrastre + objetivo/medición) ─────────────── */
 .stl .stl-kpi { display: flex; flex-direction: column; gap: 10px; }
@@ -681,7 +687,9 @@
 }
 .stl button.stl-kpi-tag { border: none; cursor: pointer; }
 .stl .stl-kpi-tag.is-prediccion { background: rgba(22, 140, 246, 0.12); color: #0E6FD1; }
-.stl .stl-kpi-tag.is-arrastre { background: rgba(66, 228, 179, 0.18); color: #1FBE91; }
+/* Teal oscurecido (no `--teal-dark`): a 11px bold, #1FBE91 sobre su propio tinte daba
+   ~2.1:1 de contraste. #0E8A68 llega a ~4.6:1 (AA) manteniendo la familia de color. */
+.stl .stl-kpi-tag.is-arrastre { background: rgba(66, 228, 179, 0.18); color: #0E8A68; }
 .stl .stl-kpi-field-label {
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
   color: var(--text-muted); margin-bottom: 2px;
@@ -723,6 +731,62 @@
   padding-left: 12px; border-left: 2px solid var(--teal);
 }
 .stl .stl-rung-impact-label { font-weight: 700; color: var(--teal-dark); }
+
+/* ── Roles · 4DX — D1: la WIG ("de X a Y para [fecha]", banda dark) ────────── */
+.stl .stl-wig { max-width: 900px; }
+.stl .stl-wig-row {
+  display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap;
+}
+.stl .stl-wig-part { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
+.stl .stl-wig-label {
+  font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--teal);
+}
+.stl .stl-wig-value {
+  font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-weight: 600; font-size: clamp(20px, 2.6vw, 30px); line-height: 1.15;
+  letter-spacing: -0.02em; color: inherit; /* hereda del tema de la sección: si la WIG
+  dejara de ser `dark`, un color fijo la volvería invisible sobre fondo claro. */
+}
+.stl .stl-wig-value.is-target { color: var(--teal); }
+.stl .stl-wig-arrow { font-size: 26px; color: var(--teal-dark); padding-bottom: 4px; }
+.stl .stl-wig-context {
+  font-size: 15px; line-height: 1.6; color: var(--dark-text-2); margin: 20px 0 0; max-width: 640px;
+}
+@media (max-width: 720px) { .stl .stl-wig-arrow { display: none; } }
+
+/* ── Roles · 4DX — D3: el marcador (qué gráfico crear en HubSpot) ──────────── */
+.stl .stl-score { display: flex; flex-direction: column; gap: 12px; }
+.stl .stl-score-top { display: flex; align-items: flex-start; gap: 14px; }
+.stl .stl-score-viz {
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: 76px; height: 76px; border-radius: 14px; background: var(--bg-soft);
+  border: 1px solid var(--border);
+}
+.stl .stl-score-id { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.stl .stl-score-chart {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; line-height: 1.5; cursor: pointer;
+  border: 1px dashed var(--border-strong); background: transparent; color: var(--text-muted);
+  transition: border-color 150ms ease, color 150ms ease;
+}
+.stl .stl-score-chart:hover { border-color: var(--blue); color: var(--blue); }
+.stl .stl-score-chart.is-static { cursor: default; border-style: solid; }
+/* La fuente del reporte lleva el acento naranja de HubSpot: es lo que hay que ir a construir. */
+.stl .stl-score-hs {
+  border-left: 3px solid #FF7A59; background: rgba(255, 122, 89, 0.06);
+  border-radius: 0 10px 10px 0; padding: 10px 12px;
+}
+.stl .stl-score-hs-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: #C2410C; margin-bottom: 2px;
+}
+
+/* ── Roles · 4DX — D4: la cadencia (WIG Session + touchpoints) ─────────────── */
+.stl .stl-cadence { display: flex; flex-direction: column; gap: 12px; }
+.stl .stl-cadence-meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+@media (max-width: 560px) { .stl .stl-cadence-meta { grid-template-columns: 1fr; } }
 
 /* ── Roles: editor de prosa markdown (perfil / transición, modo edición) ───── */
 .stl .stl-md-editor {

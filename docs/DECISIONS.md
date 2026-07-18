@@ -536,13 +536,86 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   403). NO se agregó una sección al registry de permisos: una sección de docs de dirección no debe
   ser delegable por plantilla, y SUPER_ADMIN ya es all-true en el engine — una celda de matriz no
   compraría nada. Se evita el churn del modal de /team.
-- **Plantilla FIJA de 7 secciones** (fuente única `ROLE_SECTIONS` en `lib/roles/schema.ts`):
-  Perfil de puesto · Responsabilidades · KPIs · Caminos de éxito · Caminos de fracaso · Ruta de
-  madurez · Período de transición y crecimiento. (Arrancó en 6; se sumó "Período de transición"
-  al ver que los docs reales de Elías la traían como sección propia.) *Por qué fija y no flexible:*
-  "MUY resumido y fácil de entender" pide consistencia — todos los roles se leen igual. El template
-  config del motor (`configs/roles.defs.ts`) DERIVA sus 7 defs de `ROLE_SECTIONS` (agregar una =
-  1 entrada en `ROLE_SECTIONS` + su presentación).
+- **Plantilla FIJA de 11 secciones** (fuente única `ROLE_SECTIONS` en `lib/roles/schema.ts`):
+  Perfil · Responsabilidades · **[bloque 4DX: WIG · Predicción · Arrastre · Marcador · Cadencia]** ·
+  Caminos de éxito · Caminos de fracaso · Ruta de madurez · Período de transición.
+  (Arrancó en 6; se sumó "Período de transición"; después el bloque 4DX reemplazó a "KPIs"; y
+  finalmente se podó la sección de metodología —ver el bullet de VOZ— quedando en 11.)
+  *Por qué fija y no flexible:* "MUY resumido y fácil de entender" pide consistencia — todos los
+  roles se leen igual. El template config del motor (`configs/roles.defs.ts`) DERIVA sus defs de
+  `ROLE_SECTIONS` (agregar una = 1 entrada en `ROLE_SECTIONS` + su presentación en `SECTION_META`,
+  que es un `Record<RoleSectionKey,…>` y por lo tanto NO compila si te la olvidás).
+- **4DX como el sistema de ejecución de TODOS los puestos** (pedido de Elías, investigado sobre
+  *The 4 Disciplines of Execution*): la sección única "KPIs" mezclaba lead y lag detrás de un tag, y
+  eso escondía justo la distinción que importa. Se reemplazó por un bloque de 5 secciones:
+  **WIG** (D1, "de X a Y para [fecha]", en banda `dark` para que sea imposible de pasar por alto) →
+  **medidas de predicción** (D2, lead: la acción SEMANAL controlable) → **medidas de arrastre**
+  (D2, lag: el resultado, se lee tarde) → **marcador** (D3) → **cadencia** (D4, la WIG Session).
+  *Se conservó el eje `prediccion`/`arrastre`* (`RoleKpiKind`) que ya existía: era exactamente
+  lead/lag, con su color azul/teal. **Las lead se re-escribieron como acciones semanales con número**
+  ("3 health-checks por semana"), no como KPIs genéricos — una lead que no es influenciable no es
+  lead. Orden deliberado: lag ANTES que lead (primero a dónde hay que llegar, después qué se mueve);
+  hay un test que lo congela.
+- **VOZ: la página de un puesto es una GUÍA DE TRABAJO, no un curso de 4DX** (corrección de Elías al
+  ver la primera versión renderizada: *"me arrepentí, quita esa sección… debe ser muy directa, menos
+  teórico y más direccionado a entender qué hago en mi puesto"*). Tres reglas que se derivan y que
+  hay que respetar al escribir contenido nuevo:
+  1. **Se borró la sección "Cómo ejecutamos: 4DX"** (las 4 disciplinas). Explicar el método no es
+     tarea de la página de un puesto; ahí se explica EL PUESTO.
+  2. **Reparto de vocabulario**: el **título** va en lenguaje llano y en primera persona ("La meta
+     que persigo", "Lo que hago cada semana", "Cómo sé si está funcionando", "Dónde lo veo en
+     HubSpot", "Con quién me reúno y de qué"); el **eyebrow** —chico— lleva el término técnico
+     (`D2 · Medidas de predicción (lead)`) para que el equipo igual aprenda el vocabulario; y la
+     **teoría vive SOLO en el tooltip ⓘ**, que es el único lugar donde no estorba.
+  3. **Orden por accionabilidad**: predicción ANTES que arrastre. Lo primero que alguien necesita al
+     abrir su rol es qué hacer, no a dónde tiene que llegar. (Invierte el orden de la primera versión;
+     hay un test que lo congela.)
+  *Regla de escritura del contenido:* si una card no dice QUÉ HACER o CÓMO MIRARLO, sobra. Todo a
+  1-2 líneas, sin intros por sección, y las medidas de predicción **en imperativo y con número**
+  ("Preguntá por el siguiente dolor en cada entrega · 2 por semana"), no como KPIs.
+  4. **Sin tag repetido en las cards de medidas**: dentro de "Lo que hago cada semana" TODAS son de
+     predicción (y en la de arrastre, todas de arrastre) — repetir el tag en cada card es ruido, y
+     además peleaba el renglón con los títulos cortos. El eyebrow y el ⓘ ya lo dicen. En el
+     **marcador sí va**, porque ahí se mezclan predicción y arrastre.
+- **Una medida de predicción es un acto HUMANO** (regla propia de Smarteam, coherente con el modelo
+  AI-First del preámbulo): *"si un agente de Nexus lo puede hacer, no es una medida de predicción"*
+  (Elías). Validar, conversar, diagnosticar, decidir, acompañar, transferir criterio → sí. Correr un
+  checklist, publicar el calendario, mantener limpia la atribución, barrer la higiene del pipeline →
+  NO: eso se automatiza, y ponerlo como lead measure hace que alguien vaya "verde en predicción"
+  toda la semana sin haber aportado nada que la IA no hiciera. (De paso resolvió el hallazgo de la
+  revisión adversarial: higiene de datos ≠ medida predictiva.) *Ojo con sobre-corregir:* la primera
+  pasada sacó también el diseño de piezas y video por "automatizable" y se pasó — **crear** la pieza
+  es criterio humano; lo que automatiza un agente es programarla, no concebirla. Elías lo devolvió
+  como su primer ejemplo del MO.
+- **Una medida de predicción se escribe en TRES capas: de qué me hago cargo · la acción concreta ·
+  el número semanal** (corrección de Elías con ejemplos textuales para el MO: *"busco algo como eso,
+  más simple de entender, pero dentro del marco de 4DX"*). El **título** es ancho y se agarra de una
+  ("Asegura que Smarteam tenga las redes orgánicas activas"), no una micro-acción; el **detail** es qué
+  hacer en concreto, incluyendo DÓNDE aterriza el resultado cuando aplica (*"…déjalo como nota en
+  HubSpot para que Nexus se nutra"* — el acto humano alimentando al sistema); `meta` es el número.
+  Imperativo y tuteo. Son **5 por puesto** (4DX pide pocas; 5 sigue siendo pocas y cubre el puesto sin
+  fragmentarlo). **No toda medida necesita un gráfico** en el marcador: "prueba cada insumo como
+  usuario" es criterio, no algo que se cuente en un reporte — forzarle un chart sería inventar métrica.
+- **`responsibilities` = SOLO el alcance, UNA línea por ítem, sin descripción.** Cuando las medidas de
+  predicción pasaron a estar redactadas como "de qué me hago cargo", quedaron casi 1:1 con las cards de
+  Responsabilidades (en el MO: "Video y piezas gráficas" + "Publicación de contenido" ≡ "Asegura que
+  Smarteam tenga las redes activas") → la página se leía dos veces. Se resolvió recortando
+  Responsabilidades a un mapa en trazo grueso del puesto (helper `scope()` en el seed: `detail: ""`,
+  que el motor omite en lectura) y dejando el QUÉ HACER en las medidas semanales. No se eliminó la
+  sección: sigue siendo la vista de conjunto para quien recién llega al puesto.
+- **El marcador (D3) APUNTA al gráfico; no explica cómo armarlo ni consume datos.** Por cada medida:
+  tipo de gráfico + **dónde vive** (dashboard o reporte, en una línea) + cómo se ve "ganar" (el test de
+  los 5 segundos). *Segunda corrección de Elías:* la primera versión traía la receta completa de
+  armado (filtros, propiedades a crear, caveats de licencia) y sobraba — *"me imagino algo menos
+  específico acá; para eso están los gráficos en HubSpot"*. El cómo-armarlo es trabajo de HubSpot y se
+  descubre al construir el reporte; la página del puesto solo dice **qué mirar y dónde**. Efecto: el
+  puntero pasó de ~150 a ~50 caracteres. El CSL conserva sus anclas reales (UUS del Partner Clients
+  Object) porque son el NOMBRE del dato, no su receta.
+  *Por qué no datos en vivo:* la página de un rol es un DOCUMENTO, no un dashboard; una integración
+  con la API de HubSpot es un feature aparte y mucho mayor. Las previews de gráfico son **SVG a mano,
+  estáticas y sin timers** — el motor `.stl` también renderiza en externo/PDF, donde una librería de
+  charts (ECharts es `ssr:false` + canvas) rompería, y un loop perpetuo cuelga la captura de pantalla.
+  Los números de WIG y metas son EJEMPLOS: el liderazgo fija los reales por período y se editan in-situ.
 - **Reusa el MOTOR DE RENDER/EDICIÓN, no el de DATOS** (decisión clave — evolución de la anterior;
   Elías pidió estandarizar la UX de bs/kickoffs/perfiles y sumar cards/tablas/tooltips + edición +
   drag&drop). La exploración encontró que el motor de **render/edición** (`LandingView` + un template

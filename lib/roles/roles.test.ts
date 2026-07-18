@@ -5,6 +5,7 @@
 import { test, expect } from "vitest";
 import { roleCreateSchema, rolePatchSchema, ROLE_SECTIONS } from "./schema";
 import { ROLE_SECTION_DEFS, ROLE_CONTENT_KEYS } from "@/components/landing/configs/roles.defs";
+import { ROLES_SECTION_COMPONENTS } from "@/components/landing/configs/roles";
 
 test("roleCreateSchema: title requerido; area/summary/content opcionales", () => {
   expect(roleCreateSchema.safeParse({ title: "" }).success).toBe(false);
@@ -28,11 +29,16 @@ test("rolePatchSchema: parcial + active/order; order negativo falla", () => {
   expect(rolePatchSchema.safeParse({ order: -1 }).success).toBe(false);
 });
 
-test("ROLE_SECTIONS: las 7 secciones de la plantilla, en orden", () => {
+test("ROLE_SECTIONS: las 11 secciones de la plantilla, en orden", () => {
   expect(ROLE_SECTIONS.map((s) => s.key)).toEqual([
     "profile",
     "responsibilities",
-    "kpis",
+    // 4DX: WIG (D1) → predicción (D2) → arrastre (D2) → marcador (D3) → cadencia (D4)
+    "wig",
+    "leadMeasures",
+    "lagMeasures",
+    "scoreboard",
+    "cadencia",
     "successPaths",
     "failurePaths",
     "maturityPath",
@@ -40,7 +46,22 @@ test("ROLE_SECTIONS: las 7 secciones de la plantilla, en orden", () => {
   ]);
 });
 
-test("ROLE_SECTION_DEFS: hero + las 7 de contenido, con sectionType y sin agente", () => {
+test("4DX: la meta manda, y lo que HAGO va antes que el resultado", () => {
+  const keys = ROLE_SECTIONS.map((s) => s.key) as string[];
+  // La WIG (D1) va antes que cualquier medida.
+  expect(keys.indexOf("wig")).toBeLessThan(keys.indexOf("leadMeasures"));
+  // La acción semanal (predicción) va ANTES que el resultado (arrastre): lo primero que
+  // alguien necesita al abrir su rol es qué hacer, no a dónde tiene que llegar.
+  expect(keys.indexOf("leadMeasures")).toBeLessThan(keys.indexOf("lagMeasures"));
+  // El marcador (D3) y la cadencia (D4) cierran el bloque, en ese orden.
+  expect(keys.indexOf("scoreboard")).toBeLessThan(keys.indexOf("cadencia"));
+  expect(keys.indexOf("cadencia")).toBeLessThan(keys.indexOf("successPaths"));
+  // Ni la sección única de KPIs ni la de teoría 4DX viven en la página del puesto.
+  expect(keys).not.toContain("kpis");
+  expect(keys).not.toContain("metodologia");
+});
+
+test("ROLE_SECTION_DEFS: hero + las de contenido, con sectionType y sin agente", () => {
   // Hero primero (pinned, selfTitled, alimentado por metadatos).
   const hero = ROLE_SECTION_DEFS[0];
   expect(hero.key).toBe("hero");
@@ -48,7 +69,7 @@ test("ROLE_SECTION_DEFS: hero + las 7 de contenido, con sectionType y sin agente
   expect(hero.selfTitled).toBe(true);
   expect(hero.sectionType).toBe("role_hero");
 
-  // Las 7 de contenido matchean ROLE_SECTIONS en orden, cada una con renderer + tip.
+  // Las de contenido matchean ROLE_SECTIONS en orden, cada una con renderer + tip.
   const contentDefs = ROLE_SECTION_DEFS.slice(1);
   expect(contentDefs.map((d) => d.key)).toEqual(ROLE_CONTENT_KEYS);
   for (const d of contentDefs) {
@@ -57,4 +78,17 @@ test("ROLE_SECTION_DEFS: hero + las 7 de contenido, con sectionType y sin agente
     expect(d.agentGenerated).toBe(false);
     expect(d.pinned).toBeFalsy(); // se omite en lectura si está vacía
   }
+});
+
+test("cada sectionType tiene un componente registrado (toSectionDef los DROPEA en silencio)", () => {
+  // `toSectionDef` devuelve null —y la sección desaparece sin romper nada— si el
+  // sectionType no está en el registry. Un typo se iría a producción con la suite verde.
+  const faltantes = ROLE_SECTION_DEFS.filter((d) => !ROLES_SECTION_COMPONENTS[d.sectionType ?? d.key]);
+  expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
+});
+
+test("no hay componentes huérfanos en el registry", () => {
+  const usados = new Set(ROLE_SECTION_DEFS.map((d) => d.sectionType ?? d.key));
+  const huerfanos = Object.keys(ROLES_SECTION_COMPONENTS).filter((t) => !usados.has(t));
+  expect(huerfanos).toEqual([]);
 });

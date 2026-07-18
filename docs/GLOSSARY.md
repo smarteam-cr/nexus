@@ -210,10 +210,34 @@
   equipo, SOLO SUPER_ADMIN. Cada rol es un PUESTO libre (título + área, no atado al enum
   `TeamRole` ni a una persona) que se renderiza y edita con el MISMO motor de landing
   (`LandingView`) que el business case y el kickoff (`/roles/[id]`, con `RoleWorkspace` y su toggle
-  Editar): plantilla fija de **7** secciones ricas — perfil de puesto, responsabilidades (cards),
-  KPIs (tag predicción/arrastre + objetivo/medición), caminos de éxito y de fracaso (cards),
-  ruta de madurez (escalera L1→L5) y período de transición — con edición WYSIWYG in-situ,
-  drag&drop de ítems y tooltips ⓘ por sección. El contenido vive como JSON estructurado en
+  Editar): plantilla fija de **11** secciones ricas — perfil, responsabilidades (cards), el
+  **bloque 4DX** (WIG · lo que hago cada semana · cómo sé si funciona · el marcador en HubSpot ·
+  la cadencia), caminos de éxito y de fracaso (cards), ruta de madurez (escalera L1→L5) y período
+  de transición — con edición WYSIWYG in-situ, drag&drop de ítems y tooltips ⓘ por sección. Los
+  títulos van en lenguaje llano ("Lo que hago cada semana") y el término técnico en el eyebrow: la
+  página es una guía de trabajo, no un curso — la teoría de 4DX vive solo en el ⓘ. El
+  contenido vive como JSON estructurado en
   `RoleProfile.content` (NO en `CanvasBlock`: se reusa la PRESENTACIÓN/EDICIÓN del motor, no el
   motor de datos — ver DECISIONS). Sin IA (se llena a mano); gate hardcodeado fuera de la matriz
   de permisos (mismo criterio que Costos); RLS deny (tabla interna).
+- **4DX** (*The 4 Disciplines of Execution*): el sistema de ejecución con el que se documenta cada
+  puesto. D1 enfocarse en lo crucialmente importante (la WIG) · D2 actuar sobre las medidas de
+  predicción · D3 llevar un marcador convincente · D4 crear una cadencia de responsabilidad. El
+  enemigo declarado es el **torbellino**: la operación urgente del día a día, que se come la meta.
+- **WIG** (*Wildly Important Goal*, D1): la ÚNICA meta que hay que ganar, siempre con línea de
+  llegada — **"de X a Y para [fecha]"**. Nunca más de dos a la vez (mientras más metas, menos se
+  logra). En la página del rol va en banda oscura, como sección `wig`.
+- **medida de arrastre** (lag, D2): el RESULTADO que se persigue (la WIG). Se lee cuando el
+  desempeño que la produjo ya pasó → no se puede empujar directo. En Nexus es el `kind: "arrastre"`
+  (teal) que ya usaba la vieja sección de KPIs.
+- **medida de predicción** (lead, D2): la acción SEMANAL que sí se controla y que anticipa el
+  resultado. Dos requisitos: **predictiva** (mueve la de arrastre) e **influenciable** (depende de
+  la persona, no de un tercero). Se escribe con número ("3 health-checks por semana"). `kind:
+  "prediccion"` (azul).
+- **marcador / scoreboard** (D3): el tablero de los JUGADORES (no del entrenador): simple, visible,
+  con predicción y arrastre juntos, y que en **5 segundos** diga si se va ganando. En los roles la
+  sección `scoreboard` no trae datos en vivo: ESPECIFICA qué gráfico crear en HubSpot por cada
+  medida (tipo, objeto/fuente/filtro y cómo se ve ganar).
+- **WIG Session** (D4): la reunión semanal (≤20 min, mismo día y hora, sagrada) donde ocurre la
+  ejecución. Formato fijo de 3 pasos: rendir cuentas de los compromisos → mirar el marcador →
+  comprometer 1-2 movidas que muevan las medidas de predicción. El torbellino NO entra a la sesión.

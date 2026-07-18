@@ -1,13 +1,23 @@
 /**
- * scripts/seed-roles.ts — carga (idempotente) los perfiles de puesto iniciales en
- * `RoleProfile`. Dry-run por default; `--apply` para escribir. Upsert por `title`
- * (re-correr NO duplica).
+ * scripts/seed-roles.ts — carga (idempotente) los perfiles de puesto en `RoleProfile`.
+ * Dry-run por default; `--apply` para escribir. Upsert por `title` (re-correr NO duplica).
  *
  * El contenido va ESTRUCTURADO por sección en `RoleProfile.content` (mapa
- * { [sectionKey]: data }), que el motor de landing renderiza como cards/KPIs/escalera/
- * prosa (ver components/landing/configs/roles.defs.ts). Reemplaza el markdown plano de
- * las columnas viejas — las secciones prose (profile/transitionPeriod) siguen en markdown
- * dentro de `{ md }`; el resto es data estructurada.
+ * { [sectionKey]: data }); el motor de landing lo renderiza (ver configs/roles.defs.ts).
+ *
+ * REGLAS DE ESCRITURA (la página es una GUÍA DE TRABAJO, no un curso):
+ *  1. Si una card no dice QUÉ HACER o CÓMO MIRARLO, sobra.
+ *  2. Medidas de predicción: el TÍTULO dice de qué te haces cargo, la DESCRIPCIÓN es la
+ *     acción concreta y `meta` el número semanal. En imperativo ("Asegura…", "Analiza…").
+ *  3. Una medida de predicción es un acto HUMANO: si un agente de Nexus lo puede hacer
+ *     (correr un checklist, publicar, limpiar datos), no va acá.
+ *  4. `responsibilities` es solo el ALCANCE del puesto: UNA línea por ítem, sin descripción
+ *     (el detalle de qué hacer vive en las medidas semanales; si no, se lee dos veces).
+ *  5. TUTEO siempre (CLAUDE.md §6): "controlas", "haces", "de ti" — nunca voseo.
+ *  6. La teoría de 4DX no va en el contenido: vive en los tooltips ⓘ de `roles.defs.ts`.
+ *
+ * OJO: los números de la meta y de las metas semanales son EJEMPLOS — el liderazgo fija los
+ * reales por período y se editan in-situ en /roles/[id].
  *
  *   npx tsx scripts/seed-roles.ts            # dry-run
  *   npx tsx scripts/seed-roles.ts --apply    # escribe a la DB
@@ -23,7 +33,12 @@ const PREAMBULO =
   "(modelo **AI-First**): el equipo humano se enfoca donde aporta más valor — pensamiento " +
   "crítico, criterio consultivo, habilidades blandas, adopción tecnológica y velocidad de respuesta.";
 
-const KPI_INTRO = "Evaluación que arranca en la ejecución controlable (predicción) y escala al impacto comercial (arrastre).";
+/** Los 3 pasos de la WIG Session, iguales en todos los puestos. */
+const WIG_SESSION =
+  "1) Cada quien rinde cuentas de su compromiso. 2) Se mira el marcador. 3) Cada quien se compromete a 1-2 movidas para la semana. El torbellino no entra acá.";
+
+/** El alcance del puesto va en una línea: sin `detail` (regla 4). */
+const scope = (...titles: string[]) => ({ items: titles.map((title) => ({ title, detail: "" })) });
 
 interface RoleSeed {
   title: string;
@@ -43,54 +58,82 @@ const ROLES: RoleSeed[] = [
       profile: {
         md: `${PREAMBULO}
 
-**Misión del puesto.** Liderar la producción de activos visuales de alto impacto, la edición de video multimedia y la maquetación web ágil, sirviendo tanto al marketing interno de Smarteam como a la entrega directa con clientes de sitio web. Con metodología AI-First (Figma + Claude/Gemini), asegurar que cada sitio entregado sea estéticamente impecable, funcional y validado en UX/UI, operando como un **motor de post-venta** para expandir la cuenta hacia otros servicios del catálogo (ej. implementaciones de CRM).`,
+**Misión.** Producir los activos visuales, de video y de web de Smarteam con metodología AI-First (Figma + Claude), y usar cada entrega web como puerta de entrada para **expandir la cuenta** hacia otros servicios del catálogo.`,
       },
-      responsibilities: {
+      responsibilities: scope(
+        "Diseño y desarrollo de sitios web con IA",
+        "Detección de expansión en cuentas web",
+        "Producción de video y piezas gráficas",
+        "Publicación de contenido en las plataformas",
+        "Control de calidad UX/UI antes del handoff",
+      ),
+      wig: {
+        desde: "3 oportunidades de expansión aceptadas por Ventas en el trimestre",
+        hasta: "9 en el trimestre",
+        fecha: "cierre del Q4 2026",
+        contexto:
+          "Cada sitio entregado abre una puerta. Si el sitio sale impecable pero la cuenta no crece, el trabajo quedó a mitad de camino.",
+      },
+      leadMeasures: {
         items: [
-          { title: "Desarrollo y rediseño de sitios web con IA", detail: "Atender a los clientes que adquieren proyectos web. Diseñar en Figma, estructurar y programar prototipos funcionales de forma ágil con Claude/Gemini, validando diseño, lógica de interacción y UX, y dejar el código base listo y mapeado para que Desarrollo lo monte en HubSpot o WordPress." },
-          { title: "Identificación de oportunidades post-venta (expansión)", detail: "Aprovechar la relación de confianza del rediseño para detectar necesidades del negocio resolubles con otros servicios del catálogo (ej. «ya tenés el sitio, ahora un CRM para captar prospectos o automatizar la post-venta») y derivar la oportunidad a Ventas de forma orgánica." },
-          { title: "Producción multimedia y edición de video", detail: "Crear y editar de forma autónoma piezas de video e insumos gráficos para redes, campañas, webinars y soporte." },
-          { title: "Publicación y distribución de contenido", detail: "Publicar los insumos en las plataformas (sitio, redes, etc.) cumpliendo especificaciones y formatos, según el calendario liderado por la Marketing Lead." },
-          { title: "Control de calidad UX/UI (handoff de desarrollo)", detail: "Ser el puente de calidad entre cliente, diseño y programación: validar que la implementación final coincida con el prototipo aprobado y que la UX sea impecable." },
+          { title: "Asegura que Smarteam tenga las redes orgánicas activas", detail: "Diseña las imágenes y los videos de la página de empresa y de los reps de ventas, para que Smarteam tenga presencia y relevancia.", meta: "3 piezas por semana." },
+          { title: "Lleva el éxito del cliente a los proyectos de sitio web", detail: "Trata cada cuenta web como una cuenta a la que hay que hacer exitosa: revisa que el sitio esté resolviendo lo que el cliente compró, no solo que esté entregado.", meta: "1 seguimiento por cuenta web activa." },
+          { title: "Analiza cada esfuerzo desde el dolor del cliente", detail: "Cierra cada entrega o revisión escuchando qué le duele ahora al negocio, y déjalo como nota en HubSpot para que Nexus se nutra.", meta: "2 por semana." },
+          { title: "Analiza qué otros servicios puede aprovechar el cliente", detail: "Con lo que escuchaste, identifica qué servicio del catálogo resuelve ese dolor y llévalo a Ventas con contexto: qué necesita y por qué ahora.", meta: "1 por semana." },
+          { title: "Prueba cada insumo como usuario, no como autor", detail: "Recorre el sitio, el video o la pieza como lo haría el cliente —en móvil— y anota lo que fricciona antes de mostrarlo.", meta: "1 por insumo." },
         ],
       },
-      kpis: {
-        intro: KPI_INTRO,
+      lagMeasures: {
         items: [
-          { title: "Tiempo de entrega y calidad del prototipo web", kind: "prediccion", objetivo: "Reducir el ciclo de diseño y maquetación sin comprometer la UX.", medicion: "Cumplimiento de las fechas del cronograma de diseño, entregando prototipos codificados y validados con Claude a tiempo a Dev." },
-          { title: "Eficiencia en producción gráfica y video", kind: "prediccion", objetivo: "Mantener alimentado el motor de contenidos.", medicion: "% de insumos y videos editados, aprobados y publicados a tiempo según el calendario mensual." },
-          { title: "Tasa de aprobación UX/UI en handoff", kind: "arrastre", objetivo: "Entregas técnicas sin retrabajo.", medicion: "% de proyectos web que pasan de diseño a desarrollo sin fricciones de maquetación ni inconsistencias de marca." },
-          { title: "Leads e ingresos de expansión", kind: "arrastre", objetivo: "Crecimiento orgánico de cartera vía el servicio web (core de negocio).", medicion: "Cantidad de oportunidades de CRM u otros servicios detectadas en clientes web y transferidas con éxito a Ventas." },
+          { title: "Oportunidades de expansión aceptadas por Ventas", detail: "Cuentas web que terminan en una oportunidad real.", meta: "De 3 a 9 por trimestre." },
+          { title: "Ciclo de entrega del prototipo", detail: "Días del arranque de diseño a la entrega a Desarrollo.", meta: "De 15 a 9 días." },
+          { title: "Aprobación UX/UI en el handoff", detail: "Proyectos que pasan a Desarrollo sin retrabajo.", meta: "≥ 90%." },
+        ],
+      },
+      scoreboard: {
+        items: [
+          { measure: "Oportunidades de expansión", kind: "arrastre", chart: "line", fuente: "Reporte de Negocios, en el dashboard de Marketing.", ganar: "La línea acumulada va sobre el ritmo del trimestre." },
+          { measure: "Ciclo de entrega del prototipo", kind: "arrastre", chart: "line", fuente: "Reporte del objeto Projects.", ganar: "La línea baja y se mantiene bajo 9 días." },
+          { measure: "Piezas publicadas en redes", kind: "prediccion", chart: "bar", fuente: "Reporte de Social.", ganar: "3 o más por semana, sin semanas en blanco." },
+          { measure: "Conversaciones de descubrimiento", kind: "prediccion", chart: "bar", fuente: "Reporte de Actividades.", ganar: "2 o más por semana." },
+          { measure: "Oportunidades llevadas a Ventas", kind: "prediccion", chart: "bar", fuente: "Reporte de Actividades.", ganar: "1 o más por semana." },
+        ],
+      },
+      cadencia: {
+        items: [
+          { evento: "WIG Session de Marketing", quienes: "Marketing Lead + Marketing Operator.", cuando: "Lunes 9:00, 20 min. Sagrada: no se mueve.", formato: WIG_SESSION },
+          { evento: "Handoff a Desarrollo", quienes: "Marketing Operator + Desarrollo.", cuando: "Al cerrar cada prototipo.", formato: "Recorrido del prototipo con el checklist ya corrido y entrega del código base mapeado." },
+          { evento: "1:1 con la Marketing Lead", quienes: "Marketing Operator + Marketing Lead.", cuando: "Quincenal, 30 min.", formato: "Crecimiento y obstáculos. No es revisión de tareas." },
         ],
       },
       successPaths: {
         items: [
-          { title: "Autonomía tecnológica con IA", detail: "Encarar el desarrollo con Claude de forma directa: probar código, iterar la UX en Figma y resolver ágil sin depender de Dev para estructurar la web." },
-          { title: "Mentalidad consultiva de post-venta", detail: "Escuchar los dolores de los clientes web para proponer integraciones, automatizaciones y el CRM como paso lógico de crecimiento." },
-          { title: "Calidad visual y estructural extrema", detail: "Que Figma + Claude generen layouts modernos, limpios y optimizados para la conversión." },
-          { title: "Trabajo colaborativo en ecosistema", detail: "Trabajar hombro a hombro con la Marketing Lead para alinear las piezas al calendario de marca." },
+          { title: "Autonomía técnica con IA", detail: "Probar código e iterar la UX sin depender de Desarrollo." },
+          { title: "Mentalidad consultiva", detail: "Escuchar el dolor y proponer el siguiente servicio como paso lógico." },
+          { title: "Calidad visual extrema", detail: "Layouts limpios, modernos y pensados para convertir." },
+          { title: "Trabajo en ecosistema", detail: "Alinear cada pieza con la Marketing Lead." },
         ],
       },
       failurePaths: {
         items: [
-          { title: "Bloqueo técnico / parálisis", detail: "Frenarse ante un error de código básico o limitarse a entregar imágenes estáticas esperando que Dev resuelva todo el comportamiento web." },
-          { title: "Ejecución pasiva («checklist»)", detail: "Entregar el sitio y cerrar el canal de comunicación sin explorar cómo Smarteam puede seguir aportando valor." },
-          { title: "Descuido del pixel-perfect", detail: "Código desordenado o diseños que no respetan usabilidad móvil ni velocidad de carga." },
-          { title: "Aislamiento creativo", detail: "Diseñar o editar sin alineación estratégica, provocando desfases de tono, estilo o fechas de lanzamiento." },
+          { title: "Bloqueo técnico", detail: "Frenarse ante un error básico y esperar que Desarrollo resuelva." },
+          { title: "Ejecución pasiva", detail: "Entregar el sitio y cerrar el canal sin buscar el siguiente valor." },
+          { title: "Descuido del detalle", detail: "Diseños que ignoran el móvil y la velocidad de carga." },
+          { title: "Aislamiento creativo", detail: "Diseñar sin alineación de tono ni de fechas." },
         ],
       },
       maturityPath: {
-        intro: "De un perfil de ejecución de diseño a una líder de experiencias web orientada al negocio.",
+        intro: "De ejecutar diseño a liderar experiencias web orientadas al negocio.",
         levels: [
-          { level: "L1", titulo: "Diseñadora & Multimedia Junior — zona de transferencia", alcance: "Domina Figma a nivel visual. Crea imágenes estáticas y videos bajo guion detallado. Requiere asistencia técnica y supervisión para estructurar flujos web.", impacto: "Sostiene la producción de marca con agilidad y mantiene el estándar estético de Smarteam." },
-          { level: "L2", titulo: "AI-Web Builder & Creator — meta actual a consolidar", alcance: "Estructura y rediseña webs completas de forma autónoma con Claude + Figma. Valida UX/UI. Entrega código listo para que Dev lo asimile.", impacto: "Reduce a la mitad el ciclo de entrega técnica en desarrollos web y garantiza videos impecables." },
-          { level: "L3", titulo: "Web Experience & Post-Sales Consultant — senior", alcance: "Traduce dolores complejos en soluciones web de alta conversión. Lidera el handoff perfecto diseño–desarrollo. Mapea la cartera web para detectar oportunidades.", impacto: "Genera de forma orgánica oportunidades comerciales adicionales (upselling CRM / consultorías) desde los clientes web." },
-          { level: "L4", titulo: "Conversion Optimization Specialist", alcance: "Diseña e implementa experimentos A/B, optimizaciones de velocidad y embudos de conversión (CRO) con datos reales. Integración nativa con HubSpot CMS.", impacto: "Multiplica la captación de leads en los portales de Smarteam y de sus clientes preferenciales." },
-          { level: "L5", titulo: "AI-First Creative Experience Director", alcance: "Diseña la arquitectura e interconexión visual-técnica de ecosistemas digitales complejos. Crea integraciones dinámicas de contenido con IA.", impacto: "Lidera la conceptualización de las soluciones de más alto valor, como habilitador clave de ingresos y retención de grandes cuentas." },
+          { level: "L1", titulo: "Diseño & Multimedia Junior", alcance: "Domina Figma y produce piezas y video bajo guion.", impacto: "Sostiene el estándar estético de la marca." },
+          { level: "L2", titulo: "AI-Web Builder & Creator", alcance: "Rediseña webs completas con Claude + Figma y entrega código listo para Desarrollo.", impacto: "Reduce a la mitad el ciclo de entrega técnica." },
+          { level: "L3", titulo: "Web Experience & Post-Sales Consultant", alcance: "Traduce dolores complejos en soluciones web de alta conversión y mapea la cartera.", impacto: "Genera oportunidades comerciales desde los clientes web." },
+          { level: "L4", titulo: "Conversion Optimization Specialist", alcance: "Experimentos A/B, velocidad y embudos de conversión con datos reales.", impacto: "Multiplica la captación de leads en los portales." },
+          { level: "L5", titulo: "AI-First Creative Experience Director", alcance: "Diseña ecosistemas digitales complejos e integraciones de contenido con IA.", impacto: "Habilita las soluciones de más alto valor y la retención de grandes cuentas." },
         ],
       },
       transitionPeriod: {
-        md: `Período estructurado de **3 meses** para dotar de total autonomía en el ecosistema AI-First. En las primeras semanas el anclaje está en sus fortalezas actuales (Figma a profundidad, diseño visual y producción de video básica), mientras ejecuta sus primeros proyectos web completos de forma autónoma con Claude, acompañada por Elías y Dev para limar asperezas técnicas y de código. El éxito inicial se evalúa por la fluidez de su ejecución de diseño/código e iteración web (**métricas de predicción**) antes de exigir resultados en detección y dirección de oportunidades de expansión (**métricas de arrastre**).`,
+        md: `Período de **3 meses** hasta la autonomía en el ecosistema AI-First. Las primeras semanas se apoya en sus fortalezas actuales (Figma, video) mientras ejecuta sus primeros proyectos web completos con Claude, con acompañamiento del liderazgo y de Desarrollo. Primero se evalúan las **medidas de predicción**; recién después, los resultados de expansión.`,
       },
     },
   },
@@ -103,56 +146,179 @@ const ROLES: RoleSeed[] = [
       profile: {
         md: `${PREAMBULO}
 
-**Misión del puesto.** El objetivo principal y absoluto es **generar demanda para Ventas**. El Marketing Lead transforma el área en un motor predecible de prospectos calificados, evolucionando de una base de coordinación interna y tracking hacia el dominio autónomo estratégico (ICP, funnel, alianzas y campañas).`,
+**Misión.** **Generar demanda para Ventas.** Convertir el área en un motor predecible de prospectos calificados, evolucionando de la coordinación operativa al dominio estratégico (ICP, funnel, alianzas y campañas).`,
       },
-      responsibilities: {
+      responsibilities: scope(
+        "Generación de demanda y entrega a Ventas",
+        "Eventos, webinars y workshops",
+        "Alianzas y partnerships",
+        "Casos de éxito con Customer Success",
+        "Construcción de activos digitales con IA",
+        "Estrategia de contenido y funnel (ICP)",
+        "Calendario de marketing y disciplina de datos",
+      ),
+      wig: {
+        desde: "12 leads calificados por mes",
+        hasta: "40 leads calificados (MQL) por mes",
+        fecha: "31 de diciembre de 2026",
+        contexto:
+          "Todo lo demás —contenido, eventos, alianzas, casos de éxito— existe para mover este número. Si el mercado nos conoce pero Ventas no tiene con quién hablar, no ganamos.",
+      },
+      leadMeasures: {
         items: [
-          { title: "Generación de demanda (objetivo #1) y entrega a Ventas", detail: "Ser la principal fuente de leads: generar y calificar prospectos por un ciclo lógico y entregarlos listos a Ventas. Tip: definir y calibrar constantemente con Ventas qué es un «lead calificado», cómo se entrega y en qué momento del ciclo." },
-          { title: "Organización de eventos (presenciales y digitales)", detail: "Planificar y ejecutar webinars, workshops online y eventos presenciales para captar demanda, educar al mercado y acelerar negocios del pipeline." },
-          { title: "Gestión de partnerships y alianzas", detail: "Cultivar aliados estratégicos (ej. HubSpot y otros partners) para co-crear contenido, webinars conjuntos y audiencias cruzadas que generen leads." },
-          { title: "Creación de casos de éxito", detail: "Con Customer Success, identificar clientes exitosos, liderar entrevistas y empaquetar historias de alto valor (video, PDF, blog) que Ventas use para cerrar." },
-          { title: "Construcción de activos digitales potenciada por IA", detail: "Rol de «builder» ágil: diseñar y crear landing pages y páginas internas en HubSpot con IA (Claude) y pasarlas a Desarrollo para integrarlas al CMS." },
-          { title: "Dirección de estrategia de contenido y funnel", detail: "Dueña de la narrativa: definir qué contenido se produce, para quién (ICP) y para qué etapa del funnel, alineando la ejecución gráfica del equipo de diseño." },
-          { title: "Gobernanza del calendario y disciplina de datos", detail: "Calendario de marketing inquebrantable (campañas, eventos, alianzas) y datos vivos en HubSpot para una atribución perfecta." },
+          { title: "Asegura que Ventas nunca se quede sin con quién hablar", detail: "Califica los leads de la semana con el criterio acordado y pásalos con contexto: de dónde salió, qué le interesa y cuál es el siguiente paso.", meta: "Todos los de la semana." },
+          { title: "Convierte la historia de un cliente en material de venta", detail: "Agenda la entrevista con Customer Success, sácale qué cambió de verdad en su negocio y déjala documentada para que Ventas la use.", meta: "1 por semana." },
+          { title: "Mueve una alianza que traiga demanda", detail: "Habla con un partner (HubSpot u otro) y aterriza una acción conjunta: webinar, contenido o audiencia cruzada.", meta: "1 por semana." },
+          { title: "Mantén viva la maquinaria que capta", detail: "Diseña y publica en HubSpot los activos que capturan demanda: landing pages, secuencias y piezas de campaña.", meta: "2 por semana." },
+          { title: "Aprende de los leads que Ventas rechazó", detail: "Revísalos uno por uno con Ventas y entiende por qué no calificaban. De ahí sale el ajuste del mensaje y del ICP.", meta: "1 revisión por semana." },
         ],
       },
-      kpis: {
-        intro: KPI_INTRO,
+      lagMeasures: {
         items: [
-          { title: "Tasa de generación y conversión de leads", kind: "arrastre", objetivo: "Alimentar a Ventas con demanda predecible y calificada.", medicion: "Volumen de leads y MQLs generados por mes en todos los canales (inbound, eventos, alianzas)." },
-          { title: "Ritmo de ejecución del calendario", kind: "prediccion", objetivo: "Flujo constante de mercado, sin baches.", medicion: "Cumplimiento del calendario (contenido, eventos ejecutados, campañas lanzadas, casos de éxito publicados)." },
-          { title: "Integridad de atribución en HubSpot", kind: "prediccion", objetivo: "Cero puntos ciegos en la inversión.", medicion: "% de leads y negocios con «origen de campaña» correctamente asignado en el CRM." },
-          { title: "Deals influenciados o atribuidos", kind: "arrastre", objetivo: "Demostrar el ROI real.", medicion: "Cantidad de negocios y revenue en el pipeline originados o influenciados por campañas, eventos o casos de éxito." },
+          { title: "Leads calificados entregados a Ventas", detail: "Prospectos que Ventas acepta, de todos los canales.", meta: "De 12 a 40 por mes." },
+          { title: "Aceptación de MQL a SQL", detail: "Los que se vuelven oportunidad real: mide calidad, no volumen.", meta: "≥ 35%." },
+          { title: "Pipeline con origen marketing", detail: "Monto del pipeline nuevo que originó marketing.", meta: "≥ 30% del pipeline nuevo." },
+        ],
+      },
+      scoreboard: {
+        items: [
+          { measure: "Leads calificados (MQL) por mes", kind: "arrastre", chart: "line", fuente: "Reporte de Contactos por etapa del ciclo de vida.", ganar: "La línea del mes va sobre la meta." },
+          { measure: "Pipeline con origen marketing", kind: "arrastre", chart: "bar", fuente: "Reporte de Negocios por origen de campaña.", ganar: "La porción con origen marketing crece mes a mes." },
+          { measure: "Activos de captación publicados", kind: "prediccion", chart: "bar", fuente: "Reporte de Landing pages (CMS).", ganar: "2 o más por semana." },
+          { measure: "Entrevistas a clientes", kind: "prediccion", chart: "number", fuente: "Reporte de Actividades.", ganar: "El número de la semana nunca es 0." },
+          { measure: "Conversaciones con aliados", kind: "prediccion", chart: "bar", fuente: "Reporte de Actividades.", ganar: "1 o más por semana." },
+        ],
+      },
+      cadencia: {
+        items: [
+          { evento: "WIG Session de Marketing", quienes: "Marketing Lead + Marketing Operator.", cuando: "Lunes 9:00, 20 min. Sagrada: no se mueve.", formato: WIG_SESSION },
+          { evento: "Calibración de leads con Ventas", quienes: "Marketing Lead + Ventas.", cuando: "Semanal, 20 min.", formato: "Qué leads aceptó Ventas y cuáles no, y por qué. Sale con la definición de «lead calificado» ajustada." },
+          { evento: "Revisión de alianzas y eventos", quienes: "Marketing Lead + aliados (HubSpot u otros).", cuando: "Mensual, 45 min.", formato: "Estado de las acciones conjuntas y próximos eventos comprometidos." },
+          { evento: "1:1 de desarrollo", quienes: "Marketing Lead + dirección.", cuando: "Mensual, 45 min.", formato: "Ruta de madurez y criterio estratégico. No es revisión de tareas." },
         ],
       },
       successPaths: {
         items: [
-          { title: "Foco absoluto en Ventas", detail: "Cada post, evento, alianza y caso de éxito busca facilitar conversaciones comerciales y generar reuniones." },
-          { title: "Proactividad con cliente y aliados", detail: "Salir a buscar historias, entrevistar clientes para casos de éxito y gestionar partners para amplificar el mensaje." },
-          { title: "Crecimiento guiado y colaborativo", detail: "Apoyarse en Ventas y RevOps para validar el ICP, el mensaje y medir la calidad real de los leads." },
-          { title: "Adopción de IA para escalar", detail: "Usar IA para crear landings, redactar bases de casos de éxito y campañas directo en HubSpot con autonomía." },
+          { title: "Foco absoluto en Ventas", detail: "Cada acción busca generar conversaciones comerciales." },
+          { title: "Proactividad con clientes y aliados", detail: "Salir a buscar historias y mover partners." },
+          { title: "Crecimiento colaborativo", detail: "Validar ICP y mensaje con Ventas y RevOps." },
+          { title: "IA para escalar", detail: "Crear landings y campañas en HubSpot con autonomía." },
         ],
       },
       failurePaths: {
         items: [
-          { title: "Métricas de vanidad", detail: "Conformarse con likes o asistentes sin un plan para convertir ese interés en leads calificados." },
-          { title: "Quedarse detrás de la pantalla", detail: "Operar HubSpot o programar redes sin interactuar con el ecosistema (ventas, clientes, aliados)." },
-          { title: "Silos departamentales", detail: "Lanzar estrategia sin acompañamiento, o pasar leads a Ventas sin feedback." },
-          { title: "Bloqueo técnico / parálisis", detail: "Depender de terceros para publicar un activo, o no capacitarse en los vacíos estratégicos." },
+          { title: "Métricas de vanidad", detail: "Celebrar likes o asistentes que no se vuelven leads." },
+          { title: "Quedarse detrás de la pantalla", detail: "Operar HubSpot sin hablar con ventas, clientes ni aliados." },
+          { title: "Silos", detail: "Pasar leads a Ventas sin pedir feedback." },
+          { title: "Bloqueo técnico", detail: "Depender de terceros para publicar un activo." },
         ],
       },
       maturityPath: {
-        intro: "De la coordinación operativa (junior/mid) al liderazgo estratégico (senior).",
+        intro: "De la coordinación operativa al liderazgo estratégico.",
         levels: [
-          { level: "L1", titulo: "Coordinador Operativo — zona de transferencia", alcance: "Ordena la casa: sostiene el calendario, publica a tiempo, coordina la logística básica de eventos y asegura la higiene de datos.", impacto: "Mantiene la marca viva y visible; la ejecución ocurre sin fricciones." },
-          { level: "L2", titulo: "Campaigner & Builder — meta a corto plazo", alcance: "Construye landing pages con IA. Empieza a entrevistar clientes para casos de éxito y ejecuta campañas de generación de demanda atadas a un ICP.", impacto: "Convierte tráfico en leads de forma constante; inicia la entrega de demanda real a Ventas." },
-          { level: "L3", titulo: "Demand Gen Lead — senior", alcance: "Crea el handoff perfecto para Ventas. Lidera alianzas de alto nivel, orquesta eventos complejos y domina la atribución.", impacto: "Inyecta MQLs y SQLs predecibles al pipeline de forma recurrente, justificando presupuestos." },
-          { level: "L4", titulo: "RevOps Marketer", alcance: "Ve a Smarteam como un solo motor de revenue. Analiza por qué se ganan/pierden deals y ajusta contenidos, alianzas y eventos (ABM).", impacto: "Sube la tasa de cierre global apoyando la habilitación de ventas." },
-          { level: "L5", titulo: "Growth Leader", alcance: "Orquesta modelos predictivos de adquisición. Personaliza el journey completo a gran escala interconectando todos los canales.", impacto: "Lidera el crecimiento exponencial conectando producto, marketing, ventas y alianzas." },
+          { level: "L1", titulo: "Coordinador Operativo", alcance: "Sostiene el calendario, publica a tiempo y cuida la higiene de datos.", impacto: "La marca está viva y la ejecución no fricciona." },
+          { level: "L2", titulo: "Campaigner & Builder", alcance: "Construye landings con IA y ejecuta campañas atadas a un ICP.", impacto: "Convierte tráfico en leads de forma constante." },
+          { level: "L3", titulo: "Demand Gen Lead", alcance: "Crea el handoff perfecto para Ventas, lidera alianzas y domina la atribución.", impacto: "Inyecta MQLs y SQLs predecibles al pipeline." },
+          { level: "L4", titulo: "RevOps Marketer", alcance: "Analiza por qué se ganan y pierden deals, y ajusta contenido y eventos (ABM).", impacto: "Sube la tasa de cierre global." },
+          { level: "L5", titulo: "Growth Leader", alcance: "Orquesta modelos predictivos de adquisición y personaliza el journey a escala.", impacto: "Conecta producto, marketing, ventas y alianzas para crecer." },
         ],
       },
       transitionPeriod: {
-        md: `Período de **3 meses** enfocado en la evolución del talento. Las primeras semanas: disciplina de L1 (fortalezas de coordinación) mientras toma el workshop interno para saltar rápido a L2 (builder de demanda). Se evalúan primero las **métricas de predicción** (lo que controlás y ejecutás) y paulatinamente migra la responsabilidad hacia las de **arrastre** (leads y pipeline real) conforme se adquieren habilidades senior.`,
+        md: `Período de **3 meses**. Las primeras semanas: disciplina de L1 (coordinación) mientras toma el workshop interno para saltar a L2 (builder de demanda). Se evalúan primero las **medidas de predicción** y paulatinamente migra la responsabilidad hacia las de **arrastre** (leads y pipeline real).`,
+      },
+    },
+  },
+  {
+    title: "Customer Success Lead (CSL)",
+    area: "Customer Success",
+    order: 2,
+    summary: "Lleva éxito a toda la cartera: anticipa riesgos y lidera retención, salud y expansión (revenue).",
+    content: {
+      profile: {
+        md: `${PREAMBULO}
+
+**Misión.** Llevar éxito a todos los clientes, anticipar y mitigar riesgos en cuentas de alta complejidad, y liderar la estrategia de **retención, salud y expansión (revenue)** de toda la cartera.`,
+      },
+      responsibilities: scope(
+        "Monitoreo de cuentas y detección de riesgo",
+        "Éxito y recomendación del cliente",
+        "Desarrollo del talento del equipo",
+        "Adopción de IA en el equipo de CSEs",
+        "Carga de trabajo y desbloqueo del equipo",
+        "Feedback a Ventas y a Desarrollo",
+        "Expansión de cuentas (cross y upselling)",
+        "Gobernanza del pipeline de proyectos en HubSpot",
+      ),
+      wig: {
+        desde: "un UUS promedio de cartera de 55",
+        hasta: "un UUS promedio de 75",
+        fecha: "31 de diciembre de 2026",
+        contexto:
+          "El Unified Usage Score dice si el cliente realmente usa lo que implementamos. Una cartera que no usa la herramienta no renueva y no se expande, por impecable que haya sido la implementación.",
+      },
+      leadMeasures: {
+        items: [
+          { title: "Asegura que ninguna cuenta en riesgo quede desatendida", detail: "Health-check con el CSE de cada cuenta marcada en riesgo: qué la traba, qué movida la desbloquea y quién la ejecuta.", meta: "3 por semana." },
+          { title: "Forma el criterio consultivo de tu equipo", detail: "Roleplay, simulación de reunión difícil o revisión de diagnóstico con un CSE. Formas criterio, no resuelves por él.", meta: "2 por semana." },
+          { title: "Asegura que el cliente use lo que implementamos", detail: "Revisa la adopción real de la cuenta (score de uso, asientos, add-ons) y define con el CSE cuál es la próxima habilitación.", meta: "2 cuentas por semana." },
+          { title: "Analiza qué otros servicios puede aprovechar cada cuenta", detail: "Con el CSE, detecta una necesidad nueva del negocio y llévala a la mesa con Ventas.", meta: "2 por semana." },
+          { title: "Escucha al cliente de primera mano", detail: "Entra a una sesión de cuenta junto al CSE sin conducirla: vas a escuchar el estado real del negocio, no el avance técnico.", meta: "1 por semana." },
+        ],
+      },
+      lagMeasures: {
+        items: [
+          { title: "Uso real de la cartera (UUS)", detail: "Si el cliente usa de verdad lo que implementamos.", meta: "De 55 a 75 promedio." },
+          { title: "Cuentas en rojo", detail: "Las que caen bajo 40 y ponen la renovación en duda.", meta: "De 4 a 0 cuentas." },
+          { title: "Consumo de suscripciones", detail: "Asientos y add-ons realmente usados.", meta: "≥ 80%. Bajo 60% se activa rescate." },
+          { title: "Expansión de cartera", detail: "Servicios nuevos vendidos en cuentas prioritarias.", meta: "6 en el año." },
+        ],
+      },
+      scoreboard: {
+        items: [
+          { measure: "UUS promedio de la cartera", kind: "arrastre", chart: "gauge", fuente: "Partner Clients Object, en el dashboard de Cartera.", ganar: "La aguja sube semana a semana." },
+          { measure: "Cuentas bajo 40 de UUS", kind: "arrastre", chart: "bar", fuente: "Partner Clients Object, UUS por cuenta.", ganar: "Ninguna barra por debajo de 40." },
+          { measure: "Expansión cerrada", kind: "arrastre", chart: "line", fuente: "Reporte de Negocios de tipo expansión.", ganar: "La línea acumulada va sobre el ritmo del año." },
+          { measure: "Health-checks a cuentas en riesgo", kind: "prediccion", chart: "bar", fuente: "Reporte de Actividades.", ganar: "3 o más por semana." },
+          { measure: "Conversaciones de expansión abiertas", kind: "prediccion", chart: "bar", fuente: "Reporte de Actividades.", ganar: "2 o más por semana." },
+        ],
+      },
+      cadencia: {
+        items: [
+          { evento: "WIG Session de Customer Success", quienes: "CSL + todo el equipo de CSEs. Asistencia obligatoria.", cuando: "Lunes 8:30, 20 min. Sagrada: no se mueve.", formato: `${WIG_SESSION} Con equipos grandes, ronda relámpago de 90 segundos por persona.` },
+          { evento: "Revisión de cuenta con el CSE", quienes: "CSL + el CSE dueño de la cuenta.", cuando: "Semanal si está en riesgo; quincenal el resto de la cartera prioritaria.", formato: "Se abre el cronograma y el estado real del negocio: qué lo frena, quién decide, qué se escala. Sale con acciones y responsable." },
+          { evento: "Bucle con Ventas", quienes: "CSL + Ventas (y Marketing cuando toca expansión).", cuando: "Quincenal, 30 min.", formato: "Desalineaciones entre lo vendido y lo implementado, y cuentas con potencial de expansión." },
+          { evento: "1:1 con cada CSE", quienes: "CSL + cada CSE, uno a uno.", cuando: "Mensual, 45 min.", formato: "Ruta de madurez, criterio consultivo y carga de trabajo. Es formación, no revisión de tareas." },
+        ],
+      },
+      successPaths: {
+        items: [
+          { title: "Éxito del cliente", detail: "Que el foco sea su problema, no solo cumplir el proyecto." },
+          { title: "Expansión", detail: "Un camino de crecimiento por cuenta, junto a CSE y Ventas." },
+          { title: "Sincronización cara a cara", detail: "Entender el estado de negocio real, no solo el avance técnico." },
+          { title: "Mapeo total en HubSpot", detail: "El estatus de cada proyecto siempre reflejado en el pipeline." },
+          { title: "Categorización estratégica", detail: "Clasificar la cartera por complejidad, revenue e importancia." },
+          { title: "Bucle con Ventas", detail: "Feedback continuo y remoción proactiva de obstáculos." },
+        ],
+      },
+      failurePaths: {
+        items: [
+          { title: "Enfoque único en implementación", detail: "Cumplir tareas sin mirar el problema del cliente." },
+          { title: "Desorientación estratégica", detail: "Que nada se atrase pero el cliente no tenga éxito." },
+          { title: "Tratar al CSE como operario", detail: "Revisar checklists en vez de formar criterio." },
+          { title: "Feedback solo por escrito", detail: "Chats y reportes sin debate consultivo." },
+          { title: "Desconexión de cuentas clave", detail: "No saber las fricciones de los clientes de alto valor." },
+          { title: "Burocracia interna", detail: "Ahogar al equipo en reportes manuales." },
+        ],
+      },
+      maturityPath: {
+        intro: "Escala provisional del consultor en Smarteam: cada nivel suma complejidad, stack e impacto.",
+        levels: [
+          { level: "L1", titulo: "Implementador HubSpot inicial", alcance: "1-2 Hubs básicos, conexiones nativas e integraciones estándar.", impacto: "Asimila el método Smarteam e implementa rápido con Breeze." },
+          { level: "L2", titulo: "Consultor Multi-Hub y WhatsApp básico", alcance: "Ecosistema HubSpot completo; WhatsApp con conectores del marketplace.", impacto: "Asegura la adopción técnica integral del cliente." },
+          { level: "L3", titulo: "WhatsApp Empresarial avanzado + inglés", alcance: "HubSpot full stack y soluciones avanzadas de WhatsApp Empresarial.", impacto: "Maximiza los canales directos y la conversión en portales maduros." },
+          { level: "L4", titulo: "Consultor de negocio", alcance: "HubSpot orientado a RevOps; propone integraciones con APIs y Webhooks.", impacto: "Entiende a cada cliente como un negocio con un path de crecimiento." },
+          { level: "L5", titulo: "Consultor AI-First", alcance: "Ecosistemas integrados con múltiples sistemas y soluciones a medida con IA.", impacto: "Genera cualquier solución desde las necesidades del cliente y se enfoca en su revenue." },
+        ],
       },
     },
   },

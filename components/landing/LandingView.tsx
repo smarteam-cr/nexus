@@ -298,7 +298,7 @@ export default function LandingView({
           <button
             type="button"
             className="stl-drag-handle"
-            title="Arrastrá para reordenar la sección"
+            title="Arrastra para reordenar la sección"
             aria-label={`Reordenar la sección ${effTitle}`}
             {...dragHandle}
           >

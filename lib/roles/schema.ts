@@ -32,15 +32,29 @@ export type RoleCreateInput = z.infer<typeof roleCreateSchema>;
 export type RolePatchInput = z.infer<typeof rolePatchSchema>;
 
 /**
- * Las 7 secciones de CONTENIDO de la plantilla (fuente única de labels + orden + las
+ * Las secciones de CONTENIDO de la plantilla (fuente única de labels + orden + las
  * `key` del mapa `content`). El hero (title/area/summary) NO está acá — vive en las
  * columnas de metadatos, no en `content`. El template config del motor
- * (`roles.defs.ts`) deriva sus 7 defs de esta lista.
+ * (`roles.defs.ts`) deriva sus defs de esta lista.
+ *
+ * El bloque del medio implementa **4DX** (The 4 Disciplines of Execution), pero la página
+ * es una GUÍA DE TRABAJO, no un curso: los `label` están en lenguaje llano y en primera
+ * persona (responden lo que la persona se pregunta), el término técnico vive en el
+ * `eyebrow` de `roles.defs.ts` y la teoría solo en el tooltip ⓘ. Por eso NO hay una
+ * sección de metodología: explicar 4DX no es tarea de la página de un puesto.
+ *
+ * Orden deliberado: la meta (D1) → lo que hago cada semana (D2 lead) → cómo sé si funciona
+ * (D2 lag) → dónde lo veo (D3) → con quién me reúno (D4). Las acciones van ANTES del
+ * resultado: lo primero que alguien necesita al abrir su rol es qué hacer.
  */
 export const ROLE_SECTIONS = [
   { key: "profile", label: "Perfil de puesto" },
   { key: "responsibilities", label: "Responsabilidades" },
-  { key: "kpis", label: "KPIs" },
+  { key: "wig", label: "La meta que persigo" },
+  { key: "leadMeasures", label: "Lo que hago cada semana" },
+  { key: "lagMeasures", label: "Cómo sé si está funcionando" },
+  { key: "scoreboard", label: "Dónde lo veo en HubSpot" },
+  { key: "cadencia", label: "Con quién me reúno y de qué" },
   { key: "successPaths", label: "Caminos de éxito" },
   { key: "failurePaths", label: "Caminos de fracaso" },
   { key: "maturityPath", label: "Ruta de madurez" },

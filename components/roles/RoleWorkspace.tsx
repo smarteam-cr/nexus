@@ -4,7 +4,7 @@
  * components/roles/RoleWorkspace.tsx — la página de UN rol (perfil de puesto),
  * renderizada y EDITADA con el mismo motor de landing (`LandingView`) que los business
  * cases y el kickoff. Un toggle "Editar" cambia de lectura a edición WYSIWYG in-situ
- * (cards, KPIs, escalera de madurez, tooltips) + drag&drop de ítems. Los cambios se
+ * (cards, bloque 4DX, escalera de madurez, tooltips) + drag&drop de ítems. Los cambios se
  * guardan solos (PATCH /api/roles/[id], debounce): el hero (title/area/summary) va a los
  * metadatos, el resto a `content[sectionKey]`.
  *
@@ -93,8 +93,8 @@ export default function RoleWorkspace({ role }: { role: RoleInput }) {
       <div className="flex items-center justify-between gap-3 pb-3">
         <p className="text-xs text-fg-muted">
           {editing
-            ? "Editá el contenido directamente. Arrastrá ⠿ para reordenar los ítems. Se guarda solo."
-            : "Vista del perfil. Tocá “Editar” para modificarlo."}
+            ? "Edita el contenido directamente. Arrastra ⠿ para reordenar los ítems. Se guarda solo."
+            : "Vista del perfil. Toca “Editar” para modificarlo."}
         </p>
         <div className="flex items-center gap-3">
           {editing && (

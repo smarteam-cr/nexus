@@ -15,8 +15,12 @@ import {
   RoleResponsibilitiesSection,
   RoleSuccessSection,
   RoleFailureSection,
-  RoleKpiSection,
   RoleMaturitySection,
+  RoleWigSection,
+  RoleLagSection,
+  RoleLeadSection,
+  RoleScoreboardSection,
+  RoleCadenceSection,
 } from "../sections-roles";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,8 +30,13 @@ export const ROLES_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
   role_cards: RoleResponsibilitiesSection,
   role_success: RoleSuccessSection,
   role_failure: RoleFailureSection,
-  role_kpis: RoleKpiSection,
   role_maturity: RoleMaturitySection,
+  // 4DX: WIG (D1) · predicción/arrastre (D2) · marcador (D3) · cadencia (D4)
+  role_wig: RoleWigSection,
+  role_lag: RoleLagSection,
+  role_lead: RoleLeadSection,
+  role_scoreboard: RoleScoreboardSection,
+  role_cadence: RoleCadenceSection,
 };
 
 const ROLES_LANDING_CONFIG: LandingConfig = {
@@ -37,7 +46,8 @@ const ROLES_LANDING_CONFIG: LandingConfig = {
   ),
 };
 
-/** Config completa del perfil de puesto (hero + 7 secciones, orden fijo). */
+/** Config completa del perfil de puesto (hero + las 12 secciones de `ROLE_SECTIONS`,
+ *  orden fijo, con el bloque 4DX en el medio). */
 export function landingConfigForRoles(): LandingConfig {
   return ROLES_LANDING_CONFIG;
 }

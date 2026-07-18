@@ -17,7 +17,7 @@
 import type { BCSectionDef } from "./business-case.defs";
 import { ROLE_SECTIONS, type RoleSectionKey } from "@/lib/roles/schema";
 
-type Theme = "light" | "soft";
+type Theme = "dark" | "light" | "soft";
 interface SectionMeta {
   eyebrow: string;
   theme: Theme;
@@ -26,55 +26,91 @@ interface SectionMeta {
   empty: unknown;
 }
 
-/** Presentación por sección de contenido (las 7 de ROLE_SECTIONS). */
+/**
+ * Presentación por sección. La página es una GUÍA DE TRABAJO, no un curso de 4DX, así que
+ * el reparto es: el **título** (`label` en `ROLE_SECTIONS`) está en lenguaje llano y responde
+ * lo que la persona se pregunta; el **eyebrow** —chico y en mayúsculas— lleva el término
+ * técnico (D1…D4, lead/lag) para que el equipo igual aprenda el vocabulario; y el **tip ⓘ**
+ * guarda la teoría, que es el único lugar donde no estorba. Los tips se mantienen a ~2
+ * líneas: uno largo desborda el globo fuera de su banda.
+ * La WIG va en banda `dark` a propósito: es LA meta, tiene que ser imposible de pasar por alto.
+ */
 const SECTION_META: Record<RoleSectionKey, SectionMeta> = {
   profile: {
     eyebrow: "El puesto",
     theme: "light",
     sectionType: "role_prose",
-    tip: "La misión del puesto y su encuadre: para qué existe el rol y qué valor aporta.",
+    tip: "Para qué existe el rol y qué valor aporta.",
     empty: { md: "" },
   },
   responsibilities: {
     eyebrow: "Qué hace",
     theme: "soft",
     sectionType: "role_cards",
-    tip: "Las responsabilidades concretas del día a día — lo que la persona hace y de qué responde.",
+    tip: "El alcance del puesto: de qué responde la persona.",
     empty: { items: [] },
   },
-  kpis: {
-    eyebrow: "Cómo se mide",
+  wig: {
+    eyebrow: "D1 · WIG",
+    theme: "dark",
+    sectionType: "role_wig",
+    tip: "D1 — Una sola meta, con línea de llegada: «de X a Y para [fecha]». Si no se logra, lo demás importa poco.",
+    empty: { desde: "", hasta: "", fecha: "", contexto: "" },
+  },
+  leadMeasures: {
+    eyebrow: "D2 · Medidas de predicción (lead)",
     theme: "light",
-    sectionType: "role_kpis",
-    tip: "Cómo se mide el desempeño: métricas de PREDICCIÓN (ejecución que controla) y de ARRASTRE (impacto comercial).",
+    sectionType: "role_lead",
+    tip: "D2 — Lo que sí controlas y que anticipa el resultado: semanal, con número, y que dependa de ti, no de un tercero.",
+    empty: { intro: "", items: [] },
+  },
+  lagMeasures: {
+    eyebrow: "D2 · Medidas de arrastre (lag)",
+    theme: "soft",
+    sectionType: "role_lag",
+    tip: "D2 — El resultado. Se lee cuando el trabajo que lo produjo ya pasó: no se empuja directo, solo a través de lo que haces cada semana.",
+    empty: { intro: "", items: [] },
+  },
+  scoreboard: {
+    eyebrow: "D3 · El marcador",
+    theme: "light",
+    sectionType: "role_scoreboard",
+    tip: "D3 — El marcador de los jugadores: simple, visible, y en 5 segundos dice si vas ganando. Acá está qué gráfico armar en HubSpot para cada medida.",
+    empty: { intro: "", items: [] },
+  },
+  cadencia: {
+    eyebrow: "D4 · La cadencia",
+    theme: "soft",
+    sectionType: "role_cadence",
+    tip: "D4 — La WIG Session semanal (≤20 min, mismo día y hora): rendir cuentas → mirar el marcador → comprometer 1-2 movidas.",
     empty: { intro: "", items: [] },
   },
   successPaths: {
-    eyebrow: "Qué lo hace crecer",
-    theme: "soft",
+    eyebrow: "Qué te hace crecer",
+    theme: "light",
     sectionType: "role_success",
-    tip: "Los comportamientos y hábitos que hacen crecer a la persona en el puesto.",
+    tip: "Los hábitos que hacen crecer a la persona en el puesto.",
     empty: { items: [] },
   },
   failurePaths: {
     eyebrow: "Señales de alarma",
-    theme: "light",
+    theme: "soft",
     sectionType: "role_failure",
-    tip: "Las señales de alarma: comportamientos que estancan o descarrilan el rol.",
+    tip: "Comportamientos que estancan o descarrilan el rol.",
     empty: { items: [] },
   },
   maturityPath: {
     eyebrow: "L1 → L5",
-    theme: "soft",
+    theme: "light",
     sectionType: "role_maturity",
-    tip: "La escalera de crecimiento del puesto (L1 → L5): de la ejecución asistida al liderazgo estratégico.",
+    tip: "La escalera de crecimiento del puesto: de la ejecución asistida al liderazgo estratégico.",
     empty: { intro: "", levels: [] },
   },
   transitionPeriod: {
     eyebrow: "Los primeros meses",
-    theme: "light",
+    theme: "soft",
     sectionType: "role_prose",
-    tip: "El plan de los primeros meses: cómo se acompaña a la persona hasta la autonomía.",
+    tip: "Cómo se acompaña a la persona hasta la autonomía.",
     empty: { md: "" },
   },
 };
