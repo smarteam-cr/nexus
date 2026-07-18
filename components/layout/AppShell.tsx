@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { getClientsForSidebar } from "@/lib/cache/clients";
 import { requireUser, UnauthorizedError } from "@/lib/auth/supabase";
 import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
@@ -42,8 +43,12 @@ export default async function AppShell({
     permissions,
   };
 
+  // Ancho del sidebar resuelto en SSR (mismo mecanismo que la cookie nexus-theme):
+  // el primer paint ya nace con el ancho correcto — sin flash ni salto post-hidratación.
+  const sidebarCollapsed = (await cookies()).get("nexus-sidebar")?.value === "collapsed";
+
   return (
-    <SidebarShell clients={clients} user={userLite}>
+    <SidebarShell clients={clients} user={userLite} initialOpen={!sidebarCollapsed}>
       {/* Alertas HIGH del watchdog CS → notificación de navegador. Solo CSL/SUPER_ADMIN
           (el componente se auto-apaga para otros roles; render null). */}
       <CsAlertNotifier role={userLite.role} />
