@@ -258,7 +258,8 @@ describe("P3 · estructurales", () => {
 describe("P4 · las páginas /finanzas/costos y /finanzas/caja-neta gatean ANTES de cargar datos", () => {
   const raiz = process.cwd();
 
-  for (const rel of ["app/finanzas/costos/page.tsx", "app/finanzas/caja-neta/page.tsx"]) {
+  // Las páginas viven bajo el route group (shell) — el grupo no cambia la URL.
+  for (const rel of ["app/(shell)/finanzas/costos/page.tsx", "app/(shell)/finanzas/caja-neta/page.tsx"]) {
     it(`${rel}: isCostosRole corta antes de cualquier load*`, () => {
       const abs = path.join(raiz, rel);
       expect(fs.existsSync(abs), `${rel} no existe`).toBe(true);

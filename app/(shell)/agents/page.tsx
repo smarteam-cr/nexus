@@ -1,0 +1,37 @@
+import { requireConsultantSession } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/db/prisma";
+import AgentsClient from "./AgentsClient";
+
+// ISR 60s para la lista de agentes. Mutaciones (crear/editar/eliminar) deben
+// llamar revalidatePath("/agents").
+export const revalidate = 60;
+
+export default async function AgentsPage() {
+  try {
+    await requireConsultantSession();
+  } catch {
+    redirect("/");
+  }
+
+  const agents = await prisma.agent.findMany({
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      status: true,
+      scope: true,
+      agentType: true,
+      agentGroup: true,
+      outputType: true,
+      associatedStages: true,
+      createdAt: true,
+      _count: { select: { runs: true } },
+    },
+  });
+
+  return (
+    <AgentsClient agents={agents} />
+  );
+}
