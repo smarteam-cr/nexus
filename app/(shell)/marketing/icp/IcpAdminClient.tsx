@@ -11,7 +11,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog } from "@/components/ui";
+import { ConfirmDialog, Skeleton, SkeletonText } from "@/components/ui";
 import ICPView, { type IcpViewGroup } from "@/components/marketing/ICPView";
 import type { IcpSection } from "@prisma/client";
 
@@ -78,7 +78,23 @@ export default function IcpAdminClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
-  if (loading) return <p className="text-sm text-fg-muted">Cargando…</p>;
+  // Skeleton ESTRUCTURAL: misma cáscara que el estado cargado (línea de ayuda +
+  // columnas de secciones del ICP) para que al llegar la data nada salte.
+  if (loading) {
+    return (
+      <div aria-label="Cargando el ICP">
+        <Skeleton className="h-3 w-96 max-w-full" />
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[0, 1].map((i) => (
+            <div key={i} className="bg-surface border border-line rounded-xl p-4 min-h-[220px]">
+              <Skeleton className="h-3 w-32 mb-3" delay={i * 60} />
+              <SkeletonText lines={5} />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

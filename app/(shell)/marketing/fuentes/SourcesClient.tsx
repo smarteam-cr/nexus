@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog, EmptyState, Badge, Drawer } from "@/components/ui";
+import { ConfirmDialog, EmptyState, Badge, Drawer, ListSkeleton } from "@/components/ui";
 
 interface SourceRow {
   id: string;
@@ -113,7 +113,9 @@ export default function SourcesClient({ canEdit }: { canEdit: boolean }) {
       </div>
 
       {loading ? (
-        <p className="text-sm text-fg-muted">Cargando…</p>
+        // Skeleton estructural: misma cáscara que la lista de fuentes (filas
+        // rounded-xl de ~3 líneas) para que al llegar la data nada salte.
+        <ListSkeleton rows={5} rowClassName="h-20" />
       ) : rows.length === 0 ? (
         <EmptyState
           variant="dashed"

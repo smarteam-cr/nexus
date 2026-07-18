@@ -12,7 +12,7 @@
  *      fuente nueva esté trayendo posts antes de gastar en generación.
  */
 import Link from "next/link";
-import { Badge } from "@/components/ui";
+import { Badge, ListSkeleton } from "@/components/ui";
 import { useMarketingEngine, RUN_KIND_LABEL } from "@/components/marketing/useMarketingEngine";
 
 export default function EngineClient({ canEdit }: { canEdit: boolean }) {
@@ -124,7 +124,9 @@ export default function EngineClient({ canEdit }: { canEdit: boolean }) {
       <div className="rounded-2xl border border-line bg-surface p-5">
         <p className="text-sm font-semibold text-fg mb-3">Historial de corridas</p>
         {loading ? (
-          <p className="text-xs text-fg-muted">Cargando…</p>
+          // Skeleton estructural: la card del historial ya está montada; se
+          // reservan filas de la altura real de una corrida para evitar saltos.
+          <ListSkeleton rows={3} rowClassName="h-8" />
         ) : runs.length === 0 ? (
           <p className="text-xs text-fg-muted">Todavía no hay corridas. Corré la primera con el botón de arriba.</p>
         ) : (

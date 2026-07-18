@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog, EmptyState, Badge } from "@/components/ui";
+import { ConfirmDialog, EmptyState, Badge, ListSkeleton } from "@/components/ui";
 
 type CampaignStatus = "PENDING" | "APPROVED" | "DISCARDED";
 
@@ -101,7 +101,9 @@ export default function CampaignsClient({ canEdit }: { canEdit: boolean }) {
       </div>
 
       {loading ? (
-        <p className="text-sm text-fg-muted">Cargando…</p>
+        // Skeleton estructural: misma cáscara que las cards de ideas de SEM
+        // (filas rounded-xl título + descripción) para que nada salte al cargar.
+        <ListSkeleton rows={4} rowClassName="h-20" />
       ) : rows.length === 0 ? (
         <EmptyState
           variant="dashed"

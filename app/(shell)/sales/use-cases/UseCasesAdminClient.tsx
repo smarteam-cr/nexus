@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog } from "@/components/ui";
+import { ConfirmDialog, ListSkeleton } from "@/components/ui";
 import { BC_TYPE_CATALOG } from "@/lib/business-cases/case-types";
 import { productTags, scopeTags } from "@/lib/tags/catalog";
 
@@ -188,7 +188,7 @@ export default function UseCasesAdminClient() {
 
       {/* Lista */}
       {loading ? (
-        <p className="text-sm text-fg-muted">Cargando…</p>
+        <ListSkeleton rows={5} rowClassName="h-20" />
       ) : rows.length === 0 ? (
         <p className="text-sm text-fg-muted">
           No hay casos de uso todavía. Mientras el catálogo esté vacío, los business cases se generan

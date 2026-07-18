@@ -8,7 +8,7 @@
  * ⚠ Datos SUPER_ADMIN-only; el endpoint es la barrera (guardCostosAccess).
  */
 import { useEffect, useMemo, useState } from "react";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, ListSkeleton } from "@/components/ui";
 import { fetchJson } from "@/lib/api/fetch-json";
 import type { CostoMovimientoDTO } from "@/lib/cobranza";
 import { CATEGORIA_COSTO_LABEL } from "@/lib/cobranza/schema";
@@ -89,7 +89,8 @@ export default function MovimientosSection() {
   }, [movimientos, filtroTipo]);
 
   if (cargando) {
-    return <p className="text-sm text-fg-muted px-1 py-8 text-center">Cargando movimientos…</p>;
+    // Skeleton estructural: filas apiladas ≈ la lista de movimientos agrupada por mes.
+    return <ListSkeleton rows={6} rowClassName="h-12" />;
   }
 
   if (error) {

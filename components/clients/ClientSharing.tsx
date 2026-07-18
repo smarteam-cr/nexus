@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Skeleton } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 
 // Etiquetas inline (no se importa lib/auth/roles para no arrastrar Prisma al cliente).
@@ -130,7 +131,11 @@ export default function ClientSharing({ clientId }: { clientId: string }) {
       </p>
 
       {loading ? (
-        <div className="text-xs text-gray-600 py-2">Cargando…</div>
+        // Skeleton estructural: misma cáscara que la mini-lista de accesos (filas rounded-lg).
+        <div className="space-y-2 mb-4">
+          <Skeleton className="h-8" rounded="lg" />
+          <Skeleton className="h-8" rounded="lg" delay={60} />
+        </div>
       ) : assignments.length === 0 ? (
         <div className="text-xs text-gray-600 mb-4">Todavía no se compartió con nadie.</div>
       ) : (

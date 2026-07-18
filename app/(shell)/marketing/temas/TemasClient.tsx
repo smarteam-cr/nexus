@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog, EmptyState, Badge, Drawer } from "@/components/ui";
+import { ConfirmDialog, EmptyState, Badge, Drawer, ListSkeleton } from "@/components/ui";
 
 interface PillarRow {
   id: string;
@@ -227,7 +227,11 @@ export default function TemasClient({ canEdit }: { canEdit: boolean }) {
       )}
 
       {loading ? (
-        <p className="text-sm text-fg-muted">Cargando…</p>
+        // Skeleton ESTRUCTURAL: filas de la misma altura que un tema cargado
+        // (rounded-xl px-4 py-3, título + descripción) para que nada salte.
+        <div aria-label="Cargando los temas">
+          <ListSkeleton rows={6} rowClassName="h-16" />
+        </div>
       ) : pillars.length === 0 ? (
         <EmptyState
           variant="dashed"

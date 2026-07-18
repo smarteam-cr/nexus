@@ -11,6 +11,7 @@
  * mergeada) y su mensaje se muestra acá mismo.
  */
 import { useEffect, useState } from "react";
+import { Skeleton } from "@/components/ui";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { CostoRecurrenteDTO } from "@/lib/cobranza";
 import {
@@ -232,7 +233,12 @@ export default function CostoForm({
             <div>
               <label className={LABEL_CLS}>Persona del equipo</label>
               {cargandoMembers ? (
-                <p className="text-xs text-fg-muted py-2">Cargando personas…</p>
+                // Skeleton estructural: reserva la altura del select mientras llega /api/team.
+                <div className="space-y-2 py-1">
+                  <Skeleton className="h-8" />
+                  <Skeleton className="h-8" delay={60} />
+                  <Skeleton className="h-8" delay={120} />
+                </div>
               ) : errorMembers ? (
                 <div className="flex items-center gap-2 py-1">
                   <p className="text-xs text-red-600">No se pudo cargar el equipo.</p>

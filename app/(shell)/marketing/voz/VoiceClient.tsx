@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
+import { Skeleton, SkeletonText } from "@/components/ui";
 
 export default function VoiceClient({ canEdit }: { canEdit: boolean }) {
   const toast = useToast();
@@ -46,7 +47,19 @@ export default function VoiceClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
-  if (loading) return <p className="text-sm text-fg-muted">Cargando…</p>;
+  // Skeleton ESTRUCTURAL: misma cáscara que el estado cargado (línea de ayuda +
+  // textarea rounded-2xl + botón) para que al llegar la data nada salte.
+  if (loading) {
+    return (
+      <div className="space-y-4 max-w-3xl" aria-label="Cargando la voz de marca">
+        <Skeleton className="h-3 w-96 max-w-full" />
+        <div className="bg-surface border border-line rounded-2xl p-4 min-h-[280px]">
+          <SkeletonText lines={6} />
+        </div>
+        <Skeleton className="h-9 w-24" rounded="lg" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 max-w-3xl">

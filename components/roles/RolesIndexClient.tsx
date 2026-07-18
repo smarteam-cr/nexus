@@ -11,7 +11,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog, EmptyState, Badge, Drawer } from "@/components/ui";
+import { ConfirmDialog, EmptyState, Badge, Drawer, ListSkeleton } from "@/components/ui";
 
 type RoleRow = {
   id: string;
@@ -119,7 +119,9 @@ export default function RolesIndexClient() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-fg-muted">Cargando…</p>
+        // Skeleton estructural: replica la cáscara del estado cargado y reserva su altura
+        // (patrón ProjectGPS.tsx). Nunca un <p>Cargando…</p> suelto.
+        <ListSkeleton rows={3} rowClassName="h-16" />
       ) : rows.length === 0 ? (
         <EmptyState
           variant="dashed"

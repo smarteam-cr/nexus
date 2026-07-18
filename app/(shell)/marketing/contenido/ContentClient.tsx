@@ -13,7 +13,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog, EmptyState, Badge } from "@/components/ui";
+import { ConfirmDialog, EmptyState, Badge, Skeleton, ListSkeleton } from "@/components/ui";
 import { useMarketingEngine } from "@/components/marketing/useMarketingEngine";
 import { ideaState, type ContentIdeaState } from "@/lib/marketing/schema";
 
@@ -243,10 +243,12 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
       {/* Barra del motor */}
       <div className="rounded-2xl border border-line bg-surface p-4 flex items-center justify-between gap-4 flex-wrap">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-fg">
-            {engine.loading
-              ? "Cargando estado del motor…"
-              : lastRun
+          {engine.loading ? (
+            // Skeleton inline: reserva la línea de estado del motor (misma altura que el text-sm).
+            <Skeleton className="h-3 w-40 my-1" />
+          ) : (
+            <p className="text-sm font-medium text-fg">
+              {lastRun
                 ? `Última corrida: ${new Date(lastRun.createdAt).toLocaleString("es-CR", { dateStyle: "short", timeStyle: "short" })}${
                     lastRun.status === "DONE" && lastRun.contentIdeasCount != null
                       ? ` · ${lastRun.contentIdeasCount} idea(s) generadas`
@@ -257,7 +259,8 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
                           : ""
                   }`
                 : "Todavía no corriste el motor."}
-          </p>
+            </p>
+          )}
           <Link href="/marketing/generacion" className="text-xs text-brand hover:underline">
             Ver detalle del motor →
           </Link>
@@ -305,7 +308,9 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
       </div>
 
       {loading ? (
-        <p className="text-sm text-fg-muted">Cargando…</p>
+        // Skeleton estructural: reserva el área de la lista de publicaciones
+        // (filas rounded-xl) para que al llegar las ideas nada salte.
+        <ListSkeleton rows={6} rowClassName="h-24" />
       ) : visibleIdeas.length === 0 ? (
         <EmptyState variant="dashed" title={emptyCopy[tab].title} description={emptyCopy[tab].description} />
       ) : (

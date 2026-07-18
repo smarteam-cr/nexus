@@ -194,7 +194,32 @@ export default function EquipoSection({ data, editable = false, onChange }: Sect
               <strong style={{ color: "var(--text-secondary)" }}>Equipo</strong> (una vez por persona).
             </p>
             {team === null ? (
-              <p style={{ fontSize: 14, color: "var(--text-muted)" }}>Cargando equipo…</p>
+              // Skeleton ESTRUCTURAL: misma grilla y cáscara de card del picker cargado
+              // (avatar 40px + dos líneas de texto) para que al llegar la data nada salte.
+              // Estilos inline / vars del motor .stl a propósito (este componente también
+              // renderiza en la vista externa/PDF — sin tokens Tailwind del tema).
+              <div
+                role="status"
+                aria-label="Cargando el equipo"
+                style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}
+              >
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10, width: "100%",
+                      border: "1.5px solid var(--border)", background: "var(--bg)",
+                      borderRadius: 12, padding: 10,
+                    }}
+                  >
+                    <div className="skeleton-shimmer" style={{ width: 40, height: 40, borderRadius: 999, flexShrink: 0 }} />
+                    <div style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div className="skeleton-shimmer" style={{ height: 12, width: "70%", borderRadius: 4 }} />
+                      <div className="skeleton-shimmer" style={{ height: 10, width: "45%", borderRadius: 4 }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : team.length === 0 ? (
               <p style={{ fontSize: 14, color: "var(--text-muted)" }}>No hay miembros del equipo activos.</p>
             ) : (
