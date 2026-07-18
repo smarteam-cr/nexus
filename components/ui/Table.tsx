@@ -310,9 +310,9 @@ export function TableSkeleton({
           <Skeleton className="h-9 w-36 ml-auto" rounded="lg" />
         </div>
       )}
-      <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
+      <div className="rounded-xl border border-line bg-surface overflow-hidden">
         {/* Encabezado */}
-        <div className="flex items-center gap-4 px-4 py-3 border-b border-gray-800 bg-gray-800">
+        <div className="flex items-center gap-4 px-4 py-3 border-b border-line bg-surface-muted">
           {Array.from({ length: columns }).map((_, i) => (
             <Skeleton key={i} className="h-2.5 flex-1" />
           ))}
@@ -321,7 +321,7 @@ export function TableSkeleton({
         {Array.from({ length: rows }).map((_, r) => (
           <div
             key={r}
-            className="flex items-center gap-4 px-4 py-3.5 border-b border-gray-800 last:border-0"
+            className="flex items-center gap-4 px-4 py-3.5 border-b border-line last:border-0"
           >
             <div className="flex items-center gap-3 flex-1">
               <Skeleton className="w-8 h-8 flex-shrink-0" rounded="full" delay={r * 40} />

@@ -13,7 +13,7 @@ export default function ClientWorkspaceLoading() {
     <div className="flex flex-col" style={{ height: "calc(100vh - 57px)" }}>
       <div className="flex-1 overflow-y-auto">
         {/* Tab bar */}
-        <div className="border-b border-gray-800 px-6 flex items-center gap-4 h-[45px]">
+        <div className="border-b border-line px-6 flex items-center gap-4 h-[45px]">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="h-4 w-20" delay={60} />
           <Skeleton className="h-4 w-16" delay={120} />

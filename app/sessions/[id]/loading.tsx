@@ -18,7 +18,7 @@ export default function SessionDetailLoading() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-4 border-b border-gray-800 pb-2">
+        <div className="flex items-center gap-4 border-b border-line pb-2">
           <Skeleton className="h-4 w-20" />
           <Skeleton className="h-4 w-16" delay={50} />
           <Skeleton className="h-4 w-24" delay={100} />

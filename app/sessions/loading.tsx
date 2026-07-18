@@ -14,9 +14,9 @@ export default function SessionsLoading() {
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Sidebar skeleton (replica la estructura real con buscador + 4 secciones) */}
-      <aside className="w-72 flex-shrink-0 border-r border-gray-800 flex flex-col overflow-hidden">
+      <aside className="w-72 flex-shrink-0 border-r border-line flex flex-col overflow-hidden">
         {/* Buscador */}
-        <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b border-gray-800">
+        <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b border-line">
           <Skeleton className="h-8" />
         </div>
         {/* Items por sección */}
@@ -33,7 +33,7 @@ export default function SessionsLoading() {
       </aside>
 
       {/* Panel derecho — placeholder discreto */}
-      <div className="flex-1 flex flex-col items-center justify-center text-gray-600 text-sm gap-3">
+      <div className="flex-1 flex flex-col items-center justify-center text-fg-muted text-sm gap-3">
         <Spinner size="lg" color="border-brand/60" />
         <span>Cargando sesiones…</span>
       </div>
