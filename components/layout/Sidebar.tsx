@@ -7,6 +7,7 @@ import { useTheme } from "@/lib/theme";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import MarketingFlyout from "./MarketingFlyout";
 import FinanzasFlyout from "./FinanzasFlyout";
+import RolesFlyout from "./RolesFlyout";
 
 interface ClientSummary {
   id: string;
@@ -391,6 +392,9 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
               }
             />
           )}
+          {/* Roles: perfiles de puesto del equipo — submenú flyout que lista cada
+              rol. SOLO SUPER_ADMIN (mismo gate duro que Equipo). */}
+          {isSuperAdmin && <RolesFlyout isOpen={isOpen} />}
           {canSeeConfig && (
             <NavItem
               href="/integrations"

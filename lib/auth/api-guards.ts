@@ -383,3 +383,23 @@ export async function guardCostosAccess(): Promise<
   }
   return guard;
 }
+
+/**
+ * ROLES (perfiles de puesto del equipo): SOLO SUPER_ADMIN — docs internos de
+ * dirección, gate hardcodeado fuera de la matriz de permisos (mismo criterio que
+ * Costos; una sección de docs solo-SA no se delega). PRIMERA línea de TODO handler
+ * bajo /api/roles.
+ */
+export async function guardRolesAdmin(): Promise<
+  Awaited<ReturnType<typeof requireInternalUser>> | NextResponse
+> {
+  const guard = await guardInternalUser();
+  if (guard instanceof NextResponse) return guard;
+  if (guard.role !== "SUPER_ADMIN") {
+    return NextResponse.json(
+      { error: "La sección de Roles es solo para Super Admin." },
+      { status: 403 },
+    );
+  }
+  return guard;
+}

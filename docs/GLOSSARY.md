@@ -191,3 +191,9 @@
 - **finalizado / baja** (`CostoRecurrente.finalizadoEl`): baja DEFINITIVA de un costo
   (renuncia, desvinculación, cancelación) — distinta de la pausa (`activo=false`, temporal).
   Sale del burn pasada la fecha, va al Histórico, y genera un movimiento BAJA.
+- **Roles** (sección del sidebar, `RoleProfile`): docs de los roles y responsabilidades del
+  equipo, SOLO SUPER_ADMIN. Cada rol es un PUESTO libre (título + área, no atado al enum
+  `TeamRole` ni a una persona) que se renderiza como una página web resumida (`/roles/[id]`) con
+  una plantilla fija de 6 secciones en markdown: perfil de puesto, responsabilidades, KPIs,
+  caminos de éxito, caminos de fracaso y ruta de madurez. Sin IA (se llena a mano); gate
+  hardcodeado fuera de la matriz de permisos (mismo criterio que Costos); RLS deny (tabla interna).

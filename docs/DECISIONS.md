@@ -509,6 +509,33 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   varios movimientos (cambió monto Y pausó). Lleva montos de salarios → mismas 3 capas + RLS
   deny que `CostoRecurrente`; jamás se expone fuera de la superficie SUPER_ADMIN.
 
+## Roles (perfiles de puesto del equipo)
+- **Qué es**: sección de docs internos que mantiene y visibiliza los roles y responsabilidades
+  del equipo (`RoleProfile`). Cada rol es un **puesto libre** que se define a mano (título +
+  área) y se renderiza como una **página web resumida** (`/roles/[id]`). NO está atado al enum
+  `TeamRole` (permisos) ni a un `TeamMember` (persona) — es documentación de PUESTOS, que sobrevive
+  a que entre/salga gente. *Por qué libre y no el enum:* el equipo tiene puestos que no son un rol
+  de permisos (ej. "Asistente de Finanzas", "Diseñador"); atarlo al enum los dejaría afuera.
+- **Solo SUPER_ADMIN, gate hardcodeado FUERA de la matriz de permisos** (mismo criterio que
+  Costos): `role === "SUPER_ADMIN"` en la página (`redirect` antes de cualquier query), en el
+  sidebar (`{isSuperAdmin && <RolesFlyout/>}`) y en la API (`guardRolesAdmin` en `api-guards.ts`,
+  403). NO se agregó una sección al registry de permisos: una sección de docs de dirección no debe
+  ser delegable por plantilla, y SUPER_ADMIN ya es all-true en el engine — una celda de matriz no
+  compraría nada. Se evita el churn del modal de /team.
+- **Plantilla FIJA de 6 secciones** (fuente única `ROLE_SECTIONS` en `lib/roles/schema.ts`):
+  Perfil de puesto · Responsabilidades · KPIs · Caminos de éxito · Caminos de fracaso · Ruta de
+  madurez. Cada sección es **markdown** (viñetas/negrita) y es opcional (se completa de a poco;
+  las vacías no se muestran en la página). *Por qué fija y no flexible:* "MUY resumido y fácil de
+  entender" pide consistencia — todos los roles se leen igual.
+- **Sin IA (por ahora)**: se llena a mano. **NO reusa el motor `LandingView`/`ProjectCanvas`** de
+  casos de negocio/kickoff (evaluado y descartado: arrastra `ProjectCanvas`, configs de template,
+  el hook `useCanvasSections` y el ciclo de publish — demasiada superficie para 6 campos de
+  markdown). Modelo plano de columnas típadas (`@db.Text`, ARCHITECTURE §2, no Json suelto) +
+  un `RolePage` presentacional simple con tokens semánticos (flipea claro/oscuro).
+- **RLS lockdown** (tabla interna): `RoleProfile` con RLS habilitado sin policy SELECT — anon no
+  la lee con la publishable key (regla operativa de ARCHITECTURE para tablas nuevas). Aplicada por
+  `prisma db execute` (CREATE TABLE + ENABLE ROW LEVEL SECURITY), no `db push` (hazard 2-PC).
+
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos
   dry-run-first; el usuario aprueba el `--apply`.

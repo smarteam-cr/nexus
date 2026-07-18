@@ -2869,3 +2869,29 @@ model GastoPuntual {
 
   @@index([fecha])
 }
+
+// ── Roles (roles y responsabilidades del equipo) ────────────────────────────────
+// Perfil de PUESTO libre (no atado al enum TeamRole ni a un TeamMember) que se
+// documenta a mano y se renderiza como una página web resumida. Plantilla fija de
+// 6 secciones en markdown. Sin IA. Superficie SOLO SUPER_ADMIN (docs internos de
+// dirección) — RLS deny (tabla interna, sin policy SELECT).
+model RoleProfile {
+  id               String  @id @default(cuid())
+  title            String // nombre del puesto (ej. "CSE", "Asistente de Finanzas")
+  area             String? // área/equipo (ej. "Customer Success") — opcional
+  summary          String? @db.Text // resumen de 1 línea (subtítulo del hero)
+  profile          String? @db.Text // Perfil de puesto (markdown)
+  responsibilities String? @db.Text // Responsabilidades (markdown)
+  kpis             String? @db.Text // KPIs (markdown)
+  successPaths     String? @db.Text // Caminos de éxito (markdown)
+  failurePaths     String? @db.Text // Caminos de fracaso (markdown)
+  maturityPath     String? @db.Text // Ruta de madurez (markdown)
+  active           Boolean @default(true)
+  order            Int     @default(0)
+  createdByEmail   String? // quién lo creó (auditoría liviana)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, order])
+}
