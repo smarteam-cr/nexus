@@ -646,6 +646,34 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   `kickoff-landing.css` (re-tokenizar `TimelineSection.tsx`) queda **diferido** — es archivo caliente
   de la otra PC; se coordina aparte.
 
+## Estados de carga (skeletons)
+- **El shell interno vive en el route group `app/(shell)/`** (2026-07-18): las 17 secciones
+  internas comparten UN layout que monta `AppShell` (sidebar + notificador CS). *Por qué:*
+  `AppShell` se montaba DENTRO de cada page.tsx → los `loading.tsx` se pintaban sin sidebar y al
+  resolver el RSC la columna `w-56` empujaba todo ~224px (la queja original de Elías: "los
+  skeletons son de toda la pantalla, pero no de cómo va a quedar la interfaz"). El route group no
+  cambia URLs (manifest verificado idéntico). Quedan FUERA: api, auth, external, `portal`
+  (conserva su AppShell in-page), print, login y los redirects puros (dashboard, contenido,
+  exito-cliente, icp — meterlos al grupo haría resolver el shell antes de un `redirect()`).
+  Los guards por página SE QUEDAN (defensa en profundidad). Página interna nueva → nace bajo
+  `app/(shell)/` con su `loading.tsx`.
+- **Trade-off aceptado del shell persistente**: el sidebar ya no se re-renderiza por navegación —
+  su frescura depende de `revalidateTag("clients-sidebar")` (que las mutaciones de Client ya
+  llaman) + `router.refresh()`. Si un flujo nuevo crea/renombra clientes y el sidebar no se
+  entera, el fix va en ESE flujo (revalidate/refresh), no des-haciendo el shell.
+- **Regla del skeleton estructural**: un estado de carga replica la CÁSCARA del estado cargado
+  (mismos contenedores/borders/paddings) y RESERVA su altura (`min-h` / `rowClassName`) — patrón
+  `ProjectGPS.tsx`. **Prohibido el `<p>Cargando…</p>` suelto** (una línea que swapea a contenido
+  alto = layout shift). Primitivas en `components/ui/Skeleton.tsx`: `Skeleton`/`SkeletonText`/
+  `PageHeaderSkeleton`/`CardsSkeleton`/`ListSkeleton` (+ `TableSkeleton` en Table.tsx), todas con
+  `skeleton-shimmer` (nunca `animate-pulse`) y tokens semánticos. Excepción: componentes del
+  landing engine `.stl` (ej. `EquipoSection`) usan estilos inline del motor + `skeleton-shimmer`
+  porque renderizan en externo/PDF.
+- **El ancho del sidebar (abierto/colapsado) vive en la cookie `nexus-sidebar`**, leída en SSR
+  por `AppShell` (patrón `nexus-theme`) — el primer paint nace con el ancho correcto. *Por qué:*
+  con localStorage el SSR no lo sabía → `visibility:hidden` hasta montar + salto w-56↔w-14
+  post-hidratación. Migración one-time desde `localStorage.sidebar_open` en `SidebarShell`.
+
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos
   dry-run-first; el usuario aprueba el `--apply`.
