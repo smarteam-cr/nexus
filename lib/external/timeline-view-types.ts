@@ -47,10 +47,10 @@ export interface ExternalTimelinePhase {
  * PARTICULARIDAD visible al cliente — desviación curada con atribución. Cruza SOLO si
  * visibleExternal=true (gate por-registro en el chokepoint, como SUSPENDED). CLAVE DE
  * SEGURIDAD: cruzan solo {kind, party, title, detail, weeksImpact, phaseId, occurredAt};
- * NUNCA cruzan source/needsValidation/createdByEmail (fail-closed).
+ * NUNCA cruzan source/needsValidation/createdByEmail NI sourceQuote (fail-closed).
  */
 export interface ExternalParticularidad {
-  /** ATRASO | SOLICITUD | COMPROMISO. */
+  /** ATRASO | COMPROMISO (SOLICITUD = legacy, no se crean nuevas). */
   kind: string;
   /** CLIENTE | SMARTEAM | AMBOS | DEV — atribución de la causa. */
   party: string;

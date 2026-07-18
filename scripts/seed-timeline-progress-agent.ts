@@ -51,16 +51,22 @@ REGLAS DURAS:
 - CONSERVADOR: marcá done solo lo que tengas evidencia razonable (la etapa de HubSpot ya superó esa fase, o una sesión lo confirma). Ante la duda, NO lo marques — el CSE lo hará a mano. Es peor inflar el avance que quedarse corto.
 - Si NO hay evidencia de avance (proyecto que arranca, sin sesiones, etapa inicial): devolvé currentPhaseId = la primera fase (o null) y arrays vacíos.
 
-PARTICULARIDADES (desviaciones curadas — SEPARADO del avance):
-Además del avance, detectá DESVIACIONES del plan que el CSE querría comunicarle al cliente: por qué y quién movió el cronograma. Son CURADAS (lenguaje cliente), no el log crudo. Tres tipos ("kind"):
-- ATRASO: algo se atrasó. Lleva "party" (quién lo causó) y, SOLO si el transcript lo respalda, "weeksImpact" (semanas de corrimiento).
-- SOLICITUD: se necesita algo del cliente para avanzar (un insumo, un acceso, una decisión).
-- COMPROMISO: un acuerdo o hito comprometido en una sesión.
+PARTICULARIDADES (desviaciones FECHADAS del plan — SEPARADO del avance):
+Además del avance, detectá DESVIACIONES: un HECHO PUNTUAL Y FECHADO que ALTERÓ el plan (movió una fecha, o comprometió una fecha nueva). Cada una se justifica con un hecho de UNA SESIÓN CONCRETA ("en la sesión del [fecha]…"). Son CURADAS (lenguaje cliente), no el log crudo. DOS tipos ("kind"):
+- ATRASO: una fecha del plan se corrió/reprogramó. "weeksImpact" es OBLIGATORIO (entero ≥1): las semanas de corrimiento. Si NO podés cuantificar el corrimiento en semanas con evidencia, NO es un ATRASO → descartalo (no lo emitas).
+- COMPROMISO: un acuerdo fechado en una sesión que fija o mueve una fecha del plan. "weeksImpact" opcional.
 "party" (atribución de la causa): CLIENTE | SMARTEAM | AMBOS | DEV.
+
+PROHIBIDO — NO son particularidades (NO las emitas acá):
+- PENDIENTES / INSUMOS del cliente: "se necesita X del cliente", "pendiente entrega de Y", "falta acceso/decisión Z". Eso es una TAREA del cronograma con party=CLIENTE, NO una particularidad. Si ves un pendiente, IGNORALO en este array.
+- Riesgos internos, fricción o molestias del cliente: no van acá.
+Regla de oro: si el hecho no MOVIÓ una fecha ni comprometió una nueva, NO es particularidad. Ante la duda → array vacío. Es MUCHO peor un pendiente disfrazado de particularidad que omitir una desviación (el CSE la agrega a mano si hace falta).
+
 REGLAS DURAS de particularidades:
-- SOLO lo que el transcript RESPALDE. NO inventes desviaciones ni semanas. Ante la duda, NO la propongas (array vacío). Es peor inventar una particularidad que omitirla — el CSE la agrega a mano si hace falta.
-- "title" corto y en lenguaje cliente (ej. "Se atrasó la entrega de la base de contactos"). "detail" opcional, 1-2 frases.
-- "weeksImpact" SOLO en ATRASO y SOLO si hay evidencia clara del corrimiento; si no, omitilo/null. Nunca lo inventes.
+- SOLO lo que el transcript RESPALDE con un hecho fechado. NO inventes desviaciones ni semanas.
+- "title" corto y en lenguaje cliente (ej. "Se reprogramó la migración de datos"). "detail" opcional, 1-2 frases.
+- "occurredAt": la FECHA de la sesión donde ocurrió/se acordó el hecho, en ISO (YYYY-MM-DD). Usá la fecha del bloque de sesión (el prefijo [YYYY-MM-DD]) del que sacaste el hecho.
+- "sourceQuote": un fragmento CORTO que respalde el hecho — verbatim si lo tenés, o la frase del resumen si no. SIN hora (no existen timestamps intra-reunión). Es una nota INTERNA para el CSE; nunca se le muestra al cliente.
 - "phaseId" opcional: si la desviación es de una fase concreta, poné su id EXACTO; si es general, omitilo/null.
 
 FORMATO DE RESPUESTA — JSON EXACTO, sin markdown wrapping, sin comentarios fuera del JSON:
@@ -76,10 +82,10 @@ FORMATO DE RESPUESTA — JSON EXACTO, sin markdown wrapping, sin comentarios fue
     ]
   },
   "particularidades": [
-    { "kind": "ATRASO|SOLICITUD|COMPROMISO", "party": "CLIENTE|SMARTEAM|AMBOS|DEV", "title": "<corto, lenguaje cliente>", "detail": "<opcional, 1-2 frases o null>", "weeksImpact": <entero o null>, "phaseId": "<id EXACTO o null>" }
+    { "kind": "ATRASO|COMPROMISO", "party": "CLIENTE|SMARTEAM|AMBOS|DEV", "title": "<corto, lenguaje cliente>", "detail": "<opcional, 1-2 frases o null>", "weeksImpact": <entero ≥1 OBLIGATORIO en ATRASO; opcional/null en COMPROMISO>, "occurredAt": "<YYYY-MM-DD de la sesión del hecho>", "sourceQuote": "<fragmento corto que respalda, sin hora>", "phaseId": "<id EXACTO o null>" }
   ]
 }
-Incluí en "phases" y "tasks" SOLO lo que marcás done:true (no listes lo pendiente ni lo ya-DONE). "reasoning" es obligatorio. "particularidades" es un array (vacío [] si no detectás ninguna respaldada por el transcript).`;
+Incluí en "phases" y "tasks" SOLO lo que marcás done:true (no listes lo pendiente ni lo ya-DONE). "reasoning" es obligatorio. "particularidades" es un array (vacío [] si no detectás NINGUNA desviación fechada respaldada por el transcript — que sea vacío es lo normal y esperable).`;
 
 async function main() {
   console.log(`Sembrando agente Avance de cronograma (id=${AGENT_ID})...\n`);

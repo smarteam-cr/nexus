@@ -21,13 +21,17 @@ export interface ParticularidadPatch {
   party: string;
   title: string;
   detail: string | null;
+  sourceQuote: string | null;
   weeksImpact: number | null;
   visibleExternal: boolean;
+  occurredAt: string; // YYYY-MM-DD
 }
 
-const KIND_OPTIONS: Array<{ value: string; label: string }> = [
+// Kinds vigentes. SOLICITUD está deprecado (eje DESTINO: un insumo del cliente es una tarea
+// party=CLIENTE, no una particularidad) → se ofrece SOLO como opción "heredado" si la fila YA lo es,
+// para poder migrarla; no se puede fijar de nuevo en filas que no lo tengan.
+const BASE_KIND_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "ATRASO", label: "Atraso" },
-  { value: "SOLICITUD", label: "Solicitud" },
   { value: "COMPROMISO", label: "Compromiso" },
 ];
 const PARTY_OPTIONS: Array<{ value: string; label: string }> = [
@@ -54,24 +58,39 @@ export default function ParticularidadEditModal({
   const [party, setParty] = useState(particularidad.party);
   const [title, setTitle] = useState(particularidad.title);
   const [detail, setDetail] = useState(particularidad.detail ?? "");
+  const [sourceQuote, setSourceQuote] = useState(particularidad.sourceQuote ?? "");
+  const [occurredAt, setOccurredAt] = useState(particularidad.occurredAt.slice(0, 10));
   const [weeks, setWeeks] = useState<string>(
     particularidad.weeksImpact != null ? String(particularidad.weeksImpact) : "",
   );
   const [visible, setVisible] = useState(particularidad.visibleExternal);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Si la fila es un SOLICITUD legacy, se muestra la opción "heredado" para poder verla/migrarla.
+  const kindOptions =
+    particularidad.kind !== "ATRASO" && particularidad.kind !== "COMPROMISO"
+      ? [{ value: particularidad.kind, label: `${particularidad.kind} (heredado)` }, ...BASE_KIND_OPTIONS]
+      : BASE_KIND_OPTIONS;
+
   const titleValid = title.trim().length > 0;
+  const weeksNum = weeks.trim() === "" ? null : Math.max(0, Math.round(Number(weeks)));
+  const weeksValid = weeksNum === null || Number.isFinite(weeksNum);
+  // Un ATRASO exige semanas de corrimiento ≥1 (mismo invariante que el endpoint).
+  const atrasoNeedsWeeks = kind === "ATRASO" && (weeksNum === null || weeksNum < 1);
+  const occurredValid = occurredAt.trim().length > 0;
+  const canSave = titleValid && weeksValid && !atrasoNeedsWeeks && occurredValid;
 
   const submit = () => {
-    if (!titleValid || saving) return;
-    const w = weeks.trim() === "" ? null : Math.max(0, Math.round(Number(weeks)));
+    if (!canSave || saving) return;
     onSave({
       kind,
       party,
       title: title.trim(),
       detail: detail.trim() ? detail.trim() : null,
-      weeksImpact: Number.isFinite(w as number) ? (w as number | null) : null,
+      sourceQuote: sourceQuote.trim() ? sourceQuote.trim() : null,
+      weeksImpact: weeksNum,
       visibleExternal: visible,
+      occurredAt,
     });
   };
 
@@ -91,7 +110,7 @@ export default function ParticularidadEditModal({
             <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>
               Cancelar
             </Button>
-            <Button variant="primary" size="sm" onClick={submit} loading={saving} disabled={!titleValid}>
+            <Button variant="primary" size="sm" onClick={submit} loading={saving} disabled={!canSave}>
               Guardar
             </Button>
           </>
@@ -102,7 +121,7 @@ export default function ParticularidadEditModal({
             <label className="block">
               <span className="text-xs font-medium text-gray-400 mb-1 block">Tipo</span>
               <Select value={kind} onChange={(e) => setKind(e.target.value)}>
-                {KIND_OPTIONS.map((o) => (
+                {kindOptions.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </Select>
@@ -133,16 +152,33 @@ export default function ParticularidadEditModal({
             <Textarea value={detail} onChange={(e) => setDetail(e.target.value)} rows={3} placeholder="1-2 frases de contexto." />
           </label>
 
-          <label className="block max-w-[180px]">
-            <span className="text-xs font-medium text-gray-400 mb-1 block">Semanas de atraso <span className="text-gray-600">(opcional)</span></span>
-            <Input
-              type="number"
-              min={0}
-              value={weeks}
-              onChange={(e) => setWeeks(e.target.value)}
-              placeholder="—"
-            />
+          <label className="block">
+            <span className="text-xs font-medium text-gray-400 mb-1 block">
+              Cita interna <span className="text-gray-600">(opcional — solo la ve el equipo, no cruza al cliente)</span>
+            </span>
+            <Textarea value={sourceQuote} onChange={(e) => setSourceQuote(e.target.value)} rows={2} placeholder="Fragmento de la sesión que respalda el hecho." />
           </label>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-xs font-medium text-gray-400 mb-1 block">Fecha del hecho</span>
+              <Input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} />
+              {!occurredValid && <span className="text-[11px] text-red-400 mt-1 block">Poné la fecha del hecho.</span>}
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-gray-400 mb-1 block">
+                Semanas de atraso {kind === "ATRASO" ? <span className="text-red-400">(obligatorio)</span> : <span className="text-gray-600">(opcional)</span>}
+              </span>
+              <Input
+                type="number"
+                min={0}
+                value={weeks}
+                onChange={(e) => setWeeks(e.target.value)}
+                placeholder="—"
+              />
+              {atrasoNeedsWeeks && <span className="text-[11px] text-red-400 mt-1 block">Un atraso necesita ≥1 semana de corrimiento.</span>}
+            </label>
+          </div>
 
           <label className="flex items-center gap-2.5 pt-1 cursor-pointer select-none">
             <input

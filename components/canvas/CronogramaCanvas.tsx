@@ -152,6 +152,8 @@ interface PendingParticularidadDraft {
   title: string;
   detail: string | null;
   weeksImpact: number | null;
+  occurredAt: string | null;
+  sourceQuote: string | null;
   phaseId: string | null;
 }
 
@@ -1631,6 +1633,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                         </div>
                         <p className="text-sm text-fg font-medium leading-snug">{pt.title}</p>
                         {pt.detail && <p className="text-[12.5px] text-fg-secondary leading-relaxed">{pt.detail}</p>}
+                        {/* Cita interna (fecha de la sesión + fragmento) — respalda el hecho; nunca cruza al cliente. */}
+                        {pt.sourceQuote && (
+                          <p className="text-[11px] text-fg-muted italic leading-relaxed">
+                            {pt.occurredAt && <span className="not-italic text-fg-muted/70 mr-1">[{pt.occurredAt.slice(0, 10)}]</span>}
+                            «{pt.sourceQuote}»
+                          </p>
+                        )}
                         <label className={`inline-flex items-center gap-1.5 text-[11px] font-medium cursor-pointer select-none ${accepted ? "text-fg-muted hover:text-fg" : "text-fg-muted/40 pointer-events-none"}`} title="Que el cliente la vea en su cronograma compartido">
                           <input
                             type="checkbox"

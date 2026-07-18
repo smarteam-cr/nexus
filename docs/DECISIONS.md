@@ -67,6 +67,26 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   sin que el CSE apruebe). *Schema:* `db push` (aditivo), NO migración — el repo abandonó las
   migraciones en marzo 2026 (carpeta congelada); una migración normal resetearía la base
   compartida. Se sigue `npm run db:sync`.
+- **Eje de tipificación de un HECHO detectado = su DESTINO (dónde aterriza + quién actúa), NO el
+  tema.** *Por qué:* el agente de avance sacaba una bolsa mezclada de hechos con un solo balde
+  (`Particularidad`), así que el tipo se degradaba (`SOLICITUD` = un pendiente/insumo del cliente
+  disfrazado de desviación, sin `weeksImpact` → el resumen con atribución nunca sumaba y el cliente
+  leía el mismo reclamo dos veces con "Pendiente de tu parte"). El eje correcto no es el tema (un DNS
+  pendiente en un CRM y un asset pendiente en un sitio son el MISMO objeto: insumo que debe el
+  cliente) sino el DESTINO. Destinos: *desviación fechada* → `Particularidad`; *insumo del cliente* →
+  tarea `party=CLIENTE` (`client-blockers`); *riesgo interno/fricción* → `CsAlert` (watchdog, nunca
+  cruza); *pedido de alcance nuevo* → entidad `ScopeRequest` (decide el CSL; diseñada, ver plan);
+  *hallazgo de entrega* → `KnowledgeDocument`. *Prueba de admisión de un tipo:* quién actúa · dónde
+  aterriza · qué pasa si nadie lo hace (dos tipos con la misma acción/persona/lugar son uno). *Regla:*
+  el tipo vive en el HECHO (arriba), NO dentro de `Particularidad`; el apply RUTEA (código
+  determinista). *Detección:* UN clasificador que viaja sobre una pasada de transcript ya existente
+  (hoy el agente de avance), NUNCA N agentes por destino que relean el transcript (la pasada full-
+  transcript es de las más caras del sistema). *Estado:* `Particularidad` reconcebida = desviación
+  FECHADA, 2 kinds (`ATRASO` con `weeksImpact` OBLIGATORIO + `COMPROMISO`), `SOLICITUD` deprecado
+  (filas legacy conservan el enum + fallback de render; se auditan con
+  `scripts/migrate-particularidades-audit.ts`, que exporta sin borrar), `occurredAt` = fecha de la
+  sesión del hecho, `sourceQuote` = cita interna que NUNCA cruza al cliente (fail-closed). El router
+  de hechos + `ScopeRequest` quedan diseñados para construir tras un sondeo de distribución.
 - **Un solo predicado de atraso, por FECHA (`isOverdueByDate` + `overduePlannedEnd` en
   `weeks.ts`).** *Por qué:* antes había dos algoritmos (semana-vs-anchor en el Gantt/externo,
   fecha-vs-baseline en el panel de cartera); en cuanto le mostramos un número al cliente se

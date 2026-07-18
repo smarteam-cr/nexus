@@ -94,7 +94,8 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
   // Particularidades visibles al cliente — gate por-registro visibleExternal=true (fail-closed:
   // si dudo, no cruza), independiente de detailConfirmedAt (una desviación se comunica aunque el
   // detalle de tareas no esté confirmado). Select EXPLÍCITO de los 7 campos client-safe: NUNCA
-  // cruzan source/needsValidation/createdByEmail. Se congelan dentro de publishedSnapshot al "Subir".
+  // cruzan source/needsValidation/createdByEmail NI sourceQuote (nota interna del CSE). Se congelan
+  // dentro de publishedSnapshot al "Subir".
   let particularidades: ExternalTimelineData["particularidades"] = [];
   if (tl) {
     const parts = await prisma.particularidad.findMany({

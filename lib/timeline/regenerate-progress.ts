@@ -59,11 +59,15 @@ interface ProgressOutput {
     title?: string;
     detail?: string | null;
     weeksImpact?: number | null;
+    occurredAt?: string | null;
+    sourceQuote?: string | null;
     phaseId?: string | null;
   }>;
 }
 
-const VALID_KINDS = new Set(["ATRASO", "SOLICITUD", "COMPROMISO"]);
+// SOLICITUD deprecado (eje DESTINO): un insumo del cliente es una tarea party=CLIENTE, no una
+// particularidad. El agente ya no lo propone; el enum se conserva por filas legacy (fallback de render).
+const VALID_KINDS = new Set(["ATRASO", "COMPROMISO"]);
 const VALID_PARTIES = new Set(["CLIENTE", "SMARTEAM", "AMBOS", "DEV"]);
 
 /** Borrador de una particularidad propuesta (validado; aún sin crear). */
@@ -73,6 +77,10 @@ export interface PendingParticularidadDraft {
   title: string;
   detail: string | null;
   weeksImpact: number | null;
+  /** Fecha ISO de la sesión del hecho (queda como occurredAt de la particularidad). null = usar default. */
+  occurredAt: string | null;
+  /** Cita interna que respalda el hecho ([fecha] «fragmento»). NUNCA cruza al cliente. */
+  sourceQuote: string | null;
   phaseId: string | null;
 }
 
@@ -187,7 +195,7 @@ export async function regenerateTimelineProgress(
       timelineCtx,
       "",
       "Detectá el avance real siguiendo tus instrucciones: ubicá el currentPhaseId, marcá las fases completadas y las tareas hechas. Usá ids EXACTOS. No re-propongas lo que ya está DONE. Sé conservador.",
-      "Además, si el transcript RESPALDA desviaciones del plan (algo se atrasó, se necesita un insumo del cliente, o se comprometió un acuerdo), proponelas en `particularidades` con su atribución (party) y — SOLO si el transcript lo respalda — las semanas de corrimiento (weeksImpact). No inventes semanas ni desviaciones: si no hay evidencia clara, dejá el array vacío.",
+      "Además, si el transcript RESPALDA una DESVIACIÓN FECHADA del plan (una fecha se corrió = ATRASO con weeksImpact obligatorio; o se comprometió una fecha nueva = COMPROMISO), proponela en `particularidades` con su party, occurredAt (fecha ISO de la sesión) y sourceQuote (fragmento de respaldo). NO son particularidades los pendientes/insumos del cliente ('se necesita X', 'pendiente entrega de Y') — esos son tareas party=CLIENTE, no los emitas acá. Si no hay una desviación fechada clara, dejá el array vacío.",
     ]
       .filter((x) => x !== null)
       .join("\n");
@@ -235,8 +243,10 @@ export async function regenerateTimelineProgress(
     );
 
     // Particularidades propuestas — validadas y saneadas (borrador SEPARADO del avance).
-    // Conservador: kind/party válidos, title obligatorio, weeksImpact entero ≥0 o null, phaseId
-    // debe existir (o null). Se limitan a 12 por corrida para no inundar el banner.
+    // Conservador: kind/party válidos, title obligatorio, phaseId debe existir (o null). Regla dura
+    // del eje DESTINO: una particularidad es una DESVIACIÓN FECHADA — un ATRASO SIN weeksImpact no
+    // es cuantificable → se DESCARTA (no es una particularidad; a lo sumo un pendiente/insumo, que
+    // no va acá). Se limitan a 12 por corrida para no inundar el banner.
     const particularidadesDraft: PendingParticularidadDraft[] = (parsed.particularidades ?? [])
       .map((pt): PendingParticularidadDraft | null => {
         const kind = typeof pt?.kind === "string" ? pt.kind.toUpperCase() : "";
@@ -245,9 +255,16 @@ export async function regenerateTimelineProgress(
         if (!VALID_KINDS.has(kind) || !VALID_PARTIES.has(party) || !title) return null;
         const wRaw = pt?.weeksImpact;
         const weeksImpact = typeof wRaw === "number" && Number.isFinite(wRaw) && wRaw > 0 ? Math.round(wRaw) : null;
+        // ATRASO exige corrimiento cuantificado: sin weeksImpact ≥1 no es una desviación válida.
+        if (kind === "ATRASO" && weeksImpact === null) return null;
+        // occurredAt: la fecha ISO de la sesión del hecho. Se acepta solo si es parseable; si no,
+        // null → el apply cae al default (now()). Se normaliza a ISO para persistir consistente.
+        const oRaw = typeof pt?.occurredAt === "string" ? Date.parse(pt.occurredAt) : NaN;
+        const occurredAt = Number.isNaN(oRaw) ? null : new Date(oRaw).toISOString();
+        const sourceQuote = typeof pt?.sourceQuote === "string" && pt.sourceQuote.trim() ? pt.sourceQuote.trim() : null;
         const phaseId = typeof pt?.phaseId === "string" && phaseStatus.has(pt.phaseId) ? pt.phaseId : null;
         const detail = typeof pt?.detail === "string" && pt.detail.trim() ? pt.detail.trim() : null;
-        return { kind, party, title, detail, weeksImpact, phaseId };
+        return { kind, party, title, detail, weeksImpact, occurredAt, sourceQuote, phaseId };
       })
       .filter((x): x is PendingParticularidadDraft => x !== null)
       .slice(0, 12);

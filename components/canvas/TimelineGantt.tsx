@@ -147,10 +147,12 @@ interface Props {
 // Forma mínima de una particularidad para el resumen + bitácora del Gantt interno.
 export interface GanttParticularidad {
   id: string;
-  kind: string; // ATRASO | SOLICITUD | COMPROMISO
+  kind: string; // ATRASO | COMPROMISO (SOLICITUD = legacy, no se crean nuevas)
   party: string; // CLIENTE | SMARTEAM | AMBOS | DEV
   title: string;
   detail: string | null;
+  /** Cita interna que respalda el hecho ([fecha] «fragmento»). Solo CSE; NUNCA cruza al cliente. */
+  sourceQuote?: string | null;
   weeksImpact: number | null;
   visibleExternal: boolean;
   occurredAt: string;
@@ -1058,6 +1060,13 @@ export default function TimelineGantt({
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                       </button>
+                    )}
+                    {/* Cita interna (fecha de la sesión + fragmento) — solo el CSE la ve; nunca cruza. */}
+                    {pt.sourceQuote && (
+                      <p className="w-full text-[11px] text-gray-500 italic leading-relaxed pl-0.5">
+                        <span className="not-italic text-gray-600 mr-1">[{pt.occurredAt.slice(0, 10)}]</span>
+                        «{pt.sourceQuote}»
+                      </p>
                     )}
                   </li>
                 );

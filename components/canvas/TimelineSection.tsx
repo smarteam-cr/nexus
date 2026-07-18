@@ -360,9 +360,14 @@ export default function TimelineSection({
           </div>
         </div>
 
-        {/* Pendiente de tu parte — tareas del CLIENTE atrasadas, al pie del cronograma vivo para
-            que quede claro qué necesitamos para avanzar. Solo con showProgress (cronograma vivo, no
-            el kickoff) y tras hidratar (necesita el "hoy" del cliente). Sin atrasos → no se muestra. */}
+        {/* Pendiente de tu parte — tareas del CLIENTE atrasadas. Solo con showProgress (cronograma
+            vivo, no el kickoff) y tras hidratar (necesita el "hoy" del cliente). Sin atrasos → no se
+            muestra.
+            NOTA (reorder DIFERIDO): el reorder de particularidades ARRIBA de este bloque se pospuso a
+            propósito. Los snapshots publicados de Spectrum y Wherex ya traen particularidades legacy
+            visibles (SOLICITUD/ATRASO-sin-weeks) que el cliente ve HOY; subirlas de nivel agravaría la
+            duplicación. El reorder se hace DESPUÉS del triage + republicación de esos proyectos, cuando
+            el bloque solo tenga desviaciones reales. */}
         {showProgress && (() => {
           const blockers = collectClientBlockers(phases, anchor, now);
           if (blockers.length === 0) return null;
@@ -401,7 +406,8 @@ export default function TimelineSection({
 
         {/* Particularidades — por qué y quién movió el cronograma. Resumen con atribución
             (corrimiento acumulado por responsable) + bitácora legible. Solo con showProgress
-            (el cronograma compartible) y solo las visibleExternal (ya filtradas en el chokepoint). */}
+            (el cronograma compartible) y solo las visibleExternal (ya filtradas en el chokepoint).
+            SOLICITUD queda como fallback de render para filas legacy. */}
         {showProgress && (() => {
           const parts = particularidades ?? [];
           if (parts.length === 0) return null;

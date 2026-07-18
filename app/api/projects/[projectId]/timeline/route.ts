@@ -91,6 +91,10 @@ export interface PendingParticularidad {
   title: string;
   detail: string | null;
   weeksImpact: number | null;
+  /** Fecha ISO de la sesión del hecho (occurredAt de la particularidad). null = default now(). */
+  occurredAt: string | null;
+  /** Cita interna que respalda el hecho. NUNCA cruza al cliente (fail-closed en el chokepoint). */
+  sourceQuote: string | null;
   phaseId: string | null;
 }
 
@@ -129,6 +133,7 @@ interface TimelineResponse {
     party: string;
     title: string;
     detail: string | null;
+    sourceQuote: string | null; // cita interna para el CSE — NO cruza al cliente
     weeksImpact: number | null;
     visibleExternal: boolean;
     source: string;
@@ -181,6 +186,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
           party: true,
           title: true,
           detail: true,
+          sourceQuote: true,
           weeksImpact: true,
           visibleExternal: true,
           source: true,

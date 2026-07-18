@@ -22,7 +22,9 @@ import { prisma } from "@/lib/db/prisma";
 import { Prisma, type ParticularidadKind, type TaskParty } from "@prisma/client";
 import type { PendingParticularidad } from "../../route";
 
-const VALID_KINDS = new Set(["ATRASO", "SOLICITUD", "COMPROMISO"]);
+// SOLICITUD deprecado (eje DESTINO): un insumo del cliente es una tarea party=CLIENTE, no una
+// particularidad. El agente ya no lo propone; no se admite crear ninguno nuevo.
+const VALID_KINDS = new Set(["ATRASO", "COMPROMISO"]);
 const VALID_PARTIES = new Set(["CLIENTE", "SMARTEAM", "AMBOS", "DEV"]);
 
 export async function POST(
@@ -69,6 +71,17 @@ export async function POST(
     const d = draft[index];
     if (!d) continue;
     if (!VALID_KINDS.has(d.kind) || !VALID_PARTIES.has(d.party) || !d.title) continue;
+    const weeksImpact =
+      typeof d.weeksImpact === "number" && Number.isFinite(d.weeksImpact) && d.weeksImpact > 0
+        ? Math.round(d.weeksImpact)
+        : null;
+    // Invariante del eje DESTINO: un ATRASO es un corrimiento cuantificado — sin weeksImpact ≥1 no
+    // se crea (defensa en profundidad; el borrador ya no debería traerlo, pero un draft viejo podría).
+    if (d.kind === "ATRASO" && weeksImpact === null) continue;
+    // occurredAt propuesto (fecha de la sesión del hecho): se persiste si es parseable; si no, se
+    // omite y la columna cae a su default now().
+    const occTs = typeof d.occurredAt === "string" ? Date.parse(d.occurredAt) : NaN;
+    const occurredAt = Number.isNaN(occTs) ? undefined : new Date(occTs);
     toCreate.push({
       timelineId: tl.id,
       phaseId: d.phaseId ?? null,
@@ -76,7 +89,9 @@ export async function POST(
       party: d.party as TaskParty,
       title: d.title,
       detail: d.detail ?? null,
-      weeksImpact: d.weeksImpact ?? null,
+      sourceQuote: typeof d.sourceQuote === "string" && d.sourceQuote.trim() ? d.sourceQuote.trim() : null,
+      weeksImpact,
+      ...(occurredAt ? { occurredAt } : {}),
       visibleExternal,
       source: "AGENT",
       needsValidation: false, // el CSE lo confirmó en el banner

@@ -665,6 +665,7 @@ model Particularidad {
   party           TaskParty // reusa el enum de tarea (CLIENTE/SMARTEAM/AMBOS/DEV) — misma atribución/chips
   title           String // corto, en lenguaje cliente
   detail          String?              @db.Text
+  sourceQuote     String?              @db.Text // cita interna que respalda el hecho ([fecha] «fragmento»); NUNCA cruza al cliente
   weeksImpact     Int? // semanas de corrimiento que causó; null si no movió fechas
   visibleExternal Boolean              @default(false) // gate por-registro; se respeta en el chokepoint (como SUSPENDED)
   source          ParticularidadSource @default(HUMAN)
@@ -680,9 +681,9 @@ model Particularidad {
 
 // Tipo de particularidad de cara al cliente:
 enum ParticularidadKind {
-  ATRASO // algo se atrasó (típicamente con weeksImpact y una party responsable)
-  SOLICITUD // se necesita algo del cliente para avanzar (insumo, acceso, decisión)
-  COMPROMISO // un acuerdo/hito comprometido en una sesión
+  ATRASO // algo se atrasó (weeksImpact OBLIGATORIO en creación/edición nueva; una party responsable)
+  SOLICITUD // @deprecated — insumo del cliente = tarea party=CLIENTE, no particularidad. Ya no se propone/crea; se conserva por filas legacy (fallback de render). Ver docs/DECISIONS.md (eje DESTINO).
+  COMPROMISO // un acuerdo/hito comprometido en una sesión que fija/mueve una fecha del plan
 }
 
 // Procedencia de la particularidad (distinto de `party`, que es la ATRIBUCIÓN de la causa).
