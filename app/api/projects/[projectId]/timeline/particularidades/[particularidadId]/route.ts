@@ -120,16 +120,21 @@ export async function PATCH(
     return NextResponse.json({ error: "Nada que actualizar" }, { status: 400 });
   }
 
-  // Invariante del eje DESTINO: si el RESULTADO del patch es un ATRASO, debe quedar con weeksImpact ≥1.
-  // (Editar otros campos de un ATRASO ya sin semanas también queda bloqueado hasta que se cuantifique.)
-  const effectiveKind = (data.kind as ParticularidadKind | undefined) ?? existing.kind;
-  const effectiveWeeks =
-    data.weeksImpact !== undefined ? (data.weeksImpact as number | null) : existing.weeksImpact;
-  if (effectiveKind === "ATRASO" && (effectiveWeeks === null || effectiveWeeks < 1)) {
-    return NextResponse.json(
-      { error: "Un ATRASO requiere weeksImpact ≥ 1 (semanas de corrimiento)." },
-      { status: 400 },
-    );
+  // Invariante del eje DESTINO: un ATRASO debe quedar con weeksImpact ≥1. Se aplica SOLO si el patch
+  // TOCA kind o weeksImpact (o sea, contenido nuevo/editado). Un patch que NO los toca —el toggle de
+  // visibilidad, editar el título/detalle— pasa aunque la fila sea un ATRASO legacy sin semanas.
+  // Por qué: esas filas existen (son pre-reconcepción, la migración las exporta sin borrar) y
+  // bloquearlas trababa justo el triage que hay que hacer a mano — ocultarlas del cliente.
+  if (body.kind !== undefined || body.weeksImpact !== undefined) {
+    const effectiveKind = (data.kind as ParticularidadKind | undefined) ?? existing.kind;
+    const effectiveWeeks =
+      data.weeksImpact !== undefined ? (data.weeksImpact as number | null) : existing.weeksImpact;
+    if (effectiveKind === "ATRASO" && (effectiveWeeks === null || effectiveWeeks < 1)) {
+      return NextResponse.json(
+        { error: "Un ATRASO requiere weeksImpact ≥ 1 (semanas de corrimiento)." },
+        { status: 400 },
+      );
+    }
   }
 
   const updated = await prisma.particularidad.update({
