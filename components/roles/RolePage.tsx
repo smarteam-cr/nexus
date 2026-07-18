@@ -1,7 +1,9 @@
 /**
- * components/roles/RolePage.tsx — render presentacional de UN rol como página web
- * resumida (hero + las 6 secciones de la plantilla en markdown). Tokens semánticos
- * (flipea claro/oscuro); las secciones vacías se ocultan. Sin edición, sin IA.
+ * components/roles/RolePage.tsx — render de UN rol como página web, REUSANDO el
+ * motor visual de landings de Nexus (`.stl`, app/landing-engine.css — el mismo
+ * que usa el business case). Hero + bandas de sección alternadas + prosa
+ * markdown (`.stl-md`). Read-only, sin IA, sin canvas. Las secciones vacías se
+ * ocultan.
  */
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -17,48 +19,51 @@ interface RolePageData {
   successPaths: string | null;
   failurePaths: string | null;
   maturityPath: string | null;
+  transitionPeriod: string | null;
 }
-
-// Colores de prose alineados a tokens (no `prose-invert`, no gris crudo → flipea).
-const PROSE_CLS =
-  "prose prose-sm max-w-none prose-p:text-fg-secondary prose-li:text-fg-secondary " +
-  "prose-headings:text-fg prose-strong:text-fg prose-a:text-brand prose-code:text-fg " +
-  "prose-code:bg-surface-muted prose-code:px-1 prose-code:rounded";
 
 export default function RolePage({ role }: { role: RolePageData }) {
   const filled = ROLE_SECTIONS.filter((s) => (role[s.key as RoleSectionKey] ?? "").trim().length > 0);
 
   return (
-    <article className="max-w-3xl mx-auto">
-      {/* Hero */}
-      <header className="border-b border-line pb-6">
-        {role.area && (
-          <p className="text-xs font-semibold uppercase tracking-widest text-brand">{role.area}</p>
-        )}
-        <h1 className="mt-1 text-3xl font-semibold text-fg">{role.title}</h1>
-        {role.summary && <p className="mt-2 text-base text-fg-secondary">{role.summary}</p>}
-      </header>
+    <div className="stl">
+      {/* Hero (mismo look que el business case) */}
+      <section className="stl-sec stl-dark hero-backdrop">
+        <div className="stl-wrap">
+          {role.area && <span className="stl-eyebrow">{role.area}</span>}
+          <h1 className="stl-hero-title">{role.title}</h1>
+          {role.summary && (
+            <p className="stl-body" style={{ maxWidth: 640, fontSize: 17 }}>
+              {role.summary}
+            </p>
+          )}
+        </div>
+      </section>
 
       {filled.length === 0 ? (
-        <p className="mt-8 text-sm text-fg-muted">
-          Este rol todavía no tiene contenido. Editalo para completar sus secciones.
-        </p>
+        <section className="stl-sec stl-light">
+          <div className="stl-wrap">
+            <p className="stl-body">
+              Este rol todavía no tiene contenido. Editalo para completar sus secciones.
+            </p>
+          </div>
+        </section>
       ) : (
-        <div className="mt-8 space-y-10">
-          {filled.map((s) => (
-            <section key={s.key}>
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-fg-muted">
-                {s.label}
-              </h2>
-              <div className={`mt-2 ${PROSE_CLS}`}>
+        filled.map((s, i) => (
+          <section key={s.key} className={`stl-sec ${i % 2 === 0 ? "stl-light" : "stl-soft"}`}>
+            <div className="stl-wrap">
+              <header className="stl-sec-head">
+                <h2 className="stl-title">{s.label}</h2>
+              </header>
+              <div className="stl-body stl-md">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {role[s.key as RoleSectionKey] ?? ""}
                 </ReactMarkdown>
               </div>
-            </section>
-          ))}
-        </div>
+            </div>
+          </section>
+        ))
       )}
-    </article>
+    </div>
   );
 }

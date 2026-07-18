@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
     successPaths: d.successPaths ?? null,
     failurePaths: d.failurePaths ?? null,
     maturityPath: d.maturityPath ?? null,
+    transitionPeriod: d.transitionPeriod ?? null,
     createdByEmail: guard.user.email,
   });
   return NextResponse.json({ role: { id: role.id } }, { status: 201 });

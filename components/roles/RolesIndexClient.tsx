@@ -13,19 +13,13 @@ import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog, EmptyState, Badge, Drawer } from "@/components/ui";
 import { ROLE_SECTIONS, type RoleSectionKey } from "@/lib/roles/schema";
 
-interface RoleRow {
+type RoleRow = {
   id: string;
   title: string;
   area: string | null;
   summary: string | null;
-  profile: string | null;
-  responsibilities: string | null;
-  kpis: string | null;
-  successPaths: string | null;
-  failurePaths: string | null;
-  maturityPath: string | null;
   active: boolean;
-}
+} & Record<RoleSectionKey, string | null>;
 
 type SectionForm = Record<RoleSectionKey, string>;
 interface RoleForm extends SectionForm {
@@ -34,17 +28,8 @@ interface RoleForm extends SectionForm {
   summary: string;
 }
 
-const EMPTY_FORM: RoleForm = {
-  title: "",
-  area: "",
-  summary: "",
-  profile: "",
-  responsibilities: "",
-  kpis: "",
-  successPaths: "",
-  failurePaths: "",
-  maturityPath: "",
-};
+const EMPTY_SECTIONS = Object.fromEntries(ROLE_SECTIONS.map((s) => [s.key, ""])) as SectionForm;
+const EMPTY_FORM: RoleForm = { title: "", area: "", summary: "", ...EMPTY_SECTIONS };
 
 const INPUT_CLS =
   "w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted focus:outline-none focus:border-brand";
@@ -90,17 +75,10 @@ export default function RolesIndexClient() {
 
   const startEdit = (r: RoleRow) => {
     setEditingId(r.id);
-    setForm({
-      title: r.title,
-      area: r.area ?? "",
-      summary: r.summary ?? "",
-      profile: r.profile ?? "",
-      responsibilities: r.responsibilities ?? "",
-      kpis: r.kpis ?? "",
-      successPaths: r.successPaths ?? "",
-      failurePaths: r.failurePaths ?? "",
-      maturityPath: r.maturityPath ?? "",
-    });
+    const sections = Object.fromEntries(
+      ROLE_SECTIONS.map((s) => [s.key, r[s.key] ?? ""]),
+    ) as SectionForm;
+    setForm({ title: r.title, area: r.area ?? "", summary: r.summary ?? "", ...sections });
     setDrawerOpen(true);
   };
 
@@ -119,16 +97,12 @@ export default function RolesIndexClient() {
     setBusy(true);
     try {
       const clean = (s: string) => s.trim() || null;
+      const sections = Object.fromEntries(ROLE_SECTIONS.map((s) => [s.key, clean(form[s.key])]));
       const body = {
         title: form.title.trim(),
         area: clean(form.area),
         summary: clean(form.summary),
-        profile: clean(form.profile),
-        responsibilities: clean(form.responsibilities),
-        kpis: clean(form.kpis),
-        successPaths: clean(form.successPaths),
-        failurePaths: clean(form.failurePaths),
-        maturityPath: clean(form.maturityPath),
+        ...sections,
       };
       if (editingId) {
         await fetchJson(`/api/roles/${editingId}`, {

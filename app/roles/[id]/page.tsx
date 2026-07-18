@@ -21,19 +21,23 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <AppShell>
-      <div className="px-6 py-8">
-        <div className="max-w-3xl mx-auto mb-6 flex items-center justify-between gap-4">
-          <Link href="/roles" className="text-sm text-fg-muted hover:text-fg">
-            ← Roles
-          </Link>
-          <Link
-            href={`/roles?edit=${role.id}`}
-            className="text-sm font-medium px-3 py-1.5 rounded-lg border border-line text-fg-secondary hover:bg-surface-hover"
-          >
-            Editar
-          </Link>
+      <div className="px-6 pt-6 flex items-center justify-between gap-4">
+        <Link href="/roles" className="text-sm text-fg-muted hover:text-fg">
+          ← Roles
+        </Link>
+        <Link
+          href={`/roles?edit=${role.id}`}
+          className="text-sm font-medium px-3 py-1.5 rounded-lg border border-line text-fg-secondary hover:bg-surface-hover"
+        >
+          Editar
+        </Link>
+      </div>
+      {/* El motor `.stl` trae su propio fondo/padding: se renderiza full-bleed
+          dentro del área de contenido, como el business case. */}
+      <div className="px-6 py-6">
+        <div className="overflow-hidden rounded-2xl border border-line">
+          <RolePage role={role} />
         </div>
-        <RolePage role={role} />
       </div>
     </AppShell>
   );

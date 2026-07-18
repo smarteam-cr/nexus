@@ -16,6 +16,7 @@ const ROLE_SELECT = {
   successPaths: true,
   failurePaths: true,
   maturityPath: true,
+  transitionPeriod: true,
   active: true,
   order: true,
 } as const;
@@ -31,6 +32,7 @@ export interface RoleRow {
   successPaths: string | null;
   failurePaths: string | null;
   maturityPath: string | null;
+  transitionPeriod: string | null;
   active: boolean;
   order: number;
 }

@@ -2886,6 +2886,7 @@ model RoleProfile {
   successPaths     String? @db.Text // Caminos de éxito (markdown)
   failurePaths     String? @db.Text // Caminos de fracaso (markdown)
   maturityPath     String? @db.Text // Ruta de madurez (markdown)
+  transitionPeriod String? @db.Text // Período de transición y crecimiento (markdown)
   active           Boolean @default(true)
   order            Int     @default(0)
   createdByEmail   String? // quién lo creó (auditoría liviana)

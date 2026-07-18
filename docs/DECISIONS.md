@@ -522,16 +522,25 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   403). NO se agregó una sección al registry de permisos: una sección de docs de dirección no debe
   ser delegable por plantilla, y SUPER_ADMIN ya es all-true en el engine — una celda de matriz no
   compraría nada. Se evita el churn del modal de /team.
-- **Plantilla FIJA de 6 secciones** (fuente única `ROLE_SECTIONS` en `lib/roles/schema.ts`):
+- **Plantilla FIJA de 7 secciones** (fuente única `ROLE_SECTIONS` en `lib/roles/schema.ts`):
   Perfil de puesto · Responsabilidades · KPIs · Caminos de éxito · Caminos de fracaso · Ruta de
-  madurez. Cada sección es **markdown** (viñetas/negrita) y es opcional (se completa de a poco;
-  las vacías no se muestran en la página). *Por qué fija y no flexible:* "MUY resumido y fácil de
-  entender" pide consistencia — todos los roles se leen igual.
-- **Sin IA (por ahora)**: se llena a mano. **NO reusa el motor `LandingView`/`ProjectCanvas`** de
-  casos de negocio/kickoff (evaluado y descartado: arrastra `ProjectCanvas`, configs de template,
-  el hook `useCanvasSections` y el ciclo de publish — demasiada superficie para 6 campos de
-  markdown). Modelo plano de columnas típadas (`@db.Text`, ARCHITECTURE §2, no Json suelto) +
-  un `RolePage` presentacional simple con tokens semánticos (flipea claro/oscuro).
+  madurez · Período de transición y crecimiento. (Arrancó en 6; se sumó "Período de transición"
+  al ver que los docs reales de Elías la traían como sección propia.) Cada sección es **markdown**
+  (viñetas/negrita/tablas) y es opcional (se completa de a poco; las vacías no se muestran en la
+  página). *Por qué fija y no flexible:* "MUY resumido y fácil de entender" pide consistencia —
+  todos los roles se leen igual. Para no repetir campos en el UI, el form/página se generan
+  mapeando `ROLE_SECTIONS` (agregar una sección = 1 columna + 1 entrada).
+- **Reusa el MOTOR VISUAL, no el motor de datos** (decisión clave, pedido explícito de Elías —
+  "que TODO Nexus use el mismo sistema visual"): `RolePage` renderiza con `.stl`
+  (`app/landing-engine.css`), el **mismo motor de landing** que el business case (el archivo se
+  declara a sí mismo "motor genérico: BC hoy; kickoff/diagnóstico a futuro"). Se reusa el look
+  (hero + bandas `stl-light`/`stl-soft` + `stl-eyebrow`/`stl-title`) + un helper nuevo `.stl-md`
+  (markdown genérico dentro del motor: listas/tablas/encabezados con las variables del motor). En
+  cambio, **NO se reusa el motor de DATOS** `LandingView`/`ProjectCanvas`/`useCanvasSections`
+  (owner polimórfico + configs de template + DRAFT/CONFIRMED + publish) — eso existe para
+  IA/versionado/publicación externa que Roles no tiene; forzarlo sería una god-abstraction. La
+  línea correcta: reusar la PRESENTACIÓN ampliamente, aislar los DATOS por módulo (ARCHITECTURE
+  §1/§5). Modelo plano de columnas típadas (`@db.Text`), sin IA (se llena a mano).
 - **RLS lockdown** (tabla interna): `RoleProfile` con RLS habilitado sin policy SELECT — anon no
   la lee con la publishable key (regla operativa de ARCHITECTURE para tablas nuevas). Aplicada por
   `prisma db execute` (CREATE TABLE + ENABLE ROW LEVEL SECURITY), no `db push` (hazard 2-PC).

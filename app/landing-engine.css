@@ -139,6 +139,42 @@
 .stl .stl-body { font-size: 15px; line-height: 1.7; color: var(--text-2); margin: 6px 0 0; }
 .stl .stl-dark .stl-body { color: var(--dark-text-2); }
 
+/* ── Markdown genérico dentro del motor (.stl-md) ──────────────────────────
+   Para contenido LIBRE en markdown (ej. Roles), donde no hay componentes de
+   sección estructurados. Estila listas/tablas/encabezados con las variables del
+   motor. El `.stl-body` que lo envuelve ya da color/tamaño/line-height base. */
+.stl .stl-md > *:first-child { margin-top: 0; }
+.stl .stl-md > *:last-child { margin-bottom: 0; }
+.stl .stl-md p { margin: 0 0 12px; }
+.stl .stl-md strong { color: var(--text); font-weight: 700; }
+.stl .stl-dark .stl-md strong { color: var(--dark-text); }
+.stl .stl-md a { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+.stl .stl-md ul, .stl .stl-md ol { margin: 0 0 12px; padding-left: 20px; }
+.stl .stl-md li { margin: 0 0 6px; }
+.stl .stl-md ul li::marker { color: var(--blue); }
+.stl .stl-md h3 {
+  font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-size: 17px; font-weight: 700; letter-spacing: -0.01em;
+  color: var(--text); margin: 22px 0 8px;
+}
+.stl .stl-dark .stl-md h3 { color: var(--dark-text); }
+.stl .stl-md h4 { font-size: 14px; font-weight: 700; color: var(--text); margin: 16px 0 6px; }
+.stl .stl-dark .stl-md h4 { color: var(--dark-text); }
+.stl .stl-md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+  background: var(--bg-soft); border: 1px solid var(--border); border-radius: 5px;
+  padding: 1px 5px; color: var(--text);
+}
+.stl .stl-md blockquote {
+  margin: 0 0 12px; padding: 4px 0 4px 14px; border-left: 3px solid var(--blue); color: var(--text-2);
+}
+.stl .stl-md hr { border: 0; border-top: 1px solid var(--border); margin: 20px 0; }
+.stl .stl-md table { width: 100%; border-collapse: collapse; margin: 4px 0 14px; font-size: 14px; }
+.stl .stl-md th, .stl .stl-md td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+.stl .stl-md th { background: var(--bg-soft); color: var(--text); font-weight: 700; }
+.stl .stl-dark .stl-md th, .stl .stl-dark .stl-md td { border-color: var(--dark-border); }
+.stl .stl-dark .stl-md th { background: var(--dark-card); color: var(--dark-text); }
+
 /* ── Grids ───────────────────────────────────────────────────────────────── */
 .stl .stl-grid { display: grid; gap: 18px; margin-top: 32px; }
 .stl .stl-grid-2 { grid-template-columns: repeat(2, 1fr); }

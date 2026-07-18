@@ -29,7 +29,7 @@ test("rolePatchSchema: parcial + active/order; order negativo falla", () => {
   expect(rolePatchSchema.safeParse({ order: -1 }).success).toBe(false);
 });
 
-test("ROLE_SECTIONS: las 6 secciones de la plantilla, en orden", () => {
+test("ROLE_SECTIONS: las 7 secciones de la plantilla, en orden", () => {
   expect(ROLE_SECTIONS.map((s) => s.key)).toEqual([
     "profile",
     "responsibilities",
@@ -37,5 +37,6 @@ test("ROLE_SECTIONS: las 6 secciones de la plantilla, en orden", () => {
     "successPaths",
     "failurePaths",
     "maturityPath",
+    "transitionPeriod",
   ]);
 });

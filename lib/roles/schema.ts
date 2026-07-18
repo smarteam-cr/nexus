@@ -21,6 +21,7 @@ export const roleCreateSchema = z.object({
   successPaths: mdBody.nullish(),
   failurePaths: mdBody.nullish(),
   maturityPath: mdBody.nullish(),
+  transitionPeriod: mdBody.nullish(),
 });
 
 export const rolePatchSchema = roleCreateSchema.partial().extend({
@@ -42,6 +43,7 @@ export const ROLE_SECTIONS = [
   { key: "successPaths", label: "Caminos de éxito" },
   { key: "failurePaths", label: "Caminos de fracaso" },
   { key: "maturityPath", label: "Ruta de madurez" },
+  { key: "transitionPeriod", label: "Período de transición y crecimiento" },
 ] as const;
 
 export type RoleSectionKey = (typeof ROLE_SECTIONS)[number]["key"];
