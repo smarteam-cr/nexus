@@ -169,9 +169,13 @@ export default function DesarrolloWorkspace({
           notifyLabel="requerimiento técnico"
           async
           onDone={onRegenDone}
-          // La auto-generación tras el handoff puede seguir en curso (awaitingGen): evita
-          // que un click manual dispare una segunda corrida concurrente sobre el mismo canvas.
-          disabled={awaitingGen}
+          // La auto-generación tras el handoff puede seguir en curso (awaitingGen): `busy` evita
+          // la doble corrida Y muestra el botón como "Generando requerimiento…" (spinner) en vez
+          // de un CTA muerto que ignora el click en silencio.
+          busy={awaitingGen}
+          // (C) el server exigirá regenerate si ya hay contenido, generate si no → gatear la UI
+          // por esa misma celda para no mostrar un botón que daría 403.
+          alreadyGenerated={hasGeneratedContent}
         />
       </div>
       {awaitingGen && !hasGeneratedContent && (

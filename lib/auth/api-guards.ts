@@ -27,7 +27,7 @@ import {
   type AppUserWithTeamMember,
 } from "./supabase";
 import { requireCapability, requireRole, type Capability } from "./roles";
-import { can, requirePermission } from "./permissions/engine";
+import { can, requirePermission, getEffectivePermissions } from "./permissions/engine";
 import type { ActionKeyOf, SectionKey } from "./permissions/registry";
 // isCostosRole sigue vivo: el gate de COSTOS/caja neta es SUPER_ADMIN-only
 // hard-coded (más estricto que cobranza.read y NO editable por la matriz de
@@ -197,6 +197,44 @@ export async function guardProjectEditHandoff(
   const guard = await guardCapability("handoffAnywhere");
   if (guard instanceof NextResponse) return guard;
   return { ...guard, clientId: project.clientId };
+}
+
+/**
+ * Acceso al paso de ENSURE del handoff (crear/reconciliar entidad+canvas ANTES de generar).
+ * A diferencia de guardProjectEditHandoff — que exige `handoffAnywhere` = `handoff.write`
+ * ("Editar handoff") — acá alcanza con PODER GENERAR o REGENERAR el handoff: el ensure es un
+ * prerrequisito de la generación, no una edición del documento. Sin este broadening, otorgar
+ * "Regenerar con IA" (handoff.regenerate) a un rol sin "Editar handoff" era inútil: el ensure
+ * respondía 403 antes de llegar al gate real de IA (/analyze → resolveArtifactGate). `write`
+ * también pasa (los editores). El gate FINO generate-vs-regenerate lo aplica /analyze.
+ */
+export async function guardProjectGenerateHandoff(
+  projectId: string,
+): Promise<(Awaited<ReturnType<typeof requireInternalUser>> & { clientId: string }) | NextResponse> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { clientId: true },
+  });
+  if (!project) {
+    return NextResponse.json({ error: "Proyecto no existe" }, { status: 404 });
+  }
+  let ctx: Awaited<ReturnType<typeof requireInternalUser>>;
+  try {
+    ctx = await requireInternalUser();
+  } catch (e) {
+    const r = toErrorResponse(e);
+    if (r) return r;
+    throw e;
+  }
+  const h = (await getEffectivePermissions(ctx.teamMember)).sections.handoff;
+  const allowed = h?.write === true || h?.generate === true || h?.regenerate === true;
+  if (!allowed) {
+    return NextResponse.json(
+      { error: `Tu rol (${ctx.role}) no puede generar el handoff (requiere Generar, Regenerar o Editar handoff).` },
+      { status: 403 },
+    );
+  }
+  return { ...ctx, clientId: project.clientId };
 }
 
 /**

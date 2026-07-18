@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject, guardProjectEditHandoff } from "@/lib/auth/api-guards";
+import { guardAccessToProject, guardProjectEditHandoff, guardProjectGenerateHandoff } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { computeHandoffReadiness } from "@/lib/handoff/feeding";
 import { createHandoffCanvas, reconcileHandoffCanvasSections } from "@/lib/canvas/default-canvases";
@@ -127,10 +127,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
  * Asegura (idempotente) la entidad Handoff + el canvas "Handoff" del proyecto, para
  * poder generar el documento. NO corre el agente (eso lo hace el cliente vía /analyze
  * async). Devuelve { handoffId, canvasId }.
+ *
+ * Gate: `guardProjectGenerateHandoff` (generate/regenerate/write) — NO `handoffAnywhere`
+ * (=write). El ensure es prerrequisito de la generación; exigir "Editar handoff" acá dejaba
+ * inútil el permiso "Regenerar con IA" (403 antes del gate de IA). El gate fino vive en /analyze.
  */
 export async function POST(_req: NextRequest, { params }: Params) {
   const { projectId } = await params;
-  const guard = await guardProjectEditHandoff(projectId);
+  const guard = await guardProjectGenerateHandoff(projectId);
   if (guard instanceof NextResponse) return guard;
 
   const project = await prisma.project.findUnique({
