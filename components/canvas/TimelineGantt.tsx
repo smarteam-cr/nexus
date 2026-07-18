@@ -996,7 +996,13 @@ export default function TimelineGantt({
         const parts = particularidades ?? [];
         if (parts.length === 0) return null;
         const summary = summarizeParticularidades(parts);
-        const sentence = attributionSentence(summary);
+        const sentence = attributionSentence(summary, { audience: "interno" });
+        // Lo que realmente lee el cliente: SOLO las visibles (y con DEV plegado en Smarteam). El
+        // resumen de arriba cuenta TODAS —incluidas las ocultas—, así que sin esto el CSE controla
+        // la visibilidad a ciegas: cree que el cliente lee su mismo número y puede no ser así.
+        const visibles = parts.filter((p) => p.visibleExternal);
+        const clientSentence = attributionSentence(summarizeParticularidades(visibles), { audience: "cliente" });
+        const clientDiffers = clientSentence !== sentence;
         return (
           <div className="rounded-2xl border border-gray-800 bg-gray-900/40 px-4 py-3">
             <div className="flex items-center gap-2 mb-2">
@@ -1009,6 +1015,13 @@ export default function TimelineGantt({
             </div>
             {sentence && (
               <p className="text-sm text-gray-200 mb-3 leading-relaxed">{sentence}</p>
+            )}
+            {/* Espejo de lo que cruza: solo aparece cuando el cliente lee algo distinto. */}
+            {clientDiffers && (
+              <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
+                <span className="font-semibold text-gray-300">El cliente lee:</span>{" "}
+                {clientSentence ?? `ningún corrimiento (${visibles.length} de ${parts.length} visibles al cliente).`}
+              </p>
             )}
             <ul className="flex flex-col gap-1.5">
               {parts.map((pt) => {

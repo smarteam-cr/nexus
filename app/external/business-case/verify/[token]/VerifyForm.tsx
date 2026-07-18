@@ -93,7 +93,7 @@ export function BusinessCaseVerifyForm({ token }: { token: string }) {
           onChange={(e) => setPassword(e.target.value)}
           disabled={state.kind === "loading" || state.kind === "rateLimited"}
           className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-900 focus:ring-1 focus:ring-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
-          placeholder="Pegá la contraseña aquí"
+          placeholder="Pega la contraseña aquí"
         />
       </div>
 

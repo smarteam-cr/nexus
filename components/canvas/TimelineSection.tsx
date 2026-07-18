@@ -40,6 +40,7 @@ import {
 } from "@/lib/timeline/weeks";
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
+import { clientStatusLine } from "@/lib/timeline/client-status";
 import type { ExternalTimelinePhase, ExternalParticularidad } from "@/lib/external/timeline-view-types";
 
 const MAXW = 1024; // el Gantt necesita ancho — bloque deliberadamente más ancho que las secciones de texto (760)
@@ -99,11 +100,12 @@ const SUB_LABEL: React.CSSProperties = {
   color: "var(--text-muted)",
 };
 
-// Tipo de PARTICULARIDAD (desviación curada), tema light. Espejo de PARTICULARIDAD_KIND_META del Gantt.
+// Tipo de PARTICULARIDAD, tema light. Etiquetas en LENGUAJE CLIENTE: el interno dice "Atraso /
+// Compromiso" (vocabulario de equipo); acá se dice qué le pasó al plan, en verbo y sin jerga.
 const KIND_META_LIGHT: Record<string, { label: string; text: string; bg: string; border: string }> = {
-  ATRASO:     { label: "Atraso",     text: "#b91c1c", bg: "#fef2f2", border: "#fecaca" }, // rojo
-  SOLICITUD:  { label: "Solicitud",  text: "#b45309", bg: "#fffbeb", border: "#fde68a" }, // ámbar
-  COMPROMISO: { label: "Compromiso", text: "#0f766e", bg: "#f0fdfa", border: "#99f6e4" }, // verde
+  ATRASO:     { label: "Se atrasó", text: "#b91c1c", bg: "#fef2f2", border: "#fecaca" }, // rojo
+  SOLICITUD:  { label: "En espera", text: "#b45309", bg: "#fffbeb", border: "#fde68a" }, // ámbar (legacy)
+  COMPROMISO: { label: "Acordado",  text: "#0f766e", bg: "#f0fdfa", border: "#99f6e4" }, // verde
 };
 
 export default function TimelineSection({
@@ -139,6 +141,20 @@ export default function TimelineSection({
 
   const curWeek = now ? currentWeekIndex(anchor, now) : null;
   const curInRange = curWeek !== null && curWeek >= 0 && curWeek < total;
+
+  // ── Estado del proyecto en lenguaje cliente ──────────────────────────────────
+  // Antes esta vista solo hablaba cuando algo estaba mal: si el proyecto iba bien, el cliente no leía
+  // una sola palabra. Esta línea existe SIEMPRE (avance + si vamos al día), y de paso reemplaza el
+  // "cronograma finalizado" que se disparaba solo por fecha aunque quedaran tareas sin hacer.
+  const allTasks = sorted.flatMap((p) => p.tasks ?? []);
+  const tasksDone = allTasks.filter((t) => t.status === "DONE").length;
+  const desvioSemanas = summarizeParticularidades(particularidades ?? []).totalWeeks;
+  const statusLine = showProgress
+    ? clientStatusLine({ curWeek, totalWeeks: total, tasksDone, tasksTotal: allTasks.length, delayWeeks: desvioSemanas })
+    : null;
+  // Fecha de cierre proyectada: convierte un número de atraso en un compromiso. Sale de lo que ya
+  // está en pantalla (anchor + span), sin datos nuevos ni cambios en lo que cruza al cliente.
+  const closingDate = anchor ? fmtFull(addWeeks(anchor, total).toISOString()) : null;
 
   const toggleExpand = (key: string) => {
     setExpanded((prev) => {
@@ -189,9 +205,9 @@ export default function TimelineSection({
               {anchor && curWeek !== null && curWeek < 0 && (
                 <span style={{ fontWeight: 600, opacity: 0.85 }}>· el proyecto arranca el {fmtFull(anchor)}</span>
               )}
-              {anchor && curWeek !== null && curWeek >= total && (
-                <span style={{ fontWeight: 600, opacity: 0.85 }}>· cronograma finalizado</span>
-              )}
+              {/* El viejo "· cronograma finalizado" se disparaba SOLO por fecha: podía anunciar que el
+                  proyecto terminó con tareas sin hacer. Ahora lo dice clientStatusLine, que mira el estado real. */}
+              {statusLine && <span style={{ fontWeight: 600, opacity: 0.85 }}>· {statusLine}</span>}
             </span>
           )}
 
@@ -384,7 +400,7 @@ export default function TimelineSection({
             >
               <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Pendiente de tu parte</div>
               <p style={{ margin: "4px 0 14px", fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                Para seguir avanzando necesitamos esto de ustedes:
+                Para seguir avanzando necesitamos esto de tu parte:
               </p>
               <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
                 {blockers.map((b, i) => (
@@ -412,7 +428,9 @@ export default function TimelineSection({
           const parts = particularidades ?? [];
           if (parts.length === 0) return null;
           const summary = summarizeParticularidades(parts);
-          const sentence = attributionSentence(summary);
+          // audience "cliente": SIN reparto de responsables, y cerrando con la fecha nueva — un número
+          // de atraso sin fecha de cierre es ansiedad sin salida; con fecha, es un compromiso.
+          const sentence = attributionSentence(summary, { audience: "cliente", closingDate });
           return (
             <div
               className="reveal"
@@ -424,14 +442,17 @@ export default function TimelineSection({
                 border: "1px solid var(--border)",
               }}
             >
-              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Particularidades del cronograma</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Qué cambió en el plan</div>
               {sentence && (
                 <p style={{ margin: "6px 0 14px", fontSize: 14, color: "var(--text)", lineHeight: 1.55, fontWeight: 500 }}>{sentence}</p>
               )}
               <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
                 {parts.map((pt, i) => {
                   const kMeta = KIND_META_LIGHT[pt.kind] ?? { label: pt.kind, text: "var(--text-muted)", bg: "var(--surface-2, #f1f5f9)", border: "var(--border)" };
-                  const pMeta = PARTY_META_LIGHT[pt.party] ?? PARTY_META_LIGHT.SMARTEAM;
+                  // SIN chip de responsable: acá `party` es "quién causó el atraso" y del lado del
+                  // cliente eso es un marcador de faltas. La atribución queda interna (el CSE la ve
+                  // completa en el Gantt). En las TAREAS el chip sí se queda: ahí significa "quién lo
+                  // hace" y le sirve al cliente para saber qué le toca.
                   return (
                     <li key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                       <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, fontSize: 13, color: "var(--text)" }}>
@@ -442,7 +463,6 @@ export default function TimelineSection({
                             +{pt.weeksImpact} {pt.weeksImpact === 1 ? "semana" : "semanas"}
                           </span>
                         )}
-                        <span style={chipStyle(pMeta)}>{pMeta.label}</span>
                       </div>
                       {pt.detail && (
                         <p style={{ margin: 0, paddingLeft: 2, fontSize: 12.5, color: "var(--text-secondary)", lineHeight: 1.5 }}>{pt.detail}</p>

@@ -25,14 +25,14 @@ export default async function BusinessCaseVerifyPage({
           <img src="/logo-smarteam.png" alt="Smarteam" className="h-9 w-auto mx-auto mb-4" />
           <h1 className="text-lg font-semibold text-gray-900">Caso de negocio</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Ingresá la contraseña que te compartió tu contacto en Smarteam.
+            Ingresa la contraseña que te compartió tu contacto en Smarteam.
           </p>
         </div>
 
         <BusinessCaseVerifyForm token={token} />
 
         <p className="mt-8 text-xs text-gray-400 text-center">
-          Si no recibiste una contraseña, contactá al equipo de Smarteam.
+          Si no recibiste una contraseña, contacta al equipo de Smarteam.
         </p>
       </div>
     </main>

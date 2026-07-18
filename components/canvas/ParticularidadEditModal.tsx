@@ -141,7 +141,7 @@ export default function ParticularidadEditModal({
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="En lenguaje cliente — ej. «Se atrasó la entrega de la base de contactos»"
+              placeholder="Lo lee el cliente — ej. «Se reprogramó la migración de datos» (sin jerga interna)"
               autoFocus
             />
             {!titleValid && <span className="text-[11px] text-red-400 mt-1 block">El título no puede quedar vacío.</span>}

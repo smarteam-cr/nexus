@@ -999,6 +999,16 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setPendingParticularidades(null);
         await load(); // trae las particularidades creadas → aparecen en el resumen
         toast.success(`${d?.created ?? 0} ${(d?.created ?? 0) === 1 ? "particularidad creada" : "particularidades creadas"}.`);
+        // Posible duplicado del mismo hecho: se creó igual (no bloquea), pero conviene revisarlo —
+        // dos registros del mismo atraso cuentan las semanas dos veces en el resumen.
+        const dups = (d?.posiblesDuplicados ?? []) as Array<{ title: string; similarA: string }>;
+        if (dups.length > 0) {
+          toast.info(
+            dups.length === 1
+              ? `«${dups[0].title}» se parece a una particularidad ya registrada («${dups[0].similarA}»). Revisá si está duplicada.`
+              : `${dups.length} de las creadas se parecen a particularidades ya registradas. Revisá si hay duplicados.`,
+          );
+        }
       }
     } catch {
       setError("Error de conexión al crear las particularidades.");

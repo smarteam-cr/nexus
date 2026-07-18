@@ -21,7 +21,7 @@ export default function NoAccess() {
           Acceso no disponible
         </h1>
         <p style={{ marginTop: 10, fontSize: 14, lineHeight: 1.6, color: "#6b7280" }}>
-          Tu acceso expiró o este contenido todavía no está disponible. Volvé a abrir
+          Tu acceso expiró o este contenido todavía no está disponible. Vuelve a abrir
           el enlace que te compartió tu equipo de Smarteam para ingresar de nuevo.
         </p>
       </div>

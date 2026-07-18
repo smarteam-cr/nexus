@@ -87,6 +87,20 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   `scripts/migrate-particularidades-audit.ts`, que exporta sin borrar), `occurredAt` = fecha de la
   sesión del hecho, `sourceQuote` = cita interna que NUNCA cruza al cliente (fail-closed). El router
   de hechos + `ScopeRequest` quedan diseñados para construir tras un sondeo de distribución.
+- **`TaskParty` se usa en DOS EJES; el criterio vive en cada prompt, no en el enum.** *Por qué:* en una
+  TAREA `party` = *quién la ejecuta* (dueño) y el agente de detalle manda 4 de 5 tipos de fase a AMBOS
+  (las sesiones son conjuntas); en una PARTICULARIDAD `party` = *quién CAUSÓ el corrimiento*. Es el
+  mismo enum, el mismo `PARTY_META` y la misma pantalla, y el comentario del schema define `AMBOS =
+  "trabajo conjunto (sesiones, talleres)"` — semántica de EJECUCIÓN. El agente de avance heredaba ese
+  sentido y atribuía casi todo a AMBOS (en Wherex, 5 de 7 semanas), que es lo mismo que no atribuir y
+  vacía de sentido al resumen. *Fix:* el prompt de avance define `party` como CAUSA, explícitamente
+  distinta del dueño, con "AMBOS solo si podés nombrar la contribución de cada lado" y la aclaración
+  de que la atribución NO se suaviza (el "lenguaje cliente" aplica al título). *Invariante del resumen:*
+  los buckets de `summarizeParticularidades` SIEMPRE suman `totalWeeks` — un `party` desconocido cae en
+  `SIN_ATRIBUIR` y se dice, en vez de sumar al total y a ningún bucket (el desglose no cerraba). La
+  frase se RECALCULA en cada lectura (en `publishedSnapshot` se congela la data cruda), así que cambiar
+  la redacción corrige retroactivamente lo publicado. *Si vuelve a morder:* separar el campo
+  (`Particularidad.causedBy` propio) en vez de seguir compartiendo `TaskParty`.
 - **Un solo predicado de atraso, por FECHA (`isOverdueByDate` + `overduePlannedEnd` en
   `weeks.ts`).** *Por qué:* antes había dos algoritmos (semana-vs-anchor en el Gantt/externo,
   fecha-vs-baseline en el panel de cartera); en cuanto le mostramos un número al cliente se

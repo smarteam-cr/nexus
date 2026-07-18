@@ -27,6 +27,14 @@ import type { PendingParticularidad } from "../../route";
 const VALID_KINDS = new Set(["ATRASO", "COMPROMISO"]);
 const VALID_PARTIES = new Set(["CLIENTE", "SMARTEAM", "AMBOS", "DEV"]);
 
+const STOP = new Set(["para", "que", "con", "los", "las", "del", "una", "por", "sobre", "entre", "como", "sus", "este", "esta"]);
+
+/** Tokens significativos de un título (minúsculas, sin acentos, ≥4 chars, sin stopwords). */
+function titleTokens(s: string): Set<string> {
+  const norm = s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9ñ\s]/gi, " ");
+  return new Set(norm.split(/\s+/).filter((w) => w.length >= 4 && !STOP.has(w)));
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
@@ -99,6 +107,27 @@ export async function POST(
     });
   }
 
+  // Aviso NO bloqueante de posible duplicado. Pasa al aceptar un borrador nuevo sobre un proyecto que
+  // ya tiene una particularidad del MISMO hecho (típico tras la reconcepción: la vieja sin semanas y
+  // la nueva con semanas). Duplica la bitácora y, si ambas traen semanas, cuenta el atraso dos veces.
+  // Heurística de títulos (≥2 tokens significativos en común), la misma de migrate-particularidades-audit.
+  const existentes = await prisma.particularidad.findMany({
+    where: { timelineId: tl.id },
+    select: { title: true, phaseId: true },
+  });
+  const posiblesDuplicados: Array<{ title: string; similarA: string }> = [];
+  for (const c of toCreate) {
+    const t = titleTokens(c.title);
+    for (const e of existentes) {
+      if (c.phaseId && e.phaseId && c.phaseId !== e.phaseId) continue;
+      const shared = [...titleTokens(e.title)].filter((w) => t.has(w)).length;
+      if (shared >= 2) {
+        posiblesDuplicados.push({ title: c.title, similarA: e.title });
+        break;
+      }
+    }
+  }
+
   let created = 0;
   await prisma.$transaction(async (tx) => {
     if (toCreate.length > 0) {
@@ -112,7 +141,7 @@ export async function POST(
     });
   });
 
-  return NextResponse.json({ applied: true, created });
+  return NextResponse.json({ applied: true, created, posiblesDuplicados });
 }
 
 // DELETE → descartar el borrador de particularidades sin crear nada (botón "Descartar").

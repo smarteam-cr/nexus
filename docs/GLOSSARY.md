@@ -21,14 +21,29 @@
   es ruido de máquina). Es un hecho que ALTERÓ el plan (movió/comprometió una fecha), no un pendiente.
   Dos tipos vigentes (`kind`): **ATRASO** (`weeksImpact` OBLIGATORIO ≥1) / **COMPROMISO**; `SOLICITUD`
   está deprecado (un insumo del cliente es una tarea `party=CLIENTE`, no una particularidad — ver el
-  eje DESTINO en DECISIONS.md; filas legacy conservan el enum como fallback de render). `party` reusa
-  el enum de tarea (CLIENTE/SMARTEAM/AMBOS/DEV) para la atribución; `weeksImpact` = semanas de
-  corrimiento; `occurredAt` = fecha de la sesión del hecho; `sourceQuote` = cita interna que lo
+  eje DESTINO en DECISIONS.md; filas legacy conservan el enum como fallback de render). **`party` acá
+  = quién CAUSÓ el corrimiento**, NO quién ejecuta (el mismo enum `TaskParty` significa *dueño* en una
+  tarea — ver DECISIONS, "dos ejes sobre un enum"); `AMBOS` es la excepción, no el punto medio.
+  `weeksImpact` = semanas de corrimiento; `occurredAt` = fecha de la sesión del hecho; `sourceQuote` = cita interna que lo
   respalda ([fecha] «fragmento») y que **NUNCA** cruza al cliente (fail-closed en el chokepoint).
   Cruza al cliente SOLO si `visibleExternal=true` (gate por-registro, como SUSPENDED). El CSE la crea
   a mano o acepta una propuesta del agente de avance (borrador `pendingParticularidades`, apply
   separado del avance). El resumen suma `weeksImpact` por party ("N semanas de corrimiento acumulado;
   X al cliente, Y a Smarteam").
+- **Vocabulario interno → cliente** (lo que cruza a `/external/*` se traduce; adentro se sigue hablando
+  como equipo). El cliente NO lee jerga de gestión ni reparto de responsables:
+
+  | Interno (equipo) | Lo que lee el cliente |
+  |---|---|
+  | "N semanas de corrimiento acumulado" + desglose por party | "El plan se movió N semanas. Nueva fecha de cierre: …" |
+  | "Particularidades del cronograma" | "Qué cambió en el plan" |
+  | kind `ATRASO` / `COMPROMISO` / `SOLICITUD` | "Se atrasó" / "Acordado" / "En espera" |
+  | `party` (quién causó) | *no cruza* — es cobertura interna, del lado del cliente es un marcador de faltas |
+  | "CSE" | "tu equipo de Smarteam" |
+
+  Regla de voz: al cliente se le habla de **TÚ** (nunca voseo ni "ustedes"), en las 4 superficies
+  externas (verify → kickoff → cronograma → business case). La guía de registro más completa vive en
+  el `agentIntro` de `components/landing/configs/kickoff.defs.ts`.
 - **Procesos**: bloques de la sección `procesos` del canvas "Información del cliente".
 - **Proyecto sentinel `__strategy__`**: proyecto especial por cliente que aloja el canvas de
   contexto/estrategia (no es un proyecto real de servicio).

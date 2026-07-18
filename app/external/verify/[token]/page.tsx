@@ -45,14 +45,14 @@ export default async function ExternalVerifyPage({
             Acceso al proyecto
           </h1>
           <p className="mt-1 text-sm text-gray-500">
-            Ingresá la contraseña que te compartió tu CSE.
+            Ingresa la contraseña que te compartió tu equipo de Smarteam.
           </p>
         </div>
 
         <VerifyForm token={token} next={nextSurface} />
 
         <p className="mt-8 text-xs text-gray-400 text-center">
-          Si no recibiste una contraseña, contactá al equipo de Smarteam.
+          Si no recibiste una contraseña, contacta al equipo de Smarteam.
         </p>
       </div>
     </main>

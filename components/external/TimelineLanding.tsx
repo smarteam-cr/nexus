@@ -71,7 +71,7 @@ export default function TimelineLanding({
         <section className="section-light" style={{ padding: "32px 24px 24px" }}>
           <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
             <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>
-              Estamos preparando el cronograma de tu proyecto — pronto vas a verlo acá.
+              Estamos preparando el cronograma de tu proyecto — pronto lo vas a ver aquí.
             </p>
           </div>
         </section>

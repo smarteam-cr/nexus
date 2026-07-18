@@ -55,7 +55,10 @@ PARTICULARIDADES (desviaciones FECHADAS del plan — SEPARADO del avance):
 Además del avance, detectá DESVIACIONES: un HECHO PUNTUAL Y FECHADO que ALTERÓ el plan (movió una fecha, o comprometió una fecha nueva). Cada una se justifica con un hecho de UNA SESIÓN CONCRETA ("en la sesión del [fecha]…"). Son CURADAS (lenguaje cliente), no el log crudo. DOS tipos ("kind"):
 - ATRASO: una fecha del plan se corrió/reprogramó. "weeksImpact" es OBLIGATORIO (entero ≥1): las semanas de corrimiento. Si NO podés cuantificar el corrimiento en semanas con evidencia, NO es un ATRASO → descartalo (no lo emitas).
 - COMPROMISO: un acuerdo fechado en una sesión que fija o mueve una fecha del plan. "weeksImpact" opcional.
-"party" (atribución de la causa): CLIENTE | SMARTEAM | AMBOS | DEV.
+"party" = QUIÉN CAUSÓ el corrimiento. ATENCIÓN: NO es quién ejecuta el trabajo. En las TAREAS del cronograma el mismo campo marca al DUEÑO/EJECUTOR (y ahí "AMBOS" es lo normal, porque las sesiones y talleres son conjuntos). Acá significa otra cosa: la ATRIBUCIÓN DE LA CAUSA. NO arrastres el criterio de las tareas.
+- CLIENTE: la causa se originó de su lado (no entregó un insumo, una decisión o restricción suya, un contrato/licencia suyo, su disponibilidad).
+- SMARTEAM: la causa se originó del nuestro (hubo que rehacer algo, un error nuestro, nuestra disponibilidad o nuestra estimación).
+- AMBOS: SOLO si podés NOMBRAR la contribución concreta de CADA lado. Si no podés nombrar las dos, NO es AMBOS.
 
 PROHIBIDO — NO son particularidades (NO las emitas acá):
 - PENDIENTES / INSUMOS del cliente: "se necesita X del cliente", "pendiente entrega de Y", "falta acceso/decisión Z". Eso es una TAREA del cronograma con party=CLIENTE, NO una particularidad. Si ves un pendiente, IGNORALO en este array.
@@ -63,8 +66,16 @@ PROHIBIDO — NO son particularidades (NO las emitas acá):
 Regla de oro: si el hecho no MOVIÓ una fecha ni comprometió una nueva, NO es particularidad. Ante la duda → array vacío. Es MUCHO peor un pendiente disfrazado de particularidad que omitir una desviación (el CSE la agrega a mano si hace falta).
 
 REGLAS DURAS de particularidades:
+- ATRIBUCIÓN: elegí UNA causa dominante. "AMBOS" es la EXCEPCIÓN, no el punto medio ni la salida diplomática — si dudás entre una parte y AMBOS, elegí la parte que ORIGINÓ la causa. Ejemplo: "la migración se postergó hasta el vencimiento de la licencia de Salesforce del cliente" → CLIENTE (la licencia es del cliente), NO AMBOS.
+- La atribución NO se suaviza. El "lenguaje cliente" aplica al TÍTULO, no a quién causó el atraso: el punto de esto es que quede por escrito quién movió el cronograma.
 - SOLO lo que el transcript RESPALDE con un hecho fechado. NO inventes desviaciones ni semanas.
-- "title" corto y en lenguaje cliente (ej. "Se reprogramó la migración de datos"). "detail" opcional, 1-2 frases.
+- "title": corto (4-10 palabras), en LENGUAJE CLIENTE y en verbo. Es lo ÚNICO que el cliente lee de vos acá, así que se escribe para que él entienda qué pasó con SU proyecto, no para el registro interno.
+  PROHIBIDO en el título: jerga de gestión ("corrimiento", "desviación", "particularidad", "impacto", "baseline", "hito crítico"), siglas internas (CSE, CSL, handoff), y culpar a alguien por nombre.
+  Ejemplo MAL: "Desviación por corrimiento en la fase de migración" (jerga; no dice qué pasó).
+  Ejemplo BIEN: "Se reprogramó la migración de datos".
+  Ejemplo MAL: "Bloqueo por dependencia externa no resuelta" (abstracto).
+  Ejemplo BIEN: "La integración quedó en espera hasta renovar la licencia".
+- "detail" opcional, 1-2 frases, mismo registro: qué pasó y qué implica, sin reproche.
 - "occurredAt": la FECHA de la sesión donde ocurrió/se acordó el hecho, en ISO (YYYY-MM-DD). Usá la fecha del bloque de sesión (el prefijo [YYYY-MM-DD]) del que sacaste el hecho.
 - "sourceQuote": un fragmento CORTO que respalde el hecho — verbatim si lo tenés, o la frase del resumen si no. SIN hora (no existen timestamps intra-reunión). Es una nota INTERNA para el CSE; nunca se le muestra al cliente.
 - "phaseId" opcional: si la desviación es de una fase concreta, poné su id EXACTO; si es general, omitilo/null.
@@ -82,7 +93,7 @@ FORMATO DE RESPUESTA — JSON EXACTO, sin markdown wrapping, sin comentarios fue
     ]
   },
   "particularidades": [
-    { "kind": "ATRASO|COMPROMISO", "party": "CLIENTE|SMARTEAM|AMBOS|DEV", "title": "<corto, lenguaje cliente>", "detail": "<opcional, 1-2 frases o null>", "weeksImpact": <entero ≥1 OBLIGATORIO en ATRASO; opcional/null en COMPROMISO>, "occurredAt": "<YYYY-MM-DD de la sesión del hecho>", "sourceQuote": "<fragmento corto que respalda, sin hora>", "phaseId": "<id EXACTO o null>" }
+    { "kind": "ATRASO|COMPROMISO", "party": "CLIENTE|SMARTEAM|AMBOS", "title": "<corto, lenguaje cliente>", "detail": "<opcional, 1-2 frases o null>", "weeksImpact": <entero ≥1 OBLIGATORIO en ATRASO; opcional/null en COMPROMISO>, "occurredAt": "<YYYY-MM-DD de la sesión del hecho>", "sourceQuote": "<fragmento corto que respalda, sin hora>", "phaseId": "<id EXACTO o null>" }
   ]
 }
 Incluí en "phases" y "tasks" SOLO lo que marcás done:true (no listes lo pendiente ni lo ya-DONE). "reasoning" es obligatorio. "particularidades" es un array (vacío [] si no detectás NINGUNA desviación fechada respaldada por el transcript — que sea vacío es lo normal y esperable).`;
