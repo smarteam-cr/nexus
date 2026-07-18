@@ -176,7 +176,7 @@ export default function ParticularidadEditModal({
                 onChange={(e) => setWeeks(e.target.value)}
                 placeholder="—"
               />
-              {atrasoNeedsWeeks && <span className="text-[11px] text-red-400 mt-1 block">Un atraso necesita ≥1 semana de corrimiento.</span>}
+              {atrasoNeedsWeeks && <span className="text-[11px] text-red-400 mt-1 block">Un atraso necesita al menos 1 semana.</span>}
             </label>
           </div>
 

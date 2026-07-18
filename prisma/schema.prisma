@@ -615,10 +615,20 @@ model TimelineTask {
   // Mapeo a futuro (NO se sincroniza hoy): SESSION → HubSpot Meeting (0-47); TASK → HubSpot Task (0-27).
   type              TimelineTaskType?
   source            TimelinePhaseSource @default(AGENT) // reuso consciente del enum (mismo ciclo AGENT→MODIFIED/HUMAN); renombrarlo = recrear tipo en PG por cero ganancia
+  // ── Tarea nacida de un COMPROMISO detectado en sesión ──────────────────────────
+  // Fecha que se ACORDÓ en la sesión. Es dato CRUDO, no un segundo criterio de atraso: el
+  // vencimiento lo sigue calculando el predicado único (weekIndex + anchor → isOverdueByDate).
+  // Sirve para el texto ("se comprometió para el 2 de junio") y para proponer las semanas cuando
+  // vence. Distinta de dueDateOverride, que es un override MANUAL del CSE.
+  committedDueDate  DateTime?
+  // Huella del hecho que la originó (misma que Particularidad.dedupeKey). Es lo que evita que el
+  // agente re-cree la misma tarea en cada corrida — corre por sesión, 26 veces en un proyecto real.
+  originFingerprint String?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
   @@index([phaseId, weekIndex, order])
+  @@index([originFingerprint]) // NO único a propósito, igual que Particularidad.dedupeKey
 }
 
 enum TimelinePhaseSource {
@@ -672,11 +682,30 @@ model Particularidad {
   needsValidation Boolean              @default(false) // true mientras es propuesta del agente sin confirmar
   createdByEmail  String? // quién la creó/confirmó (del guard)
   occurredAt      DateTime             @default(now()) // cuándo ocurrió la desviación (editable; default = ahora)
+  // IDENTIDAD DEL HECHO (espeja CsAlert). El agente re-deriva las particularidades desde los MISMOS
+  // transcripts en cada corrida, con redacción apenas distinta; sin identidad, aceptar dos borradores
+  // creaba dos filas del mismo hecho y el corrimiento se contaba dos veces (Wherex: 13 semanas
+  // mostradas, 8 reales). `dedupeKey` = timelineId:kind:huella — la huella la emite el agente y la
+  // reusa entre corridas. Index NO único A PROPÓSITO: una fila que el CSE borró puede volver a nacer.
+  dedupeKey       String? // null = creada a mano por el CSE (sin identidad de agente)
+  occurrences     Int                  @default(1) // veces que el agente re-detectó el MISMO hecho
+  lastDetectedAt  DateTime             @default(now())
+  // ── CONVERSIÓN EN TRABAJO ──────────────────────────────────────────────────────
+  // Una particularidad es HISTORIA (qué pasó y cuánto movió el plan). Cuando el hecho detectado es
+  // en realidad trabajo que alguien debe —un compromiso, un insumo del cliente— el CSE lo convierte
+  // en TAREA: ahí tiene dueño, fecha, vence y el cliente lo ve. La fila NO se borra al convertir
+  // (así "deshacer" es borrar la tarea y nulear esto; borrarla la recrearía sin dedupeKey y el
+  // agente la re-propondría). El link vive acá y no en la tarea porque quien lo lee en cada render
+  // es la lista de particularidades, para decidir en qué grupo cae cada fila.
+  convertedTaskId  String? // null = nadie está persiguiendo este hecho
+  convertedAt      DateTime?
+  convertedByEmail String?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
   @@index([timelineId, occurredAt])
   @@index([timelineId, visibleExternal])
+  @@index([dedupeKey])
 }
 
 // Tipo de particularidad de cara al cliente:

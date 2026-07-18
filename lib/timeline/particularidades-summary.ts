@@ -102,14 +102,14 @@ export interface AttributionOptions {
 }
 
 /**
- * Frase de atribución en lenguaje cliente. null si no hay corrimiento acumulado (totalWeeks 0):
- * el caller decide si igual muestra la bitácora.
+ * Frase de atribución. null si no hay atraso acumulado (totalWeeks 0): el caller decide si igual
+ * muestra la bitácora.
  *
- * Los buckets van de MAYOR a MENOR: el grueso del corrimiento se lee primero, así la frase no se
- * lee como "y las demás semanas dónde están". Todos los buckets se redactan igual (número +
- * etiqueta) y el desglose siempre suma el titular.
+ * Los buckets van de MAYOR a MENOR: el grueso del atraso se lee primero, así la frase no se lee
+ * como "y las demás semanas dónde están". Todos los buckets se redactan igual (número + etiqueta)
+ * y el desglose siempre suma el titular.
  *
- * Ej: *"7 semanas de corrimiento acumulado: 5 compartidas, 1 del cliente y 1 de Smarteam."*
+ * Ej: *"7 semanas de atraso acumulado: 5 compartidas, 1 del cliente y 1 de Smarteam."*
  */
 export function attributionSentence(
   s: ParticularidadesSummary,
@@ -123,10 +123,13 @@ export function attributionSentence(
     return opts.closingDate ? `${movio} Nueva fecha de cierre: ${opts.closingDate}.` : movio;
   }
 
-  // ── Interno: desglose completo. "corrimiento" es vocabulario de equipo, acá se queda. ──
+  // ── Interno: desglose completo con atribución. ──
+  // Decía "corrimiento", que es jerga de gestión: no dice qué pasó y suena a eufemismo. "Atraso"
+  // nombra la cosa. (Antes acá había un comentario justificando que la jerga se quedaba porque era
+  // vocabulario de equipo; el equipo dijo que no.)
   const items = ATTRIBUTION_BUCKETS.filter((b) => s.byParty[b] > 0)
     .sort((a, b) => s.byParty[b] - s.byParty[a] || ATTRIBUTION_BUCKETS.indexOf(a) - ATTRIBUTION_BUCKETS.indexOf(b))
     .map((b) => `${s.byParty[b]} ${BUCKET_LABEL[b]}`);
-  const head = `${semanas(s.totalWeeks)} de corrimiento acumulado`;
+  const head = `${semanas(s.totalWeeks)} de atraso acumulado`;
   return items.length > 0 ? `${head}: ${joinEs(items)}.` : `${head}.`;
 }

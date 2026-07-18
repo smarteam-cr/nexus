@@ -19,6 +19,7 @@ import { getProjectStage } from "@/lib/hubspot/stage";
 import { getPastSessionsForProject } from "@/lib/sessions/project-sessions";
 import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
+import { normalizeFingerprint } from "@/lib/timeline/particularidad-identity";
 
 const AGENT_ID_PROGRESS = "agent-timeline-progress";
 
@@ -61,6 +62,8 @@ interface ProgressOutput {
     weeksImpact?: number | null;
     occurredAt?: string | null;
     sourceQuote?: string | null;
+    /** Huella ESTABLE del hecho — la reusa entre corridas para no duplicar. */
+    fingerprint?: string | null;
     phaseId?: string | null;
   }>;
 }
@@ -81,6 +84,9 @@ export interface PendingParticularidadDraft {
   occurredAt: string | null;
   /** Cita interna que respalda el hecho ([fecha] «fragmento»). NUNCA cruza al cliente. */
   sourceQuote: string | null;
+  /** Huella estable del hecho: si ya existe una particularidad con esta huella, el apply ACTUALIZA
+   *  en vez de crear (evita que 26 corridas del agente carguen 26 veces el mismo atraso). */
+  fingerprint: string;
   phaseId: string | null;
 }
 
@@ -264,7 +270,9 @@ export async function regenerateTimelineProgress(
         const sourceQuote = typeof pt?.sourceQuote === "string" && pt.sourceQuote.trim() ? pt.sourceQuote.trim() : null;
         const phaseId = typeof pt?.phaseId === "string" && phaseStatus.has(pt.phaseId) ? pt.phaseId : null;
         const detail = typeof pt?.detail === "string" && pt.detail.trim() ? pt.detail.trim() : null;
-        return { kind, party, title, detail, weeksImpact, occurredAt, sourceQuote, phaseId };
+        // Huella del hecho: la del agente si la mandó, si no una determinística del título.
+        const fingerprint = normalizeFingerprint(pt?.fingerprint, title);
+        return { kind, party, title, detail, weeksImpact, occurredAt, sourceQuote, fingerprint, phaseId };
       })
       .filter((x): x is PendingParticularidadDraft => x !== null)
       .slice(0, 12);

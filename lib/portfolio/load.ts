@@ -296,3 +296,64 @@ export async function loadPortfolio(
     };
   });
 }
+
+/**
+ * Igual que loadPortfolio pero para UN proyecto — el summary es la fuente más rica de señales
+ * (avance, atrasos, estancamiento, alcance vs lo vendido, alarmas de etapa) y hasta ahora solo
+ * existía en versión cartera, así que el canvas del cronograma no podía consumirla. Devuelve null
+ * si el proyecto no existe.
+ */
+export async function loadProjectSummary(projectId: string): Promise<ProjectSummary | null> {
+  const p = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      status: true,
+      healthStatusOverride: true,
+      timeline: {
+        select: {
+          anchorStartDate: true,
+          phases: {
+            orderBy: { order: "asc" },
+            select: {
+              id: true, name: true, status: true, order: true, durationWeeks: true,
+              startWeek: true, actualStart: true, actualEnd: true,
+              tasks: {
+                select: { id: true, status: true, weekIndex: true, actualStart: true, actualEnd: true, needsValidation: true },
+              },
+            },
+          },
+          baselines: { where: { isActive: true }, take: 1, select: { snapshot: true, firmness: true } },
+          changes: { where: { kind: "PROGRESS" }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+        },
+      },
+    },
+  });
+  if (!p) return null;
+
+  const tl = p.timeline;
+  const activeBaseline = tl?.baselines?.[0] ?? null;
+  const lifecycleByProject = await loadLifecycleBatch([projectId]);
+  return computeProjectSummary({
+    status: p.status,
+    anchorStartDate: tl?.anchorStartDate ?? null,
+    phases: (tl?.phases ?? []).map((ph) => ({
+      id: ph.id, name: ph.name, status: ph.status, order: ph.order,
+      durationWeeks: ph.durationWeeks, startWeek: ph.startWeek,
+      actualStart: ph.actualStart, actualEnd: ph.actualEnd,
+      tasks: ph.tasks.map((t) => ({
+        id: t.id, status: t.status, weekIndex: t.weekIndex,
+        actualStart: t.actualStart, actualEnd: t.actualEnd, needsValidation: t.needsValidation,
+      })),
+    })),
+    baseline: activeBaseline
+      ? {
+          snapshot: activeBaseline.snapshot as unknown as BaselineSnapshot,
+          firmnessLabel: (activeBaseline.firmness as { label?: string } | null)?.label ?? "WEAK",
+        }
+      : null,
+    lastProgressAt: tl?.changes?.[0]?.createdAt ?? null,
+    healthOverride: p.healthStatusOverride,
+    lifecycle: toSummaryLifecycle(lifecycleByProject.get(projectId) ?? null),
+    now: new Date(),
+  });
+}

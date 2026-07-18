@@ -73,15 +73,15 @@ test("INVARIANTE: los buckets siempre suman totalWeeks", () => {
 
 test("attributionSentence: frase con cliente + Smarteam (mayor primero)", () => {
   const s = summarizeParticularidades([p("CLIENTE", 2), p("SMARTEAM", 1)]);
-  expect(attributionSentence(s)).toBe("3 semanas de corrimiento acumulado: 2 del cliente y 1 de Smarteam.");
+  expect(attributionSentence(s)).toBe("3 semanas de atraso acumulado: 2 del cliente y 1 de Smarteam.");
 });
 
 test("attributionSentence: singular", () => {
   const s = summarizeParticularidades([p("CLIENTE", 1)]);
-  expect(attributionSentence(s)).toBe("1 semana de corrimiento acumulado: 1 del cliente.");
+  expect(attributionSentence(s)).toBe("1 semana de atraso acumulado: 1 del cliente.");
 });
 
-test("attributionSentence: sin corrimiento (totalWeeks 0) → null", () => {
+test("attributionSentence: sin atraso (totalWeeks 0) → null", () => {
   const s = summarizeParticularidades([p("CLIENTE", null), p("SMARTEAM", null)]);
   expect(attributionSentence(s)).toBeNull();
 });
@@ -92,14 +92,14 @@ test("attributionSentence: AMBOS va primero por ser el mayor", () => {
     p("AMBOS", 2), p("AMBOS", 3), p("SMARTEAM", 1), p("CLIENTE", 1),
   ]);
   expect(attributionSentence(s)).toBe(
-    "7 semanas de corrimiento acumulado: 5 compartidas, 1 del cliente y 1 de Smarteam.",
+    "7 semanas de atraso acumulado: 5 compartidas, 1 del cliente y 1 de Smarteam.",
   );
 });
 
 test("attributionSentence: DEV es un bucket propio en la vista interna", () => {
   const s = summarizeParticularidades([p("DEV", 2), p("CLIENTE", 1)]);
   expect(attributionSentence(s, { audience: "interno" })).toBe(
-    "3 semanas de corrimiento acumulado: 2 de desarrollo y 1 del cliente.",
+    "3 semanas de atraso acumulado: 2 de desarrollo y 1 del cliente.",
   );
 });
 
@@ -120,12 +120,12 @@ test("attributionSentence cliente: cierra con la fecha nueva cuando la hay", () 
   );
 });
 
-test("attributionSentence cliente: sin corrimiento → null (no se inventa una alarma)", () => {
+test("attributionSentence cliente: sin atraso → null (no se inventa una alarma)", () => {
   const s = summarizeParticularidades([p("CLIENTE", null)]);
   expect(attributionSentence(s, { audience: "cliente", closingDate: "15 sep 2026" })).toBeNull();
 });
 
 test("attributionSentence: lo no atribuido se dice, no se esconde", () => {
   const s = summarizeParticularidades([p("MARCIANO", 5), p("CLIENTE", 1)]);
-  expect(attributionSentence(s)).toBe("6 semanas de corrimiento acumulado: 5 sin atribuir y 1 del cliente.");
+  expect(attributionSentence(s)).toBe("6 semanas de atraso acumulado: 5 sin atribuir y 1 del cliente.");
 });

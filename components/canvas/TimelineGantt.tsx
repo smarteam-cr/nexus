@@ -62,6 +62,9 @@ import {
 } from "@/lib/timeline/weeks";
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
+import { findDuplicateGroups } from "@/lib/timeline/particularidad-identity";
+import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
+import { clientStatusLine } from "@/lib/timeline/client-status";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 
@@ -142,6 +145,13 @@ interface Props {
   onToggleParticularidadVisible?: (id: string, next: boolean) => void;
   // Abrir el modal de edición de contenido de una particularidad (tipo/party/título/detalle/semanas).
   onEditParticularidad?: (id: string) => void;
+  // Convertir una particularidad en TAREA del cronograma (dueño + fecha). Sin esto el botón no sale.
+  onConvertParticularidad?: (id: string) => void;
+  // Abrir el drawer de la tarea que ya persigue este hecho (chip "→ tarea").
+  onOpenConvertedTask?: (taskId: string) => void;
+  /** Pedido del panel "Qué hacer acá" de ABRIR un grupo colapsado. El `nonce` existe para que
+   *  re-clickear el mismo CTA vuelva a abrirlo aunque la key no haya cambiado. */
+  focusGroup?: { key: string; nonce: number } | null;
 }
 
 // Forma mínima de una particularidad para el resumen + bitácora del Gantt interno.
@@ -156,6 +166,11 @@ export interface GanttParticularidad {
   weeksImpact: number | null;
   visibleExternal: boolean;
   occurredAt: string;
+  /** Fase a la que el agente atribuyó el hecho. Prellena la fase al convertirlo en tarea. */
+  phaseId?: string | null;
+  /** Si ya se convirtió en tarea, el id de esa tarea. El hecho queda como registro de POR QUÉ pasó;
+   *  la tarea es quién lo hace y para cuándo. null = nadie lo está persiguiendo. */
+  convertedTaskId?: string | null;
 }
 
 // ── Metadata de tipos de actividad (color de barra + chip) ────────────────────
@@ -250,7 +265,10 @@ export const nextType = (t: "SESSION" | "TASK"): "SESSION" | "TASK" => (t === "S
 // Tipo de PARTICULARIDAD (desviación curada). Atraso rojo, solicitud ámbar, compromiso verde.
 export const PARTICULARIDAD_KIND_META: Record<string, { label: string; cls: string }> = {
   ATRASO:     { label: "Atraso",     cls: "text-red-300 bg-red-900/30 border-red-700/40" },
-  SOLICITUD:  { label: "Solicitud",  cls: "text-amber-300 bg-amber-900/30 border-amber-700/50" },
+  // SOLICITUD es la forma VIEJA de un compromiso (un insumo del cliente es trabajo con dueño, no
+  // una desviación). En gris y marcada como vieja: en ámbar competía con COMPROMISO y se leía como
+  // una categoría distinta y vigente — por eso un grupo de 4 parecía tener solo 2.
+  SOLICITUD:  { label: "Compromiso (viejo)", cls: "text-gray-400 bg-gray-800/60 border-gray-700/50" },
   COMPROMISO: { label: "Compromiso", cls: "text-emerald-300 bg-emerald-900/30 border-emerald-700/40" },
 };
 
@@ -314,6 +332,9 @@ export default function TimelineGantt({
   particularidades,
   onToggleParticularidadVisible,
   onEditParticularidad,
+  onConvertParticularidad,
+  onOpenConvertedTask,
+  focusGroup,
   // onRemoveTask removido del Gantt: el borrado de tarea vive en el TaskDetailDrawer.
 }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -332,6 +353,22 @@ export default function TimelineGantt({
   const curWeek = today ? currentWeekIndex(anchor, today) : null;
   const curInRange = curWeek !== null && curWeek >= 0 && curWeek < total;
   const editable = !readOnly && !!onUpdateTask;
+
+  // Estado en una línea, con el MISMO helper que redacta el del cliente. Antes acá decía
+  // "cronograma finalizado" apenas se acababa el calendario, aunque quedaran tareas abiertas:
+  // el helper exige que estén TODAS resueltas y si no dice "En cierre · quedan N".
+  const tasksTotal = phases.reduce((n, p) => n + p.tasks.length, 0);
+  const tasksDone = phases.reduce(
+    (n, p) => n + p.tasks.filter((t) => t.status === "DONE" || t.status === "SUSPENDED").length,
+    0,
+  );
+  const statusLine = clientStatusLine({
+    curWeek,
+    totalWeeks: total,
+    tasksDone,
+    tasksTotal,
+    delayWeeks: summarizeParticularidades(particularidades ?? []).totalWeeks,
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -543,9 +580,13 @@ export default function TimelineGantt({
             {anchor && curWeek !== null && curWeek < 0 && (
               <span className="font-medium text-blue-400/90">· el proyecto arranca el {fmtFull(anchor)}</span>
             )}
-            {anchor && curWeek !== null && curWeek >= total && (
-              <span className="font-medium text-blue-400/90">· cronograma finalizado</span>
-            )}
+          </span>
+        )}
+        {/* Cómo va esto, en una línea: semana, tareas y si vamos al día. Es lo primero que el CSE
+            necesita para orientarse, y hasta ahora había que deducirlo mirando el Gantt entero. */}
+        {statusLine && (
+          <span className="text-xs font-semibold text-gray-300 bg-gray-800/60 border border-gray-700/50 rounded-lg px-3 py-1.5">
+            {statusLine}
           </span>
         )}
         {onSetAnchor && <AnchorDatePicker value={anchor ?? ""} onChange={onSetAnchor} />}
@@ -1003,8 +1044,10 @@ export default function TimelineGantt({
         const visibles = parts.filter((p) => p.visibleExternal);
         const clientSentence = attributionSentence(summarizeParticularidades(visibles), { audience: "cliente" });
         const clientDiffers = clientSentence !== sentence;
+        // El id de abajo es el destino de los CTA del panel "Qué hacer acá". Sin él, "Cuantificar"
+        // scrolleaba al tope de un Gantt altísimo y el CSE tenía que cazar la fila.
         return (
-          <div className="rounded-2xl border border-gray-800 bg-gray-900/40 px-4 py-3">
+          <div id="cronograma-particularidades" className="scroll-mt-24 rounded-2xl border border-gray-800 bg-gray-900/40 px-4 py-3">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
                 Particularidades del cronograma
@@ -1020,71 +1063,71 @@ export default function TimelineGantt({
             {clientDiffers && (
               <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
                 <span className="font-semibold text-gray-300">El cliente lee:</span>{" "}
-                {clientSentence ?? `ningún corrimiento (${visibles.length} de ${parts.length} visibles al cliente).`}
+                {clientSentence ?? `ningún atraso (${visibles.length} de ${parts.length} visibles al cliente).`}
               </p>
             )}
-            <ul className="flex flex-col gap-1.5">
-              {parts.map((pt) => {
-                const kMeta = PARTICULARIDAD_KIND_META[pt.kind] ?? { label: pt.kind, cls: "text-gray-400 bg-gray-800/60 border-gray-700/50" };
-                const pMeta = PARTY_META[pt.party] ?? PARTY_META.SMARTEAM;
-                return (
-                  <li key={pt.id} className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded-lg">
-                    <span className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${kMeta.cls}`}>
-                      {kMeta.label}
-                    </span>
-                    <span className="text-sm text-gray-200 flex-1 min-w-0">{pt.title}</span>
-                    {pt.weeksImpact != null && pt.weeksImpact > 0 && (
-                      <span className="text-[11px] font-semibold text-red-300">
-                        +{plural(pt.weeksImpact, "semana", "semanas")}
-                      </span>
-                    )}
-                    <span className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${pMeta.cls}`}>
-                      {pMeta.label}
-                    </span>
-                    {/* Visibilidad al cliente: toggle interactivo cuando es editable; tag legible si no.
-                        Verde = cruza; neutro contrastado (gris claro) = solo interna. */}
-                    {onToggleParticularidadVisible ? (
-                      <button
-                        type="button"
-                        onClick={() => onToggleParticularidadVisible(pt.id, !pt.visibleExternal)}
-                        title={pt.visibleExternal ? "Visible al cliente (clic para ocultar). Se aplica al «Subir al cliente»." : "Solo interna (clic para mostrarla al cliente). Se aplica al «Subir al cliente»."}
-                        className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border transition-colors ${pt.visibleExternal ? "text-emerald-300 bg-emerald-900/30 border-emerald-700/50 hover:bg-emerald-900/50" : "text-gray-700 bg-gray-300 border-gray-400 hover:bg-gray-200"}`}
-                      >
-                        {pt.visibleExternal ? (
-                          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                        ) : (
-                          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
-                        )}
-                        {pt.visibleExternal ? "Visible al cliente" : "Solo interna"}
-                      </button>
-                    ) : (
-                      !pt.visibleExternal && (
-                        <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-700 bg-gray-300 border border-gray-400 rounded px-1.5 py-0.5 flex-shrink-0" title="No cruza al cliente">
-                          Solo interna
-                        </span>
-                      )
-                    )}
-                    {onEditParticularidad && (
-                      <button
-                        type="button"
-                        onClick={() => onEditParticularidad(pt.id)}
-                        title="Editar particularidad"
-                        className="flex-shrink-0 text-gray-400 hover:text-gray-100 rounded p-1 hover:bg-gray-800 transition-colors"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                      </button>
-                    )}
-                    {/* Cita interna (fecha de la sesión + fragmento) — solo el CSE la ve; nunca cruza. */}
-                    {pt.sourceQuote && (
-                      <p className="w-full text-[11px] text-gray-500 italic leading-relaxed pl-0.5">
-                        <span className="not-italic text-gray-600 mr-1">[{pt.occurredAt.slice(0, 10)}]</span>
-                        «{pt.sourceQuote}»
-                      </p>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+            {/* Agrupado por ESTADO DE LA FILA, no por visibilidad. La pregunta que el CSE se hace
+                al entrar es "¿esto me pide algo o es registro?", y los grupos viejos (visibilidad +
+                cuantificación) cruzaban dos ejes sin contestar ninguno.
+                Cuando el triage termina, los dos primeros grupos DESAPARECEN y queda uno cerrado:
+                ése es el estado "esto está sano", que antes la pantalla no sabía expresar. */}
+            <div className="flex flex-col gap-1">
+              {(() => {
+                const dupIds = new Set(findDuplicateGroups(parts).flat().map((p) => p.id));
+                // Mismo predicado que el contador del panel — importado, no reescrito: el botón
+                // "6 compromisos sin tarea" tiene que traerte a un grupo que diga 6.
+                const esCompromiso = esCompromisoPendiente;
+                const paraArreglar = (p: GanttParticularidad) =>
+                  dupIds.has(p.id) || (!p.weeksImpact && (p.kind === "ATRASO" || !!p.convertedTaskId));
+
+                const compromisos = parts.filter(esCompromiso);
+                const arreglar = parts.filter((p) => !esCompromiso(p) && paraArreglar(p));
+                const historia = parts.filter((p) => !esCompromiso(p) && !paraArreglar(p));
+
+                return [
+                  {
+                    key: "compromisos",
+                    title: "Compromisos sin dueño",
+                    hint: "Alguien se comprometió a algo y no hay ninguna tarea persiguiéndolo.",
+                    items: compromisos,
+                  },
+                  {
+                    key: "arreglar",
+                    title: "Filas para arreglar",
+                    hint: "No suman al total de atraso, lo inflan, o ya no deberían existir. Ponele semanas" +
+                      " si ya sabés cuánto movió el plan; si todavía no es un atraso sino algo que alguien" +
+                      " tiene que averiguar, convertila en tarea.",
+                    items: arreglar,
+                  },
+                  {
+                    key: "historia",
+                    title: "Lo que ya pasó",
+                    hint: "Registro fechado. No piden acción: explican por qué se movió el plan.",
+                    items: historia,
+                    // El histórico NUNCA abre solo: es lo único que no pide nada.
+                    forceClosed: true,
+                  },
+                ]
+                  .filter((g) => g.items.length > 0)
+                  .map((g) => (
+                    <ParticularidadGroup
+                      key={g.key}
+                      groupKey={g.key}
+                      title={g.title}
+                      hint={g.hint}
+                      items={g.items}
+                      // Un grupo de acción con 20 filas sepulta el resto de la pantalla; el contador
+                      // del encabezado ya dice cuántas son.
+                      defaultOpen={!g.forceClosed && g.items.length <= 8}
+                      focusGroup={focusGroup}
+                      onToggleParticularidadVisible={onToggleParticularidadVisible}
+                      onEditParticularidad={onEditParticularidad}
+                      onConvertParticularidad={onConvertParticularidad}
+                      onOpenConvertedTask={onOpenConvertedTask}
+                    />
+                  ));
+              })()}
+            </div>
             {onToggleParticularidadVisible && (
               <p className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-800 leading-relaxed">
                 La visibilidad al cliente se aplica al «Subir al cliente».
@@ -1094,5 +1137,205 @@ export default function TimelineGantt({
         );
       })()}
     </div>
+  );
+}
+
+/** Cuántas filas del histórico se muestran antes del "Ver las N restantes". */
+const HISTORIA_VISIBLES = 8;
+
+/**
+ * Un grupo colapsable de particularidades. Existe porque la lista plana no se podía leer: 13 ítems
+ * en orden cronológico inverso, todos con el mismo peso, sin decir cuál pide acción. Cada grupo
+ * responde a UNA pregunta —¿esto pide algo? ¿esto está mal cargado? ¿esto es historia?— y solo los
+ * que piden acción arrancan abiertos.
+ */
+function ParticularidadGroup({
+  groupKey,
+  title,
+  hint,
+  items,
+  defaultOpen,
+  focusGroup,
+  onToggleParticularidadVisible,
+  onEditParticularidad,
+  onConvertParticularidad,
+  onOpenConvertedTask,
+}: {
+  groupKey: string;
+  title: string;
+  hint: string | null;
+  items: GanttParticularidad[];
+  defaultOpen: boolean;
+  focusGroup?: { key: string; nonce: number } | null;
+  onToggleParticularidadVisible?: (id: string, next: boolean) => void;
+  onEditParticularidad?: (id: string) => void;
+  onConvertParticularidad?: (id: string) => void;
+  onOpenConvertedTask?: (taskId: string) => void;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const [verTodas, setVerTodas] = useState(false);
+
+  // El panel "Qué hacer acá" pide abrir este grupo. Depende del `nonce` y no de la key, para que
+  // re-clickear el mismo CTA vuelva a abrirlo después de que el CSE lo cerró a mano.
+  // Ajuste DURANTE el render (patrón de React para "estado derivado de una prop que cambió") en vez
+  // de un efecto: con efecto se pinta el grupo cerrado y recién después se abre.
+  const focusNonce = focusGroup?.key === groupKey ? focusGroup.nonce : null;
+  const [lastNonce, setLastNonce] = useState(focusNonce);
+  if (focusNonce !== null && focusNonce !== lastNonce) {
+    setLastNonce(focusNonce);
+    setOpen(true);
+  }
+
+  // Una bitácora no se pagina: se lee por reciente o no se lee. Se trunca y se expande in-place.
+  const truncado = !verTodas && items.length > HISTORIA_VISIBLES;
+  const visibles = truncado ? items.slice(0, HISTORIA_VISIBLES) : items;
+
+  return (
+    <div className="rounded-xl border border-gray-800/80 bg-gray-900/30">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-800/40 rounded-xl transition-colors"
+      >
+        <svg
+          className={`w-3 h-3 text-gray-500 flex-shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-300">{title}</span>
+        <span className="text-[10px] font-semibold text-gray-400 bg-gray-800/60 border border-gray-700/50 rounded-full px-1.5">
+          {items.length}
+        </span>
+        {hint && !open && <span className="text-[11px] text-gray-500 truncate">{hint}</span>}
+      </button>
+      {open && (
+        <>
+          {hint && <p className="text-[11px] text-gray-500 px-3 pb-1 leading-relaxed">{hint}</p>}
+          <ul className="flex flex-col gap-1.5 px-1 pb-2">
+            {visibles.map((pt) => (
+              <ParticularidadRow
+                key={pt.id}
+                pt={pt}
+                onToggleParticularidadVisible={onToggleParticularidadVisible}
+                onEditParticularidad={onEditParticularidad}
+                onConvertParticularidad={onConvertParticularidad}
+                onOpenConvertedTask={onOpenConvertedTask}
+              />
+            ))}
+          </ul>
+          {truncado && (
+            <button
+              type="button"
+              onClick={() => setVerTodas(true)}
+              className="w-full text-[11px] font-semibold text-gray-400 hover:text-gray-200 px-3 pb-2 text-left"
+            >
+              Ver las {items.length - HISTORIA_VISIBLES} restantes
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Una particularidad: tipo · título · semanas · quién causó · visibilidad · convertir · editar · cita. */
+function ParticularidadRow({
+  pt,
+  onToggleParticularidadVisible,
+  onEditParticularidad,
+  onConvertParticularidad,
+  onOpenConvertedTask,
+}: {
+  pt: GanttParticularidad;
+  onToggleParticularidadVisible?: (id: string, next: boolean) => void;
+  onEditParticularidad?: (id: string) => void;
+  onConvertParticularidad?: (id: string) => void;
+  onOpenConvertedTask?: (taskId: string) => void;
+}) {
+  const kMeta = PARTICULARIDAD_KIND_META[pt.kind] ?? { label: pt.kind, cls: "text-gray-400 bg-gray-800/60 border-gray-700/50" };
+  const pMeta = PARTY_META[pt.party] ?? PARTY_META.SMARTEAM;
+  // Convertible = todavía nadie lo persigue Y hay algo que perseguir: un compromiso/solicitud, o un
+  // atraso sin cuantificar (que muchas veces no es un atraso sino algo que alguien tiene que averiguar).
+  const convertible =
+    !pt.convertedTaskId &&
+    (pt.kind === "COMPROMISO" || pt.kind === "SOLICITUD" || (pt.kind === "ATRASO" && !pt.weeksImpact));
+  return (
+    <li className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded-lg">
+      <span className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${kMeta.cls}`}>
+        {kMeta.label}
+      </span>
+      <span className="text-sm text-gray-200 flex-1 min-w-0">{pt.title}</span>
+      {pt.weeksImpact != null && pt.weeksImpact > 0 && (
+        <span className="text-[11px] font-semibold text-red-300">+{plural(pt.weeksImpact, "semana", "semanas")}</span>
+      )}
+      <span className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${pMeta.cls}`}>
+        {pMeta.label}
+      </span>
+      {/* Visibilidad al cliente: toggle interactivo cuando es editable; tag legible si no.
+          Verde = cruza; neutro contrastado (gris claro) = solo interna. */}
+      {onToggleParticularidadVisible ? (
+        <button
+          type="button"
+          onClick={() => onToggleParticularidadVisible(pt.id, !pt.visibleExternal)}
+          title={pt.visibleExternal ? "Visible al cliente (clic para ocultar). Se aplica al «Subir al cliente»." : "Solo interna (clic para mostrarla al cliente). Se aplica al «Subir al cliente»."}
+          className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border transition-colors ${pt.visibleExternal ? "text-emerald-300 bg-emerald-900/30 border-emerald-700/50 hover:bg-emerald-900/50" : "text-gray-700 bg-gray-300 border-gray-400 hover:bg-gray-200"}`}
+        >
+          {pt.visibleExternal ? (
+            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+          ) : (
+            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+          )}
+          {pt.visibleExternal ? "Visible al cliente" : "Solo interna"}
+        </button>
+      ) : (
+        !pt.visibleExternal && (
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-700 bg-gray-300 border border-gray-400 rounded px-1.5 py-0.5 flex-shrink-0" title="No cruza al cliente">
+            Solo interna
+          </span>
+        )
+      )}
+      {/* Convertir en TAREA: el hecho queda como registro de por qué pasó; la tarea es quién lo hace
+          y para cuándo. Texto y no ícono a propósito — es un gesto con consecuencia. */}
+      {convertible && onConvertParticularidad && (
+        <button
+          type="button"
+          onClick={() => onConvertParticularidad(pt.id)}
+          title="Crear una tarea del cronograma con dueño y fecha para que esto se haga"
+          className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 border border-blue-700/50 bg-blue-900/30 text-blue-300 hover:bg-blue-900/60 transition-colors"
+        >
+          Convertir en tarea
+        </button>
+      )}
+      {/* Ya tiene quien la persiga: el chip lleva a esa tarea. */}
+      {pt.convertedTaskId && (
+        <button
+          type="button"
+          onClick={() => onOpenConvertedTask?.(pt.convertedTaskId as string)}
+          disabled={!onOpenConvertedTask}
+          title="Ver la tarea que persigue este hecho"
+          className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 border border-emerald-700/50 bg-emerald-900/30 text-emerald-300 enabled:hover:bg-emerald-900/60 transition-colors"
+        >
+          → tarea
+        </button>
+      )}
+      {onEditParticularidad && (
+        <button
+          type="button"
+          onClick={() => onEditParticularidad(pt.id)}
+          title="Editar particularidad"
+          className="flex-shrink-0 text-gray-400 hover:text-gray-100 rounded p-1 hover:bg-gray-800 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+        </button>
+      )}
+      {/* Cita interna (fecha de la sesión + fragmento) — solo el CSE la ve; nunca cruza. */}
+      {pt.sourceQuote && (
+        <p className="w-full text-[11px] text-gray-500 italic leading-relaxed pl-0.5">
+          <span className="not-italic text-gray-600 mr-1">[{pt.occurredAt.slice(0, 10)}]</span>
+          «{pt.sourceQuote}»
+        </p>
+      )}
+    </li>
   );
 }

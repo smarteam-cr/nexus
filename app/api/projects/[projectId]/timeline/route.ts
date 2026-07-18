@@ -52,6 +52,8 @@ import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
 // mientras camina su propio diff y los emite DESPUÉS de la tx (best-effort):
 // la tx ya sufrió P2028 contra el pooler — no se engorda con más writes.
 import { emitTimelineEventsSafe, diffFields, type DraftEvent } from "@/lib/cs/timeline-events";
+import { loadProjectSummary } from "@/lib/portfolio/load";
+import type { ProjectSummary } from "@/lib/portfolio/summary";
 
 // Normaliza un string de fecha entrante al MISMO ISO que produce el lado DB
 // (Date.toISOString()). El validador acepta cualquier formato parseable: comparar
@@ -95,11 +97,17 @@ export interface PendingParticularidad {
   occurredAt: string | null;
   /** Cita interna que respalda el hecho. NUNCA cruza al cliente (fail-closed en el chokepoint). */
   sourceQuote: string | null;
+  /** Huella estable del hecho: si ya hay una particularidad con esta huella, el apply la ACTUALIZA. */
+  fingerprint?: string | null;
   phaseId: string | null;
 }
 
 interface TimelineResponse {
   exists: true;
+  /** Señales del proyecto (avance, atrasos, alcance vs lo vendido, alarmas de etapa, estancamiento).
+   *  Alimenta el panel "Qué hacer acá" — antes solo existía en la vista de cartera, así que el canvas
+   *  no podía consumirlas y el CSE armaba el estado del proyecto de memoria. */
+  summary: ProjectSummary | null;
   anchorStartDate: string | null;
   lastEditedByHuman: string | null;
   generatedByAgentRunId: string | null;
@@ -193,6 +201,8 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
           needsValidation: true,
           phaseId: true,
           occurredAt: true,
+          // El link a la tarea que persigue el hecho: decide en qué grupo cae la fila.
+          convertedTaskId: true,
         },
       },
       phases: {
@@ -234,7 +244,12 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     },
   });
   if (!tl) return { exists: false };
-  const kickoffDate = await getKickoffSessionDate(projectId);
+  // El summary alimenta el panel "Qué hacer acá". Va en try/catch a propósito: es contexto de apoyo,
+  // y si falla no puede tumbar el cronograma en sí.
+  const [kickoffDate, summary] = await Promise.all([
+    getKickoffSessionDate(projectId),
+    loadProjectSummary(projectId).catch(() => null),
+  ]);
   // Sesiones de entrega reales por fase (calculado, no persistido). null por fase
   // = futura o sin anchor → la UI usa el estimado `sessionCount`.
   const deliveryByPhase = await countDeliverySessionsByPhase({
@@ -248,6 +263,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
   }));
   return {
     exists: true,
+    summary,
     anchorStartDate: tl.anchorStartDate?.toISOString() ?? null,
     lastEditedByHuman: tl.lastEditedByHuman?.toISOString() ?? null,
     generatedByAgentRunId: tl.generatedByAgentRunId,

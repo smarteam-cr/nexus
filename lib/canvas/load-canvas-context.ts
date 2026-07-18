@@ -12,6 +12,7 @@
  * directo desde ProjectTimeline).
  */
 import { prisma } from "@/lib/db/prisma";
+import { extractFingerprint } from "@/lib/timeline/particularidad-identity";
 
 interface BlockLite {
   blockType: string;
@@ -116,6 +117,17 @@ export async function loadCanvasContext(
  * tareas (con id + status) — lo usa el agente de avance para ver lo YA confirmado
  * (no re-proponerlo) y referenciar tareas por id. Implica `includeIds`.
  */
+/** Forma mínima de una desviación ya registrada, para mostrarle al agente lo que no debe repetir. */
+interface RegisteredParticularidad {
+  kind: string;
+  party: string;
+  title: string;
+  weeksImpact: number | null;
+  occurredAt: Date;
+  dedupeKey: string | null;
+  visibleExternal: boolean;
+}
+
 export async function loadTimelineContext(
   projectId: string,
   opts: { includeIds?: boolean; includeProgress?: boolean } = {},
@@ -141,6 +153,21 @@ export async function loadTimelineContext(
           },
         },
       },
+      // Desviaciones YA registradas — solo para el modo avance (el agente que las propone). Sin esto
+      // el agente es CIEGO a lo que ya registró y re-deriva el mismo hecho en cada corrida con otra
+      // redacción, duplicando la fila y contando el corrimiento dos veces. Espeja lo que hace el
+      // watchdog, que le pasa al modelo las alertas existentes CON su huella para que la reuse.
+      ...(withProgress
+        ? {
+            particularidades: {
+              orderBy: { occurredAt: "desc" as const },
+              select: {
+                kind: true, party: true, title: true, weeksImpact: true,
+                occurredAt: true, dedupeKey: true, visibleExternal: true,
+              },
+            },
+          }
+        : {}),
     },
   });
   if (!tl || tl.phases.length === 0) return "";
@@ -167,5 +194,23 @@ export async function loadTimelineContext(
       }
     }
   });
+
+  // Bloque de desviaciones ya registradas, con su HUELLA. Es lo que permite que la instrucción
+  // "no repitas lo ya registrado" sea cumplible: el agente ve el hecho y la clave con que quedó.
+  const yaRegistradas = withProgress ? (tl as { particularidades?: RegisteredParticularidad[] }).particularidades ?? [] : [];
+  if (yaRegistradas.length > 0) {
+    lines.push("");
+    lines.push(
+      "DESVIACIONES YA REGISTRADAS (NO las vuelvas a proponer). Si el MISMO hecho sigue vigente y querés" +
+        " corregirlo, devolvelo con su MISMA huella y se actualiza en lugar de duplicarse:",
+    );
+    for (const pt of yaRegistradas) {
+      const huella = extractFingerprint(pt.dedupeKey) ?? "(sin huella)";
+      const sem = pt.weeksImpact ? ` +${pt.weeksImpact}sem` : "";
+      lines.push(
+        `- [huella: ${huella}] ${pt.kind}/${pt.party}${sem} (${pt.occurredAt.toISOString().slice(0, 10)}) ${pt.title}`,
+      );
+    }
+  }
   return lines.join("\n");
 }

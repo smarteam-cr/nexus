@@ -21,6 +21,7 @@ import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma, type ParticularidadKind, type TaskParty } from "@prisma/client";
 import type { PendingParticularidad } from "../../route";
+import { buildDedupeKey, normalizeFingerprint } from "@/lib/timeline/particularidad-identity";
 
 // SOLICITUD deprecado (eje DESTINO): un insumo del cliente es una tarea party=CLIENTE, no una
 // particularidad. El agente ya no lo propone; no se admite crear ninguno nuevo.
@@ -74,7 +75,17 @@ export async function POST(
   // Construir las filas a crear desde el BORRADOR (source de verdad del contenido), solo para
   // los índices aceptados que resuelven a una particularidad válida. Re-validamos kind/party por
   // si el borrador quedó de una versión vieja o corrupto (defensa en profundidad).
+  // Las que YA existen, para resolver identidad. `dedupeKey` es la vía canónica; los títulos son el
+  // fallback para las filas LEGACY (creadas antes de que existiera la huella, que tienen dedupeKey null).
+  const existentes = await prisma.particularidad.findMany({
+    where: { timelineId: tl.id },
+    select: { id: true, dedupeKey: true, title: true, phaseId: true },
+  });
+  const porHuella = new Map(existentes.filter((e) => e.dedupeKey).map((e) => [e.dedupeKey as string, e]));
+
   const toCreate: Prisma.ParticularidadCreateManyInput[] = [];
+  const toUpdate: Array<{ id: string; data: Prisma.ParticularidadUpdateInput }> = [];
+
   for (const [index, visibleExternal] of visByIndex) {
     const d = draft[index];
     if (!d) continue;
@@ -90,41 +101,56 @@ export async function POST(
     // omite y la columna cae a su default now().
     const occTs = typeof d.occurredAt === "string" ? Date.parse(d.occurredAt) : NaN;
     const occurredAt = Number.isNaN(occTs) ? undefined : new Date(occTs);
-    toCreate.push({
-      timelineId: tl.id,
+    const sourceQuote = typeof d.sourceQuote === "string" && d.sourceQuote.trim() ? d.sourceQuote.trim() : null;
+    const dedupeKey = buildDedupeKey(tl.id, d.kind, normalizeFingerprint(d.fingerprint, d.title));
+
+    // ¿Ya existe este HECHO? 1) por huella exacta. 2) por título parecido, para absorber las filas
+    // legacy sin huella (si no, el mismo atraso queda dos veces y el corrimiento se cuenta doble).
+    let match = porHuella.get(dedupeKey) ?? null;
+    if (!match) {
+      const t = titleTokens(d.title);
+      for (const e of existentes) {
+        if (e.dedupeKey) continue; // las que ya tienen huella se resuelven arriba, no por texto
+        if (d.phaseId && e.phaseId && d.phaseId !== e.phaseId) continue;
+        if ([...titleTokens(e.title)].filter((w) => t.has(w)).length >= 2) { match = e; break; }
+      }
+    }
+
+    const contenido = {
       phaseId: d.phaseId ?? null,
       kind: d.kind as ParticularidadKind,
       party: d.party as TaskParty,
       title: d.title,
       detail: d.detail ?? null,
-      sourceQuote: typeof d.sourceQuote === "string" && d.sourceQuote.trim() ? d.sourceQuote.trim() : null,
+      sourceQuote,
       weeksImpact,
       ...(occurredAt ? { occurredAt } : {}),
       visibleExternal,
-      source: "AGENT",
-      needsValidation: false, // el CSE lo confirmó en el banner
-      createdByEmail: guard.user.email ?? null,
-    });
-  }
+    };
 
-  // Aviso NO bloqueante de posible duplicado. Pasa al aceptar un borrador nuevo sobre un proyecto que
-  // ya tiene una particularidad del MISMO hecho (típico tras la reconcepción: la vieja sin semanas y
-  // la nueva con semanas). Duplica la bitácora y, si ambas traen semanas, cuenta el atraso dos veces.
-  // Heurística de títulos (≥2 tokens significativos en común), la misma de migrate-particularidades-audit.
-  const existentes = await prisma.particularidad.findMany({
-    where: { timelineId: tl.id },
-    select: { title: true, phaseId: true },
-  });
-  const posiblesDuplicados: Array<{ title: string; similarA: string }> = [];
-  for (const c of toCreate) {
-    const t = titleTokens(c.title);
-    for (const e of existentes) {
-      if (c.phaseId && e.phaseId && c.phaseId !== e.phaseId) continue;
-      const shared = [...titleTokens(e.title)].filter((w) => t.has(w)).length;
-      if (shared >= 2) {
-        posiblesDuplicados.push({ title: c.title, similarA: e.title });
-        break;
-      }
+    if (match) {
+      // MISMO hecho re-detectado → se actualiza y se cuenta la repetición. Las semanas quedan en la
+      // última confirmada, NO se suman: sumar era exactamente el bug (13 semanas mostradas, 8 reales).
+      toUpdate.push({
+        id: match.id,
+        data: {
+          ...contenido,
+          dedupeKey, // backfill: la fila legacy adopta la huella y desde ahora dedupea por ella
+          occurrences: { increment: 1 },
+          lastDetectedAt: new Date(),
+          needsValidation: false,
+        },
+      });
+      porHuella.set(dedupeKey, { ...match, dedupeKey });
+    } else {
+      toCreate.push({
+        timelineId: tl.id,
+        ...contenido,
+        dedupeKey,
+        source: "AGENT",
+        needsValidation: false, // el CSE lo confirmó en el banner
+        createdByEmail: guard.user.email ?? null,
+      });
     }
   }
 
@@ -134,6 +160,9 @@ export async function POST(
       const r = await tx.particularidad.createMany({ data: toCreate });
       created = r.count;
     }
+    for (const u of toUpdate) {
+      await tx.particularidad.update({ where: { id: u.id }, data: u.data });
+    }
     // Aceptar esta tanda LIMPIA el borrador entero: lo no aceptado se descarta junto con él.
     await tx.projectTimeline.update({
       where: { id: tl.id },
@@ -141,7 +170,7 @@ export async function POST(
     });
   });
 
-  return NextResponse.json({ applied: true, created, posiblesDuplicados });
+  return NextResponse.json({ applied: true, created, updated: toUpdate.length });
 }
 
 // DELETE → descartar el borrador de particularidades sin crear nada (botón "Descartar").

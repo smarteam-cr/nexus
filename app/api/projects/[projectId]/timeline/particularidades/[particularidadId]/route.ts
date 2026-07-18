@@ -131,7 +131,7 @@ export async function PATCH(
       data.weeksImpact !== undefined ? (data.weeksImpact as number | null) : existing.weeksImpact;
     if (effectiveKind === "ATRASO" && (effectiveWeeks === null || effectiveWeeks < 1)) {
       return NextResponse.json(
-        { error: "Un ATRASO requiere weeksImpact ≥ 1 (semanas de corrimiento)." },
+        { error: "Un atraso necesita al menos 1 semana." },
         { status: 400 },
       );
     }

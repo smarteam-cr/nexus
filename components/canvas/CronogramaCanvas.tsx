@@ -26,20 +26,28 @@
  * Render INTERNO (tema oscuro del panel de canvas), no el design system del Kickoff.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { plural, computePhaseRanges } from "@/lib/timeline/weeks";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { plural, computePhaseRanges, currentWeekIndex, overduePlannedEnd, isOverdueByDate } from "@/lib/timeline/weeks";
 import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus, type GanttParticularidad, PARTY_META, PARTICULARIDAD_KIND_META, effParty } from "./TimelineGantt";
 import ParticularidadEditModal, { type ParticularidadPatch } from "./ParticularidadEditModal";
+import ParticularidadToTaskModal, { type ConvertPayload } from "./ParticularidadToTaskModal";
 import TaskDetailDrawer from "./TaskDetailDrawer";
 import TimelineAssistDialog from "./TimelineAssistDialog";
 import PublishBar from "./PublishBar";
 import { useMe } from "@/hooks/useMe";
 import CronogramaProgressButton from "@/components/clients/CronogramaProgressButton";
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
+import { useHydrated } from "@/lib/hooks/useHydrated";
+import { collectClientBlockers } from "@/lib/timeline/client-blockers";
+import { countDuplicateFacts } from "@/lib/timeline/particularidad-identity";
+import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
+import { buildProjectActions } from "@/lib/timeline/project-actions";
+import ProjectActionsPanel from "./ProjectActionsPanel";
+import type { ProjectSummary } from "@/lib/portfolio/summary";
 
 interface TaskDraft {
   id?: string;
@@ -183,11 +191,20 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [confirmingDetail, setConfirmingDetail] = useState(false);
   // Particularidades (desviaciones curadas) — el CSE ve todas; se pasan al Gantt para el resumen.
   const [particularidades, setParticularidades] = useState<GanttParticularidad[]>([]);
+  // Señales del proyecto para el panel "Qué hacer acá" (vienen con el GET del cronograma).
+  const [summary, setSummary] = useState<ProjectSummary | null>(null);
+  // ¿Hay cambios guardados que el cliente todavía no vio? Se deriva de la MISMA sugerencia de razón
+  // que precarga el modal de publicar: si hay texto sugerido, hay diff contra lo publicado.
+  const [cambiosSinPublicar, setCambiosSinPublicar] = useState(false);
   // Cambió una particularidad VISIBLE (visibilidad/contenido/borrado) desde la última publicación
   // → la barra "Subir" avisa que hay algo para re-publicar (lo ve el cliente recién al «Subir»).
   const [particularidadesDirty, setParticularidadesDirty] = useState(false);
   // Particularidad en edición (modal). null = cerrado.
   const [editingParticularidadId, setEditingParticularidadId] = useState<string | null>(null);
+  const [convertingParticularidadId, setConvertingParticularidadId] = useState<string | null>(null);
+  // Pedido del panel "Qué hacer acá" de abrir un grupo de la lista. El nonce hace que re-clickear
+  // el mismo CTA lo vuelva a abrir aunque el CSE lo haya cerrado a mano.
+  const [focusGroup, setFocusGroup] = useState<{ key: string; nonce: number } | null>(null);
   const [savingParticularidad, setSavingParticularidad] = useState(false);
   // Señal del workspace: al generar el handoff, el cronograma (si está vacío) recarga sus fases.
   const { timelineRefreshSignal, bumpGpsRefresh } = useWorkspace();
@@ -344,6 +361,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setDetailConfirmedAt(data.detailConfirmedAt ?? null);
         setParticularidades((data.particularidades as GanttParticularidad[] | undefined) ?? []);
         setParticularidadesDirty(false);
+        setSummary((data.summary as ProjectSummary | null) ?? null);
         setLastEditedAt(data.lastEditedByHuman ?? null);
         // Propuesta de re-generación del agente (re-run con cronograma ya existente):
         // se muestra como vista previa aplicable, reusando el mismo banner que el assist.
@@ -383,6 +401,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setDetailConfirmedAt(null);
         setParticularidades([]);
         setParticularidadesDirty(false);
+        setSummary(null);
         setLastEditedAt(null);
       }
       setError(null);
@@ -396,6 +415,27 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   useEffect(() => {
     load();
   }, [load]);
+
+  // "Hoy" recién después de hidratar: en SSR no existe, y calcularlo en el primer render
+  // desincroniza servidor y cliente (mismo patrón que TimelineGantt).
+  const hydrated = useHydrated();
+  const hydratedNow = useMemo(() => (hydrated ? new Date() : null), [hydrated]);
+
+  // ¿Hay cambios que el cliente todavía no vio? Se pregunta al MISMO endpoint que sugiere la razón
+  // de re-publicación: si tiene algo que decir, es que hay diff contra lo publicado. Best-effort.
+  useEffect(() => {
+    if (!publishedAt) { setCambiosSinPublicar(false); return; }
+    let cancelado = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/timeline/publish-suggestion`);
+        if (!res.ok) return;
+        const d = await res.json().catch(() => ({}));
+        if (!cancelado) setCambiosSinPublicar(typeof d?.suggestion === "string" && d.suggestion.trim() !== "");
+      } catch { /* el panel simplemente no muestra esa fila */ }
+    })();
+    return () => { cancelado = true; };
+  }, [projectId, publishedAt, lastEditedAt]);
 
   // Generar el handoff crea las fases del cronograma como efecto. El handoff bumpea
   // timelineRefreshSignal → si el cronograma está VACÍO, recargamos para que aparezcan (no
@@ -998,17 +1038,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         const d = await res.json().catch(() => ({}));
         setPendingParticularidades(null);
         await load(); // trae las particularidades creadas → aparecen en el resumen
-        toast.success(`${d?.created ?? 0} ${(d?.created ?? 0) === 1 ? "particularidad creada" : "particularidades creadas"}.`);
-        // Posible duplicado del mismo hecho: se creó igual (no bloquea), pero conviene revisarlo —
-        // dos registros del mismo atraso cuentan las semanas dos veces en el resumen.
-        const dups = (d?.posiblesDuplicados ?? []) as Array<{ title: string; similarA: string }>;
-        if (dups.length > 0) {
-          toast.info(
-            dups.length === 1
-              ? `«${dups[0].title}» se parece a una particularidad ya registrada («${dups[0].similarA}»). Revisá si está duplicada.`
-              : `${dups.length} de las creadas se parecen a particularidades ya registradas. Revisá si hay duplicados.`,
-          );
-        }
+        // El apply ahora FUSIONA: si el hecho ya estaba registrado lo actualiza en vez de duplicarlo.
+        const nuevas = (d?.created ?? 0) as number;
+        const fusionadas = (d?.updated ?? 0) as number;
+        const partes: string[] = [];
+        if (nuevas > 0) partes.push(`${nuevas} ${nuevas === 1 ? "nueva" : "nuevas"}`);
+        if (fusionadas > 0) partes.push(`${fusionadas} actualizada${fusionadas === 1 ? "" : "s"} (ya estaba${fusionadas === 1 ? "" : "n"} registrada${fusionadas === 1 ? "" : "s"})`);
+        toast.success(partes.length > 0 ? `Particularidades: ${partes.join(" · ")}.` : "Sin cambios.");
       }
     } catch {
       setError("Error de conexión al crear las particularidades.");
@@ -1098,6 +1134,56 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     }
   };
 
+  // ── Convertir un hecho en TRABAJO ──────────────────────────────────────────────
+  // El hecho queda como registro de por qué pasó; la tarea es quién lo hace y para cuándo. Nada de
+  // esto se aplica solo: el CSE elige dueño, fase y semana en el modal.
+  const convertParticularidad = async (id: string, payload: ConvertPayload) => {
+    setSavingParticularidad(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/particularidades/${id}/convert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(d?.error ?? "No se pudo crear la tarea.");
+        return;
+      }
+      setConvertingParticularidadId(null);
+      // Trae la tarea nueva al Gantt y el link a la fila (que cambia de grupo).
+      await load();
+      // Si el hecho dejó de mostrarse al cliente, eso recién llega al «Subir».
+      if (d?.hiddenFromClient) setParticularidadesDirty(true);
+      const fase = phases.find((p) => p.id === payload.phaseId)?.name ?? "el cronograma";
+      toast.success(`Tarea creada en ${fase} · semana ${payload.weekIndex + 1}.`, {
+        duration: 12000,
+        action: { label: "Deshacer", onClick: () => void undoConvert(id) },
+      });
+    } catch {
+      toast.error("Error de conexión al crear la tarea.");
+    } finally {
+      setSavingParticularidad(false);
+    }
+  };
+
+  const undoConvert = async (id: string) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/particularidades/${id}/convert`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d?.error ?? "No se pudo deshacer.");
+        return;
+      }
+      await load();
+      toast.info("Conversión deshecha.");
+    } catch {
+      toast.error("Error de conexión al deshacer.");
+    }
+  };
+
   const toggleSet = (s: Set<string>, id: string): Set<string> => {
     const n = new Set(s);
     if (n.has(id)) n.delete(id);
@@ -1152,32 +1238,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     }
   };
 
-  if (loading) {
-    return (
-      <div className="space-y-3 max-w-3xl">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-24 rounded-2xl skeleton-shimmer" />
-        ))}
-      </div>
-    );
-  }
-
-  // ── Derivados ─────────────────────────────────────────────────────────────────
-  const totalTasks = phases.reduce((n, p) => n + p.tasks.length, 0);
-  // ¿Ya se generó el detalle con IA? = existe al menos una tarea source ∈ {AGENT, MODIFIED} (el agente
-  // de detalle o el seed de Semana 0 las crean; MODIFIED = una tarea AGENT que el CSE editó — sigue
-  // siendo detalle generado). DEBE matchear el predicado del server (gate en analyze/route.ts): si solo
-  // contáramos AGENT, editar TODAS las tareas las volvía MODIFIED, hasAiDetail caía a false, el CTA
-  // "Generar" reaparecía y un re-run duplicaba las tareas. Las MANUALES (HUMAN) que el CSE ponga en la
-  // base NO cuentan → editar/agregar a mano la base no bloquea "Generar cronograma".
   const hasAiDetail = phases.some((p) => p.tasks.some((t) => t.source === "AGENT" || t.source === "MODIFIED"));
-  const pendingValidation = phases.reduce(
-    (n, p) => n + p.tasks.filter((t) => t.needsValidation).length,
-    0,
-  );
-  // Fases que el agente del handoff estimó sin datos de tiempos → banner + badge.
-  const estimatedPhases = phases.filter((p) => p.needsValidation).length;
-
   const ganttPhases: GanttPhase[] = phases.map((p) => ({
     key: p._key,
     id: p.id,
@@ -1207,6 +1268,105 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       dueDateOverride: t.dueDateOverride ?? null,
     })),
   }));
+
+  // ── Panel "Qué hacer acá" ──────────────────────────────────────────────────────
+  // Todas las señales ya estaban calculadas y repartidas; acá se juntan. El motor
+  // (lib/timeline/project-actions) es puro: acá solo se lo alimenta.
+  const projectActions = useMemo(() => {
+    const blockers = anchor && hydratedNow ? collectClientBlockers(ganttPhases, anchor, hydratedNow) : [];
+    const scope = summary?.scope;
+    return buildProjectActions({
+      pendingProgress: showProgressBanner,
+      pendingParticularidades: showParticBanner ? (pendingParticularidades?.length ?? 0) : 0,
+      pendingProposal: !!proposal,
+      anchorStartDate: anchor || null,
+      detailConfirmedAt,
+      timelinePublishedAt: publishedAt,
+      hasTasks: hasAiDetail,
+      cambiosSinPublicar,
+      // ATRASO sin semanas: no suma al corrimiento, así que el total que ve el CSE queda corto.
+      sinCuantificar: particularidades.filter((p) => p.kind === "ATRASO" && !p.weeksImpact).length,
+      duplicados: countDuplicateFacts(particularidades),
+      // Trabajo anotado que nadie está persiguiendo. MISMO criterio que el grupo "Compromisos sin
+      // dueño" al que lleva el botón: si acá se contaran también los atrasos sin cuantificar
+      // (que son convertibles) el número saldría inflado y no coincidiría con ningún grupo — y
+      // además los estaría contando dos veces, porque ya tienen su propia línea.
+      compromisosSinTarea: particularidades.filter(esCompromisoPendiente).length,
+      // Ya tiene tarea, pero la fecha pasó y sigue sin hacerse. Se usa el MISMO predicado de atraso
+      // del resto del sistema (semana + anchor), no una segunda matemática basada en committedDueDate.
+      compromisosVencidos: (() => {
+        const conTarea = new Set(
+          particularidades.map((p) => p.convertedTaskId).filter((id): id is string => !!id),
+        );
+        if (conTarea.size === 0 || !anchor || !hydratedNow) return 0;
+        const ranges = computePhaseRanges(ganttPhases);
+        let n = 0;
+        ganttPhases.forEach((ph, i) => {
+          for (const t of ph.tasks) {
+            if (!t.id || !conTarea.has(t.id)) continue;
+            const fin = overduePlannedEnd(anchor, ranges[i].start, t.weekIndex);
+            if (isOverdueByDate(fin, hydratedNow, t.status)) n++;
+          }
+        });
+        return n;
+      })(),
+      pendientesDelClienteVencidos: blockers.length,
+      // Las alarmas de cronograma solo aplican cuando la etapa ya lo dio por consensuado.
+      tareasVencidas: summary?.scheduleAlarmsActive ? (summary?.overdueTasks ?? 0) : 0,
+      alarmasDeEtapa: summary?.stageAlarms ?? [],
+      // `attenuated` = el baseline es flojo, así que el "extra" probablemente sea detalle, no alcance real.
+      alcanceExcedido:
+        scope?.exceeded && scope.measurable && !scope.attenuated
+          ? { addedTasks: scope.addedTasks, weeksDelta: scope.weeksDelta }
+          : null,
+      estancadoDias: summary?.stalled ? summary.daysSinceActivity : null,
+    });
+  }, [
+    ganttPhases, anchor, hydratedNow, summary, showProgressBanner, showParticBanner, pendingParticularidades,
+    proposal, detailConfirmedAt, publishedAt, hasAiDetail, cambiosSinPublicar, particularidades,
+  ]);
+
+  // Cada acción lleva a DONDE está la cosa (o abre el modal que la resuelve). No ejecuta nada sola.
+  // Las que apuntan a la lista de particularidades ABREN además su grupo: hacer scroll a un
+  // acordeón cerrado deja al CSE mirando un título, que es la mitad del gesto.
+  const handleProjectAction = (id: string) => {
+    const goto = (anchorId: string, grupo?: string) => {
+      if (grupo) setFocusGroup((f) => ({ key: grupo, nonce: (f?.nonce ?? 0) + 1 }));
+      document.getElementById(anchorId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    if (id === "sin-publicar" || id === "cambios-sin-publicar") return void openPublishModal();
+    if (id === "compromisos-sin-tarea") return goto("cronograma-particularidades", "compromisos");
+    if (id === "duplicados" || id === "sin-cuantificar") return goto("cronograma-particularidades", "arreglar");
+    if (id.startsWith("draft-")) return goto("cronograma-borradores");
+    return goto("cronograma-gantt");
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-3 max-w-3xl">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-24 rounded-2xl skeleton-shimmer" />
+        ))}
+      </div>
+    );
+  }
+
+  // ── Derivados ─────────────────────────────────────────────────────────────────
+  const totalTasks = phases.reduce((n, p) => n + p.tasks.length, 0);
+  // ¿Ya se generó el detalle con IA? = existe al menos una tarea source ∈ {AGENT, MODIFIED} (el agente
+  // de detalle o el seed de Semana 0 las crean; MODIFIED = una tarea AGENT que el CSE editó — sigue
+  // siendo detalle generado). DEBE matchear el predicado del server (gate en analyze/route.ts): si solo
+  // contáramos AGENT, editar TODAS las tareas las volvía MODIFIED, hasAiDetail caía a false, el CTA
+  // "Generar" reaparecía y un re-run duplicaba las tareas. Las MANUALES (HUMAN) que el CSE ponga en la
+  // base NO cuentan → editar/agregar a mano la base no bloquea "Generar cronograma".
+  const pendingValidation = phases.reduce(
+    (n, p) => n + p.tasks.filter((t) => t.needsValidation).length,
+    0,
+  );
+  // Fases que el agente del handoff estimó sin datos de tiempos → banner + badge.
+  const estimatedPhases = phases.filter((p) => p.needsValidation).length;
+
+
 
   // ── Drawer de detalle de tarea: resolución de la tarea VIVA + navegación ──────
   const drawerRanges = computePhaseRanges(phases);
@@ -1466,12 +1626,19 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         </div>
       )}
 
+      {/* ── "Qué hacer acá": el ARRIBA de la pantalla. Reúne las señales que antes vivían repartidas
+             (borradores sin confirmar, duplicados, pendientes del cliente vencidos, alcance por encima
+             de lo vendido, alarmas de etapa) en una lista corta y accionable. Nada se ejecuta solo. ── */}
+      {!loading && phases.length > 0 && (
+        <ProjectActionsPanel actions={projectActions} onAction={handleProjectAction} />
+      )}
+
       {/* ── Banner de AVANCE detectado por el agente (D.2) — propone, el CSE confirma ── */}
       {/* ── Banners de propuesta del agente: avance + particularidades, lado a lado (2 columnas)
           cuando ambos están; uno solo ocupa el ancho completo. Misma estructura de header
           (tile de ícono + título + subtítulo + acciones a la derecha) para que se lean como un sistema. ── */}
       {(showProgressBanner || showParticBanner) && (
-      <div className={`grid gap-4 items-start ${showProgressBanner && showParticBanner ? "lg:grid-cols-2" : "grid-cols-1"}`}>
+      <div id="cronograma-borradores" className={`grid gap-4 items-start scroll-mt-24 ${showProgressBanner && showParticBanner ? "lg:grid-cols-2" : "grid-cols-1"}`}>
         {showProgressBanner && (
           <div className="rounded-2xl border border-line bg-surface-muted px-5 py-4 space-y-4">
             <div className="flex items-start gap-3">
@@ -1721,7 +1888,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           readOnly
         />
       ) : (
-        <>
+        // `space-y-4` propio: el wrapper existe para que el panel "Qué hacer acá" pueda saltar acá
+        // (scrollIntoView), y replica el espaciado que estos hijos tenían sueltos en el contenedor.
+        <div id="cronograma-gantt" className="space-y-4 scroll-mt-24">
           {canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && (
             <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-700/50 text-amber-200">
               <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -1763,8 +1932,18 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             particularidades={particularidades}
             onToggleParticularidadVisible={canEdit ? toggleParticularidadVisible : undefined}
             onEditParticularidad={canEdit ? setEditingParticularidadId : undefined}
+            onConvertParticularidad={canEdit ? setConvertingParticularidadId : undefined}
+            onOpenConvertedTask={(taskId) => {
+              // El id de la tarea no dice en qué fase vive; el drawer se abre por (phaseKey, taskKey).
+              for (const p of phases) {
+                const t = p.tasks.find((tk) => tk.id === taskId);
+                if (t) return setSelectedTask({ phaseKey: p._key, taskKey: t._key });
+              }
+              toast.info("Esa tarea ya no está en el cronograma.");
+            }}
+            focusGroup={focusGroup}
           />
-        </>
+        </div>
       )}
 
       <TaskDetailDrawer
@@ -1796,6 +1975,25 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             onSave={(patch) => void saveParticularidad(editing.id, patch)}
             onDelete={() => void deleteParticularidad(editing.id)}
             onClose={() => setEditingParticularidadId(null)}
+          />
+        );
+      })()}
+
+      {/* Convertir un hecho en trabajo: dueño, fase y semana. Nada se aplica solo. */}
+      {(() => {
+        const conv = convertingParticularidadId
+          ? particularidades.find((p) => p.id === convertingParticularidadId)
+          : null;
+        if (!conv) return null;
+        return (
+          <ParticularidadToTaskModal
+            particularidad={conv}
+            phases={ganttPhases}
+            anchor={anchor || null}
+            currentWeek={hydratedNow ? currentWeekIndex(anchor || null, hydratedNow) : null}
+            saving={savingParticularidad}
+            onConvert={(payload) => void convertParticularidad(conv.id, payload)}
+            onClose={() => setConvertingParticularidadId(null)}
           />
         );
       })()}

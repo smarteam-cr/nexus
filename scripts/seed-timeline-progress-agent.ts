@@ -66,6 +66,8 @@ PROHIBIDO — NO son particularidades (NO las emitas acá):
 Regla de oro: si el hecho no MOVIÓ una fecha ni comprometió una nueva, NO es particularidad. Ante la duda → array vacío. Es MUCHO peor un pendiente disfrazado de particularidad que omitir una desviación (el CSE la agrega a mano si hace falta).
 
 REGLAS DURAS de particularidades:
+- **NO REPITAS LO YA REGISTRADO.** En el contexto recibís "DESVIACIONES YA REGISTRADAS" con la HUELLA de cada una. Si el hecho que ibas a proponer YA está ahí, NO lo propongas de nuevo. Corrés muchas veces sobre los mismos transcripts: sin esta regla el mismo hecho se carga una y otra vez y el corrimiento se cuenta doble.
+- "fingerprint": huella ESTABLE del hecho, en minúsculas con guiones (ej. "migracion-datos-licencia-salesforce"). Si el MISMO hecho vuelve a aparecer mañana, usá la MISMA huella. Si querés CORREGIR una ya registrada (cambió el impacto, se cuantificó, mejoró la redacción), devolvela con su huella EXACTA y se actualiza en lugar de duplicarse. Identificá el hecho por su NÚCLEO (qué se movió y por qué), no por cómo lo redactaste.
 - ATRIBUCIÓN: elegí UNA causa dominante. "AMBOS" es la EXCEPCIÓN, no el punto medio ni la salida diplomática — si dudás entre una parte y AMBOS, elegí la parte que ORIGINÓ la causa. Ejemplo: "la migración se postergó hasta el vencimiento de la licencia de Salesforce del cliente" → CLIENTE (la licencia es del cliente), NO AMBOS.
 - La atribución NO se suaviza. El "lenguaje cliente" aplica al TÍTULO, no a quién causó el atraso: el punto de esto es que quede por escrito quién movió el cronograma.
 - SOLO lo que el transcript RESPALDE con un hecho fechado. NO inventes desviaciones ni semanas.
@@ -93,7 +95,7 @@ FORMATO DE RESPUESTA — JSON EXACTO, sin markdown wrapping, sin comentarios fue
     ]
   },
   "particularidades": [
-    { "kind": "ATRASO|COMPROMISO", "party": "CLIENTE|SMARTEAM|AMBOS", "title": "<corto, lenguaje cliente>", "detail": "<opcional, 1-2 frases o null>", "weeksImpact": <entero ≥1 OBLIGATORIO en ATRASO; opcional/null en COMPROMISO>, "occurredAt": "<YYYY-MM-DD de la sesión del hecho>", "sourceQuote": "<fragmento corto que respalda, sin hora>", "phaseId": "<id EXACTO o null>" }
+    { "kind": "ATRASO|COMPROMISO", "fingerprint": "<huella estable en-minusculas-con-guiones>", "party": "CLIENTE|SMARTEAM|AMBOS", "title": "<corto, lenguaje cliente>", "detail": "<opcional, 1-2 frases o null>", "weeksImpact": <entero ≥1 OBLIGATORIO en ATRASO; opcional/null en COMPROMISO>, "occurredAt": "<YYYY-MM-DD de la sesión del hecho>", "sourceQuote": "<fragmento corto que respalda, sin hora>", "phaseId": "<id EXACTO o null>" }
   ]
 }
 Incluí en "phases" y "tasks" SOLO lo que marcás done:true (no listes lo pendiente ni lo ya-DONE). "reasoning" es obligatorio. "particularidades" es un array (vacío [] si no detectás NINGUNA desviación fechada respaldada por el transcript — que sea vacío es lo normal y esperable).`;
