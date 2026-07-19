@@ -15,6 +15,7 @@ import KickoffWorkspace from "@/components/canvas/KickoffWorkspace";
 import DesarrolloWorkspace from "@/components/canvas/DesarrolloWorkspace";
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
+import CanvasBoundary from "./CanvasBoundary";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
@@ -549,7 +550,9 @@ export default function ProjectCanvasPanel({
 
       {/* Handoff: vista lineal (lectura/curación del CSE, sin grilla) */}
       {!isResumenCanvas && activeCanvas?.name === "Handoff" && activeCanvasId && (
-        <CanvasLinearView projectId={projectId} canvasId={activeCanvasId} />
+        <CanvasBoundary label="el Handoff">
+          <CanvasLinearView projectId={projectId} canvasId={activeCanvasId} />
+        </CanvasBoundary>
       )}
 
       {/* Kickoff: landing (Camino C) editable in-situ por el CSE.
@@ -563,11 +566,13 @@ export default function ProjectCanvasPanel({
               FLIP: el editor NUEVO sobre el motor LandingView (drag&drop + edición tipada)
               es el DEFAULT. El renderer VIEJO queda como escape con `?kve=old` (rollback
               puntual; el fallback tolerante del motor ya pinta la prosa markdown heredada). */}
-          {searchParams.get("kve") === "old" ? (
-            <KickoffLanding key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} editable />
-          ) : (
-            <KickoffWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
-          )}
+          <CanvasBoundary label="el Kickoff">
+            {searchParams.get("kve") === "old" ? (
+              <KickoffLanding key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} editable />
+            ) : (
+              <KickoffWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+            )}
+          </CanvasBoundary>
         </div>
       )}
 
@@ -576,7 +581,9 @@ export default function ProjectCanvasPanel({
           aparece si el handoff detectó trabajo técnico (o se regenera con el botón). */}
       {!isResumenCanvas && activeCanvas?.name === "Desarrollo" && activeCanvasId && (
         <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
-          <DesarrolloWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} clientId={clientId} canvasId={activeCanvasId} />
+          <CanvasBoundary label="el canvas de Desarrollo">
+            <DesarrolloWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} clientId={clientId} canvasId={activeCanvasId} />
+          </CanvasBoundary>
         </div>
       )}
 
@@ -585,13 +592,17 @@ export default function ProjectCanvasPanel({
           disparo del agente de detalle (POST /api/clients/[clientId]/analyze). */}
       {activeCanvas?.name === "Cronograma" && (
         // agentNonce remonta el canvas al terminar el CTA de avance → muestra el banner
-        <CronogramaCanvas key={`cronograma-${agentNonce}`} projectId={projectId} clientId={clientId} headerSlot={cronogramaSlot} />
+        <CanvasBoundary label="el Cronograma">
+          <CronogramaCanvas key={`cronograma-${agentNonce}`} projectId={projectId} clientId={clientId} headerSlot={cronogramaSlot} />
+        </CanvasBoundary>
       )}
 
       {/* Resto de canvases custom: grilla de bloques (Diagnóstico, Planificación, …) */}
       {!isResumenCanvas && activeCanvas?.name !== "Handoff" && activeCanvas?.name !== "Kickoff" && activeCanvas?.name !== "Desarrollo" && activeCanvas?.name !== "Cronograma" && activeCanvasId && (
         // agentNonce remonta la grilla al terminar una corrida del CTA → refetch
-        <SectionBlockList key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+        <CanvasBoundary label="este canvas">
+          <SectionBlockList key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+        </CanvasBoundary>
       )}
 
       {/* ── Resumen — LEGACY / RETIRADO (código muerto) ─────────────────────

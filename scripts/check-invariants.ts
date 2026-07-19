@@ -1,4 +1,6 @@
 import "dotenv/config";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { $Enums } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
@@ -129,6 +131,50 @@ async function main(): Promise<number> {
     );
   } else {
     console.log("✓ INV5: todo Cobro con fechaEmision tiene facturadoPor.");
+  }
+
+  // ── Inv 6: ningún `new Pool(` sin `max:` (post-mortem EMAXCONNSESSION jul-2026:
+  //    el default de pg es max:10 y el pooler de Supabase da ~15 slots COMPARTIDOS
+  //    entre prod + 2 PCs + scripts — un pool sin presupuesto tumba producción).
+  //    DURO en lib/ y app/ (runtime: el único pool legítimo es lib/db/prisma.ts);
+  //    ADVERTENCIA en scripts/ (los one-off legacy quedan; los nuevos deben usar
+  //    scripts/lib/db.ts → createScriptDb/createScriptPool). ──
+  const scanPoolWithoutMax = (dir: string): string[] => {
+    const hits: string[] = [];
+    const walk = (d: string) => {
+      for (const name of readdirSync(d)) {
+        if (name === "node_modules" || name.startsWith(".")) continue;
+        const full = join(d, name);
+        if (statSync(full).isDirectory()) { walk(full); continue; }
+        if (!/\.(ts|tsx|mts)$/.test(name)) continue;
+        const src = readFileSync(full, "utf8");
+        let idx = src.indexOf("new Pool(");
+        while (idx !== -1) {
+          // `max:` debe aparecer dentro de la config del Pool (ventana de 400 chars).
+          if (!src.slice(idx, idx + 400).includes("max:")) { hits.push(full); break; }
+          idx = src.indexOf("new Pool(", idx + 1);
+        }
+      }
+    };
+    walk(dir);
+    return hits;
+  };
+  const runtimePools = [...scanPoolWithoutMax(join(process.cwd(), "lib")), ...scanPoolWithoutMax(join(process.cwd(), "app"))];
+  const scriptPools = scanPoolWithoutMax(join(process.cwd(), "scripts")).filter(
+    (f) => !f.replace(/\\/g, "/").endsWith("scripts/lib/db.ts"),
+  );
+  if (runtimePools.length > 0) {
+    violations++;
+    console.error(`✗ INV6 VIOLADO: ${runtimePools.length} archivo(s) de RUNTIME crean new Pool( sin max: (default 10 → agota el pooler compartido):`);
+    for (const f of runtimePools) console.error(`    - ${f}`);
+    console.error("  El único pool de runtime legítimo es lib/db/prisma.ts (POOL_MAX por entorno).");
+  } else {
+    console.log("✓ INV6: ningún pool de runtime sin presupuesto (max:).");
+  }
+  if (scriptPools.length > 0) {
+    console.warn(
+      `⚠ INV6 (no bloquea): ${scriptPools.length} script(s) con new Pool( sin max: — legacy one-off tolerado; scripts NUEVOS deben usar scripts/lib/db.ts (createScriptDb, max:2).`,
+    );
   }
 
   return violations;

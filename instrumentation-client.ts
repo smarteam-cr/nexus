@@ -14,7 +14,14 @@ if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
     environment: process.env.NODE_ENV ?? "development",
+    // Se inlinea en build (Dockerfile ARG GIT_SHA). Mismo string que el server:
+    // un navegador con chunks viejos reporta con la release VIEJA mientras el
+    // server reporta la nueva — el deploy mixto se vuelve un filtro de Sentry.
+    release: process.env.NEXT_PUBLIC_GIT_SHA,
     tracesSampleRate: 0,
+    // Mismo criterio que el server (instrumentation.ts): ruido de conexiones que
+    // el usuario corta a mitad de camino. NO filtrar señales de pool/DB.
+    ignoreErrors: [/ECONNRESET/, /\baborted\b/i],
   });
 }
 

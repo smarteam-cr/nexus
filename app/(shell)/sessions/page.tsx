@@ -33,7 +33,11 @@ export default async function SessionsPage() {
   // teamMembers + categories vienen del cache (cambian poco, TTL 10 min).
   // sessions/transcriptIds/clients son live para reflejar cambios al instante.
   const now = new Date();
-  const [sessions, transcriptIds, minutes, sessionProjectLinks, clientsWithActiveProjects, clients, teamMembers, categories] = await Promise.all([
+  const [sessions, transcriptIds, summaryIds, minutes, sessionProjectLinks, clientsWithActiveProjects, clients, teamMembers, categories] = await Promise.all([
+    // PERF (dieta de /sessions): el blob `summary` NO viaja en la lista — con ~16k
+    // filas era el peso dominante de la página (DB → server → payload RSC). La lista
+    // solo necesita el booleano `hasSummary` (query aparte, abajo); el blob se carga
+    // lazy al abrir el detalle (GET /api/sessions/[id], que ya lo devolvía).
     prisma.firefliesSession.findMany({
       where: { date: { lt: now } },
       orderBy: { date: "desc" },
@@ -44,7 +48,6 @@ export default async function SessionsPage() {
         duration: true,
         participants: true,
         source: true,
-        summary: true,
         enrichedAt: true,
         manualClientId: true,
       },
@@ -53,6 +56,19 @@ export default async function SessionsPage() {
       where: { date: { lt: now }, transcript: { not: null } },
       select: { id: true },
     }),
+    // ¿Qué sesiones tienen resumen CON CONTENIDO? Misma semántica que el check viejo
+    // del cliente (overview || keywords.length || action_items.length) pero computada
+    // en Postgres: solo cruzan los ids. jsonb_typeof guarda contra shapes raros.
+    prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "FirefliesSession"
+      WHERE date < ${now}
+        AND summary IS NOT NULL
+        AND (
+          COALESCE(summary->>'overview', '') <> ''
+          OR (jsonb_typeof(summary->'keywords') = 'array' AND jsonb_array_length(summary->'keywords') > 0)
+          OR (jsonb_typeof(summary->'action_items') = 'array' AND jsonb_array_length(summary->'action_items') > 0)
+        )
+    `,
     prisma.sessionMinute.findMany({
       select: { sessionId: true, status: true },
     }),
@@ -78,6 +94,8 @@ export default async function SessionsPage() {
 
   // Set para lookup O(1) — ¿esta sesión tiene transcript?
   const withTranscriptSet = new Set(transcriptIds.map((t) => t.id));
+  // Set para lookup O(1) — ¿esta sesión tiene resumen con contenido?
+  const withSummarySet = new Set(summaryIds.map((s) => s.id));
   // Map sessionId → MinuteStatus para mostrar badge en sidebar
   const minuteStatusBySessionId = new Map(minutes.map((m) => [m.sessionId, m.status]));
   // F3-D: set de sesiones que ya tienen al menos un proyecto asignado
@@ -143,7 +161,7 @@ export default async function SessionsPage() {
       participants: s.participants,
       source: s.source,
       hasTranscript: withTranscriptSet.has(s.id),
-      summary: s.summary as { keywords?: string[]; overview?: string; action_items?: string[] } | null,
+      hasSummary: withSummarySet.has(s.id),
       enrichedAt: s.enrichedAt?.toISOString() ?? null,
       manualClientId: s.manualClientId,
       group: s.group,

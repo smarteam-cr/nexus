@@ -36,6 +36,7 @@ import { getBrandLogos, platformLogosFor } from "./smarteam-logo";
 import { RECURRENTE_TAG } from "@/lib/tags/catalog";
 import { applyAssignments, normalizeAssignments, HORARIOS_KEY } from "@/lib/kickoff/horario-assignments";
 import { comparaSectionHasContent, stripProseCompara, COMPARA_KEY } from "@/components/canvas/kickoff-landing-adapter";
+import { normalizeKickoffSnapshot } from "./snapshot-normalize";
 
 /**
  * Resuelve un token de acceso externo al Kickoff publicado de SU proyecto.
@@ -104,7 +105,14 @@ export async function getPublishedKickoffForToken(
   type SectionRow = Awaited<ReturnType<typeof liveSections>>[number];
   type ProcesoRow = Awaited<ReturnType<typeof readClientProcesos>>[number];
 
-  let snap = canvas.publishedSnapshot as unknown as
+  // SANEO del snapshot congelado ANTES de usarlo. Antes esto era un cast crudo
+  // y un snapshot viejo sin `blocks` en alguna sección tiraba TypeError en el
+  // RSC — la página del CLIENTE caía a la pantalla de error (una semana de
+  // eventos en Sentry). `null` = snapshot inusable → backfill perezoso abajo.
+  // El cast posterior a SectionRow/ProcesoRow es el mismo de siempre, pero
+  // ahora los DATOS están garantizados en runtime (arrays presentes, ítems
+  // basura descartados).
+  let snap = normalizeKickoffSnapshot(canvas.publishedSnapshot) as unknown as
     | { sections?: SectionRow[]; procesos?: ProcesoRow[] }
     | null;
 

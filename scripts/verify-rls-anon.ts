@@ -11,9 +11,8 @@
  * Uso: npx tsx scripts/verify-rls-anon.ts
  * Exit 0 = todas en 0 filas · exit 1 = alguna tabla filtra o falta config.
  */
-import { Pool } from "pg";
 import { createClient } from "@supabase/supabase-js";
-import "dotenv/config";
+import { createScriptPool } from "./lib/db";
 
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -27,7 +26,8 @@ async function main() {
   }
 
   // Lista real de tablas (rol privilegiado, solo lectura de catálogo).
-  const pool = new Pool({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } });
+  // Pool acotado (max:2) — no comerse los slots compartidos (ver scripts/lib/db.ts).
+  const { pool } = createScriptPool();
   const { rows } = await pool.query<{ tablename: string }>(
     `SELECT tablename FROM pg_tables
       WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'

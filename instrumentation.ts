@@ -29,7 +29,17 @@ export async function register() {
     Sentry.init({
       dsn: process.env.SENTRY_DSN,
       environment: process.env.NODE_ENV ?? "development",
+      // La firma del build (Dockerfile ARG GIT_SHA). Server y browser comparten
+      // el MISMO string → un deploy mixto (chunks viejos + server nuevo) se ve
+      // como dos releases distintas en Sentry, en vez de ser arqueología.
+      // undefined en dev = sin release, inocuo.
+      release: process.env.GIT_SHA,
       tracesSampleRate: 0,
+      // Ruido de clientes que cortan la conexión (cierran la pestaña, navegan
+      // a mitad de un request). No es un error nuestro y tapaba las señales.
+      // OJO: NO filtrar "Connection terminated" ni "max clients reached" — esos
+      // son el pool agotándose y TIENEN que seguir llegando.
+      ignoreErrors: [/ECONNRESET/, /\baborted\b/i],
     });
   }
 

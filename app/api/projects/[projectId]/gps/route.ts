@@ -2,63 +2,44 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { getStageSteps, STAGE_LABELS } from "@/lib/steps";
 import { getProjectStage } from "@/lib/hubspot/stage";
-import { normalize, extractTitleTerms } from "@/lib/utils/matching";
-import { enrichClient } from "@/lib/matching/enrichment";
-import { sessionMatchesClient } from "@/lib/matching/cascade";
-import type { EnrichedClientMatcher } from "@/lib/matching/cascade";
-import type { RawTranscript } from "@/lib/utils/matching";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { withProjectAccess } from "@/lib/api";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
+import { computeBookends, type FrontSession, type SessionBookends } from "@/lib/sessions/bookends";
 import { loadProjectSetup } from "@/lib/portfolio/project-setup";
 
-// Sesión cruda por frente (auto-detectada). mixed = participan ambas áreas.
-type FrontSession = {
-  sessionId: string;
-  title: string;
-  date: string;
-  mixed: boolean;
-  summary: string | null;
-  googleDocId: string | null;
-  googleEventId: string | null;
-};
-// Por frente: la próxima futura y la última pasada (cada una puede faltar).
-type FrontPairAuto = { next: FrontSession | null; last: FrontSession | null };
-
-// Buscar sesiones del cliente (Google Meet + Fireflies legacy) y devolver la próxima
-// futura y la última pasada — a nivel proyecto y POR FRENTE (Ventas / CSE).
-async function getClientSessionBookends(clientId: string): Promise<{
-  next: {
-    sessionId: string;
-    title: string;
-    date: string;
-    googleEventId: string | null;
-    googleDocId: string | null;
-  } | null;
-  last: {
-    sessionId: string;
-    title: string;
-    date: string;
-    summary: string | null;
-    googleDocId: string | null;
-  } | null;
-  fronts: { ventas: FrontPairAuto; cs: FrontPairAuto };
-}> {
-  const emptyFronts = { ventas: { next: null, last: null }, cs: { next: null, last: null } };
-
-  const client = await prisma.client.findUnique({
-    where: { id: clientId },
-    include: { hubspotAccount: { select: { id: true } } },
-  });
-
-  if (!client) return { next: null, last: null, fronts: emptyFronts };
-
-  const [enriched, team] = await Promise.all([
-    enrichClient(client),
+// Sesiones del cliente (Google Meet + Fireflies legacy) → próxima futura y última
+// pasada, a nivel proyecto y POR FRENTE (Ventas / CSE).
+//
+// PERF #1 (la dieta del GPS): antes esto cargaba las ~16.000 FirefliesSession con
+// su blob `summary` y corría el cascade de matching + enrichClient (4-8 llamadas
+// HubSpot EN VIVO) en cada render del widget: ~6s y el peor consumidor del pool.
+// Ahora consulta por `resolvedClientId` — el matching YA materializado (con índice
+// `[resolvedClientId, date desc]`, mantenido por resolve-sessions), el MISMO dato
+// del que depende /clients para "última actividad". El override manual conserva su
+// precedencia: manualClientId apunta acá O (sin override) la resolución automática.
+async function getClientSessionBookends(clientId: string): Promise<SessionBookends> {
+  const [team, sessions] = await Promise.all([
     prisma.teamMember.findMany({ select: { email: true, area: true, roleEnum: true } }),
+    prisma.firefliesSession.findMany({
+      where: {
+        OR: [
+          { manualClientId: clientId },
+          { manualClientId: null, resolvedClientId: clientId },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        date: true,
+        participants: true,
+        googleEventId: true,
+        googleDocId: true,
+        summary: true,
+      },
+      orderBy: { date: "desc" },
+    }),
   ]);
-  // Set normalizado para el cascade de matching (igual que antes)…
-  const teamEmails = new Set(team.map((m) => normalize(m.email)));
-  // …y los Sets por área (frente) para clasificar a los participantes internos.
+
   // El frente "CSE" del GPS es el de ENTREGA (deliveryEmails = CSE ∪ Development,
   // igual que lib/timeline/delivery-sessions.ts): las sesiones técnicas que lleva
   // solo un Dev/SA (p. ej. una integración SAP) son sesiones de entrega — con solo
@@ -66,136 +47,29 @@ async function getClientSessionBookends(clientId: string): Promise<{
   // aunque hubiera reunión agendada.
   const { salesEmails, deliveryEmails } = classifyTeamEmailsByArea(team);
 
-  for (const te of teamEmails) {
-    enriched.companyContactEmails.delete(te);
-    enriched.dealContactEmails.delete(te);
-  }
+  return computeBookends(sessions, Date.now(), salesEmails, deliveryEmails);
+}
 
-  const titleTerms = client.name ? extractTitleTerms(client.name) : [];
-  const matcher: EnrichedClientMatcher = {
-    clientId,
-    name: client.name ?? "",
-    titleTerms,
-    enriched,
-  };
-
-  const hasMatchingSignal =
-    titleTerms.length > 0 ||
-    enriched.domains.size > 0 ||
-    enriched.companyContactEmails.size > 0 ||
-    enriched.dealContactEmails.size > 0;
-
-  if (!hasMatchingSignal) return { next: null, last: null, fronts: emptyFronts };
-
-  // Cargar todas las sesiones (manualClientId override + matching cascade)
-  // Optimización: traer solo lo que necesitamos para matching + bookends
-  const allSessions = await prisma.firefliesSession.findMany({
-    select: {
-      id: true,
-      title: true,
-      date: true,
-      duration: true,
-      participants: true,
-      googleEventId: true,
-      googleDocId: true,
-      summary: true,
-      manualClientId: true,
-    },
-    orderBy: { date: "desc" },
-  });
-
-  const matched = allSessions.filter((s) => {
-    // Override manual: si la sesión tiene manualClientId, solo matchea con ese
-    if (s.manualClientId) return s.manualClientId === clientId;
-
-    // Cascade automático
-    const raw: RawTranscript = {
-      id: s.id,
-      title: s.title,
-      date: s.date.getTime(),
-      duration: s.duration,
-      participants: s.participants,
-    };
-    return sessionMatchesClient(raw, matcher, teamEmails);
-  });
-
-  const now = Date.now();
-  // matched está ordenado DESC por date → reversa para encontrar la primera futura ASC
-  const future = [...matched].reverse().filter((s) => s.date.getTime() > now);
-  const past = matched.filter((s) => s.date.getTime() <= now);
-
-  const nextRaw = future[0] ?? null;
-  const lastRaw = past[0] ?? null;
-
-  const extractSummaryText = (summary: unknown): string | null => {
-    if (!summary || typeof summary !== "object") return null;
-    const s = summary as Record<string, unknown>;
-    // Estructura típica de Fireflies: { overview, shorthand_bullet, action_items, ... }
-    if (typeof s.overview === "string") return s.overview;
-    if (typeof s.shorthand_bullet === "string") return s.shorthand_bullet;
-    return null;
-  };
-
-  // ── Por frente (Ventas / CSE): la próxima futura que involucra al área y la última
-  //    pasada que la involucra (cada una por separado). Una sesión mixta (ambas áreas)
-  //    cae en los dos frentes. future está ASC y past DESC → el primer .find() es el
-  //    bookend correcto en cada caso.
-  const involvesArea = (s: (typeof matched)[number], emails: Set<string>) =>
-    s.participants.some((p) => emails.has(p.toLowerCase()));
-
-  const buildFront = (s: (typeof matched)[number]): FrontSession => ({
-    sessionId: s.id,
-    title: s.title,
-    date: s.date.toISOString(),
-    mixed: involvesArea(s, salesEmails) && involvesArea(s, deliveryEmails),
-    summary: extractSummaryText(s.summary),
-    googleDocId: s.googleDocId,
-    googleEventId: s.googleEventId,
-  });
-
-  const frontPair = (emails: Set<string>): FrontPairAuto => {
-    if (emails.size === 0) return { next: null, last: null };
-    const n = future.find((s) => involvesArea(s, emails)) ?? null;
-    const l = past.find((s) => involvesArea(s, emails)) ?? null;
-    return { next: n ? buildFront(n) : null, last: l ? buildFront(l) : null };
-  };
-
-  const fronts = {
-    ventas: frontPair(salesEmails),
-    cs: frontPair(deliveryEmails),
-  };
-
-  return {
-    next: nextRaw
-      ? {
-          sessionId: nextRaw.id,
-          title: nextRaw.title,
-          date: nextRaw.date.toISOString(),
-          googleEventId: nextRaw.googleEventId,
-          googleDocId: nextRaw.googleDocId,
-        }
-      : null,
-    last: lastRaw
-      ? {
-          sessionId: lastRaw.id,
-          title: lastRaw.title,
-          date: lastRaw.date.toISOString(),
-          summary: extractSummaryText(lastRaw.summary),
-          googleDocId: lastRaw.googleDocId,
-        }
-      : null,
-    fronts,
-  };
+/**
+ * getProjectStage consulta HubSpot EN VIVO y sin tope: un HubSpot lento colgaba el
+ * widget entero. Cap de 1.5s — si no llega, el caller cae al label YA SINCRONIZADO
+ * (Project.hubspotPipelineStageLabel). La llamada perdedora sigue en background y
+ * termina sola; no se cancela (el SDK no expone abort), solo se deja de esperar.
+ */
+const STAGE_TIMEOUT_MS = 1500;
+async function getProjectStageCapped(hubspotServiceId: string) {
+  return Promise.race([
+    getProjectStage(hubspotServiceId).catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), STAGE_TIMEOUT_MS)),
+  ]);
 }
 
 // GET: obtener datos del GPS del proyecto
-export async function GET(
+export const GET = withProjectAccess(async (
   _req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
-) {
+) => {
   const { projectId } = await params;
-  const guard = await guardAccessToProject(projectId);
-  if (guard instanceof NextResponse) return guard;
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -228,10 +102,11 @@ export async function GET(
   // Estado actual (HubSpot first, fallback a stage/step internos)
   let currentState: string;
   if (project.hubspotServiceId) {
-    // La etapa se resuelve EN VIVO desde HubSpot (lo más fresco). Si la llamada falla (token del
-    // sistema vencido, rate-limit, etc.), caer al label YA SINCRONIZADO en el Project (sync-projects)
-    // en vez de "Sin etapa" — el dato existe, solo no se pudo revalidar ahora.
-    const stage = await getProjectStage(project.hubspotServiceId);
+    // La etapa se resuelve EN VIVO desde HubSpot (lo más fresco) pero con CAP de 1.5s:
+    // si la llamada falla o no llega a tiempo (token vencido, rate-limit, HubSpot lento),
+    // caer al label YA SINCRONIZADO en el Project (sync-projects) en vez de "Sin etapa"
+    // — el dato existe, solo no se pudo revalidar ahora.
+    const stage = await getProjectStageCapped(project.hubspotServiceId);
     currentState = stage?.label ?? project.hubspotPipelineStageLabel ?? "Sin etapa";
   } else {
     const stageSteps = getStageSteps(project.serviceType);
@@ -422,16 +297,14 @@ export async function GET(
     historyItems, // tareas hechas o borradas (tab Histórico)
     setup, // #5 — { handoff, kickoff, cronograma, procesos } para el indicador del widget
   });
-}
+});
 
 // PUT: actualizar datos del GPS
-export async function PUT(
+export const PUT = withProjectAccess(async (
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
-) {
+) => {
   const { projectId } = await params;
-  const guard = await guardAccessToProject(projectId);
-  if (guard instanceof NextResponse) return guard;
 
   const body = await req.json();
 
@@ -473,4 +346,4 @@ export async function PUT(
   });
 
   return NextResponse.json({ ok: true });
-}
+});

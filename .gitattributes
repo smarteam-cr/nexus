@@ -1,0 +1,4 @@
+# Los .sh corren en el VPS (Linux): forzar LF en el checkout SIEMPRE, sin
+# importar el autocrlf de la máquina. Un deploy.sh con CRLF falla en bash con
+# el críptico "$'\r': command not found".
+*.sh text eol=lf

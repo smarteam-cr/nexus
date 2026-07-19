@@ -61,6 +61,15 @@ ARG DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholde
 ENV DATABASE_URL=${DATABASE_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# SHA del commit que se está horneando — la FIRMA del build. Viaja al browser
+# (NEXT_PUBLIC_* se inlinea) y al server (ENV del runner, abajo). Es lo que
+# permite a deploy.sh detectar un deploy mixto (imagen vieja ≠ checkout nuevo)
+# y a Sentry etiquetar cada evento con su release. NUNCA ponerlo en el .env del
+# VPS: ahí reflejaría el checkout, no la imagen corriendo — perdería exactamente
+# la capacidad de detectar la mezcla.
+ARG GIT_SHA=dev
+ENV NEXT_PUBLIC_GIT_SHA=${GIT_SHA}
+
 RUN npx prisma generate
 RUN npm run build
 
@@ -101,6 +110,11 @@ COPY --from=builder --chown=node:node /app/node_modules/@prisma ./node_modules/@
 COPY --from=builder --chown=node:node /opt/chrome /opt/chrome
 RUN ln -sf "$(find /opt/chrome -type f -name chrome -path '*chrome-linux64*' | head -1)" /usr/local/bin/chrome-pdf
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chrome-pdf
+
+# La misma firma del build, para el server en runtime (/api/health la expone y
+# Sentry la usa como release). Va al final para no invalidar las capas de apt.
+ARG GIT_SHA=dev
+ENV GIT_SHA=${GIT_SHA}
 
 USER node
 EXPOSE 3000

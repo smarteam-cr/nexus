@@ -39,18 +39,45 @@ Reglas duras:
 4. Para flags/overrides nuevos, preferir un campo Json YA existente antes que
    una columna nueva sin coordinar (ej.: los briefs viven en
    `ProjectCanvas.sections`).
+5. **`prisma db push` JAMÁS contra el puerto `:6543`** (transaction pooling):
+   DDL a través del pooler en transaction mode produce bugs sutiles. Siempre
+   contra el host directo `:5432` — que es lo que las PCs de dev ya usan.
+
+## Invariante #3 — PRESUPUESTO DE CONEXIONES (pooler compartido)
+
+El pooler de Supabase da ~15 slots que COMPARTEN producción + las 2 PCs de dev +
+cualquier script corriendo. Post-mortem jul-2026: `EMAXCONNSESSION` (147 eventos)
+por aritmética — prod (max 10) + 2 devs (max 10 c/u) + scripts sin tope.
+
+- El pool de la app (`lib/db/prisma.ts`): **prod 10 · dev 4** (override
+  `DB_POOL_MAX`). `/api/health` expone `pool: {total,idle,waiting}`.
+- **Scripts**: usar `scripts/lib/db.ts` (`createScriptDb`/`createScriptPool`,
+  `max: 2`) — nunca `new Pool()` pelado (default 10). `check-invariants` (INV6)
+  lo bloquea en runtime (lib/, app/) y lo advierte en scripts/ legacy.
 
 ## Deploy
 
 ```bash
-cd /opt/smartflow/Nexus
-git pull origin main
-docker compose up -d --build     # --build solo si cambió código/Dockerfile
-docker logs nexus --tail 50      # sanity check post-deploy
+cd /opt/smartflow/Nexus && bash scripts/deploy.sh
 ```
 
+UNA línea, sin decisiones. El script hace: pull ff-only → **rebuild SIEMPRE** →
+swap esperando healthy (healthcheck del compose = `/api/health`) → smoke
+(`ok:true` **y** el SHA corriendo == HEAD del checkout). Si algo falla, el
+contenedor viejo queda intacto o el script imprime el rollback exacto:
+`docker tag nexus:prev nexus:latest && docker compose up -d --no-build app`.
+
+⚠️ **NUNCA `docker compose up -d` a mano sin `--build` después de un pull.**
+Eso re-levanta la imagen VIEJA contra la base con schema nuevo = el "deploy
+mixto" que generó la ola de errores de julio 2026 (`prisma.roleProfile`
+undefined ×558, `PrismaClientValidationError` en 5 rutas, chunks stale). El
+detector es `/api/health`: expone el `sha` horneado en la imagen + un canario
+del cliente Prisma (`roleProfile.count()`).
+
 - `.env` de esa carpeta = runtime (DATABASE_URL, keys, `CRON_ENABLED=1`,
-  `CS_WATCHDOG_ENABLED=1`, `SENTRY_DSN`).
+  `CS_WATCHDOG_ENABLED=1`, `SENTRY_DSN`). **`GIT_SHA` NO va acá** — lo exporta
+  deploy.sh y se hornea en la imagen; si viniera del .env reflejaría el
+  checkout y no la imagen corriendo.
 - Las `NEXT_PUBLIC_*` se INLINEAN en build → viven como build-args en
   `docker-compose.yml` y también deben estar en ese `.env` (compose las
   interpola): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,

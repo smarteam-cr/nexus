@@ -21,6 +21,9 @@ services:
         # Sentry del navegador (opcional): sin valor, el cliente no inicializa
         # Sentry. El del server (SENTRY_DSN) va por env_file en runtime.
         NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+        # La firma del build (la exporta deploy.sh: GIT_SHA=$(git rev-parse
+        # --short HEAD)). NO va al .env — se hornea en la imagen, ver Dockerfile.
+        GIT_SHA: ${GIT_SHA:-dev}
     image: nexus:latest
     container_name: nexus
     restart: unless-stopped
@@ -46,3 +49,13 @@ services:
       # Cron del módulo Contenido (viernes 6:00 America Costa Rica). Solo PROD:
       # dev no setea esta var → instrumentation.ts no arranca el intervalo.
       CRON_ENABLED: "1"
+    # Healthcheck contra /api/health (público). `deploy.sh` usa `up -d --wait`,
+    # que espera este estado: si el server no arranca o el canario de Prisma
+    # truena (cliente stale), el deploy FALLA solo en vez de servir errores.
+    # node -e con fetch nativo: el runner (bookworm-slim) no trae curl.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3004/api/health').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 25s

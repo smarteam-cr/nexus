@@ -8,10 +8,8 @@
  *
  * Editá NUEVO abajo y corré: npx tsx scripts/create-team-member.ts
  */
-import { PrismaClient, type TeamRole } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
-import "dotenv/config";
+import { type TeamRole } from "@prisma/client";
+import { createScriptDb } from "./lib/db";
 
 const NUEVO: { name: string; email: string; area: string; roleEnum: TeamRole } = {
   name: "Jerson Escudero",
@@ -20,11 +18,8 @@ const NUEVO: { name: string; email: string; area: string; roleEnum: TeamRole } =
   roleEnum: "CSE", // rol de permiso
 };
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
-});
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+// Pool acotado (max:2) — no comerse los slots compartidos del pooler (ver scripts/lib/db.ts).
+const { prisma, pool } = createScriptDb();
 
 async function main() {
   const email = NUEVO.email.toLowerCase();

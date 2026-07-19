@@ -8,10 +8,7 @@
  *
  * Dry-run por default. Aplicar con: npx tsx scripts/deactivate-team-members.ts --apply
  */
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
-import "dotenv/config";
+import { createScriptDb } from "./lib/db";
 
 const APPLY = process.argv.includes("--apply");
 
@@ -23,11 +20,8 @@ const TO_DEACTIVATE: { email: string; reason: string }[] = [
   { email: "asepulveda@smarteamcr.com", reason: "Ya no forma parte del equipo — cartera reasignada a Lorena Osorio" },
 ];
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
-});
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+// Pool acotado (max:2) — no comerse los slots compartidos del pooler (ver scripts/lib/db.ts).
+const { prisma, pool } = createScriptDb();
 
 async function main() {
   console.log(APPLY ? "APLICANDO desactivaciones…\n" : "DRY-RUN (usá --apply para escribir)\n");

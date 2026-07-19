@@ -15,16 +15,10 @@
  *
  * Uso: npx tsx scripts/seed-desarrollo-agent.ts
  */
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
-import "dotenv/config";
+import { createScriptDb } from "./lib/db";
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
-});
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+// Pool acotado (max:2) — no comerse los slots compartidos del pooler (ver scripts/lib/db.ts).
+const { prisma, pool } = createScriptDb();
 
 const AGENT_ID = "agent-desarrollo-canvas";
 const DESCRIPTION =

@@ -30,6 +30,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { resolveActiveAccess, touchAccess } from "./access";
 import type { ExternalTimelineData } from "./timeline-view-types";
+import { normalizePublishedTimeline } from "./snapshot-normalize";
 
 /** Lo que la página /external/cronograma pasa a su render. */
 export interface ExternalTimelinePage {
@@ -145,7 +146,9 @@ export async function readPublishedClientTimeline(projectId: string): Promise<Ex
   if (tl?.publishedSnapshot) {
     // El snapshot ya nace sin tareas SUSPENDED: se congela desde readClientTimeline (que las
     // filtra) tanto en publish-timeline como en el backfill de abajo — no hay status que filtrar acá.
-    return tl.publishedSnapshot as unknown as ExternalTimelineData;
+    // SANEO antes de devolver: era un cast crudo, y un snapshot congelado viejo sin `phases`
+    // reventaba al consumidor (el read vivo sí guarda `?? []`; el congelado no lo hacía).
+    return normalizePublishedTimeline(tl.publishedSnapshot) as unknown as ExternalTimelineData;
   }
   if (!tl) return { exists: false, anchorStartDate: null, phases: [] };
 

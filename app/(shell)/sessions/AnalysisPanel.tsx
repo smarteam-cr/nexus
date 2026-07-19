@@ -24,7 +24,8 @@ interface SessionLite {
   date: string;
   participants: string[];
   hasTranscript: boolean;
-  summary: { overview?: string; keywords?: string[]; action_items?: string[] } | null;
+  /** PERF: booleano computado server-side — el blob `summary` ya no viaja en la lista. */
+  hasSummary: boolean;
 }
 
 interface TeamMemberLite {
@@ -137,8 +138,7 @@ function countMatching(
       if (!hasRole) return false;
     }
     if (filters.onlyWithContent) {
-      const hasSummary = !!(s.summary?.overview || s.summary?.keywords?.length || s.summary?.action_items?.length);
-      if (!s.hasTranscript && !hasSummary) return false;
+      if (!s.hasTranscript && !s.hasSummary) return false;
     }
     return true;
   }).length;

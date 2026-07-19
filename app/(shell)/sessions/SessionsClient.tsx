@@ -34,7 +34,9 @@ interface Session {
   participants: string[];
   source: string;
   hasTranscript: boolean;
-  summary: SessionSummary | null;
+  /** PERF: la lista solo trae el booleano; el blob `summary` se carga lazy en el
+   *  detalle vía GET /api/sessions/[id] (con ~16k filas era el peso dominante). */
+  hasSummary: boolean;
   enrichedAt: string | null;
   /** @deprecated mantenido por compatibilidad; usar group.kind === 'client' */
   clientId: string | null;
@@ -839,37 +841,41 @@ function SessionDetail({
   const [reEnriching, setReEnriching] = useState(false);
   const [reEnrichMsg, setReEnrichMsg] = useState<string | null>(null);
   const [generatingSummary, setGeneratingSummary] = useState(false);
-  const [liveSummary, setLiveSummary] = useState<SessionSummary | null>(session.summary);
+  // PERF: la lista ya no trae el blob `summary` — el detalle lo carga lazy junto
+  // con el transcript (GET /api/sessions/[id] devuelve ambos desde siempre).
+  const [liveSummary, setLiveSummary] = useState<SessionSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
 
-  // Resetear estado al cambiar de sesión
-  useEffect(() => {
-    setLiveSummary(session.summary);
-  }, [session.id, session.summary]);
-
-  // Cargar transcript lazy. Si no hay summary, auto-generar con IA al recibirlo.
-  // Skip el fetch si la sesión no tiene transcript registrado (caso Fase 7).
+  // Cargar transcript + summary lazy. Si hay transcript pero no summary,
+  // auto-generar con IA al recibirlo. Skip total si la sesión no tiene ni
+  // transcript ni resumen registrados (caso Fase 7) — no hay nada que traer.
   useEffect(() => {
     setTranscript(null);
+    setLiveSummary(null);
     setTab("resumen");
 
-    if (!session.hasTranscript) {
+    if (!session.hasTranscript && !session.hasSummary) {
       setTranscriptLoading(false);
+      setSummaryLoading(false);
       return;
     }
 
     let cancelled = false;
     setTranscriptLoading(true);
+    setSummaryLoading(true);
 
     fetch(`/api/sessions/${session.id}`)
       .then((r) => r.json())
-      .then(async (data: { transcript?: string | null }) => {
+      .then(async (data: { transcript?: string | null; summary?: SessionSummary | null }) => {
         if (cancelled) return;
         const tx = data.transcript ?? null;
         setTranscript(tx);
         setTranscriptLoading(false);
+        if (data.summary) setLiveSummary(data.summary);
+        setSummaryLoading(false);
 
         // Auto-generar resumen si hay transcript pero no hay summary
-        if (tx && !liveSummary) {
+        if (tx && !data.summary) {
           setGeneratingSummary(true);
           try {
             const res = await fetch(`/api/sessions/${session.id}/summarize`, { method: "POST" });
@@ -882,7 +888,12 @@ function SessionDetail({
           }
         }
       })
-      .catch(() => { if (!cancelled) setTranscriptLoading(false); });
+      .catch(() => {
+        if (!cancelled) {
+          setTranscriptLoading(false);
+          setSummaryLoading(false);
+        }
+      });
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1094,6 +1105,14 @@ function SessionDetail({
                 }>Resumen de la reunión</SectionLabel>
                 <FormattedOverview summary={liveSummary!} />
               </section>
+            ) : summaryLoading ? (
+              // El blob viene lazy (ya no viaja en la lista) — placeholder breve
+              // para no parpadear "Sin resumen" mientras llega.
+              <div className="space-y-2 py-4">
+                <div className="h-3 w-3/4 rounded skeleton-shimmer" />
+                <div className="h-3 w-full rounded skeleton-shimmer" />
+                <div className="h-3 w-5/6 rounded skeleton-shimmer" />
+              </div>
             ) : !hasSummary ? (
               <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
                 <div className="w-10 h-10 rounded-xl bg-gray-900 border border-gray-800 flex items-center justify-center">
@@ -1298,12 +1317,9 @@ function SidebarSessionItem({ session, isActive, onClick }: {
   onClick: () => void;
 }) {
   // Resumen disponible aunque no haya transcript (caso común: Google Meet
-  // procesado por Breeze/Gemini con notas pero sin transcript full)
-  const hasSummary = !!(
-    session.summary?.overview ||
-    session.summary?.keywords?.length ||
-    session.summary?.action_items?.length
-  );
+  // procesado por Breeze/Gemini con notas pero sin transcript full).
+  // El booleano se computa server-side (la lista ya no trae el blob).
+  const hasSummary = session.hasSummary;
 
   // F1: badge del estado de la minuta post-sesión
   const minuteBadge = (() => {
@@ -1924,7 +1940,7 @@ export default function SessionsClient({
                   date: s.date,
                   participants: s.participants,
                   hasTranscript: s.hasTranscript,
-                  summary: s.summary,
+                  hasSummary: s.hasSummary,
                 }))}
                 teamMembers={teamMembers}
                 initialRunId={currentAnalysisRunId}

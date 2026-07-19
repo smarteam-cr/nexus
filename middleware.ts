@@ -14,7 +14,10 @@ import { createServerClient } from "@supabase/ssr";
 //   - /sw.js → Service Worker de notificaciones (asset público, sin secretos). Debe servirse
 //     siempre 200 (si el gate lo redirige a login, el SW no registra). El matcher excluye
 //     estáticos por extensión pero NO .js, así que se permite acá explícitamente.
-const PUBLIC_PATHS = ["/", "/sw.js"];
+//   - /api/health → smoke check del deploy (scripts/deploy.sh + healthcheck de
+//     docker-compose lo consultan con curl SIN sesión). No expone secretos:
+//     sha del build + estado de DB/pool en números.
+const PUBLIC_PATHS = ["/", "/sw.js", "/api/health"];
 
 // Prefijos siempre públicos:
 //   - /api/auth/hubspot/*  → flujo OAuth HubSpot (integración, no auth de usuario)

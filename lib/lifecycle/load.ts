@@ -8,6 +8,7 @@
  * `getProjectLifecycle(projectId)` es el export que consume todo Nexus (watchdog,
  * account-brief, Cobranza v1 lectura) — siempre vía lib/lifecycle/index.ts.
  */
+import { cache } from "react";
 import type { ProjectLifecycleStage, ProjectStageGateKey } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { KICKOFF_TITLE_FILTERS, pickKickoffSessionDate } from "@/lib/sessions/kickoff-pick";
@@ -90,8 +91,26 @@ function asAdoptionMode(v: string | null): AdoptionMode | null {
 /**
  * Batch: 1 query proyectos + 1 gates + 1 snapshots Partner + 1 settings →
  * Map<projectId, ProjectLifecycle>. Proyectos inexistentes no aparecen en el Map.
+ *
+ * PERF: memoizado INTRA-REQUEST con React cache() — /timeline (y cualquier página
+ * que compone summary + lifecycle) lo dispara más de una vez por render con los
+ * mismos ids; ahora la segunda llamada es gratis. cache() memoiza por identidad
+ * de argumentos, y el array llega como referencia NUEVA cada vez → la clave real
+ * es el string canónico (ids únicos ordenados). Fuera de un render RSC no dedupea
+ * (cada llamada es un scope nuevo) — comportamiento idéntico al de antes.
  */
 export async function loadLifecycleBatch(
+  projectIds: string[],
+): Promise<Map<string, ProjectLifecycle>> {
+  const key = [...new Set(projectIds)].sort().join(",");
+  return loadLifecycleBatchByKey(key);
+}
+
+const loadLifecycleBatchByKey = cache(async (key: string) => {
+  return loadLifecycleBatchUncached(key === "" ? [] : key.split(","));
+});
+
+async function loadLifecycleBatchUncached(
   projectIds: string[],
 ): Promise<Map<string, ProjectLifecycle>> {
   const out = new Map<string, ProjectLifecycle>();

@@ -16,8 +16,7 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { Pool } from "pg";
-import "dotenv/config";
+import { createScriptPool } from "./lib/db";
 
 async function main() {
   const apply = process.argv.includes("--apply");
@@ -32,16 +31,9 @@ async function main() {
     return;
   }
 
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    console.error("ERROR: falta DATABASE_URL en el entorno (.env).");
-    process.exit(1);
-  }
-
-  const pool = new Pool({
-    connectionString: url,
-    ssl: { rejectUnauthorized: false },
-  });
+  // Pool acotado (max:2) — no comerse los slots compartidos del pooler (ver scripts/lib/db.ts).
+  const { pool } = createScriptPool();
+  const url = process.env.DATABASE_URL!;
 
   try {
     console.log(`Aplicando prisma/policies.sql a ${new URL(url).host} ...`);
