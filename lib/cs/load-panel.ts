@@ -7,6 +7,9 @@
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import { loadPortfolio, type PortfolioRow } from "@/lib/portfolio/load";
+// El orden de triage vive con los demás diccionarios de presentación, para que el feed y el
+// panel no puedan divergir en cómo priorizan.
+import { SEV_ORDER } from "@/lib/cs/alert-labels";
 
 export interface CsAlertRow {
   id: string;
@@ -90,7 +93,6 @@ export function serializeAlert(a: {
   };
 }
 
-const SEV_ORDER = { HIGH: 0, MEDIUM: 1, LOW: 2 } as const;
 
 export async function loadCsPanel(
   clientWhere: Prisma.ClientWhereInput | null,

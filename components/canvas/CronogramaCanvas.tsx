@@ -43,9 +43,11 @@ import CronogramaProgressButton from "@/components/clients/CronogramaProgressBut
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
-import { countDuplicateFacts } from "@/lib/timeline/particularidad-identity";
+import { summarizeDuplicates } from "@/lib/timeline/particularidad-identity";
 import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
 import { buildProjectActions } from "@/lib/timeline/project-actions";
+import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import ProjectActionsPanel from "./ProjectActionsPanel";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 
@@ -193,6 +195,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [particularidades, setParticularidades] = useState<GanttParticularidad[]>([]);
   // Señales del proyecto para el panel "Qué hacer acá" (vienen con el GET del cronograma).
   const [summary, setSummary] = useState<ProjectSummary | null>(null);
+  // Lo que el cliente lee AHORA (del snapshot congelado), distinto de lo que leerá al «Subir».
+  const [publicadas, setPublicadas] = useState<Array<{ kind: string; party: string; weeksImpact: number | null }>>([]);
   // ¿Hay cambios guardados que el cliente todavía no vio? Se deriva de la MISMA sugerencia de razón
   // que precarga el modal de publicar: si hay texto sugerido, hay diff contra lo publicado.
   const [cambiosSinPublicar, setCambiosSinPublicar] = useState(false);
@@ -202,6 +206,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Particularidad en edición (modal). null = cerrado.
   const [editingParticularidadId, setEditingParticularidadId] = useState<string | null>(null);
   const [convertingParticularidadId, setConvertingParticularidadId] = useState<string | null>(null);
+  // Confirmación de "Confirmar detalle" cuando se dispara desde el panel: el CTA ejecuta, pero
+  // hacer que las tareas crucen al cliente merece un "¿seguro?" de por medio.
+  const [confirmDetailOpen, setConfirmDetailOpen] = useState(false);
   // Pedido del panel "Qué hacer acá" de abrir un grupo de la lista. El nonce hace que re-clickear
   // el mismo CTA lo vuelva a abrir aunque el CSE lo haya cerrado a mano.
   const [focusGroup, setFocusGroup] = useState<{ key: string; nonce: number } | null>(null);
@@ -362,6 +369,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setParticularidades((data.particularidades as GanttParticularidad[] | undefined) ?? []);
         setParticularidadesDirty(false);
         setSummary((data.summary as ProjectSummary | null) ?? null);
+        setPublicadas((data.publicadas as Array<{ kind: string; party: string; weeksImpact: number | null }>) ?? []);
         setLastEditedAt(data.lastEditedByHuman ?? null);
         // Propuesta de re-generación del agente (re-run con cronograma ya existente):
         // se muestra como vista previa aplicable, reusando el mismo banner que el assist.
@@ -402,6 +410,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setParticularidades([]);
         setParticularidadesDirty(false);
         setSummary(null);
+        setPublicadas([]);
         setLastEditedAt(null);
       }
       setError(null);
@@ -1286,7 +1295,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       cambiosSinPublicar,
       // ATRASO sin semanas: no suma al corrimiento, así que el total que ve el CSE queda corto.
       sinCuantificar: particularidades.filter((p) => p.kind === "ATRASO" && !p.weeksImpact).length,
-      duplicados: countDuplicateFacts(particularidades),
+      duplicados: summarizeDuplicates(particularidades),
       // Trabajo anotado que nadie está persiguiendo. MISMO criterio que el grupo "Compromisos sin
       // dueño" al que lleva el botón: si acá se contaran también los atrasos sin cuantificar
       // (que son convertibles) el número saldría inflado y no coincidiría con ningún grupo — y
@@ -1326,19 +1335,40 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     proposal, detailConfirmedAt, publishedAt, hasAiDetail, cambiosSinPublicar, particularidades,
   ]);
 
-  // Cada acción lleva a DONDE está la cosa (o abre el modal que la resuelve). No ejecuta nada sola.
-  // Las que apuntan a la lista de particularidades ABREN además su grupo: hacer scroll a un
-  // acordeón cerrado deja al CSE mirando un título, que es la mitad del gesto.
+  // El destino de cada acción vive en una TABLA PURA (`project-action-targets`), no en un if-chain.
+  // Antes había un `return` final que mandaba lo no contemplado al tope del Gantt, y terminaron
+  // cayendo ahí 8 de 16 acciones sin que nada avisara. Ahora el destino es explícito por id y hay un
+  // test que exige que toda acción emitida tenga uno.
   const handleProjectAction = (id: string) => {
-    const goto = (anchorId: string, grupo?: string) => {
-      if (grupo) setFocusGroup((f) => ({ key: grupo, nonce: (f?.nonce ?? 0) + 1 }));
-      document.getElementById(anchorId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    };
-    if (id === "sin-publicar" || id === "cambios-sin-publicar") return void openPublishModal();
-    if (id === "compromisos-sin-tarea") return goto("cronograma-particularidades", "compromisos");
-    if (id === "duplicados" || id === "sin-cuantificar") return goto("cronograma-particularidades", "arreglar");
-    if (id.startsWith("draft-")) return goto("cronograma-borradores");
-    return goto("cronograma-gantt");
+    const target = targetFor(id);
+    if (!target) {
+      // Solo pasa si alguien agregó una acción al motor sin destino — el test lo caza antes, pero en
+      // runtime preferimos no hacer nada a mandarlo a un lugar cualquiera.
+      console.warn(`[cronograma] acción sin destino declarado: ${id}`);
+      return;
+    }
+    switch (target.kind) {
+      case "run":
+        if (target.intent === "publish") return void openPublishModal();
+        // Confirmar el detalle: el click ES la decisión (con confirmación de por medio). Mandarlo a
+        // scrollear a un botón que dice lo mismo es fricción sin propósito.
+        return setConfirmDetailOpen(true);
+      case "particularidades":
+        // Por ahora abre el grupo que corresponde; en la fase siguiente enfoca las filas exactas.
+        setFocusGroup((f) => ({
+          key: id === "compromisos-sin-tarea" ? "compromisos" : "arreglar",
+          nonce: (f?.nonce ?? 0) + 1,
+        }));
+        return void document
+          .getElementById(ANCHORS.particularidades)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      case "anchor":
+        return void document
+          .getElementById(target.anchor)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      case "none":
+        return; // la fila se renderiza sin botón; no debería llegar acá
+    }
   };
 
   if (loading) {
@@ -1578,7 +1608,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
 
       {/* ── Banner de propuesta (preview sin guardar) ── */}
       {proposal && diffSummary && (
-        <div className="rounded-2xl border border-violet-700/40 bg-violet-900/30 px-4 py-3 space-y-2">
+        // Ancla PROPIA: antes el CTA "Ver la propuesta" apuntaba a #cronograma-borradores, que solo
+        // existe si hay banners de avance o particularidades. Con solo una propuesta pendiente, el
+        // botón no hacía nada.
+        <div id="cronograma-propuesta" className="scroll-mt-24 rounded-2xl border border-violet-700/40 bg-violet-900/30 px-4 py-3 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-bold uppercase tracking-wider text-violet-300">
               Propuesta de la IA — vista previa, sin guardar
@@ -1930,6 +1963,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             onOpenTask={(pk, tk) => setSelectedTask({ phaseKey: pk, taskKey: tk })}
             kickoffDate={kickoffDate || null}
             particularidades={particularidades}
+            publicadas={publicadas}
             onToggleParticularidadVisible={canEdit ? toggleParticularidadVisible : undefined}
             onEditParticularidad={canEdit ? setEditingParticularidadId : undefined}
             onConvertParticularidad={canEdit ? setConvertingParticularidadId : undefined}
@@ -1978,6 +2012,21 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           />
         );
       })()}
+
+      {/* "Confirmar detalle" disparado desde el panel: el CTA ejecuta en vez de mandarte a buscar
+          el botón, pero hacer que las tareas por semana crucen al cliente merece un "¿seguro?". */}
+      <ConfirmDialog
+        open={confirmDetailOpen}
+        title="Confirmar el detalle de tareas"
+        description="Las tareas por semana van a cruzar al cronograma que ve el cliente. Podés seguir editándolas después."
+        confirmLabel="Confirmar detalle"
+        loading={confirmingDetail}
+        onConfirm={async () => {
+          await confirmDetail();
+          setConfirmDetailOpen(false);
+        }}
+        onCancel={() => setConfirmDetailOpen(false)}
+      />
 
       {/* Convertir un hecho en trabajo: dueño, fase y semana. Nada se aplica solo. */}
       {(() => {

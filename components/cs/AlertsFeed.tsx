@@ -13,36 +13,8 @@ import Link from "next/link";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { CsAlertRow } from "@/lib/cs/load-panel";
+import { SEV_META, CATEGORY_LABEL, relTime } from "@/lib/cs/alert-labels";
 
-const SEV_META: Record<CsAlertRow["severity"], { label: string; chip: string; dot: string }> = {
-  HIGH: { label: "Alta", chip: "text-red-600 bg-red-500/10 border-red-500/30", dot: "bg-red-500" },
-  MEDIUM: { label: "Media", chip: "text-amber-600 bg-amber-500/10 border-amber-500/30", dot: "bg-amber-500" },
-  LOW: { label: "Baja", chip: "text-sky-600 bg-sky-500/10 border-sky-500/30", dot: "bg-sky-500" },
-};
-
-const CATEGORY_LABEL: Record<string, string> = {
-  TIMELINE_OVERDUE: "Cronograma atrasado",
-  TASK_MODIFICATION: "Cambio de tareas",
-  SESSION_MISSED: "Sesión caída",
-  PIPELINE_MISMATCH: "Pipeline desalineado",
-  ENGAGEMENT_COLD: "Cliente frío",
-  SUPPORT_TICKETS: "Tickets de soporte",
-  RENEWAL_RISK: "Renovación",
-  CHURN_RISK: "Riesgo de churn",
-  EXPANSION_OPPORTUNITY: "Expansión",
-  PROACTIVE_ACTION: "Acción proactiva",
-  ADOPTION_RISK: "Adopción en riesgo",
-  LICENSE_UNUSED: "Licencias sin usar",
-  PROJECT_BLOCKED: "Bloqueado en HubSpot",
-  OTHER: "Otro",
-};
-
-function relTime(iso: string): string {
-  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-  if (d <= 0) return "hoy";
-  if (d === 1) return "ayer";
-  return `hace ${d} días`;
-}
 
 export default function AlertsFeed({ initialAlerts }: { initialAlerts: CsAlertRow[] }) {
   const toast = useToast();

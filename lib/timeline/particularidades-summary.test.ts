@@ -129,3 +129,55 @@ test("attributionSentence: lo no atribuido se dice, no se esconde", () => {
   const s = summarizeParticularidades([p("MARCIANO", 5), p("CLIENTE", 1)]);
   expect(attributionSentence(s)).toBe("6 semanas de atraso acumulado: 5 sin atribuir y 1 del cliente.");
 });
+
+// ── Un COMPROMISO no es un atraso ────────────────────────────────────────────────
+// El defecto que fija este bloque: la vista del cliente sumaba ATRASO y COMPROMISO en el mismo
+// total y lo mostraba como "el plan se movió N semanas". Un compromiso es un acuerdo fechado que
+// FIJA una fecha — decir que llegamos tarde por algo que acordamos es mentirle al cliente.
+
+test("por defecto solo el ATRASO suma al total", () => {
+  const s = summarizeParticularidades([
+    { kind: "ATRASO", party: "CLIENTE", weeksImpact: 3 },
+    { kind: "COMPROMISO", party: "SMARTEAM", weeksImpact: 2 },
+  ]);
+  expect(s.totalWeeks).toBe(3);
+  expect(s.byParty.SMARTEAM).toBe(0);
+  // La bitácora sigue contando las dos: `count` no se acota.
+  expect(s.count).toBe(2);
+});
+
+test("SOLICITUD legacy tampoco suma", () => {
+  const s = summarizeParticularidades([
+    { kind: "SOLICITUD", party: "CLIENTE", weeksImpact: 4 },
+  ]);
+  expect(s.totalWeeks).toBe(0);
+  expect(s.count).toBe(1);
+});
+
+test("kinds: [] suma todo (la bitácora completa)", () => {
+  const s = summarizeParticularidades(
+    [
+      { kind: "ATRASO", party: "CLIENTE", weeksImpact: 3 },
+      { kind: "COMPROMISO", party: "SMARTEAM", weeksImpact: 2 },
+    ],
+    { kinds: [] },
+  );
+  expect(s.totalWeeks).toBe(5);
+});
+
+// Compatibilidad: un caller que no proyecta `kind` sigue sumando todo, en vez de dar 0 en silencio.
+test("sin kind en el objeto, el ítem cuenta (migración caller por caller)", () => {
+  expect(summarizeParticularidades([{ party: "CLIENTE", weeksImpact: 3 }]).totalWeeks).toBe(3);
+});
+
+// La invariante de siempre, ahora con el filtro puesto.
+test("el desglose sigue cerrando contra el total con kinds acotados", () => {
+  const s = summarizeParticularidades([
+    { kind: "ATRASO", party: "CLIENTE", weeksImpact: 3 },
+    { kind: "ATRASO", party: "AMBOS", weeksImpact: 2 },
+    { kind: "COMPROMISO", party: "SMARTEAM", weeksImpact: 9 },
+  ]);
+  const suma = Object.values(s.byParty).reduce((a, b) => a + b, 0);
+  expect(suma).toBe(s.totalWeeks);
+  expect(s.totalWeeks).toBe(5);
+});

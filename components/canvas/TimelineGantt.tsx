@@ -140,6 +140,9 @@ interface Props {
   // Particularidades (desviaciones curadas). El CSE ve TODAS (visibles y ocultas); el chip
   // "visible" marca las que cruzan al cliente. Vacío/undefined = no se renderiza el bloque.
   particularidades?: GanttParticularidad[];
+  /** Las del `publishedSnapshot` congelado: lo que el cliente lee AHORA, distinto de lo que leerá
+   *  al «Subir». Sin esto, `visibleExternal` en vivo se confunde con "ya comunicado". */
+  publicadas?: Array<{ kind: string; party: string; weeksImpact: number | null }>;
   // Togglear la visibilidad al cliente de una particularidad ya creada. Sin esto, el estado
   // se muestra estático (preview readOnly). La visibilidad recién llega al cliente al «Subir».
   onToggleParticularidadVisible?: (id: string, next: boolean) => void;
@@ -330,6 +333,7 @@ export default function TimelineGantt({
   onReorderPhases,
   onOpenTask,
   particularidades,
+  publicadas,
   onToggleParticularidadVisible,
   onEditParticularidad,
   onConvertParticularidad,
@@ -589,7 +593,11 @@ export default function TimelineGantt({
             {statusLine}
           </span>
         )}
-        {onSetAnchor && <AnchorDatePicker value={anchor ?? ""} onChange={onSetAnchor} />}
+        {onSetAnchor && (
+          <span id="cronograma-arranque" className="scroll-mt-24">
+            <AnchorDatePicker value={anchor ?? ""} onChange={onSetAnchor} />
+          </span>
+        )}
 
         {/* Sugerencia: fecha de la sesión de kickoff. Aparece si difiere del anchor
             actual (incl. cuando está vacío). Un click la fija; se guarda con «Guardar». */}
@@ -993,7 +1001,7 @@ export default function TimelineGantt({
         const blockers = collectClientBlockers(phases, anchor, today);
         if (blockers.length === 0) return null;
         return (
-          <div className="rounded-2xl border border-amber-700/50 bg-amber-900/15 px-4 py-3">
+          <div id="cronograma-pendientes-cliente" className="scroll-mt-24 rounded-2xl border border-amber-700/50 bg-amber-900/15 px-4 py-3">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
                 Pendiente del cliente · atrasadas
@@ -1036,14 +1044,18 @@ export default function TimelineGantt({
       {(() => {
         const parts = particularidades ?? [];
         if (parts.length === 0) return null;
+        // ── TRES números distintos, y confundirlos era el defecto ─────────────────────────────
+        // REGISTRADO  = todas las filas. Lo que sabemos internamente.
+        // LISTO       = las marcadas visibles PERO todavía no publicadas. Lo que leerá al «Subir».
+        // COMUNICADO  = las del snapshot congelado. Lo que el cliente tiene delante AHORA.
+        // Antes se rotulaba "El cliente lee:" a las visibles EN VIVO: marcabas tres, no publicabas,
+        // y la pantalla te decía que el cliente ya las había visto.
         const summary = summarizeParticularidades(parts);
         const sentence = attributionSentence(summary, { audience: "interno" });
-        // Lo que realmente lee el cliente: SOLO las visibles (y con DEV plegado en Smarteam). El
-        // resumen de arriba cuenta TODAS —incluidas las ocultas—, así que sin esto el CSE controla
-        // la visibilidad a ciegas: cree que el cliente lee su mismo número y puede no ser así.
-        const visibles = parts.filter((p) => p.visibleExternal);
-        const clientSentence = attributionSentence(summarizeParticularidades(visibles), { audience: "cliente" });
-        const clientDiffers = clientSentence !== sentence;
+        const registrado = summary.totalWeeks;
+        const listo = summarizeParticularidades(parts.filter((p) => p.visibleExternal)).totalWeeks;
+        const comunicado = summarizeParticularidades(publicadas ?? []).totalWeeks;
+        const hayPendienteDeSubir = listo !== comunicado;
         // El id de abajo es el destino de los CTA del panel "Qué hacer acá". Sin él, "Cuantificar"
         // scrolleaba al tope de un Gantt altísimo y el CSE tenía que cazar la fila.
         return (
@@ -1059,11 +1071,24 @@ export default function TimelineGantt({
             {sentence && (
               <p className="text-sm text-gray-200 mb-3 leading-relaxed">{sentence}</p>
             )}
-            {/* Espejo de lo que cruza: solo aparece cuando el cliente lee algo distinto. */}
-            {clientDiffers && (
-              <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
-                <span className="font-semibold text-gray-300">El cliente lee:</span>{" "}
-                {clientSentence ?? `ningún atraso (${visibles.length} de ${parts.length} visibles al cliente).`}
+            {/* Los tres números, nombrados. Solo aparece cuando difieren: si registrado == comunicado
+                no hay nada que aclarar. */}
+            {(registrado !== comunicado || hayPendienteDeSubir) && (
+              <p className="text-[11px] text-gray-400 mb-3 leading-relaxed flex flex-wrap gap-x-3 gap-y-0.5">
+                <span>
+                  <span className="font-semibold text-gray-300">El cliente lee:</span>{" "}
+                  {comunicado > 0 ? plural(comunicado, "semana", "semanas") : "ningún atraso"}
+                </span>
+                {hayPendienteDeSubir && (
+                  <span title="Marcado como visible, pero el cliente no lo ve hasta el «Subir al cliente»">
+                    <span className="font-semibold text-gray-300">Listo para subir:</span>{" "}
+                    {listo > 0 ? plural(listo, "semana", "semanas") : "nada"}
+                  </span>
+                )}
+                <span>
+                  <span className="font-semibold text-gray-300">Registrado:</span>{" "}
+                  {plural(registrado, "semana", "semanas")}
+                </span>
               </p>
             )}
             {/* Agrupado por ESTADO DE LA FILA, no por visibilidad. La pregunta que el CSE se hace

@@ -129,12 +129,26 @@ export function pickMergeWinner<T extends DuplicateCandidate>(group: T[]): T {
   )[0];
 }
 
+/** Lo que el CSE necesita saber de las repetidas: cuántas VE y cuántos HECHOS tiene que resolver. */
+export interface DuplicateSummary {
+  /** Hechos distintos que están cargados más de una vez. Es lo que hay que resolver. */
+  hechos: number;
+  /** Filas involucradas (todas, no el excedente). Es lo que el CSE va a VER al abrir el grupo. */
+  filas: number;
+  /** Los ids de esas filas, con las del mismo hecho ADYACENTES — así el destino las muestra juntas. */
+  ids: string[];
+}
+
 /**
- * Cuántas filas son EXCEDENTE de repetición (3 filas del mismo hecho = 2 repetidas). Es lo que se
- * le muestra al CSE para avisarle que el corrimiento está inflado — el bug real: un proyecto
- * mostraba 13 semanas cuando eran 8.
+ * Resumen de repetidas.
+ *
+ * Devuelve los DOS números a propósito. Antes esto era un `countDuplicateFacts` que contaba el
+ * excedente (`length - 1`) mientras el grupo destino mostraba las filas totales (`.flat()`): con 3
+ * filas del mismo hecho, el panel decía "2" y el grupo mostraba "3". Un contador que no coincide con
+ * el lugar al que te lleva su propio botón es peor que no tener contador.
  */
-export function countDuplicateFacts(parts: Array<{ kind: string; title: string }>): number {
-  const conId = parts.map((p, i) => ({ ...p, id: String(i) }));
-  return findDuplicateGroups(conId).reduce((acc, g) => acc + (g.length - 1), 0);
+export function summarizeDuplicates<T extends DuplicateCandidate>(parts: T[]): DuplicateSummary {
+  const grupos = findDuplicateGroups(parts);
+  const ids = grupos.flatMap((g) => g.map((p) => p.id));
+  return { hechos: grupos.length, filas: ids.length, ids };
 }

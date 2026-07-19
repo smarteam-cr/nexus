@@ -5,7 +5,7 @@
  * no inventa alarmas), y cada señal produce UNA acción accionable en el grupo correcto.
  */
 import { test, expect } from "vitest";
-import { buildProjectActions, groupActions, type ProjectActionsInput } from "./project-actions";
+import { buildProjectActions, groupActions, splitBlocking, type ProjectActionsInput } from "./project-actions";
 
 const sano: ProjectActionsInput = {
   pendingProgress: false,
@@ -17,7 +17,7 @@ const sano: ProjectActionsInput = {
   hasTasks: true,
   cambiosSinPublicar: false,
   sinCuantificar: 0,
-  duplicados: 0,
+  duplicados: { hechos: 0, filas: 0 },
   compromisosSinTarea: 0,
   compromisosVencidos: 0,
   pendientesDelClienteVencidos: 0,
@@ -36,20 +36,26 @@ test("borradores del agente → grupo Decidir", () => {
   const a = buildProjectActions({ ...sano, pendingProgress: true, pendingParticularidades: 3 });
   expect(a.map((x) => x.id)).toEqual(["draft-progress", "draft-particularidades"]);
   expect(a.every((x) => x.group === "decidir")).toBe(true);
-  expect(a[1].title).toContain("3 desviaciones detectadas");
+  expect(a[1].title).toContain("3 particularidades detectadas");
 });
 
-// El bug que originó todo esto: duplicados que inflan el corrimiento.
-test("duplicados avisan que el total está inflado", () => {
-  const a = buildProjectActions({ ...sano, duplicados: 3 });
+// El bug que originó todo esto: repetidas que inflan el total de atraso.
+// Y el título dice los DOS números: filas es lo que el CSE va a VER al abrir el grupo destino,
+// hechos es lo que tiene que resolver. Antes decía solo el excedente y no coincidía con el destino.
+test("repetidas: el título dice filas Y hechos", () => {
+  const a = buildProjectActions({ ...sano, duplicados: { hechos: 2, filas: 5 } });
   expect(a[0].id).toBe("duplicados");
-  expect(a[0].title).toContain("3 desviaciones repetidas");
-  expect(a[0].why).toContain("doble");
+  expect(a[0].title).toBe("5 filas repiten 2 hechos ya cargados");
+  expect(a[0].why).toContain("inflado");
+  // "Fusionar" no existe todavía como gesto: el botón no lo promete.
+  expect(a[0].cta).not.toContain("usionar");
 });
 
 test("singular vs plural", () => {
-  expect(buildProjectActions({ ...sano, duplicados: 1 })[0].title).toContain("1 desviación repetida");
-  expect(buildProjectActions({ ...sano, sinCuantificar: 1 })[0].title).toContain("1 atraso sin semanas");
+  expect(buildProjectActions({ ...sano, duplicados: { hechos: 1, filas: 2 } })[0].title)
+    .toBe("2 filas repiten 1 hecho ya cargado");
+  expect(buildProjectActions({ ...sano, sinCuantificar: 1 })[0].title)
+    .toBe("1 atraso no dice cuánto movió el plan");
 });
 
 test("sin fecha de arranque tapa al detalle sin confirmar (una cosa a la vez)", () => {
@@ -78,9 +84,9 @@ test("riesgo del cliente y alcance excedido van a Atender", () => {
 
 // El caso que originó esta tanda: compromisos anotados que nadie está haciendo.
 test("compromisos sin tarea van a Decidir, antes que la higiene de datos", () => {
-  const a = buildProjectActions({ ...sano, compromisosSinTarea: 4, duplicados: 2 });
+  const a = buildProjectActions({ ...sano, compromisosSinTarea: 4, duplicados: { hechos: 1, filas: 2 } });
   expect(a.map((x) => x.id)).toEqual(["compromisos-sin-tarea", "duplicados"]);
-  expect(a[0].title).toContain("4 compromisos sin tarea");
+  expect(a[0].title).toContain("4 compromisos que nadie está persiguiendo");
   expect(a[0].why).toContain("no vencen");
 });
 
@@ -98,8 +104,8 @@ test("alarmas de etapa se pasan tal cual con su antigüedad", () => {
     alarmasDeEtapa: [{ key: "kickoff_sin_publicar", label: "Kickoff sin publicar", days: 9 }],
   });
   expect(a[0].id).toBe("etapa-kickoff_sin_publicar");
-  expect(a[0].title).toBe("Kickoff sin publicar");
-  expect(a[0].why).toContain("9 días");
+  expect(a[0].title).toBe("Kickoff sin publicar hace 9 días");
+  expect(a[0].cta).toBe("Ir a la etapa");
 });
 
 test("el orden es decidir → publicar → atender", () => {
@@ -113,10 +119,46 @@ test("el orden es decidir → publicar → atender", () => {
 });
 
 test("cada acción trae qué pasa, por qué importa y qué hacer", () => {
-  const a = buildProjectActions({ ...sano, pendingProgress: true, duplicados: 1, pendientesDelClienteVencidos: 1 });
+  const a = buildProjectActions({ ...sano, pendingProgress: true, duplicados: { hechos: 1, filas: 2 }, pendientesDelClienteVencidos: 1 });
   for (const x of a) {
     expect(x.title.length).toBeGreaterThan(0);
     expect(x.why.length).toBeGreaterThan(0);
-    expect(x.cta.length).toBeGreaterThan(0);
+    // `cta` puede ser null a propósito (la fila informa y no lleva a ningún lado); lo que NO puede
+    // ser es una cadena vacía, que sería un botón sin texto.
+    expect(x.cta === null || x.cta.length > 0).toBe(true);
   }
+});
+
+// Las alarmas de etapa eran la única familia que emitía N filas por dato — el panel es un índice,
+// no una lista: crece con las CLASES de problema, no con los datos.
+test("varias alarmas de etapa colapsan en UNA fila con la más vieja", () => {
+  const a = buildProjectActions({
+    ...sano,
+    alarmasDeEtapa: [
+      { key: "kickoff_sin_publicar", label: "Kickoff sin publicar", days: 9 },
+      { key: "sin_baseline", label: "Cronograma sin línea base", days: 31 },
+    ],
+  });
+  const etapa = a.filter((x) => x.id.startsWith("etapa-"));
+  expect(etapa).toHaveLength(1);
+  expect(etapa[0].title).toBe("2 validaciones de etapa sin cerrar");
+  expect(etapa[0].why).toContain("Cronograma sin línea base");
+  expect(etapa[0].why).toContain("31 días");
+});
+
+// Sin fecha de arranque no se calcula ningún atraso: el resto del panel es ruido hasta resolverlo.
+test("sin-anchor es bloqueante y sale de los grupos", () => {
+  const a = buildProjectActions({ ...sano, anchorStartDate: null, pendingProgress: true });
+  const { blocking, rest } = splitBlocking(a);
+  expect(blocking.map((x) => x.id)).toEqual(["sin-anchor"]);
+  expect(rest.map((x) => x.id)).not.toContain("sin-anchor");
+  expect(groupActions(rest).flatMap((g) => g.items.map((x) => x.id))).not.toContain("sin-anchor");
+});
+
+// Un botón que no cumple es peor que no tener botón.
+test("alcance informa sin CTA (no tiene destino en esta pantalla)", () => {
+  const a = buildProjectActions({ ...sano, alcanceExcedido: { addedTasks: 3, weeksDelta: 2 } });
+  const alcance = a.find((x) => x.id === "alcance")!;
+  expect(alcance.cta).toBeNull();
+  expect(alcance.title).toContain("+3 tareas");
 });

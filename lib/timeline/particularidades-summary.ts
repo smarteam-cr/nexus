@@ -21,7 +21,22 @@
 export interface ParticularidadLike {
   party: string; // CLIENTE | SMARTEAM | AMBOS | DEV
   weeksImpact?: number | null;
+  kind?: string; // ATRASO | COMPROMISO (SOLICITUD = legacy)
 }
+
+export interface SummarizeOptions {
+  /**
+   * Kinds que cuentan como ATRASO. Default: `["ATRASO"]`.
+   *
+   * Importa: un COMPROMISO es un acuerdo fechado que FIJA o mueve una fecha; puede traer
+   * `weeksImpact` sin ser un atraso. Sumarlo al total hacía que el cliente leyera
+   * "el plan se movió N semanas" contando compromisos — decía que llegamos tarde por algo
+   * que en realidad acordamos. Pasá `kinds: []` para sumar todos (la bitácora completa).
+   */
+  kinds?: readonly string[];
+}
+
+const KINDS_DE_ATRASO = ["ATRASO"] as const;
 
 /** Parties válidos que puede traer una particularidad. */
 const KNOWN_PARTIES = ["CLIENTE", "SMARTEAM", "AMBOS", "DEV"] as const;
@@ -49,13 +64,20 @@ export interface ParticularidadesSummary {
  * para la bitácora pero no para el corrimiento). Un `party` desconocido cae en SIN_ATRIBUIR: sus
  * semanas se cuentan y se muestran como no atribuidas, en vez de desaparecer del desglose.
  */
-export function summarizeParticularidades(parts: ParticularidadLike[]): ParticularidadesSummary {
+export function summarizeParticularidades(
+  parts: ParticularidadLike[],
+  opts: SummarizeOptions = {},
+): ParticularidadesSummary {
   const byParty: Record<AttributionBucket, number> = {
     AMBOS: 0, CLIENTE: 0, SMARTEAM: 0, DEV: 0, SIN_ATRIBUIR: 0,
   };
+  // Los kinds que suman al ATRASO. `count` sigue contando TODO (es la bitácora); lo que se acota
+  // es el total de semanas, que es lo que se traduce a "el plan se movió N semanas".
+  const kinds = opts.kinds ?? KINDS_DE_ATRASO;
   let totalWeeks = 0;
   for (const p of parts) {
-    const w = typeof p.weeksImpact === "number" && p.weeksImpact > 0 ? p.weeksImpact : 0;
+    const cuenta = kinds.length === 0 || p.kind === undefined || kinds.includes(p.kind);
+    const w = cuenta && typeof p.weeksImpact === "number" && p.weeksImpact > 0 ? p.weeksImpact : 0;
     totalWeeks += w;
     const bucket: AttributionBucket = (KNOWN_PARTIES as readonly string[]).includes(p.party)
       ? (p.party as AttributionBucket)

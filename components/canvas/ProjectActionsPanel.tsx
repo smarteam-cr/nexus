@@ -15,7 +15,7 @@
  * Sigue el lenguaje visual de los banners de agente (tokens semánticos, tile 8x8, acciones a la
  * derecha), para que se lea como parte del mismo sistema.
  */
-import { groupActions, type ProjectAction, type ActionTone } from "@/lib/timeline/project-actions";
+import { groupActions, splitBlocking, type ProjectAction, type ActionTone } from "@/lib/timeline/project-actions";
 
 /** Color por tono. `risk` = algo se está deteriorando; `warn` = requiere criterio; `info` = trámite. */
 const TONE: Record<ActionTone, { dot: string; cta: string }> = {
@@ -32,10 +32,11 @@ export default function ProjectActionsPanel({
   /** El padre mapea el id a su comportamiento (abrir modal, hacer scroll a un bloque, etc.). */
   onAction: (id: string) => void;
 }) {
-  const grupos = groupActions(actions);
+  const { blocking, rest } = splitBlocking(actions);
+  const grupos = groupActions(rest);
 
   // Todo al día: una línea, no un bloque vacío ni la ausencia de nada.
-  if (grupos.length === 0) {
+  if (grupos.length === 0 && blocking.length === 0) {
     return (
       <div className="rounded-2xl border border-line bg-surface-muted px-5 py-3 flex items-center gap-2.5">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
@@ -64,6 +65,34 @@ export default function ProjectActionsPanel({
         </div>
       </div>
 
+      {/* Lo bloqueante va ARRIBA de los grupos: sin fecha de arranque no se calcula ningún atraso,
+          así que buena parte del resto del panel es ruido hasta que se resuelva. */}
+      {blocking.length > 0 && (
+        <div>
+          <p className="text-2xs font-bold uppercase tracking-wider text-red-300 mb-1.5">Antes que nada</p>
+          <ul className="space-y-1">
+            {blocking.map((a) => (
+              <li key={a.id} className="flex items-start gap-2.5 rounded-xl border border-red-700/40 bg-red-900/15 px-3 py-2.5">
+                <span className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 bg-red-400" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-fg font-semibold leading-snug">{a.title}</p>
+                  <p className="text-[12.5px] text-fg-secondary leading-relaxed mt-0.5">{a.why}</p>
+                </div>
+                {a.cta && (
+                  <button
+                    type="button"
+                    onClick={() => onAction(a.id)}
+                    className="text-xs font-semibold rounded-lg px-2.5 py-1 flex-shrink-0 transition-colors text-red-300 hover:text-red-200 hover:bg-red-900/30"
+                  >
+                    {a.cta} →
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="space-y-3">
         {grupos.map((g) => (
           <div key={g.group}>
@@ -82,13 +111,17 @@ export default function ProjectActionsPanel({
                     <p className="text-sm text-fg font-medium leading-snug">{a.title}</p>
                     <p className="text-[12.5px] text-fg-secondary leading-relaxed mt-0.5">{a.why}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => onAction(a.id)}
-                    className={`text-xs font-semibold rounded-lg px-2.5 py-1 flex-shrink-0 transition-colors ${TONE[a.tone].cta}`}
-                  >
-                    {a.cta} →
-                  </button>
+                  {/* Sin `cta` la fila informa y no lleva a ningún lado — es una declaración del
+                      motor, no un olvido. Un botón que no cumple es peor que no tener botón. */}
+                  {a.cta && (
+                    <button
+                      type="button"
+                      onClick={() => onAction(a.id)}
+                      className={`text-xs font-semibold rounded-lg px-2.5 py-1 flex-shrink-0 transition-colors ${TONE[a.tone].cta}`}
+                    >
+                      {a.cta} →
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

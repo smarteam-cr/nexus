@@ -119,6 +119,23 @@ interface TimelineResponse {
    *  Persiste aunque se despublique → distingue 1ra publicación (sin modal de motivo, #3) de
    *  re-publicación, y bloquea "Generar cronograma" sobre un cronograma ya vivo (#2). */
   hasPublishedOnce: boolean;
+  /**
+   * Las particularidades que el cliente REALMENTE está leyendo hoy — las del `publishedSnapshot`
+   * congelado, NO las que tienen `visibleExternal` en vivo.
+   *
+   * Son tres números distintos y confundirlos es el defecto que esto cierra: el CSE marcaba tres
+   * desviaciones como visibles, no publicaba, y la pantalla le decía "El cliente lee: …" sobre algo
+   * que el cliente todavía no había visto. `visibleExternal` es lo que leerá al «Subir»; esto es lo
+   * que lee ahora. Vacío = nunca se publicó, o se publicó antes de que existieran.
+   */
+  publicadas: Array<{
+    kind: string;
+    title: string;
+    weeksImpact: number | null;
+    party: string;
+    phaseId: string | null;
+    occurredAt: string;
+  }>;
   /** Fecha de la sesión de kickoff del proyecto (ISO) o null. Solo informativo: la UI
    *  la ofrece como sugerencia del anchor cuando difiere del actual. */
   kickoffSessionDate: string | null;
@@ -168,6 +185,30 @@ interface TimelineResponse {
     needsValidation: boolean;
     tasks: TimelineTaskResponse[];
   }>;
+}
+
+/**
+ * Lee las particularidades del snapshot congelado — lo que el cliente tiene delante AHORA.
+ *
+ * Tolerante a propósito: hay snapshots publicados antes de que las particularidades existieran, y
+ * otros con el shape viejo. Cualquier cosa que no parsee se ignora en silencio en vez de romper el
+ * cronograma entero; el peor caso es que el CSE vea "0 comunicadas", que es el default seguro.
+ */
+function readPublishedParticularidades(snapshot: unknown): TimelineResponse["publicadas"] {
+  const raw = (snapshot as { particularidades?: unknown } | null)?.particularidades;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((p) => {
+    const o = p as Record<string, unknown>;
+    if (typeof o?.kind !== "string" || typeof o?.title !== "string") return [];
+    return [{
+      kind: o.kind,
+      title: o.title,
+      weeksImpact: typeof o.weeksImpact === "number" ? o.weeksImpact : null,
+      party: typeof o.party === "string" ? o.party : "SIN_ATRIBUIR",
+      phaseId: typeof o.phaseId === "string" ? o.phaseId : null,
+      occurredAt: typeof o.occurredAt === "string" ? o.occurredAt : "",
+    }];
+  });
 }
 
 async function loadTimeline(projectId: string): Promise<TimelineResponse | { exists: false }> {
@@ -270,6 +311,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     detailConfirmedAt: tl.detailConfirmedAt?.toISOString() ?? null,
     timelinePublishedAt: tl.project.timelinePublishedAt?.toISOString() ?? null,
     hasPublishedOnce: tl.publishedSnapshot != null,
+    publicadas: readPublishedParticularidades(tl.publishedSnapshot),
     kickoffSessionDate: kickoffDate?.toISOString() ?? null,
     pendingProposal: (tl.pendingProposal as PutBody | null) ?? null,
     pendingProposalRunId: tl.pendingProposalRunId,

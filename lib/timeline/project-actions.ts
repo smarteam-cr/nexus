@@ -35,9 +35,14 @@ export interface ProjectAction {
   title: string;
   /** Por qué importa — la consecuencia de no hacerlo. */
   why: string;
-  /** Qué hacer — label del botón. */
-  cta: string;
+  /** Qué hacer — label del botón. **`null` = la fila informa y no lleva a ningún lado.**
+   *  Preferimos una fila sin botón a un botón que scrollea a cualquier parte: eso último es
+   *  exactamente lo que hacía que el panel se sintiera decorativo. */
+  cta: string | null;
   tone: ActionTone;
+  /** Bloquea al resto: se renderiza ARRIBA de los grupos, bajo "Antes que nada". Es para lo que
+   *  vuelve ruido a todo lo demás — hoy solo la falta de fecha de arranque. */
+  blocking?: boolean;
 }
 
 export interface ProjectActionsInput {
@@ -55,8 +60,9 @@ export interface ProjectActionsInput {
   // ── Particularidades ──
   /** ATRASO sin semanas: no suma al corrimiento y no sirve para nada hasta cuantificarlo. */
   sinCuantificar: number;
-  /** Posibles duplicados del mismo hecho detectados en la lista. */
-  duplicados: number;
+  /** Repetidas: `filas` es lo que el CSE VE al abrir el grupo, `hechos` lo que tiene que resolver.
+   *  Los dos, porque un contador que no coincide con el destino de su propio botón no sirve. */
+  duplicados: { hechos: number; filas: number };
   /** Compromisos/insumos anotados que todavía no tienen una tarea persiguiéndolos. */
   compromisosSinTarea: number;
   /** Compromisos convertidos en tarea cuya fecha ya pasó y siguen sin hacerse. */
@@ -85,50 +91,59 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
   if (i.pendingProgress) {
     out.push({
       id: "draft-progress", group: "decidir", tone: "info",
-      title: "El agente detectó avance sin confirmar",
-      why: "Hasta que lo confirmes, el cronograma muestra un avance más viejo del real.",
+      title: "Hay avance detectado que no confirmaste",
+      why: "Hasta que lo confirmes, vos y el cliente miran un avance más viejo que el real.",
       cta: "Revisar avance",
     });
   }
   if (i.pendingParticularidades > 0) {
     out.push({
       id: "draft-particularidades", group: "decidir", tone: "info",
-      title: `${plural(i.pendingParticularidades, "desviación detectada", "desviaciones detectadas")} sin confirmar`,
-      why: "Son los cambios de plan que podrías explicarle al cliente.",
-      cta: "Revisar desviaciones",
+      title: `${plural(i.pendingParticularidades, "particularidad detectada", "particularidades detectadas")} sin confirmar`,
+      why: "Son la explicación de por qué se movió el plan. Sin confirmar no suman al atraso ni le llegan al cliente.",
+      cta: "Revisar particularidades",
     });
   }
   if (i.pendingProposal) {
     out.push({
       id: "draft-proposal", group: "decidir", tone: "info",
       title: "Hay una propuesta de cronograma sin aplicar",
-      why: "El cronograma vivo sigue con la versión anterior.",
-      cta: "Ver propuesta",
+      why: "El cronograma de abajo sigue siendo el viejo: lo que propuso el agente no está en ningún lado todavía.",
+      cta: "Ver la propuesta",
     });
   }
   // Va antes que la higiene de datos: acá hay trabajo que nadie está haciendo, no una fila mal cargada.
   if (i.compromisosSinTarea > 0) {
     out.push({
       id: "compromisos-sin-tarea", group: "decidir", tone: "warn",
-      title: `${plural(i.compromisosSinTarea, "compromiso sin tarea", "compromisos sin tarea")}`,
-      why: "Quedaron anotados, pero nadie los tiene asignados ni tienen fecha: no vencen y no avisan.",
+      title: `${plural(i.compromisosSinTarea, "compromiso que nadie está persiguiendo", "compromisos que nadie está persiguiendo")}`,
+      why: "Quedaron anotados pero sin dueño ni fecha: no vencen, no avisan, y aparecen cuando el cliente los reclama.",
       cta: "Convertir en tareas",
     });
   }
-  if (i.duplicados > 0) {
+  if (i.duplicados.hechos > 0) {
+    const { filas, hechos } = i.duplicados;
     out.push({
       id: "duplicados", group: "decidir", tone: "warn",
-      title: `${plural(i.duplicados, "desviación repetida", "desviaciones repetidas")}`,
-      why: "El mismo hecho cargado dos veces cuenta el atraso doble e infla el total.",
-      cta: "Revisar y fusionar",
+      // Los dos números: `filas` es lo que va a ver, `hechos` lo que tiene que resolver.
+      title: `${plural(filas, "fila repite", "filas repiten")} ${plural(hechos, "hecho ya cargado", "hechos ya cargados")}`,
+      why: "Cada repetición vuelve a sumar sus semanas: el atraso que ves —y el que ve el cliente— está inflado.",
+      // "Fusionar" todavía no existe como gesto; no lo prometemos en el botón.
+      cta: "Revisar repetidas",
     });
   }
   if (i.sinCuantificar > 0) {
     out.push({
       id: "sin-cuantificar", group: "decidir", tone: "warn",
-      title: `${plural(i.sinCuantificar, "atraso sin semanas", "atrasos sin semanas")}`,
-      why: "Sin semanas no suman al total de atraso: el número que ves queda corto.",
-      cta: "Cuantificar",
+      // El verbo va DENTRO del plural: con el sufijo afuera, el singular quedaba "1 atraso no dice
+      // cuánto movieron el plan".
+      title: plural(
+        i.sinCuantificar,
+        "atraso no dice cuánto movió el plan",
+        "atrasos no dicen cuánto movieron el plan",
+      ),
+      why: "Un atraso sin semanas no entra en el total: el atraso que estás mostrando queda corto.",
+      cta: "Poner las semanas",
     });
   }
 
@@ -137,14 +152,16 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
     out.push({
       id: "sin-anchor", group: "publicar", tone: "warn",
       title: "El cronograma no tiene fecha de arranque",
-      why: "Sin fecha no hay calendario: no se calculan atrasos ni se puede compartir.",
-      cta: "Fijar arranque",
+      why: "Sin fecha no hay calendario: no se calcula ningún atraso, no se puede publicar, y nadie sabe en qué semana está el proyecto.",
+      cta: "Fijar el arranque",
+      // Sin arranque, buena parte del resto del panel es ruido: se muestra arriba de los grupos.
+      blocking: true,
     });
   } else if (i.hasTasks && !i.detailConfirmedAt) {
     out.push({
       id: "detalle-sin-confirmar", group: "publicar", tone: "info",
       title: "El detalle de tareas no está confirmado",
-      why: "El cliente ve las fases pero no las tareas.",
+      why: "El cliente ve las fases pero no las tareas: no puede saber qué le toca hacer a él.",
       cta: "Confirmar detalle",
     });
   }
@@ -152,14 +169,14 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
     out.push({
       id: "sin-publicar", group: "publicar", tone: "warn",
       title: "El cronograma no está publicado",
-      why: "El cliente todavía no puede verlo.",
+      why: "El cliente todavía no lo puede ver: para él, este proyecto no tiene plan.",
       cta: "Subir al cliente",
     });
   } else if (i.cambiosSinPublicar) {
     out.push({
       id: "cambios-sin-publicar", group: "publicar", tone: "info",
-      title: "Hay cambios que el cliente todavía no vio",
-      why: "Lo que ve sigue siendo la versión de la última publicación.",
+      title: "Hay cambios guardados que el cliente no vio",
+      why: "Lo que él lee sigue siendo la foto de la última publicación.",
       cta: "Subir al cliente",
     });
   }
@@ -168,33 +185,45 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
   if (i.pendientesDelClienteVencidos > 0) {
     out.push({
       id: "blockers-cliente", group: "atender", tone: "risk",
-      title: `${plural(i.pendientesDelClienteVencidos, "entrega del cliente vencida", "entregas del cliente vencidas")}`,
-      why: "Es lo que está frenando el avance; el cliente ya lo ve en su cronograma.",
-      cta: "Ver pendientes",
+      title: `${plural(i.pendientesDelClienteVencidos, "entrega del cliente está vencida", "entregas del cliente están vencidas")}`,
+      why: "Es lo que frena el avance, y el cliente ya lo ve vencido. Si no se lo reclamás, el atraso queda a tu nombre.",
+      cta: "Ver las entregas",
     });
   }
   if (i.compromisosVencidos > 0) {
     out.push({
       id: "compromisos-vencidos", group: "atender", tone: "risk",
       title: `${plural(i.compromisosVencidos, "compromiso vencido sin cumplir", "compromisos vencidos sin cumplir")}`,
-      why: "La fecha pasó y la tarea sigue pendiente. Si eso movió el plan, conviene registrarlo como atraso.",
-      cta: "Ver compromisos",
+      why: "La fecha pasó y la tarea sigue abierta. Si eso movió el plan, hoy ese atraso no está registrado en ningún lado.",
+      cta: "Ver los vencidos",
     });
   }
   if (i.tareasVencidas > 0) {
     out.push({
       id: "tareas-vencidas", group: "atender", tone: "warn",
-      title: `${plural(i.tareasVencidas, "tarea vencida", "tareas vencidas")} en el plan`,
-      why: "O se hicieron y falta marcarlas, o el plan ya no refleja la realidad.",
+      title: `${plural(i.tareasVencidas, "tarea del plan está vencida", "tareas del plan están vencidas")}`,
+      why: "O se hicieron y falta marcarlas, o el plan ya no refleja la realidad: en los dos casos el avance que ve el cliente está mal.",
       cta: "Revisar el plan",
     });
   }
-  for (const a of i.alarmasDeEtapa) {
+  // Las alarmas de etapa eran la ÚNICA familia que emitía N filas por dato, violando la regla que
+  // este mismo archivo declara arriba ("un ítem por CLASE, nunca uno por fila"). Con más de una se
+  // colapsan: el detalle está a un click, en el panel de ciclo de vida al que lleva el botón.
+  if (i.alarmasDeEtapa.length === 1) {
+    const a = i.alarmasDeEtapa[0];
     out.push({
       id: `etapa-${a.key}`, group: "atender", tone: "warn",
-      title: a.label,
-      why: `Lleva ${plural(a.days, "día", "días")} así.`,
-      cta: "Resolver",
+      title: `${a.label} hace ${plural(a.days, "día", "días")}`,
+      why: "La etapa no avanza hasta que esto se cierre.",
+      cta: "Ir a la etapa",
+    });
+  } else if (i.alarmasDeEtapa.length > 1) {
+    const peor = [...i.alarmasDeEtapa].sort((a, b) => b.days - a.days)[0];
+    out.push({
+      id: `etapa-${peor.key}`, group: "atender", tone: "warn",
+      title: `${i.alarmasDeEtapa.length} validaciones de etapa sin cerrar`,
+      why: `La más vieja es «${peor.label}», hace ${plural(peor.days, "día", "días")}. La etapa no avanza hasta que se cierren.`,
+      cta: "Ir a la etapa",
     });
   }
   if (i.alcanceExcedido) {
@@ -206,20 +235,33 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
     out.push({
       id: "alcance", group: "atender", tone: "risk",
       title: `Estás entregando de más: ${bits} vs lo vendido`,
-      why: "Trabajo que no se cotizó. Si el cliente lo pidió, conviene registrarlo antes de seguir.",
-      cta: "Ver alcance",
+      why: "Trabajo que nadie cotizó. Si el cliente lo pidió, registralo ahora — después no vas a tener con qué respaldarlo.",
+      // Sin destino en esta pantalla: el alcance se calcula en la cartera. Una fila informativa es
+      // más honesta que un botón que scrollea a cualquier lado.
+      cta: null,
     });
   }
   if (i.estancadoDias !== null && i.estancadoDias > 0) {
     out.push({
       id: "estancado", group: "atender", tone: "warn",
       title: `Sin movimiento hace ${plural(i.estancadoDias, "día", "días")}`,
-      why: "Ni avance confirmado ni cambios en el plan.",
-      cta: "Revisar",
+      why: "Ni avance confirmado ni cambios en el plan. Si el proyecto sigue activo, el cronograma está mintiendo.",
+      cta: "Buscar avance",
     });
   }
 
   return out;
+}
+
+/** Las bloqueantes salen de los grupos y se muestran arriba de todo. */
+export function splitBlocking(actions: ProjectAction[]): {
+  blocking: ProjectAction[];
+  rest: ProjectAction[];
+} {
+  return {
+    blocking: actions.filter((a) => a.blocking),
+    rest: actions.filter((a) => !a.blocking),
+  };
 }
 
 /** Agrupa para el render, preservando el orden de `buildProjectActions`. */

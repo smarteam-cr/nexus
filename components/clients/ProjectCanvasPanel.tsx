@@ -403,8 +403,12 @@ export default function ProjectCanvasPanel({
       {/* Handoff por-proyecto — sección dedicada siempre visible (estado + generar + doc). */}
       <ProjectHandoffSection projectId={projectId} clientId={clientId} />
 
-      {/* Ciclo de vida — etapa efectiva + validaciones de salida + modalidad de adopción. */}
-      <ProjectLifecyclePanel projectId={projectId} />
+      {/* Ciclo de vida — etapa efectiva + validaciones de salida + modalidad de adopción.
+          El id es el destino de las alarmas de etapa del panel "Qué hacer acá" del cronograma:
+          los gates para cerrarlas viven acá, en esta misma página. */}
+      <div id="proyecto-etapa" className="scroll-mt-24">
+        <ProjectLifecyclePanel projectId={projectId} />
+      </div>
 
       {/* Header */}
       <div className="flex items-center justify-between">
