@@ -11,6 +11,7 @@ import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import { loadCostos, loadGastos } from "@/lib/cobranza";
 import { crDateParts } from "@/lib/jobs/time";
+import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import FinanzasCostosClient from "@/components/finanzas/FinanzasCostosClient";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ export default async function FinanzasCostosPage() {
   const [costos, gastos] = await Promise.all([loadCostos(), loadGastos()]);
 
   return (
-    <div className="px-6 py-8">
+    <div className={SHELL_DEFAULT}>
       <FinanzasCostosClient initialCostos={costos} initialGastos={gastos} todayISO={todayISO} />
     </div>
   );

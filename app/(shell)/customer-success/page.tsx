@@ -8,6 +8,8 @@ import { loadCsDashboard } from "@/lib/cs/load-dashboard";
 import CsPanel from "@/components/cs/CsPanel";
 import CsDashboard from "@/components/cs/dashboard/CsDashboard";
 import AlertsFeed from "@/components/cs/AlertsFeed";
+// Mismo contenedor que loading.tsx — la fuente única evita que page y skeleton deriven.
+import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 
 // Depende del usuario logueado (rol) → no cacheable.
 export const dynamic = "force-dynamic";
@@ -35,7 +37,7 @@ export default async function CustomerSuccessPage() {
 
   const openAlerts = data.alerts.filter((a) => a.status === "OPEN").length;
   return (
-    <div className="px-6 py-8">
+    <div className={SHELL_DEFAULT}>
       <PageHeader
         title="Éxito del cliente"
         description={

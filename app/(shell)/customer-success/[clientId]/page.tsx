@@ -5,6 +5,8 @@ import { requireCapability } from "@/lib/auth/roles";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { loadCsAccount } from "@/lib/cs/load-account";
 import AccountView from "@/components/cs/account/AccountView";
+// Mismo contenedor que loading.tsx — la fuente única evita que page y skeleton deriven.
+import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +30,7 @@ export default async function CustomerSuccessAccountPage({
   if (!data) notFound();
 
   return (
-    <div className="px-6 py-8">
+    <div className={SHELL_DEFAULT}>
       <div className="mb-1">
         <Link href="/customer-success" className="text-[11px] text-fg-muted hover:text-fg transition-colors">
           ← Éxito del cliente

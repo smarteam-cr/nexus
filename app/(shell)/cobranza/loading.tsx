@@ -1,26 +1,48 @@
 /**
  * Loading skeleton de /cobranza — la página resuelve 7 queries en un Promise.all
- * antes del primer byte; sin esto la navegación quedaba congelada. Replica el
- * landing real: header con acción, tabs, cards de resumen de la cola y tabla.
+ * antes del primer byte; sin esto la navegación quedaba congelada.
+ *
+ * FORMA REAL (page.tsx → CobranzaClient → ColaCobros): header con acción global
+ * "Registrar pago" · 6 tabs SUBRAYADOS (no pills) · y como landing la COLA DE
+ * COBROS: 3 tiles de resumen, la fila de filtros, y los grupos "Vencidos" /
+ * "Esta quincena" (el tercero, "Más adelante", nace COLAPSADO: solo su
+ * encabezado). No hay tabla en el landing — la tabla vive en el tab "Clientes".
  */
-import { PageHeaderSkeleton, Skeleton, CardsSkeleton, TableSkeleton } from "@/components/ui";
+import { PageHeaderSkeleton, SkeletonTabs, Skeleton, CardsSkeleton, ListSkeleton } from "@/components/ui";
+import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 
 export default function CobranzaLoading() {
   return (
-    <div className="px-6 py-8">
-      <PageHeaderSkeleton titleWidth="w-36" descWidth="w-72" action />
+    <div className={SHELL_DEFAULT}>
+      <PageHeaderSkeleton titleWidth="w-28" descWidth="w-96 max-w-full" action />
 
-      {/* Tabs Cobros / Clientes / Proyección / Alertas / Reportes / Corte */}
-      <div className="flex items-center gap-2 mb-6">
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <Skeleton key={i} className="h-7 w-24" rounded="lg" delay={i * 40} />
-        ))}
+      {/* Cobros · Clientes · Proyección · Alertas · Reportes · Corte semanal */}
+      <SkeletonTabs count={6} className="mb-6" />
+
+      <div className="space-y-4">
+        {/* Vencido · Por cobrar esta quincena · Promesas (grid gap-3 sm:grid-cols-3) */}
+        <CardsSkeleton
+          count={3}
+          columns={3}
+          breakpoint="sm"
+          variant="tile"
+          minH="min-h-[88px]"
+          className="gap-3"
+        />
+
+        {/* Filtros: buscador + segmentado de moneda + contador */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Skeleton className="h-7 w-44" />
+          <Skeleton className="h-7 w-40" />
+          <Skeleton className="h-2.5 w-28" />
+        </div>
+
+        {/* Grupos expandidos: Vencidos · Esta quincena */}
+        <ListSkeleton groups={2} rows={6} lines={1} trailing />
+
+        {/* "Más adelante" arranca colapsado: solo el encabezado clickeable */}
+        <Skeleton className="h-2.5 w-40" />
       </div>
-
-      {/* Cards de resumen (vencido / esta quincena / más adelante) */}
-      <CardsSkeleton count={3} columns={3} variant="tile" minH="min-h-[80px]" className="mb-6" />
-
-      <TableSkeleton columns={6} rows={8} />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
   loadColaCobros,
 } from "@/lib/cobranza";
 import { crDateParts } from "@/lib/jobs/time";
+import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import CobranzaClient from "@/components/cobranza/CobranzaClient";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,7 @@ export default async function CobranzaPage() {
   // El PageHeader vive en CobranzaClient: su slot `action` carga el botón global
   // "Registrar pago", que necesita el estado del contenedor.
   return (
-    <div className="px-6 py-8">
+    <div className={SHELL_DEFAULT}>
       <CobranzaClient
         initialCola={cola}
         initialCartera={cartera}
