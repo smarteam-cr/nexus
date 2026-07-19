@@ -44,7 +44,9 @@ export function Skeleton({ className, rounded = "md", delay }: SkeletonProps) {
   return (
     <div
       className={cn("skeleton-shimmer", ROUNDED[rounded], className)}
-      style={delay ? { animationDelay: `${delay}ms` } : undefined}
+      // Dos delays en orden: shimmer (stagger visual) y skeleton-appear (la aparición
+      // diferida de ~150ms de globals.css, escalonada suave con el mismo stagger).
+      style={delay ? { animationDelay: `${delay}ms, ${150 + delay}ms` } : undefined}
     />
   );
 }

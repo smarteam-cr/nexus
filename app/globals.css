@@ -492,6 +492,16 @@ html.light aside .bg-gray-800 {
   100% { background-position:  200% 0; }
 }
 
+/* Aparición diferida del skeleton (práctica NN/g): nace invisible y recién se
+   muestra si la carga supera ~150ms — en cargas rápidas (caches, seeds) el usuario
+   ve el contenido directo, sin el flash de un skeleton que dura un parpadeo.
+   CSS puro, sin estado: forwards congela la opacidad en 1 al terminar. */
+@keyframes skeleton-appear {
+  to {
+    opacity: 1;
+  }
+}
+
 /* Dark mode shimmer (default) */
 .skeleton-shimmer {
   background: linear-gradient(
@@ -503,10 +513,13 @@ html.light aside .bg-gray-800 {
     #1f2937 100%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.6s ease-in-out infinite;
+  opacity: 0;
+  animation:
+    shimmer 1.6s ease-in-out infinite,
+    skeleton-appear 0.2s ease-out 0.15s forwards;
 }
 
-/* Light mode shimmer */
+/* Light mode shimmer (hereda opacity 0 + skeleton-appear del base) */
 :is(html.light, [data-fixed-light]) .skeleton-shimmer {
   background: linear-gradient(
     90deg,
@@ -517,7 +530,9 @@ html.light aside .bg-gray-800 {
     #d1d5db 100%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.6s ease-in-out infinite;
+  animation:
+    shimmer 1.6s ease-in-out infinite,
+    skeleton-appear 0.2s ease-out 0.15s forwards;
 }
 
 /* ── Pulso "semana actual" del cronograma (header + barra, idéntico) ──────────── */

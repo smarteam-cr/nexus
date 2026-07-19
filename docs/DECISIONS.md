@@ -703,6 +703,29 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   skeleton evita. Corolario en `CronogramaCanvas`: un refetch tras una acción NO puede poner
   `loading=true` (colapsaba el Gantt entero al esqueleto y perdía el scroll) — va un `refreshing`
   separado que mantiene el contenido en pantalla.
+- **El criterio de exactitud es CLS ≤ 0.1 above-the-fold, NO pixel-perfect** (doctrina, con la
+  guía de web.dev): lo que está arriba del viewport no se mueve al resolver; abajo se tolera
+  aproximación. Cuando la altura real es variable, se reserva el TAMAÑO MÍNIMO del caso común y
+  se acepta que el caso raro crezca (ej. el bloque de contexto del Handoff sin generar).
+- **Un `loading.tsx` NO conoce el rol** (fallback estático de Suspense: no lee cookies — doc
+  oficial de Next.js). Un skeleton que depende del rol va en un **`<Suspense>` de sección cuyo
+  fallback lo elige el server** que ya resolvió el rol ("push dynamic access down"): /clients es
+  el patrón canónico — la page resuelve auth+rol+count rápido, pinta el header real, y suspende
+  solo la zona pesada (`ClientsTable`) con `ClientsTableZoneSkeleton showPills={!isSuperAdmin}`.
+  El loading.tsx queda para la ventana pre-auth (~100ms) con la variante mayoritaria.
+- **El doble skeleton (route loading + gate client) se mata con SIEMBRA o CACHE, no con mejores
+  skeletons**: (a) siembra server-side de la data del primer paint (`initialCanvases` en el
+  workspace, patrón cobranza) para que el cliente no re-fetchee al montar; (b) cache de módulo
+  para revisitas — `gps-cache.ts` es el patrón canónico, replicado en `canvas-cache.ts`,
+  `handoff-status-cache.ts` y el cache de `useMe` (con dedupe de promesa in-flight). Persistir
+  ALTURAS medidas (localStorage) se evaluó y descartó: sobre-ingeniería sin patrón estándar.
+- **Un gate por permiso que INSERTA layout espera a `me`**: `ProjectHandoffSection` no se pinta
+  hasta `loading || me === null` — si se pintara con el status pero sin saber si el usuario es
+  editor, el bloque de contexto se insertaría después empujando el canvas. Con `useMe` cacheado,
+  la espera extra solo existe en el primer montaje de la sesión.
+- **El shimmer aparece diferido ~150ms** (`skeleton-appear` en globals.css, CSS puro): en cargas
+  rápidas (caches, seeds) el usuario ve contenido directo sin el flash de un skeleton que dura un
+  parpadeo (práctica NN/g). El prop `delay` de `Skeleton` escalona AMBAS animaciones en orden.
 
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos
