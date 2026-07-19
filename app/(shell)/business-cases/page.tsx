@@ -3,6 +3,8 @@
  * (prospectos y clientes) + "Nuevo". Gateado por el área de Ventas (VENTAS/DEV/CSL/SUPER_ADMIN).
  */
 import { redirect } from "next/navigation";
+import { PageHeader } from "@/components/ui";
+import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import Link from "next/link";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { prisma } from "@/lib/db/prisma";
@@ -34,26 +36,26 @@ export default async function BusinessCasesHubPage() {
   });
 
   return (
-    <div className="px-6 py-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-fg">Ventas — Business Cases</h1>
-          <p className="mt-1 text-sm text-fg-muted">Casos de negocio para prospectos y clientes.</p>
-        </div>
-        <div className="flex-shrink-0 flex items-center gap-3">
-          <Link href="/sales/use-cases" className="text-xs text-fg-muted hover:text-fg">
-            Catálogo de casos de uso
-          </Link>
-          <Link
-            href="/business-cases/new"
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            Nuevo business case
-          </Link>
-        </div>
-      </div>
+    <div className={SHELL_DEFAULT}>
+      <PageHeader
+        title="Ventas — Business Cases"
+        description="Casos de negocio para prospectos y clientes."
+        action={
+          <div className="flex items-center gap-3">
+            <Link href="/sales/use-cases" className="text-xs text-fg-muted hover:text-fg">
+              Catálogo de casos de uso
+            </Link>
+            <Link
+              href="/business-cases/new"
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-primary-fg hover:opacity-90"
+            >
+              Nuevo business case
+            </Link>
+          </div>
+        }
+      />
 
-      <div className="mt-6 space-y-2">
+      <div className="space-y-2">
         {cases.map((c) => (
           <div
             key={c.id}

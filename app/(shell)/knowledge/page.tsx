@@ -1,4 +1,5 @@
 import { requireConsultantSession } from "@/lib/auth";
+import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { prisma } from "@/lib/db/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui";
@@ -27,7 +28,7 @@ export default async function KnowledgePage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-6 py-8">
+      <div className={SHELL_DEFAULT}>
         <PageHeader
           title="Base de conocimiento"
           description="Metodologías, procesos y specs que los agentes AI consultan para generar recomendaciones contextualizadas."

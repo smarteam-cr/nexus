@@ -1,4 +1,5 @@
 import { requireConsultantSession } from "@/lib/auth";
+import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import NewAuditButton from "./NewAuditButton";
@@ -33,7 +34,7 @@ export default async function AuditsPage() {
   });
 
   return (
-    <div className="px-6 py-8">
+    <div className={SHELL_DEFAULT}>
       <PageHeader
         title="Auditoría del portal"
         description="Snapshots del estado del portal HubSpot de Smarteam con análisis generado por IA."

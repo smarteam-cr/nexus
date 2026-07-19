@@ -1,4 +1,6 @@
 import { requireConsultantSession } from "@/lib/auth";
+import { PageHeader } from "@/components/ui";
+import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
@@ -96,14 +98,11 @@ export default async function IntegrationsPage({
   const insiderLogoUrl = systemCfg?.insiderLogoUrl ?? null;
 
   return (
-    <div className="flex-1 overflow-y-auto px-8 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-xl font-bold text-fg mb-1">Configuración general</h1>
-        <p className="text-sm text-fg-muted">
-          Marca e integraciones de Nexus — configuración global, compartida por todos los clientes.
-        </p>
-      </div>
+    <div className={`flex-1 overflow-y-auto ${SHELL_DEFAULT}`}>
+      <PageHeader
+        title="Configuración general"
+        description="Marca e integraciones de Nexus — configuración global, compartida por todos los clientes."
+      />
 
       {/* Grid de integraciones */}
       <div className="max-w-2xl grid grid-cols-1 gap-4">
