@@ -1,10 +1,12 @@
-﻿"use client";
+"use client";
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
+import type { AgentOutputType } from "@prisma/client";
 import { useMe } from "@/hooks/useMe";
-import { Button, Input, Textarea, buttonVariants } from "@/components/ui";
+import { Button, Input, Textarea, Field, Alert, BackLink, buttonVariants } from "@/components/ui";
+import { AGENT_OUTPUT_TYPES } from "@/lib/agents/output-types";
 
 interface AgentData {
   id: string;
@@ -16,7 +18,7 @@ interface AgentData {
   associatedStages: number[];
   associatedStep: number | null;
   sectionLabel: string | null;
-  outputType: "CARDS" | "STREAM" | "FLOWCHART" | "CARDS_AND_FLOWCHARTS";
+  outputType: AgentOutputType;
   scope: "CLIENT" | "GLOBAL";
   pinnedKnowledgeIds?: string[];
 }
@@ -30,8 +32,15 @@ interface AgentForm {
   associatedStages: number[];
   associatedStep: number | null;
   sectionLabel: string;
-  outputType: "CARDS" | "STREAM" | "FLOWCHART" | "CARDS_AND_FLOWCHARTS";
+  outputType: AgentOutputType;
   scope: "CLIENT" | "GLOBAL";
+}
+
+interface EffectivePrompt {
+  systemPrompt: string;
+  additionalInstructions: string | null;
+  formatInstructions: string | null;
+  nota: string;
 }
 
 interface AgentFormClientProps {
@@ -62,6 +71,9 @@ export default function AgentFormClient({ agentId, initialData }: AgentFormClien
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // "Prompt efectivo": lo que realmente se envía (DB + format instructions del código).
+  const [effective, setEffective] = useState<EffectivePrompt | null>(null);
+  const [loadingEffective, setLoadingEffective] = useState(false);
 
   function toggleStage(stage: number) {
     setForm((prev) => ({
@@ -70,6 +82,19 @@ export default function AgentFormClient({ agentId, initialData }: AgentFormClien
         ? prev.associatedStages.filter((s) => s !== stage)
         : [...prev.associatedStages, stage].sort(),
     }));
+  }
+
+  async function loadEffectivePrompt() {
+    if (effective || loadingEffective) return;
+    setLoadingEffective(true);
+    try {
+      const res = await fetch(`/api/agents/${agentId}/effective-prompt`);
+      if (res.ok) setEffective((await res.json()) as EffectivePrompt);
+    } catch {
+      /* el <details> queda con el aviso de carga */
+    } finally {
+      setLoadingEffective(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -111,28 +136,22 @@ export default function AgentFormClient({ agentId, initialData }: AgentFormClien
     }
   }
 
-  return (
-    <div className="flex-1 px-8 py-8 max-w-2xl overflow-y-auto">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-        <Link href="/agents" className="hover:text-gray-300 transition-colors">
-          Agentes
-        </Link>
-        <span>/</span>
-        <span className="text-gray-300">{isNew ? "Nuevo agente" : "Editar agente"}</span>
-      </div>
+  // Radios/checkboxes con label propio (Field es para controles de texto).
+  const optionLabel = "flex items-center gap-2 cursor-pointer select-none";
 
-      <h1 className="text-xl font-bold text-white mb-6">
+  return (
+    <div>
+      <BackLink href="/agents" className="mb-4">
+        Agentes
+      </BackLink>
+
+      <h1 className="text-xl font-semibold text-fg mb-6">
         {isNew ? "Nuevo agente" : "Editar agente"}
       </h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <fieldset disabled={!isSuperAdmin} className="space-y-5 border-0 p-0 m-0 min-w-0">
-        {/* Nombre */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1.5">
-            Nombre <span className="text-red-400">*</span>
-          </label>
+        <Field label="Nombre" required>
           <Input
             type="text"
             value={form.name}
@@ -140,66 +159,56 @@ export default function AgentFormClient({ agentId, initialData }: AgentFormClien
             placeholder="Ej: Analizador de cliente, Generador de diagnóstico..."
             required
           />
-        </div>
+        </Field>
 
-        {/* Descripción */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1.5">
-            Descripción <span className="text-gray-600 font-normal">(opcional)</span>
-          </label>
+        <Field label="Descripción" hint="Para qué sirve este agente (opcional).">
           <Input
             type="text"
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             placeholder="Para qué sirve este agente..."
           />
-        </div>
+        </Field>
 
         {/* Etapas asociadas */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1.5">
-            Etapas donde aparece
-          </label>
+          <p className="block text-xs font-medium text-fg-secondary mb-1.5">Etapas donde aparece</p>
           <div className="flex gap-4">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
+            <label className={optionLabel}>
               <input
                 type="checkbox"
                 checked={form.associatedStages.length === 0}
                 onChange={() => setForm({ ...form, associatedStages: [] })}
                 className="w-4 h-4 rounded accent-brand"
               />
-              <span className="text-sm text-gray-400">Todas las etapas</span>
+              <span className="text-sm text-fg-muted">Todas las etapas</span>
             </label>
             {([1, 2, 3] as const).map((stage) => {
               const labels: Record<number, string> = { 1: "Diagnóstico", 2: "MVP", 3: "Adopción" };
               return (
-                <label key={stage} className="flex items-center gap-2 cursor-pointer select-none">
+                <label key={stage} className={optionLabel}>
                   <input
                     type="checkbox"
                     checked={form.associatedStages.includes(stage)}
                     onChange={() => toggleStage(stage)}
                     className="w-4 h-4 rounded accent-brand"
                   />
-                  <span className="text-sm text-gray-400">{labels[stage]}</span>
+                  <span className="text-sm text-fg-muted">{labels[stage]}</span>
                 </label>
               );
             })}
           </div>
-          <p className="text-xs text-gray-600 mt-1.5">
+          <p className="text-xs text-fg-muted mt-1.5">
             Si no seleccionas ninguna etapa específica, el agente aparece en todas
           </p>
         </div>
 
         {/* Paso específico */}
         {form.associatedStages.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Paso específico <span className="text-gray-500 font-normal text-xs">(opcional)</span>
-            </label>
-            <p className="text-xs text-gray-600 mb-2">
-              Índice del paso dentro de la etapa (0 = primer paso, 1 = segundo, etc.).
-              Vacío = aplica a todos los pasos de las etapas seleccionadas.
-            </p>
+          <Field
+            label="Paso específico"
+            hint="Índice del paso dentro de la etapa (0 = primer paso). Vacío = aplica a todos los pasos de las etapas seleccionadas."
+          >
             <Input
               type="number"
               min={0}
@@ -207,65 +216,52 @@ export default function AgentFormClient({ agentId, initialData }: AgentFormClien
               onChange={(e) => setForm({ ...form, associatedStep: e.target.value === "" ? null : parseInt(e.target.value) })}
               placeholder="Ej: 0 (Análisis inicial), 1 (Kickoff)…"
             />
-          </div>
+          </Field>
         )}
 
         {/* Nombre de sección */}
         {form.associatedStages.length > 0 && form.associatedStep !== null && (
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Nombre de la sección{" "}
-              <span className="text-gray-500 font-normal text-xs">(opcional)</span>
-            </label>
-            <p className="text-xs text-gray-600 mb-2">
-              Define el bloque visual dentro de la subetapa donde aparece este agente.
-              Si se deja vacío, se usa el nombre del agente como título de sección.
-            </p>
+          <Field
+            label="Nombre de la sección"
+            hint="El bloque visual dentro de la subetapa donde aparece este agente. Vacío = se usa el nombre del agente."
+          >
             <Input
               type="text"
               value={form.sectionLabel}
               onChange={(e) => setForm({ ...form, sectionLabel: e.target.value })}
               placeholder="Ej: Contexto del cliente, Preparación para el Kick-off…"
             />
-          </div>
+          </Field>
         )}
 
-        {/* Tipo de output */}
+        {/* Tipo de output — catálogo ÚNICO (lib/agents/output-types): los 6 valores
+            del enum, con los deprecated visibles solo si el agente ya los usa. */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">Tipo de output</label>
-          <div className="flex gap-3 flex-wrap">
-            {(["CARDS", "STREAM", "FLOWCHART", "CARDS_AND_FLOWCHARTS"] as const).map((type) => (
-              <label key={type} className="flex items-center gap-2 cursor-pointer">
+          <p className="block text-xs font-medium text-fg-secondary mb-2">Tipo de output</p>
+          <div className="flex flex-col gap-2">
+            {AGENT_OUTPUT_TYPES.filter((t) => !t.deprecated || form.outputType === t.value).map((t) => (
+              <label key={t.value} className={optionLabel}>
                 <input
                   type="radio"
                   name="outputType"
-                  value={type}
-                  checked={form.outputType === type}
-                  onChange={() => setForm({ ...form, outputType: type })}
+                  value={t.value}
+                  checked={form.outputType === t.value}
+                  onChange={() => setForm({ ...form, outputType: t.value })}
                   className="accent-brand"
                 />
-                <span className="text-sm text-gray-300">
-                  {type === "CARDS" ? "Cards editables"
-                    : type === "STREAM" ? "Texto libre (streaming)"
-                    : type === "FLOWCHART" ? "Diagrama de flujo"
-                    : "Cards + Diagramas de flujo"}
-                </span>
+                <span className="text-sm text-fg-secondary">{t.label}</span>
+                <span className="text-xs text-fg-muted">— {t.hint}</span>
               </label>
             ))}
           </div>
-          <p className="text-xs text-gray-600 mt-1">
-            Cards: el agente devuelve JSON y genera cards modificables.
-            Streaming: output de texto libre en modal.
-            Flowchart: el agente devuelve JSON con nodos y aristas para un diagrama interactivo.
-          </p>
         </div>
 
         {/* Scope */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">Scope</label>
+          <p className="block text-xs font-medium text-fg-secondary mb-2">Scope</p>
           <div className="flex gap-3">
             {(["CLIENT", "GLOBAL"] as const).map((s) => (
-              <label key={s} className="flex items-center gap-2 cursor-pointer">
+              <label key={s} className={optionLabel}>
                 <input
                   type="radio"
                   name="scope"
@@ -274,26 +270,23 @@ export default function AgentFormClient({ agentId, initialData }: AgentFormClien
                   onChange={() => setForm({ ...form, scope: s })}
                   className="accent-brand"
                 />
-                <span className="text-sm text-gray-300">
+                <span className="text-sm text-fg-secondary">
                   {s === "CLIENT" ? "Por cliente" : "Global"}
                 </span>
               </label>
             ))}
           </div>
-          <p className="text-xs text-gray-600 mt-1">
+          <p className="text-xs text-fg-muted mt-1">
             Por cliente: requiere un cliente seleccionado para ejecutarse.
             Global: no está asociado a un cliente específico.
           </p>
         </div>
 
-        {/* Prompt principal */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1.5">
-            Prompt principal <span className="text-red-400">*</span>
-          </label>
-          <p className="text-xs text-gray-600 mb-2">
-            Define el rol, objetivo y comportamiento del agente. Recibirá automáticamente el contexto del cliente y del paso actual.
-          </p>
+        <Field
+          label="Prompt principal"
+          required
+          hint="Define el rol, objetivo y comportamiento del agente. Recibe automáticamente el contexto del cliente y del paso actual."
+        >
           <Textarea
             value={form.systemPrompt}
             onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
@@ -302,16 +295,12 @@ export default function AgentFormClient({ agentId, initialData }: AgentFormClien
             className="font-mono resize-y"
             required
           />
-        </div>
+        </Field>
 
-        {/* Instrucciones adicionales */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1.5">
-            Instrucciones adicionales <span className="text-gray-600 font-normal">(opcional)</span>
-          </label>
-          <p className="text-xs text-gray-600 mb-2">
-            Restricciones, formato de respuesta, tono, estructura esperada...
-          </p>
+        <Field
+          label="Instrucciones adicionales"
+          hint="Restricciones, formato de respuesta, tono, estructura esperada (opcional)."
+        >
           <Textarea
             value={form.additionalInstructions}
             onChange={(e) => setForm({ ...form, additionalInstructions: e.target.value })}
@@ -319,14 +308,43 @@ export default function AgentFormClient({ agentId, initialData }: AgentFormClien
             rows={4}
             className="resize-y"
           />
-        </div>
+        </Field>
+
+        {/* Prompt EFECTIVO — lo que realmente se envía (base DB + formato del código).
+            Calibrar sin verlo es calibrar a ciegas: el systemPrompt es solo una parte. */}
+        {!isNew && (
+          <details
+            className="rounded-lg border border-line bg-surface-muted px-3 py-2.5"
+            onToggle={(e) => {
+              if ((e.target as HTMLDetailsElement).open) void loadEffectivePrompt();
+            }}
+          >
+            <summary className="text-xs font-medium text-fg-secondary cursor-pointer select-none">
+              Ver el prompt efectivo (lo que se envía al modelo)
+            </summary>
+            {effective ? (
+              <div className="mt-3 space-y-3">
+                <p className="text-[11px] text-fg-muted">{effective.nota}</p>
+                {effective.formatInstructions && (
+                  <pre className="text-[11px] text-fg-secondary bg-surface border border-line rounded-lg p-3 whitespace-pre-wrap max-h-64 overflow-y-auto">
+                    {effective.formatInstructions}
+                  </pre>
+                )}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-fg-muted">
+                {loadingEffective ? "Cargando…" : "No se pudo cargar."}
+              </p>
+            )}
+          </details>
+        )}
 
         {/* Estado */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">Estado</label>
+          <p className="block text-xs font-medium text-fg-secondary mb-2">Estado</p>
           <div className="flex gap-4">
             {(["ACTIVE", "DRAFT"] as const).map((s) => (
-              <label key={s} className="flex items-center gap-2 cursor-pointer select-none">
+              <label key={s} className={optionLabel}>
                 <input
                   type="radio"
                   name="status"
@@ -334,23 +352,18 @@ export default function AgentFormClient({ agentId, initialData }: AgentFormClien
                   onChange={() => setForm({ ...form, status: s })}
                   className="accent-brand"
                 />
-                <span className={`text-sm font-medium ${s === "ACTIVE" ? "text-green-400" : "text-gray-500"}`}>
+                <span className={`text-sm font-medium ${s === "ACTIVE" ? "text-green-400" : "text-fg-muted"}`}>
                   {s === "ACTIVE" ? "Activo" : "Borrador"}
                 </span>
               </label>
             ))}
           </div>
-          <p className="text-xs text-gray-600 mt-1.5">
+          <p className="text-xs text-fg-muted mt-1.5">
             Solo los agentes Activos aparecen en el workspace de clientes
           </p>
         </div>
 
-        {/* Error */}
-        {error && (
-          <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-            {error}
-          </p>
-        )}
+        {error && <Alert variant="danger">{error}</Alert>}
         </fieldset>
 
         {/* Botones — crear/editar/borrar agentes es solo Super Admin */}
@@ -382,8 +395,8 @@ export default function AgentFormClient({ agentId, initialData }: AgentFormClien
           </div>
         ) : (
           <div className="flex items-center justify-between pt-2 pb-8">
-            <p className="text-sm text-gray-500">
-              Solo lectura · tu rol no tiene el permiso <span className="text-gray-300 font-medium">Administrar agentes</span>.
+            <p className="text-sm text-fg-muted">
+              Solo lectura · tu rol no tiene el permiso <span className="text-fg-secondary font-medium">Administrar agentes</span>.
             </p>
             <Link
               href="/agents"

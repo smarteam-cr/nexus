@@ -47,7 +47,7 @@ function contarGrises(rel: string): number {
  * pegar la línea que imprime el fallo. Cuando un módulo llega a 0, su entrada se borra.
  */
 const DEUDA_TOKENS: Record<string, number> = {
-  "app/(shell)/agents/[id]/AgentFormClient.tsx": 33,
+
   "app/(shell)/agents/AgentsClient.tsx": 4,
   "app/(shell)/archived/page.tsx": 10,
   "app/(shell)/archived/UnarchiveButton.tsx": 5,
