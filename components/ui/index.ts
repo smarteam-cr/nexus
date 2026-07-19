@@ -26,13 +26,25 @@ export type { EmptyStateProps } from "./EmptyState";
 export { PageHeader } from "./PageHeader";
 export type { PageHeaderProps } from "./PageHeader";
 
-export { Skeleton, SkeletonText, PageHeaderSkeleton, CardsSkeleton, ListSkeleton } from "./Skeleton";
+export {
+  Skeleton,
+  SkeletonText,
+  SkeletonPanel,
+  PageHeaderSkeleton,
+  CardsSkeleton,
+  ListSkeleton,
+  SkeletonTabs,
+  SkeletonChart,
+} from "./Skeleton";
 export type {
   SkeletonProps,
   SkeletonTextProps,
+  SkeletonPanelProps,
   PageHeaderSkeletonProps,
   CardsSkeletonProps,
   ListSkeletonProps,
+  SkeletonTabsProps,
+  SkeletonChartProps,
 } from "./Skeleton";
 
 export { Avatar }    from "./Avatar";

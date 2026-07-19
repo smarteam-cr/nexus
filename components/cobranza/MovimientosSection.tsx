@@ -90,7 +90,7 @@ export default function MovimientosSection() {
 
   if (cargando) {
     // Skeleton estructural: filas apiladas ≈ la lista de movimientos agrupada por mes.
-    return <ListSkeleton rows={6} rowClassName="h-12" />;
+    return <ListSkeleton rows={6} lines={1} />;
   }
 
   if (error) {

@@ -18,7 +18,7 @@ export default function CobranzaLoading() {
       </div>
 
       {/* Cards de resumen (vencido / esta quincena / más adelante) */}
-      <CardsSkeleton count={3} columns={3} cardClassName="h-20" className="mb-6" />
+      <CardsSkeleton count={3} columns={3} variant="tile" minH="min-h-[80px]" className="mb-6" />
 
       <TableSkeleton columns={6} rows={8} />
     </div>

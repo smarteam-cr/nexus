@@ -142,7 +142,7 @@ export default function PersonasClient({ canEdit }: { canEdit: boolean }) {
         // Skeleton ESTRUCTURAL: cards de la altura de una persona cargada
         // (nombre + descripción + dolores/objetivos) para que nada salte.
         <div aria-label="Cargando las personas">
-          <CardsSkeleton count={4} columns={2} cardClassName="h-40" />
+          <CardsSkeleton count={4} columns={2} minH="min-h-[160px]" />
         </div>
       ) : rows.length === 0 ? (
         <EmptyState

@@ -230,7 +230,7 @@ export default function TemasClient({ canEdit }: { canEdit: boolean }) {
         // Skeleton ESTRUCTURAL: filas de la misma altura que un tema cargado
         // (rounded-xl px-4 py-3, título + descripción) para que nada salte.
         <div aria-label="Cargando los temas">
-          <ListSkeleton rows={6} rowClassName="h-16" />
+          <ListSkeleton rows={6} lines={2} />
         </div>
       ) : pillars.length === 0 ? (
         <EmptyState

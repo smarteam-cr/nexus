@@ -121,7 +121,7 @@ export default function RolesIndexClient() {
       {loading ? (
         // Skeleton estructural: replica la cáscara del estado cargado y reserva su altura
         // (patrón ProjectGPS.tsx). Nunca un <p>Cargando…</p> suelto.
-        <ListSkeleton rows={3} rowClassName="h-16" />
+        <ListSkeleton rows={3} lines={2} />
       ) : rows.length === 0 ? (
         <EmptyState
           variant="dashed"

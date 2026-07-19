@@ -5,7 +5,7 @@ export default function RolesLoading() {
   return (
     <div className="px-6 py-8">
       <PageHeaderSkeleton titleWidth="w-28" descWidth="w-96" action />
-      <ListSkeleton rows={3} rowClassName="h-16" />
+      <ListSkeleton rows={3} lines={2} />
     </div>
   );
 }

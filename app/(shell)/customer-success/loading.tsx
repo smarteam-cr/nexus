@@ -13,11 +13,11 @@ export default function CustomerSuccessLoading() {
       {/* Alertas del watchdog */}
       <div className="mb-6 space-y-2">
         <Skeleton className="h-4 w-24" />
-        <ListSkeleton rows={3} rowClassName="h-12" />
+        <ListSkeleton rows={3} lines={1} />
       </div>
 
       {/* Dashboard 2×2 */}
-      <CardsSkeleton count={4} columns={2} cardClassName="h-48" className="mb-6" />
+      <CardsSkeleton count={4} columns={2} minH="min-h-[192px]" className="mb-6" />
 
       {/* Panel / tabla de cartera */}
       <Skeleton className="h-72 w-full" rounded="xl" />

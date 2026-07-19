@@ -103,7 +103,7 @@ export default function CampaignsClient({ canEdit }: { canEdit: boolean }) {
       {loading ? (
         // Skeleton estructural: misma cáscara que las cards de ideas de SEM
         // (filas rounded-xl título + descripción) para que nada salte al cargar.
-        <ListSkeleton rows={4} rowClassName="h-20" />
+        <ListSkeleton rows={4} lines={2} />
       ) : rows.length === 0 ? (
         <EmptyState
           variant="dashed"

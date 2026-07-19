@@ -188,7 +188,7 @@ export default function UseCasesAdminClient() {
 
       {/* Lista */}
       {loading ? (
-        <ListSkeleton rows={5} rowClassName="h-20" />
+        <ListSkeleton rows={5} lines={2} />
       ) : rows.length === 0 ? (
         <p className="text-sm text-fg-muted">
           No hay casos de uso todavía. Mientras el catálogo esté vacío, los business cases se generan

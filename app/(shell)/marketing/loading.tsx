@@ -8,7 +8,7 @@ import { ListSkeleton } from "@/components/ui";
 export default function MarketingLoading() {
   return (
     <div className="mt-4">
-      <ListSkeleton rows={4} rowClassName="h-20" />
+      <ListSkeleton rows={4} lines={2} />
     </div>
   );
 }

@@ -14,7 +14,7 @@ export default function CostosLoading() {
       </div>
 
       {/* Tiles de burn mensual (CRC / USD) */}
-      <CardsSkeleton count={2} columns={2} cardClassName="h-20" className="mb-6 max-w-xl" />
+      <CardsSkeleton count={2} columns={2} variant="tile" minH="min-h-[80px]" className="mb-6 max-w-xl" />
 
       <TableSkeleton columns={5} rows={8} />
     </div>

@@ -126,7 +126,7 @@ export default function EngineClient({ canEdit }: { canEdit: boolean }) {
         {loading ? (
           // Skeleton estructural: la card del historial ya está montada; se
           // reservan filas de la altura real de una corrida para evitar saltos.
-          <ListSkeleton rows={3} rowClassName="h-8" />
+          <ListSkeleton rows={3} lines={1} />
         ) : runs.length === 0 ? (
           <p className="text-xs text-fg-muted">Todavía no hay corridas. Corré la primera con el botón de arriba.</p>
         ) : (

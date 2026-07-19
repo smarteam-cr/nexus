@@ -310,7 +310,7 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
       {loading ? (
         // Skeleton estructural: reserva el área de la lista de publicaciones
         // (filas rounded-xl) para que al llegar las ideas nada salte.
-        <ListSkeleton rows={6} rowClassName="h-24" />
+        <ListSkeleton rows={6} lines={2} />
       ) : visibleIdeas.length === 0 ? (
         <EmptyState variant="dashed" title={emptyCopy[tab].title} description={emptyCopy[tab].description} />
       ) : (

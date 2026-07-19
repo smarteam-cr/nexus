@@ -115,7 +115,7 @@ export default function SourcesClient({ canEdit }: { canEdit: boolean }) {
       {loading ? (
         // Skeleton estructural: misma cáscara que la lista de fuentes (filas
         // rounded-xl de ~3 líneas) para que al llegar la data nada salte.
-        <ListSkeleton rows={5} rowClassName="h-20" />
+        <ListSkeleton rows={5} lines={2} />
       ) : rows.length === 0 ? (
         <EmptyState
           variant="dashed"

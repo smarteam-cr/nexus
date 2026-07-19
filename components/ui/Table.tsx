@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { Skeleton } from "./Skeleton";
 import { SearchFilterBar } from "./SearchFilterBar";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
@@ -286,53 +285,7 @@ function IdentityCell({ leading, primary, secondary }: IdentityCellProps) {
 Table.IdentityCell = IdentityCell;
 
 // ── TableSkeleton ──────────────────────────────────────────────────────────────
-
-export interface TableSkeletonProps {
-  columns?: number;
-  rows?: number;
-  /** Dibuja una fila de toolbar (búsqueda + acción) sobre la tabla. */
-  toolbar?: boolean;
-  className?: string;
-}
-
-/** Esqueleto con forma de tabla — para loading.tsx y listas con fetch en cliente. */
-export function TableSkeleton({
-  columns = 5,
-  rows = 8,
-  toolbar = false,
-  className,
-}: TableSkeletonProps) {
-  return (
-    <div className={className}>
-      {toolbar && (
-        <div className="flex items-center gap-2 mb-6">
-          <Skeleton className="h-9 flex-1 max-w-xs" rounded="lg" />
-          <Skeleton className="h-9 w-36 ml-auto" rounded="lg" />
-        </div>
-      )}
-      <div className="rounded-xl border border-line bg-surface overflow-hidden">
-        {/* Encabezado */}
-        <div className="flex items-center gap-4 px-4 py-3 border-b border-line bg-surface-muted">
-          {Array.from({ length: columns }).map((_, i) => (
-            <Skeleton key={i} className="h-2.5 flex-1" />
-          ))}
-        </div>
-        {/* Filas */}
-        {Array.from({ length: rows }).map((_, r) => (
-          <div
-            key={r}
-            className="flex items-center gap-4 px-4 py-3.5 border-b border-line last:border-0"
-          >
-            <div className="flex items-center gap-3 flex-1">
-              <Skeleton className="w-8 h-8 flex-shrink-0" rounded="full" delay={r * 40} />
-              <Skeleton className="h-3 flex-1 max-w-[160px]" delay={r * 40} />
-            </div>
-            {Array.from({ length: Math.max(0, columns - 1) }).map((_, c) => (
-              <Skeleton key={c} className="h-3 flex-1" delay={r * 40} />
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// Se mudó a components/ui/Skeleton.tsx (vivía escondida acá y por eso nadie la tomaba
+// de modelo, pese a ser el skeleton estructural correcto). Re-export por compatibilidad.
+export { TableSkeleton } from './Skeleton';
+export type { TableSkeletonProps } from './Skeleton';
