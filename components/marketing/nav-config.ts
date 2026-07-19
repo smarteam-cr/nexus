@@ -1,6 +1,6 @@
 /**
  * Topología de navegación de Marketing — fuente única compartida por el
- * submenú flyout del sidebar (MarketingFlyout, solo muestra los 3 grupos) y
+ * submenú flyout del sidebar (NavFlyout, solo muestra los 3 grupos) y
  * las tabs in-page del grupo activo (MarketingSectionTabs, solo se muestran
  * si el grupo tiene 2+ hijos — "Voz de marca" no tiene, es una página directa).
  */

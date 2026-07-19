@@ -6,9 +6,9 @@ import { useTheme } from "@/lib/theme";
 import { Menu } from "@/components/ui";
 import RunsIndicator from "@/components/ai/RunsIndicator";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
-import MarketingFlyout from "./MarketingFlyout";
-import FinanzasFlyout from "./FinanzasFlyout";
-import RolesFlyout from "./RolesFlyout";
+import { isCostosRole } from "@/lib/auth/cobranza-roles";
+import { APP_NAV, canSeeNavItem } from "./nav-config";
+import NavFlyout, { RolesNavFlyout } from "./NavFlyout";
 
 interface ClientSummary {
   id: string;
@@ -70,8 +70,8 @@ function NavItem({
         isOpen ? "gap-2.5 px-3 py-2" : "justify-center p-2.5"
       } ${
         active
-          ? "bg-gray-800 text-white"
-          : "text-gray-400 hover:text-white hover:bg-gray-900"
+          ? "bg-surface-hover text-fg"
+          : "text-fg-muted hover:text-fg hover:bg-surface-muted"
       }`}
     >
       {icon}
@@ -178,26 +178,19 @@ function UserAvatar({ user, isOpen }: { user: UserLite; isOpen: boolean }) {
 export default function Sidebar({ clients, user, onToggle, isOpen = true }: SidebarProps) {
   const pathname = usePathname();
 
-  // Visibilidad de ítems del menú desde el mapa de PERMISOS EFECTIVO (default ←
-  // plantilla del rol ← overrides; editable en /team). Es cosmético: la seguridad
-  // real vive en cada página/endpoint. Universales (todos): Clientes, Marketing
-  // (incluye ICP en su submenú), Sesiones, Conocimientos.
+  // Visibilidad de ítems desde el mapa de PERMISOS EFECTIVO, resuelta por los
+  // gates DECLARATIVOS de nav-config (canSeeNavItem es puro; el test de gates
+  // congelados en lib/ui/nav-gates.test.ts fija quién ve qué). Es cosmético:
+  // la seguridad real vive en cada página/endpoint.
   const role = user.role ?? "";
   const isSuperAdmin = user.isSuperAdmin || role === "SUPER_ADMIN";
-  const perms = user.permissions?.sections ?? {};
-  const canSeeAgents = perms.agentes?.read === true; // catálogo /agents
-  const canSeePortfolio = perms.clientes?.viewAll === true; // Cartera (ve todos los clientes)
-  const canSeeSales = perms.ventas?.read === true; // Ventas / Business Cases
-  const canSeeCobranza = perms.cobranza?.read === true; // Cobranza (Admin & Finanzas)
-  const canSeeAudits = perms.auditoria?.read === true; // Auditorías
-  const canSeeTeam = isSuperAdmin; // gate DURO: solo Super Admin administra el equipo/permisos
-  const canSeeConfig = perms.configuracion?.read === true; // Configuración
+  const navCtx = { isSuperAdmin, permissions: user.permissions };
 
   return (
-    <aside className="w-full bg-gray-950 border-r border-gray-800 flex flex-col sticky top-0 h-screen overflow-hidden">
+    <aside className="w-full bg-background border-r border-line flex flex-col sticky top-0 h-screen overflow-hidden">
 
       {/* ── Brand ── */}
-      <div className={`h-14 border-b border-gray-800 flex-shrink-0 flex items-center ${isOpen ? "px-4 justify-between" : "justify-center"}`}>
+      <div className={`h-14 border-b border-line flex-shrink-0 flex items-center ${isOpen ? "px-4 justify-between" : "justify-center"}`}>
         {isOpen ? (
           <>
             <Link
@@ -206,7 +199,7 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
               className="flex items-center gap-2.5 min-w-0"
             >
               <BrandIcon />
-              <span className="text-sm font-semibold text-white leading-tight truncate">
+              <span className="text-sm font-semibold text-fg leading-tight truncate">
                 Nexus
               </span>
             </Link>
@@ -214,7 +207,7 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
               <button
                 onClick={onToggle}
                 title="Colapsar menú"
-                className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-gray-600 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+                className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-fg-muted hover:text-fg-secondary hover:bg-surface-hover transition-colors"
               >
                 <ChevronLeft />
               </button>
@@ -224,7 +217,7 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
           <button
             onClick={onToggle}
             title="Expandir menú"
-            className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:text-gray-200 hover:bg-gray-800 transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded-md text-fg-muted hover:text-fg-secondary hover:bg-surface-hover transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -234,133 +227,50 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
       </div>
 
 
-      {/* ── Nav principal: no scrollea con la lista de clientes (por eso el
-          menú ya no se corta y el flyout de Marketing queda anclado). En una
-          pantalla normal toma su alto natural; si es muy baja se encoge y
-          scrollea SOLO él (min-h-0), nunca se recorta. ── */}
-      <nav className={`space-y-0.5 py-3 overflow-y-auto min-h-0 ${isOpen ? "px-3" : "px-2"}`}>
-          <NavItem
-            href="/clients"
-            active={pathname.startsWith("/clients")}
-            isOpen={isOpen}
-            label="Clientes"
-            icon={
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            }
-          />
-          {/* Marketing: universal — todo rol interno VE (submenú flyout, incluye
-              ICP/Audiencia); editan MARKETING/CSL/SUPER_ADMIN (gate en API/páginas). */}
-          <MarketingFlyout isOpen={isOpen} />
-          {canSeePortfolio && (
-            <NavItem
-              href="/customer-success"
-              active={pathname.startsWith("/customer-success")}
-              isOpen={isOpen}
-              label="Éxito del cliente"
-              icon={
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              }
-            />
-          )}
-          {canSeeSales && (
-            <NavItem
-              href="/business-cases"
-              active={pathname.startsWith("/business-cases")}
-              isOpen={isOpen}
-              label="Ventas"
-              icon={
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 14l4-4 3 3 5-6" />
-                </svg>
-              }
-            />
-          )}
-          {/* Finanzas: agrupa Cobranza · Costos y gastos · Caja neta (submenú
-              flyout, mismo gate cosmético que el NavItem anterior). Los últimos
-              2 hijos se filtran adentro del flyout por isCostosRole. */}
-          {canSeeCobranza && <FinanzasFlyout isOpen={isOpen} role={role} />}
-          {canSeeAudits && (
-            <NavItem
-              href="/audits"
-              active={pathname.startsWith("/audits")}
-              isOpen={isOpen}
-              label="Auditoría"
-              icon={
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                </svg>
-              }
-            />
-          )}
-          {canSeeAgents && (
-            <NavItem
-              href="/agents"
-              active={pathname.startsWith("/agents")}
-              isOpen={isOpen}
-              label="Agentes"
-              icon={
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              }
-            />
-          )}
-          <NavItem
-            href="/sessions"
-            active={pathname.startsWith("/sessions")}
-            isOpen={isOpen}
-            label="Sesiones"
-            icon={
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            }
-          />
-          <NavItem
-            href="/knowledge"
-            active={pathname.startsWith("/knowledge")}
-            isOpen={isOpen}
-            label="Conocimientos"
-            icon={
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
-            }
-          />
-          {canSeeTeam && (
-            <NavItem
-              href="/team"
-              active={pathname.startsWith("/team")}
-              isOpen={isOpen}
-              label="Equipo"
-              icon={
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              }
-            />
-          )}
-          {/* Roles: perfiles de puesto del equipo — submenú flyout que lista cada
-              rol. SOLO SUPER_ADMIN (mismo gate duro que Equipo). */}
-          {isSuperAdmin && <RolesFlyout isOpen={isOpen} />}
-          {canSeeConfig && (
-            <NavItem
-              href="/integrations"
-              active={pathname.startsWith("/integrations")}
-              isOpen={isOpen}
-              label="Configuración"
-              icon={
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
-                </svg>
-              }
-            />
-          )}
-        </nav>
+      {/* ── Nav principal: DECLARATIVO desde APP_NAV (nav-config), en dos zonas
+          (operación / administración). No scrollea con la lista de clientes; en
+          pantalla baja se encoge y scrollea SOLO él (min-h-0), nunca se recorta. ── */}
+      <nav className={`py-3 overflow-y-auto min-h-0 ${isOpen ? "px-3" : "px-2"}`}>
+        {(["operacion", "administracion"] as const).map((grupo) => {
+          const items = APP_NAV.filter((it) => it.group === grupo && canSeeNavItem(it, navCtx));
+          if (items.length === 0) return null;
+          return (
+            <div key={grupo}>
+              {grupo === "administracion" && (
+                <>
+                  <div className={`my-2 border-t border-line/60 ${isOpen ? "mx-1" : "mx-0.5"}`} />
+                  {isOpen && (
+                    <p className="px-3 pb-1 text-2xs font-semibold text-fg-muted uppercase tracking-widest">
+                      Administración
+                    </p>
+                  )}
+                </>
+              )}
+              <div className="space-y-0.5">
+                {items.map((item) => {
+                  if (item.dynamicChildren === "roles") {
+                    return <RolesNavFlyout key={item.key} item={item} isOpen={isOpen} />;
+                  }
+                  if (item.children) {
+                    const children = item.children.filter((c) => !c.costosOnly || isCostosRole(role));
+                    return <NavFlyout key={item.key} item={item} items={children} isOpen={isOpen} />;
+                  }
+                  return (
+                    <NavItem
+                      key={item.key}
+                      href={item.href}
+                      active={(item.match ?? [item.href]).some((p) => pathname.startsWith(p))}
+                      isOpen={isOpen}
+                      label={item.label}
+                      icon={item.icon}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+          </nav>
 
         {/* ── Clientes recientes: ocupa el espacio restante y scrollea SOLO
             ella (ya no arrastra el menú ni queda comprimida en 150px fijos). ── */}

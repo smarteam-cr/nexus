@@ -2,7 +2,7 @@
 
 /**
  * Tabs in-page del grupo activo de Marketing. El submenú del sidebar
- * (MarketingFlyout) solo tiene los 3 grupos; navegar entre las sub-secciones
+ * (NavFlyout) solo tiene los 3 grupos; navegar entre las sub-secciones
  * DENTRO de un grupo (ej. Contenido/Generación/Ideas de campaña/Temas/Fuentes
  * dentro de "Generación de contenido") es esto. No se renderiza nada si el
  * grupo activo no tiene hijos (Voz de marca es una página directa).

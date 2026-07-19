@@ -1,6 +1,6 @@
 /**
  * /marketing — layout del área: header + tabs del grupo activo + contenido.
- * El submenú del sidebar (MarketingFlyout) solo tiene los 3 grupos; navegar
+ * El submenú del sidebar (NavFlyout) solo tiene los 3 grupos; navegar
  * entre las sub-secciones DENTRO del grupo activo (ej. Contenido/Generación/
  * Ideas de campaña/Temas/Fuentes dentro de "Generación de contenido") son
  * estas tabs (MarketingSectionTabs — no se muestran si el grupo no tiene
