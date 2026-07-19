@@ -23,6 +23,7 @@ import ProjectHandoffSection from "./ProjectHandoffSection";
 import { WorkspaceSkeleton } from "./skeletons";
 import ProjectLifecyclePanel from "@/components/lifecycle/ProjectLifecyclePanel";
 import { useWorkspace } from "./WorkspaceContext";
+import { readCanvasCache, writeCanvasCache } from "@/lib/clients/canvas-cache";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
@@ -75,18 +76,33 @@ export default function ProjectCanvasPanel({
   projectId,
   tags,
   serviceType,
+  initialCanvases,
 }: {
   projectId: string;
   tags?: string[];
   serviceType?: string | null;
+  /** Canvases sembrados server-side (page.tsx) para el proyecto inicial. */
+  initialCanvases?: CanvasMeta[] | null;
 }) {
   const params = useParams();
   const clientId = params?.id as string;
   const searchParams = useSearchParams();
   const router = useRouter();
   const canvasFromUrl = searchParams.get("canvas");
+
+  // Siembra del primer paint: props del server (carga inicial) o cache de módulo
+  // (revisitas al cambiar de tab). Con siembra, el panel NO pinta el WorkspaceSkeleton
+  // — antes re-fetcheaba /canvases al montar y el usuario veía el skeleton DOS veces
+  // (el del loading.tsx del route y este). useState perezoso: se resuelve UNA vez por
+  // montaje y nunca se re-setea (el refetch de fondo escribe `canvases` directo).
+  const [seeded] = useState<CanvasMeta[] | null>(() =>
+    initialCanvases && initialCanvases.length > 0
+      ? initialCanvases
+      : (readCanvasCache<CanvasMeta[]>(projectId)?.data ?? null),
+  );
+
   const [sections, setSections] = useState<CanvasSection[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!seeded);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [dragCardId, setDragCardId] = useState<string | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<{ sectionKey: string; index: number } | null>(null);
@@ -97,9 +113,13 @@ export default function ProjectCanvasPanel({
   const [sessionResult, setSessionResult] = useState<{ cards: CanvasCard[]; sessionTitle: string } | null>(null);
   const [unprocessedSessions, setUnprocessedSessions] = useState(0);
 
-  // Multi-canvas state
-  const [canvases, setCanvases] = useState<CanvasMeta[]>([]);
-  const [activeCanvasId, setActiveCanvasId] = useState<string | null>(null);
+  // Multi-canvas state (sembrado si hay seed; el refetch de fondo revalida igual)
+  const [canvases, setCanvases] = useState<CanvasMeta[]>(seeded ?? []);
+  const [activeCanvasId, setActiveCanvasId] = useState<string | null>(() => {
+    if (!seeded) return null;
+    const fromUrl = canvasFromUrl ? seeded.find((c) => c.id === canvasFromUrl) : null;
+    return (fromUrl ?? seeded[0])?.id ?? null;
+  });
   // Se incrementa al terminar una corrida de agente desde el CTA → remonta el canvas
   // activo (key) para que muestre los bloques nuevos sin recargar la página.
   const [agentNonce, setAgentNonce] = useState(0);

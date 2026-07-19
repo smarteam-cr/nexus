@@ -51,8 +51,13 @@ export function ProjectGpsSkeleton() {
  * con ícono + título + badge + subtítulo + tags a la izquierda y botones a la derecha
  * (~122px mínimo). Antes el skeleton era una barra de 56px: el salto al cargar era de
  * los mayores del workspace.
+ *
+ * `expanded`: para EDITORES (handoffAnywhere) la sección real suma el bloque de
+ * contexto y la fila de exclusiones — se reserva la variante colapsada (~88px extra),
+ * el mínimo del caso común (handoff generado). Un handoff sin generar abre el contexto
+ * y crece: aceptado (guía web.dev: reservar el tamaño mínimo, tolerar el caso raro).
  */
-export function HandoffSectionSkeleton() {
+export function HandoffSectionSkeleton({ expanded = false }: { expanded?: boolean }) {
   return (
     <section className="rounded-2xl border border-line bg-surface">
       <div className="px-5 py-3.5 flex items-start justify-between gap-4">
@@ -72,6 +77,20 @@ export function HandoffSectionSkeleton() {
         </div>
         <Skeleton className="h-7 w-28 flex-shrink-0" rounded="lg" delay={80} />
       </div>
+      {expanded && (
+        <>
+          {/* Cabecera del bloque de contexto (colapsado) */}
+          <div className="border-t border-line px-5 py-3 flex items-center gap-2">
+            <Skeleton className="w-3.5 h-3.5" rounded="sm" delay={200} />
+            <Skeleton className="h-3.5 w-48" delay={230} />
+          </div>
+          {/* Fila de exclusiones (colapsada) */}
+          <div className="border-t border-line px-5 py-3 flex items-center gap-2">
+            <Skeleton className="w-3.5 h-3.5" rounded="sm" delay={260} />
+            <Skeleton className="h-3.5 w-56" delay={290} />
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -101,21 +120,11 @@ export function WorkspaceSkeleton() {
         </div>
       </div>
 
-      {/* Canvas activo: dos secciones delineadas con su contenido */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {[0, 1].map((i) => (
-          <SkeletonPanel
-            key={i}
-            minH="min-h-[180px]"
-            header={<Skeleton className="h-3.5 w-40" delay={i * 80} />}
-            bodyClassName="px-5 py-4 space-y-2.5"
-          >
-            <Skeleton className="h-3 w-full" delay={i * 80} />
-            <Skeleton className="h-3 w-11/12" delay={i * 80 + 40} />
-            <Skeleton className="h-3 w-4/5" delay={i * 80 + 80} />
-          </SkeletonPanel>
-        ))}
-      </div>
+      {/* Canvas activo por defecto = CRONOGRAMA (el primero por `order`; ojo: Kickoff
+          está marcado isDefault pero la selección toma list[0] — inconsistencia
+          documentada, decisión vigente: Cronograma se queda). El skeleton imita al
+          Gantt, no una grilla genérica. */}
+      <CronogramaSkeleton />
     </div>
   );
 }

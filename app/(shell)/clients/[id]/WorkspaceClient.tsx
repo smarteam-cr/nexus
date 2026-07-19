@@ -24,18 +24,31 @@ interface ProjectSummary {
 
 // ── Main workspace component ─────────────────────────────────────────────────
 
+// Canvas sembrado server-side (page.tsx) para el proyecto inicial — mata el segundo
+// WorkspaceSkeleton (el panel arranca con la lista en mano, sin fetch al montar).
+export interface SeededCanvas {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  sections: Array<{ key: string; label: string }>;
+}
+
 export default function WorkspaceClient({
   clientId,
   projects,
   hasHubspot,
   strategyProjectId,
   strategyCanvasId,
+  initialCanvases,
+  initialCanvasesProjectId,
 }: {
   clientId: string;
   projects: ProjectSummary[];
   hasHubspot: boolean;
   strategyProjectId: string;
   strategyCanvasId: string;
+  initialCanvases: SeededCanvas[] | null;
+  initialCanvasesProjectId: string | null;
 }) {
   const router = useRouter();
   const syncedRef = useRef(false);
@@ -152,6 +165,8 @@ export default function WorkspaceClient({
           projects={projects}
           strategyProjectId={strategyProjectId}
           strategyCanvasId={strategyCanvasId}
+          initialCanvases={initialCanvases}
+          initialCanvasesProjectId={initialCanvasesProjectId}
         />
       </div>
     </div>
@@ -165,11 +180,15 @@ function ProjectSection({
   projects,
   strategyProjectId,
   strategyCanvasId,
+  initialCanvases,
+  initialCanvasesProjectId,
 }: {
   clientId: string;
   projects: ProjectSummary[];
   strategyProjectId: string;
   strategyCanvasId: string;
+  initialCanvases: SeededCanvas[] | null;
+  initialCanvasesProjectId: string | null;
 }) {
   const { activeProjectId, setActiveProjectId } = useWorkspace();
   const router = useRouter();
@@ -288,6 +307,7 @@ function ProjectSection({
           projectId={activeProjectId}
           tags={activeProject.tags}
           serviceType={activeProject.serviceType}
+          initialCanvases={activeProjectId === initialCanvasesProjectId ? initialCanvases : null}
         />
       ) : null}
     </div>

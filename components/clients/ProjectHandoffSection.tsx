@@ -19,6 +19,11 @@ import ProjectContextSection from "./ProjectContextSection";
 import TagsStrip from "@/components/tags/TagsStrip";
 import type { ImplementationType } from "@prisma/client";
 import { HandoffSectionSkeleton } from "./skeletons";
+import {
+  readHandoffStatusCache,
+  writeHandoffStatusCache,
+  invalidateHandoffStatus,
+} from "@/lib/clients/handoff-status-cache";
 
 interface HandoffStatus {
   handoffId: string | null;
@@ -43,9 +48,12 @@ function fmtDate(d: string): string {
 }
 
 export default function ProjectHandoffSection({ projectId, clientId }: { projectId: string; clientId: string }) {
-  const [status, setStatus] = useState<HandoffStatus | null>(null);
+  // Siembra desde el cache de módulo: al volver a un tab ya visitado, la sección pinta
+  // su estado real AL INSTANTE con la altura correcta (sin skeleton ni empujón).
+  const cached = readHandoffStatusCache<HandoffStatus>(projectId);
+  const [status, setStatus] = useState<HandoffStatus | null>(cached);
   const [tags, setTagsState] = useState<string[]>([]); // #5 — tags de producto/alcance del proyecto
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cached);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDoc, setShowDoc] = useState(false);
@@ -77,6 +85,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
       const r = await fetch(`/api/projects/${projectId}/handoff`);
       if (r.ok) {
         const d = (await r.json()) as HandoffStatus;
+        writeHandoffStatusCache(projectId, d); // revisitas pintan sin skeleton
         setStatus(d);
         setExclusionsLoaded((loaded) => {
           if (!loaded) setExclusions(d.contextExclusions ?? "");
@@ -147,6 +156,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     const agentId = status?.agentId;
     if (!agentId) { setError("No se encontró el agente de handoff."); return; }
     maybeRequestPermission(); // gesto del usuario → ofrecer activar notificaciones (una vez)
+    invalidateHandoffStatus(projectId); // el status va a cambiar: que un cambio de tab no pinte el viejo
     setGenerating(true);
     setError(null);
     const notifyUrl = `/clients/${clientId}`;
@@ -213,7 +223,11 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     }
   }, [projectId, clientId, fetchStatus, fetchTags, status?.agentId, status?.contextExclusions, exclusions, bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh]);
 
-  if (loading) return <HandoffSectionSkeleton />;
+  // Gate CONJUNTO status+me: si la sección se pintara apenas llega el status pero antes
+  // de /api/me, el bloque de contexto de editores se INSERTARÍA después (canEdit pasa a
+  // true tarde) empujando todo el canvas — era el segundo salto. `me` está cacheado a
+  // nivel módulo, así que esta espera extra solo existe en el primer montaje de la sesión.
+  if (loading || me === null) return <HandoffSectionSkeleton expanded={me?.capabilities.includes("handoffAnywhere") ?? false} />;
   if (!status) return null;
 
   const { generated } = status;
