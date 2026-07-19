@@ -1,10 +1,8 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { PageHeader } from "@/components/ui";
-import { getTeamMembers } from "@/lib/cache/team";
-import { computeLastMeetingDates } from "@/lib/clients/meeting-dates";
-import { computeClientActivityMap } from "@/lib/clients/last-interaction";
 import {
   requireUser,
   UnauthorizedError,
@@ -12,12 +10,22 @@ import {
 } from "@/lib/auth/supabase";
 import { accessibleClientWhere, sharedClientIdsFor } from "@/lib/auth/access";
 import { can } from "@/lib/auth/permissions/engine";
-import ClientsGrid, { type ClientRow } from "./ClientsGrid";
+import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
+import { ClientsTable, ClientsTableZoneSkeleton } from "./ClientsTable";
 
 // Render dinámico — la página depende del usuario logueado (sesión Supabase
 // vía cookies), así que no puede cachearse con ISR como antes.
 export const dynamic = "force-dynamic";
 
+/**
+ * /clients — SHELL RÁPIDO + zona suspendida ("push dynamic access down").
+ *
+ * Esta page resuelve solo lo barato (auth + rol + count) y pinta el header real de
+ * inmediato; las queries pesadas (clients + team + meeting-dates + actividad) viven en
+ * <ClientsTable>, suspendida con un fallback que ESTA page elige sabiendo el rol: con
+ * pills para CSE, sin pills para SUPER_ADMIN. Así el skeleton de la zona calza exacto
+ * con lo que cada rol va a ver — cosa que el loading.tsx estático no puede hacer.
+ */
 export default async function ClientsPage() {
   // Identidad del usuario logueado (Supabase Auth + AppUser).
   let user: Awaited<ReturnType<typeof requireUser>>;
@@ -51,89 +59,17 @@ export default async function ClientsPage() {
     sharedClientIdsFor(user),
   ]);
 
-  const [clients, teamMembers] = await Promise.all([
-    prisma.client.findMany({
-      where: clientWhere ?? undefined,
-      orderBy: { createdAt: "desc" }, // fallback secundario; el orden real se aplica abajo
-      select: {
-        id: true,
-        name: true,
-        company: true,
-        emailDomains: true,
-        createdAt: true,
-        projects: { select: { hubspotOwnerName: true, hubspotOwnerEmail: true } },
-        _count: { select: { projects: true } },
-      },
-    }),
-    getTeamMembers(),
-  ]);
-
-  const clientIds = clients.map((c) => c.id);
-
-  // Fechas de última reunión ventas/CSE + actividad (pasado/futuro) por cliente.
-  // Ambos usan el match materializado FirefliesSession.resolvedClientId — queries
-  // chicas e indexadas, no se cargan las ~16k sesiones en cada render.
-  const [meetingDates, activityMap] = await Promise.all([
-    computeLastMeetingDates({ clientIds, teamMembers }),
-    computeClientActivityMap(clients),
-  ]);
-
-  const rows: ClientRow[] = clients.map((c) => {
-    const md = meetingDates.get(c.id);
-    const activity = activityMap.get(c.id);
-    const cseNames = [
-      ...new Set(
-        c.projects
-          .map((p) => p.hubspotOwnerName)
-          .filter((n): n is string => !!n && n.trim().length > 0)
-      ),
-    ];
-    const cseEmails = [
-      ...new Set(
-        c.projects
-          .map((p) => p.hubspotOwnerEmail)
-          .filter((e): e is string => !!e && e.trim().length > 0)
-          .map((e) => e.toLowerCase())
-      ),
-    ];
-    return {
-      id: c.id,
-      name: c.name,
-      company: c.company,
-      createdAt: c.createdAt.toISOString(),
-      cseNames,
-      cseEmails,
-      lastSalesMeeting: md?.sales ? md.sales.toISOString() : null,
-      lastCseMeeting: md?.cse ? md.cse.toISOString() : null,
-      // Última actividad pasada (sesión, nota, agent run)
-      lastActivityAt: activity?.lastActivity?.date.toISOString() ?? null,
-      lastActivitySource: activity?.lastActivity?.source ?? null,
-      lastActivityLabel: activity?.lastActivity?.label ?? null,
-      // Próxima reunión agendada (futura)
-      nextMeetingAt: activity?.nextMeeting?.date.toISOString() ?? null,
-      nextMeetingLabel: activity?.nextMeeting?.label ?? null,
-      projectCount: c._count.projects,
-      isShared: sharedIds.has(c.id),
-    };
-  });
-
-  // Ordenar por última actividad PASADA DESC. Los clientes sin actividad pasada
-  // van al final (ordenados entre sí por createdAt DESC).
-  rows.sort((a, b) => {
-    const aDate = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
-    const bDate = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
-    if (aDate !== bDate) return bDate - aDate;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
+  // Count barato para la descripción del header (la lista completa llega por streaming).
+  const clientCount = await prisma.client.count({ where: clientWhere ?? undefined });
 
   return (
-    <div className="px-6 py-8">
+    <div className={SHELL_DEFAULT}>
       <PageHeader
         title="Clientes"
         description={
-          rows.length === 0
+          clientCount === 0
             ? "Sin clientes aún"
-            : `${rows.length} cliente${rows.length !== 1 ? "s" : ""}`
+            : `${clientCount} cliente${clientCount !== 1 ? "s" : ""}`
         }
         action={
           canSeeSales ? (
@@ -150,7 +86,14 @@ export default async function ClientsPage() {
         }
       />
 
-      <ClientsGrid clients={rows} activeCse={activeCse} />
+      <Suspense fallback={<ClientsTableZoneSkeleton showPills={!activeCse.isSuperAdmin} />}>
+        <ClientsTable
+          user={user}
+          activeCse={activeCse}
+          clientWhere={clientWhere}
+          sharedIds={sharedIds}
+        />
+      </Suspense>
     </div>
   );
 }

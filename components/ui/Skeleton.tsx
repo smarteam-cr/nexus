@@ -241,8 +241,10 @@ export function ListSkeleton({
 export interface TableSkeletonProps {
   columns?: number;
   rows?: number;
-  /** Dibuja una fila de toolbar (búsqueda + acción) sobre la tabla. */
+  /** Dibuja una fila de toolbar (búsqueda + acciones) sobre la tabla. */
   toolbar?: boolean;
+  /** Cuántos botones de acción reserva el toolbar (ej. /clients tiene 2). */
+  toolbarActions?: number;
   className?: string;
 }
 
@@ -254,14 +256,20 @@ export function TableSkeleton({
   columns = 5,
   rows = 8,
   toolbar = false,
+  toolbarActions = 1,
   className,
 }: TableSkeletonProps) {
   return (
     <div className={className}>
       {toolbar && (
+        // h-[38px] = la altura real del Input (py-2 + text-sm + border) y de los botones.
         <div className="flex items-center gap-2 mb-6">
-          <Skeleton className="h-9 flex-1 max-w-xs" rounded="lg" />
-          <Skeleton className="h-9 w-36 ml-auto" rounded="lg" />
+          <Skeleton className="h-[38px] w-full sm:w-72" rounded="lg" />
+          <div className="flex items-center gap-2 ml-auto">
+            {Array.from({ length: toolbarActions }).map((_, i) => (
+              <Skeleton key={i} className="h-[38px] w-36" rounded="lg" delay={i * 50} />
+            ))}
+          </div>
         </div>
       )}
       <div className="rounded-xl border border-line bg-surface overflow-hidden">
@@ -275,7 +283,7 @@ export function TableSkeleton({
         {Array.from({ length: rows }).map((_, r) => (
           <div
             key={r}
-            className="flex items-center gap-4 px-4 py-3.5 border-b border-line last:border-0"
+            className="flex items-center gap-4 px-4 py-3 border-b border-line last:border-0"
           >
             <div className="flex items-center gap-3 flex-1">
               <Skeleton className="w-8 h-8 flex-shrink-0" rounded="full" delay={r * 40} />
@@ -303,10 +311,11 @@ export interface SkeletonTabsProps {
 /** Barra de pestañas en carga. Reemplaza las 5 implementaciones a mano del mismo widget. */
 export function SkeletonTabs({ count = 3, variant = "underline", className }: SkeletonTabsProps) {
   if (variant === "pill") {
+    // h-[30px] = la pill real (py-1.5 + text-xs + border).
     return (
       <div className={cn("flex items-center gap-2", className)}>
         {Array.from({ length: count }).map((_, i) => (
-          <Skeleton key={i} className="h-7 w-24" rounded="lg" delay={i * 50} />
+          <Skeleton key={i} className="h-[30px] w-24" rounded="lg" delay={i * 50} />
         ))}
       </div>
     );
@@ -366,7 +375,13 @@ export interface PageHeaderSkeletonProps {
   className?: string;
 }
 
-/** Esqueleto de un PageHeader (título + descripción + acción opcional). */
+/**
+ * Esqueleto de un PageHeader (título + descripción + acción opcional).
+ * Las alturas CALZAN con el PageHeader real: `h1 text-xl` = line-box de 28px (h-7),
+ * `mt-0.5` y `p text-sm` = line-box de 20px (la barra fina va centrada adentro).
+ * Bloque total: 50px — medido contra components/ui/PageHeader.tsx; si ese cambia,
+ * cambiá esto con él.
+ */
 export function PageHeaderSkeleton({
   titleWidth = "w-40",
   descWidth = "w-72",
@@ -375,11 +390,15 @@ export function PageHeaderSkeleton({
 }: PageHeaderSkeletonProps) {
   return (
     <div className={cn("flex items-start justify-between gap-4 mb-6", className)}>
-      <div className="space-y-2">
-        <Skeleton className={cn("h-6", titleWidth)} />
-        {descWidth && <Skeleton className={cn("h-3", descWidth)} />}
+      <div>
+        <Skeleton className={cn("h-7", titleWidth)} />
+        {descWidth && (
+          <div className="mt-0.5 flex h-5 items-center">
+            <Skeleton className={cn("h-3", descWidth)} />
+          </div>
+        )}
       </div>
-      {action && <Skeleton className="h-9 w-36 flex-shrink-0" rounded="lg" />}
+      {action && <Skeleton className="h-[38px] w-36 flex-shrink-0" rounded="lg" />}
     </div>
   );
 }

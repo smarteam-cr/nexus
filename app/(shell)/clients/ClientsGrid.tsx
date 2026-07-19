@@ -10,7 +10,8 @@ import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 // Shape mínimo del usuario activo para el filtro "Mis clientes".
 // Antes venía del tipo ActiveCse de lib/auth (basado en cookie nexus_cse);
 // ahora viene de Supabase Auth + AppUser en el server component.
-interface ActiveCse {
+// Exportado: ClientsTable (la zona suspendida de /clients) lo recibe de page.tsx.
+export interface ActiveCse {
   email: string;
   name: string;
   role: string;
