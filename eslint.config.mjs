@@ -40,10 +40,44 @@ const themeTokenGuard = {
   },
 };
 
+// ── Blindaje anti-slab (vocabulario de skeletons) ───────────────────────────────
+// Un "slab opaco" es un rectángulo relleno GRANDE sin estructura interna: ocupa el
+// espacio pero no comunica qué viene, y se lee peor que un vacío. El átomo `Skeleton`
+// es una LÍNEA (chip, avatar, botón): más de 48px de alto ya no se lee como "una línea
+// de contenido" sino como "un panel que no dice nada" — y para eso está `SkeletonPanel`,
+// que delinea la cáscara y pone el shimmer en los hijos.
+// Warn mientras corre la migración (olas 3-5 pendientes) → error al cerrarla.
+// Sin backslashes a propósito (el selector de esquery los re-escapa mal): los
+// classnames van separados por espacios, así que alcanza con delimitar por espacio.
+const SLAB_H_RE = "(?:^| )h-(?:1[3-9]|[2-9][0-9]|screen|full)(?: |$)";
+const SLAB_MSG =
+  "Slab opaco: un <Skeleton> alto (más de h-12) y vacío ocupa espacio sin comunicar qué viene. Usá <SkeletonPanel minH=\"…\"> (cáscara delineada) y poné el shimmer en las líneas de adentro. Referencias: components/clients/skeletons.tsx y TableSkeleton.";
+
+const skeletonSlabGuard = {
+  files: ["app/**/*.tsx", "components/**/*.tsx"],
+  ignores: ["components/landing/**", "app/external/**", "app/print/**"],
+  rules: {
+    "no-restricted-syntax": [
+      "warn",
+      // <Skeleton className="… h-64 …" /> SIN hijos → es un panel disfrazado de línea.
+      {
+        selector: `JSXElement[openingElement.name.name='Skeleton'][children.length=0] JSXAttribute[name.name='className'] Literal[value=/${SLAB_H_RE}/]`,
+        message: SLAB_MSG,
+      },
+      // El mismo defecto escrito a mano: un div con la clase de shimmer y altura grande.
+      {
+        selector: `JSXAttribute[name.name='className'] Literal[value=/skeleton-shimmer/][value=/${SLAB_H_RE}/]`,
+        message: SLAB_MSG,
+      },
+    ],
+  },
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   themeTokenGuard,
+  skeletonSlabGuard,
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
