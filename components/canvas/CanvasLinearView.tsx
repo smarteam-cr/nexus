@@ -17,6 +17,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import BlockRenderer, { type BlockData } from "./BlockRenderer";
 import { useCanvasSections } from "./useCanvasSections";
+import { CanvasSectionsSkeleton } from "@/components/clients/skeletons";
 
 /** Un bloque "tiene contenido" si su texto o su data traen algo (no un manual vacío). */
 function blockHasContent(block: BlockData): boolean {
@@ -110,15 +111,9 @@ export default function CanvasLinearView({
     await restoreBlock(u.sectionId, u.block);
   }, [undo, restoreBlock, dismissUndo]);
 
-  if (loading) {
-    return (
-      <div className={onlyKey ? "space-y-4" : "grid grid-cols-1 lg:grid-cols-2 gap-4"}>
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-32 rounded-2xl skeleton-shimmer" />
-        ))}
-      </div>
-    );
-  }
+  // Cáscara de sección (cabecera + bloques de prosa), no slabs: el canvas Handoff tiene
+  // 8-10 secciones de ~200-500px, así que 3 rectángulos de 128px no reservaban nada.
+  if (loading) return <CanvasSectionsSkeleton count={onlyKey ? 1 : 4} columns={onlyKey ? 1 : 2} />;
 
   return (
     <>

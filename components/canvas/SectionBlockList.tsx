@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import BlockRenderer, { type BlockData } from "./BlockRenderer";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
+import { CanvasSectionsSkeleton } from "@/components/clients/skeletons";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -360,13 +361,7 @@ export default function SectionBlockList({
 
   const draftCount = sections.reduce((sum, s) => sum + s.blocks.filter((b) => b.status === "DRAFT").length, 0);
 
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        {[1, 2, 3].map((i) => (<div key={i} className="h-32 rounded-2xl skeleton-shimmer" />))}
-      </div>
-    );
-  }
+  if (loading) return <CanvasSectionsSkeleton count={3} columns={1} />;
 
   return (
     <div className="space-y-4" ref={containerRef}>

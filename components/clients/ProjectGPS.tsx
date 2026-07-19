@@ -7,6 +7,7 @@ import { useWorkspace } from "./WorkspaceContext";
 import { useToast } from "@/components/ui/Toast";
 import { readGpsCache, writeGpsCache, invalidateGps } from "@/lib/clients/gps-cache";
 import { calendarDaysFromToday } from "@/lib/utils/relative-date";
+import { ProjectGpsSkeleton } from "./skeletons";
 
 export interface PendingItem {
   id?: string;             // ActionItem.id (nuevo) — undefined si viene del Json viejo
@@ -352,34 +353,10 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     );
   }
 
-  // Skeleton ESTRUCTURAL: misma cáscara/altura que el widget cargado (cabecera +
-  // grid de 4 columnas, con Última y Próxima agrupadas por frente) para que al
-  // cargar no haya salto de scroll.
-  if (!data) {
-    const cell = (
-      <div className="p-4 space-y-3">
-        <div className="h-2.5 w-16 rounded skeleton-shimmer" />
-        <div className="space-y-1.5">
-          <div className="h-3 w-12 rounded skeleton-shimmer" />
-          <div className="h-3.5 w-24 rounded skeleton-shimmer" />
-        </div>
-        <div className="space-y-1.5">
-          <div className="h-3 w-12 rounded skeleton-shimmer" />
-          <div className="h-3.5 w-24 rounded skeleton-shimmer" />
-        </div>
-      </div>
-    );
-    return (
-      <div className="mb-6 bg-surface border border-line rounded-xl overflow-hidden">
-        <div className="px-4 py-2.5 bg-surface-muted border-b border-line">
-          <div className="h-4 w-64 max-w-full rounded skeleton-shimmer" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-line min-h-[170px]">
-          {cell}{cell}{cell}{cell}
-        </div>
-      </div>
-    );
-  }
+  // Skeleton ESTRUCTURAL: misma cáscara/altura que el widget cargado (cabecera + grid
+  // de 4 columnas con `min-h-[170px]`, ver abajo) para que al cargar no haya salto.
+  // Vive en ./skeletons.tsx porque el loading.tsx de la ruta pinta la MISMA pieza.
+  if (!data) return <ProjectGpsSkeleton />;
 
   const formatDate = (d: Date) => {
     const days = calendarDaysFromToday(d);

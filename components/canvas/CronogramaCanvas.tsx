@@ -50,6 +50,8 @@ import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import ProjectActionsPanel from "./ProjectActionsPanel";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
+import { CronogramaSkeleton } from "@/components/clients/skeletons";
+import { Spinner } from "@/components/ui";
 
 interface TaskDraft {
   id?: string;
@@ -176,6 +178,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [anchor, setAnchor] = useState<string>(""); // yyyy-mm-dd o ""
   const [kickoffDate, setKickoffDate] = useState<string>(""); // yyyy-mm-dd de la sesión de kickoff (sugerencia)
   const [loading, setLoading] = useState(true);
+  // `loading` = primera carga (pinta el skeleton). `refreshing` = refetch tras una acción
+  // (mantiene el Gantt en pantalla). Separarlos evita que confirmar un avance colapse la
+  // página al esqueleto y pierda el scroll.
+  const [refreshing, setRefreshing] = useState(false);
+  const loadedOnceRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [chainingProgress, setChainingProgress] = useState(false); // F — fase "evaluando avance" del encadenado
@@ -355,7 +362,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     }));
 
   const load = useCallback(async () => {
-    setLoading(true);
+    // El skeleton SOLO en la primera carga. `load()` se re-llama tras cada acción
+    // (confirmar avance, guardar, aplicar propuesta, crear particularidad…): poner
+    // `loading=true` ahí reemplazaba el Gantt entero por el esqueleto, colapsando la
+    // página a ~300px y perdiendo la posición de scroll cada vez. Un refetch de acción
+    // mantiene el contenido en pantalla y solo marca `refreshing`.
+    if (loadedOnceRef.current) setRefreshing(true);
+    else setLoading(true);
     try {
       const res = await fetch(`/api/projects/${projectId}/timeline`);
       const data = await res.json();
@@ -418,6 +431,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       setError("No se pudo cargar el cronograma.");
     }
     setLoading(false);
+    setRefreshing(false);
+    loadedOnceRef.current = true;
     setDirty(false);
   }, [projectId]);
 
@@ -1371,15 +1386,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     }
   };
 
-  if (loading) {
-    return (
-      <div className="space-y-3 max-w-3xl">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-24 rounded-2xl skeleton-shimmer" />
-        ))}
-      </div>
-    );
-  }
+  // Cáscara del Gantt a ancho completo (el skeleton viejo tenía `max-w-3xl`, así que la
+  // página además saltaba en ancho al resolver).
+  if (loading) return <CronogramaSkeleton />;
 
   // ── Derivados ─────────────────────────────────────────────────────────────────
   const totalTasks = phases.reduce((n, p) => n + p.tasks.length, 0);
@@ -1582,6 +1591,15 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           )}
         </>,
         headerSlot,
+      )}
+
+      {/* Refetch en curso tras una acción: el Gantt SIGUE en pantalla (no se reemplaza por
+          el skeleton), solo se avisa que los datos se están actualizando. */}
+      {refreshing && (
+        <p className="text-xs text-fg-muted flex items-center gap-1.5" aria-live="polite">
+          <Spinner size="xs" color="border-fg-muted" />
+          Actualizando…
+        </p>
       )}
 
       {/* Barra ÚNICA de guardar/subir — mismo diseño que en el kickoff. El guardado

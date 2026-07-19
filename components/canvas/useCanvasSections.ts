@@ -141,6 +141,10 @@ export function useCanvasSections(
     const seqAtStart = writeSeq.current;
     try {
       const res = await fetch(listUrl);
+      // Un GET fallido dejaba `sections` vacío y apagaba el skeleton: la UI pintaba
+      // "Sin contenido todavía", o sea el ERROR se disfrazaba de canvas vacío. Ahora
+      // un fallo se declara y el contenido previo (si lo hay) se mantiene.
+      if (!res.ok) throw new Error(`GET ${res.status}`);
       const data = await res.json();
       if (writeSeq.current !== seqAtStart) return; // hubo escrituras más nuevas: no pisarlas
       const next: SectionWithBlocks[] = data.sections ?? [];
@@ -151,13 +155,21 @@ export function useCanvasSections(
         lastSectionsJson.current = serialized;
         setSections(next);
       }
+      setError(null);
     } catch {
-      /* ignore: lectura; el polling reintenta */
+      setError("No se pudo cargar el contenido.");
+    } finally {
+      // En `finally`: si el fetch lanza, el skeleton igual tiene que apagarse — si no,
+      // la pantalla se queda cargando para siempre sin decir qué pasó.
+      setLoading(false);
     }
-    setLoading(false);
   }, [listUrl]);
 
+  // `listUrl` cambia al cambiar de canvas o de sub-tab: hay que volver a `loading`
+  // para que se vea el skeleton de la sección nueva en vez del contenido de la vieja.
   useEffect(() => {
+    setLoading(true);
+    lastSectionsJson.current = "";
     refetch();
   }, [refetch]);
 

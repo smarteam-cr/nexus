@@ -19,6 +19,7 @@ import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import ProjectHandoffSection from "./ProjectHandoffSection";
+import { WorkspaceSkeleton } from "./skeletons";
 import ProjectLifecyclePanel from "@/components/lifecycle/ProjectLifecyclePanel";
 import { useWorkspace } from "./WorkspaceContext";
 
@@ -384,15 +385,9 @@ export default function ProjectCanvasPanel({
 
   const totalCards = sections.reduce((sum, s) => sum + s.cards.length, 0);
 
-  if (loading) {
-    return (
-      <div className="px-6 py-8 space-y-4">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="h-24 rounded-2xl skeleton-shimmer" />
-        ))}
-      </div>
-    );
-  }
+  // La MISMA pieza que pinta app/(shell)/clients/[id]/loading.tsx: el RSC y este gate
+  // client-side se ven uno tras otro, así que tienen que hablar el mismo vocabulario.
+  if (loading) return <WorkspaceSkeleton />;
 
   return (
     <div className="px-6 py-8 space-y-6">

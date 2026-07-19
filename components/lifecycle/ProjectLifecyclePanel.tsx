@@ -87,7 +87,10 @@ export default function ProjectLifecyclePanel({ projectId }: { projectId: string
     };
   }, [projectId]);
 
-  if (!data) return null;
+  // Barra placeholder con la MISMA altura que la barra colapsada real: con `return null`
+  // la sección no existía hasta que respondía el fetch y entonces empujaba hacia abajo
+  // todo el canvas que tiene debajo.
+  if (!data) return <div className="h-[46px] rounded-xl border border-line bg-surface" />;
   const gateByKey = new Map(data.gates.map((g) => [g.gate, g]));
   const cycleGates = data.cycle === "short" ? GATE_META.filter((g) => SHORT_CYCLE_GATES.has(g.key)) : GATE_META;
   const order = data.cycle === "short" ? SHORT_CYCLE_ORDER : FULL_CYCLE_ORDER;

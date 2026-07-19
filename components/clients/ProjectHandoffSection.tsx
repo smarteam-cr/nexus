@@ -18,6 +18,7 @@ import { useMe } from "@/hooks/useMe";
 import ProjectContextSection from "./ProjectContextSection";
 import TagsStrip from "@/components/tags/TagsStrip";
 import type { ImplementationType } from "@prisma/client";
+import { HandoffSectionSkeleton } from "./skeletons";
 
 interface HandoffStatus {
   handoffId: string | null;
@@ -212,7 +213,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     }
   }, [projectId, clientId, fetchStatus, fetchTags, status?.agentId, status?.contextExclusions, exclusions, bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh]);
 
-  if (loading) return <div className="h-14 rounded-2xl skeleton-shimmer" />;
+  if (loading) return <HandoffSectionSkeleton />;
   if (!status) return null;
 
   const { generated } = status;
