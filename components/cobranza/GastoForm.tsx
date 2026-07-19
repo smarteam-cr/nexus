@@ -5,12 +5,14 @@
  * SUPER_ADMIN). Un gasto único y circunstancial (un evento, una compra puntual) —
  * NO es un costo recurrente. Fecha FUTURA = compra planificada → entra a la caja
  * neta (lado sale); fecha PASADA = solo registro/reporting. Los tags son de
- * vocabulario abierto (se normalizan a slug). Modal presentacional: al guardar
- * llama onSaved() y el contenedor re-fetchea (sin optimista).
+ * vocabulario abierto (se normalizan a slug). Drawer presentacional (primitiva
+ * de components/ui; el padre lo monta condicionalmente): al guardar llama
+ * onSaved() y el contenedor re-fetchea (sin optimista).
  */
 import { useMemo, useState } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { GastoPuntualDTO } from "@/lib/cobranza";
+import { Drawer } from "@/components/ui";
 import { INPUT_CLS, SELECT_CLS, LABEL_CLS } from "./format";
 import TagsInput from "./TagsInput";
 
@@ -87,22 +89,32 @@ export default function GastoForm({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-start justify-center p-4 pt-[10vh]">
-      <div className="absolute inset-0 bg-black/30" onMouseDown={onClose} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative w-full max-w-md max-h-[80vh] overflow-y-auto rounded-xl border border-line bg-surface shadow-2xl p-4 space-y-3"
-      >
-        <div>
-          <h3 className="text-sm font-semibold text-fg">
-            {gasto ? "Editar gasto" : "Agregar gasto"}
-          </h3>
-          <p className="text-xs text-fg-secondary mt-0.5">
-            Gasto único y circunstancial — referencia estimada, no contabilidad.
-          </p>
-        </div>
-
+    <Drawer
+      open={true}
+      onClose={onClose}
+      title={gasto ? "Editar gasto" : "Agregar gasto"}
+      description="Gasto único y circunstancial — referencia estimada, no contabilidad."
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-fg-muted hover:text-fg px-2 py-1.5"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={!puedeGuardar}
+            onClick={submit}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? "Guardando…" : gasto ? "Guardá los cambios" : "Agregá el gasto"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
         <div>
           <label className={LABEL_CLS}>Nombre</label>
           <input
@@ -177,25 +189,7 @@ export default function GastoForm({
             {serverError}
           </div>
         )}
-
-        <div className="flex items-center justify-end gap-2 pt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-xs text-fg-muted hover:text-fg px-2 py-1.5"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            disabled={!puedeGuardar}
-            onClick={submit}
-            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? "Guardando…" : gasto ? "Guardá los cambios" : "Agregá el gasto"}
-          </button>
-        </div>
       </div>
-    </div>
+    </Drawer>
   );
 }

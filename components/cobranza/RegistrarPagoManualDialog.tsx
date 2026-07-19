@@ -10,7 +10,7 @@
  */
 import { useMemo, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
-import { Spinner } from "@/components/ui";
+import { Modal, Spinner } from "@/components/ui";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { CuentaDetailDTO } from "@/lib/cobranza";
 import { TIPO_SERVICIO_LABEL } from "@/lib/cobranza/schema";
@@ -113,20 +113,29 @@ export default function RegistrarPagoManualDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-start justify-center p-4 pt-[10vh]">
-      <div className="absolute inset-0 bg-black/30" onMouseDown={onCancel} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative w-full max-w-md rounded-xl border border-line bg-surface shadow-2xl p-4 space-y-3"
-      >
-        <div>
-          <h3 className="text-sm font-semibold text-fg">Registrar un pago manual</h3>
-          <p className="text-xs text-fg-secondary mt-0.5">
-            Un pago que no salió de un plan. Se registra a tu nombre sobre un servicio del cliente.
-          </p>
-        </div>
-
+    <Modal
+      open
+      onClose={onCancel}
+      z="z-[70]"
+      title="Registrar un pago manual"
+      description="Un pago que no salió de un plan. Se registra a tu nombre sobre un servicio del cliente."
+      footer={
+        <>
+          <button type="button" onClick={onCancel} className="text-xs text-fg-muted hover:text-fg px-2 py-1.5">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={!puedeGuardar}
+            onClick={submit}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {submitting ? "Registrando…" : "Registrar pago"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
         {/* Paso 1: cliente */}
         {!cuenta ? (
           <div>
@@ -270,21 +279,7 @@ export default function RegistrarPagoManualDialog({
             )}
           </>
         )}
-
-        <div className="flex items-center justify-end gap-2 pt-1">
-          <button type="button" onClick={onCancel} className="text-xs text-fg-muted hover:text-fg px-2 py-1.5">
-            Cancelar
-          </button>
-          <button
-            type="button"
-            disabled={!puedeGuardar}
-            onClick={submit}
-            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {submitting ? "Registrando…" : "Registrar pago"}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 }

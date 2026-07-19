@@ -8,6 +8,7 @@
  * hace el PATCH.
  */
 import { useState } from "react";
+import { Modal } from "@/components/ui";
 import { fmtFecha, fmtMonto, INPUT_CLS } from "./format";
 
 /** Shape mínimo — CobroDTO y ColaCobroRow lo satisfacen. */
@@ -30,18 +31,16 @@ export default function PromesaDialog({
 }) {
   const [fecha, setFecha] = useState(cobro.promesaPago ?? "");
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30" onMouseDown={onCancel} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative w-full max-w-sm rounded-xl border border-line bg-surface shadow-2xl p-4 space-y-3"
-      >
-        <h3 className="text-sm font-semibold text-fg">¿Para cuándo prometió pagar?</h3>
-        <p className="text-xs text-fg-secondary">
-          {fmtMonto(cobro.monto, cobro.moneda)} · programado {fmtFecha(cobro.fechaProgramada)}. Sus
-          alertas se callan hasta la fecha prometida; el semáforo no cambia.
-        </p>
+    <Modal
+      open={true}
+      onClose={onCancel}
+      size="sm"
+      // Se abre ENCIMA del CuentaDrawer (z-[60]) desde el cronograma del drawer.
+      z="z-[70]"
+      title="¿Para cuándo prometió pagar?"
+      description={`${fmtMonto(cobro.monto, cobro.moneda)} · programado ${fmtFecha(cobro.fechaProgramada)}. Sus alertas se callan hasta la fecha prometida; el semáforo no cambia.`}
+    >
+      <div className="space-y-3">
         <div>
           <label className="block text-[11px] font-medium text-fg-muted mb-1">Fecha prometida</label>
           <input
@@ -83,6 +82,6 @@ export default function PromesaDialog({
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

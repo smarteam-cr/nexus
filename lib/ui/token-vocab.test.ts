@@ -250,6 +250,67 @@ const DEUDA_TABBARS: Record<string, number> = {
   "components/cobranza/CobranzaClient.tsx": 1,
 };
 
+/**
+ * DEUDA_OVERLAYS — overlays `fixed inset-0` A MANO (cuarta familia, ola A7).
+ *
+ * Modal/Drawer/ConfirmDialog (components/ui) traen portal, Escape, lock de
+ * scroll, focus-trap y role="dialog" gratis; un overlay a mano no trae nada de
+ * eso. Los 7 diálogos de cobranza ya migraron; estos son los que faltan.
+ * components/ui exento (las primitivas SON el overlay). ⚠ CronogramaCanvas y
+ * TaskDetailDrawer/TimelineAssistDialog son área de la otra PC.
+ */
+const DEUDA_OVERLAYS: Record<string, number> = {
+  "app/portal/PortalTabs.tsx": 1,
+  "components/canvas/CronogramaCanvas.tsx": 1,
+  "components/canvas/TaskDetailDrawer.tsx": 1,
+  "components/canvas/TimelineAssistDialog.tsx": 1,
+  "components/chat/ExecutionModal.tsx": 1,
+  "components/clients/ActionItemsDialog.tsx": 1,
+  "components/clients/ClientContextCards.tsx": 1,
+  "components/clients/ExternalAccessPanel.tsx": 1,
+  "components/clients/MinuteDialog.tsx": 2,
+  "components/clients/SectionDiscoveryModal.tsx": 2,
+  "components/clients/SessionHistoryDrawer.tsx": 1,
+  "components/clients/StageOverlay.tsx": 1,
+  "components/dashboard/PortfolioGrid.tsx": 1,
+  "components/flowchart/FlowchartViewer.tsx": 1,
+};
+
+describe("Ratchet de overlays: los fixed inset-0 a mano solo ENCOGEN", () => {
+  it("ningún overlay nuevo a mano; los migrados a Modal/Drawer salen", () => {
+    const norm = (s: string) => s.split(/[\\/]/).join("/");
+    const actual = new Map<string, number>();
+    for (const rel of archivosUi(EXENTOS_TOKENS)) {
+      if (norm(rel).startsWith("components/ui/")) continue;
+      const src = fs.readFileSync(path.join(RAIZ, rel), "utf8");
+      let n = 0;
+      for (const linea of src.split("\n")) {
+        if (linea.includes("fixed inset-0")) n++;
+      }
+      if (n > 0) actual.set(norm(rel), n);
+    }
+
+    const subieron: string[] = [];
+    const paraActualizar: string[] = [];
+    for (const [archivo, n] of actual) {
+      const deuda = DEUDA_OVERLAYS[archivo] ?? 0;
+      if (n > deuda) subieron.push(`  ${archivo}: ${n} (deuda registrada: ${deuda})`);
+      else if (n < deuda) paraActualizar.push(`  "${archivo}": ${n},`);
+    }
+    const paraBorrar = Object.keys(DEUDA_OVERLAYS).filter((f) => !actual.has(f));
+
+    expect(
+      subieron,
+      `Overlay a mano NUEVO (sin focus-trap, sin Escape, sin role="dialog"). Usá Modal, ` +
+        `Drawer o ConfirmDialog de components/ui:\n${subieron.join("\n")}`,
+    ).toEqual([]);
+    expect(
+      [...paraActualizar, ...paraBorrar.map((f) => `  (borrar la entrada) "${f}"`)],
+      `La deuda solo encoge: actualizá DEUDA_OVERLAYS:\n${[...paraActualizar, ...paraBorrar].join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
 describe("Ratchet de tab-bars: las copias a mano solo ENCOGEN", () => {
   it("ninguna tab-bar nueva a mano; las migradas a <Tabs> salen de la lista", () => {
     const norm = (s: string) => s.split(/[\\/]/).join("/");

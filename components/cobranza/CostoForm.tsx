@@ -11,7 +11,7 @@
  * mergeada) y su mensaje se muestra acá mismo.
  */
 import { useEffect, useState } from "react";
-import { Skeleton } from "@/components/ui";
+import { Drawer, Skeleton } from "@/components/ui";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { CostoRecurrenteDTO } from "@/lib/cobranza";
 import {
@@ -161,22 +161,32 @@ export default function CostoForm({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-start justify-center p-4 pt-[10vh]">
-      <div className="absolute inset-0 bg-black/30" onMouseDown={onClose} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative w-full max-w-md max-h-[80vh] overflow-y-auto rounded-xl border border-line bg-surface shadow-2xl p-4 space-y-3"
-      >
-        <div>
-          <h3 className="text-sm font-semibold text-fg">
-            {costo ? "Editar costo" : "Agregar costo"}
-          </h3>
-          <p className="text-xs text-fg-secondary mt-0.5">
-            Cifra estimada de referencia para dirección — no es contabilidad.
-          </p>
-        </div>
-
+    <Drawer
+      open
+      onClose={onClose}
+      title={costo ? "Editar costo" : "Agregar costo"}
+      description="Cifra estimada de referencia para dirección — no es contabilidad."
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-fg-muted hover:text-fg px-2 py-1.5"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={!puedeGuardar}
+            onClick={submit}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? "Guardando…" : costo ? "Guardar cambios" : "Agregar costo"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
         <div>
           <label className={LABEL_CLS}>Categoría</label>
           <select
@@ -384,25 +394,7 @@ export default function CostoForm({
             {serverError}
           </div>
         )}
-
-        <div className="flex items-center justify-end gap-2 pt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-xs text-fg-muted hover:text-fg px-2 py-1.5"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            disabled={!puedeGuardar}
-            onClick={submit}
-            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? "Guardando…" : costo ? "Guardar cambios" : "Agregar costo"}
-          </button>
-        </div>
       </div>
-    </div>
+    </Drawer>
   );
 }

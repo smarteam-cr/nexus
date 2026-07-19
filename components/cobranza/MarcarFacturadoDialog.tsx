@@ -9,6 +9,7 @@
  * Fecha default hoy, capada a hoy — no se factura "a futuro" desde acá.
  */
 import { useState } from "react";
+import { Modal } from "@/components/ui";
 import { fmtFecha, fmtMonto, INPUT_CLS } from "./format";
 
 /** Shape mínimo del cobro a facturar — CobroDTO y ColaCobroRow lo satisfacen. */
@@ -36,35 +37,22 @@ export default function MarcarFacturadoDialog({
   const [fecha, setFecha] = useState(todayISO);
   const fechaValida = !!fecha && fecha <= todayISO;
 
+  const descripcion =
+    (cobro.clienteNombre ? `${cobro.clienteNombre} · ` : "") +
+    fmtMonto(cobro.monto, cobro.moneda) +
+    (cobro.numCuota != null ? ` · cuota #${cobro.numCuota}` : "") +
+    ` · programado ${fmtFecha(cobro.fechaProgramada)}.`;
+
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30" onMouseDown={onCancel} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative w-full max-w-sm rounded-xl border border-line bg-surface shadow-2xl p-4 space-y-3"
-      >
-        <h3 className="text-sm font-semibold text-fg">Marcar facturado</h3>
-        <p className="text-xs text-fg-secondary">
-          {cobro.clienteNombre ? `${cobro.clienteNombre} · ` : ""}
-          {fmtMonto(cobro.monto, cobro.moneda)}
-          {cobro.numCuota != null ? ` · cuota #${cobro.numCuota}` : ""} · programado{" "}
-          {fmtFecha(cobro.fechaProgramada)}.
-        </p>
-        <div>
-          <label className="block text-[11px] font-medium text-fg-muted mb-1">
-            ¿Cuándo se emitió la factura?
-          </label>
-          <input
-            type="date"
-            value={fecha}
-            max={todayISO}
-            onChange={(e) => setFecha(e.target.value)}
-            className={INPUT_CLS}
-            autoFocus
-          />
-        </div>
-        <div className="flex items-center justify-end gap-2 pt-1">
+    <Modal
+      open
+      onClose={onCancel}
+      size="sm"
+      z="z-[70]"
+      title="Marcar facturado"
+      description={descripcion}
+      footer={
+        <>
           <button
             type="button"
             onClick={onCancel}
@@ -80,8 +68,22 @@ export default function MarcarFacturadoDialog({
           >
             Marcar facturado
           </button>
-        </div>
+        </>
+      }
+    >
+      <div>
+        <label className="block text-[11px] font-medium text-fg-muted mb-1">
+          ¿Cuándo se emitió la factura?
+        </label>
+        <input
+          type="date"
+          value={fecha}
+          max={todayISO}
+          onChange={(e) => setFecha(e.target.value)}
+          className={INPUT_CLS}
+          autoFocus
+        />
       </div>
-    </div>
+    </Modal>
   );
 }

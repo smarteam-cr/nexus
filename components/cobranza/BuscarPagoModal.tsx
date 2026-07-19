@@ -4,10 +4,11 @@
  * components/cobranza/BuscarPagoModal.tsx — el buscador del botón global
  * "Registrar pago": autocomplete 100% client-side sobre la cola YA cargada
  * (cero endpoints nuevos). Elegir un cobro cierra este modal y el contenedor
- * abre el RegistrarPagoDialog. Overlay a mano con tokens (no components/ui/Modal,
- * que arrastra grises crudos).
+ * abre el RegistrarPagoDialog. Cascarón = primitiva Modal (z-[70]: puede abrirse
+ * sobre el CuentaDrawer, que vive en z-[60]).
  */
 import { useMemo, useState } from "react";
+import { Modal } from "@/components/ui";
 import type { ColaCobroRow } from "@/lib/cobranza";
 import { TIPO_SERVICIO_LABEL } from "@/lib/cobranza/schema";
 import { fmtFecha, fmtMonto, INPUT_CLS } from "./format";
@@ -46,14 +47,11 @@ export default function BuscarPagoModal({
   const deMas = matches.length - visibles.length;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-start justify-center p-4 pt-[12vh]">
-      <div className="absolute inset-0 bg-black/30" onMouseDown={onClose} />
+    <Modal open onClose={onClose} size="lg" z="z-[70]">
       <div
-        role="dialog"
-        aria-modal="true"
-        className="relative w-full max-w-lg rounded-xl border border-line bg-surface shadow-2xl p-3 space-y-2"
+        className="space-y-2"
         onKeyDown={(e) => {
-          if (e.key === "Escape") onClose();
+          // Escape lo maneja la primitiva (closeOnEscape).
           if (e.key === "Enter" && visibles[0]) onSelect(visibles[0]);
         }}
       >
@@ -114,6 +112,6 @@ export default function BuscarPagoModal({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
