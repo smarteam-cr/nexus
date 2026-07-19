@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { withClientAccess, apiError } from "@/lib/api";
+import { parseRunError } from "@/lib/agents/run-error";
 
 type Params = { params: Promise<{ id: string; runId: string }> };
 
@@ -11,6 +12,7 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
     where: { id: runId, clientId },
     select: {
       id: true, status: true, createdAt: true, stepLabel: true, serviceType: true, output: true,
+      currentPhase: true,
       agent: { select: { name: true, outputType: true } },
       cards: { orderBy: { order: "asc" }, select: { id: true, title: true, content: true, order: true, source: true, cardType: true, diagramData: true, chartConfig: true } },
     },
@@ -21,14 +23,9 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
   // El run falló → exponer la razón real (markError la guardó humanizada en output).
   // El polling la lee y el frontend la muestra en vez de "el agente falló".
   if (run.status === "ERROR") {
-    let error = "El agente no pudo completar la tarea. Probá de nuevo.";
-    try {
-      const parsed = JSON.parse(run.output ?? "{}");
-      if (typeof parsed?.error === "string" && parsed.error.trim()) error = parsed.error;
-    } catch { /* output no-JSON */ }
     return NextResponse.json({
       id: run.id, status: run.status, createdAt: run.createdAt,
-      agentName: run.agent?.name ?? null, error,
+      agentName: run.agent?.name ?? null, error: parseRunError(run.output),
     });
   }
 
@@ -42,7 +39,7 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
     } catch { /* malformado */ }
     return NextResponse.json({
       id: run.id, status: run.status, createdAt: run.createdAt,
-      stepLabel: run.stepLabel, serviceType: run.serviceType,
+      stepLabel: run.stepLabel, serviceType: run.serviceType, currentPhase: run.currentPhase,
       agentName: run.agent?.name ?? null, outputType,
       flowchart,
     });
@@ -57,7 +54,7 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
     } catch { /* malformado */ }
     return NextResponse.json({
       id: run.id, status: run.status, createdAt: run.createdAt,
-      stepLabel: run.stepLabel, serviceType: run.serviceType,
+      stepLabel: run.stepLabel, serviceType: run.serviceType, currentPhase: run.currentPhase,
       agentName: run.agent?.name ?? null, outputType,
       cards: run.cards,
       flowcharts,
@@ -68,7 +65,7 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
   if (outputType === "CARDS_AND_CHARTS") {
     return NextResponse.json({
       id: run.id, status: run.status, createdAt: run.createdAt,
-      stepLabel: run.stepLabel, serviceType: run.serviceType,
+      stepLabel: run.stepLabel, serviceType: run.serviceType, currentPhase: run.currentPhase,
       agentName: run.agent?.name ?? null, outputType,
       cards: run.cards, // incluye cardType TEXT y CHART (con chartConfig)
     });
@@ -87,7 +84,7 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
 
   return NextResponse.json({
     id: run.id, status: run.status, createdAt: run.createdAt,
-    stepLabel: run.stepLabel, serviceType: run.serviceType,
+    stepLabel: run.stepLabel, serviceType: run.serviceType, currentPhase: run.currentPhase,
     agentName: run.agent?.name ?? null, outputType,
     cards,
   });

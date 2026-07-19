@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "@/lib/theme";
 import { Menu } from "@/components/ui";
+import RunsIndicator from "@/components/ai/RunsIndicator";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import MarketingFlyout from "./MarketingFlyout";
 import FinanzasFlyout from "./FinanzasFlyout";
@@ -409,6 +410,7 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
               dropdown hacia arriba que incluye Configuración + Cerrar sesión). ── */}
       <div className="flex-shrink-0 border-t border-gray-800/60 py-2">
         <div className={isOpen ? "px-2" : "px-1"}>
+          <RunsIndicator isOpen={isOpen} />
           <UserAvatar user={user} isOpen={isOpen} />
         </div>
       </div>

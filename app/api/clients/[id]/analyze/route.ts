@@ -360,6 +360,15 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // crear uno nuevo al final, se actualiza ese.
   const runAnalysisWork = async (existingRunId: string | null): Promise<NextResponse> => {
 
+  // Fase visible del run (best-effort, fire-and-forget): el GET [runId] la expone y
+  // useAgentRun la pinta en el disparador ("Analizando sesiones…" en vez de un label
+  // estático por minutos). Solo aplica en modo async — el modo síncrono no pollea.
+  // Mismo patrón que el generate de business cases (el único que ya escribía fases).
+  const setPhase = (phase: string) => {
+    if (!existingRunId) return;
+    prisma.agentRun.update({ where: { id: existingRunId }, data: { currentPhase: phase } }).catch(() => {});
+  };
+
   // ── Desarrollo: short-circuit al runner self-contained ────────────────────────
   // El requerimiento técnico no necesita cards/docs/deal ni el path de block-format;
   // el runner asegura el canvas, arma su input desde el handoff y persiste. El gating
@@ -370,6 +379,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   }
 
   // ── 3. Cargar notas, documentos, cards y deal en paralelo ────────────────────
+  setPhase("Leyendo el contexto del cliente…");
   const [existingCardsResult, stageNotesResult, clientDocumentsResult, dealProjectResult] =
     await Promise.allSettled([
       prisma.clientContextCard.findMany({
@@ -733,6 +743,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   }
 
   // ── 4. Buscar y traer transcripciones (Fireflies + Google Meet) ──────────────
+  setPhase("Analizando sesiones…");
   // Cargar TODOS los emails internos del equipo Smarteam — necesarios para:
   //  - Etiquetar sesiones como "puras de ventas" vs "mixtas" (handoff/kickoff).
   //  - Distinguir participantes internos vs externos (cliente, HubSpot reps).
@@ -1594,6 +1605,7 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
     // is required for operations that may take longer than 10 minutes"). .stream()
     // .finalMessage() acumula y devuelve el mismo Message. temperature 0 = salidas
     // deterministas entre ejecuciones.
+    setPhase("Generando con IA…");
     const msg = isCardsAndFlowcharts
       ? await anthropic.messages
           .stream({
@@ -1732,6 +1744,7 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   }
 
   // ── 12. Guardar AgentRun ─────────────────────────────────────────────────────
+  setPhase("Guardando el resultado…");
   // Modo async (existingRunId): el run ya existe RUNNING → se actualiza con el
   // output SIN tocar status (lo pasa a DONE el wrapper detached al final, para que
   // el polling no vea DONE antes de que se persistan las cards/blocks).
