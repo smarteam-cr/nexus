@@ -673,6 +673,36 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   por `AppShell` (patrón `nexus-theme`) — el primer paint nace con el ancho correcto. *Por qué:*
   con localStorage el SSR no lo sabía → `visibility:hidden` hasta montar + salto w-56↔w-14
   post-hidratación. Migración one-time desde `localStorage.sidebar_open` en `SidebarShell`.
+- **PROHIBIDO EL SLAB OPACO. El átomo `Skeleton` es una LÍNEA; un panel se reserva con
+  `SkeletonPanel`.** *Definición verificable:* un elemento con `skeleton-shimmer`, altura
+  declarada > 48px (`h-12`), sin hijos y sin borde. Los tres criterios juntos (un `h-72` con
+  hijos delineados es un panel legítimo). *Por qué existe la regla:* una auditoría de toda la app
+  encontró **81 sitios de carga, 39 de ellos slabs**, y la causa raíz no fue no saber la técnica
+  —`ProjectGPS` y `TableSkeleton` ya la tenían escrita— sino que **el único átomo disponible era
+  macizo** y la única primitiva estructural estaba escondida dentro de `Table.tsx`, donde nadie la
+  copió. Por eso `TableSkeleton` se mudó a `Skeleton.tsx` y nació `SkeletonPanel`: que la próxima
+  persona caiga en el patrón correcto por default. Si estás por escribir una altura mayor a `h-12`
+  en un `Skeleton`, estás escribiendo un slab.
+- **`SkeletonPanel.minH` es OBLIGATORIA a propósito** (no opcional): no se reserva una región sin
+  declarar cuánto ocupa el contenido real. Convierte "olvidé pensar la altura" en error de
+  compilación — es el proxy barato de "que la altura calce", que NO se puede verificar
+  automáticamente (jsdom no hace layout; medir CLS exige un browser logueado que este entorno no
+  tiene). El otro proxy es de colocación: **el skeleton de un componente vive en el archivo de ese
+  componente** (o en `components/clients/skeletons.tsx` cuando lo comparten un `loading.tsx` y un
+  gate client-side), para que las dos superficies que se ven una tras otra no inventen vocabularios
+  distintos.
+- **Cobertura verificada por registro, no por convención** (`lib/ui/skeleton-coverage.ts`): cada
+  ruta declara `own` | `inherits` | `exempt` y el test falla si una ruta NO está declarada — mismo
+  mecanismo que el registry de permisos, la omisión no puede pasar en silencio. Más
+  `app/(shell)/loading.tsx` como red de seguridad: ninguna navegación interna queda congelada.
+  `lib/ui/skeleton-vocab.test.ts` corre 5 chequeos (anti-slab, primitivas delineadas, animación
+  única, sin "Cargando…" suelto, Spinner fuera de los loading); tres son **ratchet**: fallan si
+  aparece un ofensor nuevo Y si uno de la lista de deuda ya se arregló, así solo puede encoger.
+- **`Spinner` es para ACCIONES en curso, no para regiones**: un botón guardando, una fila
+  procesándose. No reserva altura, así que usarlo para tapar un panel garantiza el salto que el
+  skeleton evita. Corolario en `CronogramaCanvas`: un refetch tras una acción NO puede poner
+  `loading=true` (colapsaba el Gantt entero al esqueleto y perdía el scroll) — va un `refreshing`
+  separado que mantiene el contenido en pantalla.
 
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos
