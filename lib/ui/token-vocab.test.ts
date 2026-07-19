@@ -160,6 +160,77 @@ const DEUDA_TOKENS: Record<string, number> = {
   // components/ui/* llegó a 0 en la ola A1 (2026-07-19) — las primitivas son la referencia.
 };
 
+/**
+ * DEUDA_ALERTS — errores rojos AD-HOC (segunda familia, nace con <Alert> en la ola A2).
+ *
+ * El mismo error se mostraba como toast en una pantalla, como <p class="text-red-400">
+ * en otra y como caja border-red-500/20 en una tercera. El vocabulario es: transitorio →
+ * toast.error; persistente → <Alert variant="danger">; error de un campo → el prop
+ * `error` de <Field>. Heurística deliberadamente simple (estilo T1 de skeleton-vocab):
+ * línea con `text-red-[0-9]` que además menciona "error". components/ui está exento
+ * (Alert/Field/Toast SON la alternativa). Censo inicial: 23 archivos, 30 líneas.
+ */
+const DEUDA_ALERTS: Record<string, number> = {
+  "app/(shell)/audits/[id]/GenerateInsightsButton.tsx": 1,
+  "app/(shell)/clients/[id]/settings/page.tsx": 2,
+  "app/(shell)/clients/[id]/stage/[stageNum]/NewAuditButtonClient.tsx": 1,
+  "app/(shell)/clients/[id]/stage/[stageNum]/NewImplementationButton.tsx": 1,
+  "app/(shell)/clients/NewClientButton.tsx": 1,
+  "app/(shell)/integrations/GoogleMeetCard.tsx": 2,
+  "app/(shell)/integrations/HubspotSystemCard.tsx": 1,
+  "app/(shell)/knowledge/KnowledgeClient.tsx": 1,
+  "app/(shell)/marketing/fuentes/SourcesClient.tsx": 1,
+  "app/(shell)/marketing/generacion/EngineClient.tsx": 3,
+  "app/(shell)/sessions/AnalysisPanel.tsx": 1,
+  "components/canvas/BlockRenderer.tsx": 2,
+  "components/canvas/CanvasLinearView.tsx": 1,
+  "components/canvas/CronogramaCanvas.tsx": 2,
+  "components/chat/ExecutionModal.tsx": 1,
+  "components/clients/ClientCanvasPanel.tsx": 1,
+  "components/clients/ClientContextCards.tsx": 1,
+  "components/clients/ClientDocuments.tsx": 1,
+  "components/clients/DocumentUpload.tsx": 1,
+  "components/clients/ExternalAccessPanel.tsx": 1,
+  "components/clients/ProjectHandoffSection.tsx": 1,
+  "components/clients/StageNoteEditor.tsx": 1,
+  "components/handoffs/HandoffStepper.tsx": 2,
+};
+
+describe("Ratchet de alerts: el error rojo ad-hoc solo ENCOGE", () => {
+  it("ningún archivo suma errores rojos a mano; los migrados a Alert/Field salen", () => {
+    const norm = (s: string) => s.split(/[\\/]/).join("/");
+    const actual = new Map<string, number>();
+    for (const rel of archivosUi(EXENTOS_TOKENS)) {
+      if (norm(rel).startsWith("components/ui/")) continue; // el vocabulario mismo
+      const src = fs.readFileSync(path.join(RAIZ, rel), "utf8");
+      let n = 0;
+      for (const linea of src.split("\n")) {
+        if (/text-red-[0-9]/.test(linea) && /error/i.test(linea)) n++;
+      }
+      if (n > 0) actual.set(norm(rel), n);
+    }
+
+    const subieron: string[] = [];
+    const paraActualizar: string[] = [];
+    for (const [archivo, n] of actual) {
+      const deuda = DEUDA_ALERTS[archivo] ?? 0;
+      if (n > deuda) subieron.push(`  ${archivo}: ${n} (deuda registrada: ${deuda})`);
+      else if (n < deuda) paraActualizar.push(`  "${archivo}": ${n},`);
+    }
+    const paraBorrar = Object.keys(DEUDA_ALERTS).filter((f) => !actual.has(f));
+
+    expect(
+      subieron,
+      `Error rojo AD-HOC nuevo. El vocabulario: transitorio → toast.error; persistente → ` +
+        `<Alert variant="danger">; error de campo → prop error de <Field>:\n${subieron.join("\n")}`,
+    ).toEqual([]);
+    expect(
+      [...paraActualizar, ...paraBorrar.map((f) => `  (borrar la entrada) "${f}"`)],
+      `La deuda solo encoge: actualizá DEUDA_ALERTS:\n${[...paraActualizar, ...paraBorrar].join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
 describe("Ratchet de tokens: la deuda de grises crudos solo ENCOGE", () => {
   it("ningún archivo suma grises; los arreglados actualizan o borran su entrada", () => {
     const norm = (s: string) => s.split(/[\\/]/).join("/");

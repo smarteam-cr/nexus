@@ -9,6 +9,15 @@ export { Card }      from "./Card";
 export { Input, Textarea, Select } from "./Input";
 export type { InputProps, TextareaProps, SelectProps } from "./Input";
 
+export { Field, useFieldContext } from "./Field";
+export type { FieldProps, FieldContextValue } from "./Field";
+
+export { Alert } from "./Alert";
+export type { AlertProps, AlertVariant } from "./Alert";
+
+export { IconButton } from "./IconButton";
+export type { IconButtonProps } from "./IconButton";
+
 export { Spinner }   from "./Spinner";
 
 export { Modal }     from "./Modal";

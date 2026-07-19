@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
+import { IconButton } from "./IconButton";
 
 // ── Tamaños ────────────────────────────────────────────────────────────────────
 
@@ -109,15 +110,16 @@ export function Drawer({
               {title && <h2 className="text-sm font-semibold text-fg">{title}</h2>}
               {description && <p className="mt-0.5 text-xs text-fg-muted">{description}</p>}
             </div>
-            <button
+            <IconButton
               onClick={onClose}
               aria-label="Cerrar"
-              className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-fg-muted hover:text-fg hover:bg-surface-hover"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+              size="xs"
+              icon={
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              }
+            />
           </div>
         )}
 
