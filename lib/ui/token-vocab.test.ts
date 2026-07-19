@@ -99,8 +99,6 @@ const DEUDA_TOKENS: Record<string, number> = {
   "app/portal/PortalTabs.tsx": 236,
   "app/portal/RefreshButton.tsx": 6,
   "app/portal/SwitchAccountButton.tsx": 2,
-  "components/agents/AgentRunModal.tsx": 8,
-  "components/agents/RunAgentButton.tsx": 6,
   "components/business-cases/BusinessCaseStepper.tsx": 4,
   "components/business-cases/BusinessCaseWorkspace.tsx": 1,
   "components/business-cases/ContextCard.tsx": 2,
