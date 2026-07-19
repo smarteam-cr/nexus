@@ -77,7 +77,7 @@ const DEUDA_TOKENS: Record<string, number> = {
   "app/(shell)/implementation/[id]/layout.tsx": 14,
   "app/(shell)/integrations/GoogleMeetCard.tsx": 29,
   "app/(shell)/integrations/HubspotSystemCard.tsx": 23,
-  "app/(shell)/knowledge/KnowledgeClient.tsx": 50,
+  "app/(shell)/knowledge/KnowledgeClient.tsx": 47,
   "app/(shell)/marketing/contenido/ContentClient.tsx": 7,
   "app/(shell)/marketing/fuentes/SourcesClient.tsx": 2,
   "app/(shell)/marketing/generacion/EngineClient.tsx": 1,
@@ -227,6 +227,64 @@ describe("Ratchet de alerts: el error rojo ad-hoc solo ENCOGE", () => {
     expect(
       [...paraActualizar, ...paraBorrar.map((f) => `  (borrar la entrada) "${f}"`)],
       `La deuda solo encoge: actualizá DEUDA_ALERTS:\n${[...paraActualizar, ...paraBorrar].join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
+/**
+ * DEUDA_TABBARS — tab-bars A MANO (tercera familia, nace con <Tabs> en la ola A3).
+ *
+ * Había ~13 tab-bars artesanales con CERO role="tab" en toda la app y 4 convenciones
+ * de color activo. La primitiva es components/ui/Tabs.tsx (modo estado y modo
+ * navegación, accesible, variantes espejo de SkeletonTabs). Heurística: líneas con
+ * `border-b-2` (la firma del subrayado a mano) fuera de components/ui. Pilotos ya
+ * migrados: KnowledgeClient y MarketingSectionTabs. ⚠ WorkspaceClient y el área del
+ * canvas se migran en pasada coordinada con la otra PC.
+ */
+const DEUDA_TABBARS: Record<string, number> = {
+  "app/(shell)/clients/[id]/StageTabs.tsx": 1,
+  "app/(shell)/clients/[id]/WorkspaceClient.tsx": 3,
+  "app/(shell)/clients/[id]/projects/[projectId]/StageTabs.tsx": 1,
+  "app/(shell)/sessions/SessionsClient.tsx": 2,
+  "app/(shell)/sessions/[id]/SessionView.tsx": 1,
+  "components/clients/ActionItemsDialog.tsx": 1,
+  "components/clients/ClientContextCards.tsx": 3,
+  "components/clients/ClientInfoPanel.tsx": 1,
+  "components/clients/MinuteDialog.tsx": 1,
+  "components/cobranza/CobranzaClient.tsx": 1,
+};
+
+describe("Ratchet de tab-bars: las copias a mano solo ENCOGEN", () => {
+  it("ninguna tab-bar nueva a mano; las migradas a <Tabs> salen de la lista", () => {
+    const norm = (s: string) => s.split(/[\\/]/).join("/");
+    const actual = new Map<string, number>();
+    for (const rel of archivosUi(EXENTOS_TOKENS)) {
+      if (norm(rel).startsWith("components/ui/")) continue;
+      const src = fs.readFileSync(path.join(RAIZ, rel), "utf8");
+      let n = 0;
+      for (const linea of src.split("\n")) {
+        if (linea.includes("border-b-2")) n++;
+      }
+      if (n > 0) actual.set(norm(rel), n);
+    }
+
+    const subieron: string[] = [];
+    const paraActualizar: string[] = [];
+    for (const [archivo, n] of actual) {
+      const deuda = DEUDA_TABBARS[archivo] ?? 0;
+      if (n > deuda) subieron.push(`  ${archivo}: ${n} (deuda registrada: ${deuda})`);
+      else if (n < deuda) paraActualizar.push(`  "${archivo}": ${n},`);
+    }
+    const paraBorrar = Object.keys(DEUDA_TABBARS).filter((f) => !actual.has(f));
+
+    expect(
+      subieron,
+      `Tab-bar a mano NUEVA (sin role="tab" ni teclado). Usá <Tabs> de components/ui ` +
+        `(modo estado con value/onChange, modo navegación con href):\n${subieron.join("\n")}`,
+    ).toEqual([]);
+    expect(
+      [...paraActualizar, ...paraBorrar.map((f) => `  (borrar la entrada) "${f}"`)],
+      `La deuda solo encoge: actualizá DEUDA_TABBARS:\n${[...paraActualizar, ...paraBorrar].join("\n")}`,
     ).toEqual([]);
   });
 });

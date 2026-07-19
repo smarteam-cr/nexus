@@ -10,6 +10,7 @@ import {
   Select,
   EmptyState,
   Table,
+  Tabs,
   type TableColumn,
 } from "@/components/ui";
 
@@ -218,21 +219,17 @@ function DocForm({
 
         {/* Tabs: Contenido / Tags */}
         <div>
-          <div className="flex gap-1 border-b border-gray-800 mb-3">
-            {(["content", "tags"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors -mb-px ${
-                  tab === t
-                    ? "border-brand text-brand-light"
-                    : "border-transparent text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                {t === "content" ? "Contenido (Markdown)" : `Tags ${tagIds.length > 0 ? `(${tagIds.length})` : ""}`}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            aria-label="Contenido del conocimiento"
+            size="sm"
+            className="mb-3"
+            value={tab}
+            onChange={setTab}
+            items={[
+              { key: "content", label: "Contenido (Markdown)" },
+              { key: "tags", label: "Tags", count: tagIds.length > 0 ? tagIds.length : undefined },
+            ]}
+          />
 
           {tab === "content" && (
             <textarea

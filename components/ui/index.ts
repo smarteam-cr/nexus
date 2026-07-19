@@ -18,6 +18,12 @@ export type { AlertProps, AlertVariant } from "./Alert";
 export { IconButton } from "./IconButton";
 export type { IconButtonProps } from "./IconButton";
 
+export { Tabs } from "./Tabs";
+export type { TabsProps, TabItem } from "./Tabs";
+
+export { Menu } from "./Menu";
+export type { MenuProps, MenuItemDef } from "./Menu";
+
 export { Spinner }   from "./Spinner";
 
 export { Modal }     from "./Modal";
