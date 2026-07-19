@@ -68,7 +68,7 @@ export default function DatePickerField({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1 border transition-colors hover:border-gray-600 ${
+        className={`flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1 border transition-colors hover:border-line ${
           manual ? "text-fg-secondary bg-surface-hover border-line" : "text-fg-muted bg-surface-muted border-line"
         }`}
       >
@@ -77,7 +77,7 @@ export default function DatePickerField({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1.5 z-[65] rounded-xl border border-gray-700 bg-gray-900 shadow-xl p-2">
+        <div className="absolute left-0 top-full mt-1.5 z-[65] rounded-xl border border-line bg-surface shadow-xl p-2">
           <DayPicker
             mode="single"
             selected={selected}
@@ -90,20 +90,20 @@ export default function DatePickerField({
             defaultMonth={selected ?? new Date()}
             locale={es}
             showOutsideDays
-            className="text-gray-200 text-sm"
+            className="text-fg-secondary text-sm"
             style={RDP_DARK}
             styles={{
               month_caption: { justifyContent: "flex-start", margin: 0, paddingInlineStart: "0.875rem" },
             }}
           />
-          <div className="flex items-center justify-between px-2 pt-1.5 mt-1 border-t border-gray-800">
+          <div className="flex items-center justify-between px-2 pt-1.5 mt-1 border-t border-line">
             <button
               type="button"
               onClick={() => {
                 onChange("");
                 setOpen(false);
               }}
-              className="text-xs font-medium text-gray-500 hover:text-red-400 transition-colors"
+              className="text-xs font-medium text-fg-muted hover:text-red-400 transition-colors"
             >
               Borrar
             </button>

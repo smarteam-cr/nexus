@@ -79,10 +79,36 @@
   --color-surface:        var(--surface);
   --color-surface-muted:  var(--surface-muted);
   --color-surface-hover:  var(--surface-hover);
+  --color-surface-active: var(--surface-active);
   --color-line:           var(--line);
   --color-fg:             var(--foreground);
   --color-fg-secondary:   var(--fg-secondary);
   --color-fg-muted:       var(--fg-muted);
+
+  /* ── Tokens de INTENCIÓN (mismo valor en ambos modos — no flipean) ───────────
+   *  Vivían en :root, donde Tailwind v4 NO genera utilidades (estuvieron muertos
+   *  desde su creación). En @theme generan los pares para elementos sólidos:
+   *    bg-primary text-primary-fg hover:bg-primary-hover
+   *    bg-destructive text-destructive-fg hover:bg-destructive-hover
+   *  — el reemplazo correcto de `bg-red-600 text-white` y compañía (invariante #5:
+   *  text-white crudo no flipea; el par *-fg declara la intención).
+   */
+  --color-primary:           #3b82f6;  /* blue-500 — acciones principales */
+  --color-primary-hover:     #60a5fa;  /* blue-400 */
+  --color-primary-fg:        #ffffff;  /* texto sobre primary */
+  --color-secondary:         #8b5cf6;  /* purple-500 — IA, insights */
+  --color-secondary-hover:   #a78bfa;  /* purple-400 */
+  --color-secondary-fg:      #ffffff;
+  --color-destructive:       #dc2626;  /* red-600 — botón sólido de peligro */
+  --color-destructive-hover: #ef4444;  /* red-500 */
+  --color-destructive-fg:    #ffffff;
+  --color-destructive-muted: #ef444420; /* fondo sutil para badges/alerts */
+  --color-success:           #22c55e;  /* green-500 */
+  --color-success-fg:        #ffffff;
+  --color-info:              #3b82f6;  /* blue-500 */
+  --color-info-fg:           #ffffff;
+  --color-warning:           #f59e0b;  /* amber-500 */
+  --color-warning-fg:        #ffffff;
 }
 
 html {
@@ -97,38 +123,11 @@ html {
   --background:   #030712;   /* gray-950  — fondo global */
   --foreground:   #f9fafb;   /* gray-50   — texto base */
 
-  /* Primary — acciones principales, brand */
-  --color-primary:         #3b82f6;  /* blue-500 */
-  --color-primary-hover:   #60a5fa;  /* blue-400 */
-  --color-primary-fg:      #ffffff;  /* texto sobre primary */
-
-  /* Secondary — IA, insights, acciones secundarias */
-  --color-secondary:       #8b5cf6;  /* purple-500 */
-  --color-secondary-hover: #a78bfa;  /* purple-400 */
-  --color-secondary-fg:    #ffffff;
-
-  /* Destructive — eliminar, acciones de peligro */
-  --color-destructive:       #dc2626;  /* red-600  — botón sólido */
-  --color-destructive-hover: #ef4444;  /* red-500  */
-  --color-destructive-fg:    #ffffff;
-  --color-destructive-muted: #ef444420; /* fondo sutil para badges/alerts */
-
-  /* Success */
-  --color-success:         #22c55e;  /* green-500 */
-  --color-success-fg:      #ffffff;
-
-  /* Info */
-  --color-info:            #3b82f6;  /* blue-500 */
-  --color-info-fg:         #ffffff;
-
-  /* Warning */
-  --color-warning:         #f59e0b;  /* amber-500 */
-  --color-warning-fg:      #ffffff;
-
   /* Superficie/texto semánticos — valores OSCUROS (html.light los redefine abajo) */
   --surface:        #111827;  /* gray-900 — cards/paneles */
   --surface-muted:  #111827;  /* panel sutil (banners, chips) */
   --surface-hover:  #1f2937;  /* gray-800 */
+  --surface-active: #374151;  /* gray-700 — hover de un elemento YA apoyado (botón secondary) */
   --line:           #1f2937;  /* gray-800 — bordes sutiles */
   --fg-secondary:   #e5e7eb;  /* gray-200 — texto secundario */
   --fg-muted:       #9ca3af;  /* gray-400 — texto atenuado */
@@ -199,6 +198,7 @@ html.light {
   --surface:        #ffffff;
   --surface-muted:  #f9fafb;  /* gray-50 */
   --surface-hover:  #f3f4f6;  /* gray-100 */
+  --surface-active: #e5e7eb;  /* gray-200 */
   --line:           #e5e7eb;  /* gray-200 */
   --fg-secondary:   #374151;  /* gray-700 */
   --fg-muted:       #6b7280;  /* gray-500 */

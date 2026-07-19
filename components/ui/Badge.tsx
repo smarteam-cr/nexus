@@ -9,7 +9,7 @@ const badge = cva(
     variants: {
       variant: {
         default:
-          "bg-gray-800 text-gray-400 border border-gray-700",
+          "bg-surface-hover text-fg-muted border border-line",
         primary:
           "bg-brand/10 text-brand-light border border-brand/20",
         success:
@@ -24,7 +24,7 @@ const badge = cva(
           "bg-purple-500/10 text-purple-400 border border-purple-500/20",
         // Badge sólido — para IDs, versiones, etc.
         solid:
-          "bg-brand text-white",
+          "bg-brand text-primary-fg",
       },
       size: {
         xs: "text-2xs px-2 py-0.5",
@@ -47,14 +47,14 @@ const badge = cva(
 // ── Colores del dot por variante ───────────────────────────────────────────────
 
 const DOT_COLOR: Record<string, string> = {
-  default:     "bg-gray-500",
+  default:     "bg-fg-muted",
   primary:     "bg-brand-light",
   success:     "bg-green-400",
   warning:     "bg-amber-400",
   destructive: "bg-red-400",
   info:        "bg-blue-400",
   purple:      "bg-purple-400",
-  solid:       "bg-white/70",
+  solid:       "bg-primary-fg/70",
 };
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ export function Badge({
   children,
   ...props
 }: BadgeProps) {
-  const dotColor = DOT_COLOR[variant ?? "default"] ?? "bg-gray-500";
+  const dotColor = DOT_COLOR[variant ?? "default"] ?? "bg-fg-muted";
 
   return (
     <span className={cn(badge({ variant, size, dot }), className)} {...props}>

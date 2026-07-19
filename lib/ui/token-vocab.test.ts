@@ -158,18 +158,7 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/roles/RolesIndexClient.tsx": 2,
   "components/roles/RoleWorkspace.tsx": 1,
   "components/team/TeamManager.tsx": 1,
-  "components/ui/Badge.tsx": 7,
-  "components/ui/Button.tsx": 8,
-  "components/ui/Card.tsx": 7,
-  "components/ui/CollapsibleSection.tsx": 4,
-  "components/ui/ConfirmDialog.tsx": 2,
-  "components/ui/DatePickerField.tsx": 6,
-  "components/ui/HubBadge.tsx": 6,
-  "components/ui/Input.tsx": 17,
-  "components/ui/LogoUploader.tsx": 1,
-  "components/ui/Modal.tsx": 5,
-  "components/ui/SearchFilterBar.tsx": 1,
-  "components/ui/Table.tsx": 15,
+  // components/ui/* llegó a 0 en la ola A1 (2026-07-19) — las primitivas son la referencia.
 };
 
 describe("Ratchet de tokens: la deuda de grises crudos solo ENCOGE", () => {

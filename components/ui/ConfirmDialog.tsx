@@ -89,9 +89,9 @@ export function ConfirmDialog({
           </svg>
         </div>
         <div className="min-w-0 pt-0.5">
-          <p className="text-sm font-medium text-white">{title}</p>
+          <p className="text-sm font-medium text-fg">{title}</p>
           {description && (
-            <p className="text-xs text-gray-500 mt-1 leading-relaxed">{description}</p>
+            <p className="text-xs text-fg-muted mt-1 leading-relaxed">{description}</p>
           )}
         </div>
       </div>

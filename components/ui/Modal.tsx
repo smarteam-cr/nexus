@@ -107,14 +107,14 @@ export function Modal({
         aria-label={title}
         tabIndex={-1}
         className={cn(
-          "w-full bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] focus:outline-none",
+          "w-full bg-surface border border-line rounded-2xl shadow-2xl flex flex-col max-h-[85vh] focus:outline-none",
           SIZE[size]
         )}
       >
         {hasHeader && (
           <div className="px-5 pt-5 pb-3 flex-shrink-0">
-            {title && <h2 className="text-base font-semibold text-white">{title}</h2>}
-            {description && <p className="text-sm text-gray-500 mt-1">{description}</p>}
+            {title && <h2 className="text-base font-semibold text-fg">{title}</h2>}
+            {description && <p className="text-sm text-fg-muted mt-1">{description}</p>}
           </div>
         )}
 
@@ -123,7 +123,7 @@ export function Modal({
         </div>
 
         {footer && (
-          <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-800 flex-shrink-0">
+          <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-line flex-shrink-0">
             {footer}
           </div>
         )}

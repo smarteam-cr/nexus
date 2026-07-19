@@ -14,19 +14,19 @@ export default function CollapsibleSection({ title, count, defaultOpen = true, c
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="border-t border-gray-800/60">
+    <div className="border-t border-line/60">
       <button
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 w-full py-3 text-left group"
       >
         <ChevronRight
-          className={`w-3.5 h-3.5 text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}
+          className={`w-3.5 h-3.5 text-fg-muted transition-transform ${open ? "rotate-90" : ""}`}
         />
-        <span className="text-2xs font-semibold text-gray-500 uppercase tracking-wider">
+        <span className="text-2xs font-semibold text-fg-muted uppercase tracking-wider">
           {title}
         </span>
         {count !== undefined && (
-          <span className="text-2xs text-gray-600">({count})</span>
+          <span className="text-2xs text-fg-muted">({count})</span>
         )}
       </button>
 

@@ -78,13 +78,13 @@ function compareValues(a: SortValue, b: SortValue, dir: "asc" | "desc"): number 
 function SortIcon({ state }: { state: "inactive" | "asc" | "desc" }) {
   if (state === "inactive") {
     return (
-      <svg className="w-3 h-3 flex-shrink-0 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="w-3 h-3 flex-shrink-0 text-fg-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4M8 15l4 4 4-4" />
       </svg>
     );
   }
   return (
-    <svg className="w-3 h-3 flex-shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <svg className="w-3 h-3 flex-shrink-0 text-fg-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -163,14 +163,14 @@ export function Table<T>({
         </SearchFilterBar>
       )}
 
-      <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
+      <div className="rounded-xl border border-line bg-surface overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm table-fixed">
             <thead>
-              <tr className="border-b border-gray-800 bg-gray-800">
+              <tr className="border-b border-line bg-surface-hover">
                 {columns.map((col) => {
                   const thClass = cn(
-                    "px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-gray-500 whitespace-nowrap",
+                    "px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-fg-muted whitespace-nowrap",
                     ALIGN[col.align ?? "left"],
                     col.width,
                     col.hideOnMobile && "hidden sm:table-cell"
@@ -191,8 +191,8 @@ export function Table<T>({
                         type="button"
                         onClick={() => toggleSort(col.key)}
                         className={cn(
-                          "inline-flex items-center gap-1 hover:text-gray-300 transition-colors",
-                          active && "text-gray-300",
+                          "inline-flex items-center gap-1 hover:text-fg-secondary transition-colors",
+                          active && "text-fg-secondary",
                           col.align === "right" && "w-full justify-end",
                           col.align === "center" && "w-full justify-center"
                         )}
@@ -210,7 +210,7 @@ export function Table<T>({
                 <tr>
                   <td
                     colSpan={columns.length}
-                    className="px-4 py-12 text-center text-sm text-gray-600"
+                    className="px-4 py-12 text-center text-sm text-fg-muted"
                   >
                     {query.trim() ? "Sin resultados para la búsqueda." : "Sin resultados."}
                   </td>
@@ -220,8 +220,8 @@ export function Table<T>({
                   <tr
                     key={rowKey(row)}
                     className={cn(
-                      "group border-b border-gray-800 last:border-0 transition-colors",
-                      clickable && "hover:bg-gray-800/50 cursor-pointer"
+                      "group border-b border-line last:border-0 transition-colors",
+                      clickable && "hover:bg-surface-hover/50 cursor-pointer"
                     )}
                     onClick={clickable ? () => onRowClick!(row) : undefined}
                     role={clickable ? "button" : undefined}
@@ -241,7 +241,7 @@ export function Table<T>({
                       <td
                         key={col.key}
                         className={cn(
-                          "px-4 py-3 align-middle text-gray-300",
+                          "px-4 py-3 align-middle text-fg-secondary",
                           ALIGN[col.align ?? "left"],
                           col.hideOnMobile && "hidden sm:table-cell"
                         )}
@@ -275,8 +275,8 @@ function IdentityCell({ leading, primary, secondary }: IdentityCellProps) {
     <div className="flex items-center gap-3 min-w-0">
       {leading}
       <div className="min-w-0">
-        <p className="font-medium text-white truncate">{primary}</p>
-        {secondary && <p className="text-xs text-gray-500 truncate">{secondary}</p>}
+        <p className="font-medium text-fg truncate">{primary}</p>
+        {secondary && <p className="text-xs text-fg-muted truncate">{secondary}</p>}
       </div>
     </div>
   );

@@ -11,8 +11,8 @@ export function Card({ className, variant = "default", ...props }: CardProps) {
   return (
     <div
       className={cn(
-        "rounded-xl bg-gray-900 overflow-hidden",
-        variant === "default" && "border border-gray-800",
+        "rounded-xl bg-surface overflow-hidden",
+        variant === "default" && "border border-line",
         variant === "accent"  && "border border-brand/20",
         variant === "flat"    && "",
         className
@@ -33,7 +33,7 @@ function CardHeader({ className, divided = true, ...props }: CardHeaderProps) {
     <div
       className={cn(
         "flex items-center justify-between px-5 py-4",
-        divided && "border-b border-gray-800",
+        divided && "border-b border-line",
         className
       )}
       {...props}
@@ -55,7 +55,7 @@ function CardFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement
   return (
     <div
       className={cn(
-        "flex items-center justify-between px-5 py-3.5 border-t border-gray-800",
+        "flex items-center justify-between px-5 py-3.5 border-t border-line",
         className
       )}
       {...props}
@@ -75,7 +75,7 @@ function CardIcon({ className, color = "brand", children, ...props }: CardIconPr
     purple: "bg-purple-500/10 border-purple-500/20 text-purple-400",
     green:  "bg-green-500/10  border-green-500/20  text-green-400",
     blue:   "bg-blue-500/10   border-blue-500/20   text-blue-400",
-    gray:   "bg-gray-800      border-gray-700      text-gray-400",
+    gray:   "bg-surface-hover border-line          text-fg-muted",
   };
 
   return (

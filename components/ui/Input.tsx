@@ -13,14 +13,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       <input
         ref={ref}
         className={cn(
-          "w-full text-sm transition-colors focus:outline-none placeholder:text-gray-600",
+          "w-full text-sm transition-colors focus:outline-none placeholder:text-fg-muted",
           variant === "default" && [
             "px-3 py-2 rounded-lg",
-            "bg-gray-800 border border-gray-700 text-white",
+            "bg-surface-hover border border-line text-fg",
             "focus:border-brand/50",
           ],
           variant === "ghost" && [
-            "bg-transparent border-b border-gray-700 text-gray-100 pb-1.5",
+            "bg-transparent border-b border-line text-fg pb-1.5",
             "focus:border-brand-light",
           ],
           className
@@ -46,15 +46,15 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
       <textarea
         ref={ref}
         className={cn(
-          "w-full text-sm transition-colors focus:outline-none placeholder:text-gray-600 resize-none",
+          "w-full text-sm transition-colors focus:outline-none placeholder:text-fg-muted resize-none",
           variant === "default" && [
             "px-3 py-2.5 rounded-xl",
-            "bg-gray-900 border border-gray-800 text-gray-100",
-            "focus:border-gray-700 focus:ring-1 focus:ring-gray-700/50",
+            "bg-surface border border-line text-fg",
+            "focus:border-brand/50",
           ],
           variant === "ghost" && [
-            "bg-transparent text-gray-400",
-            "focus:text-gray-200",
+            "bg-transparent text-fg-muted",
+            "focus:text-fg-secondary",
           ],
           className
         )}
@@ -68,8 +68,7 @@ Textarea.displayName = "Textarea";
 
 // ── Select ─────────────────────────────────────────────────────────────────────
 
-export interface SelectProps
-  extends React.SelectHTMLAttributes<HTMLSelectElement> {}
+export type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement>;
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, ...props }, ref) => {
@@ -78,7 +77,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         ref={ref}
         className={cn(
           "w-full px-3 py-2 rounded-lg text-sm transition-colors focus:outline-none",
-          "bg-gray-800 border border-gray-700 text-gray-300",
+          "bg-surface-hover border border-line text-fg-secondary",
           "focus:border-brand/50",
           className
         )}

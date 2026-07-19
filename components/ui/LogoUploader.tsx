@@ -103,7 +103,7 @@ export function LogoUploader({
           <button
             onClick={() => inputRef.current?.click()}
             disabled={busy}
-            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-light disabled:opacity-50"
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
           >
             {busy ? "Subiendo…" : url ? "Cambiar" : (uploadLabel ?? "Subir logo")}
           </button>

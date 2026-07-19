@@ -3,11 +3,11 @@ const HUB_COLORS: Record<string, string> = {
   "Sales Hub":     "bg-blue-50 text-blue-700 border-blue-200",
   "Service Hub":   "bg-green-50 text-green-700 border-green-200",
   "CMS Hub":       "bg-purple-50 text-purple-700 border-purple-200",
-  "Operations Hub":"bg-gray-100 text-gray-700 border-gray-300",
+  "Operations Hub":"bg-surface-hover text-fg-secondary border-line",
   "Commerce Hub":  "bg-pink-50 text-pink-700 border-pink-200",
 };
 
-const DEFAULT_COLOR = "bg-gray-50 text-gray-600 border-gray-200";
+const DEFAULT_COLOR = "bg-surface-muted text-fg-muted border-line";
 
 // Map serviceType to Hub name for inference
 const SERVICE_TO_HUB: Record<string, string> = {

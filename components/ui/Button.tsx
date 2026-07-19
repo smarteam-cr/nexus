@@ -12,21 +12,21 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Acción principal — brand suave
+        // Acción principal — par sólido de intención (primary + su texto declarado)
         primary:
-          "bg-brand-soft text-white hover:bg-brand-light",
-        // Acción secundaria — gris oscuro
+          "bg-primary text-primary-fg hover:bg-primary-hover",
+        // Acción secundaria — superficie apoyada; el hover sube un escalón (surface-active)
         secondary:
-          "bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 hover:text-white",
+          "bg-surface-hover text-fg-secondary border border-line hover:bg-surface-active hover:text-fg",
         // Acción sutil — brand translúcido
         ghost:
           "bg-brand/10 text-brand-light border border-brand/20 hover:bg-brand/20 hover:border-brand/40",
         // Peligro — rojo sutil
         destructive:
-          "bg-transparent text-gray-500 hover:text-red-400 hover:bg-red-500/10",
-        // Peligro sólido
+          "bg-transparent text-fg-muted hover:text-red-400 hover:bg-red-500/10",
+        // Peligro sólido — par de intención (mismos valores que el viejo red-600/white)
         "destructive-solid":
-          "bg-red-600 text-white hover:bg-red-500",
+          "bg-destructive text-destructive-fg hover:bg-destructive-hover",
         // Link / texto plano
         link:
           "bg-transparent text-brand-light hover:text-brand underline-offset-4 hover:underline p-0 h-auto",

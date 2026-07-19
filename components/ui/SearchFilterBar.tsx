@@ -34,7 +34,7 @@ export function SearchFilterBar({
       {search && (
         <div className="relative w-full sm:w-72">
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 pointer-events-none"
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-fg-muted pointer-events-none"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
