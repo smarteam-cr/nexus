@@ -15,6 +15,7 @@
  * Reuniones del proyecto para acceso rápido.
  */
 import { useState } from "react";
+import { BackLink } from "@/components/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -111,12 +112,9 @@ export default function SessionView({ data }: { data: SessionViewData }) {
     <div className="max-w-5xl mx-auto px-6 py-6 space-y-6">
       {/* ── Header básico ─────────────────────────────────────────────────── */}
       <div>
-        <button
-          onClick={() => router.back()}
-          className="text-xs text-gray-500 hover:text-gray-300 mb-2"
-        >
-          ← Volver
-        </button>
+        <BackLink onClick={() => router.back()} className="mb-2">
+          Volver
+        </BackLink>
         <h1 className="text-2xl font-bold text-white">{session.title}</h1>
         <div className="flex items-center gap-3 mt-2 text-sm text-gray-400">
           <span>{formatDate(session.date)}</span>

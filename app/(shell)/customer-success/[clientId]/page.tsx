@@ -31,12 +31,9 @@ export default async function CustomerSuccessAccountPage({
 
   return (
     <div className={SHELL_DEFAULT}>
-      <div className="mb-1">
-        <Link href="/customer-success" className="text-[11px] text-fg-muted hover:text-fg transition-colors">
-          ← Éxito del cliente
-        </Link>
-      </div>
       <PageHeader
+        backHref="/customer-success"
+        backLabel="Éxito del cliente"
         title={data.clientCompany || data.clientName}
         description={`${data.projects.length} proyecto${data.projects.length !== 1 ? "s" : ""} activo${data.projects.length !== 1 ? "s" : ""}${data.alerts.length > 0 ? ` · ${data.alerts.length} alerta${data.alerts.length !== 1 ? "s" : ""} vigente${data.alerts.length !== 1 ? "s" : ""}` : ""}`}
       />

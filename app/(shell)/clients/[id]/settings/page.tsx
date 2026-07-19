@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { BackLink } from "@/components/ui";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import ClientSharing from "@/components/clients/ClientSharing";
 
@@ -134,16 +135,8 @@ export default function ClientSettingsPage() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
-      {/* Volver al proyecto */}
-      <a
-        href={`/clients/${clientId}`}
-        className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
-      >
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-        </svg>
-        Volver al cliente
-      </a>
+      {/* Volver al cliente */}
+      <BackLink href={`/clients/${clientId}`}>Volver al cliente</BackLink>
 
       {/* Banner de éxito al conectar */}
       {justConnected && (

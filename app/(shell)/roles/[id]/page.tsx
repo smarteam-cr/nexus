@@ -3,6 +3,7 @@
  * getRole corre DESPUÉS del gate — nada del rol entra al payload de un no-SA.
  */
 import Link from "next/link";
+import { BackLink } from "@/components/ui";
 import { redirect, notFound } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { getRole } from "@/lib/roles/queries";
@@ -23,9 +24,7 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ id:
   return (
     <>
       <div className="px-6 pt-6">
-        <Link href="/roles" className="text-sm text-fg-muted hover:text-fg">
-          ← Roles
-        </Link>
+        <BackLink href="/roles">Roles</BackLink>
       </div>
       <div className="px-6 py-6">
         <RoleWorkspace

@@ -41,6 +41,12 @@ export type { EmptyStateProps } from "./EmptyState";
 export { PageHeader } from "./PageHeader";
 export type { PageHeaderProps } from "./PageHeader";
 
+export { BackLink } from "./BackLink";
+export type { BackLinkProps } from "./BackLink";
+
+export { Breadcrumbs } from "./Breadcrumbs";
+export type { Crumb } from "./Breadcrumbs";
+
 export {
   Skeleton,
   SkeletonText,

@@ -4,6 +4,7 @@
  * editor de canvas se construyen en F3–F5. Gateado por el área de Ventas (VENTAS/DEV/CSL/SUPER_ADMIN).
  */
 import { redirect, notFound } from "next/navigation";
+import { BackLink } from "@/components/ui";
 import Link from "next/link";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { prisma } from "@/lib/db/prisma";
@@ -59,9 +60,7 @@ export default async function BusinessCasePage({
 
   return (
     <div className="px-6 py-8">
-      <Link href="/business-cases" className="text-xs text-fg-muted hover:text-fg">
-        ← Ventas
-      </Link>
+      <BackLink href="/business-cases">Ventas</BackLink>
       <div className="mt-2 flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold text-fg truncate">{bc.name}</h1>
         <span className="flex-shrink-0 flex items-center gap-1.5">
