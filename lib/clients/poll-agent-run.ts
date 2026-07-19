@@ -29,7 +29,13 @@ export interface PolledRun {
 export async function pollAgentRun(
   clientId: string,
   runId: string,
-  opts?: { intervalMs?: number; maxAttempts?: number },
+  opts?: {
+    intervalMs?: number;
+    maxAttempts?: number;
+    /** Se llama en cada tick con la fase en curso (`AgentRun.currentPhase`) — el worker
+     *  la persiste desde siempre, pero ningún disparador la pintaba. Vía useAgentRun. */
+    onPhase?: (phase: string | null) => void;
+  },
 ): Promise<PolledRun> {
   const intervalMs = opts?.intervalMs ?? 3000;
   const maxAttempts = opts?.maxAttempts ?? 120; // ~6 min
@@ -45,7 +51,8 @@ export async function pollAgentRun(
     if (rd.status === "DONE" || rd.status === "ERROR") {
       return { ...rd, status: rd.status };
     }
-    // RUNNING / PENDING → seguir polleando
+    // RUNNING / PENDING → seguir polleando (reportando la fase si el caller la quiere)
+    opts?.onPhase?.(rd.currentPhase ?? null);
   }
   return { status: "TIMEOUT" };
 }

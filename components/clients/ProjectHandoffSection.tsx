@@ -11,7 +11,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
-import { pollAgentRun } from "@/lib/clients/poll-agent-run";
+import { useAgentRun } from "@/hooks/useAgentRun";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 import { useWorkspace } from "./WorkspaceContext";
 import { useMe } from "@/hooks/useMe";
@@ -55,6 +55,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   const [tags, setTagsState] = useState<string[]>([]); // #5 — tags de producto/alcance del proyecto
   const [loading, setLoading] = useState(!cached);
   const [generating, setGenerating] = useState(false);
+  const { phase, track } = useAgentRun(clientId);
   const [error, setError] = useState<string | null>(null);
   const [showDoc, setShowDoc] = useState(false);
   const { bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh } = useWorkspace();
@@ -192,7 +193,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
         return;
       }
       if (data.runId) {
-        const result = await pollAgentRun(clientId, data.runId);
+        const result = await track(data.runId);
         if (result.status === "ERROR") {
           // result.error viene humanizado desde AgentRun.output.error (créditos/429/timeout…).
           setError(result.error ?? "El handoff falló durante la generación. Reintentá.");
@@ -221,7 +222,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     } finally {
       setGenerating(false);
     }
-  }, [projectId, clientId, fetchStatus, fetchTags, status?.agentId, status?.contextExclusions, exclusions, bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh]);
+  }, [projectId, clientId, track, fetchStatus, fetchTags, status?.agentId, status?.contextExclusions, exclusions, bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh]);
 
   // Gate CONJUNTO status+me: si la sección se pintara apenas llega el status pero antes
   // de /api/me, el bloque de contexto de editores se INSERTARÍA después (canEdit pasa a
@@ -238,7 +239,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     readiness.feedingCount > 0 && readiness.withTranscript === 0 && readiness.manualSources === 0;
 
   const badge = generating
-    ? <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">Generando…</span>
+    ? <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">{phase ?? "Generando…"}</span>
     : generated
     ? <span className="text-[10px] font-bold uppercase tracking-wider text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">Generado</span>
     : <span className="text-[10px] font-bold uppercase tracking-wider text-fg-muted bg-surface-muted border border-line rounded-full px-2 py-0.5">No generado</span>;
@@ -297,7 +298,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
               ) : null}
-              {generating ? "Generando…" : generated ? "Regenerar" : "Generar handoff"}
+              {generating ? (phase ?? "Generando…") : generated ? "Regenerar" : "Generar handoff"}
             </button>
           )}
         </div>

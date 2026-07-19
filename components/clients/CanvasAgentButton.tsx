@@ -9,7 +9,8 @@
  * NO_HANDOFF vía data.message). `onDone` deja al canvas refrescar su contenido.
  */
 import { useState } from "react";
-import { pollAgentRun, summarizeRun, summarizePollResult } from "@/lib/clients/poll-agent-run";
+import { summarizeRun, summarizePollResult } from "@/lib/clients/poll-agent-run";
+import { useAgentRun } from "@/hooks/useAgentRun";
 import { useToast } from "@/components/ui/Toast";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 import { useMe } from "@/hooks/useMe";
@@ -68,6 +69,7 @@ export default function CanvasAgentButton({
   const [running, setRunning] = useState(false);
   const toast = useToast();
   const me = useMe();
+  const { phase, track } = useAgentRun(clientId);
 
   // Mientras carga /api/me se muestra (sin flash para el caso común permitido); con el mapa
   // cargado, se oculta si falta el permiso REQUERIDO. (C) Si el montaje pasó `alreadyGenerated`,
@@ -104,7 +106,7 @@ export default function CanvasAgentButton({
         // Guards (p.ej. NO_HANDOFF) devuelven { error, message } → mostrar el mensaje claro.
         toast.error(data.message ?? data.error ?? "No se pudo ejecutar el agente.");
       } else if (data.runId) {
-        const result = await pollAgentRun(clientId, data.runId);
+        const result = await track(data.runId);
         const summary = summarizePollResult(result);
         if (summary.type === "success") {
           toast.success(summary.message);
@@ -136,7 +138,7 @@ export default function CanvasAgentButton({
       disabled={running || disabled || !!busy}
       className={
         className ??
-        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"
+        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-primary-fg bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"
       }
     >
       {showRunning ? (
@@ -149,7 +151,7 @@ export default function CanvasAgentButton({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
       )}
-      {showRunning ? runningLabel : label}
+      {showRunning ? (phase ?? runningLabel) : label}
     </button>
   );
 }
