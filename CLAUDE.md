@@ -37,8 +37,10 @@ Anthropic SDK · HubSpot/Google/Fireflies.
    flipea en claro → reproduce el bug de "lo nuevo se ve oscuro". Un scrim/overlay que DEBE ser
    oscuro en ambos modos usa `bg-black/NN`. La regla ESLint `no-restricted-syntax` (en
    `eslint.config.mjs`, severidad **warn**) marca los grises crudos en `app/**`/`components/**`
-   (excluye landing/external/login/print/TimelineSection, que son hex literal a propósito). El
-   bloque `html.light` de `globals.css` remapea grises crudos legacy como **red de seguridad**,
+   (excluye landing/external/login/print/TimelineSection, que son hex literal a propósito) y el
+   **ratchet `lib/ui/token-vocab.test.ts` frena el merge**: el conteo de grises por archivo solo
+   puede bajar (patrón en `lib/ui/raw-neutral.mjs`, compartido entre ambos). El bloque
+   `html.light` de `globals.css` remapea grises crudos legacy como **red de seguridad**,
    no como API — código nuevo va por tokens.
 6. **Tuteo** en copy de UI nuevo (no voseo), salvo que el archivo ya esté en voseo.
 

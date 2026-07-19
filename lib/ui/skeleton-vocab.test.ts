@@ -19,33 +19,9 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { RAIZ, EXENTOS_STL, archivosUi } from "./scan-source";
 
-const RAIZ = process.cwd();
-
-/** Directorios que renderizan con el motor `.stl` (externo/PDF): estilos inline a propósito. */
-const EXENTOS = [
-  path.join("components", "landing"),
-  path.join("app", "external"),
-  path.join("app", "print"),
-];
-
-function listarTsx(dir: string, acc: string[] = []): string[] {
-  const abs = path.join(RAIZ, dir);
-  if (!fs.existsSync(abs)) return acc;
-  for (const entrada of fs.readdirSync(abs, { withFileTypes: true })) {
-    const rel = path.join(dir, entrada.name);
-    if (entrada.isDirectory()) {
-      if (entrada.name === "node_modules" || entrada.name.startsWith(".")) continue;
-      listarTsx(rel, acc);
-    } else if (entrada.name.endsWith(".tsx") || entrada.name.endsWith(".ts")) {
-      acc.push(rel);
-    }
-  }
-  return acc;
-}
-
-const exento = (rel: string) => EXENTOS.some((e) => rel.startsWith(e));
-const ARCHIVOS = [...listarTsx("app"), ...listarTsx("components")].filter((f) => !exento(f));
+const ARCHIVOS = archivosUi(EXENTOS_STL);
 const LOADINGS = ARCHIVOS.filter((f) => path.basename(f) === "loading.tsx");
 
 /**
@@ -65,7 +41,7 @@ const DEUDA = {
     "components/clients/ClientCanvasPanel.tsx:141",
     "components/clients/ClientInfoPanel.tsx:128",
     "components/clients/MinuteDialog.tsx:211",
-    "components/clients/ProjectCanvasPanel.tsx:29",
+    "components/clients/ProjectCanvasPanel.tsx:30",
     "components/clients/ProjectSessionsReview.tsx:152",
     "components/clients/SectionDiscoveryModal.tsx:9",
     "components/clients/SessionSelectionReview.tsx:213",

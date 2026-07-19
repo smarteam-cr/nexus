@@ -727,6 +727,39 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   rápidas (caches, seeds) el usuario ve contenido directo sin el flash de un skeleton que dura un
   parpadeo (práctica NN/g). El prop `delay` de `Skeleton` escalona AMBAS animaciones en orden.
 
+## Sistema de diseño — tokens y ratchets (2026-07-19)
+- **El modelo de enforcement es warn + ratchet, no error**: la regla ESLint (warn) es la guía en
+  el editor mientras se escribe; lo que FRENA el merge es el test ratchet
+  (`lib/ui/token-vocab.test.ts`) — un conteo de grises crudos POR ARCHIVO que solo puede bajar.
+  Más matches que la entrada → "tokenizá lo nuevo"; menos → "actualizá la entrada" (imprime la
+  línea lista para pegar). Censo inicial: 125 archivos, 2.460 grises. Es el mismo modelo que el
+  vocabulario de skeletons, elegido sobre "warn→error al final" porque un error global bloquearía
+  el trabajo diario sin ofrecer migración incremental.
+- **Por qué existe: la regla de tokens estuvo MUERTA semanas** por una colisión de flat config —
+  dos config objects definían `no-restricted-syntax` (tokens y anti-slab) y en flat config la
+  misma clave NO se fusiona: el último reemplaza al primero en los archivos solapados. El guard
+  de tokens quedó inerte en todo `.tsx` y entraron ~2.4k grises sin una sola marca. La corrección
+  es estructural, no puntual: (a) ambas familias viven en UN `no-restricted-syntax`
+  (`uiVocabGuard` + `slabOnlyGuard` para los exentos de tokens); (b) el patrón vive en
+  `lib/ui/raw-neutral.mjs`, importado por el config Y por el ratchet (no pueden divergir);
+  (c) el meta-test `lib/ui/eslint-guards.test.ts` resuelve la config REAL de archivos concretos
+  y falla si una familia desaparece — el bug fue silencioso una vez; no puede volver a serlo.
+- **El ratchet cuenta el ARCHIVO entero, no solo `className`**: cubre los puntos ciegos del
+  selector de ESLint — variantes `cva()` fuera de JSX (Button/Badge/Card) y template literals.
+  Un gris en un comentario también cuenta: sacarlo cuesta menos que darle un parser al ratchet.
+- **`bg-black/NN` es el scrim sancionado y NO cuenta como gris crudo** (debe ser oscuro en ambos
+  modos). El patrón lo exime sin nombrar la barra — esquery corta el regex literal en la primera
+  `/` — usando la clase `[^-a-z.-0]` (el rango `.-0` cubre 0x2E–0x30: `.`, `/`, `0`). Detalle
+  documentado en `raw-neutral.mjs`; no "simplificar" ese regex sin leer el comentario.
+- **Regla transversal: un ratchet nace en la MISMA ola que la primitiva que ofrece la
+  alternativa** (nunca antes — frenaría el trabajo diario sin darle salida). La única excepción
+  fue el de tokens: su alternativa (los tokens semánticos) existe hace meses.
+- **Clave de mapeo gris→token** (es el remap `html.light` de `globals.css`, que ya define la
+  equivalencia que la app renderiza hoy — retokenizar NO cambia el aspecto): `bg-gray-900/950`→
+  `bg-surface` · `bg-gray-800`→`bg-surface-hover` · `border-gray-600/700/800`→`border-line` ·
+  `text-white`→`text-fg` · `text-gray-200/300`→`text-fg-secondary` · `text-gray-400/500/600`→
+  `text-fg-muted` · sólidos con texto blanco→pares `bg-primary`/`bg-destructive` con su `*-fg`.
+
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos
   dry-run-first; el usuario aprueba el `--apply`.
