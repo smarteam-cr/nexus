@@ -112,7 +112,7 @@ export default function RolesIndexClient() {
       <div className="flex justify-end">
         <button
           onClick={openCreate}
-          className="px-4 py-2 text-sm rounded-lg bg-brand text-white hover:opacity-90"
+          className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-fg hover:bg-primary-hover"
         >
           + Nuevo rol
         </button>
@@ -183,7 +183,7 @@ export default function RolesIndexClient() {
             <button
               onClick={create}
               disabled={busy || !form.title.trim()}
-              className="px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
+              className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-fg disabled:opacity-40 hover:bg-primary-hover"
             >
               {busy ? "Creando…" : "Crear y abrir"}
             </button>

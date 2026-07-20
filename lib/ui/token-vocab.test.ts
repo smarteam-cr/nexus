@@ -150,8 +150,6 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/layout/Sidebar.tsx": 12,
   "components/marketing/ICPView.tsx": 51,
   "components/notifications/NotificationsInit.tsx": 1,
-  "components/roles/RolesIndexClient.tsx": 2,
-  "components/roles/RoleWorkspace.tsx": 1,
   "components/team/TeamManager.tsx": 1,
   // components/ui/* llegó a 0 en la ola A1 (2026-07-19) — las primitivas son la referencia.
 };

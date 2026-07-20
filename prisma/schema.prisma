@@ -2902,7 +2902,7 @@ model GastoPuntual {
 // ── Roles (roles y responsabilidades del equipo) ────────────────────────────────
 // Perfil de PUESTO libre (no atado al enum TeamRole ni a un TeamMember) que se
 // documenta a mano y se renderiza como una página web resumida. Plantilla fija de
-// 6 secciones en markdown. Sin IA. Superficie SOLO SUPER_ADMIN (docs internos de
+// 11 secciones (fuente única: ROLE_SECTIONS en lib/roles/schema.ts). Sin IA. Superficie SOLO SUPER_ADMIN (docs internos de
 // dirección) — RLS deny (tabla interna, sin policy SELECT).
 model RoleProfile {
   id             String  @id @default(cuid())
@@ -2911,8 +2911,8 @@ model RoleProfile {
   summary        String? @db.Text // resumen de 1 línea (subtítulo del hero)
   // Contenido estructurado por sección: mapa { [sectionKey]: data } que consume el
   // motor de landing (LandingView + config de roles). Reemplazó a las 7 columnas markdown;
-  // hoy son 12 secciones (ROLE_SECTIONS), con el bloque 4DX en el medio (metodología, WIG,
-  // medidas de arrastre y de predicción, marcador y cadencia). Cada sección guarda su
+  // hoy son 11 secciones (ROLE_SECTIONS), con el bloque 4DX en el medio (WIG, medidas de
+  // predicción y de arrastre, marcador y cadencia). Cada sección guarda su
   // propio shape (prose {md}, cards {items}, medidas, marcador, niveles). Ver
   // components/landing/configs/roles.defs.ts. Reusa la PRESENTACIÓN/EDICIÓN del motor,
   // NO el motor de datos (ProjectCanvas/CanvasBlock) — decisión en docs/DECISIONS.md.

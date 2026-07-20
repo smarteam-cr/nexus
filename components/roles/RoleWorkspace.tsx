@@ -187,7 +187,7 @@ export default function RoleWorkspace({ role }: { role: RoleInput }) {
             className={
               editing
                 ? "px-3 py-1.5 text-sm font-medium rounded-lg border border-line text-fg-secondary hover:bg-surface-hover"
-                : "px-3 py-1.5 text-sm font-medium rounded-lg bg-brand text-white hover:opacity-90"
+                : "px-3 py-1.5 text-sm font-medium rounded-lg bg-primary text-primary-fg hover:bg-primary-hover"
             }
           >
             {editing ? "Listo" : "Editar"}
