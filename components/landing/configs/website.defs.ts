@@ -169,7 +169,7 @@ export const WEBSITE_SECTION_DEFS: BCSectionDef[] = [
     empty: { cards: [], siguientePaso: "", buttonLabel: "" },
     agentHint: "4 cards de credenciales/diferenciales + siguiente paso + CTA.",
     brief:
-      "Por qué Smarteam: `cards` (hasta 4) con credenciales y diferenciales relevantes para ESTE proyecto — 'HubSpot Partner Elite' y '+200 proyectos, +8 países LATAM' son fijas; sumá referencia sectorial o equipo solo si hay evidencia. `siguientePaso`: qué sigue si avanzan (ej. sesión de arquitectura / firma). `buttonLabel`: 'Agendar siguiente paso'.",
+      "Por qué Smarteam: `cards` (hasta 4) con credenciales y diferenciales relevantes para ESTE proyecto — 'HubSpot Partner Elite' y '+200 proyectos, +8 países LATAM' son fijas; sumá referencia sectorial o equipo solo si hay evidencia. `siguientePaso`: qué sigue si avanzan (ej. sesión de arquitectura / firma), honesto y sin venderte de más. `buttonLabel`: 'Agendar siguiente paso'.",
     schema: {
       type: "object",
       properties: {

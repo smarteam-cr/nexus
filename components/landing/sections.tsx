@@ -383,9 +383,9 @@ export function CtaEditor({
   };
   const pill = (active: boolean): React.CSSProperties => ({
     flex: 1, padding: "6px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
-    border: `1px solid ${active ? "#168CF6" : "rgba(0,0,0,0.14)"}`,
-    background: active ? "rgba(22,140,246,0.10)" : "#fff",
-    color: active ? "#168CF6" : "#6b7280",
+    border: `1px solid ${active ? "#0B58D3" : "rgba(0,0,0,0.14)"}`,
+    background: active ? "rgba(11,88,211,0.10)" : "#fff",
+    color: active ? "#0B58D3" : "#6b7280",
   });
 
   return (
@@ -434,9 +434,9 @@ export const CtaSection: FC<SectionProps<CtaData>> = ({ data, editable, onChange
   return (
     <div className="stl-cta-wrap">
       <Editable as="h2" className="stl-hero-title" editable={editable} value={data.headline}
-        placeholder="Estamos listos para iniciar con [cliente]…" onCommit={(v) => set({ headline: v })} />
+        placeholder="¿[Pregunta sobre el dolor del cliente]?" onCommit={(v) => set({ headline: v })} />
       <Editable as="p" className="stl-lead" editable={editable} value={data.subhead}
-        placeholder="Frase de cierre que retoma el dolor y la apuesta…" onCommit={(v) => set({ subhead: v })} />
+        placeholder="Aterriza la pregunta en su operación — sin venderte de más…" onCommit={(v) => set({ subhead: v })} />
       {editable ? (
         <CtaEditor label={data.buttonLabel} url={data.buttonUrl} target={data.buttonTarget}
           labelPlaceholder="Agendar siguiente paso…"

@@ -150,6 +150,7 @@ export const DESARROLLO_TEMPLATE: BcTemplateDef = {
   id: "desarrollo_v1",
   caseLabel: "Requerimiento técnico",
   maxTokens: 12000, // secciones densas; generateSectionsForTemplate ABORTA si stop_reason === "max_tokens"
+  brandVoice: false, // doc técnico para devs: sin metáfora eléctrica ni CTA-pregunta
   features: { useCaseChecklist: false },
   agentIntro:
     "Eres Arquitecto de Integraciones de Smarteam y escribes el REQUERIMIENTO TÉCNICO que recibe el DESARROLLADOR para construir una integración / migración / desarrollo a medida sobre HubSpot. El documento tiene DOBLE audiencia: un desarrollador que necesita el detalle preciso, y un perfil no técnico (CSE/cliente) que debe entender de qué va la integración de un vistazo. Por eso el documento es VISUAL y ESCUETO: títulos claros, poco texto, cada dato en su lugar.\n\n" +

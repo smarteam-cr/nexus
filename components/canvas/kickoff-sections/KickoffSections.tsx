@@ -361,9 +361,10 @@ function ProcesoStatusBar({ status, onConfirm }: { status: string; onConfirm?: (
 // Como el `cta` del Business Case: el CSE edita titular/subtítulo y configura el
 // botón (texto + enlace). En read, el botón se muestra solo si tiene texto y enlace.
 const CTA_BTN: React.CSSProperties = {
-  display: "inline-flex", alignItems: "center", gap: 8, background: "var(--brand-teal, #42E4B3)",
-  color: "#0B1426", fontWeight: 700, fontSize: 16, padding: "14px 28px", borderRadius: 999,
-  textDecoration: "none", boxShadow: "0 10px 30px rgba(66,228,179,0.28)", border: "none", cursor: "pointer",
+  // Naranja de marca como FONDO (a 16px el par AA exige el profundo #C2400F + blanco).
+  display: "inline-flex", alignItems: "center", gap: 8, background: "#C2400F",
+  color: "#fff", fontWeight: 700, fontSize: 16, padding: "14px 28px", borderRadius: 100,
+  textDecoration: "none", boxShadow: "0 8px 26px -10px rgba(232,72,28,0.55)", border: "none", cursor: "pointer",
 };
 export const KickoffCtaSection: FC<SectionProps<CtaData>> = ({ data, editable, onChange }) => {
   const d = normalizeCta(data);

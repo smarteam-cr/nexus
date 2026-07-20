@@ -179,7 +179,7 @@ export default function DesarrolloWorkspace({
         />
       </div>
       {awaitingGen && !hasGeneratedContent && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "rgba(22,140,246,0.06)", borderBottom: "1px solid rgba(22,140,246,0.2)", fontSize: 13, color: "#0E6FD1" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "rgba(11,88,211,0.06)", borderBottom: "1px solid rgba(11,88,211,0.2)", fontSize: 13, color: "#07429A" }}>
           <span className="skeleton-shimmer" style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0 }} />
           <span>Generando el requerimiento técnico… (puede tomar ~20&nbsp;s). Se actualiza solo al terminar.</span>
         </div>

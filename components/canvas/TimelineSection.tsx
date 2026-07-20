@@ -59,8 +59,8 @@ const ACTIVITY_META: Record<
   ADOPCION:      { label: "Adopción",      seg: "#10b981", chipText: "#065f46", chipBg: "#ecfdf5", chipBorder: "#a7f3d0" },
   SEGUIMIENTO:   { label: "Seguimiento",   seg: "#d946ef", chipText: "#a21caf", chipBg: "#fdf4ff", chipBorder: "#f5d0fe" },
 };
-const NEUTRAL_SEG = "#CBD5E1"; // fase sin tipo
-const EMPTY_CELL = "#EEF1F4"; // semana fuera del rango de la fase
+const NEUTRAL_SEG = "#b9cdf0"; // fase sin tipo (neutro de la familia navy de marca)
+const EMPTY_CELL = "#eef3fc"; // semana fuera del rango de la fase (paper-tint)
 
 // Estado + responsable por tarea (showProgress, solo el cronograma compartible) — paleta light
 // del landing, espejo de STATUS_META/PARTY_META del Gantt interno. "atrasada" se deriva (isOverdue).
@@ -71,10 +71,11 @@ const STATUS_META_LIGHT: Record<string, { label: string; text: string; bg: strin
 };
 const OVERDUE_META_LIGHT = { label: "atrasada", text: "#b91c1c", bg: "#fef2f2", border: "#fecaca" };
 // Tipo de tarea: solo se muestra cuando es SESIÓN (las TAREAS no muestran nada).
-const SESSION_META_LIGHT = { label: "Sesión", text: "#0f766e", bg: "#f0fdfa", border: "#99f6e4" };
+// Navy de marca (la menta/teal quedó reservada para identidad Insider).
+const SESSION_META_LIGHT = { label: "Sesión", text: "#051849", bg: "#eef3fc", border: "#dbe4f3" };
 const PARTY_META_LIGHT: Record<string, { label: string; text: string; bg: string; border: string }> = {
   CLIENTE:  { label: "Cliente",  text: "#b45309", bg: "#fffbeb", border: "#fde68a" }, // ámbar — lo que entrega el cliente
-  SMARTEAM: { label: "Smarteam", text: "#0369a1", bg: "#f0f9ff", border: "#bae6fd" }, // celeste
+  SMARTEAM: { label: "Smarteam", text: "#07429A", bg: "#CFE2FA", border: "#b9cdf0" }, // royal de marca
   AMBOS:    { label: "Ambos",    text: "#6d28d9", bg: "#f5f3ff", border: "#ddd6fe" }, // violeta
   DEV:      { label: "Dev",      text: "#3730a3", bg: "#eef2ff", border: "#c7d2fe" }, // índigo — desarrollo/integración
 };
@@ -105,7 +106,7 @@ const SUB_LABEL: React.CSSProperties = {
 const KIND_META_LIGHT: Record<string, { label: string; text: string; bg: string; border: string }> = {
   ATRASO:     { label: "Se atrasó", text: "#b91c1c", bg: "#fef2f2", border: "#fecaca" }, // rojo
   SOLICITUD:  { label: "En espera", text: "#b45309", bg: "#fffbeb", border: "#fde68a" }, // ámbar (legacy)
-  COMPROMISO: { label: "Acordado",  text: "#0f766e", bg: "#f0fdfa", border: "#99f6e4" }, // verde
+  COMPROMISO: { label: "Acordado",  text: "#047857", bg: "#ecfdf5", border: "#a7f3d0" }, // verde (mismo que "hecho"; la familia menta quedó Insider-only)
 };
 
 export default function TimelineSection({
@@ -192,7 +193,7 @@ export default function TimelineSection({
                 fontWeight: 700,
                 color: "var(--brand-blue-dark)",
                 background: "var(--brand-blue-soft)",
-                border: "1px solid rgba(22, 140, 246, 0.3)",
+                border: "1px solid rgba(11, 88, 211, 0.3)",
                 borderRadius: 10,
                 padding: "6px 12px",
               }}
@@ -237,7 +238,7 @@ export default function TimelineSection({
                       lineHeight: 1.25,
                       borderRadius: 6,
                       padding: "2px 0",
-                      ...(isCur ? { background: "var(--brand-blue-soft)", boxShadow: "inset 0 0 0 1px rgba(22, 140, 246, 0.45)" } : {}),
+                      ...(isCur ? { background: "var(--brand-blue-soft)", boxShadow: "inset 0 0 0 1px rgba(11, 88, 211, 0.45)" } : {}),
                     }}
                   >
                     <div style={{ fontSize: 10, fontWeight: 700, color: isCur ? "var(--brand-blue-dark)" : "var(--text-muted)" }}>S{w}</div>
@@ -322,7 +323,7 @@ export default function TimelineSection({
                               borderRadius: 6,
                               background: meta?.seg ?? NEUTRAL_SEG,
                               opacity: isPast ? 0.35 : 1,
-                              ...(isCur ? { boxShadow: "0 0 0 2px rgba(22, 140, 246, 0.75)" } : {}),
+                              ...(isCur ? { boxShadow: "0 0 0 2px rgba(11, 88, 211, 0.75)" } : {}),
                             }}
                           />
                         );

@@ -82,7 +82,7 @@ export default function SectionTools({
     <div style={{ position: "relative", display: "flex", alignItems: "flex-end" }}>
       <div style={{ display: "flex", gap: 6 }}>
         {aiAllowed && (
-          <button style={{ ...pill, color: "#168CF6" }} onClick={() => setOpen((o) => !o)} title="Editar con IA" aria-label="Editar esta sección con IA" aria-expanded={open}>
+          <button style={{ ...pill, color: "#0B58D3" }} onClick={() => setOpen((o) => !o)} title="Editar con IA" aria-label="Editar esta sección con IA" aria-expanded={open}>
             ✨ IA
           </button>
         )}
@@ -99,7 +99,7 @@ export default function SectionTools({
             onKeyDown={(e) => { if (e.key === "Enter") regen(); }}
             style={{ flex: 1, fontSize: 12, padding: "6px 8px", border: "1px solid #E5E7EB", borderRadius: 7, color: "#0f172a", outline: "none" }}
           />
-          <button onClick={regen} disabled={busy || !instr.trim()} style={{ ...pill, color: "#fff", background: "#168CF6", borderColor: "#168CF6", opacity: busy || !instr.trim() ? 0.5 : 1 }}>
+          <button onClick={regen} disabled={busy || !instr.trim()} style={{ ...pill, color: "#fff", background: "#0B58D3", borderColor: "#0B58D3", opacity: busy || !instr.trim() ? 0.5 : 1 }}>
             {busy ? "…" : "Aplicar"}
           </button>
         </div>

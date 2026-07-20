@@ -74,7 +74,7 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
   {
     key: "dolores",
     canvasLabel: "Dolores y retos",
-    label: "Los puntos de dolor reales",
+    label: "El reto",
     eyebrow: "Diagnóstico",
     theme: "light",
     empty: { items: [] },
@@ -122,7 +122,7 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
   {
     key: "cronograma",
     canvasLabel: "Plan de implementación",
-    label: "Plan de implementación",
+    label: "Cómo trabajamos",
     eyebrow: "Timeline",
     theme: "light",
     empty: { phases: [] },
@@ -134,7 +134,7 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
   {
     key: "inversion",
     canvasLabel: "Inversión",
-    label: "Licencias + servicios Smarteam",
+    label: "Qué incluye",
     eyebrow: "Inversión",
     theme: "soft",
     empty: { licenciasHubspot: { monto: "", detalle: "" }, implementacion: { monto: "", detalle: "" }, nota: "" },
@@ -164,7 +164,7 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
     empty: { headline: "", subhead: "", buttonLabel: "Agendar siguiente paso" },
     agentHint: "Cierre corto + CTA.",
     brief:
-      "Llamado a la acción (dark, cierre narrativo corto). `headline`: 'Estamos listos para iniciar con [nombre cliente]'. `subhead`: una frase de cierre que retoma el dolor principal y la apuesta. `buttonLabel`: 'Agendar siguiente paso'.",
+      "Llamado a la acción (dark, cierre narrativo corto). `headline`: UNA PREGUNTA sobre el dolor principal del prospecto, con sus palabras (ej.: '¿Cuántas horas pierde tu equipo moviendo datos a mano?') — nunca una afirmación genérica. `subhead`: aterriza la pregunta en la apuesta del proyecto, honesta y sin venderte de más (fórmula de marca: 'Cuéntanos cómo opera tu equipo hoy y te decimos cuál es tu punto de partida — sin venderte de más.' adaptada a este caso). `buttonLabel`: 'Agendar siguiente paso'.",
     schema: { type: "object", properties: { headline: str, subhead: str, buttonLabel: str }, required: ["headline", "subhead", "buttonLabel"] },
   },
 ];
