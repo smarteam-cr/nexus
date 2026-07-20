@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { regenerateSectionData } from "@/lib/business-cases/canvas-agent";
+import { specToDiagram, relacionToDiagram } from "@/lib/flowchart/spec-to-diagram";
 import { briefsByKeyFrom } from "@/lib/business-cases/section-briefs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { templateDefsByKey, findDefAcrossTemplates } from "@/components/landing/configs/templates.defs";
@@ -107,6 +108,17 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       resolved?.templateId,
       lang,
     );
+    // Sección de DIAGRAMA: la spec cambió → recalcular el grafo. Las posiciones
+    // manuales de ESTA sección se descartan a propósito (un layout viejo sobre
+    // nodos nuevos mentiría); preserveNonSchemaKeys habría arrastrado el stale.
+    if (def?.sectionType === "diagram" && data && typeof data === "object" && !Array.isArray(data)) {
+      const d = data as Record<string, unknown>;
+      const conv =
+        Array.isArray(d.objetos) || Array.isArray(d.asociaciones)
+          ? relacionToDiagram(d)
+          : specToDiagram(d);
+      d.diagram = conv.diagram;
+    }
     return NextResponse.json({ data });
   } catch (e) {
     console.error("[bc blocks/regenerate] error:", e);

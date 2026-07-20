@@ -10,8 +10,9 @@
  * (ver `configs/desarrollo.ts`), no con prosa:
  *  - `retos_cliente`   → `web_diagnosis` (retos + panel oscuro de consecuencias)
  *  - `criterios_exito` → `roi`           (métricas grandes)
- *  - `arquitectura`    → `tech_architecture` (cadena con flechas HubSpot ↔ destino)
- *  - `relacion_objetos`→ `tech_architecture` (cadena de objetos Contacto → Empresa → Negocio)
+ *  - `arquitectura`    → `diagram` (mapa de sistemas HubSpot ↔ destino; la spec string-only
+ *                        se convierte en diagrama con `lib/flowchart/spec-to-diagram`)
+ *  - `relacion_objetos`→ `diagram` (objetos Contacto → Empresa → Negocio + cardinalidad)
  *  - `comunicacion`    → `pain`          (grid de tarjetas de disparadores)
  * El hero es propio (`desarrollo_hero`) y el cierre reusa `desarrollo_cta`.
  *
@@ -22,8 +23,6 @@
 import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
 import {
-  TECH_ARCHITECTURE_SCHEMA,
-  TECH_ARCHITECTURE_EMPTY,
   WEB_DIAGNOSIS_SCHEMA,
   WEB_DIAGNOSIS_EMPTY,
   ROI_SCHEMA,
@@ -39,6 +38,11 @@ import { DESARROLLO_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
 const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
 const asSchema = (s: unknown) => s as unknown as Record<string, unknown>;
+// Igual que en shared-sections.defs: array de objetos con hojas string (coerceToSchema
+// aplana todo a string — por eso `pending` es string "si"/"no", no boolean).
+function arrayOf(props: Record<string, unknown>, required: string[]) {
+  return { type: "array", items: { type: "object", properties: props, required } } as const;
+}
 
 export const DESARROLLO_SECTION_DEFS: BCSectionDef[] = [
   {
@@ -89,26 +93,58 @@ export const DESARROLLO_SECTION_DEFS: BCSectionDef[] = [
     label: "Arquitectura: HubSpot ↔ sistema destino",
     eyebrow: "Cómo se conectan los sistemas",
     theme: "light",
-    sectionType: "tech_architecture",
+    sectionType: "diagram",
     agentGenerated: true,
-    empty: TECH_ARCHITECTURE_EMPTY,
-    agentHint: "CADENA del flujo entre sistemas (HubSpot → conector → destino), con los IDs y la clave de desduplicación en el `detalle` de cada paso.",
+    empty: { intro: "", sistemas: [], conexiones: [], fueraDeAlcance: [], opcionales: [] },
+    agentHint: "MAPA DE SISTEMAS: `sistemas` (cajas con su detalle de identificación) + `conexiones` (flechas de datos con dedupe/trigger). El diagrama se dibuja solo desde la spec.",
     brief:
-      "La sección técnica MÁS crítica, presentada como una CADENA con flechas (cards con actor + qué pasa) para que se lea de un vistazo. `intro`: 1-2 frases con la idea central del flujo. `cadena` (3-5 pasos): cada uno `actor` (el sistema: 'HubSpot', 'Conector/Middleware', 'ERP', 'API REST'…), `titulo` de 3-6 palabras (qué hace ese paso) y `detalle` de 1 línea con el DETALLE TÉCNICO de identificación. Cubrí en los `detalle`: (1) que en HubSpot cada registro tiene un `hs_object_id` interno inmutable que se usa para PATCH/UPSERT; (2) que el ID del sistema destino se guarda en una propiedad personalizada de HubSpot configurada como Única (External ID, ej. `id_cliente_erp`); (3) la CLAVE DE DESDUPLICACIÓN por objeto — Contactos → email (HubSpot desduplica por correo por defecto), Empresas → dominio web o registro fiscal (RFC/NIT/NIF/RUT), Negocios → NO se desduplican solos, definí la regla. Dejá `fueraDeAlcance` y `opcionales` vacíos salvo que el handoff mencione algo explícito. Marcá con `⚠️ Por definir` cualquier propiedad/regla que el handoff no especifique — no inventes nombres de propiedades del cliente.",
-    schema: asSchema(TECH_ARCHITECTURE_SCHEMA),
+      "La sección técnica MÁS crítica: un MAPA DE SISTEMAS que se dibuja como diagrama (cajas = sistemas, flechas = datos que fluyen). `intro`: 1-2 frases con la idea central del flujo. " +
+      "`sistemas` (3-8): qué es un sistema — una herramienta con login/API/BD propia (CRM, ERP, POS, ecommerce, gateway); si NO la tiene (pasos, tareas, personas, decisiones) NO es un sistema; un conector/middleware SÍ lo es. Por sistema: `nombre` EXACTO de la herramienta ('HubSpot', 'SAP', 'Conector/Middleware'…) · `rol` corto ('CRM', 'ERP', 'Middleware') · `color` hex de marca opcional (ej. '#f97316' HubSpot) · `detalle` = 1 línea con su identificación técnica — en HubSpot: `hs_object_id` interno inmutable para PATCH/UPSERT; en el destino: su ID se guarda en HubSpot en una propiedad personalizada configurada como Única (External ID, ej. `id_cliente_erp`). " +
+      "`conexiones`: `desde`/`hacia` usan el `nombre` EXACTO de un ítem de `sistemas` · `titulo` = el dato que fluye en 3-6 palabras · `dataFields` = los campos concretos ('Negocio/Empresa/Contacto') · `dedupeKey` = la CLAVE DE DESDUPLICACIÓN del objeto que viaja (Contactos → email, HubSpot desduplica por correo por defecto; Empresas → dominio web o registro fiscal RFC/NIT/NIF/RUT; Negocios → NO se desduplican solos, definí la regla) · `cuando` = el momento/trigger que dispara el sync ('Negocio pasa a Cerrado Ganado') · `direction` = 'to' (unidireccional) o 'bidir' (ida y vuelta) · `syncType` = 'realtime' | 'batch' | 'manual'. " +
+      "Cuando algo esté por confirmar: escribí el texto con `⚠️ Por definir` Y marcá `pending: 'si'` — no inventes valores (nunca nombres de propiedades del cliente). Dejá `fueraDeAlcance`/`opcionales` vacíos salvo mención explícita del handoff.",
+    schema: {
+      type: "object",
+      properties: {
+        intro: str,
+        sistemas: arrayOf({ nombre: str, rol: str, color: str, detalle: str }, ["nombre"]),
+        conexiones: arrayOf(
+          { desde: str, hacia: str, titulo: str, dataFields: str, dedupeKey: str, cuando: str, direction: str, syncType: str, pending: str },
+          ["desde", "hacia", "titulo"],
+        ),
+        fueraDeAlcance: strArray,
+        opcionales: arrayOf({ nombre: str, detalle: str }, ["nombre"]),
+      },
+      required: ["sistemas", "conexiones"],
+    },
   },
   {
     key: "relacion_objetos",
     label: "Relación entre objetos",
     eyebrow: "Qué datos viajan y en qué cantidad",
     theme: "soft",
-    sectionType: "tech_architecture",
+    sectionType: "diagram",
     agentGenerated: true,
-    empty: TECH_ARCHITECTURE_EMPTY,
-    agentHint: "CADENA de objetos HubSpot (Contacto → Empresa → Negocio) con el mapeo al destino + la cardinalidad en el `detalle`.",
+    empty: { intro: "", objetos: [], asociaciones: [], fueraDeAlcance: [], opcionales: [] },
+    agentHint: "Objetos HubSpot (Contacto/Empresa/Negocio) → equivalencia en el destino + `asociaciones` con CARDINALIDAD explícita. El diagrama se dibuja solo desde la spec.",
     brief:
-      "Cómo viajan las ASOCIACIONES de HubSpot (un Contacto pertenece a una Empresa; una Empresa tiene varios Negocios) hacia un sistema destino más plano — presentado como cadena de objetos. `intro`: 1 frase. `cadena`: cada paso es un OBJETO — `actor` = el objeto HubSpot ('Contacto', 'Empresa', 'Negocio'), `titulo` = a qué equivale en el destino (ej. 'Cliente en el ERP'), `detalle` de 1 línea con el MAPEO + la CARDINALIDAD (ej. '1 Empresa ↔ 1 cliente en el ERP; sus Negocios se envían como cotizaciones' o '¿los 3 contactos de la empresa o solo el de compras? 1 Negocio = 1 factura?'). Dejá `fueraDeAlcance`/`opcionales` vacíos. Marcá `⚠️ Por definir con el cliente` las cardinalidades que el handoff no aclare. Fuente: sección `desarrollo` + `alcance_contratado`.",
-    schema: asSchema(TECH_ARCHITECTURE_SCHEMA),
+      "Cómo viajan las ASOCIACIONES de HubSpot (un Contacto pertenece a una Empresa; una Empresa tiene varios Negocios) hacia un sistema destino más plano — se dibuja como diagrama (cajas = objetos, flechas = asociaciones). `intro`: 1 frase. " +
+      "`objetos`: cada uno un OBJETO HubSpot — `nombre` ('Contacto', 'Empresa', 'Negocio') · `equivale` = a qué equivale en el destino (ej. 'Cliente en el ERP') · `detalle` = 1 línea con el mapeo + su clave de desduplicación (Contactos → email; Empresas → dominio o registro fiscal; Negocios → definí la regla). " +
+      "`asociaciones`: `desde`/`hacia` usan el `nombre` EXACTO de un ítem de `objetos` · `cardinalidad` EXPLÍCITA y corta ('1 Empresa ↔ 1 cliente ERP', 'N Negocios → cotizaciones') — usá ↔ cuando la relación sea bidireccional · `detalle` = qué viaja o la duda a resolver ('¿los 3 contactos de la empresa o solo el de compras?'). " +
+      "Cuando una cardinalidad no esté confirmada: escribila con `⚠️ Por definir con el cliente` Y marcá `pending: 'si'` — no inventes valores. Dejá `fueraDeAlcance`/`opcionales` vacíos. Fuente: sección `desarrollo` + `alcance_contratado`.",
+    schema: {
+      type: "object",
+      properties: {
+        intro: str,
+        objetos: arrayOf({ nombre: str, equivale: str, detalle: str }, ["nombre"]),
+        asociaciones: arrayOf(
+          { desde: str, hacia: str, cardinalidad: str, detalle: str, pending: str },
+          ["desde", "hacia", "cardinalidad"],
+        ),
+        fueraDeAlcance: strArray,
+        opcionales: arrayOf({ nombre: str, detalle: str }, ["nombre"]),
+      },
+      required: ["objetos", "asociaciones"],
+    },
   },
   {
     key: "comunicacion",

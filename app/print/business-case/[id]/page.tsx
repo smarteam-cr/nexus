@@ -112,6 +112,7 @@ export default async function BusinessCasePrintPage({
         ctx={{
           clientName: bc.client.name,
           lang,
+          pdfMode: true, // secciones con piezas async (diagramas) → variante estática
           clientLogoUrl: bc.client.logoUrl,
           smarteamLogoUrl: brandLogos.smarteam,
           brandLogos: brandLogoMap(brandLogos),

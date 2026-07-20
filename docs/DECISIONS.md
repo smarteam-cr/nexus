@@ -790,3 +790,28 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   `tech_architecture` cuando alcance; (5) SOLO canvas de PROYECTO (no BC): además
   `canvas-defs.ts` (AGENT_GROUP_TO_CANVAS) + `artifact-gate.ts`. El `agentIntro` nuevo arranca
   del doc de marca.
+
+## Motor de diagramas en las landings (sección "diagram", 2026-07)
+- **El FlowchartViewer (React Flow + dagre, el lienzo de Procesos) es EL motor de diagramas de
+  Nexus** — se expone al motor de landings como `sectionType: "diagram"` (`DiagramSection`).
+  Estreno: canvas Desarrollo (`arquitectura`, `relacion_objetos`). *Por qué:* las cadenas CSS de
+  `tech_architecture` no expresan ramas/cardinalidad/metadatos; el lienzo interactivo ya existía y
+  estaba probado.
+- **Patrón de datos en 2 capas** (la decisión medular): el agente genera una **spec string-only**
+  DENTRO del schema (`sistemas`/`conexiones` u `objetos`/`asociaciones` — hojas string porque
+  `coerceToSchema` coacciona todo lo demás a "") y un **conversor puro**
+  (`lib/flowchart/spec-to-diagram.ts`) la vuelve grafo en `data.diagram` (FlowchartData), que vive
+  **FUERA del schema** → `preserveNonSchemaKeys` conserva las posiciones del usuario en
+  regeneraciones por sección. La regeneración COMPLETA sí las descarta (ya era destructiva).
+- **Metadatos por conexión**: `direction` (to/bidir) · `syncType` (realtime/batch/manual) ·
+  `dataFields` (qué viaja) · `dedupeKey` (cómo no se duplica) · `trigger` (cuándo) · `pending`
+  (⚠ por confirmar) — el panel de detalle del viewer los muestra (read) y edita (edit).
+- **Legacy sin migración de DB**: conversión LAZY — `DiagramSection` resuelve en orden
+  `data.diagram` → spec → `cadena` de tech_architecture (`cadenaToDiagram`); persiste recién en el
+  primer Guardar del CSE.
+- **Cliente final**: explora (pan/zoom/fullscreen/clic→detalle) con `readOnly` — nunca edita.
+  Print/PDF: placeholder de texto (el SVG estático es tarea futura).
+- **Para enchufar OTRA superficie** (BC `arquitectura_tecnologica`, website `arquitectura_conexion`,
+  `site_architecture`): cambiar el `sectionType` de la def a `"diagram"` + registrar `DiagramSection`
+  en el registry de componentes de ese template + darle al brief el formato spec (sistemas/conexiones).
+  La conversión lazy cubre su data vieja.

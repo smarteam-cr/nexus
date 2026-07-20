@@ -85,6 +85,8 @@ interface EdgeExtraData {
   direction?: "to" | "bidir";
   syncType?: "realtime" | "batch" | "manual";
   pending?: boolean;
+  readOnly?: boolean;      // diagrama en solo-lectura → etiqueta no editable ni arrastrable
+  noArrow?: boolean;       // enlace a nota (annotation/text): sin punta de flecha
   onLabelCommit?: (value: string) => void;
   onLabelPos?: (t: number, side: number) => void;
 }
@@ -105,9 +107,11 @@ export function DataFlowEdge({
   selected,
 }: EdgeProps) {
   const { setEdges, getZoom } = useReactFlow();
-  // Interactivo solo cuando el diagrama es editable (fullscreen: elementsSelectable=true). En el
-  // embed read-only la etiqueta no se arrastra ni se edita (ni ensucia el estado).
-  const interactive = useStore((s) => s.elementsSelectable);
+  // Interactivo solo cuando el diagrama es editable. `elementsSelectable` ya no alcanza como
+  // señal (ahora está activo también en solo-lectura para abrir el panel de detalle al clic):
+  // se exige además `nodesDraggable` (= canEdit del viewer) y que el edge no venga marcado
+  // read-only en su data. En lectura la etiqueta no se arrastra ni se edita (ni ensucia estado).
+  const editableStore = useStore((s) => s.elementsSelectable && s.nodesDraggable);
   const [edgePath, midX, midY] = getBezierPath({
     sourceX,
     sourceY,
@@ -121,6 +125,7 @@ export function DataFlowEdge({
   cubicRef.current = cubic;
 
   const extra = (data ?? {}) as EdgeExtraData;
+  const interactive = editableStore && !extra.readOnly;
 
   // Posición por defecto (del layout, ya pegada a la línea) o el punto medio + perp para pares.
   let defX: number;
@@ -269,8 +274,9 @@ export function DataFlowEdge({
   const bidir = extra.direction === "bidir";
 
   // Punta de flecha propia en el extremo destino (tangente de la curva en t=1).
+  // Los enlaces a notas (noArrow) van sin punta: no son flujos de datos direccionales.
   let arrowPts: string | null = null;
-  if (cubic) {
+  if (cubic && !extra.noArrow) {
     const [, , , , c2x, c2y, tx, ty] = cubic;
     let dx = tx - c2x;
     let dy = ty - c2y;
@@ -288,7 +294,7 @@ export function DataFlowEdge({
 
   // Segunda flecha en el ORIGEN si el flujo es bidireccional (tangente en t=0, hacia el origen).
   let srcArrowPts: string | null = null;
-  if (cubic && bidir) {
+  if (cubic && bidir && !extra.noArrow) {
     const [sx, sy, c1x, c1y] = cubic;
     let dx = sx - c1x;
     let dy = sy - c1y;

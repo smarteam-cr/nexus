@@ -74,6 +74,37 @@ export interface TechArchitectureData {
 export interface ProcessMapItem { nombre: string; comoEsHoy: string; comoSera: string; sistemas: string }
 export interface ProcessMappingData { intro: string; procesos: ProcessMapItem[] }
 
+// Sección de DIAGRAMA (motor de diagramas interactivo — FlowchartViewer como sección
+// del landing). Patrón de DOS capas: la SPEC string-only (dentro del schema del agente,
+// coerceToSchema-safe) + `diagram` (el grafo FlowchartData con posiciones del usuario)
+// FUERA del schema — preserveNonSchemaKeys lo acarrea entre regeneraciones por sección.
+// Los campos legacy de tech_architecture quedan solo-lectura para la conversión lazy.
+export interface DiagramSystemSpec { nombre: string; rol: string; color: string; detalle: string }
+export interface DiagramConnSpec {
+  desde: string; hacia: string; titulo: string;
+  dataFields: string; dedupeKey: string; cuando: string;
+  direction: string; syncType: string; pending: string;
+}
+export interface DiagramObjectSpec { nombre: string; equivale: string; detalle: string }
+export interface DiagramAssocSpec { desde: string; hacia: string; cardinalidad: string; detalle: string; pending: string }
+export interface DiagramSectionData {
+  intro: string;
+  /** Spec de arquitectura (sistemas + conexiones) — la emite el agente. */
+  sistemas?: DiagramSystemSpec[];
+  conexiones?: DiagramConnSpec[];
+  /** Spec de relación de objetos (objetos + asociaciones) — la emite el agente. */
+  objetos?: DiagramObjectSpec[];
+  asociaciones?: DiagramAssocSpec[];
+  /** El grafo vivo (posiciones del CSE). FUERA del schema: carry-forward. Shape = FlowchartData. */
+  diagram?: unknown;
+  fueraDeAlcance: string[];
+  opcionales: TechArchOptional[];
+  /** Legacy tech_architecture (conversión lazy, solo lectura). */
+  cadena?: TechChainStep[];
+  nodos?: TechArchNode[];
+  flujos?: TechArchFlow[];
+}
+
 // Casos de uso del catálogo — sección DETERMINÍSTICA (agentGenerated:false): el
 // generate la escribe con los seleccionados del checklist (títulos/precios exactos);
 // el agente jamás la llena. Editable inline como cualquier sección.
@@ -148,6 +179,10 @@ export interface LandingContext {
   /** Idioma de la propuesta (código ISO, del `__lang` que declara el agente en el
    *  data del hero). null/ausente = español. Traduce los rótulos FIJOS (i18n.ts). */
   lang?: string | null;
+  /** Render para PDF (Puppeteer): las secciones con piezas ASÍNCRONAS (React Flow)
+   *  deben renderizar su variante ESTÁTICA — el export dispara al `data-pdf-ready`
+   *  y un canvas interactivo saldría vacío. Lo setea app/print/business-case. */
+  pdfMode?: boolean;
   clientLogoUrl?: string | null;
   /** Logo de marca Smarteam (config global de Nexus, getSmarteamLogoUrl). El hero lo
    *  pinta como imagen en la brand-row en lugar del badge de texto "Smarteam". */

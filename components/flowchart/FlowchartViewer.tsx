@@ -49,6 +49,8 @@ import { DataFlowEdge, SelectableSmoothStepEdge } from "./integration-edges";
 export interface FlowchartData {
   title?: string;
   description?: string;
+  // Tipo de diagrama persistido (opcional). Si falta, se infiere por los tipos de nodo.
+  kind?: "integration" | "pipeline" | "classic";
   nodes: Array<{
     id: string;
     type: string;
@@ -81,7 +83,20 @@ export interface FlowchartData {
     direction?: "to" | "bidir";
     syncType?: "realtime" | "batch" | "manual";
     pending?: boolean;       // "[Por confirmar]"
+    dataFields?: string;     // qué datos viajan (ej: "Cliente / Orden / Productos")
+    dedupeKey?: string;      // clave de desduplicación entre sistemas
+    trigger?: string;        // cuándo / disparador del flujo
   }>;
+}
+
+// Campos semánticos de un edge "dataflow" editables desde el panel de detalle.
+interface EdgeMetaPatch {
+  direction?: "to" | "bidir";
+  syncType?: "realtime" | "batch" | "manual";
+  pending?: boolean;
+  dataFields?: string;
+  dedupeKey?: string;
+  trigger?: string;
 }
 
 // Snapshot completo del estado para undo/redo (nodos + aristas)
@@ -321,9 +336,13 @@ function ToolbarSidebar({
 function FlowchartInner({
   data,
   onSave,
+  readOnly,
+  kind,
 }: {
   data: FlowchartData;
   onSave?: (updated: FlowchartData) => Promise<void>;
+  readOnly?: boolean;
+  kind?: "integration" | "pipeline" | "classic";
 }) {
   const { screenToFlowPosition } = useReactFlow();
   // Clave por CONTENIDO (no por referencia): quien nos monta (p.ej. `FlowchartBlockView` en
@@ -357,14 +376,35 @@ function FlowchartInner({
   const [activeTool, setActiveTool] = useState<"pointer" | "text" | "note" | "add">("pointer");
   const [nodePopupOpen, setNodePopupOpen] = useState(false);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [edgeEditId, setEdgeEditId] = useState<string | null>(null);
   const [edgeEditLabel, setEdgeEditLabel] = useState("");
   const [edgeEditPos, setEdgeEditPos] = useState<{ x: number; y: number } | null>(null);
   const [canUndo, setCanUndo]   = useState(false);
   const [canRedo, setCanRedo]   = useState(false);
 
+  // ── Modo de edición / tipo de diagrama ────────────────────────────────────
+  // Solo-lectura: explícito por prop, o implícito cuando no hay forma de guardar.
+  const effectiveReadOnly = readOnly ?? !onSave;
+  // Editar requiere fullscreen (igual que siempre) Y que el diagrama no sea de solo lectura.
+  const canEdit = isFullscreen && !effectiveReadOnly;
+  // Tipo de diagrama: prop explícita > `kind` persistido en el JSON (validado: puede venir
+  // basura de datos viejos) > sniffing por tipos de nodo (fallback histórico).
+  const sniffedKind: "integration" | "pipeline" | "classic" = nodes.some((n) => n.type === "system")
+    ? "integration"
+    : nodes.some((n) =>
+        ["pipeline_stage", "trigger", "action", "follow_up", "outcome_positive", "outcome_negative", "lifecycle_change", "lead_status"].includes(n.type ?? ""),
+      )
+      ? "pipeline"
+      : "classic";
+  const effectiveKind: "integration" | "pipeline" | "classic" =
+    kind ?? (data.kind && ["integration", "pipeline", "classic"].includes(data.kind) ? data.kind : sniffedKind);
+
   const rfInstance     = useRef<ReactFlowInstance | null>(null);
   const pendingFitView = useRef(false);
+  // Clave del último payload guardado con éxito: cuando el padre nos devuelve como prop `data`
+  // exactamente lo que le mandamos en onSave, NO hay que reconstruir el grafo (ver effects abajo).
+  const lastSavedKeyRef = useRef<string | null>(null);
 
   // Refs para acceso síncrono al estado sin stale closures
   const nodesRef = useRef<Node[]>([]);
@@ -378,6 +418,9 @@ function FlowchartInner({
 
   // Resetear historial al cambiar el diagrama (nueva ejecución / datos distintos)
   useEffect(() => {
+    // Eco de nuestro propio guardado (el padre re-monta `data` con lo que le mandamos):
+    // no es un diagrama nuevo — no pisar historial ni un dirty de ediciones posteriores.
+    if (dataKey === lastSavedKeyRef.current) return;
     undoStack.current = [];
     redoStack.current = [];
     setCanUndo(false);
@@ -463,6 +506,25 @@ function FlowchartInner({
         setIsDirty(true);
         setEdges((eds) =>
           eds.map((ed) => (ed.id === edgeId ? { ...ed, data: { ...(ed.data as object), labelT: t, labelSide: side } } : ed))
+        );
+      },
+    [captureSnapshot, setEdges]
+  );
+
+  // Escribir metadatos semánticos de un edge dataflow desde el panel de detalle (dirección,
+  // syncType, dataFields, dedupeKey, trigger, pending) — clon del patrón makeOnEdgeLabelPosFor:
+  // snapshot de undo + dirty + merge del patch en edge.data.
+  const makeOnEdgeMetaChange = useCallback(
+    (edgeId: string) =>
+      (patch: EdgeMetaPatch) => {
+        undoStack.current.push(captureSnapshot());
+        if (undoStack.current.length > 50) undoStack.current.shift();
+        redoStack.current = [];
+        setCanUndo(true);
+        setCanRedo(false);
+        setIsDirty(true);
+        setEdges((eds) =>
+          eds.map((ed) => (ed.id === edgeId ? { ...ed, data: { ...(ed.data as object), ...patch } } : ed))
         );
       },
     [captureSnapshot, setEdges]
@@ -568,7 +630,7 @@ function FlowchartInner({
       if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
         e.preventDefault(); handleRedo();
       }
-      if (!isFullscreen) return;
+      if (!canEdit) return;
       const hasTextSelection = !!window.getSelection?.()?.toString();
       if ((e.ctrlKey || e.metaKey) && e.key === "c" && !hasTextSelection) {
         e.preventDefault(); handleCopy();
@@ -579,7 +641,7 @@ function FlowchartInner({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleUndo, handleRedo, isFullscreen, handleCopy, handlePaste]);
+  }, [handleUndo, handleRedo, canEdit, handleCopy, handlePaste]);
 
   // ── Construcción del grafo ────────────────────────────────────────────────
   // makeOnLabelChange INSIDE buildGraph para evitar que su referencia entre en
@@ -720,6 +782,12 @@ function FlowchartInner({
 
         const targetType = nodeTypeMap.get(e.target);
 
+        // Enlace a nota (annotation/text en cualquiera de los extremos): línea suave SIN punta
+        // de flecha — una nota no es un paso del flujo y la flecha sugeriría dirección de datos.
+        const isNoteEdge =
+          sourceType === "annotation" || sourceType === "text" ||
+          targetType === "annotation" || targetType === "text";
+
         if (isPipeline && !sourceHandle) {
           if (sourceType === "decision") {
             // "yes" exits from bottom (main flow down), "no" exits from right (side lane)
@@ -759,11 +827,17 @@ function FlowchartInner({
                         direction: e.direction,
                         syncType:  e.syncType,
                         pending:   e.pending,
+                        dataFields: e.dataFields,
+                        dedupeKey:  e.dedupeKey,
+                        trigger:    e.trigger,
+                        readOnly:   effectiveReadOnly,
+                        noArrow:    isNoteEdge || undefined,
                         onLabelCommit: makeOnEdgeLabelChange(eid),
                         onLabelPos:    makeOnEdgeLabelPos(eid),
                       } : undefined,
         // Integración: el DataFlowEdge dibuja su propia flecha → sin markerEnd (evita <marker> huérfano).
-        markerEnd:    isIntegration ? undefined : { type: MarkerType.ArrowClosed, color },
+        // Enlaces a notas: sin flecha en ningún tipo de diagrama.
+        markerEnd:    isIntegration || isNoteEdge ? undefined : { type: MarkerType.ArrowClosed, color },
         style:        { stroke: color, strokeWidth: 1.5, ...(isDashed ? { strokeDasharray: "6 3" } : {}) },
         labelStyle:   { fontSize: 10, fontWeight: 600, fill: color },
         labelBgStyle: { fill: "white", fillOpacity: 0.85 },
@@ -833,10 +907,15 @@ function FlowchartInner({
     // declaración: evita reconstruir el grafo (y disparar "dimensions" espurios) cuando quien
     // nos monta re-renderiza con un objeto `data` nuevo pero de igual contenido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dataKey, setNodes, setEdges, captureSnapshot]
+    [dataKey, setNodes, setEdges, captureSnapshot, effectiveReadOnly]
   );
 
-  useEffect(() => { buildGraph(direction); }, [buildGraph, direction]);
+  useEffect(() => {
+    // Eco del guardado: si la prop `data` es EXACTAMENTE el payload que acabamos de mandar en
+    // onSave, reconstruir destruiría selección/posiciones vivas y dispararía "dimensions" espurios.
+    if (dataKey === lastSavedKeyRef.current) return;
+    buildGraph(direction);
+  }, [buildGraph, direction, dataKey]);
 
   // fitView después de buildGraph — Strict Mode safe:
   // pendingFitView.current = false va DENTRO del timeout para que si el cleanup
@@ -861,6 +940,11 @@ function FlowchartInner({
       // En un mapa de sistemas, las conexiones nuevas también son "dataflow" (etiqueta sobre
       // la línea), para no romper la coherencia del modelo Miro.
       const isIntegration = nodesRef.current.some((n) => n.type === "system");
+      // Enlace a nota (annotation/text): nace punteado y sin flecha (mismo criterio que buildGraph).
+      const noteTypes = new Set(["annotation", "text"]);
+      const isNoteEdge = nodesRef.current.some(
+        (n) => (n.id === connection.source || n.id === connection.target) && noteTypes.has(n.type ?? "")
+      );
       // Id propio + handlers de etiqueta inyectados, para que la posición y el texto de la
       // etiqueta de la arista NUEVA persistan/undo desde el primer arrastre (igual que rawEdges).
       const newEdgeId = `e-${connection.source ?? ""}-${connection.target ?? ""}-${Date.now()}`;
@@ -886,16 +970,18 @@ function FlowchartInner({
             ...connection,
             ...(isIntegration ? { id: newEdgeId } : {}),
             type:      isIntegration ? "dataflow" : "smoothstep",
-            ...(isIntegration ? { data: { labelShift: 0, onLabelCommit, onLabelPos } } : {}),
-            markerEnd: isIntegration ? undefined : { type: MarkerType.ArrowClosed, color: "#94a3b8" },
-            style:     { stroke: "#94a3b8", strokeWidth: 1.5 },
+            ...(isIntegration
+              ? { data: { labelShift: 0, onLabelCommit, onLabelPos, readOnly: effectiveReadOnly, ...(isNoteEdge ? { noArrow: true } : {}) } }
+              : {}),
+            markerEnd: isIntegration || isNoteEdge ? undefined : { type: MarkerType.ArrowClosed, color: "#94a3b8" },
+            style:     { stroke: "#94a3b8", strokeWidth: 1.5, ...(isNoteEdge ? { strokeDasharray: "6 3" } : {}) },
           },
           eds
         )
       );
       setIsDirty(true);
     },
-    [setEdges, captureSnapshot]
+    [setEdges, captureSnapshot, effectiveReadOnly]
   );
 
   // ── Crear nodo al soltar la línea en canvas vacío (estilo Miro) ────────────
@@ -1072,9 +1158,76 @@ function FlowchartInner({
     setGuidelines([]);
   }, []);
 
+  // ── Alinear / distribuir la selección (≥2 nodos) ──────────────────────────
+  // Pura aritmética sobre positions; los centros usan el tamaño medido real cuando existe
+  // (measured) y las dimensiones nominales del tipo como fallback. Snapshot de undo + dirty.
+  const applyAlign = useCallback(
+    (mode: "left" | "hcenter" | "top" | "vmiddle" | "disth" | "distv") => {
+      const sel = nodesRef.current.filter((n) => n.selected && !n.id.startsWith("__"));
+      if (sel.length < 2) return;
+
+      undoStack.current.push(captureSnapshot());
+      if (undoStack.current.length > 50) undoStack.current.shift();
+      redoStack.current = [];
+      setCanUndo(true);
+      setCanRedo(false);
+      setIsDirty(true);
+
+      const dimsOf = (n: Node) => {
+        const d = getNodeDims(n.type ?? "process");
+        return { w: n.measured?.width ?? d.width, h: n.measured?.height ?? d.height };
+      };
+      const next = new Map<string, { x: number; y: number }>();
+
+      if (mode === "left") {
+        const minX = Math.min(...sel.map((n) => n.position.x));
+        sel.forEach((n) => next.set(n.id, { x: minX, y: n.position.y }));
+      } else if (mode === "hcenter") {
+        const minX = Math.min(...sel.map((n) => n.position.x));
+        const maxX = Math.max(...sel.map((n) => n.position.x + dimsOf(n).w));
+        const cx = (minX + maxX) / 2;
+        sel.forEach((n) => next.set(n.id, { x: cx - dimsOf(n).w / 2, y: n.position.y }));
+      } else if (mode === "top") {
+        const minY = Math.min(...sel.map((n) => n.position.y));
+        sel.forEach((n) => next.set(n.id, { x: n.position.x, y: minY }));
+      } else if (mode === "vmiddle") {
+        const minY = Math.min(...sel.map((n) => n.position.y));
+        const maxY = Math.max(...sel.map((n) => n.position.y + dimsOf(n).h));
+        const cy = (minY + maxY) / 2;
+        sel.forEach((n) => next.set(n.id, { x: n.position.x, y: cy - dimsOf(n).h / 2 }));
+      } else if (mode === "disth") {
+        // Ordenar por centro y espaciar los centros uniforme entre los dos extremos.
+        const sorted = [...sel].sort((a, b) => a.position.x + dimsOf(a).w / 2 - (b.position.x + dimsOf(b).w / 2));
+        const first = sorted[0].position.x + dimsOf(sorted[0]).w / 2;
+        const last = sorted[sorted.length - 1].position.x + dimsOf(sorted[sorted.length - 1]).w / 2;
+        const step = sorted.length > 1 ? (last - first) / (sorted.length - 1) : 0;
+        sorted.forEach((n, i) => next.set(n.id, { x: first + step * i - dimsOf(n).w / 2, y: n.position.y }));
+      } else {
+        const sorted = [...sel].sort((a, b) => a.position.y + dimsOf(a).h / 2 - (b.position.y + dimsOf(b).h / 2));
+        const first = sorted[0].position.y + dimsOf(sorted[0]).h / 2;
+        const last = sorted[sorted.length - 1].position.y + dimsOf(sorted[sorted.length - 1]).h / 2;
+        const step = sorted.length > 1 ? (last - first) / (sorted.length - 1) : 0;
+        sorted.forEach((n, i) => next.set(n.id, { x: n.position.x, y: first + step * i - dimsOf(n).h / 2 }));
+      }
+
+      setNodes((nds) => nds.map((n) => (next.has(n.id) ? { ...n, position: next.get(n.id)! } : n)));
+    },
+    [captureSnapshot, setNodes]
+  );
+
   // ── Edge handlers ──────────────────────────────────────────────────────────
   const onEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => {
     setSelectedEdgeId(edge.id);
+    setSelectedNodeId(null);
+    setEdgeEditId(null);
+  }, []);
+
+  // Clic en nodo → panel de detalle (edición del `detail` en canEdit; popover de lectura en
+  // readOnly). Los sintéticos (__pipeline_title/__bg_col_) no tienen detalle que mostrar.
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    if (node.id.startsWith("__")) return;
+    setSelectedNodeId(node.id);
+    setSelectedEdgeId(null);
     setEdgeEditId(null);
   }, []);
 
@@ -1089,6 +1242,7 @@ function FlowchartInner({
 
   const onPaneClick = useCallback(() => {
     setSelectedEdgeId(null);
+    setSelectedNodeId(null);
     setEdgeEditId(null);
     setNodePopupOpen(false);
     setActiveTool("pointer"); // el botón "+" no queda resaltado tras cerrar el popup con clic en el lienzo
@@ -1205,6 +1359,8 @@ function FlowchartInner({
       return {
       title:       data.title,
       description: data.description,
+      // Round-trip del tipo persistido tal cual (si existe) — no se re-sniffea al guardar.
+      kind:        data.kind,
       // Canvas vivo: la posición del usuario (drag) SIEMPRE se persiste tal cual, para
       // cualquier tipo de diagrama — incluido pipeline. Antes se descartaba a propósito acá
       // para diagramas pipeline, forzando un re-layout automático en cada carga que pisaba
@@ -1229,6 +1385,7 @@ function FlowchartInner({
         const d = e.data as {
           labelT?: number; labelSide?: number;
           direction?: "to" | "bidir"; syncType?: "realtime" | "batch" | "manual"; pending?: boolean;
+          dataFields?: string; dedupeKey?: string; trigger?: string;
         } | undefined;
         return {
           id:           e.id,
@@ -1249,6 +1406,9 @@ function FlowchartInner({
           direction:    d?.direction,
           syncType:     d?.syncType,
           pending:      d?.pending || undefined,
+          dataFields:   d?.dataFields || undefined,
+          dedupeKey:    d?.dedupeKey || undefined,
+          trigger:      d?.trigger || undefined,
         };
       }),
       };
@@ -1261,7 +1421,12 @@ function FlowchartInner({
     if (!onSave || saving) return;
     setSaving(true);
     try {
-      await onSave(getCurrentData());
+      const payload = getCurrentData();
+      await onSave(payload);
+      // El padre suele devolvernos este mismo contenido como prop `data` tras guardar: el
+      // MISMO stringify que computa dataKey (JSON.parse conserva el orden de claves) sirve
+      // de guard para no reconstruir el grafo con nuestro propio eco.
+      lastSavedKeyRef.current = JSON.stringify(payload);
       setIsDirty(false);
       undoStack.current = [];
       redoStack.current = [];
@@ -1271,6 +1436,48 @@ function FlowchartInner({
       setSaving(false);
     }
   }, [onSave, saving, getCurrentData]);
+
+  // ── Reorganizar: re-layout automático de TODO el diagrama ─────────────────
+  // Descarta las posiciones manuales recalculando el layout sobre el estado VIVO (nodos y
+  // aristas actuales, no la prop `data`). Un Ctrl+Z lo revierte (snapshot previo).
+  const handleAutoLayout = useCallback(() => {
+    if (!window.confirm("Reacomoda todos los nodos con el layout automático y descarta las posiciones manuales. ¿Continuar?")) return;
+
+    // Sin sintéticos: el layout de pipeline re-crea título/fondos por su cuenta; para los
+    // demás tipos el título se re-ancla a mano abajo (mismo criterio que addTitleNode).
+    const titleNode = nodesRef.current.find((n) => n.id === "__pipeline_title");
+    const core = nodesRef.current.filter((n) => !n.id.startsWith("__"));
+    let layouted: { nodes: Node[]; edges: Edge[] };
+    try {
+      layouted = getLayoutedElements(core, edgesRef.current, direction, effectiveKind);
+    } catch {
+      return; // dagre puede fallar con grafos raros — no tocar nada (ni ensuciar el undo)
+    }
+
+    undoStack.current.push(captureSnapshot());
+    if (undoStack.current.length > 50) undoStack.current.shift();
+    redoStack.current = [];
+    setCanUndo(true);
+    setCanRedo(false);
+    setIsDirty(true);
+
+    let nextNodes = layouted.nodes;
+    if (titleNode && !nextNodes.some((n) => n.id === "__pipeline_title")) {
+      let minX = Infinity;
+      let minY = Infinity;
+      for (const n of nextNodes) {
+        if (n.id.startsWith("__")) continue;
+        minX = Math.min(minX, n.position.x);
+        minY = Math.min(minY, n.position.y);
+      }
+      if (!Number.isFinite(minX)) { minX = 0; minY = 0; }
+      nextNodes = [{ ...titleNode, position: { x: Math.max(0, minX), y: Math.max(0, minY - 50) } }, ...nextNodes];
+    }
+
+    pendingFitView.current = true; // fitView diferido (mismo mecanismo que buildGraph)
+    setNodes(nextNodes);
+    setEdges(layouted.edges);
+  }, [captureSnapshot, setNodes, setEdges, direction, effectiveKind]);
 
   // Escape en fullscreen + fitView al entrar
   useEffect(() => {
@@ -1288,14 +1495,16 @@ function FlowchartInner({
   }, [isFullscreen]);
 
   // ── Render ────────────────────────────────────────────────────────────────
-  // Tipo de diagrama actual: decide qué nodos ofrece la toolbar y qué leyenda se muestra.
-  const diagramKind: "integration" | "pipeline" | "classic" = nodes.some((n) => n.type === "system")
-    ? "integration"
-    : nodes.some((n) =>
-        ["pipeline_stage", "trigger", "action", "follow_up", "outcome_positive", "outcome_negative", "lifecycle_change", "lead_status"].includes(n.type ?? ""),
-      )
-      ? "pipeline"
-      : "classic";
+  // Elemento seleccionado para el panel de detalle (si se borró, queda undefined → sin panel).
+  const selectedEdge = selectedEdgeId ? edges.find((e) => e.id === selectedEdgeId) : undefined;
+  const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : undefined;
+  const selEdgeMeta = (selectedEdge?.data ?? {}) as {
+    direction?: "to" | "bidir"; syncType?: "realtime" | "batch" | "manual"; pending?: boolean;
+    dataFields?: string; dedupeKey?: string; trigger?: string;
+  };
+  const selNodeData = (selectedNode?.data ?? {}) as { label?: string; sublabel?: string; owner?: string; detail?: string };
+  // Nodos reales seleccionados (excluye sintéticos) — habilita la barra de alinear/distribuir.
+  const selectedCount = nodes.filter((n) => n.selected && !n.id.startsWith("__")).length;
 
   const flowContent = (
     <div className="relative w-full h-full">
@@ -1317,21 +1526,89 @@ function FlowchartInner({
         }
       `}</style>
 
-      {/* Toolbar lateral izquierda estilo Miro (solo en fullscreen) */}
-      {onSave && isFullscreen && (
+      {/* Toolbar lateral izquierda estilo Miro (solo en edición fullscreen) */}
+      {onSave && canEdit && (
         <ToolbarSidebar
           activeTool={activeTool}
           setActiveTool={setActiveTool}
           nodePopupOpen={nodePopupOpen}
           setNodePopupOpen={setNodePopupOpen}
           addNode={addNode}
-          diagramKind={diagramKind}
+          diagramKind={effectiveKind}
         />
       )}
 
-      {/* Toolbar derecha: undo/redo, guardar, pantalla completa, dirección */}
+      {/* Toolbar derecha: alinear, undo/redo, reorganizar, guardar, pantalla completa */}
       <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
-        {isFullscreen && (canUndo || canRedo) && (
+        {/* Barra contextual de alinear/distribuir — aparece con ≥2 nodos seleccionados.
+            Grises en vocabulario `slate` (como el resto del canvas claro): el lienzo no
+            flipea de tema, acá los tokens semánticos quedarían oscuros sobre fondo blanco. */}
+        {canEdit && selectedCount >= 2 && (
+          <div className="flex items-center gap-0.5 mr-1 bg-slate-50 border border-slate-200 rounded-lg p-0.5">
+            <button
+              onClick={() => applyAlign("left")} title="Alinear a la izquierda"
+              className="p-1 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M2 1h1.5v14H2z" />
+                <rect x="5" y="3.5" width="9" height="3" rx="0.5" />
+                <rect x="5" y="9.5" width="6" height="3" rx="0.5" />
+              </svg>
+            </button>
+            <button
+              onClick={() => applyAlign("hcenter")} title="Centrar horizontalmente"
+              className="p-1 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M7.25 1h1.5v14h-1.5z" />
+                <rect x="3" y="3.5" width="10" height="3" rx="0.5" />
+                <rect x="5" y="9.5" width="6" height="3" rx="0.5" />
+              </svg>
+            </button>
+            <button
+              onClick={() => applyAlign("top")} title="Alinear arriba"
+              className="p-1 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M1 2h14v1.5H1z" />
+                <rect x="3.5" y="5" width="3" height="9" rx="0.5" />
+                <rect x="9.5" y="5" width="3" height="6" rx="0.5" />
+              </svg>
+            </button>
+            <button
+              onClick={() => applyAlign("vmiddle")} title="Centrar verticalmente"
+              className="p-1 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M1 7.25h14v1.5H1z" />
+                <rect x="3.5" y="3" width="3" height="10" rx="0.5" />
+                <rect x="9.5" y="5" width="3" height="6" rx="0.5" />
+              </svg>
+            </button>
+            <button
+              onClick={() => applyAlign("disth")} title="Distribuir horizontalmente"
+              className="p-1 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                <rect x="1.5" y="4" width="3" height="8" rx="0.5" />
+                <rect x="6.5" y="4" width="3" height="8" rx="0.5" />
+                <rect x="11.5" y="4" width="3" height="8" rx="0.5" />
+              </svg>
+            </button>
+            <button
+              onClick={() => applyAlign("distv")} title="Distribuir verticalmente"
+              className="p-1 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                <rect x="4" y="1.5" width="8" height="3" rx="0.5" />
+                <rect x="4" y="6.5" width="8" height="3" rx="0.5" />
+                <rect x="4" y="11.5" width="8" height="3" rx="0.5" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {canEdit && (canUndo || canRedo) && (
           <div className="flex items-center gap-0.5 mr-1 bg-white border border-gray-200 rounded-lg p-0.5">
             <button
               onClick={handleUndo} disabled={!canUndo}
@@ -1356,11 +1633,27 @@ function FlowchartInner({
           </div>
         )}
 
+        {/* Reorganizar: re-layout automático de todo el diagrama (con confirmación) */}
+        {canEdit && (
+          <button
+            onClick={handleAutoLayout}
+            title="Reacomodar todos los nodos con el layout automático"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+          >
+            <svg className="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <rect x="1.5" y="1.5" width="5" height="4" rx="1" />
+              <rect x="9.5" y="10.5" width="5" height="4" rx="1" />
+              <path d="M4 8v3a2 2 0 002 2h1M12 8V5a2 2 0 00-2-2H9" />
+            </svg>
+            Reorganizar
+          </button>
+        )}
+
         {/* `|| saving`: el CTA NO se va al hacer clic — se queda como "Guardando…" hasta que el
             guardado termina, y recién ahí desaparece (isDirty=false). Sin esto, cualquier cosa que
             baje isDirty mientras el PUT está en vuelo (p.ej. un refetch del padre que aterriza en
             el medio) lo hacía desaparecer sin feedback. Vuelve a aparecer solo al modificar algo. */}
-        {onSave && (isDirty || saving) && isFullscreen && (
+        {onSave && (isDirty || saving) && canEdit && (
           <button
             onClick={handleSave} disabled={saving}
             title="Guardar cambios"
@@ -1397,37 +1690,42 @@ function FlowchartInner({
 
       </div>
 
+      {/* Edición gateada por canEdit (fullscreen + no read-only). El CLIC en nodo/edge/pane
+          queda habilitado SIEMPRE (embed, read-only) para abrir el panel de detalle; las
+          etiquetas dataflow no se vuelven editables por eso: DataFlowEdge condiciona su
+          interactividad a nodesDraggable (= canEdit) + !data.readOnly. */}
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={isFullscreen ? onNodesChange : undefined}
-        onEdgesChange={isFullscreen ? onEdgesChange : undefined}
-        onConnect={isFullscreen ? onConnect : undefined}
-        onConnectStart={isFullscreen ? onConnectStart : undefined}
-        onConnectEnd={isFullscreen ? onConnectEnd : undefined}
-        onBeforeDelete={isFullscreen ? onBeforeDelete : undefined}
-        onNodeDragStart={isFullscreen ? onNodeDragStart : undefined}
-        onNodeDrag={isFullscreen ? onNodeDrag : undefined}
-        onNodeDragStop={isFullscreen ? onNodeDragStop : undefined}
-        onEdgeClick={isFullscreen ? onEdgeClick : undefined}
-        onEdgeDoubleClick={isFullscreen ? onEdgeDoubleClick : undefined}
-        onPaneClick={isFullscreen ? onPaneClick : undefined}
-        edgesFocusable={isFullscreen}
-        onDrop={isFullscreen ? onDrop : undefined}
-        onDragOver={isFullscreen ? onDragOver : undefined}
+        onNodesChange={canEdit ? onNodesChange : undefined}
+        onEdgesChange={canEdit ? onEdgesChange : undefined}
+        onConnect={canEdit ? onConnect : undefined}
+        onConnectStart={canEdit ? onConnectStart : undefined}
+        onConnectEnd={canEdit ? onConnectEnd : undefined}
+        onBeforeDelete={canEdit ? onBeforeDelete : undefined}
+        onNodeDragStart={canEdit ? onNodeDragStart : undefined}
+        onNodeDrag={canEdit ? onNodeDrag : undefined}
+        onNodeDragStop={canEdit ? onNodeDragStop : undefined}
+        onNodeClick={onNodeClick}
+        onEdgeClick={onEdgeClick}
+        onEdgeDoubleClick={canEdit ? onEdgeDoubleClick : undefined}
+        onPaneClick={onPaneClick}
+        edgesFocusable={canEdit}
+        onDrop={canEdit ? onDrop : undefined}
+        onDragOver={canEdit ? onDragOver : undefined}
         onInit={(instance) => { rfInstance.current = instance; }}
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
         connectionMode={ConnectionMode.Loose}
-        connectionRadius={isFullscreen ? 40 : 0}
-        deleteKeyCode={isFullscreen ? ["Delete", "Backspace"] : []}
-        multiSelectionKeyCode={isFullscreen ? ["Control", "Meta"] : []}
+        connectionRadius={canEdit ? 40 : 0}
+        deleteKeyCode={canEdit ? ["Delete", "Backspace"] : []}
+        multiSelectionKeyCode={canEdit ? ["Control", "Meta"] : []}
         selectionOnDrag={false}
-        selectionKeyCode={isFullscreen ? ["Control", "Meta"] : []}
+        selectionKeyCode={canEdit ? ["Control", "Meta"] : []}
         panOnDrag={isFullscreen ? true : [0]}
-        nodesDraggable={isFullscreen}
-        nodesConnectable={isFullscreen}
-        elementsSelectable={isFullscreen}
+        nodesDraggable={canEdit}
+        nodesConnectable={canEdit}
+        elementsSelectable
         fitView
         fitViewOptions={{ padding: 0.08, minZoom: 0.1, maxZoom: isFullscreen ? 1.5 : 1.2 }}
         minZoom={0.1}
@@ -1449,7 +1747,7 @@ function FlowchartInner({
       </ReactFlow>
 
       {/* Edge label edit popup */}
-      {edgeEditId && edgeEditPos && isFullscreen && (
+      {edgeEditId && edgeEditPos && canEdit && (
         <div
           className="fixed z-50 bg-white border border-gray-200 rounded-xl shadow-xl p-2"
           style={{ left: edgeEditPos.x - 100, top: edgeEditPos.y - 20 }}
@@ -1471,8 +1769,8 @@ function FlowchartInner({
         </div>
       )}
 
-      {/* Edge style panel */}
-      {selectedEdgeId && !edgeEditId && isFullscreen && (
+      {/* Edge style panel (edición) */}
+      {selectedEdge && selectedEdgeId && !edgeEditId && canEdit && (
         <div className="absolute bottom-14 right-3 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-2">
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <span className="text-[10px] text-gray-600 font-semibold">Conector</span>
@@ -1540,19 +1838,150 @@ function FlowchartInner({
               - - Punteada
             </button>
           </div>
+
+          {/* Semántica de flujo (solo dataflow): dirección, sync y metadatos del dato que viaja */}
+          {selectedEdge.type === "dataflow" && (
+            <div className="mt-2 pt-2 border-t border-slate-100 w-56 space-y-1.5">
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] text-slate-400 font-semibold uppercase w-16 shrink-0">Dirección</span>
+                <button
+                  onClick={() => makeOnEdgeMetaChange(selectedEdgeId)({ direction: "to" })}
+                  title="Unidireccional"
+                  className={`px-2 py-0.5 text-[11px] rounded border ${selEdgeMeta.direction !== "bidir" ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 hover:bg-slate-50 text-slate-600"}`}
+                >
+                  →
+                </button>
+                <button
+                  onClick={() => makeOnEdgeMetaChange(selectedEdgeId)({ direction: "bidir" })}
+                  title="Bidireccional"
+                  className={`px-2 py-0.5 text-[11px] rounded border ${selEdgeMeta.direction === "bidir" ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 hover:bg-slate-50 text-slate-600"}`}
+                >
+                  ⇄
+                </button>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] text-slate-400 font-semibold uppercase w-16 shrink-0">Sync</span>
+                <select
+                  value={selEdgeMeta.syncType ?? ""}
+                  onChange={(e) => makeOnEdgeMetaChange(selectedEdgeId)({ syncType: (e.target.value || undefined) as EdgeMetaPatch["syncType"] })}
+                  className="flex-1 px-1.5 py-0.5 text-[11px] border border-slate-200 rounded-lg focus:border-blue-400 focus:outline-none bg-slate-50 text-slate-700"
+                >
+                  <option value="">—</option>
+                  <option value="realtime">Tiempo real</option>
+                  <option value="batch">Batch</option>
+                  <option value="manual">Manual</option>
+                </select>
+              </div>
+              <MetaTextInput
+                key={`${selectedEdgeId}-dataFields`}
+                label="Qué datos viajan"
+                value={selEdgeMeta.dataFields ?? ""}
+                onCommit={(v) => makeOnEdgeMetaChange(selectedEdgeId)({ dataFields: v || undefined })}
+              />
+              <MetaTextInput
+                key={`${selectedEdgeId}-dedupeKey`}
+                label="Clave de desduplicación"
+                value={selEdgeMeta.dedupeKey ?? ""}
+                onCommit={(v) => makeOnEdgeMetaChange(selectedEdgeId)({ dedupeKey: v || undefined })}
+              />
+              <MetaTextInput
+                key={`${selectedEdgeId}-trigger`}
+                label="Cuándo / disparador"
+                value={selEdgeMeta.trigger ?? ""}
+                onCommit={(v) => makeOnEdgeMetaChange(selectedEdgeId)({ trigger: v || undefined })}
+              />
+              <label className="flex items-center gap-1.5 text-[11px] text-amber-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={!!selEdgeMeta.pending}
+                  onChange={(e) => makeOnEdgeMetaChange(selectedEdgeId)({ pending: e.target.checked || undefined })}
+                />
+                ⚠ Por confirmar
+              </label>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Popover SOLO LECTURA del conector dataflow (readOnly, embed o fullscreen) */}
+      {selectedEdge && effectiveReadOnly && selectedEdge.type === "dataflow" && (
+        <div className="absolute bottom-14 right-3 z-10 bg-slate-50 border border-slate-200 rounded-xl shadow-lg p-3 w-64">
+          <div className="flex items-start justify-between gap-2 mb-1.5">
+            <span className="text-[11px] font-semibold text-slate-800">
+              {typeof selectedEdge.label === "string" && selectedEdge.label ? selectedEdge.label : "Flujo de datos"}
+            </span>
+            <button onClick={() => setSelectedEdgeId(null)} className="text-slate-400 hover:text-slate-600 text-xs leading-none" title="Cerrar">
+              ✕
+            </button>
+          </div>
+          {selEdgeMeta.pending && (
+            <div className="mb-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-[10px] font-semibold text-amber-700">
+              ⚠ Por confirmar
+            </div>
+          )}
+          <div className="space-y-1">
+            {selEdgeMeta.direction && (
+              <ReadField label="Dirección" value={selEdgeMeta.direction === "bidir" ? "⇄ Bidireccional" : "→ Unidireccional"} />
+            )}
+            {selEdgeMeta.syncType && (
+              <ReadField
+                label="Sincronización"
+                value={selEdgeMeta.syncType === "realtime" ? "Tiempo real" : selEdgeMeta.syncType === "batch" ? "Batch" : "Manual"}
+              />
+            )}
+            {selEdgeMeta.dataFields && <ReadField label="Qué datos viajan" value={selEdgeMeta.dataFields} />}
+            {selEdgeMeta.dedupeKey && <ReadField label="Clave de desduplicación" value={selEdgeMeta.dedupeKey} />}
+            {selEdgeMeta.trigger && <ReadField label="Cuándo / disparador" value={selEdgeMeta.trigger} />}
+          </div>
+        </div>
+      )}
+
+      {/* Popover SOLO LECTURA del nodo (label/sublabel/owner/detail — ahí viven los hs_object_id) */}
+      {selectedNode && effectiveReadOnly && (
+        <div className="absolute bottom-14 right-3 z-10 bg-slate-50 border border-slate-200 rounded-xl shadow-lg p-3 w-64">
+          <div className="flex items-start justify-between gap-2 mb-1.5">
+            <span className="text-[11px] font-semibold text-slate-800">{selNodeData.label || "Nodo"}</span>
+            <button onClick={() => setSelectedNodeId(null)} className="text-slate-400 hover:text-slate-600 text-xs leading-none" title="Cerrar">
+              ✕
+            </button>
+          </div>
+          <div className="space-y-1">
+            {selNodeData.sublabel && <ReadField label="Descripción" value={selNodeData.sublabel} />}
+            {selNodeData.owner && <ReadField label="Responsable" value={selNodeData.owner} />}
+            {selNodeData.detail && <ReadField label="Detalle" value={selNodeData.detail} />}
+          </div>
+        </div>
+      )}
+
+      {/* Panel del nodo en edición: SOLO `detail` (lo demás se edita inline en el nodo) */}
+      {selectedNode && canEdit && (
+        <div className="absolute bottom-14 right-3 z-10 bg-slate-50 border border-slate-200 rounded-xl shadow-lg p-2 w-64">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="text-[10px] text-slate-600 font-semibold">{selNodeData.label || "Nodo"}</span>
+            <button onClick={() => setSelectedNodeId(null)} className="text-slate-400 hover:text-slate-600 text-xs leading-none" title="Cerrar">
+              ✕
+            </button>
+          </div>
+          <MetaTextInput
+            key={selectedNode.id}
+            label="Detalle"
+            multiline
+            value={selNodeData.detail ?? ""}
+            onCommit={(v) => makeOnLabelChangeFor(selectedNode.id)("detail", v)}
+          />
         </div>
       )}
 
       {/* Leyenda (según el tipo de diagrama) */}
       <div className="absolute bottom-3 left-3 z-10 flex items-center gap-3 bg-white/90 backdrop-blur-sm border border-gray-100 rounded-xl px-3 py-2 shadow-sm">
-        {diagramKind === "integration" ? (
+        {effectiveKind === "integration" ? (
           <>
             <LegendItem color="bg-slate-500"  label="Sistema" />
             <span className="flex items-center gap-1.5 text-[10px] text-gray-500"><span className="inline-block w-4 border-t-2 border-gray-400" /> flujo de datos</span>
             <span className="flex items-center gap-1.5 text-[10px] text-gray-500"><span className="inline-block w-4 border-t-2 border-dashed border-gray-400" /> batch / manual</span>
             <span className="flex items-center gap-1.5 text-[10px] text-gray-500"><span className="inline-block w-4 border-t-2 border-amber-500" /> por confirmar</span>
           </>
-        ) : diagramKind === "pipeline" ? (
+        ) : effectiveKind === "pipeline" ? (
           <>
             <LegendItem color="bg-green-500"  label="Etapa" />
             <LegendItem color="bg-green-300"  label="Trigger / Acción" />
@@ -1594,9 +2023,13 @@ function FlowchartInner({
 export default function FlowchartViewer({
   data,
   onSave,
+  readOnly,
+  kind,
 }: {
   data: FlowchartData;
   onSave?: (updated: FlowchartData) => Promise<void>;
+  readOnly?: boolean;
+  kind?: "integration" | "pipeline" | "classic";
 }) {
   if (!data?.nodes?.length) {
     return (
@@ -1608,7 +2041,7 @@ export default function FlowchartViewer({
 
   return (
     <ReactFlowProvider>
-      <FlowchartInner data={data} onSave={onSave} />
+      <FlowchartInner data={data} onSave={onSave} readOnly={readOnly} kind={kind} />
     </ReactFlowProvider>
   );
 }
@@ -1660,5 +2093,65 @@ function LegendItem({ color, label }: { color: string; label: string }) {
       <div className={`w-2.5 h-2.5 rounded-sm ${color}`} />
       <span className="text-2xs text-gray-500">{label}</span>
     </div>
+  );
+}
+
+// Campo etiqueta+valor del popover de solo lectura (los vacíos no se renderizan desde el caller).
+function ReadField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[9px] text-slate-400 font-semibold uppercase">{label}</div>
+      <div className="text-[11px] text-slate-700 whitespace-pre-wrap break-words">{value}</div>
+    </div>
+  );
+}
+
+// Input/textarea con borrador local: commitea al blur o Enter (no por tecla) para que un cambio
+// de texto sea UNA sola entrada de undo (el write-path del caller ya hace snapshot + dirty).
+function MetaTextInput({
+  label,
+  value,
+  onCommit,
+  multiline,
+}: {
+  label: string;
+  value: string;
+  onCommit: (v: string) => void;
+  multiline?: boolean;
+}) {
+  const [draft, setDraft] = useState(value);
+  // Sincronizar el borrador si el valor cambia por fuera (undo/redo con el panel abierto).
+  useEffect(() => { setDraft(value); }, [value]);
+  const commit = () => {
+    const next = draft.trim();
+    if (next !== value.trim()) onCommit(next);
+  };
+  const cls = "mt-0.5 w-full px-2 py-1 text-[11px] border border-slate-200 rounded-lg focus:border-blue-400 focus:outline-none text-slate-700";
+  return (
+    <label className="block">
+      <span className="text-[9px] text-slate-400 font-semibold uppercase">{label}</span>
+      {multiline ? (
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          rows={4}
+          className={`${cls} resize-y`}
+        />
+      ) : (
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          className={cls}
+        />
+      )}
+    </label>
   );
 }

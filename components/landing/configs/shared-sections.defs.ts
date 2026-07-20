@@ -49,6 +49,54 @@ export function makeTechArchitectureDef(
   };
 }
 
+// ── Arquitectura como DIAGRAMA (motor de diagramas interactivo) ──────────────
+// Spec string-only (sistemas + conexiones con metadatos) que el conversor
+// `lib/flowchart/spec-to-diagram` vuelve grafo. La misma def sirve a BC hubspot
+// (`arquitectura_tecnologica`), website (`arquitectura_conexion`) y a cualquier
+// template futuro; Desarrollo tiene la suya propia (brief más técnico, para devs).
+export const DIAGRAM_ARCHITECTURE_SCHEMA = {
+  type: "object",
+  properties: {
+    intro: str,
+    sistemas: arrayOf({ nombre: str, rol: str, color: str, detalle: str }, ["nombre"]),
+    conexiones: arrayOf(
+      { desde: str, hacia: str, titulo: str, dataFields: str, dedupeKey: str, cuando: str, direction: str, syncType: str, pending: str },
+      ["desde", "hacia", "titulo"],
+    ),
+    fueraDeAlcance: strArray,
+    opcionales: arrayOf({ nombre: str, detalle: str }, ["nombre"]),
+  },
+  required: ["sistemas", "conexiones"],
+} as const;
+
+export const DIAGRAM_ARCHITECTURE_EMPTY = {
+  intro: "",
+  sistemas: [],
+  conexiones: [],
+  fueraDeAlcance: [],
+  opcionales: [],
+};
+
+export function makeDiagramArchitectureDef(
+  overrides: Pick<BCSectionDef, "key" | "label"> & Partial<BCSectionDef>,
+): BCSectionDef {
+  return {
+    eyebrow: "Arquitectura",
+    theme: "light",
+    sectionType: "diagram",
+    schema: DIAGRAM_ARCHITECTURE_SCHEMA as unknown as Record<string, unknown>,
+    empty: DIAGRAM_ARCHITECTURE_EMPTY,
+    agentHint:
+      "MAPA DE SISTEMAS: `sistemas` (cajas) + `conexiones` (flechas de datos con qué viaja / cuándo / dedupe). El diagrama se dibuja solo desde la spec.",
+    brief:
+      "Arquitectura de conexión como MAPA DE SISTEMAS (se dibuja como diagrama: cajas = sistemas, flechas = datos que fluyen). `intro`: 1-2 frases con la idea central. " +
+      "`sistemas` (2-6): SOLO herramientas con login/API/BD propia mencionadas en el contexto (CRM, ERP, sitio, ecommerce, telefonía; un conector/middleware también cuenta) — pasos, tareas o personas NO son sistemas. Por sistema: `nombre` EXACTO ('HubSpot', 'SAP'…) · `rol` corto ('CRM', 'ERP') · `detalle` de 1 línea (qué identifica sus registros, si se conversó) · `color` vacío salvo hex conocido de la marca. " +
+      "`conexiones`: `desde`/`hacia` con el `nombre` EXACTO de un ítem de `sistemas` · `titulo` = el dato que fluye en 3-6 palabras · `dataFields` = campos concretos si se hablaron ('Contactos/Negocios') · `dedupeKey` = cómo se evita duplicar (Contactos → email; Empresas → dominio; si no se definió, '⚠️ Por definir') · `cuando` = qué dispara el sync · `direction` = 'to' o 'bidir' · `syncType` = 'realtime' | 'batch' | 'manual'. Cuando algo esté por confirmar: texto con '⚠️ Por definir' Y `pending: 'si'` — no inventes integraciones ni valores. " +
+      "`fueraDeAlcance`: qué NO incluye esta fase. `opcionales`: integraciones a futuro.",
+    ...overrides,
+  };
+}
+
 // ── Casos de uso del catálogo (sección DETERMINÍSTICA) ──────────────────────
 // `agentGenerated:false`: el agente la SALTEA — la escribe el generate con los
 // seleccionados del checklist (títulos/precios EXACTOS del catálogo; cero

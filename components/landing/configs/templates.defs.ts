@@ -16,7 +16,7 @@
  */
 import type { BCSectionDef } from "./business-case.defs";
 import { BC_SECTION_DEFS } from "./business-case.defs";
-import { makeTechArchitectureDef, makeProcessMappingDef, USE_CASES_DEF } from "./shared-sections.defs";
+import { makeDiagramArchitectureDef, makeProcessMappingDef, USE_CASES_DEF } from "./shared-sections.defs";
 import { WEBSITE_SECTION_DEFS } from "./website.defs";
 import { HUBSPOT_TEMPLATE_ID, WEBSITE_TEMPLATE_ID } from "@/lib/business-cases/case-types";
 
@@ -53,7 +53,9 @@ export const BC_TEMPLATES: Record<string, BcTemplateDef> = {
       ...BC_SECTION_DEFS.slice(0, 4), // hero · dolores · antes_despues · solucion
       USE_CASES_DEF,
       ...BC_SECTION_DEFS.slice(4), // roi · cronograma · inversion · partner · cta
-      makeTechArchitectureDef({
+      // Motor de diagramas interactivo (la data vieja de tech_architecture se
+      // convierte lazy en el renderer — sin migración de DB).
+      makeDiagramArchitectureDef({
         key: "arquitectura_tecnologica",
         canvasLabel: "Arquitectura tecnológica",
         label: "Arquitectura tecnológica",
