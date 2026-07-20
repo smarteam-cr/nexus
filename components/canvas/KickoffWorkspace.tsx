@@ -24,6 +24,7 @@ import type { LandingContext } from "@/components/landing/types";
 import SectionTools from "@/components/business-cases/SectionTools";
 import { KICKOFF_DEF_BY_KEY } from "@/components/landing/configs/kickoff.defs";
 import PublishBar from "./PublishBar";
+import DocumentAssist from "@/components/ai/DocumentAssist";
 import { useKickoffData } from "./useKickoffData";
 import {
   buildKickoffConfig,
@@ -141,6 +142,25 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
         publishing={k.publishing}
         savedMessage={`Cambios guardados${draftProcesos > 0 ? ` (${draftProcesos} ${draftProcesos === 1 ? "proceso sin confirmar" : "procesos sin confirmar"})` : ""} — el cliente todavía no los ve.`}
       />
+      {/* Assist de documento: instrucción → propuesta → revisar → aplicar por
+          upsertCardData. El apply marca dirty solo (onContentChange del hook) —
+          el cliente no ve nada hasta "Subir al cliente". */}
+      <div style={{ maxWidth: MAXW, margin: "0 auto", padding: "14px 24px 0" }}>
+        <DocumentAssist
+          url={`/api/projects/${projectId}/canvas-assist`}
+          extraBody={{ canvasId }}
+          dialogTitle="Mejorar el kickoff con IA"
+          chips={["Dale más energía de arranque al texto", "Aclara los objetivos con lo del handoff", "Resume las secciones largas"]}
+          placeholder='Ej: "haz la bienvenida más cercana y concreta"'
+          labelFor={(key) => k.sections.find((s) => s.key === key)?.label ?? key}
+          onApplySection={(key, data) => {
+            const s = k.sections.find((x) => x.key === key);
+            if (!s) return;
+            const card = s.blocks.find((b) => b.blockType === "CARD");
+            return k.upsertCardData(s.id, card?.id ?? null, data);
+          }}
+        />
+      </div>
       <LandingView
         config={config}
         ctx={ctx}

@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
+import DocumentAssist from "@/components/ai/DocumentAssist";
 import { useCanvasSections } from "./useCanvasSections";
 import { buildDesarrolloConfig, buildDesarrolloSections } from "./desarrollo-landing-adapter";
 
@@ -180,6 +181,25 @@ export default function DesarrolloWorkspace({
           alreadyGenerated={hasGeneratedContent}
         />
       </div>
+      {/* Assist de documento: instrucción → propuesta → revisar → aplicar por
+          upsertCardData (a diferencia de Regenerar, que reescribe TODO). */}
+      {hasGeneratedContent && (
+        <DocumentAssist
+          url={`/api/projects/${projectId}/canvas-assist`}
+          extraBody={{ canvasId }}
+          dialogTitle="Mejorar el requerimiento con IA"
+          chips={["Hazlo más técnico y específico", "Aclara la arquitectura de la integración", "Resume las secciones largas"]}
+          placeholder='Ej: "detalla mejor el mapeo de objetos entre sistemas"'
+          labelFor={(key) => cs.sections.find((s) => s.key === key)?.label ?? key}
+          onApplySection={(key, data) => {
+            const s = cs.sections.find((x) => x.key === key);
+            if (!s) return;
+            const card = s.blocks.find((b) => b.blockType === "CARD");
+            return cs.upsertCardData(s.id, card?.id ?? null, data);
+          }}
+          className="px-4 pt-3"
+        />
+      )}
       {awaitingGen && !hasGeneratedContent && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "rgba(22,140,246,0.06)", borderBottom: "1px solid rgba(22,140,246,0.2)", fontSize: 13, color: "#0E6FD1" }}>
           <span className="skeleton-shimmer" style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0 }} />

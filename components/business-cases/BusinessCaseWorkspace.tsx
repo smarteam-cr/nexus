@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/Toast";
 import DeleteBusinessCaseButton from "@/components/business-cases/DeleteBusinessCaseButton";
 import CanvasDropdown from "@/components/business-cases/CanvasDropdown";
 import SectionTools from "@/components/business-cases/SectionTools";
+import DocumentAssist from "@/components/ai/DocumentAssist";
 import DownloadPdfButton from "@/components/business-cases/DownloadPdfButton";
 import BcAccessButton from "@/components/business-cases/BcAccessButton";
 import ContextCard from "@/components/business-cases/ContextCard";
@@ -352,6 +353,27 @@ export default function BusinessCaseWorkspace({
               onPublish={publish}
               publishing={publishing}
               cleanMessage="El cliente ve la última versión."
+            />
+          </div>
+        )}
+        {/* Assist de documento: instrucción → propuesta → revisar → aplicar por
+            upsertCardData. En la Plantilla (v0) no aplica: ahí se editan guías. */}
+        {!isTemplate && hasCanvas && !hook.loading && (
+          <div style={{ padding: "0 24px 14px" }}>
+            <DocumentAssist
+              url={`/api/business-cases/${bcId}/assist`}
+              extraBody={{ canvasId }}
+              dialogTitle="Mejorar el business case con IA"
+              chips={["Hazlo más orientado a valor de negocio", "Refuerza el ROI con datos del contexto", "Resume las secciones largas"]}
+              placeholder='Ej: "haz los dolores más específicos de esta industria"'
+              labelFor={(key) => hook.sections.find((s) => s.key === key)?.label ?? key}
+              onApplySection={(key, data) => {
+                const s = hook.sections.find((x) => x.key === key);
+                if (!s) return;
+                const card = s.blocks.find((b) => b.blockType === "CARD");
+                return hook.upsertCardData(s.id, card?.id ?? null, data);
+              }}
+              onApplied={() => setDirty(true)}
             />
           </div>
         )}

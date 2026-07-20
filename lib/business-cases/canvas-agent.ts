@@ -23,7 +23,9 @@ import { HUBSPOT_TEMPLATE_ID } from "@/lib/business-cases/case-types";
 
 const MODEL = "claude-sonnet-4-6";
 
-const DEFAULT_AGENT_INTRO =
+/** Intro default del BC (la usa también el assist de documento cuando el template
+ *  no declara `agentIntro`). */
+export const DEFAULT_AGENT_INTRO =
   "Sos un consultor de Smarteam (Elite HubSpot Partner en LATAM) que arma un Business Case (caso de negocio) para un prospecto, a partir de transcripts de reuniones comerciales y notas.";
 
 /** Secciones que el AGENTE genera: excluye `agentGenerated: false` (se llenan
