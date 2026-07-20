@@ -5,7 +5,7 @@ import { anthropic } from "@/lib/anthropic";
 import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { getSingleBlockOutputInstructions } from "@/lib/canvas/agent-output-schema";
 import { validateBlockPayload } from "@/lib/canvas/validate-block-payload";
-import { regenerateSectionDataForDef } from "@/lib/business-cases/canvas-agent";
+import { parseRegenBody, regenerateTypedSection } from "@/lib/canvas/regenerate-section";
 import { KICKOFF_DEF_BY_KEY } from "@/components/landing/configs/kickoff.defs";
 
 /**
@@ -28,21 +28,11 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
-  const body = (await req.json().catch(() => ({}))) as {
-    blockId?: string;
-    instruction?: string;
-    // Multi-turno (B.2): punto de partida de la regen. Si viene, el prompt parte de este
-    // draft en progreso en vez del bloque guardado (encadena "más corto" → "más formal").
-    base?: { content?: string | null; data?: unknown };
-  };
-  const blockId = typeof body.blockId === "string" ? body.blockId : "";
-  const instruction = typeof body.instruction === "string" ? body.instruction.trim() : "";
-  if (!blockId || !instruction) {
+  const parsed = parseRegenBody(await req.json().catch(() => ({})));
+  if (!parsed) {
     return NextResponse.json({ error: "blockId e instruction requeridos" }, { status: 400 });
   }
-  // Guard mínimo: aceptar base solo si es objeto. Es input no confiable, pero SOLO alimenta
-  // el prompt — el OUTPUT igual pasa por validateBlockPayload y el guardado es un PUT aparte.
-  const base = body.base && typeof body.base === "object" ? body.base : null;
+  const { blockId, instruction, base } = parsed;
 
   // Cargar el bloque + su sección + canvas (validar pertenencia al proyecto + Kickoff).
   const block = await prisma.canvasBlock.findFirst({
@@ -62,21 +52,14 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   }
 
   // ── Kickoff TIPADO: bloque CARD de una sección de prosa generable → regen por SCHEMA
-  // (motor de secciones, igual que Business Cases). Devuelve {data}. El markdown legacy
-  // (bloques TEXT viejos) sigue por el camino de abajo hasta que se regenere el kickoff. ──
+  // vía el núcleo compartido (lib/canvas/regenerate-section, mismo que BC). Devuelve
+  // {data}. El markdown legacy (bloques TEXT viejos) sigue por el camino de abajo —
+  // único de esta ruta, no es duplicación — hasta que se regenere el kickoff. ──
   const def = KICKOFF_DEF_BY_KEY[block.section.key];
   if (block.blockType === "CARD" && def) {
-    if (def.agentGenerated === false) {
-      return NextResponse.json({ error: "Esta sección se cura a mano; no se regenera con IA." }, { status: 400 });
-    }
-    try {
-      const currentData = (base ? base.data : block.data) ?? {};
-      const newData = await regenerateSectionDataForDef(def, currentData, instruction, def.brief);
-      return NextResponse.json({ blockType: "CARD", data: newData });
-    } catch (e) {
-      console.error("[blocks/regenerate typed] error:", e);
-      return NextResponse.json({ error: "regenerate_failed" }, { status: 500 });
-    }
+    const result = await regenerateTypedSection(def, (base ? base.data : block.data) ?? {}, instruction);
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    return NextResponse.json({ blockType: "CARD", data: result.data });
   }
 
   // Mismo contexto que usa el agente de kickoff.
