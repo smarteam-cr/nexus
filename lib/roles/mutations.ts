@@ -1,7 +1,8 @@
 /**
  * lib/roles/mutations.ts — escrituras del módulo Roles (perfiles de puesto).
- * CRUD plano (sin IA, sin ciclo de publish). El gate solo-SUPER_ADMIN vive en
- * las routes (`guardRolesAdmin`).
+ * CRUD plano, sin ciclo de publish. La IA nunca escribe por acá: el assist de
+ * documento solo PROPONE y el apply pasa por el PATCH normal (curaduría humana).
+ * El gate solo-SUPER_ADMIN vive en las routes (`guardRolesAdmin`).
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";

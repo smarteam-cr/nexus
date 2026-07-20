@@ -636,8 +636,26 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   `@db.Text` (migración `db execute` scoped a RoleProfile: ADD `content` aditivo → re-seed →
   verificar → DROP de las 7; NUNCA `db push`/`migrate`, que dropearían la deriva `Particularidad.
   sourceQuote` de la otra PC — el `migrate diff` lo confirmó). El hero (title/area/summary) sale de
-  los metadatos, no de `content`. Sin IA (se llena a mano); tooltips por sección via `[data-tip]` +
-  ⓘ (CSS-only en `landing-engine.css`, additivo, útil también a BC/kickoff).
+  los metadatos, no de `content`. ~~Sin IA (se llena a mano)~~ — SUPERSEDED por el assist de
+  documento (ver el bullet siguiente); el llenado sigue siendo curaduría humana, pero la IA puede
+  PROPONER. Tooltips por sección via `[data-tip]` + ⓘ (CSS-only en `landing-engine.css`, additivo,
+  útil también a BC/kickoff).
+- **Assist de documento con web_search (2026-07-20)** — la IA de los documentos del motor
+  (Roles, kickoff, BC, desarrollo) gana un modo "mejorar por instrucción": la IA **PROPONE, el
+  humano revisa y aplica** (`<AgentProposal>`, su primer consumidor real) — NUNCA escribe directo
+  sobre contenido curado. Un solo núcleo compartido (`lib/ai/assist.ts`, `runDocumentAssist`):
+  recibe el CONTRATO del documento (secciones con schema + data actual, derivado de las defs
+  existentes), la instrucción, y llama a Claude con la server-tool **`web_search_20260209`
+  SIEMPRE disponible — el MODELO decide** cuándo investigar en línea (sin toggle; la regla del
+  prompt le prohíbe buscar para ediciones de redacción → el costo no explota). Reglas duras:
+  secciones curadas (`agentGenerated:false`) y `ctxDriven` NUNCA entran al contrato (la IA no
+  puede ni proponerlas); `stop_reason=max_tokens` → error (jamás aplicar propuesta truncada);
+  keys desconocidas se descartan con warning (nunca revientan el render); las citations de web
+  search se muestran como "Fuentes consultadas" (la política de la API exige citación visible).
+  El apply reusa la persistencia existente de cada documento (autosave de Roles /
+  `upsertCardData` del canvas) — cero endpoints de escritura nuevos. Request SÍNCRONO (precedente
+  timeline/assist; deploy self-hosted sin timeout serverless); escape futuro documentado: mover a
+  AgentRun async + `useAgentRun` sin tocar el núcleo.
 - **RLS lockdown** (tabla interna): `RoleProfile` con RLS habilitado sin policy SELECT — anon no
   la lee con la publishable key (regla operativa de ARCHITECTURE para tablas nuevas). Aplicada por
   `prisma db execute` (CREATE TABLE + ENABLE ROW LEVEL SECURITY), no `db push` (hazard 2-PC).

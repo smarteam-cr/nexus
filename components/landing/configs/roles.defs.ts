@@ -6,9 +6,11 @@
  * `kickoff.defs.ts`: fuente única de key/label/eyebrow/theme/tip/sectionType/empty, que el
  * registry client (`roles.ts`) ata a los componentes de `sections-roles.tsx`.
  *
- * A diferencia del BC/kickoff, Roles NO usa el motor de DATOS (ProjectCanvas/CanvasBlock)
- * ni IA: el contenido vive como JSON estructurado en `RoleProfile.content` y se llena a
- * mano (agentGenerated:false en todas). El hero (title/area/summary) sale de los
+ * A diferencia del BC/kickoff, Roles NO usa el motor de DATOS (ProjectCanvas/CanvasBlock):
+ * el contenido vive como JSON estructurado en `RoleProfile.content`, curado a mano —
+ * `agentGenerated:false` en todas (sin generación completa ni regen por bloque). La IA
+ * participa SOLO vía el assist de documento (propone, el humano aplica); su contrato de
+ * shapes sale de estos defs. El hero (title/area/summary) sale de los
  * metadatos del rol, no de `content`. El reordenamiento de SECCIONES está apagado (el
  * workspace no pasa `onReorder`); se reordenan los ÍTEMS dentro de cada sección. Solo el
  * hero es `pinned` (para que SIEMPRE se renderice); las secciones de contenido NO lo son,

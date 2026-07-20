@@ -218,8 +218,15 @@
   página es una guía de trabajo, no un curso — la teoría de 4DX vive solo en el ⓘ. El
   contenido vive como JSON estructurado en
   `RoleProfile.content` (NO en `CanvasBlock`: se reusa la PRESENTACIÓN/EDICIÓN del motor, no el
-  motor de datos — ver DECISIONS). Sin IA (se llena a mano); gate hardcodeado fuera de la matriz
-  de permisos (mismo criterio que Costos); RLS deny (tabla interna).
+  motor de datos — ver DECISIONS). El contenido es curaduría humana con **assist de documento**
+  opcional ("✨ Mejorar con IA": la IA propone, el humano revisa y aplica — ver abajo); gate
+  hardcodeado fuera de la matriz de permisos (mismo criterio que Costos); RLS deny (tabla interna).
+- **assist de documento** (`lib/ai/assist.ts` → `runDocumentAssist`): el modo "mejorar por
+  instrucción" de un documento del motor de landing (Roles, kickoff, business case, desarrollo).
+  One-shot: instrucción → la IA lee el documento ENTERO (y puede **investigar en línea** vía la
+  server-tool web_search, a su criterio) → propuesta de cambios POR SECCIÓN → el humano revisa en
+  `<AgentProposal>` (con checkboxes y "Fuentes consultadas") → aplica o descarta. Nunca escribe
+  directo; las secciones curadas y ctxDriven no entran al contrato. Ver DECISIONS §Roles.
 - **4DX** (*The 4 Disciplines of Execution*): el sistema de ejecución con el que se documenta cada
   puesto. D1 enfocarse en lo crucialmente importante (la WIG) · D2 actuar sobre las medidas de
   predicción · D3 llevar un marcador convincente · D4 crear una cadencia de responsabilidad. El
