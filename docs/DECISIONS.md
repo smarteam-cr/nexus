@@ -653,6 +653,13 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   El **borrado FINAL** del archivo = pasada COORDINADA con la otra PC que re-tokenice
   TimelineSection. Los alias de vars (`--brand-blue` ≡ `--blue`…) en el root de `.stl` son compat
   deliberada — consolidar nombres es una pasada mecánica futura, acá se priorizó cero churn visual.
+- **Publish/snapshot del motor NO está unificado — plan futuro propio (anotado en la Ola 7,
+  2026-07-19)**: conviven 4 mecanismos (snapshot del BC, `publishedSnapshot` del kickoff,
+  `publishedSnapshot` del cronograma, y desarrollo que expone el canvas VIVO). Elías decidió
+  explícitamente dejarlo FUERA del plan de puestos ("Roles + consolidar motor"); unificarlos (y de
+  paso el acceso externo token+password) merece su propio plan con su propio análisis de riesgo.
+  Mientras tanto, un tipo nuevo que publique copia el patrón `publishedSnapshot` congelado +
+  chokepoint server-side fail-closed (ARCHITECTURE §1-WEB punto 7).
 
 ## Estados de carga (skeletons)
 - **El shell interno vive en el route group `app/(shell)/`** (2026-07-18): las 17 secciones

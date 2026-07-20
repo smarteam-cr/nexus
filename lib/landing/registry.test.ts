@@ -1,0 +1,112 @@
+/**
+ * lib/landing/registry.test.ts — registros CONGELADOS del motor de landing (Ola 7).
+ *
+ * `toSectionDef` devuelve null —y la sección DESAPARECE sin romper nada— cuando un
+ * `sectionType` no está en el registry de componentes. Un typo se iría a producción
+ * con la suite verde y una sección del documento del cliente se esfumaría en
+ * silencio. Este test lo hace imposible, para los 3 tipos sobre CanvasBlock
+ * (BC_TEMPLATES + kickoff + desarrollo); Roles tiene el suyo (lib/roles/roles.test).
+ *
+ * Además congela las KEYS por template: agregar/quitar/reordenar una sección es una
+ * decisión de producto — el snapshot obliga a tocarlo a conciencia, no por accidente.
+ *
+ * Espejo de lib/roles/roles.test.ts. Vive en lib/ (el project unit de vitest solo
+ * incluye lib/**). Contrato completo del motor: ARCHITECTURE §1-WEB.
+ */
+import { describe, it, expect } from "vitest";
+import { BC_TEMPLATES } from "@/components/landing/configs/templates.defs";
+import { SECTION_COMPONENTS, landingConfigFor } from "@/components/landing/configs/templates";
+import { KICKOFF_SECTION_DEFS } from "@/components/landing/configs/kickoff.defs";
+import { KICKOFF_SECTION_COMPONENTS, landingConfigForKickoff } from "@/components/landing/configs/kickoff";
+import { DESARROLLO_SECTION_DEFS } from "@/components/landing/configs/desarrollo.defs";
+import { DESARROLLO_SECTION_COMPONENTS, landingConfigForDesarrollo } from "@/components/landing/configs/desarrollo";
+
+describe("BC_TEMPLATES: toda def resuelve renderer y las keys están congeladas", () => {
+  it("cada sectionType de cada template tiene componente registrado", () => {
+    for (const tpl of Object.values(BC_TEMPLATES)) {
+      const faltantes = tpl.sections.filter((d) => !SECTION_COMPONENTS[d.sectionType ?? d.key]);
+      expect(faltantes.map((d) => `${tpl.id}:${d.key}→${d.sectionType}`)).toEqual([]);
+    }
+  });
+
+  it("la config viva no dropea ninguna def (defs === config, en orden)", () => {
+    for (const tpl of Object.values(BC_TEMPLATES)) {
+      expect(landingConfigFor(tpl.id).sections.map((s) => s.key)).toEqual(
+        tpl.sections.map((d) => d.key),
+      );
+    }
+  });
+
+  it("snapshot de keys por template (cambiarlas = decisión de producto)", () => {
+    expect(BC_TEMPLATES.hubspot_v1.sections.map((d) => d.key)).toEqual([
+      "hero", "dolores", "antes_despues", "solucion", "casos_de_uso", "roi",
+      "cronograma", "inversion", "partner", "cta", "arquitectura_tecnologica", "mapeo_procesos",
+    ]);
+    expect(BC_TEMPLATES.website_v1.sections.map((d) => d.key)).toEqual([
+      "hero", "diagnostico", "arquitectura_sitio", "arquitectura_conexion",
+      "alcance", "metodologia", "inversion", "por_que_smarteam",
+    ]);
+    // Un template nuevo declara acá su snapshot al nacer.
+    expect(Object.keys(BC_TEMPLATES).sort()).toEqual(["hubspot_v1", "website_v1"]);
+  });
+
+  it("hero abre cada template", () => {
+    for (const tpl of Object.values(BC_TEMPLATES)) {
+      expect(tpl.sections[0]?.key).toBe("hero");
+    }
+  });
+
+  it("sin componentes huérfanos en SECTION_COMPONENTS", () => {
+    const usados = new Set(
+      Object.values(BC_TEMPLATES).flatMap((tpl) => tpl.sections.map((d) => d.sectionType ?? d.key)),
+    );
+    const huerfanos = Object.keys(SECTION_COMPONENTS).filter((t) => !usados.has(t));
+    expect(huerfanos).toEqual([]);
+  });
+});
+
+describe("Kickoff: registry completo + keys congeladas", () => {
+  it("cada def resuelve componente y la config no dropea ninguna", () => {
+    const faltantes = KICKOFF_SECTION_DEFS.filter((d) => !KICKOFF_SECTION_COMPONENTS[d.sectionType ?? d.key]);
+    expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
+    expect(landingConfigForKickoff().sections.map((s) => s.key)).toEqual(
+      KICKOFF_SECTION_DEFS.map((d) => d.key),
+    );
+  });
+
+  it("snapshot de keys: bienvenida abre, cierre cierra", () => {
+    expect(KICKOFF_SECTION_DEFS.map((d) => d.key)).toEqual([
+      "bienvenida", "objetivos", "hoy_vs_sistema", "alcance", "equipo", "tu_rol",
+      "metricas_exito", "horarios", "canales", "proximos_pasos", "cronograma", "procesos", "cierre",
+    ]);
+  });
+
+  it("sin componentes huérfanos en KICKOFF_SECTION_COMPONENTS", () => {
+    const usados = new Set(KICKOFF_SECTION_DEFS.map((d) => d.sectionType ?? d.key));
+    const huerfanos = Object.keys(KICKOFF_SECTION_COMPONENTS).filter((t) => !usados.has(t));
+    expect(huerfanos).toEqual([]);
+  });
+});
+
+describe("Desarrollo: registry completo + keys congeladas", () => {
+  it("cada def resuelve componente y la config no dropea ninguna", () => {
+    const faltantes = DESARROLLO_SECTION_DEFS.filter((d) => !DESARROLLO_SECTION_COMPONENTS[d.sectionType ?? d.key]);
+    expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
+    expect(landingConfigForDesarrollo().sections.map((s) => s.key)).toEqual(
+      DESARROLLO_SECTION_DEFS.map((d) => d.key),
+    );
+  });
+
+  it("snapshot de keys: requerimiento abre, cierre cierra", () => {
+    expect(DESARROLLO_SECTION_DEFS.map((d) => d.key)).toEqual([
+      "requerimiento", "retos_cliente", "criterios_exito", "arquitectura",
+      "relacion_objetos", "comunicacion", "cierre",
+    ]);
+  });
+
+  it("sin componentes huérfanos en DESARROLLO_SECTION_COMPONENTS", () => {
+    const usados = new Set(DESARROLLO_SECTION_DEFS.map((d) => d.sectionType ?? d.key));
+    const huerfanos = Object.keys(DESARROLLO_SECTION_COMPONENTS).filter((t) => !usados.has(t));
+    expect(huerfanos).toEqual([]);
+  });
+});
