@@ -9,9 +9,13 @@
  *
  * `Editable` es no-controlado mientras tiene foco (React no pisa el texto que se
  * está tipeando); sincroniza desde `value` solo cuando NO está enfocado. Reporta
- * el texto nuevo en `onCommit` al perder el foco (blur) — el padre lo persiste.
+ * el texto nuevo en `onCommit` al perder el foco (blur) — el padre lo persiste —
+ * y también al DESMONTARSE si quedó texto sin blurear (toggle Editar→Listo con
+ * foco adentro, cambio de tab, remonte por key): antes ese último campo se perdía.
+ * NO se comitea por Enter a propósito: en prosa multilínea Enter inserta un salto
+ * de línea legítimo.
  */
-import { useLayoutEffect, useRef, type ElementType } from "react";
+import { useEffect, useLayoutEffect, useRef, type ElementType } from "react";
 
 export function Editable({
   value,
@@ -39,6 +43,28 @@ export function Editable({
       el.textContent = value ?? "";
     }
   }, [value, editable]);
+
+  // Refs "latest" (actualizadas en effect, nunca en render — regla react-hooks/refs)
+  // para que el cleanup de desmontaje compare contra el value VIGENTE sin re-suscribirse.
+  const onCommitRef = useRef(onCommit);
+  const valueRef = useRef(value);
+  useEffect(() => {
+    onCommitRef.current = onCommit;
+    valueRef.current = value;
+  });
+
+  // Commit al desmontar (o al salir de modo edición): si el texto difiere del value
+  // vigente es que hubo tipeo sin blur — se comitea. En el 99% de los desmontes el
+  // sync de arriba los mantiene iguales → no-op. Se captura `el` en el setup porque
+  // en el cleanup el ref puede ya estar en null (el nodo desmontado conserva su texto).
+  useEffect(() => {
+    if (!editable) return;
+    const el = ref.current;
+    return () => {
+      const txt = el?.textContent;
+      if (el && txt != null && txt !== valueRef.current) onCommitRef.current?.(txt);
+    };
+  }, [editable]);
 
   if (!editable) {
     if (!value) return null;
