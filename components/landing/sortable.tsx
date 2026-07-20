@@ -6,7 +6,8 @@
  * Drag & drop GENÉRICO para los ítems internos de una sección (tags, cards,
  * bullets, líneas de inversión…): el vendedor ordena la página para mostrar
  * primero lo más importante. Render-prop: el call-site conserva su markup y
- * coloca el `handle` (⠿, aparece al hover como el ×) dentro de cada ítem.
+ * coloca el `handle` (⠿, SIEMPRE visible en edición — ver la nota de affordance
+ * en landing-engine.css §Botones de edición) dentro de cada ítem.
  *
  *   <SortableItems items={items} disabled={!editable} onReorder={(next) => set({ items: next })}
  *     container={(nodes) => <div className="stl-grid stl-grid-2">{nodes}</div>}>
@@ -72,6 +73,9 @@ function SortableItem({
         minWidth: style?.minWidth ?? 0,
         zIndex: isDragging ? 40 : undefined,
         opacity: isDragging ? 0.85 : undefined,
+        // Feedback de "lo estoy llevando": sombra elevada mientras se arrastra
+        // (el settle animado al soltar ya lo da la transition de dnd-kit).
+        boxShadow: isDragging ? "0 10px 30px -10px rgba(15, 23, 42, 0.35)" : undefined,
       }}
     >
       {children(handle)}
@@ -101,6 +105,12 @@ export function SortableItems<T>({
 }) {
   // Teclado además de mouse: el handle es un botón enfocable (Enter/Space
   // levanta, flechas mueven, Enter suelta) — accesibilidad estándar de dnd-kit.
+  // TOUCH: PointerSensor SÍ cubre táctil porque el handle declara touch-action:none
+  // (landing-engine.css) — el bug táctil histórico era la INVISIBILIDAD del handle,
+  // no el sensor. Contingencia si un smoke en teléfono muestra que el drag pelea
+  // con el scroll: reemplazar por MouseSensor + TouchSensor({ delay: 150,
+  // tolerance: 8 }) + KeyboardSensor. NUNCA sumar TouchSensor SOBRE PointerSensor
+  // (doble activación del mismo gesto).
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -119,6 +129,8 @@ export function SortableItems<T>({
   if (idsRef.current.length > items.length) idsRef.current = idsRef.current.slice(0, items.length);
   const ids = [...idsRef.current];
 
+  // Con 0-1 ítems no hay nada que reordenar: render plano SIN handle a propósito
+  // (un ⠿ muerto es ruido, no affordance). El handle aparece al agregar el 2º ítem.
   if (disabled || items.length < 2) {
     return <>{container(items.map((it, i) => <Fragment key={i}>{children(it, i, null)}</Fragment>))}</>;
   }

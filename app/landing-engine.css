@@ -68,7 +68,7 @@
 /* Handle de drag & drop de secciones (⠿) — misma familia de pills del chrome. */
 .stl .stl-drag-handle {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 24px; border-radius: 999px; cursor: grab;
+  width: 28px; height: 28px; border-radius: 999px; cursor: grab;
   border: 1px solid rgba(0, 0, 0, 0.12); background: rgba(255, 255, 255, 0.92);
   color: #6b7280; font-size: 13px; line-height: 1; backdrop-filter: blur(4px);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); touch-action: none;
@@ -589,27 +589,42 @@
 .stl .stl-editable:empty::before { content: attr(data-placeholder); color: var(--text-muted); opacity: 0.7; }
 .stl .stl-dark .stl-editable:empty::before { color: var(--dark-text-2); }
 
-/* Botones de edición de arrays (agregar / quitar item) */
+/* Botones de edición de arrays (agregar / quitar item).
+ *
+ * AFFORDANCE (2026-07-19): estos controles eran opacity:0 hasta hover — en la
+ * práctica NADIE los encontraba ("no se puede hacer drag and drop") y en touch
+ * no existían (sin hover jamás aparecían). Ahora son SIEMPRE visibles en modo
+ * edición (0.55 → 1 al hover/focus), con target táctil de 28px (mínimo WCAG 24)
+ * y una franja de chrome propia para no tapar el título de la card. Solo se
+ * renderizan en modo edit → cero cambio en /external y /print por construcción. */
 .stl .stl-item { position: relative; }
 .stl .stl-remove {
-  position: absolute; top: 6px; right: 6px; width: 24px; height: 24px;
+  position: absolute; top: 6px; right: 6px; width: 28px; height: 28px;
   border-radius: 6px; border: 1px solid var(--border); background: #fff; color: var(--text-muted);
-  display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.55;
   transition: opacity 150ms ease, color 150ms ease, border-color 150ms ease;
 }
-.stl .stl-item:hover .stl-remove { opacity: 1; }
+.stl .stl-item:hover .stl-remove,
+.stl .stl-remove:focus-visible { opacity: 1; }
 .stl .stl-remove:hover { color: #DC2626; border-color: #FCA5A5; }
 /* Handle ⠿ de reorden de ÍTEMS (espejo del × de quitar, a la izquierda). */
 .stl .stl-drag-item {
-  position: absolute; top: 6px; left: 6px; width: 24px; height: 24px;
+  position: absolute; top: 6px; left: 6px; width: 28px; height: 28px;
   border-radius: 6px; border: 1px solid var(--border); background: #fff; color: var(--text-muted);
-  display: flex; align-items: center; justify-content: center; cursor: grab; opacity: 0;
-  font-size: 12px; line-height: 1; touch-action: none;
+  display: flex; align-items: center; justify-content: center; cursor: grab; opacity: 0.55;
+  font-size: 14px; line-height: 1; touch-action: none;
   transition: opacity 150ms ease, color 150ms ease, border-color 150ms ease;
 }
-.stl .stl-item:hover .stl-drag-item { opacity: 1; }
+.stl .stl-item:hover .stl-drag-item,
+.stl .stl-drag-item:focus-visible { opacity: 1; }
 .stl .stl-drag-item:active { cursor: grabbing; }
 .stl .stl-drag-item:hover { color: var(--blue); border-color: var(--blue); }
+/* Franja de chrome: los cards con handle reservan espacio arriba para que el ⠿
+ * y el × no tapen el título. Solo dispara en edición (en lectura el handle no se
+ * renderiza → :has() no matchea). Los chips inline quedan excluidos. */
+.stl .stl-item:has(> .stl-drag-item):not(.stl-tag):not(.stl-brand-badge):not(.stl-brand-logo-wrap) {
+  padding-top: 42px;
+}
 /* En chips compactos (tags/marcas) y en los logos de la brand-row, inline como el × */
 .stl .stl-tag .stl-drag-item,
 .stl .stl-brand-badge .stl-drag-item,
