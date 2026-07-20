@@ -53,6 +53,13 @@ export const AGENT_GROUPS: AgentGroupDef[] = [
     order: 3,
     icon: "📐",
   },
+  {
+    key: "roles",
+    label: "Roles",
+    description: "Assist de los perfiles de puesto del equipo (propone; el humano aplica)",
+    order: 4,
+    icon: "🧑‍💼",
+  },
 ];
 
 export const GROUP_BY_KEY = Object.fromEntries(

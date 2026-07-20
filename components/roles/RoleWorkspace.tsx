@@ -21,9 +21,29 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo } from "@/components/ui/UndoProvider";
+import AssistDialog from "@/components/ai/AssistDialog";
+import { AgentProposal } from "@/components/ai/AgentProposal";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import { landingConfigForRoles } from "@/components/landing/configs/roles";
 import { ROLE_CONTENT_KEYS, ROLE_SECTION_DEFS } from "@/components/landing/configs/roles.defs";
+
+/** Respuesta de POST /api/roles/[id]/assist (espejo de DocumentAssistResult + runId). */
+interface AssistResult {
+  proposal: Record<string, unknown>;
+  summary: string[];
+  reasoning?: string;
+  warnings: string[];
+  citations: { url: string; title: string }[];
+  usedWebSearch: boolean;
+  runId: string;
+}
+
+const ASSIST_CHIPS = [
+  "Documenta mejor este puesto respecto a 4DX",
+  "Haz las medidas más accionables",
+  "Resume el perfil en menos líneas",
+  "Completa las secciones vacías",
+];
 
 interface RoleInput {
   id: string;
@@ -162,6 +182,74 @@ export default function RoleWorkspace({ role }: { role: RoleInput }) {
     schedule();
   };
 
+  // ── Assist de documento ("✨ Mejorar con IA"): instrucción → propuesta →
+  // revisar en <AgentProposal> → aplicar (merge local + el autosave de siempre)
+  // o descartar (la propuesta nunca tocó el server). Doctrina: DECISIONS §Roles.
+  const [assistOpen, setAssistOpen] = useState(false);
+  const [assistLoading, setAssistLoading] = useState(false);
+  const [assist, setAssist] = useState<AssistResult | null>(null);
+  const [assistSelected, setAssistSelected] = useState<Set<string>>(new Set());
+
+  const assistLabel = (key: string) =>
+    key === "hero" ? "Título, área y resumen" : SECTION_LABELS[key] ?? key;
+
+  const submitAssist = async (instruction: string) => {
+    setAssistLoading(true);
+    try {
+      const result = await fetchJson<AssistResult>(`/api/roles/${role.id}/assist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instruction }),
+      });
+      setAssist(result);
+      setAssistSelected(new Set(Object.keys(result.proposal)));
+      setAssistOpen(false);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "El assist falló. Prueba de nuevo.");
+    } finally {
+      setAssistLoading(false);
+    }
+  };
+
+  const applyAssist = () => {
+    if (!assist) return;
+    // Snapshot COMPLETO previo → una sola entrada de undo: Ctrl+Z revierte el
+    // apply entero (y re-agenda el autosave — deshacer también persiste).
+    const prevMeta = latest.current.meta;
+    const prevContent = latest.current.content;
+
+    let nextMeta = prevMeta;
+    let nextContent = prevContent;
+    for (const key of assistSelected) {
+      const data = assist.proposal[key];
+      if (data === undefined) continue;
+      if (key === "hero") {
+        const d = data as { title?: string; area?: string; summary?: string };
+        nextMeta = { title: d.title ?? "", area: d.area ?? "", summary: d.summary ?? "" };
+      } else {
+        nextContent = { ...nextContent, [key]: data };
+      }
+    }
+    latest.current = { meta: nextMeta, content: nextContent };
+    setMeta(nextMeta);
+    setContent(nextContent);
+
+    pushUndo({
+      scope: undoScope,
+      label: "Propuesta de IA aplicada",
+      undo: () => {
+        latest.current = { meta: prevMeta, content: prevContent };
+        setMeta(prevMeta);
+        setContent(prevContent);
+        schedule();
+      },
+    });
+
+    schedule();
+    setAssist(null);
+    toast.success("Propuesta aplicada. Ctrl+Z para deshacer.");
+  };
+
   const sections: LandingSectionData[] = [
     { key: "hero", data: { title: meta.title, area: meta.area, summary: meta.summary } },
     ...ROLE_CONTENT_KEYS.map((k) => ({ key: k, data: content[k] ?? null })),
@@ -183,6 +271,14 @@ export default function RoleWorkspace({ role }: { role: RoleInput }) {
           )}
           <button
             type="button"
+            onClick={() => setAssistOpen(true)}
+            disabled={assistLoading}
+            className="px-3 py-1.5 text-sm font-medium rounded-lg border border-line text-fg-secondary hover:border-brand hover:text-brand transition-colors disabled:opacity-50"
+          >
+            ✨ Mejorar con IA
+          </button>
+          <button
+            type="button"
             onClick={() => setEditing((e) => !e)}
             className={
               editing
@@ -194,6 +290,72 @@ export default function RoleWorkspace({ role }: { role: RoleInput }) {
           </button>
         </div>
       </div>
+
+      <AssistDialog
+        open={assistOpen}
+        onClose={() => setAssistOpen(false)}
+        title="Mejorar este puesto con IA"
+        chips={ASSIST_CHIPS}
+        placeholder='Ej: "documenta mejor este puesto respecto a 4DX"'
+        loading={assistLoading}
+        onSubmit={submitAssist}
+      />
+
+      {assist && (
+        <AgentProposal
+          title="Propuesta de la IA"
+          subtitle="Revisa las secciones propuestas y elige cuáles aplicar. Nada se guarda hasta que apliques."
+          summary={assist.summary}
+          reasoning={assist.reasoning}
+          warnings={assist.warnings}
+          onApply={applyAssist}
+          onDiscard={() => setAssist(null)}
+          applyDisabled={assistSelected.size === 0}
+          className="mb-4"
+        >
+          <div className="space-y-1.5">
+            {Object.keys(assist.proposal).map((key) => (
+              <label key={key} className="flex items-center gap-2 text-sm text-fg-secondary cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={assistSelected.has(key)}
+                  onChange={(e) =>
+                    setAssistSelected((prev) => {
+                      const next = new Set(prev);
+                      if (e.target.checked) next.add(key);
+                      else next.delete(key);
+                      return next;
+                    })
+                  }
+                  className="accent-brand"
+                />
+                {assistLabel(key)}
+              </label>
+            ))}
+          </div>
+          {assist.citations.length > 0 && (
+            <div className="pt-1">
+              <p className="text-[10px] font-semibold text-fg-muted uppercase tracking-wider mb-1">
+                Fuentes consultadas
+              </p>
+              <ul className="space-y-0.5">
+                {assist.citations.map((c) => (
+                  <li key={c.url}>
+                    <a
+                      href={c.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-brand hover:underline break-all"
+                    >
+                      {c.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </AgentProposal>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-line">
         <LandingView

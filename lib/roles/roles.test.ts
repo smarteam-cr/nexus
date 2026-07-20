@@ -4,7 +4,7 @@
  */
 import { test, expect } from "vitest";
 import { roleCreateSchema, rolePatchSchema, ROLE_SECTIONS } from "./schema";
-import { ROLE_SECTION_DEFS, ROLE_CONTENT_KEYS } from "@/components/landing/configs/roles.defs";
+import { ROLE_SECTION_DEFS, ROLE_CONTENT_KEYS, rolesAssistContract } from "@/components/landing/configs/roles.defs";
 import { ROLES_SECTION_COMPONENTS } from "@/components/landing/configs/roles";
 
 test("roleCreateSchema: title requerido; area/summary/content opcionales", () => {
@@ -91,4 +91,38 @@ test("no hay componentes huérfanos en el registry", () => {
   const usados = new Set(ROLE_SECTION_DEFS.map((d) => d.sectionType ?? d.key));
   const huerfanos = Object.keys(ROLES_SECTION_COMPONENTS).filter((t) => !usados.has(t));
   expect(huerfanos).toEqual([]);
+});
+
+// ── Contrato del ASSIST de documento (ola A3) ────────────────────────────────
+// El assist coacciona la propuesta de la IA con el `schema` de cada def
+// (coerceToSchema deja SOLO las keys del schema). Un schema vacío o incompleto
+// VACIARÍA la sección en silencio al aplicar — este test lo hace imposible:
+// las properties del schema cubren TODAS las keys del `empty` de la def.
+
+test("assist: toda def (hero incluido) tiene schema cuyas properties ⊇ keys del empty", () => {
+  for (const d of ROLE_SECTION_DEFS) {
+    const props = (d.schema as { properties?: Record<string, unknown> })?.properties ?? {};
+    const propKeys = new Set(Object.keys(props));
+    expect(propKeys.size, `schema vacío en "${d.key}"`).toBeGreaterThan(0);
+    for (const emptyKey of Object.keys((d.empty ?? {}) as Record<string, unknown>)) {
+      expect(propKeys.has(emptyKey), `"${d.key}": la key "${emptyKey}" del empty falta en el schema`).toBe(true);
+    }
+  }
+});
+
+test("rolesAssistContract: hero + las 11 secciones, con brief y currentData con fallback a empty", () => {
+  const contract = rolesAssistContract({
+    title: "CSE",
+    area: "Customer Success",
+    summary: "Acompaña la implementación.",
+    content: { profile: { md: "**Perfil**" } }, // el resto vacío → cae al empty
+  });
+  expect(contract.map((s) => s.key)).toEqual(["hero", ...ROLE_CONTENT_KEYS]);
+  for (const s of contract) {
+    expect((s.brief ?? "").length, `brief vacío en "${s.key}"`).toBeGreaterThan(0);
+    expect(s.currentData, `currentData undefined en "${s.key}"`).toBeDefined();
+  }
+  expect(contract[0].currentData).toEqual({ title: "CSE", area: "Customer Success", summary: "Acompaña la implementación." });
+  expect(contract.find((s) => s.key === "profile")?.currentData).toEqual({ md: "**Perfil**" });
+  expect(contract.find((s) => s.key === "wig")?.currentData).toEqual({ desde: "", hasta: "", fecha: "", contexto: "" });
 });
