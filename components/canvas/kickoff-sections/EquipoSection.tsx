@@ -88,7 +88,7 @@ function BigMember({
         <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)" }}>{m.name}</div>
         {editable ? (
           <input
-            className="kl-edit-input"
+            className="stl-edit-input"
             value={m.role}
             placeholder="Rol de cara al cliente"
             onChange={(e) => onRole?.(e.target.value)}

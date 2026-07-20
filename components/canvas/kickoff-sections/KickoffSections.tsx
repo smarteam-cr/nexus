@@ -15,8 +15,11 @@
  * vacía y hay markdown, se renderiza con <Prose> (así los 133 y los snapshots
  * publicados se ven igual que hoy, sin migrar).
  *
- * Render bajo `.kickoff-landing > .stl` → resuelven tanto las vars/clases `kl-*`
- * (kickoff-landing.css) como el chrome `.stl-*` del motor (landing-engine.css).
+ * Render bajo `.stl` (landing-engine.css) — desde la Ola 6 el vocabulario ex
+ * `kl-*` (prose/compare/pair/edit) vive portado ahí y el wrapper legacy
+ * `.kickoff-landing` ya no envuelve al motor. La ÚNICA pieza que aún lo necesita
+ * es TimelineSection (archivo de la otra PC): KickoffTimelineSection la envuelve
+ * en su propio `<div className="kickoff-landing">` (scope mínimo del CSS viejo).
  */
 import { type FC } from "react";
 import dynamic from "next/dynamic";
@@ -62,16 +65,16 @@ function toFlowchartData(p: KickoffProceso): FlowchartData {
 /** Comparación "Hoy vs con el sistema" (display; el agente la llena). */
 function ComparaBlock({ c }: { c: ProseComparison }) {
   return (
-    <div className="kl-grid-2" style={{ marginTop: 4 }}>
-      <div className="kl-compare-now">
-        <div className="kl-compare-label">Hoy</div>
-        <ul className="kl-compare-list">
+    <div className="stl-pair" style={{ marginTop: 4 }}>
+      <div className="stl-compare-now">
+        <div className="stl-compare-label">Hoy</div>
+        <ul className="stl-compare-list">
           {c.hoy.map((x, i) => <li key={i}><InlineMD>{x}</InlineMD></li>)}
         </ul>
       </div>
-      <div className="kl-compare-future">
-        <div className="kl-compare-label">Con el sistema</div>
-        <ul className="kl-compare-list">
+      <div className="stl-compare-future">
+        <div className="stl-compare-label">Con el sistema</div>
+        <ul className="stl-compare-list">
           {c.conSistema.map((x, i) => <li key={i}><InlineMD>{x}</InlineMD></li>)}
         </ul>
       </div>
@@ -110,7 +113,7 @@ export const KickoffProseSection: FC<SectionProps<ProseData>> = ({ data, editabl
       {(editable || d.intro) && (
         <Editable
           as="p"
-          className="kl-prose"
+          className="stl-prose"
           editable={editable}
           value={d.intro ?? ""}
           placeholder="Intro (opcional)…"
@@ -148,7 +151,7 @@ export const KickoffProseSection: FC<SectionProps<ProseData>> = ({ data, editabl
         <AddBtn onClick={() => set({ items: appendItem(items, { title: "", detail: "" }) })} label="Agregar punto" />
       )}
       {d.compara && <ComparaBlock c={d.compara} />}
-      {!editable && proseIsEmpty(d) && <p className="kl-prose" style={{ color: "var(--text-muted)" }}>—</p>}
+      {!editable && proseIsEmpty(d) && <p className="stl-prose" style={{ color: "var(--text-muted)" }}>—</p>}
     </div>
   );
 };
@@ -177,7 +180,7 @@ export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({ data, ct
   const headline = d.headline?.trim() || "¡Arranquemos juntos!";
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
+    <div className="stl-hero-centered" style={{ maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
       {canEdit && (
         <div style={{ display: "flex", justifyContent: "center" }}>
           <HeroUploadButtons ctx={ctx} coverImageUrl={d.coverImageUrl} onCover={(url) => set({ coverImageUrl: url })} />
@@ -192,14 +195,14 @@ export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({ data, ct
       {canEdit ? (
         <Editable
           as="h1"
-          className="stl-hero-title kickoff-hero-title"
+          className="stl-hero-title"
           editable
           value={d.headline}
           placeholder="Inicio de proyecto: implementación de HubSpot e integración con…"
           onCommit={(v) => set({ headline: v })}
         />
       ) : (
-        <h1 className="stl-hero-title kickoff-hero-title">{headline}</h1>
+        <h1 className="stl-hero-title">{headline}</h1>
       )}
       {isLegacy ? (
         <div style={{ marginTop: 18, maxWidth: 640, marginInline: "auto", textAlign: "left", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -244,9 +247,9 @@ export const KickoffComparaSection: FC<SectionProps<ComparaData>> = ({ data, edi
     placeholder: string,
   ) => (
     <div className={cls}>
-      <div className="kl-compare-label">{label}</div>
+      <div className="stl-compare-label">{label}</div>
       <SortableItems items={items} disabled={!editable} onReorder={(next) => set({ [which]: next })}
-        container={(nodes) => <ul className="kl-compare-list">{nodes}</ul>}>
+        container={(nodes) => <ul className="stl-compare-list">{nodes}</ul>}>
         {(item, i, handle) => (
           <li className="stl-item">
             {handle}
@@ -264,12 +267,12 @@ export const KickoffComparaSection: FC<SectionProps<ComparaData>> = ({ data, edi
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       {(editable || d.subhead) && (
-        <Editable as="p" className="kl-prose" editable={editable} value={d.subhead ?? ""}
+        <Editable as="p" className="stl-prose" editable={editable} value={d.subhead ?? ""}
           placeholder="Una frase: de dónde partimos y a dónde llegamos…" onCommit={(v) => set({ subhead: v })} />
       )}
-      <div className="kl-grid-2">
-        {col("hoy", d.hoy, "kl-compare-now", "Hoy", "Cómo opera hoy (una línea)…")}
-        {col("conSistema", d.conSistema, "kl-compare-future", "Con el sistema", "Cómo va a operar (una línea)…")}
+      <div className="stl-pair">
+        {col("hoy", d.hoy, "stl-compare-now", "Hoy", "Cómo opera hoy (una línea)…")}
+        {col("conSistema", d.conSistema, "stl-compare-future", "Con el sistema", "Cómo va a operar (una línea)…")}
       </div>
     </div>
   );
@@ -298,7 +301,16 @@ const SECTION_PAD = "clamp(40px, 6vw, 72px) 24px";
 export const KickoffTimelineSection: FC<SectionProps<unknown>> = ({ ctx }) => {
   const timeline = ctx.kickoff?.timeline;
   if (!timeline?.exists || (timeline.phases?.length ?? 0) === 0) return null;
-  return <TimelineSection phases={timeline.phases} anchor={timeline.anchorStartDate ?? null} />;
+  // Scope MÍNIMO del CSS legacy: TimelineSection (archivo caliente de la otra PC)
+  // sigue usando las clases base de kickoff-landing.css (section-light, eyebrow,
+  // font-display, reveal + vars del root). Este wrapper es lo único que queda del
+  // `.kickoff-landing` que antes envolvía al motor entero; se borra en la pasada
+  // coordinada que re-tokenice TimelineSection (anotada en DECISIONS).
+  return (
+    <div className="kickoff-landing">
+      <TimelineSection phases={timeline.phases} anchor={timeline.anchorStartDate ?? null} />
+    </div>
+  );
 };
 
 // ── Procesos (ctxDriven: rinde su propia sección o null) ───────────────────────

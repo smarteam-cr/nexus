@@ -125,8 +125,10 @@ export default function DesarrolloWorkspace({
   }, [cs]);
 
   if (cs.loading) {
+    // `.stl` da el lienzo blanco/tipografía del documento mientras carga (el
+    // wrapper legacy `.kickoff-landing` ya no envuelve al motor — Ola 6).
     return (
-      <div className="kickoff-landing">
+      <div className="stl">
         <div style={{ maxWidth: MAXW, margin: "0 auto", padding: "48px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
           {[1, 2, 3].map((i) => (
             <div key={i} className="skeleton-shimmer" style={{ height: 120, borderRadius: 16 }} />
@@ -137,7 +139,7 @@ export default function DesarrolloWorkspace({
   }
 
   return (
-    <div className="kickoff-landing" key={nonce}>
+    <div key={nonce}>
       {cs.error && (
         <div style={{ position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>
           <span style={{ flex: 1 }}>{cs.error}</span>

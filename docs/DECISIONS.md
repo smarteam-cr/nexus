@@ -642,9 +642,17 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   la lee con la publishable key (regla operativa de ARCHITECTURE para tablas nuevas). Aplicada por
   `prisma db execute` (CREATE TABLE + ENABLE ROW LEVEL SECURITY), no `db push` (hazard 2-PC).
 - **Kickoff ya está en el motor** (ambos mount points defaultean a `LandingView`/`.stl`) → "un solo
-  sistema visual BC+kickoff+perfiles" queda cumplido al poner Roles en él. Borrar el viejo
-  `kickoff-landing.css` (re-tokenizar `TimelineSection.tsx`) queda **diferido** — es archivo caliente
-  de la otra PC; se coordina aparte.
+  sistema visual BC+kickoff+perfiles" queda cumplido al poner Roles en él.
+- **`kickoff-landing.css` quedó RECORTADO a residuo del cronograma (Ola 6, 2026-07-19)**: el
+  vocabulario `kl-*` + clases base + vars que el kickoff/desarrollo consumían se portaron a
+  `landing-engine.css` bajo `.stl` con MÉTRICAS EXACTAS (regla de oro: no mapear a clases .stl
+  "parecidas" — `kl-grid-2`→`.stl-pair`, no `.stl-grid-2`), y el wrapper `.kickoff-landing` dejó de
+  envolver al motor en los 4 montajes. Sobreviven DOS consumidores: `TimelineSection.tsx` (archivo
+  caliente de la otra PC — `KickoffTimelineSection` lo envuelve con un `<div className=
+  "kickoff-landing">` de scope mínimo) y `TimelineLanding.tsx` (cronograma externo, wrapper propio).
+  El **borrado FINAL** del archivo = pasada COORDINADA con la otra PC que re-tokenice
+  TimelineSection. Los alias de vars (`--brand-blue` ≡ `--blue`…) en el root de `.stl` son compat
+  deliberada — consolidar nombres es una pasada mecánica futura, acá se priorizó cero churn visual.
 
 ## Estados de carga (skeletons)
 - **El shell interno vive en el route group `app/(shell)/`** (2026-07-18): las 17 secciones

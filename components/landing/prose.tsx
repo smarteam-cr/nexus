@@ -9,16 +9,15 @@
  * (renderer legacy, borrado en la Ola 4 del plan de puestos) — se movieron acá
  * porque las consume el motor nuevo (kickoff-sections/KickoffSections).
  *
- * NOTA: `.kl-prose` (app/kickoff-landing.css) A PROPÓSITO por ahora — el swap
- * kl-* → .stl es la Ola 6 (una cosa por commit; esa ola porta las métricas
- * exactas a landing-engine.css antes de tocar la clase).
+ * `.stl-prose` vive en app/landing-engine.css (Ola 6: portada del ex `.kl-prose`
+ * con métricas exactas) — renderiza bajo el scope `.stl` del motor.
  */
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 export function Prose({ content }: { content: string }) {
   return (
-    <div className="kl-prose">
+    <div className="stl-prose">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
     </div>
   );

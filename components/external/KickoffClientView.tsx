@@ -49,7 +49,7 @@ export default function KickoffClientView({
   };
 
   return (
-    <div className="kickoff-landing relative">
+    <div className="relative">
       {/* Servicio recurrente (tag `recurrente` del handoff): badge sutil client-facing.
           El CSE lo saca quitando el tag del proyecto en el editor. Texto amable — no "recurrente". */}
       {data.recurrent && (

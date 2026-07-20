@@ -40,6 +40,24 @@
 
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
 
+  /* ── Alias de compat del vocabulario kickoff (Ola 6: kl-* → .stl) ──────────
+     Los componentes de sección del kickoff/desarrollo referencian estos nombres
+     en sus estilos inline (venían de app/kickoff-landing.css, cuyo wrapper ya no
+     envuelve al motor). MISMOS valores que la paleta de arriba — son alias, no
+     colores nuevos. Consolidar nombres (--brand-blue → --blue) es una pasada
+     futura mecánica; acá se priorizó cero churn visual. */
+  --brand-blue:          #168CF6;
+  --brand-blue-dark:     #0E6FD1;
+  --brand-blue-soft:     rgba(22, 140, 246, 0.08);
+  --brand-teal:          #42E4B3;
+  --brand-teal-dark:     #1FBE91;
+  --brand-teal-soft:     rgba(66, 228, 179, 0.10);
+  --bg-elevated:         #FFFFFF;
+  --text-secondary:      #475569;
+  --dark-text-secondary: #94A3B8;
+  --dark-text-muted:     #64748B;
+  --dark-border-strong:  rgba(255, 255, 255, 0.16);
+
   font-size: 16px;
   background: var(--bg);
   color: var(--text);
@@ -812,6 +830,159 @@
 }
 .stl .stl-md-editor:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 2px rgba(22, 140, 246, 0.18); }
 .stl .stl-md-hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+
+/* ══ Vocabulario portado del kickoff (Ola 6: kl-* → .stl) ══════════════════
+   COPIAS EXACTAS de app/kickoff-landing.css — regla de oro de la migración: no
+   mapear a clases .stl "parecidas" con otras métricas. El CSS viejo quedó
+   recortado a lo que TimelineSection/TimelineLanding (que conservan su wrapper
+   `.kickoff-landing`) consumen; TODO lo demás del kickoff/desarrollo renderiza
+   bajo `.stl` con estas clases. */
+
+/* Tipografía display + eyebrow (nombres BASE que las secciones ya usaban). */
+.stl .font-display {
+  font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-weight: 600;
+}
+.stl .display-tight { letter-spacing: -0.022em; }
+.stl .display-italic {
+  font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-style: italic;
+  font-weight: 600;
+}
+.stl .eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brand-blue);
+}
+
+/* Secciones full-bleed que un componente rinde por su cuenta (procesos, CTA). */
+.stl .section-light { background: var(--bg);      color: var(--text); }
+.stl .section-soft  { background: var(--bg-soft); color: var(--text); }
+.stl .section-dark  { background: var(--dark-bg); color: var(--dark-text); }
+
+/* Card estática de las secciones curadas (horarios/canales) — distinta de
+   .stl-card (padding/hover propios): copia exacta, no mapear. */
+.stl .card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: border-color 200ms ease, transform 200ms var(--ease), box-shadow 200ms ease;
+}
+.stl .card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px -16px rgba(15, 23, 42, 0.08);
+}
+
+.stl .btn-secondary-light {
+  display: inline-flex; align-items: center; gap: 0.6rem;
+  padding: 14px 24px; background: transparent; color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  font-size: 14px; font-weight: 500; cursor: pointer;
+  transition: background-color 200ms ease, border-color 200ms ease;
+}
+.stl .btn-secondary-light:hover { background: var(--brand-blue-soft); border-color: var(--brand-blue); color: var(--brand-blue); }
+
+/* Titular del CTA (cierre): mismo tamaño en edición y lectura. */
+.stl .cta-title {
+  font-size: clamp(28px, 4vw, 44px); line-height: 1.1; color: var(--dark-text); margin-top: 14px;
+}
+
+/* Hero CENTRADO: clase que declara el COMPONENTE (KickoffHeroSection /
+   DesarrolloHeroSection) en su raíz — el hero del Business Case no la usa y
+   queda intacto. Reemplaza a las reglas de centrado del wrapper viejo. */
+.stl .stl-hero-centered .stl-brandrow,
+.stl .stl-hero-centered .stl-tags { justify-content: center; }
+.stl .stl-hero-centered .stl-hero-title { text-align: center; }
+.stl .stl-hero-centered .stl-lead { margin-inline: auto; text-align: center; }
+
+/* Grid de 2 columnas en par (comparación / pares de cards); colapsa en móvil.
+   Ex kl-grid-2 — NO confundir con .stl-grid-2 (gap 18 + colapso escalonado). */
+.stl .stl-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 640px) {
+  .stl .stl-pair { grid-template-columns: 1fr; }
+}
+
+/* Par contrastado "Hoy / Con el sistema": "Hoy" neutro/atenuado, el futuro en
+   marca (teal). Contraste visual SIN rojo-alarma (el cliente ya compró). */
+.stl .stl-compare-now,
+.stl .stl-compare-future {
+  border-radius: 12px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+}
+.stl .stl-compare-now { background: var(--bg-soft); }
+.stl .stl-compare-future {
+  background: var(--brand-teal-soft);
+  border-color: rgba(66, 228, 179, 0.30); /* brand-teal con alpha */
+}
+.stl .stl-compare-label {
+  font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-weight: 600; font-size: 13px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  margin-bottom: 10px;
+}
+.stl .stl-compare-now .stl-compare-label { color: var(--text-muted); }
+.stl .stl-compare-future .stl-compare-label { color: var(--brand-teal-dark); }
+.stl .stl-compare-list {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.stl .stl-compare-now .stl-compare-list { color: var(--text-secondary); font-size: 14px; }
+.stl .stl-compare-future .stl-compare-list { color: var(--text); font-size: 14px; }
+.stl .stl-compare-list li { position: relative; padding-left: 18px; line-height: 1.5; }
+.stl .stl-compare-list li::before {
+  content: ""; position: absolute; left: 2px; top: 9px;
+  width: 6px; height: 6px; border-radius: 50%;
+}
+.stl .stl-compare-now .stl-compare-list li::before { background: var(--text-muted); }
+.stl .stl-compare-future .stl-compare-list li::before { background: var(--brand-teal); }
+
+/* Editores in-place de las secciones curadas (solo modo interno). */
+.stl .stl-edit-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-open-sans), system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--brand-blue);
+  border-radius: 8px;
+  padding: 8px 11px;
+  box-shadow: 0 0 0 3px var(--brand-blue-soft);
+  outline: none;
+}
+.stl .stl-edit-field { display: flex; flex-direction: column; gap: 3px; }
+.stl .stl-edit-field > span {
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+
+/* Prosa de cuerpo (markdown de bloques de texto) — ex kl-prose. Distinta de
+   .stl-md (que asume el .stl-body envolvente): copia exacta, no mapear. */
+.stl .stl-prose { color: var(--text-secondary); font-size: 15px; line-height: 1.7; }
+.stl .stl-prose > :first-child { margin-top: 0; }
+.stl .stl-prose > :last-child { margin-bottom: 0; }
+.stl .stl-prose p { margin: 0 0 0.75em; }
+.stl .stl-prose strong { color: var(--text); font-weight: 600; }
+.stl .stl-prose em { font-style: italic; }
+.stl .stl-prose ul { margin: 0.5em 0; padding-left: 1.2em; list-style: disc; }
+.stl .stl-prose ol { margin: 0.5em 0; padding-left: 1.2em; list-style: decimal; }
+.stl .stl-prose li { margin: 0.25em 0; }
+.stl .stl-prose a { color: var(--brand-blue); text-decoration: underline; text-underline-offset: 2px; }
+.stl .stl-prose h2,
+.stl .stl-prose h3 {
+  font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-weight: 600; color: var(--text);
+  margin: 0.8em 0 0.3em; line-height: 1.2;
+}
 
 /* ── Reduced motion ──────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {

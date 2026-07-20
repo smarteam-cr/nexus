@@ -38,7 +38,7 @@ export default function CanalesSection({ data, editable = false, onChange }: Sec
 
   if (!editable) {
     return (
-      <div className="kl-grid-2" style={{ gap: 20 }}>
+      <div className="stl-pair" style={{ gap: 20 }}>
         <div className="card" style={{ padding: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--brand-blue)", marginBottom: 12 }}>
             <Icon path={ICONS.horario} />
@@ -82,10 +82,10 @@ export default function CanalesSection({ data, editable = false, onChange }: Sec
   // ── Editor (CSE) ──────────────────────────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <label className="kl-edit-field">
+      <label className="stl-edit-field">
         <span>Horario de atención</span>
         <input
-          className="kl-edit-input"
+          className="stl-edit-input"
           value={draft.horario}
           placeholder="Lunes a viernes de 8 a.m. a 5 p.m."
           onChange={(e) => setDraft({ ...draft, horario: e.target.value })}
@@ -93,13 +93,13 @@ export default function CanalesSection({ data, editable = false, onChange }: Sec
         />
       </label>
 
-      <div className="kl-edit-field">
+      <div className="stl-edit-field">
         <span>Canales</span>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {draft.canales.map((c, i) => (
             <div key={i} style={{ display: "flex", gap: 8 }}>
               <input
-                className="kl-edit-input"
+                className="stl-edit-input"
                 value={c}
                 placeholder="WhatsApp (grupos asignados)"
                 onChange={(e) => {
@@ -132,10 +132,10 @@ export default function CanalesSection({ data, editable = false, onChange }: Sec
         </div>
       </div>
 
-      <label className="kl-edit-field">
+      <label className="stl-edit-field">
         <span>Correo de soporte</span>
         <input
-          className="kl-edit-input"
+          className="stl-edit-input"
           value={draft.soporteEmail}
           placeholder="soporte@smarteamcr.com"
           onChange={(e) => setDraft({ ...draft, soporteEmail: e.target.value })}

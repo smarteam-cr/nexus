@@ -24,7 +24,7 @@ export default function DesarrolloClientView({ data }: { data: DesarrolloViewDat
   }));
 
   return (
-    <div className="kickoff-landing">
+    <div>
       <LandingView
         config={config}
         ctx={{

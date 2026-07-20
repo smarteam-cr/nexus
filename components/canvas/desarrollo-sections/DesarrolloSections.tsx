@@ -11,8 +11,9 @@
  * placeholders de "arranque de proyecto". Este hero es sobrio: título técnico + una
  * bajada de qué conecta con qué + chips de los sistemas involucrados.
  *
- * Registro (como el kickoff): render bajo `.kickoff-landing > .stl` para resolver las
- * clases `.stl-*` del motor. Reusa `normalizeHero` (mismo shape headline/subhead/tags).
+ * Registro (como el kickoff): render bajo `.stl` (landing-engine.css, que desde la
+ * Ola 6 también resuelve el vocabulario ex kickoff — eyebrow, stl-hero-centered).
+ * Reusa `normalizeHero` (mismo shape headline/subhead/tags).
  */
 import { type FC } from "react";
 import { Editable } from "@/components/landing/inline";
@@ -36,7 +37,7 @@ export const DesarrolloHeroSection: FC<SectionProps<KickoffHeroData>> = ({ data,
   const headline = d.headline?.trim() || "Requerimiento técnico de integración";
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
+    <div className="stl-hero-centered" style={{ maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
       {editable ? (
         <Editable as="span" className="eyebrow" editable value={d.eyebrow ?? ""} placeholder="Requerimiento técnico" onCommit={(v) => set({ eyebrow: v })} />
       ) : (

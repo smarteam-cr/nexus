@@ -61,7 +61,7 @@ function HorariosRead({ view }: { view: HorariosData }) {
   const sessions = view.sessions.filter((s) => (s.label ?? "").trim());
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-      {view.intro && <p className="kl-prose">{view.intro}</p>}
+      {view.intro && <p className="stl-prose">{view.intro}</p>}
 
       {options.length > 0 && (
         <div>
@@ -180,7 +180,7 @@ function DroppableSession({
     <div ref={setNodeRef} style={{ display: "flex", alignItems: "center", gap: 10, border: `1.5px ${isOver ? "solid" : "dashed"} ${isOver ? "var(--brand-teal)" : "var(--border-strong)"}`, background: isOver ? "var(--brand-teal-soft)" : "var(--bg)", borderRadius: 12, padding: 10 }}>
       {editable ? (
         <input
-          className="kl-edit-input"
+          className="stl-edit-input"
           value={label}
           placeholder="Marketing Hub"
           onChange={(e) => onLabel?.(e.target.value)}
@@ -310,10 +310,10 @@ function HorariosInteractive({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       {editable ? (
-        <label className="kl-edit-field">
+        <label className="stl-edit-field">
           <span>Intro (opcional)</span>
           <input
-            className="kl-edit-input"
+            className="stl-edit-input"
             value={draft.intro ?? ""}
             placeholder="Coordinamos sesiones recurrentes con tu equipo."
             onChange={(e) => setDraft({ ...draft, intro: e.target.value })}
@@ -321,7 +321,7 @@ function HorariosInteractive({
           />
         </label>
       ) : (
-        draft.intro && <p className="kl-prose">{draft.intro}</p>
+        draft.intro && <p className="stl-prose">{draft.intro}</p>
       )}
 
       {error && (
@@ -334,7 +334,7 @@ function HorariosInteractive({
           página del cliente también lo monta. Hay una sola sección de horarios por página. */}
       <DndContext id="kickoff-horarios" sensors={sensors} collisionDetection={pointerWithin} onDragEnd={onDragEnd}>
         {(editable || options.length > 0) && (
-          <div className="kl-edit-field">
+          <div className="stl-edit-field">
             <span style={editable ? undefined : SECTION_LABEL}>
               {editable ? "Franjas que ofrecemos (arrastralas a una sesión)" : "Franjas que ofrecemos — arrastrá una a tu sesión"}
             </span>
@@ -369,7 +369,7 @@ function HorariosInteractive({
         )}
 
         {(editable || sessions.length > 0) && (
-          <div className="kl-edit-field">
+          <div className="stl-edit-field">
             <span style={editable ? undefined : SECTION_LABEL}>Sesiones</span>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: editable ? undefined : 10 }}>
               {sessions.map((s) => (
