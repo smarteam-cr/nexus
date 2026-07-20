@@ -6,10 +6,21 @@
  * `data` por sección para el motor `LandingView`, IDÉNTICO en ambas superficies
  * (el CSE ve exactamente lo que ve el cliente).
  *
+ * Desde la Ola 5 el núcleo (hero/tail/orden + CARD|`{__legacyMd}`+overrides)
+ * vive en `components/landing/build-landing.ts`; acá queda SOLO lo
+ * kickoff-específico: las secciones ctx-driven (cronograma/procesos), la key de
+ * visibilidad, y el de-dup de la comparación. El golden que congela este output
+ * vive en lib/landing/build-landing.test.ts.
+ *
  * Puro (sin React runtime): lo importa un componente cliente (workspace) y un
  * server component (página externa). Reusa el config del kickoff (kickoff.ts).
  */
-import type { LandingConfig, SectionDef } from "@/components/landing/types";
+import type { LandingConfig } from "@/components/landing/types";
+import {
+  buildLandingConfigFromOrder,
+  landingRowData,
+  type LandingSectionRow,
+} from "@/components/landing/build-landing";
 import { landingConfigForKickoff } from "@/components/landing/configs/kickoff";
 import { normalizeCompara } from "@/components/canvas/kickoff-sections/types";
 
@@ -47,12 +58,7 @@ export function kickoffHiddenKey(key: string, sectionId?: string | null): string
 }
 
 /** Fila de sección tal como llega del hook (vivo) o del snapshot (externo). */
-export interface KickoffSectionRow {
-  key: string;
-  titleOverride?: string | null;
-  eyebrowOverride?: string | null;
-  blocks: Array<{ blockType: string; content?: string | null; data?: unknown }>;
-}
+export type KickoffSectionRow = LandingSectionRow;
 
 /**
  * Config del kickoff: hero primero, `cierre` último, y en el medio las secciones de
@@ -60,18 +66,17 @@ export interface KickoffSectionRow {
  * Las ctx-driven que el snapshot viejo no trae se agregan al final del contenido.
  */
 export function buildKickoffConfig(orderedKeys: string[]): LandingConfig {
-  const allDefs = landingConfigForKickoff().sections;
   // Orden efectivo = el vivo + las ctx-driven ausentes al final (reproduce el layout viejo).
   const effective = [...orderedKeys, ...missingCtxSections(orderedKeys)];
-  const idx = new Map(effective.map((k, i) => [k, i]));
-  const hero = allDefs.filter((d) => d.key === KICKOFF_HERO);
-  const tail = (KICKOFF_PINNED_TAIL as readonly string[])
-    .map((k) => allDefs.find((d) => d.key === k))
-    .filter((d): d is SectionDef => !!d);
-  const content = allDefs
-    .filter((d) => d.key !== KICKOFF_HERO && !(KICKOFF_PINNED_TAIL as readonly string[]).includes(d.key) && idx.has(d.key))
-    .sort((a, b) => (idx.get(a.key) ?? 0) - (idx.get(b.key) ?? 0));
-  return { type: "kickoff", sections: [...hero, ...content, ...tail] };
+  return buildLandingConfigFromOrder(
+    {
+      type: "kickoff",
+      allDefs: landingConfigForKickoff().sections,
+      heroKey: KICKOFF_HERO,
+      pinnedTail: KICKOFF_PINNED_TAIL,
+    },
+    effective,
+  );
 }
 
 /** Key de la sección propia de comparación (la que reemplazó al `compara` embebido en la prosa). */
@@ -86,30 +91,12 @@ export function stripProseCompara(data: unknown): unknown {
 }
 
 /**
- * `data` de una sección para el motor: bloque CARD → su `data` tipada; si no hay
- * CARD → `{__legacyMd}` con el markdown de los bloques TEXT viejos (fallback read-only).
- * Para el hero, inyecta titleOverride/eyebrowOverride como headline/eyebrow (los
- * kickoffs viejos guardaban el título del hero en los overrides de sección).
- *
- * `dropProseCompara`: ver `buildKickoffSections`.
+ * `data` de una sección para el motor: el núcleo compartido (CARD tipada |
+ * `{__legacyMd}` + overrides del hero) + `dropProseCompara` (ver
+ * `buildKickoffSections`).
  */
 export function kickoffSectionData(row: KickoffSectionRow, dropProseCompara = false): unknown {
-  const cardBlock = row.blocks.find((b) => b.blockType === "CARD");
-  let data: unknown;
-  if (cardBlock) {
-    data = cardBlock.data ?? {};
-  } else {
-    const md = row.blocks.map((b) => b.content).filter(Boolean).join("\n\n");
-    data = { __legacyMd: md || null };
-  }
-  if (row.key === "bienvenida") {
-    const dd = (data ?? {}) as Record<string, unknown>;
-    data = {
-      ...dd,
-      headline: dd.headline ?? row.titleOverride ?? undefined,
-      eyebrow: dd.eyebrow ?? row.eyebrowOverride ?? undefined,
-    };
-  }
+  let data = landingRowData(row, KICKOFF_HERO);
   if (dropProseCompara && row.key !== COMPARA_KEY) data = stripProseCompara(data);
   return data;
 }
