@@ -16,7 +16,7 @@
  */
 import type { BCSectionDef } from "./business-case.defs";
 import { BC_SECTION_DEFS } from "./business-case.defs";
-import { makeTechArchitectureDef, makeProcessMappingDef, USE_CASES_DEF } from "./shared-sections.defs";
+import { makeDiagramArchitectureDef, makeProcessMappingDef, USE_CASES_DEF } from "./shared-sections.defs";
 import { WEBSITE_SECTION_DEFS } from "./website.defs";
 import { HUBSPOT_TEMPLATE_ID, WEBSITE_TEMPLATE_ID } from "@/lib/business-cases/case-types";
 
@@ -28,6 +28,9 @@ export interface BcTemplateDef {
   agentIntro?: string;
   /** max_tokens de la generación completa (ausente = 8000). */
   maxTokens?: number;
+  /** false = generador TÉCNICO (p.ej. desarrollo): sin las reglas de voz de marca
+   *  comercial (metáfora eléctrica, CTA-pregunta). Default true. */
+  brandVoice?: boolean;
   features?: {
     /** El checklist de casos de uso aplica a este template (default true). */
     useCaseChecklist?: boolean;
@@ -50,7 +53,9 @@ export const BC_TEMPLATES: Record<string, BcTemplateDef> = {
       ...BC_SECTION_DEFS.slice(0, 4), // hero · dolores · antes_despues · solucion
       USE_CASES_DEF,
       ...BC_SECTION_DEFS.slice(4), // roi · cronograma · inversion · partner · cta
-      makeTechArchitectureDef({
+      // Motor de diagramas interactivo (la data vieja de tech_architecture se
+      // convierte lazy en el renderer — sin migración de DB).
+      makeDiagramArchitectureDef({
         key: "arquitectura_tecnologica",
         canvasLabel: "Arquitectura tecnológica",
         label: "Arquitectura tecnológica",
@@ -68,7 +73,7 @@ export const BC_TEMPLATES: Record<string, BcTemplateDef> = {
     id: WEBSITE_TEMPLATE_ID,
     caseLabel: "Propuesta",
     agentIntro:
-      "Sos un consultor de Smarteam (Elite HubSpot Partner en LATAM) que arma una PROPUESTA DE SITIO WEB (diseño + desarrollo, típicamente sobre HubSpot Content Hub) para un prospecto, a partir de transcripts de reuniones comerciales y notas.\n\nESTA PROPUESTA SE PRESENTA EN PANTALLA, EN VIVO: escribí en estilo ejecutivo y ESCUETO. Frases cortas; NINGÚN campo de texto de más de 2 líneas (~25 palabras); títulos de 3 a 6 palabras; detalles de UNA línea. Preferí sustantivos concretos sobre narrativa. Menos es más: si dudás entre incluir o recortar, recortá.",
+      "Sos un consultor de Smarteam (Elite HubSpot Partner · Partner de Insider, LATAM) que arma una PROPUESTA DE SITIO WEB (diseño + desarrollo, típicamente sobre HubSpot Content Hub) para un prospecto, a partir de transcripts de reuniones comerciales y notas. Posicionamiento de la marca: Smarteam no vende software — lo pone a producir.\n\nESTA PROPUESTA SE PRESENTA EN PANTALLA, EN VIVO: escribí en estilo ejecutivo y ESCUETO. Frases cortas; NINGÚN campo de texto de más de 2 líneas (~25 palabras); títulos de 3 a 6 palabras; detalles de UNA línea. Preferí sustantivos concretos sobre narrativa. Menos es más: si dudás entre incluir o recortar, recortá.",
     maxTokens: 12000, // 8 secciones más ricas que las del BC clásico
     features: { useCaseChecklist: false }, // sin sección de materialización en las 8 (F7)
     sections: WEBSITE_SECTION_DEFS,

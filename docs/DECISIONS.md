@@ -796,3 +796,55 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos
   dry-run-first; el usuario aprueba el `--apply`.
+
+## Línea gráfica Smarteam en el motor de landings (retema 2026-07)
+- **Fuente de verdad de la marca**: el doc autocontenido `prompt-linea-grafica.md` (repo del
+  sitio). Paleta: navy `#051849` (tinta Y fondo oscuro) · royal `#0B58D3` (interactivo sobre
+  claro) · `#1E8FF6` (acento sobre navy) · naranja `#E8481C` SOLO fondo de botón / display
+  sobre claro (`#C2400F` texto chico) · coral `#F87B5B` SOLO display sobre oscuro · crema
+  `#FBF1E4` para bloques "futuro/positivo". Tipografía única: Plus Jakarta Sans
+  (`--font-jakarta`). *Por qué así:* los nombres históricos de tokens (`--blue`, `--teal`,
+  `--brand-*`) se CONSERVARON como alias con valores nuevos — cientos de usos migran solos;
+  la legalidad de cada par la vigila `lib/ui/landing-brand-contrast.test.ts` (frena el merge).
+- **La menta `#42E4B3` quedó en CERO usos en el motor** — reservada para identidad Insider.
+  El naranja de HubSpot `#FF7A59` se conserva (trademark de un tercero, solo sobre claro).
+- **Voz de agentes**: reglas compartidas en `BRAND_VOICE_RULES` (canvas-agent.ts) — CTA abre
+  con pregunta de dolor, una imagen eléctrica por pieza, honestidad ("sin venderte de más"),
+  prohibido inventar métricas. `brandVoice: false` en el template = generador técnico sin esas
+  reglas (desarrollo). El prompt del kickoff vive en `kickoff.defs.ts` (el `systemPrompt` del
+  agente en DB es solo nota-puntero).
+- **Patrón para un TEMPLATE NUEVO** (p.ej. futuro canvas de sitio web — `website_v1` es el
+  ejemplo canónico ya implementado): (1) defs server-safe en
+  `components/landing/configs/<x>.defs.ts` (key/label/eyebrow/theme/schema/brief/empty por
+  sección; schemas con hojas string); (2) entry en `BC_TEMPLATES` (templates.defs.ts) con
+  `agentIntro`/`maxTokens`; (3) constante de id + entry en `BC_TYPE_CATALOG`
+  (lib/business-cases/case-types.ts); (4) renderers client en `sections-<x>.tsx` registrados
+  en `SECTION_COMPONENTS` (configs/templates.ts) — reusar `hero`/`roi`/`pain`/
+  `tech_architecture` cuando alcance; (5) SOLO canvas de PROYECTO (no BC): además
+  `canvas-defs.ts` (AGENT_GROUP_TO_CANVAS) + `artifact-gate.ts`. El `agentIntro` nuevo arranca
+  del doc de marca.
+
+## Motor de diagramas en las landings (sección "diagram", 2026-07)
+- **El FlowchartViewer (React Flow + dagre, el lienzo de Procesos) es EL motor de diagramas de
+  Nexus** — se expone al motor de landings como `sectionType: "diagram"` (`DiagramSection`).
+  Estreno: canvas Desarrollo (`arquitectura`, `relacion_objetos`). *Por qué:* las cadenas CSS de
+  `tech_architecture` no expresan ramas/cardinalidad/metadatos; el lienzo interactivo ya existía y
+  estaba probado.
+- **Patrón de datos en 2 capas** (la decisión medular): el agente genera una **spec string-only**
+  DENTRO del schema (`sistemas`/`conexiones` u `objetos`/`asociaciones` — hojas string porque
+  `coerceToSchema` coacciona todo lo demás a "") y un **conversor puro**
+  (`lib/flowchart/spec-to-diagram.ts`) la vuelve grafo en `data.diagram` (FlowchartData), que vive
+  **FUERA del schema** → `preserveNonSchemaKeys` conserva las posiciones del usuario en
+  regeneraciones por sección. La regeneración COMPLETA sí las descarta (ya era destructiva).
+- **Metadatos por conexión**: `direction` (to/bidir) · `syncType` (realtime/batch/manual) ·
+  `dataFields` (qué viaja) · `dedupeKey` (cómo no se duplica) · `trigger` (cuándo) · `pending`
+  (⚠ por confirmar) — el panel de detalle del viewer los muestra (read) y edita (edit).
+- **Legacy sin migración de DB**: conversión LAZY — `DiagramSection` resuelve en orden
+  `data.diagram` → spec → `cadena` de tech_architecture (`cadenaToDiagram`); persiste recién en el
+  primer Guardar del CSE.
+- **Cliente final**: explora (pan/zoom/fullscreen/clic→detalle) con `readOnly` — nunca edita.
+  Print/PDF: placeholder de texto (el SVG estático es tarea futura).
+- **Para enchufar OTRA superficie** (BC `arquitectura_tecnologica`, website `arquitectura_conexion`,
+  `site_architecture`): cambiar el `sectionType` de la def a `"diagram"` + registrar `DiagramSection`
+  en el registry de componentes de ese template + darle al brief el formato spec (sistemas/conexiones).
+  La conversión lazy cubre su data vieja.

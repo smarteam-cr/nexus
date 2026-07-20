@@ -26,7 +26,16 @@ const MODEL = "claude-sonnet-4-6";
 /** Intro default del BC (la usa también el assist de documento cuando el template
  *  no declara `agentIntro`). */
 export const DEFAULT_AGENT_INTRO =
-  "Sos un consultor de Smarteam (Elite HubSpot Partner en LATAM) que arma un Business Case (caso de negocio) para un prospecto, a partir de transcripts de reuniones comerciales y notas.";
+  "Sos un consultor de Smarteam (Elite HubSpot Partner · Partner de Insider, LATAM) que arma un Business Case (caso de negocio) para un prospecto, a partir de transcripts de reuniones comerciales y notas. Posicionamiento de la marca: Smarteam no vende software — lo pone a producir; la promesa nunca es la herramienta, es que la operación funcione.";
+
+/** Voz de marca Smarteam (doc: prompt-linea-grafica.md) — bloque COMPARTIDO por los
+ *  4 generadores de landings (hubspot/website/kickoff/desarrollo): se inyecta en las
+ *  reglas del system prompt de generación y en la regenaración por sección. */
+export const BRAND_VOICE_RULES = `- VOZ DE MARCA (Smarteam): directa, concreta, adulta. Frases cortas. Habla de consecuencias operativas y dinero (horas perdidas, ciclo de venta, datos que no llegan), no de features. PROHIBIDOS los superlativos vacíos: "maximizar el valor", "ROI garantizado", "solución integral", "llevar al siguiente nivel", "de clase mundial".
+- HONESTIDAD (es EL diferencial de la marca): está permitido y bien visto decir "aún no te conviene", "no hace falta cambiar nada", "sin venderte de más". Nunca sobreprometas.
+- METÁFORA ELÉCTRICA (sello de la marca): encender / apagado / conectar / producir — ÚSALA con naturalidad, MÁXIMO una imagen eléctrica por pieza (no en cada párrafo).
+- CTA: el titular del cierre abre con UNA PREGUNTA sobre el dolor del lector (ej.: "¿Cuántas horas pierde tu equipo moviendo datos a mano?"), aterrizada en la operación de ESTA empresa.
+- Si falta un dato real (cifra, cliente, resultado), deja el campo vacío o un marcador "Pendiente: …" — JAMÁS lo inventes ni atribuyas cifras a empresas con nombre propio.`;
 
 /** Secciones que el AGENTE genera: excluye `agentGenerated: false` (se llenan
  *  determinísticamente — p.ej. casos de uso del catálogo — o a mano) y las
@@ -83,7 +92,7 @@ Reglas estrictas:
 - NO inventes datos que no estén en el contexto. Si te falta info para un campo, dejalo como string vacío "" (o array vacío []). NUNCA inventes cifras de ROI ni montos de inversión.
 - Respetá la forma de cada sección: los arrays con sus objetos, los campos string como string.
 - Tono profesional, claro, orientado a valor de negocio. Específico para ESTA empresa, no genérico.
-- IDIOMA: por defecto la propuesta va en ESPAÑOL. Si el contexto especifica que debe ir en OTRO idioma (p.ej. "la propuesta debe estar en inglés"), redactá TODO el contenido en ese idioma y agregá al JSON tres keys extra: "__lang" (código ISO del idioma, p.ej. "en"), "__titles" y "__eyebrows" — estos dos últimos, objetos { key de sección: texto } con el TÍTULO y el eyebrow de cada sección traducidos a ese idioma (traducí los títulos de la guía de arriba). Si la propuesta va en español, NO incluyas esas keys.
+${tpl.brandVoice === false ? "" : `${BRAND_VOICE_RULES}\n`}- IDIOMA: por defecto la propuesta va en ESPAÑOL. Si el contexto especifica que debe ir en OTRO idioma (p.ej. "la propuesta debe estar en inglés"), redactá TODO el contenido en ese idioma y agregá al JSON tres keys extra: "__lang" (código ISO del idioma, p.ej. "en"), "__titles" y "__eyebrows" — estos dos últimos, objetos { key de sección: texto } con el TÍTULO y el eyebrow de cada sección traducidos a ese idioma (traducí los títulos de la guía de arriba). Si la propuesta va en español, NO incluyas esas keys.
 - ESTILO EN ESPAÑOL (OBLIGATORIO cuando redactes en español): TUTEO neutro (segunda persona con "tú"). Conjuga SIEMPRE en forma de tú: "Transforma", "centraliza", "optimiza", "conecta", "tienes", "puedes", "necesitas". PROHIBIDO el voseo: NUNCA escribas "Transformá", "centralizá", "optimizá", "tenés", "querés", "podés", "necesitás" ni "vos".`;
 }
 
@@ -206,6 +215,7 @@ ${shapeOf(def.schema)}
 
 Guía de la sección: ${brief ?? def.brief ?? def.agentHint}
 No inventes datos que no estén en el contenido actual o la instrucción.
+${BRAND_VOICE_RULES}
 ${langRule}`,
     messages: [
       {

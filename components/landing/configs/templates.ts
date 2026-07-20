@@ -23,6 +23,7 @@ import {
   CtaSection,
 } from "../sections";
 import { TechArchitectureSection, ProcessMappingSection, UseCasesSection } from "../sections-shared";
+import { DiagramSection } from "../sections-diagram";
 import {
   WebDiagnosisSection,
   SiteArchitectureSection,
@@ -49,6 +50,10 @@ export const SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
   tech_architecture: TechArchitectureSection,
   process_mapping: ProcessMappingSection,
   use_cases: UseCasesSection,
+  // Motor de diagramas interactivo (FlowchartViewer como sección) — cualquier
+  // template puede declarar sectionType "diagram"; la conversión lazy cubre
+  // la data vieja de tech_architecture.
+  diagram: DiagramSection,
   // Template sitio web (la Portada reusa "hero"; la sección 4 reusa "tech_architecture")
   web_diagnosis: WebDiagnosisSection,
   site_architecture: SiteArchitectureSection,

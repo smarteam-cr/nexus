@@ -23,6 +23,7 @@ import { KickoffCtaSection } from "@/components/canvas/kickoff-sections/KickoffS
 import { RoiSection, PainSection } from "../sections";
 import { TechArchitectureSection } from "../sections-shared";
 import { WebDiagnosisSection } from "../sections-website";
+import { DiagramSection } from "../sections-diagram";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const DESARROLLO_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
@@ -31,6 +32,9 @@ export const DESARROLLO_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>
   // Renderers visuales reusados del motor (business case / website).
   web_diagnosis: WebDiagnosisSection,
   roi: RoiSection,
+  // Motor de diagramas interactivo (arquitectura / relación de objetos).
+  // tech_architecture queda registrado por si un canvas viejo aún trae ese sectionType.
+  diagram: DiagramSection,
   tech_architecture: TechArchitectureSection,
   pain: PainSection,
 };

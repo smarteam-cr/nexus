@@ -19,6 +19,7 @@ import { DESARROLLO_CANVAS } from "@/lib/canvas/canvas-defs";
 import { createDesarrolloCanvas, reconcileDesarrolloCanvasSections } from "@/lib/canvas/default-canvases";
 import { loadCanvasContext } from "@/lib/canvas/load-canvas-context";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
+import { specToDiagram, relacionToDiagram } from "@/lib/flowchart/spec-to-diagram";
 import { DESARROLLO_TEMPLATE, DESARROLLO_HANDOFF_KEYS } from "@/components/landing/configs/desarrollo.defs";
 import { tagLabels } from "@/lib/tags/catalog";
 
@@ -97,6 +98,16 @@ Generá el requerimiento técnico siguiendo tus instrucciones: preciso y técnic
   for (const s of gen.sections) {
     const sectionId = sectionMap.get(s.key);
     if (!sectionId) continue;
+    // El diagrama NO lo dibuja la IA: se deriva determinísticamente de la spec
+    // string-only y se guarda en `data.diagram` (key fuera de schema → preserve
+    // la arrastra en regeneraciones, y acá se recalcula fresco en cada corrida).
+    if (s.key === "arquitectura" || s.key === "relacion_objetos") {
+      const { diagram, discarded } = s.key === "arquitectura" ? specToDiagram(s.data) : relacionToDiagram(s.data);
+      if (discarded > 0) {
+        console.warn(`[desarrollo-generate] ${s.key}: ${discarded} conexiones descartadas (desde/hacia sin sistema que matchee)`);
+      }
+      (s.data as Record<string, unknown>).diagram = diagram;
+    }
     await prisma.$transaction([
       prisma.canvasBlock.deleteMany({ where: { sectionId } }),
       prisma.canvasBlock.create({

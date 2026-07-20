@@ -40,7 +40,10 @@ export function getNodeDims(type: string): { width: number; height: number } {
 export function getLayoutedElements(
   nodes: Node[],
   edges: Edge[],
-  direction: "TB" | "LR" = "LR"
+  direction: "TB" | "LR" = "LR",
+  // Tipo de diagrama explícito (opcional): fuerza el layout sin sniffear por tipos de nodo.
+  // Los consumidores existentes no lo pasan → se conserva el sniffing histórico.
+  kind?: "integration" | "pipeline" | "classic"
 ): { nodes: Node[]; edges: Edge[] } {
   // Nodos "info" (resumen del proceso): flotan FUERA del flujo. Se apartan del layout
   // (columnas/círculo/dagre los colocarían como un paso más) y se ubican ARRIBA-IZQUIERDA
@@ -48,7 +51,7 @@ export function getLayoutedElements(
   const infoNodes = nodes.filter((n) => n.type === "info");
   if (infoNodes.length > 0) {
     const core = nodes.filter((n) => n.type !== "info");
-    const layout = getLayoutedElements(core, edges, direction);
+    const layout = getLayoutedElements(core, edges, direction, kind);
     let minX = Infinity;
     let minY = Infinity;
     for (const n of layout.nodes) {
@@ -78,8 +81,43 @@ export function getLayoutedElements(
     return { nodes: [...placed, ...layout.nodes], edges: layout.edges };
   }
 
+  // Notas SUELTAS (annotation/text SIN ninguna arista): no son pasos del flujo — se apartan
+  // del layout principal (que las colocaría como un nodo más) y se apilan en columna al
+  // margen DERECHO del bounding box del diagrama ya calculado (espejo del bloque "info"
+  // de arriba, que va arriba-izquierda).
+  const linked = new Set<string>();
+  for (const e of edges) {
+    linked.add(e.source);
+    linked.add(e.target);
+  }
+  const looseNotes = nodes.filter(
+    (n) => (n.type === "annotation" || n.type === "text") && !linked.has(n.id)
+  );
+  if (looseNotes.length > 0) {
+    const looseIds = new Set(looseNotes.map((n) => n.id));
+    const core = nodes.filter((n) => !looseIds.has(n.id));
+    const layout = getLayoutedElements(core, edges, direction, kind);
+    let maxX = -Infinity;
+    let minY = Infinity;
+    for (const n of layout.nodes) {
+      // Incluir también los sintéticos (fondos de columna incluidos): el margen derecho real.
+      const { width } = getNodeDims(n.type ?? "process");
+      maxX = Math.max(maxX, n.position.x + width);
+      minY = Math.min(minY, n.position.y);
+    }
+    if (!Number.isFinite(maxX) || !Number.isFinite(minY)) { maxX = 0; minY = 0; }
+    let top = minY;
+    const placed = looseNotes.map((n) => {
+      const { height } = getNodeDims(n.type ?? "annotation");
+      const positioned = { ...n, position: { x: maxX + 60, y: top } };
+      top += height + 24;
+      return positioned;
+    });
+    return { nodes: [...layout.nodes, ...placed], edges: layout.edges };
+  }
+
   // Diagrama de INTEGRACIÓN (mapa de sistemas): nodos "system" → layout radial propio.
-  if (nodes.some((n) => n.type === "system")) {
+  if (kind === "integration" || (kind === undefined && nodes.some((n) => n.type === "system"))) {
     return getIntegrationLayout(nodes, edges);
   }
 
@@ -88,7 +126,7 @@ export function getLayoutedElements(
     ["pipeline_stage", "trigger", "action", "follow_up", "outcome_positive", "outcome_negative", "lifecycle_change", "lead_status"].includes(n.type ?? "")
   );
 
-  if (hasPipelineNodes) {
+  if (kind === "pipeline" || (kind === undefined && hasPipelineNodes)) {
     return getPipelineLayout(nodes, edges, direction);
   }
 

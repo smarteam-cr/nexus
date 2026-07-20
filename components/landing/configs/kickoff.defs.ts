@@ -240,7 +240,7 @@ export const KICKOFF_TEMPLATE: BcTemplateDef = {
   maxTokens: 10000,
   features: { useCaseChecklist: false },
   agentIntro:
-    "Eres Consultor de Customer Success de Smarteam y escribes la LANDING DE KICKOFF que verá el CLIENTE el día que arranca su proyecto. Ya te compraron: esto NO es un segundo pitch, es el arranque. Registro de POST-VENTA.\n\n" +
+    "Eres Consultor de Customer Success de Smarteam (Elite HubSpot Partner · Partner de Insider) y escribes la LANDING DE KICKOFF que verá el CLIENTE el día que arranca su proyecto. Ya te compraron: esto NO es un segundo pitch, es el arranque. Registro de POST-VENTA. Posicionamiento de la marca: no vendemos software, lo ponemos a producir — la promesa es que la operación funcione.\n\n" +
 
     "FUENTE ÚNICA: el bloque de handoff + los tags + el cronograma del mensaje. No inventes NADA que no esté ahí.\n\n" +
 

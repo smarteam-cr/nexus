@@ -16,45 +16,51 @@
    una pasada COORDINADA con la otra PC que re-tokenice TimelineSection (anotada
    en DECISIONS).
 
-   Las fuentes (Montserrat / Open Sans) se cargan por next/font en app/layout.tsx.
-   px (no rem) para no ser distorsionado por `html { font-size: 1.15em }`.
+   LÍNEA GRÁFICA SMARTEAM (retema 2026-07): MISMOS valores que landing-engine.css
+   bajo los nombres históricos --brand-*. Si tocás un token acá, tocá su gemelo
+   allá — lib/ui/landing-brand-contrast.test.ts vigila los pares críticos.
+
+   La fuente (Plus Jakarta Sans, familia única de la marca) se carga por next/font
+   en app/layout.tsx (--font-jakarta). px (no rem) para no ser distorsionado por
+   `html { font-size: 1.15em }` de Nexus.
    ============================================================================ */
 
 .kickoff-landing {
   /* Marca Smarteam */
-  --brand-blue:          #168CF6;
-  --brand-blue-dark:     #0E6FD1;
-  --brand-blue-soft:     rgba(22, 140, 246, 0.08);
-  --brand-teal:          #42E4B3;
-  --brand-teal-dark:     #1FBE91;
-  --brand-teal-soft:     rgba(66, 228, 179, 0.10);
+  --brand-blue:          #0B58D3;                 /* royal: interactivo sobre claro */
+  --brand-blue-dark:     #07429A;
+  --brand-blue-soft:     rgba(11, 88, 211, 0.08);
+  --brand-teal:          #1E8FF6;                 /* alias histórico: acento sobre NAVY */
+  --brand-teal-dark:     #07429A;                 /* alias histórico: positivo sobre claro */
+  --brand-teal-soft:     #FBF1E4;                 /* alias histórico: crema futuro/positivo */
+  --cream-line:          #F0D4B4;
 
   /* Light theme (cuerpo) */
-  --bg:                  #FFFFFF;
-  --bg-soft:             #F7F8FA;
-  --bg-elevated:         #FFFFFF;
-  --border:              #E5E7EB;
-  --border-strong:       #D1D5DB;
-  --text:                #0F172A;
-  --text-secondary:      #475569;
-  --text-muted:          #94A3B8;
+  --bg:                  #ffffff;
+  --bg-soft:             #eef3fc;
+  --bg-elevated:         #ffffff;
+  --border:              #dbe4f3;
+  --border-strong:       #b9cdf0;
+  --text:                #051849;
+  --text-secondary:      #41527a;
+  --text-muted:          #5B6B95;
 
-  /* Dark theme */
-  --dark-bg:             #0B1426;
-  --dark-bg-soft:        #101B30;
-  --dark-bg-card:        #14223C;
+  /* Dark theme — navy de marca */
+  --dark-bg:             #051849;
+  --dark-bg-soft:        #081F56;
+  --dark-bg-card:        #0C2765;
   --dark-border:         rgba(255, 255, 255, 0.08);
   --dark-border-strong:  rgba(255, 255, 255, 0.16);
-  --dark-text:           #F1F5F9;
-  --dark-text-secondary: #94A3B8;
-  --dark-text-muted:     #64748B;
+  --dark-text:           #FFFFFF;
+  --dark-text-secondary: #aebfe0;
+  --dark-text-muted:     #7D90BE;
 
-  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
   font-size: 16px; /* baseline limpio (Nexus escala html a 1.15em) */
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-open-sans), system-ui, sans-serif;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
@@ -63,21 +69,24 @@
 
 /* ── Tipografía display ──────────────────────────────────────────────────── */
 .kickoff-landing .font-display {
-  font-family: var(--font-montserrat), system-ui, sans-serif;
-  font-weight: 600;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.022em;
 }
 .kickoff-landing .display-tight { letter-spacing: -0.022em; }
 .kickoff-landing .display-italic {
-  font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
   font-style: italic;
-  font-weight: 600;
+  font-weight: 800;
 }
 .kickoff-landing .eyebrow {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--brand-blue);
+  /* Naranja texto-chico de marca (5.21 sobre blanco ✓); el royal acá quedaría
+     inconsistente con los eyebrows naranjas del motor .stl. */
+  color: #C2400F;
 }
 
 /* ── Secciones ───────────────────────────────────────────────────────────── */
@@ -86,8 +95,8 @@
 /* ── Reveal on scroll ────────────────────────────────────────────────────── */
 .kickoff-landing .reveal {
   opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 700ms var(--ease), transform 700ms var(--ease);
+  transform: translateY(26px);
+  transition: opacity 800ms var(--ease), transform 800ms var(--ease);
   will-change: opacity, transform;
 }
 .kickoff-landing .reveal.is-visible { opacity: 1; transform: translateY(0); }

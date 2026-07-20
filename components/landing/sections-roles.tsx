@@ -319,7 +319,7 @@ export const RoleLeadSection: FC<SectionProps<RoleMeasuresData>> = (p) => <RoleM
  * también se renderiza en externo/PDF, donde una librería de charts (canvas, `ssr:false`)
  * rompería, y un loop perpetuo cuelga la captura de pantalla.
  */
-const CHART_TRACK = "#E5E7EB";
+const CHART_TRACK = "#dbe4f3";
 function ChartGauge({ tone }: { tone: string }) {
   const r = 26, C = 2 * Math.PI * r;
   return (
@@ -391,7 +391,7 @@ export const RoleScoreboardSection: FC<SectionProps<RoleScoreboardData>> = ({ da
         {(it, i, handle) => {
           const kind: RoleKpiKind = it.kind === "arrastre" ? "arrastre" : "prediccion";
           const chart: RoleChartKind = CHART_ORDER.includes(it.chart) ? it.chart : "bar";
-          const tone = kind === "arrastre" ? "#1FBE91" : "#168CF6";
+          const tone = kind === "arrastre" ? "#C2400F" : "#0B58D3";
           const Viz = CHART_VIZ[chart];
           const nextChart = () => CHART_ORDER[(CHART_ORDER.indexOf(chart) + 1) % CHART_ORDER.length];
           return (

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import { Geist, Geist_Mono, Montserrat, Open_Sans } from "next/font/google";
+import { Geist, Geist_Mono, Montserrat, Open_Sans, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import "react-day-picker/style.css";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -34,6 +34,16 @@ const openSans = Open_Sans({
   display: "swap",
 });
 
+// Línea gráfica Smarteam (retema 2026-07): familia ÚNICA de las landings
+// cliente-facing (BC/Kickoff/Desarrollo/website). Solo la consumen los scopes
+// `.stl` y `.kickoff-landing` vía var(--font-jakarta) — la app interna no cambia.
+const jakarta = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Nexus",
   description: "Nexus — planifica y ejecuta tu implementación de HubSpot con IA",
@@ -64,7 +74,7 @@ export default async function RootLayout({
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} ${openSans.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} ${openSans.variable} ${jakarta.variable} antialiased`}
       >
         <ToastProvider>
           <UndoProvider>

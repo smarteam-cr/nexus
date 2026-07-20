@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { parseRegenBody, regenerateTypedSection } from "@/lib/canvas/regenerate-section";
+import { specToDiagram, relacionToDiagram } from "@/lib/flowchart/spec-to-diagram";
 import { briefsByKeyFrom } from "@/lib/business-cases/section-briefs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { templateDefsByKey, findDefAcrossTemplates } from "@/components/landing/configs/templates.defs";
@@ -95,5 +96,18 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     curatedMessage: "Esta sección se llena desde el catálogo y se edita a mano (sin IA).",
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
-  return NextResponse.json({ data: result.data });
+
+  // Sección de DIAGRAMA: la spec cambió → recalcular el grafo. Las posiciones
+  // manuales de ESTA sección se descartan a propósito (un layout viejo sobre
+  // nodos nuevos mentiría); preserveNonSchemaKeys habría arrastrado el stale.
+  const data = result.data;
+  if (def?.sectionType === "diagram" && data && typeof data === "object" && !Array.isArray(data)) {
+    const d = data as Record<string, unknown>;
+    const conv =
+      Array.isArray(d.objetos) || Array.isArray(d.asociaciones)
+        ? relacionToDiagram(d)
+        : specToDiagram(d);
+    d.diagram = conv.diagram;
+  }
+  return NextResponse.json({ data });
 }

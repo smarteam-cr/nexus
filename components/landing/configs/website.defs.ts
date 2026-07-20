@@ -7,7 +7,7 @@
  * "tech_architecture" (sections-shared). Schemas SOLO con hojas string.
  */
 import type { BCSectionDef } from "./business-case.defs";
-import { makeTechArchitectureDef } from "./shared-sections.defs";
+import { makeDiagramArchitectureDef } from "./shared-sections.defs";
 
 const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
@@ -79,14 +79,15 @@ export const WEBSITE_SECTION_DEFS: BCSectionDef[] = [
       required: ["fases"],
     },
   },
-  // 4) Arquitectura de conexión — REUSA tech_architecture (sections-shared)
-  makeTechArchitectureDef({
+  // 4) Arquitectura de conexión — motor de diagramas (la data vieja en cadena se
+  //    convierte lazy en el renderer).
+  makeDiagramArchitectureDef({
     key: "arquitectura_conexion",
     canvasLabel: "Arquitectura de conexión",
     label: "Arquitectura de conexión",
     theme: "light",
     brief:
-      "Arquitectura de conexión como CADENA de 4 pasos (se presenta como cards con flechas): típico Visitante ('Búsqueda, IA o campaña') → Sitio ('HubSpot Content Hub · formularios y CTAs') → HubSpot CRM ('Lead registrado al instante') → Equipo comercial ('Notificación y seguimiento'). Cada paso: `actor` (quién/qué), `titulo` de 3 a 6 palabras y `detalle` de UNA línea. `intro`: máximo 2 frases (ej. 'El sitio se construye dentro de HubSpot: sitio y CRM son la misma plataforma'). `fueraDeAlcance` y `opcionales`: frases cortas. Fuente: SOLO sistemas mencionados.",
+      "Arquitectura de conexión como MAPA DE SISTEMAS (se dibuja como diagrama: cajas = sistemas, flechas = datos que fluyen). Típico: Sitio ('HubSpot Content Hub · formularios y CTAs') → HubSpot CRM ('Lead registrado al instante') → herramientas del equipo comercial. `intro`: máximo 2 frases (ej. 'El sitio se construye dentro de HubSpot: sitio y CRM son la misma plataforma'). `sistemas` (2-5): SOLO herramientas con login/API/BD propia mencionadas — `nombre` EXACTO, `rol` corto, `detalle` de 1 línea. `conexiones`: `desde`/`hacia` con el `nombre` EXACTO · `titulo` = el dato que fluye (3-6 palabras) · `cuando` = qué lo dispara · `direction` 'to'/'bidir' · `syncType` 'realtime'/'batch'/'manual' · si algo está por confirmar: '⚠️ Por definir' + `pending: 'si'`. `fueraDeAlcance` y `opcionales`: frases cortas. No inventes integraciones.",
   }),
   // 5) Alcance — lista PLANA de entregables (≠ etapas: eso vive en Cronograma)
   {
@@ -169,7 +170,7 @@ export const WEBSITE_SECTION_DEFS: BCSectionDef[] = [
     empty: { cards: [], siguientePaso: "", buttonLabel: "" },
     agentHint: "4 cards de credenciales/diferenciales + siguiente paso + CTA.",
     brief:
-      "Por qué Smarteam: `cards` (hasta 4) con credenciales y diferenciales relevantes para ESTE proyecto — 'HubSpot Partner Elite' y '+200 proyectos, +8 países LATAM' son fijas; sumá referencia sectorial o equipo solo si hay evidencia. `siguientePaso`: qué sigue si avanzan (ej. sesión de arquitectura / firma). `buttonLabel`: 'Agendar siguiente paso'.",
+      "Por qué Smarteam: `cards` (hasta 4) con credenciales y diferenciales relevantes para ESTE proyecto — 'HubSpot Partner Elite' y '+200 proyectos, +8 países LATAM' son fijas; sumá referencia sectorial o equipo solo si hay evidencia. `siguientePaso`: qué sigue si avanzan (ej. sesión de arquitectura / firma), honesto y sin venderte de más. `buttonLabel`: 'Agendar siguiente paso'.",
     schema: {
       type: "object",
       properties: {

@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { DiagramStatic } from "@/components/landing/diagram-static";
+import type { FlowchartData } from "@/components/flowchart/FlowchartViewer";
 
 // ── Tipos exportados para la página server ────────────────────────────────
 
@@ -105,10 +107,27 @@ function BlockView({ block }: { block: PrintBlock }) {
   }
 
   if (type === "FLOWCHART") {
+    // SVG estático (síncrono, imprime siempre) — antes era un placeholder de texto.
+    const fc = data as { nodes?: unknown[] } | undefined;
+    if (Array.isArray(fc?.nodes) && fc.nodes.length > 0) {
+      return <DiagramStatic diagram={fc as unknown as FlowchartData} />;
+    }
     return (
       <div className="cp-flowchart-note">
         <em>[Diagrama de flujo — ver en pantalla para visualización interactiva]</em>
       </div>
+    );
+  }
+
+  // CARDs de sección con diagrama embebido (motor de diagramas de las landings —
+  // DiagramSection guarda el grafo en data.diagram): mismo SVG estático + el texto.
+  const diagramNodes = (data?.diagram as { nodes?: unknown[] } | undefined)?.nodes;
+  if (Array.isArray(diagramNodes) && diagramNodes.length > 0) {
+    return (
+      <>
+        <DiagramStatic diagram={data?.diagram as FlowchartData} />
+        <MarkdownView content={block.content ?? ""} />
+      </>
     );
   }
 

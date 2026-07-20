@@ -21,6 +21,13 @@ import { KICKOFF_SECTION_COMPONENTS, landingConfigForKickoff } from "@/component
 import { DESARROLLO_SECTION_DEFS } from "@/components/landing/configs/desarrollo.defs";
 import { DESARROLLO_SECTION_COMPONENTS, landingConfigForDesarrollo } from "@/components/landing/configs/desarrollo";
 
+/** Renderers que ningún def VIVO usa pero que se conservan a PROPÓSITO: los
+ *  snapshots publicados congelan `sectionType` y `configForSnapshot` los
+ *  resuelve por este registry — borrarlos rompería lo ya publicado. Entra acá
+ *  SOLO con esa justificación (ej. `tech_architecture`, reemplazado por
+ *  `diagram` en el retema 2026-07 — ver shared-sections.defs). */
+const LEGACY_SNAPSHOT_TYPES = new Set(["tech_architecture"]);
+
 describe("BC_TEMPLATES: toda def resuelve renderer y las keys están congeladas", () => {
   it("cada sectionType de cada template tiene componente registrado", () => {
     for (const tpl of Object.values(BC_TEMPLATES)) {
@@ -56,11 +63,13 @@ describe("BC_TEMPLATES: toda def resuelve renderer y las keys están congeladas"
     }
   });
 
-  it("sin componentes huérfanos en SECTION_COMPONENTS", () => {
+  it("sin componentes huérfanos en SECTION_COMPONENTS (salvo legacy de snapshots)", () => {
     const usados = new Set(
       Object.values(BC_TEMPLATES).flatMap((tpl) => tpl.sections.map((d) => d.sectionType ?? d.key)),
     );
-    const huerfanos = Object.keys(SECTION_COMPONENTS).filter((t) => !usados.has(t));
+    const huerfanos = Object.keys(SECTION_COMPONENTS).filter(
+      (t) => !usados.has(t) && !LEGACY_SNAPSHOT_TYPES.has(t),
+    );
     expect(huerfanos).toEqual([]);
   });
 });
@@ -104,9 +113,11 @@ describe("Desarrollo: registry completo + keys congeladas", () => {
     ]);
   });
 
-  it("sin componentes huérfanos en DESARROLLO_SECTION_COMPONENTS", () => {
+  it("sin componentes huérfanos en DESARROLLO_SECTION_COMPONENTS (salvo legacy de snapshots)", () => {
     const usados = new Set(DESARROLLO_SECTION_DEFS.map((d) => d.sectionType ?? d.key));
-    const huerfanos = Object.keys(DESARROLLO_SECTION_COMPONENTS).filter((t) => !usados.has(t));
+    const huerfanos = Object.keys(DESARROLLO_SECTION_COMPONENTS).filter(
+      (t) => !usados.has(t) && !LEGACY_SNAPSHOT_TYPES.has(t),
+    );
     expect(huerfanos).toEqual([]);
   });
 });
