@@ -15,7 +15,8 @@
  *    las sintéticas cronograma/procesos).
  *  - onReorder → reorderSections (keys→ids, bienvenida siempre primero).
  *
- * El renderer viejo sigue disponible con `?kve=old` (rollback) — ver ProjectCanvasPanel.
+ * El renderer viejo (KickoffLanding) y su escape `?kve=old` se borraron (Ola 4 del
+ * plan de puestos) — rollback de esa ola = git revert.
  */
 import { useCallback, useMemo } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";

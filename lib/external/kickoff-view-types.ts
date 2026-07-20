@@ -3,8 +3,9 @@
  *
  * Contrato de tipos del shape LIMPIO que ve el cliente externo del Kickoff.
  * Archivo SOLO-tipos (sin imports de runtime) para que lo compartan el lib
- * server-side (kickoff-view.ts, que toca Prisma) y el componente client
- * (KickoffLanding/KickoffBlock) sin arrastrar Prisma al bundle del browser.
+ * server-side (kickoff-view.ts, que toca Prisma) y los componentes client del
+ * kickoff (KickoffClientView/KickoffWorkspace + adaptador) sin arrastrar Prisma
+ * al bundle del browser.
  *
  * CLAVE DE SEGURIDAD: el shape externo NO lleva `source` / `status` /
  * `agentRunId`. `RenderableBlock` deja `status`/`source` OPCIONALES: el modo
@@ -24,7 +25,7 @@ export interface RenderableBlock {
 
 /** Tipos del cronograma externo (D.1.5): viven en timeline-view-types.ts —
  *  compartidos por las DOS superficies. Acá quedan los alias históricos para
- *  no churnear a los consumidores del kickoff (KickoffLanding). */
+ *  no churnear a los consumidores del kickoff. */
 import type {
   ExternalTimelineTask,
   ExternalTimelinePhase,

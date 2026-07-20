@@ -25,7 +25,7 @@ import { SortableItems } from "@/components/landing/sortable";
 import { HeroUploadButtons, BrandRow, TagRow } from "@/components/landing/hero-parts";
 import { CtaEditor, CtaButton } from "@/components/landing/sections";
 import type { SectionProps } from "@/components/landing/types";
-import { Prose, InlineMD } from "@/components/canvas/KickoffBlock";
+import { Prose, InlineMD } from "@/components/landing/prose";
 import TimelineSection from "@/components/canvas/TimelineSection";
 import { timelineSpan, fmtFull } from "@/lib/timeline/weeks";
 import type { FlowchartData } from "@/components/flowchart/FlowchartViewer";

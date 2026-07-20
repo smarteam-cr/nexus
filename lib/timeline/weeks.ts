@@ -4,7 +4,7 @@
  * Matemática de semanas del cronograma (ProjectTimeline) — funciones PURAS,
  * client-safe, sin Prisma. Única fuente de la conversión semanas → fechas:
  * la consumen el editor interno (CronogramaCanvas), el Gantt interno
- * (TimelineGantt) y la landing del cliente (KickoffLanding). Centralizado para
+ * (TimelineGantt) y la landing del cliente (TimelineSection). Centralizado para
  * que la vista interna y la del cliente nunca muestren fechas distintas.
  *
  * Convenciones:

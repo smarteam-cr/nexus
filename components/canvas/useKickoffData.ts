@@ -3,12 +3,13 @@
 /**
  * components/canvas/useKickoffData.ts
  *
- * Capa de datos del editor de Kickoff (CSE), COMPARTIDA por el renderer viejo
- * (KickoffLandingInternal, rollback) y el nuevo (KickoffWorkspace sobre LandingView).
- * Encapsula: useCanvasSections + fetch de timeline/procesos/visibility/logo + el
- * staging (dirty) + toggle de visibilidad + "Subir cambios al cliente" (publishChanges).
+ * Capa de datos del editor de Kickoff (CSE), consumida por KickoffWorkspace (sobre
+ * LandingView). Encapsula: useCanvasSections + fetch de timeline/procesos/visibility/
+ * logo + el staging (dirty) + toggle de visibilidad + "Subir cambios al cliente"
+ * (publishChanges).
  *
- * Extraído tal cual de KickoffLandingInternal para no duplicar ni divergir.
+ * Nació extraída del renderer legacy KickoffLandingInternal (borrado en la Ola 4
+ * del plan de puestos) — hoy KickoffWorkspace es su único consumidor.
  */
 import { useCallback, useEffect, useState } from "react";
 import { useCanvasSections } from "./useCanvasSections";

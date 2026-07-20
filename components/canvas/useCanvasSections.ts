@@ -52,8 +52,8 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 
 export function useCanvasSections(
   // Base de las rutas de canvas: `/api/projects/${projectId}` (kickoff/handoff) o
-  // `/api/business-cases/${id}` (Ventas). Permite reusar el hook (y KickoffLanding)
-  // para canvases que cuelgan de un BusinessCase, no solo de un Project.
+  // `/api/business-cases/${id}` (Ventas). Permite reusar el hook para canvases que
+  // cuelgan de un BusinessCase, no solo de un Project.
   basePath: string,
   canvasId: string,
   // D.3 staging — se dispara tras CUALQUIER mutación de contenido exitosa (bloque o

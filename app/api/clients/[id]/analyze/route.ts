@@ -1568,9 +1568,9 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
     // curadas equipo/horarios/canales (HUMAN) sobreviven al deleteMany source:AGENT.
     //
     // FLIP: el kickoff SIEMPRE genera tipado (data estructurada → 1 CARD/sección). El
-    // render default es el motor nuevo; los kickoffs viejos (markdown) se siguen viendo
-    // por el fallback tolerante del adaptador. El renderer viejo queda como escape
-    // (?kve=old / ?engine=old). Ver plan F4/F5 (flip ejecutado).
+    // render es el motor LandingView; los kickoffs viejos (markdown) se siguen viendo
+    // por el fallback tolerante del adaptador. (El renderer legacy y sus escapes
+    // ?kve=old/?engine=old se borraron en la Ola 4 del plan de puestos.)
     if (isKickoffAgent) {
       // CARRY-FORWARD (load-bearing): la generación del kickoff sobreescribe los bloques
       // EN EL LUGAR (borra y recrea). Sin pasar la data previa, `coerceToSchema` dejaría

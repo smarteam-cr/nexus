@@ -15,15 +15,14 @@
  * (`./actions.ts`, server action — la cookie tiene `path:"/external"` y no llegaría a
  * `/api/external/*`). Repite el mismo chokepoint antes de tocar nada.
  *
- * MOTOR DE RENDER (FLIP hecho): por defecto usa el motor `LandingView` (mismo que
- * Business Cases; tolerante: pinta la data tipada nueva Y el markdown viejo por
- * fallback). `?engine=old` = escape al renderer histórico `KickoffLanding` (rollback
- * puntual). Los 133 kickoffs viejos se ven por el fallback; los nuevos, tipados.
+ * MOTOR DE RENDER: el motor `LandingView` (mismo que Business Cases; tolerante:
+ * pinta la data tipada nueva Y el markdown viejo por fallback). El renderer
+ * histórico `KickoffLanding` y su escape `?engine=old` se BORRARON (Ola 4 del plan
+ * de puestos) — rollback de esta ola = `git revert` (el renderer no tenía datos propios).
  *
  * `force-dynamic`: lee cookies por request, nunca se cachea.
  */
 import { cookies } from "next/headers";
-import KickoffLanding from "@/components/canvas/KickoffLanding";
 import KickoffClientView from "@/components/external/KickoffClientView";
 import ExternalShell from "@/components/external/ExternalShell";
 import NoAccess from "@/components/external/NoAccess";
@@ -34,16 +33,8 @@ import { assignHorarioAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function ExternalKickoffPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ engine?: string }>;
-}) {
-  const [sp, cookieStore] = await Promise.all([searchParams, cookies()]);
-  // FLIP: el motor NUEVO (LandingView) es el DEFAULT. `?engine=old` = escape al renderer
-  // histórico (rollback puntual). Los kickoffs viejos (markdown) se ven por el fallback
-  // tolerante del adaptador; los tipados nuevos, por campos.
-  const useNewEngine = sp.engine !== "old";
+export default async function ExternalKickoffPage() {
+  const cookieStore = await cookies();
   const token = cookieStore.get(EXTERNAL_ACCESS_COOKIE)?.value ?? "";
 
   const [data, smarteamLogoUrl] = await Promise.all([
@@ -54,9 +45,7 @@ export default async function ExternalKickoffPage({
   return (
     <ExternalShell smarteamLogoUrl={smarteamLogoUrl}>
       {data ? (
-        useNewEngine
-          ? <KickoffClientView data={data} assignAction={assignHorarioAction} />
-          : <KickoffLanding data={data} />
+        <KickoffClientView data={data} assignAction={assignHorarioAction} />
       ) : (
         <NoAccess />
       )}

@@ -61,8 +61,9 @@ function isBlank(v: unknown): boolean {
   return false;
 }
 
-/** Toggle de ojo (mostrar/ocultar al cliente) — MISMO look que el del kickoff
- *  (KickoffLanding.HideToggle): fuente única de estilo entre landings. */
+/** Toggle de ojo (mostrar/ocultar al cliente). Heredó el look del HideToggle del
+ *  renderer legacy del kickoff (KickoffLanding, borrado en la Ola 4) — hoy esta
+ *  es LA fuente de estilo del toggle entre landings. */
 function HideToggle({ hidden, label, onToggle }: { hidden: boolean; label: string; onToggle: () => void }) {
   return (
     <button

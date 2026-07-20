@@ -10,7 +10,6 @@ import SectionDiscoveryModal from "./SectionDiscoveryModal";
 import HubBadge from "@/components/ui/HubBadge";
 import SectionBlockList from "@/components/canvas/SectionBlockList";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
-import KickoffLanding from "@/components/canvas/KickoffLanding";
 import KickoffWorkspace from "@/components/canvas/KickoffWorkspace";
 import DesarrolloWorkspace from "@/components/canvas/DesarrolloWorkspace";
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
@@ -583,15 +582,12 @@ export default function ProjectCanvasPanel({
         // (toolbar del proyecto), junto al resto de la visibilidad por superficie.
         <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
           {/* agentNonce remonta el landing al terminar una corrida del CTA → refetch.
-              FLIP: el editor NUEVO sobre el motor LandingView (drag&drop + edición tipada)
-              es el DEFAULT. El renderer VIEJO queda como escape con `?kve=old` (rollback
-              puntual; el fallback tolerante del motor ya pinta la prosa markdown heredada). */}
+              Editor sobre el motor LandingView (drag&drop + edición tipada); el fallback
+              tolerante del motor pinta la prosa markdown heredada. El renderer viejo
+              (KickoffLanding) y su escape `?kve=old` se borraron en la Ola 4 del plan
+              de puestos — rollback de esa ola = git revert. */}
           <CanvasBoundary label="el Kickoff">
-            {searchParams.get("kve") === "old" ? (
-              <KickoffLanding key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} editable />
-            ) : (
-              <KickoffWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
-            )}
+            <KickoffWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
           </CanvasBoundary>
         </div>
       )}
