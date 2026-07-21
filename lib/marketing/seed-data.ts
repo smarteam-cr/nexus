@@ -229,12 +229,25 @@ GANCHO (la PRIMERA línea decide si se lee o no — es lo MÁS importante del co
 - PROHIBIDO abrir con saludos, "Hoy quiero hablarte de…", definiciones de diccionario, o generalidades tibias ("En el mundo actual…").
 - El resto del copy debe SOSTENER la promesa del gancho: si el gancho promete una brecha/insight, entregalo.
 
+TIPOS DE POST (cada idea es de UNO de estos dos tipos — genera una MEZCLA en cada tanda):
+- "EMPRESA": post para la PÁGINA de Smarteam. Voz institucional, ESCUETO (~300-800 caracteres): un gancho + UNA idea con sustancia + cierre que abre conversación. Sin relato personal ("yo", "mi equipo"): habla como la marca.
+- "PERSONA": post para el PERFIL PERSONAL de alguien del equipo (marca personal / social selling). PRIMERA PERSONA, con STORYTELLING, más largo (~900-1600 caracteres): una observación o anécdota de campo, tensión, aprendizaje y una reflexión que invita a conversar. Es un BORRADOR GENÉRICO que cualquiera del equipo adapta a su voz — NO nombres propios ni datos personales inventados; escribe en primera persona neutra ("hace poco conversaba con un líder comercial…").
+Cuántas de cada tipo: cada tanda te indica en el input un bloque "OBJETIVO DE ESTA TANDA" con cuántas piezas EMPRESA y cuántas PERSONA generar — respetá esos números como OBJETIVO (no mínimo), priorizando calidad. Si no viene ese bloque, usá el reparto default ~60% EMPRESA / ~40% PERSONA.
+
+GUÍA SEMANAL DE SMARTEAM (SOLO posts "EMPRESA" — asigna a cada uno su "journeyStage"; los "PERSONA" llevan journeyStage: null):
+Los posts de empresa siguen un viaje lógico. Reparte los EMPRESA de forma balanceada entre las 3 etapas:
+- "CONCIENCIA" (🔴 Lun/Mar — dolor, ATRAER; el lector piensa "ese es mi problema"): caos operativo, datos aislados, tareas repetitivas, nivel de la escala de madurez, gestión del cambio.
+- "ESTRATEGIA" (🟡 Mié/Jue — solución, EDUCAR; "hay una mejor forma de organizarnos"): transformación comercial, RevOps, arquitectura de datos, conexión de sistemas.
+- "INSPIRACION" (🟢 Vie — futuro, CONVENCER; "quiero esos resultados"): IA aplicada a revenue, ROI, automatización, AEO (visibilidad en IA).
+
 QUÉ PRODUCES (un solo JSON, sin markdown ni fences, con esta forma EXACTA):
 {
   "contentIdeas": [
     {
       "title": "título interno corto de la idea",
-      "copy": "el copy COMPLETO listo para publicar en LinkedIn (con saltos de línea \\n si hacen falta; conciso: 500-1300 caracteres)",
+      "postType": "EMPRESA" | "PERSONA",
+      "journeyStage": "CONCIENCIA" | "ESTRATEGIA" | "INSPIRACION" | null,
+      "copy": "el copy COMPLETO listo para publicar en LinkedIn (con saltos de línea \\n si hacen falta). Largo según el tipo: EMPRESA ~300-800 chars; PERSONA ~900-1600 chars",
       "imageConcept": "descripción TEXTUAL del concepto visual que acompañaría el post (qué se ve, estilo, texto sobre la imagen si aplica). NO generes la imagen, solo descríbela.",
       "pillarName": "nombre EXACTO de un pilar existente de la lista, o null si propones uno nuevo",
       "newPillarName": "SOLO si pillarName es null: el nombre del pilar nuevo (debe estar también en pillarSuggestions)",
@@ -250,9 +263,9 @@ QUÉ PRODUCES (un solo JSON, sin markdown ni fences, con esta forma EXACTA):
 }
 
 REGLAS DE CADA COLECCIÓN:
-- contentIdeas: MÁXIMO 15. Variedad de formatos (opinión, educativo, lista, historia, dato + lectura, pregunta provocadora) y de pilares. Cada copy debe poder publicarse TAL CUAL: gancho fuerte en la primera línea, desarrollo con sustancia (enseña algo), cierre que abre conversación. El público: decisores de empresas medianas/grandes LATAM (ver ICP): habla de revenue, procesos y adopción, no de features técnicos.
+- contentIdeas: la cantidad y el reparto EMPRESA/PERSONA los indica el bloque "OBJETIVO DE ESTA TANDA" del input (default ~60% EMPRESA / ~40% PERSONA si no viene); es un OBJETIVO priorizando calidad, nunca más de 25. Cada idea lleva su "postType"; los EMPRESA además llevan "journeyStage" repartido balanceadamente entre CONCIENCIA/ESTRATEGIA/INSPIRACION (los PERSONA llevan journeyStage: null). Variedad de formatos (opinión, educativo, lista, historia, dato + lectura, pregunta provocadora) y de pilares. Cada copy debe poder publicarse TAL CUAL: gancho fuerte en la primera línea, desarrollo con sustancia (enseña algo), cierre que abre conversación. El público: decisores de empresas medianas/grandes LATAM (ver ICP): habla de revenue, procesos y adopción, no de features técnicos.
 - Categorización: usa los pilares EXISTENTES siempre que el tema calce (match por nombre EXACTO). Propón un pilar nuevo SOLO si detectas un tema recurrente y valioso en la inspiración que NO cabe en ningún pilar existente — y entonces la idea lleva "pillarName": null + "newPillarName", y el pilar aparece en pillarSuggestions con su rationale.
 - pillarSuggestions: pocas y justificadas (0-3). Son sugerencias que un humano aprueba: el rationale debe convencer con evidencia de los posts/insumos.
 - campaignIdeas: 2-5 ideas de campañas de pago (Google Search o paid social) alineadas al ICP y a los temas con mejor señal en la inspiración. En GOOGLE_SEARCH incluye keywords concretas en la description.
 
-CONCISIÓN: la respuesta completa debe caber holgada en el límite de salida. Copys concisos (500-1300 chars), descripciones al grano. Si tienes que elegir entre 15 ideas flojas y 10 fuertes, entrega 10 fuertes.`;
+CONCISIÓN: la respuesta completa debe caber holgada en el límite de salida. Copys al largo de su tipo (EMPRESA ~300-800, PERSONA ~900-1600 chars), descripciones al grano. Si tienes que elegir entre 15 ideas flojas y 10 fuertes, entrega 10 fuertes.`;

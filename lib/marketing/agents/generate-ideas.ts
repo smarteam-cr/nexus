@@ -20,6 +20,7 @@ import {
   generatedContentIdeaSchema,
   generatedPillarSuggestionSchema,
   generatedCampaignIdeaSchema,
+  MARKETING_GEN_DEFAULTS,
   type GeneratedContentIdea,
   type GeneratedPillarSuggestion,
   type GeneratedCampaignIdea,
@@ -27,7 +28,10 @@ import {
 
 const MAX_POSTS_IN_CONTEXT = 60;
 const MAX_POST_CHARS = 1000;
-const MAX_IDEAS = 15;
+// Techo duro del .slice — red de seguridad del presupuesto de tokens, INDEPENDIENTE
+// del objetivo del form. El objetivo real por tanda sale de MarketingSettings
+// (genEmpresaTarget + genPersonaTarget); el cap efectivo es min(objetivo, HARD_CAP).
+const HARD_CAP = 25;
 
 // ── Input building ─────────────────────────────────────────────────────────────
 
@@ -35,6 +39,8 @@ export async function buildGenerationInput(): Promise<{
   input: string;
   postIds: Set<string>;
   postsInWindow: number;
+  empresaTarget: number;
+  personaTarget: number;
 }> {
   const windowStart = inspirationWindowStart();
   const [posts, icpItems, personas, pillars, settings] = await Promise.all([
@@ -106,19 +112,34 @@ export async function buildGenerationInput(): Promise<{
       ? `== CAMPAÑA ACTIVA (PRIORIDAD) ==\nHay ${campaignPillars.length === 1 ? "un tema marcado" : "temas marcados"} como campaña activa. La MAYORÍA de las contentIdeas que generes deben servir a ${campaignPillars.length === 1 ? "este enfoque" : "estos enfoques"}; el resto puede cubrir otros pilares.\n${campaignPillars.map(pillarLine).join("\n")}`
       : null;
 
+  // Objetivo de esta tanda (lo fija el mini-form de /marketing/generacion; el cron hereda
+  // los defaults guardados). OBJETIVO, no mínimo: si el modelo no llega con fuerza a esos
+  // números, entrega menos y de más calidad (regla del módulo "10 fuertes > 15 flojas").
+  const empresaTarget = settings?.genEmpresaTarget ?? MARKETING_GEN_DEFAULTS.empresa;
+  const personaTarget = settings?.genPersonaTarget ?? MARKETING_GEN_DEFAULTS.persona;
+  const totalTarget = Math.min(empresaTarget + personaTarget, HARD_CAP);
+  const targetBlock = `== OBJETIVO DE ESTA TANDA ==\nGenerá aproximadamente ${empresaTarget} pieza(s) EMPRESA (página de la empresa) y ${personaTarget} pieza(s) PERSONA (perfil personal / social selling), ~${totalTarget} en total. Es un OBJETIVO, no un mínimo: si no llegás con fuerza a esos números, entregá MENOS y de más calidad — 10 fuertes valen más que 15 flojas. Respetá el tipo (postType) de cada pieza según lo pedido.`;
+
   const input = [
     `== VOZ DE MARCA ==\n${settings?.brandVoice ?? ""}`,
     `== ICP (perfil de cliente ideal) ==\n${icpText || "(sin ítems)"}`,
     `== BUYER PERSONAS ==\n${personasText}`,
     `== PILARES DE CONTENIDO EXISTENTES ==\n${pillarsText}`,
     campaignBlock,
+    targetBlock,
     `== POSTS DE INSPIRACIÓN (${sorted.length} de los últimos 3 meses, ordenados por engagement) ==\n\n${postLines.join("\n\n")}`,
-    `Genera el JSON con contentIdeas (máx ${MAX_IDEAS}), pillarSuggestions y campaignIdeas.`,
+    `Genera el JSON con contentIdeas (objetivo ~${totalTarget}, máx ${HARD_CAP}), pillarSuggestions y campaignIdeas.`,
   ]
     .filter((x): x is string => x !== null)
     .join("\n\n");
 
-  return { input, postIds: new Set(sorted.map((p) => p.id)), postsInWindow: posts.length };
+  return {
+    input,
+    postIds: new Set(sorted.map((p) => p.id)),
+    postsInWindow: posts.length,
+    empresaTarget,
+    personaTarget,
+  };
 }
 
 // ── Parse ────────────────────────────────────────────────────────────────────
@@ -223,17 +244,20 @@ export async function runGenerateIdeasAgent(runId: string): Promise<GenerationRe
     );
   }
 
-  const { input, postIds } = await buildGenerationInput();
+  const { input, postIds, empresaTarget, personaTarget } = await buildGenerationInput();
+  // Cap efectivo del .slice: el objetivo del form, con techo duro por presupuesto de tokens.
+  const ideaCap = Math.min(empresaTarget + personaTarget, HARD_CAP);
 
-  // 16000 tokens: 15 ideas con copys de hasta 1300 chars + conceptos de imagen +
-  // campañas + sugerencias de pilar no entran en 8000 (medido: se truncaba a
-  // mitad de pillarSuggestions). Streaming porque el SDK lo exige para llamadas
-  // de más de ~10min estimados con max_tokens alto (mismo patrón que
+  // 20000 tokens: la tanda mezcla posts EMPRESA (cortos) y PERSONA (~900-1600
+  // chars) + conceptos de imagen + campañas + sugerencias de pilar; con posts de
+  // persona más largos, 16000 se quedaba corto (se truncaba a mitad de
+  // pillarSuggestions). Streaming porque el SDK lo exige para llamadas de más de
+  // ~10min estimados con max_tokens alto (mismo patrón que
   // app/api/clients/[id]/analyze/route.ts para CARDS_AND_FLOWCHARTS).
   const msg = await anthropic.messages
     .stream({
       model: "claude-sonnet-4-6",
-      max_tokens: 16000,
+      max_tokens: 20000,
       temperature: 0,
       system: agent.systemPrompt,
       messages: [{ role: "user", content: input }],
@@ -255,7 +279,7 @@ export async function runGenerateIdeasAgent(runId: string): Promise<GenerationRe
     );
   }
 
-  const ideas = normalizeCollection<GeneratedContentIdea>(obj.contentIdeas, generatedContentIdeaSchema).slice(0, MAX_IDEAS);
+  const ideas = normalizeCollection<GeneratedContentIdea>(obj.contentIdeas, generatedContentIdeaSchema).slice(0, ideaCap);
   const suggestions = normalizeCollection<GeneratedPillarSuggestion>(obj.pillarSuggestions, generatedPillarSuggestionSchema);
   const campaigns = normalizeCollection<GeneratedCampaignIdea>(obj.campaignIdeas, generatedCampaignIdeaSchema);
 
@@ -301,6 +325,9 @@ export async function runGenerateIdeasAgent(runId: string): Promise<GenerationRe
           pillarId,
           suggestedPillarName,
           title: idea.title,
+          postType: idea.postType,
+          // Solo posts de EMPRESA llevan etapa; en PERSONA se ignora aunque venga.
+          journeyStage: idea.postType === "EMPRESA" ? (idea.journeyStage ?? null) : null,
           copy: idea.copy,
           imageConcept: idea.imageConcept,
           sources: { create: validPostIds.map((postId) => ({ postId })) },

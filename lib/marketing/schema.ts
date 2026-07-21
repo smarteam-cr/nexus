@@ -26,6 +26,67 @@ export const ICP_SECTIONS = [
 export const CAMPAIGN_CHANNELS = ["GOOGLE_SEARCH", "PAID_SOCIAL", "DISPLAY", "OTHER"] as const;
 export const RUN_KINDS = ["INGEST", "GENERATE", "CHAIN"] as const;
 
+// Objetivo de piezas por tanda de generación (fuente única para el mini-form, el Zod
+// y el agente). Default 9+6 = 15 ≈ el reparto histórico ~60% EMPRESA / ~40% PERSONA.
+// Es un OBJETIVO, no un mínimo: el prompt prioriza calidad ("10 fuertes > 15 flojas").
+export const MARKETING_GEN_DEFAULTS = { empresa: 9, persona: 6 } as const;
+// Topes del form/Zod. PERSONA más bajo: son piezas largas (900–1600 chars) — protege el
+// presupuesto de tokens del agente.
+export const MARKETING_GEN_LIMITS = { maxEmpresa: 15, maxPersona: 10 } as const;
+
+// Tipo de post (audiencia): empresa = página de Smarteam (escueto); persona =
+// marca personal / social selling (largo, storytelling). Espejo del enum Prisma.
+export const MARKETING_POST_TYPES = ["EMPRESA", "PERSONA"] as const;
+export type MarketingPostTypeValue = (typeof MARKETING_POST_TYPES)[number];
+
+// Etapa del viaje semanal de Smarteam (solo posts de EMPRESA). Espejo del enum.
+export const MARKETING_JOURNEY_STAGES = ["CONCIENCIA", "ESTRATEGIA", "INSPIRACION"] as const;
+export type MarketingJourneyStageValue = (typeof MARKETING_JOURNEY_STAGES)[number];
+
+// Destino de uso al aceptar una publicación. Espejo del enum Prisma.
+export const MARKETING_USAGE_TARGETS = ["PERSONAL", "SMARTEAM"] as const;
+export type MarketingUsageTargetValue = (typeof MARKETING_USAGE_TARGETS)[number];
+
+// Metadatos de display (client-safe) reutilizados por la UI de /contenido.
+export const POST_TYPE_META: Record<MarketingPostTypeValue, { label: string }> = {
+  EMPRESA: { label: "Empresa" },
+  PERSONA: { label: "Persona" },
+};
+export const JOURNEY_STAGE_META: Record<
+  MarketingJourneyStageValue,
+  { label: string; emoji: string }
+> = {
+  CONCIENCIA: { label: "Conciencia", emoji: "🔴" },
+  ESTRATEGIA: { label: "Estrategia", emoji: "🟡" },
+  INSPIRACION: { label: "Inspiración", emoji: "🟢" },
+};
+export const USAGE_TARGET_META: Record<MarketingUsageTargetValue, { label: string }> = {
+  PERSONAL: { label: "Uso personal" },
+  SMARTEAM: { label: "Para Smarteam" },
+};
+
+/**
+ * ¿El rol puede marcar una publicación como usada "para Smarteam" (vs. solo en
+ * sus redes personales)? Regla "por equipo": el equipo de MARKETING (sobrevive a
+ * rotación). Los demás roles aceptan siempre como PERSONAL. Client-safe (compara
+ * strings, sin importar @prisma/client) — patrón lib/auth/sales-roles.ts.
+ */
+export function canPublishForSmarteam(role: string | null | undefined): boolean {
+  return role === "MARKETING";
+}
+
+/**
+ * Destino EFECTIVO de una aceptación (el server es la fuente de verdad, no el
+ * body): SMARTEAM solo si el rol puede publicar para Smarteam Y lo pidió; en
+ * cualquier otro caso, PERSONAL. Un no-marketing nunca queda como SMARTEAM.
+ */
+export function resolveUsageTarget(
+  role: string | null | undefined,
+  requested: MarketingUsageTargetValue | undefined,
+): MarketingUsageTargetValue {
+  return canPublishForSmarteam(role) && requested === "SMARTEAM" ? "SMARTEAM" : "PERSONAL";
+}
+
 // ── Inputs CRUD ────────────────────────────────────────────────────────────────
 
 export const icpItemCreateSchema = z.object({
@@ -80,9 +141,22 @@ export const voicePutSchema = z.object({
   brandVoice: z.string().trim().min(1).max(8000),
 });
 
-export const runCreateSchema = z.object({
-  kind: z.enum(RUN_KINDS),
-});
+// Crear una corrida. `empresaCount`/`personaCount` son OPCIONALES: los manda el mini-form de
+// la pestaña Generación (CHAIN/GENERATE) para generar a medida; INGEST y el cron los omiten y
+// caen a los defaults guardados en MarketingSettings. Si vienen, al menos uno ≥ 1 (no 0/0).
+export const runCreateSchema = z
+  .object({
+    kind: z.enum(RUN_KINDS),
+    empresaCount: z.number().int().min(0).max(MARKETING_GEN_LIMITS.maxEmpresa).optional(),
+    personaCount: z.number().int().min(0).max(MARKETING_GEN_LIMITS.maxPersona).optional(),
+  })
+  .refine(
+    (v) =>
+      v.empresaCount === undefined && v.personaCount === undefined
+        ? true
+        : (v.empresaCount ?? 0) + (v.personaCount ?? 0) >= 1,
+    { message: "Configurá al menos una pieza (Empresa o Persona)." },
+  );
 
 export const suggestionActionSchema = z.object({
   action: z.enum(["approve", "discard"]),
@@ -98,6 +172,9 @@ export const ideaPatchSchema = z
     used: z.boolean().optional(),
     selected: z.boolean().optional(),
     discarded: z.boolean().optional(),
+    // Destino propuesto al aceptar (selected:true). El server decide el valor
+    // EFECTIVO según el rol — un no-marketing nunca queda como SMARTEAM.
+    acceptedFor: z.enum(MARKETING_USAGE_TARGETS).optional(),
     title: z.string().trim().min(1).max(300).optional(),
     copy: z.string().trim().min(1).max(4000).optional(),
     imageConcept: z.string().trim().min(1).max(2000).optional(),
@@ -141,6 +218,10 @@ export const generatedContentIdeaSchema = z.object({
   title: z.string().trim().min(1).max(300),
   copy: z.string().trim().min(1).max(4000),
   imageConcept: z.string().trim().min(1).max(2000),
+  // Tipo de post (default seguro EMPRESA si el agente no lo etiqueta).
+  postType: z.enum(MARKETING_POST_TYPES).catch("EMPRESA"),
+  // Etapa del viaje semanal — solo en posts de EMPRESA; persona = null.
+  journeyStage: z.enum(MARKETING_JOURNEY_STAGES).nullish(),
   pillarName: z.string().trim().max(160).nullish(),
   newPillarName: z.string().trim().max(160).nullish(),
   inspirationPostIds: z.array(z.string().trim()).max(20).default([]),

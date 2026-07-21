@@ -15,13 +15,29 @@ import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog, EmptyState, Badge, Skeleton, ListSkeleton } from "@/components/ui";
 import { useMarketingEngine } from "@/components/marketing/useMarketingEngine";
-import { ideaState, type ContentIdeaState } from "@/lib/marketing/schema";
+import { useMe } from "@/hooks/useMe";
+import {
+  ideaState,
+  canPublishForSmarteam,
+  POST_TYPE_META,
+  JOURNEY_STAGE_META,
+  USAGE_TARGET_META,
+  MARKETING_JOURNEY_STAGES,
+  type ContentIdeaState,
+  type MarketingPostTypeValue,
+  type MarketingJourneyStageValue,
+  type MarketingUsageTargetValue,
+} from "@/lib/marketing/schema";
 
 interface IdeaRow {
   id: string;
   title: string;
   copy: string;
   imageConcept: string;
+  postType: MarketingPostTypeValue;
+  journeyStage: MarketingJourneyStageValue | null;
+  acceptedFor: MarketingUsageTargetValue | null;
+  acceptedByName: string | null;
   suggestedPillarName: string | null;
   pillar: { id: string; name: string } | null;
   selectedAt: string | null;
@@ -62,14 +78,36 @@ const TABS: Array<{ key: ContentIdeaState; label: string }> = [
   { key: "descartada", label: "Descartadas" },
 ];
 
+// Color del badge por etapa del viaje semanal (espeja los 🔴🟡🟢 de la guía).
+const STAGE_BADGE_VARIANT: Record<
+  MarketingJourneyStageValue,
+  "destructive" | "warning" | "success"
+> = {
+  CONCIENCIA: "destructive",
+  ESTRATEGIA: "warning",
+  INSPIRACION: "success",
+};
+
+// Estilos de botón de aceptación (tokenizados; mismo navy que el resto de la
+// tarjeta, texto por token — sin grises crudos).
+const BTN_ACCEPT =
+  "px-3 py-1.5 text-xs rounded-lg bg-brand text-primary-fg disabled:opacity-40 hover:opacity-90";
+const BTN_OUTLINE =
+  "px-3 py-1.5 text-xs rounded-lg border border-line text-fg-muted hover:text-fg-secondary disabled:opacity-40";
+
 const nowIso = () => new Date().toISOString();
 
 export default function ContentClient({ canEdit }: { canEdit: boolean }) {
   const toast = useToast();
+  const me = useMe();
+  // Regla "por equipo": solo el equipo de MARKETING elige destino Personal/Smarteam.
+  const canChooseSmarteam = canPublishForSmarteam(me?.role);
   const [tab, setTab] = useState<ContentIdeaState>("sugerida");
   const [ideas, setIdeas] = useState<IdeaRow[]>([]);
   const [pillars, setPillars] = useState<PillarOption[]>([]);
   const [pillarFilter, setPillarFilter] = useState<string>("");
+  const [postTypeFilter, setPostTypeFilter] = useState<"" | MarketingPostTypeValue>("");
+  const [stageFilter, setStageFilter] = useState<"" | MarketingJourneyStageValue>("");
   const [loading, setLoading] = useState(true);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -86,6 +124,9 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
       const params = new URLSearchParams();
       params.set("state", tab);
       if (pillarFilter) params.set("pillarId", pillarFilter);
+      if (postTypeFilter) params.set("postType", postTypeFilter);
+      // La etapa solo aplica a posts de empresa; con PERSONA seleccionado no se envía.
+      if (stageFilter && postTypeFilter !== "PERSONA") params.set("stage", stageFilter);
       const [ideasRes, pillarsRes] = await Promise.all([
         fetchJson<{ ideas: IdeaRow[] }>(`/api/marketing/ideas?${params.toString()}`),
         fetchJson<{ pillars: PillarOption[] }>("/api/marketing/pillars"),
@@ -99,7 +140,7 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [toast, pillarFilter, tab]);
+  }, [toast, pillarFilter, postTypeFilter, stageFilter, tab]);
   useEffect(() => {
     load();
   }, [load]);
@@ -125,7 +166,7 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
 
   const patchState = async (
     id: string,
-    body: Record<string, boolean>,
+    body: Record<string, boolean | string>,
     optimistic: Partial<IdeaRow>,
     msg: string,
   ) => {
@@ -148,7 +189,13 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
-  const accept = (id: string) => patchState(id, { selected: true }, { selectedAt: nowIso() }, "Aceptada.");
+  const accept = (id: string, acceptedFor: MarketingUsageTargetValue) =>
+    patchState(
+      id,
+      { selected: true, acceptedFor },
+      { selectedAt: nowIso(), acceptedFor, acceptedByName: me?.name ?? null },
+      acceptedFor === "SMARTEAM" ? "Aceptada para Smarteam." : "Aceptada.",
+    );
   const approve = (id: string) => patchState(id, { used: true }, { usedAt: nowIso() }, "Aprobada.");
   const unapprove = (id: string) => patchState(id, { used: false }, { usedAt: null }, "Reabierta en Aceptadas.");
   const discard = (id: string) => patchState(id, { discarded: true }, { discardedAt: nowIso() }, "Descartada.");
@@ -293,18 +340,46 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
             </button>
           ))}
         </div>
-        <select
-          value={pillarFilter}
-          onChange={(e) => setPillarFilter(e.target.value)}
-          className="px-3 py-1.5 text-xs bg-surface border border-line rounded-lg text-fg"
-        >
-          <option value="">Todos los temas</option>
-          {pillars.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <div className="flex gap-2 flex-wrap">
+          <select
+            value={postTypeFilter}
+            onChange={(e) => setPostTypeFilter(e.target.value as "" | MarketingPostTypeValue)}
+            className="px-3 py-1.5 text-xs bg-surface border border-line rounded-lg text-fg"
+            aria-label="Filtrar por tipo de publicación"
+          >
+            <option value="">Todos los tipos</option>
+            <option value="EMPRESA">{POST_TYPE_META.EMPRESA.label}</option>
+            <option value="PERSONA">{POST_TYPE_META.PERSONA.label}</option>
+          </select>
+          {postTypeFilter !== "PERSONA" && (
+            <select
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value as "" | MarketingJourneyStageValue)}
+              className="px-3 py-1.5 text-xs bg-surface border border-line rounded-lg text-fg"
+              aria-label="Filtrar por etapa de la guía semanal"
+            >
+              <option value="">Todas las etapas</option>
+              {MARKETING_JOURNEY_STAGES.map((s) => (
+                <option key={s} value={s}>
+                  {JOURNEY_STAGE_META[s].emoji} {JOURNEY_STAGE_META[s].label}
+                </option>
+              ))}
+            </select>
+          )}
+          <select
+            value={pillarFilter}
+            onChange={(e) => setPillarFilter(e.target.value)}
+            className="px-3 py-1.5 text-xs bg-surface border border-line rounded-lg text-fg"
+            aria-label="Filtrar por tema"
+          >
+            <option value="">Todos los temas</option>
+            {pillars.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {loading ? (
@@ -320,8 +395,9 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
               key={idea.id}
               idea={idea}
               canEdit={canEdit}
+              canChooseSmarteam={canChooseSmarteam}
               busy={busyId === idea.id}
-              onAccept={() => accept(idea.id)}
+              onAccept={(dest) => accept(idea.id, dest)}
               onApprove={() => approve(idea.id)}
               onUnapprove={() => unapprove(idea.id)}
               onDiscard={() => discard(idea.id)}
@@ -359,6 +435,7 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
 function IdeaCard({
   idea,
   canEdit,
+  canChooseSmarteam,
   busy,
   onAccept,
   onApprove,
@@ -375,8 +452,9 @@ function IdeaCard({
 }: {
   idea: IdeaRow;
   canEdit: boolean;
+  canChooseSmarteam: boolean;
   busy: boolean;
-  onAccept: () => void;
+  onAccept: (acceptedFor: MarketingUsageTargetValue) => void;
   onApprove: () => void;
   onUnapprove: () => void;
   onDiscard: () => void;
@@ -408,20 +486,58 @@ function IdeaCard({
     <span className="text-[11px] text-fg-muted">Sin tema</span>
   );
 
+  const isPersona = idea.postType === "PERSONA";
+  const stageMeta = idea.journeyStage ? JOURNEY_STAGE_META[idea.journeyStage] : null;
+  const accepted = state === "seleccionada" || state === "aprobada";
+
   return (
     <li className={`w-[552px] max-w-full ${state === "descartada" ? "opacity-60" : ""}`}>
+      {/* Chrome de gestión (fuera del post): tipo · etapa (empresa) · atribución */}
+      <div className="flex flex-wrap items-center gap-1.5 mb-2 px-1">
+        <Badge size="xs" variant={isPersona ? "purple" : "info"}>
+          {isPersona ? "👤" : "🏢"} {POST_TYPE_META[idea.postType].label}
+        </Badge>
+        {stageMeta && idea.journeyStage && (
+          <Badge size="xs" variant={STAGE_BADGE_VARIANT[idea.journeyStage]}>
+            {stageMeta.emoji} {stageMeta.label}
+          </Badge>
+        )}
+        {accepted && idea.acceptedFor && (
+          <Badge size="xs" variant={idea.acceptedFor === "SMARTEAM" ? "primary" : "default"}>
+            {USAGE_TARGET_META[idea.acceptedFor].label}
+            {idea.acceptedByName ? ` · ${idea.acceptedByName}` : ""}
+          </Badge>
+        )}
+      </div>
       {/* La "publicación" — vista previa estilo post (ancho 552px, padding 16px) */}
       <article className="rounded-2xl border border-line bg-surface p-4 flex flex-col gap-3">
-        {/* Header: logo Smarteam + nombre + menú "…" (metadata) */}
+        {/* Header: avatar + nombre (Smarteam para empresa, perfil personal para persona) + menú "…" */}
         <div className="flex items-center gap-2.5">
-          {/* Avatar: círculo navy con el isotipo (SVG vectorial, nítido a cualquier tamaño) */}
-          <div className="w-9 h-9 rounded-full bg-[#0d2340] flex items-center justify-center flex-shrink-0" aria-label="Smarteam">
-            <SmarteamMark className="w-5 h-5" />
-          </div>
+          {isPersona ? (
+            // Avatar neutro de persona (tokenizado): el borrador se adapta a quien publique.
+            <div
+              className="w-9 h-9 rounded-full bg-surface-hover flex items-center justify-center flex-shrink-0"
+              aria-label="Perfil personal"
+            >
+              <svg className="w-5 h-5 text-fg-muted" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z" />
+              </svg>
+            </div>
+          ) : (
+            // Avatar: círculo navy con el isotipo (SVG vectorial, nítido a cualquier tamaño)
+            <div
+              className="w-9 h-9 rounded-full bg-[#0d2340] flex items-center justify-center flex-shrink-0"
+              aria-label="Smarteam"
+            >
+              <SmarteamMark className="w-5 h-5" />
+            </div>
+          )}
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-fg leading-tight">Smarteam</p>
+            <p className="text-sm font-semibold text-fg leading-tight">
+              {isPersona ? "Perfil personal" : "Smarteam"}
+            </p>
             <p className="text-[11px] text-fg-muted leading-tight">
-              Justo ahora · 🌐
+              {isPersona ? "Borrador adaptable" : "Justo ahora"} · 🌐
               {state === "seleccionada" && " · Aceptada"}
               {state === "aprobada" && " · Aprobada"}
               {idea.hubspotDraftAt && " · ✓ Borrador en HubSpot"}
@@ -489,10 +605,35 @@ function IdeaCard({
           )}
           {state === "sugerida" && (
             <>
-              <button onClick={onAccept} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90">
-                Aceptar
-              </button>
-              <button onClick={onDiscard} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg border border-line text-fg-muted hover:text-fg-secondary disabled:opacity-40">
+              {canChooseSmarteam ? (
+                // Equipo de marketing: elige destino. En posts de EMPRESA el default
+                // es Smarteam; en PERSONA (borrador para el perfil propio), personal.
+                isPersona ? (
+                  <>
+                    <button onClick={() => onAccept("PERSONAL")} disabled={busy} className={BTN_ACCEPT}>
+                      Aceptar para mí
+                    </button>
+                    <button onClick={() => onAccept("SMARTEAM")} disabled={busy} className={BTN_OUTLINE}>
+                      Para Smarteam
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => onAccept("SMARTEAM")} disabled={busy} className={BTN_ACCEPT}>
+                      Aceptar para Smarteam
+                    </button>
+                    <button onClick={() => onAccept("PERSONAL")} disabled={busy} className={BTN_OUTLINE}>
+                      Para mí
+                    </button>
+                  </>
+                )
+              ) : (
+                // Resto del equipo: siempre uso personal (el server lo fuerza igual).
+                <button onClick={() => onAccept("PERSONAL")} disabled={busy} className={BTN_ACCEPT}>
+                  Aceptar
+                </button>
+              )}
+              <button onClick={onDiscard} disabled={busy} className={BTN_OUTLINE}>
                 Descartar
               </button>
             </>

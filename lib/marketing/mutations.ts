@@ -6,7 +6,8 @@
  * acá. Single-tenant: nada cuelga de Client.
  */
 import { prisma } from "@/lib/db/prisma";
-import type { IcpSection, Prisma } from "@prisma/client";
+import type { IcpSection, Prisma, TeamRole } from "@prisma/client";
+import { resolveUsageTarget, type MarketingUsageTargetValue } from "./schema";
 
 // ── ICP ────────────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,11 @@ export async function deleteIdea(id: string) {
  * (selected/used → sus timestamps) y/o edición de campos (title/copy/imageConcept).
  * Un solo write evita estados parciales (p.ej. "reabrir" = selected+used juntos).
  * Los campos ausentes NO se tocan; `updatedAt` se maneja solo.
+ *
+ * ACEPTAR (selected:true) registra la atribución (patrón Cobro: el "quién" viene
+ * del guard, no del body). El DESTINO efectivo lo decide el server según el rol:
+ * un no-marketing nunca queda como SMARTEAM aunque el body lo mande. Aprobar /
+ * descartar / reabrir NO borran la atribución (trazabilidad).
  */
 export async function patchIdea(
   id: string,
@@ -94,13 +100,26 @@ export async function patchIdea(
     selected?: boolean;
     used?: boolean;
     discarded?: boolean;
+    acceptedFor?: MarketingUsageTargetValue;
     title?: string;
     copy?: string;
     imageConcept?: string;
   },
+  ctx: { byEmail: string; role: TeamRole },
 ) {
   const data: Prisma.ContentIdeaUpdateInput = {};
-  if (fields.selected !== undefined) data.selectedAt = fields.selected ? new Date() : null;
+  if (fields.selected !== undefined) {
+    if (fields.selected) {
+      data.selectedAt = new Date();
+      data.acceptedByEmail = ctx.byEmail;
+      data.acceptedFor = resolveUsageTarget(ctx.role, fields.acceptedFor);
+    } else {
+      // Volver a "sugerida" limpia la aceptación (no hay uso registrado).
+      data.selectedAt = null;
+      data.acceptedByEmail = null;
+      data.acceptedFor = null;
+    }
+  }
   if (fields.used !== undefined) data.usedAt = fields.used ? new Date() : null;
   if (fields.discarded !== undefined) data.discardedAt = fields.discarded ? new Date() : null;
   if (fields.title !== undefined) data.title = fields.title;

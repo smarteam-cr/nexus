@@ -11,13 +11,39 @@
  *   3) "Solo actualizar fuentes" (INGEST) — sin generar; para revisar que una
  *      fuente nueva esté trayendo posts antes de gastar en generación.
  */
+import { useState } from "react";
 import Link from "next/link";
-import { Badge, ListSkeleton } from "@/components/ui";
+import { Badge, ListSkeleton, Field, Input } from "@/components/ui";
 import { useMarketingEngine, RUN_KIND_LABEL } from "@/components/marketing/useMarketingEngine";
+import { MARKETING_GEN_LIMITS } from "@/lib/marketing/schema";
 
-export default function EngineClient({ canEdit }: { canEdit: boolean }) {
+/** Clampea el string de un input al rango [0, max] (entero; vacío/NaN → 0). */
+function clampCount(raw: string, max: number): number {
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(n, max);
+}
+
+export default function EngineClient({
+  canEdit,
+  empresaTarget,
+  personaTarget,
+}: {
+  canEdit: boolean;
+  empresaTarget: number;
+  personaTarget: number;
+}) {
   const { runs, stats, sources, loading, busy, runningPhase, startRun, lastRun } = useMarketingEngine();
   const canGenerate = (stats?.inWindow ?? 0) > 0;
+
+  // Config a medida de la tanda (pre-cargada con el default guardado; al generar se
+  // persiste como nuevo default y el cron lo hereda — ver runs/route.ts).
+  const [empresa, setEmpresa] = useState(String(empresaTarget));
+  const [persona, setPersona] = useState(String(personaTarget));
+  const empresaCount = clampCount(empresa, MARKETING_GEN_LIMITS.maxEmpresa);
+  const personaCount = clampCount(persona, MARKETING_GEN_LIMITS.maxPersona);
+  const bothZero = empresaCount + personaCount === 0;
+  const genConfig = { empresaCount, personaCount };
 
   return (
     <div className="space-y-6">
@@ -35,16 +61,16 @@ export default function EngineClient({ canEdit }: { canEdit: boolean }) {
           {canEdit ? (
             <div className="flex flex-col items-end gap-2 flex-shrink-0">
               <button
-                onClick={() => startRun("CHAIN")}
-                disabled={busy}
-                className="px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
+                onClick={() => startRun("CHAIN", genConfig)}
+                disabled={busy || bothZero}
+                className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-fg disabled:opacity-40 hover:bg-primary-hover"
               >
                 {busy ? (runningPhase ?? "En curso…") : "Generar ideas nuevas"}
               </button>
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => startRun("GENERATE")}
-                  disabled={busy || !canGenerate}
+                  onClick={() => startRun("GENERATE", genConfig)}
+                  disabled={busy || !canGenerate || bothZero}
                   title={
                     canGenerate
                       ? "Genera sin re-scrapear, con los posts que ya están guardados"
@@ -68,6 +94,45 @@ export default function EngineClient({ canEdit }: { canEdit: boolean }) {
             <p className="text-xs text-fg-muted">Tu rol puede ver el estado; correr el motor es del equipo de Marketing.</p>
           )}
         </div>
+
+        {/* Config a medida de la tanda */}
+        {canEdit && (
+          <div className="mt-4 border-t border-line pt-4">
+            <p className="text-xs font-semibold text-fg">Configuración de la tanda</p>
+            <p className="mt-0.5 text-xs text-fg-muted">
+              Cuántas piezas generar de cada tipo. Es un objetivo: la IA prioriza calidad y
+              puede entregar menos. Estos números quedan guardados como el default (también
+              los usa la corrida automática de los viernes).
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-3 max-w-sm">
+              <Field label="Página de empresa" hint={`Máx ${MARKETING_GEN_LIMITS.maxEmpresa}`}>
+                <Input
+                  type="number"
+                  min={0}
+                  max={MARKETING_GEN_LIMITS.maxEmpresa}
+                  value={empresa}
+                  onChange={(e) => setEmpresa(e.target.value)}
+                  disabled={busy}
+                />
+              </Field>
+              <Field label="Perfil personal" hint={`Máx ${MARKETING_GEN_LIMITS.maxPersona}`}>
+                <Input
+                  type="number"
+                  min={0}
+                  max={MARKETING_GEN_LIMITS.maxPersona}
+                  value={persona}
+                  onChange={(e) => setPersona(e.target.value)}
+                  disabled={busy}
+                />
+              </Field>
+            </div>
+            {bothZero && (
+              <p className="mt-2 text-xs text-amber-500">
+                Configurá al menos una pieza (Empresa o Persona) para generar.
+              </p>
+            )}
+          </div>
+        )}
 
         {busy && runningPhase && (
           <p className="mt-3 text-xs text-brand animate-pulse">⏳ {runningPhase}</p>

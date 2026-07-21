@@ -16,6 +16,13 @@ import { maybeRequestPermission, notifyAgentDone } from "@/lib/notifications/cli
 
 export type RunKind = "INGEST" | "GENERATE" | "CHAIN";
 
+/** Config a medida de la tanda (mini-form de Generación). Solo pesa en CHAIN/GENERATE;
+ * el endpoint la ignora para INGEST y la persiste en MarketingSettings como nuevo default. */
+export interface RunConfig {
+  empresaCount?: number;
+  personaCount?: number;
+}
+
 export interface RunRow {
   id: string;
   kind: RunKind;
@@ -128,15 +135,20 @@ export function useMarketingEngine() {
   );
 
   const startRun = useCallback(
-    async (kind: RunKind) => {
+    async (kind: RunKind, config?: RunConfig) => {
       if (busyRef.current) return;
       maybeRequestPermission();
       setBusy(true);
       try {
+        // La config solo aplica a lo que genera; INGEST va sin números.
+        const body =
+          config && kind !== "INGEST"
+            ? { kind, empresaCount: config.empresaCount, personaCount: config.personaCount }
+            : { kind };
         const d = await fetchJson<{ runId: string }>("/api/marketing/runs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ kind }),
+          body: JSON.stringify(body),
         });
         toast.info(`${RUN_KIND_LABEL[kind]}…`);
         await attachToRun(d.runId);

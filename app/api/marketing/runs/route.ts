@@ -6,6 +6,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardInternalUser, guardMarketingEditor } from "@/lib/auth/api-guards";
+import { prisma } from "@/lib/db/prisma";
 import { getRunHistory } from "@/lib/marketing/queries";
 import { findActiveRun, startMarketingRun } from "@/lib/marketing/runs";
 import { runCreateSchema } from "@/lib/marketing/schema";
@@ -40,6 +41,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const run = await startMarketingRun(parsed.data.kind, "MANUAL", guard.teamMember.email);
+  // Generación a medida: si el form mandó cantidades (solo aplica a lo que genera —
+  // CHAIN/GENERATE, no INGEST), persistilas como el nuevo default en MarketingSettings.
+  // `buildGenerationInput` y el cron leen de ahí (fuente única) — no se enhebra por la
+  // cadena async. El guard 409 de arriba garantiza que no haya otra corrida pisando esto.
+  const { kind, empresaCount, personaCount } = parsed.data;
+  if (kind !== "INGEST" && (empresaCount !== undefined || personaCount !== undefined)) {
+    const data: { genEmpresaTarget?: number; genPersonaTarget?: number } = {};
+    if (empresaCount !== undefined) data.genEmpresaTarget = empresaCount;
+    if (personaCount !== undefined) data.genPersonaTarget = personaCount;
+    await prisma.marketingSettings.upsert({
+      where: { id: "marketing" },
+      update: data,
+      create: { id: "marketing", brandVoice: "", ...data },
+    });
+  }
+
+  const run = await startMarketingRun(kind, "MANUAL", guard.teamMember.email);
   return NextResponse.json({ runId: run.id, status: run.status }, { status: 202 });
 }

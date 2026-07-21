@@ -32,7 +32,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
   try {
     // Un solo update atómico (transiciones + edición); campos ausentes no se tocan.
-    const idea = await patchIdea(id, parsed.data);
+    // El "quién" de la aceptación sale del guard (no del body); el destino efectivo
+    // lo decide patchIdea según el rol.
+    const idea = await patchIdea(id, parsed.data, {
+      byEmail: guard.user.email,
+      role: guard.role,
+    });
     return NextResponse.json({ idea });
   } catch (e) {
     if (isNotFound(e)) return NextResponse.json({ error: "La idea no existe" }, { status: 404 });

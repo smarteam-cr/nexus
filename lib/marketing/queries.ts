@@ -7,6 +7,7 @@
 import { prisma } from "@/lib/db/prisma";
 import type { IcpSection } from "@prisma/client";
 import { ICP_SECTION_ORDER } from "./seed-data";
+import type { MarketingPostTypeValue, MarketingJourneyStageValue } from "./schema";
 
 /** Ventana de inspiración para la generación: posts de los últimos 3 meses. */
 export function inspirationWindowStart(now = new Date()): Date {
@@ -63,6 +64,8 @@ export async function getIdeas(filter?: {
   pillarId?: string;
   runId?: string;
   state?: "sugerida" | "seleccionada" | "aprobada" | "descartada";
+  postType?: MarketingPostTypeValue;
+  journeyStage?: MarketingJourneyStageValue;
 }) {
   // Estado derivado (misma prioridad que ideaState): descartada=discardedAt set ·
   // aprobada=usedAt set y no descartada · seleccionada=selectedAt set y no aprobada
@@ -77,10 +80,12 @@ export async function getIdeas(filter?: {
           : filter?.state === "sugerida"
             ? { discardedAt: null, usedAt: null, selectedAt: null }
             : {};
-  return prisma.contentIdea.findMany({
+  const ideas = await prisma.contentIdea.findMany({
     where: {
       ...(filter?.pillarId ? { pillarId: filter.pillarId } : {}),
       ...(filter?.runId ? { runId: filter.runId } : {}),
+      ...(filter?.postType ? { postType: filter.postType } : {}),
+      ...(filter?.journeyStage ? { journeyStage: filter.journeyStage } : {}),
       ...stateWhere,
     },
     orderBy: { createdAt: "desc" },
@@ -93,6 +98,22 @@ export async function getIdeas(filter?: {
       },
     },
   });
+
+  // Resolver el email de quien aceptó → nombre del TeamMember (para "Usada por X").
+  const emails = [...new Set(ideas.map((i) => i.acceptedByEmail).filter((e): e is string => !!e))];
+  const members = emails.length
+    ? await prisma.teamMember.findMany({
+        where: { email: { in: emails } },
+        select: { email: true, name: true },
+      })
+    : [];
+  const nameByEmail = new Map(members.map((m) => [m.email, m.name]));
+
+  return ideas.map((idea) => ({
+    ...idea,
+    // null si el email no matchea un TeamMember (p.ej. cuenta dada de baja).
+    acceptedByName: idea.acceptedByEmail ? (nameByEmail.get(idea.acceptedByEmail) ?? null) : null,
+  }));
 }
 
 export async function getCampaigns(status?: "PENDING" | "APPROVED" | "DISCARDED") {

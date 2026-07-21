@@ -1826,6 +1826,24 @@ enum MarketingRunKind {
   CHAIN // ingesta → generación (si hubo posts nuevos)
 }
 
+enum MarketingPostType {
+  EMPRESA // post institucional de la página de Smarteam — escueto
+  PERSONA // post de marca personal / social selling — largo, con storytelling
+}
+
+// Etapa del viaje semanal de Smarteam (guía de contenido de EMPRESA):
+// Conciencia (dolor/atraer) → Estrategia (solución/educar) → Inspiración (futuro/convencer).
+enum MarketingJourneyStage {
+  CONCIENCIA // 🔴 Lun/Mar — dolor: caos operativo, datos aislados, tareas repetitivas, gestión del cambio
+  ESTRATEGIA // 🟡 Mié/Jue — solución: transformación comercial, RevOps, arquitectura de datos, conexión de sistemas
+  INSPIRACION // 🟢 Vie — futuro: IA aplicada a revenue, ROI, automatización, AEO
+}
+
+enum MarketingUsageTarget {
+  PERSONAL // la usó en sus propias redes (perfil personal de quien la aceptó)
+  SMARTEAM // la usó para la página/marca de Smarteam
+}
+
 enum MarketingRunTrigger {
   MANUAL // CTA en /contenido
   CRON // viernes 6:00 America Costa Rica
@@ -1841,6 +1859,11 @@ enum MarketingRunStatus {
 model MarketingSettings {
   id              String    @id @default("marketing")
   brandVoice      String    @db.Text // voz/posicionamiento (markdown) — editable en /marketing/voz
+  // Objetivo de piezas por tanda de generación (el mini-form de /marketing/generacion los
+  // escribe; buildGenerationInput y el cron los leen — fuente única). Objetivo, no mínimo:
+  // el prompt prioriza calidad. 9+6=15 ≈ el ~60/40 histórico.
+  genEmpresaTarget Int      @default(9) // piezas para la PÁGINA de empresa (postType=EMPRESA)
+  genPersonaTarget Int      @default(6) // piezas para PERFIL personal (postType=PERSONA)
   lastCronRunAt   DateTime? // nullable porque nunca corrió — display en /contenido
   lastCronDateKey String? // nullable ídem — "YYYY-MM-DD" (día CR) del último disparo; claim atómico anti-doble-fire
   createdAt       DateTime  @default(now())
@@ -1971,7 +1994,11 @@ model ContentIdea {
   title               String
   copy                String         @db.Text // copy listo para red social
   imageConcept        String         @db.Text // descripción TEXTUAL del concepto de imagen (no se genera)
-  selectedAt          DateTime? // nullable porque la idea arranca sugerida; set = "seleccionada" (en trabajo)
+  postType            MarketingPostType      @default(EMPRESA) // empresa (escueto) | persona (storytelling)
+  journeyStage        MarketingJourneyStage? // nullable porque solo aplica a posts de EMPRESA (guía semanal); los de PERSONA no tienen etapa
+  acceptedByEmail     String? // nullable porque solo se setea al aceptar — email del guard (patrón Cobro); un solo uso por publicación
+  acceptedFor         MarketingUsageTarget? // nullable porque solo se setea al aceptar — PERSONAL | SMARTEAM (destino efectivo lo decide el server)
+  selectedAt          DateTime? // nullable porque la idea arranca sugerida; set = "seleccionada"/"aceptada" (en trabajo) — timestamp de la aceptación
   usedAt              DateTime? // nullable; set = "aprobada" (lista para publicar). Estado derivado, ver lib/marketing/schema.ts ideaState()
   discardedAt         DateTime? // nullable; set = "descartada" (rechazada, reversible). Gana sobre selected/used → reabrir vuelve al estado previo
   hubspotDraftAt      DateTime? // nullable; set = ya se envió a HubSpot como borrador social (API broadcast). Ver lib/hubspot/social-broadcast.ts
