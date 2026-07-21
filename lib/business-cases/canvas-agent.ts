@@ -23,19 +23,19 @@ import { HUBSPOT_TEMPLATE_ID } from "@/lib/business-cases/case-types";
 
 const MODEL = "claude-sonnet-4-6";
 
+// El re-export de abajo no trae el símbolo al scope local: buildSystemPrompt y
+// regenerateSectionDataForDef lo usan, así que además se importa.
+import { BRAND_VOICE_RULES } from "@/lib/ai/brand-voice";
+
 /** Intro default del BC (la usa también el assist de documento cuando el template
  *  no declara `agentIntro`). */
 export const DEFAULT_AGENT_INTRO =
   "Sos un consultor de Smarteam (Elite HubSpot Partner · Partner de Insider, LATAM) que arma un Business Case (caso de negocio) para un prospecto, a partir de transcripts de reuniones comerciales y notas. Posicionamiento de la marca: Smarteam no vende software — lo pone a producir; la promesa nunca es la herramienta, es que la operación funcione.";
 
-/** Voz de marca Smarteam (doc: prompt-linea-grafica.md) — bloque COMPARTIDO por los
- *  4 generadores de landings (hubspot/website/kickoff/desarrollo): se inyecta en las
- *  reglas del system prompt de generación y en la regenaración por sección. */
-export const BRAND_VOICE_RULES = `- VOZ DE MARCA (Smarteam): directa, concreta, adulta. Frases cortas. Habla de consecuencias operativas y dinero (horas perdidas, ciclo de venta, datos que no llegan), no de features. PROHIBIDOS los superlativos vacíos: "maximizar el valor", "ROI garantizado", "solución integral", "llevar al siguiente nivel", "de clase mundial".
-- HONESTIDAD (es EL diferencial de la marca): está permitido y bien visto decir "aún no te conviene", "no hace falta cambiar nada", "sin venderte de más". Nunca sobreprometas.
-- METÁFORA ELÉCTRICA (sello de la marca): encender / apagado / conectar / producir — ÚSALA con naturalidad, MÁXIMO una imagen eléctrica por pieza (no en cada párrafo).
-- CTA: el titular del cierre abre con UNA PREGUNTA sobre el dolor del lector (ej.: "¿Cuántas horas pierde tu equipo moviendo datos a mano?"), aterrizada en la operación de ESTA empresa.
-- Si falta un dato real (cifra, cliente, resultado), deja el campo vacío o un marcador "Pendiente: …" — JAMÁS lo inventes ni atribuyas cifras a empresas con nombre propio.`;
+/** Voz de marca Smarteam — la fuente única vive en lib/ai/brand-voice.ts (la
+ *  comparten la generación de landings y el assist de documento). Se re-exporta
+ *  para no tocar los consumidores históricos. */
+export { BRAND_VOICE_RULES } from "@/lib/ai/brand-voice";
 
 /** Secciones que el AGENTE genera: excluye `agentGenerated: false` (se llenan
  *  determinísticamente — p.ej. casos de uso del catálogo — o a mano) y las
