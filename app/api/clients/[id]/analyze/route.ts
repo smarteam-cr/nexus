@@ -164,6 +164,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     async?: boolean; // A2: si true → run en background + polling (agentes pesados)
     regeneratePhaseId?: string; // D.1 regen por fase: rehace SOLO esta fase del cronograma (agente de detalle)
     regenerateMode?: "replace" | "keep"; // regen por fase: reemplazar pendientes IA (default) o conservarlas y solo sumar lo nuevo
+    preview?: boolean; // regen por fase: computa la propuesta y la devuelve SIN persistir (modal de curación)
   };
   const bodyStage: number        = typeof body?.stage === "number" ? body.stage : 1;
   const bodyStep: number         = typeof body?.step  === "number" ? body.step  : 0;
@@ -174,6 +175,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   const regeneratePhaseId: string | null =
     typeof body?.regeneratePhaseId === "string" && body.regeneratePhaseId ? body.regeneratePhaseId : null;
   const regenerateMode: "replace" | "keep" = body?.regenerateMode === "keep" ? "keep" : "replace";
+  const previewOnly: boolean = body?.preview === true;
   // El pop-up de Agentes (y el tab "Información del cliente") manda projectId con el
   // SENTINEL "__strategy__", que NO es un id de Project real → FK violation en
   // agentRun.create (AgentRun_projectId_fkey). Lo resolvemos al proyecto __strategy__
@@ -1839,6 +1841,15 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   // ProjectTimeline/TimelineTask y se responde acá — no debe pasar por
   // updateCanvasAsync ni por el path de cards.
   if (isTimelineDetailAgent) {
+    // Modal de curación (regen por fase con preview): computamos la propuesta y la devolvemos SIN
+    // escribir. El CSE la cura en el modal y aplica por /timeline/phases/[phaseId]/apply.
+    if (previewOnly && regeneratePhaseId && bodyProjectId) {
+      const previewTasks = await computeTimelineDetailPreview(bodyProjectId, analysisJson, regeneratePhaseId);
+      return NextResponse.json({
+        previewTasks,
+        run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
+      });
+    }
     const detail = await persistTimelineDetailFromAgentOutput(bodyProjectId, analysisJson, run.id, regeneratePhaseId, regenerateMode);
     return NextResponse.json({
       timelineDetail: detail,
@@ -2653,6 +2664,97 @@ function sanitizeTaskTitle(raw: string): string {
   return cleaned || raw.trim();
 }
 
+interface ComputedDetailTask {
+  title: string;
+  weekIndex: number;
+  order: number;
+  notes: string | null;
+  needsValidation: boolean;
+  party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV";
+  type: "SESSION" | "TASK";
+}
+
+/**
+ * Computa las tareas de UNA fase desde el JSON crudo del agente de detalle: clamp de weekIndex,
+ * order incremental por semana, party validado (con gate DEV para la fase técnica) o fallback por
+ * activityType, type validado, título saneado. Puro (sin DB) → reusado por la persistencia y por el
+ * PREVIEW (regen por fase que devuelve la propuesta sin escribir). `skipTitles` deduplica por título
+ * normalizado (modo "keep"). El party nunca es null (último fallback SMARTEAM).
+ */
+function computeDetailTasksForPhase(
+  phaseName: string,
+  durationWeeks: number,
+  effectiveActivity: string | null,
+  tasksRaw: unknown[],
+  skipTitles?: Set<string> | null,
+): ComputedDetailTask[] {
+  const isTechPhase = isDevIntegrationPhaseName(phaseName);
+  const perWeekCount = new Map<number, number>();
+  const out: ComputedDetailTask[] = [];
+  for (const tRaw of tasksRaw) {
+    if (!tRaw || typeof tRaw !== "object") continue;
+    const t = tRaw as Record<string, unknown>;
+    const titleRaw = typeof t.title === "string" ? t.title.trim() : "";
+    if (!titleRaw) continue;
+    if (skipTitles && skipTitles.has(titleRaw.toLowerCase())) continue;
+    const wRaw = typeof t.weekIndex === "number" && Number.isInteger(t.weekIndex) ? t.weekIndex : 0;
+    const weekIndex = Math.min(Math.max(wRaw, 0), Math.max(durationWeeks - 1, 0));
+    const order = perWeekCount.get(weekIndex) ?? 0;
+    perWeekCount.set(weekIndex, order + 1);
+    const partyRaw = typeof t.party === "string" ? t.party.toUpperCase() : "";
+    const party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" =
+      partyRaw === "DEV" && isTechPhase
+        ? "DEV"
+        : partyRaw === "CLIENTE" || partyRaw === "SMARTEAM" || partyRaw === "AMBOS"
+          ? partyRaw
+          : effectiveActivity === "CONFIGURACION"
+            ? "SMARTEAM"
+            : effectiveActivity
+              ? "AMBOS"
+              : "SMARTEAM";
+    const typeRaw = typeof t.type === "string" ? t.type.toUpperCase() : "";
+    const type: "SESSION" | "TASK" = typeRaw === "SESSION" ? "SESSION" : "TASK";
+    out.push({
+      title: sanitizeTaskTitle(titleRaw),
+      weekIndex,
+      order,
+      notes: typeof t.notes === "string" && t.notes.trim() ? t.notes.trim() : null,
+      needsValidation: t.porValidar === true,
+      party,
+      type,
+    });
+  }
+  return out;
+}
+
+/**
+ * PREVIEW del detalle por fase: computa las tareas propuestas para UNA fase (mismo criterio que la
+ * persistencia) SIN escribir nada. Lo usa el modal de curación (regen con preview:true). Devuelve []
+ * si la fase no existe o el agente no propuso tareas para ella.
+ */
+async function computeTimelineDetailPreview(
+  projectId: string,
+  analysisJson: unknown,
+  phaseId: string,
+): Promise<ComputedDetailTask[]> {
+  const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)?.timelineDetail?.phases;
+  if (!Array.isArray(detailRaw)) return [];
+  const phase = await prisma.timelinePhase.findFirst({
+    where: { id: phaseId, timeline: { projectId } },
+    select: { name: true, durationWeeks: true, activityType: true },
+  });
+  if (!phase) return [];
+  const raw = detailRaw.find(
+    (r) => r && typeof r === "object" && (r as Record<string, unknown>).id === phaseId,
+  ) as Record<string, unknown> | undefined;
+  const tasksRaw = Array.isArray(raw?.tasks) ? (raw!.tasks as unknown[]) : [];
+  const atFromModel =
+    typeof raw?.activityType === "string" && (DETAIL_ACTIVITY_TYPES as readonly string[]).includes(raw!.activityType as string)
+      ? (raw!.activityType as string)
+      : null;
+  return computeDetailTasksForPhase(phase.name, phase.durationWeeks, phase.activityType ?? atFromModel, tasksRaw);
+}
+
 interface TimelineDetailResult {
   skipped: boolean;
   reason?: string;
@@ -2798,67 +2900,16 @@ async function persistTimelineDetailFromAgentOutput(
       // B — base para el fallback de party cuando el agente no lo manda (tipo efectivo de la fase).
       const effectiveActivity = phase.activityType ?? at;
 
-      // tasks — clamp de weekIndex, order incremental dentro de cada semana
+      // tasks — computadas por el helper (clamp de weekIndex, order por semana, party con gate DEV,
+      // type); dedup por título contra lo existente en modo "keep". Mismo criterio que el preview.
       const tasksRaw = Array.isArray(ph.tasks) ? ph.tasks : [];
-      const perWeekCount = new Map<number, number>();
-      const toCreate: Array<{
-        phaseId: string;
-        title: string;
-        weekIndex: number;
-        order: number;
-        notes: string | null;
-        needsValidation: boolean;
-        party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null;
-        type: "SESSION" | "TASK";
-        source: "AGENT";
-        status: "PENDING";
-      }> = [];
-      for (const tRaw of tasksRaw) {
-        if (!tRaw || typeof tRaw !== "object") continue;
-        const t = tRaw as Record<string, unknown>;
-        const titleRaw = typeof t.title === "string" ? t.title.trim() : "";
-        if (!titleRaw) continue;
-        // Regen "keep" (conservar pendientes): no dupliques una tarea cuyo título ya existe en la fase.
-        if (keepTitles && keepTitles.has(titleRaw.toLowerCase())) continue;
-        const wRaw =
-          typeof t.weekIndex === "number" && Number.isInteger(t.weekIndex) ? t.weekIndex : 0;
-        const weekIndex = Math.min(Math.max(wRaw, 0), Math.max(phase.durationWeeks - 1, 0));
-        const order = perWeekCount.get(weekIndex) ?? 0;
-        perWeekCount.set(weekIndex, order + 1);
-        // B — party del agente (validado) o fallback por el tipo de actividad de la fase.
-        const partyRaw = typeof t.party === "string" ? t.party.toUpperCase() : "";
-        // DEV (#7) SOLO aterriza en la fase técnica ("Desarrollo / Integración"): honra el techRule
-        // del userMessage y evita que un DEV mal ubicado contamine fases funcionales. Fuera de esa
-        // fase, DEV degrada al fallback por activityType (mismo comportamiento que antes de #7).
-        const isTechPhase = isDevIntegrationPhaseName(phase.name);
-        // Toda tarea tiene dueño: si el agente no lo da (o da DEV fuera de la fase técnica), se
-        // infiere por activityType; el último fallback es SMARTEAM (nunca null).
-        const party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" =
-          partyRaw === "DEV" && isTechPhase
-            ? "DEV"
-            : partyRaw === "CLIENTE" || partyRaw === "SMARTEAM" || partyRaw === "AMBOS"
-              ? partyRaw
-              : effectiveActivity === "CONFIGURACION"
-                ? "SMARTEAM"
-                : effectiveActivity
-                  ? "AMBOS"
-                  : "SMARTEAM";
-        // Tipo de tarea del agente (validado) — fallback TASK si no manda un valor válido.
-        const typeRaw = typeof t.type === "string" ? t.type.toUpperCase() : "";
-        const type: "SESSION" | "TASK" = typeRaw === "SESSION" ? "SESSION" : "TASK";
-        toCreate.push({
-          phaseId: phase.id,
-          title: sanitizeTaskTitle(titleRaw),
-          weekIndex,
-          order,
-          notes: typeof t.notes === "string" && t.notes.trim() ? t.notes.trim() : null,
-          needsValidation: t.porValidar === true,
-          party,
-          type,
-          source: "AGENT",
-          status: "PENDING",
-        });
-      }
+      const toCreate = computeDetailTasksForPhase(
+        phase.name,
+        phase.durationWeeks,
+        effectiveActivity,
+        tasksRaw,
+        keepTitles,
+      ).map((c) => ({ ...c, phaseId: phase.id, source: "AGENT" as const, status: "PENDING" as const }));
       if (toCreate.length > 0) {
         await tx.timelineTask.createMany({ data: toCreate });
         tasksCreated += toCreate.length;
