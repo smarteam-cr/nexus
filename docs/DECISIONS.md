@@ -848,3 +848,29 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   `site_architecture`): cambiar el `sectionType` de la def a `"diagram"` + registrar `DiagramSection`
   en el registry de componentes de ese template + darle al brief el formato spec (sistemas/conexiones).
   La conversión lazy cubre su data vieja.
+
+## Cronograma — fase técnica: contenido por objeto + regen por fase (2026-07)
+
+- **`party: DEV` sobrevive de punta a punta (Fase A)**: el `techRule` (userMessage de `analyze`) ya
+  pedía DEV, pero el validador de persistencia lo descartaba (union estrecho) y el prompt base lo
+  contradecía. Fix: el prompt lista DEV y el validador lo acepta **solo en la fase técnica**
+  (`isDevIntegrationPhaseName(phase.name)`, `lib/timeline/phase-names.ts`). Todo el resto de la cadena
+  (renders, `validate.ts`, PUT, externo, snapshot) ya propagaba DEV.
+- **Señal por NOMBRE vs por TAG**: `hasTechnical` (techRule) va por TAG del proyecto
+  (`custom_dev`/`insider_one`); `isDevIntegrationPhaseName` va por NOMBRE de fase. Son señales distintas
+  y NO se fusionan.
+- **Contenido por objeto (Fase B)**: bloque en el prompt de `agent-timeline-detail` que aplica **solo**
+  a la fase "Desarrollo / Integración" — trata cada objeto de HubSpot como una mini-integración
+  (entendimiento → cuarteto por objeto [desarrollo/mapeo=DEV, homologación=CLIENTE, pruebas=AMBOS] →
+  dirección inversa si se vendió). Orden de objetos INDICATIVO. Techo de tokens del detalle a 24k + rama
+  de `repairTruncatedJson` para el agente de detalle (antes tiraba 500 al truncar).
+- **Regen POR FASE (retroactivo y seguro)**: `POST /analyze` con `regeneratePhaseId` rehace SOLO una
+  fase reusando el agente de detalle (prompt scopeado a esa fase → menos tokens/truncación). Salvaguarda
+  **por ESTADO, no por source**: borra solo `AGENT` + `PENDING` + `actualStart:null`; preserva HUMAN,
+  MODIFIED (curación) y todo lo iniciado. Borrado dentro de la `$transaction` de persistencia → atómico.
+  **Guardas G1/G2 (409 sin borrar)**: G1 = sin baseline activo / `timelinePublishedAt` null (regenerar
+  cambia ids de tarea y rompería la comparación por-id del portafolio D.3 contra el baseline congelado);
+  G2 = la fase no tiene tareas iniciadas/hechas (borrar perdería avance sellado). Invalida
+  `pendingProgress` (ids nuevos). Gate: `cronograma.regenerate` (ya lo aplica `resolveArtifactGate` en
+  `/analyze`) — no se creó capacidad nueva. **Fuera de alcance**: regen sobre cronogramas publicados
+  (requiere re-mapear ids en el baseline activo — follow-up).

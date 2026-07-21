@@ -18,6 +18,7 @@ import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
 import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
+import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { KICKOFF_TEMPLATE, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
 import { syncHorariosSessionsFromHubs } from "@/lib/canvas/kickoff-hubs";
@@ -159,6 +160,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     sessionKeywords?: string[];
     projectId?: string;
     async?: boolean; // A2: si true → run en background + polling (agentes pesados)
+    regeneratePhaseId?: string; // D.1 regen por fase: rehace SOLO esta fase del cronograma (agente de detalle)
   };
   const bodyStage: number        = typeof body?.stage === "number" ? body.stage : 1;
   const bodyStep: number         = typeof body?.step  === "number" ? body.step  : 0;
@@ -166,6 +168,8 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   const bodySectionLabel: string | null = body?.sectionLabel ?? null;
   const bodyAgentId: string | null      = body?.agentId      ?? null;
   let bodyProjectId: string | null = body?.projectId ?? null;
+  const regeneratePhaseId: string | null =
+    typeof body?.regeneratePhaseId === "string" && body.regeneratePhaseId ? body.regeneratePhaseId : null;
   // El pop-up de Agentes (y el tab "Información del cliente") manda projectId con el
   // SENTINEL "__strategy__", que NO es un id de Project real → FK violation en
   // agentRun.create (AgentRun_projectId_fkey). Lo resolvemos al proyecto __strategy__
@@ -290,6 +294,45 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         },
         { status: 400 },
       );
+    }
+    // D.1 regen por fase — guardas de seguridad ANTES de llamar a Claude (no gastar tokens si no procede).
+    if (regeneratePhaseId) {
+      const [phase, activeBaseline, project] = await Promise.all([
+        prisma.timelinePhase.findFirst({
+          where: { id: regeneratePhaseId, timelineId: tl.id },
+          select: { id: true, tasks: { select: { status: true, actualStart: true } } },
+        }),
+        prisma.timelineBaseline.count({ where: { timelineId: tl.id, isActive: true } }),
+        prisma.project.findUnique({ where: { id: bodyProjectId }, select: { timelinePublishedAt: true } }),
+      ]);
+      if (!phase) {
+        return NextResponse.json(
+          { error: "PHASE_NOT_FOUND", message: "La fase a regenerar no existe en este cronograma." },
+          { status: 404 },
+        );
+      }
+      // G1 — no publicado / sin baseline activo: regenerar cambia los ids de las tareas y rompería la
+      // comparación POR ID del portafolio (D.3) contra el baseline congelado (scope/atrasos/salud).
+      if (activeBaseline > 0 || project?.timelinePublishedAt) {
+        return NextResponse.json(
+          {
+            error: "TIMELINE_PUBLISHED",
+            message: "El cronograma está publicado. Despublicá primero o editá la fase a mano — regenerar rehace las tareas y afectaría el seguimiento publicado.",
+          },
+          { status: 409 },
+        );
+      }
+      // G2 — la fase no tiene avance real: borrar+recrear perdería status/actualStart sellados.
+      const hasProgress = phase.tasks.some((t) => t.status !== "PENDING" || t.actualStart !== null);
+      if (hasProgress) {
+        return NextResponse.json(
+          {
+            error: "PHASE_HAS_PROGRESS",
+            message: "Esta fase ya tiene tareas iniciadas o completadas. No se puede regenerar sin perder ese avance — editala a mano.",
+          },
+          { status: 409 },
+        );
+      }
     }
   }
 
@@ -1490,6 +1533,12 @@ ${handoffCtx || '(Sin handoff confirmado. Generá las tareas típicas del tipo d
 ${dbTaskRule}${techRule}
 
 Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a cada fase y proponé las tareas por semana (weekIndex relativo a la fase, < durationWeeks). Usá los ids EXACTOS del input.`;
+
+    // Regen por fase: acotá la salida a la fase target (las demás van con tasks:[]) — baja el
+    // costo/latencia y el riesgo de truncación. La persistencia igual filtra por onlyPhaseId.
+    if (regeneratePhaseId) {
+      userMessage += `\n\n=== ALCANCE: REGENERAR UNA SOLA FASE ===\nDetallá ÚNICAMENTE las tareas de la fase id="${regeneratePhaseId}". Para TODAS las demás fases del input, incluilas en el JSON con su id EXACTO pero con "tasks": [] — no las toques. Concentrá todo el detalle en la fase indicada.`;
+    }
   }
 
   // ── 10c. Marco breve de relación previa (solo agente Handoff) ────────────────
@@ -1546,7 +1595,9 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   // El mapeo puede emitir 4-6 diagramas (~4-6k tokens c/u) + card → 32k es riesgo
   // cierto de max_tokens; 64k da margen (Sonnet lo soporta con streaming, que este
   // path ya usa; el techo no cuesta — se factura lo generado).
-  const maxTokens = isCardsAndFlowcharts ? (isMapeoAgent ? 64000 : 32000) : 16000;
+  const maxTokens = isCardsAndFlowcharts
+    ? (isMapeoAgent ? 64000 : 32000)
+    : isTimelineDetailAgent ? 24000 : 16000;
   let analysisJson: {
     cards?: { title: string; content: string }[];
     suggestions?: Array<{ title?: string; content?: string; type?: string; suggestedSection?: string }>;
@@ -1680,6 +1731,27 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
               console.error("[analyze blocks] Reparación fallida");
             }
           }
+        } else if (isTimelineDetailAgent) {
+          // Recuperación para el detalle de cronograma: el agente emite timelineDetail.phases.
+          // Sin esta rama, un output truncado (24k) caía en el recovery de CARDS (regex que no
+          // matchea timelineDetail) → analysisJson quedaba inválido → 500. Reparamos y filtramos
+          // las fases sin tareas (las que quedaron cortadas al truncar) → degrada a lo recuperable.
+          console.warn(`[analyze detail] JSON.parse falló (stop_reason=${stopReason}), intentando reparación...`);
+          const repaired = repairTruncatedJson(jsonMatch[0]);
+          if (repaired) {
+            try {
+              analysisJson = JSON.parse(repaired);
+              const phs = analysisJson?.timelineDetail?.phases;
+              if (Array.isArray(phs)) {
+                analysisJson!.timelineDetail!.phases = phs.filter(
+                  (p) => Array.isArray((p as { tasks?: unknown[] })?.tasks) && (p as { tasks: unknown[] }).tasks.length > 0,
+                );
+                console.log(`[analyze detail] Reparado: ${(analysisJson!.timelineDetail!.phases as unknown[]).length} fases con tareas`);
+              }
+            } catch {
+              console.error("[analyze detail] Reparación fallida — JSON irrecuperable");
+            }
+          }
         } else if (!isFlowchart) {
           // Recuperación parcial para CARDS
           const partialCards: { title: string; content: string }[] = [];
@@ -1780,7 +1852,7 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   // ProjectTimeline/TimelineTask y se responde acá — no debe pasar por
   // updateCanvasAsync ni por el path de cards.
   if (isTimelineDetailAgent) {
-    const detail = await persistTimelineDetailFromAgentOutput(bodyProjectId, analysisJson, run.id);
+    const detail = await persistTimelineDetailFromAgentOutput(bodyProjectId, analysisJson, run.id, regeneratePhaseId);
     return NextResponse.json({
       timelineDetail: detail,
       run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
@@ -2625,6 +2697,7 @@ async function persistTimelineDetailFromAgentOutput(
   bodyProjectId: string | null,
   analysisJson: unknown,
   agentRunId: string,
+  onlyPhaseId: string | null = null,
 ): Promise<TimelineDetailResult> {
   const empty: TimelineDetailResult = { skipped: true, phasesTyped: 0, tasksCreated: 0, discardedPhaseIds: 0 };
   const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)
@@ -2659,14 +2732,36 @@ async function persistTimelineDetailFromAgentOutput(
     // reaparecía y un re-run creaba un set AGENT nuevo ALADO de las MODIFIED (sin dedup). Las tareas
     // MANUALES (source=HUMAN, que el CSE agregó a la base) NO cuentan → no bloquean la generación inicial,
     // el detalle se suma sin pisarlas. Mismo predicado en el UI (hasAiDetail) para que CTA y server coincidan.
-    const existingAgentCount = await tx.timelineTask.count({
-      where: { phase: { timelineId: tl.id }, source: { in: ["AGENT", "MODIFIED"] } },
-    });
-    if (existingAgentCount > 0) {
+    if (!onlyPhaseId) {
+      const existingAgentCount = await tx.timelineTask.count({
+        where: { phase: { timelineId: tl.id }, source: { in: ["AGENT", "MODIFIED"] } },
+      });
+      if (existingAgentCount > 0) {
+        console.log(
+          `[analyze] Skipping timeline detail: ya hay ${existingAgentCount} tareas IA (AGENT/MODIFIED) para project ${bodyProjectId}. Propuesta queda en AgentRun.output (${agentRunId}).`,
+        );
+        return { ...empty, reason: "detail_exists" };
+      }
+    } else {
+      // Regen POR FASE: NO aplica la idempotencia global. Antes de borrar, exigimos que el modelo haya
+      // devuelto tareas para la fase target — si vino vacía (falla del modelo), NO vaciamos la fase.
+      const targetRaw = detailRaw.find(
+        (r) => r && typeof r === "object" && (r as Record<string, unknown>).id === onlyPhaseId,
+      ) as Record<string, unknown> | undefined;
+      const targetTaskCount = Array.isArray(targetRaw?.tasks) ? (targetRaw!.tasks as unknown[]).length : 0;
+      if (targetTaskCount === 0) {
+        return { ...empty, reason: "empty_phase_output" };
+      }
+      // Borrado scopeado a la fase target, solo tareas AGENT SIN INICIAR (status PENDING + sin
+      // actualStart): preserva HUMAN (manual), MODIFIED (curación del CSE) y cualquier tarea iniciada.
+      // Las guardas G1/G2 del handler ya exigen sin-publicar y sin-avance; este filtro es defensa en
+      // profundidad. Todo dentro de la misma $transaction que crea las nuevas → atómico.
+      const del = await tx.timelineTask.deleteMany({
+        where: { phaseId: onlyPhaseId, source: "AGENT", status: "PENDING", actualStart: null },
+      });
       console.log(
-        `[analyze] Skipping timeline detail: ya hay ${existingAgentCount} tareas IA (AGENT/MODIFIED) para project ${bodyProjectId}. Propuesta queda en AgentRun.output (${agentRunId}).`,
+        `[analyze] Regen por fase ${onlyPhaseId}: borradas ${del.count} tareas AGENT sin iniciar (project ${bodyProjectId}, run ${agentRunId}).`,
       );
-      return { ...empty, reason: "detail_exists" };
     }
 
     const phaseById = new Map(tl.phases.map((p) => [p.id, p]));
@@ -2678,6 +2773,8 @@ async function persistTimelineDetailFromAgentOutput(
       if (!raw || typeof raw !== "object") continue;
       const ph = raw as Record<string, unknown>;
       const phaseId = typeof ph.id === "string" ? ph.id : null;
+      // Regen por fase: ignorá las demás fases (el agente las emite con tasks:[] por el scope del prompt).
+      if (onlyPhaseId && phaseId !== onlyPhaseId) continue;
       const phase = phaseId ? phaseById.get(phaseId) : undefined;
       if (!phase) {
         discardedPhaseIds++;
@@ -2708,7 +2805,7 @@ async function persistTimelineDetailFromAgentOutput(
         order: number;
         notes: string | null;
         needsValidation: boolean;
-        party: "CLIENTE" | "SMARTEAM" | "AMBOS" | null;
+        party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null;
         type: "SESSION" | "TASK";
         source: "AGENT";
         status: "PENDING";
@@ -2725,16 +2822,22 @@ async function persistTimelineDetailFromAgentOutput(
         perWeekCount.set(weekIndex, order + 1);
         // B — party del agente (validado) o fallback por el tipo de actividad de la fase.
         const partyRaw = typeof t.party === "string" ? t.party.toUpperCase() : "";
-        // Toda tarea tiene dueño: si el agente no lo da, se infiere por activityType;
-        // el último fallback es SMARTEAM (nunca null).
-        const party: "CLIENTE" | "SMARTEAM" | "AMBOS" =
-          partyRaw === "CLIENTE" || partyRaw === "SMARTEAM" || partyRaw === "AMBOS"
-            ? partyRaw
-            : effectiveActivity === "CONFIGURACION"
-              ? "SMARTEAM"
-              : effectiveActivity
-                ? "AMBOS"
-                : "SMARTEAM";
+        // DEV (#7) SOLO aterriza en la fase técnica ("Desarrollo / Integración"): honra el techRule
+        // del userMessage y evita que un DEV mal ubicado contamine fases funcionales. Fuera de esa
+        // fase, DEV degrada al fallback por activityType (mismo comportamiento que antes de #7).
+        const isTechPhase = isDevIntegrationPhaseName(phase.name);
+        // Toda tarea tiene dueño: si el agente no lo da (o da DEV fuera de la fase técnica), se
+        // infiere por activityType; el último fallback es SMARTEAM (nunca null).
+        const party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" =
+          partyRaw === "DEV" && isTechPhase
+            ? "DEV"
+            : partyRaw === "CLIENTE" || partyRaw === "SMARTEAM" || partyRaw === "AMBOS"
+              ? partyRaw
+              : effectiveActivity === "CONFIGURACION"
+                ? "SMARTEAM"
+                : effectiveActivity
+                  ? "AMBOS"
+                  : "SMARTEAM";
         // Tipo de tarea del agente (validado) — fallback TASK si no manda un valor válido.
         const typeRaw = typeof t.type === "string" ? t.type.toUpperCase() : "";
         const type: "SESSION" | "TASK" = typeRaw === "SESSION" ? "SESSION" : "TASK";
@@ -2770,7 +2873,9 @@ async function persistTimelineDetailFromAgentOutput(
       phasesArr.find((p) => p.order === 0) ??
       phasesArr.find((p) => normName(p.name).includes("semana 0") || normName(p.name).includes("kick")) ??
       null;
-    if (kickoff) {
+    // En regen POR FASE solo sembramos si la fase regenerada ES el kickoff — un regen de otra fase
+    // (ej. "Desarrollo / Integración") no debe re-sembrar las tareas fijas de la Semana 0.
+    if (kickoff && (!onlyPhaseId || onlyPhaseId === kickoff.id)) {
       const isReimpl =
         (await tx.project.findUnique({
           where: { id: bodyProjectId },
@@ -2817,10 +2922,15 @@ async function persistTimelineDetailFromAgentOutput(
       }
     }
 
-    // Trazabilidad del run que detalló. NO se toca lastEditedByHuman.
+    // Trazabilidad del run que detalló. NO se toca lastEditedByHuman. En regen POR FASE además
+    // invalidamos el borrador de avance: las tareas de la fase tienen ids nuevos → el pendingProgress
+    // viejo podría apuntar a ids muertos; se recalcula limpio con "Chequear avance".
     await tx.projectTimeline.update({
       where: { id: tl.id },
-      data: { detailGeneratedByAgentRunId: agentRunId },
+      data: {
+        detailGeneratedByAgentRunId: agentRunId,
+        ...(onlyPhaseId ? { pendingProgress: Prisma.DbNull, pendingProgressRunId: null } : {}),
+      },
     });
 
     console.log(

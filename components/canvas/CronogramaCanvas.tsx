@@ -216,6 +216,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Confirmación de "Confirmar detalle" cuando se dispara desde el panel: el CTA ejecuta, pero
   // hacer que las tareas crucen al cliente merece un "¿seguro?" de por medio.
   const [confirmDetailOpen, setConfirmDetailOpen] = useState(false);
+  // Regen por fase: la fase pendiente de confirmar el rehacer, y el flag de request en curso.
+  const [regenPhase, setRegenPhase] = useState<GanttPhase | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
   // Pedido del panel "Qué hacer acá" de abrir un grupo de la lista. El nonce hace que re-clickear
   // el mismo CTA lo vuelva a abrir aunque el CSE lo haya cerrado a mano.
   const [focusGroup, setFocusGroup] = useState<{ key: string; nonce: number } | null>(null);
@@ -882,6 +885,44 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       else toast.info("No se pudo generar el detalle automáticamente. Usá «Regenerar detalle» para reintentar.");
     }
     setGenerating(false);
+  };
+
+  // Regen POR FASE (D.1): rehace SOLO las tareas IA sin iniciar de una fase, con el detalle técnico
+  // por objeto. El server (analyze + onlyPhaseId) exige sin-publicar y sin-avance (G1/G2) y preserva
+  // HUMAN/MODIFIED/iniciadas; si no procede responde 409 con el motivo.
+  const confirmRegeneratePhase = async () => {
+    const phase = regenPhase;
+    if (!phase?.id) { setRegenPhase(null); return; }
+    setRegenerating(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage: 1,
+          step: 0,
+          stepLabel: "Regenerar fase",
+          sectionLabel: "Regenerar fase",
+          agentId: "agent-timeline-detail",
+          projectId,
+          regeneratePhaseId: phase.id,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.message ?? data?.error ?? "No se pudo regenerar la fase.");
+      } else if (data?.timelineDetail?.skipped) {
+        toast.info(`No se regeneró la fase (${data.timelineDetail.reason ?? "salida vacía"}).`);
+      } else {
+        await load();
+        clearScope(undoScope);
+        toast.success(`Fase «${phase.name}» regenerada.`);
+      }
+    } catch {
+      toast.error("Error de conexión al regenerar la fase.");
+    }
+    setRegenerating(false);
+    setRegenPhase(null);
   };
 
   // El detalle (tareas) ya NO se auto-genera en silencio: lo crea el CTA explícito
@@ -1978,6 +2019,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 ? (phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }
                 : undefined
             }
+            onRegeneratePhase={
+              // Rehacer una fase solo tiene sentido cuando YA hay detalle IA, y queda para quien puede
+              // regenerar (cronograma.regenerate). El server además exige sin-publicar / sin-avance.
+              hasAiDetail && canRegenerateTimeline
+                ? (phase) => setRegenPhase(phase)
+                : undefined
+            }
             onOpenTask={(pk, tk) => setSelectedTask({ phaseKey: pk, taskKey: tk })}
             kickoffDate={kickoffDate || null}
             particularidades={particularidades}
@@ -2045,6 +2093,29 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         }}
         onCancel={() => setConfirmDetailOpen(false)}
       />
+
+      {/* Regen POR FASE: rehacer las tareas IA SIN INICIAR de una fase con el detalle por objeto.
+          Conteo DUAL por ESTADO (no por source): N = AGENT sin iniciar (se reemplazan); M = el resto
+          (manuales, editadas o con avance) que se conservan. El server refuerza G1/G2. */}
+      {(() => {
+        if (!regenPhase) return null;
+        const n = regenPhase.tasks.filter((t) => t.source === "AGENT" && t.status === "PENDING").length;
+        const m = regenPhase.tasks.length - n;
+        return (
+          <ConfirmDialog
+            open={!!regenPhase}
+            title={`Regenerar «${regenPhase.name}»`}
+            description={
+              `Rehace ${n} tarea${n === 1 ? "" : "s"} generada${n === 1 ? "" : "s"} por IA sin iniciar de esta fase con el detalle técnico por objeto.` +
+              (m > 0 ? ` Se conservan ${m} tarea${m === 1 ? "" : "s"} manual${m === 1 ? "" : "es"}, editada${m === 1 ? "" : "s"} o con avance.` : "")
+            }
+            confirmLabel="Regenerar fase"
+            loading={regenerating}
+            onConfirm={confirmRegeneratePhase}
+            onCancel={() => setRegenPhase(null)}
+          />
+        );
+      })()}
 
       {/* Convertir un hecho en trabajo: dueño, fase y semana. Nada se aplica solo. */}
       {(() => {
