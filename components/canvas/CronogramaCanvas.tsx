@@ -48,6 +48,8 @@ import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
 import { buildProjectActions } from "@/lib/timeline/project-actions";
 import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
 import ProjectActionsPanel from "./ProjectActionsPanel";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 import { CronogramaSkeleton } from "@/components/clients/skeletons";
@@ -887,10 +889,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     setGenerating(false);
   };
 
-  // Regen POR FASE (D.1): rehace SOLO las tareas IA sin iniciar de una fase, con el detalle técnico
-  // por objeto. El server (analyze + onlyPhaseId) exige sin-publicar y sin-avance (G1/G2) y preserva
-  // HUMAN/MODIFIED/iniciadas; si no procede responde 409 con el motivo.
-  const confirmRegeneratePhase = async () => {
+  // Regen POR FASE (D.1): rehace las tareas IA de una fase con el detalle técnico por objeto (usa el
+  // handoff + el canvas Desarrollo). El server preserva SIEMPRE las tareas DONE/iniciadas y las
+  // manuales, y parchea el baseline si el proyecto está publicado. `mode`: "replace" reemplaza las
+  // pendientes IA; "keep" las conserva y solo agrega lo nuevo (dedup por título).
+  const confirmRegeneratePhase = async (mode: "replace" | "keep") => {
     const phase = regenPhase;
     if (!phase?.id) { setRegenPhase(null); return; }
     setRegenerating(true);
@@ -906,6 +909,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           agentId: "agent-timeline-detail",
           projectId,
           regeneratePhaseId: phase.id,
+          regenerateMode: mode,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -2094,26 +2098,41 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         onCancel={() => setConfirmDetailOpen(false)}
       />
 
-      {/* Regen POR FASE: rehacer las tareas IA SIN INICIAR de una fase con el detalle por objeto.
-          Conteo DUAL por ESTADO (no por source): N = AGENT sin iniciar (se reemplazan); M = el resto
-          (manuales, editadas o con avance) que se conservan. El server refuerza G1/G2. */}
+      {/* Regen POR FASE: dos modos. N = pendientes IA sin iniciar (reemplazables); M = el resto
+          (con avance o manuales) que se PRESERVAN siempre. En proyectos publicados el server parchea
+          el baseline solo (sin romper el portafolio). */}
       {(() => {
         if (!regenPhase) return null;
         const n = regenPhase.tasks.filter((t) => t.source === "AGENT" && t.status === "PENDING").length;
         const m = regenPhase.tasks.length - n;
         return (
-          <ConfirmDialog
+          <Modal
             open={!!regenPhase}
-            title={`Regenerar «${regenPhase.name}»`}
-            description={
-              `Rehace ${n} tarea${n === 1 ? "" : "s"} generada${n === 1 ? "" : "s"} por IA sin iniciar de esta fase con el detalle técnico por objeto.` +
-              (m > 0 ? ` Se conservan ${m} tarea${m === 1 ? "" : "s"} manual${m === 1 ? "" : "es"}, editada${m === 1 ? "" : "s"} o con avance.` : "")
-            }
-            confirmLabel="Regenerar fase"
-            loading={regenerating}
-            onConfirm={confirmRegeneratePhase}
-            onCancel={() => setRegenPhase(null)}
-          />
+            onClose={() => { if (!regenerating) setRegenPhase(null); }}
+            size="sm"
+            closeOnBackdrop={!regenerating}
+            closeOnEscape={!regenerating}
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-fg">Regenerar «{regenPhase.name}»</p>
+              <p className="text-xs text-fg-muted mt-1 leading-relaxed">
+                Rehace las tareas de esta fase con el detalle técnico por objeto (usa el handoff y el canvas
+                Desarrollo).{m > 0 ? ` Se conservan ${m} tarea${m === 1 ? "" : "s"} con avance o manual${m === 1 ? "" : "es"}.` : ""}
+              </p>
+              <p className="text-xs text-fg-muted mt-2 leading-relaxed">¿Qué hacemos con las pendientes generadas por IA?</p>
+            </div>
+            <div className="flex flex-col gap-2 mt-4">
+              <Button variant="destructive-solid" size="md" loading={regenerating} onClick={() => void confirmRegeneratePhase("replace")}>
+                Reemplazar {n} pendiente{n === 1 ? "" : "s"}
+              </Button>
+              <Button variant="primary" size="md" disabled={regenerating} onClick={() => void confirmRegeneratePhase("keep")}>
+                Conservar pendientes y solo agregar lo nuevo
+              </Button>
+              <Button variant="secondary" size="md" disabled={regenerating} onClick={() => setRegenPhase(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </Modal>
         );
       })()}
 

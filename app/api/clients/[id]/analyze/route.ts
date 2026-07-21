@@ -17,8 +17,10 @@ import { postProcessCards } from "@/lib/canvas/post-process";
 import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
+import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
 import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
+import { patchBaselinePhaseTasks } from "@/lib/timeline/baseline";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { KICKOFF_TEMPLATE, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
 import { syncHorariosSessionsFromHubs } from "@/lib/canvas/kickoff-hubs";
@@ -161,6 +163,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     projectId?: string;
     async?: boolean; // A2: si true → run en background + polling (agentes pesados)
     regeneratePhaseId?: string; // D.1 regen por fase: rehace SOLO esta fase del cronograma (agente de detalle)
+    regenerateMode?: "replace" | "keep"; // regen por fase: reemplazar pendientes IA (default) o conservarlas y solo sumar lo nuevo
   };
   const bodyStage: number        = typeof body?.stage === "number" ? body.stage : 1;
   const bodyStep: number         = typeof body?.step  === "number" ? body.step  : 0;
@@ -170,6 +173,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   let bodyProjectId: string | null = body?.projectId ?? null;
   const regeneratePhaseId: string | null =
     typeof body?.regeneratePhaseId === "string" && body.regeneratePhaseId ? body.regeneratePhaseId : null;
+  const regenerateMode: "replace" | "keep" = body?.regenerateMode === "keep" ? "keep" : "replace";
   // El pop-up de Agentes (y el tab "Información del cliente") manda projectId con el
   // SENTINEL "__strategy__", que NO es un id de Project real → FK violation en
   // agentRun.create (AgentRun_projectId_fkey). Lo resolvemos al proyecto __strategy__
@@ -295,42 +299,19 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         { status: 400 },
       );
     }
-    // D.1 regen por fase — guardas de seguridad ANTES de llamar a Claude (no gastar tokens si no procede).
+    // D.1 regen por fase — validación mínima. La seguridad NO viene de bloquear proyectos publicados:
+    // (a) el borrado scopeado preserva SIEMPRE las tareas DONE/iniciadas y las manuales, y
+    // (b) tras regenerar se PARCHEA el baseline activo de esa fase (patchBaselinePhaseTasks) para que
+    // el portafolio D.3 no reporte falso scope-creep ni pierda atrasos.
     if (regeneratePhaseId) {
-      const [phase, activeBaseline, project] = await Promise.all([
-        prisma.timelinePhase.findFirst({
-          where: { id: regeneratePhaseId, timelineId: tl.id },
-          select: { id: true, tasks: { select: { status: true, actualStart: true } } },
-        }),
-        prisma.timelineBaseline.count({ where: { timelineId: tl.id, isActive: true } }),
-        prisma.project.findUnique({ where: { id: bodyProjectId }, select: { timelinePublishedAt: true } }),
-      ]);
+      const phase = await prisma.timelinePhase.findFirst({
+        where: { id: regeneratePhaseId, timelineId: tl.id },
+        select: { id: true },
+      });
       if (!phase) {
         return NextResponse.json(
           { error: "PHASE_NOT_FOUND", message: "La fase a regenerar no existe en este cronograma." },
           { status: 404 },
-        );
-      }
-      // G1 — no publicado / sin baseline activo: regenerar cambia los ids de las tareas y rompería la
-      // comparación POR ID del portafolio (D.3) contra el baseline congelado (scope/atrasos/salud).
-      if (activeBaseline > 0 || project?.timelinePublishedAt) {
-        return NextResponse.json(
-          {
-            error: "TIMELINE_PUBLISHED",
-            message: "El cronograma está publicado. Despublicá primero o editá la fase a mano — regenerar rehace las tareas y afectaría el seguimiento publicado.",
-          },
-          { status: 409 },
-        );
-      }
-      // G2 — la fase no tiene avance real: borrar+recrear perdería status/actualStart sellados.
-      const hasProgress = phase.tasks.some((t) => t.status !== "PENDING" || t.actualStart !== null);
-      if (hasProgress) {
-        return NextResponse.json(
-          {
-            error: "PHASE_HAS_PROGRESS",
-            message: "Esta fase ya tiene tareas iniciadas o completadas. No se puede regenerar sin perder ese avance — editala a mano.",
-          },
-          { status: 409 },
         );
       }
     }
@@ -1507,6 +1488,9 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   if (isTimelineDetailAgent && bodyProjectId) {
     const handoffCtx = await loadCanvasContext(bodyProjectId, "Handoff", { onlyConfirmed: true });
     const timelineCtx = await loadTimelineContext(bodyProjectId, { includeIds: true });
+    // Canvas "Desarrollo" (requerimiento técnico) si existe → objetos de HubSpot, llaves de dedup y
+    // conexiones reales; ancla las tareas por objeto de la fase técnica en el alcance vendido. "" si no hay.
+    const desarrolloCtx = await loadDesarrolloContext(bodyProjectId);
 
     // Reglas #6 (tarea de BD) y #7 (tareas técnicas) derivadas de la clasificación del proyecto.
     const projTagSlugs = sanitizeTags(dealProject?.tags ?? []);
@@ -1528,7 +1512,7 @@ ${timelineCtx}
 
 === HANDOFF CURADO (bloques confirmados por el CSE) ===
 ${handoffCtx || '(Sin handoff confirmado. Generá las tareas típicas del tipo de cada fase y marcá CADA una con "porValidar": true. Títulos limpios, sin marcadores.)'}
-
+${desarrolloCtx ? `\n=== REQUERIMIENTO TÉCNICO (canvas Desarrollo — objetos, llaves y conexiones) ===\n${desarrolloCtx}\n` : ""}
 === REGLAS SEGÚN LA CLASIFICACIÓN ===
 ${dbTaskRule}${techRule}
 
@@ -1657,7 +1641,10 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
     // .finalMessage() acumula y devuelve el mismo Message. temperature 0 = salidas
     // deterministas entre ejecuciones.
     setPhase("Generando con IA…");
-    const msg = isCardsAndFlowcharts
+    // El agente de detalle usa max_tokens 24000 (>21.333) → el SDK EXIGE streaming en no-streaming
+    // (calcula timeout = 3600·maxTokens/128000 > 600s → lanza "Streaming is required"). Por eso el
+    // detalle también va por .stream().finalMessage() (mismo Message de vuelta → parseo idéntico).
+    const msg = isCardsAndFlowcharts || isTimelineDetailAgent
       ? await anthropic.messages
           .stream({
             model: "claude-sonnet-4-6",
@@ -1852,7 +1839,7 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   // ProjectTimeline/TimelineTask y se responde acá — no debe pasar por
   // updateCanvasAsync ni por el path de cards.
   if (isTimelineDetailAgent) {
-    const detail = await persistTimelineDetailFromAgentOutput(bodyProjectId, analysisJson, run.id, regeneratePhaseId);
+    const detail = await persistTimelineDetailFromAgentOutput(bodyProjectId, analysisJson, run.id, regeneratePhaseId, regenerateMode);
     return NextResponse.json({
       timelineDetail: detail,
       run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
@@ -2698,6 +2685,7 @@ async function persistTimelineDetailFromAgentOutput(
   analysisJson: unknown,
   agentRunId: string,
   onlyPhaseId: string | null = null,
+  regenerateMode: "replace" | "keep" = "replace",
 ): Promise<TimelineDetailResult> {
   const empty: TimelineDetailResult = { skipped: true, phasesTyped: 0, tasksCreated: 0, discardedPhaseIds: 0 };
   const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)
@@ -2732,6 +2720,8 @@ async function persistTimelineDetailFromAgentOutput(
     // reaparecía y un re-run creaba un set AGENT nuevo ALADO de las MODIFIED (sin dedup). Las tareas
     // MANUALES (source=HUMAN, que el CSE agregó a la base) NO cuentan → no bloquean la generación inicial,
     // el detalle se suma sin pisarlas. Mismo predicado en el UI (hasAiDetail) para que CTA y server coincidan.
+    // Regen "keep" (conservar pendientes): títulos existentes de la fase para deduplicar en el loop de creación.
+    let keepTitles: Set<string> | null = null;
     if (!onlyPhaseId) {
       const existingAgentCount = await tx.timelineTask.count({
         where: { phase: { timelineId: tl.id }, source: { in: ["AGENT", "MODIFIED"] } },
@@ -2752,16 +2742,29 @@ async function persistTimelineDetailFromAgentOutput(
       if (targetTaskCount === 0) {
         return { ...empty, reason: "empty_phase_output" };
       }
-      // Borrado scopeado a la fase target, solo tareas AGENT SIN INICIAR (status PENDING + sin
-      // actualStart): preserva HUMAN (manual), MODIFIED (curación del CSE) y cualquier tarea iniciada.
-      // Las guardas G1/G2 del handler ya exigen sin-publicar y sin-avance; este filtro es defensa en
-      // profundidad. Todo dentro de la misma $transaction que crea las nuevas → atómico.
-      const del = await tx.timelineTask.deleteMany({
-        where: { phaseId: onlyPhaseId, source: "AGENT", status: "PENDING", actualStart: null },
-      });
-      console.log(
-        `[analyze] Regen por fase ${onlyPhaseId}: borradas ${del.count} tareas AGENT sin iniciar (project ${bodyProjectId}, run ${agentRunId}).`,
-      );
+      if (regenerateMode === "replace") {
+        // Reemplazar pendientes: borra las pendientes IA SIN INICIAR (AGENT + MODIFIED, status PENDING,
+        // sin actualStart). Preserva SIEMPRE las tareas DONE/iniciadas (mismo id) y HUMAN (manual). El
+        // usuario eligió el reemplazo; el diálogo mostró cuántas se reemplazan. Todo dentro de la misma
+        // $transaction que crea las nuevas → atómico.
+        const del = await tx.timelineTask.deleteMany({
+          where: { phaseId: onlyPhaseId, source: { in: ["AGENT", "MODIFIED"] }, status: "PENDING", actualStart: null },
+        });
+        console.log(
+          `[analyze] Regen por fase ${onlyPhaseId} (replace): borradas ${del.count} pendientes IA sin iniciar (project ${bodyProjectId}, run ${agentRunId}).`,
+        );
+      } else {
+        // Conservar pendientes: no se borra NADA; el loop de creación deduplica por título normalizado
+        // contra lo existente → solo agrega las tareas por objeto cuyo título no exista ya en la fase.
+        keepTitles = new Set(
+          (await tx.timelineTask.findMany({ where: { phaseId: onlyPhaseId }, select: { title: true } })).map(
+            (t) => t.title.trim().toLowerCase(),
+          ),
+        );
+        console.log(
+          `[analyze] Regen por fase ${onlyPhaseId} (keep): sin borrado; dedup por título (${keepTitles.size} existentes).`,
+        );
+      }
     }
 
     const phaseById = new Map(tl.phases.map((p) => [p.id, p]));
@@ -2815,6 +2818,8 @@ async function persistTimelineDetailFromAgentOutput(
         const t = tRaw as Record<string, unknown>;
         const titleRaw = typeof t.title === "string" ? t.title.trim() : "";
         if (!titleRaw) continue;
+        // Regen "keep" (conservar pendientes): no dupliques una tarea cuyo título ya existe en la fase.
+        if (keepTitles && keepTitles.has(titleRaw.toLowerCase())) continue;
         const wRaw =
           typeof t.weekIndex === "number" && Number.isInteger(t.weekIndex) ? t.weekIndex : 0;
         const weekIndex = Math.min(Math.max(wRaw, 0), Math.max(phase.durationWeeks - 1, 0));
@@ -2920,6 +2925,13 @@ async function persistTimelineDetailFromAgentOutput(
           `[analyze] ✓ C: ${seeds.length} tareas fijas sembradas en "${kickoff.name}" (project ${bodyProjectId}, ${isReimpl ? "REIMPLEMENTATION" : "IMPLEMENTATION"})`,
         );
       }
+    }
+
+    // Regen POR FASE sobre un proyecto PUBLICADO: parcheamos el baseline activo de esa fase (ids
+    // nuevos + fechas planeadas) para que el portafolio D.3 no reporte falso scope-creep ni pierda
+    // atrasos. No-op si no hay baseline (sin publicar). Dentro de la misma tx → atómico con el regen.
+    if (onlyPhaseId) {
+      await patchBaselinePhaseTasks(tx, tl.id, onlyPhaseId);
     }
 
     // Trazabilidad del run que detalló. NO se toca lastEditedByHuman. En regen POR FASE además

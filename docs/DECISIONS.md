@@ -872,5 +872,18 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   cambia ids de tarea y rompería la comparación por-id del portafolio D.3 contra el baseline congelado);
   G2 = la fase no tiene tareas iniciadas/hechas (borrar perdería avance sellado). Invalida
   `pendingProgress` (ids nuevos). Gate: `cronograma.regenerate` (ya lo aplica `resolveArtifactGate` en
-  `/analyze`) — no se creó capacidad nueva. **Fuera de alcance**: regen sobre cronogramas publicados
-  (requiere re-mapear ids en el baseline activo — follow-up).
+  `/analyze`) — no se creó capacidad nueva.
+- **Follow-up — regen POR FASE en cronogramas PUBLICADOS + modo + contexto Desarrollo**:
+  - Se levantaron G1/G2. La seguridad ahora es: (a) el borrado nunca toca DONE/iniciadas; (b) tras
+    regenerar, `patchBaselinePhaseTasks(tx, timelineId, phaseId)` (`lib/timeline/baseline.ts`) parchea
+    **in-place** SOLO las tareas de esa fase en el baseline activo (ids nuevos + `plannedStart/End`
+    recomputadas con `buildTaskSnapshotEntries`), sin nueva versión → el portafolio D.3 no reporta falso
+    scope-creep ni pierde atrasos; las demás fases quedan intactas. No-op si no hay baseline (sin publicar).
+  - **Modo** (`regenerateMode`): `"replace"` (default) borra las pendientes IA sin iniciar
+    (`AGENT`+`MODIFIED`, `PENDING`, `actualStart:null`) y regenera; `"keep"` no borra nada y agrega solo
+    las tareas por objeto cuyo título no exista ya (dedup normalizado). HUMAN y lo iniciado se preservan
+    siempre. El diálogo (Modal, `CronogramaCanvas`) ofrece los dos botones.
+  - **Contexto**: el agente de detalle ya usa el canvas "Handoff" (1:1 = el último); se suma el canvas
+    **"Desarrollo"** vía `loadDesarrolloContext` (`lib/canvas/desarrollo-context.ts`) — lee los `CARD.data`
+    de `arquitectura`/`relacion_objetos`/`comunicacion` (NO `loadCanvasContext`, que da "" porque esos CARD
+    tienen `content:null`) y los inyecta al `userMessage` → las tareas por objeto salen del alcance real.
