@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getStageSteps, STAGE_LABELS } from "@/lib/steps";
 import { getProjectStage } from "@/lib/hubspot/stage";
 import { withProjectAccess } from "@/lib/api";
+import { withDbRetry } from "@/lib/db/retry";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
 import { computeBookends, type FrontSession, type SessionBookends } from "@/lib/sessions/bookends";
 import { loadProjectSetup } from "@/lib/portfolio/project-setup";
@@ -68,7 +69,7 @@ async function getProjectStageCapped(hubspotServiceId: string) {
 export const GET = withProjectAccess(async (
   _req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
-) => {
+) => withDbRetry(async () => {
   const { projectId } = await params;
 
   const project = await prisma.project.findUnique({
@@ -297,7 +298,7 @@ export const GET = withProjectAccess(async (
     historyItems, // tareas hechas o borradas (tab Histórico)
     setup, // #5 — { handoff, kickoff, cronograma, procesos } para el indicador del widget
   });
-});
+}));
 
 // PUT: actualizar datos del GPS
 export const PUT = withProjectAccess(async (

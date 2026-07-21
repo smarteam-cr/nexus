@@ -237,8 +237,29 @@ async function verifyProjectInHubspot(hsClient: Client, objectId: string): Promi
   return confirmedNotFound && !ambiguous ? "gone" : "alive";
 }
 
-export async function syncProjectsForClient(clientId: string): Promise<SyncResult> {
+// Cooldown EN MEMORIA de la auto-sync: corre en CADA montaje de la vista de cliente y es el peor
+// consumidor del pool (muchas queries + round-trips lentos a HubSpot). Prod es proceso único → este
+// Map cubre a todos los usuarios: el primero en entrar sincroniza, el resto (dentro del cooldown)
+// salta sin tocar DB ni HubSpot. El botón "Reintentar" pasa force=true para saltearlo. Se setea al
+// arrancar (claim), así un fallo por presión de pool TAMBIÉN hace back-off en vez de reintentar en
+// cada navegación y empeorar la congestión.
+const SYNC_COOLDOWN_MS = 10 * 60 * 1000; // 10 min
+const lastSyncByClient = new Map<string, number>();
+
+export async function syncProjectsForClient(
+  clientId: string,
+  opts: { force?: boolean } = {},
+): Promise<SyncResult> {
   const result: SyncResult = { found: 0, created: 0, updated: 0, skipped: 0, errors: [], debug: [] };
+
+  if (!opts.force) {
+    const last = lastSyncByClient.get(clientId) ?? 0;
+    if (Date.now() - last < SYNC_COOLDOWN_MS) {
+      result.debug!.push("Cooldown activo — sync omitida (usá 'Reintentar' para forzar).");
+      return result;
+    }
+  }
+  lastSyncByClient.set(clientId, Date.now());
 
   // 1. Obtener client + HubspotAccount (query directa para evitar quirks del relation lookup)
   const [client, hubspotAccount] = await Promise.all([

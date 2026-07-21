@@ -128,9 +128,13 @@ function plannedEnds(input: SummaryInput): { phase: Map<string, Date>; task: Map
   const task = new Map<string, Date>();
 
   if (input.baseline) {
-    for (const p of input.baseline.snapshot.phases) {
-      if (p.plannedEnd) phase.set(p.id, new Date(p.plannedEnd));
-      for (const t of p.tasks) if (t.plannedEnd) task.set(t.id, new Date(t.plannedEnd));
+    // Guard: un snapshot legacy/malformado (phases o tasks no-array) NO debe tirar TypeError → 500.
+    const snapPhases = input.baseline.snapshot?.phases;
+    if (Array.isArray(snapPhases)) {
+      for (const p of snapPhases) {
+        if (p.plannedEnd) phase.set(p.id, new Date(p.plannedEnd));
+        if (Array.isArray(p.tasks)) for (const t of p.tasks) if (t.plannedEnd) task.set(t.id, new Date(t.plannedEnd));
+      }
     }
     return { phase, task };
   }
@@ -223,11 +227,13 @@ export function computeProjectSummary(input: SummaryInput): ProjectSummary {
   if (!input.baseline) {
     scope = { measurable: false, addedPhases: 0, addedTasks: 0, weeksDelta: 0, attenuated: false, exceeded: false };
   } else {
-    const basePhaseIds = new Set(input.baseline.snapshot.phases.map((p) => p.id));
-    const baseTaskIds = new Set(input.baseline.snapshot.phases.flatMap((p) => p.tasks.map((t) => t.id)));
+    // Guard: snapshot legacy/malformado no debe tirar (phases/tasks pueden no ser array).
+    const basePhases = Array.isArray(input.baseline.snapshot?.phases) ? input.baseline.snapshot.phases : [];
+    const basePhaseIds = new Set(basePhases.map((p) => p.id));
+    const baseTaskIds = new Set(basePhases.flatMap((p) => (Array.isArray(p.tasks) ? p.tasks.map((t) => t.id) : [])));
     const addedPhases = phases.filter((p) => !basePhaseIds.has(p.id)).length;
     const addedTasks = allTasks.filter((t) => !baseTaskIds.has(t.id)).length;
-    const weeksDelta = totalWeeks(phases) - totalWeeks(input.baseline.snapshot.phases);
+    const weeksDelta = totalWeeks(phases) - totalWeeks(basePhases);
     const exceeded = addedPhases > 0 || addedTasks > 0 || weeksDelta > 0;
     scope = { measurable: true, addedPhases, addedTasks, weeksDelta, attenuated: weakBaseline, exceeded };
   }

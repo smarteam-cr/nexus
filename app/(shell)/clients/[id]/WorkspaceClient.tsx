@@ -69,11 +69,12 @@ export default function WorkspaceClient({
     if (activeSyncs.current === 0) setSyncing(false);
   }, []);
 
-  // Sincronización con HubSpot al entrar al cliente (background). Reintentable.
-  const runHubspotSync = useCallback(async () => {
+  // Sincronización con HubSpot al entrar al cliente (background). Reintentable. `force` saltea el
+  // cooldown server-side (solo el botón "Reintentar" lo usa; la auto-sync respeta el cooldown).
+  const runHubspotSync = useCallback(async (force = false) => {
     startSync();
     try {
-      const res = await fetch(`/api/clients/${clientId}/sync-projects`, { method: "POST" });
+      const res = await fetch(`/api/clients/${clientId}/sync-projects${force ? "?force=1" : ""}`, { method: "POST" });
       if (!res.ok) throw new Error("sync failed");
       const data = await res.json();
       setSyncResult({
@@ -86,7 +87,7 @@ export default function WorkspaceClient({
     } catch {
       setSyncDone(true);
       toast.error("No se pudo sincronizar con HubSpot.", {
-        action: { label: "Reintentar", onClick: () => void runHubspotSync() },
+        action: { label: "Reintentar", onClick: () => void runHubspotSync(true) },
       });
     } finally {
       endSync();
@@ -96,26 +97,34 @@ export default function WorkspaceClient({
   useEffect(() => {
     if (!hasHubspot || syncedRef.current) return;
     syncedRef.current = true;
-    void runHubspotSync();
+    // Diferir la sync FUERA de la ráfaga de montaje: GPS + cronograma cargan primero y el sync
+    // (background) arranca ~1.5s después → no compite por el pool de conexiones en el instante crítico.
+    const t = setTimeout(() => void runHubspotSync(), 1500);
+    return () => clearTimeout(t);
   }, [hasHubspot, runHubspotSync]);
 
   // Auto-sync de Google Meet en background — descubre transcripts/Docs nuevos sin que
   // el usuario dispare nada. Cooldown de 20 min en el endpoint. Si descubre cosas
   // nuevas, bumpea la señal para refrescar el GPS.
   useEffect(() => {
-    startSync();
-    fetch("/api/integrations/google/auto-sync", { method: "POST" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d && !d.skipped && ((d.sync?.synced ?? 0) > 0 || (d.enrich?.enriched ?? 0) > 0)) {
-          invalidateGps(); // limpia el cache → el GPS montado refetchea
-          bumpGpsRefresh();
-        }
-      })
-      // Enriquecimiento de fondo: el fallo se queda silencioso (no toda cuenta tiene
-      // Google conectado). El indicador alcanza; el error ruidoso es el de HubSpot.
-      .catch(() => {})
-      .finally(() => endSync());
+    // Diferida y escalonada tras la de HubSpot (~2.5s): otro consumidor de fondo que no debe competir
+    // con GPS + cronograma por el pool en el montaje. Tiene cooldown de 20 min propio en el endpoint.
+    const t = setTimeout(() => {
+      startSync();
+      fetch("/api/integrations/google/auto-sync", { method: "POST" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d && !d.skipped && ((d.sync?.synced ?? 0) > 0 || (d.enrich?.enriched ?? 0) > 0)) {
+            invalidateGps(); // limpia el cache → el GPS montado refetchea
+            bumpGpsRefresh();
+          }
+        })
+        // Enriquecimiento de fondo: el fallo se queda silencioso (no toda cuenta tiene
+        // Google conectado). El indicador alcanza; el error ruidoso es el de HubSpot.
+        .catch(() => {})
+        .finally(() => endSync());
+    }, 2500);
+    return () => clearTimeout(t);
   }, [bumpGpsRefresh, startSync, endSync]);
 
   return (

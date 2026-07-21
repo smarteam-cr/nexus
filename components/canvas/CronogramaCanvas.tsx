@@ -379,6 +379,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     else setLoading(true);
     try {
       const res = await fetch(`/api/projects/${projectId}/timeline`);
+      if (!res.ok) {
+        // El GET ahora devuelve JSON estructurado en error (antes: 500 crudo → res.json() reventaba
+        // → mensaje mudo). Mostramos el mensaje real del server y no caemos al estado vacío.
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message ?? "No se pudo cargar el cronograma.");
+      }
       const data = await res.json();
       if (data.exists) {
         setPhases(mapServerPhases(data.phases ?? []));
@@ -435,8 +441,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setLastEditedAt(null);
       }
       setError(null);
-    } catch {
-      setError("No se pudo cargar el cronograma.");
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : "No se pudo cargar el cronograma.");
     }
     setLoading(false);
     setRefreshing(false);

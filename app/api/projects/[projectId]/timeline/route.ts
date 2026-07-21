@@ -31,8 +31,10 @@
  * (lastEditedByHuman = now, todas las phases nacen como HUMAN).
  */
 import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { guardAccessToProject, guardTimelineEdit, guardTimelineDelete } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { withDbRetry } from "@/lib/db/retry";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 import { countDeliverySessionsByPhase } from "@/lib/timeline/delivery-sessions";
 import { Prisma } from "@prisma/client";
@@ -337,8 +339,20 @@ export async function GET(
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
-  const result = await loadTimeline(projectId);
-  return NextResponse.json(result);
+  try {
+    // Retry ante presión transitoria del pool → un pico breve se auto-cura en vez de 500ear.
+    const result = await withDbRetry(() => loadTimeline(projectId));
+    return NextResponse.json(result);
+  } catch (e) {
+    // Antes: un throw acá salía como 500 CRUDO (no-JSON) y el front reventaba en res.json() con un
+    // mensaje mudo. Ahora devuelve JSON estructurado (+ log/Sentry) → el cliente muestra error claro.
+    console.error(`[api] GET /api/projects/${projectId}/timeline:`, e);
+    Sentry.captureException(e instanceof Error ? e : new Error(String(e)));
+    return NextResponse.json(
+      { error: "INTERNAL_ERROR", message: "No se pudo cargar el cronograma. Reintentá en un momento." },
+      { status: 500 },
+    );
+  }
 }
 
 // ── PUT (bulk edit con diff de fases y tareas) ───────────────────────────────

@@ -298,6 +298,7 @@ export async function patchBaselinePhaseTasks(
   if (!baseline) return; // sin publicar → no hay baseline que parchear
 
   const snapshot = baseline.snapshot as unknown as BaselineSnapshot;
+  if (!Array.isArray(snapshot?.phases)) return; // snapshot legacy/malformado → no tocar (evita TypeError)
   const snapIdx = snapshot.phases.findIndex((p) => p.id === phaseId);
   if (snapIdx < 0) return; // la fase no está en el baseline → no tocar
 
