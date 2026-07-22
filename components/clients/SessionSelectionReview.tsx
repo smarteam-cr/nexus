@@ -245,7 +245,7 @@ export default function SessionSelectionReview({
     );
   }
 
-  if (loading) return <div className="h-16 rounded-xl skeleton-shimmer" />;
+  if (loading) return <div className="h-16 rounded-xl border border-line skeleton-shimmer" />;
 
   return (
     <div className="space-y-3">

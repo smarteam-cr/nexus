@@ -44,7 +44,6 @@ const DEUDA = {
     "components/clients/ProjectCanvasPanel.tsx:29",
     "components/clients/ProjectSessionsReview.tsx:152",
     "components/clients/SectionDiscoveryModal.tsx:9",
-    "components/clients/SessionSelectionReview.tsx:213",
   ],
   animatePulse: [
     "app/(shell)/audits/[id]/AuditDetailClient.tsx",
