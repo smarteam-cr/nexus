@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { BackLink } from "@/components/ui";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import ClientSharing from "@/components/clients/ClientSharing";
+import DeleteProjectButton from "@/components/clients/DeleteProjectButton";
 
 interface HubspotAccount {
   id: string;
@@ -27,6 +28,14 @@ interface Me {
   capabilities: string[];
 }
 
+interface ProjectRow {
+  id: string;
+  name: string;
+  status: string;
+  serviceType: string | null;
+  hubspotServiceId: string | null;
+}
+
 export default function ClientSettingsPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -35,6 +44,7 @@ export default function ClientSettingsPage() {
 
   const [client, setClient] = useState<Client | null>(null);
   const [me, setMe] = useState<Me | null>(null);
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [justConnected, setJustConnected] = useState(false);
@@ -64,8 +74,20 @@ export default function ClientSettingsPage() {
     }
   };
 
+  // Proyectos del cliente (para la Zona de peligro: eliminar un proyecto). Se excluye la
+  // pestaña "Información del cliente" (serviceType __strategy__), que no es un proyecto real.
+  const fetchProjects = async () => {
+    try {
+      const res = await fetch(`/api/clients/${clientId}/projects`);
+      if (!res.ok) return;
+      const data: { projects: ProjectRow[] } = await res.json();
+      setProjects((data.projects ?? []).filter((p) => p.serviceType !== "__strategy__"));
+    } catch { /* ignore */ }
+  };
+
   useEffect(() => {
     fetchClient();
+    fetchProjects();
     fetch("/api/me")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setMe(d))
@@ -288,12 +310,53 @@ export default function ClientSettingsPage() {
 
       {/* Sección: Zona de peligro (solo roles con deleteClients) */}
       {me?.capabilities.includes("deleteClients") && (
-        <section className="rounded-xl bg-gray-900 border border-red-500/20 p-5">
-          <h2 className="text-sm font-semibold text-red-400 mb-1">Zona de peligro</h2>
-          <p className="text-xs text-gray-500 mb-4">
-            Eliminar el cliente eliminará todo su historial, notas, documentos y configuraciones asociadas. Esta acción no se puede deshacer.
-          </p>
-          <DeleteClientButton clientId={clientId} />
+        <section className="rounded-xl bg-gray-900 border border-red-500/20 p-5 space-y-5">
+          <h2 className="text-sm font-semibold text-red-400">Zona de peligro</h2>
+
+          {/* Eliminar un proyecto puntual (desasocia de HubSpot si vino del sync) */}
+          <div>
+            <h3 className="text-xs font-semibold text-fg mb-1">Eliminar un proyecto</h3>
+            <p className="text-xs text-fg-muted mb-3">
+              Borra el proyecto y su handoff, cronograma, canvases, documentos y contexto. Si vino de
+              HubSpot, lo desasocia (el deal queda intacto) y el sync no lo vuelve a crear. No se puede deshacer.
+            </p>
+            {projects.length === 0 ? (
+              <p className="text-xs text-fg-muted">Este cliente no tiene proyectos.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {projects.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-center gap-3 rounded-lg bg-surface-muted border border-line px-3 py-2"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-fg truncate">{p.name}</p>
+                      <p className="text-[11px] text-fg-muted">
+                        {p.status !== "active" ? `${p.status} · ` : ""}
+                        {p.hubspotServiceId ? "de HubSpot" : "manual"}
+                      </p>
+                    </div>
+                    <DeleteProjectButton
+                      clientId={clientId}
+                      projectId={p.id}
+                      projectName={p.name}
+                      hasHubspotLink={!!p.hubspotServiceId}
+                      onDeleted={fetchProjects}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Eliminar el cliente entero */}
+          <div className="pt-4 border-t border-line">
+            <h3 className="text-xs font-semibold text-fg mb-1">Eliminar el cliente</h3>
+            <p className="text-xs text-fg-muted mb-3">
+              Elimina el cliente y todo su historial, notas, documentos y configuraciones. Esta acción no se puede deshacer.
+            </p>
+            <DeleteClientButton clientId={clientId} />
+          </div>
         </section>
       )}
 

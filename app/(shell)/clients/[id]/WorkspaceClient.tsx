@@ -8,7 +8,6 @@ import { invalidateGps } from "@/lib/clients/gps-cache";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
-import DeleteProjectButton from "@/components/clients/DeleteProjectButton";
 
 const STRATEGY_TAB_ID = "__strategy__";
 const PROCESOS_TAB_ID = "__procesos__";
@@ -242,12 +241,6 @@ function ProjectSection({
   const isProcesos = activeProjectId === PROCESOS_TAB_ID;
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
-  // Tras borrar el proyecto activo: saltar a otro proyecto (o a Información del cliente).
-  const handleProjectDeleted = useCallback(() => {
-    const remaining = projects.filter((p) => p.id !== activeProjectId);
-    setActiveProjectId(remaining[0]?.id ?? STRATEGY_TAB_ID);
-  }, [projects, activeProjectId, setActiveProjectId]);
-
   return (
     <div>
       {/* Tab bar */}
@@ -318,22 +311,13 @@ function ProjectSection({
           canvasId={strategyCanvasId}
         />
       ) : activeProjectId && activeProject ? (
-        <>
-          <ProjectCanvasPanel
-            key={activeProjectId}
-            projectId={activeProjectId}
-            tags={activeProject.tags}
-            serviceType={activeProject.serviceType}
-            initialCanvases={activeProjectId === initialCanvasesProjectId ? initialCanvases : null}
-          />
-          <DeleteProjectButton
-            clientId={clientId}
-            projectId={activeProjectId}
-            projectName={activeProject.name}
-            hasHubspotLink={!!activeProject.hubspotServiceId}
-            onDeleted={handleProjectDeleted}
-          />
-        </>
+        <ProjectCanvasPanel
+          key={activeProjectId}
+          projectId={activeProjectId}
+          tags={activeProject.tags}
+          serviceType={activeProject.serviceType}
+          initialCanvases={activeProjectId === initialCanvasesProjectId ? initialCanvases : null}
+        />
       ) : null}
     </div>
   );

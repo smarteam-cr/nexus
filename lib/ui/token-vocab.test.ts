@@ -63,7 +63,7 @@ const DEUDA_TOKENS: Record<string, number> = {
   "app/(shell)/clients/[id]/projects/[projectId]/stage/[stageNum]/page.tsx": 23,
   "app/(shell)/clients/[id]/projects/[projectId]/StageTabs.tsx": 7,
   "app/(shell)/clients/[id]/ProjectsClient.tsx": 26,
-  "app/(shell)/clients/[id]/settings/page.tsx": 43,
+  "app/(shell)/clients/[id]/settings/page.tsx": 42,
   "app/(shell)/clients/[id]/stage/[stageNum]/NewAuditButtonClient.tsx": 7,
   "app/(shell)/clients/[id]/stage/[stageNum]/NewImplementationButton.tsx": 13,
   "app/(shell)/clients/[id]/StageTabs.tsx": 7,
