@@ -43,10 +43,14 @@ export default function ProjectContextSection({
   const open = override ?? !generated;
 
   // Contadores por columna (los reportan los hijos / la columna manual los sabe directo).
+  // Todos miden lo MISMO: "fuentes que alimentan el handoff" — HubSpot cuenta solo el
+  // material de la era, Meet solo las que alimentan (las excluidas van aparte).
   const [hubspotCount, setHubspotCountState] = useState(0);
   const [meetCount, setMeetCountState] = useState(0);
+  const [meetExcluded, setMeetExcludedState] = useState(0);
   const setHubspotCount = useCallback((n: number) => setHubspotCountState((c) => (c === n ? c : n)), []);
   const setMeetCount = useCallback((n: number) => setMeetCountState((c) => (c === n ? c : n)), []);
+  const setMeetExcluded = useCallback((n: number) => setMeetExcludedState((c) => (c === n ? c : n)), []);
 
   // Fuentes manuales (transcripts/resúmenes pegados a mano).
   const [sources, setSources] = useState<ManualSource[]>([]);
@@ -96,7 +100,9 @@ export default function ProjectContextSection({
     } catch { /* ignore */ }
   }, [projectId, fetchSources]);
 
-  const total = hubspotCount + meetCount + sources.length;
+  // "Alimentan" = todo lo que entra como material al handoff (mismo criterio en las 3
+  // columnas). Las excluidas a mano se cuentan aparte (no alimentan, pero son gestionables).
+  const feedTotal = hubspotCount + meetCount + sources.length;
   const dot = (color: string) => <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: color }} />;
 
   return (
@@ -111,11 +117,14 @@ export default function ProjectContextSection({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
         <span className="text-sm font-bold text-fg">Contexto</span>
-        <span className="text-[11px] text-fg-muted">{total} fuente{total === 1 ? "" : "s"}</span>
+        <span className="text-[11px] text-fg-muted">
+          {feedTotal} fuente{feedTotal === 1 ? "" : "s"} alimentan
+          {meetExcluded > 0 ? ` · ${meetExcluded} excluida${meetExcluded === 1 ? "" : "s"}` : ""}
+        </span>
         <span className="hidden sm:flex items-center gap-3 ml-2 text-[11px] text-fg-secondary">
-          <span className="inline-flex items-center gap-1">{dot("#ff7a59")}{hubspotCount}</span>
-          <span className="inline-flex items-center gap-1">{dot("#16a34a")}{meetCount}</span>
-          <span className="inline-flex items-center gap-1">{dot("#7c6df2")}{sources.length}</span>
+          <span className="inline-flex items-center gap-1" title="HubSpot (era del proyecto)">{dot("#ff7a59")}{hubspotCount}</span>
+          <span className="inline-flex items-center gap-1" title="Google Meet (alimentan)">{dot("#16a34a")}{meetCount}</span>
+          <span className="inline-flex items-center gap-1" title="Fuentes manuales">{dot("#7c6df2")}{sources.length}</span>
         </span>
         <span className="ml-auto text-xs text-fg-muted">{open ? "Colapsar" : "Expandir"}</span>
       </button>
@@ -124,7 +133,9 @@ export default function ProjectContextSection({
           se oculta con `hidden` para no desmontar y re-fetchear al togglear. */}
       <div className={open ? "px-5 pb-4" : "hidden"}>
         <p className="text-[11px] text-fg-muted mb-2.5">
-          Llamadas, reuniones, notas y transcripciones del proyecto. Se usan automáticamente como contexto al generar.
+          Estas fuentes arman el handoff. Todo lo <span className="font-medium text-fg-secondary">incluido</span> alimenta la
+          generación; <span className="font-medium text-fg-secondary">excluí</span> lo que sea de otro proyecto. En HubSpot,
+          el material de la era del proyecto; el resto queda como trasfondo.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <ContextColumn icon={CTX_ICONS.hubspot} color="#ff7a59" title="HubSpot" count={hubspotCount}>
@@ -136,6 +147,7 @@ export default function ProjectContextSection({
               projectId={projectId}
               columnMode
               onCount={setMeetCount}
+              onExcludedCount={setMeetExcluded}
               onChange={onSessionsChange}
               readOnly={!canEdit}
             />

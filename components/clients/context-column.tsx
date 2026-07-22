@@ -10,12 +10,27 @@
  */
 import { type ReactNode, Children } from "react";
 
-/** Fila compacta de una fuente de contexto: meta (tipo · fecha) + título + snippet, opción de quitar. */
+/** Tono del badge de estado de una fila de contexto (Incluida / Excluida / aviso). */
+export type RowTone = "green" | "amber" | "muted";
+const TONE_CLASS: Record<RowTone, string> = {
+  green: "text-green-700 bg-green-50 border-green-200",
+  amber: "text-amber-700 bg-amber-50 border-amber-200",
+  muted: "text-fg-muted bg-surface border-line",
+};
+
+/**
+ * Fila compacta de una fuente de contexto: meta (tipo · fecha) + título + snippet.
+ * Opcional: `badge` (pill de estado Incluida/Excluida), `dim` (atenuada, p.ej. excluida
+ * o trasfondo), `action` (botón de texto inline, p.ej. "Incluir") y/o `onRemove` (la "X").
+ */
 export function ContextRow({
   icon,
   meta,
   title,
   snippet,
+  badge,
+  dim,
+  action,
   onRemove,
   removeTitle,
 }: {
@@ -23,11 +38,14 @@ export function ContextRow({
   meta: string;
   title?: string;
   snippet?: string;
+  badge?: { label: string; tone: RowTone };
+  dim?: boolean;
+  action?: { label: string; onClick: () => void; disabled?: boolean };
   onRemove?: () => void;
   removeTitle?: string;
 }) {
   return (
-    <li className="flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-2.5 py-1.5">
+    <li className={`flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-2.5 py-1.5${dim ? " opacity-60" : ""}`}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 text-[10px] text-fg-muted">
           {icon && (
@@ -36,10 +54,24 @@ export function ContextRow({
             </svg>
           )}
           <span className="truncate">{meta}</span>
+          {badge && (
+            <span className={`flex-shrink-0 text-[9px] font-bold uppercase tracking-wider border rounded-full px-1.5 py-0.5 ${TONE_CLASS[badge.tone]}`}>
+              {badge.label}
+            </span>
+          )}
         </div>
         {title && <p className="text-xs font-medium text-fg truncate mt-0.5">{title}</p>}
         {snippet && <p className="text-[11px] text-fg-muted truncate">{snippet}</p>}
       </div>
+      {action && (
+        <button
+          onClick={action.onClick}
+          disabled={action.disabled}
+          className="text-[11px] font-semibold text-brand hover:text-brand-dark disabled:opacity-40 transition-colors flex-shrink-0 mt-0.5"
+        >
+          {action.label}
+        </button>
+      )}
       {onRemove && (
         <button
           onClick={onRemove}

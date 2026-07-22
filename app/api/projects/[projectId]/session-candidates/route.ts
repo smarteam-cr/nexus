@@ -72,6 +72,23 @@ export async function GET(
       applies(r.session.title, r.session.participants, r.session.organizerEmail),
     );
 
+  // Atribución multi-proyecto: nombres de los OTROS proyectos donde también está
+  // linkeada cada sesión de este proyecto. La UI muestra "también en: X" para que el
+  // CSE identifique (y pueda excluir) el cruce cuando un cliente tiene varios proyectos.
+  const linkedSessionIds = safeRows.map((r) => r.session.id);
+  const otherLinks = linkedSessionIds.length
+    ? await prisma.sessionProject.findMany({
+        where: { sessionId: { in: linkedSessionIds }, projectId: { not: projectId } },
+        select: { sessionId: true, project: { select: { name: true } } },
+      })
+    : [];
+  const alsoInBySession = new Map<string, string[]>();
+  for (const l of otherLinks) {
+    const arr = alsoInBySession.get(l.sessionId) ?? [];
+    arr.push(l.project.name);
+    alsoInBySession.set(l.sessionId, arr);
+  }
+
   const feeding = safeRows
     .filter(feeds)
     .sort((a, b) => b.session.date.getTime() - a.session.date.getTime())
@@ -84,10 +101,25 @@ export async function GET(
       confidence: r.confidence,
       rationale: r.rationale,
       forced: r.handoffOverride === true,
+      alsoIn: alsoInBySession.get(r.session.id) ?? [],
       // Por qué alimenta (con la política nueva no hay otro caso): la UI lo muestra en la fila.
       origin: r.handoffOverride === true ? "forzada a mano" : r.isPrimary ? "primaria" : "confianza alta",
     }));
   const feedingIds = new Set(feeding.map((f) => f.sessionId));
+
+  // Excluidas A MANO (handoffOverride===false): la "X" del panel las sacó del handoff
+  // pero siguen siendo del proyecto. Se muestran como "Excluida" con un toggle para
+  // re-incluirlas — es la reversa visible del anclaje de la Fase 1, sin ir al modal.
+  const excluded = safeRows
+    .filter((r) => r.included && r.handoffOverride === false)
+    .sort((a, b) => b.session.date.getTime() - a.session.date.getTime())
+    .map((r) => ({
+      sessionId: r.session.id,
+      title: r.session.title,
+      date: r.session.date,
+      alsoIn: alsoInBySession.get(r.session.id) ?? [],
+    }));
+  const excludedIds = new Set(excluded.map((e) => e.sessionId));
 
   // Candidatas para el pop-up: todas las sesiones del cliente que NO alimentan ya el
   // handoff (incluye las linkeadas-pero-excluidas y las no linkeadas). `applies` marca
@@ -112,7 +144,7 @@ export async function GET(
   });
 
   const candidates = clientSessions
-    .filter((s) => !feedingIds.has(s.id))
+    .filter((s) => !feedingIds.has(s.id) && !excludedIds.has(s.id))
     .map((s) => {
       const cls = classifyHandoffSession(s.title, s.participants, s.organizerEmail, salesEmails);
       return {
@@ -135,5 +167,5 @@ export async function GET(
     (r) => r.included && r.source === "agent" && r.reviewedAt === null,
   ).length;
 
-  return NextResponse.json({ feeding, candidates, unreviewedCount });
+  return NextResponse.json({ feeding, excluded, candidates, unreviewedCount });
 }

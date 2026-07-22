@@ -56,9 +56,13 @@ export default function HubspotTimelinePanel({
     load();
   }, [load]);
 
+  // Contador HONESTO: solo el material de la ERA del proyecto (lo que alimenta como
+  // material). El "historial previo" entra como trasfondo comprimido, no como fuente
+  // material → no se cuenta acá (se muestra igual en la lista, atenuado y etiquetado).
+  const materialCount = hubspot.filter((it) => !it.previous).length;
   useEffect(() => {
-    if (!loadingHs) onCount?.(hubspot.length);
-  }, [loadingHs, hubspot.length, onCount]);
+    if (!loadingHs) onCount?.(materialCount);
+  }, [loadingHs, materialCount, onCount]);
 
   // Modo columna (Contexto): lista compacta + estado vacío, sin header ni borde propios.
   if (columnMode) {
