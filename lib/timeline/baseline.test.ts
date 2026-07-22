@@ -27,7 +27,7 @@
  * Correr: `npx vitest run lib/timeline/baseline.test.ts --project unit`.
  */
 import { test, expect } from "vitest";
-import { buildBaselineSnapshot, planFingerprint } from "./baseline";
+import { buildBaselineSnapshot, planFingerprint, buildTaskSnapshotEntries } from "./baseline";
 import type { BaselineSnapshot } from "./baseline";
 import { addWeeks } from "@/lib/timeline/weeks";
 
@@ -301,4 +301,29 @@ test("I — planFingerprint discrimina: cambiar lo vendido (needsValidation, dur
   const invertido = clone();
   invertido.phases.reverse();
   expect(planFingerprint(invertido)).not.toBe(base);
+});
+
+// ── buildTaskSnapshotEntries (parche por-fase tras regenerar) ────────────────────
+// La regen por fase reemplaza SOLO las tareas de una fase en el snapshot activo con ids nuevos;
+// este helper es la fórmula de fechas planeadas que usa el parche (patchBaselinePhaseTasks).
+
+test("buildTaskSnapshotEntries: plannedStart/End absolutos = phaseStart + weekIndex (dura 1 semana)", () => {
+  const entries = buildTaskSnapshotEntries(ANCHOR_ISO, 3, [
+    makeTask({ id: "nuevo-1", title: "Desarrollo de la integración de Contactos", weekIndex: 0, order: 0 }),
+    makeTask({ id: "nuevo-2", title: "Pruebas de integración de Contactos", weekIndex: 1, order: 0 }),
+  ]);
+  expect(entries).toHaveLength(2);
+  // fase arranca en la semana absoluta 3 → tarea weekIndex 0 = semana 3, fin semana 4
+  expect(entries[0].id).toBe("nuevo-1");
+  expect(entries[0].plannedStart).toBe(week(3));
+  expect(entries[0].plannedEnd).toBe(week(4));
+  // weekIndex 1 = semana 4, fin semana 5
+  expect(entries[1].plannedStart).toBe(week(4));
+  expect(entries[1].plannedEnd).toBe(week(5));
+});
+
+test("buildTaskSnapshotEntries: sin anchor → fechas planned null (solo números de semana)", () => {
+  const entries = buildTaskSnapshotEntries(null, 2, [makeTask({ id: "x", weekIndex: 0 })]);
+  expect(entries[0].plannedStart).toBeNull();
+  expect(entries[0].plannedEnd).toBeNull();
 });

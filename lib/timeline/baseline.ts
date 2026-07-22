@@ -82,6 +82,32 @@ interface PhaseRow {
 }
 
 /**
+ * Entradas de tarea del snapshot para UNA fase: pre-calcula plannedStart/plannedEnd desde el
+ * anchor + la semana de inicio de la fase + el weekIndex relativo (convención "+1 = fin de
+ * semana", misma que summary.ts). Reusado por buildBaselineSnapshot y por patchBaselinePhaseTasks.
+ */
+export function buildTaskSnapshotEntries(
+  anchorIso: string | null,
+  phaseStartWeek: number,
+  tasks: PhaseRow["tasks"],
+): BaselineTask[] {
+  return tasks.map((t) => {
+    const absWeek = phaseStartWeek + t.weekIndex;
+    return {
+      id: t.id,
+      title: t.title,
+      weekIndex: t.weekIndex,
+      order: t.order,
+      source: t.source,
+      needsValidation: t.needsValidation,
+      status: t.status,
+      plannedStart: anchorIso ? addWeeks(anchorIso, absWeek).toISOString() : null,
+      plannedEnd: anchorIso ? addWeeks(anchorIso, absWeek + 1).toISOString() : null,
+    };
+  });
+}
+
+/**
  * Arma el snapshot frozen + la firmeza self-contained (sin el flag de handoff, que
  * requiere una query aparte). Las fechas planeadas se PRE-CALCULAN y se congelan acá
  * (inmunes a cambios posteriores de anchor o de la convención).
@@ -107,20 +133,7 @@ export function buildBaselineSnapshot(
       status: p.status,
       plannedStart: anchorIso ? addWeeks(anchorIso, r.start).toISOString() : null,
       plannedEnd: anchorIso ? addWeeks(anchorIso, r.end).toISOString() : null,
-      tasks: p.tasks.map((t) => {
-        const absWeek = r.start + t.weekIndex;
-        return {
-          id: t.id,
-          title: t.title,
-          weekIndex: t.weekIndex,
-          order: t.order,
-          source: t.source,
-          needsValidation: t.needsValidation,
-          status: t.status,
-          plannedStart: anchorIso ? addWeeks(anchorIso, absWeek).toISOString() : null,
-          plannedEnd: anchorIso ? addWeeks(anchorIso, absWeek + 1).toISOString() : null,
-        };
-      }),
+      tasks: buildTaskSnapshotEntries(anchorIso, r.start, p.tasks),
     };
   });
 
@@ -263,4 +276,54 @@ export async function freezeBaselineOnPublish(
     });
   });
   return { created: true, version: nextVersion };
+}
+
+/**
+ * Parche IN-PLACE del baseline ACTIVO tras regenerar UNA fase (proyecto publicado): reemplaza SOLO
+ * las tareas de esa fase en el snapshot por las tareas VIVAS actuales (ids preservados + ids nuevos),
+ * con sus fechas planeadas recomputadas contra el anchor congelado. Las demás fases quedan intactas y
+ * NO se crea versión nueva → el portafolio (que compara por id contra el baseline activo, summary.ts)
+ * no reporta falso scope-creep ni pierde atrasos de la fase regenerada. No-op si el timeline no tiene
+ * baseline activo (proyecto sin publicar). Corre DENTRO de la $transaction de la regeneración (tx).
+ */
+export async function patchBaselinePhaseTasks(
+  tx: Prisma.TransactionClient,
+  timelineId: string,
+  phaseId: string,
+): Promise<void> {
+  const baseline = await tx.timelineBaseline.findFirst({
+    where: { timelineId, isActive: true },
+    select: { id: true, snapshot: true },
+  });
+  if (!baseline) return; // sin publicar → no hay baseline que parchear
+
+  const snapshot = baseline.snapshot as unknown as BaselineSnapshot;
+  if (!Array.isArray(snapshot?.phases)) return; // snapshot legacy/malformado → no tocar (evita TypeError)
+  const snapIdx = snapshot.phases.findIndex((p) => p.id === phaseId);
+  if (snapIdx < 0) return; // la fase no está en el baseline → no tocar
+
+  // Rangos desde las fases VIVAS (misma estructura que al congelar: orden/duración/startWeek no
+  // cambian al regenerar). r.start de la fase target = semana absoluta de arranque.
+  const phases = await tx.timelinePhase.findMany({
+    where: { timelineId },
+    orderBy: { order: "asc" },
+    select: { id: true, durationWeeks: true, startWeek: true },
+  });
+  const phaseIdx = phases.findIndex((p) => p.id === phaseId);
+  if (phaseIdx < 0) return;
+  const phaseStart = computePhaseRanges(phases)[phaseIdx].start;
+
+  // Tareas vivas de la fase (preservadas con id viejo + regeneradas con id nuevo).
+  const liveTasks = await tx.timelineTask.findMany({
+    where: { phaseId },
+    orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
+    select: { id: true, title: true, weekIndex: true, order: true, source: true, needsValidation: true, status: true },
+  });
+
+  snapshot.phases[snapIdx].tasks = buildTaskSnapshotEntries(snapshot.anchorStartDate, phaseStart, liveTasks);
+
+  await tx.timelineBaseline.update({
+    where: { id: baseline.id },
+    data: { snapshot: snapshot as unknown as Prisma.InputJsonValue },
+  });
 }

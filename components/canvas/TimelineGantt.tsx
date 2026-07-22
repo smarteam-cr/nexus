@@ -126,6 +126,7 @@ interface Props {
   // Nota: el borrado de tarea se hace desde el TaskDetailDrawer, no desde la fila del Gantt.
   onSetAnchor?: (isoDate: string) => void; // yyyy-mm-dd — fijar arranque desde el Gantt
   onAssistPhase?: (phase: GanttPhase) => void; // abrir el dialog de IA scopeado a esta fase
+  onRegeneratePhase?: (phase: GanttPhase) => void; // regenerar (borrar+rehacer) las tareas IA de esta fase
   kickoffDate?: string | null; // yyyy-mm-dd de la sesión de kickoff — sugerencia del anchor
   // Edición DIRECTA de fases (cuando editable) — además de la barra de IA
   onUpdatePhase?: (phaseKey: string, patch: { name?: string; durationWeeks?: number; sessionCount?: number | null; startWeek?: number | null }) => void;
@@ -325,6 +326,7 @@ export default function TimelineGantt({
   onAddTask,
   onSetAnchor,
   onAssistPhase,
+  onRegeneratePhase,
   kickoffDate,
   onUpdatePhase,
   onAddPhase,
@@ -711,7 +713,7 @@ export default function TimelineGantt({
                         ) : (
                           <span className="flex-1 min-w-[12rem] break-words">{p.name}</span>
                         )}
-                        {(onAssistPhase || (editable && canDelete && onRemovePhase)) && (
+                        {(onAssistPhase || onRegeneratePhase || (editable && canDelete && onRemovePhase)) && (
                           <span className="ml-auto flex items-center gap-1 flex-shrink-0">
                             {onAssistPhase && (
                               <button
@@ -721,6 +723,16 @@ export default function TimelineGantt({
                               >
                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
                                 IA
+                              </button>
+                            )}
+                            {onRegeneratePhase && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onRegeneratePhase(p); }}
+                                className="flex items-center gap-1 text-[10px] font-semibold text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-blue-300"
+                                title="Regenerar (rehacer) las tareas de esta fase con IA"
+                              >
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                Regenerar
                               </button>
                             )}
                             {editable && canDelete && onRemovePhase && (

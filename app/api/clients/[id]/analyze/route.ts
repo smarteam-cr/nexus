@@ -17,7 +17,10 @@ import { postProcessCards } from "@/lib/canvas/post-process";
 import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
+import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
 import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
+import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
+import { patchBaselinePhaseTasks } from "@/lib/timeline/baseline";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { KICKOFF_TEMPLATE, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
 import { syncHorariosSessionsFromHubs } from "@/lib/canvas/kickoff-hubs";
@@ -26,7 +29,7 @@ import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { autoClassifyOrphanSessions } from "@/lib/projects/analyze-participants";
-import { computeHandoffReadiness } from "@/lib/handoff/feeding";
+import { computeHandoffReadiness, projectHasEraEngagements } from "@/lib/handoff/feeding";
 import { getProjectHandoffSessions, getClientSessions } from "@/lib/sessions/project-sources";
 import { fetchCompanyTimeline, fetchCompanyTimelineSplit, serializeTimeline, projectEraSince } from "@/lib/hubspot/company-timeline";
 import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT, RECURRENTE_TAG, hasTechnicalScope } from "@/lib/tags/catalog";
@@ -159,6 +162,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     sessionKeywords?: string[];
     projectId?: string;
     async?: boolean; // A2: si true → run en background + polling (agentes pesados)
+    regeneratePhaseId?: string; // D.1 regen por fase: rehace SOLO esta fase del cronograma (agente de detalle)
+    regenerateMode?: "replace" | "keep"; // regen por fase: reemplazar pendientes IA (default) o conservarlas y solo sumar lo nuevo
+    preview?: boolean; // regen por fase: computa la propuesta y la devuelve SIN persistir (modal de curación)
   };
   const bodyStage: number        = typeof body?.stage === "number" ? body.stage : 1;
   const bodyStep: number         = typeof body?.step  === "number" ? body.step  : 0;
@@ -166,6 +172,10 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   const bodySectionLabel: string | null = body?.sectionLabel ?? null;
   const bodyAgentId: string | null      = body?.agentId      ?? null;
   let bodyProjectId: string | null = body?.projectId ?? null;
+  const regeneratePhaseId: string | null =
+    typeof body?.regeneratePhaseId === "string" && body.regeneratePhaseId ? body.regeneratePhaseId : null;
+  const regenerateMode: "replace" | "keep" = body?.regenerateMode === "keep" ? "keep" : "replace";
+  const previewOnly: boolean = body?.preview === true;
   // El pop-up de Agentes (y el tab "Información del cliente") manda projectId con el
   // SENTINEL "__strategy__", que NO es un id de Project real → FK violation en
   // agentRun.create (AgentRun_projectId_fkey). Lo resolvemos al proyecto __strategy__
@@ -291,46 +301,60 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         { status: 400 },
       );
     }
+    // D.1 regen por fase — validación mínima. La seguridad NO viene de bloquear proyectos publicados:
+    // (a) el borrado scopeado preserva SIEMPRE las tareas DONE/iniciadas y las manuales, y
+    // (b) tras regenerar se PARCHEA el baseline activo de esa fase (patchBaselinePhaseTasks) para que
+    // el portafolio D.3 no reporte falso scope-creep ni pierda atrasos.
+    if (regeneratePhaseId) {
+      const phase = await prisma.timelinePhase.findFirst({
+        where: { id: regeneratePhaseId, timelineId: tl.id },
+        select: { id: true },
+      });
+      if (!phase) {
+        return NextResponse.json(
+          { error: "PHASE_NOT_FOUND", message: "La fase a regenerar no existe en este cronograma." },
+          { status: 404 },
+        );
+      }
+    }
   }
 
   // ── Handoff scopeado al proyecto: sin sesiones clasificadas a ESTE proyecto no
   //    hay nada que investigar → cortar antes de crear el run (sin fallback client-wide).
   if (agent.agentGroup === "handoff" && bodyProjectId) {
-    // Solo miembros (included=true): un proyecto cuyas sesiones fueron todas excluidas
-    // por humano NO tiene material — cortar acá, no en el prompt vacío.
-    let projSessionCount = await prisma.sessionProject.count({
+    // Auto-sanar: adoptar las sesiones HUÉRFANAS del cliente (matcheadas a nivel
+    // cliente pero sin SessionProject) y reclasificarlas. Cubre el caso del proyecto
+    // creado DESPUÉS de que ya existían sesiones (sync de HubSpot) → el handoff
+    // funciona sin que el CSE tenga que clasificar a mano. El clasificador decide el
+    // proyecto correcto, así que en multi-proyecto no asigna a ciegas a este.
+    const projSessionCount = await prisma.sessionProject.count({
       where: { projectId: bodyProjectId, included: true },
     });
     if (projSessionCount === 0) {
-      // Auto-sanar: adoptar las sesiones HUÉRFANAS del cliente (matcheadas a nivel
-      // cliente pero sin SessionProject) y reclasificarlas. Cubre el caso del proyecto
-      // creado DESPUÉS de que ya existían sesiones (sync de HubSpot) → el handoff
-      // funciona sin que el CSE tenga que clasificar a mano. El clasificador decide el
-      // proyecto correcto, así que en multi-proyecto no asigna a ciegas a este.
       await autoClassifyOrphanSessions(clientId).catch(() => {});
-      projSessionCount = await prisma.sessionProject.count({
-        where: { projectId: bodyProjectId, included: true },
-      });
-    }
-    if (projSessionCount === 0) {
-      return NextResponse.json(
-        { error: "NO_PROJECT_SESSIONS", message: "Este proyecto no tiene sesiones clasificadas. Clasificá sesiones al proyecto antes de generar el handoff." },
-        { status: 400 },
-      );
     }
 
-    // ── Gate de MATERIAL: sin al menos una sesión-feeding con transcript real o una
-    //    fuente manual, el handoff saldría vacío/pobre — cortar ANTES de crear el run
-    //    (sin runs ERROR fantasma) con un mensaje accionable en vez de generar a ciegas.
+    // ── Gate de MATERIAL con PISO ──────────────────────────────────────────────
+    // El handoff debe poder generarse SIEMPRE que exista CUALQUIER fuente real de
+    // contexto — es lo que pidió el usuario ("todo lo que entra al contexto alimenta;
+    // se debe poder generar y regenerar"). Cuenta como material: (a) una sesión que
+    // alimenta el handoff (aunque su transcript aún no llegó — la confianza/transcript
+    // son un HINT de orden/aviso, no un veto), (b) una fuente manual pegada, o (c) un
+    // engagement de HubSpot de la ERA del proyecto (reuniones/llamadas de venta que no
+    // vinieron por Meet). Solo se BLOQUEA cuando el contexto está TOTALMENTE vacío —
+    // nunca un handoff de la nada. HubSpot se consulta SOLO si no hay ni feeding ni
+    // manual, para no pagar el round-trip en el caso común.
     const readiness = await computeHandoffReadiness(bodyProjectId);
-    if (readiness.withTranscript === 0 && readiness.manualSources === 0) {
+    let hasMaterial = readiness.feedingCount > 0 || readiness.manualSources > 0;
+    if (!hasMaterial) {
+      hasMaterial = await projectHasEraEngagements(bodyProjectId);
+    }
+    if (!hasMaterial) {
       return NextResponse.json(
         {
           error: "NO_HANDOFF_SOURCES",
           message:
-            readiness.feedingCount === 0
-              ? "Ninguna sesión alimenta este handoff (se usan la primaria del proyecto, secundarias de alta confianza o las forzadas a mano). Agregá sesiones desde la columna Google Meet del Contexto, o pegá una fuente manual."
-              : `Las ${readiness.feedingCount} sesiones que alimentan este handoff no tienen transcripción todavía. Esperá el enriquecimiento de Meet o pegá el transcript como fuente manual.`,
+            "Este proyecto todavía no tiene ninguna fuente de contexto: ni una sesión que alimente el handoff, ni actividad de HubSpot en su rango, ni una fuente manual. Incluí una sesión desde la columna Google Meet del Contexto, promoví una reunión de HubSpot, o pegá una fuente manual.",
         },
         { status: 400 },
       );
@@ -1464,6 +1488,9 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   if (isTimelineDetailAgent && bodyProjectId) {
     const handoffCtx = await loadCanvasContext(bodyProjectId, "Handoff", { onlyConfirmed: true });
     const timelineCtx = await loadTimelineContext(bodyProjectId, { includeIds: true });
+    // Canvas "Desarrollo" (requerimiento técnico) si existe → objetos de HubSpot, llaves de dedup y
+    // conexiones reales; ancla las tareas por objeto de la fase técnica en el alcance vendido. "" si no hay.
+    const desarrolloCtx = await loadDesarrolloContext(bodyProjectId);
 
     // Reglas #6 (tarea de BD) y #7 (tareas técnicas) derivadas de la clasificación del proyecto.
     const projTagSlugs = sanitizeTags(dealProject?.tags ?? []);
@@ -1485,11 +1512,17 @@ ${timelineCtx}
 
 === HANDOFF CURADO (bloques confirmados por el CSE) ===
 ${handoffCtx || '(Sin handoff confirmado. Generá las tareas típicas del tipo de cada fase y marcá CADA una con "porValidar": true. Títulos limpios, sin marcadores.)'}
-
+${desarrolloCtx ? `\n=== REQUERIMIENTO TÉCNICO (canvas Desarrollo — objetos, llaves y conexiones) ===\n${desarrolloCtx}\n` : ""}
 === REGLAS SEGÚN LA CLASIFICACIÓN ===
 ${dbTaskRule}${techRule}
 
 Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a cada fase y proponé las tareas por semana (weekIndex relativo a la fase, < durationWeeks). Usá los ids EXACTOS del input.`;
+
+    // Regen por fase: acotá la salida a la fase target (las demás van con tasks:[]) — baja el
+    // costo/latencia y el riesgo de truncación. La persistencia igual filtra por onlyPhaseId.
+    if (regeneratePhaseId) {
+      userMessage += `\n\n=== ALCANCE: REGENERAR UNA SOLA FASE ===\nDetallá ÚNICAMENTE las tareas de la fase id="${regeneratePhaseId}". Para TODAS las demás fases del input, incluilas en el JSON con su id EXACTO pero con "tasks": [] — no las toques. Concentrá todo el detalle en la fase indicada.`;
+    }
   }
 
   // ── 10c. Marco breve de relación previa (solo agente Handoff) ────────────────
@@ -1546,7 +1579,9 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   // El mapeo puede emitir 4-6 diagramas (~4-6k tokens c/u) + card → 32k es riesgo
   // cierto de max_tokens; 64k da margen (Sonnet lo soporta con streaming, que este
   // path ya usa; el techo no cuesta — se factura lo generado).
-  const maxTokens = isCardsAndFlowcharts ? (isMapeoAgent ? 64000 : 32000) : 16000;
+  const maxTokens = isCardsAndFlowcharts
+    ? (isMapeoAgent ? 64000 : 32000)
+    : isTimelineDetailAgent ? 24000 : 16000;
   let analysisJson: {
     cards?: { title: string; content: string }[];
     suggestions?: Array<{ title?: string; content?: string; type?: string; suggestedSection?: string }>;
@@ -1606,7 +1641,10 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
     // .finalMessage() acumula y devuelve el mismo Message. temperature 0 = salidas
     // deterministas entre ejecuciones.
     setPhase("Generando con IA…");
-    const msg = isCardsAndFlowcharts
+    // El agente de detalle usa max_tokens 24000 (>21.333) → el SDK EXIGE streaming en no-streaming
+    // (calcula timeout = 3600·maxTokens/128000 > 600s → lanza "Streaming is required"). Por eso el
+    // detalle también va por .stream().finalMessage() (mismo Message de vuelta → parseo idéntico).
+    const msg = isCardsAndFlowcharts || isTimelineDetailAgent
       ? await anthropic.messages
           .stream({
             model: "claude-sonnet-4-6",
@@ -1678,6 +1716,27 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
               }
             } catch {
               console.error("[analyze blocks] Reparación fallida");
+            }
+          }
+        } else if (isTimelineDetailAgent) {
+          // Recuperación para el detalle de cronograma: el agente emite timelineDetail.phases.
+          // Sin esta rama, un output truncado (24k) caía en el recovery de CARDS (regex que no
+          // matchea timelineDetail) → analysisJson quedaba inválido → 500. Reparamos y filtramos
+          // las fases sin tareas (las que quedaron cortadas al truncar) → degrada a lo recuperable.
+          console.warn(`[analyze detail] JSON.parse falló (stop_reason=${stopReason}), intentando reparación...`);
+          const repaired = repairTruncatedJson(jsonMatch[0]);
+          if (repaired) {
+            try {
+              analysisJson = JSON.parse(repaired);
+              const phs = analysisJson?.timelineDetail?.phases;
+              if (Array.isArray(phs)) {
+                analysisJson!.timelineDetail!.phases = phs.filter(
+                  (p) => Array.isArray((p as { tasks?: unknown[] })?.tasks) && (p as { tasks: unknown[] }).tasks.length > 0,
+                );
+                console.log(`[analyze detail] Reparado: ${(analysisJson!.timelineDetail!.phases as unknown[]).length} fases con tareas`);
+              }
+            } catch {
+              console.error("[analyze detail] Reparación fallida — JSON irrecuperable");
             }
           }
         } else if (!isFlowchart) {
@@ -1775,12 +1834,48 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
         },
       });
 
+  // ── 12a. Anclar las sesiones que alimentaron este handoff ────────────────────
+  // Estampar handoffOverride:true sobre los links usados evita la regresión: cuando
+  // nace un proyecto HERMANO, el reclasificador movía el PRIMARIO de la sesión que
+  // alimentaba a ese hermano y la degradaba a secundaria baja-confianza en ESTE
+  // proyecto → feedingCount=0, el handoff se rompía (caso Grupo Inve). Con
+  // handoffOverride!==null el link queda lockeado (isLockedLink) → el reclasificador
+  // saca la sesión de su lote (reclassify: candidatos = .every(!isLocked)) y ya no la
+  // toca. Es REVERSIBLE desde el mismo panel: la "X" del Contexto pone
+  // handoffOverride:false (excluir). Solo ancla links VÍRGENES (handoffOverride:null)
+  // para no repisar una decisión manual del CSE; las sesiones acá ya pasaron
+  // linkFeedsHandoff, así que ninguna estaba excluida.
+  if (isHandoffAgent && bodyProjectId && handoffSourceSessionIds.length > 0) {
+    await prisma.sessionProject
+      .updateMany({
+        where: {
+          projectId: bodyProjectId,
+          sessionId: { in: handoffSourceSessionIds },
+          handoffOverride: null,
+        },
+        data: { handoffOverride: true },
+      })
+      .catch((e) => {
+        // El anclaje es best-effort: si falla, el handoff ya se generó igual.
+        console.error("[handoff-anchor] no se pudo anclar las sesiones del handoff", e);
+      });
+  }
+
   // ── 12a'. D.1: persistir detalle del cronograma y cortar ────────────────────
   // El output del agente de detalle no es cards/blocks: se persiste sobre
   // ProjectTimeline/TimelineTask y se responde acá — no debe pasar por
   // updateCanvasAsync ni por el path de cards.
   if (isTimelineDetailAgent) {
-    const detail = await persistTimelineDetailFromAgentOutput(bodyProjectId, analysisJson, run.id);
+    // Modal de curación (regen por fase con preview): computamos la propuesta y la devolvemos SIN
+    // escribir. El CSE la cura en el modal y aplica por /timeline/phases/[phaseId]/apply.
+    if (previewOnly && regeneratePhaseId && bodyProjectId) {
+      const previewTasks = await computeTimelineDetailPreview(bodyProjectId, analysisJson, regeneratePhaseId);
+      return NextResponse.json({
+        previewTasks,
+        run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
+      });
+    }
+    const detail = await persistTimelineDetailFromAgentOutput(bodyProjectId, analysisJson, run.id, regeneratePhaseId, regenerateMode);
     return NextResponse.json({
       timelineDetail: detail,
       run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
@@ -2594,6 +2689,97 @@ function sanitizeTaskTitle(raw: string): string {
   return cleaned || raw.trim();
 }
 
+interface ComputedDetailTask {
+  title: string;
+  weekIndex: number;
+  order: number;
+  notes: string | null;
+  needsValidation: boolean;
+  party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV";
+  type: "SESSION" | "TASK";
+}
+
+/**
+ * Computa las tareas de UNA fase desde el JSON crudo del agente de detalle: clamp de weekIndex,
+ * order incremental por semana, party validado (con gate DEV para la fase técnica) o fallback por
+ * activityType, type validado, título saneado. Puro (sin DB) → reusado por la persistencia y por el
+ * PREVIEW (regen por fase que devuelve la propuesta sin escribir). `skipTitles` deduplica por título
+ * normalizado (modo "keep"). El party nunca es null (último fallback SMARTEAM).
+ */
+function computeDetailTasksForPhase(
+  phaseName: string,
+  durationWeeks: number,
+  effectiveActivity: string | null,
+  tasksRaw: unknown[],
+  skipTitles?: Set<string> | null,
+): ComputedDetailTask[] {
+  const isTechPhase = isDevIntegrationPhaseName(phaseName);
+  const perWeekCount = new Map<number, number>();
+  const out: ComputedDetailTask[] = [];
+  for (const tRaw of tasksRaw) {
+    if (!tRaw || typeof tRaw !== "object") continue;
+    const t = tRaw as Record<string, unknown>;
+    const titleRaw = typeof t.title === "string" ? t.title.trim() : "";
+    if (!titleRaw) continue;
+    if (skipTitles && skipTitles.has(titleRaw.toLowerCase())) continue;
+    const wRaw = typeof t.weekIndex === "number" && Number.isInteger(t.weekIndex) ? t.weekIndex : 0;
+    const weekIndex = Math.min(Math.max(wRaw, 0), Math.max(durationWeeks - 1, 0));
+    const order = perWeekCount.get(weekIndex) ?? 0;
+    perWeekCount.set(weekIndex, order + 1);
+    const partyRaw = typeof t.party === "string" ? t.party.toUpperCase() : "";
+    const party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" =
+      partyRaw === "DEV" && isTechPhase
+        ? "DEV"
+        : partyRaw === "CLIENTE" || partyRaw === "SMARTEAM" || partyRaw === "AMBOS"
+          ? partyRaw
+          : effectiveActivity === "CONFIGURACION"
+            ? "SMARTEAM"
+            : effectiveActivity
+              ? "AMBOS"
+              : "SMARTEAM";
+    const typeRaw = typeof t.type === "string" ? t.type.toUpperCase() : "";
+    const type: "SESSION" | "TASK" = typeRaw === "SESSION" ? "SESSION" : "TASK";
+    out.push({
+      title: sanitizeTaskTitle(titleRaw),
+      weekIndex,
+      order,
+      notes: typeof t.notes === "string" && t.notes.trim() ? t.notes.trim() : null,
+      needsValidation: t.porValidar === true,
+      party,
+      type,
+    });
+  }
+  return out;
+}
+
+/**
+ * PREVIEW del detalle por fase: computa las tareas propuestas para UNA fase (mismo criterio que la
+ * persistencia) SIN escribir nada. Lo usa el modal de curación (regen con preview:true). Devuelve []
+ * si la fase no existe o el agente no propuso tareas para ella.
+ */
+async function computeTimelineDetailPreview(
+  projectId: string,
+  analysisJson: unknown,
+  phaseId: string,
+): Promise<ComputedDetailTask[]> {
+  const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)?.timelineDetail?.phases;
+  if (!Array.isArray(detailRaw)) return [];
+  const phase = await prisma.timelinePhase.findFirst({
+    where: { id: phaseId, timeline: { projectId } },
+    select: { name: true, durationWeeks: true, activityType: true },
+  });
+  if (!phase) return [];
+  const raw = detailRaw.find(
+    (r) => r && typeof r === "object" && (r as Record<string, unknown>).id === phaseId,
+  ) as Record<string, unknown> | undefined;
+  const tasksRaw = Array.isArray(raw?.tasks) ? (raw!.tasks as unknown[]) : [];
+  const atFromModel =
+    typeof raw?.activityType === "string" && (DETAIL_ACTIVITY_TYPES as readonly string[]).includes(raw!.activityType as string)
+      ? (raw!.activityType as string)
+      : null;
+  return computeDetailTasksForPhase(phase.name, phase.durationWeeks, phase.activityType ?? atFromModel, tasksRaw);
+}
+
 interface TimelineDetailResult {
   skipped: boolean;
   reason?: string;
@@ -2625,6 +2811,8 @@ async function persistTimelineDetailFromAgentOutput(
   bodyProjectId: string | null,
   analysisJson: unknown,
   agentRunId: string,
+  onlyPhaseId: string | null = null,
+  regenerateMode: "replace" | "keep" = "replace",
 ): Promise<TimelineDetailResult> {
   const empty: TimelineDetailResult = { skipped: true, phasesTyped: 0, tasksCreated: 0, discardedPhaseIds: 0 };
   const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)
@@ -2659,14 +2847,51 @@ async function persistTimelineDetailFromAgentOutput(
     // reaparecía y un re-run creaba un set AGENT nuevo ALADO de las MODIFIED (sin dedup). Las tareas
     // MANUALES (source=HUMAN, que el CSE agregó a la base) NO cuentan → no bloquean la generación inicial,
     // el detalle se suma sin pisarlas. Mismo predicado en el UI (hasAiDetail) para que CTA y server coincidan.
-    const existingAgentCount = await tx.timelineTask.count({
-      where: { phase: { timelineId: tl.id }, source: { in: ["AGENT", "MODIFIED"] } },
-    });
-    if (existingAgentCount > 0) {
-      console.log(
-        `[analyze] Skipping timeline detail: ya hay ${existingAgentCount} tareas IA (AGENT/MODIFIED) para project ${bodyProjectId}. Propuesta queda en AgentRun.output (${agentRunId}).`,
-      );
-      return { ...empty, reason: "detail_exists" };
+    // Regen "keep" (conservar pendientes): títulos existentes de la fase para deduplicar en el loop de creación.
+    let keepTitles: Set<string> | null = null;
+    if (!onlyPhaseId) {
+      const existingAgentCount = await tx.timelineTask.count({
+        where: { phase: { timelineId: tl.id }, source: { in: ["AGENT", "MODIFIED"] } },
+      });
+      if (existingAgentCount > 0) {
+        console.log(
+          `[analyze] Skipping timeline detail: ya hay ${existingAgentCount} tareas IA (AGENT/MODIFIED) para project ${bodyProjectId}. Propuesta queda en AgentRun.output (${agentRunId}).`,
+        );
+        return { ...empty, reason: "detail_exists" };
+      }
+    } else {
+      // Regen POR FASE: NO aplica la idempotencia global. Antes de borrar, exigimos que el modelo haya
+      // devuelto tareas para la fase target — si vino vacía (falla del modelo), NO vaciamos la fase.
+      const targetRaw = detailRaw.find(
+        (r) => r && typeof r === "object" && (r as Record<string, unknown>).id === onlyPhaseId,
+      ) as Record<string, unknown> | undefined;
+      const targetTaskCount = Array.isArray(targetRaw?.tasks) ? (targetRaw!.tasks as unknown[]).length : 0;
+      if (targetTaskCount === 0) {
+        return { ...empty, reason: "empty_phase_output" };
+      }
+      if (regenerateMode === "replace") {
+        // Reemplazar pendientes: borra las pendientes IA SIN INICIAR (AGENT + MODIFIED, status PENDING,
+        // sin actualStart). Preserva SIEMPRE las tareas DONE/iniciadas (mismo id) y HUMAN (manual). El
+        // usuario eligió el reemplazo; el diálogo mostró cuántas se reemplazan. Todo dentro de la misma
+        // $transaction que crea las nuevas → atómico.
+        const del = await tx.timelineTask.deleteMany({
+          where: { phaseId: onlyPhaseId, source: { in: ["AGENT", "MODIFIED"] }, status: "PENDING", actualStart: null },
+        });
+        console.log(
+          `[analyze] Regen por fase ${onlyPhaseId} (replace): borradas ${del.count} pendientes IA sin iniciar (project ${bodyProjectId}, run ${agentRunId}).`,
+        );
+      } else {
+        // Conservar pendientes: no se borra NADA; el loop de creación deduplica por título normalizado
+        // contra lo existente → solo agrega las tareas por objeto cuyo título no exista ya en la fase.
+        keepTitles = new Set(
+          (await tx.timelineTask.findMany({ where: { phaseId: onlyPhaseId }, select: { title: true } })).map(
+            (t) => t.title.trim().toLowerCase(),
+          ),
+        );
+        console.log(
+          `[analyze] Regen por fase ${onlyPhaseId} (keep): sin borrado; dedup por título (${keepTitles.size} existentes).`,
+        );
+      }
     }
 
     const phaseById = new Map(tl.phases.map((p) => [p.id, p]));
@@ -2678,6 +2903,8 @@ async function persistTimelineDetailFromAgentOutput(
       if (!raw || typeof raw !== "object") continue;
       const ph = raw as Record<string, unknown>;
       const phaseId = typeof ph.id === "string" ? ph.id : null;
+      // Regen por fase: ignorá las demás fases (el agente las emite con tasks:[] por el scope del prompt).
+      if (onlyPhaseId && phaseId !== onlyPhaseId) continue;
       const phase = phaseId ? phaseById.get(phaseId) : undefined;
       if (!phase) {
         discardedPhaseIds++;
@@ -2698,59 +2925,16 @@ async function persistTimelineDetailFromAgentOutput(
       // B — base para el fallback de party cuando el agente no lo manda (tipo efectivo de la fase).
       const effectiveActivity = phase.activityType ?? at;
 
-      // tasks — clamp de weekIndex, order incremental dentro de cada semana
+      // tasks — computadas por el helper (clamp de weekIndex, order por semana, party con gate DEV,
+      // type); dedup por título contra lo existente en modo "keep". Mismo criterio que el preview.
       const tasksRaw = Array.isArray(ph.tasks) ? ph.tasks : [];
-      const perWeekCount = new Map<number, number>();
-      const toCreate: Array<{
-        phaseId: string;
-        title: string;
-        weekIndex: number;
-        order: number;
-        notes: string | null;
-        needsValidation: boolean;
-        party: "CLIENTE" | "SMARTEAM" | "AMBOS" | null;
-        type: "SESSION" | "TASK";
-        source: "AGENT";
-        status: "PENDING";
-      }> = [];
-      for (const tRaw of tasksRaw) {
-        if (!tRaw || typeof tRaw !== "object") continue;
-        const t = tRaw as Record<string, unknown>;
-        const titleRaw = typeof t.title === "string" ? t.title.trim() : "";
-        if (!titleRaw) continue;
-        const wRaw =
-          typeof t.weekIndex === "number" && Number.isInteger(t.weekIndex) ? t.weekIndex : 0;
-        const weekIndex = Math.min(Math.max(wRaw, 0), Math.max(phase.durationWeeks - 1, 0));
-        const order = perWeekCount.get(weekIndex) ?? 0;
-        perWeekCount.set(weekIndex, order + 1);
-        // B — party del agente (validado) o fallback por el tipo de actividad de la fase.
-        const partyRaw = typeof t.party === "string" ? t.party.toUpperCase() : "";
-        // Toda tarea tiene dueño: si el agente no lo da, se infiere por activityType;
-        // el último fallback es SMARTEAM (nunca null).
-        const party: "CLIENTE" | "SMARTEAM" | "AMBOS" =
-          partyRaw === "CLIENTE" || partyRaw === "SMARTEAM" || partyRaw === "AMBOS"
-            ? partyRaw
-            : effectiveActivity === "CONFIGURACION"
-              ? "SMARTEAM"
-              : effectiveActivity
-                ? "AMBOS"
-                : "SMARTEAM";
-        // Tipo de tarea del agente (validado) — fallback TASK si no manda un valor válido.
-        const typeRaw = typeof t.type === "string" ? t.type.toUpperCase() : "";
-        const type: "SESSION" | "TASK" = typeRaw === "SESSION" ? "SESSION" : "TASK";
-        toCreate.push({
-          phaseId: phase.id,
-          title: sanitizeTaskTitle(titleRaw),
-          weekIndex,
-          order,
-          notes: typeof t.notes === "string" && t.notes.trim() ? t.notes.trim() : null,
-          needsValidation: t.porValidar === true,
-          party,
-          type,
-          source: "AGENT",
-          status: "PENDING",
-        });
-      }
+      const toCreate = computeDetailTasksForPhase(
+        phase.name,
+        phase.durationWeeks,
+        effectiveActivity,
+        tasksRaw,
+        keepTitles,
+      ).map((c) => ({ ...c, phaseId: phase.id, source: "AGENT" as const, status: "PENDING" as const }));
       if (toCreate.length > 0) {
         await tx.timelineTask.createMany({ data: toCreate });
         tasksCreated += toCreate.length;
@@ -2770,7 +2954,9 @@ async function persistTimelineDetailFromAgentOutput(
       phasesArr.find((p) => p.order === 0) ??
       phasesArr.find((p) => normName(p.name).includes("semana 0") || normName(p.name).includes("kick")) ??
       null;
-    if (kickoff) {
+    // En regen POR FASE solo sembramos si la fase regenerada ES el kickoff — un regen de otra fase
+    // (ej. "Desarrollo / Integración") no debe re-sembrar las tareas fijas de la Semana 0.
+    if (kickoff && (!onlyPhaseId || onlyPhaseId === kickoff.id)) {
       const isReimpl =
         (await tx.project.findUnique({
           where: { id: bodyProjectId },
@@ -2817,10 +3003,22 @@ async function persistTimelineDetailFromAgentOutput(
       }
     }
 
-    // Trazabilidad del run que detalló. NO se toca lastEditedByHuman.
+    // Regen POR FASE sobre un proyecto PUBLICADO: parcheamos el baseline activo de esa fase (ids
+    // nuevos + fechas planeadas) para que el portafolio D.3 no reporte falso scope-creep ni pierda
+    // atrasos. No-op si no hay baseline (sin publicar). Dentro de la misma tx → atómico con el regen.
+    if (onlyPhaseId) {
+      await patchBaselinePhaseTasks(tx, tl.id, onlyPhaseId);
+    }
+
+    // Trazabilidad del run que detalló. NO se toca lastEditedByHuman. En regen POR FASE además
+    // invalidamos el borrador de avance: las tareas de la fase tienen ids nuevos → el pendingProgress
+    // viejo podría apuntar a ids muertos; se recalcula limpio con "Chequear avance".
     await tx.projectTimeline.update({
       where: { id: tl.id },
-      data: { detailGeneratedByAgentRunId: agentRunId },
+      data: {
+        detailGeneratedByAgentRunId: agentRunId,
+        ...(onlyPhaseId ? { pendingProgress: Prisma.DbNull, pendingProgressRunId: null } : {}),
+      },
     });
 
     console.log(

@@ -41,6 +41,7 @@ export async function GET(
     // historial/trasfondo (atenuados en la UI).
     const { current, previous } = await fetchCompanyTimelineSplit(hs, companyId, projectEraSince(project));
     const toDto = (i: TimelineItem, prev: boolean) => ({
+      id: i.id, // id estable del engagement — para excluir/promover el ítem por-handoff (Fase 2)
       type: i.type,
       title: i.title,
       date: i.date,

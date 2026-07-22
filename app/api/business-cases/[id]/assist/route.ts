@@ -115,6 +115,8 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       sections,
       instruction,
       lang,
+      // Mismo gate que la generación (canvas-agent): el BC es cliente-facing.
+      brandVoice: tpl.brandVoice !== false,
       maxWebSearches: 3,
     });
     await prisma.agentRun.update({

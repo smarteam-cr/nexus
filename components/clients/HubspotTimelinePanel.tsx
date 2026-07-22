@@ -16,6 +16,8 @@ import { fetchJson } from "@/lib/api/fetch-json";
 import { ContextColumnList, ContextRow, CTX_ICONS } from "./context-column";
 
 type HsTimelineItem = {
+  /** Id estable del engagement (v1) — para promoverlo a material. */
+  id: string;
   type: "NOTE" | "CALL" | "MEETING";
   title: string;
   date: string | null;
@@ -30,6 +32,8 @@ export default function HubspotTimelinePanel({
   framed = false,
   columnMode = false,
   onCount,
+  canEdit = false,
+  onPromoted,
 }: {
   projectId: string;
   framed?: boolean;
@@ -37,9 +41,32 @@ export default function HubspotTimelinePanel({
   columnMode?: boolean;
   /** Reporta la cantidad de ítems (para el contador del header de Contexto). */
   onCount?: (n: number) => void;
+  /** Habilita "Usar en el handoff" (promover a material). Solo columnMode. */
+  canEdit?: boolean;
+  /** Se llama tras promover un engagement (para refrescar las fuentes manuales). */
+  onPromoted?: () => void;
 }) {
   const [hubspot, setHubspot] = useState<HsTimelineItem[]>([]);
   const [loadingHs, setLoadingHs] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const promote = useCallback(
+    async (engagementId: string) => {
+      setBusyId(engagementId);
+      try {
+        const r = await fetch(`/api/projects/${projectId}/hubspot-timeline/promote`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ engagementId }),
+        });
+        if (r.ok) onPromoted?.();
+      } catch {
+        /* ignore — best-effort */
+      }
+      setBusyId(null);
+    },
+    [projectId, onPromoted],
+  );
 
   const load = useCallback(async () => {
     try {
@@ -56,21 +83,35 @@ export default function HubspotTimelinePanel({
     load();
   }, [load]);
 
+  // Contador HONESTO: solo el material de la ERA del proyecto (lo que alimenta como
+  // material). El "historial previo" entra como trasfondo comprimido, no como fuente
+  // material → no se cuenta acá (se muestra igual en la lista, atenuado y etiquetado).
+  const materialCount = hubspot.filter((it) => !it.previous).length;
   useEffect(() => {
-    if (!loadingHs) onCount?.(hubspot.length);
-  }, [loadingHs, hubspot.length, onCount]);
+    if (!loadingHs) onCount?.(materialCount);
+  }, [loadingHs, materialCount, onCount]);
 
   // Modo columna (Contexto): lista compacta + estado vacío, sin header ni borde propios.
+  // Los de la ERA alimentan como material (badge). Los del historial PREVIO entran solo
+  // como trasfondo comprimido → se muestran atenuados con "Usar en el handoff" para
+  // promoverlos a material completo (persistido como fuente manual).
   if (columnMode) {
     return (
       <ContextColumnList loading={loadingHs} empty="Sin actividad en HubSpot.">
         {hubspot.map((it, i) => (
           <ContextRow
-            key={i}
+            key={it.id || i}
             icon={it.type === "NOTE" ? CTX_ICONS.note : CTX_ICONS.calendar}
             meta={`${HS_TYPE_LABEL[it.type] ?? it.type}${it.date ? ` · ${it.date}` : ""}${it.previous ? " · historial previo" : ""}`}
             title={it.title}
             snippet={it.snippet}
+            dim={it.previous}
+            badge={it.previous ? undefined : { label: "Material", tone: "green" }}
+            action={
+              canEdit && it.previous && it.id
+                ? { label: "Usar", onClick: () => promote(it.id), disabled: busyId === it.id }
+                : undefined
+            }
           />
         ))}
       </ContextColumnList>

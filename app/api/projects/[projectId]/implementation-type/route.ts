@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardProjectEditHandoff } from "@/lib/auth/api-guards";
+import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 type Params = { params: Promise<{ projectId: string }> };
@@ -13,7 +13,9 @@ type Params = { params: Promise<{ projectId: string }> };
  */
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { projectId } = await params;
-  const guard = await guardProjectEditHandoff(projectId);
+  // Clasificación del proyecto = owner del cliente o handoffAnywhere (el CSE la ajusta
+  // en SUS proyectos, como los tags). Scope de owner enforced por requireHandoffAccess.
+  const guard = await guardProjectHandoffAccess(projectId);
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;

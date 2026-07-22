@@ -23,6 +23,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "@/lib/anthropic";
 import { shapeOf, coerceToSchema, preserveNonSchemaKeys, parseObject } from "@/lib/ai/section-schema";
+import { BRAND_VOICE_RULES } from "@/lib/ai/brand-voice";
 
 const MODEL = "claude-sonnet-4-6";
 /** Continuaciones máximas tras `pause_turn` (el loop de búsquedas nunca es infinito). */
@@ -53,6 +54,12 @@ export interface DocumentAssistInput {
   context?: string;
   /** Idioma de la propuesta (`__lang` del hero en BC) — null/undefined = español. */
   lang?: string | null;
+  /** Inyecta la VOZ DE MARCA (BRAND_VOICE_RULES) en las reglas fijas. OPT-IN: solo
+   *  documentos cliente-facing de marca (business case, kickoff). Los técnicos
+   *  (desarrollo, `brandVoice:false` en su template) y los internos (perfil de
+   *  puesto) van SIN — mismo gate que la generación (canvas-agent). Sin esto,
+   *  "Mejorar con IA" podía reintroducir los superlativos que la voz prohíbe. */
+  brandVoice?: boolean;
   maxTokens?: number;
   maxWebSearches?: number;
 }
@@ -89,7 +96,7 @@ Reglas estrictas:
 - NO inventes datos: si la instrucción no da la información y web_search no aplica, no toques esa parte.
 - Respeta la forma de cada sección (arrays con sus objetos, strings como strings) y sus valores válidos cuando la guía los enumere.
 - Cambia lo MÍNIMO que cumpla la instrucción: las secciones que no menciones quedan intactas.
-- ${langRule}`;
+${input.brandVoice ? `${BRAND_VOICE_RULES}\n` : ""}- ${langRule}`;
 }
 
 function sectionsBlock(sections: AssistSectionDef[]): string {

@@ -11,6 +11,7 @@ const SIZE = {
   md: "max-w-md",
   lg: "max-w-lg",
   xl: "max-w-2xl",
+  xxl: "max-w-5xl", // layouts anchos (ej. curación de fase a dos columnas)
 } as const;
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────

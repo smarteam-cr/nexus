@@ -63,6 +63,12 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   // handoffAnywhere). El CSE lo VE pero no lo genera ni edita.
   const me = useMe();
   const canEdit = me?.capabilities.includes("handoffAnywhere") ?? false;
+  // Gestionar el CONTEXTO del handoff (incluir/excluir sesiones, pegar fuentes, tags) lo
+  // hace el OWNER del cliente además de handoffAnywhere — el CSE cura el contexto de SUS
+  // proyectos. El workspace ya restringe al CSE a sus clientes (owner), y el server enforce
+  // owner||handoffAnywhere (guardProjectHandoffAccess) en cada mutación, así que alcanza con
+  // "es interno". Editar el DOCUMENTO del handoff y las exclusiones libres siguen en canEdit.
+  const canManageContext = me != null;
   // Generar/regenerar con IA es su propia celda (handoff.generate|regenerate), independiente de
   // editar a mano (handoff.write = canEdit). (C) Se gatea por la celda que el server EXIGIRÁ según
   // el estado del artefacto: ya generado → `regenerate`; sin generar → `generate` (mismo criterio
@@ -272,7 +278,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
             <TagsStrip
               tags={tags}
               implementationType={status.implementationType}
-              canEdit={canEdit}
+              canEdit={canManageContext}
               onSetTags={saveTags}
               onSetModality={setModality}
             />
@@ -311,11 +317,11 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
       )}
 
       {/* Contexto — HubSpot · Google Meet · Fuentes manuales, en 3 columnas colapsables.
-          Solo editores (el CSE no gestiona el contexto). Curado + display unificados. */}
-      {canEdit && (
+          El CSE (owner) también lo ve y gestiona; el server enforce el scope de owner. */}
+      {canManageContext && (
         <ProjectContextSection
           projectId={projectId}
-          canEdit={canEdit}
+          canEdit={canManageContext}
           generated={generated}
           onSessionsChange={fetchStatus}
         />

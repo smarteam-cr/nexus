@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardProjectEditHandoff } from "@/lib/auth/api-guards";
+import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { belongsToClient } from "@/lib/sessions/project-sources";
 
@@ -13,14 +13,16 @@ import { belongsToClient } from "@/lib/sessions/project-sources";
  *                                 sesión del proyecto (cronograma/minutas intactos): solo
  *                                 deja de alimentar el handoff.
  *
- * Editar el handoff requiere la capacidad handoffAnywhere (el CSE no lo cura).
+ * Gestionar el CONTEXTO del handoff (qué sesiones lo alimentan) = owner del cliente o
+ * handoffAnywhere. El CSE cura el contexto de SUS proyectos (owner); editar el DOCUMENTO
+ * del handoff sigue siendo handoffAnywhere. El scope de owner lo enfuerza requireHandoffAccess.
  */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardProjectEditHandoff(projectId);
+  const guard = await guardProjectHandoffAccess(projectId);
   if (guard instanceof NextResponse) return guard;
 
   let body: { sessionId?: unknown; feeds?: unknown };

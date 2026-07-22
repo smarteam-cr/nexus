@@ -12,7 +12,7 @@
  * Guarded con guardProjectHandoffAccess (mismo gate que el resto del handoff).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardProjectHandoffAccess, guardProjectEditHandoff } from "@/lib/auth/api-guards";
+import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 export async function GET(
@@ -36,7 +36,9 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardProjectEditHandoff(projectId);
+  // Gestionar fuentes del contexto = owner del cliente o handoffAnywhere (el CSE pega
+  // fuentes en SUS proyectos). Scope de owner enforced por requireHandoffAccess.
+  const guard = await guardProjectHandoffAccess(projectId);
   if (guard instanceof NextResponse) return guard;
 
   let body: { title?: unknown; content?: unknown } = {};

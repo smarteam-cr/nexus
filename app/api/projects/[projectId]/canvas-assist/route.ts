@@ -20,8 +20,9 @@ import { guardAccessToProject, guardPermission } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { runDocumentAssist, type AssistSectionDef } from "@/lib/ai/assist";
 import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
-import { KICKOFF_DEF_BY_KEY, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
-import { DESARROLLO_DEF_BY_KEY, DESARROLLO_HANDOFF_KEYS } from "@/components/landing/configs/desarrollo.defs";
+import { KICKOFF_DEF_BY_KEY, KICKOFF_HANDOFF_KEYS, KICKOFF_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
+import { DESARROLLO_DEF_BY_KEY, DESARROLLO_HANDOFF_KEYS, DESARROLLO_TEMPLATE } from "@/components/landing/configs/desarrollo.defs";
+import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
 import type { BCSectionDef } from "@/components/landing/configs/business-case.defs";
 
 const bodySchema = z.object({
@@ -33,19 +34,30 @@ type Params = Promise<{ projectId: string }>;
 
 const DOC: Record<
   string,
-  { section: "kickoff" | "desarrollo"; agentId: string; docLabel: string; defs: Record<string, BCSectionDef> }
+  {
+    section: "kickoff" | "desarrollo";
+    agentId: string;
+    docLabel: string;
+    defs: Record<string, BCSectionDef>;
+    /** El template del CÓDIGO — de acá sale la VOZ (agentIntro + gate brandVoice).
+     *  El `systemPrompt` del Agent en DB es una NOTA-PUNTERO (ver
+     *  scripts/seed-kickoff-agent.ts), no sirve como prompt. */
+    tpl: BcTemplateDef;
+  }
 > = {
   Kickoff: {
     section: "kickoff",
     agentId: "agent-kickoff-canvas",
     docLabel: "kickoff (landing de arranque de cara al cliente)",
     defs: KICKOFF_DEF_BY_KEY,
+    tpl: KICKOFF_TEMPLATE,
   },
   Desarrollo: {
     section: "desarrollo",
     agentId: "agent-desarrollo-canvas",
     docLabel: "requerimiento técnico de integración",
     defs: DESARROLLO_DEF_BY_KEY,
+    tpl: DESARROLLO_TEMPLATE,
   },
 };
 
@@ -100,7 +112,9 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
 
   // Mismo contexto que usa la generación de cada documento.
   const [agent, project, handoffCtx, timelineCtx] = await Promise.all([
-    prisma.agent.findUnique({ where: { id: doc.agentId }, select: { systemPrompt: true, additionalInstructions: true } }),
+    // Solo `additionalInstructions` (el apéndice calibrable desde /agents): el
+    // `systemPrompt` de estos agentes en DB es la nota-puntero al código.
+    prisma.agent.findUnique({ where: { id: doc.agentId }, select: { additionalInstructions: true } }),
     prisma.project.findUnique({
       where: { id: projectId },
       select: { clientId: true, client: { select: { name: true, industry: true } } },
@@ -115,11 +129,16 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     doc.section === "kickoff" ? loadTimelineContext(projectId) : Promise.resolve(""),
   ]);
 
-  const systemPrompt = agent
-    ? agent.additionalInstructions
-      ? `${agent.systemPrompt}\n\n${agent.additionalInstructions}`
-      : agent.systemPrompt
-    : `Mejoras el ${doc.docLabel} de un proyecto de Smarteam (consultora HubSpot).`;
+  // La VOZ sale del template del CÓDIGO — misma fuente que usa la generación y que
+  // la ruta de assist del business case. Antes se leía `agent.systemPrompt` de la DB,
+  // que para estos dos agentes es la nota-puntero ("[NOTA] Este agente genera con el
+  // prompt del código…"): el assist corría sin persona ni posicionamiento.
+  const systemPrompt = [
+    doc.tpl.agentIntro ?? `Mejoras el ${doc.docLabel} de un proyecto de Smarteam (consultora HubSpot).`,
+    agent?.additionalInstructions?.trim() || "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const context = [
     `Empresa: ${project?.client.name ?? "—"} · Industria: ${project?.client.industry ?? "No especificada"}`,
@@ -147,6 +166,9 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       sections,
       instruction,
       context,
+      // Mismo gate que la generación: el requerimiento técnico (brandVoice:false)
+      // no lleva voz comercial; el kickoff sí (lo lee el cliente).
+      brandVoice: doc.tpl.brandVoice !== false,
       maxWebSearches: 3,
     });
     await prisma.agentRun.update({

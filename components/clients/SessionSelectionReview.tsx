@@ -28,8 +28,16 @@ interface FeedingSession {
   confidence: number | null;
   rationale: string | null;
   forced: boolean;
+  /** Otros proyectos donde también está linkeada (multi-proyecto) — "también en: X". */
+  alsoIn?: string[];
   /** Por qué alimenta: "primaria" | "confianza alta" | "forzada a mano". */
   origin: string;
+}
+interface ExcludedSession {
+  sessionId: string;
+  title: string;
+  date: string;
+  alsoIn?: string[];
 }
 interface CandidateSession {
   sessionId: string;
@@ -52,6 +60,7 @@ export default function SessionSelectionReview({
   readOnly = false,
   columnMode = false,
   onCount,
+  onExcludedCount,
 }: {
   projectId: string;
   onChange?: () => void;
@@ -60,9 +69,12 @@ export default function SessionSelectionReview({
   columnMode?: boolean;
   /** Reporta la cantidad de sesiones que alimentan (para el contador del header). */
   onCount?: (n: number) => void;
+  /** Reporta la cantidad de sesiones excluidas a mano (para el contador honesto). */
+  onExcludedCount?: (n: number) => void;
 }) {
-  const [data, setData] = useState<{ feeding: FeedingSession[]; candidates: CandidateSession[] }>({
+  const [data, setData] = useState<{ feeding: FeedingSession[]; excluded: ExcludedSession[]; candidates: CandidateSession[] }>({
     feeding: [],
+    excluded: [],
     candidates: [],
   });
   const [loading, setLoading] = useState(true);
@@ -115,10 +127,13 @@ export default function SessionSelectionReview({
   );
 
   useEffect(() => {
-    if (!loading) onCount?.(data.feeding.length);
-  }, [loading, data.feeding.length, onCount]);
+    if (!loading) {
+      onCount?.(data.feeding.length);
+      onExcludedCount?.(data.excluded.length);
+    }
+  }, [loading, data.feeding.length, data.excluded.length, onCount, onExcludedCount]);
 
-  const { feeding, candidates } = data;
+  const { feeding, excluded, candidates } = data;
   const q = search.trim().toLowerCase();
   const filtered = q ? candidates.filter((c) => (c.title || "").toLowerCase().includes(q)) : candidates;
 
@@ -177,7 +192,11 @@ export default function SessionSelectionReview({
     </Modal>
   );
 
-  // Modo columna (Contexto): lista compacta + "buscar más" + el modal, sin el header propio.
+  // Meta line de una sesión: "Reunión · fecha[ · también en X]".
+  const meetMeta = (date: string, alsoIn?: string[]) =>
+    `Reunión · ${fmtDate(date)}${alsoIn && alsoIn.length ? ` · también en ${alsoIn.join(", ")}` : ""}`;
+
+  // Modo columna (Contexto): incluidas + excluidas con toggle, "buscar más" + el modal.
   if (columnMode) {
     return (
       <>
@@ -189,10 +208,26 @@ export default function SessionSelectionReview({
             <ContextRow
               key={s.sessionId}
               icon={CTX_ICONS.meet}
-              meta={`${fmtDate(s.date)} · ${s.origin ?? (s.forced ? "forzada a mano" : "primaria")}`}
+              meta={meetMeta(s.date, s.alsoIn)}
               title={s.title || "Sin título"}
+              badge={{ label: "Incluida", tone: "green" }}
               onRemove={!readOnly ? () => setFeeds(s.sessionId, false) : undefined}
-              removeTitle="Quitar del handoff (no la desvincula del proyecto)"
+              removeTitle="Excluir del handoff (no la desvincula del proyecto)"
+            />
+          ))}
+          {excluded.map((s) => (
+            <ContextRow
+              key={s.sessionId}
+              icon={CTX_ICONS.meet}
+              meta={meetMeta(s.date, s.alsoIn)}
+              title={s.title || "Sin título"}
+              badge={{ label: "Excluida", tone: "muted" }}
+              dim
+              action={
+                !readOnly
+                  ? { label: "Incluir", onClick: () => setFeeds(s.sessionId, true), disabled: busyId === s.sessionId }
+                  : undefined
+              }
             />
           ))}
         </ContextColumnList>
@@ -210,7 +245,7 @@ export default function SessionSelectionReview({
     );
   }
 
-  if (loading) return <div className="h-16 rounded-xl skeleton-shimmer" />;
+  if (loading) return <div className="h-16 rounded-xl border border-line skeleton-shimmer" />;
 
   return (
     <div className="space-y-3">

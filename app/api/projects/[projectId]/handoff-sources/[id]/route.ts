@@ -7,7 +7,7 @@
  * Guarded con guardProjectHandoffAccess.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardProjectEditHandoff } from "@/lib/auth/api-guards";
+import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 export async function DELETE(
@@ -15,7 +15,8 @@ export async function DELETE(
   { params }: { params: Promise<{ projectId: string; id: string }> },
 ) {
   const { projectId, id } = await params;
-  const guard = await guardProjectEditHandoff(projectId);
+  // Owner del cliente o handoffAnywhere (el CSE gestiona las fuentes de SUS proyectos).
+  const guard = await guardProjectHandoffAccess(projectId);
   if (guard instanceof NextResponse) return guard;
 
   // Verificar que la fuente pertenece a ESTE proyecto antes de borrarla.

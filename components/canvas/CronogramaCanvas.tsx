@@ -48,6 +48,9 @@ import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
 import { buildProjectActions } from "@/lib/timeline/project-actions";
 import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { PhaseRegenModal, type RegenProposedTask, type RegenCurrentTask, type FinalTask } from "./PhaseRegenModal";
 import ProjectActionsPanel from "./ProjectActionsPanel";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 import { CronogramaSkeleton } from "@/components/clients/skeletons";
@@ -216,6 +219,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Confirmación de "Confirmar detalle" cuando se dispara desde el panel: el CTA ejecuta, pero
   // hacer que las tareas crucen al cliente merece un "¿seguro?" de por medio.
   const [confirmDetailOpen, setConfirmDetailOpen] = useState(false);
+  // Regen por fase → modal de curación: la fase en juego, la propuesta del preview, y los flags.
+  const [regenPhase, setRegenPhase] = useState<GanttPhase | null>(null);
+  const [regenPreview, setRegenPreview] = useState<RegenProposedTask[] | null>(null);
+  const [regenLoading, setRegenLoading] = useState(false);
+  const [regenApplying, setRegenApplying] = useState(false);
   // Pedido del panel "Qué hacer acá" de abrir un grupo de la lista. El nonce hace que re-clickear
   // el mismo CTA lo vuelva a abrir aunque el CSE lo haya cerrado a mano.
   const [focusGroup, setFocusGroup] = useState<{ key: string; nonce: number } | null>(null);
@@ -371,6 +379,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     else setLoading(true);
     try {
       const res = await fetch(`/api/projects/${projectId}/timeline`);
+      if (!res.ok) {
+        // El GET ahora devuelve JSON estructurado en error (antes: 500 crudo → res.json() reventaba
+        // → mensaje mudo). Mostramos el mensaje real del server y no caemos al estado vacío.
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message ?? "No se pudo cargar el cronograma.");
+      }
       const data = await res.json();
       if (data.exists) {
         setPhases(mapServerPhases(data.phases ?? []));
@@ -427,8 +441,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setLastEditedAt(null);
       }
       setError(null);
-    } catch {
-      setError("No se pudo cargar el cronograma.");
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : "No se pudo cargar el cronograma.");
     }
     setLoading(false);
     setRefreshing(false);
@@ -882,6 +896,64 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       else toast.info("No se pudo generar el detalle automáticamente. Usá «Regenerar detalle» para reintentar.");
     }
     setGenerating(false);
+  };
+
+  // Regen POR FASE → modal de curación (D.1). Paso 1 PREVIEW: el agente de detalle genera la propuesta
+  // (con el handoff + el canvas Desarrollo) SIN persistir; abre el modal viejo↔nuevo.
+  const startRegenPreview = async (phase: GanttPhase) => {
+    if (!phase.id) return;
+    setRegenPhase(phase);
+    setRegenPreview(null);
+    setRegenLoading(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage: 1, step: 0, stepLabel: "Regenerar fase", sectionLabel: "Regenerar fase",
+          agentId: "agent-timeline-detail", projectId, regeneratePhaseId: phase.id, preview: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.message ?? data?.error ?? "No se pudo generar la propuesta.");
+        setRegenPhase(null);
+      } else {
+        setRegenPreview(Array.isArray(data?.previewTasks) ? data.previewTasks : []);
+      }
+    } catch {
+      toast.error("Error de conexión al generar la propuesta.");
+      setRegenPhase(null);
+    }
+    setRegenLoading(false);
+  };
+
+  // Paso 2 APLICAR: el set curado (columna derecha del modal) reemplaza la fase — status por tarea +
+  // parche de baseline (server-side).
+  const applyPhaseRegen = async (finalTasks: FinalTask[]) => {
+    const phase = regenPhase;
+    if (!phase?.id) return;
+    setRegenApplying(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/phases/${phase.id}/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tasks: finalTasks, reason: `Regeneración curada de «${phase.name}»` }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error ?? data?.message ?? "No se pudo aplicar la fase.");
+      } else {
+        await load();
+        clearScope(undoScope);
+        toast.success(`Fase «${phase.name}» actualizada.`);
+        setRegenPhase(null);
+        setRegenPreview(null);
+      }
+    } catch {
+      toast.error("Error de conexión al aplicar la fase.");
+    }
+    setRegenApplying(false);
   };
 
   // El detalle (tareas) ya NO se auto-genera en silencio: lo crea el CTA explícito
@@ -1978,6 +2050,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 ? (phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }
                 : undefined
             }
+            onRegeneratePhase={
+              // Rehacer una fase solo tiene sentido cuando YA hay detalle IA, y queda para quien puede
+              // regenerar (cronograma.regenerate). El server además exige sin-publicar / sin-avance.
+              hasAiDetail && canRegenerateTimeline
+                ? (phase) => void startRegenPreview(phase)
+                : undefined
+            }
             onOpenTask={(pk, tk) => setSelectedTask({ phaseKey: pk, taskKey: tk })}
             kickoffDate={kickoffDate || null}
             particularidades={particularidades}
@@ -2045,6 +2124,39 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         }}
         onCancel={() => setConfirmDetailOpen(false)}
       />
+
+      {/* Regen POR FASE → modal de curación viejo↔nuevo. Paso 1: loading del preview. */}
+      {regenPhase && regenLoading && (
+        <Modal open onClose={() => {}} size="sm" closeOnBackdrop={false} closeOnEscape={false}>
+          <div className="flex items-center gap-3 py-1">
+            <span className="w-4 h-4 border-2 border-brand/30 border-t-brand rounded-full animate-spin flex-shrink-0" />
+            <p className="text-sm text-fg">Generando la propuesta para «{regenPhase.name}»…</p>
+          </div>
+        </Modal>
+      )}
+      {/* Paso 2: el modal de dos columnas (actuales vs propuesta) para definir cómo queda la fase. */}
+      {regenPhase && regenPreview && (() => {
+        const src = phases.find((p) => p.id === regenPhase.id);
+        const current: RegenCurrentTask[] = (src?.tasks ?? [])
+          .filter((t) => t.id)
+          .map((t) => ({
+            id: t.id as string, title: t.title, weekIndex: t.weekIndex,
+            party: t.party ?? null, type: t.type ?? null, status: t.status,
+            source: t.source ?? null, notes: t.notes ?? null,
+          }));
+        return (
+          <PhaseRegenModal
+            open
+            phaseName={regenPhase.name}
+            durationWeeks={regenPhase.durationWeeks}
+            current={current}
+            proposed={regenPreview}
+            applying={regenApplying}
+            onCancel={() => { setRegenPhase(null); setRegenPreview(null); }}
+            onApply={applyPhaseRegen}
+          />
+        );
+      })()}
 
       {/* Convertir un hecho en trabajo: dueño, fase y semana. Nada se aplica solo. */}
       {(() => {
