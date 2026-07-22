@@ -29,7 +29,7 @@ import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { autoClassifyOrphanSessions } from "@/lib/projects/analyze-participants";
-import { computeHandoffReadiness } from "@/lib/handoff/feeding";
+import { computeHandoffReadiness, projectHasEraEngagements } from "@/lib/handoff/feeding";
 import { getProjectHandoffSessions, getClientSessions } from "@/lib/sessions/project-sources";
 import { fetchCompanyTimeline, fetchCompanyTimelineSplit, serializeTimeline, projectEraSince } from "@/lib/hubspot/company-timeline";
 import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT, RECURRENTE_TAG, hasTechnicalScope } from "@/lib/tags/catalog";
@@ -322,41 +322,39 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // ── Handoff scopeado al proyecto: sin sesiones clasificadas a ESTE proyecto no
   //    hay nada que investigar → cortar antes de crear el run (sin fallback client-wide).
   if (agent.agentGroup === "handoff" && bodyProjectId) {
-    // Solo miembros (included=true): un proyecto cuyas sesiones fueron todas excluidas
-    // por humano NO tiene material — cortar acá, no en el prompt vacío.
-    let projSessionCount = await prisma.sessionProject.count({
+    // Auto-sanar: adoptar las sesiones HUÉRFANAS del cliente (matcheadas a nivel
+    // cliente pero sin SessionProject) y reclasificarlas. Cubre el caso del proyecto
+    // creado DESPUÉS de que ya existían sesiones (sync de HubSpot) → el handoff
+    // funciona sin que el CSE tenga que clasificar a mano. El clasificador decide el
+    // proyecto correcto, así que en multi-proyecto no asigna a ciegas a este.
+    const projSessionCount = await prisma.sessionProject.count({
       where: { projectId: bodyProjectId, included: true },
     });
     if (projSessionCount === 0) {
-      // Auto-sanar: adoptar las sesiones HUÉRFANAS del cliente (matcheadas a nivel
-      // cliente pero sin SessionProject) y reclasificarlas. Cubre el caso del proyecto
-      // creado DESPUÉS de que ya existían sesiones (sync de HubSpot) → el handoff
-      // funciona sin que el CSE tenga que clasificar a mano. El clasificador decide el
-      // proyecto correcto, así que en multi-proyecto no asigna a ciegas a este.
       await autoClassifyOrphanSessions(clientId).catch(() => {});
-      projSessionCount = await prisma.sessionProject.count({
-        where: { projectId: bodyProjectId, included: true },
-      });
-    }
-    if (projSessionCount === 0) {
-      return NextResponse.json(
-        { error: "NO_PROJECT_SESSIONS", message: "Este proyecto no tiene sesiones clasificadas. Clasificá sesiones al proyecto antes de generar el handoff." },
-        { status: 400 },
-      );
     }
 
-    // ── Gate de MATERIAL: sin al menos una sesión-feeding con transcript real o una
-    //    fuente manual, el handoff saldría vacío/pobre — cortar ANTES de crear el run
-    //    (sin runs ERROR fantasma) con un mensaje accionable en vez de generar a ciegas.
+    // ── Gate de MATERIAL con PISO ──────────────────────────────────────────────
+    // El handoff debe poder generarse SIEMPRE que exista CUALQUIER fuente real de
+    // contexto — es lo que pidió el usuario ("todo lo que entra al contexto alimenta;
+    // se debe poder generar y regenerar"). Cuenta como material: (a) una sesión que
+    // alimenta el handoff (aunque su transcript aún no llegó — la confianza/transcript
+    // son un HINT de orden/aviso, no un veto), (b) una fuente manual pegada, o (c) un
+    // engagement de HubSpot de la ERA del proyecto (reuniones/llamadas de venta que no
+    // vinieron por Meet). Solo se BLOQUEA cuando el contexto está TOTALMENTE vacío —
+    // nunca un handoff de la nada. HubSpot se consulta SOLO si no hay ni feeding ni
+    // manual, para no pagar el round-trip en el caso común.
     const readiness = await computeHandoffReadiness(bodyProjectId);
-    if (readiness.withTranscript === 0 && readiness.manualSources === 0) {
+    let hasMaterial = readiness.feedingCount > 0 || readiness.manualSources > 0;
+    if (!hasMaterial) {
+      hasMaterial = await projectHasEraEngagements(bodyProjectId);
+    }
+    if (!hasMaterial) {
       return NextResponse.json(
         {
           error: "NO_HANDOFF_SOURCES",
           message:
-            readiness.feedingCount === 0
-              ? "Ninguna sesión alimenta este handoff (se usan la primaria del proyecto, secundarias de alta confianza o las forzadas a mano). Agregá sesiones desde la columna Google Meet del Contexto, o pegá una fuente manual."
-              : `Las ${readiness.feedingCount} sesiones que alimentan este handoff no tienen transcripción todavía. Esperá el enriquecimiento de Meet o pegá el transcript como fuente manual.`,
+            "Este proyecto todavía no tiene ninguna fuente de contexto: ni una sesión que alimente el handoff, ni actividad de HubSpot en su rango, ni una fuente manual. Incluí una sesión desde la columna Google Meet del Contexto, promoví una reunión de HubSpot, o pegá una fuente manual.",
         },
         { status: 400 },
       );
@@ -1835,6 +1833,33 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
           sourceSessionIds: handoffSourceSessionIds,
         },
       });
+
+  // ── 12a. Anclar las sesiones que alimentaron este handoff ────────────────────
+  // Estampar handoffOverride:true sobre los links usados evita la regresión: cuando
+  // nace un proyecto HERMANO, el reclasificador movía el PRIMARIO de la sesión que
+  // alimentaba a ese hermano y la degradaba a secundaria baja-confianza en ESTE
+  // proyecto → feedingCount=0, el handoff se rompía (caso Grupo Inve). Con
+  // handoffOverride!==null el link queda lockeado (isLockedLink) → el reclasificador
+  // saca la sesión de su lote (reclassify: candidatos = .every(!isLocked)) y ya no la
+  // toca. Es REVERSIBLE desde el mismo panel: la "X" del Contexto pone
+  // handoffOverride:false (excluir). Solo ancla links VÍRGENES (handoffOverride:null)
+  // para no repisar una decisión manual del CSE; las sesiones acá ya pasaron
+  // linkFeedsHandoff, así que ninguna estaba excluida.
+  if (isHandoffAgent && bodyProjectId && handoffSourceSessionIds.length > 0) {
+    await prisma.sessionProject
+      .updateMany({
+        where: {
+          projectId: bodyProjectId,
+          sessionId: { in: handoffSourceSessionIds },
+          handoffOverride: null,
+        },
+        data: { handoffOverride: true },
+      })
+      .catch((e) => {
+        // El anclaje es best-effort: si falla, el handoff ya se generó igual.
+        console.error("[handoff-anchor] no se pudo anclar las sesiones del handoff", e);
+      });
+  }
 
   // ── 12a'. D.1: persistir detalle del cronograma y cortar ────────────────────
   // El output del agente de detalle no es cards/blocks: se persiste sobre

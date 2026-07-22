@@ -22,7 +22,7 @@ import type { Client } from "@hubspot/api-client";
 import { getSystemHubspotClient, forceRefreshSystemToken } from "./client";
 
 type V1Engagement = {
-  engagement?: { type?: string; timestamp?: number };
+  engagement?: { id?: number | string; type?: string; timestamp?: number };
   metadata?: Record<string, unknown>;
 };
 
@@ -62,6 +62,9 @@ function engagementText(type: string, m: Record<string, unknown>): { title: stri
 }
 
 export type TimelineItem = {
+  /** Id ESTABLE del engagement en HubSpot (v1) — clave para excluir/promover un ítem
+   *  por-handoff sin ambigüedad. String para no perder precisión de enteros grandes. */
+  id: string;
   type: "NOTE" | "CALL" | "MEETING";
   title: string;
   body: string;
@@ -107,7 +110,9 @@ async function fetchAllTimelineItems(hsClient: Client, companyId: string): Promi
       const type = (e.engagement?.type ?? "") as TimelineItem["type"];
       const { title, body } = engagementText(type, e.metadata ?? {});
       if (!body) return null;
-      return { type, title, body, date: fmtDate(e.engagement?.timestamp), ts: e.engagement?.timestamp ?? 0 };
+      const id = e.engagement?.id != null ? String(e.engagement.id) : "";
+      if (!id) return null; // sin id estable no se puede excluir/promover el ítem con seguridad
+      return { id, type, title, body, date: fmtDate(e.engagement?.timestamp), ts: e.engagement?.timestamp ?? 0 };
     })
     .filter((x): x is TimelineItem => x !== null)
     .sort((a, b) => b.ts - a.ts);
