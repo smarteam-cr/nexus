@@ -576,9 +576,24 @@ export async function syncProjectsForClient(
 
   result.found = projects.length;
 
+  // Supresión de re-sync: hubspotServiceId de proyectos BORRADOS a mano desde Nexus. El sync
+  // no los vuelve a crear NI a reactivar (desasociación durable; el objeto en HubSpot queda
+  // intacto). Se limpia sacándolo de la lista para "re-agregar a mano".
+  const suppressed = new Set(
+    (await prisma.client.findUnique({ where: { id: clientId }, select: { ignoredHubspotServiceIds: true } }))
+      ?.ignoredHubspotServiceIds ?? [],
+  );
+
   // 6. Sincronizar cada proyecto HubSpot → DB
   for (const project of projects) {
     const props = project.properties;
+
+    // Proyecto borrado a mano en Nexus → no recrear (antes del lookup: ni create ni reactivate).
+    if (suppressed.has(project.id)) {
+      result.skipped++;
+      result.debug!.push(`Proyecto suprimido (borrado a mano en Nexus): ${project.id}`);
+      continue;
+    }
 
     const realName = props.nombre_del_proyecto || props.hs_name || null;
     const projectName = realName ?? `Proyecto ${project.id}`;

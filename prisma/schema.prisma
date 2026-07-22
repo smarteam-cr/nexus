@@ -159,6 +159,11 @@ model Client {
   source           String? // "manual" | "sheet" (futuro: "hubspot" | "odoo")
   sourceExternalId String? // id estable en la fuente (columna id del sheet o slug del nombre)
 
+  // hubspotServiceId de los proyectos BORRADOS a mano desde Nexus — el sync NO los vuelve
+  // a crear (supresión durable: sobrevive al borrado del Project, que no puede llevar el
+  // flag). Se limpia para "re-agregar a mano". Ver lib/hubspot/sync-projects.ts.
+  ignoredHubspotServiceIds String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
