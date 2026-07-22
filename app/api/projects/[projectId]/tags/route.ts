@@ -6,7 +6,7 @@
  * PATCH /implementation-type). GET auto-deriva un producto desde `serviceType` si está vacío.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject, guardProjectEditHandoff } from "@/lib/auth/api-guards";
+import { guardAccessToProject, guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { sanitizeTags, SERVICE_TO_PRODUCT } from "@/lib/tags/catalog";
 
@@ -39,13 +39,14 @@ export async function GET(
   return NextResponse.json({ tags });
 }
 
-// PUT: reemplaza los tags. EDICIÓN = editores del handoff (CSE ve, no edita — como impl-type).
+// PUT: reemplaza los tags. EDICIÓN = owner del cliente o handoffAnywhere (el CSE clasifica
+// SUS proyectos a mano). Scope de owner enforced por requireHandoffAccess.
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardProjectEditHandoff(projectId);
+  const guard = await guardProjectHandoffAccess(projectId);
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;
