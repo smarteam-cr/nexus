@@ -65,18 +65,25 @@ export function classifyHandoffSession(
   return { include: false, reason: "sin Ventas y título neutro" };
 }
 
-/** Umbral de confianza para que un link SECUNDARIO alimente el handoff (decisión 2026-07-10). */
-export const HANDOFF_MIN_SECONDARY_CONFIDENCE = 0.6;
+/**
+ * Piso de confianza para que un link SECUNDARIO alimente el handoff. Bajado de 0.6 a 0.4
+ * (2026-07-22, modelo "todo lo incluido alimenta salvo lo excluido"): el clasificador ya
+ * descarta asignaciones <0.4, así que en la práctica TODO secundario propuesto por IA
+ * alimenta. La confianza pasa a ser un PISO anti-ruido, no un veto de curaduría — la
+ * curaduría multi-proyecto la hace el humano con el toggle Incluir/Excluir (handoffOverride)
+ * y la relevancia la sigue filtrando `appliesRule`.
+ */
+export const HANDOFF_MIN_SECONDARY_CONFIDENCE = 0.4;
 
 /**
  * ¿Este LINK sesión↔proyecto alimenta el handoff del proyecto?
  * Política ÚNICA (analyze + session-candidates + readiness — NO cronograma/minutas):
- *   1. handoffOverride=false → nunca (la "X" del panel).
- *   2. handoffOverride=true  → siempre (agregada a mano).
- *   3. Sin override: solo links PRIMARIOS o secundarios con confianza alta, y de
- *      esos, los que la regla de relevancia (`appliesRule`) incluye.
+ *   1. handoffOverride=false → nunca (la "X" del panel — exclusión humana).
+ *   2. handoffOverride=true  → siempre (Incluir a mano / anclaje al generar).
+ *   3. Sin override: links PRIMARIOS o secundarios por encima del piso de confianza
+ *      (0.4), y de esos, los que la regla de relevancia (`appliesRule`) incluye.
  * `confidence ?? 0` ⇒ un secundario manual/legacy sin confidence NO alimenta salvo
- * forzado — intencional: primario / alta confianza / forzado, nada más.
+ * forzado — intencional: se incluye a mano con el toggle si corresponde.
  */
 export function linkFeedsHandoff(
   link: { isPrimary: boolean; confidence: number | null; handoffOverride: boolean | null },

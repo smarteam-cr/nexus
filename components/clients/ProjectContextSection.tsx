@@ -139,7 +139,13 @@ export default function ProjectContextSection({
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <ContextColumn icon={CTX_ICONS.hubspot} color="#ff7a59" title="HubSpot" count={hubspotCount}>
-            <HubspotTimelinePanel projectId={projectId} columnMode onCount={setHubspotCount} />
+            <HubspotTimelinePanel
+              projectId={projectId}
+              columnMode
+              onCount={setHubspotCount}
+              canEdit={canEdit}
+              onPromoted={fetchSources}
+            />
           </ContextColumn>
 
           <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={meetCount}>
