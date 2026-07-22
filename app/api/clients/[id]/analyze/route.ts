@@ -747,13 +747,30 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
             client.hubspotCompanyId,
             projectEraSince(dealProject),
           );
-          companyTimelineContent = serializeTimeline(current);
+          // Exclusiones por-ítem (la "X" de la columna HubSpot) — sacar los engagements
+          // que el humano marcó como de otro proyecto, tanto de la era como del trasfondo.
+          const excludedEng = bodyProjectId
+            ? new Set(
+                (
+                  await prisma.handoff.findUnique({
+                    where: { projectId: bodyProjectId },
+                    select: { excludedEngagementIds: true },
+                  })
+                )?.excludedEngagementIds ?? [],
+              )
+            : new Set<string>();
+          const keptCurrent = current.filter((i) => !excludedEng.has(i.id));
+          const keptPrevious = previous.filter((i) => !excludedEng.has(i.id));
+          companyTimelineContent = serializeTimeline(keptCurrent);
           companyTimelinePrevContent =
-            previous.length > 0 ? serializeTimeline(previous, { perItemChars: 400 }) : "";
-          if (previous.length > 0) {
+            keptPrevious.length > 0 ? serializeTimeline(keptPrevious, { perItemChars: 400 }) : "";
+          if (keptPrevious.length > 0) {
             console.log(
-              `[analyze handoff] historial previo a la era del proyecto: ${previous.length} engagements (comprimidos como trasfondo)`,
+              `[analyze handoff] historial previo a la era del proyecto: ${keptPrevious.length} engagements (comprimidos como trasfondo)`,
             );
+          }
+          if (excludedEng.size > 0) {
+            console.log(`[analyze handoff] ${excludedEng.size} engagement(s) de HubSpot excluidos a mano`);
           }
         } else {
           companyTimelineContent = await fetchCompanyTimeline(hsClient, client.hubspotCompanyId);

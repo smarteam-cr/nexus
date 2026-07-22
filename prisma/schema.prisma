@@ -442,6 +442,12 @@ model Handoff {
   // Se inyectan como reglas negativas duras en el prompt del agente de handoff.
   contextExclusions String? @db.Text
 
+  // Engagements de HubSpot (por engagement id v1) EXCLUIDOS a mano de ESTE handoff — la
+  // "X" de la columna HubSpot del Contexto. Por defecto todas las reuniones/notas de la
+  // company alimentan (era completas, previas resumidas); acá se sacan las que el humano
+  // marca como de otro proyecto. Por-proyecto (Handoff es 1:1 con Project).
+  excludedEngagementIds String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

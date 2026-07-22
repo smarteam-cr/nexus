@@ -22,10 +22,13 @@ export async function GET(
   const guard = await guardProjectHandoffAccess(projectId);
   if (guard instanceof NextResponse) return guard;
 
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { createdAt: true, hubspotCreatedAt: true, client: { select: { hubspotCompanyId: true } } },
-  });
+  const [project, handoff] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id: projectId },
+      select: { createdAt: true, hubspotCreatedAt: true, client: { select: { hubspotCompanyId: true } } },
+    }),
+    prisma.handoff.findUnique({ where: { projectId }, select: { excludedEngagementIds: true } }),
+  ]);
   if (!project) {
     return NextResponse.json({ error: "Proyecto no existe" }, { status: 404 });
   }
@@ -33,20 +36,22 @@ export async function GET(
   if (!companyId) {
     return NextResponse.json({ items: [] });
   }
+  const excludedIds = new Set(handoff?.excludedEngagementIds ?? []);
 
   try {
     const hs = await getSystemHubspotClient();
     // Partido por la ERA del proyecto — la columna muestra lo mismo que entra al prompt
     // del handoff: los de la era como material, y los ANTERIORES (cap 10) marcados como
-    // historial/trasfondo (atenuados en la UI).
+    // trasfondo (atenuados en la UI). `excluded` = sacado a mano con la "X".
     const { current, previous } = await fetchCompanyTimelineSplit(hs, companyId, projectEraSince(project));
     const toDto = (i: TimelineItem, prev: boolean) => ({
-      id: i.id, // id estable del engagement — para excluir/promover el ítem por-handoff (Fase 2)
+      id: i.id, // id estable del engagement — para excluir/re-incluir el ítem por-handoff
       type: i.type,
       title: i.title,
       date: i.date,
       snippet: i.body.length > 200 ? i.body.slice(0, 200).trimEnd() + "…" : i.body,
       previous: prev,
+      excluded: excludedIds.has(i.id),
     });
     return NextResponse.json({
       items: [...current.map((i) => toDto(i, false)), ...previous.map((i) => toDto(i, true))],
