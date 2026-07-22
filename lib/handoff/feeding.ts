@@ -14,6 +14,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getProjectHandoffSessions, type ProjectSourceSession } from "@/lib/sessions/project-sources";
 import { classifyHandoffSession, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
+import { salesPresenceEmails } from "@/lib/handoff/sales-presence";
 import { fetchCompanyTimelineItems, projectEraSince } from "@/lib/hubspot/company-timeline";
 
 /** Mínimo de chars de transcript para contar como "material real" (gate NO_HANDOFF_SOURCES). */
@@ -21,14 +22,10 @@ export const HANDOFF_MIN_TRANSCRIPT_CHARS = 200;
 
 /** Sesiones que efectivamente alimentarán el handoff del proyecto (política linkFeedsHandoff). */
 export async function computeHandoffFeeding(projectId: string): Promise<ProjectSourceSession[]> {
-  const [{ sessions }, salesTeam] = await Promise.all([
+  const [{ sessions }, salesEmails] = await Promise.all([
     getProjectHandoffSessions(projectId),
-    prisma.teamMember.findMany({
-      where: { area: { in: ["Sales", "Ventas"] } },
-      select: { email: true },
-    }),
+    salesPresenceEmails(),
   ]);
-  const salesEmails = new Set(salesTeam.map((m) => m.email.toLowerCase()));
   // organizerEmail ya viene plegado en participants (foldOrganizer del chokepoint).
   return sessions.filter((s) =>
     linkFeedsHandoff(s, classifyHandoffSession(s.title, s.participants, null, salesEmails).include),

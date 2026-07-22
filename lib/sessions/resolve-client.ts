@@ -99,7 +99,7 @@ export async function reResolveSession(
 ): Promise<void> {
   const session = await prisma.firefliesSession.findUnique({
     where: { id: sessionId },
-    select: { id: true, title: true, participants: true, manualClientId: true },
+    select: { id: true, title: true, participants: true, manualClientId: true, resolvedClientId: true },
   });
   if (!session) return;
   let c = ctx;
@@ -112,6 +112,13 @@ export async function reResolveSession(
     where: { id: sessionId },
     data: { resolvedClientId: resolved },
   });
+  // Si cambió de dueño, re-clasificar el cliente nuevo para vincular esta sesión a sus
+  // proyectos (cierra el hueco resolver≠clasificar). Fire-and-forget.
+  if (resolved && resolved !== session.resolvedClientId) {
+    void import("./reclassify")
+      .then((m) => m.reclassifyClientSessions(resolved))
+      .catch(() => {});
+  }
 }
 
 export interface ResolveAllResult {
@@ -129,7 +136,10 @@ export interface ResolveAllResult {
  * (no escribe). En modo escritura agrupa por valor y usa `updateMany` en chunks
  * (≈ N_clientes llamadas, no 16k).
  */
-export async function resolveAllSessions(opts?: { dryRun?: boolean }): Promise<ResolveAllResult> {
+/** Tope de clientes a auto-reclasificar en una corrida (evita tormenta en imports masivos). */
+const MAX_AUTO_RECLASSIFY_CLIENTS = 20;
+
+export async function resolveAllSessions(opts?: { dryRun?: boolean; reclassify?: boolean }): Promise<ResolveAllResult> {
   const ctx = await buildCategorizeCtx();
   const sessions = await prisma.firefliesSession.findMany({
     select: { id: true, title: true, participants: true, manualClientId: true, resolvedClientId: true },
@@ -172,6 +182,26 @@ export async function resolveAllSessions(opts?: { dryRun?: boolean }): Promise<R
           where: { id: { in: ids.slice(i, i + 1000) } },
           data: { resolvedClientId: value },
         });
+      }
+    }
+
+    // Cerrar el hueco de timing: resolver ≠ clasificar. Cuando una sesión pasa a ser de un
+    // cliente DESPUÉS de que su proyecto ya existe, nada la vinculaba (los triggers de
+    // reclasificación disparan al crear proyecto/handoff, no al resolver). Acá, tras
+    // materializar nuevos dueños, se re-clasifican los clientes que GANARON sesiones para
+    // que se creen los SessionProject faltantes. Fire-and-forget + cap anti-tormenta.
+    if (opts?.reclassify !== false) {
+      const gained = [...idsByNewValue.keys()].filter((v): v is string => v !== null);
+      if (gained.length > MAX_AUTO_RECLASSIFY_CLIENTS) {
+        console.warn(
+          `[resolve-client] ${gained.length} clientes cambiaron dueño de sesiones — se omite el auto-reclasificado (correr scripts/reclassify-client-sessions.ts si hace falta).`,
+        );
+      } else {
+        for (const clientId of gained) {
+          void import("./reclassify")
+            .then((m) => m.reclassifyClientSessions(clientId))
+            .catch(() => {});
+        }
       }
     }
   }

@@ -12,6 +12,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
+import { salesPresenceEmails } from "@/lib/handoff/sales-presence";
 
 const emailOf = (p: string): string => (p.match(/[\w.+-]+@[\w.-]+/)?.[0] ?? "").toLowerCase();
 const domainOf = (p: string): string => {
@@ -49,11 +50,10 @@ export async function loadBcFeeding(businessCaseId: string): Promise<BcFeedingRe
 
   const domains = (bc.client.emailDomains ?? []).map((d) => d.toLowerCase()).filter(Boolean);
 
-  const [salesRows, links] = await Promise.all([
-    prisma.teamMember.findMany({ where: { area: { in: ["Sales", "Ventas"] } }, select: { email: true } }),
+  const [salesEmails, links] = await Promise.all([
+    salesPresenceEmails(),
     prisma.businessCaseSession.findMany({ where: { businessCaseId }, select: { sessionId: true, included: true } }),
   ]);
-  const salesEmails = new Set(salesRows.map((m) => m.email.toLowerCase()));
   // Override del CSE por sesión: true=incluir, false=excluir. Sin entrada = decide la regla.
   const override = new Map(links.map((l) => [l.sessionId, l.included]));
   const linkedIds = new Set(links.map((l) => l.sessionId));

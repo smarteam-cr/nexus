@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { classifyHandoffSession, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
+import { salesPresenceEmails } from "@/lib/handoff/sales-presence";
 import { belongsToClient } from "@/lib/sessions/project-sources";
 
 /**
@@ -26,11 +27,7 @@ export async function GET(
   if (guard instanceof NextResponse) return guard;
   const { clientId } = guard;
 
-  const salesTeam = await prisma.teamMember.findMany({
-    where: { area: { in: ["Sales", "Ventas"] } },
-    select: { email: true },
-  });
-  const salesEmails = new Set(salesTeam.map((m) => m.email.toLowerCase()));
+  const salesEmails = await salesPresenceEmails();
   const applies = (title: string, participants: string[], organizerEmail: string | null): boolean =>
     classifyHandoffSession(title, participants, organizerEmail, salesEmails).include;
 

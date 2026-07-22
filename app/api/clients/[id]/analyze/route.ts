@@ -30,6 +30,7 @@ import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { autoClassifyOrphanSessions } from "@/lib/projects/analyze-participants";
 import { computeHandoffReadiness, projectHasEraEngagements } from "@/lib/handoff/feeding";
+import { isSalesPresence } from "@/lib/handoff/sales-presence";
 import { getProjectHandoffSessions, getClientSessions } from "@/lib/sessions/project-sources";
 import { fetchCompanyTimeline, fetchCompanyTimelineSplit, serializeTimeline, projectEraSince } from "@/lib/hubspot/company-timeline";
 import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT, RECURRENTE_TAG, hasTechnicalScope } from "@/lib/tags/catalog";
@@ -778,10 +779,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     select: { email: true, name: true, area: true },
   });
   const internalEmails = new Set(allTeam.map((m) => m.email.toLowerCase()));
+  // Ventas = área de ventas ∪ preventa técnica (fuente única: lib/handoff/sales-presence).
   const salesEmails = new Set(
-    allTeam
-      .filter((m) => m.area === "Sales" || m.area === "Ventas")
-      .map((m) => m.email.toLowerCase()),
+    allTeam.filter(isSalesPresence).map((m) => m.email.toLowerCase()),
   );
 
   // ── Filtro especial para el agente Handoff Sales→CS ─────────────────────────

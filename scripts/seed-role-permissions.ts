@@ -1,12 +1,13 @@
 /**
  * scripts/seed-role-permissions.ts — siembra las PLANTILLAS de RolePermission.
  *
- * Contenido = DEFAULT_MATRIX (comportamiento actual exacto) + el DELTA operativo
- * decidido por el usuario (2026-07-11): DEV pasa a SOLO LECTURA en los artefactos —
- * pierde escritura/generación de handoff, kickoff, cronograma y procesos (sigue
- * VIENDO todo por clientes.viewAll y conserva ventas/marketing.read/conocimientos/
- * agentes/auditoría). SUPER_ADMIN NO se siembra: el engine lo hardcodea all-true
- * (anti-lockout) y el PUT de plantillas lo rechaza.
+ * Contenido = DEFAULT_MATRIX (comportamiento actual exacto) + deltas operativos por rol.
+ * Roles mixtos (2026-07-22): DEV ENTREGA servicios (sitios web, integraciones), así que
+ * genera handoff/kickoff/procesos/desarrollo/cronograma de punta a punta como parte de la
+ * entrega — solo NO BORRA cronograma (`cronograma.delete` off, igual que el CSE). Se le
+ * ENCIENDE además `cronograma.regenerate` (que el default no trae) para que itere el
+ * cronograma con IA. Sigue viendo todo por clientes.viewAll. SUPER_ADMIN NO se siembra: el
+ * engine lo hardcodea all-true (anti-lockout) y el PUT de plantillas lo rechaza.
  *
  * Idempotente (upsert). Imprime el diff por rol contra el DEFAULT de código y,
  * si la fila ya existe, contra lo sembrado antes. La tabla RolePermission es
@@ -27,24 +28,31 @@ import { parsePermissionMapLoose } from "@/lib/auth/permissions/schema";
 const APPLY = process.argv.includes("--apply");
 const SEEDED_BY = "seed-role-permissions.ts";
 
-// Roles a sembrar (SUPER_ADMIN afuera: hardcodeado all-true en el engine).
-const ROLES: TeamRole[] = ["CSE", "VENTAS", "DEV", "CSL", "MARKETING", "ADMIN"];
+// Filtro opcional `--role=DEV` (repetible con comas) para sembrar SOLO ciertos roles —
+// clave cuando otras filas fueron editadas a mano desde /team y no se quieren pisar.
+const roleArg = process.argv.find((a) => a.startsWith("--role="))?.split("=")[1];
+const ONLY_ROLES = roleArg ? roleArg.split(",").map((r) => r.trim().toUpperCase()) : null;
 
-/** Celdas que el delta apaga sobre el default del rol. */
+// Roles a sembrar (SUPER_ADMIN afuera: hardcodeado all-true en el engine).
+const ALL_ROLES: TeamRole[] = ["CSE", "VENTAS", "DEV", "CSL", "MARKETING", "ADMIN"];
+const ROLES: TeamRole[] = ONLY_ROLES
+  ? ALL_ROLES.filter((r) => ONLY_ROLES.includes(r))
+  : ALL_ROLES;
+
+/** Celdas que el delta APAGA sobre el default del rol. */
 const DELTAS: Partial<Record<TeamRole, Array<[string, string]>>> = {
-  // DEV → solo lectura en artefactos (decisión del usuario, semilla PERM-F3).
+  // DEV entrega servicios (roles mixtos): conserva el default de generación de artefactos
+  // (handoff/kickoff/procesos/desarrollo/cronograma) y solo NO borra cronograma.
   DEV: [
-    ["handoff", "create"],
-    ["handoff", "write"],
-    ["handoff", "generate"],
-    ["handoff", "regenerate"],
-    ["kickoff", "generate"],
-    ["kickoff", "regenerate"],
-    ["procesos", "generate"],
-    ["procesos", "regenerate"],
-    ["cronograma", "write"],
     ["cronograma", "delete"],
-    ["cronograma", "generate"],
+  ],
+};
+
+/** Celdas que el delta ENCIENDE sobre el default del rol (para superar el default de código). */
+const ENABLES: Partial<Record<TeamRole, Array<[string, string]>>> = {
+  // DEV itera el cronograma con IA: regenerate no viene en el default (solo CSL/SUPER_ADMIN).
+  DEV: [
+    ["cronograma", "regenerate"],
   ],
 };
 
@@ -52,6 +60,9 @@ function buildTemplate(role: TeamRole): PermissionMap {
   const map = structuredClone(DEFAULT_MATRIX[role]);
   for (const [section, action] of DELTAS[role] ?? []) {
     map.sections[section][action] = false;
+  }
+  for (const [section, action] of ENABLES[role] ?? []) {
+    map.sections[section][action] = true;
   }
   return map;
 }
