@@ -20,6 +20,7 @@ import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import {
   computeProposalDeltas,
+  buildPhaseOrder,
   type ProposalLike,
   type ProposalDelta,
 } from "@/lib/timeline/proposal-deltas";
@@ -91,28 +92,14 @@ export async function POST(
   const resolvedKeys = new Set([...acceptKeys, ...discardKeys].filter((k) => byKey.has(k)));
 
   const now = new Date();
-  let maxOrder = tl.phases.reduce((m, p) => Math.max(m, p.order), -1);
+  const acceptedKeySet = new Set(accepted.map((d) => d.key));
 
   await prisma.$transaction(async (tx) => {
     // 1) Aplicar los ACEPTADOS (solo esos; nada se aplica solo).
+    //    Cambios de contenido y anchor primero; el ORDEN se resuelve al final de una sola vez,
+    //    porque insertar fases y reordenarlas se pisan entre sí si se hacen por separado.
     for (const d of accepted) {
-      if (d.kind === "ADD_PHASE") {
-        // La fase nueva nace VACÍA al final (el orden fino se arrastra en el Gantt); las tareas
-        // se detallan después con "regenerar solo esta fase" (PhaseRegenModal).
-        await tx.timelinePhase.create({
-          data: {
-            timelineId: tl.id,
-            name: d.phase.name,
-            order: ++maxOrder,
-            durationWeeks: d.phase.durationWeeks,
-            startWeek: d.phase.startWeek ?? null,
-            sessionCount: d.phase.sessionCount ?? null,
-            notes: d.phase.notes ?? null,
-            activityType: (d.phase.activityType as never) ?? null,
-            source: "AGENT", // propuesta por la IA, confirmada por el humano
-          },
-        });
-      } else if (d.kind === "MODIFY_PHASE") {
+      if (d.kind === "MODIFY_PHASE") {
         const data: Record<string, unknown> = {};
         for (const c of d.changes) data[c.field] = c.to;
         await tx.timelinePhase.update({ where: { id: d.phaseId }, data });
@@ -124,18 +111,41 @@ export async function POST(
       }
     }
 
-    // 2) Reescribir la propuesta guardada SIN los ítems resueltos (aceptados o descartados).
-    //    Las claves son deterministas contra la propuesta guardada (add:<índice> / mod:<id> /
-    //    anchor), así cliente y server siempre hablan de lo mismo.
-    const keptPhases = proposal.phases.filter((p, i) => {
-      const key = p.id ? `mod:${p.id}` : `add:${i}`;
-      return !resolvedKeys.has(key);
-    });
-    const keptAnchor = resolvedKeys.has("anchor") ? null : proposal.anchorStartDate;
-    const rewritten: ProposalLike = { anchorStartDate: keptAnchor, phases: keptPhases };
+    // 1b) ORDEN FINAL (helper puro): las fases nuevas aceptadas caen EN SU LUGAR (después de su
+    //     fase previa en la propuesta, no al final) y, si se aceptó el reordenamiento, las
+    //     existentes se reacomodan. Las fases nuevas nacen VACÍAS; las tareas se detallan
+    //     después con "regenerar solo esta fase" (PhaseRegenModal).
+    const slots = buildPhaseOrder(tl.phases, proposal, acceptedKeySet);
+    for (const [i, slot] of slots.entries()) {
+      if (slot.kind === "new") {
+        await tx.timelinePhase.create({
+          data: {
+            timelineId: tl.id,
+            name: slot.phase.name,
+            order: i,
+            durationWeeks: slot.phase.durationWeeks,
+            startWeek: slot.phase.startWeek ?? null,
+            sessionCount: slot.phase.sessionCount ?? null,
+            notes: slot.phase.notes ?? null,
+            activityType: (slot.phase.activityType as never) ?? null,
+            source: "AGENT", // propuesta por la IA, confirmada por el humano
+          },
+        });
+      } else {
+        // Solo escribir si el orden cambió (evita filas tocadas de más en la transacción).
+        const prev = tl.phases.find((p) => p.id === slot.id);
+        if (prev && prev.order !== i) {
+          await tx.timelinePhase.update({ where: { id: slot.id }, data: { order: i } });
+        }
+      }
+    }
 
-    // ¿Queda algún delta vivo contra el estado POST-aplicación? Si no, la propuesta se limpia
-    // entera (las fases re-emitidas idénticas no son deltas — solo eran el "no borrar" del PUT).
+    // 2) Reescribir la propuesta guardada de forma CANÓNICA contra el estado post-aplicación:
+    //    - la SECUENCIA pasa a ser la del cronograma real, así un reordenamiento ya resuelto
+    //      (aceptado O descartado) no se vuelve a proponer solo en la próxima lectura;
+    //    - cada fase conserva el contenido PROPUESTO solo si su sugerencia sigue pendiente
+    //      (si se aceptó, la DB ya lo tiene; si se descartó, gana la DB);
+    //    - las fases nuevas no resueltas se reinsertan detrás de su fase ancla.
     const phasesAfter = await tx.timelinePhase.findMany({
       where: { timelineId: tl.id },
       orderBy: { order: "asc" },
@@ -145,6 +155,39 @@ export async function POST(
       where: { id: tl.id },
       select: { anchorStartDate: true },
     });
+
+    const pendingModByPhase = new Map<string, (typeof proposal.phases)[number]>();
+    const keptNewByAnchor = new Map<string | null, (typeof proposal.phases)[number][]>();
+    proposal.phases.forEach((p, i) => {
+      if (p.id) {
+        if (!resolvedKeys.has(`mod:${p.id}`)) pendingModByPhase.set(p.id, p);
+        return;
+      }
+      if (resolvedKeys.has(`add:${i}`)) return;
+      let anchorId: string | null = null;
+      for (let j = i - 1; j >= 0; j--) {
+        const q = proposal.phases[j];
+        if (q?.id) {
+          anchorId = q.id;
+          break;
+        }
+      }
+      const arr = keptNewByAnchor.get(anchorId) ?? [];
+      arr.push(p);
+      keptNewByAnchor.set(anchorId, arr);
+    });
+
+    const rebuilt: (typeof proposal.phases)[number][] = [...(keptNewByAnchor.get(null) ?? [])];
+    for (const ph of phasesAfter) {
+      rebuilt.push(pendingModByPhase.get(ph.id) ?? { ...ph });
+      rebuilt.push(...(keptNewByAnchor.get(ph.id) ?? []));
+    }
+
+    const keptAnchor = resolvedKeys.has("anchor") ? null : proposal.anchorStartDate;
+    const rewritten: ProposalLike = { anchorStartDate: keptAnchor, phases: rebuilt };
+
+    // ¿Queda algún delta vivo? Si no, la propuesta se limpia entera (las fases re-emitidas
+    // idénticas no son deltas — solo eran el "no borrar" del PUT del modelo viejo).
     const remaining = computeProposalDeltas(
       phasesAfter,
       rewritten,

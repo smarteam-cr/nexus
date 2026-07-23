@@ -6,7 +6,7 @@
  * existente produce cero deltas (no-op → no molesta al CSE).
  */
 import { test, expect } from "vitest";
-import { computeProposalDeltas, describeChange } from "./proposal-deltas";
+import { computeProposalDeltas, describeChange, buildPhaseOrder } from "./proposal-deltas";
 
 const cur = (over: Partial<Parameters<typeof computeProposalDeltas>[0][number]> = {}) => ({
   id: "ph1",
@@ -67,4 +67,79 @@ test("anchor nuevo (derivado del kickoff) → SET_ANCHOR; anchor igual → nada"
 test("describeChange redacta la sugerencia principal", () => {
   expect(describeChange({ field: "durationWeeks", from: 4, to: 6 })).toBe("4 → 6 semanas");
   expect(describeChange({ field: "name", from: "A", to: "B" })).toBe("renombrar a «B»");
+});
+
+// ── Asperezas corregidas ─────────────────────────────────────────────────────────────────
+
+test("una fase nueva sabe DÓNDE va (después de la fase previa de la propuesta)", () => {
+  const a = cur({ id: "a", name: "Sales Hub" });
+  const b = cur({ id: "b", name: "Service Hub" });
+  const proposal = {
+    anchorStartDate: null,
+    phases: [{ ...a }, { name: "Integraciones", durationWeeks: 2, sessionCount: null, notes: null }, { ...b }],
+  };
+  const [d] = computeProposalDeltas([a, b], proposal, null);
+  expect(d).toMatchObject({ kind: "ADD_PHASE", afterPhaseId: "a", afterPhaseName: "Sales Hub" });
+});
+
+test("una fase nueva AL PRINCIPIO no tiene ancla previa", () => {
+  const a = cur({ id: "a" });
+  const proposal = {
+    anchorStartDate: null,
+    phases: [{ name: "Semana 0", durationWeeks: 1, sessionCount: null, notes: null }, { ...a }],
+  };
+  const [d] = computeProposalDeltas([a], proposal, null);
+  expect(d).toMatchObject({ kind: "ADD_PHASE", afterPhaseId: null, afterPhaseName: null });
+});
+
+test("reordenar las MISMAS fases produce un delta (antes se perdía en silencio)", () => {
+  const a = cur({ id: "a", name: "A" });
+  const b = cur({ id: "b", name: "B" });
+  const proposal = { anchorStartDate: null, phases: [{ ...b }, { ...a }] };
+  const deltas = computeProposalDeltas([a, b], proposal, null);
+  expect(deltas).toEqual([
+    { key: "reorder", kind: "REORDER_PHASES", ids: ["b", "a"], names: ["B", "A"] },
+  ]);
+  expect(computeProposalDeltas([a, b], { anchorStartDate: null, phases: [{ ...a }, { ...b }] }, null)).toEqual([]);
+});
+
+test("buildPhaseOrder: la fase aceptada cae en su lugar, no al final", () => {
+  const a = cur({ id: "a" });
+  const b = cur({ id: "b" });
+  const nueva = { name: "Integraciones", durationWeeks: 2, sessionCount: null, notes: null };
+  const proposal = { anchorStartDate: null, phases: [{ ...a }, nueva, { ...b }] };
+  expect(buildPhaseOrder([a, b], proposal, new Set(["add:1"]))).toEqual([
+    { kind: "existing", id: "a" },
+    { kind: "new", key: "add:1", phase: nueva },
+    { kind: "existing", id: "b" },
+  ]);
+});
+
+test("buildPhaseOrder: reorden + fase nueva se resuelven juntos, sin pisarse", () => {
+  const a = cur({ id: "a" });
+  const b = cur({ id: "b" });
+  const nueva = { name: "N", durationWeeks: 1, sessionCount: null, notes: null };
+  const proposal = { anchorStartDate: null, phases: [{ ...b }, nueva, { ...a }] };
+  expect(buildPhaseOrder([a, b], proposal, new Set(["reorder", "add:1"]))).toEqual([
+    { kind: "existing", id: "b" },
+    { kind: "new", key: "add:1", phase: nueva },
+    { kind: "existing", id: "a" },
+  ]);
+  expect(buildPhaseOrder([a, b], proposal, new Set(["add:1"]))).toEqual([
+    { kind: "existing", id: "a" },
+    { kind: "existing", id: "b" },
+    { kind: "new", key: "add:1", phase: nueva },
+  ]);
+});
+
+test("buildPhaseOrder: dos fases nuevas consecutivas conservan su orden relativo", () => {
+  const a = cur({ id: "a" });
+  const n1 = { name: "N1", durationWeeks: 1, sessionCount: null, notes: null };
+  const n2 = { name: "N2", durationWeeks: 1, sessionCount: null, notes: null };
+  const proposal = { anchorStartDate: null, phases: [{ ...a }, n1, n2] };
+  expect(buildPhaseOrder([a], proposal, new Set(["add:1", "add:2"]))).toEqual([
+    { kind: "existing", id: "a" },
+    { kind: "new", key: "add:1", phase: n1 },
+    { kind: "new", key: "add:2", phase: n2 },
+  ]);
 });

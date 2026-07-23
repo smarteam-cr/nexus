@@ -1102,11 +1102,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // igualó el cronograma a mano) → no hay nada que decidir: se descarta sola, así no queda el
   // aviso fantasma en "Qué hacer acá".
   useEffect(() => {
-    if (structureOnlyProposal && proposalDeltas.length === 0 && !resolvingProposal && !loading) {
+    // `dirty` es clave: los deltas se calculan contra el estado LOCAL, así que una edición sin
+    // guardar que casualmente coincida con la sugerencia la hacía desaparecer del server — y al
+    // deshacer ya no volvía. Con cambios sin guardar no se descarta nada.
+    if (structureOnlyProposal && proposalDeltas.length === 0 && !resolvingProposal && !loading && !dirty && !saving) {
       void discardProposal();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [structureOnlyProposal, proposalDeltas.length, loading]);
+  }, [structureOnlyProposal, proposalDeltas.length, loading, dirty, saving]);
 
   // ── D/E — banner de avance: meta de tareas (título + fase) y regla de cierre de fase ──
   const progressTaskMeta = new Map<string, { title: string; phaseId: string; phaseName: string; party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null }>();
@@ -1834,33 +1837,42 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               </button>
             </div>
           </div>
-          {(() => {
-            const a = proposalDeltas.find((d) => d.kind === "SET_ANCHOR");
-            if (!a || a.kind !== "SET_ANCHOR") return null;
-            return (
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-fg-secondary">
-                <span>
-                  Fecha de arranque sugerida: {a.from ?? "sin fecha"} → <span className="font-semibold">{a.to}</span>
+          {/* Sugerencias GLOBALES (no viven en una fila del Gantt): fecha de arranque y
+              reordenamiento de fases. Cada una con su ✓/✗ propio. */}
+          {proposalDeltas
+            .filter((d) => d.kind === "SET_ANCHOR" || d.kind === "REORDER_PHASES")
+            .map((d) => (
+              <div key={d.key} className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-fg-secondary">
+                <span className="min-w-0">
+                  {d.kind === "SET_ANCHOR" ? (
+                    <>
+                      Fecha de arranque sugerida: {d.from ?? "sin fecha"} →{" "}
+                      <span className="font-semibold">{d.to}</span>
+                    </>
+                  ) : (
+                    <>
+                      Reordenar las fases: <span className="font-semibold">{d.names.join(" → ")}</span>
+                    </>
+                  )}
                 </span>
                 <button
-                  onClick={() => void resolveProposalItems([a.key], [])}
+                  onClick={() => void resolveProposalItems([d.key], [])}
                   disabled={resolvingProposal}
-                  className="text-emerald-400 hover:text-emerald-300 font-bold"
-                  title="Fijar esta fecha de arranque"
+                  className="text-emerald-400 hover:text-emerald-300 font-bold disabled:opacity-50"
+                  title="Aceptar esta sugerencia"
                 >
                   ✓
                 </button>
                 <button
-                  onClick={() => void resolveProposalItems([], [a.key])}
+                  onClick={() => void resolveProposalItems([], [d.key])}
                   disabled={resolvingProposal}
-                  className="text-red-400 hover:text-red-300 font-bold"
-                  title="Descartar la sugerencia de fecha"
+                  className="text-red-400 hover:text-red-300 font-bold disabled:opacity-50"
+                  title="Descartar esta sugerencia"
                 >
                   ✗
                 </button>
               </div>
-            );
-          })()}
+            ))}
           <p className="text-[11px] text-fg-muted mt-1.5">
             Revisá cada sugerencia en el Gantt de abajo (badges azules en fases existentes y filas
             «Fase propuesta») y aceptala o descartala una por una. El cronograma sigue editable.

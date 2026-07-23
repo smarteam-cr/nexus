@@ -1096,6 +1096,8 @@ export default function TimelineGantt({
                   <span className="text-[10px] text-fg-muted flex-shrink-0">
                     {plural(d.phase.durationWeeks, "semana", "semanas")}
                     {d.phase.sessionCount != null ? ` · ${plural(d.phase.sessionCount, "sesión", "sesiones")}` : ""}
+                    {/* Dónde va a quedar al aceptarla — antes caía al final sin avisar. */}
+                    {d.afterPhaseName ? ` · va después de «${d.afterPhaseName}»` : " · va al principio"}
                   </span>
                   <span className="ml-auto flex items-center gap-2.5 flex-shrink-0">
                     <button
