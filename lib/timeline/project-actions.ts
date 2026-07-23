@@ -107,9 +107,9 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
   if (i.pendingProposal) {
     out.push({
       id: "draft-proposal", group: "decidir", tone: "info",
-      title: "Hay una propuesta de cronograma sin aplicar",
-      why: "El cronograma de abajo sigue siendo el viejo: lo que propuso el agente no está en ningún lado todavía.",
-      cta: "Ver la propuesta",
+      title: "La IA sugiere cambios de estructura en el cronograma",
+      why: "Salieron del último handoff. Las tareas y sus estados no se tocan: son fases nuevas o ajustes de fase que aceptás o descartás uno por uno en el Gantt.",
+      cta: "Revisar sugerencias",
     });
   }
   // Va antes que la higiene de datos: acá hay trabajo que nadie está haciendo, no una fila mal cargada.

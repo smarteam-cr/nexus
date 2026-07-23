@@ -426,10 +426,12 @@ export async function PUT(
         update: {
           anchorStartDate: anchorDate,
           lastEditedByHuman: now,
-          // Aplicar la propuesta (o cualquier guardado humano) invalida la propuesta
-          // pendiente: ya quedó reflejada o el humano editó algo distinto.
-          pendingProposal: Prisma.DbNull,
-          pendingProposalRunId: null,
+          // Un guardado DELIBERADO (con razón: aplicar la propuesta del assist, crear la 1ra
+          // fase) invalida la propuesta pendiente — ya quedó reflejada o el humano decidió otra
+          // cosa. Los AUTO-GUARDADOS (skipAudit) NO la tocan: con las sugerencias por ítem del
+          // handoff el Gantt sigue editable mientras hay propuesta, y un autosave de una edición
+          // cualquiera no es una decisión del CSE sobre las sugerencias.
+          ...(skipAudit ? {} : { pendingProposal: Prisma.DbNull, pendingProposalRunId: null }),
         },
         select: { id: true },
       });

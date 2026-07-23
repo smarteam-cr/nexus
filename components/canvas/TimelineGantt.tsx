@@ -64,6 +64,7 @@ import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
 import { findDuplicateGroups } from "@/lib/timeline/particularidad-identity";
 import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
+import { describeChange, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
 import { clientStatusLine } from "@/lib/timeline/client-status";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
@@ -152,6 +153,11 @@ interface Props {
   // Crear un AVISO a mano (el CSE le escribe algo al cliente). Si viene, el bloque se muestra
   // aunque no haya ninguna particularidad todavía — si no, no habría dónde poner el botón.
   onAddParticularidad?: () => void;
+  // Sugerencias de ESTRUCTURA pendientes (propuesta del handoff, solo fases): se dibujan DENTRO
+  // del Gantt real — badge "Sugerencia" en la fila de la fase afectada + fila fantasma por fase
+  // nueva — y el CSE las resuelve una por una. El Gantt nunca se reemplaza por la propuesta.
+  proposalDeltas?: ProposalDelta[];
+  onResolveProposalDelta?: (key: string, accept: boolean) => void;
   // Convertir una particularidad en TAREA del cronograma (dueño + fecha). Sin esto el botón no sale.
   onConvertParticularidad?: (id: string) => void;
   // Abrir el drawer de la tarea que ya persigue este hecho (chip "→ tarea").
@@ -367,6 +373,8 @@ export default function TimelineGantt({
   onToggleParticularidadVisible,
   onEditParticularidad,
   onAddParticularidad,
+  proposalDeltas,
+  onResolveProposalDelta,
   onConvertParticularidad,
   onOpenConvertedTask,
   focusGroup,
@@ -388,6 +396,15 @@ export default function TimelineGantt({
   const curWeek = today ? currentWeekIndex(anchor, today) : null;
   const curInRange = curWeek !== null && curWeek >= 0 && curWeek < total;
   const editable = !readOnly && !!onUpdateTask;
+
+  // Sugerencias de estructura (propuesta del handoff) indexadas para el render in-place:
+  // cambios sobre fases existentes por phaseId (badge en su fila) + fases nuevas (filas fantasma).
+  // El gate de edición se hace en cada punto de uso (`!readOnly && onResolveProposalDelta`), que
+  // además ESTRECHA el tipo del handler y evita aserciones `!`.
+  const proposalModByPhase = new Map(
+    (proposalDeltas ?? []).flatMap((d) => (d.kind === "MODIFY_PHASE" ? [[d.phaseId, d] as const] : [])),
+  );
+  const proposalAdds = (proposalDeltas ?? []).filter((d) => d.kind === "ADD_PHASE");
 
   // Estado en una línea, con el MISMO helper que redacta el del cliente. Antes acá decía
   // "cronograma finalizado" apenas se acababa el calendario, aunque quedaran tareas abiertas:
@@ -826,6 +843,37 @@ export default function TimelineGantt({
                         )}
                         {/* Etiquetas a la derecha: estado + tipo de actividad + estimada + atraso */}
                         <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+                          {/* Sugerencia de la IA (propuesta del handoff) sobre ESTA fase — se
+                              acepta/descarta acá mismo; nada se aplica solo. */}
+                          {(() => {
+                            const d = p.id ? proposalModByPhase.get(p.id) : undefined;
+                            if (!d || readOnly || !onResolveProposalDelta) return null;
+                            return (
+                              <span
+                                className="flex items-center gap-1 flex-shrink-0"
+                                title={`Sugerencia de la IA (del último handoff): ${d.changes.map(describeChange).join(" · ")}`}
+                              >
+                                <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border text-blue-300 bg-blue-900/30 border-blue-700/40">
+                                  Sugerencia: {describeChange(d.changes[0])}
+                                  {d.changes.length > 1 ? ` +${d.changes.length - 1}` : ""}
+                                </span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, true); }}
+                                  title="Aceptar la sugerencia (aplica solo este cambio)"
+                                  className="text-emerald-400 hover:text-emerald-300 text-[11px] font-bold px-0.5"
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, false); }}
+                                  title="Descartar la sugerencia"
+                                  className="text-red-400 hover:text-red-300 text-[11px] font-bold px-0.5"
+                                >
+                                  ✗
+                                </button>
+                              </span>
+                            );
+                          })()}
                           {p.status === "DONE" && (
                             <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-emerald-300 bg-emerald-900/30 border-emerald-700/40" title="Fase completada">
                               ✓ Completada
@@ -1034,6 +1082,44 @@ export default function TimelineGantt({
             })}
             </SortableContext>
             </DndContext>
+            {/* Fases NUEVAS propuestas por la IA (del handoff) — filas fantasma dentro del
+                cronograma real: no existen hasta que el CSE las acepta. Nacen vacías; las
+                tareas se detallan después con "regenerar solo esta fase". */}
+            {!readOnly &&
+              onResolveProposalDelta &&
+              proposalAdds.map((d) => (
+                <div
+                  key={d.key}
+                  className="mt-1 flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-blue-700/50 bg-blue-900/10 px-2.5 py-2"
+                >
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border text-blue-300 bg-blue-900/30 border-blue-700/40 flex-shrink-0">
+                    Fase propuesta
+                  </span>
+                  <span className="text-sm text-fg min-w-0 truncate">{d.phase.name}</span>
+                  <span className="text-[10px] text-fg-muted flex-shrink-0">
+                    {plural(d.phase.durationWeeks, "semana", "semanas")}
+                    {d.phase.sessionCount != null ? ` · ${plural(d.phase.sessionCount, "sesión", "sesiones")}` : ""}
+                    {/* Dónde va a quedar al aceptarla — antes caía al final sin avisar. */}
+                    {d.afterPhaseName ? ` · va después de «${d.afterPhaseName}»` : " · va al principio"}
+                  </span>
+                  <span className="ml-auto flex items-center gap-2.5 flex-shrink-0">
+                    <button
+                      onClick={() => onResolveProposalDelta(d.key, true)}
+                      title="Crear la fase (vacía; las tareas se detallan después)"
+                      className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors"
+                    >
+                      ✓ Aceptar
+                    </button>
+                    <button
+                      onClick={() => onResolveProposalDelta(d.key, false)}
+                      title="Descartar esta fase propuesta"
+                      className="text-[11px] font-semibold text-fg-muted hover:text-red-400 transition-colors"
+                    >
+                      ✗ Descartar
+                    </button>
+                  </span>
+                </div>
+              ))}
             {editable && onAddPhase && (
               <button
                 onClick={onAddPhase}

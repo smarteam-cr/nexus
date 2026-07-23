@@ -53,15 +53,16 @@ export async function DELETE(
   // Desasociar de HubSpot: suprimir el re-sync ANTES de borrar (el flag no puede vivir en el
   // Project que se elimina). Solo si vino del sync (hubspotServiceId). Idempotente.
   if (project.hubspotServiceId) {
+    // `push` es atómico: leer-modificar-escribir el array entero podía perder una supresión si
+    // se borran dos proyectos del mismo cliente a la vez. El `has` evita duplicar el id.
     const client = await prisma.client.findUnique({
       where: { id: clientId },
       select: { ignoredHubspotServiceIds: true },
     });
-    const ignored = new Set(client?.ignoredHubspotServiceIds ?? []);
-    if (!ignored.has(project.hubspotServiceId)) {
+    if (!client?.ignoredHubspotServiceIds.includes(project.hubspotServiceId)) {
       await prisma.client.update({
         where: { id: clientId },
-        data: { ignoredHubspotServiceIds: [...ignored, project.hubspotServiceId] },
+        data: { ignoredHubspotServiceIds: { push: project.hubspotServiceId } },
       });
     }
   }
