@@ -71,3 +71,10 @@ test("convertible: compromisos, solicitudes legacy y atrasos sin cuantificar", (
   // Ya hay una tarea persiguiéndolo.
   expect(esConvertible({ kind: "COMPROMISO", convertedTaskId: "t1" })).toBe(false);
 });
+
+// Un AVISO no es un compromiso ni un pendiente: no se convierte a tarea ni engrosa el contador
+// de "Compromisos sin dueño" (es una nota informativa, no algo que alguien deba perseguir).
+test("un AVISO no es convertible ni compromiso pendiente", () => {
+  expect(esConvertible({ kind: "AVISO", weeksImpact: null })).toBe(false);
+  expect(esCompromisoPendiente({ kind: "AVISO" })).toBe(false);
+});

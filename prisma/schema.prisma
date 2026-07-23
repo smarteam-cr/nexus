@@ -159,6 +159,11 @@ model Client {
   source           String? // "manual" | "sheet" (futuro: "hubspot" | "odoo")
   sourceExternalId String? // id estable en la fuente (columna id del sheet o slug del nombre)
 
+  // hubspotServiceId de los proyectos BORRADOS a mano desde Nexus — el sync NO los vuelve
+  // a crear (supresión durable: sobrevive al borrado del Project, que no puede llevar el
+  // flag). Se limpia para "re-agregar a mano". Ver lib/hubspot/sync-projects.ts.
+  ignoredHubspotServiceIds String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -442,6 +447,12 @@ model Handoff {
   // Se inyectan como reglas negativas duras en el prompt del agente de handoff.
   contextExclusions String? @db.Text
 
+  // Engagements de HubSpot (por engagement id v1) EXCLUIDOS a mano de ESTE handoff — la
+  // "X" de la columna HubSpot del Contexto. Por defecto todas las reuniones/notas de la
+  // company alimentan (era completas, previas resumidas); acá se sacan las que el humano
+  // marca como de otro proyecto. Por-proyecto (Handoff es 1:1 con Project).
+  excludedEngagementIds String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -713,6 +724,7 @@ enum ParticularidadKind {
   ATRASO // algo se atrasó (weeksImpact OBLIGATORIO en creación/edición nueva; una party responsable)
   SOLICITUD // @deprecated — insumo del cliente = tarea party=CLIENTE, no particularidad. Ya no se propone/crea; se conserva por filas legacy (fallback de render). Ver docs/DECISIONS.md (eje DESTINO).
   COMPROMISO // un acuerdo/hito comprometido en una sesión que fija/mueve una fecha del plan
+  AVISO // nota libre del CSE al cliente que NO mueve fechas (ej. "pausamos la próxima semana"). SOLO humana: el agente nunca la emite, y weeksImpact va null (no suma al corrimiento ni a la atribución).
 }
 
 // Procedencia de la particularidad (distinto de `party`, que es la ATRIBUCIÓN de la causa).

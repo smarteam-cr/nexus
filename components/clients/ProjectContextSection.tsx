@@ -43,12 +43,14 @@ export default function ProjectContextSection({
   const open = override ?? !generated;
 
   // Contadores por columna (los reportan los hijos / la columna manual los sabe directo).
-  // Todos miden lo MISMO: "fuentes que alimentan el handoff" — HubSpot cuenta solo el
-  // material de la era, Meet solo las que alimentan (las excluidas van aparte).
+  // Todos miden lo MISMO: "fuentes que alimentan el handoff" — HubSpot y Meet cuentan lo
+  // que alimenta (no excluido); las excluidas a mano van aparte.
   const [hubspotCount, setHubspotCountState] = useState(0);
+  const [hubspotExcluded, setHubspotExcludedState] = useState(0);
   const [meetCount, setMeetCountState] = useState(0);
   const [meetExcluded, setMeetExcludedState] = useState(0);
   const setHubspotCount = useCallback((n: number) => setHubspotCountState((c) => (c === n ? c : n)), []);
+  const setHubspotExcluded = useCallback((n: number) => setHubspotExcludedState((c) => (c === n ? c : n)), []);
   const setMeetCount = useCallback((n: number) => setMeetCountState((c) => (c === n ? c : n)), []);
   const setMeetExcluded = useCallback((n: number) => setMeetExcludedState((c) => (c === n ? c : n)), []);
 
@@ -100,9 +102,10 @@ export default function ProjectContextSection({
     } catch { /* ignore */ }
   }, [projectId, fetchSources]);
 
-  // "Alimentan" = todo lo que entra como material al handoff (mismo criterio en las 3
-  // columnas). Las excluidas a mano se cuentan aparte (no alimentan, pero son gestionables).
+  // "Alimentan" = todo lo que entra al handoff (mismo criterio en las 3 columnas). Las
+  // excluidas a mano (Meet + HubSpot) se cuentan aparte (no alimentan, pero son gestionables).
   const feedTotal = hubspotCount + meetCount + sources.length;
+  const excludedTotal = meetExcluded + hubspotExcluded;
   const dot = (color: string) => <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: color }} />;
 
   return (
@@ -119,10 +122,10 @@ export default function ProjectContextSection({
         <span className="text-sm font-bold text-fg">Contexto</span>
         <span className="text-[11px] text-fg-muted">
           {feedTotal} fuente{feedTotal === 1 ? "" : "s"} alimentan
-          {meetExcluded > 0 ? ` · ${meetExcluded} excluida${meetExcluded === 1 ? "" : "s"}` : ""}
+          {excludedTotal > 0 ? ` · ${excludedTotal} excluida${excludedTotal === 1 ? "" : "s"}` : ""}
         </span>
         <span className="hidden sm:flex items-center gap-3 ml-2 text-[11px] text-fg-secondary">
-          <span className="inline-flex items-center gap-1" title="HubSpot (era del proyecto)">{dot("#ff7a59")}{hubspotCount}</span>
+          <span className="inline-flex items-center gap-1" title="HubSpot (alimentan)">{dot("#ff7a59")}{hubspotCount}</span>
           <span className="inline-flex items-center gap-1" title="Google Meet (alimentan)">{dot("#16a34a")}{meetCount}</span>
           <span className="inline-flex items-center gap-1" title="Fuentes manuales">{dot("#7c6df2")}{sources.length}</span>
         </span>
@@ -143,8 +146,8 @@ export default function ProjectContextSection({
               projectId={projectId}
               columnMode
               onCount={setHubspotCount}
+              onExcludedCount={setHubspotExcluded}
               canEdit={canEdit}
-              onPromoted={fetchSources}
             />
           </ContextColumn>
 

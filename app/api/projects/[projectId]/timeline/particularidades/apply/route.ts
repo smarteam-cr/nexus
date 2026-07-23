@@ -79,7 +79,7 @@ export async function POST(
   // fallback para las filas LEGACY (creadas antes de que existiera la huella, que tienen dedupeKey null).
   const existentes = await prisma.particularidad.findMany({
     where: { timelineId: tl.id },
-    select: { id: true, dedupeKey: true, title: true, phaseId: true },
+    select: { id: true, dedupeKey: true, title: true, phaseId: true, source: true },
   });
   const porHuella = new Map(existentes.filter((e) => e.dedupeKey).map((e) => [e.dedupeKey as string, e]));
 
@@ -111,6 +111,10 @@ export async function POST(
       const t = titleTokens(d.title);
       for (const e of existentes) {
         if (e.dedupeKey) continue; // las que ya tienen huella se resuelven arriba, no por texto
+        // Los avisos ESCRITOS POR EL CSE (source=HUMAN, sin huella) NO se absorben por parecido de
+        // título: son texto propio, no una detección legacy del agente. Absorberlos le pisaba el
+        // contenido al humano y le adoptaba una huella de agente.
+        if (e.source === "HUMAN") continue;
         if (d.phaseId && e.phaseId && d.phaseId !== e.phaseId) continue;
         if ([...titleTokens(e.title)].filter((w) => t.has(w)).length >= 2) { match = e; break; }
       }

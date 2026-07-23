@@ -107,6 +107,7 @@ const KIND_META_LIGHT: Record<string, { label: string; text: string; bg: string;
   ATRASO:     { label: "Se atrasó", text: "#b91c1c", bg: "#fef2f2", border: "#fecaca" }, // rojo
   SOLICITUD:  { label: "En espera", text: "#b45309", bg: "#fffbeb", border: "#fde68a" }, // ámbar (legacy)
   COMPROMISO: { label: "Acordado",  text: "#047857", bg: "#ecfdf5", border: "#a7f3d0" }, // verde (mismo que "hecho"; la familia menta quedó Insider-only)
+  AVISO:      { label: "Aviso",     text: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" }, // azul informativo: no es atraso ni acuerdo, no mueve fechas
 };
 
 export default function TimelineSection({

@@ -149,6 +149,9 @@ interface Props {
   onToggleParticularidadVisible?: (id: string, next: boolean) => void;
   // Abrir el modal de edición de contenido de una particularidad (tipo/party/título/detalle/semanas).
   onEditParticularidad?: (id: string) => void;
+  // Crear un AVISO a mano (el CSE le escribe algo al cliente). Si viene, el bloque se muestra
+  // aunque no haya ninguna particularidad todavía — si no, no habría dónde poner el botón.
+  onAddParticularidad?: () => void;
   // Convertir una particularidad en TAREA del cronograma (dueño + fecha). Sin esto el botón no sale.
   onConvertParticularidad?: (id: string) => void;
   // Abrir el drawer de la tarea que ya persigue este hecho (chip "→ tarea").
@@ -201,6 +204,16 @@ export const NEXT_STATUS: Record<GanttTaskStatus, GanttTaskStatus> = {
   SUSPENDED: "PENDING",
 };
 
+// Ciclo RÁPIDO del check de la fila del cronograma: pendiente → en curso → hecho → pendiente.
+// Deja SUSPENDIDA afuera a propósito (aparcar una tarea es una decisión deliberada; se marca desde
+// el detalle). Una tarea suspendida vuelve a pendiente al clickear el check.
+export const NEXT_STATUS_QUICK: Record<GanttTaskStatus, GanttTaskStatus> = {
+  PENDING: "IN_PROGRESS",
+  IN_PROGRESS: "DONE",
+  DONE: "PENDING",
+  SUSPENDED: "PENDING",
+};
+
 export const STATUS_META: Record<GanttTaskStatus, { label: string; cls: string }> = {
   PENDING:     { label: "pendiente", cls: "bg-gray-800 text-gray-400 border-gray-700" },
   IN_PROGRESS: { label: "en curso",  cls: "bg-blue-900/30 text-blue-300 border-blue-700/50" },
@@ -209,8 +222,10 @@ export const STATUS_META: Record<GanttTaskStatus, { label: string; cls: string }
 };
 
 // Círculo de estado tipo checklist (reusado por la fila del Gantt y el TaskDetailDrawer).
-// BINARIO: no hecha = check-circle tenue (aro + check gris); hecha = disco verde con check blanco.
-// "En curso" y "suspendida" NO se representan acá (se gestionan en el drawer). "Atrasada" es un tag.
+// El check está COLOREADO POR ESTADO: hecha = disco verde con check blanco; en curso = check AZUL;
+// suspendida = aro ámbar con guion (aparcada); pendiente = aro gris tenue. Antes era binario y una
+// tarea EN CURSO se veía igual que una PENDIENTE desde el cronograma (no se sabía si algo atrasado
+// ya se estaba trabajando). "Atrasada" sigue siendo un tag aparte (es ortogonal al estado).
 export function StatusCircle({ status, size = 18 }: { status: GanttTaskStatus; size?: number }) {
   const done = status === "DONE";
   if (done) {
@@ -224,6 +239,12 @@ export function StatusCircle({ status, size = 18 }: { status: GanttTaskStatus; s
       </span>
     );
   }
+  const tone =
+    status === "IN_PROGRESS"
+      ? "text-blue-400 group-hover/task:text-blue-300"
+      : status === "SUSPENDED"
+        ? "text-amber-400 group-hover/task:text-amber-300"
+        : "text-gray-400 group-hover/task:text-gray-300";
   return (
     <svg
       width={size}
@@ -231,11 +252,15 @@ export function StatusCircle({ status, size = 18 }: { status: GanttTaskStatus; s
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      className="flex-shrink-0 text-gray-400 group-hover/task:text-gray-300 transition-colors"
+      className={`flex-shrink-0 transition-colors ${tone}`}
       aria-hidden
     >
-      <circle cx="12" cy="12" r="9" strokeWidth="2" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.5 12.5l2.5 2.5 4.5-5" />
+      <circle cx="12" cy="12" r="9" strokeWidth={status === "IN_PROGRESS" ? "2.5" : "2"} />
+      {status === "SUSPENDED" ? (
+        <path strokeLinecap="round" strokeWidth="2" d="M8.5 12h7" />
+      ) : (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={status === "IN_PROGRESS" ? "2.5" : "2"} d="M8.5 12.5l2.5 2.5 4.5-5" />
+      )}
     </svg>
   );
 }
@@ -274,6 +299,9 @@ export const PARTICULARIDAD_KIND_META: Record<string, { label: string; cls: stri
   // una categoría distinta y vigente — por eso un grupo de 4 parecía tener solo 2.
   SOLICITUD:  { label: "Compromiso (viejo)", cls: "text-gray-400 bg-gray-800/60 border-gray-700/50" },
   COMPROMISO: { label: "Compromiso", cls: "text-emerald-300 bg-emerald-900/30 border-emerald-700/40" },
+  // Nota libre del CSE al cliente: NO mueve fechas ni suma al corrimiento. Azul (informativo),
+  // deliberadamente fuera de la familia rojo/verde de "se atrasó"/"acordado".
+  AVISO:      { label: "Aviso",      cls: "text-blue-300 bg-blue-900/30 border-blue-700/40" },
 };
 
 // ── Drag & drop de tareas: item sortable + contenedor de semana droppable ─────
@@ -338,6 +366,7 @@ export default function TimelineGantt({
   publicadas,
   onToggleParticularidadVisible,
   onEditParticularidad,
+  onAddParticularidad,
   onConvertParticularidad,
   onOpenConvertedTask,
   focusGroup,
@@ -902,17 +931,19 @@ export default function TimelineGantt({
                                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" /></svg>
                                       </button>
                                     )}
-                                    {/* Círculo de estado (checklist) — clic marca hecha/pendiente; no abre el drawer */}
+                                    {/* Círculo de estado (checklist) — clic CICLA pendiente → en curso → hecha
+                                        (sin abrir el drawer), para poder marcar "en curso" desde el cronograma.
+                                        Suspender queda en el detalle de la tarea. */}
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        if (canToggle) onToggleStatus!(t.id!, t.status === "DONE" ? "PENDING" : "DONE");
+                                        if (canToggle) onToggleStatus!(t.id!, NEXT_STATUS_QUICK[t.status]);
                                       }}
                                       disabled={!canToggle}
                                       title={
                                         !t.id
                                           ? "Guardá el cronograma para poder cambiar el estado"
-                                          : t.status === "DONE" ? "Marcar como pendiente" : "Marcar como hecha"
+                                          : `Estado: ${STATUS_META[t.status].label} — clic para marcar como ${STATUS_META[NEXT_STATUS_QUICK[t.status]].label}`
                                       }
                                       className={`flex-shrink-0 ${!canToggle ? "opacity-50 cursor-default" : "cursor-pointer"}`}
                                     >
@@ -942,6 +973,16 @@ export default function TimelineGantt({
                                           className={`min-w-0 truncate text-xs ${editable ? "cursor-text hover:underline decoration-dotted underline-offset-2" : ""} ${t.status === "DONE" || t.status === "SUSPENDED" ? "text-gray-500 line-through" : "text-gray-300"}`}
                                         >
                                           {t.title?.trim() ? t.title : <span className="text-gray-600 italic">Sin título</span>}
+                                        </span>
+                                      )}
+                                      {/* "En curso" convive con "Atrasada": una tarea atrasada que YA se está
+                                          trabajando muestra ambos tags, y así no se confunde con una pendiente. */}
+                                      {t.status === "IN_PROGRESS" && (
+                                        <span
+                                          className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${STATUS_META.IN_PROGRESS.cls}`}
+                                          title="Ya se está trabajando (no está solo pendiente)"
+                                        >
+                                          En curso
                                         </span>
                                       )}
                                       {overdue && (
@@ -1055,7 +1096,9 @@ export default function TimelineGantt({
           cruzan al cliente. Espejo light en TimelineSection (la matemática es única: helper puro). */}
       {(() => {
         const parts = particularidades ?? [];
-        if (parts.length === 0) return null;
+        // Con cero particularidades el bloque desaparecía — y entonces no había dónde colgar
+        // "Agregar aviso". Si el CSE puede crear, el bloque se muestra igual (vacío, con el botón).
+        if (parts.length === 0 && !onAddParticularidad) return null;
         // ── TRES números distintos, y confundirlos era el defecto ─────────────────────────────
         // REGISTRADO  = todas las filas. Lo que sabemos internamente.
         // LISTO       = las marcadas visibles PERO todavía no publicadas. Lo que leerá al «Subir».
@@ -1079,7 +1122,25 @@ export default function TimelineGantt({
               <span className="text-[10px] font-semibold text-gray-400 bg-gray-800/60 border border-gray-700/50 rounded-full px-2 py-0.5">
                 {parts.length}
               </span>
+              {onAddParticularidad && (
+                <button
+                  onClick={onAddParticularidad}
+                  title="Escribirle al cliente un aviso sobre el cronograma"
+                  className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-brand hover:text-brand-light transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Agregar aviso
+                </button>
+              )}
             </div>
+            {parts.length === 0 && (
+              <p className="text-[11px] text-fg-muted leading-relaxed">
+                Todavía no hay avisos. Agregá uno para contarle al cliente algo del cronograma — por
+                ejemplo una pausa, un cambio de contacto o un acuerdo de la última sesión.
+              </p>
+            )}
             {sentence && (
               <p className="text-sm text-gray-200 mb-3 leading-relaxed">{sentence}</p>
             )}

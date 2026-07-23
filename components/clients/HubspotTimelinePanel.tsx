@@ -16,14 +16,16 @@ import { fetchJson } from "@/lib/api/fetch-json";
 import { ContextColumnList, ContextRow, CTX_ICONS } from "./context-column";
 
 type HsTimelineItem = {
-  /** Id estable del engagement (v1) — para promoverlo a material. */
+  /** Id estable del engagement (v1) — para excluir/re-incluir el ítem por-handoff. */
   id: string;
   type: "NOTE" | "CALL" | "MEETING";
   title: string;
   date: string | null;
   snippet: string;
-  /** true = anterior a la era del proyecto (trasfondo comprimido — se muestra atenuado). */
+  /** true = anterior a la era del proyecto (entra resumido como trasfondo). */
   previous?: boolean;
+  /** true = sacado a mano del handoff con la "X". */
+  excluded?: boolean;
 };
 const HS_TYPE_LABEL: Record<string, string> = { NOTE: "Nota", CALL: "Llamada", MEETING: "Reunión" };
 
@@ -32,41 +34,23 @@ export default function HubspotTimelinePanel({
   framed = false,
   columnMode = false,
   onCount,
+  onExcludedCount,
   canEdit = false,
-  onPromoted,
 }: {
   projectId: string;
   framed?: boolean;
   /** Render compacto para la columna de "Contexto" (sin header ni border-t propios). */
   columnMode?: boolean;
-  /** Reporta la cantidad de ítems (para el contador del header de Contexto). */
+  /** Reporta la cantidad de ítems que ALIMENTAN (no excluidos) — contador del header. */
   onCount?: (n: number) => void;
-  /** Habilita "Usar en el handoff" (promover a material). Solo columnMode. */
+  /** Reporta la cantidad de ítems excluidos a mano — contador honesto del header. */
+  onExcludedCount?: (n: number) => void;
+  /** Habilita la "X" (excluir) / "Incluir". Solo columnMode. */
   canEdit?: boolean;
-  /** Se llama tras promover un engagement (para refrescar las fuentes manuales). */
-  onPromoted?: () => void;
 }) {
   const [hubspot, setHubspot] = useState<HsTimelineItem[]>([]);
   const [loadingHs, setLoadingHs] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-
-  const promote = useCallback(
-    async (engagementId: string) => {
-      setBusyId(engagementId);
-      try {
-        const r = await fetch(`/api/projects/${projectId}/hubspot-timeline/promote`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ engagementId }),
-        });
-        if (r.ok) onPromoted?.();
-      } catch {
-        /* ignore — best-effort */
-      }
-      setBusyId(null);
-    },
-    [projectId, onPromoted],
-  );
 
   const load = useCallback(async () => {
     try {
@@ -83,37 +67,68 @@ export default function HubspotTimelinePanel({
     load();
   }, [load]);
 
-  // Contador HONESTO: solo el material de la ERA del proyecto (lo que alimenta como
-  // material). El "historial previo" entra como trasfondo comprimido, no como fuente
-  // material → no se cuenta acá (se muestra igual en la lista, atenuado y etiquetado).
-  const materialCount = hubspot.filter((it) => !it.previous).length;
-  useEffect(() => {
-    if (!loadingHs) onCount?.(materialCount);
-  }, [loadingHs, materialCount, onCount]);
+  const setExcluded = useCallback(
+    async (engagementId: string, excluded: boolean) => {
+      setBusyId(engagementId);
+      try {
+        const r = await fetch(`/api/projects/${projectId}/hubspot-timeline/exclude`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ engagementId, excluded }),
+        });
+        if (r.ok) await load();
+      } catch {
+        /* ignore — best-effort */
+      }
+      setBusyId(null);
+    },
+    [projectId, load],
+  );
 
-  // Modo columna (Contexto): lista compacta + estado vacío, sin header ni borde propios.
-  // Los de la ERA alimentan como material (badge). Los del historial PREVIO entran solo
-  // como trasfondo comprimido → se muestran atenuados con "Usar en el handoff" para
-  // promoverlos a material completo (persistido como fuente manual).
+  // Contador HONESTO: TODAS las reuniones/notas de HubSpot alimentan (era completas,
+  // previas resumidas como trasfondo) salvo las excluidas a mano con la "X".
+  const feedingCount = hubspot.filter((it) => !it.excluded).length;
+  const excludedCount = hubspot.filter((it) => it.excluded).length;
+  useEffect(() => {
+    if (!loadingHs) {
+      onCount?.(feedingCount);
+      onExcludedCount?.(excludedCount);
+    }
+  }, [loadingHs, feedingCount, excludedCount, onCount, onExcludedCount]);
+
+  // Modo columna (Contexto): igual que Google Meet — todo INCLUIDO por defecto con badge
+  // (era "Material", previo "Trasfondo") y la "X" para excluir; los excluidos van atenuados
+  // con "Incluir" para revertir. NO se copian a fuentes manuales: siguen siendo de HubSpot.
   if (columnMode) {
     return (
       <ContextColumnList loading={loadingHs} empty="Sin actividad en HubSpot.">
-        {hubspot.map((it, i) => (
-          <ContextRow
-            key={it.id || i}
-            icon={it.type === "NOTE" ? CTX_ICONS.note : CTX_ICONS.calendar}
-            meta={`${HS_TYPE_LABEL[it.type] ?? it.type}${it.date ? ` · ${it.date}` : ""}${it.previous ? " · historial previo" : ""}`}
-            title={it.title}
-            snippet={it.snippet}
-            dim={it.previous}
-            badge={it.previous ? undefined : { label: "Material", tone: "green" }}
-            action={
-              canEdit && it.previous && it.id
-                ? { label: "Usar", onClick: () => promote(it.id), disabled: busyId === it.id }
-                : undefined
-            }
-          />
-        ))}
+        {hubspot.map((it, i) => {
+          const isExc = !!it.excluded;
+          return (
+            <ContextRow
+              key={it.id || i}
+              icon={it.type === "NOTE" ? CTX_ICONS.note : CTX_ICONS.calendar}
+              meta={`${HS_TYPE_LABEL[it.type] ?? it.type}${it.date ? ` · ${it.date}` : ""}`}
+              title={it.title}
+              snippet={it.snippet}
+              dim={isExc}
+              badge={
+                isExc
+                  ? { label: "Excluida", tone: "muted" }
+                  : it.previous
+                    ? { label: "Trasfondo", tone: "muted" }
+                    : { label: "Material", tone: "green" }
+              }
+              action={
+                canEdit && isExc && it.id
+                  ? { label: "Incluir", onClick: () => setExcluded(it.id, false), disabled: busyId === it.id }
+                  : undefined
+              }
+              onRemove={canEdit && !isExc && it.id ? () => setExcluded(it.id, true) : undefined}
+              removeTitle="Excluir del handoff"
+            />
+          );
+        })}
       </ContextColumnList>
     );
   }

@@ -3,11 +3,17 @@
 /**
  * components/canvas/ParticularidadEditModal.tsx
  *
- * Edición del CONTENIDO de una particularidad ya creada (tipo, responsable, título, detalle,
- * semanas de impacto, visibilidad al cliente). Reusa el Modal genérico + Input/Textarea/Select +
- * ConfirmDialog. El estado del form vive acá (seed desde el item); al Guardar emite el patch
- * completo, al Eliminar dispara onDelete (con confirmación). El padre (CronogramaCanvas) hace el
- * PATCH/DELETE y refresca su estado local; la visibilidad recién llega al cliente al «Subir».
+ * Crear o editar una particularidad/aviso (tipo, responsable, título, detalle, fase, semanas de
+ * impacto, visibilidad al cliente). Reusa el Modal genérico + Input/Textarea/Select + ConfirmDialog.
+ *
+ * Dos modos, mismo formulario:
+ *  - EDITAR (`particularidad` != null): incluye Eliminar. Sirve igual para las generadas por IA —
+ *    se pueden modificar en su totalidad (incluida la FASE a la que están ancladas).
+ *  - CREAR (`particularidad` == null): el CSE escribe un aviso propio. Arranca en tipo "Aviso"
+ *    (nota libre que NO mueve fechas) y VISIBLE al cliente, porque se escribe para él.
+ *
+ * El estado del form vive acá; al Guardar emite el patch completo. El padre (CronogramaCanvas) hace
+ * el POST/PATCH/DELETE y refresca. Como todo lo del cliente, llega al «Subir al cliente».
  */
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
@@ -25,6 +31,7 @@ export interface ParticularidadPatch {
   weeksImpact: number | null;
   visibleExternal: boolean;
   occurredAt: string; // YYYY-MM-DD
+  phaseId: string | null;
 }
 
 // Kinds vigentes. SOLICITUD está deprecado (eje DESTINO: un insumo del cliente es una tarea
@@ -33,6 +40,7 @@ export interface ParticularidadPatch {
 const BASE_KIND_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "ATRASO", label: "Atraso" },
   { value: "COMPROMISO", label: "Compromiso" },
+  { value: "AVISO", label: "Aviso (no mueve fechas)" },
 ];
 const PARTY_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "CLIENTE", label: "Cliente" },
@@ -41,37 +49,51 @@ const PARTY_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "DEV", label: "Desarrollo" },
 ];
 
+const hoyISO = () => new Date().toISOString().slice(0, 10);
+
 export default function ParticularidadEditModal({
   particularidad,
+  phases,
   saving,
   onSave,
   onDelete,
   onClose,
 }: {
-  particularidad: GanttParticularidad;
+  /** null = modo CREAR (aviso manual del CSE). */
+  particularidad: GanttParticularidad | null;
+  /** Fases del cronograma, para anclar/re-anclar el hecho. Solo las ya guardadas (con id). */
+  phases?: Array<{ id?: string; name: string }>;
   saving: boolean;
   onSave: (patch: ParticularidadPatch) => void;
-  onDelete: () => void;
+  /** Solo en modo editar. */
+  onDelete?: () => void;
   onClose: () => void;
 }) {
-  const [kind, setKind] = useState(particularidad.kind);
-  const [party, setParty] = useState(particularidad.party);
-  const [title, setTitle] = useState(particularidad.title);
-  const [detail, setDetail] = useState(particularidad.detail ?? "");
-  const [sourceQuote, setSourceQuote] = useState(particularidad.sourceQuote ?? "");
-  const [occurredAt, setOccurredAt] = useState(particularidad.occurredAt.slice(0, 10));
+  const creating = particularidad === null;
+  const [kind, setKind] = useState(particularidad?.kind ?? "AVISO");
+  const [party, setParty] = useState(particularidad?.party ?? "SMARTEAM");
+  const [title, setTitle] = useState(particularidad?.title ?? "");
+  const [detail, setDetail] = useState(particularidad?.detail ?? "");
+  const [sourceQuote, setSourceQuote] = useState(particularidad?.sourceQuote ?? "");
+  const [occurredAt, setOccurredAt] = useState(particularidad?.occurredAt.slice(0, 10) ?? hoyISO());
   const [weeks, setWeeks] = useState<string>(
-    particularidad.weeksImpact != null ? String(particularidad.weeksImpact) : "",
+    particularidad?.weeksImpact != null ? String(particularidad.weeksImpact) : "",
   );
-  const [visible, setVisible] = useState(particularidad.visibleExternal);
+  // Un aviso manual se escribe PARA el cliente → nace visible.
+  const [visible, setVisible] = useState(particularidad?.visibleExternal ?? true);
+  const [phaseId, setPhaseId] = useState<string>(particularidad?.phaseId ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Si la fila es un SOLICITUD legacy, se muestra la opción "heredado" para poder verla/migrarla.
-  const kindOptions =
-    particularidad.kind !== "ATRASO" && particularidad.kind !== "COMPROMISO"
-      ? [{ value: particularidad.kind, label: `${particularidad.kind} (heredado)` }, ...BASE_KIND_OPTIONS]
-      : BASE_KIND_OPTIONS;
+  const legacyKind =
+    particularidad && particularidad.kind !== "ATRASO" && particularidad.kind !== "COMPROMISO" && particularidad.kind !== "AVISO";
+  const kindOptions = legacyKind
+    ? [{ value: particularidad.kind, label: `${particularidad.kind} (heredado)` }, ...BASE_KIND_OPTIONS]
+    : BASE_KIND_OPTIONS;
 
+  const phaseOptions = (phases ?? []).filter((p): p is { id: string; name: string } => !!p.id);
+
+  const esAviso = kind === "AVISO";
   const titleValid = title.trim().length > 0;
   const weeksNum = weeks.trim() === "" ? null : Math.max(0, Math.round(Number(weeks)));
   const weeksValid = weeksNum === null || Number.isFinite(weeksNum);
@@ -88,9 +110,11 @@ export default function ParticularidadEditModal({
       title: title.trim(),
       detail: detail.trim() ? detail.trim() : null,
       sourceQuote: sourceQuote.trim() ? sourceQuote.trim() : null,
-      weeksImpact: weeksNum,
+      // Un aviso no mueve fechas: nunca lleva semanas (el endpoint lo normaliza igual).
+      weeksImpact: esAviso ? null : weeksNum,
       visibleExternal: visible,
       occurredAt,
+      phaseId: phaseId || null,
     });
   };
 
@@ -99,19 +123,25 @@ export default function ParticularidadEditModal({
       <Modal
         open
         onClose={onClose}
-        title="Editar particularidad"
-        description="Ajustá el texto que verá el cliente. Los cambios llegan al cliente al «Subir al cliente»."
+        title={creating ? "Nuevo aviso" : "Editar particularidad"}
+        description={
+          creating
+            ? "Escribile al cliente algo que deba saber del cronograma. Llega al cliente al «Subir al cliente»."
+            : "Ajustá el texto que verá el cliente. Los cambios llegan al cliente al «Subir al cliente»."
+        }
         size="md"
         footer={
           <>
-            <Button variant="destructive" size="sm" onClick={() => setConfirmDelete(true)} disabled={saving} className="mr-auto">
-              Eliminar
-            </Button>
+            {!creating && onDelete && (
+              <Button variant="destructive" size="sm" onClick={() => setConfirmDelete(true)} disabled={saving} className="mr-auto">
+                Eliminar
+              </Button>
+            )}
             <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>
               Cancelar
             </Button>
             <Button variant="primary" size="sm" onClick={submit} loading={saving} disabled={!canSave}>
-              Guardar
+              {creating ? "Crear aviso" : "Guardar"}
             </Button>
           </>
         }
@@ -159,6 +189,20 @@ export default function ParticularidadEditModal({
             <Textarea value={sourceQuote} onChange={(e) => setSourceQuote(e.target.value)} rows={2} placeholder="Fragmento de la sesión que respalda el hecho." />
           </label>
 
+          {phaseOptions.length > 0 && (
+            <label className="block">
+              <span className="text-xs font-medium text-fg-secondary mb-1 block">
+                Fase <span className="text-fg-muted">(opcional — a qué parte del plan corresponde)</span>
+              </span>
+              <Select value={phaseId} onChange={(e) => setPhaseId(e.target.value)}>
+                <option value="">Sin fase</option>
+                {phaseOptions.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </Select>
+            </label>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="text-xs font-medium text-gray-400 mb-1 block">Fecha del hecho</span>
@@ -167,14 +211,22 @@ export default function ParticularidadEditModal({
             </label>
             <label className="block">
               <span className="text-xs font-medium text-gray-400 mb-1 block">
-                Semanas de atraso {kind === "ATRASO" ? <span className="text-red-400">(obligatorio)</span> : <span className="text-gray-600">(opcional)</span>}
+                Semanas de atraso{" "}
+                {esAviso ? (
+                  <span className="text-fg-muted">(no aplica)</span>
+                ) : kind === "ATRASO" ? (
+                  <span className="text-red-400">(obligatorio)</span>
+                ) : (
+                  <span className="text-gray-600">(opcional)</span>
+                )}
               </span>
               <Input
                 type="number"
                 min={0}
-                value={weeks}
+                value={esAviso ? "" : weeks}
                 onChange={(e) => setWeeks(e.target.value)}
-                placeholder="—"
+                disabled={esAviso}
+                placeholder={esAviso ? "Un aviso no mueve fechas" : "—"}
               />
               {atrasoNeedsWeeks && <span className="text-[11px] text-red-400 mt-1 block">Un atraso necesita al menos 1 semana.</span>}
             </label>
@@ -200,7 +252,7 @@ export default function ParticularidadEditModal({
         confirmLabel="Eliminar"
         z="z-[60]"
         onCancel={() => setConfirmDelete(false)}
-        onConfirm={() => { setConfirmDelete(false); onDelete(); }}
+        onConfirm={() => { setConfirmDelete(false); onDelete?.(); }}
       />
     </>
   );
