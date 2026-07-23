@@ -13,7 +13,9 @@
  */
 import { useMemo, useState } from "react";
 import { EmptyState } from "@/components/ui";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
+import { useMe } from "@/hooks/useMe";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { CostoRecurrenteDTO, GastoPuntualDTO } from "@/lib/cobranza";
 import {
@@ -21,7 +23,7 @@ import {
   CATEGORIA_COSTO_LABEL,
   FRECUENCIA_COSTO_LABEL,
 } from "@/lib/cobranza/schema";
-import { fmtMonto, fmtFecha, mensualizado, INPUT_CLS } from "./format";
+import { fmtMontoVisible, fmtFecha, mensualizado, INPUT_CLS } from "./format";
 import CostoForm from "./CostoForm";
 import GastosSection from "./GastosSection";
 import MovimientosSection from "./MovimientosSection";
@@ -64,6 +66,12 @@ export default function CostosPanel({
   onGastosChanged: () => void;
 }) {
   const toast = useToast();
+  const me = useMe();
+  // Revelar los montos es SOLO de SUPER_ADMIN — explícito acá además del gate de página
+  // (COSTOS_ROLES ya deja esta pantalla en SUPER_ADMIN, esto es defensa en profundidad y
+  // hace la regla verificable en el propio componente). `me === null` = aún cargando → no
+  // se revela hasta confirmar el rol.
+  const puedeRevelar = me?.isSuperAdmin === true;
   const [vista, setVista] = useState<Vista>("fijos");
 
   const [form, setForm] = useState<{ abierto: boolean; costo: CostoRecurrenteDTO | null }>({
@@ -80,6 +88,24 @@ export default function CostosPanel({
   const [finalizarMotivo, setFinalizarMotivo] = useState("");
 
   const [historicoAbierto, setHistoricoAbierto] = useState(false);
+  // Los montos de esta sección son salarios y precios de herramientas: arrancan OCULTOS
+  // para que abrir la pantalla (o compartir la ventana) no los muestre de una. NO se
+  // persiste a propósito — si recordáramos "visible", el próximo ingreso los volvería a
+  // mostrar solos y el toggle no serviría para nada. Es máscara visual, no seguridad:
+  // la barrera real es COSTOS_ROLES (ver el comentario de `fmtMontoVisible`).
+  const [mostrarDatos, setMostrarDatos] = useState(false);
+  // Revelar pide una 2ª confirmación (evita el reveal accidental frente a alguien);
+  // OCULTAR es siempre directo (es el lado seguro, nunca se pregunta).
+  const [confirmMostrar, setConfirmMostrar] = useState(false);
+
+  function onToggleMostrar() {
+    if (mostrarDatos) {
+      setMostrarDatos(false);
+      return;
+    }
+    if (!puedeRevelar) return; // solo SUPER_ADMIN
+    setConfirmMostrar(true);
+  }
 
   // Burn mensual estimado POR MONEDA (jamás sumadas): EXCLUYE finalizados y pausados.
   const burn = useMemo(() => burnDe(costos), [costos]);
@@ -196,7 +222,7 @@ export default function CostosPanel({
         Cifras estimadas — referencia para dirección, no contabilidad.
       </div>
 
-      {/* ── Sub-navegación de vistas (pills) ── */}
+      {/* ── Sub-navegación de vistas (pills) + toggle de montos ── */}
       <div className="flex flex-wrap items-center gap-1.5">
         {VISTAS.map(([k, lbl]) => (
           <button
@@ -213,6 +239,34 @@ export default function CostosPanel({
             {lbl}
           </button>
         ))}
+        {/* Vive junto a las pills (no dentro de una vista) porque aplica a las TRES:
+            costos fijos, gastos y movimientos muestran los mismos montos sensibles. */}
+        <button
+          type="button"
+          onClick={onToggleMostrar}
+          disabled={!mostrarDatos && !puedeRevelar}
+          aria-pressed={mostrarDatos}
+          title={
+            mostrarDatos
+              ? "Ocultar los montos (salarios y precios de herramientas)"
+              : puedeRevelar
+                ? "Mostrar los montos — pide confirmación; ojo con quién tenés al lado o si estás compartiendo pantalla"
+                : "Solo un super admin puede mostrar los montos"
+          }
+          className="ml-auto flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-line text-fg-muted hover:text-fg-secondary hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {mostrarDatos ? (
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+            </svg>
+          ) : (
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          )}
+          {mostrarDatos ? "Ocultar datos" : "Mostrar datos"}
+        </button>
       </div>
 
       {vista === "fijos" && (
@@ -248,7 +302,7 @@ export default function CostosPanel({
                         burn[m] === 0 ? "opacity-40" : ""
                       }`}
                     >
-                      {fmtMonto(burn[m], m)}
+                      {fmtMontoVisible(burn[m], m, mostrarDatos)}
                     </p>
                     <p className="text-[11px] font-medium uppercase tracking-wide mt-1 text-fg-muted">
                       Burn mensual estimado · {m}
@@ -278,8 +332,8 @@ export default function CostosPanel({
               ) : (
                 grupos.map(({ cat, items, subtotal }) => {
                   const partes: string[] = [];
-                  if (subtotal.CRC > 0) partes.push(fmtMonto(subtotal.CRC, "CRC"));
-                  if (subtotal.USD > 0) partes.push(fmtMonto(subtotal.USD, "USD"));
+                  if (subtotal.CRC > 0) partes.push(fmtMontoVisible(subtotal.CRC, "CRC", mostrarDatos));
+                  if (subtotal.USD > 0) partes.push(fmtMontoVisible(subtotal.USD, "USD", mostrarDatos));
                   return (
                     <div
                       key={cat}
@@ -312,7 +366,7 @@ export default function CostosPanel({
                               </span>
                               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-line text-fg-muted whitespace-nowrap">
                                 {c.frecuencia === "ANUAL"
-                                  ? `Anual → ${fmtMonto(mensualizado(c.monto, c.frecuencia), c.moneda)}/mes`
+                                  ? `Anual → ${fmtMontoVisible(mensualizado(c.monto, c.frecuencia), c.moneda, mostrarDatos)}/mes`
                                   : (FRECUENCIA_COSTO_LABEL[c.frecuencia] ?? c.frecuencia)}
                               </span>
                               {!c.activo && (
@@ -321,7 +375,7 @@ export default function CostosPanel({
                                 </span>
                               )}
                               <span className="w-32 text-right text-sm font-medium tabular-nums text-fg whitespace-nowrap">
-                                {fmtMonto(c.monto, c.moneda)}
+                                {fmtMontoVisible(c.monto, c.moneda, mostrarDatos)}
                               </span>
                               <div className="flex items-center gap-1">
                                 <button
@@ -501,7 +555,7 @@ export default function CostosPanel({
                               Baja: {fmtFecha(c.finalizadoEl)}
                             </span>
                             <span className="w-32 text-right text-sm font-medium tabular-nums text-fg whitespace-nowrap">
-                              {fmtMonto(c.monto, c.moneda)}
+                              {fmtMontoVisible(c.monto, c.moneda, mostrarDatos)}
                             </span>
                             <button
                               type="button"
@@ -526,10 +580,10 @@ export default function CostosPanel({
       )}
 
       {vista === "gastos" && (
-        <GastosSection gastos={gastos} todayISO={todayISO} onChanged={onGastosChanged} />
+        <GastosSection gastos={gastos} todayISO={todayISO} onChanged={onGastosChanged} mostrarDatos={mostrarDatos} />
       )}
 
-      {vista === "movimientos" && <MovimientosSection />}
+      {vista === "movimientos" && <MovimientosSection mostrarDatos={mostrarDatos} />}
 
       {form.abierto && (
         <CostoForm
@@ -541,6 +595,27 @@ export default function CostosPanel({
           }}
         />
       )}
+
+      {/* 2ª confirmación antes de revelar salarios/precios en pantalla. */}
+      <ConfirmDialog
+        open={confirmMostrar}
+        variant="default"
+        title="¿Mostrar los montos?"
+        description={
+          <>
+            Vas a revelar en pantalla los salarios y los precios de las herramientas.
+            Asegurate de que nadie más los esté viendo (alguien al lado, pantalla
+            compartida). Se ocultan solos al recargar.
+          </>
+        }
+        confirmLabel="Mostrar montos"
+        cancelLabel="Cancelar"
+        onConfirm={() => {
+          setMostrarDatos(true);
+          setConfirmMostrar(false);
+        }}
+        onCancel={() => setConfirmMostrar(false)}
+      />
     </div>
   );
 }

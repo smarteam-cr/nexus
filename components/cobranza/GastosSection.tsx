@@ -13,7 +13,7 @@ import { EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { GastoPuntualDTO, TotalesMoneda } from "@/lib/cobranza";
-import { fmtMonto, fmtFecha } from "./format";
+import { fmtMontoVisible, fmtFecha } from "./format";
 import GastoForm from "./GastoForm";
 
 const TH_CLS =
@@ -33,10 +33,13 @@ export default function GastosSection({
   gastos,
   todayISO,
   onChanged,
+  mostrarDatos,
 }: {
   gastos: GastoPuntualDTO[];
   todayISO: string;
   onChanged: () => void;
+  /** Toggle "Mostrar datos" del panel padre — lo comparten las 3 sub-vistas. */
+  mostrarDatos: boolean;
 }) {
   const toast = useToast();
   const [formOpen, setFormOpen] = useState(false);
@@ -170,11 +173,11 @@ export default function GastosSection({
                 <p className="text-[11px] text-fg-muted">
                   Total {tagActivo}:{" "}
                   <span className="tabular-nums text-fg-secondary font-medium">
-                    {fmtMonto(totalFiltro.CRC, "CRC")}
+                    {fmtMontoVisible(totalFiltro.CRC, "CRC", mostrarDatos)}
                   </span>{" "}
                   ·{" "}
                   <span className="tabular-nums text-fg-secondary font-medium">
-                    {fmtMonto(totalFiltro.USD, "USD")}
+                    {fmtMontoVisible(totalFiltro.USD, "USD", mostrarDatos)}
                   </span>
                   <button
                     type="button"
@@ -217,7 +220,7 @@ export default function GastosSection({
                     </div>
                   </div>
                   <span className="text-sm font-medium text-fg tabular-nums whitespace-nowrap">
-                    {fmtMonto(g.monto, g.moneda)}
+                    {fmtMontoVisible(g.monto, g.moneda, mostrarDatos)}
                   </span>
                   <div className="flex items-center gap-1 shrink-0">
                     {confirmando ? (
@@ -278,14 +281,14 @@ export default function GastosSection({
                     <td className="px-4 py-2.5 whitespace-nowrap font-medium text-fg">{fmtMes(t.ym)}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">
                       {t.CRC > 0 ? (
-                        <span className="text-fg">{fmtMonto(t.CRC, "CRC")}</span>
+                        <span className="text-fg">{fmtMontoVisible(t.CRC, "CRC", mostrarDatos)}</span>
                       ) : (
                         <span className="text-fg-muted">—</span>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">
                       {t.USD > 0 ? (
-                        <span className="text-fg">{fmtMonto(t.USD, "USD")}</span>
+                        <span className="text-fg">{fmtMontoVisible(t.USD, "USD", mostrarDatos)}</span>
                       ) : (
                         <span className="text-fg-muted">—</span>
                       )}

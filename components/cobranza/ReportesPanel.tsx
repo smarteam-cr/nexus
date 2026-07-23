@@ -363,6 +363,23 @@ export default function ReportesPanel({
       {/* ── Tendencias (solo con ≥2 cortes: 1 punto no es tendencia) ── */}
       {hayTendencias && (
         <div className="grid gap-4 lg:grid-cols-2">
+          {/* Orden pedido por Alex: primero lo que se cumplió (cobrado vs proyectado),
+              después la foto de la deuda por edad (aging), luego su evolución en el
+              tiempo, y el DSO al final como indicador resumen. */}
+          <ChartCard
+            titulo="Cobrado vs proyectado"
+            nota="Lo que cada corte proyectó que entraría hasta el siguiente, contra lo realmente cobrado en esa ventana."
+            extra={<MonedaToggle value={monedaCvp} onChange={setMonedaCvp} />}
+          >
+            <EChartRenderer option={cvpOption} height={240} className="bg-surface" />
+          </ChartCard>
+          <ChartCard
+            titulo="Aging del vencido"
+            nota={`Monto vencido por antigüedad desde la fecha programada. ${VENCIDO_INFLADO_CAVEAT}`}
+            extra={<MonedaToggle value={monedaAging} onChange={setMonedaAging} />}
+          >
+            <EChartRenderer option={agingOption} height={240} className="bg-surface" />
+          </ChartCard>
           <ChartCard
             titulo="Vencido en el tiempo"
             nota={`Total vencido por corte — CRC en el eje ₡, USD en el eje $. ${VENCIDO_INFLADO_CAVEAT}`}
@@ -374,20 +391,6 @@ export default function ReportesPanel({
             nota="Antigüedad promedio (días) de lo exigible, ponderada por monto. Un corte sin exigibles queda como hueco."
           >
             <EChartRenderer option={dsoOption} height={240} className="bg-surface" />
-          </ChartCard>
-          <ChartCard
-            titulo="Aging del vencido"
-            nota={`Monto vencido por antigüedad desde la fecha programada. ${VENCIDO_INFLADO_CAVEAT}`}
-            extra={<MonedaToggle value={monedaAging} onChange={setMonedaAging} />}
-          >
-            <EChartRenderer option={agingOption} height={240} className="bg-surface" />
-          </ChartCard>
-          <ChartCard
-            titulo="Cobrado vs proyectado"
-            nota="Lo que cada corte proyectó que entraría hasta el siguiente, contra lo realmente cobrado en esa ventana."
-            extra={<MonedaToggle value={monedaCvp} onChange={setMonedaCvp} />}
-          >
-            <EChartRenderer option={cvpOption} height={240} className="bg-surface" />
           </ChartCard>
         </div>
       )}

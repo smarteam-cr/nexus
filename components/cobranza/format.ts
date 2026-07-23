@@ -24,6 +24,27 @@ export function fmtMonto(monto: number | null | undefined, moneda: string | null
   return `${simbolo}${monto.toLocaleString("es-CR", { maximumFractionDigits: 2 })}`;
 }
 
+/** Placeholder de un monto oculto por el toggle "Mostrar datos" de Costos y gastos. */
+export const MONTO_OCULTO = "•••••";
+
+/**
+ * `fmtMonto` con máscara opcional. Lo usa la sección Costos y gastos, donde los montos
+ * son salarios y precios de herramientas: arrancan OCULTOS para que abrir la pantalla
+ * frente a alguien (o compartir la ventana) no los exponga de una.
+ *
+ * OJO — esto es una máscara VISUAL, no una barrera de seguridad: los montos YA viajaron
+ * al cliente cuando esta función corre. La barrera real sigue siendo `COSTOS_ROLES`
+ * (SUPER_ADMIN) en las 3 capas de guards + los tests de `costos-privacy.test.ts`; el
+ * toggle protege de la mirada por encima del hombro, nada más.
+ */
+export function fmtMontoVisible(
+  monto: number | null | undefined,
+  moneda: string | null | undefined,
+  visible: boolean,
+): string {
+  return visible ? fmtMonto(monto, moneda) : MONTO_OCULTO;
+}
+
 /**
  * Colores del semáforo (tokens + colores de estado permitidos — patrón SEV_META).
  * Dos relojes (Tanda B, 2026-07): amarillo = "te toca facturar" (Reloj 1, en ventana

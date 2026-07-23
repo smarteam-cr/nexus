@@ -12,7 +12,7 @@ import { EmptyState, ListSkeleton } from "@/components/ui";
 import { fetchJson } from "@/lib/api/fetch-json";
 import type { CostoMovimientoDTO } from "@/lib/cobranza";
 import { CATEGORIA_COSTO_LABEL } from "@/lib/cobranza/schema";
-import { MOVIMIENTO_TIPO_META, FILTER_SELECT_CLS, fmtMonto, fmtFecha } from "./format";
+import { MOVIMIENTO_TIPO_META, FILTER_SELECT_CLS, fmtMontoVisible, fmtFecha } from "./format";
 
 // Meses en español (largos) para el header de cada grupo — sin `new Date` (determinístico).
 const MESES_LARGOS = [
@@ -45,7 +45,12 @@ type GrupoMes = {
   items: CostoMovimientoDTO[];
 };
 
-export default function MovimientosSection() {
+export default function MovimientosSection({
+  mostrarDatos,
+}: {
+  /** Toggle "Mostrar datos" del panel padre — lo comparten las 3 sub-vistas. */
+  mostrarDatos: boolean;
+}) {
   // null = aún sin cargar; "cargando" es DERIVADO (sin data y sin error) — un
   // setState síncrono en el effect dispara renders en cascada (lint, patrón CostoForm).
   const [movimientos, setMovimientos] = useState<CostoMovimientoDTO[] | null>(null);
@@ -174,13 +179,13 @@ export default function MovimientosSection() {
                         {m.tipo === "CAMBIO_MONTO" && m.montoAnterior != null ? (
                           <>
                             <span className="text-fg-muted line-through">
-                              {fmtMonto(m.montoAnterior, m.moneda)}
+                              {fmtMontoVisible(m.montoAnterior, m.moneda, mostrarDatos)}
                             </span>
                             {" → "}
-                            {fmtMonto(m.monto, m.moneda)}
+                            {fmtMontoVisible(m.monto, m.moneda, mostrarDatos)}
                           </>
                         ) : (
-                          fmtMonto(m.monto, m.moneda)
+                          fmtMontoVisible(m.monto, m.moneda, mostrarDatos)
                         )}
                       </span>
                     </div>
