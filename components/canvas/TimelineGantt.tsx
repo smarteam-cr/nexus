@@ -149,6 +149,9 @@ interface Props {
   onToggleParticularidadVisible?: (id: string, next: boolean) => void;
   // Abrir el modal de edición de contenido de una particularidad (tipo/party/título/detalle/semanas).
   onEditParticularidad?: (id: string) => void;
+  // Crear un AVISO a mano (el CSE le escribe algo al cliente). Si viene, el bloque se muestra
+  // aunque no haya ninguna particularidad todavía — si no, no habría dónde poner el botón.
+  onAddParticularidad?: () => void;
   // Convertir una particularidad en TAREA del cronograma (dueño + fecha). Sin esto el botón no sale.
   onConvertParticularidad?: (id: string) => void;
   // Abrir el drawer de la tarea que ya persigue este hecho (chip "→ tarea").
@@ -296,6 +299,9 @@ export const PARTICULARIDAD_KIND_META: Record<string, { label: string; cls: stri
   // una categoría distinta y vigente — por eso un grupo de 4 parecía tener solo 2.
   SOLICITUD:  { label: "Compromiso (viejo)", cls: "text-gray-400 bg-gray-800/60 border-gray-700/50" },
   COMPROMISO: { label: "Compromiso", cls: "text-emerald-300 bg-emerald-900/30 border-emerald-700/40" },
+  // Nota libre del CSE al cliente: NO mueve fechas ni suma al corrimiento. Azul (informativo),
+  // deliberadamente fuera de la familia rojo/verde de "se atrasó"/"acordado".
+  AVISO:      { label: "Aviso",      cls: "text-blue-300 bg-blue-900/30 border-blue-700/40" },
 };
 
 // ── Drag & drop de tareas: item sortable + contenedor de semana droppable ─────
@@ -360,6 +366,7 @@ export default function TimelineGantt({
   publicadas,
   onToggleParticularidadVisible,
   onEditParticularidad,
+  onAddParticularidad,
   onConvertParticularidad,
   onOpenConvertedTask,
   focusGroup,
@@ -1089,7 +1096,9 @@ export default function TimelineGantt({
           cruzan al cliente. Espejo light en TimelineSection (la matemática es única: helper puro). */}
       {(() => {
         const parts = particularidades ?? [];
-        if (parts.length === 0) return null;
+        // Con cero particularidades el bloque desaparecía — y entonces no había dónde colgar
+        // "Agregar aviso". Si el CSE puede crear, el bloque se muestra igual (vacío, con el botón).
+        if (parts.length === 0 && !onAddParticularidad) return null;
         // ── TRES números distintos, y confundirlos era el defecto ─────────────────────────────
         // REGISTRADO  = todas las filas. Lo que sabemos internamente.
         // LISTO       = las marcadas visibles PERO todavía no publicadas. Lo que leerá al «Subir».
@@ -1113,7 +1122,25 @@ export default function TimelineGantt({
               <span className="text-[10px] font-semibold text-gray-400 bg-gray-800/60 border border-gray-700/50 rounded-full px-2 py-0.5">
                 {parts.length}
               </span>
+              {onAddParticularidad && (
+                <button
+                  onClick={onAddParticularidad}
+                  title="Escribirle al cliente un aviso sobre el cronograma"
+                  className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-brand hover:text-brand-light transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Agregar aviso
+                </button>
+              )}
             </div>
+            {parts.length === 0 && (
+              <p className="text-[11px] text-fg-muted leading-relaxed">
+                Todavía no hay avisos. Agregá uno para contarle al cliente algo del cronograma — por
+                ejemplo una pausa, un cambio de contacto o un acuerdo de la última sesión.
+              </p>
+            )}
             {sentence && (
               <p className="text-sm text-gray-200 mb-3 leading-relaxed">{sentence}</p>
             )}

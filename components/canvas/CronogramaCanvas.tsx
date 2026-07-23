@@ -215,6 +215,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [particularidadesDirty, setParticularidadesDirty] = useState(false);
   // Particularidad en edición (modal). null = cerrado.
   const [editingParticularidadId, setEditingParticularidadId] = useState<string | null>(null);
+  const [creatingParticularidad, setCreatingParticularidad] = useState(false);
   const [convertingParticularidadId, setConvertingParticularidadId] = useState<string | null>(null);
   // Confirmación de "Confirmar detalle" cuando se dispara desde el panel: el CTA ejecuta, pero
   // hacer que las tareas crucen al cliente merece un "¿seguro?" de por medio.
@@ -1183,6 +1184,33 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
 
   // Editar el CONTENIDO de una particularidad (desde el modal). PATCH con todos los campos; update
   // local del estado. Marca particularidadesDirty si el cambio afecta al cliente (es o era visible).
+  // Crear un AVISO a mano (el CSE le escribe al cliente). Espejo de saveParticularidad, pero POST:
+  // el endpoint lo marca source=HUMAN y visible por defecto, así que nace listo para subir.
+  const createParticularidad = async (patch: ParticularidadPatch) => {
+    setSavingParticularidad(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/particularidades`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d?.error ?? "No se pudo crear el aviso.");
+        return;
+      }
+      const created = await res.json();
+      setParticularidades((ps) => [created, ...ps]);
+      if (created.visibleExternal) setParticularidadesDirty(true);
+      setCreatingParticularidad(false);
+      toast.success("Aviso creado.");
+    } catch {
+      toast.error("Error de conexión al crear el aviso.");
+    } finally {
+      setSavingParticularidad(false);
+    }
+  };
+
   const saveParticularidad = async (id: string, patch: ParticularidadPatch) => {
     const before = particularidades.find((p) => p.id === id);
     setSavingParticularidad(true);
@@ -2063,6 +2091,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             publicadas={publicadas}
             onToggleParticularidadVisible={canEdit ? toggleParticularidadVisible : undefined}
             onEditParticularidad={canEdit ? setEditingParticularidadId : undefined}
+            onAddParticularidad={canEdit ? () => setCreatingParticularidad(true) : undefined}
             onConvertParticularidad={canEdit ? setConvertingParticularidadId : undefined}
             onOpenConvertedTask={(taskId) => {
               // El id de la tarea no dice en qué fase vive; el drawer se abre por (phaseKey, taskKey).
@@ -2095,13 +2124,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         hasNext={flatIdx >= 0 && flatIdx < flatTasks.length - 1}
       />
 
-      {/* Editar una particularidad ya creada (contenido + visibilidad + borrar) */}
+      {/* Editar una particularidad ya creada (contenido + visibilidad + fase + borrar) */}
       {(() => {
         const editing = editingParticularidadId ? particularidades.find((p) => p.id === editingParticularidadId) : null;
         if (!editing) return null;
         return (
           <ParticularidadEditModal
             particularidad={editing}
+            phases={phases}
             saving={savingParticularidad}
             onSave={(patch) => void saveParticularidad(editing.id, patch)}
             onDelete={() => void deleteParticularidad(editing.id)}
@@ -2109,6 +2139,17 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           />
         );
       })()}
+
+      {/* Crear un AVISO a mano: mismo formulario, sin Eliminar, arranca en "Aviso" y visible */}
+      {creatingParticularidad && (
+        <ParticularidadEditModal
+          particularidad={null}
+          phases={phases}
+          saving={savingParticularidad}
+          onSave={(patch) => void createParticularidad(patch)}
+          onClose={() => setCreatingParticularidad(false)}
+        />
+      )}
 
       {/* "Confirmar detalle" disparado desde el panel: el CTA ejecuta en vez de mandarte a buscar
           el botón, pero hacer que las tareas por semana crucen al cliente merece un "¿seguro?". */}

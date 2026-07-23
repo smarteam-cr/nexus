@@ -181,3 +181,24 @@ test("el desglose sigue cerrando contra el total con kinds acotados", () => {
   expect(suma).toBe(s.totalWeeks);
   expect(s.totalWeeks).toBe(5);
 });
+
+// AVISO = nota libre del CSE al cliente. Es bitácora, NO corrimiento: no puede sumar semanas ni
+// aparecer en el desglose por responsable, o el cliente leería "el plan se movió N semanas" por
+// algo que explícitamente no mueve fechas.
+test("un AVISO cuenta en la bitácora pero no suma semanas ni atribución", () => {
+  const s = summarizeParticularidades([
+    { kind: "ATRASO", party: "CLIENTE", weeksImpact: 2 },
+    { kind: "AVISO", party: "SMARTEAM", weeksImpact: null },
+  ]);
+  expect(s.count).toBe(2);
+  expect(s.totalWeeks).toBe(2);
+  expect(s.byParty.SMARTEAM).toBe(0);
+  expect(Object.values(s.byParty).reduce((a, b) => a + b, 0)).toBe(s.totalWeeks);
+});
+
+// Defensa: aunque una fila vieja/corrupta trajera semanas en un AVISO, no deben contarse.
+test("un AVISO con semanas igual no suma al corrimiento", () => {
+  const s = summarizeParticularidades([{ kind: "AVISO", party: "CLIENTE", weeksImpact: 9 }]);
+  expect(s.totalWeeks).toBe(0);
+  expect(s.byParty.CLIENTE).toBe(0);
+});

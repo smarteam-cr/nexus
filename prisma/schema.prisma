@@ -724,6 +724,7 @@ enum ParticularidadKind {
   ATRASO // algo se atrasó (weeksImpact OBLIGATORIO en creación/edición nueva; una party responsable)
   SOLICITUD // @deprecated — insumo del cliente = tarea party=CLIENTE, no particularidad. Ya no se propone/crea; se conserva por filas legacy (fallback de render). Ver docs/DECISIONS.md (eje DESTINO).
   COMPROMISO // un acuerdo/hito comprometido en una sesión que fija/mueve una fecha del plan
+  AVISO // nota libre del CSE al cliente que NO mueve fechas (ej. "pausamos la próxima semana"). SOLO humana: el agente nunca la emite, y weeksImpact va null (no suma al corrimiento ni a la atribución).
 }
 
 // Procedencia de la particularidad (distinto de `party`, que es la ATRIBUCIÓN de la causa).

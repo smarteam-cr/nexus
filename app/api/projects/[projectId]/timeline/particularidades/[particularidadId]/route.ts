@@ -15,12 +15,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { Prisma, type ParticularidadKind, type TaskParty } from "@prisma/client";
-
-// SOLICITUD deprecado (eje DESTINO): ya no se admite fijar este kind. Las filas legacy que lo tengan
-// se pueden seguir editando en sus otros campos (no se manda `kind`), pero no se puede volver a él.
-const VALID_KINDS = new Set(["ATRASO", "COMPROMISO"]);
-const VALID_PARTIES = new Set(["CLIENTE", "SMARTEAM", "AMBOS", "DEV"]);
+import { Prisma, type ParticularidadKind } from "@prisma/client";
+import {
+  parseTitle,
+  parseOptionalText,
+  parseParty,
+  parseKind,
+  parseWeeksImpact,
+  parseOccurredAt,
+  normalizeWeeksForKind,
+  checkKindWeeksInvariant,
+} from "@/lib/timeline/particularidad-validation";
 
 export async function PATCH(
   req: NextRequest,
@@ -45,13 +50,14 @@ export async function PATCH(
     kind?: unknown;
     sourceQuote?: unknown;
     occurredAt?: unknown;
+    phaseId?: unknown;
   };
 
   // Ownership por traversal + estado actual (kind/weeksImpact) para las validaciones cross-field
   // (passthrough de kind legacy + invariante ATRASO). La particularidad debe colgar de ESTE proyecto.
   const existing = await prisma.particularidad.findFirst({
     where: { id: particularidadId, timeline: { projectId } },
-    select: { id: true, kind: true, weeksImpact: true },
+    select: { id: true, kind: true, weeksImpact: true, timelineId: true },
   });
   if (!existing) {
     return NextResponse.json({ error: "Particularidad no encontrada" }, { status: 404 });
@@ -67,53 +73,54 @@ export async function PATCH(
     data.visibleExternal = body.visibleExternal;
   }
   if (body.title !== undefined) {
-    const title = typeof body.title === "string" ? body.title.trim() : "";
-    if (!title) return NextResponse.json({ error: "El título no puede quedar vacío" }, { status: 400 });
-    data.title = title;
+    const r = parseTitle(body.title);
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
+    data.title = r.value;
   }
   if (body.detail !== undefined) {
-    data.detail = typeof body.detail === "string" && body.detail.trim() ? body.detail.trim() : null;
+    data.detail = parseOptionalText(body.detail);
   }
   if (body.party !== undefined) {
-    const party = typeof body.party === "string" ? body.party.toUpperCase() : "";
-    if (!VALID_PARTIES.has(party)) {
-      return NextResponse.json({ error: `party debe ser uno de ${[...VALID_PARTIES].join("|")}` }, { status: 400 });
-    }
-    data.party = party as TaskParty;
+    const r = parseParty(body.party);
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
+    data.party = r.value;
   }
   if (body.kind !== undefined) {
-    const kind = typeof body.kind === "string" ? body.kind.toUpperCase() : "";
-    // Se admite un kind vigente (ATRASO/COMPROMISO) o el MISMO que ya tiene la fila (passthrough:
-    // deja editar una fila legacy SOLICITUD sin poder volver a fijar SOLICITUD en otras).
-    if (!VALID_KINDS.has(kind) && kind !== existing.kind) {
-      return NextResponse.json({ error: `kind debe ser uno de ${[...VALID_KINDS].join("|")}` }, { status: 400 });
-    }
-    data.kind = kind as ParticularidadKind;
+    // Passthrough del kind que ya tiene la fila: deja editar una legacy SOLICITUD sin poder
+    // volver a fijar SOLICITUD en otras.
+    const r = parseKind(body.kind, existing.kind);
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
+    data.kind = r.value;
   }
   if (body.weeksImpact !== undefined) {
-    const w = body.weeksImpact;
-    if (w === null) {
-      data.weeksImpact = null;
-    } else if (typeof w === "number" && Number.isFinite(w) && w >= 0) {
-      data.weeksImpact = Math.round(w);
-    } else {
-      return NextResponse.json({ error: "weeksImpact debe ser un entero ≥0 o null" }, { status: 400 });
-    }
+    const r = parseWeeksImpact(body.weeksImpact);
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
+    data.weeksImpact = r.value;
   }
   if (body.sourceQuote !== undefined) {
     // Cita interna para el CSE (nunca cruza al cliente). null/"" la limpia.
-    data.sourceQuote =
-      typeof body.sourceQuote === "string" && body.sourceQuote.trim() ? body.sourceQuote.trim() : null;
+    data.sourceQuote = parseOptionalText(body.sourceQuote);
   }
   if (body.occurredAt !== undefined) {
-    if (body.occurredAt === null) {
-      return NextResponse.json({ error: "occurredAt no puede ser null" }, { status: 400 });
+    const r = parseOccurredAt(body.occurredAt);
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
+    data.occurredAt = r.value;
+  }
+  // Re-anclar la fase (o desanclar con null). La fase debe ser de ESTE timeline — si no, se podría
+  // colgar la particularidad de otro proyecto.
+  if (body.phaseId !== undefined) {
+    if (body.phaseId === null) {
+      data.phase = { disconnect: true };
+    } else if (typeof body.phaseId === "string" && body.phaseId) {
+      const phase = await prisma.timelinePhase.findFirst({
+        where: { id: body.phaseId, timelineId: existing.timelineId },
+        select: { id: true },
+      });
+      if (!phase) return NextResponse.json({ error: "La fase no pertenece a este cronograma" }, { status: 400 });
+      data.phase = { connect: { id: phase.id } };
+    } else {
+      return NextResponse.json({ error: "phaseId debe ser un id o null" }, { status: 400 });
     }
-    const t = typeof body.occurredAt === "string" ? Date.parse(body.occurredAt) : NaN;
-    if (Number.isNaN(t)) {
-      return NextResponse.json({ error: "occurredAt debe ser una fecha válida (ISO)" }, { status: 400 });
-    }
-    data.occurredAt = new Date(t);
   }
 
   if (Object.keys(data).length === 0) {
@@ -127,14 +134,13 @@ export async function PATCH(
   // bloquearlas trababa justo el triage que hay que hacer a mano — ocultarlas del cliente.
   if (body.kind !== undefined || body.weeksImpact !== undefined) {
     const effectiveKind = (data.kind as ParticularidadKind | undefined) ?? existing.kind;
-    const effectiveWeeks =
+    const rawWeeks =
       data.weeksImpact !== undefined ? (data.weeksImpact as number | null) : existing.weeksImpact;
-    if (effectiveKind === "ATRASO" && (effectiveWeeks === null || effectiveWeeks < 1)) {
-      return NextResponse.json(
-        { error: "Un atraso necesita al menos 1 semana." },
-        { status: 400 },
-      );
-    }
+    // Un AVISO no mueve el plan → se le limpian las semanas (incluso si venía de otro kind).
+    const effectiveWeeks = normalizeWeeksForKind(effectiveKind, rawWeeks);
+    const err = checkKindWeeksInvariant(effectiveKind, effectiveWeeks);
+    if (err) return NextResponse.json({ error: err }, { status: 400 });
+    if (effectiveWeeks !== rawWeeks) data.weeksImpact = effectiveWeeks;
   }
 
   const updated = await prisma.particularidad.update({
