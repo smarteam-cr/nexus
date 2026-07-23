@@ -2604,6 +2604,26 @@ async function persistTimelineFromAgentOutput(
         phases: proposedPhases,
       };
 
+      // ¿La propuesta es un NO-OP? (mismos ids en el mismo orden, mismos campos que el PUT
+      // escribiría, mismo anchor). Regenerar el handoff para refrescar CONTEXTO no debe generar
+      // ruido en el cronograma: antes TODA regeneración dejaba una "propuesta pendiente" aunque
+      // fuera idéntica a lo existente, y el CSE tenía que descartarla a mano.
+      const phaseFp = (p: {
+        id?: string | null; name: string; durationWeeks: number; startWeek?: number | null;
+        sessionCount: number | null; notes: string | null; activityType?: string | null;
+      }) =>
+        JSON.stringify([p.id ?? null, p.name, p.durationWeeks, p.startWeek ?? null, p.sessionCount ?? null, p.notes ?? null, p.activityType ?? null]);
+      const isNoOp =
+        pendingProposal.anchorStartDate === (existing.anchorStartDate?.toISOString() ?? null) &&
+        proposedPhases.length === existing.phases.length &&
+        proposedPhases.every((p, i) => phaseFp(p) === phaseFp(existing.phases[i]));
+      if (isNoOp) {
+        console.log(
+          `[analyze] propuesta de cronograma idéntica a lo existente — no se guarda (project ${bodyProjectId}, run ${agentRunId}).`,
+        );
+        return;
+      }
+
       await prisma.projectTimeline.update({
         where: { projectId: bodyProjectId },
         data: {
