@@ -109,6 +109,100 @@ describe("matriz de contraste de la marca (AA, contra el fondo REAL)", () => {
   }
 });
 
+// ── Paleta INTERNA (.stl-internal) ───────────────────────────────────────────
+// Los documentos que el cliente NO ve (canvas Exploración) re-declaran la paleta a
+// grises + UN ámbar. El guard tiene que cubrirla también: es el mismo motor y los
+// mismos componentes, así que un par ilegal acá rompe igual la legibilidad.
+const BLOQUE_INTERNO = ENGINE.match(/\.stl\.stl-internal\s*\{([^}]*)\}/)?.[1] ?? "";
+function internalToken(name: string): string {
+  const m = BLOQUE_INTERNO.match(new RegExp(`${name}:\\s*(#[0-9A-Fa-f]{6})`));
+  if (!m) throw new Error(`token interno ${name} no encontrado en .stl.stl-internal`);
+  return m[1].toUpperCase();
+}
+
+describe("paleta interna (.stl-internal): gris + UN ámbar, y legible", () => {
+  it("el bloque .stl.stl-internal existe y va DESPUÉS del bloque de marca", () => {
+    expect(BLOQUE_INTERNO, "no se encontró el bloque .stl.stl-internal").not.toBe("");
+    expect(ENGINE.indexOf(".stl.stl-internal")).toBeGreaterThan(ENGINE.indexOf(".stl {"));
+  });
+
+  // Si alguien mueve el bloque interno ARRIBA del de marca, `token()` (primer match)
+  // empezaría a leer los grises y TODA la matriz de arriba pasaría a validar la paleta
+  // equivocada en silencio. Este test lo vuelve imposible.
+  it("los tokens de MARCA se siguen leyendo del bloque base, no del interno", () => {
+    expect(P.blue).toBe("#0B58D3");
+    expect(P.darkBg).toBe("#051849");
+    expect(P.text).toBe("#051849");
+  });
+
+  const I = {
+    bg: internalToken("--bg"),
+    soft: internalToken("--bg-soft"),
+    text: internalToken("--text"),
+    text2: internalToken("--text-2"),
+    muted: internalToken("--text-muted"),
+    blue: internalToken("--blue"),
+    darkBg: internalToken("--dark-bg"),
+    darkCard: internalToken("--dark-card"),
+    darkText2: internalToken("--dark-text-2"),
+    flag: internalToken("--flag"),
+    flagSoft: internalToken("--flag-soft"),
+  };
+
+  const casos: Array<[string, string, string, number]> = [
+    ["tinta sobre blanco", I.text, I.bg, 4.5],
+    ["tinta sobre gris suave", I.text, I.soft, 4.5],
+    ["secundario sobre blanco", I.text2, I.bg, 4.5],
+    ["secundario sobre gris suave", I.text2, I.soft, 4.5],
+    ["muted sobre blanco", I.muted, I.bg, 4.5],
+    ["muted sobre gris suave", I.muted, I.soft, 4.5],
+    ["interactivo (grafito) sobre blanco", I.blue, I.bg, 4.5],
+    ["interactivo (grafito) sobre gris suave", I.blue, I.soft, 4.5],
+    ["blanco sobre banda carbón", "#FFFFFF", I.darkBg, 4.5],
+    ["blanco sobre card carbón", "#FFFFFF", I.darkCard, 4.5],
+    ["secundario-dark sobre banda carbón", I.darkText2, I.darkBg, 4.5],
+    ["ámbar de «sin verificar» sobre su fondo", I.flag, I.flagSoft, 4.5],
+    ["ámbar de «sin verificar» sobre blanco", I.flag, I.bg, 4.5],
+  ];
+  for (const [desc, fg, bg, min] of casos) {
+    it(`${desc} ≥ ${min}:1`, () => {
+      const r = ratio(fg, bg);
+      expect(r, `${fg} sobre ${bg} da ${r.toFixed(2)}:1 (mínimo ${min}:1)`).toBeGreaterThanOrEqual(min);
+    });
+  }
+
+  // "Gris + UN ámbar" es la decisión de producto (el documento tiene que leerse como
+  // interno de un vistazo). Verificable: ningún color de MARCA puede aparecer adentro.
+  it("la paleta interna NO reintroduce ningún color de marca", () => {
+    for (const marca of ["0B58D3", "07429A", "1E8FF6", "E8481C", "F87B5B", "051849", "FBF1E4", "FF7A59"]) {
+      expect(
+        BLOQUE_INTERNO.toUpperCase().includes(marca),
+        `.stl-internal reintroduce el color de marca #${marca}`,
+      ).toBe(false);
+    }
+  });
+
+  // El ámbar es la ÚNICA señal cromática permitida: los demás tokens del bloque tienen
+  // que ser NEUTROS. Se mide por SATURACIÓN (HSL), no por spread RGB crudo: los grises
+  // fríos de la escala (ej. #4b5563, azulado a propósito) son neutros legítimos y un
+  // spread crudo los rechazaba, mientras que un acento real está muy por encima
+  // (#0B58D3 royal ≈ 90%, #E8481C naranja ≈ 82%). El corte en 25% los separa limpio.
+  it("fuera del ámbar, todos los tokens del bloque interno son NEUTROS (saturación < 25%)", () => {
+    const hexes = [...BLOQUE_INTERNO.matchAll(/(--[a-z0-9-]+):\s*(#[0-9A-Fa-f]{6})/g)];
+    const permitidos = new Set(["--flag", "--flag-soft", "--flag-line"]);
+    for (const [, name, hex] of hexes) {
+      if (permitidos.has(name)) continue;
+      const h = hex.replace("#", "");
+      const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const l = (max + min) / 2;
+      const sat = max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
+      expect(sat, `${name}: ${hex} no es neutro (saturación ${(sat * 100).toFixed(0)}%, máx 25%)`).toBeLessThanOrEqual(0.25);
+    }
+  });
+});
+
 describe("reglas duras de la marca", () => {
   it("la menta Insider #42E4B3 tiene CERO usos en el motor (reservada)", () => {
     for (const [name, css] of [["landing-engine.css", ENGINE], ["kickoff-landing.css", KICKOFF]] as const) {

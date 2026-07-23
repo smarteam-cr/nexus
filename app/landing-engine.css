@@ -80,6 +80,72 @@
 }
 .stl ::selection { background: var(--blue); color: #fff; }
 
+/* ── Paleta INTERNA (.stl-internal) ──────────────────────────────────────────
+   Los documentos que el CLIENTE NO ve (hoy: canvas Exploración) se rinden en
+   GRISES Y BLANCOS, para que se distingan a simple vista de los que sí ve
+   (kickoff, business case, cronograma). No es un tema alternativo del motor: es
+   el MISMO motor con la paleta re-declarada — cero cambios en componentes, y los
+   documentos de marca quedan intactos por construcción.
+
+   Va DESPUÉS del bloque `.stl` a propósito, por dos razones que hay que respetar
+   si alguien mueve este bloque: (1) la cascada — con la misma especificidad, gana
+   el último; (2) `lib/ui/landing-brand-contrast.test.ts` lee cada token con el
+   PRIMER match del archivo, así que los valores de MARCA tienen que declararse
+   arriba. Ese test también valida los pares de acá (ver INTERNA en el test).
+
+   El ÚNICO color es el ámbar `--flag`, reservado a marcar lo NO VERIFICADO — la
+   distinción que sostiene el documento. Si mañana se le agrega un segundo acento,
+   deja de leerse como interno. */
+.stl.stl-internal {
+  /* Interactivo/acentos → grafito (sin marca) */
+  --blue:        #4b5563;
+  --blue-dark:   #374151;
+  --blue-soft:   rgba(75, 85, 99, 0.08);
+  --teal:        #9ca3af;
+  --teal-dark:   #4b5563;
+  --teal-soft:   #f4f5f7;
+  --cream-line:  #e3e5e9;
+  --accent-btn:  #4b5563;
+  --accent-btn-hover: #374151;
+
+  /* Light */
+  --bg:          #ffffff;
+  --bg-soft:     #f4f5f7;
+  --border:      #e3e5e9;
+  --border-strong: #c8ccd3;
+  --text:        #1f2328;
+  --text-2:      #495057;
+  /* #6b7280 (gray-500) da 4.43:1 sobre --bg-soft — reprobaba AA por poco y el guard
+     de contraste lo frenó. Este llega a 4.5+ sobre blanco Y sobre el gris suave. */
+  --text-muted:  #5f6673;
+
+  /* Dark (carbón, no navy) */
+  --dark-bg:     #26292e;
+  --dark-bg-deep: #17191c;
+  --dark-card:   #32363c;
+  --dark-text:   #ffffff;
+  --dark-text-2: #c8ccd3;
+  --dark-text-muted: #9ca3af;
+
+  /* La ÚNICA señal de color: ámbar de "sin verificar". */
+  --flag:        #B45309;
+  --flag-soft:   #FEF3C7;
+  --flag-line:   #FCD34D;
+}
+
+/* Marca de "sin verificar": la sección de supuestos y los chips ⚠️. Es lo único
+   que rompe el gris — a propósito, es el dato más accionable del documento. */
+.stl.stl-internal .stl-flag {
+  color: var(--flag);
+  background: var(--flag-soft);
+  border: 1px solid var(--flag-line);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-block;
+}
+
 /* ── Secciones (tema por sección) ───────────────────────────────────────── */
 .stl .stl-sec { padding: clamp(48px, 7vw, 88px) 0; position: relative; }
 .stl .stl-sec.hero-backdrop { padding: clamp(80px, 12vh, 140px) 0; }
@@ -221,6 +287,10 @@
 
 /* ── Grids ───────────────────────────────────────────────────────────────── */
 .stl .stl-grid { display: grid; gap: 18px; margin-top: 32px; }
+/* Columna única: ítems anchos que se leen en secuencia (ej. el plan de sesiones de
+   Exploración, donde cada tarjeta trae su propia lista adentro y una grilla los
+   apretaría). Mismo gap/margen que .stl-grid — es su hermano de 1 columna. */
+.stl .stl-stack { display: grid; gap: 18px; margin-top: 32px; grid-template-columns: 1fr; }
 .stl .stl-grid-2 { grid-template-columns: repeat(2, 1fr); }
 .stl .stl-grid-3 { grid-template-columns: repeat(3, 1fr); }
 .stl .stl-grid-4 { grid-template-columns: repeat(4, 1fr); }

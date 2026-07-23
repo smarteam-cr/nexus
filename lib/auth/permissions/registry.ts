@@ -56,6 +56,11 @@ export const PERMISSION_SECTIONS = [
     actions: [GENERATE, REGENERATE],
   },
   {
+    key: "exploracion",
+    label: "Exploración (descubrimiento del negocio)",
+    actions: [GENERATE, REGENERATE],
+  },
+  {
     key: "procesos",
     label: "Procesos",
     actions: [

@@ -21,6 +21,57 @@ interface BlockLite {
   status: string;
 }
 
+/**
+ * Marco breve de la relación PREVIA del cliente con Smarteam (proyectos y handoffs
+ * anteriores al actual), listo para inyectar como contexto en el prompt de un agente.
+ * Devuelve "" si no hay historia.
+ *
+ * Vive acá —junto a los otros serializadores de contexto— porque lo consumen DOS
+ * agentes: el de Handoff (que lo tenía inline en analyze/route.ts) y el de Exploración.
+ * Budget chico (~2.5k chars) y aditivo: da conciencia de la historia sin diluir las
+ * fuentes principales.
+ */
+export async function loadPriorRelationshipContext(
+  clientId: string,
+  excludeProjectId?: string | null,
+): Promise<string> {
+  const [priorProjects, priorHandoffs] = await Promise.all([
+    prisma.project.findMany({
+      where: {
+        clientId,
+        serviceType: { not: "__strategy__" },
+        ...(excludeProjectId ? { id: { not: excludeProjectId } } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { name: true, status: true, serviceType: true, createdAt: true },
+    }),
+    prisma.handoff.findMany({
+      where: { clientId, ...(excludeProjectId ? { projectId: { not: excludeProjectId } } : {}) },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { createdAt: true, hubspotDealId: true, project: { select: { name: true } } },
+    }),
+  ]);
+  if (priorProjects.length === 0 && priorHandoffs.length === 0) return "";
+
+  const projLines = priorProjects.map(
+    (p) => `- ${p.name}${p.serviceType ? ` (${p.serviceType})` : ""} · ${p.status} · ${p.createdAt.toISOString().slice(0, 10)}`,
+  );
+  const hoLines = priorHandoffs.map(
+    (h) => `- ${h.project.name} · ${h.createdAt.toISOString().slice(0, 10)}${h.hubspotDealId ? ` · deal ${h.hubspotDealId}` : ""}`,
+  );
+  return [
+    "=== RELACIÓN PREVIA DEL CLIENTE CON SMARTEAM (contexto — no lo repitas literal) ===",
+    "Este puede NO ser el primer proyecto del cliente. Usalo solo para no contradecir la historia previa ni duplicar lo ya entregado; el foco de tu análisis sigue siendo el deal ancla y las sesiones de ventas.",
+    priorProjects.length ? `Proyectos previos (${priorProjects.length}):\n${projLines.join("\n")}` : "",
+    priorHandoffs.length ? `Handoffs previos (${priorHandoffs.length}):\n${hoLines.join("\n")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 2500);
+}
+
 function blockToText(b: BlockLite): string {
   const data = (b.data ?? {}) as Record<string, unknown>;
   switch (b.blockType) {

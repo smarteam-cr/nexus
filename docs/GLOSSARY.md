@@ -16,6 +16,18 @@
   proyecto. Vive en `CanvasBlock`s del canvas "Handoff".
 - **Kickoff**: arranque del proyecto con el cliente (canvas "Kickoff"; tiene vista externa).
 - **Cronograma** (`ProjectTimeline`): plan del proyecto con fases/tareas/baselines/fechas reales/avances.
+- **Exploración** (canvas "Exploración", `agent-exploracion-canvas`): guía **INTERNA** por
+  proyecto para descubrir el negocio del cliente cuando el kickoff ya pasó — qué hay que
+  entender, cómo preguntarlo, en qué orden y a quién del cliente involucrar en cada sesión.
+  Su eje es separar **lo que ya sabemos** (afirmado por el handoff, con su fuente → no se
+  repregunta) de **lo que damos por supuesto** (sin verificar → de ahí salen las preguntas).
+  7 secciones sobre el motor `LandingView`; se genera on-demand desde la sección del proyecto
+  y sus fuentes, por peso, son: handoff del proyecto (ancla) → handoffs y proyectos previos
+  del cliente → etiquetas → los demás canvas. **El cliente NUNCA la ve**: no existe ruta
+  `/external` ni publicación (congelado por `lib/canvas/exploracion-internal.test.ts`) y se
+  renderiza con la **paleta interna** (`.stl-internal`: grises y blancos, ámbar solo para lo
+  no verificado) para distinguirla a simple vista de los documentos de cara al cliente.
+  Ver DECISIONS §Exploración.
 - **Particularidad** (`Particularidad`): desviación FECHADA y curada del cronograma con atribución —
   el "por qué y quién" movió el plan, en lenguaje cliente (a diferencia de `TimelineChange`, cuyo log
   es ruido de máquina). Es un hecho que ALTERÓ el plan (movió/comprometió una fecha), no un pendiente.

@@ -20,6 +20,8 @@ import { KICKOFF_SECTION_DEFS } from "@/components/landing/configs/kickoff.defs"
 import { KICKOFF_SECTION_COMPONENTS, landingConfigForKickoff } from "@/components/landing/configs/kickoff";
 import { DESARROLLO_SECTION_DEFS } from "@/components/landing/configs/desarrollo.defs";
 import { DESARROLLO_SECTION_COMPONENTS, landingConfigForDesarrollo } from "@/components/landing/configs/desarrollo";
+import { EXPLORACION_SECTION_DEFS } from "@/components/landing/configs/exploracion.defs";
+import { EXPLORACION_SECTION_COMPONENTS, landingConfigForExploracion } from "@/components/landing/configs/exploracion";
 
 /** Renderers que ningún def VIVO usa pero que se conservan a PROPÓSITO: los
  *  snapshots publicados congelan `sectionType` y `configForSnapshot` los
@@ -119,5 +121,50 @@ describe("Desarrollo: registry completo + keys congeladas", () => {
       (t) => !usados.has(t) && !LEGACY_SNAPSHOT_TYPES.has(t),
     );
     expect(huerfanos).toEqual([]);
+  });
+});
+
+describe("Exploración: registry completo + keys congeladas", () => {
+  it("cada def resuelve componente y la config no dropea ninguna", () => {
+    const faltantes = EXPLORACION_SECTION_DEFS.filter((d) => !EXPLORACION_SECTION_COMPONENTS[d.sectionType ?? d.key]);
+    expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
+    expect(landingConfigForExploracion().sections.map((s) => s.key)).toEqual(
+      EXPLORACION_SECTION_DEFS.map((d) => d.key),
+    );
+  });
+
+  it("snapshot de keys: exploracion abre, cierre cierra", () => {
+    expect(EXPLORACION_SECTION_DEFS.map((d) => d.key)).toEqual([
+      "exploracion", "ya_sabemos", "sin_verificar", "sesiones",
+      "personas", "profundidad", "cierre",
+    ]);
+  });
+
+  it("sin componentes huérfanos en EXPLORACION_SECTION_COMPONENTS", () => {
+    const usados = new Set(EXPLORACION_SECTION_DEFS.map((d) => d.sectionType ?? d.key));
+    const huerfanos = Object.keys(EXPLORACION_SECTION_COMPONENTS).filter(
+      (t) => !usados.has(t) && !LEGACY_SNAPSHOT_TYPES.has(t),
+    );
+    expect(huerfanos).toEqual([]);
+  });
+
+  // La sección que sostiene el documento: separar lo confirmado de lo supuesto. Si
+  // alguna de las dos se cayera del set, el documento perdería su razón de ser y el
+  // snapshot de arriba lo diría — pero este test lo dice POR QUÉ.
+  it("las dos secciones del eje confirmado-vs-supuesto existen y el agente las genera", () => {
+    for (const key of ["ya_sabemos", "sin_verificar"]) {
+      const def = EXPLORACION_SECTION_DEFS.find((d) => d.key === key);
+      expect(def, `falta la sección ${key}`).toBeDefined();
+      expect(def?.agentGenerated, `${key} debe generarla el agente`).not.toBe(false);
+    }
+  });
+
+  // El cierre es CURADO: si el agente pudiera escribirlo, una regeneración pisaría lo
+  // que el equipo dejó anotado (mismo criterio que el `cierre` de kickoff/desarrollo).
+  it("el cierre es curado (agentGenerated:false) y va pinneado al final", () => {
+    const cierre = EXPLORACION_SECTION_DEFS.at(-1);
+    expect(cierre?.key).toBe("cierre");
+    expect(cierre?.agentGenerated).toBe(false);
+    expect(cierre?.pinned).toBe(true);
   });
 });

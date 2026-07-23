@@ -63,6 +63,20 @@ export const DESARROLLO_CIERRE_DEFAULT = {
   buttonTarget: "_blank",
 } as const;
 
+// Default del CIERRE del canvas Exploración. OJO: este documento es INTERNO (no lo ve
+// el cliente), así que el "botón" apunta a recursos del equipo (carpeta de notas, doc
+// de descubrimiento), nunca a una agenda de cara al cliente. Fuente ÚNICA — la usan
+// createExploracionCanvas, la reconciliación y el `empty` de exploracion.defs.
+export const EXPLORACION_CIERRE_DEFAULT = {
+  eyebrow: "Cómo se cierra",
+  headline: "Qué hacemos con lo que averigüemos",
+  subhead:
+    "Al cerrar cada sesión, mueve lo confirmado a «Lo que ya sabemos» y abre las preguntas nuevas que aparezcan.",
+  buttonLabel: "",
+  buttonUrl: "",
+  buttonTarget: "_blank",
+} as const;
+
 // ── Canvas Handoff (traspaso Sales→CS) ────────────────────────────────────────
 // YA NO se crea con createDefaultCanvases: el handoff es una entidad cliente-level
 // (model Handoff) que arranca el proyecto, y su canvas lo monta el FLUJO de
@@ -197,6 +211,9 @@ export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
   // Requerimiento técnico: canvas ON-DEMAND (solo si el handoff detecta trabajo técnico).
   // Lo crea createDesarrolloCanvas; el agente "agent-desarrollo-canvas" escribe en él.
   desarrollo: "Desarrollo",
+  // Exploración del negocio: canvas ON-DEMAND e INTERNO (lo crea el botón "Generar
+  // exploración" del proyecto). El agente "agent-exploracion-canvas" escribe en él.
+  exploracion: "Exploración",
   businesscase: "Business Case",
   // D.1: el canvas "Cronograma" no tiene secciones → resolver targetCanvasId acá
   // evita que analyze inyecte instrucciones de formato cards al prompt del agente
@@ -208,24 +225,23 @@ export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
 export const KICKOFF_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c) => c.name === "Kickoff")!;
 
 /**
- * Secuencia destino de las secciones de un canvas Kickoff: parte del orden VIVO
- * (`existingKeys`, tal como las ve el CSE — que puede haberlas reordenado con drag)
- * y agrega cada key canónica faltante justo detrás de su predecesora canónica
- * presente. Si ninguna predecesora existe, va al principio.
+ * Núcleo PURO de la secuencia destino de secciones de un canvas: parte del orden VIVO
+ * (`existingKeys`, tal como las ve el CSE — que puede haberlas reordenado con drag) y
+ * agrega cada key canónica faltante justo detrás de su predecesora canónica presente.
+ * Si ninguna predecesora existe, va al principio. NUNCA quita keys: las secciones
+ * custom del CSE sobreviven en su lugar.
  *
- * PURA: la comparten `reconcileKickoffCanvasSections` (runtime, al regenerar) y
- * `scripts/backfill-kickoff-sections.ts` (los kickoffs viejos) → mismo resultado.
- * NUNCA quita keys: las secciones custom del CSE sobreviven en su lugar.
+ * Vive UNA vez y lo envuelven los tres canvases reconciliables (kickoff, desarrollo,
+ * exploración) — antes era el mismo algoritmo copiado por canvas.
  */
-export function kickoffSectionSequence(existingKeys: string[]): string[] {
-  const canon = KICKOFF_CANVAS.sections.map((s) => s.key);
+function sectionSequence(canonKeys: string[], existingKeys: string[]): string[] {
   const seq = [...existingKeys];
-  for (const key of canon) {
+  for (const key of canonKeys) {
     if (seq.includes(key)) continue;
-    const canonIdx = canon.indexOf(key);
+    const canonIdx = canonKeys.indexOf(key);
     let at = 0;
     for (let i = canonIdx - 1; i >= 0; i--) {
-      const pos = seq.indexOf(canon[i]);
+      const pos = seq.indexOf(canonKeys[i]);
       if (pos !== -1) {
         at = pos + 1;
         break;
@@ -234,6 +250,15 @@ export function kickoffSectionSequence(existingKeys: string[]): string[] {
     seq.splice(at, 0, key);
   }
   return seq;
+}
+
+/**
+ * Secuencia destino de las secciones de un canvas Kickoff.
+ * La comparten `reconcileKickoffCanvasSections` (runtime, al regenerar) y
+ * `scripts/backfill-kickoff-sections.ts` (los kickoffs viejos) → mismo resultado.
+ */
+export function kickoffSectionSequence(existingKeys: string[]): string[] {
+  return sectionSequence(KICKOFF_CANVAS.sections.map((s) => s.key), existingKeys);
 }
 
 // ── Canvas Desarrollo (requerimiento técnico) ─────────────────────────────────
@@ -256,24 +281,45 @@ export const DESARROLLO_CANVAS: CanvasDefinition = {
   ],
 };
 
-/** Secuencia destino de las secciones del canvas Desarrollo. Espeja
- *  `kickoffSectionSequence` (orden vivo + inserta canónicas faltantes detrás de su
- *  predecesora). La usan reconcileDesarrolloCanvasSections y el backfill futuro. */
+/** Secuencia destino de las secciones del canvas Desarrollo (orden vivo + inserta
+ *  canónicas faltantes detrás de su predecesora). La usan
+ *  reconcileDesarrolloCanvasSections y el backfill futuro. */
 export function desarrolloSectionSequence(existingKeys: string[]): string[] {
-  const canon = DESARROLLO_CANVAS.sections.map((s) => s.key);
-  const seq = [...existingKeys];
-  for (const key of canon) {
-    if (seq.includes(key)) continue;
-    const canonIdx = canon.indexOf(key);
-    let at = 0;
-    for (let i = canonIdx - 1; i >= 0; i--) {
-      const pos = seq.indexOf(canon[i]);
-      if (pos !== -1) {
-        at = pos + 1;
-        break;
-      }
-    }
-    seq.splice(at, 0, key);
-  }
-  return seq;
+  return sectionSequence(DESARROLLO_CANVAS.sections.map((s) => s.key), existingKeys);
+}
+
+// ── Canvas Exploración (descubrimiento del negocio del cliente) ───────────────
+// Canvas ON-DEMAND e INTERNO: NO va en DEFAULT_PROJECT_CANVASES (no se pre-crea en los
+// ~113 proyectos: ver los 111 cascarones vacíos de Handoff que hubo que borrar) y NO
+// tiene superficie externa — no existe /external/exploracion ni publish-exploracion, y
+// `lib/canvas/exploracion-internal.test.ts` congela esa ausencia. Lo monta
+// createExploracionCanvas cuando el CSE toca "Generar exploración" en el proyecto.
+//
+// Va DESPUÉS del kickoff en el flujo (el kickoff ya pasó y el proyecto arrancó). `order`
+// es Int y el Kickoff ya ocupa el 1, así que va en 2 — empata con Diagnóstico y el
+// desempate del listado (`[order asc, createdAt asc]`) lo deja detrás, porque el canvas
+// de Exploración se crea on-demand mucho después que los del set inicial. Renumerar
+// Diagnóstico/Planificación no serviría: los ~113 proyectos ya tienen su `order` en DB.
+// Fuente ÚNICA de sus secciones (keys/labels 1:1 con EXPLORACION_SECTION_DEFS del
+// motor). Solo `cierre` es curada (defaultData).
+export const EXPLORACION_CANVAS: CanvasDefinition = {
+  name: "Exploración",
+  isDefault: false,
+  order: 2,
+  sections: [
+    { key: "exploracion",   label: "Qué hay que entender de este proyecto" },
+    { key: "ya_sabemos",    label: "Lo que ya sabemos" },
+    { key: "sin_verificar", label: "Lo que damos por supuesto" },
+    { key: "sesiones",      label: "Plan de sesiones" },
+    { key: "personas",      label: "A quién involucrar" },
+    { key: "profundidad",   label: "Qué hay que entender a fondo" },
+    { key: "cierre",        label: "Cómo se cierra", defaultData: { ...EXPLORACION_CIERRE_DEFAULT } },
+  ],
+};
+
+/** Secuencia destino de las secciones del canvas Exploración (orden vivo + inserta
+ *  canónicas faltantes detrás de su predecesora). La usa
+ *  reconcileExploracionCanvasSections. */
+export function exploracionSectionSequence(existingKeys: string[]): string[] {
+  return sectionSequence(EXPLORACION_CANVAS.sections.map((s) => s.key), existingKeys);
 }

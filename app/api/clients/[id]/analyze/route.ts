@@ -17,8 +17,9 @@ import { postProcessCards } from "@/lib/canvas/post-process";
 import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
+import { runExploracionGeneration } from "@/lib/canvas/exploracion-generate";
 import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
-import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
+import { loadCanvasContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
 import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
 import { patchBaselinePhaseTasks } from "@/lib/timeline/baseline";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
@@ -277,6 +278,11 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // persiste). Se resuelve por id para no tocar a ningún otro agente.
   const isDesarrolloAgent = agent.id === "agent-desarrollo-canvas";
 
+  // Ídem el agente de Exploración (guía interna de descubrimiento): delega en
+  // `runExploracionGeneration`, que arma su propio input (handoff ancla + historial del
+  // cliente + tags + canvases del proyecto) y persiste. Resuelto por id.
+  const isExploracionAgent = agent.id === "agent-exploracion-canvas";
+
   // ── D.1: fail-fast del agente de detalle de cronograma ──────────────────────
   // Este agente DETALLA un esqueleto existente (fases con ids). Sin proyecto o
   // sin timeline con fases no hay nada que detallar — se corta acá, antes de
@@ -400,6 +406,15 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // (artifact-gate) ya corrió arriba; acá solo se ejecuta el trabajo.
   if (isDesarrolloAgent && bodyProjectId) {
     const r = await runDesarrolloGeneration({ projectId: bodyProjectId, agentRunId: existingRunId });
+    return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
+  }
+
+  // ── Exploración: short-circuit al runner self-contained ───────────────────────
+  // Mismo trato que Desarrollo: el runner asegura el canvas, arma su input desde el
+  // handoff + el historial del cliente + tags + canvases, y persiste. El gating
+  // (artifact-gate, celda `exploracion`) ya corrió arriba.
+  if (isExploracionAgent && bodyProjectId) {
+    const r = await runExploracionGeneration({ projectId: bodyProjectId, agentRunId: existingRunId });
     return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
   }
 
@@ -1531,42 +1546,10 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   // chico (~2.5k chars) y aditivo — no diluye las fuentes principales.
   if (isHandoffAgent) {
     try {
-      const [priorProjects, priorHandoffs] = await Promise.all([
-        prisma.project.findMany({
-          where: {
-            clientId,
-            serviceType: { not: "__strategy__" },
-            ...(bodyProjectId ? { id: { not: bodyProjectId } } : {}),
-          },
-          orderBy: { createdAt: "desc" },
-          take: 10,
-          select: { name: true, status: true, serviceType: true, createdAt: true },
-        }),
-        prisma.handoff.findMany({
-          where: { clientId, ...(bodyProjectId ? { projectId: { not: bodyProjectId } } : {}) },
-          orderBy: { createdAt: "desc" },
-          take: 10,
-          select: { createdAt: true, hubspotDealId: true, project: { select: { name: true } } },
-        }),
-      ]);
-      if (priorProjects.length > 0 || priorHandoffs.length > 0) {
-        const projLines = priorProjects.map(
-          (p) => `- ${p.name}${p.serviceType ? ` (${p.serviceType})` : ""} · ${p.status} · ${p.createdAt.toISOString().slice(0, 10)}`,
-        );
-        const hoLines = priorHandoffs.map(
-          (h) => `- ${h.project.name} · ${h.createdAt.toISOString().slice(0, 10)}${h.hubspotDealId ? ` · deal ${h.hubspotDealId}` : ""}`,
-        );
-        const frame = [
-          "=== RELACIÓN PREVIA DEL CLIENTE CON SMARTEAM (contexto — no lo repitas literal) ===",
-          "Este puede NO ser el primer proyecto del cliente. Usalo solo para no contradecir la historia previa ni duplicar lo ya entregado; el foco de tu análisis sigue siendo el deal ancla y las sesiones de ventas.",
-          priorProjects.length ? `Proyectos previos (${priorProjects.length}):\n${projLines.join("\n")}` : "",
-          priorHandoffs.length ? `Handoffs previos (${priorHandoffs.length}):\n${hoLines.join("\n")}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n")
-          .slice(0, 2500);
-        userMessage = `${userMessage}\n\n${frame}`;
-      }
+      // El armado vive en lib/canvas/load-canvas-context.ts (lo comparte el agente de
+      // Exploración) — mismo query, mismo budget y mismo texto que tenía acá inline.
+      const frame = await loadPriorRelationshipContext(clientId, bodyProjectId);
+      if (frame) userMessage = `${userMessage}\n\n${frame}`;
     } catch (e) {
       console.error("[analyze handoff] marco relación previa error:", e);
     }

@@ -23,6 +23,7 @@ const AGENT_SECTION: Record<string, string> = {
   "agent-mapeo-inicial": "procesos",
   "agent-kickoff-canvas": "kickoff",
   "agent-desarrollo-canvas": "desarrollo",
+  "agent-exploracion-canvas": "exploracion",
   "agent-timeline-detail": "cronograma",
   "agent-planificacion-canvas": "cronograma",
 };

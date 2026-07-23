@@ -41,7 +41,7 @@ const DEUDA = {
     "components/clients/ClientCanvasPanel.tsx:141",
     "components/clients/ClientInfoPanel.tsx:128",
     "components/clients/MinuteDialog.tsx:211",
-    "components/clients/ProjectCanvasPanel.tsx:29",
+    "components/clients/ProjectCanvasPanel.tsx:31",
     "components/clients/ProjectSessionsReview.tsx:152",
     "components/clients/SectionDiscoveryModal.tsx:9",
   ],

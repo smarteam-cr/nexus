@@ -22,7 +22,7 @@ import { prisma } from "@/lib/db/prisma";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 
 export type ArtifactGate = {
-  section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo";
+  section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo" | "exploracion";
   action: "generate" | "regenerate";
 };
 
@@ -80,6 +80,15 @@ export async function resolveArtifactGate(
       });
       return { section: "desarrollo", action: aiBlocks > 0 ? "regenerate" : "generate" };
     }
+    case "exploracion": {
+      // Canvas "Exploración" (descubrimiento del negocio, INTERNO). "Ya existe" = bloques
+      // source AGENT (el `cierre` curado nace HUMAN → no cuenta). Mismo criterio que kickoff.
+      if (!projectId) return { section: "exploracion", action: "generate" };
+      const aiBlocks = await prisma.canvasBlock.count({
+        where: { source: "AGENT", section: { canvas: { projectId, name: "Exploración" } } },
+      });
+      return { section: "exploracion", action: aiBlocks > 0 ? "regenerate" : "generate" };
+    }
     // Planificación escribe el ESQUELETO del cronograma (persistTimelineFromAgentOutput).
     case "planificacion":
       return {
@@ -124,14 +133,18 @@ export async function resolveArtifactGate(
 
 /** Copy del 403 (interno, voseo). */
 export function artifactGateMessage(gate: ArtifactGate): string {
-  const label = {
+  // Record explícito sobre ArtifactGate["section"]: si mañana entra una sección nueva al
+  // tipo y no se le pone copy acá, NO compila (antes el objeto inferido la dejaba pasar
+  // hasta que el 403 mostraba "undefined").
+  const label: Record<ArtifactGate["section"], string> = {
     handoff: "el handoff",
     kickoff: "el kickoff",
     procesos: "los procesos",
     cronograma: "el cronograma",
     desarrollo: "el requerimiento de desarrollo",
-  }[gate.section];
+    exploracion: "la exploración del negocio",
+  };
   return gate.action === "regenerate"
-    ? `Tu rol no puede regenerar ${label} con IA (ya está generado). Pedile a un CSL o Super Admin, o ajustalo a mano.`
-    : `Tu rol no puede generar ${label} con IA.`;
+    ? `Tu rol no puede regenerar ${label[gate.section]} con IA (ya está generado). Pedile a un CSL o Super Admin, o ajustalo a mano.`
+    : `Tu rol no puede generar ${label[gate.section]} con IA.`;
 }

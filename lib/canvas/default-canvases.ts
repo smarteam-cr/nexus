@@ -6,10 +6,12 @@ import {
   BUSINESS_CASE_CANVAS,
   KICKOFF_CANVAS,
   DESARROLLO_CANVAS,
+  EXPLORACION_CANVAS,
   DEFAULT_PROJECT_CANVASES,
   AGENT_GROUP_TO_CANVAS,
   kickoffSectionSequence,
   desarrolloSectionSequence,
+  exploracionSectionSequence,
 } from "./canvas-defs";
 import { templateById, templateDefsByKey } from "@/components/landing/configs/templates.defs";
 import { HUBSPOT_TEMPLATE_ID } from "@/lib/business-cases/case-types";
@@ -19,7 +21,7 @@ import { buildTemplateMetaEntry } from "@/lib/business-cases/template-meta";
 // que los importadores de servidor existentes (analyze/route.ts, etc.) sigan
 // funcionando sin cambios. La separación evita que un componente cliente que
 // importe estos datos arrastre `pg`/`fs` al bundle del navegador.
-export { HANDOFF_CANVAS, BUSINESS_CASE_CANVAS, KICKOFF_CANVAS, DESARROLLO_CANVAS, DEFAULT_PROJECT_CANVASES, AGENT_GROUP_TO_CANVAS };
+export { HANDOFF_CANVAS, BUSINESS_CASE_CANVAS, KICKOFF_CANVAS, DESARROLLO_CANVAS, EXPLORACION_CANVAS, DEFAULT_PROJECT_CANVASES, AGENT_GROUP_TO_CANVAS };
 export type { CanvasDefinition };
 
 // Acepta el cliente global o un cliente de transacción ($transaction) para que la
@@ -318,25 +320,30 @@ function byBlockCount(rows: Array<{ key: string; _count: { blocks: number } }>, 
   return rows.find((r) => r.key === key)?._count.blocks ?? 0;
 }
 
-/** Crea el canvas "Desarrollo" (+7 secciones de DESARROLLO_CANVAS) para un proyecto.
- *  ON-DEMAND: lo llama el auto-chain del handoff (createDesarrolloCanvas) y la rama
- *  desarrollo de analyze cuando aún no existe. Siembra el bloque de la sección CURADA
- *  (`cierre`, con defaultData) como CARD CONFIRMED — el resto lo genera el agente.
- *  Asume que el proyecto aún no tiene canvas "Desarrollo" (los callers lo chequean). */
-export async function createDesarrolloCanvas(projectId: string, db: Db = prisma): Promise<string> {
+/**
+ * Crea un canvas ON-DEMAND desde su definición (+ sus secciones) para un proyecto, y
+ * siembra el bloque de las secciones CURADAS (las que traen `defaultData`) como CARD
+ * CONFIRMED — sin bloque, el editor no persiste y el agente no las genera, así que
+ * quedarían muertas (misma razón que en el kickoff). El resto lo genera el agente.
+ * Asume que el proyecto aún no tiene ese canvas (los callers lo chequean).
+ *
+ * GENÉRICO a propósito: Desarrollo y Exploración son on-demand con la MISMA mecánica —
+ * antes esto era el mismo cuerpo copiado por canvas.
+ */
+async function createOnDemandCanvas(projectId: string, def: CanvasDefinition, db: Db = prisma): Promise<string> {
   const canvas = await db.projectCanvas.create({
     data: {
       projectId,
-      name: DESARROLLO_CANVAS.name,
-      isDefault: DESARROLLO_CANVAS.isDefault,
-      order: DESARROLLO_CANVAS.order,
-      sections: DESARROLLO_CANVAS.sections as unknown as Prisma.InputJsonValue,
+      name: def.name,
+      isDefault: def.isDefault,
+      order: def.order,
+      sections: def.sections as unknown as Prisma.InputJsonValue,
     },
     select: { id: true },
   });
 
   await db.canvasSection.createMany({
-    data: DESARROLLO_CANVAS.sections.map((s, i) => ({
+    data: def.sections.map((s, i) => ({
       canvasId: canvas.id,
       key: s.key,
       label: s.label,
@@ -344,9 +351,7 @@ export async function createDesarrolloCanvas(projectId: string, db: Db = prisma)
     })),
   });
 
-  // Sembrar el bloque de las secciones CURADAS (hoy solo `cierre`): sin bloque el
-  // editor no persiste y el agente no las genera → quedarían muertas (igual que kickoff).
-  const curated = DESARROLLO_CANVAS.sections.filter((s) => s.defaultData);
+  const curated = def.sections.filter((s) => s.defaultData);
   if (curated.length) {
     const rows = await db.canvasSection.findMany({
       where: { canvasId: canvas.id, key: { in: curated.map((s) => s.key) } },
@@ -370,20 +375,25 @@ export async function createDesarrolloCanvas(projectId: string, db: Db = prisma)
 }
 
 /**
- * Reconcilia un canvas "Desarrollo" YA EXISTENTE a la estructura canónica: crea las
- * secciones faltantes (respetando el orden vivo del CSE vía desarrolloSectionSequence)
- * y siembra el bloque de las curadas sin bloque. NUNCA borra ni pisa data. Idempotente.
- * La llama la rama desarrollo de analyze ANTES de generar (igual que kickoff).
+ * Reconcilia un canvas on-demand YA EXISTENTE a su estructura canónica: crea las
+ * secciones faltantes (respetando el orden vivo del CSE vía su `sequenceFn`) y siembra
+ * el bloque de las curadas que no lo tengan. NUNCA borra ni pisa data. Idempotente.
+ * La llaman las ramas de analyze ANTES de generar (igual que kickoff).
  */
-export async function reconcileDesarrolloCanvasSections(canvasId: string, db: Db = prisma): Promise<void> {
-  const canon = DESARROLLO_CANVAS.sections;
+async function reconcileOnDemandCanvasSections(
+  canvasId: string,
+  def: CanvasDefinition,
+  sequenceFn: (existingKeys: string[]) => string[],
+  db: Db = prisma,
+): Promise<void> {
+  const canon = def.sections;
   const existing = await db.canvasSection.findMany({
     where: { canvasId },
     orderBy: { order: "asc" },
     select: { id: true, key: true, order: true, _count: { select: { blocks: true } } },
   });
   const existingKeys = new Set(existing.map((s) => s.key));
-  const seq = desarrolloSectionSequence(existing.map((s) => s.key));
+  const seq = sequenceFn(existing.map((s) => s.key));
   const missing = canon.filter((s) => !existingKeys.has(s.key));
 
   if (missing.length) {
@@ -420,4 +430,26 @@ export async function reconcileDesarrolloCanvasSections(canvasId: string, db: Db
       status: "CONFIRMED" as const,
     })),
   });
+}
+
+/** Canvas "Desarrollo" (requerimiento técnico) — lo llama el auto-chain del handoff y la
+ *  rama desarrollo de analyze cuando aún no existe. */
+export async function createDesarrolloCanvas(projectId: string, db: Db = prisma): Promise<string> {
+  return createOnDemandCanvas(projectId, DESARROLLO_CANVAS, db);
+}
+
+/** Reconcilia el canvas "Desarrollo" a su estructura canónica. Idempotente. */
+export async function reconcileDesarrolloCanvasSections(canvasId: string, db: Db = prisma): Promise<void> {
+  return reconcileOnDemandCanvasSections(canvasId, DESARROLLO_CANVAS, desarrolloSectionSequence, db);
+}
+
+/** Canvas "Exploración" (descubrimiento del negocio, INTERNO) — lo llama el botón
+ *  "Generar exploración" del proyecto vía `ensureExploracionCanvas`. */
+export async function createExploracionCanvas(projectId: string, db: Db = prisma): Promise<string> {
+  return createOnDemandCanvas(projectId, EXPLORACION_CANVAS, db);
+}
+
+/** Reconcilia el canvas "Exploración" a su estructura canónica. Idempotente. */
+export async function reconcileExploracionCanvasSections(canvasId: string, db: Db = prisma): Promise<void> {
+  return reconcileOnDemandCanvasSections(canvasId, EXPLORACION_CANVAS, exploracionSectionSequence, db);
 }

@@ -679,6 +679,74 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   Mientras tanto, un tipo nuevo que publique copia el patrón `publishedSnapshot` congelado +
   chokepoint server-side fail-closed (ARCHITECTURE §1-WEB punto 7).
 
+## Exploración (descubrimiento del negocio del cliente)
+- **Qué es y por qué**: cuando el kickoff ya pasó y el proyecto arranca, el CSE tiene que
+  entender el negocio del cliente — y hoy la calidad de eso depende de qué tan bueno sea
+  preguntando cada CSE. **Exploración** es una página INTERNA por proyecto (canvas
+  `Exploración`, motor `LandingView`) que dice qué hay que entender de ESE proyecto, cómo
+  preguntarlo, en qué orden y a quién del cliente involucrar en cada sesión.
+- **El eje que sostiene el documento: lo AFIRMADO vs lo SUPUESTO.** Dos secciones separadas
+  — «Lo que ya sabemos» (hechos que la fuente afirma explícitamente, cada uno con de dónde
+  salió → no se repreguntan) y «Lo que damos por supuesto» (todo lo demás: lo que suena
+  razonable, lo que el alcance da por hecho, lo prometido sin detallar). **Ante la duda va a
+  supuestos**: poner un supuesto en «ya sabemos» hace que el CSE dé por cerrado algo que
+  nadie confirmó — es el error más caro del documento. De los supuestos salen las preguntas
+  del plan de sesiones; una pregunta que no cierra ningún supuesto sobra.
+- **UN SOLO agente, sin prompts por tipo de servicio** (CRM/CDP/web/consultoría). El método
+  es el mismo para todos: leer el handoff, detectar lo que se dio por supuesto y no está
+  verificado, y de ahí derivar la pregunta. Cuatro prompts serían cuatro documentos que
+  envejecen por separado. Las preguntas NO salen de un checklist genérico de descubrimiento:
+  salen de los huecos de ESE handoff.
+- **Calibración por tamaño de cliente** (regla de negocio de Elías, vive en el `agentIntro`):
+  a un cliente GRANDE no le sirve que le mapeen lo que ya sabe — con él se apunta a **lo que
+  no está viendo** (contradicciones entre áreas, lo que nadie es dueño, el proceso que existe
+  en el papel y no en la práctica); a un cliente CHICO sí vale mapear lo obvio, porque ahí el
+  valor es escribir por primera vez cómo funciona. El agente INFIERE el tamaño del handoff +
+  tags + historial y **declara en el hero qué calibración usó**, para que el CSE la corrija
+  en un segundo si se equivocó. No hay campo de "tamaño" en el schema: inventarlo obligaría a
+  mantener a mano un dato que el handoff ya insinúa.
+- **Fuentes por peso** (F1): (1) el **handoff del proyecto es el ancla** — de ahí sale qué se
+  vendió, qué se prometió y qué quedó dicho a medias; (2) handoffs y proyectos ANTERIORES del
+  cliente; (3) etiquetas del cliente/proyecto; (4) los demás canvas del proyecto (kickoff,
+  cronograma) + los business cases. Los transcripts de sesiones y CS360 quedan para la F2
+  (van por el chokepoint `lib/sessions/project-sources.ts` y tienen otro presupuesto de
+  tokens); los `KnowledgeDocument` como profundidad técnica, para la F3.
+- **Storage `CanvasBlock` — y el matiz que corrige a §1-WEB punto 1**: la regla decía
+  "`ProjectCanvas`/`CanvasBlock` SOLO si el documento necesita DRAFT/CONFIRMED + agente +
+  **publish al cliente**". Exploración cumple las dos primeras y NO la tercera (Desarrollo ya
+  rompía esa pata: tampoco tiene `publishedSnapshot`). El eje real es **"curación por sección
+  con generación por agente"; el publish es opcional**. A cambio se hereda gratis
+  `useCanvasSections` (edición inline, reorden, undo), la píldora ✨IA por sección, el
+  dropdown de canvases y el adaptador `build-landing`. Un Json propio (patrón `RoleProfile`)
+  obligaría a reimplementar todo eso para un documento que ES 1:1 con un proyecto. **Cero
+  DDL**: no se tocó `prisma/schema.prisma`.
+- **INTERNO = no existe el camino, no es un flag apagado.** No hay `/external/exploracion`,
+  ni `publish-exploracion`, ni botón de compartir. Un flag se prende sin querer; un camino que
+  no existe hay que construirlo a propósito. El riesgo era concreto: Exploración se construyó
+  copiando el canvas **Desarrollo**, que SÍ tiene los tres. Lo congela
+  `lib/canvas/exploracion-internal.test.ts` (escanea `app/external/**`, `app/api/**` y el
+  workspace). Si algún día se decide exponerla, hay que ir a borrar ese guard — que es
+  exactamente la conversación que se quiere forzar.
+- **Paleta INTERNA `.stl-internal`**: grises y blancos con **un solo ámbar** (`--flag`)
+  reservado a marcar lo NO verificado. No es un tema alternativo del motor: es el MISMO motor
+  con las variables re-declaradas en un modificador scopeado → cero cambios en componentes y
+  los documentos de marca intactos por construcción. Va DESPUÉS del bloque `.stl` (cascada +
+  el guard lee cada token por el PRIMER match). `landing-brand-contrast.test.ts` valida
+  también estos pares y exige que todo token del bloque sea NEUTRO (**saturación < 25%**,
+  medida en HSL — el spread RGB crudo rechazaba los grises fríos legítimos y dejaba pasar lo
+  que importaba). Un segundo acento rompe el efecto "esto es interno" y el test lo frena.
+- **On-demand, no auto-encadenada ni pre-creada**: el canvas nace cuando el CSE toca "Generar
+  exploración" en la sección del proyecto. Pre-crearla en los ~113 proyectos repetiría los 111
+  cascarones vacíos de Handoff que hubo que borrar; auto-encadenarla al kickoff generaría
+  documentos que quizá nadie mire y gastaría tokens sin pedirlo. "Después del kickoff" es el
+  ORDEN del flujo, no un disparador automático.
+- **Máximo reuso de renderers**: de las 6 secciones de contenido, 5 usan renderers que ya
+  existían (`pain` ×3, `web_diagnosis`, el hero de Desarrollo, el CTA del kickoff). El único
+  componente nuevo es el **plan de sesiones**, porque su unidad es una sesión con una lista de
+  preguntas adentro y eso ningún renderer del motor lo expresa. Dentro de él, las sesiones se
+  arrastran pero las preguntas NO: un dnd-kit anidado pelea con el de afuera y el valor de
+  reordenar preguntas no paga ese riesgo.
+
 ## Estados de carga (skeletons)
 - **El shell interno vive en el route group `app/(shell)/`** (2026-07-18): las 17 secciones
   internas comparten UN layout que monta `AppShell` (sidebar + notificador CS). *Por qué:*
