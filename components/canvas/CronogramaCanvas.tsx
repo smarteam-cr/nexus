@@ -812,24 +812,27 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // descompone en deltas por ítem (fase nueva / cambio de fase / fecha de arranque) que el CSE
   // acepta o descarta uno por uno DENTRO del cronograma real.
   const structureOnlyProposal = !!proposal && proposal.phases.every((p) => p.tasks === undefined);
-  const proposalDeltas: ProposalDelta[] =
-    structureOnlyProposal && proposal
-      ? computeProposalDeltas(
-          phases
-            .filter((p): p is Phase & { id: string } => !!p.id)
-            .map((p) => ({
-              id: p.id,
-              name: p.name,
-              durationWeeks: p.durationWeeks,
-              startWeek: p.startWeek ?? null,
-              sessionCount: p.sessionCount ?? null,
-              notes: p.notes ?? null,
-              activityType: p.activityType ?? null,
-            })),
-          proposal,
-          anchor || null,
-        )
-      : [];
+  const proposalDeltas: ProposalDelta[] = useMemo(
+    () =>
+      structureOnlyProposal && proposal
+        ? computeProposalDeltas(
+            phases
+              .filter((p): p is Phase & { id: string } => !!p.id)
+              .map((p) => ({
+                id: p.id,
+                name: p.name,
+                durationWeeks: p.durationWeeks,
+                startWeek: p.startWeek ?? null,
+                sessionCount: p.sessionCount ?? null,
+                notes: p.notes ?? null,
+                activityType: p.activityType ?? null,
+              })),
+            proposal,
+            anchor || null,
+          )
+        : [],
+    [structureOnlyProposal, proposal, phases, anchor],
+  );
 
   // Debounce: auto-guarda ~1.5 s después de la última edición. Se reinicia con cada
   // cambio (phases/anchor). No corre con propuesta del ASSIST abierta (el Gantt muestra la

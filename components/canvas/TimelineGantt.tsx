@@ -399,7 +399,8 @@ export default function TimelineGantt({
 
   // Sugerencias de estructura (propuesta del handoff) indexadas para el render in-place:
   // cambios sobre fases existentes por phaseId (badge en su fila) + fases nuevas (filas fantasma).
-  const canResolveDelta = !readOnly && !!onResolveProposalDelta;
+  // El gate de edición se hace en cada punto de uso (`!readOnly && onResolveProposalDelta`), que
+  // además ESTRECHA el tipo del handler y evita aserciones `!`.
   const proposalModByPhase = new Map(
     (proposalDeltas ?? []).flatMap((d) => (d.kind === "MODIFY_PHASE" ? [[d.phaseId, d] as const] : [])),
   );
@@ -844,8 +845,9 @@ export default function TimelineGantt({
                         <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
                           {/* Sugerencia de la IA (propuesta del handoff) sobre ESTA fase — se
                               acepta/descarta acá mismo; nada se aplica solo. */}
-                          {canResolveDelta && p.id && proposalModByPhase.has(p.id) && (() => {
-                            const d = proposalModByPhase.get(p.id!)!;
+                          {(() => {
+                            const d = p.id ? proposalModByPhase.get(p.id) : undefined;
+                            if (!d || readOnly || !onResolveProposalDelta) return null;
                             return (
                               <span
                                 className="flex items-center gap-1 flex-shrink-0"
@@ -856,14 +858,14 @@ export default function TimelineGantt({
                                   {d.changes.length > 1 ? ` +${d.changes.length - 1}` : ""}
                                 </span>
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta!(d.key, true); }}
+                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, true); }}
                                   title="Aceptar la sugerencia (aplica solo este cambio)"
                                   className="text-emerald-400 hover:text-emerald-300 text-[11px] font-bold px-0.5"
                                 >
                                   ✓
                                 </button>
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta!(d.key, false); }}
+                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, false); }}
                                   title="Descartar la sugerencia"
                                   className="text-red-400 hover:text-red-300 text-[11px] font-bold px-0.5"
                                 >
@@ -1083,7 +1085,8 @@ export default function TimelineGantt({
             {/* Fases NUEVAS propuestas por la IA (del handoff) — filas fantasma dentro del
                 cronograma real: no existen hasta que el CSE las acepta. Nacen vacías; las
                 tareas se detallan después con "regenerar solo esta fase". */}
-            {canResolveDelta &&
+            {!readOnly &&
+              onResolveProposalDelta &&
               proposalAdds.map((d) => (
                 <div
                   key={d.key}
@@ -1101,14 +1104,14 @@ export default function TimelineGantt({
                   </span>
                   <span className="ml-auto flex items-center gap-2.5 flex-shrink-0">
                     <button
-                      onClick={() => onResolveProposalDelta!(d.key, true)}
+                      onClick={() => onResolveProposalDelta(d.key, true)}
                       title="Crear la fase (vacía; las tareas se detallan después)"
                       className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors"
                     >
                       ✓ Aceptar
                     </button>
                     <button
-                      onClick={() => onResolveProposalDelta!(d.key, false)}
+                      onClick={() => onResolveProposalDelta(d.key, false)}
                       title="Descartar esta fase propuesta"
                       className="text-[11px] font-semibold text-fg-muted hover:text-red-400 transition-colors"
                     >

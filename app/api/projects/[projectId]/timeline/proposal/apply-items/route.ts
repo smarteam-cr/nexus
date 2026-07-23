@@ -17,13 +17,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { Prisma } from "@prisma/client";
+import { Prisma, type TimelineActivityType } from "@prisma/client";
 import {
   computeProposalDeltas,
   buildPhaseOrder,
   type ProposalLike,
   type ProposalDelta,
 } from "@/lib/timeline/proposal-deltas";
+import { ACTIVITY_TYPES } from "@/lib/timeline/validate";
+
+/**
+ * `activityType` es un ENUM de Prisma y la propuesta es JSON sin tipar: un valor basura
+ * llegaría hasta la DB y reventaría con un error crudo. Se valida contra la MISMA lista que
+ * usan el PUT del cronograma y el assist. Devuelve `undefined` = inválido (→ 400).
+ */
+function parseActivityType(v: unknown): TimelineActivityType | null | undefined {
+  if (v === null || v === undefined) return null;
+  return typeof v === "string" && (ACTIVITY_TYPES as readonly string[]).includes(v)
+    ? (v as TimelineActivityType)
+    : undefined;
+}
 
 const PHASE_SELECT = {
   id: true,
@@ -91,6 +104,23 @@ export async function POST(
   for (const k of discardKeys) if (!byKey.has(k)) staleKeys.push(k);
   const resolvedKeys = new Set([...acceptKeys, ...discardKeys].filter((k) => byKey.has(k)));
 
+  // Validar ANTES de abrir la transacción: un enum inválido debe salir como 400 legible, no
+  // como un error de Prisma a mitad de la escritura.
+  for (const d of accepted) {
+    const raw =
+      d.kind === "ADD_PHASE"
+        ? d.phase.activityType
+        : d.kind === "MODIFY_PHASE"
+          ? d.changes.find((c) => c.field === "activityType")?.to
+          : undefined;
+    if (raw !== undefined && parseActivityType(raw) === undefined) {
+      return NextResponse.json(
+        { error: `Tipo de actividad inválido en la sugerencia: ${String(raw)}` },
+        { status: 400 },
+      );
+    }
+  }
+
   const now = new Date();
   const acceptedKeySet = new Set(accepted.map((d) => d.key));
 
@@ -100,8 +130,17 @@ export async function POST(
     //    porque insertar fases y reordenarlas se pisan entre sí si se hacen por separado.
     for (const d of accepted) {
       if (d.kind === "MODIFY_PHASE") {
-        const data: Record<string, unknown> = {};
-        for (const c of d.changes) data[c.field] = c.to;
+        // Campo por campo y tipado: el allowlist de `PhaseField` ya acota qué puede cambiar,
+        // pero escribirlo explícito evita meter claves arbitrarias en el update de Prisma.
+        const data: Prisma.TimelinePhaseUpdateInput = {};
+        for (const c of d.changes) {
+          if (c.field === "name") data.name = String(c.to);
+          else if (c.field === "durationWeeks") data.durationWeeks = Number(c.to);
+          else if (c.field === "startWeek") data.startWeek = c.to === null ? null : Number(c.to);
+          else if (c.field === "sessionCount") data.sessionCount = c.to === null ? null : Number(c.to);
+          else if (c.field === "notes") data.notes = c.to === null ? null : String(c.to);
+          else if (c.field === "activityType") data.activityType = parseActivityType(c.to) ?? null;
+        }
         await tx.timelinePhase.update({ where: { id: d.phaseId }, data });
       } else if (d.kind === "SET_ANCHOR") {
         await tx.projectTimeline.update({
@@ -115,6 +154,9 @@ export async function POST(
     //     fase previa en la propuesta, no al final) y, si se aceptó el reordenamiento, las
     //     existentes se reacomodan. Las fases nuevas nacen VACÍAS; las tareas se detallan
     //     después con "regenerar solo esta fase" (PhaseRegenModal).
+    //     NB: el `order` resultante queda DENSO (0..N-1). Es deliberado: normalizar mantiene el
+    //     índice consistente con la posición visual y hace idempotente el próximo cálculo. Solo
+    //     se escribe la fila si su orden cambió de verdad (la transacción no toca lo que no debe).
     const slots = buildPhaseOrder(tl.phases, proposal, acceptedKeySet);
     for (const [i, slot] of slots.entries()) {
       if (slot.kind === "new") {
@@ -127,7 +169,7 @@ export async function POST(
             startWeek: slot.phase.startWeek ?? null,
             sessionCount: slot.phase.sessionCount ?? null,
             notes: slot.phase.notes ?? null,
-            activityType: (slot.phase.activityType as never) ?? null,
+            activityType: parseActivityType(slot.phase.activityType) ?? null,
             source: "AGENT", // propuesta por la IA, confirmada por el humano
           },
         });
