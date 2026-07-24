@@ -300,10 +300,14 @@ export const DESARROLLO_CANVAS: CanvasDefinition = {
   order: 0,
   sections: [
     { key: "requerimiento",    label: "Requerimiento técnico" },
+    // ctxDriven (el dato vive en DevEstimate): su CanvasSection existe SOLO para llevar un
+    // `order` arrastrable, igual que cronograma/procesos en el kickoff.
+    { key: "estimacion",       label: "Estimación del equipo técnico" },
     { key: "retos_cliente",    label: "Retos del cliente" },
     { key: "criterios_exito",  label: "Criterios de éxito" },
     { key: "arquitectura",     label: "Arquitectura (IDs y dedup)" },
     { key: "relacion_objetos", label: "Relación entre objetos" },
+    { key: "propiedades",      label: "Propiedades y campos" },
     { key: "comunicacion",     label: "Triggers y flujos" },
     { key: "cierre",           label: "Notas de cierre", defaultData: { ...DESARROLLO_CIERRE_DEFAULT } },
   ],

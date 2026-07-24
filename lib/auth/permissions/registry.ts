@@ -53,7 +53,15 @@ export const PERMISSION_SECTIONS = [
   {
     key: "desarrollo",
     label: "Desarrollo (requerimiento técnico)",
-    actions: [GENERATE, REGENERATE],
+    actions: [
+      GENERATE,
+      REGENERATE,
+      // La estimación de esfuerzo la escribe el EQUIPO TÉCNICO tras leer el requerimiento,
+      // no cualquiera que pueda ver el documento. Es una celda de la matriz (no un whitelist
+      // de roles en código) justamente para que sumar un perfil técnico nuevo sea prender un
+      // switch en /team, sin deploy.
+      { key: "estimate", label: "Estimar esfuerzo (horas/fecha)", enforced: true },
+    ],
   },
   {
     key: "exploracion",
@@ -77,6 +85,10 @@ export const PERMISSION_SECTIONS = [
       { key: "delete", label: "Borrar tareas y fases", enforced: true },
       GENERATE,
       { key: "regenerate", label: "Regenerar con IA", enforced: true },
+      // SUGERIR ≠ ESCRIBIR: quien tiene esta celda propone una particularidad que el CSE
+      // revisa y recién entonces se vuelve real. Existe para que el equipo técnico (que ve
+      // los atrasos y las pruebas de conectividad) tenga canal SIN poder tocar el cronograma.
+      { key: "suggest", label: "Sugerir particularidades (sin aplicarlas)", enforced: true },
     ],
   },
   {

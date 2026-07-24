@@ -34,6 +34,7 @@ import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus, type GanttParticularidad, PARTY_META, PARTICULARIDAD_KIND_META, effParty } from "./TimelineGantt";
 import ParticularidadEditModal, { type ParticularidadPatch } from "./ParticularidadEditModal";
+import SugerenciasParticularidad, { type SugerenciaItem } from "./SugerenciasParticularidad";
 import ParticularidadToTaskModal, { type ConvertPayload } from "./ParticularidadToTaskModal";
 import TaskDetailDrawer from "./TaskDetailDrawer";
 import TimelineAssistDialog from "./TimelineAssistDialog";
@@ -207,6 +208,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [confirmingDetail, setConfirmingDetail] = useState(false);
   // Particularidades (desviaciones curadas) — el CSE ve todas; se pasan al Gantt para el resumen.
   const [particularidades, setParticularidades] = useState<GanttParticularidad[]>([]);
+  // Propuestas del equipo técnico (needsValidation=true). Llegan en una lista APARTE del GET
+  // justamente para que no se mezclen con las confirmadas: no suman semanas ni salen al cliente.
+  const [sugerencias, setSugerencias] = useState<SugerenciaItem[]>([]);
   // Señales del proyecto para el panel "Qué hacer acá" (vienen con el GET del cronograma).
   const [summary, setSummary] = useState<ProjectSummary | null>(null);
   // Lo que el cliente lee AHORA (del snapshot congelado), distinto de lo que leerá al «Subir».
@@ -399,6 +403,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setHasPublishedOnce(!!data.hasPublishedOnce);
         setDetailConfirmedAt(data.detailConfirmedAt ?? null);
         setParticularidades((data.particularidades as GanttParticularidad[] | undefined) ?? []);
+        setSugerencias((data.sugerencias as SugerenciaItem[] | undefined) ?? []);
         setParticularidadesDirty(false);
         setSummary((data.summary as ProjectSummary | null) ?? null);
         setPublicadas((data.publicadas as Array<{ kind: string; party: string; weeksImpact: number | null }>) ?? []);
@@ -440,6 +445,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setHasPublishedOnce(false);
         setDetailConfirmedAt(null);
         setParticularidades([]);
+        setSugerencias([]);
         setParticularidadesDirty(false);
         setSummary(null);
         setPublicadas([]);
@@ -1947,6 +1953,17 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       )}
 
       {/* ── Banner de AVANCE detectado por el agente (D.2) — propone, el CSE confirma ── */}
+      {/* Sugerencias del equipo técnico. Va ARRIBA de los banners del agente a propósito: son
+          de una persona esperando respuesta, no de un proceso automático. Solo para quien puede
+          editar el cronograma (aprobar ES escribir); el componente se auto-oculta si no hay. */}
+      {canEdit && (
+        <SugerenciasParticularidad
+          projectId={projectId}
+          sugerencias={sugerencias}
+          onResolved={load}
+        />
+      )}
+
       {/* ── Banners de propuesta del agente: avance + particularidades, lado a lado (2 columnas)
           cuando ambos están; uno solo ocupa el ancho completo. Misma estructura de header
           (tile de ícono + título + subtítulo + acciones a la derecha) para que se lean como un sistema. ── */}

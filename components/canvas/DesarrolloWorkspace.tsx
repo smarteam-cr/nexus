@@ -18,8 +18,11 @@ import LandingView, { type LandingSectionData } from "@/components/landing/Landi
 import type { LandingContext } from "@/components/landing/types";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import DocumentAssist from "@/components/ai/DocumentAssist";
+import SugerirParticularidad from "@/components/canvas/SugerirParticularidad";
+import { useMe } from "@/hooks/useMe";
 import { useCanvasSections } from "./useCanvasSections";
 import { buildDesarrolloConfig, buildDesarrolloSections } from "./desarrollo-landing-adapter";
+import type { DevEstimateCtx } from "@/components/landing/types";
 
 const MAXW = 860;
 
@@ -118,7 +121,59 @@ export default function DesarrolloWorkspace({
     }));
   }, [cs.sections]);
 
-  const ctx: LandingContext = useMemo(() => ({ clientName: "" }), []);
+  // ── Estimación de esfuerzo (sección `estimacion`, ctxDriven) ──────────────────
+  // Vive en la tabla DevEstimate, no en un CanvasBlock: se carga aparte y viaja por ctx.
+  const me = useMe();
+  const [estimate, setEstimate] = useState<DevEstimateCtx | null>(null);
+  const [estHistory, setEstHistory] = useState<DevEstimateCtx[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    void fetch(`/api/projects/${projectId}/dev-estimate`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!vivo || !d) return;
+        setEstimate(d.current ?? null);
+        setEstHistory(d.history ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [projectId]);
+
+  const onEstimate = useCallback(
+    async (input: { hours: number | null; estimatedDate: string | null; note: string }) => {
+      const res = await fetch(`/api/projects/${projectId}/dev-estimate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(d?.error ?? "No se pudo guardar la estimación.");
+      }
+      // El POST devuelve el estado completo → sin segundo GET (y sin ventana de desfase).
+      const d = await res.json();
+      setEstimate(d.current ?? null);
+      setEstHistory(d.history ?? []);
+    },
+    [projectId],
+  );
+
+  const ctx: LandingContext = useMemo(
+    () => ({
+      clientName: "",
+      desarrollo: {
+        estimate,
+        history: estHistory,
+        // Gate COSMÉTICO (la barrera real es guardPermission en el POST). `=== true` para que
+        // mientras `me` carga (null) el formulario NO parpadee visible y después desaparezca.
+        canEstimate: me?.permissions?.sections?.desarrollo?.estimate === true,
+        onEstimate,
+      },
+    }),
+    [estimate, estHistory, me, onEstimate],
+  );
 
   const onRegenDone = useCallback(() => {
     setNonce((n) => n + 1);
@@ -148,6 +203,9 @@ export default function DesarrolloWorkspace({
         </div>
       )}
       <div style={{ position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 16px", background: "var(--bg, #fff)", borderBottom: "1px solid var(--border, #e5e7eb)" }}>
+        {/* El canal del equipo técnico hacia el CSE: propone un hecho para el cronograma
+            (atraso, aviso, compromiso) sin poder tocarlo. Se auto-oculta sin el permiso. */}
+        <SugerirParticularidad projectId={projectId} />
         {shared !== null && (
           <button
             onClick={toggleShared}

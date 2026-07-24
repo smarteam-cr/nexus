@@ -14,9 +14,17 @@
  *
  * Ojo: como toda la vista del cliente, el aviso llega recién con «Subir al cliente» (el snapshot
  * publicado se re-congela ahí). Guarded con guardTimelineEdit (el CSE lo tiene por defecto).
+ *
+ * MODO SUGERENCIA (`{ suggest: true }`): el equipo técnico PROPONE un hecho desde el canvas
+ * Desarrollo sin poder tocar el cronograma. Cambia tres cosas y ninguna más:
+ *   - el guard pasa a ser `cronograma.suggest` (no `write`) — sugerir ≠ escribir;
+ *   - nace con `needsValidation: true` → NINGÚN read la cuenta como desviación real
+ *     (ni el corrimiento de semanas, ni la lista del CSE, ni la vista del cliente);
+ *   - `visibleExternal` se fuerza a false — una propuesta sin revisar no se le muestra al cliente.
+ * Se vuelve real cuando el CSE la aprueba en `particularidades/[id]/resolve`.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardTimelineEdit } from "@/lib/auth/api-guards";
+import { guardAccessToProject, guardPermission, guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import {
   parseTitle,
@@ -34,9 +42,8 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardTimelineEdit(projectId);
-  if (guard instanceof NextResponse) return guard;
 
+  // El body se lee ANTES del guard porque `suggest` decide CUÁL guard aplica.
   let raw: unknown;
   try {
     raw = await req.json();
@@ -53,7 +60,26 @@ export async function POST(
     occurredAt?: unknown;
     visibleExternal?: unknown;
     phaseId?: unknown;
+    suggest?: unknown;
   };
+  const esSugerencia = body.suggest === true;
+
+  // Sugerir exige `cronograma.suggest`; registrar de verdad exige la edición del cronograma.
+  // En los dos casos se valida PRIMERO el acceso al cliente del proyecto: la matriz de permisos
+  // y el row-level son ortogonales (ARCHITECTURE §4.2) — tener la celda no da acceso a un
+  // cliente ajeno con solo conocer el projectId.
+  let email: string | null;
+  if (esSugerencia) {
+    const access = await guardAccessToProject(projectId);
+    if (access instanceof NextResponse) return access;
+    const perm = await guardPermission("cronograma", "suggest");
+    if (perm instanceof NextResponse) return perm;
+    email = perm.user.email ?? null;
+  } else {
+    const guard = await guardTimelineEdit(projectId);
+    if (guard instanceof NextResponse) return guard;
+    email = guard.user.email ?? null;
+  }
 
   const tl = await prisma.projectTimeline.findUnique({
     where: { projectId },
@@ -109,12 +135,18 @@ export async function POST(
       sourceQuote: parseOptionalText(body.sourceQuote),
       weeksImpact,
       occurredAt: occurred.value,
-      // Nace VISIBLE salvo que pidan lo contrario: el CSE lo escribe para el cliente.
-      visibleExternal: body.visibleExternal === undefined ? true : body.visibleExternal === true,
+      // Un aviso del CSE nace VISIBLE (lo escribe PARA el cliente); una SUGERENCIA nace
+      // oculta sin excepción — todavía no la revisó nadie.
+      visibleExternal: esSugerencia
+        ? false
+        : body.visibleExternal === undefined
+        ? true
+        : body.visibleExternal === true,
       source: "HUMAN",
       dedupeKey: null, // sin identidad de agente → el apply no lo absorbe
-      needsValidation: false,
-      createdByEmail: guard.user.email ?? null,
+      // LA marca que la mantiene fuera de todo conteo hasta que el CSE la apruebe.
+      needsValidation: esSugerencia,
+      createdByEmail: email,
     },
     select: {
       id: true,
@@ -125,6 +157,7 @@ export async function POST(
       sourceQuote: true,
       weeksImpact: true,
       visibleExternal: true,
+      needsValidation: true,
       phaseId: true,
       occurredAt: true,
       source: true,

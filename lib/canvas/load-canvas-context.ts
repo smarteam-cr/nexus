@@ -211,6 +211,12 @@ export async function loadTimelineContext(
       ...(withProgress
         ? {
             particularidades: {
+              // Solo las CONFIRMADAS: una sugerencia pendiente todavía no es un hecho
+              // registrado. Si el agente la viera como registrada, dejaría de proponer ese
+              // mismo hecho — y si el CSE después descarta la sugerencia, el hecho se
+              // perdería sin que nadie lo note. Que el agente lo re-proponga es el
+              // comportamiento correcto: el CSE ve las dos y resuelve.
+              where: { needsValidation: false },
               orderBy: { occurredAt: "desc" as const },
               select: {
                 kind: true, party: true, title: true, weeksImpact: true,
