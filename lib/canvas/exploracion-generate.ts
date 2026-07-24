@@ -10,7 +10,10 @@
  *   1. El HANDOFF del proyecto — el ancla. De ahí sale qué se vendió, qué se prometió y
  *      qué quedó dicho a medias (que es de donde salen los supuestos sin verificar).
  *   2. Los handoffs y proyectos ANTERIORES del cliente (`loadPriorRelationshipContext`).
- *   3. Las ETIQUETAS del cliente/proyecto.
+ *   3. Las ETIQUETAS del proyecto — TAG-DRIVEN: no son contexto decorativo, DIRIGEN qué va a
+ *      buscar el agente. Cada tag inyecta su "lente" (`exploracion-lenses.ts`) y solo entran
+ *      las de los tags activos. Un proyecto con `sitio_web` pregunta por referencias/assets;
+ *      uno con `sales_hub` va al proceso de venta real.
  *   4. Los demás CANVAS del proyecto (kickoff, cronograma) + los business cases.
  * (Los transcripts de sesiones y CS360 entran en la fase 2 — van por el chokepoint
  * `lib/sessions/project-sources.ts` y tienen otro presupuesto de tokens.)
@@ -27,6 +30,7 @@ import { createExploracionCanvas, reconcileExploracionCanvasSections } from "@/l
 import { loadCanvasContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { EXPLORACION_TEMPLATE, EXPLORACION_HANDOFF_KEYS } from "@/components/landing/configs/exploracion.defs";
+import { buildTagLensBlock } from "@/components/landing/configs/exploracion-lenses";
 import { tagLabels } from "@/lib/tags/catalog";
 
 /** Asegura el canvas "Exploración" del proyecto (lo crea si falta) + reconcilia sus
@@ -99,14 +103,17 @@ export async function runExploracionGeneration(opts: {
       : Promise.resolve([]),
   ]);
 
-  const tagsLabel = tagLabels(project?.tags ?? []).join(", ");
+  // TAG-DRIVEN: los tags del handoff no son decoración — inyectan las LENTES que dirigen qué
+  // va a buscar el agente (ver exploracion-lenses.ts). Solo entran las de los tags activos.
+  const tagLensBlock = buildTagLensBlock(project?.tags ?? []);
   const companyName = project?.client?.name ?? project?.client?.company ?? "el cliente";
 
   const userMessage = [
     `Empresa: ${companyName}`,
     `Industria: ${project?.client?.industry ?? "No especificada"}`,
     `Proyecto: ${project?.name ?? "(sin nombre)"}`,
-    tagsLabel ? `Alcance etiquetado (tags del proyecto): ${tagsLabel}` : "",
+    "",
+    tagLensBlock,
     "",
     "=== HANDOFF DEL PROYECTO — TU FUENTE ANCLA ===",
     handoffCtx ||

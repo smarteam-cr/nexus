@@ -29,7 +29,20 @@
   `/external` ni publicación (congelado por `lib/canvas/exploracion-internal.test.ts`) y se
   renderiza con la **paleta interna** (`.stl-internal`: grises y blancos, ámbar solo para lo
   no verificado) para distinguirla a simple vista de los documentos de cara al cliente.
+  Es **tag-driven**: los tags del handoff inyectan sus lentes y dirigen qué va a buscar.
   Ver DECISIONS §Exploración.
+- **lente de exploración** (`EXPLORACION_TAG_LENSES`, en
+  `components/landing/configs/exploracion-lenses.ts`): el bloque de prompt que un TAG le inyecta
+  al agente de Exploración — qué supuestos suele esconder ese tipo de proyecto y qué clase de
+  pregunta los cierra. Solo entran las lentes de los tags ACTIVOS del proyecto. Es lo que
+  convierte al tag de etiqueta decorativa en **disparador**: `sitio_web` manda a preguntar por
+  referencias/anti-referencias, funcionalidad y assets; `sales_hub`, al proceso de venta real.
+  Influyen el CONTENIDO, no la estructura (las 7 secciones son fijas). Un tag nuevo SIN lente
+  rompe `lib/canvas/exploracion-lenses.test.ts`.
+- **tag Sitio web** (`sitio_web`, grupo `scope`): marca que el alcance incluye construir o
+  rediseñar un sitio, landings o web pública — sea en HubSpot o fuera. Lo emite el agente de
+  handoff y el CSE lo corrige en la tira de tags. NO implica `custom_dev`: un sitio en el CMS sin
+  integraciones no lleva fase técnica ni canvas Desarrollo.
 - **Particularidad** (`Particularidad`): desviación FECHADA y curada del cronograma con atribución —
   el "por qué y quién" movió el plan, en lenguaje cliente (a diferencia de `TimelineChange`, cuyo log
   es ruido de máquina). Es un hecho que ALTERÓ el plan (movió/comprometió una fecha), no un pendiente.

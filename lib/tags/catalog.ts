@@ -44,6 +44,10 @@ export const TAG_CATALOG: readonly TagDef[] = [
   // ── Alcance / características ────────────────────────────────────────────────
   { slug: "custom_dev", label: "Integración / Desarrollo a medida", group: "scope" },
   { slug: "crm_migration", label: "Migración desde otro CRM", group: "scope" },
+  // Se vendió un sitio web (nuevo o rediseño), landings o web pública. Es `scope` y no
+  // `product` porque describe QUÉ SE VENDIÓ, no un producto de HubSpot: `content_hub`
+  // (ex CMS Hub) sigue siendo el producto y un proyecto web normalmente lleva los dos.
+  { slug: "sitio_web", label: "Sitio web", group: "scope" },
   // ── Modalidad del servicio ──────────────────────────────────────────────────
   { slug: RECURRENTE_TAG, label: "Servicio recurrente", group: "modalidad" },
 ] as const;
@@ -98,7 +102,12 @@ export function tagLabels(slugs: string[]): string[] {
   return sanitizeTags(slugs).map(labelForTag);
 }
 
-/** ¿La lista tiene un tag de alcance técnico? → enruta a la fase "Desarrollo / Integración" (#7). */
+/** ¿La lista tiene un tag de alcance técnico? → enruta a la fase "Desarrollo / Integración" (#7).
+ *
+ *  ⚠ `sitio_web` NO entra acá A PROPÓSITO: esta función rutea al canvas "Desarrollo" y a la fase
+ *  técnica del cronograma, y un sitio web NO es necesariamente desarrollo a medida (un sitio en
+ *  el CMS sin integraciones no lleva fase técnica). Si un proyecto web además tiene desarrollo,
+ *  el handoff le pone `custom_dev` y ahí sí entra. No acoplarlos por arrastre. */
 export function hasTechnicalScope(slugs: string[]): boolean {
   const s = sanitizeTags(slugs);
   return s.includes("custom_dev") || s.includes("insider_one");

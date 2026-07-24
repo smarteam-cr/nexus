@@ -756,6 +756,32 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   es lo normal, así que muestra un estado **idle** ("Todavía sin generar…") en vez del poll de
   "Generando…" que tenía cuando la CTA lo abría justo después de disparar. El refresco tras
   generar lo da el remonte por `agentNonce` del panel, igual que en los otros canvases.
+- **TAG-DRIVEN: el tag deja de ser etiqueta y pasa a ser DISPARADOR** (2026-07-23, pedido de
+  Elías). Antes los tags del handoff se aplanaban a una línea de contexto y el agente producía
+  lo mismo tuviera los tags que tuviera. Ahora cada tag inyecta su **lente de exploración**
+  (`components/landing/configs/exploracion-lenses.ts`): qué supuestos suele esconder ese tipo de
+  proyecto y qué clase de pregunta los cierra. Un proyecto con `sitio_web` pregunta por
+  referencias/anti-referencias, funcionalidad y assets; uno con `sales_hub` va al proceso de
+  venta real. **Solo se inyectan las lentes de los tags ACTIVOS** — el prompt no carga las 12
+  siempre, y si se colaran todas el tag dejaría de dirigir.
+  *Generaliza un precedente que ya existía:* `hasTechnicalScope` (`custom_dev`/`insider_one`) ya
+  era un tag-driver real — hace que el handoff agregue fase técnica y que `analyze` auto-encadene
+  el canvas Desarrollo. Esto lleva el mismo mecanismo al agente de exploración.
+  **Reglas duras:** (1) un tag nuevo **obliga** a definir su lente —
+  `lib/canvas/exploracion-lenses.test.ts` falla si falta, porque un tag sin lente vuelve al
+  estado inerte del que venimos; (2) las lentes influyen **solo el CONTENIDO** dentro de las 7
+  secciones fijas — NO agregan secciones: el set está congelado por `registry.test` y ya existe
+  en los canvases creados, y una sección condicional por tag es otra decisión; (3) sin tags, el
+  bloque dice EXPLÍCITAMENTE "no asumas tipo de proyecto" — el silencio se lee como permiso para
+  asumir.
+- **Tag `sitio_web` (grupo `scope`)**: faltaba forma de marcar que se vendió un sitio. Es
+  `scope` y no `product` porque describe **qué se vendió**, como `custom_dev` y `crm_migration`;
+  `content_hub` (ex CMS Hub) sigue siendo el producto y un proyecto web normalmente lleva los
+  dos. ⚠ **NO entra a `hasTechnicalScope()`**: esa función rutea al canvas Desarrollo y a la fase
+  técnica del cronograma, y un sitio en el CMS sin integraciones no lleva fase técnica. Si además
+  hay desarrollo, el handoff pone `custom_dev` y ahí sí entra. Sin backfill: aplica de ahora en
+  adelante y el CSE lo agrega con un clic en la tira de tags (adivinar "esto es web" desde texto
+  viejo sería justo la fabricación que el repo evita).
 - **Máximo reuso de renderers**: de las 6 secciones de contenido, 5 usan renderers que ya
   existían (`pain` ×3, `web_diagnosis`, el hero de Desarrollo, el CTA del kickoff). El único
   componente nuevo es el **plan de sesiones**, porque su unidad es una sesión con una lista de
