@@ -90,7 +90,11 @@ export default function CanvasAgentButton({
   const noun =
     notifyLabel ??
     (label.replace(/^(generar|regenerar|crear)\s+(el\s+|la\s+|los\s+|las\s+)?/i, "").trim() || "documento");
-  const notifyUrl = `/clients/${clientId}`;
+  // Deep-link a la pestaña del proyecto, no a la home del cliente: el CTA sabe en
+  // qué proyecto está parado. El canvas exacto lo agrega el centro de corridas, que
+  // lo resuelve server-side desde los bloques que escribió el agente
+  // (lib/agents/run-url.ts) — acá todavía no existen.
+  const notifyUrl = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}`;
 
   const run = async () => {
     if (running || disabled || busy) return;

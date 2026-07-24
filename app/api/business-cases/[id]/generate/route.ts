@@ -28,6 +28,7 @@ import {
 } from "@/lib/business-cases/use-cases";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { fetchCompanyTimeline } from "@/lib/hubspot/company-timeline";
+import { triggeredByEmail } from "@/lib/agents/triggered-by";
 
 // Timeout envolvente del LLM: el SDK de Anthropic tiene su propio timeout (10min)
 // + 2 reintentos — sin envoltura, un cuelgue de la API puede dejar esta request
@@ -195,6 +196,7 @@ export async function POST(
       agentSlug: "business-case",
       stepLabel: "Generación",
       currentPhase: "Leyendo el contexto…",
+      triggeredByEmail: await triggeredByEmail(),
     },
     select: { id: true },
   });

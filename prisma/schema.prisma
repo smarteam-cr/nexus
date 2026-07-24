@@ -1129,6 +1129,11 @@ model AgentRun {
   // flujos que no la escriben siguen igual (F5.2 del plan de mejoras).
   currentPhase   String?
   output         String?        @db.Text // JSON raw de Claude (backup)
+  // Quién apretó el botón (email del TeamMember). Lo usa el centro de corridas para
+  // avisarte SOLO de lo tuyo cuando termina mientras navegás por otra parte de Nexus.
+  // nullable a propósito: las corridas de SISTEMA (watchdog CS, post-proceso de
+  // sesiones, clasificador) no tienen humano detrás → quedan null y NUNCA notifican.
+  triggeredByEmail String?
 
   // ── Análisis contextuales desde /sessions (Fase 9) ──────────────────────────
   sourceSessionIds String[] @default([]) // ids de FirefliesSession usados como input

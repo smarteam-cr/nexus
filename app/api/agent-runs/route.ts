@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/supabase";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { can } from "@/lib/auth/permissions/engine";
 import { parseRunError } from "@/lib/agents/run-error";
+import { resolveRunResultUrl } from "@/lib/agents/run-url";
 
 /**
  * GET /api/agent-runs — el feed del CENTRO DE CORRIDAS (RunsIndicator).
@@ -29,6 +30,7 @@ export async function GET(req: NextRequest) {
   }
 
   const take = Math.min(Math.max(Number(req.nextUrl.searchParams.get("take")) || 10, 1), 25);
+  const email = user.email?.toLowerCase() ?? null;
 
   const clientWhere = await accessibleClientWhere(user);
   const canCobranza = tm.roleEnum === "SUPER_ADMIN" || (await can(tm, "cobranza", "read"));
@@ -49,10 +51,18 @@ export async function GET(req: NextRequest) {
     createdAt: true,
     updatedAt: true,
     clientId: true,
+    projectId: true,
+    businessCaseId: true,
     stepLabel: true,
     output: true,
+    triggeredByEmail: true,
     agent: { select: { name: true } },
     client: { select: { name: true } },
+    // Un solo bloque alcanza para saber EN QUÉ CANVAS aterrizó lo generado — es lo
+    // que convierte el aviso de "listo" en un enlace al resultado y no a la home
+    // del cliente. Las corridas que no escriben bloques (cronograma, análisis) caen
+    // solas al deep-link de proyecto.
+    blocks: { take: 1, select: { section: { select: { canvasId: true } } } },
   } satisfies Prisma.AgentRunSelect;
 
   const [running, recent] = await Promise.all([
@@ -80,6 +90,17 @@ export async function GET(req: NextRequest) {
     clientName: r.client?.name ?? null,
     agentName: r.agent?.name ?? r.stepLabel ?? "Agente",
     error: r.status === "ERROR" ? parseRunError(r.output) : null,
+    // ¿La lancé YO? Gobierna el aviso emergente (solo lo tuyo interrumpe) y el
+    // filtro por defecto del panel. Las corridas de sistema tienen el campo null,
+    // así que jamás son "mías" — nunca avisan, que es lo correcto.
+    mine: !!r.triggeredByEmail && r.triggeredByEmail === email,
+    // A dónde lleva "Ver" en el aviso y el click en el ítem del panel.
+    resultUrl: resolveRunResultUrl({
+      clientId: r.clientId,
+      projectId: r.projectId,
+      businessCaseId: r.businessCaseId,
+      canvasId: r.blocks[0]?.section.canvasId ?? null,
+    }),
   });
 
   return NextResponse.json({

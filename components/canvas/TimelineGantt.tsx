@@ -1140,12 +1140,12 @@ export default function TimelineGantt({
         const blockers = collectClientBlockers(phases, anchor, today);
         if (blockers.length === 0) return null;
         return (
-          <div id="cronograma-pendientes-cliente" className="scroll-mt-24 rounded-2xl border border-amber-700/50 bg-amber-900/15 px-4 py-3">
+          <div id="cronograma-pendientes-cliente" className="scroll-mt-24 rounded-2xl border border-warn-line bg-warn-surface px-4 py-3">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-warn-ink">
                 Pendiente del cliente · atrasadas
               </span>
-              <span className="text-[10px] font-semibold text-amber-400/80 bg-amber-900/40 border border-amber-700/40 rounded-full px-2 py-0.5">
+              <span className="text-[10px] font-semibold text-warn-ink bg-warn-line/40 border border-warn-line rounded-full px-2 py-0.5">
                 {blockers.length}
               </span>
             </div>
@@ -1158,11 +1158,11 @@ export default function TimelineGantt({
                       type="button"
                       disabled={!clickable}
                       onClick={clickable ? () => onOpenTask!(b.phase.key, b.task.key!) : undefined}
-                      className={`w-full flex flex-wrap items-center gap-2 text-left px-2 py-1.5 rounded-lg ${clickable ? "hover:bg-amber-900/25 cursor-pointer" : "cursor-default"}`}
+                      className={`w-full flex flex-wrap items-center gap-2 text-left px-2 py-1.5 rounded-lg ${clickable ? "hover:bg-warn-line/30 cursor-pointer" : "cursor-default"}`}
                     >
-                      <span className="text-sm text-gray-200 flex-1 min-w-0">{b.task.title}</span>
-                      <span className="text-[11px] text-gray-500">{b.phaseName}</span>
-                      <span className="text-[10px] font-semibold text-red-300">
+                      <span className="text-sm text-fg-secondary flex-1 min-w-0">{b.task.title}</span>
+                      <span className="text-[11px] text-fg-muted">{b.phaseName}</span>
+                      <span className="text-[10px] font-semibold text-warn-ink">
                         {b.weeksLate >= 1 ? `hace ${plural(b.weeksLate, "semana", "semanas")}` : ""}
                       </span>
                       <span className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${PARTY_META.CLIENTE.cls}`}>

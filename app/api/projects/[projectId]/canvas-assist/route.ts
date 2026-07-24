@@ -24,6 +24,7 @@ import { KICKOFF_DEF_BY_KEY, KICKOFF_HANDOFF_KEYS, KICKOFF_TEMPLATE } from "@/co
 import { DESARROLLO_DEF_BY_KEY, DESARROLLO_HANDOFF_KEYS, DESARROLLO_TEMPLATE } from "@/components/landing/configs/desarrollo.defs";
 import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
 import type { BCSectionDef } from "@/components/landing/configs/business-case.defs";
+import { triggeredByEmail } from "@/lib/agents/triggered-by";
 
 const bodySchema = z.object({
   canvasId: z.string().min(1),
@@ -155,6 +156,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       projectId,
       status: "RUNNING",
       stepLabel: `Assist · ${canvas.name}`,
+      triggeredByEmail: await triggeredByEmail(),
     },
     select: { id: true },
   });

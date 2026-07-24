@@ -21,6 +21,7 @@ import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { buildAnalysisContext, type AnalysisFilters } from "@/lib/sessions/analysis-context";
+import { triggeredByEmail } from "@/lib/agents/triggered-by";
 
 // Slugs estables — mismos del seed scripts/seed-analysis-agents.ts
 const AGENT_SLUG_TO_ID: Record<string, string> = {
@@ -110,6 +111,7 @@ export const POST = withAuth(async (req) => {
       agentSlug: agentSlug,
       sourceSessionIds: ctx.sessions.map((s) => s.id),
       filters: filters as object,
+      triggeredByEmail: await triggeredByEmail(),
     },
   });
 

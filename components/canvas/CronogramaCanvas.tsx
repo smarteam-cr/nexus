@@ -178,6 +178,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const { pushUndo, clearScope } = useUndo();
   const undoScope = `cronograma:${projectId}`;
   useUndoScope(undoScope); // purga el historial de undo al desmontar (no aplica a otro proyecto)
+  // Destino del click en la notificación: la pestaña del proyecto (donde vive el
+  // cronograma), no la home del cliente.
+  const cronogramaUrl = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}`;
   const [phases, setPhases] = useState<Phase[]>([]);
   const [anchor, setAnchor] = useState<string>(""); // yyyy-mm-dd o ""
   const [kickoffDate, setKickoffDate] = useState<string>(""); // yyyy-mm-dd de la sesión de kickoff (sugerencia)
@@ -884,7 +887,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         // mudo: un toast suave avisa que se puede reintentar a mano.
         if (!auto) {
           setError(data?.message ?? data?.error ?? "Error al generar el detalle.");
-          void notifyAgentDone({ group: "cronograma", ok: false, url: `/clients/${clientId}` });
+          void notifyAgentDone({ group: "cronograma", ok: false, url: cronogramaUrl });
         } else toast.info("No se pudo generar el detalle automáticamente. Usá «Regenerar detalle» para reintentar.");
       } else if (data?.timelineDetail?.skipped) {
         const reason = data.timelineDetail.reason;
@@ -920,7 +923,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             toast.info("Tareas generadas. Podés revisar el avance con «Chequear avance».");
           }
           setChainingProgress(false);
-          void notifyAgentDone({ group: "cronograma", ok: true, url: `/clients/${clientId}` });
+          void notifyAgentDone({ group: "cronograma", ok: true, url: cronogramaUrl });
         }
       }
     } catch {

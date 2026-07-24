@@ -84,6 +84,12 @@
   --color-fg:             var(--foreground);
   --color-fg-secondary:   var(--fg-secondary);
   --color-fg-muted:       var(--fg-muted);
+  /* Panel SUAVE de advertencia: bg-warn-surface · border-warn-line · text-warn-ink.
+     Prefijo `warn-` a propósito: `--color-warning*` (abajo) es el par SÓLIDO
+     (fondo ámbar + texto blanco) y son cosas distintas — no colisionan. */
+  --color-warn-surface: var(--warn-surface);
+  --color-warn-line:    var(--warn-line);
+  --color-warn-ink:     var(--warn-ink);
 
   /* ── Tokens de INTENCIÓN (mismo valor en ambos modos — no flipean) ───────────
    *  Vivían en :root, donde Tailwind v4 NO genera utilidades (estuvieron muertos
@@ -131,6 +137,14 @@ html {
   --line:           #1f2937;  /* gray-800 — bordes sutiles */
   --fg-secondary:   #e5e7eb;  /* gray-200 — texto secundario */
   --fg-muted:       #9ca3af;  /* gray-400 — texto atenuado */
+
+  /* Superficie de ADVERTENCIA (paneles ámbar: "pendiente del cliente", atrasos).
+     Los tokens de intención (--color-warning) sirven para elementos SÓLIDOS; esto
+     es el trío tint/borde/texto de un panel suave, que sí tiene que flipear:
+     `bg-amber-900/15 + text-amber-300` se veía lavado e ilegible en tema claro. */
+  --warn-surface: #78350f26;  /* amber-900 @ 15% — tint sobre fondo oscuro */
+  --warn-line:    #b4530a80;  /* amber-700 @ 50% */
+  --warn-ink:     #fcd34d;    /* amber-300 — legible sobre el tint oscuro */
 
   /* Scrollbars temáticos (valores OSCUROS) — html.light los redefine */
   --scrollbar-thumb:       #374151;  /* gray-700 */
@@ -202,6 +216,11 @@ html.light {
   --line:           #e5e7eb;  /* gray-200 */
   --fg-secondary:   #374151;  /* gray-700 */
   --fg-muted:       #6b7280;  /* gray-500 */
+
+  /* Superficie de advertencia — valores CLAROS (tint suave + texto oscuro) */
+  --warn-surface: #fffbeb;  /* amber-50 */
+  --warn-line:    #fde68a;  /* amber-200 */
+  --warn-ink:     #92400e;  /* amber-800 — AA sobre amber-50 */
 
   /* Scrollbars temáticos — valores CLAROS */
   --scrollbar-thumb:       #cbd5e1;  /* slate-300 */

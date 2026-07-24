@@ -166,7 +166,8 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     invalidateHandoffStatus(projectId); // el status va a cambiar: que un cambio de tab no pinte el viejo
     setGenerating(true);
     setError(null);
-    const notifyUrl = `/clients/${clientId}`;
+    // A la pestaña del proyecto, no a la home del cliente (el handoff vive ahí).
+    const notifyUrl = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}`;
     try {
       // 0. Guardar exclusiones PENDIENTES del textarea: escribir y regenerar directo
       //    (sin apretar "Guardar") perdía el texto en silencio y el prompt corría sin

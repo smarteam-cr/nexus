@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { withClientAccess, apiError } from "@/lib/api";
 import { guardPermission } from "@/lib/auth/api-guards";
 import { resolveArtifactGate, artifactGateMessage } from "@/lib/auth/permissions/artifact-gate";
+import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { HANDOFF_EXCLUDE_TITLE_KEYWORDS, HANDOFF_INCLUDE_TITLE_KEYWORDS, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
@@ -1831,6 +1832,7 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
           output:       JSON.stringify(analysisJson),
           // Trazabilidad: para el handoff, qué sesiones de ventas se usaron (item de validación).
           sourceSessionIds: handoffSourceSessionIds,
+          triggeredByEmail: await triggeredByEmail(),
         },
       });
 
@@ -2337,6 +2339,9 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
       sectionLabel: bodySectionLabel ?? agent.sectionLabel ?? null,
       status:       "RUNNING",
       output:       "{}",
+      // Este es EL camino que importa para el aviso: corrida detached que el usuario
+      // deja corriendo mientras se va a otra parte de Nexus.
+      triggeredByEmail: await triggeredByEmail(),
     },
   });
 

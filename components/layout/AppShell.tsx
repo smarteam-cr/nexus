@@ -6,6 +6,7 @@ import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import SidebarShell from "./SidebarShell";
 import CsAlertNotifier from "@/components/cs/CsAlertNotifier";
+import AgentRunsProvider from "@/components/ai/AgentRunsProvider";
 
 export default async function AppShell({
   children,
@@ -48,11 +49,16 @@ export default async function AppShell({
   const sidebarCollapsed = (await cookies()).get("nexus-sidebar")?.value === "collapsed";
 
   return (
-    <SidebarShell clients={clients} user={userLite} initialOpen={!sidebarCollapsed}>
-      {/* Alertas HIGH del watchdog CS → notificación de navegador. Solo CSL/SUPER_ADMIN
-          (el componente se auto-apaga para otros roles; render null). */}
-      <CsAlertNotifier role={userLite.role} />
-      {children}
-    </SidebarShell>
+    // El provider envuelve al shell ENTERO (sidebar incluido): el ítem "Corridas de
+    // agentes" consume el mismo feed que dispara los avisos, y al vivir en el layout
+    // del route-group el seguimiento sobrevive a navegar entre secciones.
+    <AgentRunsProvider>
+      <SidebarShell clients={clients} user={userLite} initialOpen={!sidebarCollapsed}>
+        {/* Alertas HIGH del watchdog CS → notificación de navegador. Solo CSL/SUPER_ADMIN
+            (el componente se auto-apaga para otros roles; render null). */}
+        <CsAlertNotifier role={userLite.role} />
+        {children}
+      </SidebarShell>
+    </AgentRunsProvider>
   );
 }

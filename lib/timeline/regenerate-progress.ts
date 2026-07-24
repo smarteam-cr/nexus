@@ -20,6 +20,7 @@ import { getPastSessionsForProject } from "@/lib/sessions/project-sessions";
 import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
 import { normalizeFingerprint } from "@/lib/timeline/particularidad-identity";
+import { triggeredByEmail } from "@/lib/agents/triggered-by";
 
 const AGENT_ID_PROGRESS = "agent-timeline-progress";
 
@@ -315,6 +316,7 @@ export async function regenerateTimelineProgress(
         status: "DONE",
         stepLabel: "Avance de cronograma",
         output: JSON.stringify(parsed),
+        triggeredByEmail: await triggeredByEmail(),
       },
     });
 

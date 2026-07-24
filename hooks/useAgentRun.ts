@@ -20,6 +20,7 @@
  */
 import { useCallback, useState } from "react";
 import { pollAgentRun, type PolledRun } from "@/lib/clients/poll-agent-run";
+import { useAgentRuns } from "@/components/ai/AgentRunsProvider";
 
 export function useAgentRun(clientId: string): {
   /** Fase en curso reportada por el agente ("Analizando sesiones…") o null. */
@@ -28,17 +29,30 @@ export function useAgentRun(clientId: string): {
   track: (runId: string) => Promise<PolledRun>;
 } {
   const [phase, setPhase] = useState<string | null>(null);
+  // El centro de corridas (AgentRunsProvider) también vigila esta corrida y avisa
+  // cuando termina. Si ESTE componente sigue vivo hasta el final, el toast local ya
+  // dio la noticia (con más detalle) → se la marca como anunciada para que el
+  // provider no la repita. Si el usuario navegó, el componente murió, nadie marcó
+  // nada y el aviso lo da el provider: exactamente uno en los dos casos.
+  const runs = useAgentRuns();
 
   const track = useCallback(
     async (runId: string): Promise<PolledRun> => {
       setPhase(null);
+      // Avisarle al provider que hay algo nuevo: sin esto tarda hasta un minuto en
+      // notar la corrida y el spinner del sidebar aparecería tarde.
+      runs?.refrescar();
       try {
-        return await pollAgentRun(clientId, runId, { onPhase: setPhase });
+        const res = await pollAgentRun(clientId, runId, { onPhase: setPhase });
+        // TIMEOUT no se marca: el polling se rindió pero la corrida sigue viva, así
+        // que el provider DEBE poder anunciarla cuando de verdad termine.
+        if (res.status === "DONE" || res.status === "ERROR") runs?.marcarAnunciada(runId);
+        return res;
       } finally {
         setPhase(null);
       }
     },
-    [clientId],
+    [clientId, runs],
   );
 
   return { phase, track };

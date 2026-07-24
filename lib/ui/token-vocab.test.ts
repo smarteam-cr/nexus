@@ -109,7 +109,7 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/canvas/SectionBlockList.tsx": 13,
   "components/canvas/TaskDetailDrawer.tsx": 24,
   "components/canvas/TimelineAssistDialog.tsx": 1,
-  "components/canvas/TimelineGantt.tsx": 110,
+  "components/canvas/TimelineGantt.tsx": 108,
   "components/charts/EChartRenderer.tsx": 4,
   "components/chat/ExecutionModal.tsx": 33,
   "components/chat/PlanningChat.tsx": 66,
