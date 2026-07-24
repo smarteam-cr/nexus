@@ -443,8 +443,10 @@ export async function reconcileDesarrolloCanvasSections(canvasId: string, db: Db
   return reconcileOnDemandCanvasSections(canvasId, DESARROLLO_CANVAS, desarrolloSectionSequence, db);
 }
 
-/** Canvas "Exploración" (descubrimiento del negocio, INTERNO) — lo llama el botón
- *  "Generar exploración" del proyecto vía `ensureExploracionCanvas`. */
+/** Canvas "Exploración" (descubrimiento del negocio, INTERNO). Desde que Exploración es
+ *  un canvas DEFAULT, `createDefaultCanvases` ya lo crea con el proyecto; esto queda como
+ *  red de auto-sanado para los proyectos viejos (lo llama `ensureExploracionCanvas` antes
+ *  de generar) y para el backfill `scripts/migrate-add-exploracion-canvas.ts`. */
 export async function createExploracionCanvas(projectId: string, db: Db = prisma): Promise<string> {
   return createOnDemandCanvas(projectId, EXPLORACION_CANVAS, db);
 }

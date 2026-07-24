@@ -21,9 +21,11 @@
   entender, cómo preguntarlo, en qué orden y a quién del cliente involucrar en cada sesión.
   Su eje es separar **lo que ya sabemos** (afirmado por el handoff, con su fuente → no se
   repregunta) de **lo que damos por supuesto** (sin verificar → de ahí salen las preguntas).
-  7 secciones sobre el motor `LandingView`; se genera on-demand desde la sección del proyecto
-  y sus fuentes, por peso, son: handoff del proyecto (ancla) → handoffs y proyectos previos
-  del cliente → etiquetas → los demás canvas. **El cliente NUNCA la ve**: no existe ruta
+  7 secciones sobre el motor `LandingView`. Es un **canvas de proyecto como Kickoff o
+  Cronograma**: aparece en el dropdown de canvases y se genera con su agente desde el
+  **header del propio canvas** (no hay CTA aparte). Sus fuentes, por peso, son: handoff del
+  proyecto (ancla) → handoffs y proyectos previos del cliente → etiquetas → los demás canvas.
+  **El cliente NUNCA la ve**: no existe ruta
   `/external` ni publicación (congelado por `lib/canvas/exploracion-internal.test.ts`) y se
   renderiza con la **paleta interna** (`.stl-internal`: grises y blancos, ámbar solo para lo
   no verificado) para distinguirla a simple vista de los documentos de cara al cliente.

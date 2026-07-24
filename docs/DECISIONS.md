@@ -735,11 +735,27 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   también estos pares y exige que todo token del bloque sea NEUTRO (**saturación < 25%**,
   medida en HSL — el spread RGB crudo rechazaba los grises fríos legítimos y dejaba pasar lo
   que importaba). Un segundo acento rompe el efecto "esto es interno" y el test lo frena.
-- **On-demand, no auto-encadenada ni pre-creada**: el canvas nace cuando el CSE toca "Generar
-  exploración" en la sección del proyecto. Pre-crearla en los ~113 proyectos repetiría los 111
-  cascarones vacíos de Handoff que hubo que borrar; auto-encadenarla al kickoff generaría
-  documentos que quizá nadie mire y gastaría tokens sin pedirlo. "Después del kickoff" es el
-  ORDEN del flujo, no un disparador automático.
+- **Canvas DEFAULT de primera clase (modelo Kickoff)** — *supera a la decisión original
+  "on-demand, no pre-creada" (2026-07-23, pedido de Elías: "debe ser un canvas, como kickoff,
+  cronograma… correr el agente de kickoff en el canvas de kickoff, así pero para la
+  exploración")*. Exploración está en `DEFAULT_PROJECT_CANVASES`: se pre-crea con el proyecto,
+  vive en el **dropdown de canvases** y su agente se dispara desde el **header del canvas**
+  (`CANVAS_PRIMARY_AGENT`), exactamente como el kickoff. Se retiró la CTA dedicada
+  (`ProjectExploracionSection`) y su endpoint `/api/projects/[id]/exploracion`.
+  *Por qué se revirtió:* el argumento original eran los 111 cascarones vacíos de Handoff — pero
+  ese caso NO es análogo: Handoff pasó a ser una **entidad cliente-level** y su canvas de
+  proyecto quedó redundante. Un canvas de Exploración vacío es exactamente como un Kickoff sin
+  generar: aparece en el dropdown con su botón "Generar" adentro, que es el patrón normal del
+  producto. *Alcance:* backfill retroactivo a los proyectos existentes con
+  `scripts/migrate-add-exploracion-canvas.ts` (dry-run-first, excluye `__strategy__`).
+  `order: 4` (al final) para no renumerar los canvases que los ~113 proyectos ya tienen en DB.
+  **INTERNO ≠ on-demand**: sigue sin superficie externa y con la paleta gris (ver el bullet de
+  abajo). "Después del kickoff" sigue siendo el ORDEN del flujo, no un disparador automático:
+  NO hay auto-chain, el CSE decide cuándo generar.
+- **El workspace NO asume "sin contenido ⇒ generando"**: como canvas default, abrirlo sin generar
+  es lo normal, así que muestra un estado **idle** ("Todavía sin generar…") en vez del poll de
+  "Generando…" que tenía cuando la CTA lo abría justo después de disparar. El refresco tras
+  generar lo da el remonte por `agentNonce` del panel, igual que en los otros canvases.
 - **Máximo reuso de renderers**: de las 6 secciones de contenido, 5 usan renderers que ya
   existían (`pain` ×3, `web_diagnosis`, el hero de Desarrollo, el CTA del kickoff). El único
   componente nuevo es el **plan de sesiones**, porque su unidad es una sesión con una lista de

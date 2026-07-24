@@ -15,9 +15,10 @@
  * (Los transcripts de sesiones y CS360 entran en la fase 2 — van por el chokepoint
  * `lib/sessions/project-sources.ts` y tienen otro presupuesto de tokens.)
  *
- * Lo dispara UN camino: el botón "Generar/Regenerar exploración" del proyecto, vía
- * POST /analyze (que gatea con artifact-gate y crea el AgentRun, y delega acá). NO hay
- * auto-chain: el CSE decide cuándo el kickoff ya pasó.
+ * Lo dispara UN camino: el botón "Generar exploración" del HEADER del canvas (mapa
+ * `CANVAS_PRIMARY_AGENT`, igual que el kickoff en su canvas), vía POST /analyze (que gatea
+ * con artifact-gate y crea el AgentRun, y delega acá). NO hay auto-chain: el CSE decide
+ * cuándo el kickoff ya pasó.
  */
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";

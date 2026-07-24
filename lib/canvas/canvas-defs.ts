@@ -196,6 +196,33 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     order: 0,
     sections: [],
   },
+  {
+    // Exploración: guía INTERNA de descubrimiento del negocio. Canvas de primera
+    // clase (modelo Kickoff): aparece en el dropdown y su agente se corre desde el
+    // header del canvas. INTERNO ≠ on-demand — sigue sin superficie externa (no hay
+    // /external/exploracion ni publish-exploracion; `exploracion-internal.test.ts`
+    // congela esa ausencia) y se renderiza con la paleta gris `.stl-internal`.
+    //
+    // `order: 4` (al final) a propósito: Cronograma/Kickoff/Diagnóstico/Planificación
+    // ya ocupan 0-3 EN LA DB de los ~113 proyectos. Renumerar acá solo afectaría a los
+    // proyectos nuevos y haría divergir el orden del dropdown entre viejos y nuevos;
+    // y empatar en 2 con Diagnóstico daría un orden no determinístico ahora que ambos
+    // se crean en el mismo `createMany` (ya no hay desempate por `createdAt`).
+    // Fuente ÚNICA de sus secciones (keys/labels 1:1 con EXPLORACION_SECTION_DEFS del
+    // motor). Solo `cierre` es curada (defaultData).
+    name: "Exploración",
+    isDefault: false,
+    order: 4,
+    sections: [
+      { key: "exploracion",   label: "Qué hay que entender de este proyecto" },
+      { key: "ya_sabemos",    label: "Lo que ya sabemos" },
+      { key: "sin_verificar", label: "Lo que damos por supuesto" },
+      { key: "sesiones",      label: "Plan de sesiones" },
+      { key: "personas",      label: "A quién involucrar" },
+      { key: "profundidad",   label: "Qué hay que entender a fondo" },
+      { key: "cierre",        label: "Cómo se cierra", defaultData: { ...EXPLORACION_CIERRE_DEFAULT } },
+    ],
+  },
 ];
 
 /** Map from agentGroup to canvas name for routing cards/blocks.
@@ -211,8 +238,9 @@ export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
   // Requerimiento técnico: canvas ON-DEMAND (solo si el handoff detecta trabajo técnico).
   // Lo crea createDesarrolloCanvas; el agente "agent-desarrollo-canvas" escribe en él.
   desarrollo: "Desarrollo",
-  // Exploración del negocio: canvas ON-DEMAND e INTERNO (lo crea el botón "Generar
-  // exploración" del proyecto). El agente "agent-exploracion-canvas" escribe en él.
+  // Exploración del negocio: canvas DEFAULT e INTERNO (se pre-crea con el proyecto y
+  // vive en el dropdown, como Kickoff). El agente "agent-exploracion-canvas" escribe
+  // en él, disparado desde el header del propio canvas (CANVAS_PRIMARY_AGENT).
   exploracion: "Exploración",
   businesscase: "Business Case",
   // D.1: el canvas "Cronograma" no tiene secciones → resolver targetCanvasId acá
@@ -289,33 +317,11 @@ export function desarrolloSectionSequence(existingKeys: string[]): string[] {
 }
 
 // ── Canvas Exploración (descubrimiento del negocio del cliente) ───────────────
-// Canvas ON-DEMAND e INTERNO: NO va en DEFAULT_PROJECT_CANVASES (no se pre-crea en los
-// ~113 proyectos: ver los 111 cascarones vacíos de Handoff que hubo que borrar) y NO
-// tiene superficie externa — no existe /external/exploracion ni publish-exploracion, y
-// `lib/canvas/exploracion-internal.test.ts` congela esa ausencia. Lo monta
-// createExploracionCanvas cuando el CSE toca "Generar exploración" en el proyecto.
-//
-// Va DESPUÉS del kickoff en el flujo (el kickoff ya pasó y el proyecto arrancó). `order`
-// es Int y el Kickoff ya ocupa el 1, así que va en 2 — empata con Diagnóstico y el
-// desempate del listado (`[order asc, createdAt asc]`) lo deja detrás, porque el canvas
-// de Exploración se crea on-demand mucho después que los del set inicial. Renumerar
-// Diagnóstico/Planificación no serviría: los ~113 proyectos ya tienen su `order` en DB.
-// Fuente ÚNICA de sus secciones (keys/labels 1:1 con EXPLORACION_SECTION_DEFS del
-// motor). Solo `cierre` es curada (defaultData).
-export const EXPLORACION_CANVAS: CanvasDefinition = {
-  name: "Exploración",
-  isDefault: false,
-  order: 2,
-  sections: [
-    { key: "exploracion",   label: "Qué hay que entender de este proyecto" },
-    { key: "ya_sabemos",    label: "Lo que ya sabemos" },
-    { key: "sin_verificar", label: "Lo que damos por supuesto" },
-    { key: "sesiones",      label: "Plan de sesiones" },
-    { key: "personas",      label: "A quién involucrar" },
-    { key: "profundidad",   label: "Qué hay que entender a fondo" },
-    { key: "cierre",        label: "Cómo se cierra", defaultData: { ...EXPLORACION_CIERRE_DEFAULT } },
-  ],
-};
+/** Definición canónica del canvas Exploración (fuente única del seed, la reconciliación
+ *  y el backfill). Vive DENTRO de DEFAULT_PROJECT_CANVASES — es un canvas de primera
+ *  clase (modelo Kickoff): se pre-crea con el proyecto y su agente se corre desde el
+ *  header del canvas. INTERNO ≠ on-demand: sigue sin superficie externa. */
+export const EXPLORACION_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c) => c.name === "Exploración")!;
 
 /** Secuencia destino de las secciones del canvas Exploración (orden vivo + inserta
  *  canónicas faltantes detrás de su predecesora). La usa

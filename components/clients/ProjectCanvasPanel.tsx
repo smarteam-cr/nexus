@@ -20,7 +20,6 @@ import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import ProjectHandoffSection from "./ProjectHandoffSection";
-import ProjectExploracionSection from "./ProjectExploracionSection";
 import { WorkspaceSkeleton } from "./skeletons";
 import ProjectLifecyclePanel from "@/components/lifecycle/ProjectLifecyclePanel";
 import { useWorkspace } from "./WorkspaceContext";
@@ -420,18 +419,6 @@ export default function ProjectCanvasPanel({
       {/* Handoff por-proyecto — sección dedicada siempre visible (estado + generar + doc). */}
       <ProjectHandoffSection projectId={projectId} clientId={clientId} />
 
-      {/* Exploración del negocio — disparador on-demand del canvas interno. Al generarse,
-          el canvas nace: hay que RE-LISTAR los canvases antes de poder cambiar a él (no
-          está en el dropdown todavía). */}
-      <ProjectExploracionSection
-        projectId={projectId}
-        clientId={clientId}
-        onOpenCanvas={async (id) => {
-          await refetchCanvases();
-          switchCanvas(id);
-        }}
-      />
-
       {/* Ciclo de vida — etapa efectiva + validaciones de salida + modalidad de adopción.
           El id es el destino de las alarmas de etapa del panel "Qué hacer acá" del cronograma:
           los gates para cerrarlas viven acá, en esta misma página. */}
@@ -618,12 +605,12 @@ export default function ProjectCanvasPanel({
       )}
 
       {/* Exploración: guía INTERNA de descubrimiento del negocio (mismo motor, paleta gris).
-          Canvas on-demand — solo aparece si el CSE lo generó desde la sección del proyecto.
-          A diferencia de Kickoff/Desarrollo, NO tiene vista externa ni publicación. */}
+          Canvas de primera clase como Kickoff: vive en el dropdown y su agente se dispara
+          desde el header (CANVAS_PRIMARY_AGENT). NO tiene vista externa ni publicación. */}
       {!isResumenCanvas && activeCanvas?.name === "Exploración" && activeCanvasId && (
         <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
           <CanvasBoundary label="el canvas de Exploración">
-            <ExploracionWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} clientId={clientId} canvasId={activeCanvasId} />
+            <ExploracionWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
           </CanvasBoundary>
         </div>
       )}
