@@ -10,13 +10,6 @@ import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import { APP_NAV, canSeeNavItem } from "./nav-config";
 import NavFlyout, { RolesNavFlyout } from "./NavFlyout";
 
-interface ClientSummary {
-  id: string;
-  name: string;
-  company: string | null;
-  hubspotAccount: { id: string; hubName: string | null } | null;
-}
-
 interface UserLite {
   email: string;
   name: string;
@@ -27,7 +20,6 @@ interface UserLite {
 }
 
 interface SidebarProps {
-  clients: ClientSummary[];
   user: UserLite;
   onToggle?: () => void;
   isOpen?: boolean;
@@ -175,7 +167,7 @@ function UserAvatar({ user, isOpen }: { user: UserLite; isOpen: boolean }) {
   );
 }
 
-export default function Sidebar({ clients, user, onToggle, isOpen = true }: SidebarProps) {
+export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps) {
   const pathname = usePathname();
 
   // Visibilidad de ítems desde el mapa de PERMISOS EFECTIVO, resuelta por los
@@ -272,49 +264,11 @@ export default function Sidebar({ clients, user, onToggle, isOpen = true }: Side
         })}
           </nav>
 
-        {/* ── Clientes recientes: ocupa el espacio restante y scrollea SOLO
-            ella (ya no arrastra el menú ni queda comprimida en 150px fijos). ── */}
-        {isOpen && clients.length > 0 && (
-          <div className="flex-1 min-h-0 flex flex-col">
-            <div className="border-t border-gray-800/60 mx-3 mb-2 flex-shrink-0" />
-            <p className="px-6 pb-1.5 text-2xs font-semibold text-gray-600 uppercase tracking-widest flex-shrink-0">
-              Clientes recientes
-            </p>
-            <div className="flex-1 min-h-0 overflow-y-auto px-3 space-y-0.5 pb-2">
-              {clients.slice(0, 8).map((client) => {
-                const isActive = pathname.startsWith(`/clients/${client.id}`);
-                return (
-                  <Link
-                    key={client.id}
-                    href={`/clients/${client.id}`}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors ${
-                      isActive ? "bg-gray-800 text-white" : "text-gray-400 hover:text-white hover:bg-gray-900"
-                    }`}
-                  >
-                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${client.hubspotAccount ? "bg-green-400" : "bg-gray-600"}`} />
-                    <div className="min-w-0">
-                      <p className="text-xs truncate">{client.name}</p>
-                      {client.hubspotAccount?.hubName ? (
-                        <p className="text-2xs text-green-600 truncate">{client.hubspotAccount.hubName}</p>
-                      ) : client.company ? (
-                        <p className="text-2xs text-gray-600 truncate">{client.company}</p>
-                      ) : null}
-                    </div>
-                  </Link>
-                );
-              })}
-              {clients.length > 8 && (
-                <Link href="/clients" className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-400 transition-colors">
-                  +{clients.length - 8} más
-                </Link>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Si no hay clientes recientes (colapsado o lista vacía), un
-            espaciador ocupa el hueco y empuja el avatar al fondo igual. */}
-        {(!isOpen || clients.length === 0) && <div className="flex-1 min-h-0" />}
+        {/* Espaciador: ocupa el hueco entre el menú y el pie, y empuja el avatar
+            al fondo. Antes era condicional porque acá vivía "Clientes recientes"
+            (retirada el 2026-07-24 para todos los roles — la navegación a un
+            cliente va por Clientes, que tiene búsqueda y filtros). */}
+        <div className="flex-1 min-h-0" />
 
       {/* ── Avatar del usuario logueado (FIJO al fondo, siempre visible; con
               dropdown hacia arriba que incluye Configuración + Cerrar sesión). ── */}

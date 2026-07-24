@@ -44,6 +44,29 @@ function arrayOf(props: Record<string, unknown>, required: string[]) {
   return { type: "array", items: { type: "object", properties: props, required } } as const;
 }
 
+/**
+ * VOCABULARIO CERRADO de la tabla de propiedades. Fuente ÚNICA: lo consumen el `brief` del
+ * agente (arriba, en prosa) y los desplegables del renderer (`PropsTableSection`) — si viven
+ * en dos lados, el agente emite valores que el desplegable no ofrece y la celda queda huérfana.
+ * `sistema` y `objeto` NO están acotados a propósito: dependen del proyecto (el sistema destino
+ * y sus objetos salen de `arquitectura`), así que esas dos columnas son texto libre.
+ */
+export const PROP_TIPOS = [
+  { value: "texto", label: "Texto" },
+  { value: "numero", label: "Número" },
+  { value: "fecha", label: "Fecha" },
+  { value: "booleano", label: "Booleano" },
+  { value: "enumeracion", label: "Enumeración" },
+  { value: "moneda", label: "Moneda" },
+  { value: "id", label: "ID" },
+] as const;
+
+export const PROP_DIRECCIONES = [
+  { value: "entra", label: "Entra" },
+  { value: "sale", label: "Sale" },
+  { value: "ambas", label: "Ambas" },
+] as const;
+
 export const DESARROLLO_SECTION_DEFS: BCSectionDef[] = [
   {
     key: "requerimiento",
@@ -61,6 +84,26 @@ export const DESARROLLO_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "Portada del requerimiento técnico. `headline`: patrón `Requerimiento técnico: [integración de HubSpot con [sistema]] / [migración desde [plataforma]] / [desarrollo a medida]` — sacá el nombre propio del sistema destino de la sección `desarrollo` del handoff (SAP, ERP, Aircall, e-commerce, Salesforce…). `subhead`: UNA frase, en lenguaje llano (que la entienda alguien no técnico), de qué conecta con qué y para qué (ej. 'Sincroniza los negocios cerrados en HubSpot con el ERP para facturar sin recaptura'). `tags`: 2-5 chips cortos de los sistemas/APIs/tipo (ej. 'HubSpot', 'SAP', 'API REST', 'Webhook', 'Migración'). Fuente: sección `desarrollo` del handoff + tags del proyecto. No inventes sistemas.",
     schema: { type: "object", properties: { headline: str, subhead: str, tags: strArray }, required: ["headline"] },
+  },
+  {
+    key: "estimacion",
+    label: "Estimación del equipo técnico",
+    eyebrow: "Cuánto toma",
+    theme: "soft",
+    // Va JUSTO DESPUÉS del requerimiento: se estima habiendo leído la portada, no al final
+    // del documento (para eso habría que scrollear todo el requerimiento y volver).
+    sectionType: "estimacion",
+    ctxDriven: true, // el dato vive en la tabla DevEstimate, no en el CanvasBlock
+    ctxEmpty: (ctx) => !ctx.desarrollo?.estimate && !ctx.desarrollo?.canEstimate,
+    agentGenerated: false, // LA IA NO LA TOCA: la llena una persona del equipo técnico
+    empty: {},
+    tip:
+      "La escribe el equipo técnico después de leer el requerimiento. Cada re-estimación queda " +
+      "como una entrada nueva del historial — así se ve cómo se movió respecto a lo que se estimó al inicio. " +
+      "No se publica al cliente.",
+    agentHint: "",
+    brief: "Sección de datos: la llena el equipo de desarrollo desde la app, no el agente.",
+    schema: { type: "object", properties: {} },
   },
   {
     key: "retos_cliente",
@@ -144,6 +187,52 @@ export const DESARROLLO_SECTION_DEFS: BCSectionDef[] = [
         opcionales: arrayOf({ nombre: str, detalle: str }, ["nombre"]),
       },
       required: ["objetos", "asociaciones"],
+    },
+  },
+  {
+    key: "propiedades",
+    label: "Propiedades y campos",
+    eyebrow: "El diccionario de la integración",
+    theme: "light",
+    sectionType: "props_table",
+    agentGenerated: true,
+    empty: { intro: "", filas: [] },
+    tip:
+      "Una fila por propiedad que participa de la integración: dónde vive, si entra o sale, si es la llave que une los registros y para qué se usa. " +
+      "Es el lugar donde se busca la respuesta cuando el cliente pregunta «¿qué propiedad hace esto?» — por eso también la ve el cliente y las descripciones van sin jerga.",
+    agentHint:
+      "Una fila por propiedad/campo que viaja en la integración. Sembrá el esqueleto desde la arquitectura; lo que no esté confirmado va con `⚠️ Por validar` (nunca inventes nombres de propiedades del cliente).",
+    brief:
+      "EL DICCIONARIO DE LA INTEGRACIÓN: la tabla que el equipo consulta mientras construye y a la que vuelve cuando el cliente pregunta '¿qué propiedad hace esto?'. Se rinde como tabla; el equipo la completa a mano mientras desarrolla — vos sembrás el esqueleto. `intro`: 1 frase opcional de contexto. " +
+      "`filas`: una por PROPIEDAD/CAMPO que participa del flujo. Derivalas de `dataFields` y `dedupeKey` de las conexiones de `arquitectura` y del mapeo de `relacion_objetos` — si esas secciones nombran un campo, tiene que estar acá. Por fila: " +
+      "`sistema` = dónde VIVE esa propiedad, con el nombre EXACTO de un ítem de `sistemas` ('HubSpot', 'SAP'…) · " +
+      "`objeto` = a qué objeto pertenece ('Contacto', 'Empresa', 'Negocio', 'Ticket', 'Producto' en HubSpot; en el destino el que corresponda: 'Cliente', 'Factura'…) · " +
+      "`campo` = el nombre técnico de la propiedad entre backticks si lo sabés (`email`, `id_cliente_erp`); si NO está confirmado, describilo y marcá `⚠️ Por validar` — NUNCA inventes un internal name · " +
+      "`tipo` = UNO de: texto | numero | fecha | booleano | enumeracion | moneda | id · " +
+      "`direccion` = UNO de: entra (llega a este sistema) | sale (parte de este sistema) | ambas · " +
+      "`esLlave` = 'si' SOLO si es la propiedad que EMPAREJA los registros entre sistemas (el External ID, el email en Contactos, el dominio o registro fiscal en Empresas); si no, 'no' · " +
+      "`obligatorio` = 'si' si sin ese dato el sync falla o crea basura; si no, 'no' · " +
+      "`descripcion` = POR QUÉ se usa, en 1 línea que entienda alguien NO técnico (esta tabla la ve el cliente): 'Identifica al cliente en el ERP para no duplicarlo', no 'FK del maestro de clientes'. " +
+      "Fuente: `arquitectura` + `relacion_objetos` + la sección `desarrollo` del handoff. Si no hay NADA de respaldo, dejá `filas` vacío.",
+    schema: {
+      type: "object",
+      properties: {
+        intro: str,
+        filas: arrayOf(
+          {
+            sistema: str,
+            objeto: str,
+            campo: str,
+            tipo: str,
+            direccion: str,
+            esLlave: str,
+            obligatorio: str,
+            descripcion: str,
+          },
+          ["sistema", "objeto", "campo"],
+        ),
+      },
+      required: ["filas"],
     },
   },
   {

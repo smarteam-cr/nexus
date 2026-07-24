@@ -1,6 +1,7 @@
 import { getHubspotClient, getSystemHubspotClient } from "./client";
 import { prisma } from "@/lib/db/prisma";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
+import { sanitizeTags, normalizeTag } from "@/lib/tags/catalog";
 import type { Client } from "@hubspot/api-client";
 
 // ── Mapeo de nombre del proyecto → serviceType + projectType ─────────────────
@@ -21,6 +22,32 @@ const SERVICE_MAP: Record<string, ServiceMapping> = {
   "Implementación de Data Hub": { serviceType: null, projectType: "BASE_IMPLEMENTATION", hubTag: null },
   "Signals Based Marketing": { serviceType: "loop_marketing", projectType: "USE_CASE", hubTag: "Marketing Hub" },
 };
+
+/**
+ * Tags del proyecto tras el sync: ADITIVO, nunca destructivo.
+ *
+ * ⚠ Antes esto era `tags: hubTag ? [hubTag] : []` — un REEMPLAZO derivado solo del nombre
+ * del servicio en HubSpot. Como `inferServiceMapping` devuelve `hubTag: null` para todo
+ * nombre fuera de su catálogo de 8 plantillas, cualquier proyecto con nombre libre
+ * ("Wherex - Nuevo tipo de objeto Deal") quedaba con `tags: []` en CADA sync — borrando lo
+ * que el agente de handoff clasificó Y lo que el CSE agregó a mano en la tira. Como el sync
+ * corre al entrar al cliente (cooldown 10 min), los tags "se perdían solos" cada tanto.
+ *
+ * La política ahora es la MISMA que la de `analyze` (persistTimelineFromAgentOutput): unir,
+ * no reemplazar. El sync solo puede SUMAR su tag derivado.
+ *
+ * Trade-off aceptado: si en HubSpot cambian el servicio de "Marketing Hub" a "Sales Hub",
+ * el proyecto queda con los dos y el CSE quita el que sobra. Es preferible a que un dato
+ * curado desaparezca sin aviso — retirar un tag es una decisión humana, no un efecto
+ * secundario de abrir una pantalla.
+ */
+export function mergeHubTag(currentTags: string[], hubTag: string | null): string[] {
+  const next = sanitizeTags(currentTags); // normaliza labels legacy → slugs
+  // `hubTag` viene como LABEL ("Marketing Hub"); se guarda como SLUG canónico.
+  const slug = hubTag ? normalizeTag(hubTag) : null;
+  if (slug && !next.includes(slug)) next.push(slug);
+  return next;
+}
 
 function inferServiceMapping(projectName: string | null): ServiceMapping {
   if (!projectName) return { serviceType: "proyecto_temporal", projectType: "USE_CASE", hubTag: null };
@@ -702,7 +729,9 @@ export async function syncProjectsForClient(
           hubspotServiceId: project.id,
           serviceType: mapping.serviceType,
           projectType: mapping.projectType,
-          tags: mapping.hubTag ? [mapping.hubTag] : [],
+          // ADITIVO (ver mergeHubTag): el sync no puede borrar la clasificación del
+          // agente ni la del CSE. Solo suma su tag derivado del servicio de HubSpot.
+          tags: mergeHubTag(existing.tags, mapping.hubTag),
           status: "active",
           hubspotOwnerId:      hubOwnerId,
           hubspotOwnerName:    ownerName,
@@ -729,7 +758,9 @@ export async function syncProjectsForClient(
             hubspotServiceId: project.id,
             serviceType: mapping.serviceType,
             projectType: mapping.projectType,
-            tags: mapping.hubTag ? [mapping.hubTag] : [],
+            // Proyecto NUEVO: no hay nada curado que preservar, pero igual pasa por
+            // mergeHubTag para guardar el SLUG canónico (antes guardaba el label).
+            tags: mergeHubTag([], mapping.hubTag),
             hubspotOwnerId:      hubOwnerId,
             hubspotOwnerName:    ownerName,
             hubspotOwnerEmail:   ownerEmail,

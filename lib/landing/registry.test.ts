@@ -110,8 +110,8 @@ describe("Desarrollo: registry completo + keys congeladas", () => {
 
   it("snapshot de keys: requerimiento abre, cierre cierra", () => {
     expect(DESARROLLO_SECTION_DEFS.map((d) => d.key)).toEqual([
-      "requerimiento", "retos_cliente", "criterios_exito", "arquitectura",
-      "relacion_objetos", "comunicacion", "cierre",
+      "requerimiento", "estimacion", "retos_cliente", "criterios_exito", "arquitectura",
+      "relacion_objetos", "propiedades", "comunicacion", "cierre",
     ]);
   });
 

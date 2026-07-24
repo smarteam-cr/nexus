@@ -357,6 +357,32 @@ model Project {
   csAlerts            CsAlert[] // Éxito del cliente: alertas del watchdog
   serviciosCobranza   ServicioContratado[] // Cobranza: servicios facturables ligados a este proyecto
   stageGates          ProjectStageGate[] // Ciclo de vida: validaciones de salida cumplidas
+  devEstimates        DevEstimate[] // Desarrollo: estimaciones de esfuerzo del equipo técnico
+}
+
+// ── Desarrollo (requerimiento técnico) ────────────────────────────────────────
+// Estimación de esfuerzo del equipo técnico para un proyecto, tras leer el
+// requerimiento del canvas Desarrollo. APPEND-ONLY: cada re-estimación es una FILA
+// NUEVA (nunca un update) → queda el historial "estimamos 40h y terminó en 90h", que
+// es lo que permite calibrar. La VIGENTE es la más reciente por createdAt.
+//
+// Vive en tabla propia y NO dentro de `CanvasBlock.data` a propósito: las horas tienen
+// que ser CONSULTABLES (sumar el esfuerzo de un período, reportar por proyecto) y
+// parsear Json de todas las filas para eso no escala. La sección `estimacion` del canvas
+// la LEE por ctx — el dato no se duplica (ARCHITECTURE §2.1).
+model DevEstimate {
+  id            String    @id @default(cuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  hours         Int? // nullable porque se puede estimar SOLO por fecha
+  estimatedDate DateTime? // nullable porque se puede estimar SOLO por horas
+  note          String?   @db.Text // por qué cambió respecto a la anterior
+  // Quién estimó. Texto (no FK a TeamMember) para que el historial sobreviva a la baja
+  // de una persona del equipo — el mismo criterio de `Particularidad.createdByEmail`.
+  createdByEmail String
+  createdAt      DateTime @default(now())
+
+  @@index([projectId, createdAt])
 }
 
 // D.3 panel — salud del proyecto para el panel de cartera. Es el OVERRIDE curado; la salud

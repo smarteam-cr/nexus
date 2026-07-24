@@ -1,11 +1,21 @@
 /**
  * lib/cache/clients.ts
  *
- * Wrapper cacheado de `prisma.client.findMany` para el sidebar de AppShell.
+ * ⚠ SIN LECTORES desde el 2026-07-24: se retiró la sección "Clientes recientes"
+ * del sidebar (para todos los roles) y con ella el único consumidor de
+ * `getClientsForSidebar` — la llamaba `AppShell` en CADA navegación, así que su
+ * retiro es también la razón por la que dejó de correr el query más caliente del
+ * proyecto en cada carga de página.
  *
- * Se ejecuta en CADA navegación dentro de la app (AppShell envuelve casi todas
- * las páginas), así que es el query más caliente del proyecto. Con `unstable_cache`
- * lo bajamos a 1 RTT a Supabase cada `revalidate` segundos.
+ * Qué queda vivo: `revalidateClientsSidebar()`, que 4 routes de clientes siguen
+ * llamando (invalidan un tag que hoy nadie lee → no-op barato, no un bug). El
+ * módulo se conserva ENTERO a propósito: borrarlo obliga a tocar esas 4 routes,
+ * que no tienen nada que ver con el pedido. Si no se repone una lista de clientes
+ * en el shell, la limpieza pendiente es: borrar este archivo + sus 5 call sites en
+ * app/api/clients/{route,connect,[id]}.ts y app/api/system/hubspot/import/route.ts.
+ *
+ * Wrapper cacheado de `prisma.client.findMany` para el sidebar de AppShell.
+ * Con `unstable_cache` se bajaba a 1 RTT a Supabase cada `revalidate` segundos.
  *
  * El orden es por **última actividad pasada** (no por createdAt) — así los
  * clientes "activos" suben y los dormidos bajan. Reusa el helper

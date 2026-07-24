@@ -90,6 +90,112 @@ export function Editable({
   );
 }
 
+// ── Controles de VOCABULARIO CERRADO (desplegable y casilla) ─────────────────
+//
+// `Editable` cubre texto libre. Cuando el campo tiene un conjunto ACOTADO de valores
+// (dirección de un dato, tipo de campo, sí/no), escribirlo a mano garantiza que cada
+// quien lo escriba distinto ("entra" / "Entrada" / "inbound") y que después no se
+// pueda filtrar ni contar. Estos dos controles fijan el vocabulario en la UI.
+//
+// REGLA DE ORO — nunca pierden un valor desconocido: el agente puede emitir
+// `⚠️ Por validar` (o un valor que el vocabulario no contempla todavía) y editar OTRA
+// celda de la fila no puede borrarlo en silencio. `InlineSelect` inyecta el valor
+// vigente como opción extra si no está en la lista, así siempre round-trippea.
+//
+// Los valores viajan como STRING a propósito: `coerceToSchema` (lib/ai/section-schema)
+// aplana todo el output del agente a string, así que un boolean real nunca sobreviviría
+// — por eso las casillas hablan "si"/"no" y no true/false.
+
+/** Valores que cuentan como "sí" al leer una casilla (tolerante a lo que emita el agente). */
+export function isSi(v: string | undefined | null): boolean {
+  const s = (v ?? "").trim().toLowerCase();
+  return s === "si" || s === "sí" || s === "true" || s === "1" || s === "x";
+}
+
+export interface InlineOption {
+  value: string;
+  label: string;
+}
+
+/** Desplegable de vocabulario cerrado. En lectura pinta el label; en edición, un `<select>`. */
+export function InlineSelect({
+  value,
+  options,
+  onCommit,
+  editable,
+  placeholder = "—",
+  ariaLabel,
+}: {
+  value: string;
+  options: readonly InlineOption[];
+  onCommit?: (next: string) => void;
+  editable?: boolean;
+  placeholder?: string;
+  ariaLabel: string;
+}) {
+  const actual = (value ?? "").trim();
+  const conocido = options.some((o) => o.value === actual);
+  // Valor fuera del vocabulario (típico: "⚠️ Por validar" del agente) → entra como opción
+  // para que quede seleccionado y NO se pierda al tocar otra celda de la misma fila.
+  const opciones: readonly InlineOption[] =
+    actual && !conocido ? [{ value: actual, label: actual }, ...options] : options;
+
+  if (!editable) {
+    const label = options.find((o) => o.value === actual)?.label ?? actual;
+    return <span className="stl-cell-ro">{label || placeholder}</span>;
+  }
+
+  return (
+    <select
+      className="stl-select"
+      value={actual}
+      aria-label={ariaLabel}
+      onChange={(e) => onCommit?.(e.target.value)}
+    >
+      <option value="">{placeholder}</option>
+      {opciones.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** Casilla sí/no. Persiste "si"/"no" (string — ver la nota de `coerceToSchema` arriba). */
+export function InlineCheck({
+  value,
+  onCommit,
+  editable,
+  ariaLabel,
+}: {
+  value: string;
+  onCommit?: (next: string) => void;
+  editable?: boolean;
+  ariaLabel: string;
+}) {
+  const on = isSi(value);
+
+  if (!editable) {
+    // En lectura una casilla vacía no dice nada útil: se pinta un check o una raya.
+    return (
+      <span className={on ? "stl-flag-on" : "stl-cell-ro"} aria-label={on ? "Sí" : "No"}>
+        {on ? "✓" : "—"}
+      </span>
+    );
+  }
+
+  return (
+    <input
+      type="checkbox"
+      className="stl-check"
+      checked={on}
+      aria-label={ariaLabel}
+      onChange={(e) => onCommit?.(e.target.checked ? "si" : "no")}
+    />
+  );
+}
+
 /** Botón "× quitar item" (aparece al hover del .stl-item). */
 export function RemoveBtn({ onClick, title = "Quitar" }: { onClick: () => void; title?: string }) {
   return (

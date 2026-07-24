@@ -19,6 +19,8 @@ import type { LandingConfig, SectionDef, SectionProps } from "../types";
 import { DESARROLLO_SECTION_DEFS } from "./desarrollo.defs";
 import { toSectionDef } from "./templates";
 import { DesarrolloHeroSection } from "@/components/canvas/desarrollo-sections/DesarrolloSections";
+import { PropsTableSection } from "@/components/canvas/desarrollo-sections/PropsTableSection";
+import { EstimacionSection } from "@/components/canvas/desarrollo-sections/EstimacionSection";
 import { KickoffCtaSection } from "@/components/canvas/kickoff-sections/KickoffSections";
 import { RoiSection, PainSection } from "../sections";
 import { TechArchitectureSection } from "../sections-shared";
@@ -37,6 +39,11 @@ export const DESARROLLO_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>
   diagram: DiagramSection,
   tech_architecture: TechArchitectureSection,
   pain: PainSection,
+  // Diccionario de la integración (una fila por propiedad). Propio del canvas Desarrollo:
+  // es el único documento del motor que necesita una tabla de datos editable.
+  props_table: PropsTableSection,
+  // ctxDriven: se alimenta de `ctx.desarrollo` (tabla DevEstimate), no de su CanvasBlock.
+  estimacion: EstimacionSection,
 };
 
 const DESARROLLO_LANDING_CONFIG: LandingConfig = {

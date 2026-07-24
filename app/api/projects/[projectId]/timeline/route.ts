@@ -50,6 +50,7 @@ import type {
 // Validador + tipos del body compartidos con POST /timeline/assist (la IA
 // emite exactamente este shape para que aplicar su propuesta sea un PUT normal).
 import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
+import { partitionByValidation } from "@/lib/timeline/particularidad-state";
 // Eventos crudos para el watchdog de Éxito del cliente. El PUT los acumula
 // mientras camina su propio diff y los emite DESPUÉS de la tx (best-effort):
 // la tx ya sufrió P2028 contra el pooler — no se engorda con más writes.
@@ -104,6 +105,26 @@ export interface PendingParticularidad {
   phaseId: string | null;
 }
 
+/** Una particularidad tal como la ve el CSE (interna: incluye sourceQuote y la autoría).
+ *  El mismo shape sirve para las CONFIRMADAS y para las SUGERIDAS — lo que las separa es
+ *  en qué lista del payload viajan, no sus campos. */
+export interface ParticularidadDTO {
+  id: string;
+  kind: string;
+  party: string;
+  title: string;
+  detail: string | null;
+  sourceQuote: string | null; // cita interna para el CSE — NO cruza al cliente
+  weeksImpact: number | null;
+  visibleExternal: boolean;
+  source: string;
+  needsValidation: boolean;
+  createdByEmail: string | null;
+  phaseId: string | null;
+  occurredAt: string;
+  convertedTaskId?: string | null;
+}
+
 interface TimelineResponse {
   exists: true;
   /** Señales del proyecto (avance, atrasos, alcance vs lo vendido, alarmas de etapa, estancamiento).
@@ -152,22 +173,16 @@ interface TimelineResponse {
   // Borrador de PARTICULARIDADES propuestas por el agente (separado de pendingProgress; apply propio).
   pendingParticularidades: PendingParticularidad[] | null;
   pendingParticularidadesRunId: string | null;
-  // Particularidades (desviaciones curadas) — el CSE ve TODAS (visibles y ocultas), con la
-  // marca visibleExternal para saber cuáles cruzan al cliente. Orden por occurredAt desc.
-  particularidades: Array<{
-    id: string;
-    kind: string;
-    party: string;
-    title: string;
-    detail: string | null;
-    sourceQuote: string | null; // cita interna para el CSE — NO cruza al cliente
-    weeksImpact: number | null;
-    visibleExternal: boolean;
-    source: string;
-    needsValidation: boolean;
-    phaseId: string | null;
-    occurredAt: string;
-  }>;
+  // Particularidades CONFIRMADAS (desviaciones curadas) — el CSE ve todas (visibles y ocultas),
+  // con la marca visibleExternal para saber cuáles cruzan al cliente. Orden por occurredAt desc.
+  // NO incluye las sugeridas: esas viajan en `sugerencias` (ver la partición en loadTimeline).
+  particularidades: ParticularidadDTO[];
+  /**
+   * SUGERENCIAS pendientes: propuestas (needsValidation=true) que alguien —típicamente el equipo
+   * técnico desde el canvas Desarrollo— mandó al CSE. NO son desviaciones todavía: no suman al
+   * corrimiento, no salen al cliente y no cuentan en ningún resumen hasta que el CSE aprueba.
+   */
+  sugerencias: ParticularidadDTO[];
   phases: Array<{
     id: string;
     name: string;
@@ -242,6 +257,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
           visibleExternal: true,
           source: true,
           needsValidation: true,
+          createdByEmail: true, // quién sugirió (se muestra al CSE al revisar)
           phaseId: true,
           occurredAt: true,
           // El link a la tarea que persigue el hecho: decide en qué grupo cae la fila.
@@ -321,10 +337,19 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     pendingProgressRunId: tl.pendingProgressRunId,
     pendingParticularidades: (tl.pendingParticularidades as PendingParticularidad[] | null) ?? null,
     pendingParticularidadesRunId: tl.pendingParticularidadesRunId,
-    particularidades: tl.particularidades.map((pt) => ({
-      ...pt,
-      occurredAt: pt.occurredAt.toISOString(),
-    })),
+    // PARTICIÓN por `needsValidation` (regla única en lib/timeline/particularidad-state).
+    // Una SUGERENCIA todavía NO es una desviación real: si viajara junto a las confirmadas
+    // sumaría su `weeksImpact` al corrimiento y se leería como un hecho registrado — el bug
+    // de "13 semanas mostradas, 8 reales". Va en una lista APARTE que la UI pinta como
+    // propuestas a revisar.
+    ...(() => {
+      const { confirmadas, sugerencias } = partitionByValidation(tl.particularidades);
+      const iso = (pt: (typeof tl.particularidades)[number]) => ({
+        ...pt,
+        occurredAt: pt.occurredAt.toISOString(),
+      });
+      return { particularidades: confirmadas.map(iso), sugerencias: sugerencias.map(iso) };
+    })(),
     phases,
   };
 }

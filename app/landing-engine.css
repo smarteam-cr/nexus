@@ -775,6 +775,124 @@
 /* --teal-soft ahora es crema SÓLIDA — sobre navy sería un bloque cremoso: rgba azul. */
 .stl .stl-dark .stl-add:hover { border-color: var(--teal); color: var(--teal); background: rgba(30, 143, 246, 0.10); }
 
+/* ── Controles de vocabulario cerrado (desplegable + casilla) ───────────────
+   Espejo de `.stl-editable` para los campos que NO son texto libre (ver la nota
+   de `components/landing/inline.tsx`). A diferencia del contentEditable, acá el
+   control nativo se estiliza para que no rompa el documento: alto de línea del
+   texto, sin cromo de sistema, mismo foco azul. En LECTURA no se renderiza
+   ningún control — sale `.stl-cell-ro` (texto plano) o `.stl-flag-on` (el ✓). */
+.stl .stl-select {
+  font: inherit; color: inherit; border: 1px solid transparent; border-radius: 6px;
+  background: transparent; padding: 2px 4px; cursor: pointer; max-width: 100%;
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+.stl .stl-select:hover { background: rgba(100, 116, 139, 0.08); border-color: var(--border); }
+.stl .stl-select:focus { outline: none; background: rgba(11, 88, 211, 0.06); box-shadow: 0 0 0 2px rgba(11, 88, 211, 0.40); }
+.stl .stl-dark .stl-select { color: var(--dark-text); }
+.stl .stl-dark .stl-select option { color: var(--text); } /* el menú nativo se pinta claro */
+.stl .stl-check {
+  width: 16px; height: 16px; cursor: pointer; accent-color: var(--blue); vertical-align: middle;
+}
+.stl .stl-cell-ro { color: var(--text-2); }
+.stl .stl-dark .stl-cell-ro { color: var(--dark-text-2); }
+.stl .stl-flag-on { color: var(--blue); font-weight: 700; }
+.stl .stl-dark .stl-flag-on { color: var(--teal); }
+
+/* ── Tabla de propiedades (diccionario de la integración) ───────────────────
+   Canvas Desarrollo. 8 columnas no entran en móvil: el scroll horizontal vive
+   DENTRO de `.stl-props-scroll` — el body de la página nunca scrollea de lado.
+   `min-width` en la tabla es lo que fuerza el scroll en vez de aplastar celdas. */
+.stl .stl-props-scroll { overflow-x: auto; margin-top: 24px; }
+.stl .stl-props {
+  width: 100%; min-width: 860px; border-collapse: collapse; font-size: 14px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+}
+.stl .stl-props th {
+  text-align: left; font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-muted);
+  padding: 10px 12px; border-bottom: 1px solid var(--border-strong); white-space: nowrap;
+}
+.stl .stl-props td {
+  padding: 9px 12px; border-bottom: 1px solid var(--border);
+  color: var(--text-2); vertical-align: top;
+}
+.stl .stl-props tbody tr:last-child td { border-bottom: none; }
+.stl .stl-props tbody tr:hover { background: var(--bg-soft); }
+.stl .stl-props .stl-props-mid { text-align: center; }
+/* El nombre técnico de la propiedad es lo que el dev copia y pega: monoespaciado. */
+.stl .stl-props-campo {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px; color: var(--text); background: var(--bg-soft);
+  border-radius: 5px; padding: 1px 5px;
+}
+.stl .stl-props-desc { color: var(--text-2); }
+.stl .stl-props-dir { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.stl .stl-props-actions { width: 40px; text-align: right; }
+/* El × de la fila no puede ser `position:absolute` como en las cards (se saldría de
+   la tabla): acá va inline en su propia celda y aparece al hover de la FILA. */
+.stl .stl-props-actions .stl-remove {
+  position: static; opacity: 0; width: 24px; height: 24px; margin-left: auto;
+}
+.stl .stl-props tbody tr:hover .stl-remove,
+.stl .stl-props .stl-remove:focus-visible { opacity: 1; }
+.stl .stl-props-warn {
+  margin-top: 10px; font-size: 13px; color: #B45309;
+  background: rgba(245, 158, 11, 0.10); border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 8px; padding: 8px 12px;
+}
+
+/* ── Estimación del equipo técnico (canvas Desarrollo) ──────────────────────
+   Sección ctxDriven: el dato viene de la tabla DevEstimate. La cifra vigente en
+   grande (es LO que se viene a mirar), el historial colapsado, y el formulario
+   solo para quien tiene el permiso. NO se publica al cliente (ver la def). */
+.stl .stl-est-cifras { display: flex; flex-wrap: wrap; gap: 40px; margin-top: 8px; }
+.stl .stl-est-valor {
+  font-size: clamp(28px, 4vw, 40px); font-weight: 700; line-height: 1.1; color: var(--text);
+}
+.stl .stl-est-rotulo {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--text-muted); margin-top: 6px;
+}
+.stl .stl-est-nota { font-size: 15px; color: var(--text-2); margin: 18px 0 0; }
+.stl .stl-est-meta { font-size: 12px; color: var(--text-muted); margin: 14px 0 0; }
+.stl .stl-est-vacio { font-size: 15px; color: var(--text-muted); margin: 8px 0 0; }
+.stl .stl-est-link {
+  background: none; border: none; padding: 0; font: inherit; color: var(--blue);
+  cursor: pointer; text-decoration: underline;
+}
+.stl .stl-est-hist { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 10px; }
+.stl .stl-est-hist li {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+  padding: 8px 12px; border-left: 2px solid var(--border-strong); background: var(--bg);
+  border-radius: 0 8px 8px 0;
+}
+.stl .stl-est-hist-cifra { font-weight: 700; color: var(--text); font-size: 14px; }
+.stl .stl-est-hist-meta { font-size: 12px; color: var(--text-muted); }
+.stl .stl-est-hist-nota { font-size: 13px; color: var(--text-2); flex-basis: 100%; }
+.stl .stl-est-form {
+  margin-top: 20px; padding: 16px; border: 1px solid var(--border);
+  border-radius: 12px; background: var(--bg); display: grid; gap: 12px;
+}
+.stl .stl-est-campos { display: flex; flex-wrap: wrap; gap: 12px; }
+.stl .stl-est-campo { display: grid; gap: 5px; flex: 1 1 200px; }
+.stl .stl-est-campo > span { font-size: 12px; font-weight: 600; color: var(--text-2); }
+.stl .stl-est-input {
+  font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 8px; background: #fff; color: var(--text); width: 100%;
+}
+.stl .stl-est-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+.stl .stl-est-acciones { display: flex; align-items: center; gap: 14px; }
+.stl .stl-est-btn {
+  margin-top: 18px; display: inline-flex; align-items: center; padding: 9px 16px;
+  border: none; border-radius: 8px; background: var(--blue); color: #fff;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.stl .stl-est-form .stl-est-btn { margin-top: 0; }
+.stl .stl-est-btn:hover { background: var(--blue-dark); }
+.stl .stl-est-btn:disabled { opacity: 0.55; cursor: wait; }
+.stl .stl-est-error { font-size: 13px; color: #B91C1C; margin: 0; }
+
 /* ── ⓘ Tooltips (por sección/dato) — CSS-only, cero JS ─────────────────────
    Un `[data-tip]` muestra su texto en una burbuja al hover/focus. El ⓘ de sección
    (`.stl-tip`) lo pinta LandingView junto al título cuando la def trae `tip`; los

@@ -73,10 +73,17 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     clientes: ["viewAll"],
     handoff: ["create", "write", "generate", "regenerate"],
     kickoff: ["generate", "regenerate"],
-    desarrollo: ["generate", "regenerate"],
+    // `estimate` es de DEV y de nadie más en el default: la estimación de esfuerzo la
+    // escribe el equipo técnico tras leer el requerimiento (SUPER_ADMIN la tiene por el
+    // all-true hardcodeado). Se le puede prender a otro rol desde /team.
+    desarrollo: ["generate", "regenerate", "estimate"],
     exploracion: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
-    cronograma: ["write", "delete", "generate"],
+    // `suggest` es redundante para DEV mientras tenga `write` (quien puede escribir puede
+    // sugerir), pero se declara igual: si mañana se le recorta el write —que es el recorte
+    // que ya se pidió y vive en la semilla, no en el default— el canal de sugerencias
+    // tiene que sobrevivir. Es la razón de ser de la celda.
+    cronograma: ["write", "delete", "generate", "suggest"],
     ventas: ["read", "write"],
     marketing: ["read"],
     conocimientos: ["write"],

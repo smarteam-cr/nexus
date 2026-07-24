@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { getClientsForSidebar } from "@/lib/cache/clients";
 import { requireUser, UnauthorizedError } from "@/lib/auth/supabase";
 import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
@@ -23,10 +22,6 @@ export default async function AppShell({
     if (e instanceof UnauthorizedError) redirect("/");
     throw e;
   }
-
-  // Cacheado (ver lib/cache/clients.ts). Mutaciones de Client llaman
-  // revalidateTag("clients-sidebar") para invalidar.
-  const clients = await getClientsForSidebar();
 
   // Permisos EFECTIVOS (default ← plantilla del rol ← overrides) — se resuelven
   // acá en el server y bajan al Sidebar (sin fetch extra ni flash en el cliente).
@@ -53,7 +48,7 @@ export default async function AppShell({
     // agentes" consume el mismo feed que dispara los avisos, y al vivir en el layout
     // del route-group el seguimiento sobrevive a navegar entre secciones.
     <AgentRunsProvider>
-      <SidebarShell clients={clients} user={userLite} initialOpen={!sidebarCollapsed}>
+      <SidebarShell user={userLite} initialOpen={!sidebarCollapsed}>
         {/* Alertas HIGH del watchdog CS → notificación de navegador. Solo CSL/SUPER_ADMIN
             (el componente se auto-apaga para otros roles; render null). */}
         <CsAlertNotifier role={userLite.role} />

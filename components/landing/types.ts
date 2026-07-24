@@ -221,6 +221,35 @@ export interface LandingContext {
      */
     onAssignSession?: (sessionId: string, optionId: string | null) => Promise<void>;
   };
+  /**
+   * Solo DESARROLLO: la estimación de esfuerzo, que vive en la tabla `DevEstimate` y NO en
+   * `CanvasBlock` (las horas tienen que ser consultables — ver el comentario del modelo).
+   * La sección `estimacion` es `ctxDriven` y la lee de acá.
+   *
+   * AUSENTE EN LA SUPERFICIE EXTERNA a propósito: la vista del cliente no arma este ctx, así
+   * que la sección se apaga sola por `ctxEmpty`. El esfuerzo estimado es información interna
+   * (aproxima el costo) — que no llegue al cliente es fail-closed POR CONSTRUCCIÓN, no por
+   * un flag que alguien pueda prender por error.
+   */
+  desarrollo?: {
+    estimate?: DevEstimateCtx | null;
+    history?: DevEstimateCtx[];
+    /** `true` si el usuario tiene la celda `desarrollo.estimate` (gate COSMÉTICO del form). */
+    canEstimate?: boolean;
+    /** Solo edición: registra una estimación nueva. Rechaza (throw) si el servidor la rechaza. */
+    onEstimate?: (input: { hours: number | null; estimatedDate: string | null; note: string }) => Promise<void>;
+  };
+}
+
+/** Una estimación como la ve el motor (espejo del DTO de `lib/desarrollo`, sin importarlo:
+ *  `types.ts` es client-safe y no debe arrastrar el módulo de datos). */
+export interface DevEstimateCtx {
+  id: string;
+  hours: number | null;
+  estimatedDate: string | null;
+  note: string | null;
+  createdByEmail: string;
+  createdAt: string;
 }
 
 /** Props que recibe TODA sección. `onChange` emite el nuevo `data` (estado local

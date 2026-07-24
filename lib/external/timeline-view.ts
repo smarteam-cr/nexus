@@ -100,7 +100,13 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
   let particularidades: ExternalTimelineData["particularidades"] = [];
   if (tl) {
     const parts = await prisma.particularidad.findMany({
-      where: { timelineId: tl.id, visibleExternal: true },
+      // DOS barreras a propósito (defensa en profundidad):
+      //  · visibleExternal=true  → el CSE decidió que este hecho se comunica.
+      //  · needsValidation=false → es un hecho CONFIRMADO, no una sugerencia sin revisar.
+      // La segunda es redundante hoy (una sugerencia nace con visibleExternal=false y no se
+      // puede prender sin aprobarla), y así debe quedar: si un día alguien agrega una vía
+      // que prenda la visibilidad antes de la aprobación, el cliente igual no lo ve.
+      where: { timelineId: tl.id, visibleExternal: true, needsValidation: false },
       orderBy: { occurredAt: "desc" },
       select: { kind: true, party: true, title: true, detail: true, weeksImpact: true, phaseId: true, occurredAt: true },
     });
