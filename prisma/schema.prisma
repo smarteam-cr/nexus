@@ -2413,6 +2413,7 @@ enum CobranzaTipoServicio {
   WEB
   SOPORTE
   CRM
+  CONECTOR // integraciones SaaS facturadas aparte (Hub&SAP, QuickBooks) — hoja "Conectores SAAS"
   OTRO
 }
 
@@ -2455,6 +2456,10 @@ enum CobranzaOrigenCobro {
   PLAN // materializado desde PlanDePago
   CATCH_UP // generado por desfase arranque-vs-hoy (caso Teamnet) — requiere confirmación
   MANUAL // creado a mano por la persona
+  // Cargado del histórico de facturación (hoja de Alex). Se escribe SIN pasar por el
+  // engine —que clampea al ciclo corriente y no puede backfillear— pero con numCuota
+  // = orden del plan, así el engine lo reconoce y no propone cambios fantasma.
+  IMPORTACION
 }
 
 enum CobranzaTipoAlerta {

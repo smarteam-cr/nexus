@@ -1,0 +1,296 @@
+{
+  "AE": {
+    "cliente": "AE",
+    "via": "exacto",
+    "clientId": "cmrw92hc7005h07n14cdkxe6e",
+    "clienteNexus": "TEC- AE"
+  },
+  "AMC": {
+    "cliente": "AMC",
+    "via": "exacto",
+    "clientId": "cmoi1jw6m0029l8ijbnobwo0e",
+    "clienteNexus": "AMC - Atlas Mining & Construction"
+  },
+  "Acccsa Internacional": {
+    "cliente": "Acccsa Internacional",
+    "via": "prefijo",
+    "clientId": "cmrf4w8ug001e7gijy8087onc",
+    "clienteNexus": "ACCCSA"
+  },
+  "Acccsa Stand Personalizado": {
+    "cliente": "Acccsa Stand Personalizado",
+    "via": "prefijo",
+    "clientId": "cmrf4w8ug001e7gijy8087onc",
+    "clienteNexus": "ACCCSA"
+  },
+  "Alfa": {
+    "cliente": "Alfa",
+    "via": "exacto",
+    "clientId": "cmpc0e86s00ctxgijeiaavvog",
+    "clienteNexus": "ALFA+ (LISJ)"
+  },
+  "Almotec": {
+    "cliente": "Almotec",
+    "via": "exacto",
+    "clientId": "cmpx15ppv00002oijbcudq2vh",
+    "clienteNexus": "ALMOTEC"
+  },
+  "Alta Hoteles": {
+    "cliente": "Alta Hoteles",
+    "via": "exacto",
+    "clientId": "cmpc0ej2m00itxgijladzt815",
+    "clienteNexus": "Hotel Alta Las Palomas"
+  },
+  "Amvac": {
+    "cliente": "Amvac",
+    "via": "prefijo",
+    "clientId": "cmrf4wzzw00ax7gij3nxt0wcx",
+    "clienteNexus": "Amvac Latam"
+  },
+  "Analisa Lab": {
+    "cliente": "Analisa Lab",
+    "via": "exacto",
+    "clientId": "cmrf4x1fr00bf7gijlmcwxw5g",
+    "clienteNexus": "Analisalab"
+  },
+  "Apptividad": {
+    "cliente": "Apptividad",
+    "via": "exacto",
+    "clientId": "cmpc0ef1s00gkxgijs4a2uy9v",
+    "clienteNexus": "Apptividad"
+  },
+  "Aprecap": {
+    "cliente": "Aprecap",
+    "via": "exacto",
+    "clientId": "cmrf4w6ai000i7gijlrqcot7d",
+    "clienteNexus": "APRECAP"
+  },
+  "Bluesat": {
+    "cliente": "Bluesat",
+    "via": "exacto",
+    "clientId": "cmpc0e02z008bxgij4ksityv4",
+    "clienteNexus": "BLUESAT"
+  },
+  "Bluesat Welcome kit": {
+    "cliente": "Bluesat Welcome kit",
+    "via": "prefijo",
+    "clientId": "cmpc0e02z008bxgij4ksityv4",
+    "clienteNexus": "BLUESAT"
+  },
+  "CAV": {
+    "cliente": "CAV",
+    "via": "exacto",
+    "clientId": "cmo87p996000l3wiiuor4yk9b",
+    "clienteNexus": "Club de Amantes del Vino"
+  },
+  "CICADEX": {
+    "cliente": "CICADEX",
+    "via": "exacto",
+    "clientId": "cmoi1jte2000rl8ijeh2d4jx9",
+    "clienteNexus": "Cicadex"
+  },
+  "Construtecho": {
+    "cliente": "Construtecho",
+    "via": "exacto",
+    "clientId": "cmpc0edm200ftxgij3bi1vsmp",
+    "clienteNexus": "Construtecho"
+  },
+  "Corrugando": {
+    "cliente": "Corrugando",
+    "via": "crear",
+    "clientId": null,
+    "clienteNexus": null
+  },
+  "Don Juan Tours": {
+    "cliente": "Don Juan Tours",
+    "via": "crear",
+    "clientId": null,
+    "clienteNexus": null
+  },
+  "Ecoquintas": {
+    "cliente": "Ecoquintas",
+    "via": "exacto",
+    "clientId": "cmoi1js140000l8ij7a0waux4",
+    "clienteNexus": "ECOQUINTAS"
+  },
+  "Ecoquintas S.A": {
+    "cliente": "Ecoquintas S.A",
+    "via": "prefijo",
+    "clientId": "cmoi1js140000l8ij7a0waux4",
+    "clienteNexus": "ECOQUINTAS"
+  },
+  "Electrocaribe": {
+    "cliente": "Electrocaribe",
+    "via": "exacto",
+    "clientId": "cmrf4wdad002y7gijtfuzn5vz",
+    "clienteNexus": "Electrocaribe"
+  },
+  "Eurostone": {
+    "cliente": "Eurostone",
+    "via": "crear",
+    "clientId": null,
+    "clienteNexus": null
+  },
+  "Ferreteria Noelito": {
+    "cliente": "Ferreteria Noelito",
+    "via": "exacto",
+    "clientId": "cmpc0dxeo006txgijtlphkreq",
+    "clienteNexus": "Ferreteria Noelito"
+  },
+  "Forestales Latinoamericanos": {
+    "cliente": "Forestales Latinoamericanos",
+    "via": "exacto",
+    "clientId": "cmpc0dpj60032xgijkoundq1y",
+    "clienteNexus": "Forestales Latinoamericanos"
+  },
+  "Global Supply": {
+    "cliente": "Global Supply",
+    "via": "prefijo",
+    "clientId": "cmoi1julw001il8ijnqv6r343",
+    "clienteNexus": "Global Supply S.A"
+  },
+  "Grupo Inve": {
+    "cliente": "Grupo Inve",
+    "via": "exacto",
+    "clientId": "cmpc0e2pf009txgij0zcp6ytq",
+    "clienteNexus": "Grupo Inve"
+  },
+  "Honda Soporte": {
+    "cliente": "Honda Soporte",
+    "via": "exacto",
+    "clientId": "cmpc0e6pi00c2xgijxhc4o92z",
+    "clienteNexus": "Honda Costa Rica"
+  },
+  "IIA": {
+    "cliente": "IIA",
+    "via": "crear",
+    "clientId": null,
+    "clienteNexus": null
+  },
+  "Iberorutas": {
+    "cliente": "Iberorutas",
+    "via": "exacto",
+    "clientId": "cmpc0egga00hbxgij73k0ih23",
+    "clienteNexus": "Iberorutas"
+  },
+  "Kaizen Kapital": {
+    "cliente": "Kaizen Kapital",
+    "via": "exacto",
+    "clientId": "cmrf4ws8o00877gij9pc9ncnr",
+    "clienteNexus": "KAIZEN KAPITAL"
+  },
+  "Libreria Internacional": {
+    "cliente": "Libreria Internacional",
+    "via": "exacto",
+    "clientId": "cmrf4wzfv00aq7gij2fbv1c59",
+    "clienteNexus": "Librería Internacional"
+  },
+  "MSC Payroll": {
+    "cliente": "MSC Payroll",
+    "via": "exacto",
+    "clientId": "cmpx15y3000292oijhlj4mb97",
+    "clienteNexus": "MSC Payroll"
+  },
+  "MTS Multiservicios": {
+    "cliente": "MTS Multiservicios",
+    "via": "exacto",
+    "clientId": "cmo2esefx00018sijoowf4ib8",
+    "clienteNexus": "MTS MULTISERVICIOS"
+  },
+  "Metzger Industrial Supplies": {
+    "cliente": "Metzger Industrial Supplies",
+    "via": "exacto",
+    "clientId": "cmrw92he6005i07n1u728k7bd",
+    "clienteNexus": "Metzger Supplies"
+  },
+  "Multiquimica Dominicana": {
+    "cliente": "Multiquimica Dominicana",
+    "via": "prefijo",
+    "clientId": "cmqjzpmxn000407nqw5wvor4e",
+    "clienteNexus": "Multiquimica"
+  },
+  "PLANT": {
+    "cliente": "PLANT",
+    "via": "exacto",
+    "clientId": "cmpc0dsj9004kxgijypp9ef6a",
+    "clienteNexus": "Plant"
+  },
+  "Pacuare Luxury Realty CR S.A.": {
+    "cliente": "Pacuare Luxury Realty CR S.A.",
+    "via": "crear",
+    "clientId": null,
+    "clienteNexus": null
+  },
+  "Primo": {
+    "cliente": "Primo",
+    "via": "exacto",
+    "clientId": "cmpc0elzc00kbxgijl6crilqs",
+    "clienteNexus": "PRIMO"
+  },
+  "Real Shipping": {
+    "cliente": "Real Shipping",
+    "via": "prefijo",
+    "clientId": "cmpc0eatk00ebxgijwi2oe5xi",
+    "clienteNexus": "Real Shipping & Trade"
+  },
+  "SOLUCIONES, ANALITICOS Y SERVICIOS TEAM": {
+    "cliente": "SOLUCIONES, ANALITICOS Y SERVICIOS TEAM",
+    "via": "exacto",
+    "clientId": "cmoiswxin0000tcijn8zlam3d",
+    "clienteNexus": "Teamnet"
+  },
+  "Secure Title Latin America": {
+    "cliente": "Secure Title Latin America",
+    "via": "exacto",
+    "clientId": "cmpx15tdn000r2oij23hzqid8",
+    "clienteNexus": "Secure Title Latin America"
+  },
+  "Selectrica": {
+    "cliente": "Selectrica",
+    "via": "exacto",
+    "clientId": "cmrf4wa0w001t7gijhj1ezinz",
+    "clienteNexus": "Seléctrica"
+  },
+  "Selvatura": {
+    "cliente": "Selvatura",
+    "via": "exacto",
+    "clientId": "cmpc0djuk0002xgijwi3ij7vo",
+    "clienteNexus": "Selvatura"
+  },
+  "Servica": {
+    "cliente": "Servica",
+    "via": "exacto",
+    "clientId": "cmpc0do52002bxgijudfmif1v",
+    "clienteNexus": "Grupo Servica"
+  },
+  "Spectrum": {
+    "cliente": "Spectrum",
+    "via": "exacto",
+    "clientId": "cmpx15wdq001i2oij8dyo448b",
+    "clienteNexus": "Spectrum"
+  },
+  "TECNOLOGÍA ESPECIALIZADA ASOCIADA DE MÉXICO": {
+    "cliente": "TECNOLOGÍA ESPECIALIZADA ASOCIADA DE MÉXICO",
+    "via": "exacto",
+    "clientId": "cmoiswxin0000tcijn8zlam3d",
+    "clienteNexus": "Teamnet"
+  },
+  "Transportes Juanva": {
+    "cliente": "Transportes Juanva",
+    "via": "crear",
+    "clientId": null,
+    "clienteNexus": null
+  },
+  "Visual Branding": {
+    "cliente": "Visual Branding",
+    "via": "exacto",
+    "clientId": "cmqzhjvfv000b07nrbze7a99p",
+    "clienteNexus": "Visual Branding"
+  },
+  "Wherex": {
+    "cliente": "Wherex",
+    "via": "exacto",
+    "clientId": "cmpc0en9000l2xgijykm0086f",
+    "clienteNexus": "Wherex"
+  }
+}

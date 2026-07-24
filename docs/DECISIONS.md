@@ -338,6 +338,8 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   Blast radius: una línea (`engine.ts`) + un test (`J6`); los golden JSON no se mueven.
 
 ## Cobranza — carga del histórico de Alex (diseño; ejecución en pase con gate)
+> **EJECUTADA el 2026-07-23** — ver "Cobranza — lo que la carga real cambió del diseño" más abajo:
+> el archivo trajo cosas que el diseño no anticipó (fórmulas como montos, totales rotos, moneda).
 > Estas decisiones se tomaron para la carga del archivo histórico de Alex (~70 registros, estado
 > en el color de celda). El archivo AÚN NO EXISTE cuando se escriben — son el diseño acordado.
 > La construcción del loader, la limpieza de seeds y la carga corren en un segundo pase con gate
@@ -388,6 +390,51 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   accidental **ALFA+ (LISJ)** (sin marca demo) — en el pase de carga se verifica en el dry-run si
   esa fila existe y, si existe, se extiende el cleanup por id explícito. La limpieza se hace justo
   antes de cargar, no antes, para no dejar el módulo vacío mientras se espera el archivo.
+## Cobranza — lo que la carga real cambió del diseño (2026-07-23, ejecutada)
+> Carga aplicada: **53 servicios · 202 cobros · $301.347,98** de "Facturaciones 2026" a 46 cuentas.
+> Decodificador puro en `lib/cobranza/facturaciones-sheet.ts` (+28 tests); loader en
+> `scripts/import-facturaciones-xlsx.ts` (dry-run por default); resolución de clientes revisada y
+> versionada en `scripts/data/facturaciones-clientes.json`.
+- **Una celda con FÓRMULA puede ser un cobro real — no se descartan en bloque.** El primer parser
+  aceptaba solo números planos (para saltar las columnas de IVA, que son `=B3*0.13`) y eso borraba
+  clientes enteros: Kaizen Kapital (`=7167*3`, **$21.501**), MSC Payroll (`=8400/5`), Bluesat
+  Welcome kit (`=1500/6`), AE I TEC (`=1620*2`). En total **$41.922** que no se estaban cargando.
+  La regla que separa los dos casos es la REFERENCIA A OTRA CELDA: aritmética sobre literales =
+  monto escrito con calculadora; cualquier letra en la fórmula (`SUM`, `B3`) = derivado → se
+  descarta. Vive en `montoDeCelda`.
+- **Las filas de totales del propio documento están rotas y SUB-suman.** `SUM(H3:H4)` sobre 6
+  clientes, `SUM(O2:O8)` arrancando en el encabezado, columnas sin fórmula: las hojas no reportaban
+  ~$10.4k. El cruce contra esa fila quedó como control INFORMATIVO en el reporte del loader, nunca
+  como validación — lo leído celda por celda es la verdad. (Argumento fuerte para dejar el Excel.)
+- **`POR_COBRAR` sí se usa (corrige V3).** El diseño lo daba por vestigial y mandaba el amarillo a
+  `PROGRAMADO + fechaEmision`. Pero el enum lo define como "factura en curso (amarillo)", que es
+  exactamente el caso: amarillo → `POR_COBRAR` + `fechaEmision`, blanco → `PROGRAMADO` sin emisión.
+- **NO se crea `PlanDePago` para lo importado.** La grilla mezcla quincenas dentro de un mismo
+  servicio (Ecoquintas ene30/feb15/feb30) y `cobroDateFor` deriva el día de UN solo ancla
+  (`diaCobroAncla ?? día del arranque`) → cualquier plan reproduciría fechas distintas a las
+  cargadas y el engine propondría cambios fantasma. Los cobros van directos con
+  `origen = IMPORTACION` y `numCuota` = orden cronológico: el `@@unique([servicioId, numCuota])`
+  da la idempotencia y, sin plan activo, `materializeCobros` ni corre. El plan se configura después
+  desde el panel, servicio por servicio.
+- **Moneda: TODO en USD** (confirmado con el usuario contra una indicación previa de "CR en
+  colones"): las 7 hojas, incluidas las de Costa Rica, están formateadas `"$"#,##0.00`. El IVA 13%
+  es costarricense pero se factura en dólares. Cero conversión FX.
+- **El riesgo a cubrir en la resolución de clientes es el DUPLICADO, no el faltante.** Crear un
+  cliente que ya existe parte su cartera en dos fichas. Por eso "dudoso" es deliberadamente laxo
+  (comparte un token, o el documento lo anota como "… I `<cliente>`", o es su ACRÓNIMO) y nunca se
+  aplica solo. El acrónimo se agregó tras cazar **CAV = "Club de Amantes del Vino"**, que ya existía
+  con cuenta y se iba a duplicar. Los 11 dudosos se resolvieron a mano y quedaron en el JSON.
+- **La fila del documento es un SERVICIO, no un cliente.** Acccsa, Ecoquintas, Honda, Ferretería
+  Noelito, AMC, Iberorutas, Construtecho y Bluesat aparecen en varias filas/pestañas: 49 nombres
+  distintos → 45 clientes de Nexus. Dedup extra por HUELLA (nombre + montos + fechas + colores)
+  para "Honda Soporte I 6 Meses", que estaba idéntico en dos pestañas.
+- **Las fechas de emisión y de pago son la QUINCENA del documento, no dato bancario.** El archivo
+  no trae fecha real de pago (V3 mandaba PARAR y avisar): se avisó, el usuario eligió usar la
+  quincena, y cada `Cobro.notas` lo dice explícitamente. `confirmadoPor = "import:facturaciones-2026"`.
+- **Las 11 cuentas preexistentes estaban en el default de fábrica** (CRC, `PENDIENTE_DATOS`, sin
+  procedencia, 0 cobros) — nunca configuradas. El loader las completa a USD; a cualquier cuenta ya
+  tocada a mano no le escribe nada (`update: {}`), para no pisar créditoDías/correo/estado curado.
+
 - **Costos/Caja neta salen a su propia unidad "Finanzas"** (Pieza 1, tanda 2026-07): Alex pidió
   poder analizar costos/caja neta separado de la operación diaria de cobros — "debería ser otra
   unidad completamente distinta". Sidebar: "Finanzas" agrupa Cobranza · Costos y gastos · Caja

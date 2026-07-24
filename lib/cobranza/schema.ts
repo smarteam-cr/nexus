@@ -26,6 +26,7 @@ export const COBRANZA_TIPOS_SERVICIO = [
   "WEB",
   "SOPORTE",
   "CRM",
+  "CONECTOR",
   "OTRO",
 ] as const;
 export const COBRANZA_MODALIDADES = ["RECURRENTE", "PROYECTO"] as const;
@@ -72,6 +73,7 @@ export const TIPO_SERVICIO_LABEL: Record<string, string> = {
   WEB: "Web",
   SOPORTE: "Soporte",
   CRM: "CRM",
+  CONECTOR: "Conector",
   OTRO: "Otro",
 };
 export const PLAN_TEMPLATE_LABEL: Record<string, string> = {
