@@ -146,7 +146,9 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/flowchart/pipeline-nodes.tsx": 11,
   "components/handoffs/HandoffStepper.tsx": 1,
   "components/implementation/ExecutionView.tsx": 33,
-  "components/layout/Sidebar.tsx": 12,
+  // 12 → 1 al retirar "Clientes recientes" (2026-07-24): la sección concentraba
+  // 11 de los grises del rail (los ítems de cliente y el separador).
+  "components/layout/Sidebar.tsx": 1,
   "components/marketing/ICPView.tsx": 51,
   "components/notifications/NotificationsInit.tsx": 1,
   "components/team/TeamManager.tsx": 1,

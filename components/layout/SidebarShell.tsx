@@ -5,13 +5,6 @@ import { usePathname } from "next/navigation";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import Sidebar from "./Sidebar";
 
-interface ClientSummary {
-  id: string;
-  name: string;
-  company: string | null;
-  hubspotAccount: { id: string; hubName: string | null } | null;
-}
-
 interface UserLite {
   email: string;
   name: string;
@@ -22,7 +15,6 @@ interface UserLite {
 }
 
 interface Props {
-  clients: ClientSummary[];
   user: UserLite;
   /** Ancho inicial resuelto en SSR desde la cookie `nexus-sidebar` (AppShell). */
   initialOpen: boolean;
@@ -38,7 +30,7 @@ const writeCookie = (open: boolean) => {
   document.cookie = `${COOKIE_KEY}=${open ? "open" : "collapsed"};path=/;max-age=31536000;SameSite=Lax`;
 };
 
-export default function SidebarShell({ clients, user, initialOpen, children }: Props) {
+export default function SidebarShell({ user, initialOpen, children }: Props) {
   const pathname = usePathname();
   // Auto-colapsar sidebar en vista detalle de cliente
   const isClientDetail = /^\/clients\/[^/]+\/(projects|stage|documents|settings)/.test(pathname);
@@ -96,7 +88,6 @@ export default function SidebarShell({ clients, user, initialOpen, children }: P
         }`}
       >
         <Sidebar
-          clients={clients}
           user={user}
           onToggle={toggle}
           isOpen={effectiveOpen}
