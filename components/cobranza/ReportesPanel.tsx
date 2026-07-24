@@ -49,17 +49,11 @@ const AGING_BUCKETS: Array<{ key: keyof AgingBuckets; label: string; color: stri
 
 const GRID = { left: 8, right: 8, top: 32, bottom: 8, containLabel: true };
 
-// Caveat de Tanda B (2026-07): el "vencido" de los CORTES sigue calculado desde
-// fechaProgramada+umbral, no desde fechaEmision+creditoDias como el tab Cobros y la
-// foto de hoy — hallazgo de Tanda C en DECISIONS.md. Al 2026-07-24 la diferencia es
-// real y medible: el corte dice $80.959 y el vencido efectivo son $60.997 (los
-// $12.171 sin facturar + $7.792 todavía dentro del crédito inflan el histórico).
-// Alinearlo cambia la semántica del motor de alertas → decisión pendiente del
-// usuario, anotada en DECISIONS.md.
-const VENCIDO_INFLADO_CAVEAT =
-  "OJO: este \"vencido\" del histórico se calcula desde la fecha programada, no desde la " +
-  "factura — mete adentro lo que todavía no se facturó y lo que sigue dentro del crédito, " +
-  "así que lee MÁS ALTO que la realidad. El número bueno es el de «Estado de hoy», acá arriba.";
+// NOTA (2026-07-24): acá vivía VENCIDO_INFLADO_CAVEAT, la advertencia de que el
+// "vencido" de los cortes se calculaba distinto que el de la pestaña Cobros y leía
+// más alto. Finanzas definió un criterio ÚNICO (factura emitida + crédito consumido)
+// y el motor se alineó, así que la advertencia ya no aplica: los cortes y la cola
+// dicen el mismo número. Ver docs/DECISIONS.md.
 
 const simbolo = (m: Moneda) => (m === "USD" ? "$" : "₡");
 
@@ -513,14 +507,14 @@ export default function ReportesPanel({
           </ChartCard>
           <ChartCard
             titulo="Aging del vencido"
-            nota={`Monto vencido por antigüedad desde la fecha programada. ${VENCIDO_INFLADO_CAVEAT}`}
+            nota="Monto vencido por antigüedad, contado desde la fecha programada. Vencido = factura emitida y crédito del cliente ya consumido."
             extra={<MonedaToggle value={monedaAging} onChange={setMonedaAging} />}
           >
             <EChartRenderer option={agingOption} height={240} className="bg-surface" />
           </ChartCard>
           <ChartCard
             titulo="Vencido en el tiempo"
-            nota={`Total vencido por corte — CRC en el eje ₡, USD en el eje $. ${VENCIDO_INFLADO_CAVEAT}`}
+            nota="Total vencido por corte — CRC en el eje ₡, USD en el eje $."
           >
             <EChartRenderer option={vencidoOption} height={240} className="bg-surface" />
           </ChartCard>

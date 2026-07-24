@@ -225,14 +225,28 @@ function servicioCartera(over: Partial<ServicioCartera> = {}): ServicioCartera {
   };
 }
 
+/**
+ * Cobro de cartera para los tests de métricas. `fechaEmisionISO` defaultea a la
+ * fecha programada — "facturado el día que tocaba", que es como se ve la cartera
+ * real importada del histórico.
+ *
+ * NO es un detalle: desde el criterio único de vencido (2026-07-24) un cobro SIN
+ * factura nunca es vencido, así que sin este default todos los casos caerían en
+ * "sin facturar" y los tests de aging/DSO no probarían nada. Para probar
+ * explícitamente lo no facturado se pasa `fechaEmisionISO: null`.
+ */
 function cobroCartera(over: Partial<CobroCartera> = {}): CobroCartera {
+  const fechaProgramadaISO = over.fechaProgramadaISO ?? "2026-07-20";
   return {
     cobroId: "co1",
     servicioId: "s1",
     estado: "POR_COBRAR",
     origen: "PLAN",
-    fechaProgramadaISO: "2026-07-20",
+    fechaProgramadaISO,
     monto: 100,
+    // Se factura el día que toca; lo FUTURO todavía no se facturó. Emitir en el
+    // futuro no existe en la realidad y volvía "azul" a cobros que son grises.
+    fechaEmisionISO: fechaProgramadaISO <= HOY ? fechaProgramadaISO : null,
     ...over,
   };
 }
@@ -818,10 +832,12 @@ test("J6 — Reloj 1, borde de gracia en 5: +5 días → COBRO_PROXIMO; +6 → F
       cuenta({
         servicios: [servicioCartera()],
         cobros: [
-          cobroCartera({ cobroId: "co1", fechaProgramadaISO: "2026-07-05" }), // +5 = borde exacto, NO escala
-          cobroCartera({ cobroId: "co2", fechaProgramadaISO: "2026-07-04" }), // +6 = pasa la gracia
-          cobroCartera({ cobroId: "co3", fechaProgramadaISO: "2026-07-25" }), // -15 = borde de ventana
-          cobroCartera({ cobroId: "co4", fechaProgramadaISO: "2026-07-26" }), // -16: fuera de ventana
+          // fechaEmisionISO: null EXPLÍCITO — este test es del Reloj 1 ("¿facturaste?"),
+          // que solo aplica a cobros SIN factura emitida (el default del fixture sí la trae).
+          cobroCartera({ cobroId: "co1", fechaProgramadaISO: "2026-07-05", fechaEmisionISO: null }), // +5 = borde exacto, NO escala
+          cobroCartera({ cobroId: "co2", fechaProgramadaISO: "2026-07-04", fechaEmisionISO: null }), // +6 = pasa la gracia
+          cobroCartera({ cobroId: "co3", fechaProgramadaISO: "2026-07-25", fechaEmisionISO: null }), // -15 = borde de ventana
+          cobroCartera({ cobroId: "co4", fechaProgramadaISO: "2026-07-26", fechaEmisionISO: null }), // -16: fuera de ventana
         ],
       }),
     ],
@@ -1020,15 +1036,21 @@ test("L4 — computeAlertSet: cuenta SIN proyecto real baja CUENTA_SIN_DATOS a u
 
 // ── M) proyectarIngresos ─────────────────────────────────────────────────────────
 
+/** Igual que `cobroCartera`: `fechaEmisionISO` defaultea a la fecha programada.
+ *  Sin factura un cobro atrasado ya no es "vencido" sino "por facturar" (criterio
+ *  único de Finanzas), así que el default mantiene el sentido de los tests viejos.
+ *  Para probar lo NO facturado se pasa `fechaEmisionISO: null` explícito. */
 function cobroProy(over: Partial<CobroProyeccionInput> = {}): CobroProyeccionInput {
+  const fechaProgramadaISO = over.fechaProgramadaISO ?? "2026-07-20";
   return {
     cobroId: "p1",
     cuentaId: "c1",
     clienteNombre: "Acme",
     estado: "PROGRAMADO",
-    fechaProgramadaISO: "2026-07-20",
+    fechaProgramadaISO,
     monto: 100,
     moneda: "USD",
+    fechaEmisionISO: fechaProgramadaISO <= HOY ? fechaProgramadaISO : null,
     ...over,
   };
 }
@@ -1049,7 +1071,8 @@ test("M2 — COBRADO se excluye; vencido (> umbral) va a vencidos y NO a buckets
   const p = proyectarIngresos(
     [
       cobroProy({ cobroId: "cobrado", estado: "COBRADO", fechaProgramadaISO: "2026-07-20" }),
-      cobroProy({ cobroId: "venc", estado: "POR_COBRAR", fechaProgramadaISO: "2026-07-01", monto: 300 }),
+      // Vencido de verdad bajo el criterio B: facturado el 1-jun, crédito de 15 d → venció el 16-jun.
+      cobroProy({ cobroId: "venc", estado: "POR_COBRAR", fechaProgramadaISO: "2026-07-01", monto: 300, fechaEmisionISO: "2026-06-01" }),
     ],
     { todayISO: HOY },
   );
@@ -1151,7 +1174,7 @@ function metricasDe(
 
 test("N1 — cartera vacía: ceros/nulls honestos (dso null, NO 0) y ventana declarada", () => {
   const m = metricasDe([], { desdeUltimoCorteISO: null });
-  expect(m.version).toBe(1);
+  expect(m.version).toBe(2);
   expect(m.ventana).toEqual({ desdeISO: null, hastaISO: HOY, proximoCorteISO: "2026-07-17" });
   for (const mon of ["CRC", "USD"] as const) {
     expect(m.moneda[mon].totalVencido).toBe(0);
@@ -1198,7 +1221,7 @@ test("N3 — mapeo 1:1 al semáforo: rojo→vencido, amarillo→porCobrar, gris�
   const m = metricasDe([
     cuenta({
       cobros: [
-        cobroCartera({ cobroId: "co1", moneda: "USD", monto: 500, fechaProgramadaISO: "2026-07-01" }), // rojo (9d)
+        cobroCartera({ cobroId: "co1", moneda: "USD", monto: 500, fechaProgramadaISO: "2026-07-01", fechaEmisionISO: "2026-06-01" }), // rojo: facturado 1-jun, crédito vencido
         cobroCartera({ cobroId: "co2", moneda: "USD", monto: 200, fechaProgramadaISO: "2026-07-09" }), // amarillo
         cobroCartera({ cobroId: "co3", moneda: "USD", monto: 300, estado: "PROGRAMADO", fechaProgramadaISO: "2026-08-01" }), // gris
         cobroCartera({ cobroId: "co4", moneda: "USD", monto: 100, estado: "COBRADO", fechaProgramadaISO: "2026-07-01", fechaCobroISO: "2026-07-05" }),
@@ -1273,7 +1296,7 @@ test("N8 — proyectadoProximoCorte: vencido fuera; gracia (pasado no-rojo cuent
   const m = metricasDe([
     cuenta({
       cobros: [
-        cobroCartera({ cobroId: "a", moneda: "USD", monto: 500, fechaProgramadaISO: "2026-07-01" }), // rojo: fuera
+        cobroCartera({ cobroId: "a", moneda: "USD", monto: 500, fechaProgramadaISO: "2026-07-01", fechaEmisionISO: "2026-06-01" }), // rojo: fuera
         cobroCartera({ cobroId: "b", moneda: "USD", monto: 100, fechaProgramadaISO: "2026-07-08" }), // amarillo pasado → gracia (hoy ≤ corte)
         cobroCartera({ cobroId: "c", moneda: "USD", monto: 200, estado: "PROGRAMADO", fechaProgramadaISO: "2026-07-15" }), // dentro
         cobroCartera({ cobroId: "d", moneda: "USD", monto: 400, estado: "PROGRAMADO", fechaProgramadaISO: "2026-07-20" }), // después del corte: fuera
@@ -1288,12 +1311,14 @@ test("N9 — cobertura: excluida fuera de TODO; sin configurar / PENDIENTE_DATOS
     cuenta({
       cuentaId: "cx",
       excluidaOperacion: true,
-      cobros: [cobroCartera({ moneda: "USD", monto: 999, fechaProgramadaISO: "2026-07-01" })], // rojo, pero excluida
+      cobros: [cobroCartera({ moneda: "USD", monto: 999, fechaProgramadaISO: "2026-07-01", fechaEmisionISO: "2026-06-01" })], // rojo, pero excluida
     }),
     cuenta({ cuentaId: "cb", tieneCuenta: false }),
     cuenta({ cuentaId: "cc", estadoCuenta: "PENDIENTE_DATOS", cobros: [] }),
-    cuenta({ cuentaId: "cd", cobros: [cobroCartera({ cobroId: "d1", moneda: "USD", monto: 100, fechaProgramadaISO: "2026-07-01" })] }), // roja
-    cuenta({ cuentaId: "ce", cobros: [cobroCartera({ cobroId: "e1", moneda: "USD", monto: 50, fechaProgramadaISO: "2026-07-09" })] }), // amarilla
+    cuenta({ cuentaId: "cd", cobros: [cobroCartera({ cobroId: "d1", moneda: "USD", monto: 100, fechaProgramadaISO: "2026-07-01", fechaEmisionISO: "2026-06-01" })] }), // roja
+    // Amarilla = FALTA FACTURAR (Reloj 1). Con factura emitida y crédito corriendo
+    // sería azul, que no es ni roja ni amarilla: está sana, solo esperando al cliente.
+    cuenta({ cuentaId: "ce", cobros: [cobroCartera({ cobroId: "e1", moneda: "USD", monto: 50, fechaProgramadaISO: "2026-07-09", fechaEmisionISO: null })] }), // amarilla
   ]);
   expect(m.cobertura).toEqual({
     cuentasTotales: 4, // la excluida NO cuenta ni en el universo medido
@@ -1316,6 +1341,105 @@ test("N10 — diasPromedioCobro negativo: el que paga antes se ve (round1)", () 
     }),
   ]);
   expect(m.moneda.USD.diasPromedioCobro).toBe(-2.5);
+});
+
+// ── V) Criterio ÚNICO de "vencido" (decisión de Finanzas, 2026-07-24) ────────────
+// Vencido = factura emitida + crédito del cliente consumido. Lo que no se facturó
+// NO está vencido: "siempre van a haber facturas sin hacer y eso no significa que
+// estén vencidas". Estos tests fijan esa frontera para que no se corra sola.
+
+test("V1 — atrasado SIN factura: no es vencido, va a totalSinFacturar", () => {
+  const m = metricasDe([
+    cuenta({
+      cobros: [
+        // 190 días de atraso, pero nunca se facturó → el cliente no debe nada.
+        cobroCartera({ moneda: "USD", monto: 5_000, fechaProgramadaISO: "2026-01-01", fechaEmisionISO: null }),
+      ],
+    }),
+  ]);
+  expect(m.moneda.USD.totalVencido).toBe(0);
+  expect(m.moneda.USD.aging).toEqual({ d0_30: 0, d31_60: 0, d61_90: 0, d90mas: 0 });
+  expect(m.moneda.USD.totalSinFacturar).toBe(5_000);
+  expect(m.moneda.USD.nSinFacturar).toBe(1);
+});
+
+test("V2 — facturado pero DENTRO del crédito: tampoco es vencido", () => {
+  const m = metricasDe([
+    cuenta({
+      // Programado y facturado el 1-jul, 15 días de crédito → vence el 16-jul.
+      cobros: [cobroCartera({ moneda: "USD", monto: 900, fechaProgramadaISO: "2026-07-01" })],
+    }),
+  ]);
+  expect(m.moneda.USD.totalVencido).toBe(0);
+  expect(m.moneda.USD.totalPorCobrar).toBe(900); // azul: esperando al cliente, sano
+  expect(m.moneda.USD.totalSinFacturar).toBe(0);
+});
+
+test("V3 — el crédito de la cuenta manda sobre el default", () => {
+  const conCredito = (creditoDias: number) =>
+    metricasDe([
+      cuenta({
+        creditoDias,
+        cobros: [cobroCartera({ moneda: "USD", monto: 900, fechaProgramadaISO: "2026-07-01" })],
+      }),
+    ]).moneda.USD;
+  expect(conCredito(30).totalVencido).toBe(0); // vence el 31-jul: sano
+  expect(conCredito(5).totalVencido).toBe(900); // venció el 6-jul: vencido
+});
+
+test("V4 — los tres totales son EXHAUSTIVOS: ni un colón se pierde", () => {
+  const m = metricasDe([
+    cuenta({
+      cobros: [
+        cobroCartera({ cobroId: "v", moneda: "USD", monto: 100, fechaProgramadaISO: "2026-07-01", fechaEmisionISO: "2026-06-01" }), // rojo
+        cobroCartera({ cobroId: "a", moneda: "USD", monto: 200, fechaProgramadaISO: "2026-07-08" }), // azul
+        cobroCartera({ cobroId: "s", moneda: "USD", monto: 400, fechaProgramadaISO: "2026-07-08", fechaEmisionISO: null }), // amarillo
+        cobroCartera({ cobroId: "g", moneda: "USD", monto: 800, estado: "PROGRAMADO", fechaProgramadaISO: "2026-09-01" }), // gris
+      ],
+    }),
+  ]);
+  const u = m.moneda.USD;
+  expect(u.totalVencido + u.totalPorCobrar + u.totalProgramado).toBe(1_500);
+  // totalSinFacturar es TRANSVERSAL: cuenta aparte, no es un cuarto bucket.
+  expect(u.totalSinFacturar).toBe(400);
+});
+
+test("V5 — el DSO solo pondera lo FACTURADO (no disimula con lo sin facturar)", () => {
+  const m = metricasDe([
+    cuenta({
+      cobros: [
+        // Facturado y viejo: 40 días de atraso sobre 100.
+        cobroCartera({ cobroId: "f", moneda: "USD", monto: 100, fechaProgramadaISO: "2026-05-31" }),
+        // Sin facturar y reciente: bajaría el promedio si entrara — no debe entrar.
+        cobroCartera({ cobroId: "s", moneda: "USD", monto: 900, fechaProgramadaISO: "2026-07-09", fechaEmisionISO: null }),
+      ],
+    }),
+  ]);
+  expect(m.moneda.USD.dso).toBe(40);
+});
+
+test("V6 — proyección: lo atrasado sin factura sale de vencidos y va a porFacturar", () => {
+  const p = proyectarIngresos(
+    [
+      cobroProy({ cobroId: "venc", fechaProgramadaISO: "2026-07-01", monto: 300, fechaEmisionISO: "2026-06-01" }),
+      cobroProy({ cobroId: "sinfac", fechaProgramadaISO: "2026-07-01", monto: 700, fechaEmisionISO: null }),
+    ],
+    { todayISO: HOY },
+  );
+  expect(p.vencidos.cobros.map((c) => c.cobroId)).toEqual(["venc"]);
+  expect(p.porFacturar.cobros.map((c) => c.cobroId)).toEqual(["sinfac"]);
+  // Ninguno de los dos entra a los buckets: no se puede proyectar como ingreso.
+  expect(p.buckets.every((b) => b.cobros.length === 0)).toBe(true);
+});
+
+test("V7 — caja neta: lo pendiente de facturar viaja APARTE, jamás dentro del neto", () => {
+  const entra = proyectarIngresos(
+    [cobroProy({ cobroId: "sf", fechaProgramadaISO: "2026-07-01", monto: 700, moneda: "CRC", fechaEmisionISO: null })],
+    { todayISO: HOY },
+  );
+  const caja = computeCajaNeta(entra, proyectarCostos([], { todayISO: HOY }));
+  expect(caja.porFacturarAparte).toEqual({ totales: { CRC: 700, USD: 0 }, count: 1 });
+  expect(caja.totalesHorizonte.entra).toEqual({ CRC: 0, USD: 0 });
 });
 
 // ── R) computeRiesgoPago (fase 3) ────────────────────────────────────────────────

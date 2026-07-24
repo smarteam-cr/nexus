@@ -161,6 +161,13 @@
       },
       "count": 0
     },
+    "porFacturarAparte": {
+      "totales": {
+        "CRC": 0,
+        "USD": 0
+      },
+      "count": 0
+    },
     "totalesHorizonte": {
       "entra": {
         "CRC": 1300000,

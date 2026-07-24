@@ -132,9 +132,30 @@ describe("resumenAntiguedad", () => {
     expect(r.dso).toBe(25);
   });
 
+  it("el DSO ignora lo SIN FACTURAR — mide al cliente, no nuestra demora", () => {
+    // Sin el filtro, los 900 recientes bajarían el promedio de 40 a ~7 días.
+    const r = resumenAntiguedad(
+      [
+        cobro({ fechaProgramada: "2026-06-14", monto: 100 }), // facturado, 40 d
+        cobro({ fechaProgramada: "2026-07-21", monto: 900, fechaEmision: null }), // sin factura
+      ],
+      HOY,
+    ).USD;
+    expect(r.dso).toBe(40);
+  });
+
   it("sin exigibles el DSO es null, no cero (cero mentiría)", () => {
     const r = resumenAntiguedad([cobro({ fechaProgramada: "2026-09-01" })], HOY).USD;
     expect(r.dso).toBeNull();
+  });
+
+  it("nada facturado → DSO null aunque haya cartera vieja", () => {
+    const r = resumenAntiguedad(
+      [cobro({ fechaProgramada: "2026-01-15", monto: 5000, fechaEmision: null })],
+      HOY,
+    ).USD;
+    expect(r.dso).toBeNull();
+    expect(r.sinFacturar).toBe(5000);
   });
 
   it("NUNCA suma monedas distintas", () => {

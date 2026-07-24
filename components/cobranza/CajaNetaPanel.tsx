@@ -152,7 +152,7 @@ export default function CajaNetaPanel({
   const [moneda, setMoneda] = useState<Moneda>("CRC");
   const colors = useChartColors();
 
-  const { buckets, vencidosAparte, totalesHorizonte, totalMensualCostos, gastosPlanificados } =
+  const { buckets, vencidosAparte, porFacturarAparte, totalesHorizonte, totalMensualCostos, gastosPlanificados } =
     cajaNeta;
 
   // Último corte CON métricas — la cobertura del lado entra sale de ahí.
@@ -393,6 +393,18 @@ export default function CajaNetaPanel({
               {fmtMonto(vencidosAparte.totales.CRC, "CRC")} · {fmtMonto(vencidosAparte.totales.USD, "USD")}{" "}
               ({vencidosAparte.count} cobro{vencidosAparte.count !== 1 ? "s" : ""}). Se gestiona en Cobros
               y Proyección.
+            </div>
+          )}
+
+          {/* ── Pendiente de facturar — TAMBIÉN aparte. No es vencido (el cliente no
+                 debe nada todavía), pero sin factura no hay fecha creíble de ingreso:
+                 prometerlo en el neto sería inflar la caja. Decisión de Finanzas. ── */}
+          {porFacturarAparte.count > 0 && (
+            <div className="rounded-xl border border-warn-line bg-warn-surface px-4 py-3 text-sm text-warn-ink">
+              <span className="font-semibold">Pendiente de facturar — NO incluido en el neto:</span>{" "}
+              {fmtMonto(porFacturarAparte.totales.CRC, "CRC")} ·{" "}
+              {fmtMonto(porFacturarAparte.totales.USD, "USD")} ({porFacturarAparte.count} cobro
+              {porFacturarAparte.count !== 1 ? "s" : ""}). No está vencido: falta emitir la factura.
             </div>
           )}
         </>

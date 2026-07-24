@@ -417,13 +417,40 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   aviso de "hacen falta 2 cortes" queda acotado a las líneas de tendencia. Se borró además el
   snapshot del 10-jul (medía la cartera CON las cuentas de demo adentro) y se corrió el primer
   corte real.
-- ⚠ **DEUDA ABIERTA — hay dos definiciones de "vencido" y difieren en plata.** El snapshot usa
-  `semaforoLegacyPorFecha` (fechaProgramada + 3 días), la cola usa los dos relojes. Al 2026-07-24:
-  corte **$80.959** vs vencido efectivo **$60.997** (la diferencia son $12.171 sin facturar +
-  $7.792 todavía dentro del crédito). El caveat de `ReportesPanel` ahora lo dice con esos números y
-  apunta a "Estado de hoy" como el bueno. Alinearlo cambia la semántica del motor de alertas →
-  **decisión del usuario**, no se hizo por cuenta propia. Momento ideal: la serie histórica quedó
-  en 1 solo punto, así que hoy no hay comparabilidad que romper.
+- ✅ **RESUELTO (ver la sección siguiente): la deuda de las dos definiciones de "vencido".**
+  Finanzas eligió el criterio de los dos relojes y el módulo entero se alineó.
+
+## Cobranza — criterio ÚNICO de "vencido" (2026-07-24, decisión de Finanzas)
+> **Vencido = factura EMITIDA + crédito del cliente consumido.** Lo que no se facturó NO está
+> vencido: *"siempre van a haber facturas sin hacer y eso no significa que estén vencidas, solo
+> que no les ha llegado su tiempo de hacerse"*. Antes convivían dos criterios y el módulo mostraba
+> **$80.959** (cortes y proyección) contra **$60.997** (lista de cobros) para la misma cartera.
+- **Las alertas YA estaban en este criterio** — `computeAlertSet` calcula
+  `vencimiento = fechaEmision + creditoDias` desde Tanda B, y lo no facturado sale como
+  `FACTURACION_ATRASADA`. No se tocó nada del motor de alertas: el trabajo fue traer las MÉTRICAS
+  a donde las alertas y la cola ya estaban.
+- **Se borraron `semaforoLegacyPorFecha` y `semaforoCuentaLegacyPorFecha`.** Dejarlas sin lectores
+  era una invitación a que el criterio viejo se colara de nuevo. `computeMetricasCartera` y
+  `proyectarIngresos` usan `semaforoCobro`/`semaforoCuenta`, los mismos de la cola.
+- **`semaforoCobro` tiene un estado que el viejo no tenía: AZUL** (facturado y todavía dentro del
+  crédito). Olvidarlo hacía DESAPARECER esa plata de los totales — bug real cazado por el test N2.
+  Azul y amarillo son ambos "por cobrar" (uno espera al cliente, el otro espera la factura); los
+  tres totales son exhaustivos y `totalSinFacturar` cuenta aparte, transversal.
+- **`totalSinFacturar` es la contrapartida honesta de sacar la plata del vencido**: no desaparece,
+  tiene su propia línea en las 4 pantallas. En la proyección y la caja neta va como bloque
+  `porFacturar`, FUERA del neto: no es vencido, pero sin factura no hay fecha creíble de ingreso.
+- **El DSO pasa a medirse solo sobre lo FACTURADO** (decisión de Finanzas): mide cuánto tarda el
+  CLIENTE en pagar, no cuánto tardamos en emitir. Sube de 96,1 a **108,8 días** — el número era
+  más bajo porque lo sin facturar, que es más reciente, lo estaba disimulando.
+- **`MetricasCartera.version` → 2.** El corte cambia de significado y tiene que distinguirse.
+- **Los golden se regeneraron** (proyección y caja neta) con `fechaEmisionISO` en los fixtures y un
+  set nuevo `sinFactura` que ejercita la rama `porFacturar`. Se verificó cobro por cobro que en los
+  8 casos la suma `vencidos + porFacturar + buckets + fueraDeHorizonte` sigue dando 39 de 39: el
+  cambio reclasifica, no pierde plata. ⚠ El script de regeneración debe emitir EXACTAMENTE la forma
+  que assertea el test — la primera pasada se comió `gastosPasados`/`gastosFueraDeHorizonte` y el
+  golden habría dejado de vigilarlos en silencio.
+- **Verificado contra la cartera real**: las 4 pantallas (Cobros, Reportes, Proyección, Caja neta)
+  reportan vencido **$60.997**, pendiente de facturar **$12.170,66** y DSO **108,8 d**, al centavo.
 
 ## Cobranza — lo que la carga real cambió del diseño (2026-07-23, ejecutada)
 > Carga aplicada: **53 servicios · 202 cobros · $301.347,98** de "Facturaciones 2026" a 46 cuentas.

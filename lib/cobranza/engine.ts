@@ -761,6 +761,10 @@ export interface CobroProyeccionInput {
   fechaProgramadaISO: string;
   monto: number;
   moneda: "CRC" | "USD";
+  /** Criterio único de vencido (2026-07-24). Ausente/null = nunca se facturó. */
+  fechaEmisionISO?: string | null;
+  /** Crédito de la cuenta ya resuelto. Ausente = DEFAULT_CREDITO_DIAS. */
+  creditoDias?: number | null;
 }
 
 /** Totales por moneda SEPARADOS — jamás se convierten ni suman entre sí. */
@@ -780,8 +784,12 @@ export interface BucketProyeccion {
 }
 
 export interface ProyeccionIngresos {
-  /** Vencidos (> umbral) "en riesgo" — APARTE de los buckets futuros. */
+  /** Vencidos (facturado + crédito consumido) "en riesgo" — APARTE de los buckets futuros. */
   vencidos: { totales: TotalesMoneda; cobros: CobroProyeccionInput[] };
+  /** Atrasado y SIN factura emitida. Ni vencido (el cliente no debe nada todavía) ni
+   *  proyectable (no se sabe cuándo se emitirá) → bloque propio, FUERA del neto.
+   *  Decisión de Finanzas 2026-07-24. */
+  porFacturar: { totales: TotalesMoneda; cobros: CobroProyeccionInput[] };
   buckets: BucketProyeccion[]; // quincenas del horizonte cercano, luego meses; vacíos SÍ se emiten
   fueraDeHorizonte: number; // count informativo de cobros más allá del horizonte
 }
@@ -862,8 +870,9 @@ function esqueletoBuckets(
  * Proyección de ingresos por QUINCENA (horizonte cercano) + MES (resto), con
  * totales CRC y USD SEPARADOS (sin tipo de cambio — otra iteración). Reglas:
  *  - COBRADO se excluye (ya entró).
- *  - vencido (> umbral días pasado) → `vencidos` (en riesgo), NO a los buckets.
- *  - pasado dentro del umbral (gracia) → bucket de la quincena ACTUAL (entra ya).
+ *  - atrasado y SIN factura → `porFacturar` (aparte, no proyectable).
+ *  - vencido (facturado + crédito consumido) → `vencidos` (en riesgo), NO a los buckets.
+ *  - pasado pero aún sin vencer → bucket de la quincena ACTUAL (entra ya).
  *  - quincena = día 1–15 / 16–fin de mes (fin clampeado: febrero 16–28/29).
  *  - buckets vacíos intermedios SÍ se emiten (la línea de tiempo no salta meses).
  *  - más allá del horizonte → `fueraDeHorizonte` (contador).
@@ -874,11 +883,12 @@ export function proyectarIngresos(
     todayISO: string;
     horizonteMeses?: number;
     mesesEnQuincenas?: number;
-    umbralVencidoDias?: number;
+    /** Crédito por defecto si el cobro no trae el de su cuenta. */
+    creditoDiasDefault?: number;
   },
 ): ProyeccionIngresos {
   const horizonteMeses = opts.horizonteMeses ?? PROYECCION_HORIZONTE_MESES;
-  const umbral = opts.umbralVencidoDias ?? UMBRAL_VENCIDO_DIAS;
+  const creditoDefault = opts.creditoDiasDefault ?? DEFAULT_CREDITO_DIAS;
   const hoyISO = toISODate(toUTCDate(opts.todayISO));
 
   const { base, finHorizonteISO } = esqueletoBuckets(
@@ -893,6 +903,7 @@ export function proyectarIngresos(
   }));
 
   const vencidos: ProyeccionIngresos["vencidos"] = { totales: { CRC: 0, USD: 0 }, cobros: [] };
+  const porFacturar: ProyeccionIngresos["porFacturar"] = { totales: { CRC: 0, USD: 0 }, cobros: [] };
   let fueraDeHorizonte = 0;
 
   const ordenados = [...cobros].sort(
@@ -901,12 +912,33 @@ export function proyectarIngresos(
   for (const c of ordenados) {
     if (c.estado === "COBRADO") continue;
     const diasPasados = diffDays(c.fechaProgramadaISO, opts.todayISO);
-    if (diasPasados > umbral) {
+
+    // Se le pasó la fecha y no tiene factura: no es vencido (el cliente no debe
+    // nada) pero tampoco se puede proyectar — no se sabe cuándo se va a emitir.
+    // Bloque propio, fuera del neto. Decisión de Finanzas 2026-07-24.
+    if (diasPasados > 0 && !c.fechaEmisionISO) {
+      porFacturar.cobros.push(c);
+      porFacturar.totales[c.moneda] = round2(porFacturar.totales[c.moneda] + c.monto);
+      continue;
+    }
+
+    // Vencido = MISMO criterio que el resto del módulo (semaforoCobro): factura
+    // emitida y crédito del cliente consumido. Ya no "fechaProgramada + umbral".
+    const sem = semaforoCobro(
+      {
+        estado: c.estado,
+        fechaProgramadaISO: c.fechaProgramadaISO,
+        fechaEmisionISO: c.fechaEmisionISO ?? null,
+      },
+      opts.todayISO,
+      c.creditoDias ?? creditoDefault,
+    );
+    if (sem === "rojo") {
       vencidos.cobros.push(c);
       vencidos.totales[c.moneda] = round2(vencidos.totales[c.moneda] + c.monto);
       continue;
     }
-    // Gracia (pasado dentro del umbral) cuenta como "entra ya": quincena actual.
+    // Pasado pero todavía sin vencer cuenta como "entra ya": quincena actual.
     const fechaEfectiva = diasPasados > 0 ? hoyISO : toISODate(toUTCDate(c.fechaProgramadaISO));
     if (fechaEfectiva > finHorizonteISO) {
       fueraDeHorizonte++;
@@ -921,7 +953,7 @@ export function proyectarIngresos(
     bucket.totales[c.moneda] = round2(bucket.totales[c.moneda] + c.monto);
   }
 
-  return { vencidos, buckets, fueraDeHorizonte };
+  return { vencidos, porFacturar, buckets, fueraDeHorizonte };
 }
 
 // ── 10. Métricas de cartera + riesgo de pago (fase 3 — analítica) ───────────────
@@ -963,6 +995,11 @@ export interface MetricasMoneda {
   totalVencido: number; // rojos
   totalPorCobrar: number; // amarillos
   totalProgramado: number; // grises
+  /** Atrasado y SIN factura emitida. Transversal a los tres de arriba: no es vencido
+   *  (el cliente no debe nada todavía) pero tampoco puede quedar invisible — es
+   *  trabajo pendiente de Smarteam. Ver la decisión de Finanzas en DECISIONS.md. */
+  totalSinFacturar: number;
+  nSinFacturar: number;
   /** COBRADOs con fechaCobro dentro de la ventana (desde el corte anterior, exclusivo → hoy]. */
   totalCobradoDesdeUltimoCorte: number;
   /** SOLO vencidos, por días de atraso. Invariante: Σ buckets === totalVencido. */
@@ -980,7 +1017,9 @@ export interface MetricasMoneda {
 }
 
 export interface MetricasCartera {
-  version: 1;
+  /** 1 = vencido contado desde la fecha programada (criterio viejo, pre-2026-07-24).
+   *  2 = vencido = factura emitida + crédito consumido (criterio único de Finanzas). */
+  version: 2;
   /** Ventana del corte — desdeISO null = primer corte (sin historia, declarado). */
   ventana: { desdeISO: string | null; hastaISO: string; proximoCorteISO: string };
   moneda: { CRC: MetricasMoneda; USD: MetricasMoneda };
@@ -995,41 +1034,12 @@ export interface MetricasCartera {
   };
 }
 
-/**
- * Réplica DELIBERADA del modelo de UN reloj pre-Tanda-B (fechaProgramada + umbral,
- * sin fechaEmision/crédito) — SOLO para computeMetricasCartera (aging/DSO/Reportes).
- * Tanda B decidió (opción C, "pregunta abierta") dejar esta clasificación en el
- * reloj viejo por ahora: unificarla exige mover el eje temporal completo de
- * proyectarIngresos, que es trabajo de la Tanda C (ver docs/DECISIONS.md). NO usar
- * para nada nuevo — semaforoCobro/semaforoCuenta (arriba) son la fuente de verdad
- * vigente en Cobros/Alertas.
- */
-function semaforoLegacyPorFecha(
-  cobro: { estado: string; fechaProgramadaISO: string },
-  todayISO: string,
-  umbralVencidoDias: number,
-): Semaforo {
-  if (cobro.estado === "COBRADO") return "verde";
-  const diasPasados = diffDays(cobro.fechaProgramadaISO, todayISO);
-  if (diasPasados > umbralVencidoDias) return "rojo";
-  if (cobro.estado === "POR_COBRAR") return "amarillo";
-  return "gris";
-}
-
-/** Peor caso legacy (mismo criterio que semaforoLegacyPorFecha — nunca produce
- *  "azul", así que reusar SEMAFORO_PESO para comparar es seguro). */
-function semaforoCuentaLegacyPorFecha(
-  cobros: Array<{ estado: string; fechaProgramadaISO: string }>,
-  todayISO: string,
-  umbralVencidoDias: number,
-): Semaforo {
-  let peor: Semaforo = "verde";
-  for (const c of cobros) {
-    const s = semaforoLegacyPorFecha(c, todayISO, umbralVencidoDias);
-    if (SEMAFORO_PESO[s] > SEMAFORO_PESO[peor]) peor = s;
-  }
-  return peor;
-}
+// NOTA (2026-07-24): acá vivían `semaforoLegacyPorFecha` y
+// `semaforoCuentaLegacyPorFecha` — la réplica del modelo de UN reloj (fechaProgramada
+// + umbral, sin mirar la factura) que usaba computeMetricasCartera. Finanzas definió
+// un criterio ÚNICO de vencido (factura emitida + crédito consumido), así que las
+// métricas pasaron a `semaforoCobro`/`semaforoCuenta` y estas se borraron a propósito:
+// dejarlas sin lectores era una invitación a que el criterio viejo volviera a colarse.
 
 /**
  * Computa las métricas agregadas de la cartera para el SnapshotCartera del corte.
@@ -1043,14 +1053,17 @@ export function computeMetricasCartera(
     todayISO: string;
     desdeUltimoCorteISO: string | null;
     proximoCorteISO: string;
-    umbralVencidoDias?: number;
+    /** Crédito por defecto cuando la cuenta no trae el suyo. Ausente = DEFAULT_CREDITO_DIAS. */
+    creditoDiasDefault?: number;
   },
 ): MetricasCartera {
-  const umbral = opts.umbralVencidoDias ?? UMBRAL_VENCIDO_DIAS;
+  const creditoDefault = opts.creditoDiasDefault ?? DEFAULT_CREDITO_DIAS;
   const mkMoneda = (): MetricasMoneda => ({
     totalVencido: 0,
     totalPorCobrar: 0,
     totalProgramado: 0,
+    totalSinFacturar: 0,
+    nSinFacturar: 0,
     totalCobradoDesdeUltimoCorte: 0,
     aging: { d0_30: 0, d31_60: 0, d61_90: 0, d90mas: 0 },
     dso: null,
@@ -1081,7 +1094,14 @@ export function computeMetricasCartera(
       continue; // vacía ≠ sana: no aporta ni al verde ni a los denominadores
     }
 
-    const sem = semaforoCuentaLegacyPorFecha(cuenta.cobros, opts.todayISO, umbral);
+    const creditoDias = cuenta.creditoDias ?? creditoDefault;
+    const cobrosSem = cuenta.cobros.map((c) => ({
+      estado: c.estado,
+      fechaProgramadaISO: c.fechaProgramadaISO,
+      fechaEmisionISO: c.fechaEmisionISO ?? null,
+      promesaPagoISO: c.promesaPagoISO ?? null,
+    }));
+    const sem = semaforoCuenta(cobrosSem, opts.todayISO, creditoDias);
     if (sem === "rojo") cuentasRojas++;
     else if (sem === "amarillo") cuentasAmarillas++;
 
@@ -1105,21 +1125,55 @@ export function computeMetricasCartera(
         continue;
       }
 
-      const s = semaforoLegacyPorFecha(c, opts.todayISO, umbral);
+      // CRITERIO ÚNICO DE "VENCIDO" (decisión de Finanzas, 2026-07-24): vencido =
+      // factura EMITIDA y crédito del cliente consumido. Lo que todavía no se
+      // facturó NO está vencido — "siempre van a haber facturas sin hacer y eso no
+      // significa que estén vencidas". Es el mismo `semaforoCobro` que usa la cola
+      // de cobros y el mismo que ya usaba el motor de alertas: una sola definición
+      // en todo el módulo. (Antes acá vivía `semaforoLegacyPorFecha`, que contaba
+      // desde la fecha programada e inflaba el vencido en $19.962 sobre la cartera
+      // real del 2026-07-24.)
+      const s = semaforoCobro(
+        {
+          estado: c.estado,
+          fechaProgramadaISO: c.fechaProgramadaISO,
+          fechaEmisionISO: c.fechaEmisionISO ?? null,
+          promesaPagoISO: c.promesaPagoISO ?? null,
+        },
+        opts.todayISO,
+        creditoDias,
+      );
       const edad = diffDays(c.fechaProgramadaISO, opts.todayISO); // >0 = pasado
+      const sinFacturar = edad > 0 && !c.fechaEmisionISO;
 
+      // Los tres totales son EXHAUSTIVOS sobre lo no cobrado: cada colón cae en uno
+      // y solo uno. `semaforoCobro` tiene un estado más que el semáforo viejo —AZUL
+      // (facturado y todavía dentro del crédito)— y olvidarlo hacía desaparecer esa
+      // plata de los totales. Azul y amarillo son ambos "por cobrar": uno espera al
+      // cliente, el otro espera la factura; la distinción vive en totalSinFacturar.
       if (s === "rojo") {
         m.totalVencido = round2(m.totalVencido + c.monto);
         const bucket = bucketAntiguedad(edad);
         m.aging[bucket] = round2(m.aging[bucket] + c.monto);
-      } else if (s === "amarillo") {
+      } else if (s === "amarillo" || s === "azul") {
         m.totalPorCobrar = round2(m.totalPorCobrar + c.monto);
-      } else if (s === "gris") {
-        m.totalProgramado = round2(m.totalProgramado + c.monto);
+      } else {
+        m.totalProgramado = round2(m.totalProgramado + c.monto); // gris
       }
 
-      // DSO: exigibles = la fecha programada ya llegó (los futuros no diluyen).
-      if (edad >= 0) {
+      // Se le pasó la fecha y nunca se facturó: sale del vencido pero NO desaparece
+      // — es trabajo pendiente de Smarteam y tiene su propia línea. Se cuenta APARTE
+      // de los totales por semáforo (un mismo cobro puede ser amarillo y estar acá).
+      if (sinFacturar) {
+        m.totalSinFacturar = round2(m.totalSinFacturar + c.monto);
+        m.nSinFacturar++;
+      }
+
+      // DSO: días que la plata YA FACTURADA lleva sin entrar, ponderados por monto.
+      // Solo lo facturado (decisión de Finanzas): mide cuánto tarda el CLIENTE en
+      // pagar, no cuánto tardamos nosotros en emitir. Incluir lo no facturado
+      // mezclaba dos problemas y bajaba el indicador (96,1 d en vez de 108,8 d).
+      if (edad >= 0 && c.fechaEmisionISO) {
         dsoAcc[c.moneda].peso += c.monto;
         dsoAcc[c.moneda].suma += edad * c.monto;
       }
@@ -1141,7 +1195,7 @@ export function computeMetricasCartera(
   }
 
   return {
-    version: 1,
+    version: 2,
     ventana: {
       desdeISO: opts.desdeUltimoCorteISO,
       hastaISO: opts.todayISO,
@@ -1459,6 +1513,9 @@ export interface CajaNeta {
   buckets: BucketCajaNeta[];
   /** Vencidos "en riesgo" del lado entra — APARTE, jamás dentro del neto. */
   vencidosAparte: { totales: TotalesMoneda; count: number };
+  /** Atrasado y sin factura emitida — TAMBIÉN aparte: no es vencido, pero sin
+   *  factura no hay fecha creíble de ingreso. Nunca dentro del neto. */
+  porFacturarAparte: { totales: TotalesMoneda; count: number };
   totalesHorizonte: { entra: TotalesMoneda; sale: TotalesMoneda; neto: TotalesMoneda };
 }
 
@@ -1470,7 +1527,7 @@ export interface CajaNeta {
  * los costos recurrentes + los gastos puntuales (`gastos`, opcional) de esa key;
  * el desglose costos-vs-gastos NO vive acá (viaja en el DTO de queries.ts). Omitir
  * `gastos` da output profundamente idéntico a pasar `proyectarGastos([])` (O21).
- * Los vencidos del lado entra viajan APARTE — el neto proyectado no los incluye.
+ * Los vencidos y lo pendiente de facturar viajan APARTE — el neto no los incluye.
  */
 export function computeCajaNeta(
   entra: ProyeccionIngresos,
@@ -1515,6 +1572,10 @@ export function computeCajaNeta(
   return {
     buckets,
     vencidosAparte: { totales: entra.vencidos.totales, count: entra.vencidos.cobros.length },
+    porFacturarAparte: {
+      totales: entra.porFacturar.totales,
+      count: entra.porFacturar.cobros.length,
+    },
     totalesHorizonte,
   };
 }

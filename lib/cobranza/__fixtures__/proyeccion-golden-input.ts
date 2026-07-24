@@ -12,6 +12,12 @@
  * para probar que un refactor NO mueve los números de ingresos (están en
  * producción). Si un cambio de COMPORTAMIENTO deliberado los mueve, se
  * regenera el JSON en el mismo commit que documenta el porqué.
+ *
+ * REGENERADO 2026-07-24 — criterio único de "vencido" (Finanzas): vencido =
+ * factura emitida + crédito consumido, ya no "fecha programada + 3 días". Se
+ * agregó `fechaEmisionISO` a los cobros (por defecto = la fecha programada, o
+ * sea "se factura el día que toca") y un set nuevo `sinFactura` que ejercita la
+ * rama `porFacturar`, que antes no existía.
  */
 import type { CobroProyeccionInput } from "../engine";
 
@@ -29,6 +35,22 @@ const c = (
   fechaProgramadaISO,
   monto,
   moneda,
+  // "Se factura el día que toca": determinista y sin depender de todayISO (el
+  // mismo set corre contra varios). Con esto un cobro pasado sigue llegando a
+  // vencido cuando su crédito ya corrió.
+  fechaEmisionISO: fechaProgramadaISO,
+});
+
+/** Variante SIN factura emitida → rama `porFacturar` (atrasado pero no vencido). */
+const sinFactura = (
+  cobroId: string,
+  fechaProgramadaISO: string,
+  monto: number,
+  moneda: "CRC" | "USD",
+  estado = "PROGRAMADO",
+): CobroProyeccionInput => ({
+  ...c(cobroId, fechaProgramadaISO, monto, moneda, estado),
+  fechaEmisionISO: null,
 });
 
 export const GOLDEN_COBROS: CobroProyeccionInput[] = [
@@ -79,6 +101,12 @@ export const GOLDEN_COBROS: CobroProyeccionInput[] = [
   // Pasado remoto y montos chicos extra (ruido determinista)
   c("bj", "2025-12-01", 9.99, "USD"),
   c("bk", "2026-01-15", 500_000, "CRC", "PROGRAMADO"),
+  // SIN factura emitida: atrasados que NO son vencidos (rama porFacturar) + uno
+  // futuro, que no lo es todavía y debe seguir cayendo en su bucket normal.
+  sinFactura("ca", "2026-03-20", 33_000, "CRC"),
+  sinFactura("cb", "2026-07-02", 480, "USD"),
+  sinFactura("cc", "2026-07-09", 7_777, "CRC"),
+  sinFactura("cd", "2026-09-20", 1_250, "USD"),
 ];
 
 export interface GoldenCase {
@@ -87,7 +115,7 @@ export interface GoldenCase {
   opts: {
     horizonteMeses?: number;
     mesesEnQuincenas?: number;
-    umbralVencidoDias?: number;
+    creditoDiasDefault?: number;
   };
 }
 
@@ -98,7 +126,7 @@ export const GOLDEN_CASES: GoldenCase[] = [
   { nombre: "horizonte-3", todayISO: "2026-07-10", opts: { horizonteMeses: 3 } },
   { nombre: "sin-quincenas", todayISO: "2026-07-10", opts: { mesesEnQuincenas: 0 } },
   { nombre: "quincenas-4", todayISO: "2026-07-10", opts: { mesesEnQuincenas: 4 } },
-  { nombre: "umbral-7", todayISO: "2026-07-10", opts: { umbralVencidoDias: 7 } },
+  { nombre: "credito-7", todayISO: "2026-07-10", opts: { creditoDiasDefault: 7 } },
   // El clamp: mesesEnQuincenas > horizonteMeses (la rama que el refactor muda de lugar)
   { nombre: "clamp-quincenas", todayISO: "2026-07-10", opts: { horizonteMeses: 2, mesesEnQuincenas: 6 } },
 ];

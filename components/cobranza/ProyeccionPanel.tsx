@@ -68,7 +68,7 @@ export default function ProyeccionPanel({
   const [actualizando, setActualizando] = useState(false);
   const colors = useChartColors();
 
-  const { buckets, vencidos, fueraDeHorizonte } = proyeccion;
+  const { buckets, vencidos, porFacturar, fueraDeHorizonte } = proyeccion;
   const primerBucket: BucketProyeccion | undefined = buckets[0];
   const segundoBucket: BucketProyeccion | undefined = buckets[1];
 
@@ -84,7 +84,10 @@ export default function ProyeccionPanel({
   }, [buckets]);
 
   const hayCobros =
-    vencidos.cobros.length > 0 || fueraDeHorizonte > 0 || buckets.some((b) => b.cobros.length > 0);
+    vencidos.cobros.length > 0 ||
+    porFacturar.cobros.length > 0 ||
+    fueraDeHorizonte > 0 ||
+    buckets.some((b) => b.cobros.length > 0);
   const hayPlataEnBuckets = buckets.some((b) => b.totales.CRC > 0 || b.totales.USD > 0);
 
   // Barras por bucket: DOS series (CRC eje izq. / USD eje der.), sin apilar.
@@ -192,6 +195,12 @@ export default function ProyeccionPanel({
       totales: vencidos.totales,
       tone: "text-red-600 border-red-500/30 bg-red-500/5",
     },
+    {
+      label: "Pendiente de facturar",
+      detalle: `${porFacturar.cobros.length} cobro${porFacturar.cobros.length !== 1 ? "s" : ""}`,
+      totales: porFacturar.totales,
+      tone: "text-warn-ink border-warn-line bg-warn-surface",
+    },
   ];
 
   return (
@@ -247,10 +256,8 @@ export default function ProyeccionPanel({
                   En riesgo (vencidos) · {vencidos.cobros.length}
                 </p>
                 <p className="mt-1 text-[10px] text-fg-muted normal-case tracking-normal">
-                  Este &quot;vencido&quot; se calcula desde la fecha programada, no desde la
-                  factura — incluye cobros que todavía están dentro del crédito, así que aparece
-                  más alto de lo real. El dato correcto está en la pestaña Cobros. Se alinea en
-                  la próxima iteración.
+                  Facturado y con el crédito del cliente ya consumido. No entra a los períodos
+                  de abajo: se persigue, no se proyecta.
                 </p>
               </div>
               <ul className="divide-y divide-line bg-surface">
@@ -261,6 +268,35 @@ export default function ProyeccionPanel({
                       {fmtFecha(c.fechaProgramadaISO)}
                     </span>
                     <span className="w-28 text-right font-medium text-red-600 tabular-nums whitespace-nowrap">
+                      {fmtMonto(c.monto, c.moneda)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* ── Pendiente de facturar — ni vencido ni proyectable ── */}
+          {porFacturar.cobros.length > 0 && (
+            <div className="rounded-xl border border-warn-line overflow-hidden">
+              <div className="px-4 py-2.5 bg-warn-surface border-b border-warn-line">
+                <p className="text-[11px] font-semibold text-warn-ink uppercase tracking-wide">
+                  Pendiente de facturar · {porFacturar.cobros.length}
+                </p>
+                <p className="mt-1 text-[10px] text-fg-muted normal-case tracking-normal">
+                  Se les pasó la fecha y todavía no se emitió la factura. NO están vencidos: el
+                  cliente no debe nada. Tampoco se proyectan — sin factura no hay fecha creíble
+                  de ingreso.
+                </p>
+              </div>
+              <ul className="divide-y divide-line bg-surface">
+                {porFacturar.cobros.map((c: CobroProyeccionInput) => (
+                  <li key={c.cobroId} className="px-4 py-2 text-sm flex items-center gap-3">
+                    <span className="flex-1 truncate font-medium text-fg">{c.clienteNombre}</span>
+                    <span className="text-xs text-fg-muted whitespace-nowrap">
+                      {fmtFecha(c.fechaProgramadaISO)}
+                    </span>
+                    <span className="w-28 text-right font-medium text-warn-ink tabular-nums whitespace-nowrap">
                       {fmtMonto(c.monto, c.moneda)}
                     </span>
                   </li>

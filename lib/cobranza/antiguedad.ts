@@ -132,7 +132,8 @@ export interface ResumenMoneda {
   /** KPI: plata vencida que ya pasó el crédito estándar de 30 días. */
   vencido30mas: number;
   n30mas: number;
-  /** KPI: días promedio de cobro ponderados por monto (DSO). null = sin exigibles. */
+  /** KPI: días promedio de cobro ponderados por monto (DSO), SOLO sobre lo ya
+   *  facturado. null = no hay nada facturado y exigible (no es 0: cero mentiría). */
   dso: number | null;
   /** Atrasado y sin factura emitida — pendiente de Smarteam, no del cliente. */
   sinFacturar: number;
@@ -177,8 +178,13 @@ export function resumenAntiguedad(
     const m = (out[c.moneda] ??= vacio());
     (dso[c.moneda] ??= { peso: 0, suma: 0 });
 
+    // DSO solo sobre lo FACTURADO (decisión de Finanzas 2026-07-24): mide cuánto
+    // tarda el CLIENTE en pagar, no cuánto tardamos en emitir. Mezclarlos bajaba el
+    // indicador (96,1 d en vez de 108,8 d) porque lo sin facturar es más reciente.
+    // Misma regla que `computeMetricasCartera`: el KPI de la cola y el del corte
+    // tienen que dar el mismo número.
     const edad = diffDays(c.fechaProgramada, todayISO);
-    if (edad >= 0) {
+    if (edad >= 0 && c.fechaEmision) {
       dso[c.moneda].peso += c.monto;
       dso[c.moneda].suma += edad * c.monto;
     }

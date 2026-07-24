@@ -697,9 +697,10 @@ export async function loadProyeccion(todayISO: string): Promise<ProyeccionIngres
       cuentaId: true,
       estado: true,
       fechaProgramada: true,
+      fechaEmision: true,
       monto: true,
       moneda: true,
-      cuenta: { select: { client: { select: { name: true } } } },
+      cuenta: { select: { creditoDias: true, client: { select: { name: true } } } },
     },
   });
   const input: CobroProyeccionInput[] = cobros.map((c) => ({
@@ -710,6 +711,10 @@ export async function loadProyeccion(todayISO: string): Promise<ProyeccionIngres
     fechaProgramadaISO: isoDay(c.fechaProgramada)!,
     monto: num(c.monto)!,
     moneda: c.moneda,
+    // Criterio único de vencido (2026-07-24): sin estos dos, la proyección volvía
+    // a clasificar por fecha sola y contradecía a la cola de cobros.
+    fechaEmisionISO: isoDay(c.fechaEmision),
+    creditoDias: c.cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS,
   }));
   return proyectarIngresos(input, { todayISO });
 }
