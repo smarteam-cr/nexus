@@ -525,7 +525,7 @@ export interface SnapshotSerieDTO {
  * Serie histórica para las vistas de tendencia: solo snapshots CON métricas
  * (los pre-fase-3 tienen metricas null y no son comparables — sin backfill,
  * la historia arranca del primer corte que las capturó). Ascendente para
- * graficar directo; default un año de cortes semanales.
+ * graficar directo; default un año de cortes quincenales.
  */
 export async function loadSnapshotSeries(limit = 52): Promise<SnapshotSerieDTO[]> {
   const snaps = await prisma.snapshotCartera.findMany({

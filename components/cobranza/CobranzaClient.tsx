@@ -48,7 +48,7 @@ const TABS: Array<{ key: Tab; label: string }> = [
   { key: "proyeccion", label: "Proyección" },
   { key: "alertas", label: "Alertas" },
   { key: "reportes", label: "Reportes" },
-  { key: "corte", label: "Corte semanal" },
+  { key: "corte", label: "Corte quincenal" },
 ];
 
 const porFecha = (a: ColaCobroRow, b: ColaCobroRow) =>
@@ -241,7 +241,9 @@ export default function CobranzaClient({
       {tab === "alertas" && (
         <AlertasCobranza alertas={alertas} setAlertas={setAlertas} onOpenCuenta={setOpenCuentaId} />
       )}
-      {tab === "reportes" && <ReportesPanel series={series} riesgo={riesgo} role={role} />}
+      {tab === "reportes" && (
+        <ReportesPanel series={series} riesgo={riesgo} role={role} cola={cola} todayISO={todayISO} />
+      )}
       {tab === "corte" && (
         <DigestPanel initialSnapshot={initialSnapshot} onDigestDone={onDigestDone} />
       )}

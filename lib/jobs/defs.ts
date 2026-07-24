@@ -22,6 +22,7 @@ import { syncPartnerClients } from "@/lib/cs/partner-sync";
 import { watchdogJobs } from "@/lib/cs/watchdog";
 import { claimDateKey, type JobDef } from "./registry";
 import { WEEKDAYS_MON_FRI } from "./time";
+import { esDiaDeCorte } from "@/lib/cobranza/antiguedad";
 
 /** Los jobs de Éxito del cliente son OPT-IN por env (prod los prende explícito). */
 export function csJobsEnabled(): boolean {
@@ -117,26 +118,34 @@ const maintenanceDaily: JobDef = {
   },
 };
 
-// Corte semanal de Cobranza (lunes ≥ 7:00 CR): computa alertas de cartera, las
-// diffea contra el snapshot anterior y guarda el digest (solo-cambios). OPT-IN
-// por env como los de CS — el disparo manual (POST /api/cobranza/digest) siempre
-// está disponible aunque el cron esté apagado.
-const cobranzaWeekly: JobDef = {
-  key: "cobranza-weekly",
-  shouldRun: (_now, parts) =>
-    process.env.COBRANZA_CRON_ENABLED === "1" && parts.weekday === "Mon" && parts.hour >= 7,
+// Corte QUINCENAL de Cobranza: computa alertas de cartera, las diffea contra el
+// snapshot anterior y guarda el digest (solo-cambios). OPT-IN por env como los de
+// CS — el disparo manual (POST /api/cobranza/digest) siempre está disponible
+// aunque el cron esté apagado.
+//
+// Corre al ARRANQUE de cada tanda de cobro (día 1 y día 15, ≥7:00 CR): Smarteam
+// cobra en dos ventanas fijas al mes (1-5 y 15-20), así que el corte semanal
+// partía el ciclo por la mitad y comparaba períodos que no se corresponden. Las
+// ventanas viven en lib/cobranza/antiguedad.ts (`esDiaDeCorte`), única definición.
+// `claimDateKey` es por día → aunque el tick corra muchas veces, el corte es uno.
+const cobranzaQuincenal: JobDef = {
+  key: "cobranza-quincenal",
+  shouldRun: (_now, parts) => {
+    if (process.env.COBRANZA_CRON_ENABLED !== "1" || parts.hour < 7) return false;
+    return esDiaDeCorte(parts.dateKey);
+  },
   run: async (now) => {
     const { dateKey } = (await import("./time")).crDateParts(now);
-    if (!(await claimDateKey("cobranza-weekly", dateKey, now))) return;
+    if (!(await claimDateKey("cobranza-quincenal", dateKey, now))) return;
     const { runCobranzaDigest } = await import("@/lib/cobranza/digest");
     const digest = await runCobranzaDigest(now, "cron");
     console.log(
-      `[jobs/cobranza] ${dateKey} — corte semanal: ${digest.diff.nuevas.length} nuevas, ${digest.diff.resueltas.length} resueltas, ${digest.diff.persistentes} persistentes${digest.diff.sinCambios ? " (sin cambios)" : ""}`,
+      `[jobs/cobranza] ${dateKey} — corte quincenal: ${digest.diff.nuevas.length} nuevas, ${digest.diff.resueltas.length} resueltas, ${digest.diff.persistentes} persistentes${digest.diff.sinCambios ? " (sin cambios)" : ""}`,
     );
   },
 };
 
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaWeekly];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal];
 }

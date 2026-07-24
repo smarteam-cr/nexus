@@ -942,6 +942,22 @@ export interface AgingBuckets {
   d90mas: number;
 }
 
+/**
+ * Cubo de antigüedad de una edad en días (desde la fecha programada). Bordes
+ * CERRADOS arriba: 30 → d0_30, 31 → d31_60, 90 → d61_90, 91 → d90mas.
+ *
+ * Vive acá (y no en lib/cobranza/antiguedad.ts, que es quien lo reexporta para la
+ * UI) solo para no crear un ciclo de imports: ese módulo ya depende de este. Lo
+ * que importa es que haya UNA definición — el snapshot y la lista de cobros no
+ * pueden discrepar sobre en qué cubo cae la plata.
+ */
+export function bucketAntiguedad(edadDias: number): keyof AgingBuckets {
+  if (edadDias <= 30) return "d0_30";
+  if (edadDias <= 60) return "d31_60";
+  if (edadDias <= 90) return "d61_90";
+  return "d90mas";
+}
+
 export interface MetricasMoneda {
   /** Montos por semáforo del cobro (mapeo 1:1 — cero definiciones nuevas de "vencido"). */
   totalVencido: number; // rojos
@@ -1094,7 +1110,7 @@ export function computeMetricasCartera(
 
       if (s === "rojo") {
         m.totalVencido = round2(m.totalVencido + c.monto);
-        const bucket = edad <= 30 ? "d0_30" : edad <= 60 ? "d31_60" : edad <= 90 ? "d61_90" : "d90mas";
+        const bucket = bucketAntiguedad(edad);
         m.aging[bucket] = round2(m.aging[bucket] + c.monto);
       } else if (s === "amarillo") {
         m.totalPorCobrar = round2(m.totalPorCobrar + c.monto);

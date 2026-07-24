@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * components/cobranza/DigestPanel.tsx — tab "Corte semanal".
+ * components/cobranza/DigestPanel.tsx — tab "Corte quincenal".
  *
  * El corte de cartera (diff-based): muestra el resumen del último
  * SnapshotCartera — Nuevas / Resueltas / persistentes, o "sin cambios" — y el
@@ -157,7 +157,7 @@ export default function DigestPanel({
         <EmptyState
           variant="dashed"
           title="Todavía no hay cortes"
-          description="Hacé el primer corte para arrancar el registro semanal de cambios."
+          description="Hacé el primer corte para arrancar el registro quincenal de cambios."
           action={botonCorte}
         />
         <p className="text-[11px] text-fg-muted text-center">El corte automático corre los lunes a las 7:00.</p>

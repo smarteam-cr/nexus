@@ -3,23 +3,40 @@
 /**
  * components/cobranza/ColaCobros.tsx — el LANDING del módulo: la cola de trabajo
  * de quien cobra. Totales arriba (CRC y USD SIEMPRE separados — jamás se suman),
- * lista de cobros pendientes agrupada por urgencia (Vencidos → Esta quincena →
- * Más adelante) con las acciones del día a día inline: registrar pago (1 click
- * → diálogo), promesa y borrador de correo.
+ * lista de cobros pendientes ordenada DE LO MÁS VIEJO A LO MÁS NUEVO, con las
+ * acciones del día a día inline: registrar pago (1 click → diálogo), promesa y
+ * borrador de correo.
  *
  * Los cards se computan de la cola COMPLETA (la verdad del día); los filtros
  * solo estrechan la LISTA. El estado (rows) vive en CobranzaClient — igual que
  * la cartera — y el registro de pago lo ejecuta el contenedor (chokepoint
  * client único para cola + buscador global).
  *
- * NOTA: `semaforoCobro`/`finQuincenaISO` se importan de lib/cobranza/engine
- * (motor puro) y NO del barrel lib/cobranza (re-exporta módulos server-only).
+ * AGRUPACIÓN (2026-07): la decide `clasificarCobro` (lib/cobranza/antiguedad.ts),
+ * no el color del semáforo. Antes se agrupaba por semáforo y, como `semaforoCobro`
+ * por diseño nunca marca vencido un cobro sin factura emitida, TODO lo atrasado
+ * sin facturar caía en "Esta quincena" (15 cobros el 2026-07-24, el más viejo de
+ * mayo). Ahora eso tiene grupo propio y arriba de todo, y lo vencido se subdivide
+ * por antigüedad 30/60/90. El semáforo sigue gobernando el color del chip.
+ *
+ * NOTA: los helpers se importan de lib/cobranza/engine y /antiguedad (módulos
+ * puros) y NO del barrel lib/cobranza (re-exporta módulos server-only).
  */
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { EmptyState } from "@/components/ui";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
-import { addDaysISO, finQuincenaISO, semaforoCobro } from "@/lib/cobranza/engine";
+import { addDaysISO } from "@/lib/cobranza/engine";
+import {
+  clasificarCobro,
+  resumenAntiguedad,
+  estadoTanda,
+  GRUPOS_ORDEN,
+  BUCKET_LABEL,
+  KPI_CREDITO_DIAS,
+  type GrupoCobro,
+  type ResumenAntiguedad,
+} from "@/lib/cobranza/antiguedad";
 import type { ColaCobroRow, RiesgoPagoItem } from "@/lib/cobranza";
 import { TIPO_SERVICIO_LABEL } from "@/lib/cobranza/schema";
 import { fmtFecha, fmtMonto } from "./format";
@@ -27,13 +44,33 @@ import BorradorCobroModal from "./BorradorCobroModal";
 import PromesaDialog from "./PromesaDialog";
 import MarcarFacturadoDialog from "./MarcarFacturadoDialog";
 
-type Grupo = "vencidos" | "quincena" | "adelante";
+type Grupo = GrupoCobro;
 type FiltroMoneda = "all" | "CRC" | "USD";
 
 const GRUPO_LABEL: Record<Grupo, string> = {
-  vencidos: "Vencidos",
+  sinFacturar: "Falta facturar",
+  ...BUCKET_LABEL,
   quincena: "Esta quincena",
   adelante: "Más adelante",
+};
+
+/** Subtítulo del grupo — dice qué hacer, no solo qué es. */
+const GRUPO_HINT: Partial<Record<Grupo, string>> = {
+  sinFacturar:
+    "El cliente todavía no debe esto: falta emitir la factura. Es trabajo de Smarteam, no mora.",
+  d90mas: "Lo más viejo de la cartera — atacar primero.",
+  quincena: "Programado para cobrarse en el período actual.",
+};
+
+/** Los cubos de vencido: comparten el tratamiento visual (rojo, "hace N d"). */
+const ES_VENCIDO: Record<Grupo, boolean> = {
+  sinFacturar: false,
+  d90mas: true,
+  d61_90: true,
+  d31_60: true,
+  d0_30: true,
+  quincena: false,
+  adelante: false,
 };
 
 /** Total por moneda de un set de filas — SIEMPRE separados (regla dura). */
@@ -43,6 +80,91 @@ function totalesPorMoneda(rows: ColaCobroRow[]): { CRC: number; USD: number } {
     if (r.moneda === "CRC" || r.moneda === "USD") t[r.moneda] += r.monto;
   }
   return t;
+}
+
+/**
+ * KPI — plata vencida que ya pasó el crédito estándar (30 días). Por moneda: CRC y
+ * USD jamás se suman. El % es sobre lo vencido de ESA moneda, no sobre la cartera:
+ * responde "de lo que me deben tarde, cuánto está muy tarde".
+ */
+function KpiVencido30({ resumen }: { resumen: ResumenAntiguedad }) {
+  const lineas = Object.entries(resumen)
+    .filter(([, r]) => r.vencido30mas > 0)
+    .map(([moneda, r]) => ({
+      moneda,
+      monto: r.vencido30mas,
+      pct: r.totalVencido > 0 ? Math.round((r.vencido30mas / r.totalVencido) * 100) : 0,
+      n: r.n30mas,
+    }));
+  const nTotal = lineas.reduce((n, l) => n + l.n, 0);
+  return (
+    <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3">
+      <p className="text-[11px] font-semibold text-red-600 uppercase tracking-wide">
+        Vencido +{KPI_CREDITO_DIAS} días · {nTotal}
+      </p>
+      {lineas.length === 0 ? (
+        <p className="mt-1.5 text-lg font-semibold text-emerald-600 leading-tight">✓ Nada</p>
+      ) : (
+        <div className="mt-1.5 space-y-0.5">
+          {lineas.map((l) => (
+            <p key={l.moneda} className="text-lg font-semibold text-fg tabular-nums leading-tight">
+              {fmtMonto(l.monto, l.moneda)}{" "}
+              <span className="text-[11px] font-normal text-fg-muted">
+                · {l.pct}% de lo vencido
+              </span>
+            </p>
+          ))}
+        </div>
+      )}
+      <p className="text-[11px] text-fg-muted mt-0.5">
+        supera el crédito estándar de {KPI_CREDITO_DIAS} días
+      </p>
+    </div>
+  );
+}
+
+/**
+ * KPI — DSO: días promedio que la plata exigible lleva sin entrar, ponderado por
+ * monto (una factura grande y vieja pesa más que una chica). Alerta si supera el
+ * crédito estándar. null = no hay exigibles, y eso NO es cero (cero mentiría).
+ */
+function KpiDso({ resumen }: { resumen: ResumenAntiguedad }) {
+  const lineas = Object.entries(resumen).filter(([, r]) => r.dso !== null);
+  const excede = lineas.some(([, r]) => (r.dso ?? 0) > KPI_CREDITO_DIAS);
+  return (
+    <div
+      className={`rounded-xl border px-4 py-3 ${
+        excede ? "border-red-500/30 bg-red-500/5" : "border-line bg-surface-muted"
+      }`}
+    >
+      <p
+        className={`text-[11px] font-semibold uppercase tracking-wide ${
+          excede ? "text-red-600" : "text-fg-muted"
+        }`}
+      >
+        Promedio de cobro
+      </p>
+      {lineas.length === 0 ? (
+        <p className="mt-1.5 text-lg font-semibold text-fg-muted leading-tight">—</p>
+      ) : (
+        <div className="mt-1.5 space-y-0.5">
+          {lineas.map(([moneda, r]) => (
+            <p key={moneda} className="text-lg font-semibold text-fg tabular-nums leading-tight">
+              {r.dso} d{" "}
+              {lineas.length > 1 && (
+                <span className="text-[11px] font-normal text-fg-muted">{moneda}</span>
+              )}
+            </p>
+          ))}
+        </div>
+      )}
+      <p className="text-[11px] text-fg-muted mt-0.5">
+        {excede
+          ? `por encima del crédito de ${KPI_CREDITO_DIAS} días`
+          : `dentro del crédito de ${KPI_CREDITO_DIAS} días`}
+      </p>
+    </div>
+  );
 }
 
 function LineasMoneda({ totales }: { totales: { CRC: number; USD: number } }) {
@@ -82,42 +204,47 @@ export default function ColaCobros({
   const [facturarCobro, setFacturarCobro] = useState<ColaCobroRow | null>(null);
 
   const riesgoSet = useMemo(() => new Set(riesgo.map((r) => r.cobroId)), [riesgo]);
-  const finQuincena = useMemo(() => finQuincenaISO(todayISO), [todayISO]);
   const finSemana = useMemo(() => addDaysISO(todayISO, 7), [todayISO]);
+  const tanda = useMemo(() => estadoTanda(todayISO), [todayISO]);
 
-  // Agrupación con la regla canónica del semáforo: rojo (= vencido, >3 días) →
-  // Vencidos; el resto por fecha (la gracia de 0-3 días cae en Esta quincena).
+  // Agrupación por ANTIGÜEDAD (helper puro con tests). Lo viejo primero; dentro de
+  // cada grupo, lo más atrasado arriba.
   const grupos = useMemo(() => {
-    const out: Record<Grupo, ColaCobroRow[]> = { vencidos: [], quincena: [], adelante: [] };
-    for (const r of rows) {
-      const sem = semaforoCobro(
-        {
-          estado: r.estado,
-          fechaProgramadaISO: r.fechaProgramada,
-          fechaEmisionISO: r.fechaEmision,
-          promesaPagoISO: r.promesaPago,
-        },
-        todayISO,
-        r.creditoDias,
-      );
-      if (sem === "rojo") out.vencidos.push(r);
-      else if (r.fechaProgramada <= finQuincena) out.quincena.push(r);
-      else out.adelante.push(r);
+    const out = Object.fromEntries(GRUPOS_ORDEN.map((g) => [g, [] as ColaCobroRow[]])) as Record<
+      Grupo,
+      ColaCobroRow[]
+    >;
+    for (const r of rows) out[clasificarCobro(r, todayISO)].push(r);
+    for (const g of GRUPOS_ORDEN) {
+      // Vencidos y sin facturar: el más viejo arriba. Lo futuro ya viene por fecha
+      // ascendente del server (lo próximo primero), que ahí es lo correcto.
+      if (g !== "quincena" && g !== "adelante") {
+        out[g].sort((a, b) => b.diasAtraso - a.diasAtraso || a.id.localeCompare(b.id));
+      }
     }
-    out.vencidos.sort((a, b) => b.diasAtraso - a.diasAtraso || a.id.localeCompare(b.id));
-    return out; // quincena/adelante ya vienen por fecha asc del server
-  }, [rows, todayISO, finQuincena]);
+    return out;
+  }, [rows, todayISO]);
+
+  // Resumen por moneda para los KPI — de la cola COMPLETA, sin filtros.
+  const resumen = useMemo(() => resumenAntiguedad(rows, todayISO), [rows, todayISO]);
+
+  const vencidos = useMemo(
+    () => GRUPOS_ORDEN.filter((g) => ES_VENCIDO[g]).flatMap((g) => grupos[g]),
+    [grupos],
+  );
 
   // Cards: SIEMPRE de la cola completa — los filtros no cambian la verdad del día.
   const cards = useMemo(
     () => ({
-      vencido: totalesPorMoneda(grupos.vencidos),
-      nVencidos: grupos.vencidos.length,
+      vencido: totalesPorMoneda(vencidos),
+      nVencidos: vencidos.length,
       quincena: totalesPorMoneda(grupos.quincena),
       nQuincena: grupos.quincena.length,
+      sinFacturar: totalesPorMoneda(grupos.sinFacturar),
+      nSinFacturar: grupos.sinFacturar.length,
       promesas: rows.filter((r) => r.promesaPago && r.promesaPago >= todayISO && r.promesaPago < finSemana).length,
     }),
-    [grupos, rows, todayISO, finSemana],
+    [grupos, vencidos, rows, todayISO, finSemana],
   );
 
   const filtra = (list: ColaCobroRow[]) => {
@@ -127,13 +254,11 @@ export default function ColaCobros({
     if (fMoneda !== "all") out = out.filter((r) => r.moneda === fMoneda);
     return out;
   };
-  const visibles: Record<Grupo, ColaCobroRow[]> = {
-    vencidos: filtra(grupos.vencidos),
-    quincena: filtra(grupos.quincena),
-    adelante: filtra(grupos.adelante),
-  };
+  const visibles = Object.fromEntries(
+    GRUPOS_ORDEN.map((g) => [g, filtra(grupos[g])]),
+  ) as Record<Grupo, ColaCobroRow[]>;
   const hayFiltros = q.trim() !== "" || fMoneda !== "all";
-  const totalVisible = visibles.vencidos.length + visibles.quincena.length + visibles.adelante.length;
+  const totalVisible = GRUPOS_ORDEN.reduce((n, g) => n + visibles[g].length, 0);
 
   // Promesa desde la cola: PATCH optimista sobre las filas (patrón applyPromesa).
   async function applyPromesa(row: ColaCobroRow, promesaPago: string | null) {
@@ -185,8 +310,29 @@ export default function ColaCobros({
 
   return (
     <div className="space-y-4">
+      {/* ── Tanda de cobro: Smarteam cobra del 1 al 5 y del 15 al 20. Es una VENTANA
+             DE TRABAJO — no mueve la fecha de ningún cobro, solo dice si hoy toca. ── */}
+      <div
+        className={`rounded-xl border px-4 py-2.5 text-[11px] ${
+          tanda.activa
+            ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-700"
+            : "border-line bg-surface-muted text-fg-muted"
+        }`}
+      >
+        {tanda.activa ? (
+          <>
+            <span className="font-semibold">Tanda de cobro abierta</span> · {tanda.activa.label}
+          </>
+        ) : (
+          <>
+            Fuera de tanda · la próxima abre el día {tanda.proximaDesde}
+            {tanda.diasParaProxima > 0 && ` (en ${tanda.diasParaProxima} día${tanda.diasParaProxima !== 1 ? "s" : ""})`}
+          </>
+        )}
+      </div>
+
       {/* ── Cards de resumen (la verdad del día — no las tocan los filtros) ── */}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3">
           <p className="text-[11px] font-semibold text-red-600 uppercase tracking-wide">
             Vencido · {cards.nVencidos} cobro{cards.nVencidos !== 1 ? "s" : ""}
@@ -195,6 +341,13 @@ export default function ColaCobros({
             <LineasMoneda totales={cards.vencido} />
           </div>
         </div>
+
+        {/* KPI 1 — la plata que ya pasó el crédito estándar de la casa. */}
+        <KpiVencido30 resumen={resumen} />
+
+        {/* KPI 2 — cuánto tarda en entrar la plata (DSO). */}
+        <KpiDso resumen={resumen} />
+
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
           <p className="text-[11px] font-semibold text-amber-600 uppercase tracking-wide">
             Por cobrar esta quincena · {cards.nQuincena}
@@ -202,6 +355,23 @@ export default function ColaCobros({
           <div className="mt-1.5">
             <LineasMoneda totales={cards.quincena} />
           </div>
+        </div>
+      </div>
+
+      {/* Segunda fila: lo que depende de Smarteam y las promesas. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-warn-line bg-warn-surface px-4 py-3">
+          <p className="text-[11px] font-semibold text-warn-ink uppercase tracking-wide">
+            Falta facturar · {cards.nSinFacturar}
+          </p>
+          <div className="mt-1.5">
+            <LineasMoneda totales={cards.sinFacturar} />
+          </div>
+          <p className="text-[11px] text-fg-muted mt-0.5">
+            {cards.nSinFacturar === 0
+              ? "todo lo vencido ya tiene factura emitida"
+              : "atrasado por facturar — no es mora del cliente"}
+          </p>
         </div>
         <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 px-4 py-3">
           <p className="text-[11px] font-semibold text-sky-600 uppercase tracking-wide">
@@ -254,7 +424,7 @@ export default function ColaCobros({
           description="Ajustá la búsqueda o el filtro de moneda."
         />
       ) : (
-        (["vencidos", "quincena", "adelante"] as const).map((g) => {
+        GRUPOS_ORDEN.map((g) => {
           const list = visibles[g];
           if (g === "adelante") {
             return (
@@ -271,13 +441,38 @@ export default function ColaCobros({
               </div>
             );
           }
+          // Un cubo de antigüedad vacío no aporta nada: se omite (con filtros
+          // activos también, para no llenar la pantalla de encabezados en cero).
+          if (list.length === 0 && (ES_VENCIDO[g] || g === "sinFacturar")) return null;
+          const totales = totalesPorMoneda(list);
           return (
             <div key={g}>
-              <p className="text-[11px] font-semibold text-fg-muted uppercase tracking-widest">
-                {GRUPO_LABEL[g]} ({list.length})
-              </p>
-              {g === "vencidos" && list.length === 0 && !hayFiltros ? (
-                <p className="mt-1.5 text-xs text-emerald-600">✓ Nada vencido</p>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <p
+                  className={`text-[11px] font-semibold uppercase tracking-widest ${
+                    g === "sinFacturar"
+                      ? "text-warn-ink"
+                      : ES_VENCIDO[g]
+                        ? "text-red-600"
+                        : "text-fg-muted"
+                  }`}
+                >
+                  {GRUPO_LABEL[g]} ({list.length})
+                </p>
+                {(totales.CRC > 0 || totales.USD > 0) && (
+                  <span className="text-[11px] text-fg-muted tabular-nums">
+                    {[totales.CRC > 0 ? fmtMonto(totales.CRC, "CRC") : null,
+                      totales.USD > 0 ? fmtMonto(totales.USD, "USD") : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                )}
+              </div>
+              {GRUPO_HINT[g] && (
+                <p className="mt-0.5 text-[11px] text-fg-muted">{GRUPO_HINT[g]}</p>
+              )}
+              {g === "quincena" && list.length === 0 && !hayFiltros ? (
+                <p className="mt-1.5 text-xs text-emerald-600">✓ Nada pendiente en este período</p>
               ) : (
                 <ListaGrupo grupo={g} list={list} />
               )}
@@ -343,9 +538,13 @@ export default function ColaCobros({
                 {r.numCuota != null ? `#${r.numCuota} · ` : ""}
                 {r.periodo}
               </span>
-              {grupo === "vencidos" ? (
+              {ES_VENCIDO[grupo] || grupo === "sinFacturar" ? (
                 <span className="text-[11px] flex-shrink-0">
-                  <span className="text-red-600 font-semibold">hace {r.diasAtraso} d</span>{" "}
+                  <span
+                    className={`font-semibold ${grupo === "sinFacturar" ? "text-warn-ink" : "text-red-600"}`}
+                  >
+                    hace {r.diasAtraso} d
+                  </span>{" "}
                   <span className="text-fg-muted">({fmtFecha(r.fechaProgramada)})</span>
                 </span>
               ) : (

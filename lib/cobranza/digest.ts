@@ -4,9 +4,10 @@
  * El "corte" de cartera: computa el set de alertas, lo persiste (dedup), lo
  * diffea contra el snapshot anterior y guarda un SnapshotCartera nuevo. El digest
  * resultante es DIFF-BASED: si nada cambió desde el último corte, `sinCambios`
- * es true y la UI/el aviso no molestan. Lo disparan (a) el JobDef cobranza-weekly
- * (lunes ≥7:00 CR, opt-in por COBRANZA_CRON_ENABLED — registrado en lib/jobs/defs.ts)
- * y (b) el botón "Correr corte ahora" (POST /api/cobranza/digest).
+ * es true y la UI/el aviso no molestan. Lo disparan (a) el JobDef cobranza-quincenal
+ * (día 1 y día 15 ≥7:00 CR — el arranque de cada tanda de cobro; opt-in por
+ * COBRANZA_CRON_ENABLED, registrado en lib/jobs/defs.ts) y (b) el botón "Correr
+ * corte ahora" (POST /api/cobranza/digest).
  */
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";

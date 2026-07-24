@@ -390,6 +390,41 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   accidental **ALFA+ (LISJ)** (sin marca demo) — en el pase de carga se verifica en el dry-run si
   esa fila existe y, si existe, se extiende el cleanup por id explícito. La limpieza se hace justo
   antes de cargar, no antes, para no dejar el módulo vacío mientras se espera el archivo.
+## Cobranza — antigüedad, tandas quincenales y reportes vivos (2026-07-24)
+> Con los $301k reales cargados, el módulo dejó de servir para operar. Cinco pedidos del usuario:
+> ordenar por antigüedad, subdividir lo vencido en 30/60/90, sacar lo vencido de "Esta quincena",
+> pasar de ciclo semanal a quincenal, y devolver los reportes.
+- **El bug de "Esta quincena" era de AGRUPACIÓN, no de fechas.** La cola agrupaba por el color del
+  semáforo, y `semaforoCobro` —por el diseño de los dos relojes— nunca marca vencido un cobro sin
+  `fechaEmision` ("no facturar es trabajo de Smarteam, no mora del cliente"). Consecuencia: todo lo
+  atrasado sin facturar caía en "Esta quincena" (15 cobros el 2026-07-24, el más viejo de mayo).
+  Ahora la agrupación la decide `clasificarCobro` (`lib/cobranza/antiguedad.ts`) por **fecha +
+  facturación**; el semáforo NO se tocó y sigue gobernando el color del chip. Son dos preguntas
+  distintas y confundirlas era el defecto.
+- **"Falta facturar" es un grupo propio y va PRIMERO** (decisión del usuario). Mezclarlo con lo
+  vencido invita a mandarle un correo de cobro a un cliente que no tiene factura emitida.
+- **Los cortes 30/60/90 tienen una sola definición.** `bucketAntiguedad` vive en `engine.ts` (donde
+  ya estaba el ternario inline del snapshot) y `antiguedad.ts` lo reexporta para la UI — el orden es
+  ese y no al revés para no crear un ciclo de imports. La cola y los reportes no pueden discrepar.
+- **Las tandas 1-5 y 15-20 son VENTANAS DE TRABAJO, no fechas de cobro** (decisión del usuario): no
+  se movió ninguna fecha ni monto de los 202 cobros cargados. Definen cuándo abre la lista de
+  trabajo y cuándo corre el corte. El cron `cobranza-weekly` (lunes) pasó a `cobranza-quincenal`
+  (día 1 y 15, arranque de cada tanda) — el semanal partía el ciclo por la mitad y comparaba
+  períodos que no se corresponden.
+- **Reportes no estaba roto: estaba vacío.** Los charts exigen ≥2 cortes y quedaba 1 (los otros 10
+  eran del seed de demo). El arreglo de fondo NO es bajar el mínimo: es que **el estado de HOY no
+  dependa de la historia** — se calcula en vivo desde la cola con el mismo helper que la lista, y el
+  aviso de "hacen falta 2 cortes" queda acotado a las líneas de tendencia. Se borró además el
+  snapshot del 10-jul (medía la cartera CON las cuentas de demo adentro) y se corrió el primer
+  corte real.
+- ⚠ **DEUDA ABIERTA — hay dos definiciones de "vencido" y difieren en plata.** El snapshot usa
+  `semaforoLegacyPorFecha` (fechaProgramada + 3 días), la cola usa los dos relojes. Al 2026-07-24:
+  corte **$80.959** vs vencido efectivo **$60.997** (la diferencia son $12.171 sin facturar +
+  $7.792 todavía dentro del crédito). El caveat de `ReportesPanel` ahora lo dice con esos números y
+  apunta a "Estado de hoy" como el bueno. Alinearlo cambia la semántica del motor de alertas →
+  **decisión del usuario**, no se hizo por cuenta propia. Momento ideal: la serie histórica quedó
+  en 1 solo punto, así que hoy no hay comparabilidad que romper.
+
 ## Cobranza — lo que la carga real cambió del diseño (2026-07-23, ejecutada)
 > Carga aplicada: **53 servicios · 202 cobros · $301.347,98** de "Facturaciones 2026" a 46 cuentas.
 > Decodificador puro en `lib/cobranza/facturaciones-sheet.ts` (+28 tests); loader en

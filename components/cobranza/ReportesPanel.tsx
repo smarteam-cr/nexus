@@ -15,7 +15,13 @@
  * siempre, haya o no historia de cortes.
  */
 import { useMemo, useState, type ReactNode } from "react";
-import type { AgingBuckets, RiesgoPagoItem, SnapshotSerieDTO } from "@/lib/cobranza";
+import type { AgingBuckets, ColaCobroRow, RiesgoPagoItem, SnapshotSerieDTO } from "@/lib/cobranza";
+import {
+  resumenAntiguedad,
+  BUCKETS_ORDEN,
+  BUCKET_LABEL,
+  KPI_CREDITO_DIAS,
+} from "@/lib/cobranza/antiguedad";
 import EChartRenderer from "@/components/charts/EChartRenderer";
 import { useChartColors, type EChartsColors } from "@/hooks/useChartColors";
 import { baseTooltip, SERIES_PALETTE } from "@/components/cs/dashboard/chart-theme";
@@ -43,12 +49,17 @@ const AGING_BUCKETS: Array<{ key: keyof AgingBuckets; label: string; color: stri
 
 const GRID = { left: 8, right: 8, top: 32, bottom: 8, containLabel: true };
 
-// Caveat de Tanda B (2026-07): este "vencido" sigue en fechaProgramada+umbral (no
-// fechaEmision+creditoDias como el tab Cobros) — hallazgo de Tanda C en DECISIONS.md.
+// Caveat de Tanda B (2026-07): el "vencido" de los CORTES sigue calculado desde
+// fechaProgramada+umbral, no desde fechaEmision+creditoDias como el tab Cobros y la
+// foto de hoy — hallazgo de Tanda C en DECISIONS.md. Al 2026-07-24 la diferencia es
+// real y medible: el corte dice $80.959 y el vencido efectivo son $60.997 (los
+// $12.171 sin facturar + $7.792 todavía dentro del crédito inflan el histórico).
+// Alinearlo cambia la semántica del motor de alertas → decisión pendiente del
+// usuario, anotada en DECISIONS.md.
 const VENCIDO_INFLADO_CAVEAT =
-  "Este \"vencido\" se calcula desde la fecha programada, no desde la factura — incluye " +
-  "cobros que todavía están dentro del crédito, así que aparece más alto de lo real. El dato " +
-  "correcto está en la pestaña Cobros. Se alinea en la próxima iteración.";
+  "OJO: este \"vencido\" del histórico se calcula desde la fecha programada, no desde la " +
+  "factura — mete adentro lo que todavía no se facturó y lo que sigue dentro del crédito, " +
+  "así que lee MÁS ALTO que la realidad. El número bueno es el de «Estado de hoy», acá arriba.";
 
 const simbolo = (m: Moneda) => (m === "USD" ? "$" : "₡");
 
@@ -158,6 +169,120 @@ function lineSerie(name: string, color: string, data: Array<number | null>, extr
 
 // ── Piezas de UI ─────────────────────────────────────────────────────────────────
 
+/**
+ * La foto de HOY: antigüedad de la cartera, DSO y vencido a +30 días, calculados
+ * en vivo desde la cola de cobros con el MISMO helper que usa la lista
+ * (lib/cobranza/antiguedad.ts) — así el reporte y la pantalla de trabajo no pueden
+ * contar historias distintas.
+ *
+ * No depende de `SnapshotCartera`: ese es el punto. Los cortes sirven para la
+ * TENDENCIA (cómo venimos), no para saber cómo estamos hoy — y mientras no
+ * hubiera 2 cortes, esta pantalla se veía rota.
+ */
+function FotoDeHoy({ cola, todayISO }: { cola: ColaCobroRow[]; todayISO: string }) {
+  const resumen = useMemo(() => resumenAntiguedad(cola, todayISO), [cola, todayISO]);
+  const monedas = Object.keys(resumen).sort();
+
+  if (monedas.length === 0) {
+    return (
+      <div className="rounded-xl border border-line bg-surface px-4 py-8 text-center text-sm text-fg-muted">
+        No hay cobros pendientes — nada que envejecer.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-line bg-surface overflow-hidden">
+      <div className="px-4 py-2.5 bg-surface-muted border-b border-line flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <span className="text-[11px] font-semibold text-fg-muted uppercase tracking-wide">
+          Estado de hoy
+        </span>
+        <span className="text-[11px] text-fg-muted">
+          Antigüedad de lo vencido, calculada en vivo — no espera al próximo corte.
+        </span>
+      </div>
+      <div className="divide-y divide-line">
+        {monedas.map((m) => {
+          const r = resumen[m];
+          const pct30 = r.totalVencido > 0 ? Math.round((r.vencido30mas / r.totalVencido) * 100) : 0;
+          const dsoExcede = (r.dso ?? 0) > KPI_CREDITO_DIAS;
+          return (
+            <div key={m} className="px-4 py-3 space-y-3">
+              {monedas.length > 1 && (
+                <p className="text-[11px] font-semibold text-fg-secondary">{m}</p>
+              )}
+
+              {/* Cubos de antigüedad — del más viejo al más nuevo. */}
+              <div className="grid gap-2 sm:grid-cols-4">
+                {BUCKETS_ORDEN.map((b) => {
+                  const monto = r.aging[b];
+                  const share = r.totalVencido > 0 ? (monto / r.totalVencido) * 100 : 0;
+                  return (
+                    <div key={b} className="rounded-lg border border-line bg-surface-muted px-3 py-2">
+                      <p className="text-[10px] font-semibold text-fg-muted uppercase tracking-wide">
+                        {BUCKET_LABEL[b]}
+                      </p>
+                      <p className="mt-1 text-base font-semibold text-fg tabular-nums leading-tight">
+                        {fmtMonto(monto, m)}
+                      </p>
+                      <p className="text-[11px] text-fg-muted">
+                        {r.conteo[b]} cobro{r.conteo[b] !== 1 ? "s" : ""}
+                        {monto > 0 && ` · ${Math.round(share)}%`}
+                      </p>
+                      {/* Barra de proporción: el peso relativo se lee de un vistazo. */}
+                      <div className="mt-1.5 h-1 rounded-full bg-surface-active overflow-hidden">
+                        <div
+                          className={b === "d0_30" ? "h-full bg-amber-500" : "h-full bg-red-500"}
+                          style={{ width: `${Math.min(100, share)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* KPI de la moneda. */}
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px]">
+                <span className="text-fg-muted">
+                  Vencido total:{" "}
+                  <span className="font-semibold text-fg tabular-nums">
+                    {fmtMonto(r.totalVencido, m)}
+                  </span>{" "}
+                  ({r.nVencidos})
+                </span>
+                <span className="text-fg-muted">
+                  Más de {KPI_CREDITO_DIAS} días:{" "}
+                  <span className="font-semibold text-red-600 tabular-nums">
+                    {fmtMonto(r.vencido30mas, m)}
+                  </span>{" "}
+                  ({pct30}% de lo vencido)
+                </span>
+                <span className="text-fg-muted">
+                  Promedio de cobro:{" "}
+                  <span
+                    className={`font-semibold tabular-nums ${dsoExcede ? "text-red-600" : "text-fg"}`}
+                  >
+                    {r.dso === null ? "—" : `${r.dso} d`}
+                  </span>
+                </span>
+                {r.nSinFacturar > 0 && (
+                  <span className="text-fg-muted">
+                    Falta facturar:{" "}
+                    <span className="font-semibold text-warn-ink tabular-nums">
+                      {fmtMonto(r.sinFacturar, m)}
+                    </span>{" "}
+                    ({r.nSinFacturar})
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function MonedaToggle({ value, onChange }: { value: Moneda; onChange: (m: Moneda) => void }) {
   return (
     <div className="inline-flex rounded-md border border-line overflow-hidden">
@@ -226,10 +351,15 @@ export default function ReportesPanel({
   series,
   riesgo,
   role,
+  cola,
+  todayISO,
 }: {
   series: SnapshotSerieDTO[];
   riesgo: RiesgoPagoItem[];
   role: string;
+  /** Cola en vivo — de acá sale la FOTO DE HOY, que no depende de tener cortes. */
+  cola: ColaCobroRow[];
+  todayISO: string;
 }) {
   const colors = useChartColors();
   const [monedaAging, setMonedaAging] = useState<Moneda>("CRC");
@@ -321,13 +451,13 @@ export default function ReportesPanel({
 
   return (
     <div className="space-y-4">
-      {/* ── Honestidad: cuánta historia hay + cobertura del último corte ── */}
-      {!hayTendencias && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-600">
-          Acumulando historia — {series.length} corte{series.length !== 1 ? "s" : ""} con métricas. Las
-          tendencias necesitan al menos 2.
-        </div>
-      )}
+      {/* ── LA FOTO DE HOY — calculada en vivo desde la cola, NO desde los cortes.
+             Antes esta pantalla quedaba en blanco cuando no había historia (es lo
+             que pasó al limpiar los cortes de demo: quedó 1 solo y las tendencias
+             piden 2). El estado actual de la cartera siempre se puede calcular;
+             lo único que necesita historia son las líneas de tendencia. ── */}
+      <FotoDeHoy cola={cola} todayISO={todayISO} />
+
       <div className="flex flex-wrap items-center gap-2">
         {ultimo && cob && (
           <p className="text-[11px] text-fg-muted">
@@ -361,6 +491,14 @@ export default function ReportesPanel({
       </div>
 
       {/* ── Tendencias (solo con ≥2 cortes: 1 punto no es tendencia) ── */}
+      {!hayTendencias && (
+        <div className="rounded-xl border border-line bg-surface-muted px-4 py-3 text-sm text-fg-muted">
+          <span className="font-semibold text-fg-secondary">Todavía no hay tendencias.</span> Van{" "}
+          {series.length} corte{series.length !== 1 ? "s" : ""} guardado
+          {series.length !== 1 ? "s" : ""}; hacen falta 2 para dibujar una línea. La foto de arriba
+          es de hoy y no depende de eso — el próximo corte inaugura las curvas.
+        </div>
+      )}
       {hayTendencias && (
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Orden pedido por Alex: primero lo que se cumplió (cobrado vs proyectado),
