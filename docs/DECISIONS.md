@@ -420,6 +420,37 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
 - ✅ **RESUELTO (ver la sección siguiente): la deuda de las dos definiciones de "vencido".**
   Finanzas eligió el criterio de los dos relojes y el módulo entero se alineó.
 
+## Ciclo de vida — el KICKOFF es un paso OPCIONAL (2026-07-24, decisión de negocio)
+> Disparador: al abrir GRUPO INVE | DOCUSIGN + HUBSPOT lo primero que se leía era «Kickoff sin
+> publicar hace 172d **hace 172 días**» en rojo, sobre un proyecto sano para su etapa (handoff
+> corrido, 6 fases, sugerencias frescas). La regla es: **el handoff es la base; un proyecto puede
+> legítimamente no llevar kickoff**.
+- **El kickoff ya NO alarma.** Se retiró `kickoff_sin_publicar` (y `KICKOFF_PUBLISH_GRACE_DAYS`)
+  de `lib/portfolio/summary.ts`. Afectaba a **27 de los 32** proyectos con handoff (84 %) y ninguno
+  tenía override manual: nadie lo estaba compensando a mano, simplemente se leía mal.
+  La higiene de publicarlo sigue visible como **chip informativo del setup** (`deriveSetup`), que
+  es el tratamiento que corresponde a algo opcional.
+- ⚠ **Lo que NO se tocó, a propósito**: `kickoffPublishedAt` sigue siendo el **gate duro de la
+  vista del cliente** (`lib/external/kickoff-view.ts:55`) — sin publicar, el cliente no ve la
+  página. Son dos cosas distintas: que no sea obligatorio para el equipo no significa exponerlo.
+- **La edad de las alarmas tempranas se cuenta desde la FECHA DE ARRANQUE del cronograma**
+  (`anchorStartDate ?? lastGateAt ?? projectCreatedAt`). Antes salía de `hubspotCreatedAt`, que le
+  cargaba a CS días en los que el proyecto ni existía en Nexus (Grupo Inve: 172 d de HubSpot contra
+  52 reales). Un arranque **futuro** da edad negativa → sin alarma, que es lo correcto: un proyecto
+  que todavía no arrancó no tiene nada que reclamar. `anchorStartDate` ya viajaba en `SummaryInput`
+  (`load.ts:237`) — no hizo falta threadearlo por el DTO del ciclo de vida.
+- **Bug de copy arreglado**: `summary.ts` metía «hace 172d» en el label y `project-actions.ts:216`
+  le concatenaba «hace 172 días». Ahora el label es solo el hecho y la frase la arma un único
+  lugar (donde vive el `plural()`). El test no lo agarraba porque su fixture usaba el label limpio:
+  **productor y consumidor habían divergido y nadie lo veía.**
+- **Las sugerencias del Gantt muestran TODOS los cambios** (`describeChanges`, ordenados por
+  impacto). El badge mostraba `changes[0]` + `+N` y lo escondido solía ser lo que MUEVE el
+  calendario (duración, semana de inicio) mientras el renombre cosmético ocupaba el lugar visible.
+- ⏸ **PENDIENTE — el modelo de etapas.** `inferLifecycleStage` sigue cortando en `HAND_OFF` hasta
+  que el kickoff se publique, así que esos proyectos siguen mostrando «Etapa 1/9 · Hand Off». El
+  usuario pausó ese rediseño para pasar primero las descripciones de cada estado. **No tocar
+  `stage-engine.ts` hasta entonces.**
+
 ## Cobranza — criterio ÚNICO de "vencido" (2026-07-24, decisión de Finanzas)
 > **Vencido = factura EMITIDA + crédito del cliente consumido.** Lo que no se facturó NO está
 > vencido: *"siempre van a haber facturas sin hacer y eso no significa que estén vencidas, solo

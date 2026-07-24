@@ -64,7 +64,7 @@ import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
 import { findDuplicateGroups } from "@/lib/timeline/particularidad-identity";
 import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
-import { describeChange, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
+import { describeChanges, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
 import { clientStatusLine } from "@/lib/timeline/client-status";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
@@ -851,11 +851,14 @@ export default function TimelineGantt({
                             return (
                               <span
                                 className="flex items-center gap-1 flex-shrink-0"
-                                title={`Sugerencia de la IA (del último handoff): ${d.changes.map(describeChange).join(" · ")}`}
+                                title={`Sugerencia de la IA (del último handoff): ${describeChanges(d.changes)}`}
                               >
+                                {/* TODOS los cambios, ordenados por impacto: antes se mostraba
+                                    changes[0] y el resto quedaba en un "+N" — y lo escondido
+                                    solía ser lo que MUEVE el cronograma (duración, semana de
+                                    inicio), mientras el renombre cosmético ocupaba el lugar. */}
                                 <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border text-blue-300 bg-blue-900/30 border-blue-700/40">
-                                  Sugerencia: {describeChange(d.changes[0])}
-                                  {d.changes.length > 1 ? ` +${d.changes.length - 1}` : ""}
+                                  Sugerencia: {describeChanges(d.changes)}
                                 </span>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, true); }}

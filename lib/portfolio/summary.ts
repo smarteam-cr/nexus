@@ -17,8 +17,7 @@ import { stageAtOrAfter, STAGE_LABEL_ES } from "@/lib/lifecycle/stage-engine";
 import { computePhaseRanges, addWeeks, isOverdueByDate } from "@/lib/timeline/weeks";
 
 export const STALL_DAYS = 14; // "sin avance" por defecto (configurable después)
-/** Días de gracia de las alarmas tempranas: kickoff sin publicar / cronograma sin consensuar. */
-export const KICKOFF_PUBLISH_GRACE_DAYS = 7;
+/** Días de gracia de la alarma temprana de cronograma sin consensuar. */
 export const CRONOGRAMA_CONSENSUS_GRACE_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -110,7 +109,7 @@ export interface ProjectSummary {
   stage: { effective: ProjectLifecycleStage; source: "override" | "inferred"; label: string } | null;
   /** Alarmas PROPIAS de etapas tempranas (reemplazan a las de cronograma cuando no aplican). */
   stageAlarms: Array<{
-    key: "kickoff_sin_publicar" | "cronograma_sin_consensuar" | "sin_baseline";
+    key: "cronograma_sin_consensuar" | "sin_baseline";
     label: string;
     days: number;
   }>;
@@ -254,28 +253,38 @@ export function computeProjectSummary(input: SummaryInput): ProjectSummary {
   if (lcActive && lc && !isCompleted && input.status !== "paused") {
     const daysSince = (d: Date | null) =>
       d ? Math.floor((now.getTime() - d.getTime()) / DAY_MS) : null;
-    if (lc.stage === "HAND_OFF" && !lc.kickoffPublishedAt) {
-      const age = daysSince(lc.projectCreatedAt);
-      if (age !== null && age >= KICKOFF_PUBLISH_GRACE_DAYS) {
-        stageAlarms.push({
-          key: "kickoff_sin_publicar",
-          label: `Kickoff sin publicar hace ${age}d`,
-          days: age,
-        });
-      }
-    }
+    // El KICKOFF NO ALARMA (decisión de negocio 2026-07-24): es un paso NO
+    // requerido — el handoff es la base y un proyecto puede legítimamente no
+    // llevar kickoff. Antes esto emitía `kickoff_sin_publicar` y ensuciaba la
+    // lectura de 27 de los 32 proyectos con handoff. La higiene de publicarlo
+    // sigue visible como CHIP informativo del setup (deriveSetup), que es lo que
+    // corresponde a algo opcional; y `kickoffPublishedAt` sigue siendo el gate
+    // duro de la vista del cliente (lib/external/kickoff-view.ts) — eso no cambia.
+    // BASE DE LA EDAD (decisión de negocio 2026-07-24): el reloj arranca en la
+    // FECHA DE ARRANQUE del cronograma; si no hay, se mantiene la cadena de
+    // siempre (última señal cumplida → creación en HubSpot). Antes se contaba
+    // desde la creación en HubSpot y eso cargaba días en los que el proyecto ni
+    // existía en Nexus (Grupo Inve: 172 d cuando Nexus lo conoce hace 52).
+    // Un arranque FUTURO da edad negativa → sin alarma, que es lo correcto: un
+    // proyecto que todavía no arrancó no tiene nada que reclamar.
+    // `input.anchorStartDate` ya viene del mismo ProjectTimeline que usa el resto
+    // del summary (load.ts:237) — no hace falta threadearlo por el DTO del ciclo
+    // de vida: es literalmente el mismo dato.
+    const baseEdad = input.anchorStartDate ?? lc.lastGateAt ?? lc.projectCreatedAt;
     if (lc.stage === "PLANIFICACION" && !lc.cronogramaConsensuadoAt) {
-      const idle = daysSince(lc.lastGateAt ?? lc.projectCreatedAt);
+      const idle = daysSince(baseEdad);
       if (idle !== null && idle >= CRONOGRAMA_CONSENSUS_GRACE_DAYS) {
         stageAlarms.push({
+          // El "hace N días" lo compone project-actions.ts (donde vive el plural):
+          // tenerlo ACÁ además producía "…hace 172d hace 172 días" en pantalla.
           key: "cronograma_sin_consensuar",
-          label: `Cronograma sin consensuar hace ${idle}d`,
+          label: "Cronograma sin consensuar",
           days: idle,
         });
       }
     }
     if (scheduleAlarmsActive && !hasBaseline) {
-      const idle = daysSince(lc.cronogramaConsensuadoAt ?? lc.lastGateAt) ?? 0;
+      const idle = daysSince(lc.cronogramaConsensuadoAt ?? baseEdad) ?? 0;
       stageAlarms.push({
         key: "sin_baseline",
         label: "Cronograma sin línea base publicada",

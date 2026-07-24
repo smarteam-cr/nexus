@@ -6,7 +6,12 @@
  * existente produce cero deltas (no-op → no molesta al CSE).
  */
 import { test, expect } from "vitest";
-import { computeProposalDeltas, describeChange, buildPhaseOrder } from "./proposal-deltas";
+import {
+  computeProposalDeltas,
+  describeChange,
+  describeChanges,
+  buildPhaseOrder,
+} from "./proposal-deltas";
 
 const cur = (over: Partial<Parameters<typeof computeProposalDeltas>[0][number]> = {}) => ({
   id: "ph1",
@@ -142,4 +147,33 @@ test("buildPhaseOrder: dos fases nuevas consecutivas conservan su orden relativo
     { kind: "new", key: "add:1", phase: n1 },
     { kind: "new", key: "add:2", phase: n2 },
   ]);
+});
+
+// ── describeChanges: qué se LEE en el badge del Gantt ──────────────────────────
+// El badge mostraba changes[0] + "+N" y escondía justo lo que mueve el calendario.
+// Caso real (Grupo Inve): «renombrar a "Auditoría y cierre de gaps" +2».
+
+test("describeChanges: lo que MUEVE fechas va primero; el renombre, último", () => {
+  const frase = describeChanges([
+    { field: "name", from: "Análisis y diseño", to: "Auditoría y cierre de gaps" },
+    { field: "sessionCount", from: 2, to: 4 },
+    { field: "durationWeeks", from: 2, to: 5 },
+  ]);
+  expect(frase).toBe("2 → 5 semanas · 2 → 4 sesiones · renombrar a «Auditoría y cierre de gaps»");
+});
+
+test("describeChanges: NADA queda escondido detrás de un +N", () => {
+  const frase = describeChanges([
+    { field: "name", from: "A", to: "B" },
+    { field: "durationWeeks", from: 1, to: 3 },
+    { field: "startWeek", from: 0, to: 4 },
+  ]);
+  expect(frase).toContain("semanas");
+  expect(frase).toContain("inicio");
+  expect(frase).toContain("renombrar");
+  expect(frase).not.toContain("+");
+});
+
+test("describeChanges: un solo cambio se lee igual que antes", () => {
+  expect(describeChanges([{ field: "durationWeeks", from: 4, to: 6 }])).toBe("4 → 6 semanas");
 });

@@ -228,8 +228,12 @@ test("H — etapa TARDÍA (Configuración técnica): vencida deriva EN_FRICCION 
   expect(s.health.derived).toBe("EN_FRICCION");
 });
 
-test("I — HAND_OFF viejo sin kickoff publicado: alarma de etapa con gracia de 7d", () => {
-  const s = computeProjectSummary({
+test("I — el KICKOFF NO ALARMA: es un paso opcional, no bloquea ni ensucia la pantalla", () => {
+  // Decisión de negocio 2026-07-24: el handoff es la base; un proyecto puede
+  // legítimamente no llevar kickoff. Antes esto emitía `kickoff_sin_publicar` y
+  // marcaba EN_FRICCION a 27 de los 32 proyectos con handoff (caso Grupo Inve:
+  // "Kickoff sin publicar hace 172d" sobre un proyecto sano para su etapa).
+  const viejisimo = computeProjectSummary({
     status: "active",
     anchorStartDate: null,
     phases: [],
@@ -241,32 +245,56 @@ test("I — HAND_OFF viejo sin kickoff publicado: alarma de etapa con gracia de 
       kickoffPublishedAt: null,
       cronogramaConsensuadoAt: null,
       lastGateAt: null,
-      projectCreatedAt: d("2026-06-09"), // 12 días antes de NOW
+      projectCreatedAt: d("2026-01-01"), // medio año: ni así alarma
     }),
     now: NOW,
   });
-  expect(s.stageAlarms.map((a) => a.key)).toEqual(["kickoff_sin_publicar"]);
-  expect(s.stageAlarms[0].days).toBe(12);
-  expect(s.health.derived).toBe("EN_FRICCION"); // la alarma temprana sí deriva fricción
-  // Recién creado (2d): la gracia lo calla
-  const fresh = computeProjectSummary({
+  expect(viejisimo.stageAlarms).toEqual([]);
+  expect(viejisimo.health.derived).toBe("SALUDABLE");
+});
+
+test("I2 — la edad de las alarmas tempranas se cuenta desde el ARRANQUE del cronograma", () => {
+  // Base: anchorStartDate ?? lastGateAt ?? projectCreatedAt(HubSpot). Antes se
+  // usaba la creación en HubSpot y cargaba días en los que el proyecto ni existía
+  // en Nexus (Grupo Inve: 172 d de HubSpot vs 52 reales).
+  const conArranque = computeProjectSummary({
     status: "active",
-    anchorStartDate: null,
+    anchorStartDate: d("2026-06-06"), // 15 días antes de NOW → pasa la gracia de 14
     phases: [],
     baseline: null,
     lastProgressAt: null,
     healthOverride: null,
     lifecycle: lifecycle({
-      stage: "HAND_OFF",
-      kickoffPublishedAt: null,
+      stage: "PLANIFICACION",
       cronogramaConsensuadoAt: null,
       lastGateAt: null,
-      projectCreatedAt: d("2026-06-19"),
+      projectCreatedAt: d("2025-01-01"), // la fecha vieja de HubSpot NO manda
     }),
     now: NOW,
   });
-  expect(fresh.stageAlarms).toEqual([]);
-  expect(fresh.health.derived).toBe("SALUDABLE");
+  const a = conArranque.stageAlarms.find((x) => x.key === "cronograma_sin_consensuar");
+  expect(a?.days).toBe(15);
+  // El label NO trae el "hace Nd": lo compone project-actions.ts (si no, en
+  // pantalla salía "…hace 15d hace 15 días").
+  expect(a?.label).toBe("Cronograma sin consensuar");
+
+  // Arranque FUTURO → edad negativa → sin alarma: no hay nada que reclamar todavía.
+  const futuro = computeProjectSummary({
+    status: "active",
+    anchorStartDate: d("2026-09-01"),
+    phases: [],
+    baseline: null,
+    lastProgressAt: null,
+    healthOverride: null,
+    lifecycle: lifecycle({
+      stage: "PLANIFICACION",
+      cronogramaConsensuadoAt: null,
+      lastGateAt: null,
+      projectCreatedAt: d("2025-01-01"),
+    }),
+    now: NOW,
+  });
+  expect(futuro.stageAlarms.some((x) => x.key === "cronograma_sin_consensuar")).toBe(false);
 });
 
 test("J — SIN handoff generado (defined=false): sin etapa, sin alarmas, sin riesgo (aunque haya vencidas)", () => {
