@@ -427,11 +427,6 @@
 .stl .stl-ba-future .stl-ba-li { color: var(--text); }
 /* Bullet naranja LITERAL (gráfico, 3.50 sobre crema ✓) — vía token daría azul 2.98 ✗. */
 .stl .stl-ba-future .stl-ba-li::before { background: #E8481C; }
-/* El handle de arrastre (solo EDIT: `.stl-drag-item` no existe en lectura) es un
-   botón de 24px que no entra en los 18px de sangría pensados para el bullet de
-   6px — en edición, el bullet cede su lugar y se agranda el hueco. */
-.stl .stl-ba-li:has(.stl-drag-item) { padding-left: 34px; }
-.stl .stl-ba-li:has(.stl-drag-item)::before { display: none; }
 
 /* Field-card rotulada (solución / partner / inversión) */
 .stl .stl-field-card {
@@ -455,9 +450,6 @@
 /* Lista simple con viñeta neutra (fuera de alcance / alcance) */
 .stl .stl-plain-li { position: relative; padding-left: 18px; font-size: 14px; line-height: 1.5; color: var(--text-2); }
 .stl .stl-plain-li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
-/* Mismo hueco que .stl-ba-li para el handle de arrastre en edición. */
-.stl .stl-plain-li:has(.stl-drag-item) { padding-left: 34px; }
-.stl .stl-plain-li:has(.stl-drag-item)::before { display: none; }
 
 /* ── Diagnóstico y contexto: retos (izq) + panel oscuro "Por qué X" (der) ── */
 .stl .stl-diag { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-top: 24px; align-items: start; }
@@ -474,9 +466,6 @@
   box-shadow: 0 2px 6px -2px rgba(5, 24, 73, 0.08), 0 14px 30px -14px rgba(5, 24, 73, 0.16);
 }
 .stl .stl-diag-reto strong { color: var(--text); font-weight: 700; }
-/* Handle de arrastre (edición): la card no reserva espacio a la izquierda para
-   un botón de 24px — se lo hacemos cuando el handle está presente. */
-.stl .stl-diag-reto:has(.stl-drag-item) { padding-left: 40px; }
 .stl .stl-diag-panel {
   background: var(--dark-bg); border-radius: 22px; padding: 26px 28px; color: var(--dark-text);
 }
@@ -498,9 +487,6 @@
 .stl .stl-diag-bullets { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .stl .stl-diag-bullet { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.55; color: var(--dark-text-2); }
 .stl .stl-diag-bullet strong { color: #fff; font-weight: 700; }
-/* Sin sangría propia (flex sin padding-left): el handle absoluto de 24px taparía
-   el punto + el inicio del texto — se le hace lugar cuando está presente. */
-.stl .stl-diag-bullet:has(.stl-drag-item) { padding-left: 34px; }
 .stl .stl-diag-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--teal); margin-top: 7px; }
 .stl .stl-diag-footer {
   margin-top: 22px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.14);
@@ -723,19 +709,25 @@
 .stl .stl-editable:empty::before { content: attr(data-placeholder); color: var(--text-muted); opacity: 0.7; }
 .stl .stl-dark .stl-editable:empty::before { color: var(--dark-text-2); }
 
-/* Botones de edición de arrays (agregar / quitar item).
+/* Chrome de edición del ítem (handle ⠿ + × de quitar).
  *
- * AFFORDANCE (2026-07-19): estos controles eran opacity:0 hasta hover — en la
- * práctica NADIE los encontraba ("no se puede hacer drag and drop") y en touch
- * no existían (sin hover jamás aparecían). Ahora son SIEMPRE visibles en modo
- * edición (0.55 → 1 al hover/focus), con target táctil de 28px (mínimo WCAG 24)
- * y una franja de chrome propia para no tapar el título de la card. Solo se
- * renderizan en modo edit → cero cambio en /external y /print por construcción. */
+ * AFFORDANCE — historia (importa para no volver atrás): nacieron opacity:0 hasta
+ * hover (nadie los encontraba); en 2026-07-19 se pasaron a SIEMPRE visibles (0.55)
+ * con una RESERVA de espacio por ítem (banda arriba en cards, canaleta a la
+ * izquierda en filas) para que el ⠿ no tapara el contenido. Esa reserva hacía que
+ * la vista de edición NO se pareciera a la del cliente — un espacio/sangría extra
+ * que el cliente no ve. Decisión 2026-07-23 (Elías): el chrome vuelve a ser
+ * SOLO-EN-HOVER y se SUPERPONE en las esquinas (no reserva nada) → la vista de
+ * edición queda idéntica a la del cliente cuando no interactuás. En hover/focus
+ * aparece sobre la esquina (patrón Notion/Linear). Por eso se borraron TODAS las
+ * reglas de reserva `:has(.stl-drag-item)`.
+ * Sigue siendo edit-only (el handle no se renderiza en lectura) → /external y
+ * /print intactos por construcción. focus-visible → 1 mantiene el teclado. */
 .stl .stl-item { position: relative; }
 .stl .stl-remove {
   position: absolute; top: 6px; right: 6px; width: 28px; height: 28px;
   border-radius: 6px; border: 1px solid var(--border); background: #fff; color: var(--text-muted);
-  display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.55;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0;
   transition: opacity 150ms ease, color 150ms ease, border-color 150ms ease;
 }
 .stl .stl-item:hover .stl-remove,
@@ -745,7 +737,7 @@
 .stl .stl-drag-item {
   position: absolute; top: 6px; left: 6px; width: 28px; height: 28px;
   border-radius: 6px; border: 1px solid var(--border); background: #fff; color: var(--text-muted);
-  display: flex; align-items: center; justify-content: center; cursor: grab; opacity: 0.55;
+  display: flex; align-items: center; justify-content: center; cursor: grab; opacity: 0;
   font-size: 14px; line-height: 1; touch-action: none;
   transition: opacity 150ms ease, color 150ms ease, border-color 150ms ease;
 }
@@ -753,12 +745,10 @@
 .stl .stl-drag-item:focus-visible { opacity: 1; }
 .stl .stl-drag-item:active { cursor: grabbing; }
 .stl .stl-drag-item:hover { color: var(--blue); border-color: var(--blue); }
-/* Franja de chrome: los cards con handle reservan espacio arriba para que el ⠿
- * y el × no tapen el título. Solo dispara en edición (en lectura el handle no se
- * renderiza → :has() no matchea). Los chips inline quedan excluidos. */
-.stl .stl-item:has(> .stl-drag-item):not(.stl-tag):not(.stl-brand-badge):not(.stl-brand-logo-wrap) {
-  padding-top: 42px;
-}
+/* (Sin reserva de espacio: el chrome es solo-en-hover y se superpone en las
+ * esquinas — ver el comentario grande arriba. La banda `padding-top: 42px` de las
+ * cards y la canaleta de las filas se quitaron a propósito: reservaban lugar para
+ * un handle que ya no está siempre visible.) */
 /* En chips compactos (tags/marcas) y en los logos de la brand-row, inline como el × */
 .stl .stl-tag .stl-drag-item,
 .stl .stl-brand-badge .stl-drag-item,

@@ -4,8 +4,11 @@
  * components/canvas/ExploracionWorkspace.tsx
  *
  * Editor del canvas "Exploración" (guía de descubrimiento del negocio) sobre el motor
- * `LandingView`. Es el hermano INTERNO de `DesarrolloWorkspace`, con dos diferencias
- * deliberadas:
+ * `LandingView`. Es un canvas de PRIMERA CLASE (modelo Kickoff): se pre-crea con el
+ * proyecto, vive en el dropdown, y su agente se dispara desde el HEADER del canvas
+ * (`CANVAS_PRIMARY_AGENT`), no desde acá — igual que el kickoff en su canvas.
+ *
+ * Es el hermano INTERNO de `DesarrolloWorkspace`, con dos diferencias deliberadas:
  *
  *  1. NO tiene compartir/publicar. El de Desarrollo trae "Compartir con dev" +
  *     `publish-desarrollo` + el link de `/external/desarrollo`; acá no existe ese bloque
@@ -19,10 +22,9 @@
  * Todo lo demás lo hereda del motor vía `useCanvasSections`: edición inline con commit en
  * blur y en desmontaje, drag & drop de ítems, reorden de secciones, undo global.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
-import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { useCanvasSections } from "./useCanvasSections";
 import { buildExploracionConfig, buildExploracionSections } from "./exploracion-landing-adapter";
 
@@ -30,41 +32,24 @@ const MAXW = 860;
 
 export default function ExploracionWorkspace({
   projectId,
-  clientId,
   canvasId,
 }: {
   projectId: string;
-  clientId: string;
   canvasId: string;
 }) {
   // poll:false — igual que Desarrollo: el poll genérico solo refetchea al cambiar la
-  // cuenta de bloques DRAFT, y el runner persiste CONFIRMED. El poll acotado de abajo
-  // (awaitingGen) cubre la ventana de "generación en curso".
+  // cuenta de bloques DRAFT, y el runner persiste CONFIRMED. Tras generar, el remonte
+  // lo fuerza el padre (`key` con su `agentNonce` al terminar el agente del header).
   const cs = useCanvasSections(`/api/projects/${projectId}`, canvasId, undefined, { poll: false });
-  const [nonce, setNonce] = useState(0); // fuerza remonte tras regenerar
 
-  // ¿Ya hay contenido generado? `ensureExploracionCanvas` solo siembra el bloque del
+  // ¿Ya hay contenido generado? La creación del canvas solo siembra el bloque del
   // `cierre` (curado), así que si alguna sección ≠ cierre tiene un CARD, la generación
-  // ya corrió.
+  // ya corrió. Se usa para el aviso de "todavía sin generar" — NO para inferir que hay
+  // una corrida en curso: como canvas default, lo normal es abrirlo en frío sin generar.
   const hasGeneratedContent = useMemo(
     () => cs.sections.some((s) => s.key !== "cierre" && s.blocks.some((b) => b.blockType === "CARD")),
     [cs.sections],
   );
-  const [awaitingGen, setAwaitingGen] = useState(false);
-  const [genTimedOut, setGenTimedOut] = useState(false);
-  useEffect(() => {
-    if (cs.loading) return;
-    if (hasGeneratedContent) { setAwaitingGen(false); setGenTimedOut(false); return; }
-    let tries = 0;
-    setAwaitingGen(true);
-    const id = setInterval(() => {
-      tries += 1;
-      if (tries >= 10) { setAwaitingGen(false); setGenTimedOut(true); clearInterval(id); return; }
-      void cs.refetch();
-    }, 4000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cs.loading, hasGeneratedContent]);
 
   const idByKey = useMemo(() => new Map(cs.sections.map((s) => [s.key, s.id])), [cs.sections]);
   const config = useMemo(() => buildExploracionConfig(cs.sections.map((s) => s.key)), [cs.sections]);
@@ -79,11 +64,6 @@ export default function ExploracionWorkspace({
   }, [cs.sections]);
 
   const ctx: LandingContext = useMemo(() => ({ clientName: "" }), []);
-
-  const onRegenDone = useCallback(() => {
-    setNonce((n) => n + 1);
-    void cs.refetch();
-  }, [cs]);
 
   if (cs.loading) {
     // `.stl stl-internal` da el lienzo y la tipografía del documento ya con la paleta
@@ -118,7 +98,7 @@ export default function ExploracionWorkspace({
   }
 
   return (
-    <div key={nonce} className="stl stl-internal">
+    <div className="stl stl-internal">
       {cs.error && (
         <div style={{ position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>
           <span style={{ flex: 1 }}>{cs.error}</span>
@@ -126,36 +106,23 @@ export default function ExploracionWorkspace({
         </div>
       )}
 
-      <div style={{ position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 16px", background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
-        {/* El rótulo es parte del contrato con el CSE: este documento no se comparte. */}
+      {/* El rótulo es parte del contrato con el CSE: este documento no se comparte.
+          El CTA de generar NO vive acá: está en el header del canvas, junto a su nombre
+          (CANVAS_PRIMARY_AGENT), igual que el del kickoff en el canvas de kickoff. */}
+      <div style={{ position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
           Documento interno · no se comparte con el cliente
         </span>
-        <CanvasAgentButton
-          clientId={clientId}
-          projectId={projectId}
-          agentId="agent-exploracion-canvas"
-          label="Regenerar exploración"
-          runningLabel="Generando exploración…"
-          notifyLabel="exploración del negocio"
-          async
-          onDone={onRegenDone}
-          busy={awaitingGen}
-          // El server exige `regenerate` si ya hay contenido y `generate` si no → la UI
-          // se gatea por la MISMA celda para no ofrecer un botón que daría 403.
-          alreadyGenerated={hasGeneratedContent}
-        />
       </div>
 
-      {awaitingGen && !hasGeneratedContent && (
+      {/* Estado IDLE (el canvas existe desde que nace el proyecto, así que abrirlo sin
+          generar es lo NORMAL — no se asume que hay una corrida en curso). */}
+      {!hasGeneratedContent && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg-soft)", borderBottom: "1px solid var(--border)", fontSize: 13, color: "var(--text-2)" }}>
-          <span className="skeleton-shimmer" style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0 }} />
-          <span>Generando la exploración… (puede tomar ~20&nbsp;s). Se actualiza sola al terminar.</span>
-        </div>
-      )}
-      {genTimedOut && !hasGeneratedContent && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--flag-soft)", borderBottom: "1px solid var(--flag-line)", fontSize: 13, color: "var(--flag)" }}>
-          <span>No pudimos confirmar que la generación haya terminado. Probá <strong>Regenerar exploración</strong> arriba.</span>
+          <span>
+            Todavía sin generar. Usá <strong>Generar exploración</strong> arriba, junto al nombre
+            del canvas. El handoff del proyecto es la fuente ancla.
+          </span>
         </div>
       )}
 

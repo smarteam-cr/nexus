@@ -92,7 +92,9 @@ SERVICIO RECURRENTE vs IMPLEMENTACIÓN CON FIN DEFINIDO — campo top-level "isR
 CLASIFICACIÓN (TAGS) — campo top-level "tags" (array de slugs, podés devolver []):
 - PRODUCTOS HubSpot involucrados (uno por cada uno que entre en el alcance): "marketing_hub", "sales_hub", "service_hub", "content_hub", "operations_hub", "commerce_hub", "data_hub". Si es Insider One: "insider_one".
 - ALCANCE técnico: "custom_dev" si hay integración o desarrollo a medida; "crm_migration" si se migran datos desde OTRO CRM (Salesforce, Pipedrive, Zoho, etc.) hacia HubSpot.
+- SITIO WEB: "sitio_web" si el alcance incluye construir o rediseñar un sitio, landing pages o web pública del cliente (sea en HubSpot o fuera). NO lo marques si solo se instalan formularios o tracking en un sitio que ya existe y no se rehace. Es independiente de "custom_dev": un sitio SIN integraciones NO lleva "custom_dev".
 - Usá EXACTAMENTE esos slugs (en minúscula con guion bajo). NO inventes otros. Devolvé solo los que tengan evidencia en las fuentes; ante la duda, omití el tag.
+- Los tags NO son decorativos: DIRIGEN qué va a investigar después el agente de Exploración (un proyecto con "sitio_web" preguntará por referencias visuales y assets; uno con "sales_hub" irá al proceso de venta real). Un tag de más manda la exploración a un lado equivocado.
 - COHERENCIA con la sección "desarrollo" y con el cronograma: si marcás "custom_dev" o "insider_one", el cronograma DEBE incluir una fase dedicada "Desarrollo / Integración" (ver regla del timeline).
 
 FORMATO DEL OUTPUT — sections + blocks:
@@ -105,7 +107,7 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
 {
   "implementationType": "<IMPLEMENTATION o REIMPLEMENTATION segun la regla>",
   "isRecurrent": "<true si el servicio es recurrente/de continuidad; false si es una implementación con fin definido>",
-  "tags": ["<slugs del catálogo: marketing_hub|sales_hub|service_hub|content_hub|operations_hub|commerce_hub|data_hub|insider_one|custom_dev|crm_migration — solo los que apliquen, o []>"],
+  "tags": ["<slugs del catálogo: marketing_hub|sales_hub|service_hub|content_hub|operations_hub|commerce_hub|data_hub|insider_one|custom_dev|crm_migration|sitio_web — solo los que apliquen, o []>"],
   "sections": [
     {
       "key": "fecha_inicio_kickoff",

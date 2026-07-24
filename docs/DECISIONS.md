@@ -782,11 +782,53 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   también estos pares y exige que todo token del bloque sea NEUTRO (**saturación < 25%**,
   medida en HSL — el spread RGB crudo rechazaba los grises fríos legítimos y dejaba pasar lo
   que importaba). Un segundo acento rompe el efecto "esto es interno" y el test lo frena.
-- **On-demand, no auto-encadenada ni pre-creada**: el canvas nace cuando el CSE toca "Generar
-  exploración" en la sección del proyecto. Pre-crearla en los ~113 proyectos repetiría los 111
-  cascarones vacíos de Handoff que hubo que borrar; auto-encadenarla al kickoff generaría
-  documentos que quizá nadie mire y gastaría tokens sin pedirlo. "Después del kickoff" es el
-  ORDEN del flujo, no un disparador automático.
+- **Canvas DEFAULT de primera clase (modelo Kickoff)** — *supera a la decisión original
+  "on-demand, no pre-creada" (2026-07-23, pedido de Elías: "debe ser un canvas, como kickoff,
+  cronograma… correr el agente de kickoff en el canvas de kickoff, así pero para la
+  exploración")*. Exploración está en `DEFAULT_PROJECT_CANVASES`: se pre-crea con el proyecto,
+  vive en el **dropdown de canvases** y su agente se dispara desde el **header del canvas**
+  (`CANVAS_PRIMARY_AGENT`), exactamente como el kickoff. Se retiró la CTA dedicada
+  (`ProjectExploracionSection`) y su endpoint `/api/projects/[id]/exploracion`.
+  *Por qué se revirtió:* el argumento original eran los 111 cascarones vacíos de Handoff — pero
+  ese caso NO es análogo: Handoff pasó a ser una **entidad cliente-level** y su canvas de
+  proyecto quedó redundante. Un canvas de Exploración vacío es exactamente como un Kickoff sin
+  generar: aparece en el dropdown con su botón "Generar" adentro, que es el patrón normal del
+  producto. *Alcance:* backfill retroactivo a los proyectos existentes con
+  `scripts/migrate-add-exploracion-canvas.ts` (dry-run-first, excluye `__strategy__`).
+  `order: 4` (al final) para no renumerar los canvases que los ~113 proyectos ya tienen en DB.
+  **INTERNO ≠ on-demand**: sigue sin superficie externa y con la paleta gris (ver el bullet de
+  abajo). "Después del kickoff" sigue siendo el ORDEN del flujo, no un disparador automático:
+  NO hay auto-chain, el CSE decide cuándo generar.
+- **El workspace NO asume "sin contenido ⇒ generando"**: como canvas default, abrirlo sin generar
+  es lo normal, así que muestra un estado **idle** ("Todavía sin generar…") en vez del poll de
+  "Generando…" que tenía cuando la CTA lo abría justo después de disparar. El refresco tras
+  generar lo da el remonte por `agentNonce` del panel, igual que en los otros canvases.
+- **TAG-DRIVEN: el tag deja de ser etiqueta y pasa a ser DISPARADOR** (2026-07-23, pedido de
+  Elías). Antes los tags del handoff se aplanaban a una línea de contexto y el agente producía
+  lo mismo tuviera los tags que tuviera. Ahora cada tag inyecta su **lente de exploración**
+  (`components/landing/configs/exploracion-lenses.ts`): qué supuestos suele esconder ese tipo de
+  proyecto y qué clase de pregunta los cierra. Un proyecto con `sitio_web` pregunta por
+  referencias/anti-referencias, funcionalidad y assets; uno con `sales_hub` va al proceso de
+  venta real. **Solo se inyectan las lentes de los tags ACTIVOS** — el prompt no carga las 12
+  siempre, y si se colaran todas el tag dejaría de dirigir.
+  *Generaliza un precedente que ya existía:* `hasTechnicalScope` (`custom_dev`/`insider_one`) ya
+  era un tag-driver real — hace que el handoff agregue fase técnica y que `analyze` auto-encadene
+  el canvas Desarrollo. Esto lleva el mismo mecanismo al agente de exploración.
+  **Reglas duras:** (1) un tag nuevo **obliga** a definir su lente —
+  `lib/canvas/exploracion-lenses.test.ts` falla si falta, porque un tag sin lente vuelve al
+  estado inerte del que venimos; (2) las lentes influyen **solo el CONTENIDO** dentro de las 7
+  secciones fijas — NO agregan secciones: el set está congelado por `registry.test` y ya existe
+  en los canvases creados, y una sección condicional por tag es otra decisión; (3) sin tags, el
+  bloque dice EXPLÍCITAMENTE "no asumas tipo de proyecto" — el silencio se lee como permiso para
+  asumir.
+- **Tag `sitio_web` (grupo `scope`)**: faltaba forma de marcar que se vendió un sitio. Es
+  `scope` y no `product` porque describe **qué se vendió**, como `custom_dev` y `crm_migration`;
+  `content_hub` (ex CMS Hub) sigue siendo el producto y un proyecto web normalmente lleva los
+  dos. ⚠ **NO entra a `hasTechnicalScope()`**: esa función rutea al canvas Desarrollo y a la fase
+  técnica del cronograma, y un sitio en el CMS sin integraciones no lleva fase técnica. Si además
+  hay desarrollo, el handoff pone `custom_dev` y ahí sí entra. Sin backfill: aplica de ahora en
+  adelante y el CSE lo agrega con un clic en la tira de tags (adivinar "esto es web" desde texto
+  viejo sería justo la fabricación que el repo evita).
 - **Máximo reuso de renderers**: de las 6 secciones de contenido, 5 usan renderers que ya
   existían (`pain` ×3, `web_diagnosis`, el hero de Desarrollo, el CTA del kickoff). El único
   componente nuevo es el **plan de sesiones**, porque su unidad es una sesión con una lista de

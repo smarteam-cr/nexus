@@ -20,7 +20,6 @@ import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import ProjectHandoffSection from "./ProjectHandoffSection";
-import ProjectExploracionSection from "./ProjectExploracionSection";
 import { WorkspaceSkeleton } from "./skeletons";
 import ProjectLifecyclePanel from "@/components/lifecycle/ProjectLifecyclePanel";
 import { useWorkspace } from "./WorkspaceContext";
@@ -30,6 +29,21 @@ const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
   { ssr: false, loading: () => <div className="h-64 rounded-xl skeleton-shimmer" /> }
 );
+
+/**
+ * Canvases que tienen su PROPIO renderer más abajo (motor de landing, Gantt o vista
+ * lineal). La grilla genérica `SectionBlockList` los excluye: si un canvas con renderer
+ * propio no está en este set, se pinta DOS VECES — el suyo arriba y la grilla debajo.
+ * Es exactamente lo que le pasó a Exploración, y por eso esto es un set con nombre y no
+ * una cadena de `&&`: sumar un canvas nuevo con renderer propio obliga a mirar acá.
+ */
+const CANVAS_CON_RENDERER_PROPIO = new Set([
+  "Handoff",
+  "Kickoff",
+  "Desarrollo",
+  "Exploración",
+  "Cronograma",
+]);
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -420,18 +434,6 @@ export default function ProjectCanvasPanel({
       {/* Handoff por-proyecto — sección dedicada siempre visible (estado + generar + doc). */}
       <ProjectHandoffSection projectId={projectId} clientId={clientId} />
 
-      {/* Exploración del negocio — disparador on-demand del canvas interno. Al generarse,
-          el canvas nace: hay que RE-LISTAR los canvases antes de poder cambiar a él (no
-          está en el dropdown todavía). */}
-      <ProjectExploracionSection
-        projectId={projectId}
-        clientId={clientId}
-        onOpenCanvas={async (id) => {
-          await refetchCanvases();
-          switchCanvas(id);
-        }}
-      />
-
       {/* Ciclo de vida — etapa efectiva + validaciones de salida + modalidad de adopción.
           El id es el destino de las alarmas de etapa del panel "Qué hacer acá" del cronograma:
           los gates para cerrarlas viven acá, en esta misma página. */}
@@ -618,12 +620,12 @@ export default function ProjectCanvasPanel({
       )}
 
       {/* Exploración: guía INTERNA de descubrimiento del negocio (mismo motor, paleta gris).
-          Canvas on-demand — solo aparece si el CSE lo generó desde la sección del proyecto.
-          A diferencia de Kickoff/Desarrollo, NO tiene vista externa ni publicación. */}
+          Canvas de primera clase como Kickoff: vive en el dropdown y su agente se dispara
+          desde el header (CANVAS_PRIMARY_AGENT). NO tiene vista externa ni publicación. */}
       {!isResumenCanvas && activeCanvas?.name === "Exploración" && activeCanvasId && (
         <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
           <CanvasBoundary label="el canvas de Exploración">
-            <ExploracionWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} clientId={clientId} canvasId={activeCanvasId} />
+            <ExploracionWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
           </CanvasBoundary>
         </div>
       )}
@@ -638,8 +640,11 @@ export default function ProjectCanvasPanel({
         </CanvasBoundary>
       )}
 
-      {/* Resto de canvases custom: grilla de bloques (Diagnóstico, Planificación, …) */}
-      {!isResumenCanvas && activeCanvas?.name !== "Handoff" && activeCanvas?.name !== "Kickoff" && activeCanvas?.name !== "Desarrollo" && activeCanvas?.name !== "Cronograma" && activeCanvasId && (
+      {/* Resto de canvases custom: grilla de bloques (Diagnóstico, Planificación, …).
+          Los que tienen renderer PROPIO se excluyen por `CANVAS_CON_RENDERER_PROPIO`:
+          si uno falta ahí, su canvas se pinta DOS veces (el motor arriba y esta grilla
+          abajo). Pasó con Exploración — por eso es un set con nombre y no otra `&&`. */}
+      {!isResumenCanvas && !CANVAS_CON_RENDERER_PROPIO.has(activeCanvas?.name ?? "") && activeCanvasId && (
         // agentNonce remonta la grilla al terminar una corrida del CTA → refetch
         <CanvasBoundary label="este canvas">
           <SectionBlockList key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
