@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
       fetchCompanyDeals(hs, company.id),
       prisma.client.findFirst({
         where: { hubspotCompanyId: company.id },
-        select: { id: true, name: true, isProspect: true },
+        select: { id: true, name: true, kind: true },
       }),
     ]);
 
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
       deals,
       existingClientId: existing?.id ?? null,
       existingClientName: existing?.name ?? null,
-      existingIsProspect: existing?.isProspect ?? null,
+      existingIsProspect: existing ? existing.kind === "PROSPECTO" : null,
     });
   } catch (e) {
     console.error("[business-cases/lookup] error:", e);

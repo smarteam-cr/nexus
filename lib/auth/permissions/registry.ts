@@ -33,6 +33,10 @@ export const PERMISSION_SECTIONS = [
       { key: "viewAll", label: "Ver todos los clientes", enforced: true },
       { key: "share", label: "Compartir clientes", enforced: true },
       { key: "delete", label: "Eliminar clientes", enforced: true },
+      // Decir QUÉ ES una empresa (cliente / prospecto / aliado / interno). Solo lo
+      // necesita quien ve la cartera completa: es ahí donde se nota que una fila no
+      // es un cliente. Ver lib/clients/kind.ts.
+      { key: "classify", label: "Clasificar empresas (cliente/prospecto/aliado/interno)", enforced: true },
     ],
   },
   {
@@ -96,7 +100,10 @@ export const PERMISSION_SECTIONS = [
     label: "Ventas / Business Cases",
     actions: [
       { key: "read", label: "Acceder al área", enforced: true },
-      { key: "write", label: "Editar", enforced: false },
+      // enforced desde 2026-07-24: su primer guard real es el TAM del cliente
+      // (PATCH /api/clients/[id]/classification). El área de Ventas es quien
+      // estima cuánto vale una cuenta; el resto la ve pero no la escribe.
+      { key: "write", label: "Editar (incluye el TAM de un cliente)", enforced: true },
     ],
   },
   {

@@ -27,6 +27,7 @@ import {
   type AppUserWithTeamMember,
 } from "./supabase";
 import { can } from "./permissions/engine";
+import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
 export type AccessReason =
   | "super-admin"
@@ -105,6 +106,18 @@ export async function requireAccessToClient(clientId: string): Promise<AccessRes
  * Si el recurso no existe (project null), devolver 404 ANTES de llamar al helper.
  */
 
+export interface AccessibleClientOpts {
+  /**
+   * Qué CATEGORÍAS de empresa entran. Default: solo la cartera de CS (`CS_CLIENT_WHERE`).
+   *
+   * `"all"` es para la ÚNICA pantalla que necesita ver lo que no es cartera: el listado
+   * de /clients, donde se re-clasifica una empresa mal marcada. Si esa pantalla no
+   * pudiera verlas, un aliado marcado por error quedaría invisible y sin forma de
+   * corregirse. Ningún listado de CS/cobranza/portafolio debe pasar `"all"`.
+   */
+  kinds?: "all";
+}
+
 /**
  * Devuelve el filtro Prisma de clientes VISIBLES para un usuario, o `null` si
  * puede ver TODOS (sin filtro). Lo usan la lista de clientes (página + API) para
@@ -112,6 +125,7 @@ export async function requireAccessToClient(clientId: string): Promise<AccessRes
  */
 export async function accessibleClientWhere(
   user: AppUserWithTeamMember,
+  opts?: AccessibleClientOpts,
 ): Promise<Prisma.ClientWhereInput | null> {
   // EXTERNAL: solo su propio cliente
   if (user.kind === "EXTERNAL") {
@@ -120,14 +134,19 @@ export async function accessibleClientWhere(
   const tm = user.teamMember;
   if (!tm || tm.deactivatedAt) return { id: "__none__" }; // sin acceso
 
+  // Filtro de CATEGORÍA (qué ES la empresa), ortogonal al de ACCESO (a quién le toca).
+  // Por default es la cartera de CS: aun "ve todo" excluye prospectos de Ventas, aliados
+  // comerciales y las entidades internas de Smarteam. Sale de la fuente única
+  // (lib/clients/kind.ts) — acá NO se escribe `kind` a mano.
+  const kindWhere: Prisma.ClientWhereInput =
+    opts?.kinds === "all" ? {} : { ...CS_CLIENT_WHERE };
+
   // Ve todo: SUPER_ADMIN / VENTAS / CSL / MARKETING, o el flag override vigente.
-  // NOTA: aun "ve todo" EXCLUYE prospectos de Ventas (Clients lazily creados para un
-  // business case) — no son clientes reales y no deben aparecer en los listados de CS.
   if (tm.roleEnum === "SUPER_ADMIN" || (await can(tm, "clientes", "viewAll"))) {
-    return { isProspect: false };
+    return kindWhere;
   }
   if (tm.canViewAllClients && (!tm.canViewAllExpiresAt || tm.canViewAllExpiresAt > new Date())) {
-    return { isProspect: false };
+    return kindWhere;
   }
 
   // CSE (scoped): owner por proyecto OR GRANT (a mí o a mi rol), menos REVOKE
@@ -151,7 +170,7 @@ export async function accessibleClientWhere(
 
   return {
     AND: [
-      { isProspect: false },
+      kindWhere,
       { OR: visibility },
       ...(revokedIds.length ? [{ id: { notIn: revokedIds } }] : []),
     ],

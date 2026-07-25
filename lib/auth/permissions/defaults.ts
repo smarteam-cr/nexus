@@ -54,7 +54,10 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
   // VENTAS: ve todo + handoff completo + cronograma (sin regenerar IA) + área
   // de Ventas + auditorías + agentes + conocimientos.
   VENTAS: grant({
-    clientes: ["viewAll"],
+    // `classify` va a los MISMOS roles que `viewAll`: quien ve la cartera entera es
+    // quien nota que una fila no es un cliente (un aliado, nosotros mismos). Un CSE
+    // scoped no ve el listado completo, así que no tiene con qué comparar.
+    clientes: ["viewAll", "classify"],
     handoff: ["create", "write", "generate", "regenerate"],
     kickoff: ["generate", "regenerate"],
     desarrollo: ["generate", "regenerate"],
@@ -70,7 +73,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
   // DEV ≡ VENTAS en el DEFAULT (invariante histórica del rol). El recorte a
   // solo-lectura pedido por el usuario va en la SEMILLA, no acá.
   DEV: grant({
-    clientes: ["viewAll"],
+    clientes: ["viewAll", "classify"],
     handoff: ["create", "write", "generate", "regenerate"],
     kickoff: ["generate", "regenerate"],
     // `estimate` es de DEV y de nadie más en el default: la estimación de esfuerzo la
@@ -93,7 +96,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
   // CSL: como super admin salvo gestión de equipo/administraciones; único rol
   // (junto a SA) que REGENERA el cronograma con IA y borra clientes.
   CSL: grant({
-    clientes: ["viewAll", "share", "delete"],
+    clientes: ["viewAll", "share", "delete", "classify"],
     handoff: ["write", "generate", "regenerate"],
     kickoff: ["generate", "regenerate"],
     desarrollo: ["generate", "regenerate"],
@@ -110,7 +113,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
   // MARKETING: ≈ CSL pero sin borrar clientes, sin regenerar cronograma, sin
   // área de Ventas ni auditorías; editor del área de Marketing.
   MARKETING: grant({
-    clientes: ["viewAll", "share"],
+    clientes: ["viewAll", "share", "classify"],
     handoff: ["write", "generate", "regenerate"],
     kickoff: ["generate", "regenerate"],
     desarrollo: ["generate", "regenerate"],

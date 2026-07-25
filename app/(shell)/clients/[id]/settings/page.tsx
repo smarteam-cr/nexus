@@ -4,6 +4,8 @@ import { useEffect, useState, useTransition } from "react";
 import { BackLink } from "@/components/ui";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import ClientSharing from "@/components/clients/ClientSharing";
+import ClientClassification from "@/components/clients/ClientClassification";
+import type { ClientKind } from "@prisma/client";
 import DeleteProjectButton from "@/components/clients/DeleteProjectButton";
 
 interface HubspotAccount {
@@ -21,6 +23,8 @@ interface Client {
   emailDomains: string[];
   logoUrl: string | null;
   hubspotAccount: HubspotAccount | null;
+  kind: ClientKind;
+  tamUsd: number | null; // el GET lo cruza de Decimal a number
 }
 
 interface Me {
@@ -238,6 +242,16 @@ export default function ClientSettingsPage() {
           </div>
         </form>
       </section>
+
+      {/* Sección: Clasificación y potencial (solo para quien puede clasificar y/o estimar) */}
+      {client && (
+        <ClientClassification
+          clientId={clientId}
+          initialKind={client.kind}
+          initialTamUsd={client.tamUsd}
+          onSaved={() => startTransition(() => router.refresh())}
+        />
+      )}
 
       {/* El logo del cliente se gestiona en el tab "Información del cliente" → Marca. */}
 

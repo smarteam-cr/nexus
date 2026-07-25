@@ -19,6 +19,7 @@ import { prisma } from "@/lib/db/prisma";
 import { computeAmbiguousNameTokens, effectiveDomainsForClient } from "@/lib/sessions/categorize";
 import { importFilaCanonicaSchema, type ImportCampoCanonico } from "./schema";
 import { aplicarMapeo, esDominioCompartido, nombreEnSkipList, warningsFila } from "./import-core";
+import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
 // ── Índices de dedup ─────────────────────────────────────────────────────────────
 
@@ -57,7 +58,7 @@ function normalizarNombre(s: string): string {
 
 export async function buildDedupIndices(): Promise<DedupIndices> {
   const clients = await prisma.client.findMany({
-    where: { isProspect: false },
+    where: { ...CS_CLIENT_WHERE },
     select: { id: true, name: true, company: true, emailDomains: true, source: true, sourceExternalId: true },
   });
   const byFuenteId = new Map<string, ClienteRef>();

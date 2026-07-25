@@ -150,10 +150,20 @@ model Client {
   hubspotCompanyId String? // ID de la empresa vinculada en HubSpot CRM
   emailDomains     String[] // dominios de email para matching automático de sesiones (ej: "ice.go.cr")
   logoUrl          String? // URL pública del logo del cliente (bucket public-assets) — se muestra en kickoff/cronograma externos
-  // Prospecto de Ventas: Client creado lazily desde una empresa HubSpot para un
-  // business case (puede no ser cliente real todavía). Se EXCLUYE de los listados
-  // de CS (clientes, sidebar, portafolio).
+  // QUÉ ES esta empresa. Fuente ÚNICA de "¿cuenta como cliente de CS?" — una empresa es
+  // UNA sola cosa, así que reemplaza al booleano `isProspect`. El filtro de los listados
+  // NO se escribe a mano en cada query: sale de `lib/clients/kind.ts` (CS_CLIENT_WHERE).
+  kind             ClientKind @default(CLIENTE)
+  // DEPRECATED — eliminar después del 2026-09-30. Reemplazado por `kind` (2026-07-24):
+  // `isProspect: true` ≡ `kind: PROSPECTO`. Ya NO se lee ni se escribe en ningún lado; la
+  // columna sobrevive solo para poder auditar el backfill. Si al llegar la fecha `kind`
+  // no dio problemas, se dropea.
   isProspect       Boolean  @default(false)
+  // Mercado total direccionable de esta empresa, en USD — cuánto podría facturar Smarteam
+  // si le vendiera todo lo que necesita. Lo estima VENTAS a mano (no se calcula ni se
+  // sincroniza): es una apuesta comercial, no un dato derivable. Sumado sobre la cartera
+  // da el "potencial estimado". Nullable = todavía no estimado, que NO es lo mismo que 0.
+  tamUsd           Decimal? @db.Decimal(12, 2)
   // Procedencia de fuente externa (regla Cobranza fuente + id_externo → upsert
   // idempotente: re-sincronizar NO duplica). null = creado por flujos previos.
   source           String? // "manual" | "sheet" (futuro: "hubspot" | "odoo")
@@ -1473,6 +1483,18 @@ model AppUser {
 enum AppUserKind {
   INTERNAL
   EXTERNAL
+}
+
+/// Qué es una empresa para Smarteam. Solo `CLIENTE` entra a los listados y métricas de CS
+/// (ver `lib/clients/kind.ts`); el resto son empresas reales que NO son cartera:
+///   PROSPECTO — Ventas la creó para un business case; todavía no compró.
+///   ALIADO    — aliado comercial / partner (ej. una agencia con la que se co-vende).
+///   INTERNO   — Smarteam misma y sus entidades: no somos nuestro propio cliente.
+enum ClientKind {
+  CLIENTE
+  PROSPECTO
+  ALIADO
+  INTERNO
 }
 
 // ─── ClientAssignment ─────────────────────────────────────────────────────────

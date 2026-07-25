@@ -24,6 +24,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { fetchAllPartnerClients, type PartnerClientRecord } from "@/lib/hubspot/partner-clients";
+import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
 export interface PartnerSyncResult {
   supported: boolean;
@@ -224,7 +225,7 @@ export async function syncPartnerClients(
     // ── Índices de matching (SIN prospectos: un vínculo a prospecto es invisible
     //    para el módulo CS) + estado actual de vínculos ────────────────────────
     const clients = await prisma.client.findMany({
-      where: { isProspect: false },
+      where: { ...CS_CLIENT_WHERE },
       select: { id: true, name: true, hubspotCompanyId: true, emailDomains: true },
     });
     const byCompanyId = new Map<string, string>();
@@ -300,7 +301,7 @@ export async function syncPartnerClients(
                   name,
                   hubspotCompanyId: draft.hubspotCompanyId,
                   emailDomains: scalars.domain ? [scalars.domain] : [],
-                  isProspect: false,
+                  kind: "CLIENTE",
                 },
                 select: { id: true },
               });

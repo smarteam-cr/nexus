@@ -30,6 +30,7 @@ import {
   type TotalesMoneda,
 } from "./engine";
 import { Prisma } from "@prisma/client";
+import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
 // ── DTOs serializables (lo ÚNICO que sale de este módulo hacia la UI) ───────────
 
@@ -212,7 +213,7 @@ function serializeCobro(c: CobroRow): CobroDTO {
 /**
  * Devuelve los clientId de clientes con al menos un proyecto REAL y navegable —
  * criterio copiado de lib/portfolio/load.ts (status active + no-sentinel + regla
- * HubSpot) + isProspect:false. Es el universo v1 del panel de cartera.
+ * HubSpot) + CS_CLIENT_WHERE. Es el universo v1 del panel de cartera.
  */
 async function clientIdsConProyectoReal(): Promise<Map<string, { name: string }>> {
   const projects = await prisma.project.findMany({
@@ -226,7 +227,7 @@ async function clientIdsConProyectoReal(): Promise<Map<string, { name: string }>
             { hubspotServiceId: { not: null } },
           ],
         },
-        { client: { isProspect: false } },
+        { client: { ...CS_CLIENT_WHERE } },
       ],
     },
     select: { clientId: true, client: { select: { name: true } } },

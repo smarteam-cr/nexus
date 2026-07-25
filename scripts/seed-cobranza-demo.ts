@@ -53,6 +53,7 @@ import {
 } from "@/lib/cobranza/mutations";
 import { ingestCuentasEntrantes } from "@/lib/cobranza/ingest";
 import { crDateParts } from "@/lib/jobs/time";
+import { CS_CLIENT_WHERE } from "../lib/clients/kind";
 
 const APPLY = process.argv.includes("--apply");
 const SEED_EMAIL = "seed-cobranza-demo";
@@ -81,7 +82,7 @@ async function main() {
             { hubspotServiceId: { not: null } },
           ],
         },
-        { client: { isProspect: false, cuentaFinanciera: { is: null } } },
+        { client: { ...CS_CLIENT_WHERE, cuentaFinanciera: { is: null } } },
       ],
     },
     select: {

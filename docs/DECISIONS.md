@@ -533,6 +533,49 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   `9508a5a`/`11cf8a2`, "blindar el cronograma vivo"); `migrate diff` post-pull da "No difference
   detected" — cero drift pendiente.
 
+## Qué ES una empresa: `ClientKind` + TAM (2026-07-24)
+> Elías abrió el listado de clientes y encontró ahí a **4am Saatchi** (un aliado comercial) y a
+> **Smarteam** (nosotros mismos). Pidió poder marcarlo por interfaz y que aparezcan en otro lado,
+> más un **TAM en dólares seteado por Ventas** para calcular el potencial estimado.
+- **UN enum, no un booleano más.** `Client.isProspect` (creado para los business cases de Ventas)
+  ya respondía a medias la pregunta "¿esto es un cliente?", y agregarle `isPartner`/`isInternal`
+  al lado habría dado 8 combinaciones de las que 5 son estados imposibles. `ClientKind`
+  (`CLIENTE | PROSPECTO | ALIADO | INTERNO`) es **mutuamente excluyente por construcción** —
+  regla §2.6 del ARCHITECTURE (enums para estados, nunca booleanos paralelos). `isProspect`
+  queda como columna DEPRECATED (eliminar después del 2026-09-30) para poder auditar el
+  backfill; sin lectores desde esta tanda.
+- **El filtro vive en UN lugar: `CS_CLIENT_WHERE` (`lib/clients/kind.ts`).** Antes la pregunta
+  se contestaba con `isProspect: false` escrito a mano en ~15 queries — cada listado nuevo tenía
+  que acordarse, y agregar una categoría más obligaba a tocar los 15. Ahora se importa. **Regla:
+  ninguna query nueva escribe `kind` a mano.**
+- **La categoría es ORTOGONAL al acceso.** `accessibleClientWhere` responde "¿a quién le toca
+  este cliente?" y `CS_CLIENT_WHERE` responde "¿esto es un cliente?". Se componen, pero el
+  segundo no puede colarse en el primero como si fuera seguridad: la opción `{ kinds: "all" }`
+  existe para **una sola pantalla** —el listado de /clients, donde se re-clasifica— porque si esa
+  pantalla no viera a los no-clientes, un aliado marcado por error quedaría invisible y sin forma
+  de corregirse. Ningún listado de CS/cobranza/portafolio la usa.
+- **Pestañas en la MISMA pantalla, no una sección aparte** (decisión de Elías): re-clasificar es
+  mover una fila de pestaña, no navegar a otro módulo. El eje categoría se compone con el eje
+  pertenencia que ya existía (Mis clientes / Compartido / Todos): los conteos de pertenencia se
+  calculan DENTRO de la categoría abierta. Abre siempre en "Clientes".
+- **El TAM es un dato de VENTAS, estimado a mano, y `null` ≠ 0.** Nexus no lo deriva de nada
+  (ni de cobros ni de proyectos): es cuánto **puede** llegar a facturar la cuenta en un año. Por
+  eso "sin estimar" es su propio estado — si se sumara como cero, el potencial de la cartera
+  diría que vale menos de lo que vale y nadie sabría cuánto falta por estimar. El total de la UI
+  cuenta los "sin estimar" APARTE, nunca dentro. `Decimal(12,2)` como el resto del dinero del
+  repo, cruzado a `number` en la frontera (Decimal no es serializable). Techo de cordura de
+  100M USD: un dedazo de ceros arruina el total de toda la cartera.
+- **Dos campos, dos permisos, un formulario**: `kind` va por la celda NUEVA `clientes.classify`
+  (concedida a los mismos roles que `clientes.viewAll` — quien ve la cartera entera es quien nota
+  que una fila no es un cliente; un CSE scoped no tiene con qué comparar) y `tamUsd` por
+  `ventas.write`, que pasó de `enforced:false` a `true` — **su primer guard real**. El endpoint
+  valida campo por campo y **no escribe nada** si falta un permiso; el cliente manda solo los
+  campos que puede tocar, así alguien con un solo permiso no se come un 403 en el guardado entero.
+- **No se adivinan aliados ni internos desde el nombre.** El backfill solo mapea
+  `isProspect:true → PROSPECTO`; el resto arranca en CLIENTE y lo corrige una persona por la
+  interfaz — que es exactamente lo que se pidió. Inferir "Smarteam somos nosotros" con un match
+  de texto sería la fabricación que el repo evita.
+
 ## Permisos — matriz sección×acción (migración PERM, 2026-07-11)
 - **Sin CASL/casbin — registry homegrown tipado**: esas librerías brillan en abilities
   condicionales row-level, y Nexus YA resuelve el row-level con `lib/auth/access.ts`

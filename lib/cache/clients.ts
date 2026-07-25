@@ -30,6 +30,7 @@
 import { unstable_cache, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { computeClientActivityMap } from "@/lib/clients/last-interaction";
+import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
 /** Tag de cache — usar también en `revalidateTag()` desde mutaciones. */
 export const CLIENTS_SIDEBAR_TAG = "clients-sidebar";
@@ -38,7 +39,8 @@ export const getClientsForSidebar = unstable_cache(
   async () => {
     // 1. Cargar todos los clientes con los campos básicos del sidebar
     const rows = await prisma.client.findMany({
-      where: { isProspect: false }, // los prospectos de Ventas (business cases) no van al sidebar de CS
+      // Solo la cartera: prospectos de Ventas, aliados e internos no son clientes de CS.
+      where: { ...CS_CLIENT_WHERE },
       select: {
         id: true,
         name: true,

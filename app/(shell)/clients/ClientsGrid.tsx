@@ -7,6 +7,8 @@ import DeleteClientButton from "./DeleteClientButton";
 import NewClientButton from "./NewClientButton";
 import HandoffStepper from "@/components/handoffs/HandoffStepper";
 import { calendarDaysFromToday } from "@/lib/utils/relative-date";
+import { CLIENT_KINDS, CLIENT_KIND_META, formatTamUsd } from "@/lib/clients/kind";
+import type { ClientKind } from "@prisma/client";
 // Shape mínimo del usuario activo para el filtro "Mis clientes".
 // Antes venía del tipo ActiveCse de lib/auth (basado en cookie nexus_cse);
 // ahora viene de Supabase Auth + AppUser en el server component.
@@ -37,6 +39,8 @@ export interface ClientRow {
   nextMeetingLabel: string | null;
   projectCount: number;
   isShared: boolean;            // compartido con el usuario actual (GRANT a él o a su rol)
+  kind: ClientKind;             // qué ES la empresa (cliente/prospecto/aliado/interno)
+  tamUsd: number | null;        // techo anual estimado en USD; null = Ventas no lo estimó
 }
 
 /** Formatea una fecha pasada en forma relativa (hoy/ayer/hace N días/sem/fecha). */
@@ -130,6 +134,18 @@ export default function ClientsGrid({
 }) {
   const router = useRouter();
 
+  // ── Pestañas de CATEGORÍA (qué ES la empresa) ────────────────────────────────
+  // Abre SIEMPRE en "Clientes": la cartera es el caso de uso del 99% de las visitas.
+  // Las otras existen para que un aliado o una entidad interna mal marcada se pueda
+  // encontrar y corregir — no para navegarlas a diario.
+  const [kindTab, setKindTab] = useState<ClientKind>("CLIENTE");
+  const countByKind = useMemo(() => {
+    const acc = Object.fromEntries(CLIENT_KINDS.map((k) => [k, 0])) as Record<ClientKind, number>;
+    for (const c of clients) acc[c.kind] = (acc[c.kind] ?? 0) + 1;
+    return acc;
+  }, [clients]);
+  const kindClients = useMemo(() => clients.filter((c) => c.kind === kindTab), [clients, kindTab]);
+
   // Pestañas: "mine" (soy owner) · "shared" (compartidos conmigo) · "all" (accesibles).
   // Solo para un CSE específico — el Super Admin ve todo sin filtro.
   const canFilter = !!activeCse && !activeCse.isSuperAdmin;
@@ -143,10 +159,12 @@ export default function ClientsGrid({
       c.cseNames.some((n) => n.toLowerCase() === myName);
   }, [activeCse]);
 
-  const mineClients = useMemo(() => clients.filter(isMine), [clients, isMine]);
+  // Mis clientes / compartidos se calculan DENTRO de la categoría abierta: los dos ejes
+  // se componen (categoría × pertenencia), no compiten.
+  const mineClients = useMemo(() => kindClients.filter(isMine), [kindClients, isMine]);
   const sharedClients = useMemo(
-    () => clients.filter((c) => c.isShared && !isMine(c)),
-    [clients, isMine],
+    () => kindClients.filter((c) => c.isShared && !isMine(c)),
+    [kindClients, isMine],
   );
 
   // Roles "ven todo" abren el índice en "Todos" (su caso normal es la cartera completa).
@@ -157,12 +175,18 @@ export default function ClientsGrid({
   );
 
   const displayedClients = !canFilter
-    ? clients
+    ? kindClients
     : tab === "mine"
       ? mineClients
       : tab === "shared"
         ? sharedClients
-        : clients;
+        : kindClients;
+
+  // Potencial estimado de lo que se está viendo: la suma de los TAM cargados. Los "sin
+  // estimar" se cuentan APARTE y nunca como 0 — si se sumaran como cero, el total diría
+  // que la cartera vale menos de lo que vale y nadie sabría cuánto falta por estimar.
+  const tamTotal = displayedClients.reduce((acc, c) => acc + (c.tamUsd ?? 0), 0);
+  const sinTam = displayedClients.filter((c) => c.tamUsd === null).length;
 
   const columns: TableColumn<ClientRow>[] = [
     {
@@ -229,6 +253,24 @@ export default function ClientsGrid({
       render: (c) => <PastDateCell iso={c.lastCseMeeting} />,
     },
     {
+      key: "tam",
+      header: "TAM",
+      // Sin estimar (null) va al FONDO en ambos sentidos del sort: es ausencia de dato,
+      // no un valor bajo. El Table trata null como "sin valor" y lo manda al final.
+      sortValue: (c) => c.tamUsd,
+      width: "w-24",
+      align: "right",
+      hideOnMobile: true,
+      render: (c) => (
+        <span
+          className={c.tamUsd === null ? "text-fg-muted" : "tabular-nums text-fg-secondary"}
+          title={c.tamUsd === null ? "Ventas todavía no estimó el potencial de esta cuenta" : undefined}
+        >
+          {formatTamUsd(c.tamUsd)}
+        </span>
+      ),
+    },
+    {
       key: "projects",
       header: "Proyectos",
       sortValue: (c) => c.projectCount,
@@ -252,19 +294,48 @@ export default function ClientsGrid({
 
   return (
     <div className="space-y-3">
+      {/* Pestañas de CATEGORÍA: separan la cartera de lo que NO es cliente (aliados
+          comerciales, nosotros mismos, prospectos de Ventas). Se ven siempre. */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {CLIENT_KINDS.map((k) => (
+          <button
+            key={k}
+            onClick={() => setKindTab(k)}
+            title={CLIENT_KIND_META[k].help}
+            className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+              kindTab === k
+                ? "bg-brand/15 text-brand border-brand/30"
+                : "bg-surface text-fg-muted border-line hover:border-fg-muted/40"
+            }`}
+          >
+            {CLIENT_KIND_META[k].plural}{" "}
+            <span className="tabular-nums opacity-70">{countByKind[k] ?? 0}</span>
+          </button>
+        ))}
+        {displayedClients.length > 0 && (
+          <span className="ml-auto text-xs text-fg-muted">
+            Potencial estimado{" "}
+            <span className="tabular-nums text-fg-secondary font-medium">
+              {formatTamUsd(tamTotal)}
+            </span>
+            {sinTam > 0 && <span className="text-fg-muted"> · {sinTam} sin estimar</span>}
+          </span>
+        )}
+      </div>
+
       {/* Toolbar: pestañas Mis clientes / Compartidos conmigo / Todos (solo CSE) */}
       {canFilter && (
         <div className="flex items-center gap-1.5 flex-wrap">
           {(canSeeAll
             ? [
-                { key: "all" as const, label: "Todos", count: clients.length },
+                { key: "all" as const, label: "Todos", count: kindClients.length },
                 { key: "mine" as const, label: "Mis clientes", count: mineClients.length },
                 { key: "shared" as const, label: "Compartido", count: sharedClients.length },
               ]
             : [
                 { key: "mine" as const, label: "Mis clientes", count: mineClients.length },
                 { key: "shared" as const, label: "Compartido", count: sharedClients.length },
-                { key: "all" as const, label: "Todos", count: clients.length },
+                { key: "all" as const, label: "Todos", count: kindClients.length },
               ]
           ).map((t) => (
             <button
@@ -286,7 +357,7 @@ export default function ClientsGrid({
                 : tab === "shared"
                   ? "No tenés clientes compartidos."
                   : "Sin clientes."}
-              {clients.length > 0 && tab !== "all" && (
+              {kindClients.length > 0 && tab !== "all" && (
                 <>
                   {" · "}
                   <button onClick={() => setTab("all")} className="text-brand hover:underline">
@@ -315,8 +386,12 @@ export default function ClientsGrid({
         empty={
           <EmptyState
             variant="dashed"
-            title="Sin clientes aún"
-            description="Creá tu primer cliente con el botón “Nuevo cliente”."
+            title={`Sin ${CLIENT_KIND_META[kindTab].plural.toLowerCase()} aún`}
+            description={
+              kindTab === "CLIENTE"
+                ? "Creá tu primer cliente con el botón “Nuevo cliente”."
+                : `${CLIENT_KIND_META[kindTab].help} Se marca desde la ficha de la empresa, en Configuración.`
+            }
           />
         }
       />

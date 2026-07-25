@@ -6,6 +6,7 @@ import { accessibleClientWhere } from "@/lib/auth/access";
 import { can } from "@/lib/auth/permissions/engine";
 import { parseRunError } from "@/lib/agents/run-error";
 import { resolveRunResultUrl } from "@/lib/agents/run-url";
+import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
 /**
  * GET /api/agent-runs — el feed del CENTRO DE CORRIDAS (RunsIndicator).
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
   // runs globales (clientId null) si puede ver cobranza.
   const scope: Prisma.AgentRunWhereInput = {
     OR: [
-      { client: clientWhere ?? { isProspect: false } },
+      { client: clientWhere ?? { ...CS_CLIENT_WHERE } },
       ...(canCobranza ? [{ clientId: null }] : []),
     ],
   };

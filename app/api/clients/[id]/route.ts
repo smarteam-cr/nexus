@@ -29,7 +29,12 @@ export async function GET(
     return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
   }
 
-  return NextResponse.json(client);
+  // `tamUsd` es Decimal(12,2): sin esto se serializa como STRING y el form de la ficha
+  // recibiría "36000.00" donde espera un número. La frontera lo cruza acá, una vez.
+  return NextResponse.json({
+    ...client,
+    tamUsd: client.tamUsd === null ? null : Number(client.tamUsd),
+  });
 }
 
 // PATCH /api/clients/[id]
