@@ -20,7 +20,14 @@ import "dotenv/config";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
-const TITLE = "Alcance de Breeze para construcción de portales (BORRADOR)";
+const TITLE = "Alcance de Breeze para construcción de portales";
+/**
+ * El seed original lo creó con "(BORRADOR)" en el título. El equipo lo revisó, lo
+ * publicó y se le quitó ese sufijo — pero el buscador de acá abajo es POR TÍTULO, así
+ * que si solo se cambiara la constante, una re-corrida no encontraría el documento y
+ * crearía un DUPLICADO en borrador que además volvería a partir el gate en dos.
+ */
+const TITULOS_HISTORICOS = [TITLE, "Alcance de Breeze para construcción de portales (BORRADOR)"];
 
 const CONTENT = `# Alcance de Breeze para construcción de portales
 
@@ -83,7 +90,7 @@ async function main() {
     tagIds.push(tag.id);
   }
 
-  const existing = await prisma.knowledgeDocument.findFirst({ where: { title: TITLE } });
+  const existing = await prisma.knowledgeDocument.findFirst({ where: { title: { in: TITULOS_HISTORICOS } } });
   if (existing) {
     // Solo se re-conectan los tags: el CONTENIDO no se pisa (el equipo pudo haberlo
     // editado) y el STATUS tampoco (publicarlo o no es decisión del equipo).
