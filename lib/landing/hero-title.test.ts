@@ -46,6 +46,20 @@ describe("la cadena de respaldo del título", () => {
     });
   });
 
+  it("🔒 si el título y el titular dicen lo mismo, la bajada se calla", () => {
+    // Repetir el mismo texto dos veces seguidas se lee como un error de la página, y es
+    // un empate fácil de producir (el agente escribiendo ambos campos, o alguien
+    // copiando uno en el otro).
+    expect(resolveHeroTitle({ escrito: "Diagnóstico comercial", titular: "Diagnóstico comercial" }))
+      .toEqual({ titulo: "Diagnóstico comercial", bajada: "" });
+    // Y con diferencias que no cambian el texto: mayúsculas y espacios de más.
+    expect(resolveHeroTitle({ escrito: "Diagnóstico comercial", titular: "  diagnóstico   COMERCIAL " }))
+      .toEqual({ titulo: "Diagnóstico comercial", bajada: "" });
+    // Pero si de verdad dicen cosas distintas, la bajada se queda.
+    expect(resolveHeroTitle({ escrito: "Diagnóstico comercial", titular: "Perdés leads en el traspaso" }))
+      .toEqual({ titulo: "Diagnóstico comercial", bajada: "Perdés leads en el traspaso" });
+  });
+
   it("sin nada escrito, cae al rótulo del documento", () => {
     expect(resolveHeroTitle({ rotulo: "Plan de implementación" }))
       .toEqual({ titulo: "Plan de implementación", bajada: "" });

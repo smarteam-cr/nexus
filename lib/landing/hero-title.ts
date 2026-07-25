@@ -58,10 +58,21 @@ export interface HeroTitleResult {
 export function resolveHeroTitle({ escrito, titular, rotulo }: HeroTitleInput): HeroTitleResult {
   const propio = texto(escrito);
   const caso = texto(titular);
-  if (propio) return { titulo: propio, bajada: caso };
+  if (propio) {
+    // Si el título propio y el titular dicen LO MISMO, la bajada se calla: repetir el
+    // mismo texto dos veces seguidas se lee como un error de la página, y es un empate
+    // fácil de producir (el agente escribiendo ambos campos, o alguien copiando uno en
+    // el otro). Se compara sin distinguir mayúsculas ni espacios de más.
+    return { titulo: propio, bajada: mismoTexto(propio, caso) ? "" : caso };
+  }
   // Sin título propio: el titular ocupa su lugar y no se repite abajo.
   if (caso) return { titulo: caso, bajada: "" };
   return { titulo: (rotulo ?? "").trim(), bajada: "" };
+}
+
+function mismoTexto(a: string, b: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  return !!b && norm(a) === norm(b);
 }
 
 function texto(v: unknown): string {
@@ -77,11 +88,20 @@ function texto(v: unknown): string {
  */
 export const HERO_TITLE_MAX_CHARS = 60;
 
-/** La frase que se le pide al agente, para que las seis portadas pidan lo mismo. */
+/**
+ * La frase que se le pide al agente, para que las seis portadas pidan lo mismo.
+ *
+ * Dice "puede precisar de qué trata este caso" a propósito: sin esa licencia salen
+ * títulos genéricos, todos iguales entre proyectos. Con ella salen los que sirven
+ * ("Integración HubSpot–SAP: módulo CXC y cobranza"). Es la misma instrucción que usa
+ * el backfill de los documentos ya escritos (scripts/backfill-titulos-portada.ts) —
+ * tienen que pedir lo mismo o conviven dos estilos de título en la misma app.
+ */
 export function heroTitleBrief(ejemplo: string): string {
   return (
     `\`titulo\`: el nombre del documento en pocas palabras (máximo ${HERO_TITLE_MAX_CHARS} ` +
-    `caracteres), del tipo "${ejemplo}". Es el título de la página, no un titular de venta: ` +
-    `sin verbos de transformación, sin promesas y sin el nombre del cliente. `
+    `caracteres), del tipo "${ejemplo}", pudiendo precisar de qué trata este caso concreto ` +
+    `(los sistemas involucrados, el objeto del trabajo). Es un sintagma nominal, no un ` +
+    `titular de venta: sin verbos conjugados, sin promesas y sin el nombre del cliente. `
   );
 }

@@ -66,6 +66,7 @@ const PORTADAS: Record<string, { key: string; ejemplo: string }> = {
 
 interface Fila {
   blockId: string;
+  canvasId: string;
   slug: string;
   proyecto: string;
   titular: string;
@@ -148,13 +149,25 @@ async function main() {
   for (const slug of slugs) {
     const { key } = PORTADAS[slug];
     const bloques = await prisma.canvasBlock.findMany({
+      // blockType CARD y en ORDEN a propósito: la portada podría tener más de un bloque
+      // (pasa: hay una con dos, uno editado a mano y uno del agente). Sin filtrar, se le
+      // escribiría un título distinto a cada uno; y como la pantalla toma el primer CARD
+      // y la impresión toma el primer bloque a secas, papel y pantalla dirían cosas
+      // distintas del mismo documento.
       where: {
+        blockType: "CARD",
         section: { key, canvas: { slug, projectId: { not: null } } },
       },
+      orderBy: { order: "asc" },
       select: {
         id: true,
         data: true,
-        section: { select: { canvas: { select: { slug: true, project: { select: { name: true } } } } } },
+        section: {
+          select: {
+            canvasId: true,
+            canvas: { select: { slug: true, project: { select: { name: true } } } },
+          },
+        },
       },
     });
     for (const b of bloques) {
@@ -166,6 +179,7 @@ async function main() {
       if (!titular && !resumen) continue; // portada vacía: no hay nada que resumir
       filas.push({
         blockId: b.id,
+        canvasId: b.section.canvasId,
         slug: b.section.canvas.slug ?? slug,
         proyecto: b.section.canvas.project?.name ?? "?",
         titular,
@@ -192,10 +206,40 @@ async function main() {
     console.log(`      título:  "${titulo}"`);
     console.log(`      pasa a bajada:  "${f.titular.slice(0, 70)}${f.titular.length > 70 ? "…" : ""}"`);
     if (APPLY) {
+      // Se RE-LEE el bloque justo antes de escribir. Entre la lectura inicial y este
+      // momento pasaron una o dos llamadas al modelo por fila —minutos, en una tanda—
+      // y en esa ventana alguien pudo haber editado el documento desde la pantalla.
+      // Escribir la copia vieja le borraría ese trabajo, y como CanvasBlock no guarda
+      // fecha de modificación, el pisado sería invisible.
+      const fresco = await prisma.canvasBlock.findUnique({
+        where: { id: f.blockId },
+        select: { data: true },
+      });
+      if (!fresco) {
+        console.log(`      (el bloque ya no existe, se salta)`);
+        continue;
+      }
+      const dataFresca = (fresco.data ?? {}) as Record<string, unknown>;
+      if (typeof dataFresca.titulo === "string" && dataFresca.titulo.trim()) {
+        console.log(`      (le escribieron un título mientras tanto, se respeta el suyo)`);
+        continue;
+      }
       // Solo la clave `titulo`. El resto de la data —y el `source` del bloque— quedan igual.
       await prisma.canvasBlock.update({
         where: { id: f.blockId },
-        data: { data: { ...f.data, titulo } as Prisma.InputJsonValue },
+        data: { data: { ...dataFresca, titulo } as Prisma.InputJsonValue },
+      });
+      // Marca el canvas como cambiado: es lo que hace que un documento ya compartido
+      // muestre "cambios sin subir" en vez de decir "Al día" mintiendo. Escribir por
+      // fuera de las rutas normales se saltea esa marca (la ponen las rutas de bloques
+      // vía lib/canvas/touch-content.ts), y una barra que dice "Al día" sobre contenido
+      // que el cliente todavía no vio es peor que no tener barra. Pasó: el kickoff de
+      // JUDESUR quedó diciendo "Al día" con el título nuevo sin publicar.
+      // Se escribe con el cliente de este script en vez de reusar el helper para no
+      // abrir una segunda conexión a la base desde una tanda.
+      await prisma.projectCanvas.update({
+        where: { id: f.canvasId },
+        data: { contentUpdatedAt: new Date() },
       });
     }
     escritas++;

@@ -55,6 +55,7 @@ async function main() {
     JOIN "ProjectCanvas" c ON c.id = s."canvasId"
     LEFT JOIN "Project" p ON p.id = c."projectId"
     WHERE b.data::text LIKE ${"%" + BASURA + "%"}
+       OR b."previousData"::text LIKE ${"%" + BASURA + "%"}
   `;
 
   if (sospechosos.length === 0) {
@@ -66,9 +67,22 @@ async function main() {
   let tocados = 0;
 
   for (const s of sospechosos) {
-    const bloque = await prisma.canvasBlock.findUnique({ where: { id: s.id }, select: { data: true } });
+    const bloque = await prisma.canvasBlock.findUnique({
+      where: { id: s.id },
+      // `previousData` es el respaldo del "deshacer" de un bloque. Limpiarlo también NO
+      // es cosmético: si la basura queda ahí, un clic en deshacer la devuelve al
+      // documento — y en un requerimiento técnico eso lo ve el desarrollador externo al
+      // instante, porque ese documento se lee en vivo y no tiene foto congelada.
+      select: { data: true, previousData: true },
+    });
     const data = (bloque?.data ?? {}) as Record<string, unknown>;
-    const { limpia, claves } = limpiar(data);
+    const previa = (bloque?.previousData ?? null) as Record<string, unknown> | null;
+    const enData = limpiar(data);
+    const enPrevia = previa ? limpiar(previa) : { limpia: null, claves: [] as string[] };
+    const claves = [
+      ...enData.claves,
+      ...enPrevia.claves.map((k) => `${k} (deshacer)`),
+    ];
     if (claves.length === 0) {
       console.log(`  · ${s.projectName ?? "?"} — ${s.canvasName}/${s.key}: la cadena está anidada, se salta`);
       continue;
@@ -80,7 +94,10 @@ async function main() {
     if (APPLY) {
       await prisma.canvasBlock.update({
         where: { id: s.id },
-        data: { data: limpia as Prisma.InputJsonValue },
+        data: {
+          ...(enData.claves.length ? { data: enData.limpia as Prisma.InputJsonValue } : {}),
+          ...(enPrevia.claves.length ? { previousData: enPrevia.limpia as Prisma.InputJsonValue } : {}),
+        },
       });
     }
     tocados++;
