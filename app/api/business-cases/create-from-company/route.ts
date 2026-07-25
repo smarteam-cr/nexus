@@ -3,7 +3,7 @@
  *   body: { companyId, companyName, domain?, dealId?, name?, caseType?, caseSubtype? }
  *
  * Crea un business case sobre una empresa de HubSpot que puede no ser cliente:
- * find-or-create de un Client (isProspect=true si es nuevo) + BusinessCase (con su
+ * find-or-create de un Client (kind=PROSPECTO si es nuevo) + BusinessCase (con su
  * tipo + tags seed) + Plantilla v0 sembrada con el template del tipo. Devuelve
  * el businessCaseId. Gateado con guardSalesAccess.
  */
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
         company: companyName,
         hubspotCompanyId: companyId,
         emailDomains: domain ? [domain] : [],
-        isProspect: true,
+        kind: "PROSPECTO",
       },
       select: { id: true },
     });

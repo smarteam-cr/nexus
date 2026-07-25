@@ -19,6 +19,7 @@ import { getSystemHubspotClient } from "./client";
 import { fetchCompanyDeals, type AvailableDeal } from "./deals";
 import { fetchCompanyTimelineItems } from "./company-timeline";
 import { fetchCompanyTickets } from "./tickets";
+import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RENEWAL_WINDOW_DAYS = 90; // renovaciones "próximas" = closedate dentro de esta ventana
@@ -202,7 +203,7 @@ export async function refreshAllCsSignals(
 ): Promise<RefreshAllResult> {
   const maxAgeHours = opts.maxAgeHours ?? 20;
   const clients = await prisma.client.findMany({
-    where: { isProspect: false, hubspotCompanyId: { not: null } },
+    where: { ...CS_CLIENT_WHERE, hubspotCompanyId: { not: null } },
     select: { id: true, csSignals: { select: { fetchedAt: true } } },
     orderBy: { name: "asc" },
   });

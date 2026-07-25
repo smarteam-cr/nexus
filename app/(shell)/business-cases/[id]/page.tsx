@@ -41,7 +41,7 @@ export default async function BusinessCasePage({
       caseType: true,
       caseSubtype: true,
       language: true,
-      client: { select: { id: true, name: true, isProspect: true, logoUrl: true } },
+      client: { select: { id: true, name: true, kind: true, logoUrl: true } },
     },
   });
   if (!bc) notFound();
@@ -77,7 +77,7 @@ export default async function BusinessCasePage({
       </div>
       <p className="mt-1 text-sm text-fg-muted">
         {bc.client.name}
-        {bc.client.isProspect ? " (prospecto)" : ""}
+        {bc.client.kind === "PROSPECTO" ? " (prospecto)" : ""}
         {bc.hubspotDealId ? " · deal vinculado" : ""}
       </p>
 

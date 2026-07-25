@@ -21,6 +21,7 @@ import { anthropic } from "@/lib/anthropic";
 import { buildWatchdogContext } from "./watchdog-context";
 import { claimDateKey } from "@/lib/jobs/registry";
 import { crDateParts, WEEKDAYS_MON_FRI } from "@/lib/jobs/time";
+import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
 const AGENT_ID = "agent-cs-watchdog";
 const AGENT_SLUG = "cs-watchdog";
@@ -430,7 +431,7 @@ export async function runWatchdogSweep(now: Date): Promise<{ candidates: number;
   // Mismo criterio que el panel (accessibleClientWhere de roles see-all): los
   // prospectos de Ventas no son clientes reales — sin esto el sweep les crearía
   // alertas que la cartera nunca muestra.
-  const rows = await loadPortfolio({ isProspect: false });
+  const rows = await loadPortfolio({ ...CS_CLIENT_WHERE });
 
   // Señales por cliente (para candidatos por frialdad/renovación/tickets).
   const signals = await prisma.clientCsSignals.findMany({

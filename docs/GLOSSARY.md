@@ -76,6 +76,26 @@
   contexto/estrategia (no es un proyecto real de servicio).
 - **`hubspotCompanyId`** (en `Client`): id de la company de HubSpot ligada al cliente. Habilita
   HubSpot→Client en el cascade.
+- **`ClientKind`** (`Client.kind`): qué ES una empresa para el negocio, en un solo enum
+  excluyente. **CLIENTE** = nos compró o nos está comprando (la cartera: entra a los listados,
+  al portafolio y a cobranza) · **PROSPECTO** = Ventas la creó para un business case, todavía no
+  compró · **ALIADO** = aliado comercial o partner con el que trabajamos (ej. 4am Saatchi), es
+  una empresa pero no es cartera · **INTERNO** = Smarteam y sus entidades (no somos nuestro
+  propio cliente). Se marca por interfaz en la ficha del cliente → Configuración y se navega por
+  las pestañas de /clients. Reemplaza a `Client.isProspect` (DEPRECATED, eliminar después del
+  2026-09-30).
+- **cartera (de CS)** / **`CS_CLIENT_WHERE`** (`lib/clients/kind.ts`): los clientes de verdad,
+  o sea `kind = CLIENTE`. Es el filtro ÚNICO que usan los listados y métricas de CS, cobranza y
+  portafolio — **ninguna query escribe `kind` a mano**. Es ortogonal al acceso
+  (`accessibleClientWhere`, quién ve qué cliente): uno dice "esto es un cliente", el otro "a este
+  usuario le toca".
+- **TAM** (`Client.tamUsd`): *Total Addressable Market* de una cuenta — cuánto puede llegar a
+  facturar en un año, en USD. Lo estima **Ventas a mano** (celda `ventas.write`); Nexus no lo
+  deriva de cobros ni de proyectos. `null` = **sin estimar**, que NO es cero: el "potencial
+  estimado" del listado suma los cargados y cuenta los sin estimar aparte.
+- **potencial estimado**: la suma de los TAM de las empresas que se están viendo en /clients,
+  con el conteo de las que todavía no tienen TAM al lado. No es pipeline ni forecast — es el
+  techo teórico de la cartera según Ventas.
 - **"feeding"**: las sesiones que alimentan un handoff (panel de revisión `SessionSelectionReview`).
 - **`publishedSnapshot`**: foto client-safe (staging) que ve el cliente externo; el contenido vivo
   es borrador hasta "Subir".

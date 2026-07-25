@@ -9,6 +9,7 @@ import {
   ForbiddenError,
 } from "@/lib/auth/supabase";
 import { accessibleClientWhere, sharedClientIdsFor } from "@/lib/auth/access";
+import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { can } from "@/lib/auth/permissions/engine";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { ClientsTable, ClientsTableZoneSkeleton } from "./ClientsTable";
@@ -54,13 +55,20 @@ export default async function ClientsPage() {
   // Filtro de acceso server-side: CSE ve solo sus clientes (owner) + compartidos;
   // roles con visibilidad total → null (sin filtro). Ya no es cosmético en el browser.
   // sharedIds = los compartidos con él (GRANT) → alimenta la pestaña "Compartidos conmigo".
+  //
+  // `kinds: "all"` es EXCLUSIVO de esta pantalla: es la única donde se re-clasifica una
+  // empresa, así que tiene que poder ver a los aliados/internos/prospectos para sacarlos
+  // de la cartera. Las pestañas de categoría separan lo que es cliente de lo que no.
   const [clientWhere, sharedIds] = await Promise.all([
-    accessibleClientWhere(user),
+    accessibleClientWhere(user, { kinds: "all" }),
     sharedClientIdsFor(user),
   ]);
 
   // Count barato para la descripción del header (la lista completa llega por streaming).
-  const clientCount = await prisma.client.count({ where: clientWhere ?? undefined });
+  // Cuenta SOLO clientes de verdad: el header dice "N clientes", no "N empresas".
+  const clientCount = await prisma.client.count({
+    where: { AND: [clientWhere ?? {}, { ...CS_CLIENT_WHERE }] },
+  });
 
   return (
     <div className={SHELL_DEFAULT}>

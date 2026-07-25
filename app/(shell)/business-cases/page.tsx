@@ -31,7 +31,7 @@ export default async function BusinessCasesHubPage() {
       name: true,
       status: true,
       caseType: true,
-      client: { select: { name: true, isProspect: true } },
+      client: { select: { name: true, kind: true } },
     },
   });
 
@@ -69,7 +69,7 @@ export default async function BusinessCasesHubPage() {
                 <p className="text-sm font-medium text-fg truncate">{c.name}</p>
                 <p className="text-xs text-fg-muted truncate">
                   {c.client.name}
-                  {c.client.isProspect ? " (prospecto)" : ""}
+                  {c.client.kind === "PROSPECTO" ? " (prospecto)" : ""}
                 </p>
               </div>
               <span className="flex-shrink-0 flex items-center gap-1.5">

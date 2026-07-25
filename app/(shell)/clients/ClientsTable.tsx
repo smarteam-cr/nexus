@@ -42,6 +42,8 @@ export async function ClientsTable({
         company: true,
         emailDomains: true,
         createdAt: true,
+        kind: true,
+        tamUsd: true,
         projects: { select: { hubspotOwnerName: true, hubspotOwnerEmail: true } },
         _count: { select: { projects: true } },
       },
@@ -82,6 +84,9 @@ export async function ClientsTable({
       name: c.name,
       company: c.company,
       createdAt: c.createdAt.toISOString(),
+      kind: c.kind,
+      // Decimal(12,2) → number en la frontera server→client (no es serializable).
+      tamUsd: c.tamUsd === null ? null : Number(c.tamUsd),
       cseNames,
       cseEmails,
       lastSalesMeeting: md?.sales ? md.sales.toISOString() : null,
@@ -119,9 +124,11 @@ export async function ClientsTable({
 export function ClientsTableZoneSkeleton({ showPills }: { showPills: boolean }) {
   return (
     <div className="space-y-3">
+      {/* Pestañas de CATEGORÍA (Clientes · Prospectos · Aliados · Internos) — las ve todo rol */}
+      <SkeletonTabs count={4} variant="pill" className="gap-1.5 flex-wrap" />
       {showPills && <SkeletonTabs count={3} variant="pill" className="gap-1.5 flex-wrap" />}
-      {/* Cliente · Última actividad · Próxima reunión · CSE · Reunión ventas · Sesión CSE · Proyectos · acciones */}
-      <TableSkeleton columns={8} rows={9} toolbar toolbarActions={2} />
+      {/* Cliente · Última actividad · Próxima reunión · CSE · Reunión ventas · Sesión CSE · TAM · Proyectos · acciones */}
+      <TableSkeleton columns={9} rows={9} toolbar toolbarActions={2} />
     </div>
   );
 }

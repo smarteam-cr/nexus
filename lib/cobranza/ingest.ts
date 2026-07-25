@@ -16,6 +16,7 @@ import { prisma } from "@/lib/db/prisma";
 import { effectiveDomainsForClient } from "@/lib/sessions/categorize";
 import type { CuentaEntrante, IngestResultado } from "./ports";
 import { clampInicioCicloCorriente, esDominioCompartido, nombreEnSkipList } from "./import-core";
+import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
 const dayUTC = (isoDate: string) => new Date(`${isoDate}T00:00:00.000Z`);
 
@@ -26,7 +27,7 @@ export async function ingestCuentasEntrantes(
   // Índices en memoria UNA vez (patrón partner-sync byCompanyId/byDomain); se
   // actualizan durante el batch para que dos filas de la misma empresa no dupliquen.
   const clients = await prisma.client.findMany({
-    where: { isProspect: false },
+    where: { ...CS_CLIENT_WHERE },
     select: { id: true, name: true, company: true, emailDomains: true, source: true, sourceExternalId: true },
   });
   const byFuenteId = new Map<string, string>();
@@ -80,7 +81,7 @@ export async function ingestCuentasEntrantes(
           const client = await tx.client.create({
             data: {
               name: cta.clienteNombre,
-              isProspect: false,
+              kind: "CLIENTE", // una cuenta de cobranza es, por definición, cartera
               emailDomains: dominioUsable ? [dominioUsable] : [], // jamás dominios compartidos
               source: cta.fuenteRef.fuente,
               sourceExternalId: cta.fuenteRef.idExterno,

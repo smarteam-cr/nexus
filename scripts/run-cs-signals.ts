@@ -12,6 +12,7 @@
 import "dotenv/config";
 import { prisma } from "../lib/db/prisma";
 import { computeClientSignals, refreshAllCsSignals } from "../lib/hubspot/cs-signals";
+import { CS_CLIENT_WHERE } from "../lib/clients/kind";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -32,7 +33,7 @@ async function main() {
   if (limit) {
     // Smoke acotado: refresca solo los primeros N clientes elegibles.
     const clients = await prisma.client.findMany({
-      where: { isProspect: false, hubspotCompanyId: { not: null } },
+      where: { ...CS_CLIENT_WHERE, hubspotCompanyId: { not: null } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
       take: limit,
