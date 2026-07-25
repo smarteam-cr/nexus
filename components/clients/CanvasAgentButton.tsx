@@ -96,7 +96,7 @@ export default function CanvasAgentButton({
   // (lib/agents/run-url.ts) — acá todavía no existen.
   const notifyUrl = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}`;
 
-  const run = async () => {
+  const run = async (forzar = false) => {
     if (running || disabled || busy) return;
     maybeRequestPermission(); // gesto del usuario → ofrecer activar notificaciones (una vez)
     setRunning(true);
@@ -104,12 +104,26 @@ export default function CanvasAgentButton({
       const res = await fetch(`/api/clients/${clientId}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId, projectId, ...(useAsync ? { async: true } : {}) }),
+        body: JSON.stringify({
+          agentId,
+          projectId,
+          ...(useAsync ? { async: true } : {}),
+          ...(forzar ? { forzar: true } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        // Guards (p.ej. NO_HANDOFF) devuelven { error, message } → mostrar el mensaje claro.
-        toast.error(data.message ?? data.error ?? "No se pudo ejecutar el agente.");
+        if (data.error === "PIECE_NOT_APPLICABLE") {
+          // AVISA y deja seguir: la pieza no le corresponde al proyecto por sus tags,
+          // pero los tags se equivocan y el CSE es quien sabe. El toast con acción es
+          // sticky, así que el aviso espera la decisión en vez de desaparecer solo.
+          toast.info(data.message ?? "Esta pieza no le corresponde a este proyecto.", {
+            action: { label: "Generar igual", onClick: () => void run(true) },
+          });
+        } else {
+          // Guards (p.ej. NO_HANDOFF) devuelven { error, message } → mostrar el mensaje claro.
+          toast.error(data.message ?? data.error ?? "No se pudo ejecutar el agente.");
+        }
       } else if (data.runId) {
         const result = await track(data.runId);
         const summary = summarizePollResult(result);
@@ -139,7 +153,7 @@ export default function CanvasAgentButton({
 
   return (
     <button
-      onClick={run}
+      onClick={() => void run()}
       disabled={running || disabled || !!busy}
       className={
         className ??

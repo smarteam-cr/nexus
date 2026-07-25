@@ -37,6 +37,8 @@ import { getProjectHandoffSessions, getClientSessions } from "@/lib/sessions/pro
 import { fetchCompanyTimeline, fetchCompanyTimelineSplit, serializeTimeline, projectEraSince } from "@/lib/hubspot/company-timeline";
 import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT, RECURRENTE_TAG, hasTechnicalScope } from "@/lib/tags/catalog";
 import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
+import { pieceByAgentGroup } from "@/lib/pieces/registry";
+import { pieceAppliesByTags, pieceReadiness } from "@/lib/flow/piece-readiness";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -169,6 +171,8 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     regeneratePhaseId?: string; // D.1 regen por fase: rehace SOLO esta fase del cronograma (agente de detalle)
     regenerateMode?: "replace" | "keep"; // regen por fase: reemplazar pendientes IA (default) o conservarlas y solo sumar lo nuevo
     preview?: boolean; // regen por fase: computa la propuesta y la devuelve SIN persistir (modal de curación)
+    /** El CSE ya vio el aviso de "esta pieza no le corresponde al proyecto" y sigue igual. */
+    forzar?: boolean;
   };
   const bodyStage: number        = typeof body?.stage === "number" ? body.stage : 1;
   const bodyStep: number         = typeof body?.step  === "number" ? body.step  : 0;
@@ -383,6 +387,29 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         { error: "NO_HANDOFF", message: "Este proyecto no tiene handoff generado. Generá el handoff antes de correr el kickoff." },
         { status: 400 },
       );
+    }
+  }
+
+  // ── La pieza no le corresponde a este proyecto ──────────────────────────────
+  // AVISA, no bloquea: los tags se equivocan y los proyectos son raros; una pieza que se
+  // niega a existir por un tag mal puesto obliga a pelear con la herramienta en el peor
+  // momento. Pero generar en silencio era peor — hasta acá, el requerimiento técnico
+  // corría en CUALQUIER proyecto, y el único lugar que miraba sus tags era el encadenado
+  // automático del handoff. El CSE se enteraba leyendo un documento que no venía al caso.
+  if (bodyProjectId) {
+    const destino = agent.agentGroup ? pieceByAgentGroup(agent.agentGroup) : null;
+    if (destino && !body.forzar) {
+      const proj = await prisma.project.findUnique({
+        where: { id: bodyProjectId },
+        select: { tags: true },
+      });
+      if (!pieceAppliesByTags(destino.slug, proj?.tags ?? [])) {
+        const r = pieceReadiness(destino.slug, { tags: proj?.tags ?? [], piezasConContenido: [] });
+        return NextResponse.json(
+          { error: "PIECE_NOT_APPLICABLE", message: r.reason, slug: destino.slug },
+          { status: 400 },
+        );
+      }
     }
   }
 

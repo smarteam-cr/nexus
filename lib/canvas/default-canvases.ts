@@ -351,7 +351,7 @@ function byBlockCount(rows: Array<{ key: string; _count: { blocks: number } }>, 
  * GENÉRICO a propósito: Desarrollo y Exploración son on-demand con la MISMA mecánica —
  * antes esto era el mismo cuerpo copiado por canvas.
  */
-async function createOnDemandCanvas(projectId: string, def: CanvasDefinition, db: Db = prisma): Promise<string> {
+export async function createOnDemandCanvas(projectId: string, def: CanvasDefinition, db: Db = prisma): Promise<string> {
   const canvas = await db.projectCanvas.create({
     data: {
       projectId,
@@ -402,7 +402,7 @@ async function createOnDemandCanvas(projectId: string, def: CanvasDefinition, db
  * el bloque de las curadas que no lo tengan. NUNCA borra ni pisa data. Idempotente.
  * La llaman las ramas de analyze ANTES de generar (igual que kickoff).
  */
-async function reconcileOnDemandCanvasSections(
+export async function reconcileOnDemandCanvasSections(
   canvasId: string,
   def: CanvasDefinition,
   sequenceFn: (existingKeys: string[]) => string[],

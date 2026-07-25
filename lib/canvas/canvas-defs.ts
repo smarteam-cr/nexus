@@ -277,7 +277,7 @@ export const KICKOFF_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c
  * Vive UNA vez y lo envuelven los tres canvases reconciliables (kickoff, desarrollo,
  * exploración) — antes era el mismo algoritmo copiado por canvas.
  */
-function sectionSequence(canonKeys: string[], existingKeys: string[]): string[] {
+export function sectionSequence(canonKeys: string[], existingKeys: string[]): string[] {
   const seq = [...existingKeys];
   for (const key of canonKeys) {
     if (seq.includes(key)) continue;
@@ -348,4 +348,54 @@ export const EXPLORACION_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.fin
  *  reconcileExploracionCanvasSections. */
 export function exploracionSectionSequence(existingKeys: string[]): string[] {
   return sectionSequence(EXPLORACION_CANVAS.sections.map((s) => s.key), existingKeys);
+}
+
+// ── Canvas Implementación (qué construir en HubSpot) ─────────────────────────
+/**
+ * La pieza donde el CSE ve QUÉ hay que construir en HubSpot, y desde donde salen los
+ * prompts para que Breeze lo cree.
+ *
+ * ORDEN DEL CONTENIDO, y no es arbitrario: primero se resuelve la arquitectura (qué
+ * propiedades, qué pipelines, qué objetos), y RECIÉN AHÍ valen los prompts. Pedirle a
+ * Breeze que construya sin haber decidido la arquitectura es pedirle que la invente.
+ *
+ * Tiene sentido cuando ya se entendió al cliente — exploración y planificación hechas.
+ * Eso NO se bloquea: la pieza lo avisa (lib/flow/piece-readiness.ts) y el CSE decide.
+ *
+ * Su agente llega en su propia ola; hasta entonces la pieza se activa y se llena a mano.
+ */
+export const IMPLEMENTACION_CANVAS: CanvasDefinition = {
+  slug: "implementation",
+  name: "Implementación",
+  isDefault: false,
+  order: 5,
+  sections: [
+    { key: "arquitectura_propiedades", label: "Arquitectura de propiedades" },
+    { key: "pipelines",                label: "Pipelines y objetos" },
+    { key: "procesos_marketing",       label: "Procesos de marketing" },
+    { key: "prompts_breeze",           label: "Prompts para Breeze" },
+    { key: "a_mano",                   label: "Lo que va a mano" },
+  ],
+};
+
+export function implementacionSectionSequence(existingKeys: string[]): string[] {
+  return sectionSequence(IMPLEMENTACION_CANVAS.sections.map((s) => s.key), existingKeys);
+}
+
+// ── Índice pieza → definición ────────────────────────────────────────────────
+/**
+ * De la IDENTIDAD de una pieza a su estructura. Es lo que faltaba para poder crear una
+ * pieza cualquiera a mano: las definiciones estaban repartidas entre el array de las que
+ * nacen con el proyecto y las constantes sueltas de las on-demand, sin nada que las una.
+ *
+ * El handoff queda afuera a propósito: no se activa desde el desplegable — lo monta el
+ * flujo de handoffs, que además crea la entidad.
+ */
+export const CANVAS_DEF_BY_SLUG: Record<string, CanvasDefinition> = Object.fromEntries(
+  [...DEFAULT_PROJECT_CANVASES, DESARROLLO_CANVAS, IMPLEMENTACION_CANVAS].map((d) => [d.slug, d]),
+);
+
+/** La estructura de una pieza, o null si no es una pieza activable desde el desplegable. */
+export function canvasDefForSlug(slug: string): CanvasDefinition | null {
+  return CANVAS_DEF_BY_SLUG[slug] ?? null;
 }

@@ -20,11 +20,13 @@ import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { slugForCanvas } from "@/lib/pieces/registry";
 import { buildPieceRows, type RowState } from "@/lib/flow/dropdown-rows";
+import { pieceReadiness } from "@/lib/flow/piece-readiness";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import ProjectHandoffSection from "./ProjectHandoffSection";
 import { WorkspaceSkeleton } from "./skeletons";
 import ProjectLifecyclePanel from "@/components/lifecycle/ProjectLifecyclePanel";
 import { useWorkspace } from "./WorkspaceContext";
+import { useToast } from "@/components/ui/Toast";
 import { readCanvasCache, writeCanvasCache } from "@/lib/clients/canvas-cache";
 
 const FlowchartViewer = dynamic(
@@ -159,6 +161,7 @@ export default function ProjectCanvasPanel({
   const [agentNonce, setAgentNonce] = useState(0);
   // Para refrescar el widget del proyecto (ProjectGPS + pills de setup) al generar un canvas.
   const { bumpGpsRefresh, canvasRefreshSignal } = useWorkspace();
+  const toast = useToast();
   const [canvasDropdownOpen, setCanvasDropdownOpen] = useState(false);
   const [addingSectionName, setAddingSectionName] = useState<string | null>(null);
   const canvasDropdownRef = useRef<HTMLDivElement>(null);
@@ -178,7 +181,9 @@ export default function ProjectCanvasPanel({
   const activeSlug = activeCanvas ? slugForCanvas(activeCanvas) : null;
   // Las filas del desplegable salen del FLUJO (lib/flow), no de la lista de canvases.
   const pieceRows = buildPieceRows(canvases);
-
+  // Qué piezas ya tienen algo escrito — lo mira `pieceReadiness` para avisar cuando a una
+  // pieza le faltan sus pasos previos.
+  const piezasConContenido = pieceRows.filter((r) => r.state === "generada").map((r) => r.slug);
   // Update URL when canvas changes (no page reload)
   const switchCanvas = useCallback((canvasId: string) => {
     // Clickear el canvas que YA está activo colgaba la pantalla: `setActiveCanvasId`
@@ -231,6 +236,35 @@ export default function ProjectCanvasPanel({
       // forma de recuperarse. Y a partir de F2 la lista puede quedar vacía a propósito.
       .finally(() => setListLoaded(true));
   }, [projectId]);
+
+  const [activando, setActivando] = useState<string | null>(null);
+
+  /**
+   * Activar una pieza desde el `+`. Crea el documento VACÍO y lleva ahí: generar es un
+   * segundo clic a propósito — disparar un agente sin que nadie lo pida gasta tokens y,
+   * sobre una pieza que ya tuviera contenido, lo pisaría.
+   */
+  const activarPieza = useCallback(async (slug: string) => {
+    setActivando(slug);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/pieces/${slug}`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.message ?? "No se pudo activar la pieza.");
+        return;
+      }
+      await refetchCanvases();
+      switchCanvas(data.canvasId);
+      setCanvasDropdownOpen(false);
+      if (data.outcome === "reactivada") {
+        toast.info(`${data.label} vuelve a estar activa — su contenido sigue ahí.`);
+      }
+    } catch {
+      toast.error("No se pudo activar la pieza.");
+    } finally {
+      setActivando(null);
+    }
+  }, [projectId, refetchCanvases, switchCanvas, toast]);
 
   // Primer load + refetch cuando la señal genérica de canvases bumpea (canvas
   // auto-creado por un agente). La señal es el punto de escalabilidad: cualquier
@@ -505,6 +539,12 @@ export default function ProjectCanvasPanel({
                 <div className="absolute left-0 top-full mt-1 z-50 w-80 bg-gray-900 border border-gray-800 rounded-xl shadow-xl py-1">
                   {pieceRows.map((row) => {
                     const activa = row.canvasId !== null && row.canvasId === activeCanvasId;
+                    // ¿Esta pieza le corresponde a este proyecto, y están sus pasos
+                    // previos? Nunca bloquea: informa. (lib/flow/piece-readiness)
+                    const readiness = pieceReadiness(row.slug, {
+                      tags: tags ?? [],
+                      piezasConContenido,
+                    });
                     return (
                       /* Fila = contenedor + DOS botones. Antes la fila entera era un
                          <button>, así que no se le podía meter el CTA adentro: anidar
@@ -518,24 +558,37 @@ export default function ProjectCanvasPanel({
                       >
                         <button
                           onClick={() => {
-                            if (!row.canvasId) return; // "por activar": no hay adónde ir todavía
+                            // El `+` ACTIVA la pieza; las que ya existen, navegan.
+                            if (!row.canvasId) {
+                              void activarPieza(row.slug);
+                              return;
+                            }
                             switchCanvas(row.canvasId);
                             setCanvasDropdownOpen(false);
                           }}
-                          disabled={!row.canvasId}
-                          className={`flex-1 flex items-center gap-2 text-left text-sm transition-colors ${
+                          disabled={activando !== null}
+                          className={`flex-1 flex items-center gap-2 text-left text-sm transition-colors disabled:opacity-60 ${
                             activa
                               ? "text-brand font-semibold"
                               : row.canvasId
                                 ? "text-gray-300"
-                                : "text-fg-muted cursor-default"
+                                : "text-fg-muted"
                           }`}
-                          title={ESTADO_PIEZA[row.state].hint}
+                          /* El motivo de por qué una pieza no corresponde pesa más que el
+                             estado: es lo que el CSE necesita saber ANTES de activarla. */
+                          title={readiness.reason ?? ESTADO_PIEZA[row.state].hint}
                         >
                           <span aria-hidden className="w-3 shrink-0 text-center">
-                            {ESTADO_PIEZA[row.state].glifo}
+                            {activando === row.slug ? "…" : ESTADO_PIEZA[row.state].glifo}
                           </span>
-                          {row.label}
+                          <span className={readiness.reason ? "opacity-60" : undefined}>
+                            {row.label}
+                          </span>
+                          {readiness.reason && (
+                            <span aria-hidden className="text-amber-500/80 text-xs" title={readiness.reason}>
+                              !
+                            </span>
+                          )}
                         </button>
                         {row.agent && row.canvasId && (
                           <CanvasAgentButton
