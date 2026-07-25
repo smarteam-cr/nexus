@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject, denyHandoffCanvasEditForCse } from "@/lib/auth/api-guards";
+import {
+  guardAccessToProject,
+  guardProjectCanvasDelete,
+  denyHandoffCanvasEditForCse,
+} from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 type Params = Promise<{ projectId: string; canvasId: string }>;
@@ -47,10 +51,13 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
   return NextResponse.json(canvas);
 }
 
-// DELETE: delete a custom canvas (not default)
+// DELETE: borra un canvas del proyecto. Irreversible — cascadea a secciones y bloques.
+// Por eso pide la celda `proyectos.deleteCanvas` (solo CSL/SUPER_ADMIN por default) y no
+// solo acceso al cliente: borrar UNA tarea del cronograma ya exigía capacidad, el
+// contenedor no podía estar más suelto que su contenido.
 export async function DELETE(_req: NextRequest, { params }: { params: Params }) {
   const { projectId, canvasId } = await params;
-  const guard = await guardAccessToProject(projectId);
+  const guard = await guardProjectCanvasDelete(projectId);
   if (guard instanceof NextResponse) return guard;
 
   const canvas = await prisma.projectCanvas.findUnique({

@@ -12,6 +12,13 @@
  * handoff/kickoff/cronograma/procesos) NO vive acá — vive en la SEMILLA de la
  * DB (scripts/seed-role-permissions.ts). El default de código es compat exacta.
  *
+ * ÚNICA DESVIACIÓN de "compat exacta" (2026-07-24): `proyectos.deleteCanvas` nace
+ * apagado para todos salvo CSL. Antes ese borrado solo pedía acceso al cliente, así
+ * que la compat literal sería darlo a los 7 roles. Se decidió restringirlo, y es
+ * gratis: el endpoint NO tiene ningún llamador en la aplicación — no hay botón que
+ * deje de funcionar. Va en el default de código y no en la semilla justamente para
+ * que no haya que acordarse de aplicarlo en ningún entorno.
+ *
  * Precedencia (computeEffective): DEFAULT_MATRIX[rol] ← plantilla del rol (DB)
  * ← overrides del usuario (sparse). SUPER_ADMIN = all-true SIEMPRE (anti-lockout:
  * ni la DB ni los overrides pueden recortarlo). Rol desconocido en runtime
@@ -103,6 +110,9 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     exploracion: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "delete", "generate", "regenerate"],
+    // Único rol operativo (fuera de SUPER_ADMIN) que puede borrar un canvas entero.
+    // Misma doctrina que `cronograma.delete`: el CSE suspende, el líder borra.
+    proyectos: ["deleteCanvas"],
     ventas: ["read", "write"],
     marketing: ["read", "write"],
     conocimientos: ["write"],

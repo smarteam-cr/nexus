@@ -96,6 +96,22 @@ export const PERMISSION_SECTIONS = [
     ],
   },
   {
+    // El PROYECTO como contenedor, no su contenido. Las celdas por pieza (kickoff,
+    // desarrollo, exploración…) gobiernan generar y regenerar con IA; ninguna cubría
+    // borrar el canvas entero, que hasta 2026-07-24 solo pedía acceso al cliente.
+    // O sea: borrar UNA tarea del cronograma exigía capacidad, y borrar el canvas que
+    // la contiene no exigía nada. Esta sección cierra esa asimetría.
+    key: "proyectos",
+    label: "Proyectos (estructura)",
+    actions: [
+      {
+        key: "deleteCanvas",
+        label: "Eliminar un canvas del proyecto",
+        enforced: true,
+      },
+    ],
+  },
+  {
     key: "ventas",
     label: "Ventas / Business Cases",
     actions: [

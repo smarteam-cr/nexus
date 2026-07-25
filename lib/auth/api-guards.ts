@@ -273,6 +273,28 @@ export async function guardTimelineDelete(
 }
 
 /**
+ * BORRAR un canvas del proyecto: acceso al CLIENTE + celda `proyectos.deleteCanvas`
+ * (solo CSL y SUPER_ADMIN por default).
+ *
+ * Por qué existe: el borrado cascadea a secciones y bloques, sin soft-delete y sin
+ * deshacer. Hasta 2026-07-24 solo pedía acceso al cliente — o sea que borrar UNA tarea
+ * del cronograma exigía capacidad (`guardTimelineDelete`) y borrar el canvas entero que
+ * la contiene no exigía nada. Es la misma doctrina de siempre: el CSE suspende, no borra.
+ *
+ * Endurecerlo no le sacó un botón a nadie: este DELETE no tiene ningún llamador en la
+ * aplicación (el único fetch a esa ruta desde la UI es el PUT que agrega una sección).
+ */
+export async function guardProjectCanvasDelete(
+  projectId: string,
+): Promise<(Awaited<ReturnType<typeof requirePermission>> & { clientId: string }) | NextResponse> {
+  const access = await guardAccessToProject(projectId);
+  if (access instanceof NextResponse) return access;
+  const guard = await guardPermission("proyectos", "deleteCanvas");
+  if (guard instanceof NextResponse) return guard;
+  return { ...guard, clientId: access.clientId };
+}
+
+/**
  * Para endpoints de canvas GENÉRICOS (compartidos con Kickoff/Diagnóstico): si el
  * canvas que se edita es "Handoff", exige `handoffAnywhere` (CSE no edita handoff).
  * Para cualquier otro canvas devuelve null (el endpoint ya validó acceso al proyecto).

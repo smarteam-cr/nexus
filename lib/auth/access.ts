@@ -5,36 +5,43 @@
  * sección 4.4 del ARCHITECTURE.md (recordá: el acceso se otorga a nivel
  * cliente, NO a nivel proyecto — sección 4.3).
  *
+ * ── SOLO USUARIOS INTERNOS ────────────────────────────────────────────────────
+ * Esta cadena es la de la GENTE DE SMARTEAM. El cliente final entra por otra puerta
+ * completamente distinta (token + cookie `nexus_ext_access`, ver lib/external/access.ts)
+ * y nunca llega acá.
+ *
+ * Hasta 2026-07-24 la primera línea era `requireUser()` —que acepta cualquier AppUser—
+ * y más abajo había una rama `kind === "EXTERNAL"` que devolvía acceso a TODOS los
+ * proyectos de "su" cliente sin mirar rol ni permisos. Hoy nadie puede alcanzarla (el
+ * callback de login rechaza todo lo que no sea INTERNAL y nadie crea usuarios EXTERNAL),
+ * pero era un fail-open armado: el día que se construya el login de clientes, ~42
+ * endpoints —incluido el borrado de canvases— se abrían de golpe sin que nada avisara.
+ *
+ * Por eso la puerta ahora es `requireInternalUser()`. Si alguna vez hace falta acceso
+ * externo con sesión, va por su PROPIA cadena (`requireExternalUser` + un filtro de
+ * visibilidad propio), NUNCA reintroduciendo una rama por `kind` acá adentro. Hay un
+ * guard que falla si vuelve a aparecer: lib/auth/project-api-guards.test.ts.
+ *
  * Orden de resolución:
- *   1. requireUser() → 401 si no logueado
- *   2. EXTERNAL: solo su propio clientId, sino 403
- *   3. INTERNAL sin TeamMember → 403
- *   4. SUPER_ADMIN → OK (reason: super-admin)
- *   5. Permiso clientes.viewAll EFECTIVO (default VENTAS/DEV/CSL/MARKETING;
+ *   1. requireInternalUser() → 401 si no logueado, 403 si no es interno/activo
+ *   2. SUPER_ADMIN → OK (reason: super-admin)
+ *   3. Permiso clientes.viewAll EFECTIVO (default VENTAS/DEV/CSL/MARKETING;
  *      editable por plantilla/overrides) → OK (reason: view-all)
- *   6. canViewAllClients flag (con expiración opcional) → OK (reason: view-all)
- *   7. ClientAssignment REVOKE → 403 (corta antes que cualquier otro permiso)
- *   8. ClientAssignment GRANT → OK (reason: granted)
- *   9. Owner en HubSpot (algún Project.hubspotOwnerEmail = email del user) → OK (reason: hubspot-owner)
- *   10. 403
+ *   4. canViewAllClients flag (con expiración opcional) → OK (reason: view-all)
+ *   5. ClientAssignment REVOKE → 403 (corta antes que cualquier otro permiso)
+ *   6. ClientAssignment GRANT → OK (reason: granted)
+ *   7. Owner en HubSpot (algún Project.hubspotOwnerEmail = email del user) → OK (reason: hubspot-owner)
+ *   8. 403
  */
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
-import {
-  requireUser,
-  requireInternalUser,
-  ForbiddenError,
-  type AppUserWithTeamMember,
-} from "./supabase";
+import { requireInternalUser, ForbiddenError, type AppUserWithTeamMember } from "./supabase";
 import { can } from "./permissions/engine";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
-export type AccessReason =
-  | "super-admin"
-  | "view-all"
-  | "hubspot-owner"
-  | "granted"
-  | "external-owner";
+/** Por qué se concedió el acceso. Todas las razones son de gente INTERNA: no hay —ni
+ *  debe volver a haber— una razón "porque es el cliente dueño". */
+export type AccessReason = "super-admin" | "view-all" | "hubspot-owner" | "granted";
 
 export interface AccessResult {
   user: AppUserWithTeamMember;
@@ -46,34 +53,24 @@ export interface AccessResult {
  * Lanza ForbiddenError (403) si no, devuelve el AppUser + la razón del acceso.
  */
 export async function requireAccessToClient(clientId: string): Promise<AccessResult> {
-  const user = await requireUser(); // 401 si no logueado
+  // 1. Interno, con TeamMember y activo. Cubre de una vez lo que antes eran tres pasos
+  //    sueltos (401 sin sesión, 403 sin TeamMember, 403 desactivado) y cierra la puerta
+  //    a EXTERNAL de forma estructural — ver el encabezado del archivo.
+  const { user, teamMember: tm } = await requireInternalUser();
 
-  // 2. EXTERNAL: solo su propio cliente
-  if (user.kind === "EXTERNAL") {
-    if (user.clientId && user.clientId === clientId) {
-      return { user, reason: "external-owner" };
-    }
-    throw new ForbiddenError("Cliente externo solo puede acceder a su propio cliente");
-  }
-
-  // 3. INTERNAL necesita TeamMember activo
-  const tm = user.teamMember;
-  if (!tm) throw new ForbiddenError("Usuario interno sin TeamMember vinculado");
-  if (tm.deactivatedAt) throw new ForbiddenError("Tu cuenta del equipo fue desactivada");
-
-  // 4. SUPER_ADMIN ve todo
+  // 2. SUPER_ADMIN ve todo
   if (tm.roleEnum === "SUPER_ADMIN") return { user, reason: "super-admin" };
 
-  // 5. Permiso "ve todos los clientes" EFECTIVO (default: VENTAS/DEV/CSL/MARKETING)
+  // 3. Permiso "ve todos los clientes" EFECTIVO (default: VENTAS/DEV/CSL/MARKETING)
   if (await can(tm, "clientes", "viewAll")) return { user, reason: "view-all" };
 
-  // 6. Override excepcional por flag (ej. un CSE con acceso temporal a todo)
+  // 4. Override excepcional por flag (ej. un CSE con acceso temporal a todo)
   if (tm.canViewAllClients) {
     const notExpired = !tm.canViewAllExpiresAt || tm.canViewAllExpiresAt > new Date();
     if (notExpired) return { user, reason: "view-all" };
   }
 
-  // 7. Compartir / override: por persona (teamMemberId) o por rol (targetRole, ej.
+  // 5. Compartir / override: por persona (teamMemberId) o por rol (targetRole, ej.
   //    CSE = todo el equipo). Cualquier REVOKE que me alcance corta; sino GRANT da acceso.
   const assignments = await prisma.clientAssignment.findMany({
     where: { clientId, OR: [{ teamMemberId: tm.id }, { targetRole: tm.roleEnum }] },
@@ -84,13 +81,13 @@ export async function requireAccessToClient(clientId: string): Promise<AccessRes
   }
   if (assignments.some((a) => a.kind === "GRANT")) return { user, reason: "granted" };
 
-  // 8. Owner en HubSpot (algún Project del cliente con su email como owner)
+  // 6. Owner en HubSpot (algún Project del cliente con su email como owner)
   const ownerProjectCount = await prisma.project.count({
     where: { clientId, hubspotOwnerEmail: tm.email },
   });
   if (ownerProjectCount > 0) return { user, reason: "hubspot-owner" };
 
-  // 9. Sin acceso
+  // 7. Sin acceso
   throw new ForbiddenError("Sin acceso a este cliente");
 }
 
@@ -127,10 +124,10 @@ export async function accessibleClientWhere(
   user: AppUserWithTeamMember,
   opts?: AccessibleClientOpts,
 ): Promise<Prisma.ClientWhereInput | null> {
-  // EXTERNAL: solo su propio cliente
-  if (user.kind === "EXTERNAL") {
-    return { id: user.clientId ?? "__none__" };
-  }
+  // El flujo con sesión es SOLO interno (ver el encabezado del archivo). Un AppUser
+  // EXTERNAL no ve ningún cliente: cuando exista acceso externo con sesión, va a tener
+  // su propio filtro, no esta rama. Mismo criterio que app/api/agent-runs/route.ts.
+  if (user.kind === "EXTERNAL") return { id: "__none__" };
   const tm = user.teamMember;
   if (!tm || tm.deactivatedAt) return { id: "__none__" }; // sin acceso
 
