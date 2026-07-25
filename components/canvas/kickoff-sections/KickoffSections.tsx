@@ -27,6 +27,7 @@ import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "@/
 import { SortableItems } from "@/components/landing/sortable";
 import { HeroUploadButtons, BrandRow, TagRow } from "@/components/landing/hero-parts";
 import { CtaEditor, CtaButton } from "@/components/landing/sections";
+import { resolveHeroTitle } from "@/lib/landing/hero-title";
 import type { SectionProps } from "@/components/landing/types";
 import { Prose, InlineMD } from "@/components/landing/prose";
 import TimelineSection from "@/components/canvas/TimelineSection";
@@ -161,7 +162,9 @@ export const KickoffProseSection: FC<SectionProps<ProseData>> = ({ data, editabl
 // (`components/landing/hero-parts.tsx`): portada, logo del cliente, brand-row
 // arrastrable y chips de tags. Diferencias del kickoff: centrado, con eyebrow, y
 // con 3 stats DERIVADOS del cronograma (no editables — fuente única: ProjectTimeline).
-export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({ data, ctx, editable, onChange }) => {
+export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({
+  data, ctx, editable, onChange, sectionTitle, sectionEyebrow,
+}) => {
   const d = normalizeHero(data);
   const isLegacy = !!d.__legacyMd;
   const canEdit = !!editable && !isLegacy; // legacy = read-only hasta regenerar
@@ -176,8 +179,12 @@ export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({ data, ct
   const totalWeeks = timelineSpan(phases);
   const startLabel = ctx.kickoff?.timeline?.anchorStartDate ? fmtFull(ctx.kickoff.timeline.anchorStartDate) : "Por definir";
 
-  const eyebrow = d.eyebrow?.trim() || "Kickoff del proyecto";
-  const headline = d.headline?.trim() || "¡Arranquemos juntos!";
+  // El respaldo sale del documento (rótulo declarado en su definición), no de un texto
+  // escrito acá: es lo que impide que una portada le preste su identidad a otra.
+  const eyebrow = d.eyebrow?.trim() || (sectionEyebrow ?? "").trim();
+  const { titulo, bajada } = resolveHeroTitle({
+    escrito: d.titulo, titular: d.headline, rotulo: sectionTitle,
+  });
 
   return (
     <div className="stl-hero-centered" style={{ maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
@@ -188,21 +195,28 @@ export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({ data, ct
       )}
       <BrandRow brands={d.brands} ctx={ctx} editable={canEdit} onChange={(next) => set({ brands: next })} />
       {canEdit ? (
-        <Editable as="span" className="eyebrow" editable value={d.eyebrow ?? ""} placeholder="Kickoff del proyecto" onCommit={(v) => set({ eyebrow: v })} />
+        <Editable as="span" className="eyebrow" editable value={d.eyebrow ?? ""} placeholder={sectionEyebrow ?? ""} onCommit={(v) => set({ eyebrow: v })} />
       ) : (
-        <span className="eyebrow">{eyebrow}</span>
+        eyebrow && <span className="eyebrow">{eyebrow}</span>
       )}
       {canEdit ? (
         <Editable
           as="h1"
           className="stl-hero-title"
           editable
-          value={d.headline}
-          placeholder="Inicio de proyecto: implementación de HubSpot e integración con…"
-          onCommit={(v) => set({ headline: v })}
+          value={titulo}
+          placeholder={sectionTitle ?? ""}
+          onCommit={(v) => set({ titulo: v })}
         />
       ) : (
-        <h1 className="stl-hero-title">{headline}</h1>
+        <h1 className="stl-hero-title">{titulo}</h1>
+      )}
+      {/* El titular del caso, cuando NO subió a título. */}
+      {(canEdit || bajada) && (
+        <div style={{ maxWidth: 640, marginInline: "auto" }}>
+          <Editable as="p" className="stl-lead" editable={canEdit} value={bajada}
+            placeholder="El titular del caso en una frase…" onCommit={(v) => set({ headline: v })} />
+        </div>
       )}
       {isLegacy ? (
         <div style={{ marginTop: 18, maxWidth: 640, marginInline: "auto", textAlign: "left", display: "flex", flexDirection: "column", gap: 10 }}>

@@ -336,6 +336,12 @@ export default function LandingView({
       <Comp
         data={data}
         ctx={ctx}
+        /* Las portadas (`selfTitled`) no reciben el encabezado del motor, así que el
+           rótulo del documento viaja por props: es el respaldo del título cuando la
+           portada todavía no tiene uno escrito. Sin esto, cada portada lo resolvía con
+           un texto propio y las compartidas se prestaban la identidad entre documentos. */
+        sectionTitle={effTitle}
+        sectionEyebrow={effEyebrow}
         editable={editable}
         onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
       />

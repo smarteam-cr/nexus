@@ -50,11 +50,11 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     agentGenerated: true,
     // `eyebrow`, `brands` y `coverImageUrl` quedan FUERA del schema: los cura el CSE y
     // los preserva `preserveNonSchemaKeys` en cada regeneración.
-    empty: { headline: "", subhead: "", tags: [], brands: [] },
+    empty: { titulo: "", headline: "", subhead: "", tags: [], brands: [] },
     agentHint: "Titular del kickoff + una bajada + 3-5 chips del alcance contratado.",
     brief:
-      "Portada del kickoff. `headline`: SIEMPRE con el patrón `Inicio de proyecto: [qué se implementa][ e integración con [herramienta]]` — ej. 'Inicio de proyecto: implementación de HubSpot e integración con Aircall'. Sacá el 'qué se implementa' de los HUBS listados en los tags del proyecto y el 'con qué se integra' de la sección `desarrollo` / `alcance_contratado` del handoff (nombre propio de la herramienta: Aircall, SAP, ERP…). Si no hay integración, cortá el título ahí. `subhead`: UNA frase (máx. 25 palabras) que dice qué cambia para el negocio. `tags`: 3-5 chips cortos (2-4 palabras) del alcance CONTRATADO — hubs, integraciones y migraciones (ej. 'Sales Hub Pro', 'Integración Aircall', 'Migración desde Excel'). Fuente: tags del proyecto + handoff. No inventes herramientas.",
-    schema: { type: "object", properties: { headline: str, subhead: str, tags: strArray }, required: ["headline", "subhead"] },
+      "`titulo`: el nombre del documento en pocas palabras (máximo 60 caracteres), del tipo 'Kickoff del proyecto'. Es el título de la página, no un titular de venta: sin verbos de transformación, sin promesas y sin el nombre del cliente. Portada del kickoff. `headline`: SIEMPRE con el patrón `Inicio de proyecto: [qué se implementa][ e integración con [herramienta]]` — ej. 'Inicio de proyecto: implementación de HubSpot e integración con Aircall'. Sacá el 'qué se implementa' de los HUBS listados en los tags del proyecto y el 'con qué se integra' de la sección `desarrollo` / `alcance_contratado` del handoff (nombre propio de la herramienta: Aircall, SAP, ERP…). Si no hay integración, cortá el título ahí. `subhead`: UNA frase (máx. 25 palabras) que dice qué cambia para el negocio. `tags`: 3-5 chips cortos (2-4 palabras) del alcance CONTRATADO — hubs, integraciones y migraciones (ej. 'Sales Hub Pro', 'Integración Aircall', 'Migración desde Excel'). Fuente: tags del proyecto + handoff. No inventes herramientas.",
+    schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline", "subhead"] },
   },
   {
     key: "objetivos",

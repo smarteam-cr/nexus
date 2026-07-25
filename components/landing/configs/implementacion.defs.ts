@@ -50,13 +50,13 @@ export const IMPLEMENTACION_SECTION_DEFS: BCSectionDef[] = [
     noHide: true,
     sectionType: "implementacion_hero",
     agentGenerated: true,
-    empty: { headline: "", subhead: "", tags: [] },
+    empty: { titulo: "", headline: "", subhead: "", tags: [] },
     agentHint: "Qué se construye primero y por qué. Tags = hubs/objetos del alcance.",
     brief:
-      "Portada de la guía. `headline`: qué se construye PRIMERO y por qué ese orden ('Primero las propiedades de Negocio: todo lo demás las referencia'). " +
+      "`titulo`: el nombre del documento en pocas palabras (máximo 60 caracteres), del tipo 'Guía de construcción'. Es el título de la página, no un titular de venta: sin verbos de transformación, sin promesas y sin el nombre del cliente. Portada de la guía. `headline`: qué se construye PRIMERO y por qué ese orden ('Primero las propiedades de Negocio: todo lo demás las referencia'). " +
       "`subhead`: 1-2 frases con el estado de la decisión — de dónde sale esta guía (la planificación aprobada, el requerimiento técnico) y qué queda pendiente de decidir. " +
       "`tags`: los hubs/objetos que cubre ('Sales', 'Negocios', 'Tickets').",
-    schema: { type: "object", properties: { headline: str, subhead: str, tags: strArray }, required: ["headline"] },
+    schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },
   },
   {
     key: "arquitectura_propiedades",

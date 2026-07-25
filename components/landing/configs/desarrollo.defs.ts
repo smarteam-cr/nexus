@@ -79,11 +79,11 @@ export const DESARROLLO_SECTION_DEFS: BCSectionDef[] = [
     noHide: true,
     sectionType: "desarrollo_hero",
     agentGenerated: true,
-    empty: { headline: "", subhead: "", tags: [] },
+    empty: { titulo: "", headline: "", subhead: "", tags: [] },
     agentHint: "Título técnico del requerimiento + una bajada de qué conecta con qué + chips de los sistemas.",
     brief:
-      "Portada del requerimiento técnico. `headline`: patrón `Requerimiento técnico: [integración de HubSpot con [sistema]] / [migración desde [plataforma]] / [desarrollo a medida]` — sacá el nombre propio del sistema destino de la sección `desarrollo` del handoff (SAP, ERP, Aircall, e-commerce, Salesforce…). `subhead`: UNA frase, en lenguaje llano (que la entienda alguien no técnico), de qué conecta con qué y para qué (ej. 'Sincroniza los negocios cerrados en HubSpot con el ERP para facturar sin recaptura'). `tags`: 2-5 chips cortos de los sistemas/APIs/tipo (ej. 'HubSpot', 'SAP', 'API REST', 'Webhook', 'Migración'). Fuente: sección `desarrollo` del handoff + tags del proyecto. No inventes sistemas.",
-    schema: { type: "object", properties: { headline: str, subhead: str, tags: strArray }, required: ["headline"] },
+      "`titulo`: el nombre del documento en pocas palabras (máximo 60 caracteres), del tipo 'Requerimiento técnico'. Es el título de la página, no un titular de venta: sin verbos de transformación, sin promesas y sin el nombre del cliente. Portada del requerimiento técnico. `headline`: patrón `Requerimiento técnico: [integración de HubSpot con [sistema]] / [migración desde [plataforma]] / [desarrollo a medida]` — sacá el nombre propio del sistema destino de la sección `desarrollo` del handoff (SAP, ERP, Aircall, e-commerce, Salesforce…). `subhead`: UNA frase, en lenguaje llano (que la entienda alguien no técnico), de qué conecta con qué y para qué (ej. 'Sincroniza los negocios cerrados en HubSpot con el ERP para facturar sin recaptura'). `tags`: 2-5 chips cortos de los sistemas/APIs/tipo (ej. 'HubSpot', 'SAP', 'API REST', 'Webhook', 'Migración'). Fuente: sección `desarrollo` del handoff + tags del proyecto. No inventes sistemas.",
+    schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },
   },
   {
     key: "estimacion",

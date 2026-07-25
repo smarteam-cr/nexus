@@ -18,7 +18,10 @@ import type { KickoffTimelineData, KickoffProceso } from "@/lib/external/kickoff
 //    subtítulo + tags (chips). `brands` vacío → la brand-row cae a los defaults.
 //    `coverImageUrl` (fuera del schema del agente, como `brands`): imagen de portada
 //    subida por el CSE — se renderiza como fondo con overlay azul (LandingView).
-export interface HeroData { headline: string; subhead: string; tags: string[]; brands?: string[]; coverImageUrl?: string | null }
+//    `titulo`: el NOMBRE del documento en pocas palabras — el título de la página. Es
+//    distinto de `headline`, que es el titular con el mensaje del caso; sin él, una
+//    portada sin generar no tenía ningún título (ver lib/landing/hero-title.ts).
+export interface HeroData { titulo?: string; headline: string; subhead: string; tags: string[]; brands?: string[]; coverImageUrl?: string | null }
 
 // 2) Diagnóstico — 3 a 6 dolores concretos.
 export interface PainItem { title: string; detail: string }
@@ -260,6 +263,20 @@ export interface SectionProps<T> {
   ctx: LandingContext;
   editable?: boolean;
   onChange?: (data: T) => void;
+  /**
+   * Rótulo y categoría del documento que se está pintando, ya resueltos por el motor
+   * (lo que el CSE renombró y, si no, lo declarado en la definición).
+   *
+   * Existen para las PORTADAS, que al ser `selfTitled` no reciben el encabezado del
+   * motor y antes resolvían el hueco con textos escritos a mano adentro del componente.
+   * Como una misma portada la comparten varios documentos, ese respaldo hacía que
+   * Planificación se presentara como un requerimiento técnico. Con el rótulo entrando
+   * por props, el respaldo sale siempre del documento correcto.
+   *
+   * El resto de las secciones los ignora: su encabezado lo sigue pintando el motor.
+   */
+  sectionTitle?: string;
+  sectionEyebrow?: string;
 }
 
 /** Definición de una sección dentro de un LandingConfig. No genérico (cada sección

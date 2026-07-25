@@ -18,6 +18,8 @@ import { postProcessCards } from "@/lib/canvas/post-process";
 import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
+import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
+import { DESARROLLO_CANVAS } from "@/lib/canvas/canvas-defs";
 import { runExploracionGeneration } from "@/lib/canvas/exploracion-generate";
 import { runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
 import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
@@ -2551,10 +2553,22 @@ async function persistTimelineFromAgentOutput(
         .catch((e) => console.warn("[analyze] handoffGeneratedAt no guardado:", e instanceof Error ? e.message : e));
 
       // AUTO-CHAIN: si el handoff detectó trabajo técnico (tag custom_dev/insider_one),
-      // crear el canvas "Desarrollo" y correr el requerimiento técnico con IA — FIRE-AND-FORGET
-      // (no bloquea ni rompe el handoff si la generación falla; el botón manual queda de respaldo).
-      // Se leen los tags recién resueltos (el update de arriba ya commiteó). Idempotente: el runner
-      // asegura el canvas (crea si falta) y regenera sus secciones en el lugar.
+      // crear el canvas "Desarrollo" y escribir el requerimiento técnico con IA —
+      // FIRE-AND-FORGET (no bloquea ni rompe el handoff si falla; el botón manual queda
+      // de respaldo). Se leen los tags recién resueltos (el update de arriba ya commiteó).
+      //
+      // ⛔ SOLO LA PRIMERA VEZ. Antes esto corría en CADA regeneración del handoff, y el
+      // runner borra todos los bloques de cada sección que genera — sin mirar quién los
+      // escribió. O sea: regenerar un handoff destruía en silencio, por atrás y sin pedir
+      // confirmación, lo que el equipo técnico hubiera editado a mano en el requerimiento.
+      // Verificado en Wherex, que tenía "Propiedades y campos" editado a mano.
+      // Agravantes: no pasa por la celda de permiso `desarrollo.regenerate` (regenerar el
+      // handoff se volvía una vía indirecta para regenerar un documento que quizá no te
+      // corresponde), y si el desarrollador externo tiene el link ve el reemplazo al
+      // instante, porque ese documento se lee en vivo y no tiene foto congelada.
+      //
+      // Con el documento ya escrito, la puerta correcta es el botón "Regenerar" del propio
+      // canvas: es una acción explícita, con su permiso y su corrida visible.
       try {
         const proj = await prisma.project.findUnique({ where: { id: bodyProjectId }, select: { tags: true } });
         if (hasTechnicalScope(proj?.tags ?? [])) {
@@ -2562,11 +2576,25 @@ async function persistTimelineFromAgentOutput(
           // Crear el canvas SINCRÓNICAMENTE (rápido: find-or-create + reconcile) antes de que
           // el run marque DONE → cuando el front refetchea la lista de canvases, "Desarrollo"
           // ya existe y aparece sin recargar. La GENERACIÓN de contenido sigue fire-and-forget.
-          // Se pasa el canvasId ya resuelto para que runDesarrolloGeneration no lo re-asegure.
           const desarrolloCanvasId = await ensureDesarrolloCanvas(pid);
-          void runDesarrolloGeneration({ projectId: pid, canvasId: desarrolloCanvasId }).catch((e) =>
-            console.warn("[analyze] auto-desarrollo falló:", e instanceof Error ? e.message : e),
-          );
+          // Mismo criterio de "tiene contenido" que usa el desplegable para pintar el punto
+          // verde: la semilla de las secciones curadas no cuenta como contenido.
+          const conContenido = await loadCanvasesConContenido(pid, [
+            { id: desarrolloCanvasId, slug: DESARROLLO_CANVAS.slug },
+          ]);
+          if (conContenido.has(desarrolloCanvasId)) {
+            console.log(
+              `[analyze] auto-desarrollo OMITIDO en ${pid}: el requerimiento técnico ya está escrito. ` +
+                `Regenerarlo es decisión del CSE desde su propio botón (que sí pide permiso).`,
+            );
+          } else {
+            void runDesarrolloGeneration({
+              projectId: pid,
+              canvasId: desarrolloCanvasId,
+              // Trazabilidad: sin esto los bloques quedaban sin decir qué corrida los escribió.
+              agentRunId,
+            }).catch((e) => console.warn("[analyze] auto-desarrollo falló:", e instanceof Error ? e.message : e));
+          }
         }
       } catch (e) {
         console.warn("[analyze] auto-desarrollo (check) falló:", e instanceof Error ? e.message : e);

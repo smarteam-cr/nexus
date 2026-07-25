@@ -48,14 +48,14 @@ export const EXPLORACION_SECTION_DEFS: BCSectionDef[] = [
     noHide: true,
     sectionType: "exploracion_hero",
     agentGenerated: true,
-    empty: { headline: "", subhead: "", tags: [] },
+    empty: { titulo: "", headline: "", subhead: "", tags: [] },
     agentHint:
       "Qué hay que entender de ESTE negocio para entregar bien + la calibración que usaste (cliente grande vs. chico) + chips de los frentes a explorar.",
     brief:
-      "Portada de la guía. `headline`: en UNA línea, qué es lo que hay que entender del negocio del cliente para entregar bien ESTE proyecto (no el nombre del proyecto — el foco de la exploración). " +
+      "`titulo`: el nombre del documento en pocas palabras (máximo 60 caracteres), del tipo 'Exploración del negocio'. Es el título de la página, no un titular de venta: sin verbos de transformación, sin promesas y sin el nombre del cliente. Portada de la guía. `headline`: en UNA línea, qué es lo que hay que entender del negocio del cliente para entregar bien ESTE proyecto (no el nombre del proyecto — el foco de la exploración). " +
       "`subhead`: 1-2 frases que declaran EXPLÍCITAMENTE la calibración que usaste y por qué, para que el CSE la corrija si te equivocaste. Ej.: 'Cliente con operación grande y equipo propio de datos: la guía apunta a los puntos ciegos, no a mapear lo que ya saben.' o 'Cliente chico, sin proceso formal: la guía sí mapea lo básico porque probablemente no esté escrito en ningún lado.' " +
       "`tags`: 2-5 chips cortos de los frentes a explorar (ej. 'Proceso comercial', 'Datos', 'Postventa', 'Facturación'). No inventes frentes que la fuente no mencione.",
-    schema: { type: "object", properties: { headline: str, subhead: str, tags: strArray }, required: ["headline"] },
+    schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },
   },
   {
     key: "ya_sabemos",

@@ -1,6 +1,7 @@
 import { requireConsultantSession } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
+import { resolveHeroTitle } from "@/lib/landing/hero-title";
 import PrintClient, { type CanvasPrintData } from "./PrintClient";
 
 export const dynamic = "force-dynamic";
@@ -179,6 +180,17 @@ export default async function CanvasPrintPage({
         data: b.data,
       })),
     }));
+
+    /* El PDF dice el mismo título que la pantalla. Los documentos del motor guardan el
+       suyo en la portada (la primera sección); si todavía no tiene uno escrito, queda el
+       nombre del canvas, que es lo que se imprimía siempre. Sin esto, el papel y la
+       pantalla contarían dos cosas distintas del mismo documento — y el nombre del
+       archivo PDF sale de acá. */
+    const portada = dbSections[0]?.blocks[0]?.data as { titulo?: unknown } | null;
+    printData.canvasName = resolveHeroTitle({
+      escrito: portada?.titulo,
+      rotulo: canvas.name,
+    }).titulo;
   }
 
   return <PrintClient data={printData} autoPrint={sp.print === "1"} />;

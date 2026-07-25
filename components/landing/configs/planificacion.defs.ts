@@ -52,13 +52,13 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     noHide: true,
     sectionType: "planificacion_hero",
     agentGenerated: true,
-    empty: { headline: "", subhead: "", tags: [] },
+    empty: { titulo: "", headline: "", subhead: "", tags: [] },
     agentHint: "Qué se construye + la decisión de arquitectura clave + la modalidad de adopción usada.",
     brief:
-      "Portada del plan. `headline`: QUÉ se construye, en una línea de negocio ('Un solo pipeline de ventas con seguimiento automático'). " +
+      "`titulo`: el nombre del documento en pocas palabras (máximo 60 caracteres), del tipo 'Plan de implementación'. Es el título de la página, no un titular de venta: sin verbos de transformación, sin promesas y sin el nombre del cliente. Portada del plan. `headline`: QUÉ se construye, en una línea de negocio ('Un solo pipeline de ventas con seguimiento automático'). " +
       "`subhead`: 1-2 frases con la decisión de arquitectura más importante Y la modalidad de adopción que este plan asume (directa o por pilotos) — declarada para que el CSE la corrija si no es la acordada. " +
       "`tags`: 2-5 chips de los frentes del plan ('Pipeline', 'Ciclo de vida', 'Adopción').",
-    schema: { type: "object", properties: { headline: str, subhead: str, tags: strArray }, required: ["headline"] },
+    schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },
   },
   makeDiagramArchitectureDef({
     key: "arquitectura_solucion",

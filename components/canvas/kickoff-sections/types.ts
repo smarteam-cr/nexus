@@ -142,6 +142,9 @@ export function proseIsEmpty(d: ProseData): boolean {
  *  a las regeneraciones vía `preserveNonSchemaKeys`. */
 export interface KickoffHeroData {
   eyebrow?: string;
+  /** El NOMBRE del documento en pocas palabras — el título de la página. Distinto de
+   *  `headline`, que es el titular del caso. Ver lib/landing/hero-title.ts. */
+  titulo?: string;
   headline: string;
   subhead: string;
   tags: string[];
@@ -155,6 +158,7 @@ export function normalizeHero(data: unknown): KickoffHeroData {
   const d = (data ?? {}) as Partial<KickoffHeroData> & { __legacyMd?: string | null };
   return {
     eyebrow: typeof d.eyebrow === "string" ? d.eyebrow : "",
+    titulo: typeof d.titulo === "string" ? d.titulo : "",
     headline: typeof d.headline === "string" ? d.headline : "",
     // COMPATIBILIDAD: kickoffs ya generados traen `{intro}` → mapear a `subhead`
     // (el backfill lo migra en la DB; esto cubre la ventana hasta que corra).

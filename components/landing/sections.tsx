@@ -13,6 +13,7 @@ import { useEffect, useRef, useState, type FC } from "react";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
 import { HeroUploadButtons, BrandRow, TagRow } from "./hero-parts";
+import { resolveHeroTitle } from "@/lib/landing/hero-title";
 import { landingLang, t } from "./i18n";
 import type {
   SectionProps,
@@ -68,19 +69,40 @@ function TextCard({
 // ── 1) Hero ──────────────────────────────────────────────────────────────────
 // Compuesto con las primitivas COMPARTIDAS de `hero-parts.tsx` (las mismas que usa
 // el hero del Kickoff). Layout del BC: left-aligned, sin eyebrow ni stats.
-export const HeroSection: FC<SectionProps<HeroData>> = ({ data, ctx, editable, onChange }) => {
+export const HeroSection: FC<SectionProps<HeroData>> = ({
+  data, ctx, editable, onChange, sectionTitle, sectionEyebrow,
+}) => {
   const tags = data.tags ?? [];
   const set = (next: Partial<HeroData>) => onChange?.({ ...data, ...next });
+  // El TÍTULO nunca falta. Y el titular del caso es título O bajada, nunca los dos:
+  // mientras el documento no tenga título propio, su titular sigue arriba (así los ya
+  // generados no cambian solos de aspecto).
+  const { titulo, bajada } = resolveHeroTitle({
+    escrito: data.titulo, titular: data.headline, rotulo: sectionTitle,
+  });
+  const eyebrow = (sectionEyebrow ?? "").trim();
   return (
     <div style={{ maxWidth: 900 }}>
       {editable && (
         <HeroUploadButtons ctx={ctx} coverImageUrl={data.coverImageUrl} onCover={(url) => set({ coverImageUrl: url })} />
       )}
       <BrandRow brands={data.brands} ctx={ctx} editable={editable} onChange={(next) => set({ brands: next })} />
-      <Editable as="h1" className="stl-hero-title" editable={editable} value={data.headline}
-        placeholder="[Verbo de transformación] la [operación / proceso] de [cliente]…" onCommit={(v) => set({ headline: v })} />
-      <Editable as="p" className="stl-lead" editable={editable} value={data.subhead}
-        placeholder="Una frase que resume el dolor central y la apuesta…" onCommit={(v) => set({ subhead: v })} />
+      {eyebrow && <span className="eyebrow">{eyebrow}</span>}
+      {/* El título es editable, pero el placeholder es el rótulo del propio documento:
+          así lo que se ve mientras está vacío ya es el texto correcto, no una plantilla
+          de otro documento. */}
+      <Editable as="h1" className="stl-hero-title" editable={editable} value={titulo}
+        placeholder={sectionTitle ?? ""} onCommit={(v) => set({ titulo: v })} />
+      {/* El titular del caso, cuando NO subió a título. Editarlo con el título vacío lo
+          vuelve a subir solo — no hay estado donde el mismo texto salga dos veces. */}
+      {(editable || bajada) && (
+        <Editable as="p" className="stl-lead" editable={editable} value={bajada}
+          placeholder="El titular del caso en una frase…" onCommit={(v) => set({ headline: v })} />
+      )}
+      {(editable || data.subhead) && (
+        <Editable as="p" className="stl-lead" editable={editable} value={data.subhead}
+          placeholder="El resumen en una o dos frases…" onCommit={(v) => set({ subhead: v })} />
+      )}
       <TagRow tags={tags} editable={editable} onChange={(next) => set({ tags: next })} />
     </div>
   );
