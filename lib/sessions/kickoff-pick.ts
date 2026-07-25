@@ -5,14 +5,18 @@
  * el proyecto vitest "unit"). La consume `getKickoffSessionDate`
  * (lib/sessions/project-sessions.ts), fuente de verdad de la heurística "kickoff".
  */
+import { kickoffTitleFilters } from "@/lib/sessions/session-type";
 
-/** Variantes de título que identifican la sesión de Kick Off (comparte criterio con
- *  HANDOFF_EXCLUDE_TITLE_KEYWORDS de analyze/route.ts). */
-export const KICKOFF_TITLE_FILTERS = [
-  { title: { contains: "kickoff", mode: "insensitive" as const } },
-  { title: { contains: "kick-off", mode: "insensitive" as const } },
-  { title: { contains: "kick off", mode: "insensitive" as const } },
-];
+/**
+ * Variantes de título que identifican la sesión de Kick Off.
+ *
+ * Salen del vocabulario único de tipos de reunión (lib/sessions/session-type.ts), donde
+ * cada palabra declara si además genera filtro de base. ⚠ Esta lista la consume también
+ * el motor de etapas, que está congelado por decisión: ampliarla movería la etapa
+ * inferida de toda la cartera. Hay un candado en session-type.test.ts que falla si
+ * cambia.
+ */
+export const KICKOFF_TITLE_FILTERS = kickoffTitleFilters();
 
 /** Tolerancia hacia atrás al preferir kickoffs posteriores a la creación del proyecto:
  *  un kickoff agendado un par de días ANTES de que el Service exista en HubSpot sigue

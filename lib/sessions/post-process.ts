@@ -20,6 +20,7 @@ import {
   type CategorizeContext,
 } from "@/lib/sessions/categorize";
 import { classifySessionToProjects } from "@/lib/sessions/classify-session-project";
+import { titleMentionsKickoff } from "@/lib/sessions/session-type";
 import { maybeReanchorToKickoff } from "@/lib/timeline/reanchor";
 
 const AGENT_ID_POST_SESSION = "agent-post-session";
@@ -146,7 +147,11 @@ export async function postProcessSession(
   // cronograma al Kick Off real (best-effort; las guardas —sin avance, sin
   // baseline— viven en maybeReanchorToKickoff). Cubre el flujo real: el Kick Off
   // ocurre → Fireflies la ingiere → se clasifica → el ancla se corrige sola.
-  if (primaryProjectId && /kick[\s-]?off/i.test(session.title ?? "")) {
+  // El pre-filtro es AMPLIO a propósito (no usa la cascada de tipos): acá alcanza con
+  // que el título mencione un kickoff. Angostarlo a "esta sesión ES de tipo kickoff"
+  // dejaría de re-anclar en títulos mixtos tipo "Kickoff + review", que es justo cuando
+  // hace falta. La verificación de verdad la hacen las guardas de maybeReanchorToKickoff.
+  if (primaryProjectId && titleMentionsKickoff(session.title ?? "")) {
     try {
       await maybeReanchorToKickoff(primaryProjectId);
     } catch (e) {

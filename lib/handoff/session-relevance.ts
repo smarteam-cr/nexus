@@ -20,30 +20,24 @@
  * el readiness del handoff (lib/handoff/feeding.ts).
  */
 
-// Títulos de entrega/CS que NUNCA alimentan el handoff. Se chequean PRIMERO (ganan).
-export const HANDOFF_EXCLUDE_TITLE_KEYWORDS = [
-  "implementacion", "implementation",
-  "adopcion", "adoption",
-  "capacitacion", "training",
-  "review", "revision",
-  "retro", "retrospectiva",
-  "sesion semanal", "weekly",
-  "stand up", "standup",
-  "qbr", "business review",
-];
+// Las dos listas viven ahora en el vocabulario único de tipos de reunión
+// (lib/sessions/session-type.ts), donde cada palabra declara EXPLÍCITAMENTE su rol en
+// este filtro. Se re-exportan desde acá porque este archivo sigue siendo la casa de la
+// política del handoff y varios módulos las importan por este camino.
+//
+// Lo que se gana: el vocabulario de tipos puede crecer sin tocar el handoff — una
+// palabra nueva nace declarando que NO entra a estas listas, y hay un candado
+// (lib/sessions/session-type.test.ts) que falla si alguna se cuela.
+export {
+  HANDOFF_EXCLUDE_TITLE_KEYWORDS,
+  HANDOFF_INCLUDE_TITLE_KEYWORDS,
+} from "@/lib/sessions/session-type";
 
-// Títulos que SÍ alimentan el handoff: solo handoff y kickoff (entran aunque no haya
-// Ventas formal en la sala). Lo demás depende de si hubo Ventas presente.
-export const HANDOFF_INCLUDE_TITLE_KEYWORDS = [
-  "hand off", "handoff", "hand-off",
-  "traspaso",
-  "kickoff", "kick-off", "kick off",
-];
-
-/** Insensitive a mayúsculas y acentos (NFD + remover marcas combinantes U+0300–U+036F). */
-function normalizeTitle(t: string): string {
-  return t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-}
+import {
+  HANDOFF_EXCLUDE_TITLE_KEYWORDS as EXCLUDE_KW,
+  HANDOFF_INCLUDE_TITLE_KEYWORDS as INCLUDE_KW,
+  normalizeTitle,
+} from "@/lib/sessions/session-type";
 
 /**
  * ¿Esta sesión alimenta el handoff? Excluir-por-título gana; luego incluir-por-título;
@@ -56,9 +50,9 @@ export function classifyHandoffSession(
   salesEmails: Set<string>,
 ): { include: boolean; reason: string } {
   const t = normalizeTitle(title || "");
-  const excludeHit = HANDOFF_EXCLUDE_TITLE_KEYWORDS.find((kw) => t.includes(kw));
+  const excludeHit = EXCLUDE_KW.find((kw) => t.includes(kw));
   if (excludeHit) return { include: false, reason: `título de entrega/CS ("${excludeHit}")` };
-  const includeHit = HANDOFF_INCLUDE_TITLE_KEYWORDS.find((kw) => t.includes(kw));
+  const includeHit = INCLUDE_KW.find((kw) => t.includes(kw));
   if (includeHit) return { include: true, reason: `título de venta ("${includeHit}")` };
   const all = organizerEmail ? [...participants, organizerEmail] : participants;
   if (all.some((p) => salesEmails.has(p.toLowerCase()))) return { include: true, reason: "Ventas en la sala" };
