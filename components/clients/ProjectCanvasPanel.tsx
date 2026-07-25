@@ -124,6 +124,9 @@ export default function ProjectCanvasPanel({
 
   const [sections, setSections] = useState<CanvasSection[]>([]);
   const [loading, setLoading] = useState(!seeded);
+  /** ¿Ya volvió la consulta de la lista de canvases? (con éxito o con error). Es lo que
+   *  destraba el esqueleto — no que la lista traiga algo. */
+  const [listLoaded, setListLoaded] = useState(!!seeded);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [dragCardId, setDragCardId] = useState<string | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<{ sectionKey: string; index: number } | null>(null);
@@ -166,6 +169,12 @@ export default function ProjectCanvasPanel({
 
   // Update URL when canvas changes (no page reload)
   const switchCanvas = useCallback((canvasId: string) => {
+    // Clickear el canvas que YA está activo colgaba la pantalla: `setActiveCanvasId`
+    // hace bail-out con el mismo valor, pero `setLoading(true)` sí re-renderiza, y el
+    // efecto que apaga el loading no vuelve a correr porque ninguna de sus deps cambió
+    // → esqueleto hasta desmontar. El dropdown no filtra el activo, así que es un click
+    // a un dedo de distancia.
+    if (canvasId === activeCanvasId) return;
     setActiveCanvasId(canvasId);
     setLoading(true);
     const url = new URL(window.location.href);
@@ -176,7 +185,7 @@ export default function ProjectCanvasPanel({
       url.searchParams.set("canvas", canvasId);
     }
     router.replace(url.pathname + url.search, { scroll: false });
-  }, [canvases, router]);
+  }, [canvases, router, activeCanvasId]);
 
   // `canvasFromUrl` en un ref (no en las deps de `refetchCanvases`): `switchCanvas`
   // reescribe el `?canvas=` en cada click de tab, así que si el callback dependiera
@@ -203,7 +212,12 @@ export default function ProjectCanvasPanel({
           return fromUrl ? fromUrl.id : list[0].id;
         });
       })
-      .catch(() => {});
+      .catch(() => {})
+      // Pase lo que pase, la consulta terminó. Antes el loading colgaba de
+      // `canvases.length > 0`: con la lista vacía —o con este `.catch` comiéndose un
+      // error de red— la pantalla quedaba en esqueleto PARA SIEMPRE, sin timeout y sin
+      // forma de recuperarse. Y a partir de F2 la lista puede quedar vacía a propósito.
+      .finally(() => setListLoaded(true));
   }, [projectId]);
 
   // Primer load + refetch cuando la señal genérica de canvases bumpea (canvas
@@ -248,7 +262,12 @@ export default function ProjectCanvasPanel({
     fetch(`/api/projects/${projectId}/process-session`)
       .then((r) => r.json())
       .then((d) => setUnprocessedSessions(d.unprocessed ?? 0))
-      .catch(() => {});
+      .catch(() => {})
+      // Pase lo que pase, la consulta terminó. Antes el loading colgaba de
+      // `canvases.length > 0`: con la lista vacía —o con este `.catch` comiéndose un
+      // error de red— la pantalla quedaba en esqueleto PARA SIEMPRE, sin timeout y sin
+      // forma de recuperarse. Y a partir de F2 la lista puede quedar vacía a propósito.
+      .finally(() => setListLoaded(true));
   }, [projectId]);
 
   const processSession = async () => {
@@ -276,11 +295,11 @@ export default function ProjectCanvasPanel({
     setLoading(false);
   }, [projectId, activeCanvasId, isResumenCanvas]);
 
-  const canvasesLoaded = canvases.length > 0;
   useEffect(() => {
-    if (canvasesLoaded && isResumenCanvas) fetchCanvasCards();
-    if (canvasesLoaded && !isResumenCanvas) setLoading(false);
-  }, [fetchCanvasCards, canvasesLoaded, isResumenCanvas]);
+    if (!listLoaded) return;
+    if (isResumenCanvas) fetchCanvasCards();
+    else setLoading(false);
+  }, [fetchCanvasCards, listLoaded, isResumenCanvas]);
 
   const lastDraftCount = useRef(0);
   const fetchRef = useRef(fetchCanvasCards);
@@ -461,13 +480,16 @@ export default function ProjectCanvasPanel({
                 onClick={() => setCanvasDropdownOpen(!canvasDropdownOpen)}
                 className="flex items-center gap-2 text-xl font-bold text-white hover:text-gray-300 transition-colors"
               >
-                {activeCanvas?.name ?? "Resumen del servicio"}
+                {activeCanvas?.name ?? (canvases.length === 0 ? "Sin piezas" : "Resumen del servicio")}
                 <svg className={`w-4 h-4 text-gray-400 transition-transform ${canvasDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
               {canvasDropdownOpen && (
                 <div className="absolute left-0 top-full mt-1 z-50 w-64 bg-gray-900 border border-gray-800 rounded-xl shadow-xl py-1">
+                  {canvases.length === 0 && (
+                    <p className="px-4 py-2 text-sm text-fg-muted">Este proyecto no tiene piezas activas.</p>
+                  )}
                   {canvases.map((c) => (
                     <button
                       key={c.id}
@@ -659,6 +681,20 @@ export default function ProjectCanvasPanel({
         <CanvasBoundary label="este canvas">
           <SectionBlockList key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
         </CanvasBoundary>
+      )}
+
+      {/* Sin ninguna pieza activa. Antes este caso no existía en la UI: la pantalla se
+          quedaba en esqueleto para siempre (el loading colgaba de que la lista trajera
+          algo). Ahora es un estado con nombre — y a partir del interruptor de piezas
+          puede darse a propósito, no solo por un error. */}
+      {canvases.length === 0 && (
+        <div className="rounded-xl border border-dashed border-line px-6 py-10 text-center">
+          <p className="text-sm font-medium text-fg">Este proyecto no tiene piezas activas.</p>
+          <p className="mt-1 text-sm text-fg-muted">
+            El handoff y el cronograma siguen arriba. Para trabajar el contenido del proyecto,
+            activá una pieza.
+          </p>
+        </div>
       )}
 
       {/* ── Resumen — LEGACY / RETIRADO (código muerto) ─────────────────────
