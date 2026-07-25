@@ -123,7 +123,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     // MISMO contexto que la generación de cada documento (analyze isKickoffAgent /
     // desarrollo-generate): allowlist por doc — el kickoff/desarrollo los lee gente
     // de afuera y las secciones INTERNAS del handoff no deben entrar al prompt.
-    loadCanvasContext(projectId, "Handoff", {
+    loadCanvasContext(projectId, "handoff", {
       onlyConfirmed: false,
       includeKeys: doc.section === "kickoff" ? KICKOFF_HANDOFF_KEYS : DESARROLLO_HANDOFF_KEYS,
     }),

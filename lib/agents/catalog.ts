@@ -17,6 +17,7 @@
  * hardcodeado: el handoff se resuelve por agentGroup="handoff").
  */
 import { AGENT_GROUP_TO_CANVAS } from "@/lib/canvas/canvas-defs";
+import { pieceLabel } from "@/lib/pieces/registry";
 
 export type AgentCategoryKey = "canvas" | "session" | "transversal" | "library";
 
@@ -91,8 +92,11 @@ export function agentTriggerHint(a: CategorizableAgent): string {
   if (cat === "canvas") {
     if (a.id === "agent-mapeo-inicial") return "Pestaña Procesos";
     if (a.id === "agent-timeline-detail") return "Canvas Cronograma";
-    const canvas = a.agentGroup ? AGENT_GROUP_TO_CANVAS[a.agentGroup] : undefined;
-    return canvas ? `Canvas ${canvas}` : "Canvas del proyecto";
+    // AGENT_GROUP_TO_CANVAS devuelve el SLUG de la pieza; acá se muestra en pantalla,
+    // así que hay que traducirlo a su nombre visible. Sin `pieceLabel` esto diría
+    // "Canvas tech-requirements" en el catálogo de agentes.
+    const slug = a.agentGroup ? AGENT_GROUP_TO_CANVAS[a.agentGroup] : undefined;
+    return slug ? `Canvas ${pieceLabel(slug)}` : "Canvas del proyecto";
   }
   if (cat === "session") return "Automático (Google Meet)";
   if (cat === "transversal") return "Información del cliente";

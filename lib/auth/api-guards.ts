@@ -34,6 +34,7 @@ import type { ActionKeyOf, SectionKey } from "./permissions/registry";
 // permisos — los salarios no se abren desde /team). guardCostosAccess lo usa.
 import { isCostosRole } from "./cobranza-roles";
 import type { TeamRole } from "@prisma/client";
+import { pieceByName } from "@/lib/pieces/registry";
 
 function toErrorResponse(e: unknown): NextResponse | null {
   if (e instanceof UnauthorizedError) {
@@ -277,8 +278,13 @@ export async function guardTimelineDelete(
  * Para cualquier otro canvas devuelve null (el endpoint ya validó acceso al proyecto).
  * Devuelve una NextResponse 403 si corresponde bloquear, o null si pasa.
  */
-export async function denyHandoffCanvasEditForCse(canvasName: string): Promise<NextResponse | null> {
-  if (canvasName !== "Handoff") return null;
+export async function denyHandoffCanvasEditForCse(canvasSlugOrName: string): Promise<NextResponse | null> {
+  // Identidad por PIEZA: acepta el slug ("handoff") o el nombre visible ("Handoff").
+  // Lo segundo sigue importando aunque el sistema ya vaya por slug — un canvas custom
+  // con slug null llamado "Handoff" todavía entra en la consulta dual de canvasOf(),
+  // así que renombrar hacia "Handoff" tiene que seguir pidiendo la capacidad.
+  const slug = pieceByName(canvasSlugOrName)?.slug ?? canvasSlugOrName;
+  if (slug !== "handoff") return null;
   const guard = await guardCapability("handoffAnywhere");
   return guard instanceof NextResponse ? guard : null;
 }

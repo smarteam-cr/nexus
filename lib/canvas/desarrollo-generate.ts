@@ -56,7 +56,7 @@ export async function runDesarrolloGeneration(opts: {
   // (y del canvas, si ya viene resuelto) → en paralelo en vez de 3 round-trips seguidos.
   const [canvasId, handoffCtx, project] = await Promise.all([
     opts.canvasId ?? ensureDesarrolloCanvas(projectId),
-    loadCanvasContext(projectId, "Handoff", {
+    loadCanvasContext(projectId, "handoff", {
       onlyConfirmed: false,
       includeKeys: DESARROLLO_HANDOFF_KEYS,
     }),

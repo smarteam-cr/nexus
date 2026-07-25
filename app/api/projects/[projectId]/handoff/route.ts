@@ -3,6 +3,7 @@ import { guardAccessToProject, guardProjectEditHandoff, guardProjectGenerateHand
 import { prisma } from "@/lib/db/prisma";
 import { computeHandoffReadiness } from "@/lib/handoff/feeding";
 import { createHandoffCanvas, reconcileHandoffCanvasSections } from "@/lib/canvas/default-canvases";
+import { canvasOf } from "@/lib/pieces/canvas-query";
 
 type Params = { params: Promise<{ projectId: string }> };
 
@@ -24,7 +25,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     select: {
       implementationType: true,
       handoff: { select: { id: true, contextExclusions: true } },
-      canvases: { where: { name: "Handoff" }, select: { id: true }, take: 1 },
+      canvases: { where: canvasOf("handoff"), select: { id: true }, take: 1 },
     },
   });
   if (!project) return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -142,7 +143,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
     select: {
       clientId: true,
       handoff: { select: { id: true } },
-      canvases: { where: { name: "Handoff" }, select: { id: true }, take: 1 },
+      canvases: { where: canvasOf("handoff"), select: { id: true }, take: 1 },
     },
   });
   if (!project) return NextResponse.json({ error: "not_found" }, { status: 404 });

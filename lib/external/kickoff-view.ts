@@ -37,6 +37,7 @@ import { RECURRENTE_TAG } from "@/lib/tags/catalog";
 import { applyAssignments, normalizeAssignments, HORARIOS_KEY } from "@/lib/kickoff/horario-assignments";
 import { comparaSectionHasContent, stripProseCompara, COMPARA_KEY } from "@/components/canvas/kickoff-landing-adapter";
 import { normalizeKickoffSnapshot } from "./snapshot-normalize";
+import { canvasOf } from "@/lib/pieces/canvas-query";
 
 /**
  * Resuelve un token de acceso externo al Kickoff publicado de SU proyecto.
@@ -75,7 +76,7 @@ export async function getPublishedKickoffForToken(
 
   // 3. Canvas Kickoff del proyecto (se identifica por nombre, igual que el panel interno).
   const canvas = await prisma.projectCanvas.findFirst({
-    where: { projectId, name: "Kickoff" },
+    where: { projectId, ...canvasOf("kickoff") },
     select: { id: true, publishedSnapshot: true },
   });
   if (!canvas) return null;

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 // Secciones predefinidas del canvas "Información del cliente".
 // (Ex "canvas de estrategia" — quitamos handoff_ventas y perfil_cliente.)
@@ -17,6 +18,8 @@ const CLIENT_INFO_SECTIONS = [
 export const SENTINEL_SERVICE_TYPE = "__strategy__";
 const PROJECT_NAME = "Información del cliente";
 const CANVAS_NAME = "Información del cliente";
+// IDENTIDAD de la pieza (lib/pieces/registry.ts). El nombre es solo el rótulo.
+const CANVAS_SLUG = "client-info";
 
 export interface ClientInfoProjectRef {
   projectId: string;
@@ -44,14 +47,14 @@ export async function ensureClientInfoProject(clientId: string): Promise<ClientI
     // canvases Handoff/Kickoff de migraciones viejas, y canvases[0] sin orderBy
     // podría devolver el equivocado y romper las pestañas de Información del cliente.
     const named = await prisma.projectCanvas.findFirst({
-      where: { projectId: existing.id, name: CANVAS_NAME },
+      where: canvasOfNested(CANVAS_SLUG, { projectId: existing.id }),
       select: { id: true },
     });
     canvasId =
       named?.id ??
       (
         await prisma.projectCanvas.create({
-          data: { projectId: existing.id, name: CANVAS_NAME, isDefault: false },
+          data: { projectId: existing.id, slug: CANVAS_SLUG, name: CANVAS_NAME, isDefault: false },
         })
       ).id;
   } else {
@@ -67,7 +70,7 @@ export async function ensureClientInfoProject(clientId: string): Promise<ClientI
     projectId = project.id;
     canvasId = (
       await prisma.projectCanvas.create({
-        data: { projectId: project.id, name: CANVAS_NAME, isDefault: false },
+        data: { projectId: project.id, slug: CANVAS_SLUG, name: CANVAS_NAME, isDefault: false },
       })
     ).id;
   }

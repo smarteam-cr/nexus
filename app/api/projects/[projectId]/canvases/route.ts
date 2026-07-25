@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { canvasNotOf } from "@/lib/pieces/canvas-query";
 
 // GET: list canvases for a project (default first, then by createdAt)
 export async function GET(
@@ -16,10 +17,12 @@ export async function GET(
   // proyecto. El canvas sigue existiendo (1:1 con el Project) y loadCanvasContext
   // lo lee igual para el Kickoff — solo se oculta de este listado.
   const canvases = await prisma.projectCanvas.findMany({
-    where: { projectId, name: { not: "Handoff" } },
+    where: { projectId, ...canvasNotOf("handoff") },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,
+      // El front ramifica su renderer por SLUG (identidad de pieza), no por `name`.
+      slug: true,
       name: true,
       isDefault: true,
       order: true,

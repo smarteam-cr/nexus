@@ -36,6 +36,7 @@ import { isSalesPresence } from "@/lib/handoff/sales-presence";
 import { getProjectHandoffSessions, getClientSessions } from "@/lib/sessions/project-sources";
 import { fetchCompanyTimeline, fetchCompanyTimelineSplit, serializeTimeline, projectEraSince } from "@/lib/hubspot/company-timeline";
 import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT, RECURRENTE_TAG, hasTechnicalScope } from "@/lib/tags/catalog";
+import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -375,7 +376,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   //    el kickoff es interno y usa el handoff aunque esté en borrador.
   if (agent.id === "agent-kickoff-canvas" && bodyProjectId) {
     const handoffBlockCount = await prisma.canvasBlock.count({
-      where: { section: { canvas: { projectId: bodyProjectId, name: "Handoff" } } },
+      where: { section: { canvas: canvasOfNested("handoff", { projectId: bodyProjectId }) } },
     });
     if (handoffBlockCount === 0) {
       return NextResponse.json(
@@ -1162,7 +1163,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   let targetCanvasId: string | null = null;
   if (bodyProjectId && agent.agentGroup && AGENT_GROUP_TO_CANVAS[agent.agentGroup]) {
     const targetCanvas = await prisma.projectCanvas.findFirst({
-      where: { projectId: bodyProjectId, name: AGENT_GROUP_TO_CANVAS[agent.agentGroup] },
+      where: { projectId: bodyProjectId, ...canvasOf(AGENT_GROUP_TO_CANVAS[agent.agentGroup]) },
       select: { id: true },
     });
     if (targetCanvas) targetCanvasId = targetCanvas.id;
@@ -1477,7 +1478,7 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     // (riesgos_banderas, motivacion_decision "por qué vendimos", acuerdos_promesas
     // comerciales, estado_en_flight) NO se le mandan al modelo — ni siquiera para que
     // las "ignore". El prompt además se lo prohíbe, pero la fuente es el gate real.
-    const handoffCtx = await loadCanvasContext(bodyProjectId, "Handoff", {
+    const handoffCtx = await loadCanvasContext(bodyProjectId, "handoff", {
       onlyConfirmed: false,
       includeKeys: KICKOFF_HANDOFF_KEYS,
     });
@@ -1499,8 +1500,8 @@ ${timelineCtx ? `${timelineCtx}\n\n` : ""}Generá la landing de kickoff de cara 
   // DIAGNÓSTICO ya curados del proyecto. Gateado por grupo (planificacion).
   const isPlanificacionAgent = agent.agentGroup === "planificacion";
   if (isPlanificacionAgent && bodyProjectId) {
-    const handoffCtx = await loadCanvasContext(bodyProjectId, "Handoff", { onlyConfirmed: false });
-    const diagnosticoCtx = await loadCanvasContext(bodyProjectId, "Diagnóstico", { onlyConfirmed: false });
+    const handoffCtx = await loadCanvasContext(bodyProjectId, "handoff", { onlyConfirmed: false });
+    const diagnosticoCtx = await loadCanvasContext(bodyProjectId, "diagnosis", { onlyConfirmed: false });
     userMessage = `Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
 ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}
@@ -1519,7 +1520,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // curado para que las tareas sean del proyecto real. Sin fechas en el
   // contexto: el agente no las calcula.
   if (isTimelineDetailAgent && bodyProjectId) {
-    const handoffCtx = await loadCanvasContext(bodyProjectId, "Handoff", { onlyConfirmed: true });
+    const handoffCtx = await loadCanvasContext(bodyProjectId, "handoff", { onlyConfirmed: true });
     const timelineCtx = await loadTimelineContext(bodyProjectId, { includeIds: true });
     // Canvas "Desarrollo" (requerimiento técnico) si existe → objetos de HubSpot, llaves de dedup y
     // conexiones reales; ancla las tareas por objeto de la fase técnica en el alcance vendido. "" si no hay.

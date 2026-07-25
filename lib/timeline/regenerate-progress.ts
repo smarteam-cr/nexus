@@ -154,7 +154,7 @@ export async function regenerateTimelineProgress(
     // 3. Contexto: sesiones pasadas + handoff + cronograma con avance confirmado.
     const [pastSessions, handoffCtx, timelineCtx] = await Promise.all([
       getPastSessionsForProject(projectId),
-      loadCanvasContext(projectId, "Handoff", { onlyConfirmed: true }),
+      loadCanvasContext(projectId, "handoff", { onlyConfirmed: true }),
       loadTimelineContext(projectId, { includeProgress: true }),
     ]);
     const sessionsBlock = pastSessions

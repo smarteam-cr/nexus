@@ -18,6 +18,7 @@ import type {
   TimelineTaskStatus,
 } from "@prisma/client";
 import { computePhaseRanges, addWeeks } from "@/lib/timeline/weeks";
+import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 // ── Shape del snapshot frozen ─────────────────────────────────────────────────
 
@@ -239,7 +240,7 @@ export async function freezeBaselineOnPublish(
   const { snapshot, firmness } = buildBaselineSnapshot(tl.anchorStartDate, tl.phases);
   const handoffConfirmedAtFreeze =
     (await prisma.canvasBlock.count({
-      where: { status: "CONFIRMED", section: { canvas: { projectId, name: "Handoff" } } },
+      where: { status: "CONFIRMED", section: { canvas: canvasOfNested("handoff", { projectId }) } },
     })) > 0;
   const fullFirmness: BaselineFirmness = { ...firmness, handoffConfirmedAtFreeze };
 

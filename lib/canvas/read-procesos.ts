@@ -7,9 +7,9 @@
  * CONFIRMED) para renderizarlos como sección "Procesos".
  */
 import { prisma } from "@/lib/db/prisma";
+import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 const SENTINEL = "__strategy__";
-const CANVAS_NAME = "Información del cliente";
 
 export interface ProcesoFlowchart {
   id: string;
@@ -34,7 +34,7 @@ export async function readClientProcesos(
     where: {
       blockType: "FLOWCHART",
       ...(opts.onlyConfirmed ? { status: "CONFIRMED" } : {}),
-      section: { key: "procesos", canvas: { projectId: strategy.id, name: CANVAS_NAME } },
+      section: { key: "procesos", canvas: canvasOfNested("client-info", { projectId: strategy.id }) },
     },
     orderBy: { order: "asc" },
     select: { id: true, content: true, data: true, status: true },

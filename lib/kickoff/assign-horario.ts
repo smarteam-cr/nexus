@@ -22,6 +22,7 @@ import {
   HORARIOS_KEY,
   type HorarioAssignments,
 } from "./horario-assignments";
+import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 export type AssignResult =
   | { ok: true; assignments: HorarioAssignments }
@@ -44,7 +45,7 @@ export async function assignKickoffHorario(
   optionId: string | null,
 ): Promise<AssignResult> {
   const section = await prisma.canvasSection.findFirst({
-    where: { key: HORARIOS_KEY, canvas: { projectId, name: "Kickoff" } },
+    where: { key: HORARIOS_KEY, canvas: canvasOfNested("kickoff", { projectId }) },
     select: { blocks: { where: { blockType: "CARD" }, orderBy: { order: "asc" }, take: 1, select: { data: true } } },
   });
   const data = section?.blocks[0]?.data;

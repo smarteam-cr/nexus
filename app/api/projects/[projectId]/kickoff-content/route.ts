@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { freezeKickoffSnapshot } from "@/lib/canvas/kickoff-snapshot";
+import { canvasOf } from "@/lib/pieces/canvas-query";
 
 type Params = Promise<{ projectId: string }>;
 
@@ -32,7 +33,7 @@ export async function GET(_req: NextRequest, { params }: { params: Params }) {
   if (guard instanceof NextResponse) return guard;
 
   const canvas = await prisma.projectCanvas.findFirst({
-    where: { projectId, name: "Kickoff" },
+    where: { projectId, ...canvasOf("kickoff") },
     select: { publishedSnapshotAt: true, contentUpdatedAt: true },
   });
 

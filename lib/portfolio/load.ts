@@ -16,11 +16,13 @@ import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import { loadLifecycleBatch, type ProjectLifecycle } from "@/lib/lifecycle";
 import {
-  SETUP_CANVAS_NAMES,
+  SETUP_CANVAS_SLUGS,
   blockCountsForStep,
   deriveSetup,
   type SetupSignals,
 } from "./project-setup";
+import { canvasOfNested, canvasOfAnyNested } from "@/lib/pieces/canvas-query";
+import { slugForCanvas } from "@/lib/pieces/registry";
 
 export interface PortfolioRow {
   projectId: string;
@@ -190,18 +192,19 @@ export async function loadPortfolio(
   // generados por proyecto. Cuentan por existencia (born-CONFIRMED #1; regla en project-setup.ts).
   const setupBlocks = projectIds.length
     ? await prisma.canvasBlock.findMany({
-        where: { section: { canvas: { projectId: { in: projectIds }, name: { in: SETUP_CANVAS_NAMES } } } },
-        select: { status: true, section: { select: { canvas: { select: { projectId: true, name: true } } } } },
+        where: { section: { canvas: canvasOfAnyNested(SETUP_CANVAS_SLUGS, { projectId: { in: projectIds } }) } },
+        select: { status: true, section: { select: { canvas: { select: { projectId: true, slug: true, name: true } } } } },
       })
     : [];
   const stepsByProject = new Map<string, Set<string>>();
   for (const b of setupBlocks) {
     const c = b.section.canvas;
     if (!c.projectId) continue; // canvas de business case (sin proyecto) — fuera del portafolio
-    if (!blockCountsForStep(c.name, b.status)) continue;
+    const slug = slugForCanvas(c);
+    if (!slug || !blockCountsForStep(slug, b.status)) continue;
     let set = stepsByProject.get(c.projectId);
     if (!set) { set = new Set(); stepsByProject.set(c.projectId, set); }
-    set.add(c.name);
+    set.add(slug);
   }
 
   // 4ta query (batch): clientes CON procesos (flowcharts con nodos en la sección "procesos" del
@@ -213,7 +216,7 @@ export async function loadPortfolio(
           blockType: "FLOWCHART",
           section: {
             key: "procesos",
-            canvas: { name: "Información del cliente", project: { clientId: { in: clientIds }, serviceType: SENTINEL_SERVICE_TYPE } },
+            canvas: canvasOfNested("client-info", { project: { clientId: { in: clientIds }, serviceType: SENTINEL_SERVICE_TYPE } }),
           },
         },
         select: { data: true, section: { select: { canvas: { select: { project: { select: { clientId: true } } } } } } },

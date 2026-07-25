@@ -20,6 +20,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
+import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 export type ArtifactGate = {
   section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo" | "exploracion";
@@ -54,7 +55,7 @@ export async function resolveArtifactGate(
       let exists = !!p?.handoffGeneratedAt;
       if (!exists) {
         const aiBlocks = await prisma.canvasBlock.count({
-          where: { source: "AGENT", section: { canvas: { projectId, name: "Handoff" } } },
+          where: { source: "AGENT", section: { canvas: canvasOfNested("handoff", { projectId }) } },
         });
         exists = aiBlocks > 0;
       }
@@ -67,7 +68,7 @@ export async function resolveArtifactGate(
       // el proyecto (createDefaultCanvases) → contarlas daría "regenerate" siempre y
       // dejaría kickoff.generate como letra muerta. Espeja el criterio de cronograma.
       const aiBlocks = await prisma.canvasBlock.count({
-        where: { source: "AGENT", section: { canvas: { projectId, name: "Kickoff" } } },
+        where: { source: "AGENT", section: { canvas: canvasOfNested("kickoff", { projectId }) } },
       });
       return { section: "kickoff", action: aiBlocks > 0 ? "regenerate" : "generate" };
     }
@@ -76,7 +77,7 @@ export async function resolveArtifactGate(
       // (el `cierre` curado nace HUMAN → no cuenta). Mismo criterio que kickoff.
       if (!projectId) return { section: "desarrollo", action: "generate" };
       const aiBlocks = await prisma.canvasBlock.count({
-        where: { source: "AGENT", section: { canvas: { projectId, name: "Desarrollo" } } },
+        where: { source: "AGENT", section: { canvas: canvasOfNested("tech-requirements", { projectId }) } },
       });
       return { section: "desarrollo", action: aiBlocks > 0 ? "regenerate" : "generate" };
     }
@@ -85,7 +86,7 @@ export async function resolveArtifactGate(
       // source AGENT (el `cierre` curado nace HUMAN → no cuenta). Mismo criterio que kickoff.
       if (!projectId) return { section: "exploracion", action: "generate" };
       const aiBlocks = await prisma.canvasBlock.count({
-        where: { source: "AGENT", section: { canvas: { projectId, name: "Exploración" } } },
+        where: { source: "AGENT", section: { canvas: canvasOfNested("exploration", { projectId }) } },
       });
       return { section: "exploracion", action: aiBlocks > 0 ? "regenerate" : "generate" };
     }
@@ -112,10 +113,9 @@ export async function resolveArtifactGate(
             blockType: "FLOWCHART",
             section: {
               key: "procesos",
-              canvas: {
-                name: "Información del cliente",
+              canvas: canvasOfNested("client-info", {
                 project: { clientId, serviceType: SENTINEL_SERVICE_TYPE },
-              },
+              }),
             },
           },
           select: { data: true },

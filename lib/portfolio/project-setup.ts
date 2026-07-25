@@ -16,19 +16,21 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
+import { canvasOfNested, canvasOfAnyNested } from "@/lib/pieces/canvas-query";
+import { slugForCanvas } from "@/lib/pieces/registry";
 
-// Pasos de setup basados en CANVAS (identificados por nombre). Extensible: sumar el canvas de
+// Pasos de setup basados en CANVAS (identificados por SLUG de pieza). Extensible: sumar el canvas de
 // diagnóstico/planificación a futuro = una línea acá + su pill en la UI. Cuentan por EXISTENCIA
 // del bloque = "generado", NO "expuesto al cliente" (eso lo gobierna el staging). Con born-CONFIRMED
 // (#1) el handoff/kickoff nacen CONFIRMED; contar por existencia además rescata kickoffs DRAFT viejos.
 // `requireConfirmed` queda por si un paso futuro necesita exigir confirmación.
 export const SETUP_CANVAS_STEPS = [
-  { key: "handoff", canvasName: "Handoff", requireConfirmed: false },
-  { key: "kickoff", canvasName: "Kickoff", requireConfirmed: false },
+  { key: "handoff", canvasSlug: "handoff", requireConfirmed: false },
+  { key: "kickoff", canvasSlug: "kickoff", requireConfirmed: false },
 ] as const;
-export const SETUP_CANVAS_NAMES: string[] = SETUP_CANVAS_STEPS.map((s) => s.canvasName);
+export const SETUP_CANVAS_SLUGS: string[] = SETUP_CANVAS_STEPS.map((s) => s.canvasSlug);
 export const CONFIRMED_ONLY = new Set<string>(
-  SETUP_CANVAS_STEPS.filter((s) => s.requireConfirmed).map((s) => s.canvasName),
+  SETUP_CANVAS_STEPS.filter((s) => s.requireConfirmed).map((s) => s.canvasSlug),
 );
 
 export interface SetupSignals {
@@ -38,14 +40,14 @@ export interface SetupSignals {
   procesos: boolean;
 }
 
-/** ¿Este bloque cuenta para su paso? (aplica la regla requireConfirmed por canvas). */
-export function blockCountsForStep(canvasName: string, status: string): boolean {
-  return !(CONFIRMED_ONLY.has(canvasName) && status !== "CONFIRMED");
+/** ¿Este bloque cuenta para su paso? (aplica la regla requireConfirmed por pieza). */
+export function blockCountsForStep(canvasSlug: string | null, status: string): boolean {
+  return !(canvasSlug !== null && CONFIRMED_ONLY.has(canvasSlug) && status !== "CONFIRMED");
 }
 
 /**
  * Derivación PURA de las señales de setup a partir de datos ya cargados.
- * `steps` = nombres de canvas presentes (ya filtrados por blockCountsForStep).
+ * `steps` = slugs de pieza presentes (ya filtrados por blockCountsForStep).
  * Cronograma: "publicado" se ata al baseline ACTIVO (no al flag timelinePublishedAt,
  * que puede quedar seteado sin baseline por el fail-open del publish).
  */
@@ -56,8 +58,8 @@ export function deriveSetup(input: {
   hasProcesos: boolean;
 }): SetupSignals {
   return {
-    handoff: input.steps.has("Handoff"),
-    kickoff: input.steps.has("Kickoff"),
+    handoff: input.steps.has("handoff"),
+    kickoff: input.steps.has("kickoff"),
     cronograma: input.hasActiveBaseline ? "publicado" : input.hasPhases ? "borrador" : "sin",
     procesos: input.hasProcesos,
   };
@@ -71,8 +73,8 @@ export function deriveSetup(input: {
 export async function loadProjectSetup(projectId: string, clientId: string): Promise<SetupSignals> {
   const [setupBlocks, tl, procesoBlocks] = await Promise.all([
     prisma.canvasBlock.findMany({
-      where: { section: { canvas: { projectId, name: { in: SETUP_CANVAS_NAMES } } } },
-      select: { status: true, section: { select: { canvas: { select: { name: true } } } } },
+      where: { section: { canvas: canvasOfAnyNested(SETUP_CANVAS_SLUGS, { projectId }) } },
+      select: { status: true, section: { select: { canvas: { select: { slug: true, name: true } } } } },
     }),
     prisma.projectTimeline.findUnique({
       where: { projectId },
@@ -88,7 +90,7 @@ export async function loadProjectSetup(projectId: string, clientId: string): Pro
         blockType: "FLOWCHART",
         section: {
           key: "procesos",
-          canvas: { name: "Información del cliente", project: { clientId, serviceType: SENTINEL_SERVICE_TYPE } },
+          canvas: canvasOfNested("client-info", { project: { clientId, serviceType: SENTINEL_SERVICE_TYPE } }),
         },
       },
       select: { data: true },
@@ -97,8 +99,8 @@ export async function loadProjectSetup(projectId: string, clientId: string): Pro
 
   const steps = new Set<string>();
   for (const b of setupBlocks) {
-    const name = b.section.canvas.name;
-    if (blockCountsForStep(name, b.status)) steps.add(name);
+    const slug = slugForCanvas(b.section.canvas);
+    if (slug && blockCountsForStep(slug, b.status)) steps.add(slug);
   }
 
   const hasProcesos = procesoBlocks.some((b) => {

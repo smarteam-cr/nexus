@@ -11,9 +11,11 @@
  * migró lo EXISTENTE una sola vez); esta es la vía para la salida FUTURA del agente.
  */
 import { prisma } from "@/lib/db/prisma";
+import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 const SENTINEL = "__strategy__";
 const CANVAS_NAME = "Información del cliente";
+const CANVAS_SLUG = "client-info";
 const INFO_SECTIONS = [
   { key: "stakeholders", label: "Stakeholders" },
   { key: "retos_estrategicos", label: "Retos Estratégicos" },
@@ -37,12 +39,12 @@ export async function ensureProcesosSection(clientId: string): Promise<string> {
     });
   }
   let canvas = await prisma.projectCanvas.findFirst({
-    where: { projectId: project.id, name: CANVAS_NAME },
+    where: canvasOfNested(CANVAS_SLUG, { projectId: project.id }),
     select: { id: true },
   });
   if (!canvas) {
     canvas = await prisma.projectCanvas.create({
-      data: { projectId: project.id, name: CANVAS_NAME, isDefault: false },
+      data: { projectId: project.id, slug: CANVAS_SLUG, name: CANVAS_NAME, isDefault: false },
       select: { id: true },
     });
   }

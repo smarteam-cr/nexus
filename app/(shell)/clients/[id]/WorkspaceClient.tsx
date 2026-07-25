@@ -28,6 +28,8 @@ interface ProjectSummary {
 // WorkspaceSkeleton (el panel arranca con la lista en mano, sin fetch al montar).
 export interface SeededCanvas {
   id: string;
+  /** Identidad de la pieza (lib/pieces/registry); null en canvases custom del CSE. */
+  slug: string | null;
   name: string;
   isDefault: boolean;
   sections: Array<{ key: string; label: string }>;

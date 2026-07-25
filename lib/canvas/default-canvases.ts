@@ -35,6 +35,8 @@ export async function createDefaultCanvases(projectId: string, db: Db = prisma) 
   await db.projectCanvas.createMany({
     data: DEFAULT_PROJECT_CANVASES.map((c) => ({
       projectId,
+      // slug = IDENTIDAD de la pieza; name es solo el rótulo visible.
+      slug: c.slug,
       name: c.name,
       isDefault: c.isDefault,
       order: c.order,
@@ -96,6 +98,7 @@ export async function createHandoffCanvas(projectId: string, db: Db = prisma): P
   const canvas = await db.projectCanvas.create({
     data: {
       projectId,
+      slug: HANDOFF_CANVAS.slug,
       name: HANDOFF_CANVAS.name,
       isDefault: HANDOFF_CANVAS.isDefault,
       order: HANDOFF_CANVAS.order,
@@ -176,6 +179,9 @@ export async function createBusinessCaseCanvas(
   const canvas = await db.projectCanvas.create({
     data: {
       businessCaseId,
+      // Todas las versiones del BC comparten la MISMA pieza: el `name` de acá abajo
+      // es la versión ("Plantilla", "Propuesta 2"), no la identidad.
+      slug: BUSINESS_CASE_CANVAS.slug,
       // Rótulo de cara al CSE: v0 = "Plantilla" (base con las guías del agente, NO se
       // llena con contenido); v1+ = "Caso de uso N" (cada "Generar" crea una versión).
       name: version === 0 ? "Plantilla" : `${tpl.caseLabel} ${version}`,
@@ -334,6 +340,7 @@ async function createOnDemandCanvas(projectId: string, def: CanvasDefinition, db
   const canvas = await db.projectCanvas.create({
     data: {
       projectId,
+      slug: def.slug,
       name: def.name,
       isDefault: def.isDefault,
       order: def.order,

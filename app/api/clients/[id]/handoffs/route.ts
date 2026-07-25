@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { canvasOf } from "@/lib/pieces/canvas-query";
 
 /**
  * GET /api/clients/[id]/handoffs
@@ -32,7 +33,7 @@ export async function GET(
         select: {
           name: true,
           // 1:1 con el Project — el canvas "Handoff" guarda el contenido.
-          canvases: { where: { name: "Handoff" }, select: { id: true }, take: 1 },
+          canvases: { where: canvasOf("handoff"), select: { id: true }, take: 1 },
         },
       },
     },

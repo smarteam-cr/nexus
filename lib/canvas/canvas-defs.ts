@@ -24,6 +24,12 @@ export type CanvasSectionDef = {
 };
 
 export type CanvasDefinition = {
+  /**
+   * IDENTIDAD de la pieza (lib/pieces/registry.ts). Es lo que se persiste en
+   * `ProjectCanvas.slug` al crear y lo que resuelven agente/renderer/permiso/vista
+   * externa. `name` es solo el rótulo visible.
+   */
+  slug: string;
   name: string;
   isDefault: boolean;
   order: number;
@@ -84,6 +90,7 @@ export const EXPLORACION_CIERRE_DEFAULT = {
 // acá como fuente ÚNICA de las 10 secciones — el agente "Handoff Sales→CS" escribe
 // en ellas vía AGENT_GROUP_TO_CANVAS. Cada sección 1:1 con una card del agente.
 export const HANDOFF_CANVAS: CanvasDefinition = {
+  slug: "handoff",
   name: "Handoff",
   isDefault: false,
   order: 0,
@@ -107,6 +114,7 @@ export const HANDOFF_CANVAS: CanvasDefinition = {
 // siembra desde BC_TEMPLATES[templateId], no desde acá. Se conserva como referencia
 // de las 9 secciones históricas de hubspot_v1 (mismas keys y rótulos internos).
 export const BUSINESS_CASE_CANVAS: CanvasDefinition = {
+  slug: "business-case",
   name: "Business Case",
   isDefault: true,
   order: 0,
@@ -134,6 +142,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     // es una sección — la plantilla lo pinta desde ProjectTimeline. ANCLA/default
     // del proyecto (isDefault → fallback cuando no hay canvas seleccionado + no
     // borrable desde la UI).
+    slug: "kickoff",
     name: "Kickoff",
     isDefault: true,
     order: 1,
@@ -162,6 +171,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     ],
   },
   {
+    slug: "diagnosis",
     name: "Diagnóstico",
     isDefault: false,
     order: 2,
@@ -177,6 +187,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     ],
   },
   {
+    slug: "planning",
     name: "Planificación",
     isDefault: false,
     order: 3,
@@ -191,6 +202,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     // Cronograma: editor del ProjectTimeline (fases/semanas/sesiones). NO tiene
     // CanvasSection — lo respalda ProjectTimeline (fuente única; el Kickoff lo
     // refleja). Render especial en ProjectCanvasPanel (branch name==="Cronograma").
+    slug: "timeline",
     name: "Cronograma",
     isDefault: false,
     order: 0,
@@ -210,6 +222,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     // se crean en el mismo `createMany` (ya no hay desempate por `createdAt`).
     // Fuente ÚNICA de sus secciones (keys/labels 1:1 con EXPLORACION_SECTION_DEFS del
     // motor). Solo `cierre` es curada (defaultData).
+    slug: "exploration",
     name: "Exploración",
     isDefault: false,
     order: 4,
@@ -225,32 +238,34 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
   },
 ];
 
-/** Map from agentGroup to canvas name for routing cards/blocks.
+/** agentGroup -> SLUG de la pieza destino (lib/pieces/registry.ts) donde el agente
+ *  escribe sus cards/bloques. Mapeaba al NOMBRE visible, y por eso renombrar un
+ *  canvas dejaba al agente escribiendo en la nada (targetCanvasId null, en silencio).
  *  Fuente ÚNICA — app/api/clients/[id]/analyze/route.ts la importa (vía
  *  default-canvases.ts, que la re-exporta).
  *  `handoff` SE MANTIENE: el agente sigue escribiendo al canvas "Handoff" del
  *  proyecto, que ahora lo crea el flujo de handoff (createHandoffCanvas). */
 export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
-  diagnostico: "Diagnóstico",
-  planificacion: "Planificación",
-  handoff: "Handoff",
-  kickoff: "Kickoff",
+  diagnostico: "diagnosis",
+  planificacion: "planning",
+  handoff: "handoff",
+  kickoff: "kickoff",
   // Requerimiento técnico: canvas ON-DEMAND (solo si el handoff detecta trabajo técnico).
   // Lo crea createDesarrolloCanvas; el agente "agent-desarrollo-canvas" escribe en él.
-  desarrollo: "Desarrollo",
+  desarrollo: "tech-requirements",
   // Exploración del negocio: canvas DEFAULT e INTERNO (se pre-crea con el proyecto y
   // vive en el dropdown, como Kickoff). El agente "agent-exploracion-canvas" escribe
   // en él, disparado desde el header del propio canvas (CANVAS_PRIMARY_AGENT).
-  exploracion: "Exploración",
-  businesscase: "Business Case",
+  exploracion: "exploration",
+  businesscase: "business-case",
   // D.1: el canvas "Cronograma" no tiene secciones → resolver targetCanvasId acá
   // evita que analyze inyecte instrucciones de formato cards al prompt del agente
   // de detalle (la persistencia real va a ProjectTimeline, no a bloques).
-  cronograma: "Cronograma",
+  cronograma: "timeline",
 };
 
 /** Definición canónica del canvas Kickoff (fuente única del seed, la reconciliación y el backfill). */
-export const KICKOFF_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c) => c.name === "Kickoff")!;
+export const KICKOFF_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c) => c.slug === "kickoff")!;
 
 /**
  * Núcleo PURO de la secuencia destino de secciones de un canvas: parte del orden VIVO
@@ -295,6 +310,7 @@ export function kickoffSectionSequence(existingKeys: string[]): string[] {
 // trabajo técnico (hasTechnicalScope). Fuente ÚNICA de sus secciones (keys/labels 1:1
 // con DESARROLLO_SECTION_DEFS del motor). Solo `cierre` es curada (defaultData).
 export const DESARROLLO_CANVAS: CanvasDefinition = {
+  slug: "tech-requirements",
   name: "Desarrollo",
   isDefault: false,
   order: 0,
@@ -325,7 +341,7 @@ export function desarrolloSectionSequence(existingKeys: string[]): string[] {
  *  y el backfill). Vive DENTRO de DEFAULT_PROJECT_CANVASES — es un canvas de primera
  *  clase (modelo Kickoff): se pre-crea con el proyecto y su agente se corre desde el
  *  header del canvas. INTERNO ≠ on-demand: sigue sin superficie externa. */
-export const EXPLORACION_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c) => c.name === "Exploración")!;
+export const EXPLORACION_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c) => c.slug === "exploration")!;
 
 /** Secuencia destino de las secciones del canvas Exploración (orden vivo + inserta
  *  canónicas faltantes detrás de su predecesora). La usa

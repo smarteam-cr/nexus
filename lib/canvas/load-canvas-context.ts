@@ -13,6 +13,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { extractFingerprint } from "@/lib/timeline/particularidad-identity";
+import { canvasOf } from "@/lib/pieces/canvas-query";
 
 interface BlockLite {
   blockType: string;
@@ -120,11 +121,13 @@ function blockToText(b: BlockLite): string {
  */
 export async function loadCanvasContext(
   projectId: string,
-  canvasName: string,
+  /** SLUG de la pieza (lib/pieces/registry.ts), no su nombre visible. Era el
+   *  nombre y eso ataba el contexto de 8 agentes al rótulo del canvas. */
+  canvasSlug: string,
   opts: { onlyConfirmed?: boolean; includeKeys?: readonly string[] } = {},
 ): Promise<string> {
   const canvas = await prisma.projectCanvas.findFirst({
-    where: { projectId, name: canvasName },
+    where: { projectId, ...canvasOf(canvasSlug) },
     select: { id: true },
   });
   if (!canvas) return "";

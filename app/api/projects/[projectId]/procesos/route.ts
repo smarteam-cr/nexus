@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { readClientProcesos } from "@/lib/canvas/read-procesos";
+import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 /**
  * GET /api/projects/[projectId]/procesos
@@ -68,7 +69,7 @@ export async function PATCH(
         where: {
           id: blockId,
           blockType: "FLOWCHART",
-          section: { key: "procesos", canvas: { projectId: strategy.id, name: "Información del cliente" } },
+          section: { key: "procesos", canvas: canvasOfNested("client-info", { projectId: strategy.id }) },
         },
         select: { id: true },
       })

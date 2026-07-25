@@ -3,6 +3,7 @@ import { guardCapability } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { resolveCompanyProjectIds } from "@/lib/hubspot/sync-projects";
+import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 /**
  * GET /api/handoffs/projects-of-company?companyId=<id>
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest) {
     const generated = new Set<string>();
     for (const np of nexusProjects) {
       const blocks = await prisma.canvasBlock.count({
-        where: { section: { canvas: { name: "Handoff", projectId: np.id } } },
+        where: { section: { canvas: canvasOfNested("handoff", { projectId: np.id }) } },
       });
       if (blocks > 0) generated.add(np.id);
     }

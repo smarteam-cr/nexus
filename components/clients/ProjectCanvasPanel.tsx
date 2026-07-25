@@ -18,6 +18,7 @@ import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import CanvasBoundary from "./CanvasBoundary";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
+import { slugForCanvas } from "@/lib/pieces/registry";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import ProjectHandoffSection from "./ProjectHandoffSection";
 import { WorkspaceSkeleton } from "./skeletons";
@@ -34,15 +35,18 @@ const FlowchartViewer = dynamic(
  * Canvases que tienen su PROPIO renderer más abajo (motor de landing, Gantt o vista
  * lineal). La grilla genérica `SectionBlockList` los excluye: si un canvas con renderer
  * propio no está en este set, se pinta DOS VECES — el suyo arriba y la grilla debajo.
- * Es exactamente lo que le pasó a Exploración, y por eso esto es un set con nombre y no
- * una cadena de `&&`: sumar un canvas nuevo con renderer propio obliga a mirar acá.
+ * Es exactamente lo que le pasó a Exploración, y por eso esto es un set y no una cadena
+ * de `&&`: sumar un canvas nuevo con renderer propio obliga a mirar acá.
+ *
+ * Va por SLUG de pieza (lib/pieces/registry), no por nombre visible: renombrar
+ * "Desarrollo" a "Requerimientos técnicos" no puede dejar un canvas pintado dos veces.
  */
 const CANVAS_CON_RENDERER_PROPIO = new Set([
-  "Handoff",
-  "Kickoff",
-  "Desarrollo",
-  "Exploración",
-  "Cronograma",
+  "handoff",
+  "kickoff",
+  "tech-requirements",
+  "exploration",
+  "timeline",
 ]);
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -80,6 +84,8 @@ const SECTION_ICONS: Record<string, string> = {
 
 interface CanvasMeta {
   id: string;
+  /** Identidad de la pieza (lib/pieces/registry). null en canvases custom del CSE. */
+  slug: string | null;
   name: string;
   isDefault: boolean;
   sections: Array<{ key: string; label: string }>;
@@ -153,6 +159,10 @@ export default function ProjectCanvasPanel({
   // NO es el canvas de cards). isResumenCanvas gobierna solo la UI legacy del Resumen
   // (cards + GPS), que se retira en la fase final.
   const isResumenCanvas = activeCanvas?.name === "Resumen";
+  // Identidad de la PIEZA activa. `slugForCanvas` cae al nombre visible solo si el
+  // canvas todavía no tiene slug (canvas viejo sin backfillear): así el renderer no
+  // depende del rótulo, que es justo lo que se va a renombrar.
+  const activeSlug = activeCanvas ? slugForCanvas(activeCanvas) : null;
 
   // Update URL when canvas changes (no page reload)
   const switchCanvas = useCallback((canvasId: string) => {
@@ -480,26 +490,26 @@ export default function ProjectCanvasPanel({
             {isResumenCanvas && <HubBadge tags={tags} serviceType={serviceType} size="sm" />}
             {/* CTA por-canvas: ejecuta el agente primario del canvas, anclado junto al
                 nombre (reemplaza el pop-up). Handoff/Cronograma tienen su propio CTA. */}
-            {!isResumenCanvas && activeCanvas && CANVAS_PRIMARY_AGENT[activeCanvas.name] && (
+            {!isResumenCanvas && activeCanvas && CANVAS_PRIMARY_AGENT[activeSlug ?? ""] && (
               <CanvasAgentButton
                 clientId={clientId}
                 projectId={projectId}
-                agentId={CANVAS_PRIMARY_AGENT[activeCanvas.name].agentId}
-                label={CANVAS_PRIMARY_AGENT[activeCanvas.name].label}
-                async={CANVAS_PRIMARY_AGENT[activeCanvas.name].async}
+                agentId={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].agentId}
+                label={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].label}
+                async={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].async}
                 onDone={() => { setAgentNonce((n) => n + 1); bumpGpsRefresh(); }}
               />
             )}
             {/* CTA principal del Cronograma (Generar cronograma / Chequear avance) — A LA PAR DEL
                 NOMBRE, igual que el CanvasAgentButton de los demás canvases. Lo inyecta
                 CronogramaCanvas por portal (conoce phases/tasks/published). */}
-            {activeCanvas?.name === "Cronograma" && (
+            {activeSlug === "timeline" && (
               <div ref={setCronogramaSlot} className="flex items-center gap-2" />
             )}
             {/* Aviso (nunca bloqueo): en clientes multi-proyecto, links de IA sin revisar
                 pueden mezclar contexto de otro proyecto en el handoff/kickoff. */}
             {!isResumenCanvas &&
-              (activeCanvas?.name === "Handoff" || activeCanvas?.name === "Kickoff") && (
+              (activeSlug === "handoff" || activeSlug === "kickoff") && (
                 <UnreviewedSessionsChip projectId={projectId} />
               )}
           </div>
@@ -584,7 +594,7 @@ export default function ProjectCanvasPanel({
       )}
 
       {/* Handoff: vista lineal (lectura/curación del CSE, sin grilla) */}
-      {!isResumenCanvas && activeCanvas?.name === "Handoff" && activeCanvasId && (
+      {!isResumenCanvas && activeSlug === "handoff" && activeCanvasId && (
         <CanvasBoundary label="el Handoff">
           <CanvasLinearView projectId={projectId} canvasId={activeCanvasId} />
         </CanvasBoundary>
@@ -593,7 +603,7 @@ export default function ProjectCanvasPanel({
       {/* Kickoff: landing (Camino C) editable in-situ por el CSE.
           El div rompe el padding del panel (px-6 py-8 space-y-6) para que las
           secciones del landing sean full-bleed dentro del scroll container. */}
-      {!isResumenCanvas && activeCanvas?.name === "Kickoff" && activeCanvasId && (
+      {!isResumenCanvas && activeSlug === "kickoff" && activeCanvasId && (
         // Publicar/ocultar el kickoff vive en el pop-up "Acceso del cliente"
         // (toolbar del proyecto), junto al resto de la visibilidad por superficie.
         <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
@@ -611,7 +621,7 @@ export default function ProjectCanvasPanel({
       {/* Desarrollo: requerimiento técnico editable in-situ (mismo motor que el Kickoff,
           sin staging: la vista externa lee el canvas vivo). El canvas es on-demand — solo
           aparece si el handoff detectó trabajo técnico (o se regenera con el botón). */}
-      {!isResumenCanvas && activeCanvas?.name === "Desarrollo" && activeCanvasId && (
+      {!isResumenCanvas && activeSlug === "tech-requirements" && activeCanvasId && (
         <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
           <CanvasBoundary label="el canvas de Desarrollo">
             <DesarrolloWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} clientId={clientId} canvasId={activeCanvasId} />
@@ -622,7 +632,7 @@ export default function ProjectCanvasPanel({
       {/* Exploración: guía INTERNA de descubrimiento del negocio (mismo motor, paleta gris).
           Canvas de primera clase como Kickoff: vive en el dropdown y su agente se dispara
           desde el header (CANVAS_PRIMARY_AGENT). NO tiene vista externa ni publicación. */}
-      {!isResumenCanvas && activeCanvas?.name === "Exploración" && activeCanvasId && (
+      {!isResumenCanvas && activeSlug === "exploration" && activeCanvasId && (
         <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
           <CanvasBoundary label="el canvas de Exploración">
             <ExploracionWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
@@ -633,7 +643,7 @@ export default function ProjectCanvasPanel({
       {/* Cronograma: Gantt + editor del ProjectTimeline (fases/tareas/semanas).
           Fuente única — el Kickoff lo refleja read-only. clientId habilita el
           disparo del agente de detalle (POST /api/clients/[clientId]/analyze). */}
-      {activeCanvas?.name === "Cronograma" && (
+      {activeSlug === "timeline" && (
         // agentNonce remonta el canvas al terminar el CTA de avance → muestra el banner
         <CanvasBoundary label="el Cronograma">
           <CronogramaCanvas key={`cronograma-${agentNonce}`} projectId={projectId} clientId={clientId} headerSlot={cronogramaSlot} />
@@ -644,7 +654,7 @@ export default function ProjectCanvasPanel({
           Los que tienen renderer PROPIO se excluyen por `CANVAS_CON_RENDERER_PROPIO`:
           si uno falta ahí, su canvas se pinta DOS veces (el motor arriba y esta grilla
           abajo). Pasó con Exploración — por eso es un set con nombre y no otra `&&`. */}
-      {!isResumenCanvas && !CANVAS_CON_RENDERER_PROPIO.has(activeCanvas?.name ?? "") && activeCanvasId && (
+      {!isResumenCanvas && !CANVAS_CON_RENDERER_PROPIO.has(activeSlug ?? "") && activeCanvasId && (
         // agentNonce remonta la grilla al terminar una corrida del CTA → refetch
         <CanvasBoundary label="este canvas">
           <SectionBlockList key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />

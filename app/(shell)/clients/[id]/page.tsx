@@ -4,6 +4,7 @@ import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { ensureStrategyProject } from "@/lib/canvas/strategy-project";
 import WorkspaceClient from "./WorkspaceClient";
+import { canvasNotOf } from "@/lib/pieces/canvas-query";
 
 export default async function ClientPage({
   params,
@@ -76,12 +77,13 @@ export default async function ClientPage({
   const initialCanvases = initialProjectId
     ? (
         await prisma.projectCanvas.findMany({
-          where: { projectId: initialProjectId, name: { not: "Handoff" } },
+          where: { projectId: initialProjectId, ...canvasNotOf("handoff") },
           orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-          select: { id: true, name: true, isDefault: true, sections: true },
+          select: { id: true, slug: true, name: true, isDefault: true, sections: true },
         })
       ).map((c) => ({
         id: c.id,
+        slug: c.slug,
         name: c.name,
         isDefault: c.isDefault,
         sections: (c.sections as Array<{ key: string; label: string }> | null) ?? [],

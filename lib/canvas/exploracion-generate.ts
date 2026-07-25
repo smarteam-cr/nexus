@@ -76,8 +76,8 @@ export async function runExploracionGeneration(opts: {
   // Todas las fuentes son independientes entre sí → en paralelo, no en serie.
   const [canvasId, handoffCtx, kickoffCtx, timelineCtx, project] = await Promise.all([
     opts.canvasId ?? ensureExploracionCanvas(projectId),
-    loadCanvasContext(projectId, "Handoff", { onlyConfirmed: false, includeKeys: EXPLORACION_HANDOFF_KEYS }),
-    loadCanvasContext(projectId, "Kickoff", { onlyConfirmed: false }),
+    loadCanvasContext(projectId, "handoff", { onlyConfirmed: false, includeKeys: EXPLORACION_HANDOFF_KEYS }),
+    loadCanvasContext(projectId, "kickoff", { onlyConfirmed: false }),
     loadTimelineContext(projectId),
     prisma.project.findUnique({
       where: { id: projectId },

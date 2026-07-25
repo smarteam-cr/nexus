@@ -20,6 +20,7 @@ import { prisma } from "@/lib/db/prisma";
 import { resolveActiveAccess, touchAccess } from "./access";
 import { getBrandLogos } from "./smarteam-logo";
 import type { DesarrolloSectionRow } from "@/components/canvas/desarrollo-landing-adapter";
+import { canvasOf } from "@/lib/pieces/canvas-query";
 
 export interface DesarrolloViewData {
   projectName: string;
@@ -41,7 +42,7 @@ export async function getDesarrolloForToken(token: string): Promise<DesarrolloVi
   const projectId = access.project.id;
 
   const canvas = await prisma.projectCanvas.findFirst({
-    where: { projectId, name: "Desarrollo" },
+    where: { projectId, ...canvasOf("tech-requirements") },
     select: { id: true },
   });
   if (!canvas) return null;

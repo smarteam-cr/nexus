@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { guardCapability, guardAccessToClient } from "@/lib/auth/api-guards";
 import { createDefaultCanvases, createHandoffCanvas } from "@/lib/canvas/default-canvases";
 import { sanitizeTags } from "@/lib/tags/catalog";
+import { canvasOf } from "@/lib/pieces/canvas-query";
 
 interface Body {
   dealId?: string;
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
         where: { id: targetProjectId },
         select: {
           clientId: true,
-          canvases: { where: { name: "Handoff" }, select: { id: true } },
+          canvases: { where: canvasOf("handoff"), select: { id: true } },
           handoff: { select: { id: true } },
         },
       });

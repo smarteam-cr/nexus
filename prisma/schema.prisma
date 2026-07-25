@@ -869,7 +869,16 @@ model ProjectCanvas {
   project        Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   businessCaseId String?
   businessCase   BusinessCase? @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
+  // NOMBRE VISIBLE. Editable sin consecuencias: ningún lookup del código lo usa
+  // como identidad (esa es `slug`). Para los canvases de BusinessCase, `name` es la
+  // VERSIÓN ("Plantilla", "Propuesta 1"), no la pieza.
   name           String
+  // IDENTIDAD de la pieza (lib/pieces/registry.ts): inglés, estable, NUNCA cambia.
+  // Es lo que resuelve agente, renderer, permiso, vista externa y contexto. Antes
+  // ese papel lo hacía `name`, repetido en 8+ lugares, y por eso renombrar una
+  // pieza rompía ruteo/permisos/vista a la vez y dejaba canvases huérfanos.
+  // nullable: los canvases custom del CSE no son una pieza registrada.
+  slug           String?
   isDefault      Boolean       @default(false)
   order          Int           @default(0) // orden de aparición en el dropdown de canvases
   // Versionado (business case): cada "Generar" crea un canvas nuevo; isActive marca

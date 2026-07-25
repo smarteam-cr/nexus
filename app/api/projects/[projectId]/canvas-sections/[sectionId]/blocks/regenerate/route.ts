@@ -7,6 +7,7 @@ import { getSingleBlockOutputInstructions } from "@/lib/canvas/agent-output-sche
 import { validateBlockPayload } from "@/lib/canvas/validate-block-payload";
 import { parseRegenBody, regenerateTypedSection } from "@/lib/canvas/regenerate-section";
 import { KICKOFF_DEF_BY_KEY } from "@/components/landing/configs/kickoff.defs";
+import { slugForCanvas } from "@/lib/pieces/registry";
 
 /**
  * POST /api/projects/[projectId]/canvas-sections/[sectionId]/blocks/regenerate
@@ -41,13 +42,13 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       blockType: true,
       content: true,
       data: true,
-      section: { select: { key: true, label: true, canvas: { select: { name: true, projectId: true } } } },
+      section: { select: { key: true, label: true, canvas: { select: { slug: true, name: true, projectId: true } } } },
     },
   });
   if (!block || block.section.canvas.projectId !== projectId) {
     return NextResponse.json({ error: "Bloque no encontrado" }, { status: 404 });
   }
-  if (block.section.canvas.name !== "Kickoff") {
+  if (slugForCanvas(block.section.canvas) !== "kickoff") {
     return NextResponse.json({ error: "Regeneración por IA solo soportada en el canvas Kickoff" }, { status: 400 });
   }
 
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
 
   // Mismo contexto que usa el agente de kickoff.
   const [handoffCtx, timelineCtx, agent, project] = await Promise.all([
-    loadCanvasContext(projectId, "Handoff", { onlyConfirmed: true }),
+    loadCanvasContext(projectId, "handoff", { onlyConfirmed: true }),
     loadTimelineContext(projectId),
     prisma.agent.findUnique({
       where: { id: KICKOFF_AGENT_ID },

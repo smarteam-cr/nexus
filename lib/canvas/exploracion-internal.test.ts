@@ -16,6 +16,8 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { AGENT_GROUP_TO_CANVAS } from "./canvas-defs";
+import { pieceBySlug } from "@/lib/pieces/registry";
 
 const RAIZ = process.cwd();
 
@@ -79,11 +81,19 @@ describe("Exploración es un documento INTERNO: no existe camino a la superficie
     }
   });
 
-  it("el canvas declara su propio nombre y NO reusa el de un documento cliente-facing", () => {
+  it("el canvas declara su propia PIEZA y NO reusa la de un documento cliente-facing", () => {
     // Sanity del ruteo: si alguien apuntara el agente de exploración al canvas Kickoff
     // (que sí es cliente-facing y sí publica), el contenido interno terminaría en la
     // vista externa del kickoff. El mapa es la fuente de ese ruteo.
-    const src = fs.readFileSync(path.join(RAIZ, "lib/canvas/canvas-defs.ts"), "utf8");
-    expect(src).toMatch(/exploracion:\s*"Exploración"/);
+    //
+    // Desde el registro de piezas (2026-07-24) el mapa apunta al SLUG, no al nombre
+    // visible. Se afirma sobre el VALOR y no con una regex sobre el fuente: así el
+    // test sigue protegiendo el ruteo aunque el archivo se reordene o se renombre la
+    // pieza — que es justo el punto de haber separado identidad de rótulo.
+    expect(AGENT_GROUP_TO_CANVAS.exploracion).toBe("exploration");
+    expect(AGENT_GROUP_TO_CANVAS.exploracion).not.toBe(AGENT_GROUP_TO_CANVAS.kickoff);
+    // Y la pieza tiene que estar declarada como INTERNA en el registro.
+    expect(pieceBySlug("exploration")?.clientFacing).toBe(false);
+    expect(pieceBySlug("kickoff")?.clientFacing).toBe(true);
   });
 });
