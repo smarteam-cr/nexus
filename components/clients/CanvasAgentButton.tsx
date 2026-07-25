@@ -36,6 +36,7 @@ export default function CanvasAgentButton({
   runningLabel = "Generando…",
   async: useAsync = false,
   onDone,
+  appearance = "primary",
   className,
   notifyLabel,
   clientName,
@@ -51,6 +52,10 @@ export default function CanvasAgentButton({
   /** true para agentes pesados (CARDS_AND_FLOWCHARTS) — corren detached y polleamos. */
   async?: boolean;
   onDone?: () => void;
+  /** Jerarquía visual. `primary` = la acción natural siguiente (sólido). `ghost` =
+   *  acciones que pisan trabajo (Regenerar) o secundarias — borde, sin fondo. */
+  appearance?: "primary" | "ghost";
+  /** Clases ADICIONALES (se agregan al estilo de la variante, no lo reemplazan). */
   className?: string;
   /** Sustantivo para la notificación ("diagnóstico"). Default: se deriva del `label`. */
   notifyLabel?: string;
@@ -155,10 +160,13 @@ export default function CanvasAgentButton({
     <button
       onClick={() => void run()}
       disabled={running || disabled || !!busy}
-      className={
-        className ??
-        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-primary-fg bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"
-      }
+      className={[
+        "flex items-center gap-1.5 rounded-lg text-xs font-semibold disabled:opacity-60 transition-colors",
+        appearance === "primary"
+          ? "px-3 py-1.5 text-primary-fg bg-brand hover:bg-brand-dark"
+          : "px-2.5 py-1 text-fg-muted border border-line hover:text-fg hover:bg-surface-hover",
+        className ?? "",
+      ].join(" ")}
     >
       {showRunning ? (
         <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">

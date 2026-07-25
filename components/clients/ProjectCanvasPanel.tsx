@@ -532,11 +532,14 @@ export default function ProjectCanvasPanel({
                 </svg>
               </button>
               {canvasDropdownOpen && (
-                /* El desplegable es el MAPA DEL FLUJO, no la lista de lo que existe: se
-                   ven las 7 piezas del recorrido aunque el proyecto todavía no las tenga.
-                   Antes, una pieza ausente era indistinguible de una que no existe en
-                   Nexus — el CSE no podía saber que el Diagnóstico era una opción. */
-                <div className="absolute left-0 top-full mt-1 z-50 w-80 bg-gray-900 border border-gray-800 rounded-xl shadow-xl py-1">
+                /* El desplegable es el MAPA DEL FLUJO, no la lista de lo que existe: las
+                   7 piezas del recorrido, tenga el proyecto las que tenga. Cada fila:
+                   estado (dot) · nombre · aviso si no aplica (texto visible, no un hover)
+                   · CTA a la derecha con jerarquía — Generar sólido (la acción natural
+                   siguiente), Regenerar y Activar fantasma (pisan trabajo o son
+                   secundarias). Fila = contenedor + DOS botones: anidar botones es HTML
+                   inválido y el click del CTA burbujearía hasta cambiar de canvas. */
+                <div className="absolute left-0 top-full mt-1 z-50 w-96 bg-surface border border-line rounded-xl shadow-xl py-1.5">
                   {pieceRows.map((row) => {
                     const activa = row.canvasId !== null && row.canvasId === activeCanvasId;
                     // ¿Esta pieza le corresponde a este proyecto, y están sus pasos
@@ -546,19 +549,14 @@ export default function ProjectCanvasPanel({
                       piezasConContenido,
                     });
                     return (
-                      /* Fila = contenedor + DOS botones. Antes la fila entera era un
-                         <button>, así que no se le podía meter el CTA adentro: anidar
-                         botones es HTML inválido y el click del CTA burbujearía hasta
-                         cambiar de canvas. */
                       <div
                         key={row.slug}
-                        className={`flex items-center gap-2 pl-4 pr-2 py-1.5 transition-colors ${
-                          activa ? "bg-brand/10" : "hover:bg-gray-800"
+                        className={`group flex items-center gap-3 pl-4 pr-2.5 py-2 transition-colors ${
+                          activa ? "bg-brand/10" : "hover:bg-surface-hover"
                         }`}
                       >
                         <button
                           onClick={() => {
-                            // El `+` ACTIVA la pieza; las que ya existen, navegan.
                             if (!row.canvasId) {
                               void activarPieza(row.slug);
                               return;
@@ -567,44 +565,70 @@ export default function ProjectCanvasPanel({
                             setCanvasDropdownOpen(false);
                           }}
                           disabled={activando !== null}
-                          className={`flex-1 flex items-center gap-2 text-left text-sm transition-colors disabled:opacity-60 ${
-                            activa
-                              ? "text-brand font-semibold"
-                              : row.canvasId
-                                ? "text-gray-300"
-                                : "text-fg-muted"
-                          }`}
-                          /* El motivo de por qué una pieza no corresponde pesa más que el
-                             estado: es lo que el CSE necesita saber ANTES de activarla. */
-                          title={readiness.reason ?? ESTADO_PIEZA[row.state].hint}
+                          className="flex-1 min-w-0 flex items-center gap-2.5 text-left disabled:opacity-60"
+                          title={ESTADO_PIEZA[row.state].hint}
                         >
-                          <span aria-hidden className="w-3 shrink-0 text-center">
-                            {activando === row.slug ? "…" : ESTADO_PIEZA[row.state].glifo}
+                          {/* Estado como dot: verde generada · ámbar vacía · hueco por activar. */}
+                          <span aria-hidden className="w-2 shrink-0 flex justify-center">
+                            {activando === row.slug ? (
+                              <span className="w-2 h-2 rounded-full border border-brand border-t-transparent animate-spin" />
+                            ) : (
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  row.state === "generada"
+                                    ? "bg-emerald-400"
+                                    : row.state === "vacia"
+                                      ? "bg-amber-400"
+                                      : "border border-line"
+                                }`}
+                              />
+                            )}
                           </span>
-                          <span className={readiness.reason ? "opacity-60" : undefined}>
-                            {row.label}
-                          </span>
-                          {readiness.reason && (
-                            <span aria-hidden className="text-amber-500/80 text-xs" title={readiness.reason}>
-                              !
+                          <span className="min-w-0">
+                            <span
+                              className={`block truncate text-sm ${
+                                activa
+                                  ? "text-brand font-semibold"
+                                  : row.canvasId
+                                    ? "text-fg"
+                                    : "text-fg-muted"
+                              }`}
+                            >
+                              {row.label}
                             </span>
-                          )}
+                            {/* El aviso, visible: es lo que el CSE necesita saber ANTES
+                                de activar o generar — no puede vivir en un hover. */}
+                            {readiness.reason && (
+                              <span className="block truncate text-[11px] leading-tight text-amber-500/90">
+                                {readiness.reason}
+                              </span>
+                            )}
+                          </span>
                         </button>
-                        {row.agent && row.canvasId && (
+                        {row.agent && row.canvasId ? (
                           <CanvasAgentButton
                             clientId={clientId}
                             projectId={projectId}
                             agentId={row.agent.agentId}
                             label={row.state === "generada" ? "Regenerar" : "Generar"}
                             async={row.agent.async}
-                            className="text-xs px-2 py-1 shrink-0"
+                            appearance={row.state === "generada" ? "ghost" : "primary"}
+                            className="shrink-0"
                             onDone={() => {
                               setAgentNonce((n) => n + 1);
                               bumpGpsRefresh();
                               void refetchCanvases();
                             }}
                           />
-                        )}
+                        ) : !row.canvasId ? (
+                          <button
+                            onClick={() => void activarPieza(row.slug)}
+                            disabled={activando !== null}
+                            className="shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold text-fg-muted border border-line hover:text-fg hover:bg-surface-hover disabled:opacity-60 transition-colors"
+                          >
+                            {activando === row.slug ? "Activando…" : "Activar"}
+                          </button>
+                        ) : null}
                       </div>
                     );
                   })}
