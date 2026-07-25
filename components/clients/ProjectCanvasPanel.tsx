@@ -19,6 +19,7 @@ import CanvasBoundary from "./CanvasBoundary";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { slugForCanvas } from "@/lib/pieces/registry";
+import { buildPieceRows, type RowState } from "@/lib/flow/dropdown-rows";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import ProjectHandoffSection from "./ProjectHandoffSection";
 import { WorkspaceSkeleton } from "./skeletons";
@@ -48,6 +49,13 @@ const CANVAS_CON_RENDERER_PROPIO = new Set([
   "exploration",
   "timeline",
 ]);
+
+/** Cómo se lee de un vistazo el estado de una pieza en el desplegable. */
+const ESTADO_PIEZA: Record<RowState, { glifo: string; hint: string }> = {
+  generada:    { glifo: "✓", hint: "Generada" },
+  vacia:       { glifo: "○", hint: "Todavía sin contenido — entrá y generala" },
+  por_activar: { glifo: "+", hint: "Este proyecto todavía no la tiene" },
+};
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -89,6 +97,8 @@ interface CanvasMeta {
   name: string;
   isDefault: boolean;
   sections: Array<{ key: string; label: string }>;
+  /** ¿Tiene algún bloque escrito? Lo informa el listado; el seed server-side no. */
+  hasContent?: boolean;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -166,6 +176,8 @@ export default function ProjectCanvasPanel({
   // canvas todavía no tiene slug (canvas viejo sin backfillear): así el renderer no
   // depende del rótulo, que es justo lo que se va a renombrar.
   const activeSlug = activeCanvas ? slugForCanvas(activeCanvas) : null;
+  // Las filas del desplegable salen del FLUJO (lib/flow), no de la lista de canvases.
+  const pieceRows = buildPieceRows(canvases);
 
   // Update URL when canvas changes (no page reload)
   const switchCanvas = useCallback((canvasId: string) => {
@@ -486,26 +498,63 @@ export default function ProjectCanvasPanel({
                 </svg>
               </button>
               {canvasDropdownOpen && (
-                <div className="absolute left-0 top-full mt-1 z-50 w-64 bg-gray-900 border border-gray-800 rounded-xl shadow-xl py-1">
-                  {canvases.length === 0 && (
-                    <p className="px-4 py-2 text-sm text-fg-muted">Este proyecto no tiene piezas activas.</p>
-                  )}
-                  {canvases.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => {
-                        switchCanvas(c.id);
-                        setCanvasDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                        c.id === activeCanvasId
-                          ? "bg-brand/10 text-brand font-semibold"
-                          : "text-gray-300 hover:bg-gray-800"
-                      }`}
-                    >
-                      {c.name}
-                    </button>
-                  ))}
+                /* El desplegable es el MAPA DEL FLUJO, no la lista de lo que existe: se
+                   ven las 7 piezas del recorrido aunque el proyecto todavía no las tenga.
+                   Antes, una pieza ausente era indistinguible de una que no existe en
+                   Nexus — el CSE no podía saber que el Diagnóstico era una opción. */
+                <div className="absolute left-0 top-full mt-1 z-50 w-80 bg-gray-900 border border-gray-800 rounded-xl shadow-xl py-1">
+                  {pieceRows.map((row) => {
+                    const activa = row.canvasId !== null && row.canvasId === activeCanvasId;
+                    return (
+                      /* Fila = contenedor + DOS botones. Antes la fila entera era un
+                         <button>, así que no se le podía meter el CTA adentro: anidar
+                         botones es HTML inválido y el click del CTA burbujearía hasta
+                         cambiar de canvas. */
+                      <div
+                        key={row.slug}
+                        className={`flex items-center gap-2 pl-4 pr-2 py-1.5 transition-colors ${
+                          activa ? "bg-brand/10" : "hover:bg-gray-800"
+                        }`}
+                      >
+                        <button
+                          onClick={() => {
+                            if (!row.canvasId) return; // "por activar": no hay adónde ir todavía
+                            switchCanvas(row.canvasId);
+                            setCanvasDropdownOpen(false);
+                          }}
+                          disabled={!row.canvasId}
+                          className={`flex-1 flex items-center gap-2 text-left text-sm transition-colors ${
+                            activa
+                              ? "text-brand font-semibold"
+                              : row.canvasId
+                                ? "text-gray-300"
+                                : "text-fg-muted cursor-default"
+                          }`}
+                          title={ESTADO_PIEZA[row.state].hint}
+                        >
+                          <span aria-hidden className="w-3 shrink-0 text-center">
+                            {ESTADO_PIEZA[row.state].glifo}
+                          </span>
+                          {row.label}
+                        </button>
+                        {row.agent && row.canvasId && (
+                          <CanvasAgentButton
+                            clientId={clientId}
+                            projectId={projectId}
+                            agentId={row.agent.agentId}
+                            label={row.state === "generada" ? "Regenerar" : "Generar"}
+                            async={row.agent.async}
+                            className="text-xs px-2 py-1 shrink-0"
+                            onDone={() => {
+                              setAgentNonce((n) => n + 1);
+                              bumpGpsRefresh();
+                              void refetchCanvases();
+                            }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

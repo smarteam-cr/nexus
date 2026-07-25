@@ -203,6 +203,25 @@ export const PIECES: PieceDefinition[] = [
     clientFacing: true, // vista del dev externo
   },
   {
+    slug: "implementation",
+    label: "Implementación",
+    legacyNames: ["Implementación"],
+    scope: "project",
+    agentGroup: "implementacion",
+    permissionSection: "implementacion",
+    // ON-DEMAND: aparece cuando el proyecto llega a configurar. No tiene sentido en un
+    // proyecto que todavía está en handoff, y crearla vacía en los 118 fue justo el
+    // error que costó retirar 234 canvases de Diagnóstico y Planificación.
+    createdWithProject: false,
+    isDefaultCanvas: false,
+    optional: true,
+    // La enciende el CSE desde el desplegable. No hay tag que la implique: TODO
+    // proyecto de implementación configura algo, con o sin desarrollo a la medida.
+    enabledByTags: [],
+    ownRenderer: true, // ImplementacionWorkspace (motor de landings)
+    clientFacing: false, // es la guía de trabajo del CSE, no un entregable
+  },
+  {
     slug: "client-info",
     label: "Información del cliente",
     legacyNames: ["Información del cliente"],

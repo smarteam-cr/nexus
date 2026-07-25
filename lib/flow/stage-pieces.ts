@@ -85,8 +85,11 @@ export const STAGE_FLOW: StageFlow[] = [
     cycles: ["full"],
   },
   {
+    // Dos piezas, y son complementarias: "Requerimientos técnicos" es QUÉ hay que
+    // construir a la medida (opcional, solo con alcance técnico) e "Implementación" es
+    // QUÉ hay que configurar en HubSpot esta semana según el cronograma.
     stage: "CONFIGURACION_TECNICA",
-    pieces: ["tech-requirements"],
+    pieces: ["tech-requirements", "implementation"],
     primary: null,
     gate: "DEMO_APROBADA",
     cycles: ["full"],

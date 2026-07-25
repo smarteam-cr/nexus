@@ -34,7 +34,23 @@ export async function GET(
       createdAt: true,
     },
   });
-  return NextResponse.json({ canvases });
+
+  // ¿Cuáles tienen algo escrito? Lo usa el desplegable para distinguir "generada" de
+  // "vacía" — que es la diferencia entre "ya está hecho" y "entrá y generalo". Una sola
+  // consulta agrupada, no N+1: interesa la EXISTENCIA de bloques, no cuántos.
+  const conContenido = new Set(
+    (
+      await prisma.canvasSection.findMany({
+        where: { canvasId: { in: canvases.map((c) => c.id) }, blocks: { some: {} } },
+        select: { canvasId: true },
+        distinct: ["canvasId"],
+      })
+    ).map((s) => s.canvasId),
+  );
+
+  return NextResponse.json({
+    canvases: canvases.map((c) => ({ ...c, hasContent: conContenido.has(c.id) })),
+  });
 }
 
 // POST: create a new custom canvas

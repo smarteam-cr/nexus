@@ -126,7 +126,7 @@ describe("los hitos", () => {
 });
 
 describe("el orden narrativo de la médula", () => {
-  it("es el que describió el negocio: handoff → kickoff → exploración → diagnóstico → cronograma → planificación → técnico", () => {
+  it("es el que describió el negocio, de punta a punta", () => {
     expect(piecesInFlowOrder("full")).toEqual([
       "handoff",
       "kickoff",
@@ -135,6 +135,7 @@ describe("el orden narrativo de la médula", () => {
       "timeline",
       "planning",
       "tech-requirements",
+      "implementation",
     ]);
   });
 
