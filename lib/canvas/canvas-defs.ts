@@ -95,6 +95,18 @@ export const DIAGNOSTICO_CIERRE_DEFAULT = {
   buttonTarget: "_blank",
 } as const;
 
+// Default del CIERRE del canvas Planificación (documento que aprueba el cliente antes
+// de habilitar el CRM). Fuente ÚNICA — seed/reconcile + `empty` de planificacion.defs.
+export const PLANIFICACION_CIERRE_DEFAULT = {
+  eyebrow: "Aprobación",
+  headline: "Listo para construir",
+  subhead:
+    "Este plan define qué se construye y cómo se adopta. Con tu aprobación, arranca la configuración del CRM.",
+  buttonLabel: "",
+  buttonUrl: "",
+  buttonTarget: "_blank",
+} as const;
+
 // ── Canvas Handoff (traspaso Sales→CS) ────────────────────────────────────────
 // YA NO se crea con createDefaultCanvases: el handoff es una entidad cliente-level
 // (model Handoff) que arranca el proyecto, y su canvas lo monta el FLUJO de
@@ -210,11 +222,20 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     name: "Planificación",
     isDefault: false,
     order: 3,
+    // 2026-07-25 — la Planificación pasó al motor de landings. Se SUMAN hero, etapas
+    // del ciclo de vida del CRM, rutinas de adopción, plan de despliegue (condicional:
+    // el agente la deja vacía si el equipo es chico) y cierre. Las 4 keys legacy SE
+    // CONSERVAN para que el contenido viejo siga visible.
     sections: [
+      { key: "planificacion", label: "Plan de implementación" },
       { key: "arquitectura_solucion", label: "Arquitectura de la solución" },
-      { key: "roadmap", label: "Roadmap de implementación" },
-      { key: "definicion_procesos", label: "Definición de procesos" },
+      { key: "roadmap", label: "Hoja de ruta" },
+      { key: "definicion_procesos", label: "Procesos rediseñados" },
+      { key: "ciclo_vida_crm", label: "Etapas del ciclo de vida" },
+      { key: "rutinas_adopcion", label: "Rutinas de adopción" },
+      { key: "plan_despliegue", label: "Plan de despliegue por olas" },
       { key: "metricas_exito", label: "Métricas de éxito" },
+      { key: "cierre", label: "Aprobación", defaultData: { ...PLANIFICACION_CIERRE_DEFAULT } },
     ],
   },
   {
@@ -361,6 +382,14 @@ export function desarrolloSectionSequence(existingKeys: string[]): string[] {
  *  clase (modelo Kickoff): se pre-crea con el proyecto y su agente se corre desde el
  *  header del canvas. INTERNO ≠ on-demand: sigue sin superficie externa. */
 export const EXPLORACION_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c) => c.slug === "exploration")!;
+
+// ── Canvas Planificación (el plan que aprueba el cliente) ─────────────────────
+export const PLANIFICACION_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c) => c.slug === "planning")!;
+
+/** Secuencia destino de las secciones del canvas Planificación. */
+export function planificacionSectionSequence(existingKeys: string[]): string[] {
+  return sectionSequence(PLANIFICACION_CANVAS.sections.map((s) => s.key), existingKeys);
+}
 
 // ── Canvas Diagnóstico (informe de rendimiento para el cliente) ───────────────
 export const DIAGNOSTICO_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c) => c.slug === "diagnosis")!;

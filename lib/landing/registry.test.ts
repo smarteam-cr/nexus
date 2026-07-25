@@ -24,7 +24,9 @@ import { EXPLORACION_SECTION_DEFS } from "@/components/landing/configs/exploraci
 import { EXPLORACION_SECTION_COMPONENTS, landingConfigForExploracion } from "@/components/landing/configs/exploracion";
 import { DIAGNOSTICO_SECTION_DEFS, DIAGNOSTICO_DEF_BY_KEY } from "@/components/landing/configs/diagnostico.defs";
 import { DIAGNOSTICO_SECTION_COMPONENTS, landingConfigForDiagnostico } from "@/components/landing/configs/diagnostico";
-import { DIAGNOSTICO_CANVAS } from "@/lib/canvas/canvas-defs";
+import { DIAGNOSTICO_CANVAS, PLANIFICACION_CANVAS } from "@/lib/canvas/canvas-defs";
+import { PLANIFICACION_SECTION_DEFS, PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
+import { PLANIFICACION_SECTION_COMPONENTS, landingConfigForPlanificacion } from "@/components/landing/configs/planificacion";
 
 /** Renderers que ningún def VIVO usa pero que se conservan a PROPÓSITO: los
  *  snapshots publicados congelan `sectionType` y `configForSnapshot` los
@@ -213,5 +215,37 @@ describe("Diagnóstico: registry completo + keys congeladas", () => {
     for (const key of ["estado_deseado", "impacto_gap", "proximos_pasos", "cierre"]) {
       expect(DIAGNOSTICO_DEF_BY_KEY[key].agentGenerated, `${key} debería ser agentGenerated:false`).toBe(false);
     }
+  });
+});
+
+describe("Planificación: registry completo + keys congeladas", () => {
+  it("cada def resuelve componente y la config no dropea ninguna", () => {
+    const faltantes = PLANIFICACION_SECTION_DEFS.filter((d) => !PLANIFICACION_SECTION_COMPONENTS[d.sectionType ?? d.key]);
+    expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
+    expect(landingConfigForPlanificacion().sections.map((s) => s.key)).toEqual(
+      PLANIFICACION_SECTION_DEFS.map((d) => d.key),
+    );
+  });
+
+  it("snapshot de keys: hero abre, cierre cierra, las 4 legacy se conservan", () => {
+    expect(PLANIFICACION_SECTION_DEFS.map((d) => d.key)).toEqual([
+      "planificacion", "arquitectura_solucion", "roadmap", "definicion_procesos",
+      "ciclo_vida_crm", "rutinas_adopcion", "plan_despliegue", "metricas_exito", "cierre",
+    ]);
+  });
+
+  it("las keys 1:1 con las secciones del canvas (el runner saltea en silencio lo que no matchea)", () => {
+    const canvasKeys = new Set(PLANIFICACION_CANVAS.sections.map((s) => s.key));
+    for (const d of PLANIFICACION_SECTION_DEFS) {
+      expect(canvasKeys.has(d.key), `la def "${d.key}" no existe como sección del canvas`).toBe(true);
+    }
+    expect(PLANIFICACION_CANVAS.sections.length).toBe(PLANIFICACION_SECTION_DEFS.length);
+  });
+
+  it("el plan de despliegue es CONDICIONAL: el agente puede dejarlo vacío", () => {
+    // La decisión de negocio: con adopción directa la sección queda vacía y el modo
+    // lectura la omite. Si dejara de ser agentGenerated, el mecanismo se rompe.
+    expect(PLANIFICACION_DEF_BY_KEY["plan_despliegue"].agentGenerated).toBe(true);
+    expect(PLANIFICACION_DEF_BY_KEY["cierre"].agentGenerated).toBe(false);
   });
 });

@@ -297,7 +297,7 @@ async function getObjectTotal(token: string, objectType: string): Promise<number
 
 /** Obtiene todas las opciones de la propiedad lifecyclestage desde la API de HubSpot.
  *  Esto incluye tanto las etapas estándar como los valores customizados del portal (ej: "partner"). */
-async function fetchLifecycleStageOptions(
+export async function fetchLifecycleStageOptions(
   token: string
 ): Promise<Array<{ value: string; label: string }>> {
   try {
@@ -423,7 +423,7 @@ async function fetchAccountDetails(
   }
 }
 
-async function fetchLifecycleStats(
+export async function fetchLifecycleStats(
   token: string,
   _workflows: WorkflowDef[]
 ): Promise<LifecycleStats> {

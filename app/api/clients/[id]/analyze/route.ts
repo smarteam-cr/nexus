@@ -20,6 +20,7 @@ import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/can
 import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
 import { runExploracionGeneration } from "@/lib/canvas/exploracion-generate";
 import { runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
+import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
 import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
 import { loadCanvasContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
 import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
@@ -297,6 +298,11 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // grupo "diagnostico" lo siguen usando).
   const isDiagnosticoAgent = agent.id === "agent-diagnostico-canvas";
 
+  // Ídem Planificación: delega en `runPlanificacionGeneration`. Con el short-circuit
+  // muere también su herencia de escribir el esqueleto del cronograma — el prompt ya
+  // tenía la regla "sin fechas"; ahora el código la acompaña.
+  const isPlanificacionAgent = agent.id === "agent-planificacion-canvas";
+
   // ── D.1: fail-fast del agente de detalle de cronograma ──────────────────────
   // Este agente DETALLA un esqueleto existente (fases con ids). Sin proyecto o
   // sin timeline con fases no hay nada que detallar — se corta acá, antes de
@@ -459,6 +465,13 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   if (isDiagnosticoAgent && bodyProjectId) {
     setPhase("Midiendo contra la escala…");
     const r = await runDiagnosticoGeneration({ projectId: bodyProjectId, agentRunId: existingRunId });
+    return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
+  }
+
+  // ── Planificación: short-circuit al runner self-contained ─────────────────────
+  if (isPlanificacionAgent && bodyProjectId) {
+    setPhase("Armando el plan…");
+    const r = await runPlanificacionGeneration({ projectId: bodyProjectId, agentRunId: existingRunId });
     return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
   }
 
@@ -1537,11 +1550,12 @@ ${handoffCtx || "(Sin handoff todavía. Dejá vacías las secciones sin respaldo
 ${timelineCtx ? `${timelineCtx}\n\n` : ""}Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: es una PRESENTACIÓN (poco texto, cards con título corto y detalle de una línea), tono post-venta, sin inflar alcance/objetivos (solo lo respaldado por el handoff), métricas como propuesta de Smarteam si no están explícitas, y NO reproduzcas el cronograma en prosa (la plantilla lo muestra aparte).`;
   }
 
-  // ── 10b''. Input del agente de Planificación ─────────────────────────────────
-  // Como el Kickoff, NO consume fuentes crudas: su input es el HANDOFF + el
-  // DIAGNÓSTICO ya curados del proyecto. Gateado por grupo (planificacion).
-  const isPlanificacionAgent = agent.agentGroup === "planificacion";
-  if (isPlanificacionAgent && bodyProjectId) {
+  // ── 10b''. Input LEGACY del grupo planificacion ──────────────────────────────
+  // agent-planificacion-canvas ya NO pasa por acá (short-circuit por id al runner del
+  // motor de landings). Esta rama queda para los agentes DORMIDOS del grupo, si los
+  // hubiera — por eso gatea por grupo y excluye al principal.
+  const isPlanificacionGroupLegacy = agent.agentGroup === "planificacion" && !isPlanificacionAgent;
+  if (isPlanificacionGroupLegacy && bodyProjectId) {
     const handoffCtx = await loadCanvasContext(bodyProjectId, "handoff", { onlyConfirmed: false });
     const diagnosticoCtx = await loadCanvasContext(bodyProjectId, "diagnosis", { onlyConfirmed: false });
     userMessage = `Empresa: ${companyName}

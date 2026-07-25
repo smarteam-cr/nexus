@@ -174,9 +174,7 @@ export const PIECES: PieceDefinition[] = [
     legacyNames: ["Planificación"],
     scope: "project",
     agentGroup: "planificacion",
-    // Herencia: se gatea con la celda `cronograma` de cuando escribía el esqueleto
-    // del timeline. Su prompt actual ya no emite fechas. Anotado, no cambiado en F1.
-    permissionSection: "cronograma",
+    permissionSection: "planificacion",
     // 2026-07-24 — DEJA de nacer con el proyecto (decisión de negocio). Se creaba en
     // los 118 proyectos y tenía contenido en UNO. Los 234 canvases vacíos de esta pieza
     // y de Planificación se retiraron; los 2 con trabajo real se conservaron. Ahora la

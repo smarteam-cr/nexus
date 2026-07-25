@@ -14,6 +14,7 @@ import KickoffWorkspace from "@/components/canvas/KickoffWorkspace";
 import DesarrolloWorkspace from "@/components/canvas/DesarrolloWorkspace";
 import ExploracionWorkspace from "@/components/canvas/ExploracionWorkspace";
 import DiagnosticoWorkspace from "@/components/canvas/DiagnosticoWorkspace";
+import PlanificacionWorkspace from "@/components/canvas/PlanificacionWorkspace";
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import CanvasBoundary from "./CanvasBoundary";
@@ -32,7 +33,7 @@ import { readCanvasCache, writeCanvasCache } from "@/lib/clients/canvas-cache";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
-  { ssr: false, loading: () => <div className="h-64 rounded-xl skeleton-shimmer" /> }
+  { ssr: false, loading: () => <div className="h-64 rounded-xl border border-line skeleton-shimmer" /> }
 );
 
 /**
@@ -51,6 +52,7 @@ const CANVAS_CON_RENDERER_PROPIO = new Set([
   "tech-requirements",
   "exploration",
   "diagnosis",
+  "planning",
   "timeline",
 ]);
 
@@ -782,6 +784,13 @@ export default function ProjectCanvasPanel({
       {/* Exploración: guía INTERNA de descubrimiento del negocio (mismo motor, paleta gris).
           Canvas de primera clase como Kickoff: vive en el dropdown y su agente se dispara
           desde el header (CANVAS_PRIMARY_AGENT). NO tiene vista externa ni publicación. */}
+      {/* Planificación: el plan que aprueba el cliente (motor de landings, interno). */}
+      {!isResumenCanvas && activeSlug === "planning" && activeCanvasId && (
+        <CanvasBoundary label="la planificación">
+          <PlanificacionWorkspace key={`planificacion-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+        </CanvasBoundary>
+      )}
+
       {/* Diagnóstico: informe de rendimiento para el cliente (motor de landings). */}
       {!isResumenCanvas && activeSlug === "diagnosis" && activeCanvasId && (
         <CanvasBoundary label="el diagnóstico">

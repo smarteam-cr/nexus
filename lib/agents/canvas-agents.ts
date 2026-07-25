@@ -21,7 +21,7 @@ export const CANVAS_PRIMARY_AGENT: Record<string, CanvasAgentDef> = {
   // async: el runner lee escala + handoff + exploración + procesos y escribe 8
   // secciones — corre detached y la corrida se ve en el centro de corridas.
   diagnosis: { agentId: "agent-diagnostico-canvas", label: "Generar diagnóstico", async: true },
-  planning: { agentId: "agent-planificacion-canvas", label: "Generar planificación" },
+  planning: { agentId: "agent-planificacion-canvas", label: "Generar planificación", async: true },
   // Exploración (guía INTERNA de descubrimiento): se dispara desde el header de su
   // canvas igual que el kickoff. `async` porque el runner corre detached (lee handoff +
   // historial + canvases y escribe 6 secciones — no entra en una request corta).

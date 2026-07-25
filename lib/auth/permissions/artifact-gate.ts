@@ -23,7 +23,7 @@ import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 export type ArtifactGate = {
-  section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo" | "exploracion" | "diagnostico";
+  section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo" | "exploracion" | "diagnostico" | "planificacion";
   action: "generate" | "regenerate";
 };
 
@@ -101,12 +101,16 @@ export async function resolveArtifactGate(
       });
       return { section: "diagnostico", action: aiBlocks > 0 ? "regenerate" : "generate" };
     }
-    // Planificación escribe el ESQUELETO del cronograma (persistTimelineFromAgentOutput).
-    case "planificacion":
-      return {
-        section: "cronograma",
-        action: (await hasAiTimelineDetail(projectId)) ? "regenerate" : "generate",
-      };
+    case "planificacion": {
+      // Desde 2026-07-25 la Planificación es su propia pieza en el motor de landings y
+      // YA NO escribe el esqueleto del cronograma → deja de prestar la celda
+      // `cronograma` y gana la suya. "Ya existe" = bloques AGENT en el canvas planning.
+      if (!projectId) return { section: "planificacion", action: "generate" };
+      const aiBlocks = await prisma.canvasBlock.count({
+        where: { source: "AGENT", section: { canvas: canvasOfNested("planning", { projectId }) } },
+      });
+      return { section: "planificacion", action: aiBlocks > 0 ? "regenerate" : "generate" };
+    }
     case "cronograma": {
       // agent-timeline-detail ESCRIBE tareas; agent-timeline-progress solo propone → sin gate.
       if (agent.id !== "agent-timeline-detail") return null;
@@ -155,6 +159,7 @@ export function artifactGateMessage(gate: ArtifactGate): string {
     desarrollo: "el requerimiento de desarrollo",
     exploracion: "la exploración del negocio",
     diagnostico: "el diagnóstico",
+    planificacion: "la planificación",
   };
   return gate.action === "regenerate"
     ? `Tu rol no puede regenerar ${label[gate.section]} con IA (ya está generado). Pedile a un CSL o Super Admin, o ajustalo a mano.`

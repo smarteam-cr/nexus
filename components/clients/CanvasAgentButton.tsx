@@ -26,7 +26,7 @@ const AGENT_SECTION: Record<string, string> = {
   "agent-exploracion-canvas": "exploracion",
   "agent-diagnostico-canvas": "diagnostico",
   "agent-timeline-detail": "cronograma",
-  "agent-planificacion-canvas": "cronograma",
+  "agent-planificacion-canvas": "planificacion",
 };
 
 export default function CanvasAgentButton({
