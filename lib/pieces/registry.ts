@@ -153,9 +153,7 @@ export const PIECES: PieceDefinition[] = [
     legacyNames: ["Diagnóstico"],
     scope: "project",
     agentGroup: "diagnostico",
-    // Hoy NO tiene celda propia y cae al default null (cualquiera que corra agentes
-    // genera diagnósticos). Se deja explícito para no perder el hallazgo.
-    permissionSection: null,
+    permissionSection: "diagnostico",
     // 2026-07-24 — DEJA de nacer con el proyecto (decisión de negocio). Se creaba en
     // los 118 proyectos y tenía contenido en UNO. Los 234 canvases vacíos de esta pieza
     // y de Planificación se retiraron; los 2 con trabajo real se conservaron. Ahora la
@@ -164,8 +162,11 @@ export const PIECES: PieceDefinition[] = [
     isDefaultCanvas: false,
     optional: true,
     enabledByTags: [],
-    ownRenderer: false,
-    clientFacing: false,
+    // 2026-07-25 — pasó al motor de landings: DiagnosticoWorkspace.
+    ownRenderer: true,
+    // Es un informe DE CARA AL CLIENTE (se presenta en sesión / PDF). La publicación
+    // con link propio llega en su propia tanda.
+    clientFacing: true,
   },
   {
     slug: "planning",

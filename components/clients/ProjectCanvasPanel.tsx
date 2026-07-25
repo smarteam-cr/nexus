@@ -13,6 +13,7 @@ import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import KickoffWorkspace from "@/components/canvas/KickoffWorkspace";
 import DesarrolloWorkspace from "@/components/canvas/DesarrolloWorkspace";
 import ExploracionWorkspace from "@/components/canvas/ExploracionWorkspace";
+import DiagnosticoWorkspace from "@/components/canvas/DiagnosticoWorkspace";
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import CanvasBoundary from "./CanvasBoundary";
@@ -49,6 +50,7 @@ const CANVAS_CON_RENDERER_PROPIO = new Set([
   "kickoff",
   "tech-requirements",
   "exploration",
+  "diagnosis",
   "timeline",
 ]);
 
@@ -780,6 +782,13 @@ export default function ProjectCanvasPanel({
       {/* Exploración: guía INTERNA de descubrimiento del negocio (mismo motor, paleta gris).
           Canvas de primera clase como Kickoff: vive en el dropdown y su agente se dispara
           desde el header (CANVAS_PRIMARY_AGENT). NO tiene vista externa ni publicación. */}
+      {/* Diagnóstico: informe de rendimiento para el cliente (motor de landings). */}
+      {!isResumenCanvas && activeSlug === "diagnosis" && activeCanvasId && (
+        <CanvasBoundary label="el diagnóstico">
+          <DiagnosticoWorkspace key={`diagnostico-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+        </CanvasBoundary>
+      )}
+
       {!isResumenCanvas && activeSlug === "exploration" && activeCanvasId && (
         <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
           <CanvasBoundary label="el canvas de Exploración">

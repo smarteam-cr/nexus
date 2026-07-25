@@ -19,6 +19,7 @@ import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
 import { runExploracionGeneration } from "@/lib/canvas/exploracion-generate";
+import { runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
 import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
 import { loadCanvasContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
 import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
@@ -289,6 +290,13 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // cliente + tags + canvases del proyecto) y persiste. Resuelto por id.
   const isExploracionAgent = agent.id === "agent-exploracion-canvas";
 
+  // Ídem el agente de Diagnóstico (informe de rendimiento para el cliente): delega en
+  // `runDiagnosticoGeneration` — motor de landings, escala 1-5 desde conocimiento,
+  // procesos serializados. Resuelto por id. El camino legacy de bloques markdown queda
+  // muerto para este agente sin tocar BLOCK_FORMAT_GROUPS (los agentes dormidos del
+  // grupo "diagnostico" lo siguen usando).
+  const isDiagnosticoAgent = agent.id === "agent-diagnostico-canvas";
+
   // ── D.1: fail-fast del agente de detalle de cronograma ──────────────────────
   // Este agente DETALLA un esqueleto existente (fases con ids). Sin proyecto o
   // sin timeline con fases no hay nada que detallar — se corta acá, antes de
@@ -444,6 +452,13 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // (artifact-gate, celda `exploracion`) ya corrió arriba.
   if (isExploracionAgent && bodyProjectId) {
     const r = await runExploracionGeneration({ projectId: bodyProjectId, agentRunId: existingRunId });
+    return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
+  }
+
+  // ── Diagnóstico: short-circuit al runner self-contained ───────────────────────
+  if (isDiagnosticoAgent && bodyProjectId) {
+    setPhase("Midiendo contra la escala…");
+    const r = await runDiagnosticoGeneration({ projectId: bodyProjectId, agentRunId: existingRunId });
     return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
   }
 

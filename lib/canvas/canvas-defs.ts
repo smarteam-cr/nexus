@@ -83,6 +83,18 @@ export const EXPLORACION_CIERRE_DEFAULT = {
   buttonTarget: "_blank",
 } as const;
 
+// Default del CIERRE del canvas Diagnóstico (informe de cara al cliente). Fuente
+// ÚNICA — la usan el seed/reconcile y el `empty` de diagnostico.defs.
+export const DIAGNOSTICO_CIERRE_DEFAULT = {
+  eyebrow: "El siguiente paso",
+  headline: "De entender a construir",
+  subhead:
+    "Con este diagnóstico sobre la mesa, el siguiente paso es la planificación: cómo pasamos del nivel actual al que sigue.",
+  buttonLabel: "",
+  buttonUrl: "",
+  buttonTarget: "_blank",
+} as const;
+
 // ── Canvas Handoff (traspaso Sales→CS) ────────────────────────────────────────
 // YA NO se crea con createDefaultCanvases: el handoff es una entidad cliente-level
 // (model Handoff) que arranca el proyecto, y su canvas lo monta el FLUJO de
@@ -175,15 +187,22 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     name: "Diagnóstico",
     isDefault: false,
     order: 2,
+    // 2026-07-25 — el Diagnóstico pasó al motor de landings (informe de cara al
+    // cliente). Se SUMAN hero/escala/cierre; las 8 keys legacy SE CONSERVAN para que el
+    // contenido markdown viejo siga visible (tres quedan solo-lectura en las defs:
+    // estado_deseado, impacto_gap, proximos_pasos). Orden = el del informe.
     sections: [
-      { key: "contexto_alcance", label: "Contexto y alcance" },
-      { key: "estado_actual", label: "Estado actual (Current State)" },
-      { key: "estado_deseado", label: "Estado deseado (Desired State)" },
-      { key: "gap_analysis", label: "Gap Analysis" },
-      { key: "causa_raiz", label: "Análisis de Causa Raíz" },
-      { key: "impacto_gap", label: "Impacto del Gap" },
-      { key: "recomendaciones", label: "Recomendaciones priorizadas" },
-      { key: "proximos_pasos", label: "Próximos pasos / Caso de Uso propuesto" },
+      { key: "diagnostico", label: "Diagnóstico de rendimiento" },
+      { key: "contexto_alcance", label: "Qué miramos y con qué fuentes" },
+      { key: "estado_actual", label: "Cómo operás hoy — y cómo vas a operar" },
+      { key: "estado_deseado", label: "Estado deseado" },
+      { key: "escala", label: "Dónde estás en la escala" },
+      { key: "causa_raiz", label: "Qué explica estos resultados" },
+      { key: "gap_analysis", label: "Qué te separa del siguiente nivel" },
+      { key: "impacto_gap", label: "Impacto del gap" },
+      { key: "recomendaciones", label: "Qué hacemos con esto" },
+      { key: "proximos_pasos", label: "Próximos pasos" },
+      { key: "cierre", label: "El siguiente paso", defaultData: { ...DIAGNOSTICO_CIERRE_DEFAULT } },
     ],
   },
   {
@@ -342,6 +361,15 @@ export function desarrolloSectionSequence(existingKeys: string[]): string[] {
  *  clase (modelo Kickoff): se pre-crea con el proyecto y su agente se corre desde el
  *  header del canvas. INTERNO ≠ on-demand: sigue sin superficie externa. */
 export const EXPLORACION_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c) => c.slug === "exploration")!;
+
+// ── Canvas Diagnóstico (informe de rendimiento para el cliente) ───────────────
+export const DIAGNOSTICO_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c) => c.slug === "diagnosis")!;
+
+/** Secuencia destino de las secciones del canvas Diagnóstico (orden vivo + inserta
+ *  canónicas faltantes). La usan el reconcile y la activación de la pieza. */
+export function diagnosticoSectionSequence(existingKeys: string[]): string[] {
+  return sectionSequence(DIAGNOSTICO_CANVAS.sections.map((s) => s.key), existingKeys);
+}
 
 /** Secuencia destino de las secciones del canvas Exploración (orden vivo + inserta
  *  canónicas faltantes detrás de su predecesora). La usa

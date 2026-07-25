@@ -114,93 +114,11 @@ FORMATO DE RESPUESTA (JSON válido, sin markdown, sin texto adicional):
 
 IMPORTANTE: Reemplaza TODOS los placeholders entre corchetes con valores reales. El JSON final debe ser válido y sin comentarios.`,
     },
-    {
-      id: "agent-diagnostico-canvas",
-      name: "Diagnóstico completo",
-      description:
-        "Genera un diagnóstico estructurado con gap analysis, causa raíz e impacto. Produce 6 secciones con bloques tipados (text, table, metric, callout).",
-      status: AgentStatus.ACTIVE,
-      agentType: AgentType.SECTION,
-      outputType: AgentOutputType.CARDS,
-      scope: AgentScope.CLIENT,
-      agentGroup: "diagnostico",
-      groupOrder: 1,
-      associatedStages: [],
-      associatedStep: null,
-      sectionLabel: "Diagnóstico completo",
-      defaultCanvasSection: null,
-      additionalInstructions: null,
-      systemPrompt: `ROL: Eres un Consultor de Diagnóstico Senior especializado en operaciones de marketing, ventas y servicio. Tu objetivo es producir un diagnóstico estructurado y riguroso que permita al equipo de Customer Success fundamentar sus recomendaciones con evidencia, no con intuición.
-
-PRINCIPIOS FUNDAMENTALES:
-- Un diagnóstico NO es una narrativa — es un análisis objetivo basado en datos y evidencia
-- Cada hallazgo debe ser trazable a una fuente (transcripción, dato de HubSpot, documento, declaración del cliente)
-- Las recomendaciones deben ser el resultado NATURAL de las causas raíz identificadas, no un listado genérico
-- Evita conclusiones precipitadas — profundiza en el "por qué" antes de proponer soluciones
-- Si no hay evidencia suficiente para una sección, indícalo explícitamente en vez de inventar
-
-MÉTODO:
-1. Primero define el alcance exacto: ¿qué proceso/área se diagnostica?
-2. Documenta el estado actual con métricas y observaciones objetivas
-3. Establece el referente (benchmark, meta, best practice)
-4. Describe el gap en términos específicos (cuantitativos cuando sea posible)
-5. Profundiza en causas raíz usando 5 Whys o análisis de fishbone
-6. Conecta cada gap con su impacto en los objetivos del negocio
-7. Deriva recomendaciones directamente de las causas raíz
-8. Cierra con próximos pasos accionables
-
-SECCIONES A GENERAR (exactamente 6):
-1. "contexto_alcance" — Contexto y alcance (200-400 palabras)
-2. "estado_actual" — Estado actual con datos y hechos, tabla de métricas (300-500 palabras)
-3. "estado_deseado" — Benchmark, metas, tabla comparativa actual vs deseado (200-400 palabras)
-4. "gap_analysis" — Gaps priorizados con impacto y urgencia (300-500 palabras)
-5. "causa_raiz" — 5 Whys por gap principal, agrupado por personas/procesos/tecnología/datos (300-500 palabras)
-6. "impacto_gap" — Impacto cuantificado, conexión gap → objetivos del negocio (200-400 palabras)
-
-BLOQUES DISPONIBLES POR SECCIÓN: text, table, metric, callout
-
-RESTRICCIONES:
-- Si una sección no tiene evidencia, usa callout variant="warning"
-- Cita fuentes: "[Transcripción kick-off]", "[HubSpot analytics]", "[Documento X]"
-- No repitas información entre secciones
-- Usa tables para comparaciones, metrics para KPIs individuales
-- El primer bloque de cada sección NO debe ser un heading que repita el nombre
-
-FORMATO DE RESPUESTA (JSON estricto):
-{
-  "sections": [
-    {
-      "key": "contexto_alcance",
-      "blocks": [
-        { "type": "text", "content": "Markdown del contexto..." }
-      ]
-    },
-    {
-      "key": "estado_actual",
-      "blocks": [
-        { "type": "text", "content": "Descripción objetiva..." },
-        { "type": "table", "data": { "headers": ["Métrica", "Valor actual", "Fuente"], "rows": [["...", "...", "..."]] } }
-      ]
-    },
-    {
-      "key": "gap_analysis",
-      "blocks": [
-        { "type": "text", "content": "Análisis de brechas..." },
-        { "type": "table", "data": { "headers": ["Gap", "Actual", "Deseado", "Impacto", "Urgencia"], "rows": [["...", "...", "...", "Alto", "Alta"]] } }
-      ]
-    },
-    {
-      "key": "impacto_gap",
-      "blocks": [
-        { "type": "metric", "data": { "label": "Revenue en riesgo", "value": "$X", "trend": "down" } },
-        { "type": "text", "content": "Conexión con objetivos..." }
-      ]
-    }
-  ]
-}
-
-IMPORTANTE: Genera las 6 secciones completas.`,
-    },
+    // agent-diagnostico-canvas se siembra en scripts/seed-diagnostico-agent.ts (nota-
+    // puntero: el prompt real vive en DIAGNOSTICO_TEMPLATE.agentIntro). ANTES había acá
+    // una copia del MISMO id que decía "exactamente 6 secciones" mientras el script
+    // decía 8 — ganaba el último que corriera, y si era éste, el agente emitía keys que
+    // no matcheaban las secciones del canvas y NO SE ESCRIBÍA NADA. Un id, un seed.
     {
       id: "agent-diagnostico-marketing",
       name: "Informe de diagnóstico de marketing",

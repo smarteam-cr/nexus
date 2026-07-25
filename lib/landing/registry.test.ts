@@ -22,6 +22,9 @@ import { DESARROLLO_SECTION_DEFS } from "@/components/landing/configs/desarrollo
 import { DESARROLLO_SECTION_COMPONENTS, landingConfigForDesarrollo } from "@/components/landing/configs/desarrollo";
 import { EXPLORACION_SECTION_DEFS } from "@/components/landing/configs/exploracion.defs";
 import { EXPLORACION_SECTION_COMPONENTS, landingConfigForExploracion } from "@/components/landing/configs/exploracion";
+import { DIAGNOSTICO_SECTION_DEFS, DIAGNOSTICO_DEF_BY_KEY } from "@/components/landing/configs/diagnostico.defs";
+import { DIAGNOSTICO_SECTION_COMPONENTS, landingConfigForDiagnostico } from "@/components/landing/configs/diagnostico";
+import { DIAGNOSTICO_CANVAS } from "@/lib/canvas/canvas-defs";
 
 /** Renderers que ningún def VIVO usa pero que se conservan a PROPÓSITO: los
  *  snapshots publicados congelan `sectionType` y `configForSnapshot` los
@@ -166,5 +169,49 @@ describe("Exploración: registry completo + keys congeladas", () => {
     expect(cierre?.key).toBe("cierre");
     expect(cierre?.agentGenerated).toBe(false);
     expect(cierre?.pinned).toBe(true);
+  });
+});
+
+describe("Diagnóstico: registry completo + keys congeladas", () => {
+  it("cada def resuelve componente y la config no dropea ninguna", () => {
+    const faltantes = DIAGNOSTICO_SECTION_DEFS.filter((d) => !DIAGNOSTICO_SECTION_COMPONENTS[d.sectionType ?? d.key]);
+    expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
+    expect(landingConfigForDiagnostico().sections.map((s) => s.key)).toEqual(
+      DIAGNOSTICO_SECTION_DEFS.map((d) => d.key),
+    );
+  });
+
+  it("snapshot de keys: hero abre, cierre cierra, las legacy se conservan", () => {
+    // Las 8 keys legacy SIGUEN acá a propósito: el contenido markdown viejo (Teamnet)
+    // se rinde vía __legacyMd. Tres son solo-lectura (el agente nuevo no las escribe).
+    expect(DIAGNOSTICO_SECTION_DEFS.map((d) => d.key)).toEqual([
+      "diagnostico", "contexto_alcance", "estado_actual", "estado_deseado",
+      "escala", "causa_raiz", "gap_analysis", "impacto_gap",
+      "recomendaciones", "proximos_pasos", "cierre",
+    ]);
+  });
+
+  it("sin componentes huérfanos en DIAGNOSTICO_SECTION_COMPONENTS", () => {
+    const usados = new Set(DIAGNOSTICO_SECTION_DEFS.map((d) => d.sectionType ?? d.key));
+    const huerfanos = Object.keys(DIAGNOSTICO_SECTION_COMPONENTS).filter(
+      (t) => !usados.has(t) && !LEGACY_SNAPSHOT_TYPES.has(t),
+    );
+    expect(huerfanos).toEqual([]);
+  });
+
+  it("las keys 1:1 con las secciones del canvas — el runner saltea EN SILENCIO las que no matchean", () => {
+    // Es literalmente el bug que tenía el diagnóstico viejo (prompt de 6 secciones
+    // contra canvas de 8): el agente emitía keys sin sección y no se escribía nada.
+    const canvasKeys = new Set(DIAGNOSTICO_CANVAS.sections.map((s) => s.key));
+    for (const d of DIAGNOSTICO_SECTION_DEFS) {
+      expect(canvasKeys.has(d.key), `la def "${d.key}" no existe como sección del canvas`).toBe(true);
+    }
+    expect(DIAGNOSTICO_CANVAS.sections.length).toBe(DIAGNOSTICO_SECTION_DEFS.length);
+  });
+
+  it("las solo-lectura legacy y el cierre NO las escribe el agente", () => {
+    for (const key of ["estado_deseado", "impacto_gap", "proximos_pasos", "cierre"]) {
+      expect(DIAGNOSTICO_DEF_BY_KEY[key].agentGenerated, `${key} debería ser agentGenerated:false`).toBe(false);
+    }
   });
 });

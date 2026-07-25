@@ -23,7 +23,7 @@ import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 export type ArtifactGate = {
-  section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo" | "exploracion";
+  section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo" | "exploracion" | "diagnostico";
   action: "generate" | "regenerate";
 };
 
@@ -90,6 +90,17 @@ export async function resolveArtifactGate(
       });
       return { section: "exploracion", action: aiBlocks > 0 ? "regenerate" : "generate" };
     }
+    case "diagnostico": {
+      // Canvas "Diagnóstico" (informe de rendimiento para el cliente, motor de landings
+      // desde 2026-07-25). "Ya existe" = bloques source AGENT (el `cierre` curado nace
+      // HUMAN → no cuenta; el markdown legacy también era AGENT, así que los diagnósticos
+      // viejos exigen `regenerate`, que es lo correcto: regenerar los pisa).
+      if (!projectId) return { section: "diagnostico", action: "generate" };
+      const aiBlocks = await prisma.canvasBlock.count({
+        where: { source: "AGENT", section: { canvas: canvasOfNested("diagnosis", { projectId }) } },
+      });
+      return { section: "diagnostico", action: aiBlocks > 0 ? "regenerate" : "generate" };
+    }
     // Planificación escribe el ESQUELETO del cronograma (persistTimelineFromAgentOutput).
     case "planificacion":
       return {
@@ -143,6 +154,7 @@ export function artifactGateMessage(gate: ArtifactGate): string {
     cronograma: "el cronograma",
     desarrollo: "el requerimiento de desarrollo",
     exploracion: "la exploración del negocio",
+    diagnostico: "el diagnóstico",
   };
   return gate.action === "regenerate"
     ? `Tu rol no puede regenerar ${label[gate.section]} con IA (ya está generado). Pedile a un CSL o Super Admin, o ajustalo a mano.`

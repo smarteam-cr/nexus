@@ -73,6 +73,11 @@ export const PERMISSION_SECTIONS = [
     actions: [GENERATE, REGENERATE],
   },
   {
+    key: "diagnostico",
+    label: "Diagnóstico",
+    actions: [GENERATE, { key: "regenerate", label: "Regenerar con IA", enforced: true }],
+  },
+  {
     key: "procesos",
     label: "Procesos",
     actions: [
