@@ -545,7 +545,7 @@ export default function ProjectCanvasPanel({
                    siguiente), Regenerar y Activar fantasma (pisan trabajo o son
                    secundarias). Fila = contenedor + DOS botones: anidar botones es HTML
                    inválido y el click del CTA burbujearía hasta cambiar de canvas. */
-                <div className="absolute left-0 top-full mt-1 z-50 w-96 bg-surface border border-line rounded-xl shadow-xl py-1.5">
+                <div className="absolute left-0 top-full mt-1.5 z-50 w-96 bg-surface border border-line rounded-2xl shadow-2xl p-1.5">
                   {pieceRows.map((row) => {
                     const activa = row.canvasId !== null && row.canvasId === activeCanvasId;
                     // ¿Esta pieza le corresponde a este proyecto, y están sus pasos
@@ -557,7 +557,7 @@ export default function ProjectCanvasPanel({
                     return (
                       <div
                         key={row.slug}
-                        className={`group flex items-center gap-3 pl-4 pr-2.5 py-2 transition-colors ${
+                        className={`group flex items-center gap-3 pl-3 pr-2 py-2 rounded-xl transition-colors ${
                           activa ? "bg-brand/10" : "hover:bg-surface-hover"
                         }`}
                       >
@@ -602,11 +602,15 @@ export default function ProjectCanvasPanel({
                             >
                               {row.label}
                             </span>
-                            {/* El aviso, visible: es lo que el CSE necesita saber ANTES
-                                de activar o generar — no puede vivir en un hover. */}
-                            {readiness.reason && (
-                              <span className="block truncate text-[11px] leading-tight text-amber-500/90">
-                                {readiness.reason}
+                            {/* El aviso COMPRIMIDO y legible ("Sin tag X" / "Antes: Y").
+                                La frase completa no cabe en una fila y truncarla la
+                                volvía ilegible — vive en el tooltip. */}
+                            {readiness.shortReason && (
+                              <span
+                                className="block text-xs leading-snug text-amber-600"
+                                title={readiness.reason ?? undefined}
+                              >
+                                {readiness.shortReason}
                               </span>
                             )}
                           </span>

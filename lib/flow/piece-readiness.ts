@@ -56,11 +56,17 @@ export interface PieceReadiness {
   applies: boolean;
   /** ¿Están hechos los pasos que la anteceden? */
   ready: boolean;
-  /** Motivo en una frase, listo para mostrar. null = todo en orden. */
+  /** Motivo COMPLETO en una frase (toasts, respuestas del server). null = en orden. */
   reason: string | null;
+  /**
+   * El mismo motivo COMPRIMIDO para espacios chicos (la fila del desplegable). Existe
+   * porque la frase completa no cabe en una fila y truncarla la volvía ilegible — un
+   * aviso cortado a la mitad es peor que ninguno. El completo va en el tooltip.
+   */
+  shortReason: string | null;
 }
 
-const OK: PieceReadiness = { applies: true, ready: true, reason: null };
+const OK: PieceReadiness = { applies: true, ready: true, reason: null, shortReason: null };
 
 /** Une rótulos con comas y una "y" al final: "Exploración y Planificación". */
 function enumerar(labels: string[]): string {
@@ -89,6 +95,7 @@ export function pieceReadiness(
         applies: false,
         ready: true,
         reason: `Este proyecto no tiene ${rotulos}. Podés agregarla igual, o sumar el tag en el handoff.`,
+        shortReason: `Sin tag ${labelForTag(needs.anyTag[0])}`,
       };
     }
   }
@@ -105,6 +112,7 @@ export function pieceReadiness(
         applies: true,
         ready: false,
         reason: `Conviene tener ${rotulos} antes${porque}.`,
+        shortReason: `Antes: ${rotulos}`,
       };
     }
   }

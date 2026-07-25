@@ -47,7 +47,7 @@ describe("una pieza a la que le faltan pasos previos", () => {
 
   it("con el paso previo hecho, deja de avisar", () => {
     const r = pieceReadiness("diagnosis", { ...sinNada, piezasConContenido: ["exploration"] });
-    expect(r).toEqual({ applies: true, ready: true, reason: null });
+    expect(r).toEqual({ applies: true, ready: true, reason: null, shortReason: null });
   });
 
   it("la Implementación necesita entender al cliente primero", () => {
@@ -75,6 +75,7 @@ describe("las piezas sin condiciones", () => {
         applies: true,
         ready: true,
         reason: null,
+        shortReason: null,
       });
     }
   });
