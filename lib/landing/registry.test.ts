@@ -24,7 +24,9 @@ import { EXPLORACION_SECTION_DEFS } from "@/components/landing/configs/exploraci
 import { EXPLORACION_SECTION_COMPONENTS, landingConfigForExploracion } from "@/components/landing/configs/exploracion";
 import { DIAGNOSTICO_SECTION_DEFS, DIAGNOSTICO_DEF_BY_KEY } from "@/components/landing/configs/diagnostico.defs";
 import { DIAGNOSTICO_SECTION_COMPONENTS, landingConfigForDiagnostico } from "@/components/landing/configs/diagnostico";
-import { DIAGNOSTICO_CANVAS, PLANIFICACION_CANVAS } from "@/lib/canvas/canvas-defs";
+import { DIAGNOSTICO_CANVAS, PLANIFICACION_CANVAS, IMPLEMENTACION_CANVAS } from "@/lib/canvas/canvas-defs";
+import { IMPLEMENTACION_SECTION_DEFS } from "@/components/landing/configs/implementacion.defs";
+import { IMPLEMENTACION_SECTION_COMPONENTS, landingConfigForImplementacion } from "@/components/landing/configs/implementacion";
 import { PLANIFICACION_SECTION_DEFS, PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
 import { PLANIFICACION_SECTION_COMPONENTS, landingConfigForPlanificacion } from "@/components/landing/configs/planificacion";
 
@@ -247,5 +249,36 @@ describe("Planificación: registry completo + keys congeladas", () => {
     // lectura la omite. Si dejara de ser agentGenerated, el mecanismo se rompe.
     expect(PLANIFICACION_DEF_BY_KEY["plan_despliegue"].agentGenerated).toBe(true);
     expect(PLANIFICACION_DEF_BY_KEY["cierre"].agentGenerated).toBe(false);
+  });
+});
+
+describe("Implementación: registry completo + keys congeladas", () => {
+  it("cada def resuelve componente y la config no dropea ninguna", () => {
+    const faltantes = IMPLEMENTACION_SECTION_DEFS.filter((d) => !IMPLEMENTACION_SECTION_COMPONENTS[d.sectionType ?? d.key]);
+    expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
+    expect(landingConfigForImplementacion().sections.map((s) => s.key)).toEqual(
+      IMPLEMENTACION_SECTION_DEFS.map((d) => d.key),
+    );
+  });
+
+  it("snapshot de keys: el ORDEN es la doctrina — arquitectura antes que prompts", () => {
+    // Decisión de negocio 2026-07-25: primero se decide la arquitectura (propiedades,
+    // pipelines, marketing) y RECIÉN AHÍ valen los prompts para Breeze. Pedirle a
+    // Breeze que construya sin arquitectura decidida es pedirle que la invente.
+    const keys = IMPLEMENTACION_SECTION_DEFS.map((d) => d.key);
+    expect(keys).toEqual([
+      "implementacion", "arquitectura_propiedades", "pipelines",
+      "procesos_marketing", "prompts_breeze", "a_mano", "cierre",
+    ]);
+    expect(keys.indexOf("prompts_breeze")).toBeGreaterThan(keys.indexOf("arquitectura_propiedades"));
+    expect(keys.indexOf("prompts_breeze")).toBeGreaterThan(keys.indexOf("pipelines"));
+  });
+
+  it("las keys 1:1 con las secciones del canvas", () => {
+    const canvasKeys = new Set(IMPLEMENTACION_CANVAS.sections.map((s) => s.key));
+    for (const d of IMPLEMENTACION_SECTION_DEFS) {
+      expect(canvasKeys.has(d.key), `la def "${d.key}" no existe como sección del canvas`).toBe(true);
+    }
+    expect(IMPLEMENTACION_CANVAS.sections.length).toBe(IMPLEMENTACION_SECTION_DEFS.length);
   });
 });

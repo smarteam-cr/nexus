@@ -56,6 +56,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     exploracion: ["generate", "regenerate"],
     diagnostico: ["generate", "regenerate"],
     planificacion: ["generate", "regenerate"],
+    implementacion: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "generate"],
     marketing: ["read"],
@@ -73,6 +74,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     exploracion: ["generate", "regenerate"],
     diagnostico: ["generate", "regenerate"],
     planificacion: ["generate", "regenerate"],
+    implementacion: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "delete", "generate"],
     ventas: ["read", "write"],
@@ -94,6 +96,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     exploracion: ["generate", "regenerate"],
     diagnostico: ["generate", "regenerate"],
     planificacion: ["generate", "regenerate"],
+    implementacion: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     // `suggest` es redundante para DEV mientras tenga `write` (quien puede escribir puede
     // sugerir), pero se declara igual: si mañana se le recorta el write —que es el recorte
@@ -116,6 +119,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     exploracion: ["generate", "regenerate"],
     diagnostico: ["generate", "regenerate"],
     planificacion: ["generate", "regenerate"],
+    implementacion: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "delete", "generate", "regenerate"],
     // Único rol operativo (fuera de SUPER_ADMIN) que puede borrar un canvas entero.
@@ -138,6 +142,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     exploracion: ["generate", "regenerate"],
     diagnostico: ["generate", "regenerate"],
     planificacion: ["generate", "regenerate"],
+    implementacion: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "delete", "generate"],
     marketing: ["read", "write"],

@@ -107,6 +107,17 @@ export const PLANIFICACION_CIERRE_DEFAULT = {
   buttonTarget: "_blank",
 } as const;
 
+// Default del CIERRE del canvas Implementación (guía de construcción del CSE).
+export const IMPLEMENTACION_CIERRE_DEFAULT = {
+  eyebrow: "A construir",
+  headline: "Listo para construir en el portal",
+  subhead:
+    "Con la arquitectura y los pipelines decididos, lo que sigue es ejecutarlo: Breeze lo que pueda, y el resto a mano.",
+  buttonLabel: "",
+  buttonUrl: "",
+  buttonTarget: "_blank",
+} as const;
+
 // ── Canvas Handoff (traspaso Sales→CS) ────────────────────────────────────────
 // YA NO se crea con createDefaultCanvases: el handoff es una entidad cliente-level
 // (model Handoff) que arranca el proyecto, y su canvas lo monta el FLUJO de
@@ -286,6 +297,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
  *  `handoff` SE MANTIENE: el agente sigue escribiendo al canvas "Handoff" del
  *  proyecto, que ahora lo crea el flujo de handoff (createHandoffCanvas). */
 export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
+  implementacion: "implementation",
   diagnostico: "diagnosis",
   planificacion: "planning",
   handoff: "handoff",
@@ -427,11 +439,13 @@ export const IMPLEMENTACION_CANVAS: CanvasDefinition = {
   isDefault: false,
   order: 5,
   sections: [
+    { key: "implementacion",           label: "Guía de construcción" },
     { key: "arquitectura_propiedades", label: "Arquitectura de propiedades" },
     { key: "pipelines",                label: "Pipelines y objetos" },
     { key: "procesos_marketing",       label: "Procesos de marketing" },
     { key: "prompts_breeze",           label: "Prompts para Breeze" },
     { key: "a_mano",                   label: "Lo que va a mano" },
+    { key: "cierre",                   label: "A construir", defaultData: { ...IMPLEMENTACION_CIERRE_DEFAULT } },
   ],
 };
 

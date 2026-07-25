@@ -25,6 +25,7 @@ const AGENT_SECTION: Record<string, string> = {
   "agent-desarrollo-canvas": "desarrollo",
   "agent-exploracion-canvas": "exploracion",
   "agent-diagnostico-canvas": "diagnostico",
+  "agent-implementacion-canvas": "implementacion",
   "agent-timeline-detail": "cronograma",
   "agent-planificacion-canvas": "planificacion",
 };

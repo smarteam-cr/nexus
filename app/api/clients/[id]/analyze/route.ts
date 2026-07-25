@@ -21,6 +21,7 @@ import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/de
 import { runExploracionGeneration } from "@/lib/canvas/exploracion-generate";
 import { runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
 import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
+import { runImplementacionGeneration } from "@/lib/canvas/implementacion-generate";
 import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
 import { loadCanvasContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
 import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
@@ -303,6 +304,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // tenía la regla "sin fechas"; ahora el código la acompaña.
   const isPlanificacionAgent = agent.id === "agent-planificacion-canvas";
 
+  // Ídem Implementación (guía de construcción + prompts de Breeze).
+  const isImplementacionAgent = agent.id === "agent-implementacion-canvas";
+
   // ── D.1: fail-fast del agente de detalle de cronograma ──────────────────────
   // Este agente DETALLA un esqueleto existente (fases con ids). Sin proyecto o
   // sin timeline con fases no hay nada que detallar — se corta acá, antes de
@@ -472,6 +476,13 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   if (isPlanificacionAgent && bodyProjectId) {
     setPhase("Armando el plan…");
     const r = await runPlanificacionGeneration({ projectId: bodyProjectId, agentRunId: existingRunId });
+    return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
+  }
+
+  // ── Implementación: short-circuit al runner self-contained ────────────────────
+  if (isImplementacionAgent && bodyProjectId) {
+    setPhase("Derivando la construcción…");
+    const r = await runImplementacionGeneration({ projectId: bodyProjectId, agentRunId: existingRunId });
     return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
   }
 

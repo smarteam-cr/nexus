@@ -15,6 +15,7 @@ import DesarrolloWorkspace from "@/components/canvas/DesarrolloWorkspace";
 import ExploracionWorkspace from "@/components/canvas/ExploracionWorkspace";
 import DiagnosticoWorkspace from "@/components/canvas/DiagnosticoWorkspace";
 import PlanificacionWorkspace from "@/components/canvas/PlanificacionWorkspace";
+import ImplementacionWorkspace from "@/components/canvas/ImplementacionWorkspace";
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import CanvasBoundary from "./CanvasBoundary";
@@ -53,6 +54,7 @@ const CANVAS_CON_RENDERER_PROPIO = new Set([
   "exploration",
   "diagnosis",
   "planning",
+  "implementation",
   "timeline",
 ]);
 
@@ -784,6 +786,13 @@ export default function ProjectCanvasPanel({
       {/* Exploración: guía INTERNA de descubrimiento del negocio (mismo motor, paleta gris).
           Canvas de primera clase como Kickoff: vive en el dropdown y su agente se dispara
           desde el header (CANVAS_PRIMARY_AGENT). NO tiene vista externa ni publicación. */}
+      {/* Implementación: la guía de construcción del CSE (motor de landings, interna). */}
+      {!isResumenCanvas && activeSlug === "implementation" && activeCanvasId && (
+        <CanvasBoundary label="la implementación">
+          <ImplementacionWorkspace key={`implementacion-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+        </CanvasBoundary>
+      )}
+
       {/* Planificación: el plan que aprueba el cliente (motor de landings, interno). */}
       {!isResumenCanvas && activeSlug === "planning" && activeCanvasId && (
         <CanvasBoundary label="la planificación">

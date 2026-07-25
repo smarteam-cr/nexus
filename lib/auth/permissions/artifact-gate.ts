@@ -23,7 +23,7 @@ import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 export type ArtifactGate = {
-  section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo" | "exploracion" | "diagnostico" | "planificacion";
+  section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo" | "exploracion" | "diagnostico" | "planificacion" | "implementacion";
   action: "generate" | "regenerate";
 };
 
@@ -111,6 +111,14 @@ export async function resolveArtifactGate(
       });
       return { section: "planificacion", action: aiBlocks > 0 ? "regenerate" : "generate" };
     }
+    case "implementacion": {
+      // Canvas "Implementación" (guía de construcción, interna). Mismo criterio.
+      if (!projectId) return { section: "implementacion", action: "generate" };
+      const aiBlocks = await prisma.canvasBlock.count({
+        where: { source: "AGENT", section: { canvas: canvasOfNested("implementation", { projectId }) } },
+      });
+      return { section: "implementacion", action: aiBlocks > 0 ? "regenerate" : "generate" };
+    }
     case "cronograma": {
       // agent-timeline-detail ESCRIBE tareas; agent-timeline-progress solo propone → sin gate.
       if (agent.id !== "agent-timeline-detail") return null;
@@ -160,6 +168,7 @@ export function artifactGateMessage(gate: ArtifactGate): string {
     exploracion: "la exploración del negocio",
     diagnostico: "el diagnóstico",
     planificacion: "la planificación",
+    implementacion: "la guía de implementación",
   };
   return gate.action === "regenerate"
     ? `Tu rol no puede regenerar ${label[gate.section]} con IA (ya está generado). Pedile a un CSL o Super Admin, o ajustalo a mano.`
