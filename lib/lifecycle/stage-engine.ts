@@ -58,6 +58,29 @@ const STAGE_RANK: Record<ProjectLifecycleStage, number> = {
   FINALIZADO: 8,
 };
 
+/**
+ * La CADENA DE SALIDA del ciclo full: cada etapa con el gate que la cierra.
+ * `inferLifecycleStage` la recorre en orden y devuelve la PRIMERA cuyo gate no está
+ * marcado — o sea, esta tabla ES la definición de "en qué etapa está el proyecto".
+ *
+ * Vive a nivel de módulo (antes era un array local dentro de la función) para que el
+ * mapa etapa↔pieza de lib/flow/stage-pieces.ts pueda compararse contra ella en un test:
+ * si alguien cambia un gate acá y no allá, la barra de flujo mostraría una etapa cerrada
+ * por un gate que ya no existe. Mover la constante no cambia ningún comportamiento.
+ */
+export const STAGE_EXIT_STEPS: ReadonlyArray<{
+  stage: ProjectLifecycleStage;
+  gate: ProjectStageGateKey;
+  doneLabel: string;
+  pending: string;
+}> = [
+  { stage: "EXPLORACION", gate: "ENTENDIMIENTO_CERRADO", doneLabel: "Entendimiento cerrado", pending: "Pendiente: cerrar el entendimiento del negocio (sesiones + notas confirmadas)." },
+  { stage: "DIAGNOSTICO", gate: "DIAGNOSTICO_COMPARTIDO", doneLabel: "Diagnóstico compartido", pending: "Pendiente: presentar y compartir el diagnóstico con el cliente." },
+  { stage: "PLANIFICACION", gate: "CRONOGRAMA_CONSENSUADO", doneLabel: "Cronograma consensuado", pending: "Pendiente: que el cliente consensúe el cronograma." },
+  { stage: "CONFIGURACION_TECNICA", gate: "DEMO_APROBADA", doneLabel: "Demo aprobada", pending: "Pendiente: demo funcional aprobada por el cliente." },
+  { stage: "ADOPCION", gate: "CLIENTE_OPERANDO", doneLabel: "Cliente operando", pending: "Pendiente: sesiones de adopción cumplidas y cliente operando." },
+];
+
 /** ¿`stage` está en (o después de) `floor` en madurez? Compara rangos globales. */
 export function stageAtOrAfter(
   stage: ProjectLifecycleStage,
@@ -171,20 +194,7 @@ export function inferLifecycleStage(s: LifecycleSignals): InferredStage {
     return { stage: "FINALIZADO", reasons: done };
   }
 
-  const steps: Array<{
-    stage: ProjectLifecycleStage;
-    gate: ProjectStageGateKey;
-    doneLabel: string;
-    pending: string;
-  }> = [
-    { stage: "EXPLORACION", gate: "ENTENDIMIENTO_CERRADO", doneLabel: "Entendimiento cerrado", pending: "Pendiente: cerrar el entendimiento del negocio (sesiones + notas confirmadas)." },
-    { stage: "DIAGNOSTICO", gate: "DIAGNOSTICO_COMPARTIDO", doneLabel: "Diagnóstico compartido", pending: "Pendiente: presentar y compartir el diagnóstico con el cliente." },
-    { stage: "PLANIFICACION", gate: "CRONOGRAMA_CONSENSUADO", doneLabel: "Cronograma consensuado", pending: "Pendiente: que el cliente consensúe el cronograma." },
-    { stage: "CONFIGURACION_TECNICA", gate: "DEMO_APROBADA", doneLabel: "Demo aprobada", pending: "Pendiente: demo funcional aprobada por el cliente." },
-    { stage: "ADOPCION", gate: "CLIENTE_OPERANDO", doneLabel: "Cliente operando", pending: "Pendiente: sesiones de adopción cumplidas y cliente operando." },
-  ];
-
-  for (const step of steps) {
+  for (const step of STAGE_EXIT_STEPS) {
     const markedAt = s.gates[step.gate];
     if (!markedAt) {
       return { stage: step.stage, reasons: [...done, step.pending] };
