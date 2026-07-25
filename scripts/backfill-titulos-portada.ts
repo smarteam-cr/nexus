@@ -43,14 +43,25 @@ const MODEL = "claude-sonnet-4-6";
 const APPLY = process.argv.includes("--apply");
 const SLUG_FILTRO = process.argv.find((a) => a.startsWith("--slug="))?.split("=")[1] ?? null;
 
-/** La portada de cada documento del motor: su clave de sección y su rótulo. */
-const PORTADAS: Record<string, { key: string; rotulo: string }> = {
-  kickoff: { key: "bienvenida", rotulo: "¡Arranquemos juntos!" },
-  "tech-requirements": { key: "requerimiento", rotulo: "Requerimiento técnico" },
-  exploration: { key: "exploracion", rotulo: "Qué hay que entender de este proyecto" },
-  diagnosis: { key: "diagnostico", rotulo: "Diagnóstico de rendimiento" },
-  planning: { key: "planificacion", rotulo: "Plan de implementación" },
-  implementation: { key: "implementacion", rotulo: "Guía de construcción" },
+/**
+ * La portada de cada documento: su clave de sección y el EJEMPLO de título que se le
+ * muestra al modelo.
+ *
+ * ⚠ El ejemplo NO es el rótulo de la sección. Para cuatro documentos coinciden, pero
+ * para dos no: el rótulo del Kickoff es "¡Arranquemos juntos!" (un saludo) y el de
+ * Exploración es "Qué hay que entender de este proyecto" (una frase). Pasarle esos como
+ * ejemplo le pide al modelo, literalmente, que escriba una frase en vez de un nombre —
+ * y eso fue exactamente lo que devolvió en la primera pasada ("Lo que está en juego en
+ * la cuenta después de 11 semanas"). Acá va el nombre del documento, el mismo que usan
+ * las guías de las defs.
+ */
+const PORTADAS: Record<string, { key: string; ejemplo: string }> = {
+  kickoff: { key: "bienvenida", ejemplo: "Kickoff del proyecto" },
+  "tech-requirements": { key: "requerimiento", ejemplo: "Requerimiento técnico" },
+  exploration: { key: "exploracion", ejemplo: "Exploración del negocio" },
+  diagnosis: { key: "diagnostico", ejemplo: "Diagnóstico de rendimiento" },
+  planning: { key: "planificacion", ejemplo: "Plan de implementación" },
+  implementation: { key: "implementacion", ejemplo: "Guía de construcción" },
 };
 
 interface Fila {
@@ -64,21 +75,28 @@ interface Fila {
 
 /** Una sola llamada al modelo. `apretar` = segundo intento pidiendo que lo acorte. */
 async function unIntento(f: Fila, apretar?: string): Promise<string> {
-  const { rotulo } = PORTADAS[f.slug];
+  const { ejemplo } = PORTADAS[f.slug];
   const msg = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 100,
     system:
       `Escribís el TÍTULO de una página de documento. Máximo ${HERO_TITLE_MAX_CHARS} caracteres. ` +
-      `Es el título de la página, no un titular de venta: sin verbos de transformación, sin ` +
-      `promesas y sin dos puntos seguidos de una enumeración. Debe leerse como el nombre del ` +
-      `documento, del tipo "${rotulo}", pero pudiendo precisar de qué trata este caso concreto. ` +
+      `Es un sintagma nominal —el nombre del documento, del tipo "${ejemplo}"— y puede precisar ` +
+      `de qué trata este caso concreto (los sistemas involucrados, el objeto del trabajo). ` +
+      `No es un titular de venta: sin verbos conjugados, sin promesas y sin dos puntos seguidos ` +
+      `de una enumeración.\n` +
+      // El nombre del cliente se prohíbe CON NOMBRE Y APELLIDO, no en abstracto: la regla
+      // genérica se incumplía 1 de cada 5 veces, y cada "para <cliente>" se come caracteres
+      // que le hacen falta al sistema o al objeto del trabajo. Además el documento ya vive
+      // dentro del proyecto de ese cliente: repetirlo no agrega nada.
+      `PROHIBIDO nombrar al cliente: no escribas "${f.proyecto}" ni ninguna de sus palabras, ` +
+      `ni fórmulas del tipo "para <cliente>".\n` +
       `Respondé SOLO con el título, sin comillas ni explicación.`,
     messages: [
       {
         role: "user",
         content:
-          `Tipo de documento: ${rotulo}\n` +
+          `Tipo de documento: ${ejemplo}\n` +
           `Titular actual: ${f.titular || "(vacío)"}\n` +
           `Resumen actual: ${f.resumen || "(vacío)"}\n\n` +
           (apretar
