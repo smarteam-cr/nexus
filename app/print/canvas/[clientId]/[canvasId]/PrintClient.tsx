@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { DiagramStatic } from "@/components/landing/diagram-static";
 import type { FlowchartData } from "@/components/flowchart/FlowchartViewer";
+import { CardDataView, MarkdownView, hasCardPrintContent } from "./card-print";
 
 // ── Tipos exportados para la página server ────────────────────────────────
 
@@ -49,13 +48,15 @@ export interface CanvasPrintData {
 
 // ── Render helpers ────────────────────────────────────────────────────────
 
-function MarkdownView({ content }: { content: string }) {
-  if (!content?.trim()) return null;
-  return (
-    <div className="cp-md">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-    </div>
-  );
+/**
+ * Cuerpo de un bloque: markdown si el bloque tiene `content`, y si no —los canvas del
+ * motor de landings guardan `content: null` con todo en `data`— el aplanado tipado.
+ * Sin este fallback esos canvas imprimían el título de sección y nada debajo.
+ */
+function BlockBody({ block }: { block: PrintBlock }) {
+  const md = (block.content ?? "").trim();
+  if (md) return <MarkdownView content={md} />;
+  return <CardDataView data={block.data} />;
 }
 
 function BlockView({ block }: { block: PrintBlock }) {
@@ -126,12 +127,32 @@ function BlockView({ block }: { block: PrintBlock }) {
     return (
       <>
         <DiagramStatic diagram={data?.diagram as FlowchartData} />
-        <MarkdownView content={block.content ?? ""} />
+        <BlockBody block={block} />
       </>
     );
   }
 
-  return <MarkdownView content={block.content ?? ""} />;
+  return <BlockBody block={block} />;
+}
+
+/**
+ * ¿El bloque imprime algo? Los canvas del motor siembran CARDs con la data VACÍA de su
+ * def (`{items: []}`), así que contar bloques no alcanza: sin esto, un canvas nunca
+ * generado imprimía todos sus títulos de sección en blanco en vez del aviso de vacío.
+ */
+function blockHasPrintContent(block: PrintBlock): boolean {
+  if ((block.content ?? "").trim()) return true;
+  const data = block.data as Record<string, unknown> | null;
+  if (!data || typeof data !== "object") return false;
+
+  const type = block.blockType?.toUpperCase();
+  if (type === "TABLE") return Array.isArray(data.headers) && data.headers.length > 0;
+  if (type === "METRIC") return !!(data.label || data.value);
+  if (type === "FLOWCHART") return Array.isArray(data.nodes) && data.nodes.length > 0;
+
+  const diagramNodes = (data.diagram as { nodes?: unknown[] } | undefined)?.nodes;
+  if (Array.isArray(diagramNodes) && diagramNodes.length > 0) return true;
+  return hasCardPrintContent(data);
 }
 
 // ── Componente principal ──────────────────────────────────────────────────
@@ -176,7 +197,15 @@ export default function PrintClient({
       })
     : null;
 
-  const totalItems = data.sections.reduce(
+  // Se descartan los bloques que no imprimen nada (CARDs sembrados vacíos): así una
+  // sección sin contenido real no deja su título huérfano y el aviso de "canvas vacío"
+  // vuelve a aparecer cuando corresponde.
+  const sections = data.sections.map((s) => ({
+    ...s,
+    blocks: s.blocks.filter(blockHasPrintContent),
+  }));
+
+  const totalItems = sections.reduce(
     (sum, s) => sum + (s.type === "cards" ? s.cards.length : s.blocks.length),
     0,
   );
@@ -249,7 +278,7 @@ export default function PrintClient({
         {totalItems === 0 ? (
           <p className="cp-empty">Este canvas aún no tiene contenido para exportar.</p>
         ) : (
-          data.sections.map((section) => {
+          sections.map((section) => {
             const hasContent =
               (section.type === "cards" && section.cards.length > 0) ||
               (section.type === "blocks" && section.blocks.length > 0);

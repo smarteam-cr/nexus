@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
+import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 
 // GET: list canvases for a project (default first, then by createdAt)
 export async function GET(
@@ -36,17 +37,12 @@ export async function GET(
   });
 
   // ¿Cuáles tienen algo escrito? Lo usa el desplegable para distinguir "generada" de
-  // "vacía" — que es la diferencia entre "ya está hecho" y "entrá y generalo". Una sola
-  // consulta agrupada, no N+1: interesa la EXISTENCIA de bloques, no cuántos.
-  const conContenido = new Set(
-    (
-      await prisma.canvasSection.findMany({
-        where: { canvasId: { in: canvases.map((c) => c.id) }, blocks: { some: {} } },
-        select: { canvasId: true },
-        distinct: ["canvasId"],
-      })
-    ).map((s) => s.canvasId),
-  );
+  // "vacía" — que es la diferencia entre "ya está hecho" y "entrá y generalo". El
+  // criterio vive en lib/pieces/piece-content.ts (bloque semilla ≠ contenido; el
+  // Cronograma se mide por sus fases) y lo comparte con el seed server-side de
+  // app/(shell)/clients/[id]/page.tsx: si cada uno tuviera el suyo, la pantalla
+  // arrancaría con un estado y saltaría a otro al llegar el refetch.
+  const conContenido = await loadCanvasesConContenido(projectId, canvases);
 
   return NextResponse.json({
     canvases: canvases.map((c) => ({ ...c, hasContent: conContenido.has(c.id) })),

@@ -37,6 +37,7 @@ import {
 import { CSS as DndCss } from "@dnd-kit/utilities";
 import { useReveal, useHeroParallax } from "../canvas/useLandingMotion";
 import { Editable } from "./inline";
+import { Prose } from "./prose";
 import type { LandingConfig, LandingContext, SectionDef } from "./types";
 
 export interface LandingSectionData {
@@ -59,6 +60,33 @@ function isBlank(v: unknown): boolean {
   if (Array.isArray(v)) return v.every(isBlank);
   if (typeof v === "object") return Object.values(v as Record<string, unknown>).every(isBlank);
   return false;
+}
+
+/**
+ * Aviso de que lo que se ve abajo es contenido del FORMATO ANTERIOR (markdown de bloques
+ * TEXT, sin data tipada). Solo en EDICIÓN: al cliente el texto le llega igual y la
+ * aclaración es interna.
+ *
+ * Dice explícitamente que regenerar lo reemplaza porque el reflejo frente a una sección
+ * que no se puede editar por campos es apretar "Regenerar" — y eso es justo lo que pisa
+ * el trabajo que se está conservando.
+ */
+function LegacyNotice() {
+  return (
+    <div
+      style={{
+        fontSize: 12,
+        color: "var(--text-muted)",
+        background: "var(--bg-soft)",
+        border: "1px dashed var(--border-strong)",
+        borderRadius: 8,
+        padding: "6px 10px",
+      }}
+    >
+      Contenido del formato anterior — se muestra tal cual se escribió y no se edita por
+      campos. Si regenerás el documento con IA, esta sección se reemplaza.
+    </div>
+  );
 }
 
 /** Toggle de ojo (mostrar/ocultar al cliente). Heredó el look del HideToggle del
@@ -285,6 +313,34 @@ export default function LandingView({
         : null;
     const Comp = def.Component;
 
+    /* Contenido del FORMATO ANTERIOR (documentos escritos antes de que la pieza pasara al
+       motor): el cuerpo vivía como markdown en bloques TEXT y `landingRowData` lo entrega
+       como `__legacyMd`. Solo tres componentes lo leen — los demás (process_mapping, pain,
+       web_diagnosis, roi, diagram…) buscan sus arrays tipados, no encuentran nada y pintan
+       la sección VACÍA. Una sección en blanco empuja a apretar "Regenerar", que borra
+       exactamente el trabajo que se quería conservar.
+       Por eso el fallback vive acá, en el motor, y no componente por componente: si la data
+       TIPADA no tiene nada que mostrar, se rinde el markdown viejo. El HERO queda afuera a
+       propósito — su componente ya sabe rendir `__legacyMd` y además compone marca, portada
+       y stats que este fallback perdería. */
+    const legacyMd = typeof data.__legacyMd === "string" ? data.__legacyMd.trim() : "";
+    const typedData = { ...data };
+    delete typedData.__legacyMd;
+    const showLegacy = !!legacyMd && !isHero && isBlank(typedData);
+    const sectionBody = showLegacy ? (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {editable && <LegacyNotice />}
+        <Prose content={legacyMd} />
+      </div>
+    ) : (
+      <Comp
+        data={data}
+        ctx={ctx}
+        editable={editable}
+        onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
+      />
+    );
+
     /* Chrome ESTANDARIZADO: badge de oculto + controles del workspace + caret de
        colapsar + toggle de ojo + handle de drag, arriba a la derecha. */
     const chrome = editable && (renderOverlay || onToggleHidden || dragHandle) && (
@@ -390,12 +446,7 @@ export default function LandingView({
               onCommit={(v) => onBriefChange?.(def.key, v)}
             />
           )}
-          <Comp
-            data={data}
-            ctx={ctx}
-            editable={editable}
-            onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
-          />
+          {sectionBody}
         </div>
       </section>
     );

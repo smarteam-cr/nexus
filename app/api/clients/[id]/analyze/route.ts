@@ -447,13 +447,29 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     prisma.agentRun.update({ where: { id: existingRunId }, data: { currentPhase: phase } }).catch(() => {});
   };
 
+  // Cierre común de los runners self-contained. Ninguno pasa por el bloque que graba
+  // `AgentRun.output` (paso 12) porque cortan antes: el run quedaba con output "{}" y sin
+  // ClientContextCard, así que el GET [runId] respondía cards:[] y el toast del polling
+  // decía "Listo — sin resultados" con el canvas COMPLETO en pantalla. Dejamos en el
+  // output cuántas secciones se escribieron —única señal contable de estos runners, que
+  // persisten CanvasBlocks, no cards— para que el resumen del toast diga la verdad.
+  const finishRunnerShortCircuit = async (r: { canvasId: string; sectionCount: number }) => {
+    if (existingRunId) {
+      await prisma.agentRun
+        .update({ where: { id: existingRunId }, data: { output: JSON.stringify({ sectionCount: r.sectionCount }) } })
+        .catch(() => {}); // el output es señal, no dato: si falla no se tumba la generación
+    }
+    return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
+  };
+
   // ── Desarrollo: short-circuit al runner self-contained ────────────────────────
   // El requerimiento técnico no necesita cards/docs/deal ni el path de block-format;
   // el runner asegura el canvas, arma su input desde el handoff y persiste. El gating
   // (artifact-gate) ya corrió arriba; acá solo se ejecuta el trabajo.
   if (isDesarrolloAgent && bodyProjectId) {
-    const r = await runDesarrolloGeneration({ projectId: bodyProjectId, agentRunId: existingRunId });
-    return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
+    return finishRunnerShortCircuit(
+      await runDesarrolloGeneration({ projectId: bodyProjectId, agentRunId: existingRunId }),
+    );
   }
 
   // ── Exploración: short-circuit al runner self-contained ───────────────────────
@@ -461,29 +477,33 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // handoff + el historial del cliente + tags + canvases, y persiste. El gating
   // (artifact-gate, celda `exploracion`) ya corrió arriba.
   if (isExploracionAgent && bodyProjectId) {
-    const r = await runExploracionGeneration({ projectId: bodyProjectId, agentRunId: existingRunId });
-    return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
+    return finishRunnerShortCircuit(
+      await runExploracionGeneration({ projectId: bodyProjectId, agentRunId: existingRunId }),
+    );
   }
 
   // ── Diagnóstico: short-circuit al runner self-contained ───────────────────────
   if (isDiagnosticoAgent && bodyProjectId) {
     setPhase("Midiendo contra la escala…");
-    const r = await runDiagnosticoGeneration({ projectId: bodyProjectId, agentRunId: existingRunId });
-    return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
+    return finishRunnerShortCircuit(
+      await runDiagnosticoGeneration({ projectId: bodyProjectId, agentRunId: existingRunId }),
+    );
   }
 
   // ── Planificación: short-circuit al runner self-contained ─────────────────────
   if (isPlanificacionAgent && bodyProjectId) {
     setPhase("Armando el plan…");
-    const r = await runPlanificacionGeneration({ projectId: bodyProjectId, agentRunId: existingRunId });
-    return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
+    return finishRunnerShortCircuit(
+      await runPlanificacionGeneration({ projectId: bodyProjectId, agentRunId: existingRunId }),
+    );
   }
 
   // ── Implementación: short-circuit al runner self-contained ────────────────────
   if (isImplementacionAgent && bodyProjectId) {
     setPhase("Derivando la construcción…");
-    const r = await runImplementacionGeneration({ projectId: bodyProjectId, agentRunId: existingRunId });
-    return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
+    return finishRunnerShortCircuit(
+      await runImplementacionGeneration({ projectId: bodyProjectId, agentRunId: existingRunId }),
+    );
   }
 
   // ── 3. Cargar notas, documentos, cards y deal en paralelo ────────────────────

@@ -20,6 +20,13 @@ export interface PolledRun {
   flowcharts?: unknown[];
   flowchart?: unknown;
   blocks?: unknown[];
+  /** Bloques de canvas escritos por la corrida, contados en la DB (lo expone el GET
+   *  cuando el agente es de block-format y no dejó cards: Kickoff, Handoff). */
+  blockCount?: number;
+  /** Secciones de canvas escritas por los runners self-contained (Diagnóstico,
+   *  Planificación, Implementación, Exploración, Desarrollo). Es su ÚNICA señal
+   *  contable: persisten CanvasBlocks, no cards. */
+  sectionCount?: number;
   /** Razón real del fallo (la expone el GET [runId] cuando status=ERROR). F2. */
   error?: string;
   /** Fase en curso ("Analizando sesiones…") — la expone el GET cuando RUNNING. F3. */
@@ -76,22 +83,36 @@ export function summarizePollResult(r: PolledRun): { type: "success" | "error"; 
   };
 }
 
-/** Resumen corto de lo que produjo una corrida (para toasts). */
+/**
+ * Resumen corto de lo que produjo una corrida (para toasts). Acepta tanto el cuerpo de
+ * la respuesta SÍNCRONA del POST /analyze como el del GET [runId] que devuelve el
+ * polling — las dos formas describen el mismo trabajo con claves distintas.
+ */
 export function summarizeRun(d: {
   cards?: Array<{ cardType?: string }>;
   flowcharts?: unknown[];
   flowchart?: unknown;
   blocks?: unknown[];
+  blockCount?: number;
+  sectionCount?: number;
+  /** Respuesta síncrona de los runners self-contained: `sections` es un NÚMERO. */
+  sections?: number;
 }): string {
   const allCards = d.cards ?? [];
   const textCards = allCards.filter((c) => c.cardType !== "FLOWCHART" && c.cardType !== "CHART");
   const flowchartCount = (d.flowcharts?.length ?? 0) + (d.flowchart ? 1 : 0);
-  // Agentes en block-format (Kickoff, Handoff, Diagnóstico) devuelven `blocks`, no `cards`.
-  // Sin contarlos, el toast decía "sin resultados" aunque hubiera generado bloques.
-  const blockCount = d.blocks?.length ?? 0;
+  // Agentes en block-format (Kickoff, Handoff) devuelven `blocks` en modo síncrono y
+  // `blockCount` por el GET del polling. Sin contarlos, el toast decía "sin resultados"
+  // aunque hubiera generado bloques.
+  const blockCount = d.blockCount ?? d.blocks?.length ?? 0;
+  // Runners self-contained (Diagnóstico, Planificación, …): no crean cards ni devuelven
+  // bloques — escriben N secciones del canvas, y eso es lo que hay que reportar.
+  const sectionCount = d.sectionCount ?? (typeof d.sections === "number" ? d.sections : 0);
   const parts: string[] = [];
   if (textCards.length > 0) parts.push(`${textCards.length} card${textCards.length !== 1 ? "s" : ""}`);
   if (blockCount > 0) parts.push(`${blockCount} bloque${blockCount !== 1 ? "s" : ""}`);
+  // "sección" pierde la tilde en plural — no alcanza con sufijar como en card/bloque.
+  if (sectionCount > 0) parts.push(`${sectionCount} ${sectionCount === 1 ? "sección" : "secciones"}`);
   if (flowchartCount > 0) parts.push(`${flowchartCount} diagrama${flowchartCount !== 1 ? "s" : ""}`);
   return parts.join(" + ") || "sin resultados";
 }

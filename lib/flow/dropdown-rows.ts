@@ -45,7 +45,12 @@ export interface CanvasParaFila {
   id: string;
   slug: string | null;
   name: string;
-  /** ¿Tiene algún bloque escrito? Lo informa el listado del proyecto. */
+  /**
+   * ¿Tiene contenido REAL? No es "¿tiene algún bloque?": las piezas nacen con un bloque
+   * SEMILLA en sus secciones curadas, y contarlo pintaba de verde piezas vacías. El
+   * criterio único vive en lib/pieces/piece-content.ts y lo calculan igual el listado
+   * del proyecto y el seed server-side de la página del cliente.
+   */
   hasContent?: boolean;
 }
 

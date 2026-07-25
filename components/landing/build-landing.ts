@@ -58,7 +58,10 @@ export function buildLandingConfigFromOrder(shape: LandingShape, orderedKeys: st
 /**
  * `data` de una sección para el motor: bloque CARD → su `data` tipada; si no hay
  * CARD → `{__legacyMd}` con el markdown de los bloques TEXT viejos (fallback
- * read-only). Para el hero, inyecta titleOverride/eyebrowOverride como
+ * read-only). Quién lo RINDE: `LandingView` lo hace de forma genérica (si la data
+ * tipada de la sección está vacía, pinta el markdown) — antes solo lo leían tres
+ * componentes puntuales y el resto dejaba la sección en blanco. Para el hero, inyecta
+ * titleOverride/eyebrowOverride como
  * headline/eyebrow (los documentos viejos guardaban el título del hero en los
  * overrides de sección) — sin pisar lo que la data tipada ya trae.
  */

@@ -105,7 +105,13 @@ interface CanvasMeta {
   name: string;
   isDefault: boolean;
   sections: Array<{ key: string; label: string }>;
-  /** ¿Tiene algún bloque escrito? Lo informa el listado; el seed server-side no. */
+  /**
+   * ¿Alguien escribió acá de verdad? Ojo: NO es "tiene algún bloque" — crear una pieza
+   * ya siembra los bloques curados (el cierre), así que ese criterio daba "generada"
+   * sobre documentos vacíos. El criterio único vive en lib/pieces/piece-content.ts y lo
+   * informan tanto el listado como el seed server-side, para que el primer pintado no
+   * mienta. Sigue opcional porque los canvases del Business Case no lo traen.
+   */
   hasContent?: boolean;
 }
 
@@ -790,25 +796,35 @@ export default function ProjectCanvasPanel({
       {/* Exploración: guía INTERNA de descubrimiento del negocio (mismo motor, paleta gris).
           Canvas de primera clase como Kickoff: vive en el dropdown y su agente se dispara
           desde el header (CANVAS_PRIMARY_AGENT). NO tiene vista externa ni publicación. */}
-      {/* Implementación: la guía de construcción del CSE (motor de landings, interna). */}
+      {/* Implementación: la guía de construcción del CSE (motor de landings, interna).
+          El margen negativo es OBLIGATORIO en todo canvas del motor: anula el px-6 py-8
+          del panel para que las bandas de sección lleguen a los bordes. Sin él, el hero
+          y el cierre —que llevan fondo propio— quedan recortados con calles a los lados. */}
       {!isResumenCanvas && activeSlug === "implementation" && activeCanvasId && (
-        <CanvasBoundary label="la implementación">
-          <ImplementacionWorkspace key={`implementacion-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
-        </CanvasBoundary>
+        <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
+          <CanvasBoundary label="la implementación">
+            <ImplementacionWorkspace key={`implementacion-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+          </CanvasBoundary>
+        </div>
       )}
 
       {/* Planificación: el plan que aprueba el cliente (motor de landings, interno). */}
       {!isResumenCanvas && activeSlug === "planning" && activeCanvasId && (
-        <CanvasBoundary label="la planificación">
-          <PlanificacionWorkspace key={`planificacion-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
-        </CanvasBoundary>
+        <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
+          <CanvasBoundary label="la planificación">
+            <PlanificacionWorkspace key={`planificacion-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+          </CanvasBoundary>
+        </div>
       )}
 
-      {/* Diagnóstico: informe de rendimiento para el cliente (motor de landings). */}
+      {/* Diagnóstico: informe de rendimiento para el cliente (motor de landings). Es el
+          que más lo necesita: se proyecta en la sesión con el cliente. */}
       {!isResumenCanvas && activeSlug === "diagnosis" && activeCanvasId && (
-        <CanvasBoundary label="el diagnóstico">
-          <DiagnosticoWorkspace key={`diagnostico-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
-        </CanvasBoundary>
+        <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
+          <CanvasBoundary label="el diagnóstico">
+            <DiagnosticoWorkspace key={`diagnostico-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+          </CanvasBoundary>
+        </div>
       )}
 
       {!isResumenCanvas && activeSlug === "exploration" && activeCanvasId && (

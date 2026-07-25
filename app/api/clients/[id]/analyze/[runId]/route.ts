@@ -73,12 +73,27 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
 
   // ── CARDS: leer desde ClientContextCard o fallback a output ──────────────────
   let cards = run.cards;
+  // Muchos agentes escriben EN EL CANVAS, no en cards: los runners self-contained
+  // (Diagnóstico/Planificación/Implementación/Exploración/Desarrollo) dejan `sectionCount`
+  // en el output, y los de block-format (Kickoff/Handoff) dejan `sections`. Sin exponer
+  // eso, el polling veía cards:[] y el toast decía "sin resultados" aunque el canvas
+  // estuviera completo — regresión al pasar los CTAs de canvas a async (antes la
+  // respuesta síncrona traía `blocks` y el toast contaba bloques).
+  let sectionCount: number | undefined;
+  let blockCount: number | undefined;
   if (cards.length === 0) {
     try {
       const parsed = JSON.parse(run.output ?? "{}");
       cards = (parsed.cards ?? []).map((c: { title: string; content: string }, i: number) => ({
         id: `legacy-${i}`, title: c.title, content: c.content, order: i, source: "AGENT" as const,
       }));
+      if (typeof parsed.sectionCount === "number") {
+        sectionCount = parsed.sectionCount;
+      } else if (Array.isArray(parsed.sections) && parsed.sections.length > 0) {
+        // Contamos lo REALMENTE persistido (lo mismo que devolvía `blocks` en la respuesta
+        // síncrona), no lo que el modelo dijo que iba a escribir.
+        blockCount = await prisma.canvasBlock.count({ where: { agentRunId: run.id } });
+      }
     } catch { /* output malformado */ }
   }
 
@@ -86,7 +101,7 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
     id: run.id, status: run.status, createdAt: run.createdAt,
     stepLabel: run.stepLabel, serviceType: run.serviceType, currentPhase: run.currentPhase,
     agentName: run.agent?.name ?? null, outputType,
-    cards,
+    cards, sectionCount, blockCount,
   });
 });
 

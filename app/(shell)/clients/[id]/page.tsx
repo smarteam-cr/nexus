@@ -3,8 +3,33 @@ import { UnauthorizedError, ForbiddenError } from "@/lib/auth/supabase";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { ensureStrategyProject } from "@/lib/canvas/strategy-project";
-import WorkspaceClient from "./WorkspaceClient";
+import WorkspaceClient, { type SeededCanvas } from "./WorkspaceClient";
 import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
+import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
+
+/**
+ * Los canvases del proyecto inicial, CON su señal de contenido. La señal viaja desde el
+ * primer pintado a propósito: sin ella todas las filas del desplegable arrancaban
+ * "vacía" (ámbar) y el CTA salía "Generar" sólido sobre piezas llenas, hasta que llegaba
+ * el refetch del listado y todo saltaba de estado. El criterio es UNO solo
+ * (lib/pieces/piece-content.ts), el mismo que usa /api/projects/[id]/canvases.
+ */
+async function seedCanvases(projectId: string): Promise<SeededCanvas[]> {
+  const canvases = await prisma.projectCanvas.findMany({
+    where: { projectId, ...canvasNotOf("handoff"), ...onlyEnabled },
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+    select: { id: true, slug: true, name: true, isDefault: true, sections: true },
+  });
+  const conContenido = await loadCanvasesConContenido(projectId, canvases);
+  return canvases.map((c) => ({
+    id: c.id,
+    slug: c.slug,
+    name: c.name,
+    isDefault: c.isDefault,
+    sections: (c.sections as Array<{ key: string; label: string }> | null) ?? [],
+    hasContent: conContenido.has(c.id),
+  }));
+}
 
 export default async function ClientPage({
   params,
@@ -74,21 +99,7 @@ export default async function ClientPage({
       : visibleProjects.length === 1
         ? visibleProjects[0].id
         : null;
-  const initialCanvases = initialProjectId
-    ? (
-        await prisma.projectCanvas.findMany({
-          where: { projectId: initialProjectId, ...canvasNotOf("handoff"), ...onlyEnabled },
-          orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-          select: { id: true, slug: true, name: true, isDefault: true, sections: true },
-        })
-      ).map((c) => ({
-        id: c.id,
-        slug: c.slug,
-        name: c.name,
-        isDefault: c.isDefault,
-        sections: (c.sections as Array<{ key: string; label: string }> | null) ?? [],
-      }))
-    : null;
+  const initialCanvases = initialProjectId ? await seedCanvases(initialProjectId) : null;
 
   return (
     <WorkspaceClient
