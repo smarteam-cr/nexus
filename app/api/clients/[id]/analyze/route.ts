@@ -1491,6 +1491,11 @@ ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}` : ""}
 ${classificationLabel ? `Clasificación del proyecto: ${classificationLabel}` : ""}
 
 ${(() => {
+  // ⚠ ESCALA DEPRECADA (la 0-4). La canónica es la 1-5 de la base de conocimiento
+  // (decisión 2026-07-25); el Diagnóstico ya se mide SOLO con ella — su runner ni lee
+  // este campo. Este bloque queda para los agentes legacy del camino genérico. Migrar
+  // los valores guardados 0-4 → 1-5 es un follow-up aparte (⚠ general===0 es el
+  // sentinel "sin setear", no nivel cero — una migración +1 a ciegas lo rompería).
   const escala = (clientCanvas as unknown as Record<string, unknown>)?.escala_rendimiento as { general?: number; por_hub?: { marketing?: number; sales?: number; service?: number }; objetivo?: number } | undefined;
   if (!escala || (escala.general ?? 0) === 0) return "";
   const hubLines = [];

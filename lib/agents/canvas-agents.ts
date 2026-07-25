@@ -17,7 +17,10 @@ export interface CanvasAgentDef {
 /** Indexado por SLUG de pieza (lib/pieces/registry), no por nombre visible: el CTA
  *  "Generar" no puede desaparecer porque alguien renombre el canvas. */
 export const CANVAS_PRIMARY_AGENT: Record<string, CanvasAgentDef> = {
-  kickoff: { agentId: "agent-kickoff-canvas", label: "Generar kickoff" },
+  // async desde 2026-07-25: en proyectos con mucho contexto tardaba minutos con el
+  // botón colgado (y el fetch moría a los ~3 min como "Error de conexión"). Detached
+  // gana además la visibilidad en el centro de corridas — mismo código, otro wrapper.
+  kickoff: { agentId: "agent-kickoff-canvas", label: "Generar kickoff", async: true },
   // async: el runner lee escala + handoff + exploración + procesos y escribe 8
   // secciones — corre detached y la corrida se ve en el centro de corridas.
   diagnosis: { agentId: "agent-diagnostico-canvas", label: "Generar diagnóstico", async: true },
