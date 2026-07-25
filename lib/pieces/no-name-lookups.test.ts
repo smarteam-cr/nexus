@@ -23,18 +23,26 @@ const RAIZ = process.cwd();
 const NOMBRES = PIECES.flatMap((p) => p.legacyNames);
 
 /**
- * Un lookup por nombre = el nombre de una pieza usado dentro de un `where` de
- * Prisma (`name: "Kickoff"`). No cuenta el nombre en prosa, ni en un rótulo de UI,
- * ni en las definiciones del propio registro (que es donde DEBE vivir).
+ * Un lookup por nombre = el nombre de una pieza usado como IDENTIDAD dentro de un
+ * `where` de Prisma. No cuenta el nombre en prosa, ni en un rótulo de UI, ni en las
+ * definiciones del propio registro (que es donde DEBE vivir).
+ *
+ * Dos formas, y la segunda es la que importa: cuando migré F1 busqué el literal
+ * (`name: "Desarrollo"`) y se me escaparon `ensureDesarrolloCanvas` y
+ * `ensureExploracionCanvas`, que escribían `name: DESARROLLO_CANVAS.name` — la misma
+ * consulta por rótulo, disfrazada de constante. Un guard que solo mira el literal da
+ * falsa seguridad justo en los dos find-or-create que pueden duplicar una pieza.
  */
-function lookupsPorNombre(rel: string): number {
+function lookupsPorNombre(rel: string): string[] {
   const src = fs.readFileSync(path.join(RAIZ, rel), "utf8");
-  let n = 0;
+  const hits: string[] = [];
   for (const nombre of NOMBRES) {
     const re = new RegExp(`name:\\s*"${nombre.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`, "g");
-    n += (src.match(re) ?? []).length;
+    hits.push(...(src.match(re) ?? []));
   }
-  return n;
+  // `name: ALGO.name` / `name: ALGO.name,` dentro de un where — el rótulo por referencia.
+  hits.push(...(src.match(/name:\s*[A-Z][A-Za-z0-9_]*(?:\.[a-zA-Z0-9_]+)*\.name\b/g) ?? []));
+  return hits;
 }
 
 /**
@@ -49,6 +57,10 @@ const CRITICOS = [
   "lib/canvas/load-canvas-context.ts", // embudo del contexto de 8 agentes
   "app/api/projects/[projectId]/canvases/route.ts", // dropdown del proyecto
   "app/api/projects/[projectId]/kickoff-content/route.ts",
+  // Los dos find-or-create: acá un lookup por rótulo no "no encuentra" — CREA UN
+  // CANVAS DUPLICADO y deja el contenido viejo huérfano. Es el peor caso de todos.
+  "lib/canvas/desarrollo-generate.ts",
+  "lib/canvas/exploracion-generate.ts",
 ];
 
 describe("los caminos críticos NO identifican piezas por nombre", () => {
@@ -59,7 +71,7 @@ describe("los caminos críticos NO identifican piezas por nombre", () => {
         `${rel} volvió a buscar un canvas por su NOMBRE. Usá canvasOf(slug) / ` +
           `canvasOfNested(slug) de lib/pieces/canvas-query.ts — si no, renombrar la ` +
           `pieza rompe este camino en silencio.`,
-      ).toBe(0);
+      ).toEqual([]);
     });
   }
 });

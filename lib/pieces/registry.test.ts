@@ -125,12 +125,16 @@ describe("renombrar es seguro: identidad ≠ nombre visible", () => {
 });
 
 describe("consultas del registro", () => {
-  it("las piezas que se pre-crean con el proyecto son las del seed actual", () => {
+  it("un proyecto nuevo nace con Kickoff, Cronograma y Exploración — nada más", () => {
+    // Cambiar esta lista es una decisión de PRODUCTO, no un refactor: define con qué
+    // se encuentra el CSE al abrir un proyecto recién creado. El test está para que el
+    // cambio sea deliberado y quede escrito por qué.
+    //
+    // 2026-07-24 — salieron Diagnóstico y Planificación: se creaban en los 118
+    // proyectos y tenían contenido en UNO cada una. Ahora las enciende el CSE.
     expect(piecesCreatedWithProject().map((p) => p.slug).sort()).toEqual([
-      "diagnosis",
       "exploration",
       "kickoff",
-      "planning",
       "timeline",
     ]);
   });
@@ -138,6 +142,19 @@ describe("consultas del registro", () => {
   it("handoff y requerimientos técnicos NO se pre-crean", () => {
     expect(pieceBySlug("handoff")!.createdWithProject).toBe(false);
     expect(pieceBySlug("tech-requirements")!.createdWithProject).toBe(false);
+  });
+
+  it("toda pieza que nace con el proyecto tiene su definición de canvas", async () => {
+    // `createDefaultCanvases` cruza registro × canvas-defs por slug y descarta lo que no
+    // encuentra. Sin este test, marcar una pieza como "nace con el proyecto" sin darle
+    // definición la haría desaparecer en silencio: el proyecto nacería sin ella y nada
+    // fallaría.
+    const { DEFAULT_PROJECT_CANVASES } = await import("@/lib/canvas/canvas-defs");
+    const definidas = new Set(DEFAULT_PROJECT_CANVASES.map((c) => c.slug));
+    for (const p of piecesCreatedWithProject()) {
+      expect(definidas.has(p.slug), `la pieza "${p.slug}" nace con el proyecto pero no tiene definición de canvas`)
+        .toBe(true);
+    }
   });
 
   it("los tags técnicos encienden la pieza de requerimientos", () => {

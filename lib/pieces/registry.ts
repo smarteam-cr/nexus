@@ -149,7 +149,11 @@ export const PIECES: PieceDefinition[] = [
     // Hoy NO tiene celda propia y cae al default null (cualquiera que corra agentes
     // genera diagnósticos). Se deja explícito para no perder el hallazgo.
     permissionSection: null,
-    createdWithProject: true,
+    // 2026-07-24 — DEJA de nacer con el proyecto (decisión de negocio). Se creaba en
+    // los 118 proyectos y tenía contenido en UNO. Los 234 canvases vacíos de esta pieza
+    // y de Planificación se retiraron; los 2 con trabajo real se conservaron. Ahora la
+    // enciende el CSE cuando la va a usar.
+    createdWithProject: false,
     isDefaultCanvas: false,
     optional: true,
     enabledByTags: [],
@@ -165,7 +169,11 @@ export const PIECES: PieceDefinition[] = [
     // Herencia: se gatea con la celda `cronograma` de cuando escribía el esqueleto
     // del timeline. Su prompt actual ya no emite fechas. Anotado, no cambiado en F1.
     permissionSection: "cronograma",
-    createdWithProject: true,
+    // 2026-07-24 — DEJA de nacer con el proyecto (decisión de negocio). Se creaba en
+    // los 118 proyectos y tenía contenido en UNO. Los 234 canvases vacíos de esta pieza
+    // y de Planificación se retiraron; los 2 con trabajo real se conservaron. Ahora la
+    // enciende el CSE cuando la va a usar.
+    createdWithProject: false,
     isDefaultCanvas: false,
     optional: true,
     enabledByTags: [],

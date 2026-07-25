@@ -16,6 +16,7 @@ import {
 import { templateById, templateDefsByKey } from "@/components/landing/configs/templates.defs";
 import { HUBSPOT_TEMPLATE_ID } from "@/lib/business-cases/case-types";
 import { buildTemplateMetaEntry } from "@/lib/business-cases/template-meta";
+import { piecesCreatedWithProject } from "@/lib/pieces/registry";
 
 // Re-export de las definiciones PURAS (viven en canvas-defs.ts, SIN Prisma) para
 // que los importadores de servidor existentes (analyze/route.ts, etc.) sigan
@@ -28,12 +29,25 @@ export type { CanvasDefinition };
 // creación de canvases sea atómica con el resto del orquestador (Fase 4 handoff).
 type Db = Prisma.TransactionClient;
 
-/** Create all standard canvases for a project with CanvasSection records.
- *  NO incluye Handoff (es entidad cliente-level; usar createHandoffCanvas). */
+/**
+ * Crea las piezas con las que NACE un proyecto, con sus CanvasSection.
+ * NO incluye Handoff (es entidad cliente-level; usar createHandoffCanvas).
+ *
+ * Qué piezas nacen lo decide el REGISTRO (`piecesCreatedWithProject`), no una lista
+ * fija acá: es una decisión de producto y tiene que vivir en un solo lugar. Desde
+ * 2026-07-24 Diagnóstico y Planificación quedaron fuera — se creaban en los 118
+ * proyectos y se usaron en uno.
+ */
 export async function createDefaultCanvases(projectId: string, db: Db = prisma) {
-  // Create all canvases
+  // El registro manda QUÉ piezas; canvas-defs manda CÓMO es cada una (secciones,
+  // orden, defaults). Se cruzan por slug: una pieza marcada para nacer sin definición
+  // acá se ignora en silencio en vez de romper la creación del proyecto.
+  const aCrear = piecesCreatedWithProject()
+    .map((p) => DEFAULT_PROJECT_CANVASES.find((c) => c.slug === p.slug))
+    .filter((c): c is CanvasDefinition => !!c);
+
   await db.projectCanvas.createMany({
-    data: DEFAULT_PROJECT_CANVASES.map((c) => ({
+    data: aCrear.map((c) => ({
       projectId,
       // slug = IDENTIDAD de la pieza; name es solo el rótulo visible.
       slug: c.slug,
@@ -46,15 +60,16 @@ export async function createDefaultCanvases(projectId: string, db: Db = prisma) 
     })),
   });
 
-  // Create CanvasSection records for every canvas that defines sections.
-  // Canvases sin secciones (Cronograma) no llevan.
+  // Secciones de cada canvas recién creado. Canvases sin secciones (Cronograma) no llevan.
+  // Se emparejan por SLUG, no por nombre: con `d.name === canvas.name` el renombre de F4
+  // dejaría los canvases nuevos sin ninguna sección, en silencio.
   const createdCanvases = await db.projectCanvas.findMany({
-    where: { projectId },
-    select: { id: true, name: true },
+    where: { projectId, slug: { in: aCrear.map((c) => c.slug) } },
+    select: { id: true, slug: true },
   });
 
   for (const canvas of createdCanvases) {
-    const def = DEFAULT_PROJECT_CANVASES.find((d) => d.name === canvas.name);
+    const def = aCrear.find((d) => d.slug === canvas.slug);
     if (!def?.sections.length) continue;
     await db.canvasSection.createMany({
       data: def.sections.map((s, i) => ({

@@ -32,12 +32,13 @@ import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { EXPLORACION_TEMPLATE, EXPLORACION_HANDOFF_KEYS } from "@/components/landing/configs/exploracion.defs";
 import { buildTagLensBlock } from "@/components/landing/configs/exploracion-lenses";
 import { tagLabels } from "@/lib/tags/catalog";
+import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 /** Asegura el canvas "Exploración" del proyecto (lo crea si falta) + reconcilia sus
  *  secciones. Idempotente. Devuelve el canvasId. */
 export async function ensureExploracionCanvas(projectId: string): Promise<string> {
   const existing = await prisma.projectCanvas.findFirst({
-    where: { projectId, name: EXPLORACION_CANVAS.name },
+    where: canvasOfNested(EXPLORACION_CANVAS.slug, { projectId }),
     select: { id: true },
   });
   const canvasId = existing?.id ?? (await createExploracionCanvas(projectId));

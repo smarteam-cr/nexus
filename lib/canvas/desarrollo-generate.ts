@@ -22,12 +22,13 @@ import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { specToDiagram, relacionToDiagram } from "@/lib/flowchart/spec-to-diagram";
 import { DESARROLLO_TEMPLATE, DESARROLLO_HANDOFF_KEYS } from "@/components/landing/configs/desarrollo.defs";
 import { tagLabels } from "@/lib/tags/catalog";
+import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 /** Asegura el canvas "Desarrollo" del proyecto (lo crea si falta) + reconcilia sus
  *  secciones. Idempotente. Devuelve el canvasId. */
 export async function ensureDesarrolloCanvas(projectId: string): Promise<string> {
   const existing = await prisma.projectCanvas.findFirst({
-    where: { projectId, name: DESARROLLO_CANVAS.name },
+    where: canvasOfNested(DESARROLLO_CANVAS.slug, { projectId }),
     select: { id: true },
   });
   const canvasId = existing?.id ?? (await createDesarrolloCanvas(projectId));

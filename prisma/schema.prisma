@@ -901,6 +901,13 @@ model ProjectCanvas {
 
   @@index([projectId])
   @@index([businessCaseId])
+  // OJO — en la base hay además un índice ÚNICO PARCIAL que Prisma no sabe declarar:
+  //   ProjectCanvas_projectId_slug_key ON ("projectId", slug)
+  //   WHERE "projectId" IS NOT NULL AND slug IS NOT NULL
+  // (scripts/sql/2026-07-24-projectcanvas-slug.sql). Es lo que impide dos canvases de
+  // la misma pieza en un proyecto sin bloquear los canvases custom (slug null) ni los
+  // del Business Case (projectId null). No aparece acá: si alguien lee solo el schema
+  // va a creer que ProjectCanvas no tiene unique, que es justo la conclusión peligrosa.
 }
 
 // Sección de un canvas no-default (entidad de primer nivel)
