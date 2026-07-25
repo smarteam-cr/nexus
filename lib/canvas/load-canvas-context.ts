@@ -105,8 +105,47 @@ function blockToText(b: BlockLite): string {
     case "IMAGE":
       return "(imagen)";
     default: // TEXT, CARD
-      return (b.content ?? "").trim();
+      // Los canvas TIPADOS (kickoff/exploración/diagnóstico/…) guardan su contenido en
+      // `data` con `content: null`. Sin este fallback, un agente que lea uno de esos
+      // canvas (Planificación leyendo el Diagnóstico) lo vería VACÍO — sin error, solo
+      // silencio. Aditivo: los bloques con `content` poblado siguen saliendo igual.
+      return (b.content ?? "").trim() || flattenCardData(data);
   }
+}
+
+/**
+ * Aplana el `data` de un CARD tipado a texto legible por un agente: hojas string con su
+ * clave, y arrays de objetos como viñetas "title — detail". Se saltan claves técnicas
+ * (posiciones de diagramas, idioma) que no aportan contexto.
+ */
+function flattenCardData(data: Record<string, unknown>, depth = 0): string {
+  if (depth > 2) return "";
+  const SKIP = new Set(["diagram", "__lang", "buttonTarget", "coverImageUrl", "brands"]);
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(data)) {
+    if (SKIP.has(key)) continue;
+    if (typeof value === "string" && value.trim()) {
+      lines.push(`${key}: ${value.trim()}`);
+    } else if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === "string" && item.trim()) lines.push(`- ${item.trim()}`);
+        else if (item && typeof item === "object") {
+          const o = item as Record<string, unknown>;
+          const title = typeof o.title === "string" ? o.title : typeof o.nombre === "string" ? o.nombre : "";
+          const rest = Object.entries(o)
+            .filter(([k, v]) => k !== "title" && k !== "nombre" && typeof v === "string" && (v as string).trim())
+            .map(([, v]) => (v as string).trim())
+            .join(" · ");
+          const line = [title, rest].filter(Boolean).join(" — ");
+          if (line) lines.push(`- ${line}`);
+        }
+      }
+    } else if (value && typeof value === "object") {
+      const inner = flattenCardData(value as Record<string, unknown>, depth + 1);
+      if (inner) lines.push(inner);
+    }
+  }
+  return lines.join("\n");
 }
 
 /**
