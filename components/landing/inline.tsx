@@ -34,23 +34,35 @@ export function Editable({
 }) {
   const ref = useRef<HTMLElement>(null);
 
+  /* Blindaje contra el texto-que-no-era-texto. El tipo dice `string`, pero la data de
+     una sección viene de la base y de la IA, y los tipos no existen en tiempo de
+     ejecución: si un llamador pasa un objeto, el navegador lo pinta como
+     "[object Object]" y —porque este campo comitea su propio texto al perder el foco—
+     ESA CADENA SE GUARDA, pisando el contenido real. Pasó de verdad: dos portadas de
+     un proyecto quedaron con "[object Object]" de título tras una recarga en caliente
+     con un valor mal armado.
+     Convertir a "" es lo correcto: un campo vacío muestra su ayuda y se arregla
+     escribiendo; una cadena basura se ve como contenido y se propaga al PDF y al
+     cliente. */
+  const safeValue = typeof value === "string" ? value : "";
+
   // Sincroniza el texto desde `value` cuando cambia externamente y el elemento no
   // está enfocado (evita pisar lo que el usuario está tipeando).
   useLayoutEffect(() => {
     const el = ref.current;
     if (!editable || !el) return;
-    if (document.activeElement !== el && el.textContent !== value) {
-      el.textContent = value ?? "";
+    if (document.activeElement !== el && el.textContent !== safeValue) {
+      el.textContent = safeValue;
     }
-  }, [value, editable]);
+  }, [safeValue, editable]);
 
   // Refs "latest" (actualizadas en effect, nunca en render — regla react-hooks/refs)
   // para que el cleanup de desmontaje compare contra el value VIGENTE sin re-suscribirse.
   const onCommitRef = useRef(onCommit);
-  const valueRef = useRef(value);
+  const valueRef = useRef(safeValue);
   useEffect(() => {
     onCommitRef.current = onCommit;
-    valueRef.current = value;
+    valueRef.current = safeValue;
   });
 
   // Commit al desmontar (o al salir de modo edición): si el texto difiere del value
@@ -67,10 +79,10 @@ export function Editable({
   }, [editable]);
 
   if (!editable) {
-    if (!value) return null;
+    if (!safeValue) return null;
     return (
       <Tag className={className} style={{ whiteSpace: "pre-wrap" }}>
-        {value}
+        {safeValue}
       </Tag>
     );
   }

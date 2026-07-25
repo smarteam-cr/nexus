@@ -10,6 +10,8 @@
  * y porque el séptimo documento que alguien construya va a copiar de estos.
  */
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { resolveHeroTitle, heroTitleBrief, HERO_TITLE_MAX_CHARS } from "@/lib/landing/hero-title";
 import { KICKOFF_SECTION_DEFS } from "@/components/landing/configs/kickoff.defs";
 import { DESARROLLO_SECTION_DEFS } from "@/components/landing/configs/desarrollo.defs";
@@ -125,6 +127,31 @@ describe("🔒 ninguna portada puede quedar sin título ni heredar el de otra", 
     // literalmente el defecto que este archivo vino a cerrar.
     const rotulos = DOCUMENTOS.map((d) => d.defs[0].label);
     expect(new Set(rotulos).size, `rótulos repetidos: ${rotulos.join(" · ")}`).toBe(rotulos.length);
+  });
+
+  it("🔒 el campo editable trata como vacío lo que no sea texto", () => {
+    // Pasó de verdad: durante una recarga en caliente, una portada recibió un objeto
+    // donde iba el título. El navegador lo pintó como "[object Object]" y, como este
+    // campo comitea su propio texto al perder el foco, ESA CADENA SE GUARDÓ en dos
+    // documentos de un proyecto real (saneado con scripts/fix-titulos-basura.ts).
+    // El tipo dice `string`, pero los tipos no existen en tiempo de ejecución y la data
+    // viene de la base y de la IA. Las TRES lecturas del valor tienen que ir por la
+    // versión saneada: la que pinta, la que compara al desmontar (el camino por el que
+    // se guardó) y la de modo lectura.
+    const src = fs.readFileSync(path.join(process.cwd(), "components/landing/inline.tsx"), "utf8");
+    expect(
+      src.includes('const safeValue = typeof value === "string" ? value : ""'),
+      "Editable dejó de sanear el valor: un objeto vuelve a poder guardarse como texto",
+    ).toBe(true);
+    expect(
+      src.includes("useRef(safeValue)"),
+      "el commit al desmontar volvió a comparar contra el valor crudo — es el camino exacto " +
+        "por el que se guardó '[object Object]'",
+    ).toBe(true);
+    expect(
+      src.includes("if (!safeValue) return null"),
+      "el modo lectura volvió a pintar el valor crudo",
+    ).toBe(true);
   });
 
   it("ningún rótulo menciona un requerimiento técnico salvo el de Desarrollo", () => {
