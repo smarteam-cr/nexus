@@ -71,3 +71,27 @@ export function canvasOfAnyNested(
 ): Prisma.ProjectCanvasWhereInput {
   return { ...scope, ...canvasOfAny(slugs) };
 }
+
+/**
+ * ── VISIBILIDAD, no existencia ────────────────────────────────────────────────
+ * Fragmento para las consultas de LISTADO: qué piezas se le muestran al CSE.
+ * Se COMBINA por spread para que quede visible en cada punto de uso:
+ *
+ *   where: { projectId, ...canvasNotOf("handoff"), ...onlyEnabled }
+ *
+ * ⛔ NUNCA se mete adentro de `canvasOf` / `canvasOfNested` / `canvasOfAny`. Esas son
+ * consultas de EXISTENCIA y las usan los find-or-CREATE (`ensureDesarrolloCanvas`,
+ * `ensureExploracionCanvas`): si no vieran la pieza apagada crearían un canvas
+ * DUPLICADO y dejarían huérfano el contenido viejo — además de chocar contra el índice
+ * único parcial (projectId, slug). El mismo razonamiento vale para el gate de permisos
+ * (una pieza apagada leída como inexistente convertiría un "regenerar" en "generar" y
+ * saltearía la celda que protege pisar contenido) y para el contexto de los agentes.
+ *
+ * Hay un guard que lo verifica: lib/pieces/enabled-filter.test.ts.
+ */
+export const onlyEnabled: Prisma.ProjectCanvasWhereInput = { disabledAt: null };
+
+/** Mismo criterio, en memoria: para listas ya cargadas. */
+export function isPieceEnabled(canvas: { disabledAt: Date | null }): boolean {
+  return canvas.disabledAt === null;
+}

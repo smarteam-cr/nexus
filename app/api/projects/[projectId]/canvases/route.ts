@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { canvasNotOf } from "@/lib/pieces/canvas-query";
+import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 
 // GET: list canvases for a project (default first, then by createdAt)
 export async function GET(
@@ -17,7 +17,11 @@ export async function GET(
   // proyecto. El canvas sigue existiendo (1:1 con el Project) y loadCanvasContext
   // lo lee igual para el Kickoff — solo se oculta de este listado.
   const canvases = await prisma.projectCanvas.findMany({
-    where: { projectId, ...canvasNotOf("handoff") },
+    // `onlyEnabled` va acá y en el seed server-side de app/(shell)/clients/[id]/page.tsx,
+    // en el mismo commit: el panel mezcla las dos en un solo estado, así que filtrar en
+    // una sola haría que la pantalla arranque con N pestañas y salte a N−1 — y si la que
+    // desaparece era la activa, el CSE termina en otro canvas sin haber tocado nada.
+    where: { projectId, ...canvasNotOf("handoff"), ...onlyEnabled },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,

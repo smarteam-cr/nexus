@@ -4,7 +4,7 @@ import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { ensureStrategyProject } from "@/lib/canvas/strategy-project";
 import WorkspaceClient from "./WorkspaceClient";
-import { canvasNotOf } from "@/lib/pieces/canvas-query";
+import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 
 export default async function ClientPage({
   params,
@@ -77,7 +77,7 @@ export default async function ClientPage({
   const initialCanvases = initialProjectId
     ? (
         await prisma.projectCanvas.findMany({
-          where: { projectId: initialProjectId, ...canvasNotOf("handoff") },
+          where: { projectId: initialProjectId, ...canvasNotOf("handoff"), ...onlyEnabled },
           orderBy: [{ order: "asc" }, { createdAt: "asc" }],
           select: { id: true, slug: true, name: true, isDefault: true, sections: true },
         })

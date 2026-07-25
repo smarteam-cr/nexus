@@ -104,9 +104,16 @@ export const PIECES: PieceDefinition[] = [
     permissionSection: "kickoff",
     createdWithProject: true,
     isDefaultCanvas: true,
-    // Negocio 2026-07-24: el kickoff es un paso NO requerido. Hoy igual se pre-crea
-    // (`createdWithProject`); F2 le da el interruptor real.
-    optional: true,
+    // El kickoff es un paso NO REQUERIDO —un proyecto puede no llevarlo— pero NO es
+    // apagable: siempre está en la lista de piezas (decisión de negocio 2026-07-24).
+    // El motivo es que el kickoff sostiene tres subsistemas ajenos: el semáforo de la
+    // cartera lo pinta ROJO por ausencia ("Sin kickoff") y ordena por él; el motor de
+    // etapas deja el proyecto clavado en HAND_OFF sin él; y clavado ahí se APAGAN todas
+    // las alarmas del cronograma. Apagar una pieza nunca puede silenciar el cronograma.
+    // "No requerido" ya está resuelto donde importa: no publicarlo no traba el avance
+    // ni alarma. Si algún día se quiere el interruptor, hay que arreglar esas tres
+    // superficies primero — no alcanza con dar vuelta este booleano.
+    optional: false,
     enabledByTags: [],
     ownRenderer: false,
     clientFacing: true,

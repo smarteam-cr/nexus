@@ -883,8 +883,20 @@ model ProjectCanvas {
   order          Int           @default(0) // orden de aparición en el dropdown de canvases
   // Versionado (business case): cada "Generar" crea un canvas nuevo; isActive marca
   // el vivo/editable. En proyectos queda version=1/isActive=true (sin uso).
+  // OJO: `isActive` es del BUSINESS CASE. Para "el CSE apagó esta pieza del proyecto"
+  // es `disabledAt` — son dos cosas distintas y confundirlas rompe el versionado del BC.
   version        Int           @default(1)
   isActive       Boolean       @default(true)
+
+  // PIEZA APAGADA por decisión del CSE (scope project). Ausente = activa. Fecha y no
+  // booleano porque interesa CUÁNDO, que es parte del historial del proyecto. Apagar
+  // NUNCA borra contenido: el interruptor vive en la misma fila que el contenido
+  // justamente para que no exista un camino donde apagar toque secciones o bloques.
+  // El filtro por estas columnas va SOLO en consultas de LISTADO — nunca en las de
+  // EXISTENCIA (`canvasOf`), porque los find-or-create crearían un canvas duplicado.
+  disabledAt     DateTime?
+  disabledBy     String? // correo, no FK: el rastro sobrevive a que la persona salga del equipo
+  disabledReason String?
   sections       Json          @default("[]") // Array de { key, label, brief?, previousBrief? } — brief = guía del agente por sección (BC), acá y no en columna para sobrevivir db push entre las 2 PCs (ver lib/business-cases/section-briefs.ts)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
