@@ -207,7 +207,10 @@ const ACTIVITY_META: Record<string, { label: string; seg: string; chip: string }
   ADOPCION:      { label: "Adopción",      seg: "bg-emerald-500", chip: "text-emerald-300 bg-emerald-900/30 border-emerald-700/40" },
   SEGUIMIENTO:   { label: "Seguimiento",   seg: "bg-fuchsia-500", chip: "text-fuchsia-300 bg-fuchsia-900/30 border-fuchsia-700/40" },
 };
-const NEUTRAL_SEG = "bg-gray-600";
+/* Barra de una fase SIN tipo de actividad. Va con opacidad sobre el color de texto apagado y
+   no con un neutro fijo: ahora que el cronograma interno sigue el tema, un tono duro de la
+   escala cruda se perdía contra el fondo oscuro. */
+const NEUTRAL_SEG = "bg-fg-muted/40";
 
 // ── Estado de tarea: ciclo + estilos ──────────────────────────────────────────
 
@@ -230,7 +233,7 @@ export const NEXT_STATUS_QUICK: Record<GanttTaskStatus, GanttTaskStatus> = {
 };
 
 export const STATUS_META: Record<GanttTaskStatus, { label: string; cls: string }> = {
-  PENDING:     { label: "pendiente", cls: "bg-gray-800 text-gray-400 border-gray-700" },
+  PENDING:     { label: "pendiente", cls: "bg-surface-hover text-fg-muted border-line" },
   IN_PROGRESS: { label: "en curso",  cls: "bg-blue-900/30 text-blue-300 border-blue-700/50" },
   DONE:        { label: "hecho",     cls: "bg-emerald-900/40 text-emerald-300 border-emerald-700/50" },
   SUSPENDED:   { label: "suspendida", cls: "bg-amber-900/30 text-amber-300 border-amber-700/50" },
@@ -259,7 +262,7 @@ export function StatusCircle({ status, size = 18 }: { status: GanttTaskStatus; s
       ? "text-blue-400 group-hover/task:text-blue-300"
       : status === "SUSPENDED"
         ? "text-amber-400 group-hover/task:text-amber-300"
-        : "text-gray-400 group-hover/task:text-gray-300";
+        : "text-fg-muted group-hover/task:text-fg-secondary";
   return (
     <svg
       width={size}
@@ -300,7 +303,7 @@ export const nextParty = (p: Party): Party =>
 // effType resuelve null/undefined (data vieja) a TASK. Mapeo a futuro: SESSION→Meeting, TASK→Task.
 export const TYPE_META: Record<string, { label: string; cls: string }> = {
   SESSION: { label: "Sesión", cls: "text-teal-300 bg-teal-900/30 border-teal-700/40" },
-  TASK:    { label: "Tarea",  cls: "text-gray-400 bg-gray-800/60 border-gray-700/50" },
+  TASK:    { label: "Tarea",  cls: "text-fg-muted bg-surface-hover/60 border-line/50" },
 };
 export const effType = (t: "SESSION" | "TASK" | null | undefined): "SESSION" | "TASK" =>
   t === "SESSION" ? "SESSION" : "TASK";
@@ -312,7 +315,7 @@ export const PARTICULARIDAD_KIND_META: Record<string, { label: string; cls: stri
   // SOLICITUD es la forma VIEJA de un compromiso (un insumo del cliente es trabajo con dueño, no
   // una desviación). En gris y marcada como vieja: en ámbar competía con COMPROMISO y se leía como
   // una categoría distinta y vigente — por eso un grupo de 4 parecía tener solo 2.
-  SOLICITUD:  { label: "Compromiso (viejo)", cls: "text-gray-400 bg-gray-800/60 border-gray-700/50" },
+  SOLICITUD:  { label: "Compromiso (viejo)", cls: "text-fg-muted bg-surface-hover/60 border-line/50" },
   COMPROMISO: { label: "Compromiso", cls: "text-emerald-300 bg-emerald-900/30 border-emerald-700/40" },
   // Nota libre del CSE al cliente: NO mueve fechas ni suma al corrimiento. Azul (informativo),
   // deliberadamente fuera de la familia rojo/verde de "se atrasó"/"acordado".
@@ -623,11 +626,17 @@ export default function TimelineGantt({
   const gridCols = { gridTemplateColumns: `minmax(240px, 380px) repeat(${total}, minmax(26px, 1fr))` };
 
   return (
-    // data-fixed-light: el Cronograma interno debe verse SIEMPRE CLARO (igual que el del
-    // cliente), sin importar el tema. El remap claro de `html.light` (globals.css) se extiende
-    // a este subárbol vía `:is(html.light, [data-fixed-light])`, así la viz queda clara también
-    // en modo oscuro.
-    <div className="space-y-3" data-fixed-light>
+    /* ── ESTE CRONOGRAMA SIGUE EL TEMA. El de afuera, no. ─────────────────────────────
+       Antes este subárbol llevaba `data-fixed-light` para verse SIEMPRE claro, con el
+       argumento de que el CSE viera exactamente lo mismo que el cliente. El costo no se veía
+       y era grande: ese atributo remapea las utilidades de la escala neutra CRUDA de Tailwind
+       pero **nunca las variables semánticas**, así que adentro no se podían usar los colores
+       del tema y el archivo acumuló 108 neutros duros — la deuda de estilo más grande del
+       repo. Cualquier bloque nuevo heredaba el problema.
+       Ahora el cronograma INTERNO se ve oscuro en modo oscuro, como el resto de Nexus. El
+       cronograma del CLIENTE no cambia: es otro componente (`TimelineSection.tsx`), claro por
+       diseño, y `/external/cronograma` sigue blanco siempre. */
+    <div className="space-y-3">
       {/* Fecha de hoy — visible apenas hidrata (depende de la zona del usuario) + leyenda */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         {today && (
@@ -648,7 +657,7 @@ export default function TimelineGantt({
         {/* Cómo va esto, en una línea: semana, tareas y si vamos al día. Es lo primero que el CSE
             necesita para orientarse, y hasta ahora había que deducirlo mirando el Gantt entero. */}
         {statusLine && (
-          <span className="text-xs font-semibold text-gray-300 bg-gray-800/60 border border-gray-700/50 rounded-lg px-3 py-1.5">
+          <span className="text-xs font-semibold text-fg-secondary bg-surface-hover/60 border border-line/50 rounded-lg px-3 py-1.5">
             {statusLine}
           </span>
         )}
@@ -676,7 +685,7 @@ export default function TimelineGantt({
           {Object.values(ACTIVITY_META).map((m) => (
             <span key={m.label} className="flex items-center gap-1.5">
               <span className={`w-6 h-1.5 rounded ${m.seg} inline-block`} />
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{m.label}</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-fg-muted">{m.label}</span>
             </span>
           ))}
         </span>
@@ -687,22 +696,22 @@ export default function TimelineGantt({
           reordenamiento sobre las filas que están abajo. */}
       {proposalGlobalSlot}
 
-      <div className="rounded-2xl border border-gray-800 bg-gray-900 overflow-x-auto">
+      <div className="rounded-2xl border border-line bg-surface overflow-x-auto">
         <div style={{ minWidth: Math.max(640, 300 + total * 34) }}>
           {/* Cabecera de semanas */}
-          <div className="grid gap-1 items-center px-4 py-2.5 border-b border-gray-800 bg-gray-800/60" style={gridCols}>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Fase</div>
+          <div className="grid gap-1 items-center px-4 py-2.5 border-b border-line bg-surface-hover/60" style={gridCols}>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-fg-muted">Fase</div>
             {Array.from({ length: total }).map((_, w) => {
               const isCur = curWeek === w;
               return (
                 <div
                   key={w}
                   className={`text-center leading-tight rounded py-0.5 ${
-                    isCur ? "bg-blue-900/50 text-blue-300 timeline-now-pulse" : "text-gray-500"
+                    isCur ? "bg-blue-900/50 text-blue-300 timeline-now-pulse" : "text-fg-muted"
                   }`}
                 >
                   <div className="text-[10px] font-bold">S{w}</div>
-                  {anchor && <div className="text-[9px] text-gray-600">{fmtDay(addWeeks(anchor, w))}</div>}
+                  {anchor && <div className="text-[9px] text-fg-muted">{fmtDay(addWeeks(anchor, w))}</div>}
                 </div>
               );
             })}
@@ -742,24 +751,24 @@ export default function TimelineGantt({
                       }
                       toggleExpand(p.key);
                     }}
-                    className="grid gap-1 items-center px-2 py-1.5 -mx-2 rounded-lg cursor-pointer hover:bg-gray-800/50 transition-colors group"
+                    className="grid gap-1 items-center px-2 py-1.5 -mx-2 rounded-lg cursor-pointer hover:bg-surface-hover/50 transition-colors group"
                     style={gridCols}
                   >
                     <div className="flex flex-col min-w-0 pr-2">
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-gray-300 group-hover:text-white">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-fg-secondary group-hover:text-fg">
                         {editable && onReorderPhases && (
                           <button
                             {...attributes}
                             {...listeners}
                             onClick={(e) => e.stopPropagation()}
                             title="Arrastrar para reordenar la fase"
-                            className="flex-shrink-0 cursor-grab touch-none text-gray-600 hover:text-gray-400"
+                            className="flex-shrink-0 cursor-grab touch-none text-fg-muted hover:text-fg-muted"
                           >
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" /></svg>
                           </button>
                         )}
                         <svg
-                          className={`w-3 h-3 text-gray-600 flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                          className={`w-3 h-3 text-fg-muted flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
                           fill="none" viewBox="0 0 24 24" stroke="currentColor"
                         >
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -770,7 +779,7 @@ export default function TimelineGantt({
                             onChange={(e) => onUpdatePhase(p.key, { name: e.target.value })}
                             onClick={(e) => e.stopPropagation()}
                             placeholder="Nombre de la fase"
-                            className="flex-1 min-w-[12rem] bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:outline-none pb-0.5 text-gray-200"
+                            className="flex-1 min-w-[12rem] bg-transparent border-b border-transparent hover:border-line focus:border-blue-500 focus:outline-none pb-0.5 text-fg-secondary"
                           />
                         ) : (
                           <span className="flex-1 min-w-[12rem] break-words">{p.name}</span>
@@ -800,7 +809,7 @@ export default function TimelineGantt({
                             {editable && canDelete && onRemovePhase && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); onRemovePhase(p.key); }}
-                                className="p-1 rounded text-gray-600 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="p-1 rounded text-fg-muted hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity"
                                 title="Eliminar fase"
                               >
                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -811,18 +820,18 @@ export default function TimelineGantt({
                       </div>
                       <div className="ml-[18px] mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                         {editable && onUpdatePhase ? (
-                          <span className="flex items-center gap-1.5 text-[10px] text-gray-500" onClick={(e) => e.stopPropagation()}>
+                          <span className="flex items-center gap-1.5 text-[10px] text-fg-muted" onClick={(e) => e.stopPropagation()}>
                             <input
                               type="number" min={1}
                               value={p.durationWeeks}
                               onChange={(e) => { const v = parseInt(e.target.value, 10); if (v >= 1) onUpdatePhase(p.key, { durationWeeks: v }); }}
-                              className="w-9 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-blue-500"
+                              className="w-9 bg-surface-hover border border-line rounded px-1 py-0.5 text-fg-secondary focus:outline-none focus:border-blue-500"
                               title="Duración en semanas"
                             />
                             <span>sem</span>
-                            <span className="text-gray-700">·</span>
+                            <span className="text-fg-muted">·</span>
                             {p.actualSessionCount != null ? (
-                              <span className="text-gray-400 font-medium" title="Sesiones de entrega ejecutadas (CSE/Dev + cliente) en la ventana de la fase — calculado">
+                              <span className="text-fg-muted font-medium" title="Sesiones de entrega ejecutadas (CSE/Dev + cliente) en la ventana de la fase — calculado">
                                 {p.actualSessionCount} ses
                               </span>
                             ) : (
@@ -832,26 +841,26 @@ export default function TimelineGantt({
                                   value={p.sessionCount ?? ""}
                                   placeholder="—"
                                   onChange={(e) => { const v = e.target.value === "" ? null : parseInt(e.target.value, 10); onUpdatePhase(p.key, { sessionCount: v }); }}
-                                  className="w-9 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-blue-500"
+                                  className="w-9 bg-surface-hover border border-line rounded px-1 py-0.5 text-fg-secondary focus:outline-none focus:border-blue-500"
                                   title="Sesiones estimadas (opcional)"
                                 />
                                 <span>ses</span>
                               </>
                             )}
-                            <span className="text-gray-700">·</span>
-                            <span className="text-gray-600">inicia S</span>
+                            <span className="text-fg-muted">·</span>
+                            <span className="text-fg-muted">inicia S</span>
                             <input
                               type="number" min={1}
                               value={p.startWeek != null ? p.startWeek + 1 : ""}
                               placeholder="auto"
                               onChange={(e) => { const raw = e.target.value === "" ? null : parseInt(e.target.value, 10); onUpdatePhase(p.key, { startWeek: raw != null && raw >= 1 ? raw - 1 : null }); }}
-                              className="w-10 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-blue-500"
+                              className="w-10 bg-surface-hover border border-line rounded px-1 py-0.5 text-fg-secondary focus:outline-none focus:border-blue-500"
                               title="Inicio de la fase (n° de semana). Vacío = automático (tras la fase anterior). Igualá el de otra fase para correr EN PARALELO."
                             />
-                            <span className="text-gray-700 ml-1">{fmtPhaseRange(anchor, range)}</span>
+                            <span className="text-fg-muted ml-1">{fmtPhaseRange(anchor, range)}</span>
                           </span>
                         ) : (
-                          <span className="text-[10px] text-gray-600">
+                          <span className="text-[10px] text-fg-muted">
                             {fmtPhaseRange(anchor, range)}
                             {p.actualSessionCount != null && ` · ${plural(p.actualSessionCount, "sesión", "sesiones")}`}
                             {p.tasks.length > 0 && ` · ${plural(p.tasks.length, "tarea", "tareas")}`}
@@ -923,7 +932,7 @@ export default function TimelineGantt({
                     {/* Celdas de semanas */}
                     {Array.from({ length: total }).map((_, w) => {
                       const inRange = w >= range.start && w < range.end;
-                      if (!inRange) return <div key={w} className="h-3 rounded bg-gray-800/70" />;
+                      if (!inRange) return <div key={w} className="h-3 rounded bg-surface-hover/70" />;
 
                       const relWeek = w - range.start;
                       const weekTasks = tasksByWeek.get(relWeek) ?? [];
@@ -949,17 +958,17 @@ export default function TimelineGantt({
 
                   {/* Expandido: tareas por semana (edición inline) */}
                   {isOpen && (
-                    <div className="ml-7 mr-2 mb-3 mt-1 border-l-2 border-gray-700 pl-4 space-y-3">
+                    <div className="ml-7 mr-2 mb-3 mt-1 border-l-2 border-line pl-4 space-y-3">
                       {Array.from({ length: p.durationWeeks }).map((_, relWeek) => {
                         const weekTasks = tasksByWeek.get(relWeek) ?? [];
                         if (weekTasks.length === 0 && !editable) return null;
                         const absW = absoluteWeek(range.start, relWeek);
                         return (
                           <div key={relWeek}>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 border-b border-dashed border-gray-700 pb-1 mb-1.5 flex items-center">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-fg-muted border-b border-dashed border-line pb-1 mb-1.5 flex items-center">
                               <span>
                                 Semana {relWeek + 1}
-                                <span className="text-gray-600 font-semibold ml-2">
+                                <span className="text-fg-muted font-semibold ml-2">
                                   S{absW}
                                   {anchor && ` · ${fmtDay(addWeeks(anchor, absW))} – ${fmtDay(addWeeks(anchor, absW + 1))}`}
                                 </span>
@@ -967,7 +976,7 @@ export default function TimelineGantt({
                               {editable && onAddTask && (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); onAddTask(p.key, relWeek); }}
-                                  className="ml-auto flex items-center gap-1 text-[10px] font-semibold text-gray-500 hover:text-gray-300 normal-case tracking-normal transition-colors"
+                                  className="ml-auto flex items-center gap-1 text-[10px] font-semibold text-fg-muted hover:text-fg-secondary normal-case tracking-normal transition-colors"
                                   title="Agregar tarea en esta semana"
                                 >
                                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" /></svg>
@@ -985,7 +994,7 @@ export default function TimelineGantt({
                                   {(attributes, listeners) => (
                                   <div
                                     onClick={() => { if (!readOnly && onOpenTask) onOpenTask(p.key, t.key); }}
-                                    className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 group/task hover:bg-gray-800/50 ${!readOnly && onOpenTask ? "cursor-pointer" : ""}`}
+                                    className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 group/task hover:bg-surface-hover/50 ${!readOnly && onOpenTask ? "cursor-pointer" : ""}`}
                                   >
                                     {editable && onMoveTask && (
                                       <button
@@ -993,7 +1002,7 @@ export default function TimelineGantt({
                                         {...listeners}
                                         onClick={(e) => e.stopPropagation()}
                                         title="Arrastrar para reordenar o mover de semana"
-                                        className="flex-shrink-0 cursor-grab touch-none text-gray-600 hover:text-gray-400 opacity-0 group-hover/task:opacity-100 transition-opacity"
+                                        className="flex-shrink-0 cursor-grab touch-none text-fg-muted hover:text-fg-muted opacity-0 group-hover/task:opacity-100 transition-opacity"
                                       >
                                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" /></svg>
                                       </button>
@@ -1031,15 +1040,15 @@ export default function TimelineGantt({
                                           // Auto-ancho al contenido: `size` (en caracteres) sigue al texto; crece al tipear
                                           // (value controlado → re-render). max-w-full evita desbordar la fila.
                                           size={Math.max(t.title.length, 8)}
-                                          className={`max-w-full bg-transparent text-xs border-b border-blue-500 focus:outline-none ${t.status === "DONE" || t.status === "SUSPENDED" ? "text-gray-500 line-through" : "text-gray-300"}`}
+                                          className={`max-w-full bg-transparent text-xs border-b border-blue-500 focus:outline-none ${t.status === "DONE" || t.status === "SUSPENDED" ? "text-fg-muted line-through" : "text-fg-secondary"}`}
                                         />
                                       ) : (
                                         <span
                                           onClick={editable ? (e) => { e.stopPropagation(); setEditingTitleKey(t.key); } : undefined}
                                           title={editable ? "Clic para renombrar" : undefined}
-                                          className={`min-w-0 truncate text-xs ${editable ? "cursor-text hover:underline decoration-dotted underline-offset-2" : ""} ${t.status === "DONE" || t.status === "SUSPENDED" ? "text-gray-500 line-through" : "text-gray-300"}`}
+                                          className={`min-w-0 truncate text-xs ${editable ? "cursor-text hover:underline decoration-dotted underline-offset-2" : ""} ${t.status === "DONE" || t.status === "SUSPENDED" ? "text-fg-muted line-through" : "text-fg-secondary"}`}
                                         >
-                                          {t.title?.trim() ? t.title : <span className="text-gray-600 italic">Sin título</span>}
+                                          {t.title?.trim() ? t.title : <span className="text-fg-muted italic">Sin título</span>}
                                         </span>
                                       )}
                                       {/* "En curso" convive con "Atrasada": una tarea atrasada que YA se está
@@ -1082,7 +1091,7 @@ export default function TimelineGantt({
                                 );
                               })}
                               {weekTasks.length === 0 && editable && (
-                                <p className="text-[11px] text-gray-700 px-2.5">Sin tareas esta semana.</p>
+                                <p className="text-[11px] text-fg-muted px-2.5">Sin tareas esta semana.</p>
                               )}
                             </SortableContext>
                             </DroppableWeek>
@@ -1090,7 +1099,7 @@ export default function TimelineGantt({
                         );
                       })}
                       {p.tasks.length === 0 && !editable && (
-                        <p className="text-xs text-gray-600 py-1">Sin tareas.</p>
+                        <p className="text-xs text-fg-muted py-1">Sin tareas.</p>
                       )}
                     </div>
                   )}
@@ -1142,7 +1151,7 @@ export default function TimelineGantt({
             {editable && onAddPhase && (
               <button
                 onClick={onAddPhase}
-                className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 hover:text-gray-300 transition-colors px-2 py-1.5"
+                className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-fg-muted hover:text-fg-secondary transition-colors px-2 py-1.5"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" /></svg>
                 Agregar fase
@@ -1219,12 +1228,12 @@ export default function TimelineGantt({
         // El id de abajo es el destino de los CTA del panel "Qué hacer acá". Sin él, "Cuantificar"
         // scrolleaba al tope de un Gantt altísimo y el CSE tenía que cazar la fila.
         return (
-          <div id="cronograma-particularidades" className="scroll-mt-24 rounded-2xl border border-gray-800 bg-gray-900/40 px-4 py-3">
+          <div id="cronograma-particularidades" className="scroll-mt-24 rounded-2xl border border-line bg-surface/40 px-4 py-3">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-300">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-fg-secondary">
                 Particularidades del cronograma
               </span>
-              <span className="text-[10px] font-semibold text-gray-400 bg-gray-800/60 border border-gray-700/50 rounded-full px-2 py-0.5">
+              <span className="text-[10px] font-semibold text-fg-muted bg-surface-hover/60 border border-line/50 rounded-full px-2 py-0.5">
                 {parts.length}
               </span>
               {onAddParticularidad && (
@@ -1252,24 +1261,24 @@ export default function TimelineGantt({
               </p>
             )}
             {sentence && (
-              <p className="text-sm text-gray-200 mb-3 leading-relaxed">{sentence}</p>
+              <p className="text-sm text-fg-secondary mb-3 leading-relaxed">{sentence}</p>
             )}
             {/* Los tres números, nombrados. Solo aparece cuando difieren: si registrado == comunicado
                 no hay nada que aclarar. */}
             {(registrado !== comunicado || hayPendienteDeSubir) && (
-              <p className="text-[11px] text-gray-400 mb-3 leading-relaxed flex flex-wrap gap-x-3 gap-y-0.5">
+              <p className="text-[11px] text-fg-muted mb-3 leading-relaxed flex flex-wrap gap-x-3 gap-y-0.5">
                 <span>
-                  <span className="font-semibold text-gray-300">El cliente lee:</span>{" "}
+                  <span className="font-semibold text-fg-secondary">El cliente lee:</span>{" "}
                   {comunicado > 0 ? plural(comunicado, "semana", "semanas") : "ningún atraso"}
                 </span>
                 {hayPendienteDeSubir && (
                   <span title="Marcado como visible, pero el cliente no lo ve hasta el «Subir al cliente»">
-                    <span className="font-semibold text-gray-300">Listo para subir:</span>{" "}
+                    <span className="font-semibold text-fg-secondary">Listo para subir:</span>{" "}
                     {listo > 0 ? plural(listo, "semana", "semanas") : "nada"}
                   </span>
                 )}
                 <span>
-                  <span className="font-semibold text-gray-300">Registrado:</span>{" "}
+                  <span className="font-semibold text-fg-secondary">Registrado:</span>{" "}
                   {plural(registrado, "semana", "semanas")}
                 </span>
               </p>
@@ -1337,7 +1346,7 @@ export default function TimelineGantt({
               })()}
             </div>
             {onToggleParticularidadVisible && (
-              <p className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-800 leading-relaxed">
+              <p className="text-[11px] text-fg-muted mt-2 pt-2 border-t border-line leading-relaxed">
                 La visibilidad al cliente se aplica al «Subir al cliente».
               </p>
             )}
@@ -1399,27 +1408,27 @@ function ParticularidadGroup({
   const visibles = truncado ? items.slice(0, HISTORIA_VISIBLES) : items;
 
   return (
-    <div className="rounded-xl border border-gray-800/80 bg-gray-900/30">
+    <div className="rounded-xl border border-line/80 bg-surface/30">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-800/40 rounded-xl transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-surface-hover/40 rounded-xl transition-colors"
       >
         <svg
-          className={`w-3 h-3 text-gray-500 flex-shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+          className={`w-3 h-3 text-fg-muted flex-shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor"
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
-        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-300">{title}</span>
-        <span className="text-[10px] font-semibold text-gray-400 bg-gray-800/60 border border-gray-700/50 rounded-full px-1.5">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-fg-secondary">{title}</span>
+        <span className="text-[10px] font-semibold text-fg-muted bg-surface-hover/60 border border-line/50 rounded-full px-1.5">
           {items.length}
         </span>
-        {hint && !open && <span className="text-[11px] text-gray-500 truncate">{hint}</span>}
+        {hint && !open && <span className="text-[11px] text-fg-muted truncate">{hint}</span>}
       </button>
       {open && (
         <>
-          {hint && <p className="text-[11px] text-gray-500 px-3 pb-1 leading-relaxed">{hint}</p>}
+          {hint && <p className="text-[11px] text-fg-muted px-3 pb-1 leading-relaxed">{hint}</p>}
           <ul className="flex flex-col gap-1.5 px-1 pb-2">
             {visibles.map((pt) => (
               <ParticularidadRow
@@ -1436,7 +1445,7 @@ function ParticularidadGroup({
             <button
               type="button"
               onClick={() => setVerTodas(true)}
-              className="w-full text-[11px] font-semibold text-gray-400 hover:text-gray-200 px-3 pb-2 text-left"
+              className="w-full text-[11px] font-semibold text-fg-muted hover:text-fg-secondary px-3 pb-2 text-left"
             >
               Ver las {items.length - HISTORIA_VISIBLES} restantes
             </button>
@@ -1461,7 +1470,7 @@ function ParticularidadRow({
   onConvertParticularidad?: (id: string) => void;
   onOpenConvertedTask?: (taskId: string) => void;
 }) {
-  const kMeta = PARTICULARIDAD_KIND_META[pt.kind] ?? { label: pt.kind, cls: "text-gray-400 bg-gray-800/60 border-gray-700/50" };
+  const kMeta = PARTICULARIDAD_KIND_META[pt.kind] ?? { label: pt.kind, cls: "text-fg-muted bg-surface-hover/60 border-line/50" };
   const pMeta = PARTY_META[pt.party] ?? PARTY_META.SMARTEAM;
   // Convertible = todavía nadie lo persigue Y hay algo que perseguir: un compromiso/solicitud, o un
   // atraso sin cuantificar (que muchas veces no es un atraso sino algo que alguien tiene que averiguar).
@@ -1473,7 +1482,7 @@ function ParticularidadRow({
       <span className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${kMeta.cls}`}>
         {kMeta.label}
       </span>
-      <span className="text-sm text-gray-200 flex-1 min-w-0">{pt.title}</span>
+      <span className="text-sm text-fg-secondary flex-1 min-w-0">{pt.title}</span>
       {pt.weeksImpact != null && pt.weeksImpact > 0 && (
         <span className="text-[11px] font-semibold text-red-300">+{plural(pt.weeksImpact, "semana", "semanas")}</span>
       )}
@@ -1487,7 +1496,7 @@ function ParticularidadRow({
           type="button"
           onClick={() => onToggleParticularidadVisible(pt.id, !pt.visibleExternal)}
           title={pt.visibleExternal ? "Visible al cliente (clic para ocultar). Se aplica al «Subir al cliente»." : "Solo interna (clic para mostrarla al cliente). Se aplica al «Subir al cliente»."}
-          className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border transition-colors ${pt.visibleExternal ? "text-emerald-300 bg-emerald-900/30 border-emerald-700/50 hover:bg-emerald-900/50" : "text-gray-700 bg-gray-300 border-gray-400 hover:bg-gray-200"}`}
+          className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border transition-colors ${pt.visibleExternal ? "text-emerald-300 bg-emerald-900/30 border-emerald-700/50 hover:bg-emerald-900/50" : "text-fg-muted bg-surface-hover border-line hover:bg-surface-active"}`}
         >
           {pt.visibleExternal ? (
             <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
@@ -1498,7 +1507,7 @@ function ParticularidadRow({
         </button>
       ) : (
         !pt.visibleExternal && (
-          <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-700 bg-gray-300 border border-gray-400 rounded px-1.5 py-0.5 flex-shrink-0" title="No cruza al cliente">
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-fg-muted bg-surface-hover border border-line rounded px-1.5 py-0.5 flex-shrink-0" title="No cruza al cliente">
             Solo interna
           </span>
         )
@@ -1532,15 +1541,15 @@ function ParticularidadRow({
           type="button"
           onClick={() => onEditParticularidad(pt.id)}
           title="Editar particularidad"
-          className="flex-shrink-0 text-gray-400 hover:text-gray-100 rounded p-1 hover:bg-gray-800 transition-colors"
+          className="flex-shrink-0 text-fg-muted hover:text-fg rounded p-1 hover:bg-surface-hover transition-colors"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
         </button>
       )}
       {/* Cita interna (fecha de la sesión + fragmento) — solo el CSE la ve; nunca cruza. */}
       {pt.sourceQuote && (
-        <p className="w-full text-[11px] text-gray-500 italic leading-relaxed pl-0.5">
-          <span className="not-italic text-gray-600 mr-1">[{pt.occurredAt.slice(0, 10)}]</span>
+        <p className="w-full text-[11px] text-fg-muted italic leading-relaxed pl-0.5">
+          <span className="not-italic text-fg-muted mr-1">[{pt.occurredAt.slice(0, 10)}]</span>
           «{pt.sourceQuote}»
         </p>
       )}

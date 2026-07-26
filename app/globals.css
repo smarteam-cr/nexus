@@ -229,7 +229,18 @@ html.light {
   color-scheme: light;
 }
 
-/* ── Backgrounds (neutrals) ── */
+/* ⚠ `[data-fixed-light]` YA NO TIENE CONSUMIDORES — y conviene que siga así.
+   Era el escape para forzar un subárbol a verse claro sin importar el tema; lo usaba el
+   Gantt interno. El problema es que remapea las utilidades de la escala neutra CRUDA pero
+   NUNCA las variables semánticas, así que adentro de un subárbol marcado no se pueden usar
+   los colores del tema: el Gantt terminó con 108 neutros duros, la deuda de estilo más
+   grande del repo, y cualquier bloque nuevo la heredaba.
+   Si necesitás que algo se vea claro siempre —la vista del cliente, por ejemplo— hacelo
+   como `components/canvas/TimelineSection.tsx`: un componente con su propia paleta, no un
+   atributo que apaga el tema. El selector se conserva porque `html.light` es el modo claro
+   de verdad y estas reglas son las que lo hacen funcionar.
+
+   ── Backgrounds (neutrals) ── */
 :is(html.light, [data-fixed-light]) .bg-gray-950 { background-color: #ffffff !important; }
 :is(html.light, [data-fixed-light]) .bg-gray-900 { background-color: #ffffff !important; }
 :is(html.light, [data-fixed-light]) .bg-gray-800 { background-color: #f3f4f6 !important; }
