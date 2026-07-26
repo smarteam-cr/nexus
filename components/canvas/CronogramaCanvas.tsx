@@ -44,13 +44,13 @@ import CronogramaProgressButton from "@/components/clients/CronogramaProgressBut
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import { actionsFromSignals } from "@/lib/timeline/project-actions-input";
+import ProjectActionsLine from "./ProjectActionsLine";
+import ProposalGlobalStrip from "./ProposalGlobalStrip";
 import { computeProposalDeltas, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
 import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
-import { Button } from "@/components/ui/Button";
 import { PhaseRegenModal, type RegenProposedTask, type RegenCurrentTask, type FinalTask } from "./PhaseRegenModal";
-import ProjectActionsPanel from "./ProjectActionsPanel";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 import { CronogramaSkeleton } from "@/components/clients/skeletons";
 import { Spinner } from "@/components/ui";
@@ -230,6 +230,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Pedido del panel "Qué hacer acá" de abrir un grupo de la lista. El nonce hace que re-clickear
   // el mismo CTA lo vuelva a abrir aunque el CSE lo haya cerrado a mano.
   const [focusGroup, setFocusGroup] = useState<{ key: string; nonce: number } | null>(null);
+  /** El cajón de borradores del agente (avance + particularidades propuestas). Cerrado por
+   *  defecto: son decisiones que esperan, no información que haya que leer al entrar. */
+  const [draftsOpen, setDraftsOpen] = useState(false);
   const [savingParticularidad, setSavingParticularidad] = useState(false);
   // Señal del workspace: al generar el handoff, el cronograma (si está vacío) recarga sus fases.
   const { timelineRefreshSignal, bumpGpsRefresh } = useWorkspace();
@@ -1507,6 +1510,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       return;
     }
     switch (target.kind) {
+      case "drawer":
+        // Los borradores del agente ya no son un banner: se abren.
+        return setDraftsOpen(true);
       case "run":
         // Confirmar el detalle: el click ES la decisión (con confirmación de por medio). Mandarlo a
         // scrollear a un botón que dice lo mismo es fricción sin propósito.
@@ -1533,22 +1539,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // página además saltaba en ancho al resolver).
   if (loading) return <CronogramaSkeleton />;
 
-  // ── Derivados ─────────────────────────────────────────────────────────────────
-  const totalTasks = phases.reduce((n, p) => n + p.tasks.length, 0);
-  // ¿Ya se generó el detalle con IA? = existe al menos una tarea source ∈ {AGENT, MODIFIED} (el agente
-  // de detalle o el seed de Semana 0 las crean; MODIFIED = una tarea AGENT que el CSE editó — sigue
-  // siendo detalle generado). DEBE matchear el predicado del server (gate en analyze/route.ts): si solo
-  // contáramos AGENT, editar TODAS las tareas las volvía MODIFIED, hasAiDetail caía a false, el CTA
-  // "Generar" reaparecía y un re-run duplicaba las tareas. Las MANUALES (HUMAN) que el CSE ponga en la
-  // base NO cuentan → editar/agregar a mano la base no bloquea "Generar cronograma".
-  const pendingValidation = phases.reduce(
-    (n, p) => n + p.tasks.filter((t) => t.needsValidation).length,
-    0,
-  );
-  // Fases que el agente del handoff estimó sin datos de tiempos → banner + badge.
-  const estimatedPhases = phases.filter((p) => p.needsValidation).length;
-
-
+  /* Acá se contaban `totalTasks`, `pendingValidation` y `estimatedPhases`, y existían SOLO para
+     alimentar los dos avisos ámbar permanentes que se borraron. Las marcas que representaban no
+     se perdieron: el Gantt las pinta donde importan —el badge "estimada" en la fila de su fase y
+     el "por validar" en su tarea— en vez de resumirlas arriba de todo. */
 
   // ── Drawer de detalle de tarea: resolución de la tarea VIVA + navegación ──────
   const drawerRanges = computePhaseRanges(phases);
@@ -1779,76 +1773,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         />
       )}
 
-      {/* ── Propuesta de ESTRUCTURA (del handoff): banner compacto — los cambios se revisan y
-             resuelven POR ÍTEM dentro del Gantt real (badges azules + fases propuestas). ── */}
-      {proposal && structureOnlyProposal && proposalDeltas.length > 0 && (
-        <div id="cronograma-propuesta" className="scroll-mt-24 rounded-2xl border border-blue-700/50 bg-blue-900/15 px-4 py-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-blue-300">
-              La IA sugiere {plural(proposalDeltas.length, "cambio de estructura", "cambios de estructura")}
-            </span>
-            <span className="text-[11px] text-fg-muted">
-              del último handoff · las tareas y sus estados no se tocan
-            </span>
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                onClick={() => void resolveProposalItems(proposalDeltas.map((d) => d.key), [])}
-                disabled={resolvingProposal}
-                className="text-xs font-semibold bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-50 px-3.5 py-1.5 rounded-lg transition-colors"
-              >
-                {resolvingProposal ? "Aplicando…" : "Aceptar todo"}
-              </button>
-              <button
-                onClick={() => void resolveProposalItems([], proposalDeltas.map((d) => d.key))}
-                disabled={resolvingProposal}
-                className="text-xs font-medium text-fg-muted hover:text-fg border border-line hover:border-fg-muted rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
-              >
-                Descartar todo
-              </button>
-            </div>
-          </div>
-          {/* Sugerencias GLOBALES (no viven en una fila del Gantt): fecha de arranque y
-              reordenamiento de fases. Cada una con su ✓/✗ propio. */}
-          {proposalDeltas
-            .filter((d) => d.kind === "SET_ANCHOR" || d.kind === "REORDER_PHASES")
-            .map((d) => (
-              <div key={d.key} className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-fg-secondary">
-                <span className="min-w-0">
-                  {d.kind === "SET_ANCHOR" ? (
-                    <>
-                      Fecha de arranque sugerida: {d.from ?? "sin fecha"} →{" "}
-                      <span className="font-semibold">{d.to}</span>
-                    </>
-                  ) : (
-                    <>
-                      Reordenar las fases: <span className="font-semibold">{d.names.join(" → ")}</span>
-                    </>
-                  )}
-                </span>
-                <button
-                  onClick={() => void resolveProposalItems([d.key], [])}
-                  disabled={resolvingProposal}
-                  className="text-emerald-400 hover:text-emerald-300 font-bold disabled:opacity-50"
-                  title="Aceptar esta sugerencia"
-                >
-                  ✓
-                </button>
-                <button
-                  onClick={() => void resolveProposalItems([], [d.key])}
-                  disabled={resolvingProposal}
-                  className="text-red-400 hover:text-red-300 font-bold disabled:opacity-50"
-                  title="Descartar esta sugerencia"
-                >
-                  ✗
-                </button>
-              </div>
-            ))}
-          <p className="text-[11px] text-fg-muted mt-1.5">
-            Revisá cada sugerencia en el Gantt de abajo (badges azules en fases existentes y filas
-            «Fase propuesta») y aceptala o descartala una por una. El cronograma sigue editable.
-          </p>
-        </div>
-      )}
+      {/* La propuesta de ESTRUCTURA ya no tiene banner propio. Sus cambios siempre se resolvieron
+          POR ÍTEM dentro del Gantt (badges azules en las fases afectadas + filas «Fase propuesta»),
+          así que el banner de arriba era un índice de algo que estaba 300 px más abajo — y ocupaba
+          el mismo lugar que el documento. Lo global —fecha de arranque sugerida, reordenamiento, y
+          el aceptar/descartar todo— se mudó a la franja de encabezado del propio Gantt, al lado
+          del selector de fecha, que es donde se aplica. */}
 
       {/* ── Banner de propuesta del ASSIST (reemplazo completo con tareas): preview sin guardar ── */}
       {proposal && !structureOnlyProposal && diffSummary && (
@@ -1903,30 +1833,30 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         </div>
       )}
 
-      {/* ── "Qué hacer acá": el ARRIBA de la pantalla. Reúne las señales que antes vivían repartidas
-             (borradores sin confirmar, duplicados, pendientes del cliente vencidos, alcance por encima
-             de lo vendido, alarmas de etapa) en una lista corta y accionable. Nada se ejecuta solo. ── */}
+      {/* ── "Qué hacer acá", en UNA LÍNEA. Todo lo que antes ocupaba media pantalla arriba del
+             Gantt vive acá adentro: se abre si el CSE quiere, y por defecto no compite con el
+             documento que esta pantalla existe para mostrar. ── */}
       {!loading && phases.length > 0 && (
-        <ProjectActionsPanel actions={projectActions} onAction={handleProjectAction} />
+        <ProjectActionsLine actions={projectActions} onAction={handleProjectAction} />
       )}
 
-      {/* ── Banner de AVANCE detectado por el agente (D.2) — propone, el CSE confirma ── */}
-      {/* Sugerencias del equipo técnico. Va ARRIBA de los banners del agente a propósito: son
-          de una persona esperando respuesta, no de un proceso automático. Solo para quien puede
-          editar el cronograma (aprobar ES escribir); el componente se auto-oculta si no hay. */}
-      {canEdit && (
-        <SugerenciasParticularidad
-          projectId={projectId}
-          sugerencias={sugerencias}
-          onResolved={load}
-        />
-      )}
-
-      {/* ── Banners de propuesta del agente: avance + particularidades, lado a lado (2 columnas)
-          cuando ambos están; uno solo ocupa el ancho completo. Misma estructura de header
-          (tile de ícono + título + subtítulo + acciones a la derecha) para que se lean como un sistema. ── */}
-      {(showProgressBanner || showParticBanner) && (
-      <div id="cronograma-borradores" className={`grid gap-4 items-start scroll-mt-24 ${showProgressBanner && showParticBanner ? "lg:grid-cols-2" : "grid-cols-1"}`}>
+      {/* ── EL CAJÓN DE BORRADORES DEL AGENTE ────────────────────────────────────────
+          Avance detectado + particularidades propuestas. Los dos vivían como banners fijos
+          arriba del Gantt; son decisiones que esperan, no información que haya que leer cada
+          vez que se entra. Ahora se abren desde la línea de arriba ("Revisar avance" /
+          "Revisar particularidades") y desde el enlace profundo de la bandeja.
+          Las dos secciones conviven en el mismo cajón porque son la misma pregunta —qué
+          detectó el agente desde la última sesión— y separarlas obligaba a abrir dos veces. */}
+      <Modal
+        open={draftsOpen && (showProgressBanner || showParticBanner)}
+        onClose={() => setDraftsOpen(false)}
+        title="Lo que detectó el agente"
+        description="Nada de esto se aplicó todavía: revisá y confirmá."
+        size="xxl"
+      >
+      {/* Sin `id`: el ancla `cronograma-borradores` se borró de la tabla de destinos junto con el
+          banner. Estos bloques ya no se alcanzan por scroll sino abriendo el cajón. */}
+      <div className={`grid gap-4 items-start ${showProgressBanner && showParticBanner ? "lg:grid-cols-2" : "grid-cols-1"}`}>
         {showProgressBanner && (
           <div className="rounded-2xl border border-line bg-surface-muted px-5 py-4 space-y-4">
             <div className="flex items-start gap-3">
@@ -2128,7 +2058,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           </div>
         )}
       </div>
-      )}
+      </Modal>
 
       {/* ── Error ── */}
       {error && (
@@ -2138,29 +2068,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         </div>
       )}
 
-      {/* ── Banner: fases estimadas por el agente (sin datos de tiempos en ventas) ── */}
-      {estimatedPhases > 0 && !proposal && (
-        <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-200">
-          <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-          </svg>
-          <span className="text-xs leading-relaxed">
-            <span className="font-semibold">{estimatedPhases} {estimatedPhases === 1 ? "fase estimada" : "fases estimadas"}</span> — el agente no tenía tiempos en ventas; confirmá fases y duraciones antes de usar el cronograma.
-          </span>
-        </div>
-      )}
-
-      {/* ── Alerta global de handoff flaco (reemplaza el badge "por validar" por fila) ── */}
-      {totalTasks > 0 && pendingValidation > 0 && !proposal && !generating && (
-        <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-200">
-          <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-          </svg>
-          <span className="text-xs leading-relaxed">
-            Este cronograma se generó con handoff limitado — revisá que las tareas reflejen el proyecto real.
-          </span>
-        </div>
-      )}
+      {/* Acá vivían dos avisos ámbar permanentes: "N fases estimadas" y "se generó con handoff
+          limitado". Los dos se fueron, y no se reemplazan por nada.
+          Fallan el criterio de admisión que el propio motor de acciones declara: (a) no tienen una
+          acción concreta —dicen "revisá", que no es un gesto—, (b) no empeoran si nadie los
+          atiende, y (c) el Gantt YA los muestra donde importa: la fase estimada lleva su badge en
+          su fila y la tarea sin validar el suyo. Eran un índice permanente de marcas que están dos
+          centímetros más abajo, ocupando el lugar del documento. Un aviso crónico deja de leerse a
+          la semana; lo que consigue es que tampoco se lean los que sí importan. */}
 
       {/* ── EL cronograma. Propuesta del ASSIST (con tareas) → preview read-only swapeada.
              Propuesta de ESTRUCTURA (handoff) → NO se swapea: el Gantt real sigue editable y
@@ -2236,6 +2151,22 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               canEdit
                 ? (key, accept) => void resolveProposalItems(accept ? [key] : [], accept ? [] : [key])
                 : undefined
+            }
+            sugerenciasSlot={
+              // El componente se auto-oculta si no hay ninguna. Solo para quien puede editar el
+              // cronograma: aprobar una sugerencia ES escribir.
+              canEdit ? (
+                <SugerenciasParticularidad projectId={projectId} sugerencias={sugerencias} onResolved={load} />
+              ) : undefined
+            }
+            proposalGlobalSlot={
+              structureOnlyProposal && proposalDeltas.length > 0 && canEdit ? (
+                <ProposalGlobalStrip
+                  deltas={proposalDeltas}
+                  working={resolvingProposal}
+                  onResolve={(accept, discard) => void resolveProposalItems(accept, discard)}
+                />
+              ) : undefined
             }
             onConvertParticularidad={canEdit ? setConvertingParticularidadId : undefined}
             onOpenConvertedTask={(taskId) => {

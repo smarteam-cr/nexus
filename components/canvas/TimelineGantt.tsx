@@ -165,6 +165,15 @@ interface Props {
   /** Pedido del panel "Qué hacer acá" de ABRIR un grupo colapsado. El `nonce` existe para que
    *  re-clickear el mismo CTA vuelva a abrirlo aunque la key no haya cambiado. */
   focusGroup?: { key: string; nonce: number } | null;
+  /** La bandeja de sugerencias del equipo técnico, que se renderiza DENTRO del bloque de
+   *  particularidades. Llega como slot y no como datos porque es un componente completo con su
+   *  propio estado y sus llamadas al servidor: el Gantt solo le presta el lugar correcto. */
+  sugerenciasSlot?: ReactNode;
+  /** Sugerencias GLOBALES de la propuesta de estructura (fecha de arranque, reordenamiento) más
+   *  el aceptar/descartar todo. Se dibujan en la franja de encabezado, junto al selector de fecha
+   *  que es donde se aplican. Antes vivían en un banner arriba del Gantt: un índice de algo que
+   *  estaba 300 px más abajo. */
+  proposalGlobalSlot?: ReactNode;
 }
 
 // Forma mínima de una particularidad para el resumen + bitácora del Gantt interno.
@@ -375,6 +384,8 @@ export default function TimelineGantt({
   onAddParticularidad,
   proposalDeltas,
   onResolveProposalDelta,
+  sugerenciasSlot,
+  proposalGlobalSlot,
   onConvertParticularidad,
   onOpenConvertedTask,
   focusGroup,
@@ -670,6 +681,11 @@ export default function TimelineGantt({
           ))}
         </span>
       </div>
+
+      {/* Lo global de la propuesta de estructura: acá y no en un banner arriba, porque la fecha
+          de arranque sugerida se aplica sobre el selector que está a su izquierda y el
+          reordenamiento sobre las filas que están abajo. */}
+      {proposalGlobalSlot}
 
       <div className="rounded-2xl border border-gray-800 bg-gray-900 overflow-x-auto">
         <div style={{ minWidth: Math.max(640, 300 + total * 34) }}>
@@ -1224,6 +1240,11 @@ export default function TimelineGantt({
                 </button>
               )}
             </div>
+            {/* Lo que reportó una PERSONA del equipo y espera respuesta. Vivía como un bloque suelto
+                arriba del Gantt; está acá porque es la misma lista —particularidades— en otro
+                estado, y porque arriba competía con el documento. Va PRIMERO dentro del bloque: del
+                otro lado hay alguien esperando, no un proceso automático. */}
+            {sugerenciasSlot}
             {parts.length === 0 && (
               <p className="text-[11px] text-fg-muted leading-relaxed">
                 Todavía no hay avisos. Agregá uno para contarle al cliente algo del cronograma — por
