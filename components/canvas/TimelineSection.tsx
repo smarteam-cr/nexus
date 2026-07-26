@@ -43,7 +43,9 @@ import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/p
 import { clientStatusLine } from "@/lib/timeline/client-status";
 import type { ExternalTimelinePhase, ExternalParticularidad } from "@/lib/external/timeline-view-types";
 
-const MAXW = 1024; // el Gantt necesita ancho — bloque deliberadamente más ancho que las secciones de texto (760)
+/** El cronograma usa el MISMO contenedor que el resto de los documentos: antes era un
+ *  número propio (1024) y quedaba desalineado con las secciones de texto de al lado. */
+const MAXW = "var(--stl-w-pagina)";
 const SECTION_PAD = "clamp(40px, 6vw, 72px) 24px";
 
 // Misma paleta de tipos que el Gantt interno, en sus variantes light (los

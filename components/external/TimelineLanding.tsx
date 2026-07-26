@@ -22,7 +22,8 @@ import TimelineSection from "@/components/canvas/TimelineSection";
 import { useReveal } from "@/components/canvas/useLandingMotion";
 import type { ExternalTimelineData } from "@/lib/external/timeline-view-types";
 
-const MAXW = 1024; // mismo ancho que el Gantt de TimelineSection
+/** Mismo contenedor que el resto (ver TimelineSection): sale del token del motor. */
+const MAXW = "var(--stl-w-pagina)";
 
 export default function TimelineLanding({
   clientName,

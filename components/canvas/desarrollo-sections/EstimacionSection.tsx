@@ -45,7 +45,11 @@ function Cifra({ valor, rotulo }: { valor: string; rotulo: string }) {
   );
 }
 
-export const EstimacionSection: FC<SectionProps<Record<string, never>>> = ({ ctx }) => {
+export const EstimacionSection: FC<SectionProps<Record<string, never>>> = ({
+  ctx,
+  sectionTitle,
+  sectionEyebrow,
+}) => {
   const d = ctx.desarrollo;
   const actual: DevEstimateCtx | null = d?.estimate ?? null;
   const historial = d?.history ?? [];
@@ -85,9 +89,24 @@ export const EstimacionSection: FC<SectionProps<Record<string, never>>> = ({ ctx
     }
   }
 
+  /* ⚠ LA SECCIÓN SE RINDE ENTERA ACÁ, a propósito y por obligación: el motor NO envuelve
+     las secciones que se alimentan del contexto —les saltea la banda y el contenedor
+     centrado— porque espera que traigan los suyos, como hacen el cronograma y los procesos
+     del kickoff. Esta devolvía un `div` pelado, así que salía pegada al borde izquierdo de
+     la pantalla y sin encabezado, mientras el resto del documento quedaba centrado.
+     El rótulo y la categoría llegan por props desde la definición: no se escriben acá para
+     que renombrar la sección en un solo lugar siga alcanzando. */
   return (
-    <div className="stl-est">
-      {actual ? (
+    <section className="stl-sec stl-soft">
+      <div className="stl-wrap">
+        <header className="stl-sec-head">
+          {sectionEyebrow && <span className="stl-eyebrow">{sectionEyebrow}</span>}
+          <div className="stl-title-line">
+            <h2 className="stl-title">{sectionTitle}</h2>
+          </div>
+        </header>
+        <div className="stl-est">
+          {actual ? (
         <>
           <div className="stl-est-cifras">
             {actual.hours != null && <Cifra valor={`${actual.hours} h`} rotulo="Esfuerzo estimado" />}
@@ -197,7 +216,9 @@ export const EstimacionSection: FC<SectionProps<Record<string, never>>> = ({ ctx
           <button type="button" className="stl-est-btn" onClick={() => setAbierto(true)}>
             {actual ? "Volver a estimar" : "Registrar estimación"}
           </button>
-        ))}
-    </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 };

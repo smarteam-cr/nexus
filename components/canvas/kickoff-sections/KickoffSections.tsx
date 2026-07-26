@@ -304,9 +304,11 @@ function HeroStat({ value, unit, label }: { value: string; unit?: string; label:
   );
 }
 
-// Procesos: más ancho que la prosa — los flowcharts necesitan lienzo. Igual al ancho
-// del wrap del motor (.stl-wrap ≈ 1040) para alinear con el resto de las secciones.
-const PROCESOS_MAXW = 1040;
+/** Procesos: más ancho que la prosa — los diagramas necesitan lienzo.
+ *  Rinden su propia sección (se alimentan del contexto), así que repiten el contenedor
+ *  del motor. Se lee del MISMO token para que ensanchar la página no los deje angostos:
+ *  antes era un número propio y quedaba desalineado con las secciones de al lado. */
+const PROCESOS_MAXW = "var(--stl-w-pagina)";
 const SECTION_PAD = "clamp(40px, 6vw, 72px) 24px";
 
 // ── Cronograma (ctxDriven: rinde su propia sección o null) ─────────────────────

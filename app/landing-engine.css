@@ -23,6 +23,17 @@
    ============================================================================ */
 
 .stl {
+  /* ── ANCHO DE PÁGINA ──────────────────────────────────────────────────────
+     El contenedor de TODOS los documentos del motor, en un solo lugar. Era un número
+     suelto repetido en cuatro archivos (el motor, los procesos del kickoff y las dos
+     vistas del cronograma), así que ensancharlo obligaba a encontrarlos todos y en la
+     práctica quedaban desalineados entre sí.
+     1280 y no más: se busca espacio para presentar al cliente, pero una línea de texto
+     de más de ~90 caracteres se vuelve incómoda de leer — por eso las secciones de prosa
+     siguen teniendo su propio tope (`--stl-w-prosa`) más angosto que el contenedor. */
+  --stl-w-pagina: 1280px;
+  --stl-w-prosa:  860px;
+
   /* Marca — interactivo/acentos */
   --blue:        #0B58D3;                    /* royal: links/interactivo sobre claro */
   --blue-dark:   #07429A;                    /* royal profundo: hover/máxima jerarquía */
@@ -206,7 +217,7 @@
 .stl .stl-light { background: var(--bg);       color: var(--text); --accent: #C2400F; --accent-soft: rgba(232, 72, 28, 0.08); --accent-display: #E8481C; }
 .stl .stl-soft  { background: var(--bg-soft);  color: var(--text); --accent: #C2400F; --accent-soft: rgba(232, 72, 28, 0.08); --accent-display: #E8481C; border-top: 1px solid var(--border); }
 .stl .stl-dark  { background: var(--dark-bg);  color: var(--dark-text); --accent: #1E8FF6; --accent-soft: rgba(30, 143, 246, 0.10); --accent-display: #F87B5B; }
-.stl .stl-wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+.stl .stl-wrap { max-width: var(--stl-w-pagina); margin: 0 auto; padding: 0 24px; }
 .stl .stl-narrow { max-width: 760px; }
 
 /* ── Tipografía ──────────────────────────────────────────────────────────── */
@@ -238,7 +249,10 @@
 /* Encabezado editorial de sección (eyebrow chico + título grande), estilo kickoff. */
 .stl .stl-sec-head { margin-bottom: clamp(20px, 2.6vw, 30px); }
 .stl .stl-sec-head .stl-eyebrow { margin: 0 0 10px; }
-.stl .stl-lead { font-size: clamp(16px, 1.7vw, 19px); line-height: 1.6; color: var(--text-2); margin: 16px 0 0; }
+.stl .stl-lead { font-size: clamp(16px, 1.7vw, 19px); line-height: 1.6; color: var(--text-2); margin: 16px 0 0; max-width: var(--stl-w-prosa); }
+/* En las portadas centradas la bajada ya viene envuelta en su propio contenedor
+   centrado: acá el tope se quita para no desplazarla a la izquierda. */
+.stl .stl-hero-centered .stl-lead { max-width: none; }
 .stl .stl-dark .stl-lead { color: var(--dark-text-2); }
 .stl .stl-intro { font-size: 16px; line-height: 1.7; color: var(--text-2); max-width: 70ch; margin: 14px 0 0; }
 .stl .stl-dark .stl-intro { color: var(--dark-text-2); }
@@ -1206,7 +1220,11 @@
 
 /* Prosa de cuerpo (markdown de bloques de texto) — ex kl-prose. Distinta de
    .stl-md (que asume el .stl-body envolvente): copia exacta, no mapear. */
-.stl .stl-prose { color: var(--text-secondary); font-size: 15px; line-height: 1.7; }
+/* La PROSA no se estira con el contenedor: con la página a 1280 un párrafo daría ~150
+   caracteres por línea y el ojo pierde el renglón al volver. El contenedor ancho es para
+   lo que gana con el espacio —tablas, diagramas, el Gantt, las grillas de tarjetas—, no
+   para el texto corrido. */
+.stl .stl-prose { color: var(--text-secondary); font-size: 15px; line-height: 1.7; max-width: var(--stl-w-prosa); }
 .stl .stl-prose > :first-child { margin-top: 0; }
 .stl .stl-prose > :last-child { margin-bottom: 0; }
 .stl .stl-prose p { margin: 0 0 0.75em; }
