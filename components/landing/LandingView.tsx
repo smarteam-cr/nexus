@@ -393,6 +393,13 @@ export default function LandingView({
         <Comp
           data={data}
           ctx={ctx}
+          /* También acá. Estas secciones rinden su PROPIO encabezado, así que son
+             precisamente las que necesitan el rótulo del documento — y era la rama que
+             no se lo pasaba. La estimación quedaba con un `h2` vacío y sin categoría,
+             visible en el editor y en el requerimiento técnico que el dev externo lee
+             EN VIVO. Las dos ramas pasan lo mismo: si una sección no los usa, los ignora. */
+          sectionTitle={effTitle}
+          sectionEyebrow={effEyebrow}
           editable={editable}
           onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
         />

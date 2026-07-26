@@ -64,9 +64,17 @@ export async function runDiagnosticoGeneration(opts: {
     loadCanvasContext(projectId, "handoff", { onlyConfirmed: false, includeKeys: DIAGNOSTICO_HANDOFF_KEYS }),
     loadCanvasContext(projectId, "exploration", { onlyConfirmed: false }),
     loadTimelineContext(projectId),
-    // La vara: el doc canónico de la escala + los criterios por nivel/hub. Contenido
-    // completo — no el embudo de 4.000 chars del camino viejo.
-    loadKnowledgeByTags(["escala_rendimiento"], 20000),
+    /* La vara: el doc canónico de la escala + los criterios por nivel/hub.
+       ⚠ El presupuesto tiene que ENTRAR el documento entero, y el de hoy mide 131.733
+       caracteres. Con el tope viejo de 20.000 no entraba NUNCA: el cargador lo omitía
+       completo y el informe se escribía sin las rúbricas — puntuando al cliente solo con
+       los nombres de los cinco niveles, en el documento que se le presenta. Se descubrió
+       en la auditoría previa al push.
+       El costo es real (unas 35.000 fichas de entrada por diagnóstico) y se paga a
+       propósito: la escala ES la vara del informe entero; sin ella el documento vale
+       menos que lo que cuesta generarlo. Si el documento crece, subir este número —
+       no dejar que se omita en silencio. */
+    loadKnowledgeByTags(["escala_rendimiento"], 160000),
     prisma.project.findUnique({
       where: { id: projectId },
       select: {
