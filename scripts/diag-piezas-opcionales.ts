@@ -12,15 +12,13 @@
  *
  * Uso: npx tsx scripts/diag-piezas-opcionales.ts
  */
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
-import "dotenv/config";
+import { createScriptDb } from "./lib/db";
 import { hasTechnicalScope } from "../lib/tags/catalog";
 import { slugForCanvas, pieceLabel } from "../lib/pieces/registry";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+// Presupuesto de conexiones ACOTADO (scripts/lib/db.ts): el pooler comparte ~15 slots
+// con producción y las dos PCs de dev; un pool sin tope se comía 10 él solo.
+const { prisma, close } = createScriptDb();
 
 const SENTINEL = "__strategy__";
 
@@ -115,4 +113,4 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(() => prisma.$disconnect());
+  .finally(() => close());

@@ -29,16 +29,15 @@
  *   npx tsx scripts/backfill-titulos-portada.ts --apply
  *   npx tsx scripts/backfill-titulos-portada.ts --slug=kickoff   # acota a un tipo
  */
-import { PrismaClient, Prisma } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
-import "dotenv/config";
+import { createScriptDb } from "./lib/db";
+import type { Prisma } from "@prisma/client";
 import { anthropic } from "@/lib/anthropic";
 import { loadCanvasContext } from "@/lib/canvas/load-canvas-context";
 import { HERO_TITLE_MAX_CHARS } from "@/lib/landing/hero-title";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+// Presupuesto de conexiones ACOTADO (scripts/lib/db.ts): el pooler comparte ~15 slots
+// con producción y las dos PCs de dev; un pool sin tope se comía 10 él solo.
+const { prisma, close } = createScriptDb();
 
 const MODEL = "claude-sonnet-4-6";
 const APPLY = process.argv.includes("--apply");
@@ -385,4 +384,4 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(() => prisma.$disconnect());
+  .finally(() => close());

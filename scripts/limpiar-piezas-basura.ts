@@ -21,10 +21,8 @@
  *   npx tsx scripts/limpiar-piezas-basura.ts --apply    → aplica
  *   ... --solo=piezas|proyectos|tecnica                 → una parte a la vez
  */
-import { PrismaClient, Prisma } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
-import "dotenv/config";
+import { createScriptDb } from "./lib/db";
+import { Prisma } from "@prisma/client";
 import { hasTechnicalScope } from "../lib/tags/catalog";
 import { slugForCanvas } from "../lib/pieces/registry";
 import {
@@ -35,8 +33,9 @@ import {
   EXPLORACION_CIERRE_DEFAULT,
 } from "../lib/canvas/canvas-defs";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+// Presupuesto de conexiones ACOTADO (scripts/lib/db.ts): el pooler comparte ~15 slots
+// con producción y las dos PCs de dev; un pool sin tope se comía 10 él solo.
+const { prisma, close } = createScriptDb();
 
 const APPLY = process.argv.includes("--apply");
 const SOLO = process.argv.find((a) => a.startsWith("--solo="))?.split("=")[1] ?? "todo";
@@ -295,4 +294,4 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(() => prisma.$disconnect());
+  .finally(() => close());

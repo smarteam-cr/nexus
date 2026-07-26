@@ -12,10 +12,7 @@
  *   npx tsx scripts/ver-tipos-de-sesion.ts "Wherex"         # un cliente por nombre
  *   npx tsx scripts/ver-tipos-de-sesion.ts "Wherex" --todas # con el detalle reunión por reunión
  */
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
-import "dotenv/config";
+import { createScriptDb } from "./lib/db";
 import { isSalesMember, isCseMember } from "@/lib/sessions/areas";
 import {
   resolveSessionType,
@@ -23,8 +20,9 @@ import {
   type SessionType,
 } from "@/lib/sessions/session-type";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+// Presupuesto de conexiones ACOTADO (scripts/lib/db.ts): el pooler comparte ~15 slots
+// con producción y las dos PCs de dev; un pool sin tope se comía 10 él solo.
+const { prisma, close } = createScriptDb();
 
 const FUENTE_LABEL: Record<string, string> = {
   manual: "corregido a mano",
@@ -117,4 +115,4 @@ async function main() {
     .map(([k, v]) => `${FUENTE_LABEL[k] ?? k}=${v}`).join(" · "));
 }
 
-main().catch((e) => { console.error(e.message); process.exit(1); }).finally(() => prisma.$disconnect());
+main().catch((e) => { console.error(e.message); process.exit(1); }).finally(() => close());

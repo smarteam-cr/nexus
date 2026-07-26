@@ -17,13 +17,11 @@
  * Correr con: npx tsx scripts/seed-diagnostico-agent.ts
  * (Upsert por id — seguro contra la base compartida.)
  */
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
-import "dotenv/config";
+import { createScriptDb } from "./lib/db";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+// Presupuesto de conexiones ACOTADO (scripts/lib/db.ts): el pooler comparte ~15 slots
+// con producción y las dos PCs de dev; un pool sin tope se comía 10 él solo.
+const { prisma, close } = createScriptDb();
 
 const DESCRIPTION =
   "Escribe el informe de diagnóstico de rendimiento PARA EL CLIENTE: cómo opera hoy por hub, " +
@@ -72,4 +70,4 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(() => prisma.$disconnect());
+  .finally(() => close());
