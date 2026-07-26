@@ -1,8 +1,13 @@
 /**
  * lib/pieces/piece-state.ts — en qué estado está cada pieza de un proyecto. PURO.
  *
- * Sin Prisma y sin fetch, igual que el registro: lo importan el endpoint, el gestor de
- * piezas y el aviso junto a los tags, y los tres tienen que decir lo mismo.
+ * Sin Prisma y sin fetch, igual que el registro.
+ *
+ * ⚠ TODAVÍA NO LO IMPORTA NADIE fuera de su test. Se escribió para que el endpoint, el
+ * gestor de piezas y el aviso junto a los tags resolvieran el estado desde un solo lugar,
+ * pero esos tres siguen calculándolo cada uno por su cuenta. Está dicho acá y no en un
+ * comentario en presente para que nadie lo lea como "ya es la fuente de verdad": mientras
+ * los tres no lo importen, cambiar este archivo no cambia lo que se ve en pantalla.
  *
  * ── LA PROPUESTA NO SE GUARDA, SE DERIVA ──────────────────────────────────────
  * `proposed` sale de evaluar los tags del proyecto contra el registro EN CADA LECTURA.

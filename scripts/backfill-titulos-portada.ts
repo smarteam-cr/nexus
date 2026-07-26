@@ -21,8 +21,12 @@
  *   Ahí no hay nada que resumir y lo que corresponde es correr el agente del documento.
  * · No pisa un título ya escrito.
  * · No cambia `source` del bloque: un bloque curado a mano sigue marcado como tal.
- * · No re-publica nada. Los documentos ya compartidos con el cliente guardan una foto
- *   congelada y siguen mostrando su portada anterior hasta que alguien los vuelva a subir.
+ * · No re-publica nada — CON UNA EXCEPCIÓN QUE HAY QUE SABER. Los documentos compartidos
+ *   con el CLIENTE guardan una foto congelada y siguen mostrando su portada anterior hasta
+ *   que alguien los vuelva a subir. Pero el requerimiento técnico (`tech-requirements`) NO
+ *   tiene foto: el desarrollador externo lo lee EN VIVO contra la base, así que un título
+ *   escrito acá le aparece al instante. No es dañino —solo se agrega un título donde no
+ *   había— pero cambia lo que ve alguien de afuera sin que nadie apriete "publicar".
  *
  * Ensayo primero, como todo saneo del repo:
  *   npx tsx scripts/backfill-titulos-portada.ts                  # muestra qué escribiría
@@ -342,8 +346,19 @@ async function main() {
         continue;
       }
       const dataFresca = (fresco.data ?? {}) as Record<string, unknown>;
-      if (typeof dataFresca.titulo === "string" && dataFresca.titulo.trim()) {
+      const escrito = (k: string) => typeof dataFresca[k] === "string" && (dataFresca[k] as string).trim().length > 0;
+      if (escrito("titulo")) {
         console.log(`      (le escribieron un título mientras tanto, se respeta el suyo)`);
+        continue;
+      }
+      /* La re-lectura tiene que cubrir TODO lo que esta fila va a escribir, no solo el
+         título. Con `--desde-cuerpo` también se escriben `headline` y `subhead`, y esos
+         se redactan justamente porque la portada estaba vacía: si en la ventana de la
+         llamada al modelo alguien la llenó a mano, es la mano la que gana. Chequear solo
+         `titulo` dejaba pasar ese caso —el título seguía vacío— y le borraba el titular
+         y el resumen recién escritos. */
+      if (redaccion && (escrito("headline") || escrito("subhead"))) {
+        console.log(`      (redactaron la portada a mano mientras tanto, se respeta la suya)`);
         continue;
       }
       // Solo la clave `titulo`. El resto de la data —y el `source` del bloque— quedan igual.

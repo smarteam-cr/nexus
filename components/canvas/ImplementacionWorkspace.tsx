@@ -21,6 +21,20 @@ import { buildImplementacionConfig, buildImplementacionSections } from "./implem
 
 const MAXW = 860;
 
+/** Slug de la pieza — `POST /pieces/[slug]` materializa sus secciones canónicas. */
+const PIECE_SLUG = "implementation";
+
+/** Sección resuelta contra la base: dónde escribir y si ya tiene un CARD que pisar. */
+interface TargetSection {
+  id: string;
+  cardBlockId: string | null;
+  hasBlocks: boolean;
+}
+
+const SIN_SECCION =
+  "No se pudo guardar ese cambio: esta sección todavía no existe en este documento y no se pudo crear. " +
+  "Copiá el texto, recargá la página y volvé a intentarlo.";
+
 export default function ImplementacionWorkspace({
   projectId,
   canvasId,
@@ -58,6 +72,51 @@ export default function ImplementacionWorkspace({
 
   const ctx: LandingContext = useMemo(() => ({ clientName: "" }), []);
 
+  // Aviso propio del workspace (separado de `cs.error`, que es del hook): lo usamos cuando
+  // ni siquiera pudimos llegar a guardar porque la sección no existe.
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  /**
+   * Resuelve una `key` de la plantilla a su fila REAL en la base, MATERIALIZÁNDOLA si el
+   * documento es viejo y todavía no la tiene. Es la misma función que sus dos gemelos
+   * (Diagnóstico y Planificación); acá faltaba, y esa ausencia costaba texto tipeado.
+   *
+   * POR QUÉ existe: el motor pinta como editables TODAS las secciones de la plantilla,
+   * también las que un documento viejo no tiene en la base. Sin esto, editar una de esas
+   * terminaba en un `return` mudo — el CSE escribía, recargaba y el texto ya no estaba,
+   * sin un solo aviso. Perder texto tipeado es el peor resultado posible, así que primero
+   * se intenta CONSERVARLO: `POST /pieces/[slug]` es idempotente y no destructivo (crea
+   * las secciones faltantes, nunca borra bloques), y recién con la sección creada se
+   * guarda. Si aun así no se puede, el caller AVISA.
+   */
+  const resolveSection = async (key: string): Promise<TargetSection | null> => {
+    const local = cs.sections.find((x) => x.key === key);
+    if (local) {
+      const card = local.blocks.find((b) => b.blockType === "CARD");
+      return { id: local.id, cardBlockId: card?.id ?? null, hasBlocks: local.blocks.length > 0 };
+    }
+    try {
+      const ensured = await fetch(`/api/projects/${projectId}/pieces/${PIECE_SLUG}`, { method: "POST" });
+      const info = ensured.ok
+        ? ((await ensured.json().catch(() => null)) as { canvasId?: string } | null)
+        : null;
+      // Si el proyecto tuviera OTRO canvas de esta pieza, el reconcile fue sobre ESE:
+      // escribir igual mandaría el texto a un documento que el CSE no tiene abierto.
+      if (!info || info.canvasId !== canvasId) return null;
+      const listed = await fetch(`/api/projects/${projectId}/canvas-sections?canvasId=${canvasId}`);
+      if (!listed.ok) return null;
+      const payload = (await listed.json().catch(() => null)) as {
+        sections?: Array<{ id: string; key: string; blocks?: Array<{ id: string; blockType: string }> }>;
+      } | null;
+      const row = payload?.sections?.find((s) => s.key === key);
+      if (!row) return null;
+      const card = row.blocks?.find((b) => b.blockType === "CARD");
+      return { id: row.id, cardBlockId: card?.id ?? null, hasBlocks: (row.blocks?.length ?? 0) > 0 };
+    } catch {
+      return null;
+    }
+  };
+
   if (cs.loading) {
     return (
       <div className="stl stl-internal">
@@ -83,6 +142,13 @@ export default function ImplementacionWorkspace({
         <div style={{ position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>
           <span style={{ flex: 1 }}>{cs.error}</span>
           <button onClick={() => cs.clearError()} title="Cerrar" style={{ color: "#b91c1c", background: "transparent", border: "none", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
+        </div>
+      )}
+
+      {aviso && (
+        <div style={{ position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg-soft)", borderBottom: "1px solid var(--border-strong)", color: "var(--text-2)", fontSize: 13 }}>
+          <span style={{ flex: 1 }}>{aviso}</span>
+          <button onClick={() => setAviso(null)} title="Cerrar" style={{ color: "var(--text-2)", background: "transparent", border: "none", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
         </div>
       )}
 
@@ -125,19 +191,27 @@ export default function ImplementacionWorkspace({
         mode="edit"
         showBriefs={false}
         onSectionChange={(key, data) => {
-          const s = cs.sections.find((x) => x.key === key);
-          if (!s) return;
-          const cardBlock = s.blocks.find((b) => b.blockType === "CARD");
-          if (!cardBlock && s.blocks.length > 0) return;
-          void cs.upsertCardData(s.id, cardBlock?.id ?? null, data);
+          void (async () => {
+            const target = await resolveSection(key);
+            if (!target) return setAviso(SIN_SECCION);
+            // Legacy con bloques TEXT y sin CARD: read-only (manda el fallback markdown).
+            if (!target.cardBlockId && target.hasBlocks) return;
+            await cs.upsertCardData(target.id, target.cardBlockId, data);
+          })();
         }}
         onTitleChange={(key, title) => {
-          const id = idByKey.get(key);
-          if (id) cs.renameSection(id, title);
+          void (async () => {
+            const target = await resolveSection(key);
+            if (!target) return setAviso(SIN_SECCION);
+            await cs.renameSection(target.id, title);
+          })();
         }}
         onEyebrowChange={(key, eyebrow) => {
-          const id = idByKey.get(key);
-          if (id) cs.setEyebrow(id, eyebrow);
+          void (async () => {
+            const target = await resolveSection(key);
+            if (!target) return setAviso(SIN_SECCION);
+            await cs.setEyebrow(target.id, eyebrow);
+          })();
         }}
         onReorder={(keys) => {
           const heroId = idByKey.get("implementacion");

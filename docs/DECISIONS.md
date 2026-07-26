@@ -450,6 +450,13 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   que el kickoff se publique, así que esos proyectos siguen mostrando «Etapa 1/9 · Hand Off». El
   usuario pausó ese rediseño para pasar primero las descripciones de cada estado. **No tocar
   `stage-engine.ts` hasta entonces.**
+  - **La regla sigue en pie, y en `bb28efa` se tocó igual — dicho acá para que no siente
+    precedente.** Fue un *hoist* puro: el array local con la cadena de salida subió a constante
+    exportada (`STAGE_EXIT_STEPS`) para que `lib/flow/stage-pieces.ts` pudiera compararse contra
+    el motor real en un test. **Cero cambios de comportamiento** (los 14 tests del ciclo de vida
+    siguen pasando sin tocarse). Lo que la regla prohíbe es cambiar CÓMO se decide la etapa —
+    orden, gates, criterios—, no exportar lo que ya estaba escrito. Ante la duda: si el diff
+    cambia lo que devuelve `inferLifecycleStage` para algún input, está prohibido.
 
 ## Cobranza — criterio ÚNICO de "vencido" (2026-07-24, decisión de Finanzas)
 > **Vencido = factura EMITIDA + crédito del cliente consumido.** Lo que no se facturó NO está

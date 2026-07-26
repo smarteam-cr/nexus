@@ -431,7 +431,8 @@ export function exploracionSectionSequence(existingKeys: string[]): string[] {
  * Tiene sentido cuando ya se entendió al cliente — exploración y planificación hechas.
  * Eso NO se bloquea: la pieza lo avisa (lib/flow/piece-readiness.ts) y el CSE decide.
  *
- * Su agente llega en su propia ola; hasta entonces la pieza se activa y se llena a mano.
+ * Su agente (`agent-implementacion-canvas`) la genera con el motor de landings; el CSE
+ * también puede activarla y llenarla a mano.
  */
 export const IMPLEMENTACION_CANVAS: CanvasDefinition = {
   slug: "implementation",

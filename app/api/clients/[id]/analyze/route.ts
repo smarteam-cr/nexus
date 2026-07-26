@@ -2583,6 +2583,10 @@ async function persistTimelineFromAgentOutput(
             { id: desarrolloCanvasId, slug: DESARROLLO_CANVAS.slug },
           ]);
           if (conContenido.has(desarrolloCanvasId)) {
+            /* El salteo NO es silencioso: el desplegable marca la pieza con "El handoff
+               cambió después" comparando este sello nuevo de `handoffGeneratedAt` contra
+               el `contentUpdatedAt` del documento (lib/pieces/piece-staleness.ts). Este
+               log queda para el servidor; el aviso al CSE vive en la pantalla. */
             console.log(
               `[analyze] auto-desarrollo OMITIDO en ${pid}: el requerimiento técnico ya está escrito. ` +
                 `Regenerarlo es decisión del CSE desde su propio botón (que sí pide permiso).`,

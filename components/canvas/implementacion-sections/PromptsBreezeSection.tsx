@@ -34,14 +34,26 @@ export interface PromptsBreezeData {
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
+  const [fallo, setFallo] = useState(false);
   return (
     <button
       type="button"
       onClick={() => {
-        void navigator.clipboard.writeText(text).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1600);
-        });
+        /* El portapapeles falla de verdad: sin permiso, sin contexto seguro, o con la
+           pestaña en segundo plano. Sin `catch`, la promesa quedaba rechazada sin dueño y
+           el botón no cambiaba — el CSE creía que había copiado el prompt y pegaba en
+           Breeze lo que tuviera de antes. Un "No se pudo" es peor que copiar, pero mucho
+           mejor que un silencio que miente. */
+        navigator.clipboard
+          .writeText(text)
+          .then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1600);
+          })
+          .catch(() => {
+            setFallo(true);
+            setTimeout(() => setFallo(false), 2400);
+          });
       }}
       style={{
         flexShrink: 0,
@@ -50,13 +62,17 @@ function CopyButton({ text }: { text: string }) {
         padding: "4px 10px",
         borderRadius: 8,
         border: "1px solid var(--border)",
-        background: copied ? "var(--bg-soft)" : "var(--bg)",
-        color: "var(--text-2)",
+        background: copied || fallo ? "var(--bg-soft)" : "var(--bg)",
+        color: fallo ? "var(--color-destructive)" : "var(--text-2)",
         cursor: "pointer",
       }}
-      title="Copiar el prompt para pegarlo en Breeze"
+      title={
+        fallo
+          ? "El navegador bloqueó el portapapeles: seleccioná el texto del prompt y copialo a mano"
+          : "Copiar el prompt para pegarlo en Breeze"
+      }
     >
-      {copied ? "Copiado ✓" : "Copiar"}
+      {fallo ? "No se pudo" : copied ? "Copiado ✓" : "Copiar"}
     </button>
   );
 }

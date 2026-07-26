@@ -191,6 +191,18 @@ export default async function CanvasPrintPage({
       escrito: portada?.titulo,
       rotulo: canvas.name,
     }).titulo;
+
+    /* Y se QUITA de la portada, porque ya está impreso arriba como nombre del documento.
+       `titulo` es una de las claves que titulan su tarjeta (card-print.tsx), así que sin
+       esto el mismo texto salía dos veces en la primera página: una en el encabezado y
+       otra dentro de la sección. Se quita solo de la copia que va al papel — el dato en
+       la base no se toca. */
+    const bloquesPortada = printData.sections[0]?.blocks;
+    if (bloquesPortada?.[0]?.data && typeof bloquesPortada[0].data === "object") {
+      const { titulo: _yaEstaEnElEncabezado, ...resto } = bloquesPortada[0].data as Record<string, unknown>;
+      void _yaEstaEnElEncabezado;
+      bloquesPortada[0] = { ...bloquesPortada[0], data: resto };
+    }
   }
 
   return <PrintClient data={printData} autoPrint={sp.print === "1"} />;

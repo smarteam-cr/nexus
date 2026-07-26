@@ -177,7 +177,7 @@ export const PIECES: PieceDefinition[] = [
     permissionSection: "planificacion",
     // 2026-07-24 — DEJA de nacer con el proyecto (decisión de negocio). Se creaba en
     // los 118 proyectos y tenía contenido en UNO. Los 234 canvases vacíos de esta pieza
-    // y de Planificación se retiraron; los 2 con trabajo real se conservaron. Ahora la
+    // y de Diagnóstico se retiraron; los 2 con trabajo real se conservaron. Ahora la
     // enciende el CSE cuando la va a usar.
     createdWithProject: false,
     isDefaultCanvas: false,

@@ -204,21 +204,48 @@ async function limpiarProyectos() {
   });
   console.log(`\n══ B) Proyectos "Proyecto principal": ${candidatos.length}`);
 
-  // Un proyecto solo se borra si NINGUNA de sus piezas tiene contenido y no está
-  // atado a nada de afuera (HubSpot, sesiones, cronograma, handoff, cobranza).
+  // Un proyecto solo se borra si NINGUNA de sus piezas tiene contenido y no está atado a
+  // nada de afuera. Qué cuenta como "atado" está abajo, y la lista es la fuente de verdad:
+  // este comentario no promete nada que el código no consulte.
   const todosLosCanvas = candidatos.flatMap((p) => p.canvases.map((c) => c.id));
   const senales = await senalesDe(todosLosCanvas);
   // BusinessCase NO se chequea por projectId: esa FK todavía no existe (la agrega F5).
   // Hoy una propuesta se ata al proyecto por cliente + deal de HubSpot, y el deal ya se
   // mira más abajo — un proyecto sin deal no puede tener propuesta colgando.
-  const [conTimeline, conHandoff] = await Promise.all([
-    prisma.projectTimeline.findMany({ where: { projectId: { in: candidatos.map((p) => p.id) } }, select: { projectId: true } }),
-    prisma.handoff.findMany({ where: { projectId: { in: candidatos.map((p) => p.id) } }, select: { projectId: true } }),
-  ]);
-  const conAlgoExterno = new Set([
-    ...conTimeline.map((t) => t.projectId),
-    ...conHandoff.map((h) => h.projectId),
-  ]);
+  /* ⚠ ESTA LISTA TIENE QUE CUBRIR LO QUE SE LLEVA LA CASCADA. El comentario de arriba
+     prometía mirar cobranza y documentos y solo miraba cronograma y handoff — o sea que
+     un proyecto con el brief del cliente subido, o con una estimación del equipo técnico,
+     contaba como "basura" y el borrado se llevaba esos archivos con él.
+     Borrar un Project cascadea a: DevEstimate · ProjectStageGate · Handoff ·
+     HandoffSource · ProjectTimeline · ProjectExternalAccess · ProjectCanvas · StageNote ·
+     ClientDocument · ClientContextCard · AgentRun · SessionProject ·
+     ProjectParticipantSnapshot · TimelineEvent.
+     Cobranza (ServicioContratado) NO se borra —queda en SetNull— pero el servicio pierde
+     su proyecto, así que también cuenta como atadura. */
+  const idsCandidatos = candidatos.map((p) => p.id);
+  const enProyectos = { where: { projectId: { in: idsCandidatos } }, select: { projectId: true } };
+  const ataduras: Array<[string, Promise<Array<{ projectId: string | null }>>]> = [
+    ["cronograma", prisma.projectTimeline.findMany(enProyectos)],
+    ["handoff", prisma.handoff.findMany(enProyectos)],
+    ["documentos del cliente", prisma.clientDocument.findMany(enProyectos)],
+    ["contexto guardado", prisma.clientContextCard.findMany(enProyectos)],
+    ["estimación técnica", prisma.devEstimate.findMany(enProyectos)],
+    ["etapas marcadas", prisma.projectStageGate.findMany(enProyectos)],
+    ["link compartido afuera", prisma.projectExternalAccess.findMany(enProyectos)],
+    ["cobranza", prisma.servicioContratado.findMany(enProyectos)],
+  ];
+  /* Un motivo por proyecto Y por señal: si el script perdona un proyecto, el log dice
+     exactamente qué lo salvó. Antes decía "cronograma/handoff/propuesta" para cualquiera
+     de los casos, así que leyendo la corrida no se podía saber si el chequeo servía. */
+  const atadoPor = new Map<string, string[]>();
+  for (const [etiqueta, consulta] of ataduras) {
+    for (const fila of await consulta) {
+      if (!fila.projectId) continue;
+      const previos = atadoPor.get(fila.projectId) ?? [];
+      if (!previos.includes(etiqueta)) previos.push(etiqueta);
+      atadoPor.set(fila.projectId, previos);
+    }
+  }
 
   const borrables: typeof candidatos = [];
   const seDejan: Array<{ p: (typeof candidatos)[number]; motivo: string }> = [];
@@ -228,7 +255,8 @@ async function limpiarProyectos() {
     if (p.hubspotServiceId) motivos.push("ligado a servicio de HubSpot");
     if (p.hubspotDealId) motivos.push("ligado a deal de HubSpot");
     if ((p.tags ?? []).length > 0) motivos.push(`tags [${p.tags.join(", ")}]`);
-    if (conAlgoExterno.has(p.id)) motivos.push("tiene cronograma/handoff/propuesta");
+    const ataduraDelProyecto = atadoPor.get(p.id);
+    if (ataduraDelProyecto?.length) motivos.push(`tiene ${ataduraDelProyecto.join(", ")}`);
     const conContenido = p.canvases.filter((c) => !vacio(senales.get(c.id)!));
     if (conContenido.length)
       motivos.push(conContenido.map((c) => `${c.id.slice(-6)}: ${describir(senales.get(c.id)!)}`).join(" | "));

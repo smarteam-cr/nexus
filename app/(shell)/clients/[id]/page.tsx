@@ -6,6 +6,7 @@ import { ensureStrategyProject } from "@/lib/canvas/strategy-project";
 import WorkspaceClient, { type SeededCanvas } from "./WorkspaceClient";
 import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
+import { piezaDesactualizadaPorHandoff } from "@/lib/pieces/piece-staleness";
 
 /**
  * Los canvases del proyecto inicial, CON su señal de contenido. La señal viaja desde el
@@ -18,9 +19,14 @@ async function seedCanvases(projectId: string): Promise<SeededCanvas[]> {
   const canvases = await prisma.projectCanvas.findMany({
     where: { projectId, ...canvasNotOf("handoff"), ...onlyEnabled },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-    select: { id: true, slug: true, name: true, isDefault: true, sections: true },
+    select: { id: true, slug: true, name: true, isDefault: true, sections: true, contentUpdatedAt: true },
   });
-  const conContenido = await loadCanvasesConContenido(projectId, canvases);
+  const [conContenido, proyecto] = await Promise.all([
+    loadCanvasesConContenido(projectId, canvases),
+    // Misma señal de vejez que /api/projects/[id]/canvases: si una sola la calculara, la
+    // fila arrancaría sin aviso y lo estrenaría al llegar el refetch.
+    prisma.project.findUnique({ where: { id: projectId }, select: { handoffGeneratedAt: true } }),
+  ]);
   return canvases.map((c) => ({
     id: c.id,
     slug: c.slug,
@@ -28,6 +34,10 @@ async function seedCanvases(projectId: string): Promise<SeededCanvas[]> {
     isDefault: c.isDefault,
     sections: (c.sections as Array<{ key: string; label: string }> | null) ?? [],
     hasContent: conContenido.has(c.id),
+    stale: piezaDesactualizadaPorHandoff(
+      { slug: c.slug, contentUpdatedAt: c.contentUpdatedAt, hasContent: conContenido.has(c.id) },
+      proyecto?.handoffGeneratedAt ?? null,
+    ),
   }));
 }
 

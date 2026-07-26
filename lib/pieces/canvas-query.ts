@@ -80,14 +80,33 @@ export function canvasOfAnyNested(
  *   where: { projectId, ...canvasNotOf("handoff"), ...onlyEnabled }
  *
  * ⛔ NUNCA se mete adentro de `canvasOf` / `canvasOfNested` / `canvasOfAny`. Esas son
- * consultas de EXISTENCIA y las usan los find-or-CREATE (`ensureDesarrolloCanvas`,
- * `ensureExploracionCanvas`): si no vieran la pieza apagada crearían un canvas
+ * consultas de EXISTENCIA y las usan los cinco find-or-CREATE (`ensureDesarrolloCanvas`,
+ * `ensureExploracionCanvas`, `ensureDiagnosticoCanvas`, `ensurePlanificacionCanvas`,
+ * `ensureImplementacionCanvas`): si no vieran la pieza apagada crearían un canvas
  * DUPLICADO y dejarían huérfano el contenido viejo — además de chocar contra el índice
  * único parcial (projectId, slug). El mismo razonamiento vale para el gate de permisos
  * (una pieza apagada leída como inexistente convertiría un "regenerar" en "generar" y
  * saltearía la celda que protege pisar contenido) y para el contexto de los agentes.
  *
  * Hay un guard que lo verifica: lib/pieces/enabled-filter.test.ts.
+ *
+ * ── QUÉ NO HACE APAGAR UNA PIEZA (leer antes de construir el interruptor) ─────
+ * Hoy NADA en la app escribe `disabledAt`: `lib/pieces/ensure-canvas.ts` solo lo LIMPIA
+ * (reencender). O sea que el apagado existe como dato y como filtro, pero todavía no
+ * como acción — y quien la construya tiene que decidir dos cosas que este campo por sí
+ * solo NO resuelve:
+ *
+ *   1. **No despublica.** El requerimiento técnico que lee el desarrollador externo se
+ *      gatea con `Project.desarrolloPublishedAt` (lib/external/desarrollo-view.ts), no
+ *      con el estado de la pieza. Apagarla la saca del listado interno y el de afuera
+ *      sigue viéndola en vivo. Si el interruptor no limpia también ese sello, la
+ *      pantalla va a decir "compartido" sobre una pieza que el equipo dio de baja.
+ *   2. **No detiene a los agentes.** Los find-or-create de arriba escriben igual sobre
+ *      una pieza apagada (tienen que verla, por lo del duplicado). El corte va en el
+ *      BORDE: el endpoint que dispara al agente.
+ *
+ * Hoy hay 0 piezas apagadas en la base, así que esto es una decisión a tomar, no una
+ * deuda que esté doliendo.
  */
 export const onlyEnabled: Prisma.ProjectCanvasWhereInput = { disabledAt: null };
 

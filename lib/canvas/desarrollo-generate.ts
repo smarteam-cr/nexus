@@ -126,5 +126,19 @@ Generá el requerimiento técnico siguiendo tus instrucciones: preciso y técnic
     ]);
     sectionCount++;
   }
+
+  /* Sella CUÁNDO se escribió este documento. Hacen falta las dos puntas para que el aviso
+     de "el handoff cambió después" (lib/pieces/piece-staleness.ts) sirva: se compara
+     contra `Project.handoffGeneratedAt`, y sin esta marca un documento escrito por el
+     agente quedaba con la fecha en null — o sea, indistinguible de uno viejo, y el aviso
+     no aparecía nunca justo en el caso más común.
+     Escribe también la barra de "cambios sin subir" del kickoff, que es el otro lector
+     de este campo, y es correcto: el documento efectivamente cambió. Solo si se escribió
+     algo — una corrida que no produjo secciones no tocó nada. */
+  if (sectionCount > 0) {
+    await prisma.projectCanvas
+      .update({ where: { id: canvasId }, data: { contentUpdatedAt: new Date() } })
+      .catch((e) => console.warn("[desarrollo-generate] contentUpdatedAt no sellado:", e instanceof Error ? e.message : e));
+  }
   return { canvasId, sectionCount };
 }

@@ -20,6 +20,7 @@ import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
 import { PROCESS_MAPPING_SCHEMA, PROCESS_MAPPING_EMPTY } from "./shared-sections.defs";
 import { IMPLEMENTACION_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
+import { heroTitleBrief } from "@/lib/landing/hero-title";
 
 const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
@@ -53,7 +54,8 @@ export const IMPLEMENTACION_SECTION_DEFS: BCSectionDef[] = [
     empty: { titulo: "", headline: "", subhead: "", tags: [] },
     agentHint: "Qué se construye primero y por qué. Tags = hubs/objetos del alcance.",
     brief:
-      "`titulo`: el nombre del documento en pocas palabras (máximo 60 caracteres), del tipo 'Guía de construcción'. Es el título de la página, no un titular de venta: sin verbos de transformación, sin promesas y sin el nombre del cliente. Portada de la guía. `headline`: qué se construye PRIMERO y por qué ese orden ('Primero las propiedades de Negocio: todo lo demás las referencia'). " +
+      heroTitleBrief("Guía de construcción") +
+      "Portada de la guía. `headline`: qué se construye PRIMERO y por qué ese orden ('Primero las propiedades de Negocio: todo lo demás las referencia'). " +
       "`subhead`: 1-2 frases con el estado de la decisión — de dónde sale esta guía (la planificación aprobada, el requerimiento técnico) y qué queda pendiente de decidir. " +
       "`tags`: los hubs/objetos que cubre ('Sales', 'Negocios', 'Tickets').",
     schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },

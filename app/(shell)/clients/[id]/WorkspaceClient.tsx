@@ -36,6 +36,8 @@ export interface SeededCanvas {
   /** ¿Tiene contenido real? Viaja desde el server para que el primer pintado del
    *  desplegable no muestre "vacía" en piezas llenas (lib/pieces/piece-content.ts). */
   hasContent: boolean;
+  /** El handoff corrió después de escribirse este documento (lib/pieces/piece-staleness.ts). */
+  stale?: boolean;
 }
 
 export default function WorkspaceClient({

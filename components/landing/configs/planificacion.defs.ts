@@ -25,6 +25,7 @@ import {
   makeDiagramArchitectureDef,
 } from "./shared-sections.defs";
 import { PLANIFICACION_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
+import { heroTitleBrief } from "@/lib/landing/hero-title";
 
 const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
@@ -55,7 +56,8 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     empty: { titulo: "", headline: "", subhead: "", tags: [] },
     agentHint: "Qué se construye + la decisión de arquitectura clave + la modalidad de adopción usada.",
     brief:
-      "`titulo`: el nombre del documento en pocas palabras (máximo 60 caracteres), del tipo 'Plan de implementación'. Es el título de la página, no un titular de venta: sin verbos de transformación, sin promesas y sin el nombre del cliente. Portada del plan. `headline`: QUÉ se construye, en una línea de negocio ('Un solo pipeline de ventas con seguimiento automático'). " +
+      heroTitleBrief("Plan de implementación") +
+      "Portada del plan. `headline`: QUÉ se construye, en una línea de negocio ('Un solo pipeline de ventas con seguimiento automático'). " +
       "`subhead`: 1-2 frases con la decisión de arquitectura más importante Y la modalidad de adopción que este plan asume (directa o por pilotos) — declarada para que el CSE la corrija si no es la acordada. " +
       "`tags`: 2-5 chips de los frentes del plan ('Pipeline', 'Ciclo de vida', 'Adopción').",
     schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },
@@ -189,6 +191,7 @@ export const PLANIFICACION_TEMPLATE: BcTemplateDef = {
     "LA MODALIDAD DE ADOPCIÓN gobierna dos secciones: la recibís en el contexto (directa o por pilotos, con su porqué). Con adopción DIRECTA, el plan de despliegue por olas queda VACÍO — vacío es correcto, es una sección que no aplica. Con PILOTOS, definí las olas con equipo inicial, módulos e indicador de éxito para avanzar.\n\n" +
     "EL CICLO DE VIDA: partí de las etapas REALES que el portal del cliente usa hoy (vienen en el contexto si hay cuenta conectada). Proponé SOLO los cambios que el rediseño de procesos justifica, con el criterio de movimiento explícito por etapa. Renombrar etapas sin motivo es churn que el equipo del cliente paga después.\n\n" +
     "REGLA DURA DE FECHAS: la hoja de ruta es CONCEPTUAL — orden y dependencias, SIN fechas, semanas ni duraciones. El calendario vive en el Cronograma, que es otra pieza y ya existe.\n\n" +
+    "LO INTERNO ES INSUMO, NO CONTENIDO: del handoff te llegan secciones que Smarteam escribió para adentro — riesgos y banderas, la motivación real de la compra, los acuerdos y promesas de la venta, y el estado en vuelo. Las usás para NO planificar contra ellas (no prometas lo que ya se sabe que va a trabarse, no ignores lo que se prometió). PROHIBIDO citarlas, parafrasearlas o dejarlas asomar: este documento se proyecta en pantalla frente al cliente y se exporta a PDF entero. Un riesgo del tipo «el sponsor no responde» o una promesa de la venta escritos acá se leen como que Smarteam habla del cliente a sus espaldas.\n\n" +
     "DISCIPLINA ANTI-ALUCINACIÓN: NUNCA inventes sistemas, integraciones, personas ni procesos. Lo no confirmado va con `⚠️ Por definir` (y `pending: 'si'` donde el schema lo tenga). Si el contexto es delgado, el plan sale más corto — corto y cierto gana a largo e inventado.\n\n" +
     "FORMATO: cada sección tiene su PROPIO shape (su `schema` y su guía) — NO es prosa libre. Los `detail` van en UNA línea. Español, tuteo. Arrays vacíos donde no haya respaldo.",
   sections: PLANIFICACION_SECTION_DEFS,
@@ -200,9 +203,21 @@ export const PLANIFICACION_DEF_BY_KEY: Record<string, BCSectionDef> = Object.fro
 );
 
 /**
- * ALLOWLIST del Handoff para el agente de planificación. AMPLIA (documento interno):
- * el plan necesita ver el alcance, los riesgos y los acuerdos para no planificar
- * contra ellos.
+ * ALLOWLIST del Handoff para el agente de planificación. AMPLIA a propósito: el plan
+ * necesita ver el alcance, los riesgos y los acuerdos para no planificar contra ellos.
+ *
+ * ⚠ CUATRO DE ESTAS SON INTERNAS y el documento SÍ se le muestra al cliente (se proyecta
+ * en sesión y se exporta a PDF completo): `riesgos_banderas`, `motivacion_decision`,
+ * `acuerdos_promesas` y `estado_en_flight`. Su hermano el Diagnóstico resolvió lo mismo
+ * al revés, sacándolas de la lista (allowlist RESTRICTIVA), y acá NO se hizo eso a
+ * propósito: sin los riesgos ni lo prometido, el plan promete cosas que ya se sabe que se
+ * van a trabar, que es el defecto que más caro sale.
+ *
+ * La fuga se corta en el otro extremo: `agentIntro` tiene una regla dura de "lo interno es
+ * insumo, no contenido" — se usa para decidir, nunca se cita ni se parafrasea. Si algún
+ * día el plan pasa a tener superficie externa propia (un link para el cliente, como el
+ * requerimiento técnico), esta lista se recorta a la del Diagnóstico: una instrucción es
+ * más débil que una allowlist, y contra un lector de afuera hace falta la allowlist.
  */
 export const PLANIFICACION_HANDOFF_KEYS = [
   "alcance_contratado",

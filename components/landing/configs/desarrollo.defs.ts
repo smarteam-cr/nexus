@@ -34,6 +34,7 @@ import {
 // server y cliente): evita que este `empty` derive del literal sembrado y quede
 // desincronizado (ej. si se agrega/edita un campo del CTA en un solo lugar).
 import { DESARROLLO_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
+import { heroTitleBrief } from "@/lib/landing/hero-title";
 
 const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
@@ -82,7 +83,8 @@ export const DESARROLLO_SECTION_DEFS: BCSectionDef[] = [
     empty: { titulo: "", headline: "", subhead: "", tags: [] },
     agentHint: "Título técnico del requerimiento + una bajada de qué conecta con qué + chips de los sistemas.",
     brief:
-      "`titulo`: el nombre del documento en pocas palabras (máximo 60 caracteres), del tipo 'Requerimiento técnico'. Es el título de la página, no un titular de venta: sin verbos de transformación, sin promesas y sin el nombre del cliente. Portada del requerimiento técnico. `headline`: patrón `Requerimiento técnico: [integración de HubSpot con [sistema]] / [migración desde [plataforma]] / [desarrollo a medida]` — sacá el nombre propio del sistema destino de la sección `desarrollo` del handoff (SAP, ERP, Aircall, e-commerce, Salesforce…). `subhead`: UNA frase, en lenguaje llano (que la entienda alguien no técnico), de qué conecta con qué y para qué (ej. 'Sincroniza los negocios cerrados en HubSpot con el ERP para facturar sin recaptura'). `tags`: 2-5 chips cortos de los sistemas/APIs/tipo (ej. 'HubSpot', 'SAP', 'API REST', 'Webhook', 'Migración'). Fuente: sección `desarrollo` del handoff + tags del proyecto. No inventes sistemas.",
+      heroTitleBrief("Requerimiento técnico") +
+      "Portada del requerimiento técnico. `headline`: patrón `Requerimiento técnico: [integración de HubSpot con [sistema]] / [migración desde [plataforma]] / [desarrollo a medida]` — sacá el nombre propio del sistema destino de la sección `desarrollo` del handoff (SAP, ERP, Aircall, e-commerce, Salesforce…). `subhead`: UNA frase, en lenguaje llano (que la entienda alguien no técnico), de qué conecta con qué y para qué (ej. 'Sincroniza los negocios cerrados en HubSpot con el ERP para facturar sin recaptura'). `tags`: 2-5 chips cortos de los sistemas/APIs/tipo (ej. 'HubSpot', 'SAP', 'API REST', 'Webhook', 'Migración'). Fuente: sección `desarrollo` del handoff + tags del proyecto. No inventes sistemas.",
     schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },
   },
   {

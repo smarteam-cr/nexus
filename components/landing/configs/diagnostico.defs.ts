@@ -38,6 +38,7 @@ import {
   PROCESS_MAPPING_EMPTY,
 } from "./shared-sections.defs";
 import { DIAGNOSTICO_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
+import { heroTitleBrief } from "@/lib/landing/hero-title";
 
 const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
@@ -68,7 +69,8 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     empty: { titulo: "", headline: "", subhead: "", tags: [] },
     agentHint: "Portada del informe: el hallazgo principal en una frase + los hubs diagnosticados como chips.",
     brief:
-      "`titulo`: el nombre del documento en pocas palabras (máximo 60 caracteres), del tipo 'Diagnóstico de rendimiento'. Es el título de la página, no un titular de venta: sin verbos de transformación, sin promesas y sin el nombre del cliente. Portada del informe. `headline`: el HALLAZGO principal en una línea, dicho al cliente ('Tu proceso comercial pierde los leads que marketing ya pagó'). No pongas 'Diagnóstico de X' — el título de la página ya lo dice. " +
+      heroTitleBrief("Diagnóstico de rendimiento") +
+      "Portada del informe. `headline`: el HALLAZGO principal en una línea, dicho al cliente ('Tu proceso comercial pierde los leads que marketing ya pagó'). No pongas 'Diagnóstico de X' — el título de la página ya lo dice. " +
       "`subhead`: 1-2 frases con el resumen honesto: dónde está hoy (nivel de la escala con su nombre) y qué es lo primero que cambia con este proyecto. " +
       "`tags`: los hubs/áreas diagnosticadas ('Ventas', 'Marketing', 'Servicio').",
     schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },

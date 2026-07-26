@@ -3,6 +3,7 @@ import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
+import { piezaDesactualizadaPorHandoff } from "@/lib/pieces/piece-staleness";
 
 // GET: list canvases for a project (default first, then by createdAt)
 export async function GET(
@@ -33,6 +34,8 @@ export async function GET(
       order: true,
       sections: true,
       createdAt: true,
+      // Para el aviso de "el handoff cambió después" (lib/pieces/piece-staleness.ts).
+      contentUpdatedAt: true,
     },
   });
 
@@ -44,8 +47,23 @@ export async function GET(
   // arrancaría con un estado y saltaría a otro al llegar el refetch.
   const conContenido = await loadCanvasesConContenido(projectId, canvases);
 
+  /* Cuándo corrió el handoff por última vez: con eso se marca el requerimiento técnico
+     que quedó viejo. El encadenado ya NO lo reescribe solo (borraba ediciones a mano), y
+     sin este aviso el único rastro del salteo era un log del servidor. */
+  const proyecto = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { handoffGeneratedAt: true },
+  });
+
   return NextResponse.json({
-    canvases: canvases.map((c) => ({ ...c, hasContent: conContenido.has(c.id) })),
+    canvases: canvases.map((c) => ({
+      ...c,
+      hasContent: conContenido.has(c.id),
+      stale: piezaDesactualizadaPorHandoff(
+        { slug: c.slug, contentUpdatedAt: c.contentUpdatedAt, hasContent: conContenido.has(c.id) },
+        proyecto?.handoffGeneratedAt ?? null,
+      ),
+    })),
   });
 }
 

@@ -59,6 +59,11 @@ const CANVAS_FLOW_IDS = new Set<string>([
   "agent-kickoff-canvas",
   "agent-diagnostico-canvas",
   "agent-planificacion-canvas",
+  // Faltaban: sin estar acá, /agents los mostraba en "Sin uso / biblioteca" y con
+  // "Sin disparador" pese a tener su CTA en el desplegable y en el encabezado del canvas.
+  // La fuente de verdad de qué agente genera cada pieza es CANVAS_PRIMARY_AGENT.
+  "agent-implementacion-canvas",
+  "agent-exploracion-canvas",
   "agent-mapeo-inicial",
   "agent-timeline-detail",
 ]);

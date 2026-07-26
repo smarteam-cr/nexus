@@ -38,6 +38,12 @@ export interface PieceRow {
   agent: { agentId: string; label: string; async?: boolean } | null;
   /** Se puede prender/apagar (las no opcionales viven siempre). */
   optional: boolean;
+  /**
+   * El handoff se regeneró DESPUÉS de que se escribió este documento, así que lo que dice
+   * salió de una versión anterior. El criterio vive en lib/pieces/piece-staleness.ts y lo
+   * calculan las dos lecturas del listado; acá solo viaja hasta la fila.
+   */
+  stale: boolean;
 }
 
 /** Lo mínimo que hace falta saber de un canvas para armar su fila. */
@@ -52,6 +58,8 @@ export interface CanvasParaFila {
    * del proyecto y el seed server-side de la página del cliente.
    */
   hasContent?: boolean;
+  /** Ídem: lo calculan las dos lecturas con lib/pieces/piece-staleness.ts. */
+  stale?: boolean;
 }
 
 /**
@@ -79,6 +87,7 @@ export function buildPieceRows(canvases: CanvasParaFila[]): PieceRow[] {
         canvasId: canvas?.id ?? null,
         agent: CANVAS_PRIMARY_AGENT[slug] ?? null,
         optional: pieza?.optional ?? false,
+        stale: canvas?.stale ?? false,
       } satisfies PieceRow;
     });
 
@@ -91,6 +100,8 @@ export function buildPieceRows(canvases: CanvasParaFila[]): PieceRow[] {
     canvasId: c.id,
     agent: null,
     optional: false,
+    // Un canvas suelto del CSE no sigue al handoff: nunca queda viejo por él.
+    stale: false,
   }));
 
   return [...delFlujo, ...sueltos];

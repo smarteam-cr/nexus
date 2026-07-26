@@ -83,6 +83,40 @@ del cliente Prisma (`roleProfile.count()`).
   interpola): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
   `NEXT_PUBLIC_SENTRY_DSN`.
 
+### Lo que `deploy.sh` NO hace: migraciones y seeds
+
+El script mueve **código**. La base y los prompts de los agentes NO se tocan solos, y son
+dos pasos manuales distintos que se olvidan por separado.
+
+- **Migraciones (SQL directo, nunca `prisma db push`).** Los `.sql` viven en
+  `scripts/sql/AAAA-MM-DD-*.sql` y se corren **contra la base compartida, ANTES de deployar
+  el código que los necesita** — si el código llega primero, la app queda pidiendo una
+  columna que no existe. `db push` está prohibido: la base tiene objetos que el schema no
+  declara y los dropea (ya se llevó `RoleProfile` una vez).
+- **Seeds de agentes (`scripts/seed-*.ts`) se corren DESDE UNA PC DE DESARROLLO, no desde
+  el VPS.** El checkout del servidor **no tiene `node_modules`** —la app vive en Docker—,
+  así que ahí `npx tsx scripts/seed-*.ts` falla con `Cannot find module 'pg'`. Como la base
+  es la misma, correrlos desde dev tiene exactamente el mismo efecto. (Pasó en el deploy
+  del 2026-07-26: el deploy salió bien y los tres seeds fallaron ahí mismo.)
+- **Un seed re-siembra el prompt COMPLETO.** Si alguien editó ese agente a mano desde
+  `/agents`, el seed le pasa por encima. Antes de correr uno con `--force`, mirar si el
+  prompt en la base fue tocado.
+- **El orden importa cuando el prompt nuevo describe secciones nuevas**: primero el deploy
+  del código (que trae las secciones), después el re-seed del prompt. Al revés, el agente
+  escribe secciones que la versión corriendo todavía no sabe pintar.
+
+Checklist corto para un deploy que trae los tres:
+
+```bash
+psql "$DATABASE_URL" -f scripts/sql/AAAA-MM-DD-loquesea.sql   # 1) desde dev, antes
+```
+```bash
+cd /opt/smartflow/Nexus && bash scripts/deploy.sh              # 2) en el VPS
+```
+```bash
+npx tsx scripts/seed-EL-AGENTE.ts                              # 3) desde dev, después
+```
+
 ## Sentry (observabilidad)
 
 Activación 100% por env — sin las vars, cero cambio de comportamiento:

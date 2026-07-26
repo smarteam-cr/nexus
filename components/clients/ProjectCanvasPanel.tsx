@@ -23,6 +23,7 @@ import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { slugForCanvas } from "@/lib/pieces/registry";
 import { buildPieceRows, type RowState } from "@/lib/flow/dropdown-rows";
+import { AVISO_DESACTUALIZADA, AVISO_DESACTUALIZADA_LARGO } from "@/lib/pieces/piece-staleness";
 import { pieceReadiness } from "@/lib/flow/piece-readiness";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import ProjectHandoffSection from "./ProjectHandoffSection";
@@ -113,6 +114,8 @@ interface CanvasMeta {
    * mienta. Sigue opcional porque los canvases del Business Case no lo traen.
    */
   hasContent?: boolean;
+  /** El handoff corrió después de escribirse este documento (lib/pieces/piece-staleness.ts). */
+  stale?: boolean;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -619,6 +622,18 @@ export default function ProjectCanvasPanel({
                                 {readiness.shortReason}
                               </span>
                             )}
+                            {/* El handoff corrió después de escribirse el documento. El
+                                encadenado ya NO lo reescribe solo (borraba ediciones a
+                                mano), así que sin este renglón el único rastro era un log
+                                del servidor y el CSE creía que estaba al día. */}
+                            {row.stale && !readiness.shortReason && (
+                              <span
+                                className="block text-xs leading-snug text-amber-600"
+                                title={AVISO_DESACTUALIZADA_LARGO}
+                              >
+                                {AVISO_DESACTUALIZADA}
+                              </span>
+                            )}
                           </span>
                         </button>
                         {row.agent && row.canvasId ? (
@@ -661,7 +676,15 @@ export default function ProjectCanvasPanel({
                 agentId={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].agentId}
                 label={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].label}
                 async={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].async}
-                onDone={() => { setAgentNonce((n) => n + 1); bumpGpsRefresh(); }}
+                /* Mismo cierre que el CTA de la fila del desplegable, incluido el refetch:
+                   sin él, generar desde acá dejaba la fila en ámbar con "Generar" y las
+                   piezas siguientes avisando "Antes: …" sobre algo que ya estaba hecho.
+                   El documento se veía bien y el mapa del flujo mentía hasta recargar. */
+                onDone={() => {
+                  setAgentNonce((n) => n + 1);
+                  bumpGpsRefresh();
+                  void refetchCanvases();
+                }}
               />
             )}
             {/* CTA principal del Cronograma (Generar cronograma / Chequear avance) — A LA PAR DEL
