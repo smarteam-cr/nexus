@@ -92,8 +92,15 @@ export async function runDiagnosticoGeneration(opts: {
     hubs.length ? `Hubs/áreas del proyecto (dirigen QUÉ procesos cubre el informe): ${hubs.join(", ")}` : "",
     "",
     "=== ESCALA DE RENDIMIENTO 1-5 — TU VARA DE MEDICIÓN ===",
-    escala.text ||
-      "(El documento de la escala no está publicado en la base de conocimiento. Usá los nombres canónicos —1 Deficiente · 2 Inicial · 3 Funcional · 4 Eficiente · 5 Óptimo— y puntuá SOLO donde la evidencia alcance.)",
+    /* Se decide por `count`, NO por `text`. Cuando ningún documento entra en el
+       presupuesto de contexto, `loadKnowledgeByTags` igual devuelve texto: la nota
+       "(N documento(s) más no entraron…)". Preguntar por `text` la tomaba como escala
+       válida y el respaldo no se usaba nunca — el agente puntuaba al cliente, en un
+       informe que se le presenta, sin la vara y sin siquiera los nombres de los niveles.
+       Es el mismo criterio que usa su hermano en implementacion-generate.ts. */
+    escala.count > 0
+      ? escala.text
+      : "(El documento de la escala no está publicado en la base de conocimiento. Usá los nombres canónicos —1 Deficiente · 2 Inicial · 3 Funcional · 4 Eficiente · 5 Óptimo— y puntuá SOLO donde la evidencia alcance.)",
     "",
     "=== HANDOFF DEL PROYECTO (solo lo apto para el cliente) ===",
     handoffCtx || "(Sin handoff generado.)",

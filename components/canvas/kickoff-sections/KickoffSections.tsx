@@ -215,7 +215,8 @@ export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({
       {(canEdit || bajada) && (
         <div style={{ maxWidth: 640, marginInline: "auto" }}>
           <Editable as="p" className="stl-lead" editable={canEdit} value={bajada}
-            placeholder="El titular del caso en una frase…" onCommit={(v) => set({ headline: v })} />
+            placeholder="El titular del caso en una frase…"
+            onCommit={(v) => set({ titulo, headline: v })} />
         </div>
       )}
       {isLegacy ? (

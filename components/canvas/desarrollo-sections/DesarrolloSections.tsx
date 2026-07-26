@@ -76,7 +76,7 @@ export const DesarrolloHeroSection: FC<SectionProps<KickoffHeroData>> = ({
             editable={editable}
             value={bajada}
             placeholder="El titular del caso en una frase…"
-            onCommit={(v) => set({ headline: v })}
+            onCommit={(v) => set({ titulo, headline: v })}
           />
         </div>
       )}

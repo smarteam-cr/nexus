@@ -95,9 +95,17 @@ export function Editable({
       suppressContentEditableWarning
       data-placeholder={placeholder}
       style={{ whiteSpace: "pre-wrap" }}
-      onBlur={(e: React.FocusEvent<HTMLElement>) =>
-        onCommit?.(e.currentTarget.textContent ?? "")
-      }
+      /* Comitea SOLO si el texto cambió — la misma comparación que ya hacía el commit al
+         desmontar (arriba). Antes comiteaba en CADA blur, y eso era inocuo mientras el
+         campo leyera y escribiera la misma clave: blur sin tipear = guardar lo mismo.
+         Dejó de serlo cuando una portada empezó a mostrar un valor DERIVADO y a escribir
+         en otra clave: entrar a la bajada y salir sin tocar nada guardaba "" sobre el
+         titular del documento y lo destruía, sin deshacer y en documentos que el cliente
+         ve. La comparación cuesta nada y cierra la clase entera de ese error. */
+      onBlur={(e: React.FocusEvent<HTMLElement>) => {
+        const txt = e.currentTarget.textContent ?? "";
+        if (txt !== safeValue) onCommit?.(txt);
+      }}
     />
   );
 }

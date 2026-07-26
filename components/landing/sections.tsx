@@ -93,11 +93,13 @@ export const HeroSection: FC<SectionProps<HeroData>> = ({
           de otro documento. */}
       <Editable as="h1" className="stl-hero-title" editable={editable} value={titulo}
         placeholder={sectionTitle ?? ""} onCommit={(v) => set({ titulo: v })} />
-      {/* El titular del caso, cuando NO subió a título. Editarlo con el título vacío lo
-          vuelve a subir solo — no hay estado donde el mismo texto salga dos veces. */}
+      {/* El titular del caso, cuando NO subió a título. Al escribirlo se FIJA también el
+          título que se está viendo: sin eso, el texto recién escrito saltaba arriba
+          (porque el titular se vuelve a promocionar) y la portada se sentía inestable. */}
       {(editable || bajada) && (
         <Editable as="p" className="stl-lead" editable={editable} value={bajada}
-          placeholder="El titular del caso en una frase…" onCommit={(v) => set({ headline: v })} />
+          placeholder="El titular del caso en una frase…"
+          onCommit={(v) => set({ titulo, headline: v })} />
       )}
       {(editable || data.subhead) && (
         <Editable as="p" className="stl-lead" editable={editable} value={data.subhead}
