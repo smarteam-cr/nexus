@@ -14,8 +14,17 @@
  *
  * Se agrupa por ACCIÓN (qué tiene que hacer), no por tipo de objeto:
  *   - decidir  → hay algo esperando su criterio
- *   - publicar → hay algo listo que el cliente todavía no ve
  *   - atender  → hay algo que se está deteriorando
+ *
+ * ── PUBLICAR NO ES UNA ACCIÓN DE ACÁ ──────────────────────────────────────────
+ * Hubo un tercer grupo, `publicar`, y era un error de diseño: emitía "El cronograma no
+ * está publicado" y "Hay cambios que el cliente no vio" mientras la barra amarilla
+ * (`components/canvas/PublishBar.tsx`) decía exactamente lo mismo dos centímetros más
+ * arriba, con el botón de verdad. Dos lugares diciendo lo mismo es peor que uno solo:
+ * el CSE no sabe cuál mirar y ninguno de los dos se siente autoritativo.
+ * **La conversación de publicar la tiene la barra amarilla, y solo ella.** El grupo se
+ * borró del TIPO —no solo sus dos ítems— para que reintroducirlo sea un error de `tsc` y
+ * no una cuestión de disciplina.
  *
  * CRITERIO DE ADMISIÓN (lo que evita que el panel crezca sin control): entra acá lo que
  *   (a) tiene una acción concreta y única, (b) empeora si nadie lo hace, y (c) no se ve solo al
@@ -24,7 +33,7 @@
  * código), no con los datos.
  */
 
-export type ActionGroup = "decidir" | "publicar" | "atender";
+export type ActionGroup = "decidir" | "atender";
 export type ActionTone = "info" | "warn" | "risk";
 
 export interface ProjectAction {
@@ -50,13 +59,12 @@ export interface ProjectActionsInput {
   pendingProgress: boolean;
   pendingParticularidades: number;
   pendingProposal: boolean;
-  // ── Estado de publicación ──
+  /** Lo que reportó una PERSONA del equipo (needsValidation) y espera respuesta del CSE. */
+  sugerenciasDelEquipo: number;
+  // ── Estado del plan ──
   anchorStartDate: string | null;
   detailConfirmedAt: string | null;
-  timelinePublishedAt: string | null;
   hasTasks: boolean;
-  /** Hay cambios guardados que el cliente todavía no vio (del publish-diff). */
-  cambiosSinPublicar: boolean;
   // ── Particularidades ──
   /** ATRASO sin semanas: no suma al corrimiento y no sirve para nada hasta cuantificarlo. */
   sinCuantificar: number;
@@ -81,8 +89,8 @@ export interface ProjectActionsInput {
 const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`;
 
 /**
- * Devuelve las acciones ordenadas: primero lo que espera una decisión (destraba el resto), después
- * lo que hay que publicar, al final lo que se está deteriorando. Lista vacía = todo al día.
+ * Devuelve las acciones ordenadas: primero lo que espera una decisión (destraba el resto), al final
+ * lo que se está deteriorando. Lista vacía = todo al día.
  */
 export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
   const out: ProjectAction[] = [];
@@ -110,6 +118,20 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
       title: "La IA sugiere cambios de estructura en el cronograma",
       why: "Salieron del último handoff. Las tareas y sus estados no se tocan: son fases nuevas o ajustes de fase que aceptás o descartás uno por uno en el Gantt.",
       cta: "Revisar sugerencias",
+    });
+  }
+  /* Antes que los borradores de la IA en importancia, aunque salga después en la lista: del otro
+     lado hay una PERSONA esperando. Entró al motor cuando su bandeja propia salió de arriba del
+     Gantt: sin esto, un pedido del equipo técnico desaparecía de la pantalla al colapsar el bloque.
+     El `cta` dice "lo reportado" y no "sugerencias" a propósito — `draft-proposal` ya usa la palabra
+     "sugerencias", y dos botones con el mismo texto en la misma lista es justo el ruido que estamos
+     sacando. */
+  if (i.sugerenciasDelEquipo > 0) {
+    out.push({
+      id: "sugerencias-equipo", group: "decidir", tone: "warn",
+      title: `${plural(i.sugerenciasDelEquipo, "sugerencia del equipo técnico", "sugerencias del equipo técnico")} sin responder`,
+      why: "Alguien del equipo reportó algo del proyecto y está esperando tu criterio. Hasta que la apruebes no suma al atraso ni le llega al cliente.",
+      cta: "Revisar lo reportado",
     });
   }
   // Va antes que la higiene de datos: acá hay trabajo que nadie está haciendo, no una fila mal cargada.
@@ -147,10 +169,13 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
     });
   }
 
-  // ── PUBLICAR ───────────────────────────────────────────────────────────────
+  /* Estos dos vivían en el grupo `publicar`, y son los únicos que sobrevivieron a borrarlo.
+     Ninguno de los dos publica nada: la fecha de arranque es la condición para que exista un
+     calendario, y confirmar el detalle es decidir qué parte del plan cruza al cliente. Los dos
+     son criterio del CSE, así que `decidir` es su lugar de verdad, no un consuelo. */
   if (!i.anchorStartDate) {
     out.push({
-      id: "sin-anchor", group: "publicar", tone: "warn",
+      id: "sin-anchor", group: "decidir", tone: "warn",
       title: "El cronograma no tiene fecha de arranque",
       why: "Sin fecha no hay calendario: no se calcula ningún atraso, no se puede publicar, y nadie sabe en qué semana está el proyecto.",
       cta: "Fijar el arranque",
@@ -159,25 +184,10 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
     });
   } else if (i.hasTasks && !i.detailConfirmedAt) {
     out.push({
-      id: "detalle-sin-confirmar", group: "publicar", tone: "info",
+      id: "detalle-sin-confirmar", group: "decidir", tone: "info",
       title: "El detalle de tareas no está confirmado",
       why: "El cliente ve las fases pero no las tareas: no puede saber qué le toca hacer a él.",
       cta: "Confirmar detalle",
-    });
-  }
-  if (i.anchorStartDate && !i.timelinePublishedAt) {
-    out.push({
-      id: "sin-publicar", group: "publicar", tone: "warn",
-      title: "El cronograma no está publicado",
-      why: "El cliente todavía no lo puede ver: para él, este proyecto no tiene plan.",
-      cta: "Subir al cliente",
-    });
-  } else if (i.cambiosSinPublicar) {
-    out.push({
-      id: "cambios-sin-publicar", group: "publicar", tone: "info",
-      title: "Hay cambios guardados que el cliente no vio",
-      why: "Lo que él lee sigue siendo la foto de la última publicación.",
-      cta: "Subir al cliente",
     });
   }
 
@@ -268,10 +278,9 @@ export function splitBlocking(actions: ProjectAction[]): {
 export function groupActions(actions: ProjectAction[]): Array<{ group: ActionGroup; label: string; items: ProjectAction[] }> {
   const LABEL: Record<ActionGroup, string> = {
     decidir: "Decidir",
-    publicar: "Publicar",
     atender: "Atender",
   };
-  const order: ActionGroup[] = ["decidir", "publicar", "atender"];
+  const order: ActionGroup[] = ["decidir", "atender"];
   return order
     .map((g) => ({ group: g, label: LABEL[g], items: actions.filter((a) => a.group === g) }))
     .filter((s) => s.items.length > 0);

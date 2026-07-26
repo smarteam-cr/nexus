@@ -7,9 +7,9 @@
  * al tope del Gantt. Nadie se enteraba: la acción nueva salía, el botón "funcionaba", y te dejaba
  * mirando una fila cualquiera. Llegaron a ser 8 de 16.
  *
- * Acá se arma un proyecto con TODO mal —tres variantes, porque las condiciones de publicación son
- * mutuamente excluyentes entre sí— y se exige que cada acción emitida tenga destino declarado. Si
- * agregás una al motor y te olvidás de la tabla, este test falla nombrándola.
+ * Acá se arma un proyecto con TODO mal —dos variantes, porque `sin-anchor` y `detalle-sin-confirmar`
+ * son mutuamente excluyentes— y se exige que cada acción emitida tenga destino declarado. Si agregás
+ * una al motor y te olvidás de la tabla, este test falla nombrándola.
  */
 import { test, expect } from "vitest";
 import { buildProjectActions, type ProjectActionsInput } from "./project-actions";
@@ -20,11 +20,10 @@ const TODO_MAL: ProjectActionsInput = {
   pendingProgress: true,
   pendingParticularidades: 3,
   pendingProposal: true,
+  sugerenciasDelEquipo: 2,
   anchorStartDate: null, // → sin-anchor (TAPA a detalle-sin-confirmar)
   detailConfirmedAt: null,
-  timelinePublishedAt: null, // → sin-publicar (TAPA a cambios-sin-publicar)
   hasTasks: true,
-  cambiosSinPublicar: true,
   sinCuantificar: 2,
   duplicados: { hechos: 2, filas: 5 },
   compromisosSinTarea: 4,
@@ -40,27 +39,21 @@ const TODO_MAL: ProjectActionsInput = {
 };
 
 /**
- * Las otras ramas de las cadenas else-if. Hacen falta DOS variantes más, no una: las condiciones de
- * publicación forman un triángulo (sin anchor / con anchor sin publicar / publicado con cambios) y
- * ninguna combinación sola emite las tres. Este test ya cazó el hueco una vez.
+ * La otra rama del else-if. Antes hacían falta DOS variantes más porque las condiciones de
+ * publicación formaban un triángulo; al salir `publicar` del motor —esa conversación la tiene
+ * la barra amarilla— quedó un par simple: sin arranque, o con arranque y sin detalle confirmado.
  */
-const CON_ANCHOR_SIN_PUBLICAR: ProjectActionsInput = {
+const CON_ANCHOR: ProjectActionsInput = {
   ...TODO_MAL,
   anchorStartDate: "2026-06-01T00:00:00.000Z", // → detalle-sin-confirmar
-  timelinePublishedAt: null, // → sin-publicar
-};
-const PUBLICADO_CON_CAMBIOS: ProjectActionsInput = {
-  ...CON_ANCHOR_SIN_PUBLICAR,
-  timelinePublishedAt: "2026-06-03T00:00:00.000Z", // → cambios-sin-publicar
 };
 
 const TODOS_LOS_IDS = [
   ...buildProjectActions(TODO_MAL).map((a) => a.id),
-  ...buildProjectActions(CON_ANCHOR_SIN_PUBLICAR).map((a) => a.id),
-  ...buildProjectActions(PUBLICADO_CON_CAMBIOS).map((a) => a.id),
+  ...buildProjectActions(CON_ANCHOR).map((a) => a.id),
 ];
 
-test("las tres variantes juntas cubren TODAS las acciones del motor", () => {
+test("las dos variantes juntas cubren TODAS las acciones del motor", () => {
   // Si el motor gana una acción y no se agrega acá, el test de abajo no la revisa: este guard es
   // el que avisa que la cobertura quedó corta.
   const unicos = new Set(TODOS_LOS_IDS);
@@ -84,21 +77,45 @@ test("las alarmas de etapa (dinámicas) van al panel de ciclo de vida", () => {
   expect(targetFor("etapa-lo_que_sea_futuro")).toEqual({ kind: "anchor", anchor: ANCHORS.etapa });
 });
 
-// El bug concreto: apuntaba a un ancla que solo existe si hay OTROS banners.
-test("draft-proposal tiene ancla propia, no la de los borradores", () => {
-  expect(targetFor("draft-proposal")).toEqual({ kind: "anchor", anchor: ANCHORS.propuesta });
+/**
+ * LA REGLA DE NEGOCIO, escrita donde alguien la va a leer: **publicar es de la barra amarilla.**
+ * Tener el recordatorio en dos lugares —el panel y el `PublishBar`— era exactamente el ruido que
+ * el rediseño vino a sacar. El grupo `publicar` se borró del TIPO, así que reintroducir un ítem
+ * también rompe `tsc`; esto cubre el otro extremo, la tabla de destinos.
+ */
+test("ninguna acción publica: esa conversación es de la barra amarilla", () => {
+  for (const [id, target] of Object.entries(ACTION_TARGETS)) {
+    expect(id, "un id de publicación volvió al catálogo").not.toMatch(/publicar/);
+    expect(
+      target.kind === "run" && (target as { intent: string }).intent === "publish",
+      `"${id}" volvió a tener un destino de publicar`,
+    ).toBe(false);
+  }
+});
+
+// El bug concreto que este archivo arregló: apuntaba a un ancla que solo existe si hay OTROS
+// banners. Hoy los borradores viven en un cajón y la propuesta se resuelve dentro del Gantt.
+test("los borradores abren su cajón; la propuesta va al Gantt donde se resuelve", () => {
+  expect(targetFor("draft-progress")).toEqual({ kind: "drawer", drawer: "borradores" });
+  expect(targetFor("draft-particularidades")).toEqual({ kind: "drawer", drawer: "borradores" });
+  expect(targetFor("draft-proposal")).toEqual({ kind: "anchor", anchor: ANCHORS.gantt });
   expect(targetFor("draft-proposal")).not.toEqual(targetFor("draft-progress"));
 });
 
-test("publicar y confirmar detalle EJECUTAN, no navegan", () => {
-  expect(targetFor("sin-publicar")).toEqual({ kind: "run", intent: "publish" });
-  expect(targetFor("cambios-sin-publicar")).toEqual({ kind: "run", intent: "publish" });
+test("confirmar detalle EJECUTA, no navega", () => {
   expect(targetFor("detalle-sin-confirmar")).toEqual({ kind: "run", intent: "confirm-detail" });
 });
 
-test("las acciones sobre filas enfocan la lista, no scrollean al Gantt", () => {
-  for (const id of ["compromisos-sin-tarea", "duplicados", "sin-cuantificar", "compromisos-vencidos"]) {
-    expect(targetFor(id), id).toEqual({ kind: "particularidades" });
+/**
+ * El grupo viaja en la TABLA, no en un if-chain del canvas. Antes era
+ * `id === "compromisos-sin-tarea" ? "compromisos" : "arreglar"`, o sea que cualquier acción nueva
+ * caía en "arreglar" sin que nada avisara — el mismo fallback silencioso, de vuelta.
+ */
+test("las acciones sobre filas enfocan SU grupo de la lista", () => {
+  expect(targetFor("compromisos-sin-tarea")).toEqual({ kind: "particularidades", group: "compromisos" });
+  expect(targetFor("sugerencias-equipo")).toEqual({ kind: "particularidades", group: "sugerencias" });
+  for (const id of ["duplicados", "sin-cuantificar", "compromisos-vencidos"]) {
+    expect(targetFor(id), id).toEqual({ kind: "particularidades", group: "arreglar" });
   }
 });
 

@@ -27,7 +27,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { plural, computePhaseRanges, currentWeekIndex, overduePlannedEnd, isOverdueByDate } from "@/lib/timeline/weeks";
+import { plural, computePhaseRanges, currentWeekIndex } from "@/lib/timeline/weeks";
 import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
@@ -43,10 +43,7 @@ import { useMe } from "@/hooks/useMe";
 import CronogramaProgressButton from "@/components/clients/CronogramaProgressButton";
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
 import { useHydrated } from "@/lib/hooks/useHydrated";
-import { collectClientBlockers } from "@/lib/timeline/client-blockers";
-import { summarizeDuplicates } from "@/lib/timeline/particularidad-identity";
-import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
-import { buildProjectActions } from "@/lib/timeline/project-actions";
+import { actionsFromSignals } from "@/lib/timeline/project-actions-input";
 import { computeProposalDeltas, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
 import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -215,9 +212,6 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [summary, setSummary] = useState<ProjectSummary | null>(null);
   // Lo que el cliente lee AHORA (del snapshot congelado), distinto de lo que leerá al «Subir».
   const [publicadas, setPublicadas] = useState<Array<{ kind: string; party: string; weeksImpact: number | null }>>([]);
-  // ¿Hay cambios guardados que el cliente todavía no vio? Se deriva de la MISMA sugerencia de razón
-  // que precarga el modal de publicar: si hay texto sugerido, hay diff contra lo publicado.
-  const [cambiosSinPublicar, setCambiosSinPublicar] = useState(false);
   // Cambió una particularidad VISIBLE (visibilidad/contenido/borrado) desde la última publicación
   // → la barra "Subir" avisa que hay algo para re-publicar (lo ve el cliente recién al «Subir»).
   const [particularidadesDirty, setParticularidadesDirty] = useState(false);
@@ -470,21 +464,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const hydrated = useHydrated();
   const hydratedNow = useMemo(() => (hydrated ? new Date() : null), [hydrated]);
 
-  // ¿Hay cambios que el cliente todavía no vio? Se pregunta al MISMO endpoint que sugiere la razón
-  // de re-publicación: si tiene algo que decir, es que hay diff contra lo publicado. Best-effort.
-  useEffect(() => {
-    if (!publishedAt) { setCambiosSinPublicar(false); return; }
-    let cancelado = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/projects/${projectId}/timeline/publish-suggestion`);
-        if (!res.ok) return;
-        const d = await res.json().catch(() => ({}));
-        if (!cancelado) setCambiosSinPublicar(typeof d?.suggestion === "string" && d.suggestion.trim() !== "");
-      } catch { /* el panel simplemente no muestra esa fila */ }
-    })();
-    return () => { cancelado = true; };
-  }, [projectId, publishedAt, lastEditedAt]);
+  /* Acá vivía un efecto que en CADA montaje le pegaba a `/timeline/publish-suggestion` solo para
+     decidir si mostrar la fila "hay cambios que el cliente no vio". Se fue con esa fila: publicar
+     es conversación de la barra amarilla (`PublishBar`, arriba), que ya lo sabe comparando
+     `lastEditedByHuman` contra `timelinePublishedAt` sin pedirle nada al servidor.
+     No es solo limpieza: ese endpoint corre `readClientTimeline` entero —arma el snapshot externo
+     completo— y era el único bloqueante real para resolver las acciones de 13-17 proyectos de una,
+     que es lo que necesita la bandeja del CSE. El endpoint sigue existiendo y se llama cuando
+     corresponde: al ABRIR el modal de publicar, para sugerir el motivo del cambio. */
 
   // Generar el handoff crea las fases del cronograma como efecto. El handoff bumpea
   // timelineRefreshSignal → si el cronograma está VACÍO, recargamos para que aparezcan (no
@@ -1478,62 +1465,34 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     })),
   }));
 
-  // ── Panel "Qué hacer acá" ──────────────────────────────────────────────────────
-  // Todas las señales ya estaban calculadas y repartidas; acá se juntan. El motor
-  // (lib/timeline/project-actions) es puro: acá solo se lo alimenta.
-  const projectActions = useMemo(() => {
-    const blockers = anchor && hydratedNow ? collectClientBlockers(ganttPhases, anchor, hydratedNow) : [];
-    const scope = summary?.scope;
-    return buildProjectActions({
-      pendingProgress: showProgressBanner,
-      pendingParticularidades: showParticBanner ? (pendingParticularidades?.length ?? 0) : 0,
-      pendingProposal: !!proposal,
-      anchorStartDate: anchor || null,
-      detailConfirmedAt,
-      timelinePublishedAt: publishedAt,
-      hasTasks: hasAiDetail,
-      cambiosSinPublicar,
-      // ATRASO sin semanas: no suma al corrimiento, así que el total que ve el CSE queda corto.
-      sinCuantificar: particularidades.filter((p) => p.kind === "ATRASO" && !p.weeksImpact).length,
-      duplicados: summarizeDuplicates(particularidades),
-      // Trabajo anotado que nadie está persiguiendo. MISMO criterio que el grupo "Compromisos sin
-      // dueño" al que lleva el botón: si acá se contaran también los atrasos sin cuantificar
-      // (que son convertibles) el número saldría inflado y no coincidiría con ningún grupo — y
-      // además los estaría contando dos veces, porque ya tienen su propia línea.
-      compromisosSinTarea: particularidades.filter(esCompromisoPendiente).length,
-      // Ya tiene tarea, pero la fecha pasó y sigue sin hacerse. Se usa el MISMO predicado de atraso
-      // del resto del sistema (semana + anchor), no una segunda matemática basada en committedDueDate.
-      compromisosVencidos: (() => {
-        const conTarea = new Set(
-          particularidades.map((p) => p.convertedTaskId).filter((id): id is string => !!id),
-        );
-        if (conTarea.size === 0 || !anchor || !hydratedNow) return 0;
-        const ranges = computePhaseRanges(ganttPhases);
-        let n = 0;
-        ganttPhases.forEach((ph, i) => {
-          for (const t of ph.tasks) {
-            if (!t.id || !conTarea.has(t.id)) continue;
-            const fin = overduePlannedEnd(anchor, ranges[i].start, t.weekIndex);
-            if (isOverdueByDate(fin, hydratedNow, t.status)) n++;
-          }
-        });
-        return n;
-      })(),
-      pendientesDelClienteVencidos: blockers.length,
-      // Las alarmas de cronograma solo aplican cuando la etapa ya lo dio por consensuado.
-      tareasVencidas: summary?.scheduleAlarmsActive ? (summary?.overdueTasks ?? 0) : 0,
-      alarmasDeEtapa: summary?.stageAlarms ?? [],
-      // `attenuated` = el baseline es flojo, así que el "extra" probablemente sea detalle, no alcance real.
-      alcanceExcedido:
-        scope?.exceeded && scope.measurable && !scope.attenuated
-          ? { addedTasks: scope.addedTasks, weeksDelta: scope.weeksDelta }
-          : null,
-      estancadoDias: summary?.stalled ? summary.daysSinceActivity : null,
-    });
-  }, [
-    ganttPhases, anchor, hydratedNow, summary, showProgressBanner, showParticBanner, pendingParticularidades,
-    proposal, detailConfirmedAt, publishedAt, hasAiDetail, cambiosSinPublicar, particularidades,
-  ]);
+  /* ── Panel "Qué hacer acá" ────────────────────────────────────────────────────
+     El armado del input se mudó a `lib/timeline/project-actions-input.ts` (puro), porque la
+     bandeja del CSE tiene que resolver las acciones de 13-17 proyectos sin montar 17 canvases.
+     Acá sigue calculándose LOCAL a propósito: la lista tiene que reaccionar a `ganttPhases`
+     apenas el CSE toca una tarea, antes de que vuelva el próximo `load()`. Misma función, dos
+     llamadores, cero divergencia posible. */
+  const projectActions = useMemo(
+    () =>
+      actionsFromSignals(
+        {
+          anchorStartDate: anchor || null,
+          detailConfirmedAt,
+          hasTasks: hasAiDetail,
+          pendingProgress: showProgressBanner,
+          pendingParticularidades: showParticBanner ? (pendingParticularidades?.length ?? 0) : 0,
+          pendingProposal: !!proposal,
+          particularidades,
+          sugerenciasDelEquipo: sugerencias.length,
+          phases: ganttPhases,
+        },
+        summary,
+        hydratedNow,
+      ),
+    [
+      ganttPhases, anchor, hydratedNow, summary, showProgressBanner, showParticBanner,
+      pendingParticularidades, proposal, detailConfirmedAt, hasAiDetail, particularidades, sugerencias,
+    ],
+  );
 
   // El destino de cada acción vive en una TABLA PURA (`project-action-targets`), no en un if-chain.
   // Antes había un `return` final que mandaba lo no contemplado al tope del Gantt, y terminaron
@@ -1549,16 +1508,15 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     }
     switch (target.kind) {
       case "run":
-        if (target.intent === "publish") return void openPublishModal();
         // Confirmar el detalle: el click ES la decisión (con confirmación de por medio). Mandarlo a
         // scrollear a un botón que dice lo mismo es fricción sin propósito.
         return setConfirmDetailOpen(true);
       case "particularidades":
-        // Por ahora abre el grupo que corresponde; en la fase siguiente enfoca las filas exactas.
-        setFocusGroup((f) => ({
-          key: id === "compromisos-sin-tarea" ? "compromisos" : "arreglar",
-          nonce: (f?.nonce ?? 0) + 1,
-        }));
+        // El grupo viene de la TABLA, no de un if-chain acá: antes era
+        // `id === "compromisos-sin-tarea" ? "compromisos" : "arreglar"`, o sea que cualquier
+        // acción nueva caía en "arreglar" en silencio — el mismo fallback que este archivo
+        // dice haber matado, escondido una capa más abajo.
+        setFocusGroup((f) => ({ key: target.group, nonce: (f?.nonce ?? 0) + 1 }));
         return void document
           .getElementById(ANCHORS.particularidades)
           ?.scrollIntoView({ behavior: "smooth", block: "start" });

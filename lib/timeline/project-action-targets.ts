@@ -18,17 +18,21 @@
 export type ActionTarget =
   /** Scroll a un ancla concreta de la página. */
   | { kind: "anchor"; anchor: string }
-  /** A la lista de particularidades, enfocando las filas de ESTA acción (el canvas resuelve los ids). */
-  | { kind: "particularidades" }
+  /** A la lista de particularidades, enfocando UN grupo concreto de la lista.
+   *  El grupo va acá y no en el canvas: antes lo decidía un if-chain
+   *  (`id === "compromisos-sin-tarea" ? "compromisos" : "arreglar"`), que es exactamente el
+   *  fallback silencioso que este archivo existe para matar — una acción nueva caía en
+   *  "arreglar" sin que nada avisara. Con el grupo en la tabla, el test lo cubre. */
+  | { kind: "particularidades"; group: "compromisos" | "arreglar" | "sugerencias" }
+  /** Abre el cajón de borradores del agente (avance + particularidades propuestas). */
+  | { kind: "drawer"; drawer: "borradores" }
   /** Ejecuta algo en vez de navegar: el click ES la decisión. */
-  | { kind: "run"; intent: "publish" | "confirm-detail" }
+  | { kind: "run"; intent: "confirm-detail" }
   /** Sin destino: la fila se muestra sin botón. Mejor que un botón que no cumple. */
   | { kind: "none" };
 
 /** Anclas de la página. Cada una tiene que existir en el DOM con `scroll-mt-24`. */
 export const ANCHORS = {
-  borradores: "cronograma-borradores",
-  propuesta: "cronograma-propuesta",
   arranque: "cronograma-arranque",
   gantt: "cronograma-gantt",
   particularidades: "cronograma-particularidades",
@@ -37,7 +41,11 @@ export const ANCHORS = {
 } as const;
 
 const A = (anchor: string): ActionTarget => ({ kind: "anchor", anchor });
-const PARTS: ActionTarget = { kind: "particularidades" };
+const PARTS = (group: "compromisos" | "arreglar" | "sugerencias"): ActionTarget => ({
+  kind: "particularidades",
+  group,
+});
+const BORRADORES: ActionTarget = { kind: "drawer", drawer: "borradores" };
 
 /**
  * Destino por id de acción. Los `etapa-*` se resuelven aparte porque son dinámicos (uno por alarma).
@@ -47,24 +55,26 @@ const PARTS: ActionTarget = { kind: "particularidades" };
  */
 export const ACTION_TARGETS: Record<string, ActionTarget> = {
   // ── Borradores del agente ────────────────────────────────────────────────────
-  "draft-progress": A(ANCHORS.borradores),
-  "draft-particularidades": A(ANCHORS.borradores),
-  // Ancla PROPIA: `#cronograma-borradores` solo existe si hay banners de avance o particularidades.
-  "draft-proposal": A(ANCHORS.propuesta),
+  // Los dos banners dejaron de vivir arriba del Gantt y ahora comparten un cajón, así que
+  // no hay ancla a la que scrollear: se abre.
+  "draft-progress": BORRADORES,
+  "draft-particularidades": BORRADORES,
+  // La propuesta de estructura se resuelve DENTRO del Gantt (badges azules + filas fantasma
+  // por fase), así que el destino es el Gantt, no un banner que ya no existe.
+  "draft-proposal": A(ANCHORS.gantt),
 
-  // ── Filas de la lista: el CTA enfoca las suyas ───────────────────────────────
-  "compromisos-sin-tarea": PARTS,
-  duplicados: PARTS,
-  "sin-cuantificar": PARTS,
-  "compromisos-vencidos": PARTS,
+  // ── Filas de la lista: el CTA enfoca su grupo ────────────────────────────────
+  "compromisos-sin-tarea": PARTS("compromisos"),
+  duplicados: PARTS("arreglar"),
+  "sin-cuantificar": PARTS("arreglar"),
+  "compromisos-vencidos": PARTS("arreglar"),
+  "sugerencias-equipo": PARTS("sugerencias"),
 
-  // ── Publicación ──────────────────────────────────────────────────────────────
+  // ── Condiciones del plan ─────────────────────────────────────────────────────
   "sin-anchor": A(ANCHORS.arranque),
   // No scrollea: confirma. Mandarte a un botón que dice lo mismo que acabás de clickear es
   // fricción sin propósito — el click ES la decisión (con su confirmación de por medio).
   "detalle-sin-confirmar": { kind: "run", intent: "confirm-detail" },
-  "sin-publicar": { kind: "run", intent: "publish" },
-  "cambios-sin-publicar": { kind: "run", intent: "publish" },
 
   // ── Riesgo ───────────────────────────────────────────────────────────────────
   "blockers-cliente": A(ANCHORS.pendientesCliente),

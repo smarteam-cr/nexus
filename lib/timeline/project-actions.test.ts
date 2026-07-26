@@ -11,11 +11,10 @@ const sano: ProjectActionsInput = {
   pendingProgress: false,
   pendingParticularidades: 0,
   pendingProposal: false,
+  sugerenciasDelEquipo: 0,
   anchorStartDate: "2026-06-01T00:00:00.000Z",
   detailConfirmedAt: "2026-06-02T00:00:00.000Z",
-  timelinePublishedAt: "2026-06-03T00:00:00.000Z",
   hasTasks: true,
-  cambiosSinPublicar: false,
   sinCuantificar: 0,
   duplicados: { hechos: 0, filas: 0 },
   compromisosSinTarea: 0,
@@ -64,10 +63,48 @@ test("sin fecha de arranque tapa al detalle sin confirmar (una cosa a la vez)", 
   expect(a.map((x) => x.id)).not.toContain("detalle-sin-confirmar");
 });
 
-test("sin publicar tapa a cambios-sin-publicar (no se pide dos veces lo mismo)", () => {
-  const a = buildProjectActions({ ...sano, timelinePublishedAt: null, cambiosSinPublicar: true });
-  expect(a.map((x) => x.id)).toContain("sin-publicar");
-  expect(a.map((x) => x.id)).not.toContain("cambios-sin-publicar");
+/**
+ * La regla de negocio del rediseño: **publicar es de la barra amarilla, no del panel.**
+ * El motor emitía "El cronograma no está publicado" y "Hay cambios que el cliente no vio"
+ * mientras el `PublishBar` decía lo mismo dos centímetros más arriba, con el botón de verdad.
+ * El grupo `publicar` se borró del TIPO, así que esto no puede volver sin romper `tsc` — pero
+ * el test lo deja escrito donde alguien lo va a leer.
+ */
+test("el motor no habla de publicar: eso es de la barra amarilla", () => {
+  const enLlamas = buildProjectActions({
+    ...sano,
+    pendingProgress: true,
+    anchorStartDate: null,
+    pendientesDelClienteVencidos: 3,
+    estancadoDias: 40,
+  });
+  for (const x of enLlamas) {
+    expect(x.id, `"${x.id}" volvió a hablar de publicar`).not.toMatch(/publicar/);
+    expect(x.cta ?? "").not.toContain("Subir al cliente");
+  }
+});
+
+// Los dos que sobrevivieron al grupo borrado son decisiones del CSE, no publicaciones.
+test("el arranque y el detalle son decisiones, no publicaciones", () => {
+  expect(buildProjectActions({ ...sano, anchorStartDate: null })
+    .find((x) => x.id === "sin-anchor")!.group).toBe("decidir");
+  expect(buildProjectActions({ ...sano, detailConfirmedAt: null })
+    .find((x) => x.id === "detalle-sin-confirmar")!.group).toBe("decidir");
+});
+
+// Del otro lado hay una PERSONA esperando respuesta, no un borrador del agente.
+test("lo que reporta el equipo técnico entra al panel", () => {
+  const a = buildProjectActions({ ...sano, sugerenciasDelEquipo: 2 });
+  expect(a[0].id).toBe("sugerencias-equipo");
+  expect(a[0].group).toBe("decidir");
+  expect(a[0].tone).toBe("warn");
+  expect(a[0].title).toBe("2 sugerencias del equipo técnico sin responder");
+  // No puede decir "Revisar sugerencias": ese texto ya es el de `draft-proposal`, y dos botones
+  // con el mismo label en la misma lista es el ruido que estamos sacando.
+  expect(a[0].cta).not.toBe(
+    buildProjectActions({ ...sano, pendingProposal: true })[0].cta,
+  );
+  expect(buildProjectActions(sano).map((x) => x.id)).not.toContain("sugerencias-equipo");
 });
 
 test("riesgo del cliente y alcance excedido van a Atender", () => {
@@ -108,14 +145,13 @@ test("alarmas de etapa se pasan tal cual con su antigüedad", () => {
   expect(a[0].cta).toBe("Ir a la etapa");
 });
 
-test("el orden es decidir → publicar → atender", () => {
+test("el orden es decidir → atender", () => {
   const a = buildProjectActions({
     ...sano,
     pendingProgress: true,
-    timelinePublishedAt: null,
     pendientesDelClienteVencidos: 1,
   });
-  expect(groupActions(a).map((g) => g.group)).toEqual(["decidir", "publicar", "atender"]);
+  expect(groupActions(a).map((g) => g.group)).toEqual(["decidir", "atender"]);
 });
 
 test("cada acción trae qué pasa, por qué importa y qué hacer", () => {

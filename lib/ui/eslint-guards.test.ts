@@ -15,15 +15,22 @@
 import { describe, expect, it } from "vitest";
 import { ESLint } from "eslint";
 
+/* UNA sola instancia para los tres tests. Antes cada uno construía la suya, y como resolver la
+   flat config entera cuesta ~5 s en frío, el primero se pasaba del timeout por defecto (5 s)
+   cada vez que el archivo corría junto a los otros 78 — o sea que la suite completa quedaba en
+   rojo permanente aunque el guard estuviera bien. Un test que siempre falla deja de avisar de
+   nada: tapa las fallas de verdad. Con la instancia compartida el costo se paga una vez. */
+const eslint = new ESLint({ cwd: process.cwd() });
+
 async function selectoresPara(archivo: string): Promise<string> {
-  const eslint = new ESLint({ cwd: process.cwd() });
   const config = (await eslint.calculateConfigForFile(archivo)) as {
     rules?: Record<string, unknown>;
   };
   return JSON.stringify(config.rules?.["no-restricted-syntax"] ?? []);
 }
 
-describe("meta-test: las dos familias de no-restricted-syntax no se pisan", () => {
+// El arranque en frío de ESLint no cabe en el timeout por defecto cuando la máquina está cargada.
+describe("meta-test: las dos familias de no-restricted-syntax no se pisan", { timeout: 30_000 }, () => {
   it("un .tsx interno tiene AMBAS familias (tokens + anti-slab)", async () => {
     const selectores = await selectoresPara("components/ui/Button.tsx");
     expect(selectores, "familia de tokens ausente — ¿otro guard pisó la clave?").toMatch(/-gray-/);
