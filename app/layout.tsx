@@ -73,7 +73,16 @@ export default async function RootLayout({
           }}
         />
       </head>
+      {/* `suppressHydrationWarning` SOLO acá, en el <body>, y por un motivo concreto: varias
+          extensiones del navegador le agregan atributos propios (ColorZilla escribe
+          `cz-shortcut-listen`, y hay gestores de contraseñas y traductores que hacen lo
+          mismo) ANTES de que React hidrate. El servidor no los puso, el cliente los ve, y
+          React reporta un error de hidratación que no viene del código y que nadie puede
+          arreglar — solo entrena a ignorar la consola, que es el costo real.
+          Es acotado a este elemento: adentro del árbol los errores de hidratación siguen
+          reportándose normalmente, así que los de verdad no se tapan. */}
       <body
+        suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} ${openSans.variable} ${jakarta.variable} antialiased`}
       >
         <ToastProvider>

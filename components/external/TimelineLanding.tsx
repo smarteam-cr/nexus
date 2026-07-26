@@ -18,12 +18,12 @@
  *     aparecen con .is-visible — sin el observer quedarían invisibles.
  */
 import { useRef } from "react";
-import TimelineSection from "@/components/canvas/TimelineSection";
+import TimelineSection, { TIMELINE_CONTAINER } from "@/components/canvas/TimelineSection";
 import { useReveal } from "@/components/canvas/useLandingMotion";
 import type { ExternalTimelineData } from "@/lib/external/timeline-view-types";
 
-/** Mismo contenedor que el resto (ver TimelineSection): sale del token del motor. */
-const MAXW = "var(--stl-w-pagina)";
+/* El contenedor sale importado del Gantt, no copiado: era un número repetido en los dos
+   archivos y con el tiempo dejaron de coincidir (1024 acá, 1040 en el motor). */
 
 export default function TimelineLanding({
   clientName,
@@ -43,7 +43,7 @@ export default function TimelineLanding({
     <div ref={rootRef} className="kickoff-landing">
       {/* Titular de la página (la marca la pone ExternalShell) */}
       <section className="section-light" style={{ padding: "clamp(36px, 5vw, 56px) 24px 0" }}>
-        <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
+        <div style={TIMELINE_CONTAINER}>
           {clientLogoUrl && (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -70,7 +70,7 @@ export default function TimelineLanding({
         <TimelineSection phases={timeline.phases} anchor={start} showHeader={false} showProgress particularidades={timeline.particularidades} />
       ) : (
         <section className="section-light" style={{ padding: "32px 24px 24px" }}>
-          <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
+          <div style={TIMELINE_CONTAINER}>
             <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>
               Estamos preparando el cronograma de tu proyecto — pronto lo vas a ver aquí.
             </p>

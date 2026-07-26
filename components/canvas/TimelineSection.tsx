@@ -43,9 +43,19 @@ import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/p
 import { clientStatusLine } from "@/lib/timeline/client-status";
 import type { ExternalTimelinePhase, ExternalParticularidad } from "@/lib/external/timeline-view-types";
 
-/** El cronograma usa el MISMO contenedor que el resto de los documentos: antes era un
- *  número propio (1024) y quedaba desalineado con las secciones de texto de al lado. */
-const MAXW = "var(--stl-w-pagina)";
+/**
+ * Contenedor del cronograma. Es MÁS ANCHO que el de los documentos de texto (1280) porque
+ * el Gantt gana con cada píxel: más semanas visibles sin scroll horizontal.
+ *
+ * ⚠ NO usa el token del motor (`--stl-w-pagina`) y no es un descuido: el cronograma se
+ * rinde dentro de `.kickoff-landing`, FUERA del ámbito `.stl` donde ese token está
+ * declarado. Al referenciarlo desde acá la variable quedaba sin definir, el `max-width`
+ * inválido, y el cronograma salía al 100% del ancho de la pantalla, pegado a los bordes.
+ *
+ * El porcentaje, y no un número fijo, es lo que deja "poco margen" en cualquier pantalla:
+ * en un monitor grande usa casi todo, y en un portátil se comporta como el ancho de antes.
+ */
+export const TIMELINE_CONTAINER = { width: "80%", maxWidth: 1800, margin: "0 auto" } as const;
 const SECTION_PAD = "clamp(40px, 6vw, 72px) 24px";
 
 // Misma paleta de tipos que el Gantt interno, en sus variantes light (los
@@ -173,7 +183,7 @@ export default function TimelineSection({
 
   return (
     <section className="section-light" style={{ padding: SECTION_PAD }}>
-      <div style={{ maxWidth: MAXW, margin: "0 auto" }}>
+      <div style={TIMELINE_CONTAINER}>
         {showHeader && (
           <>
             <span className="eyebrow reveal">Hoja de ruta</span>
