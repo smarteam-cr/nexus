@@ -63,6 +63,7 @@ import {
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
 import { findDuplicateGroups } from "@/lib/timeline/particularidad-identity";
+import { buildPhaseSignal, type SignalTone } from "@/lib/timeline/phase-signal";
 import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
 import { describeChanges, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
 import { clientStatusLine } from "@/lib/timeline/client-status";
@@ -211,6 +212,15 @@ const ACTIVITY_META: Record<string, { label: string; seg: string; chip: string }
    no con un neutro fijo: ahora que el cronograma interno sigue el tema, un tono duro de la
    escala cruda se perdía contra el fondo oscuro. */
 const NEUTRAL_SEG = "bg-fg-muted/40";
+
+/** Color del indicador único de la fila de fase (`lib/timeline/phase-signal.ts`).
+ *  Solo `riesgo` grita: es la fase que se pasó de fecha, no una tarea suelta vencida. */
+const SIGNAL_TONE: Record<SignalTone, string> = {
+  riesgo: "text-red-400",
+  ok: "text-emerald-400",
+  curso: "text-blue-400",
+  neutro: "text-fg-muted",
+};
 
 // ── Estado de tarea: ciclo + estilos ──────────────────────────────────────────
 
@@ -725,8 +735,23 @@ export default function TimelineGantt({
               const range = ranges[i];
               const meta = p.activityType ? ACTIVITY_META[p.activityType] : null;
               const isOpen = expanded.has(p.key);
-              const hasOverdue = p.tasks.some((t) =>
-                isOverdueByDate(overduePlannedEnd(anchor, range.start, t.weekIndex), today, t.status),
+              /* El punto rojo se ganaba con "alguna tarea suya venció", que en un proyecto real
+                 dispara en 7 de cada 10 fases. `buildPhaseSignal` separa eso —problema de una
+                 tarea, que ya grita en su propia fila— de que la FASE se haya pasado de fecha,
+                 que es lo único que merece rojo. */
+              const signal = buildPhaseSignal(
+                {
+                  // Una fase sin estado guardado (snapshots viejos) se lee como pendiente:
+                  // es lo mismo que hace el resto del módulo, y `derivePhaseState` lo respeta.
+                  status: p.status ?? "PENDING",
+                  tasks: p.tasks,
+                  tipoLabel: meta?.label ?? null,
+                  needsValidation: p.needsValidation,
+                  vencidas: p.tasks.filter((t) =>
+                    isOverdueByDate(overduePlannedEnd(anchor, range.start, t.weekIndex), today, t.status),
+                  ).length,
+                },
+                { phaseStart: range.start, durationWeeks: p.durationWeeks, curWeek },
               );
 
               const tasksByWeek = new Map<number, GanttTask[]>();
@@ -902,29 +927,21 @@ export default function TimelineGantt({
                               </span>
                             );
                           })()}
-                          {p.status === "DONE" && (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-emerald-300 bg-emerald-900/30 border-emerald-700/40" title="Fase completada">
-                              ✓ Completada
-                            </span>
-                          )}
-                          {p.status === "IN_PROGRESS" && (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-blue-300 bg-blue-900/30 border-blue-700/40" title="Fase en curso (hoy)">
-                              ● En curso
-                            </span>
-                          )}
-                          {meta && (
-                            <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${meta.chip}`}>
-                              {meta.label}
-                            </span>
-                          )}
-                          {p.needsValidation && (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 text-amber-300 bg-amber-900/30 border-amber-700/40" title="El agente estimó esta fase/duración sin datos de tiempos en ventas — confirmá y ajustá">
-                              ⚠ Estimada
-                            </span>
-                          )}
-                          {hasOverdue && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" title="Tareas vencidas" />
-                          )}
+                          {/* UN indicador en lugar de cuatro cajitas de solo lectura (estado, tipo,
+                              "estimada" y un punto rojo). El cuadrado lleva el color del tipo de
+                              actividad — el mismo de su barra— porque la palabra ya vive en la
+                              leyenda; y el `title` trae la lectura completa, así que nada de lo
+                              que se comprime se pierde. */}
+                          <span
+                            className={`inline-flex items-center gap-1.5 flex-shrink-0 text-[10px] font-semibold ${SIGNAL_TONE[signal.tono]}`}
+                            title={signal.detalle}
+                          >
+                            <span
+                              className={`w-2 h-2 rounded-sm flex-shrink-0 ${meta ? meta.seg : "border border-fg-muted/50"}`}
+                              aria-hidden
+                            />
+                            {signal.texto}
+                          </span>
                         </span>
                       </div>
                     </div>
