@@ -163,6 +163,12 @@ describe("paleta interna (.stl-internal): gris + UN ámbar, y legible", () => {
     ["secundario-dark sobre banda carbón", I.darkText2, I.darkBg, 4.5],
     ["ámbar de «sin verificar» sobre su fondo", I.flag, I.flagSoft, 4.5],
     ["ámbar de «sin verificar» sobre blanco", I.flag, I.bg, 4.5],
+    // Umbral 3 y no 4.5 A PROPÓSITO: el × de una pregunta del plan de sesiones es un ícono
+    // SVG de 13px, y WCAG 1.4.11 pide 3:1 para contenido no textual. Sobre la fila marcada
+    // (gris suave) el par da 4.43 — alcanza para un ícono, no para texto. Si algún día ese
+    // botón lleva una palabra, hay que subir este 3 a 4.5 y el guard va a frenarlo.
+    ["× de borrar pregunta sobre fila marcada (ícono, no texto)", "#DC2626", I.soft, 3],
+    ["× de borrar pregunta sobre fila sin marcar", "#DC2626", I.bg, 3],
   ];
   for (const [desc, fg, bg, min] of casos) {
     it(`${desc} ≥ ${min}:1`, () => {

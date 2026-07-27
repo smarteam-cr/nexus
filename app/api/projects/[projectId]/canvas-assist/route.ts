@@ -60,6 +60,13 @@ const DOC: Record<
     defs: DESARROLLO_DEF_BY_KEY,
     tpl: DESARROLLO_TEMPLATE,
   },
+  /* ⚠ ANTES DE SUMAR EXPLORACIÓN ACÁ: aplicar una propuesta del assist pasa por
+     `preserveNonSchemaKeys` (lib/ai/assist.ts), que es SHALLOW — solo conserva keys de
+     PRIMER NIVEL fuera del schema. Las marcas "ya la pregunté" del plan de sesiones viven
+     anidadas en `sesiones[].preguntas[].hecha`, así que una propuesta que toque `sesiones`
+     las borraría TODAS sin ningún aviso: el cartel que sí existe en la sección habla de
+     "Regenerar", y el apply del assist va por otro camino. Ver
+     lib/canvas/exploracion-preguntas.ts. */
 };
 
 export async function POST(req: NextRequest, { params }: { params: Params }) {

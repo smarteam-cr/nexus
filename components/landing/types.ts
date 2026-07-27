@@ -255,9 +255,11 @@ export interface DevEstimateCtx {
   createdAt: string;
 }
 
-/** Props que recibe TODA sección. `onChange` emite el nuevo `data` (estado local
- *  del workspace, que persiste con debounce vía saveBlock). En modo lectura no hay
- *  handlers. */
+/** Props que recibe TODA sección. `onChange` emite el nuevo `data` (estado local del
+ *  workspace, que persiste DE INMEDIATO vía `saveBlock`: PUT optimista, sin debounce —
+ *  quien commitea es `Editable`, al perder el foco). Decía "con debounce" y era falso;
+ *  la diferencia importa, porque un control de clic (una casilla) manda un PUT por clic,
+ *  sin ventana de coalescencia. En modo lectura no hay handlers. */
 export interface SectionProps<T> {
   data: T;
   ctx: LandingContext;

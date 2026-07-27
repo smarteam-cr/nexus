@@ -28,6 +28,12 @@
  * COROLARIO ACEPTADO: regenerar la sección BORRA las marcas, porque reescribe las
  * preguntas. Es correcto — una marca sobre una pregunta que ya no existe no significa
  * nada. La UI lo avisa antes (ver ExploracionSections).
+ *
+ * ⚠ EL MISMO BORRADO, PERO SIN AVISO, ESPERA EN EL ASSIST. `preserveNonSchemaKeys`
+ * (lib/ai/section-schema.ts) es SHALLOW: solo conserva keys fuera de schema de PRIMER
+ * NIVEL, y `hecha` vive anidada. Hoy no pasa porque Exploración no está en el mapa `DOC`
+ * de app/api/projects/[projectId]/canvas-assist/route.ts — hay una nota ahí para el día
+ * que alguien la agregue.
  */
 import { isSi } from "@/lib/ui/si-no";
 

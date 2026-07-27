@@ -114,13 +114,40 @@ function blockToText(b: BlockLite): string {
 }
 
 /**
+ * Claves técnicas que NO son contenido del documento. Espeja `SKIP_KEYS` de
+ * `lib/canvas/print-vocab.ts` (el vocabulario del PDF): las dos listas persiguen lo mismo
+ * —sacar del texto lo que no es contenido— y por eso conviene mirarlas juntas al agregar
+ * una, aunque los destinos difieran (un prompt acá, papel allá).
+ */
+const SKIP = new Set([
+  "diagram",
+  "__lang",
+  "buttonTarget",
+  "coverImageUrl",
+  "brands",
+  // Estado VIVO del CSE, no contenido: la casilla "ya la pregunté" del plan de sesiones.
+  // Sin esto, al bajar a las preguntas se colaría un "si" pelado al prompt del agente.
+  "hecha",
+  // El `orden` que escribió la IA queda VIEJO en cuanto el CSE reordena las sesiones — la
+  // UI ya decidió ignorarlo y numerar por posición (ver ExploracionSections). Acá el orden
+  // real es el del array, así que imprimir ese número solo puede contradecirlo.
+  "orden",
+]);
+
+/** Claves que TITULAN a su objeto: encabezan la viñeta antes del "—". */
+const TITULO = ["title", "nombre", "titulo", "q"];
+
+/**
  * Aplana el `data` de un CARD tipado a texto legible por un agente: hojas string con su
  * clave, y arrays de objetos como viñetas "title — detail". Se saltan claves técnicas
  * (posiciones de diagramas, idioma) que no aportan contexto.
+ *
+ * Exportada SOLO para su test: es el embudo por el que un canvas se convierte en el
+ * contexto de otro agente, y lo que se cae acá se cae en silencio — ni los tipos ni el
+ * build lo ven, porque el resultado sigue siendo un string válido, solo que más pobre.
  */
-function flattenCardData(data: Record<string, unknown>, depth = 0): string {
+export function flattenCardData(data: Record<string, unknown>, depth = 0): string {
   if (depth > 2) return "";
-  const SKIP = new Set(["diagram", "__lang", "buttonTarget", "coverImageUrl", "brands"]);
   const lines: string[] = [];
   for (const [key, value] of Object.entries(data)) {
     if (SKIP.has(key)) continue;
@@ -131,13 +158,25 @@ function flattenCardData(data: Record<string, unknown>, depth = 0): string {
         if (typeof item === "string" && item.trim()) lines.push(`- ${item.trim()}`);
         else if (item && typeof item === "object") {
           const o = item as Record<string, unknown>;
-          const title = typeof o.title === "string" ? o.title : typeof o.nombre === "string" ? o.nombre : "";
+          const claveTitulo = TITULO.find((k) => typeof o[k] === "string" && (o[k] as string).trim());
+          const title = claveTitulo ? (o[claveTitulo] as string).trim() : "";
           const rest = Object.entries(o)
-            .filter(([k, v]) => k !== "title" && k !== "nombre" && typeof v === "string" && (v as string).trim())
+            .filter(([k, v]) => k !== claveTitulo && !SKIP.has(k) && typeof v === "string" && (v as string).trim())
             .map(([, v]) => (v as string).trim())
             .join(" · ");
           const line = [title, rest].filter(Boolean).join(" — ");
           if (line) lines.push(`- ${line}`);
+          // Un ítem de array puede traer SUS PROPIAS listas —el plan de sesiones tiene las
+          // preguntas adentro de cada sesión— y hasta acá se perdían enteras: el filtro de
+          // `rest` exige `typeof v === "string"`. Eran ~30 preguntas con su repregunta que
+          // ningún agente llegaba a leer, en la sección donde vive lo que se fue a averiguar.
+          const anidado = flattenCardData(
+            Object.fromEntries(
+              Object.entries(o).filter(([, v]) => Array.isArray(v) || (v && typeof v === "object")),
+            ),
+            depth + 1,
+          );
+          if (anidado) lines.push(anidado.replace(/^/gm, "  "));
         }
       }
     } else if (value && typeof value === "object") {

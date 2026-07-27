@@ -834,6 +834,17 @@
 .stl .stl-q-row.is-done .stl-card-detail { color: var(--text-muted); }
 .stl .stl-q-check { flex-shrink: 0; padding-top: 2px; }
 .stl .stl-q-body { flex: 1; min-width: 0; }
+/* Variante oscura, aunque HOY no se vea: `sesiones` es `theme: "soft"` y además
+   `.stl-card` —la tarjeta que contiene estas filas— no tiene variante dark, así que en
+   una banda oscura sigue siendo blanca. Es una trampa DIFERIDA: el día que alguien le dé
+   a `.stl-card` su variante (que es lo que ya hizo `.stl-rung`), estas filas quedarían
+   blancas con borde claro sobre carbón. Y nada lo cazaría — el guard de contraste valida
+   pares de TOKENS, no combinaciones clase × tema. Mismo modelo que `.stl-rung`. */
+.stl .stl-dark .stl-q-row { background: var(--dark-card); border-color: var(--dark-border); }
+.stl .stl-dark .stl-q-row.is-done { background: rgba(255, 255, 255, 0.06); border-color: transparent; }
+.stl .stl-dark .stl-q-row.is-done .stl-card-detail,
+.stl .stl-dark .stl-q-followup,
+.stl .stl-dark .stl-q-followup-mark { color: var(--dark-text-muted); }
 .stl .stl-q-followup { font-size: 13px; font-style: italic; color: var(--text-muted); }
 .stl .stl-q-followup-mark { flex-shrink: 0; color: var(--text-muted); font-size: 13px; line-height: 1.6; }
 /* El × de la fila NO reusa `.stl-remove`: ese es absoluto y se revela con
@@ -848,7 +859,15 @@
 }
 .stl .stl-q-row:hover .stl-q-remove,
 .stl .stl-q-remove:focus-visible { opacity: 1; }
+/* #DC2626 da 4.83 sobre --bg ✓ pero 4.43 sobre --bg-soft (la fila marcada), por debajo
+   del 4.5 de AA. Se acepta y se vigila con umbral 3, no 4.5: el contenido del botón es un
+   ícono SVG de 13px y WCAG 1.4.11 pide 3:1 para contenido no textual. Si algún día lleva
+   texto, el caso de landing-brand-contrast.test.ts hay que subirlo a 4.5 — y va a fallar.
+   En OSCURO el canon del archivo es #FCA5A5 (ver .stl-diag-panel y .stl-inv-monthly):
+   #DC2626 sobre carbón es ilegible. */
 .stl .stl-q-remove:hover { color: #DC2626; border-color: #FCA5A5; }
+.stl .stl-dark .stl-q-remove { border-color: var(--dark-border); color: var(--dark-text-2); }
+.stl .stl-dark .stl-q-remove:hover { color: #FCA5A5; border-color: #FCA5A5; }
 
 /* ── Tabla de propiedades (diccionario de la integración) ───────────────────
    Canvas Desarrollo. 8 columnas no entran en móvil: el scroll horizontal vive

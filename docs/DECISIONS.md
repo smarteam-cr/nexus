@@ -978,6 +978,36 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   preguntas adentro y eso ningún renderer del motor lo expresa. Dentro de él, las sesiones se
   arrastran pero las preguntas NO: un dnd-kit anidado pelea con el de afuera y el valor de
   reordenar preguntas no paga ese riesgo.
+- **El rótulo de un renderer compartido entra por la DEFINICIÓN, nunca por un campo de `data`**
+  (2026-07-27). `web_diagnosis` nació para la propuesta de sitio web con sus rótulos escritos a
+  mano adentro: izquierda "Retos actuales", derecha `"Por qué " + data.plataforma`. Cuando lo
+  reusaron Exploración, Diagnóstico y Desarrollo, los briefs taparon el problema pidiéndole al
+  agente que escribiera un RÓTULO dentro de `plataforma` — y en pantalla salió
+  **«POR QUÉ QUÉ SE ROMPE SI EL SUPUESTO ES FALSO»**. Ahora el rótulo es `SectionDef.chips`,
+  un dato de la def, y `plataforma` volvió a ser solo un dato. Exploración pone
+  *Supuestos / Riesgos* ("qué se rompe" se lee como si se rompiera el supuesto, cuando lo que
+  se rompe es la entrega). **La propuesta de sitio web NO declara `chips`**: es la única de la
+  familia que se publica al cliente y tiene 5 propuestas publicadas cuyo snapshot congela los
+  rótulos históricos. Congelado por `lib/landing/registry.test.ts`.
+- **La casilla «ya la pregunté» NO lleva autoría ni fecha** (2026-07-27), a diferencia de las
+  ~24 columnas `*ByEmail` del schema. Es deliberado, no un olvido: vive dentro del `data` del
+  bloque CARD (`hecha: "si"` — string y no boolean porque `coerceToSchema` aplana toda hoja a
+  string), **una regeneración la borra**, y es memoria de trabajo del propio CSE durante la
+  reunión. Poner `hechaByEmail` + timestamp sobre un dato que una regeneración destruye es
+  teatro de auditoría. El contraste correcto es `DRAFT/CONFIRMED`, que sí lleva
+  `confirmedByEmail` porque ahí alguien se hace responsable de algo que se publica — y este
+  documento no se publica a nadie. Además `hecha` está FUERA del schema del agente a propósito:
+  `coerceToSchema` descarta lo no declarado, así que el modelo no puede marcar una pregunta como
+  hecha ni por error; la invariante la sostiene el tipo, no un pedido en el brief.
+- **El plan de sesiones SÍ alimenta a Diagnóstico y Planificación** (2026-07-27). `flattenCardData`
+  descartaba los arrays anidados dentro de un ítem de array (`typeof v === "string"`), así que las
+  preguntas —donde vive lo que se fue a averiguar— nunca llegaban al contexto de esos dos agentes.
+  Salió a la luz porque el rediseño movió contenido justo ahí (se capó «Lo que damos por supuesto»
+  y creció el plan): los dos documentos pasaron a leer MENOS Exploración que antes. Medido sobre
+  Wherex, el contexto pasó de 13.750 a 16.492 caracteres. Al bajar a las preguntas hubo que sacar
+  dos claves del texto: `hecha` (estado del CSE, no contenido) y `orden` (el número que escribió la
+  IA queda viejo en cuanto se reordenan las sesiones — la UI ya lo ignora y numera por posición, así
+  que imprimirlo solo puede contradecir el orden real).
 
 ## Estados de carga (skeletons)
 - **El shell interno vive en el route group `app/(shell)/`** (2026-07-18): las 17 secciones
