@@ -33,6 +33,21 @@ export interface NavChildConfig {
   match?: readonly string[];
   /** Hijo visible solo para roles de Costos (whitelist COSTOS_ROLES). */
   costosOnly?: boolean;
+  /**
+   * Activo por igualdad EXACTA en vez de prefijo. Lo necesita una hoja que es
+   * PADRE de otras: sin esto, `/finanzas/costos` se marcaría activo también en
+   * `/finanzas/costos/herramientas` y compañía.
+   */
+  exact?: boolean;
+  /**
+   * Encabezado del bloque al que PERTENECE este hijo — no "encabezado antes de
+   * mí". La diferencia importa: el flyout agrupa DESPUÉS de filtrar, así que un
+   * bloque cuyos hijos se filtran enteros (ej. los de costos para un ADMIN) no
+   * deja un encabezado huérfano. Con la otra semántica habría que acordarse de
+   * mover el encabezado al agregar un hijo arriba — edición a distancia que nada
+   * fuerza. Sin `section` = hoja suelta (el flyout le pone un divisor).
+   */
+  section?: string;
 }
 
 export interface NavItemConfig {
@@ -66,6 +81,57 @@ export function canSeeNavItem(item: Pick<NavItemConfig, "gate">, ctx: NavContext
     Record<string, boolean> | undefined
   >;
   return sections[gate.section]?.[gate.action] === true;
+}
+
+// ── Hijos del flyout: las 3 reglas, PURAS ──────────────────────────────────────
+// Vivían inline en el JSX (el filtro en Sidebar.tsx, el activo en NavFlyout.tsx) y
+// por eso no había forma de testear la visibilidad de un hijo — el único hueco que
+// dejaba el test de gates congelados. Extraerlas es lo que permite que el test
+// PRUEBE la regla en vez de duplicarla.
+
+/** Espeja el filtro del Sidebar: un hijo `costosOnly` solo lo ve un rol de Costos. */
+export function visibleNavChildren(
+  item: Pick<NavItemConfig, "children">,
+  ctx: { isCostos: boolean },
+): NavChildConfig[] {
+  return (item.children ?? []).filter((c) => !c.costosOnly || ctx.isCostos);
+}
+
+/**
+ * Espeja el predicado de activo del flyout: `startsWith` por default, igualdad
+ * EXACTA con `exact`. El parámetro se tipa suelto para aceptar también los ítems
+ * que arma `RolesNavFlyout`, que no salen de la config.
+ */
+export function isChildActive(
+  child: { href: string; match?: readonly string[]; exact?: boolean },
+  pathname: string,
+): boolean {
+  return child.exact
+    ? pathname === child.href
+    : (child.match ?? [child.href]).some((p) => pathname.startsWith(p));
+}
+
+export interface NavChildBlock<T> {
+  section?: string;
+  items: T[];
+}
+
+/**
+ * Agrupa hijos YA FILTRADOS en RUNS CONSECUTIVOS por `section` (no en un Map):
+ * así el orden de la config ES el orden visual, y una hoja sin sección después de
+ * un bloque queda como su propio run sin label. Si alguien escribiera A,B,A vería
+ * dos bloques "A" — la señal correcta, en vez de un reordenamiento silencioso.
+ */
+export function groupNavChildren<T extends { section?: string }>(
+  items: readonly T[],
+): NavChildBlock<T>[] {
+  const out: NavChildBlock<T>[] = [];
+  for (const child of items) {
+    const last = out[out.length - 1];
+    if (last && last.section === child.section) last.items.push(child);
+    else out.push({ section: child.section, items: [child] });
+  }
+  return out;
 }
 
 // ── Íconos (los mismos SVG del rail de siempre — cero cambio visual) ───────────
@@ -133,8 +199,17 @@ export const APP_NAV: readonly NavItemConfig[] = [
     gate: { kind: "permission", section: "cobranza", action: "read" },
     group: "operacion",
     children: [
-      { href: "/cobranza", label: "Cobranza" },
-      { href: "/finanzas/costos", label: "Costos y gastos", costosOnly: true },
+      // Una hoja se agrega acá en la MISMA tanda que crea su ruta: hasta que
+      // exista su page.tsx, el menú prometería un 404.
+      { href: "/cobranza", label: "Cobranza", section: "Ingresos" },
+      { href: "/finanzas/ingresos-variables", label: "Ingresos variables", section: "Ingresos" },
+      // `exact`: sin esto el Resumen se marcaría activo también en sus 3 hojas hijas.
+      { href: "/finanzas/costos", label: "Resumen", section: "Costos y gastos", costosOnly: true, exact: true },
+      { href: "/finanzas/costos/herramientas", label: "Herramientas", section: "Costos y gastos", costosOnly: true },
+      { href: "/finanzas/costos/planillas", label: "Planillas", section: "Costos y gastos", costosOnly: true },
+      { href: "/finanzas/costos/fijos", label: "Costos fijos", section: "Costos y gastos", costosOnly: true },
+      // Sin `section`: la caja neta es la SÍNTESIS de los dos bloques (entra − sale),
+      // no pertenece a ninguno. El flyout le deriva un divisor por ser un run suelto.
       { href: "/finanzas/caja-neta", label: "Caja neta", costosOnly: true },
     ],
     icon: icon(

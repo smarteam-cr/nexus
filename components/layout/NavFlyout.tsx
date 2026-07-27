@@ -19,6 +19,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { fetchJson } from "@/lib/api/fetch-json";
+import { groupNavChildren, isChildActive } from "./nav-config";
 import type { NavChildConfig, NavItemConfig } from "./nav-config";
 
 interface PanelItem {
@@ -27,7 +28,15 @@ interface PanelItem {
   match?: readonly string[];
   /** Activo por igualdad exacta (roles) en vez de startsWith. */
   exact?: boolean;
+  /**
+   * Separador manual ANTES de este ítem. Solo lo produce `RolesNavFlyout`, que
+   * arma una lista dinámica sin config. Convive con el divisor DERIVADO de las
+   * secciones (abajo) sin solaparse: uno es per-ítem y manual, el otro per-run y
+   * calculado. No unificarlos sin decidir antes si Roles debe mostrar encabezado.
+   */
   separatorBefore?: boolean;
+  /** Bloque al que pertenece (ver NavChildConfig.section). */
+  section?: string;
 }
 
 export default function NavFlyout({
@@ -96,27 +105,41 @@ export default function NavFlyout({
             style={{ position: "fixed", top: coords.top, left: coords.left }}
             className="z-[70] max-h-[70vh] w-56 overflow-y-auto rounded-xl border border-line bg-surface shadow-2xl py-1.5"
           >
-            {items.map((child) => {
-              const childActive = child.exact
-                ? pathname === child.href
-                : (child.match ?? [child.href]).some((p) => pathname.startsWith(p));
-              return (
-                <div key={child.href}>
-                  {child.separatorBefore && <div className="my-1 mx-3 border-t border-line" />}
-                  <Link
-                    href={child.href}
-                    onClick={() => setOpen(false)}
-                    className={`block px-3 py-2 mx-1.5 rounded-lg text-sm transition-colors truncate ${
-                      childActive
-                        ? "bg-brand/10 text-brand font-medium"
-                        : "text-fg-secondary hover:bg-surface-hover hover:text-fg"
-                    }`}
+            {groupNavChildren(items).map((bloque, bi) => (
+              <div key={bloque.section ?? `__suelto-${bi}`}>
+                {bloque.section ? (
+                  // El encabezado ES el separador del bloque: apilarle además un
+                  // divisor ensucia en un panel de w-56.
+                  <p
+                    className={`px-3 ${bi === 0 ? "pt-1" : "pt-2"} pb-1 text-2xs font-semibold uppercase tracking-widest text-fg-muted`}
                   >
-                    {child.label}
-                  </Link>
-                </div>
-              );
-            })}
+                    {bloque.section}
+                  </p>
+                ) : bi > 0 ? (
+                  // Hoja suelta después de un bloque → divisor DERIVADO (no declarado).
+                  <div className="my-1 mx-3 border-t border-line" />
+                ) : null}
+                {bloque.items.map((child) => {
+                  const childActive = isChildActive(child, pathname);
+                  return (
+                    <div key={child.href}>
+                      {child.separatorBefore && <div className="my-1 mx-3 border-t border-line" />}
+                      <Link
+                        href={child.href}
+                        onClick={() => setOpen(false)}
+                        className={`block px-3 py-2 mx-1.5 rounded-lg text-sm transition-colors truncate ${
+                          childActive
+                            ? "bg-brand/10 text-brand font-medium"
+                            : "text-fg-secondary hover:bg-surface-hover hover:text-fg"
+                        }`}
+                      >
+                        {child.label}
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
           </div>,
           document.body,
         )}
