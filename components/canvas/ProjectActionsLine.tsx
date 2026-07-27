@@ -37,17 +37,23 @@ const TONE: Record<ActionTone, { dot: string; cta: string }> = {
   info: { dot: "bg-brand", cta: "text-brand hover:text-brand-dark hover:bg-brand/10" },
 };
 
-/** La que se nombra en la línea cerrada: bloqueante primero, después por gravedad del tono. */
-const URGENCIA: Record<ActionTone, number> = { risk: 0, warn: 1, info: 2 };
+/**
+ * La que se nombra en la línea cerrada.
+ *
+ * MANDA EL ORDEN DEL MOTOR, no un criterio propio de acá. La primera versión reordenaba por
+ * gravedad del tono (`risk` antes que `info`) y eso **contradecía al motor**, que emite primero
+ * lo que espera una DECISIÓN porque destraba el resto, y al final lo que se está deteriorando.
+ * El efecto se vio enseguida en un proyecto real: Spectrum tenía avance detectado esperando
+ * confirmación y la línea titulaba "3 entregas del cliente están vencidas", dejando el borrador
+ * escondido detrás de "Ver 4" — o sea que el CSE entraba y no encontraba lo que el sistema
+ * había preparado para él.
+ *
+ * Una sola fuente de prioridad. Lo único que se antepone es lo bloqueante, que el propio motor
+ * ya marca aparte porque vuelve ruido a todo lo demás.
+ */
 function laMasUrgente(actions: ProjectAction[]): ProjectAction | null {
   if (actions.length === 0) return null;
-  // `find` sobre el orden que YA emite el motor: dentro del mismo tono gana el que él puso
-  // primero, que es su criterio de prioridad. No se reordena por acá.
-  return (
-    actions.find((a) => a.blocking) ??
-    [0, 1, 2].map((n) => actions.find((a) => URGENCIA[a.tone] === n)).find(Boolean) ??
-    actions[0]
-  );
+  return actions.find((a) => a.blocking) ?? actions[0];
 }
 
 export default function ProjectActionsLine({
