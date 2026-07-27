@@ -32,6 +32,14 @@
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import {
+  SKIP_KEYS,
+  MD_KEYS,
+  TITLE_KEYS,
+  NO_LABEL_KEYS,
+  VALUE_LABELS,
+  labelFor,
+} from "@/lib/canvas/print-vocab";
 
 /** Markdown → hoja impresa. `content` vacío no imprime nada (ni un contenedor vacío). */
 export function MarkdownView({ content }: { content: string }) {
@@ -44,96 +52,11 @@ export function MarkdownView({ content }: { content: string }) {
 }
 
 // ── Vocabulario de las claves ─────────────────────────────────────────────────
-
-/** Claves técnicas: no son contenido del documento (mismo criterio que `flattenCardData`). */
-const SKIP_KEYS = new Set([
-  "diagram", // lo dibuja DiagramStatic aparte
-  "__lang",
-  "buttonTarget",
-  "buttonUrl", // un link largo en papel es ruido; el rótulo del botón sí queda
-  "coverImageUrl",
-  "brands",
-  "color", // hex de marca
-]);
-
-/** Claves cuyo valor ya es markdown (prosa legacy de los canvas viejos). */
-const MD_KEYS = new Set(["__legacyMd", "md"]);
-
-/** Claves que titulan a su objeto: encabezan la viñeta en negrita, sin etiqueta. */
-const TITLE_KEYS = ["title", "titulo", "nombre", "name", "label", "headline", "concepto", "actor", "campo", "evento", "objeto", "measure"];
-
-/** Claves de prosa: se imprimen como párrafo pelado (etiquetarlas sería ruido). */
-const NO_LABEL_KEYS = new Set(["headline", "subhead", "intro", "summary", "detail", "detalle", "descripcion", "eyebrow", "texto"]);
-
-/** Traducciones de las claves de schema que humanizadas quedarían mal (acentos, jerga). */
-const KEY_LABELS: Record<string, string> = {
-  comoEsHoy: "Cómo es hoy",
-  comoSera: "Cómo va a ser",
-  porQueBullets: "Qué implica",
-  fueraDeAlcance: "Fuera de alcance",
-  dataFields: "Datos que viajan",
-  dedupeKey: "Clave anti-duplicados",
-  syncType: "Tipo de sincronización",
-  direction: "Dirección",
-  cuando: "Cuándo",
-  quienes: "Quiénes",
-  siguientePaso: "Siguiente paso",
-  referenciaSectorial: "Referencia sectorial",
-  casosDeUso: "Casos de uso",
-  cotizaAparte: "Cotiza aparte",
-  esLlave: "Es llave",
-  metrics: "Métricas",
-  duration: "Duración",
-  price: "Precio",
-  buttonLabel: "Botón",
-  pending: "Por confirmar",
-  // Claves en inglés de los schemas del motor: humanizarlas dejaría "Value", "Label"…
-  value: "Valor",
-  label: "Etiqueta",
-  title: "Título",
-  detail: "Detalle",
-  name: "Nombre",
-  kind: "Tipo",
-  chart: "Gráfico",
-  measure: "Medida",
-  level: "Nivel",
-  before: "Antes",
-  after: "Después",
-  sistemas: "Sistemas",
-  procesos: "Procesos",
-  conexiones: "Conexiones",
-  retos: "Retos",
-  cadena: "Flujo",
-  opcionales: "Opcionales",
-  plataforma: "Plataforma",
-  objetivo: "Objetivo",
-  hubs: "Hubs",
-  tags: "Áreas",
-};
-
-/** `comoEsHoy` → "Como es hoy". Fallback cuando la clave no está en el diccionario. */
-function humanize(key: string): string {
-  const words = key
-    .replace(/[_-]+/g, " ")
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .trim()
-    .toLowerCase();
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
-function labelFor(key: string): string {
-  return KEY_LABELS[key] ?? humanize(key);
-}
-
-/**
- * Valores que en pantalla son un ícono o una flecha y en papel serían jerga cruda
- * ("direction: to"). Solo los del mapa de sistemas, que es la sección más técnica.
- */
-const VALUE_LABELS: Record<string, Record<string, string>> = {
-  direction: { to: "unidireccional", bidir: "bidireccional" },
-  syncType: { realtime: "en tiempo real", batch: "por lotes", manual: "manual" },
-  pending: { si: "sí", sí: "sí", no: "no" },
-};
+// Vive en lib/canvas/print-vocab.ts (importado arriba): el PDF no usa el motor de
+// landing, así que un cambio de forma en un schema lo degrada EN SILENCIO —etiquetas
+// tipo "Q:", estado interno del CSE filtrado al papel— sin que tsc ni los tests se
+// enteren. Desde lib/ hay un test que vigila que toda clave de schema esté gobernada
+// por alguno de los baldes.
 
 /** Valores escalares a texto. Los schemas son string-only, pero la data vieja trae números/flags. */
 function toText(value: unknown, key?: string): string {
