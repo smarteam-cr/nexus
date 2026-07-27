@@ -3,10 +3,16 @@
 /**
  * ExternalAccessButton
  *
- * Botón en el toolbar del proyecto + modal para gestionar el acceso del cliente
- * externo (token revocable + contraseña) a las superficies externas — kickoff y
- * cronograma comparten el MISMO acceso (D.1.5); qué ve el cliente lo deciden los
- * flags de publicación de cada superficie por separado.
+ * Botón en el toolbar del proyecto + modal para gestionar el acceso externo (token
+ * revocable + contraseña). Las TRES superficies —kickoff, cronograma y requerimiento
+ * técnico— comparten el MISMO acceso (D.1.5): mismo token, misma contraseña, mismo
+ * verify; lo único que cambia es a dónde aterriza quien entra (`?next=`). Qué está
+ * disponible lo deciden los flags de publicación de cada una por separado.
+ *
+ * El requerimiento técnico se compartía desde su propio canvas, con su propia barra de
+ * link y su propio botón — el mismo token por otro camino, tanto que esa barra tenía que
+ * aclarar "la contraseña es la misma del Acceso del cliente". Vive acá desde 2026-07-26:
+ * un solo lugar dice quién tiene acceso al proyecto y a qué.
  *
  * La contraseña se guarda en plano (accessPassword) además del hash → queda
  * VISIBLE en el panel: el CSE puede verla, copiarla, escribir una propia o
@@ -31,7 +37,12 @@ interface AccessState {
   createdBy?: { name: string; email: string } | null;
   kickoffPublished?: boolean;
   timelinePublished?: boolean;
+  desarrolloPublished?: boolean;
 }
+
+/** Las superficies que este acceso destraba. Un solo lugar: la unión estaba repetida en
+ *  cuatro sitios y agregar el requerimiento técnico obligaba a acertarle a los cuatro. */
+export type ExternalSurface = "kickoff" | "cronograma" | "desarrollo";
 
 // Alphabet sin caracteres ambiguos (igual que el server) para las sugerencias
 // del lado del cliente. El server re-valida + hashea, esto es solo una propuesta.
@@ -120,11 +131,12 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
     }
   };
 
-  // Publicar / ocultar una superficie (kickoff | cronograma) para el cliente.
+  // Publicar / ocultar una superficie para quien tiene el acceso.
   // El cronograma se muestra COMPLETO al publicar: confirmamos el detalle de paso
   // (best-effort; 404 si todavía no hay cronograma). Refresca para actualizar badges.
-  const togglePublish = async (kind: "kickoff" | "cronograma", publish: boolean) => {
-    const endpoint = kind === "kickoff" ? "publish-kickoff" : "publish-timeline";
+  const togglePublish = async (kind: ExternalSurface, publish: boolean) => {
+    const endpoint =
+      kind === "kickoff" ? "publish-kickoff" : kind === "cronograma" ? "publish-timeline" : "publish-desarrollo";
     try {
       const res = await fetch(`/api/projects/${projectId}/${endpoint}`, {
         method: publish ? "POST" : "DELETE",
@@ -280,7 +292,7 @@ function ManageView({
   confirming: "regenerate" | "revoke" | null;
   working: boolean;
   onSavePassword: (pw: string) => Promise<string | null>;
-  onTogglePublish: (kind: "kickoff" | "cronograma", publish: boolean) => Promise<void>;
+  onTogglePublish: (kind: ExternalSurface, publish: boolean) => Promise<void>;
   onAskRegenerate: () => void;
   onAskRevoke: () => void;
   onCancelConfirm: () => void;
@@ -293,6 +305,12 @@ function ManageView({
     ? [
         { kind: "kickoff" as const, label: "Link Kickoff", url: state.url, published: !!state.kickoffPublished },
         { kind: "cronograma" as const, label: "Link Cronograma", url: `${state.url}?next=cronograma`, published: !!state.timelinePublished },
+        /* El requerimiento técnico. Su destinatario habitual es el desarrollador externo y no
+           el cliente, pero el mecanismo es el MISMO —mismo token, misma contraseña, mismo
+           verify— así que tenerlo en otro lado obligaba a saber que una superficie se comparte
+           por un lado y las otras dos por otro, y dejaba su estado invisible desde el panel que
+           dice justamente quién tiene acceso al proyecto. */
+        { kind: "desarrollo" as const, label: "Link Requerimiento técnico", url: `${state.url}?next=desarrollo`, published: !!state.desarrolloPublished },
       ]
     : [];
 
@@ -507,11 +525,11 @@ function LinkRow({
   published,
   onTogglePublish,
 }: {
-  kind: "kickoff" | "cronograma";
+  kind: ExternalSurface;
   label: string;
   url: string;
   published: boolean;
-  onTogglePublish: (kind: "kickoff" | "cronograma", publish: boolean) => Promise<void>;
+  onTogglePublish: (kind: ExternalSurface, publish: boolean) => Promise<void>;
 }) {
   const [copied, setCopied] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -570,7 +588,11 @@ function LinkRow({
       </div>
       {!published && (
         <p className="text-[10px] text-amber-600 mt-1">
-          El cliente verá &quot;no disponible&quot; hasta que publiques esta superficie.
+          {/* El requerimiento técnico lo abre el desarrollador, no el cliente: mismo link y
+              misma contraseña, otro destinatario. Decir "el cliente" ahí confundiría sobre a
+              quién se le está por dar acceso. */}
+          {kind === "desarrollo" ? "El desarrollador" : "El cliente"} verá &quot;no disponible&quot;
+          hasta que publiques esta superficie.
         </p>
       )}
     </div>

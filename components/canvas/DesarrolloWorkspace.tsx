@@ -14,6 +14,7 @@
  * inline (por campos) y el reorden se guardan al instante vía useCanvasSections.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
@@ -30,10 +31,13 @@ export default function DesarrolloWorkspace({
   projectId,
   clientId,
   canvasId,
+  headerSlot,
 }: {
   projectId: string;
   clientId: string;
   canvasId: string;
+  /** Nodo del header del panel donde este canvas inyecta sus CTAs (junto al nombre). */
+  headerSlot?: HTMLElement | null;
 }) {
   // poll:false — el poll genérico de este hook solo refetchea cuando cambia la cuenta de
   // bloques DRAFT, pero runDesarrolloGeneration siempre persiste CONFIRMED: nunca dispararía
@@ -42,43 +46,9 @@ export default function DesarrolloWorkspace({
   const cs = useCanvasSections(`/api/projects/${projectId}`, canvasId, undefined, { poll: false });
   const [nonce, setNonce] = useState(0); // fuerza refetch tras regenerar
 
-  // Compartir con un DEV externo (desarrolloPublishedAt). Sin esto, la página
-  // /external/desarrollo no muestra nada (gate de seguridad). No es "publicar al
-  // cliente" — es habilitar el link técnico para el desarrollador.
-  const [shared, setShared] = useState<boolean | null>(null);
-  const [sharing, setSharing] = useState(false);
-  const [devUrl, setDevUrl] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const refreshShareStatus = useCallback(() => {
-    return fetch(`/api/projects/${projectId}/publish-desarrollo`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        setShared(!!d?.published);
-        setDevUrl(d?.devUrl ?? null);
-      })
-      .catch(() => setShared(null));
-  }, [projectId]);
-  useEffect(() => {
-    void refreshShareStatus();
-  }, [refreshShareStatus]);
-  const toggleShared = useCallback(async () => {
-    if (shared === null) return;
-    setSharing(true);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/publish-desarrollo`, { method: shared ? "DELETE" : "POST" });
-      // Refetch (no solo optimistic) — así `devUrl` se pone al día si el acceso externo
-      // del proyecto se generó recién (antes estaba `null` y el compartir quedaba mudo).
-      if (res.ok) await refreshShareStatus();
-    } finally {
-      setSharing(false);
-    }
-  }, [projectId, shared, refreshShareStatus]);
-  const copyDevLink = useCallback(async () => {
-    if (!devUrl) return;
-    await navigator.clipboard.writeText(devUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [devUrl]);
+  /* El estado de "compartir con el dev" ya no vive acá: se lee y se escribe desde el panel
+     de "Acceso activo" (`components/clients/ExternalAccessPanel.tsx`), junto al kickoff y al
+     cronograma. El endpoint `publish-desarrollo` es el mismo; lo que cambió es quién lo llama. */
 
   // ¿Ya hay contenido generado? El canvas puede aparecer (auto-creado por el handoff)
   // ANTES de que la generación fire-and-forget escriba las secciones. `ensureDesarrolloCanvas`
@@ -202,43 +172,37 @@ export default function DesarrolloWorkspace({
           <button onClick={() => cs.clearError()} title="Cerrar" style={{ color: "#b91c1c", background: "transparent", border: "none", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
         </div>
       )}
-      <div style={{ position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 16px", background: "var(--bg, #fff)", borderBottom: "1px solid var(--border, #e5e7eb)" }}>
-        {/* El canal del equipo técnico hacia el CSE: propone un hecho para el cronograma
-            (atraso, aviso, compromiso) sin poder tocarlo. Se auto-oculta sin el permiso. */}
-        <SugerirParticularidad projectId={projectId} />
-        {shared !== null && (
-          <button
-            onClick={toggleShared}
-            disabled={sharing}
-            title={shared ? "El dev externo ve el requerimiento en /external/desarrollo. Clic para dejar de compartir." : "Habilita el link /external/desarrollo para el desarrollador externo."}
-            style={{
-              display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 8, cursor: sharing ? "wait" : "pointer",
-              ...(shared
-                ? { color: "#047857", background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.4)" }
-                : { color: "var(--text-secondary, #6b7280)", background: "transparent", border: "1px solid var(--border, #e5e7eb)" }),
-            }}
-          >
-            {shared ? "✓ Compartido con dev" : "Compartir con dev"}
-          </button>
-        )}
-        <CanvasAgentButton
-          clientId={clientId}
-          projectId={projectId}
-          agentId="agent-desarrollo-canvas"
-          label="Regenerar requerimiento"
-          runningLabel="Generando requerimiento…"
-          notifyLabel="requerimiento técnico"
-          async
-          onDone={onRegenDone}
-          // La auto-generación tras el handoff puede seguir en curso (awaitingGen): `busy` evita
-          // la doble corrida Y muestra el botón como "Generando requerimiento…" (spinner) en vez
-          // de un CTA muerto que ignora el click en silencio.
-          busy={awaitingGen}
-          // (C) el server exigirá regenerate si ya hay contenido, generate si no → gatear la UI
-          // por esa misma celda para no mostrar un botón que daría 403.
-          alreadyGenerated={hasGeneratedContent}
-        />
-      </div>
+      {/* Los CTAs van AL HEADER DEL PANEL, junto al nombre del canvas — el mismo lugar que
+          el resto de las piezas. Antes vivían en una barra propia acá abajo, y Desarrollo
+          era el único canvas del flujo con su botón en una segunda fila.
+          Van por portal y no por `CANVAS_PRIMARY_AGENT` porque el botón necesita estado que
+          solo este componente tiene: si la auto-generación posterior al handoff sigue en
+          curso (`awaitingGen`), `busy` evita la doble corrida. Mismo mecanismo que usa el
+          Cronograma para alternar entre "Generar" y "Chequear avance". */}
+      {headerSlot && createPortal(
+        <>
+          {/* El canal del equipo técnico hacia el CSE: propone un hecho para el cronograma
+              (atraso, aviso, compromiso) sin poder tocarlo. Se auto-oculta sin el permiso. */}
+          <SugerirParticularidad projectId={projectId} />
+          <CanvasAgentButton
+            clientId={clientId}
+            projectId={projectId}
+            agentId="agent-desarrollo-canvas"
+            label="Regenerar requerimiento"
+            runningLabel="Generando requerimiento…"
+            notifyLabel="requerimiento técnico"
+            async
+            onDone={onRegenDone}
+            // `busy` muestra el botón como "Generando requerimiento…" (spinner) en vez de un
+            // CTA muerto que ignora el click en silencio.
+            busy={awaitingGen}
+            // (C) el server exigirá regenerate si ya hay contenido, generate si no → gatear la UI
+            // por esa misma celda para no mostrar un botón que daría 403.
+            alreadyGenerated={hasGeneratedContent}
+          />
+        </>,
+        headerSlot,
+      )}
       {/* Assist de documento: instrucción → propuesta → revisar → aplicar por
           upsertCardData (a diferencia de Regenerar, que reescribe TODO). */}
       {hasGeneratedContent && (
@@ -269,27 +233,14 @@ export default function DesarrolloWorkspace({
           <span>No pudimos confirmar que la generación automática haya terminado. Probá <strong>Regenerar requerimiento</strong> arriba.</span>
         </div>
       )}
-      {shared && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", background: "rgba(16,185,129,0.06)", borderBottom: "1px solid rgba(16,185,129,0.2)", fontSize: 12, color: "#065f46" }}>
-          {devUrl ? (
-            <>
-              <span style={{ fontWeight: 600, flexShrink: 0 }}>Link para el dev:</span>
-              <input
-                readOnly
-                value={devUrl}
-                onFocus={(e) => e.currentTarget.select()}
-                style={{ flex: 1, minWidth: 0, fontFamily: "ui-monospace, monospace", fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid rgba(16,185,129,0.3)", background: "#fff", color: "#374151" }}
-              />
-              <button onClick={copyDevLink} style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(16,185,129,0.3)", background: "#fff", color: "#065f46", cursor: "pointer" }}>
-                {copied ? "✓ Copiado" : "Copiar"}
-              </button>
-              <span style={{ flexShrink: 0, color: "#047857" }}>La contraseña es la misma del Acceso del cliente.</span>
-            </>
-          ) : (
-            <span>Compartido, pero falta generar el <strong>Acceso del cliente</strong> (token+contraseña) para tener el link de entrada del dev.</span>
-          )}
-        </div>
-      )}
+      {/* Acá vivía "Compartir con dev" con su propia barra de link y su botón de copiar.
+          Se mudó a "Acceso activo", junto al kickoff y el cronograma.
+          El motivo es que nunca fueron cosas distintas: es el MISMO token del proyecto y la
+          MISMA contraseña —tanto, que esta barra tenía que aclarar "la contraseña es la misma
+          del Acceso del cliente"—; lo único que cambia es a dónde aterriza quien entra. Tener
+          dos lugares para compartir obligaba a saber que el requerimiento se comparte por un
+          lado y todo lo demás por otro, y dejaba el estado de una superficie invisible desde
+          el panel que dice quién tiene acceso al proyecto. */}
       <LandingView
         config={config}
         ctx={ctx}

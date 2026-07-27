@@ -180,10 +180,15 @@ export default function ProjectCanvasPanel({
   const [canvasDropdownOpen, setCanvasDropdownOpen] = useState(false);
   const [addingSectionName, setAddingSectionName] = useState<string | null>(null);
   const canvasDropdownRef = useRef<HTMLDivElement>(null);
-  // Slot en el header para los CTAs del Cronograma (Pedir cambio con IA / Guardar
-  // cambios). CronogramaCanvas los renderiza acá vía portal → quedan a la par de
-  // "Acceso activo" sin tener que levantar su estado del asistente.
-  const [cronogramaSlot, setCronogramaSlot] = useState<HTMLDivElement | null>(null);
+  /* Slot en el header para los CTAs de un canvas que necesita ESTADO PROPIO para decidir
+     qué botón mostrar. El canvas los renderiza acá por portal y quedan junto al nombre, en
+     el mismo lugar que el `CanvasAgentButton` que este panel monta para los demás.
+     Existe porque `CANVAS_PRIMARY_AGENT` solo alcanza para un botón fijo: el Cronograma
+     alterna entre "Generar cronograma" y "Chequear avance" según tenga tareas, y Desarrollo
+     necesita saber si la auto-generación posterior al handoff sigue en curso para no
+     disparar dos veces. Era exclusivo del Cronograma; dejarlo así obligó a Desarrollo a
+     armarse una segunda barra debajo del nombre, que es el defecto que esto corrige. */
+  const [canvasHeaderSlot, setCanvasHeaderSlot] = useState<HTMLDivElement | null>(null);
 
   const activeCanvas = canvases.find((c) => c.id === activeCanvasId) ?? canvases.find((c) => c.isDefault) ?? canvases[0] ?? null;
   // El render se ramifica por NOMBRE, no por isDefault (Handoff es el "home" pero
@@ -687,11 +692,10 @@ export default function ProjectCanvasPanel({
                 }}
               />
             )}
-            {/* CTA principal del Cronograma (Generar cronograma / Chequear avance) — A LA PAR DEL
-                NOMBRE, igual que el CanvasAgentButton de los demás canvases. Lo inyecta
-                CronogramaCanvas por portal (conoce phases/tasks/published). */}
-            {activeSlug === "timeline" && (
-              <div ref={setCronogramaSlot} className="flex items-center gap-2" />
+            {/* CTAs de los canvas que se los inyectan por portal (Cronograma y Desarrollo) —
+                A LA PAR DEL NOMBRE, en el mismo lugar que el CanvasAgentButton de los demás. */}
+            {(activeSlug === "timeline" || activeSlug === "tech-requirements") && (
+              <div ref={setCanvasHeaderSlot} className="flex items-center gap-2" />
             )}
             {/* Aviso (nunca bloqueo): en clientes multi-proyecto, links de IA sin revisar
                 pueden mezclar contexto de otro proyecto en el handoff/kickoff. */}
@@ -811,7 +815,7 @@ export default function ProjectCanvasPanel({
       {!isResumenCanvas && activeSlug === "tech-requirements" && activeCanvasId && (
         <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
           <CanvasBoundary label="el canvas de Desarrollo">
-            <DesarrolloWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} clientId={clientId} canvasId={activeCanvasId} />
+            <DesarrolloWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} clientId={clientId} canvasId={activeCanvasId} headerSlot={canvasHeaderSlot} />
           </CanvasBoundary>
         </div>
       )}
@@ -864,7 +868,7 @@ export default function ProjectCanvasPanel({
       {activeSlug === "timeline" && (
         // agentNonce remonta el canvas al terminar el CTA de avance → muestra el banner
         <CanvasBoundary label="el Cronograma">
-          <CronogramaCanvas key={`cronograma-${agentNonce}`} projectId={projectId} clientId={clientId} headerSlot={cronogramaSlot} />
+          <CronogramaCanvas key={`cronograma-${agentNonce}`} projectId={projectId} clientId={clientId} headerSlot={canvasHeaderSlot} />
         </CanvasBoundary>
       )}
 

@@ -207,7 +207,7 @@ export async function GET(
       lastUsedAt: true,
       createdBy: { select: { name: true, email: true } },
       // Flags de publicación por superficie → el panel marca qué link ya sirve.
-      project: { select: { kickoffPublishedAt: true, timelinePublishedAt: true } },
+      project: { select: { kickoffPublishedAt: true, timelinePublishedAt: true, desarrolloPublishedAt: true } },
     },
   });
 
@@ -226,9 +226,13 @@ export async function GET(
     revokedAt: access.revokedAt,
     lastUsedAt: access.lastUsedAt,
     createdBy: access.createdBy,
-    // Publicación por superficie (D.1.5): kickoff y cronograma se publican aparte.
+    // Publicación por superficie (D.1.5): cada una se publica aparte, con el MISMO token
+    // y la misma contraseña — lo único que cambia es dónde aterriza quien entra.
     kickoffPublished: !!access.project.kickoffPublishedAt,
     timelinePublished: !!access.project.timelinePublishedAt,
+    // El requerimiento técnico se compartía desde su propio canvas, con su propia barra de
+    // link: era el mismo token y la misma contraseña por otro camino. Ahora vive acá.
+    desarrolloPublished: !!access.project.desarrolloPublishedAt,
   });
 }
 

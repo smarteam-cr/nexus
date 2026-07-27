@@ -30,4 +30,8 @@ export const CANVAS_PRIMARY_AGENT: Record<string, CanvasAgentDef> = {
   // historial + canvases y escribe 6 secciones — no entra en una request corta).
   exploration: { agentId: "agent-exploracion-canvas", label: "Generar exploración", async: true },
   implementation: { agentId: "agent-implementacion-canvas", label: "Generar implementación", async: true },
+  /* Desarrollo (tech-requirements) NO está acá, y es a propósito: su botón necesita estado
+     que solo el workspace tiene —si la auto-generación posterior al handoff sigue en curso,
+     `busy` evita la doble corrida— así que se inyecta al header por PORTAL, igual que el
+     Cronograma. En pantalla queda en el mismo lugar: junto al nombre. */
 };
