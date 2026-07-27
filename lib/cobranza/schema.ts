@@ -299,6 +299,23 @@ export const bitacoraCreateSchema = z.object({
   cobroId: z.string().cuid().nullish(),
 });
 
+// ── Ingresos variables ─────────────────────────────────────────────────────────
+// Entrada de dinero fuera del ciclo quincenal que NO cuelga de un servicio
+// contratado. `clientId` es OPCIONAL a propósito: el ingreso puede relacionarse
+// con un cliente o ser general (ver el comentario del modelo en schema.prisma).
+
+export const ingresoVariableCreateSchema = z.object({
+  concepto: z.string().trim().min(1, "El concepto es requerido").max(160),
+  monto,
+  moneda: z.enum(COBRANZA_MONEDAS),
+  fecha: isoDateReal,
+  // null / ausente = ingreso general, sin cliente.
+  clientId: z.string().cuid().nullable().optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
+export const ingresoVariablePatchSchema = ingresoVariableCreateSchema.partial();
+
 // ── Costos recurrentes (fase 4 — SUPER_ADMIN-only) ─────────────────────────────
 // Espejos client-safe de los enums Prisma (mantener en sync con schema.prisma).
 // La superficie completa de costos/caja-neta está gateada por COSTOS_ROLES

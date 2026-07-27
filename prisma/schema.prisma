@@ -200,6 +200,7 @@ model Client {
   partnerSnapshot   ClientPartnerSnapshot? // CS360: snapshot del objeto Partner Clients de HubSpot
   accountBrief      CsAccountBrief? // CS360: resumen ejecutivo citado (agente)
   cuentaFinanciera  CuentaFinanciera? // Cobranza: perfil de cobro 1:1 (ver sección Cobranza)
+  ingresosVariables IngresoVariable[] @relation("IngresosVariablesDeCliente") // Finanzas: entradas fuera del ciclo
   importFilasAplicadas ImportacionFila[] // Cobranza: trazabilidad del importador
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
@@ -3022,6 +3023,48 @@ model GastoPuntual {
   updatedAt DateTime @updatedAt
 
   @@index([fecha])
+}
+
+// ─── IngresoVariable ─────────────────────────────────────────────────────────
+// Entrada de dinero que NO forma parte del flujo constante de cobranza quincenal
+// y que NO cuelga de un servicio contratado: una cuenta rescatada que se cobró
+// por fuera, un trabajo suelto, un reembolso, una devolución. Espejo simétrico de
+// GastoPuntual del lado que ENTRA.
+//
+// ⚠ Por qué NO es un `Cobro`: el schema de Cobro exige `servicioId` y `cuentaId`
+// OBLIGATORIOS (todo cobro cuelga de un servicio de una cuenta). Un ingreso "de
+// forma general" —sin cliente, o de un cliente sin servicio configurado— no puede
+// representarse ahí sin inventarle un servicio fantasma, que ensuciaría la cartera,
+// el semáforo y la proyección de cobranza. Por eso vive aparte.
+//
+// LÍMITE ANTI-DOBLE-CONTEO: si la plata SÍ vino de un servicio contratado, se
+// registra en Cobranza (cobro MANUAL) y aparece en la pantalla de ingresos
+// variables como "detectado en Cobranza" — NO se vuelve a cargar acá. La pantalla
+// lo dice explícitamente.
+//
+// Misma línea dura que el resto del módulo: registro de CONTROL, no contabilidad
+// (sin asiento, sin impuestos, sin conciliación); CRC y USD jamás se suman.
+model IngresoVariable {
+  id       String         @id @default(cuid())
+  concepto String // qué fue ("Rescate deuda 2025", "Reembolso de licencia")
+  monto    Decimal        @db.Decimal(12, 2)
+  moneda   CobranzaMoneda
+  fecha    DateTime       @db.Date // día en que entró la plata
+
+  // nullable A PROPÓSITO: el pedido es que se pueda relacionar con un cliente
+  // "o de forma general". SetNull para que borrar un cliente NUNCA borre el
+  // registro de que esa plata entró — el ingreso queda sin dueño y visible.
+  clientId String?
+  client   Client? @relation("IngresosVariablesDeCliente", fields: [clientId], references: [id], onDelete: SetNull)
+
+  notas         String? @db.Text
+  registradoPor String // email del guard que lo registró (trazabilidad, como confirmadoPor)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fecha])
+  @@index([clientId])
 }
 
 // ── Roles (roles y responsabilidades del equipo) ────────────────────────────────

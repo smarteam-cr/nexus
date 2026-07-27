@@ -56,15 +56,33 @@ export default function CostosPanel({
   costos,
   gastos,
   todayISO,
+  categoria,
+  leyenda,
   onCostosChanged,
   onGastosChanged,
 }: {
+  /** Ya vienen FILTRADOS por la página cuando `categoria` está presente. */
   costos: CostoRecurrenteDTO[];
   gastos: GastoPuntualDTO[];
   todayISO: string;
+  /**
+   * Presente = el panel está ACOTADO a una categoría (hoja Herramientas /
+   * Planillas / Costos fijos): sin pills, el burn y el histórico son los de esa
+   * categoría, y "Agregar costo" la preselecciona.
+   *
+   * Se resolvió así —un panel parametrizado— en vez de partirlo en dos
+   * componentes: `burnDe` y la regla `activo && finalizadoEl == null` quedan con
+   * UNA sola implementación. Dos copias del burn es exactamente el escenario en
+   * que el total del resumen y el de la hoja empiezan a contar historias
+   * distintas (lo advierte el header de este archivo).
+   */
+  categoria?: string;
+  /** Copia de la línea de contexto sobre el CTA (default: la del resumen). */
+  leyenda?: string;
   onCostosChanged: () => void;
   onGastosChanged: () => void;
 }) {
+  const acotado = categoria != null;
   const toast = useToast();
   const me = useMe();
   // Revelar los montos es SOLO de SUPER_ADMIN — explícito acá además del gate de página
@@ -72,6 +90,8 @@ export default function CostosPanel({
   // hace la regla verificable en el propio componente). `me === null` = aún cargando → no
   // se revela hasta confirmar el rol.
   const puedeRevelar = me?.isSuperAdmin === true;
+  // Acotado ⇒ solo existe la lista de esa categoría (Gastos y Movimientos viven
+  // en el Resumen, que es transversal a las cuatro hojas).
   const [vista, setVista] = useState<Vista>("fijos");
 
   const [form, setForm] = useState<{ abierto: boolean; costo: CostoRecurrenteDTO | null }>({
@@ -224,21 +244,22 @@ export default function CostosPanel({
 
       {/* ── Sub-navegación de vistas (pills) + toggle de montos ── */}
       <div className="flex flex-wrap items-center gap-1.5">
-        {VISTAS.map(([k, lbl]) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setVista(k)}
-            aria-pressed={vista === k}
-            className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-              vista === k
-                ? "border-brand/30 bg-brand/10 text-brand"
-                : "border-transparent text-fg-muted hover:text-fg-secondary"
-            }`}
-          >
-            {lbl}
-          </button>
-        ))}
+        {!acotado &&
+          VISTAS.map(([k, lbl]) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setVista(k)}
+              aria-pressed={vista === k}
+              className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+                vista === k
+                  ? "border-brand/30 bg-brand/10 text-brand"
+                  : "border-transparent text-fg-muted hover:text-fg-secondary"
+              }`}
+            >
+              {lbl}
+            </button>
+          ))}
         {/* Vive junto a las pills (no dentro de una vista) porque aplica a las TRES:
             costos fijos, gastos y movimientos muestran los mismos montos sensibles. */}
         <button
@@ -269,12 +290,12 @@ export default function CostosPanel({
         </button>
       </div>
 
-      {vista === "fijos" && (
+      {(acotado || vista === "fijos") && (
         <div className="space-y-4">
           {/* ── Encabezado + CTA ── */}
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-xs text-fg-muted">
-              Costos de referencia: salarios all-in, herramientas y fijos de operación.
+              {leyenda ?? "Costos de referencia: salarios all-in, herramientas y fijos de operación."}
             </p>
             <button
               type="button"
@@ -288,8 +309,12 @@ export default function CostosPanel({
           {costos.length === 0 ? (
             <EmptyState
               variant="dashed"
-              title="Sin costos registrados"
-              description="Todavía no registraste ningún costo. Empezá por los salarios y las herramientas fijas."
+              title={acotado ? "Sin costos en esta categoría" : "Sin costos registrados"}
+              description={
+                acotado
+                  ? "Todavía no hay nada acá. Agregá el primero con el botón de arriba."
+                  : "Todavía no registraste ningún costo. Empezá por los salarios y las herramientas fijas."
+              }
             />
           ) : (
             <>
@@ -588,6 +613,7 @@ export default function CostosPanel({
       {form.abierto && (
         <CostoForm
           costo={form.costo}
+          categoriaInicial={categoria}
           onClose={() => setForm({ abierto: false, costo: null })}
           onSaved={() => {
             setForm({ abierto: false, costo: null });

@@ -255,24 +255,128 @@ describe("P3 · estructurales", () => {
 });
 
 // ── P4 · Páginas de Finanzas (Pieza 1, tanda 2026-07) ───────────────────────
-describe("P4 · las páginas /finanzas/costos y /finanzas/caja-neta gatean ANTES de cargar datos", () => {
+// ESCANEO, no lista hardcodeada: antes eran dos paths literales y una hoja nueva
+// de costos nacía sin vigilancia. Ahora TODA página bajo app/(shell)/finanzas/**
+// está obligada a gatear con isCostosRole antes de cargar nada, salvo las que se
+// declaren explícitamente como NO-costos en la allowlist de abajo — agregar una
+// pasa a ser una decisión visible en el diff, no un olvido.
+describe("P4 · las páginas de Finanzas gatean ANTES de cargar datos", () => {
   const raiz = process.cwd();
+  const baseFinanzas = path.join(raiz, "app", "(shell)", "finanzas");
 
-  // Las páginas viven bajo el route group (shell) — el grupo no cambia la URL.
-  for (const rel of ["app/(shell)/finanzas/costos/page.tsx", "app/(shell)/finanzas/caja-neta/page.tsx"]) {
-    it(`${rel}: isCostosRole corta antes de cualquier load*`, () => {
-      const abs = path.join(raiz, rel);
-      expect(fs.existsSync(abs), `${rel} no existe`).toBe(true);
-      const src = fs.readFileSync(abs, "utf8");
-      expect(src.includes("isCostosRole("), `${rel} no invoca isCostosRole`).toBe(true);
+  /**
+   * Rutas de Finanzas que NO son de costos y por lo tanto NO llevan isCostosRole
+   * (su gate es `cobranza.read`, la superficie de ADMIN). Clave = ruta relativa a
+   * app/(shell)/finanzas.
+   */
+  const NO_COSTOS: Record<string, string> = {
+    "ingresos-variables":
+      "son INGRESOS (cobros ya registrados), no costos: su gate es cobranza.read, la superficie de ADMIN",
+  };
+
+  /**
+   * Blanquea comentarios y literales de string CONSERVANDO los offsets (mismo
+   * largo, mismos saltos de línea) para que los índices sigan siendo comparables.
+   *
+   * ⚠ POR QUÉ EXISTE: sin esto el escaneo se satisfacía con el COMENTARIO de
+   * cabecera. Las 3 hojas de categoría mencionan «isCostosRole(role)» en su
+   * docstring, así que `includes` daba true y `indexOf` apuntaba a la línea 3 —
+   * o sea que una página que MENCIONA el gate sin invocarlo pasaba verde, y el
+   * orden gate-antes-de-load quedaba medido contra el comentario. Se verificó
+   * borrando el guard real de una copia: el test seguía en verde.
+   * Es exactamente lo que el header de este archivo advierte: un comentario no
+   * frena nada; lo que frena es el test — pero solo si mira el CÓDIGO.
+   */
+  function soloCodigo(src: string): string {
+    const out = src.split("");
+    const blanquear = (desde: number, hasta: number) => {
+      for (let k = desde; k < hasta && k < out.length; k++) {
+        if (out[k] !== "\n") out[k] = " ";
+      }
+    };
+    let i = 0;
+    while (i < src.length) {
+      const c = src[i];
+      const d = src[i + 1];
+      if (c === "/" && d === "/") {
+        const fin = src.indexOf("\n", i);
+        blanquear(i, fin === -1 ? src.length : fin);
+        i = fin === -1 ? src.length : fin;
+      } else if (c === "/" && d === "*") {
+        const fin = src.indexOf("*/", i + 2);
+        const hasta = fin === -1 ? src.length : fin + 2;
+        blanquear(i, hasta);
+        i = hasta;
+      } else if (c === '"' || c === "'" || c === "`") {
+        // Un string puede contener "isCostosRole(" y mentir igual que un comentario.
+        let j = i + 1;
+        while (j < src.length && src[j] !== c) {
+          if (src[j] === "\\") j++;
+          j++;
+        }
+        blanquear(i + 1, j);
+        i = j + 1;
+      } else {
+        i++;
+      }
+    }
+    return out.join("");
+  }
+
+  it("el escaneo mira el CÓDIGO, no los comentarios (meta-guard)", () => {
+    const mentiroso = [
+      "/** Gate AUTÓNOMO isCostosRole(role) — solo dirección. */",
+      'const nota = "isCostosRole(ctx.role)";',
+      "export default async function P() {",
+      "  const costos = await loadCostos();",
+      "}",
+    ].join("\n");
+    // Ni el comentario ni el string deben contar como invocación.
+    expect(soloCodigo(mentiroso).includes("isCostosRole(")).toBe(false);
+    // Y el código real sí sobrevive al blanqueo.
+    expect(soloCodigo("if (!isCostosRole(ctx.role)) redirect();").includes("isCostosRole(")).toBe(
+      true,
+    );
+  });
+
+  function paginasDeFinanzas(dir: string, rel = ""): string[] {
+    const out: string[] = [];
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) out.push(...paginasDeFinanzas(path.join(dir, e.name), r));
+      else if (e.name === "page.tsx") out.push(rel);
+    }
+    return out;
+  }
+
+  const rutas = paginasDeFinanzas(baseFinanzas);
+
+  it("el escaneo encuentra las páginas de Finanzas (guard del propio test)", () => {
+    // Si alguien mueve o borra la carpeta, el test avisa en vez de pasar vacío.
+    expect(rutas.length, "no se encontró ninguna page.tsx bajo finanzas/").toBeGreaterThanOrEqual(5);
+    expect(rutas).toContain("costos");
+    expect(rutas).toContain("caja-neta");
+  });
+
+  for (const rel of rutas) {
+    const esDeCostos = !(rel in NO_COSTOS);
+    if (!esDeCostos) continue;
+
+    it(`finanzas/${rel}: isCostosRole corta antes de cualquier load*`, () => {
+      const abs = path.join(baseFinanzas, rel, "page.tsx");
+      // Comentarios y strings blanqueados: mencionar el gate no es invocarlo.
+      const src = soloCodigo(fs.readFileSync(abs, "utf8"));
+      expect(src.includes("isCostosRole("), `finanzas/${rel} no invoca isCostosRole`).toBe(true);
 
       const idxGate = src.indexOf("isCostosRole(");
-      const llamadasLoad = [...src.matchAll(/\bload(Costos|CajaNeta|Gastos)\(/g)];
-      expect(llamadasLoad.length, `${rel} no llama a ningún load*`).toBeGreaterThan(0);
+      // `load[A-Z]…` cubre los futuros (loadTarjetas, loadMovimientosCostos…);
+      // exige mayúscula para no matchear `loading`.
+      const llamadasLoad = [...src.matchAll(/\bload[A-Z]\w*\(/g)];
+      expect(llamadasLoad.length, `finanzas/${rel} no llama a ningún load*`).toBeGreaterThan(0);
       for (const m of llamadasLoad) {
         expect(
           m.index! > idxGate,
-          `${rel} — ${m[0]} aparece ANTES del gate isCostosRole`,
+          `finanzas/${rel} — ${m[0]} aparece ANTES del gate isCostosRole`,
         ).toBe(true);
       }
     });
