@@ -114,21 +114,44 @@ export const EXPLORACION_SECTION_DEFS: BCSectionDef[] = [
     agentGenerated: true,
     empty: { intro: "", sesiones: [] },
     agentHint:
-      "2-4 sesiones ORDENADAS: cada una con objetivo, a quién invitar y las preguntas literales. El orden importa (lo que desbloquea al resto va primero).",
+      "2-4 sesiones ORDENADAS: cada una con objetivo, a quién invitar y las preguntas literales, cada pregunta con su repregunta. El orden importa (lo que desbloquea al resto va primero).",
+    /* ── ESTA SECCIÓN ES LA HERRAMIENTA, NO EL RESUMEN ────────────────────────────────
+       Es la única del documento donde MÁS es mejor: el CSE la lee con el cliente enfrente
+       y una pregunta de más no cuesta nada, mientras que una de menos es una sesión que
+       hay que repetir. Por eso acá los números suben (6-10 por sesión) justo cuando en
+       «Lo que damos por supuesto» bajan. El presupuesto sale de ahí: esa sección pasó de
+       ~10.400 caracteres a un tope mucho menor, y ese aire se gasta acá.
+
+       La REPREGUNTA es lo que convierte un cuestionario en una entrevista: la respuesta
+       genérica ("depende del caso", "más o menos así") es el modo de falla real de estas
+       sesiones, y el CSE tiene que tener a mano cómo aterrizarla sin improvisar. */
     brief:
-      "El guion operativo: cómo convertir los supuestos sin verificar en respuestas. `intro`: 1 frase (opcional). " +
+      "El guion operativo: cómo convertir los supuestos sin verificar en respuestas. Es la sección que el CSE lee CON EL CLIENTE ENFRENTE, así que va COMPLETA aunque quede larga — es la única del documento donde más es mejor. `intro`: 1 frase (opcional). " +
       "`sesiones`: 2-4, ORDENADAS por dependencia — primero la que desbloquea a las demás (si no sabés cuántos procesos hay, no podés preguntar el detalle de ninguno). Por sesión: " +
       "`orden` = el número como string ('1', '2'…); `titulo` = de qué va, en 3-6 palabras ('Cómo venden hoy'); " +
-      "`objetivo` = UNA frase con qué supuesto de la sección anterior queda cerrado al terminar ('Cerrar si hay uno o varios procesos de venta y quién es dueño de cada uno'); " +
+      "`objetivo` = UNA frase con qué hay que dejar CONFIRMADO al terminar ('Confirmar si hay uno o varios procesos de venta y quién es dueño de cada uno'); " +
       "`participantes` = a quién del CLIENTE hay que tener en la sala y POR QUÉ, en una línea ('Gerente comercial (define el proceso) + un vendedor senior (lo ejecuta de verdad)') — nombres propios SOLO si la fuente los trae; " +
-      "`preguntas` = 3-6 preguntas LITERALES, tal como se van a hacer. Abiertas y concretas ('Muéstrame el último negocio que cerraron: ¿por dónde entró y qué pasó después?'), nunca de sí/no ni genéricas ('¿cómo es su proceso?'). Preferí pedir ejemplos y casos reales antes que definiciones. " +
-      "Cada pregunta debe poder rastrearse a un supuesto sin verificar: si no cierra ninguno, sobra.",
+      "`preguntas` = 6 a 10 por sesión, ORDENADAS como se van a hacer: primero las que abren el tema, después las que aprietan el detalle. Cada una es un objeto con dos campos: " +
+      "  · `q` = la pregunta LITERAL, tal como se va a decir. Abierta y concreta ('Muéstrame el último negocio que cerraron: ¿por dónde entró y qué pasó después?'), nunca de sí/no ni genérica ('¿cómo es su proceso?'). Preferí pedir ejemplos y casos reales antes que definiciones. " +
+      "  · `repregunta` = QUÉ HACER SI LA RESPUESTA SALE VAGA, en máximo 20 palabras y empezando por la condición: 'Si dice «depende del caso»: pedile los dos últimos casos y en qué se diferenciaron' / 'Si contesta el proceso ideal: preguntá cuándo fue la última vez que NO pasó así'. Es lo que evita que el CSE se quede con un «más o menos así» y tenga que volver a reunirse. Toda pregunta lleva la suya. " +
+      "Cada pregunta debe poder rastrearse a un supuesto sin verificar: si no cierra ninguno, sobra. Si un supuesto quedó afuera de «Lo que damos por supuesto» por el tope de esa sección, acá SÍ tiene que aparecer su pregunta.",
     schema: {
       type: "object",
       properties: {
         intro: str,
         sesiones: arrayOf(
-          { orden: str, titulo: str, objetivo: str, participantes: str, preguntas: strArray },
+          {
+            orden: str,
+            titulo: str,
+            objetivo: str,
+            participantes: str,
+            /* `preguntas` pasó de `string[]` a objetos. `hecha` (la casilla del CSE) NO
+               está acá A PROPÓSITO: `coerceToSchema` descarta lo que no esté en el
+               schema, así que el agente no puede marcar una pregunta como preguntada
+               ni por error. La invariante la sostiene el tipo, no un pedido en el brief.
+               Ver lib/canvas/exploracion-preguntas.ts. */
+            preguntas: arrayOf({ q: str, repregunta: str }, ["q"]),
+          },
           ["titulo", "objetivo", "preguntas"],
         ),
       },
@@ -192,7 +215,12 @@ export const EXPLORACION_SECTION_DEFS: BCSectionDef[] = [
 export const EXPLORACION_TEMPLATE: BcTemplateDef = {
   id: "exploracion_v1",
   caseLabel: "Exploración",
-  maxTokens: 14000, // el plan de sesiones trae preguntas literales; generateSectionsForTemplate ABORTA si stop_reason === "max_tokens"
+  // 18000 (era 14000, y la corrida real de Wherex ya salía ~10.600 tokens): el plan de
+  // sesiones pasó de 3-6 preguntas por sesión a 6-10, y cada una suma su repregunta —
+  // en el peor caso 30 preguntas con seguimiento contra las 15 sueltas de antes.
+  // `generateSectionsForTemplate` ABORTA si stop_reason === "max_tokens", así que quedarse
+  // corto acá no degrada el documento: lo deja sin generar. Mismo techo que Implementación.
+  maxTokens: 18000,
   brandVoice: false, // documento INTERNO: sin metáfora de marca ni CTA-pregunta
   features: { useCaseChecklist: false },
   agentIntro:

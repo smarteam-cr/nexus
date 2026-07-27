@@ -16,6 +16,7 @@
  * de línea legítimo.
  */
 import { useEffect, useLayoutEffect, useRef, type ElementType } from "react";
+import { isSi } from "@/lib/ui/si-no";
 
 export function Editable({
   value,
@@ -126,11 +127,10 @@ export function Editable({
 // aplana todo el output del agente a string, así que un boolean real nunca sobreviviría
 // — por eso las casillas hablan "si"/"no" y no true/false.
 
-/** Valores que cuentan como "sí" al leer una casilla (tolerante a lo que emita el agente). */
-export function isSi(v: string | undefined | null): boolean {
-  const s = (v ?? "").trim().toLowerCase();
-  return s === "si" || s === "sí" || s === "true" || s === "1" || s === "x";
-}
+/** Valores que cuentan como "sí" al leer una casilla. Vive en `lib/ui/si-no.ts` —
+ *  los helpers puros que cuentan casillas también lo necesitan y `lib/` no puede
+ *  importar de un `"use client"`. Se re-exporta acá para no tocar a los callers. */
+export { isSi } from "@/lib/ui/si-no";
 
 export interface InlineOption {
   value: string;

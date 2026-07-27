@@ -21,16 +21,25 @@
  * INTERNO y no debe parecerse a lo que ve el cliente.
  */
 import { type FC } from "react";
-import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "@/components/landing/inline";
+import { Editable, InlineCheck, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "@/components/landing/inline";
 import { SortableItems } from "@/components/landing/sortable";
 import type { SectionProps } from "@/components/landing/types";
+import {
+  contarHechas,
+  contarMarcasDelPlan,
+  normalizarPreguntas,
+  type ExploracionPregunta,
+  type PreguntaGuardada,
+} from "@/lib/canvas/exploracion-preguntas";
+import { isSi } from "@/lib/ui/si-no";
 
 export interface ExploracionSesion {
   orden?: string;
   titulo?: string;
   objetivo?: string;
   participantes?: string;
-  preguntas?: string[];
+  /** `string` = formato viejo (una pregunta suelta). Ver lib/canvas/exploracion-preguntas. */
+  preguntas?: PreguntaGuardada[];
 }
 export interface ExploracionSesionesData {
   intro?: string;
@@ -43,6 +52,7 @@ export const ExploracionSesionesSection: FC<SectionProps<ExploracionSesionesData
   onChange,
 }) => {
   const sesiones = data.sesiones ?? [];
+  const marcas = contarMarcasDelPlan(sesiones);
   const set = (next: Partial<ExploracionSesionesData>) => onChange?.({ ...data, ...next });
   const setSesion = (i: number, patch: Partial<ExploracionSesion>) =>
     set({ sesiones: replaceAt(sesiones, i, { ...sesiones[i], ...patch }) });
@@ -60,6 +70,20 @@ export const ExploracionSesionesSection: FC<SectionProps<ExploracionSesionesData
         />
       )}
 
+      {/* Las marcas viven en la data de la sección, así que REGENERAR el plan las borra
+          junto con las preguntas que las tenían. Es lo correcto —una marca sobre una
+          pregunta que ya no existe no significa nada— pero se avisa antes en vez de
+          sorprender después. El CTA de regenerar vive en el header del canvas. */}
+      {marcas > 0 && (
+        <p
+          className="stl-card-detail"
+          style={{ marginTop: 14, color: "var(--text-muted)", fontSize: 13 }}
+        >
+          Tenés {marcas === 1 ? "1 pregunta marcada" : `${marcas} preguntas marcadas`} como
+          preguntadas. Regenerar la exploración reescribe el plan y las borra.
+        </p>
+      )}
+
       <SortableItems
         items={sesiones}
         disabled={!editable}
@@ -67,7 +91,9 @@ export const ExploracionSesionesSection: FC<SectionProps<ExploracionSesionesData
         container={(nodes) => <div className="stl-stack">{nodes}</div>}
       >
         {(s, i, handle) => {
-          const preguntas = s.preguntas ?? [];
+          // Levanta el formato viejo (`string[]`) al vuelo. La migración se persiste sola
+          // la primera vez que se edita algo de esta sesión — sin script de datos.
+          const preguntas = normalizarPreguntas(s.preguntas);
           // El número que se muestra es la POSICIÓN real en la lista: si el CSE
           // reordena las sesiones, el orden mostrado sigue al arrastre en vez de
           // quedarse con el `orden` que escribió la IA (que quedaría mintiendo).
@@ -109,13 +135,13 @@ export const ExploracionSesionesSection: FC<SectionProps<ExploracionSesionesData
 
               {(editable || s.objetivo) && (
                 <div style={{ marginTop: 8 }}>
-                  <span className="eyebrow">Qué queda cerrado</span>
+                  <span className="eyebrow">Qué se necesita confirmar</span>
                   <Editable
                     as="p"
                     className="stl-card-detail"
                     editable={editable}
                     value={s.objetivo ?? ""}
-                    placeholder="Qué supuesto queda confirmado al terminar…"
+                    placeholder="Qué supuesto tiene que quedar confirmado al terminar…"
                     onCommit={(v) => setSesion(i, { objetivo: v })}
                   />
                 </div>
@@ -136,53 +162,96 @@ export const ExploracionSesionesSection: FC<SectionProps<ExploracionSesionesData
               )}
 
               {(editable || preguntas.length > 0) && (
-                <div style={{ marginTop: 12 }}>
-                  <span className="eyebrow">Qué preguntar</span>
-                  <ul style={{ listStyle: "none", margin: "6px 0 0", padding: 0, display: "grid", gap: 6 }}>
-                    {preguntas.map((q, qi) => (
-                      <li
-                        key={qi}
-                        style={{ display: "flex", alignItems: "flex-start", gap: 8, position: "relative" }}
-                      >
-                        <span aria-hidden="true" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-                          &ndash;
-                        </span>
-                        <Editable
-                          as="p"
-                          className="stl-card-detail"
-                          editable={editable}
-                          value={q}
-                          placeholder="Pregunta literal, abierta, pidiendo un ejemplo real…"
-                          onCommit={(v) => setSesion(i, { preguntas: replaceAt(preguntas, qi, v) })}
-                        />
-                        {editable && (
-                          <button
-                            type="button"
-                            aria-label="Eliminar pregunta"
-                            title="Eliminar pregunta"
-                            onClick={() => setSesion(i, { preguntas: removeAt(preguntas, qi) })}
-                            style={{
-                              flexShrink: 0,
-                              width: 24,
-                              height: 24,
-                              borderRadius: 6,
-                              border: "1px solid var(--border)",
-                              background: "transparent",
-                              color: "var(--text-muted)",
-                              cursor: "pointer",
-                              lineHeight: 1,
-                            }}
-                          >
-                            ×
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                    <span className="eyebrow">Qué preguntar</span>
+                    {/* El contador es el motivo de que la casilla exista: entrar a la sesión
+                        siguiente y ver de un vistazo qué quedó sin preguntar. */}
+                    {preguntas.length > 0 &&
+                      (() => {
+                        const { hechas, total } = contarHechas(preguntas);
+                        return (
+                          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                            {hechas === 0
+                              ? `${total} preguntas`
+                              : hechas === total
+                                ? `las ${total} preguntadas`
+                                : `${hechas} de ${total} preguntadas`}
+                          </span>
+                        );
+                      })()}
+                  </div>
+
+                  <div style={{ margin: "8px 0 0", display: "grid", gap: 8 }}>
+                    {preguntas.map((p, qi) => {
+                      const hecha = isSi(p.hecha);
+                      const setPregunta = (patch: Partial<ExploracionPregunta>) =>
+                        setSesion(i, { preguntas: replaceAt(preguntas, qi, { ...p, ...patch }) });
+                      return (
+                        <div key={qi} className={`stl-q-row${hecha ? " is-done" : ""}`}>
+                          <span className="stl-q-check">
+                            <InlineCheck
+                              value={p.hecha ?? "no"}
+                              editable={editable}
+                              ariaLabel={hecha ? "Marcar como no preguntada" : "Marcar como preguntada"}
+                              onCommit={(v) => setPregunta({ hecha: v })}
+                            />
+                          </span>
+
+                          <div className="stl-q-body">
+                            <Editable
+                              as="p"
+                              className="stl-card-detail"
+                              editable={editable}
+                              value={p.q}
+                              placeholder="Pregunta literal, abierta, pidiendo un ejemplo real…"
+                              onCommit={(v) => setPregunta({ q: v })}
+                            />
+                            {(editable || p.repregunta) && (
+                              <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                                <span aria-hidden="true" className="stl-q-followup-mark">
+                                  ↳
+                                </span>
+                                <Editable
+                                  as="p"
+                                  className="stl-card-detail stl-q-followup"
+                                  editable={editable}
+                                  value={p.repregunta ?? ""}
+                                  placeholder="Si contesta en general o se va por las ramas, repreguntá…"
+                                  onCommit={(v) => setPregunta({ repregunta: v })}
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Botón propio y NO `RemoveBtn`: el × del motor es `position:
+                              absolute` y se revela con `.stl-item:hover .stl-remove`, un
+                              selector DESCENDENTE. Dentro de la tarjeta de la sesión eso
+                              haría aparecer los 8-10 × de golpe al pasar por cualquier
+                              parte, y encima del texto de cada pregunta. Acá va en el
+                              flujo del flex y se revela solo con su propia fila. */}
+                          {editable && (
+                            <button
+                              type="button"
+                              className="stl-q-remove"
+                              aria-label="Eliminar pregunta"
+                              title="Eliminar pregunta"
+                              onClick={() => setSesion(i, { preguntas: removeAt(preguntas, qi) })}
+                            >
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                                <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
                   {editable && (
                     <AddBtn
                       label="Agregar pregunta"
-                      onClick={() => setSesion(i, { preguntas: appendItem(preguntas, "") })}
+                      onClick={() => setSesion(i, { preguntas: appendItem(preguntas, { q: "" }) })}
                     />
                   )}
                 </div>

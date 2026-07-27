@@ -812,6 +812,44 @@
 .stl .stl-flag-on { color: var(--blue); font-weight: 700; }
 .stl .stl-dark .stl-flag-on { color: var(--teal); }
 
+/* ── Fila de pregunta del plan de sesiones (canvas Exploración) ─────────────
+   Cada pregunta es una fila-tarjeta con su casilla: el CSE la marca mientras
+   corre la sesión. Deliberadamente MÁS LIVIANA que `.stl-rung` (la escalera de
+   Roles): esta lista vive DENTRO de la tarjeta de la sesión, y una tarjeta con
+   sombra adentro de otra tarjeta con sombra compite con su propio contenedor.
+
+   Marcada se APAGA, no se tacha — son preguntas largas y el tachado las vuelve
+   ilegibles justo cuando hay que releerlas para repreguntar. El estado vive
+   entero en `.is-done` (una clase, no dos ternarios en el componente).
+
+   `.stl-q-followup` es la repregunta: subordinada por tamaño e itálica, nunca
+   por un color más flojo que el mínimo de contraste (`--text-muted` es el piso
+   que pasa AA, ver la nota de la paleta interna arriba). */
+.stl .stl-q-row {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--bg);
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.stl .stl-q-row.is-done { background: var(--bg-soft); border-color: transparent; }
+.stl .stl-q-row.is-done .stl-card-detail { color: var(--text-muted); }
+.stl .stl-q-check { flex-shrink: 0; padding-top: 2px; }
+.stl .stl-q-body { flex: 1; min-width: 0; }
+.stl .stl-q-followup { font-size: 13px; font-style: italic; color: var(--text-muted); }
+.stl .stl-q-followup-mark { flex-shrink: 0; color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+/* El × de la fila NO reusa `.stl-remove`: ese es absoluto y se revela con
+   `.stl-item:hover .stl-remove` (descendente), así que dentro de la tarjeta de la
+   sesión aparecerían los 8-10 × juntos y encima del texto. Este va en el flujo del
+   flex y solo lo revela su propia fila. */
+.stl .stl-q-remove {
+  flex-shrink: 0; width: 24px; height: 24px; border-radius: 6px; opacity: 0;
+  border: 1px solid var(--border); background: transparent; color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: opacity 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+.stl .stl-q-row:hover .stl-q-remove,
+.stl .stl-q-remove:focus-visible { opacity: 1; }
+.stl .stl-q-remove:hover { color: #DC2626; border-color: #FCA5A5; }
+
 /* ── Tabla de propiedades (diccionario de la integración) ───────────────────
    Canvas Desarrollo. 8 columnas no entran en móvil: el scroll horizontal vive
    DENTRO de `.stl-props-scroll` — el body de la página nunca scrollea de lado.
