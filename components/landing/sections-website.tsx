@@ -24,8 +24,14 @@ import type {
   WhyUsData,
 } from "./types";
 
-// ── 2) Diagnóstico y contexto — retos (izq) + panel oscuro "Por qué X" (der) ──
-export const WebDiagnosisSection: FC<SectionProps<WebDiagnosisData>> = ({ data, ctx, editable, onChange }) => {
+/* ── 2) Dos columnas: una lista a la izquierda + un panel oscuro de consecuencias ──────
+   Nació para la propuesta de sitio web —izquierda "Retos actuales", derecha "Por qué
+   {plataforma}"— y hoy lo comparten CUATRO documentos. En los otros tres las columnas ya
+   no son retos ni un "por qué" de una plataforma, así que los rótulos entran por
+   `sectionChips` desde la definición de cada documento.
+   Sin `sectionChips` se usan los literales de siempre, que en la propuesta de sitio web
+   —la única de la familia que se publica al cliente— son los correctos. */
+export const WebDiagnosisSection: FC<SectionProps<WebDiagnosisData>> = ({ data, ctx, editable, onChange, sectionChips }) => {
   const lang = landingLang(ctx.lang);
   const retos = data.retos ?? [];
   // Fallback LEGACY: `porQuePlataforma` (párrafo) → un bullet único sin título.
@@ -48,7 +54,7 @@ export const WebDiagnosisSection: FC<SectionProps<WebDiagnosisData>> = ({ data, 
       <div className="stl-diag">
         {/* Izquierda: retos actuales (cards de una línea) */}
         <div>
-          <span className="stl-diag-chip">{t(lang, "retosActuales")}</span>
+          <span className="stl-diag-chip">{sectionChips?.retos ?? t(lang, "retosActuales")}</span>
           <SortableItems items={retos} disabled={!editable} onReorder={(next) => set({ retos: next })}
             container={(nodes) => <div className="stl-diag-retos">{nodes}</div>}>
             {(r, i, handle) => (
@@ -68,10 +74,18 @@ export const WebDiagnosisSection: FC<SectionProps<WebDiagnosisData>> = ({ data, 
         {/* Derecha: panel oscuro "Por qué [plataforma]" con bullets + objetivo */}
         <div className="stl-diag-panel">
           <span className="stl-diag-panel-chip">
-            {/*  : el espacio normal se colapsa entre items del inline-flex */}
-            {`${t(lang, "porQue")} `}
-            <Editable as="span" editable={editable} value={data.plataforma ?? ""}
-              placeholder="HubSpot Content Hub…" onCommit={(v) => set({ plataforma: v })} />
+            {/* Con `panel` declarado el rótulo es UNO SOLO y fijo. Sin él, el histórico:
+                "Por qué" + un campo que el agente llena con el nombre de la plataforma.
+                Ese prefijo fijo es lo que producía "Por qué qué se rompe si el supuesto es
+                falso" en Exploración: el brief le pedía al agente meter una frase entera en
+                una ranura que ya venía prefijada. */}
+            {sectionChips?.panel ?? (
+              <>
+                {`${t(lang, "porQue")} `}
+                <Editable as="span" editable={editable} value={data.plataforma ?? ""}
+                  placeholder="HubSpot Content Hub…" onCommit={(v) => set({ plataforma: v })} />
+              </>
+            )}
           </span>
           <SortableItems items={bullets} disabled={!editable} onReorder={setBullets}
             container={(nodes) => <div className="stl-diag-bullets">{nodes}</div>}>

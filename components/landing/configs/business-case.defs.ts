@@ -32,6 +32,12 @@ export interface BCSectionDef {
   /** Id del renderer en SECTION_COMPONENTS (configs/templates.ts). Ausente = la key.
    *  Permite que templates distintos reusen un mismo componente con keys propias. */
   sectionType?: string;
+  /** Rótulos de los CHIPS de columna de `web_diagnosis`, por documento.
+   *  Ausente = los literales históricos del componente ("Retos actuales" / "Por qué
+   *  {plataforma}"), que son los correctos en la propuesta de sitio web. Existe porque ese
+   *  componente lo comparten cuatro documentos y en tres de ellos las columnas ya no son
+   *  "retos" ni un "por qué" de una plataforma. Ver `SectionProps.sectionChips`. */
+  chips?: { retos?: string; panel?: string };
   /** La sección nace OCULTA: createBusinessCaseCanvas siembra `hidden:true` en el Json
    *  del canvas (publish filtra por ese Json, no por la config). El CSE la muestra cuando aplica. */
   defaultHidden?: boolean;

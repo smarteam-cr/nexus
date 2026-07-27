@@ -277,6 +277,21 @@ export interface SectionProps<T> {
    */
   sectionTitle?: string;
   sectionEyebrow?: string;
+  /**
+   * Rótulos de los CHIPS de columna, resueltos desde la definición del documento.
+   *
+   * Hoy los usa solo `WebDiagnosisSection`, y existe por el mismo motivo que
+   * `sectionTitle`: ese componente lo comparten CUATRO documentos y sus rótulos estaban
+   * escritos a mano adentro, pensados para uno solo. Nació para la propuesta de sitio web
+   * —izquierda "Retos actuales", derecha "Por qué {plataforma}"— y en los otros tres las
+   * columnas ya no son retos ni un "por qué" de una plataforma. Exploración terminó
+   * mostrando "Retos actuales" sobre una lista de supuestos, y "Por qué" concatenado con
+   * una frase entera que el propio brief le pedía escribir al agente.
+   *
+   * Ausente = los rótulos históricos del componente, que en la propuesta de sitio web son
+   * los correctos. El resto de las secciones lo ignora.
+   */
+  sectionChips?: { retos?: string; panel?: string };
 }
 
 /** Definición de una sección dentro de un LandingConfig. No genérico (cada sección
@@ -298,6 +313,8 @@ export interface SectionDef {
   agentHint: string;           // qué debe redactar el agente (instrucción base; el override la gana)
   brief?: string;              // guía del spec (descripción + regla "Fuente:") — ayuda editable
                                // en el editor; el agente la lee al generar (override por sección la gana)
+  /** Rótulos de los chips de columna de `web_diagnosis`, por documento. Ver `SectionProps.sectionChips`. */
+  chips?: { retos?: string; panel?: string };
   empty: unknown;              // data inicial (template vacío)
   /** La sección se alimenta de `ctx` (no de `data`): NO se omite en read por `isBlank`
    *  (el Component decide si devuelve null). Ej. kickoff: cronograma/procesos/cierre. */

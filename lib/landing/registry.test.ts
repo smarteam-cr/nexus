@@ -176,6 +176,51 @@ describe("Exploración: registry completo + keys congeladas", () => {
   });
 });
 
+/**
+ * El renderer `web_diagnosis` nació para la PROPUESTA DE SITIO WEB: su panel oscuro se
+ * rotula "Por qué " + `data.plataforma` (el nombre de la plataforma que se propone), y su
+ * columna izquierda "Retos actuales". Cuando Exploración, Diagnóstico y Desarrollo lo
+ * reusaron, los briefs le hicieron escribir al agente un RÓTULO adentro de `plataforma`
+ * para tapar el problema — y el resultado renderizado fue el stutter que el usuario vio en
+ * vivo: «POR QUÉ QUÉ SE ROMPE SI EL SUPUESTO ES FALSO». El rótulo ahora es `chips`, un
+ * dato de la def; `plataforma` volvió a ser solo un dato.
+ */
+describe("web_diagnosis: los rótulos son `chips` de la def, no texto que escriba el agente", () => {
+  const INTERNOS = [
+    ...EXPLORACION_SECTION_DEFS.map((d) => ["exploración", d] as const),
+    ...DIAGNOSTICO_SECTION_DEFS.map((d) => ["diagnóstico", d] as const),
+    ...DESARROLLO_SECTION_DEFS.map((d) => ["desarrollo", d] as const),
+  ].filter(([, d]) => d.sectionType === "web_diagnosis");
+
+  it("los 3 documentos internos reusan el renderer (si no, este test no protege nada)", () => {
+    expect(INTERNOS.map(([doc, d]) => `${doc}:${d.key}`)).toEqual([
+      "exploración:sin_verificar", "diagnóstico:gap_analysis", "desarrollo:retos_cliente",
+    ]);
+  });
+
+  it("cada uno declara su rótulo de panel y ninguno arranca con «Por qué»", () => {
+    for (const [doc, d] of INTERNOS) {
+      expect(d.chips?.panel, `${doc}:${d.key} sin chips.panel → rotula "Por qué" a secas`).toBeTruthy();
+      // El componente ya no antepone "Por qué" cuando hay chip: repetirlo lo duplicaría.
+      expect(d.chips?.panel?.toLowerCase().startsWith("por qué")).toBe(false);
+    }
+  });
+
+  it("ningún brief le pide al agente que escriba `plataforma` (es la fuente del stutter)", () => {
+    for (const [doc, d] of INTERNOS) {
+      expect(d.brief.includes("`plataforma`"), `${doc}:${d.key} vuelve a rotular por \`plataforma\``).toBe(false);
+    }
+  });
+
+  it("la propuesta de sitio web NO declara chips: sus rótulos son los históricos", () => {
+    // Cinco propuestas publicadas los tienen congelados en su snapshot. Cambiarlos acá
+    // haría que el documento vivo y el publicado dijeran cosas distintas.
+    const web = BC_TEMPLATES.website_v1.sections.find((d) => d.sectionType === "web_diagnosis");
+    expect(web?.key).toBe("diagnostico");
+    expect(web?.chips).toBeUndefined();
+  });
+});
+
 describe("Diagnóstico: registry completo + keys congeladas", () => {
   it("cada def resuelve componente y la config no dropea ninguna", () => {
     const faltantes = DIAGNOSTICO_SECTION_DEFS.filter((d) => !DIAGNOSTICO_SECTION_COMPONENTS[d.sectionType ?? d.key]);

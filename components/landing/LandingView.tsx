@@ -342,6 +342,7 @@ export default function LandingView({
            un texto propio y las compartidas se prestaban la identidad entre documentos. */
         sectionTitle={effTitle}
         sectionEyebrow={effEyebrow}
+        sectionChips={def.chips}
         editable={editable}
         onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
       />
@@ -400,6 +401,7 @@ export default function LandingView({
              EN VIVO. Las dos ramas pasan lo mismo: si una sección no los usa, los ignora. */
           sectionTitle={effTitle}
           sectionEyebrow={effEyebrow}
+          sectionChips={def.chips}
           editable={editable}
           onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
         />

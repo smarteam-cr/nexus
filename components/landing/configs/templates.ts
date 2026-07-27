@@ -88,6 +88,7 @@ export function toSectionDef(
     schema: d.schema,
     agentHint: d.agentHint,
     brief: d.brief,
+    chips: d.chips,
     empty: d.empty,
     Component,
   };

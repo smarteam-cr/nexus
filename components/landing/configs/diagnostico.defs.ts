@@ -157,10 +157,12 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     agentGenerated: true,
     empty: WEB_DIAGNOSIS_EMPTY,
     agentHint: "Los retos (izq) + qué cuesta hoy la brecha (panel oscuro) + cuál se cierra primero.",
+    /* Rótulos de las dos columnas (antes se colaban por `plataforma`, ver exploracion.defs.ts). */
+    chips: { retos: "Qué falta", panel: "Qué te cuesta hoy" },
     brief:
       "La brecha entre el nivel actual y el siguiente — concreta, no aspiracional. `intro`: 1 frase de encuadre. " +
-      "`retos`: qué falta para subir de nivel, cada uno `title` corto + `detail` de una línea. " +
-      "`plataforma`: poné exactamente `Qué te cuesta hoy`. `porQueBullets`: el IMPACTO de la brecha en resultados — tiempo perdido, ventas caídas, clientes sin respuesta — con números SOLO si alguna fuente los trae. " +
+      "`retos`: qué falta para subir de nivel — 4 a 6, cada uno `title` corto + `detail` de máximo 20 PALABRAS. " +
+      "`porQueBullets`: el IMPACTO de la brecha en resultados — 3 a 5, tiempo perdido, ventas caídas, clientes sin respuesta — con números SOLO si alguna fuente los trae, `detail` de máximo 20 PALABRAS. " +
       "`objetivo`: cuál brecha se cierra primero y por qué esa ('Primero la captura del lead: todo lo demás depende de que el dato exista').",
     schema: asSchema(WEB_DIAGNOSIS_SCHEMA),
   },

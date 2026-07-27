@@ -84,13 +84,23 @@ export const EXPLORACION_SECTION_DEFS: BCSectionDef[] = [
     empty: WEB_DIAGNOSIS_EMPTY,
     agentHint:
       "Los supuestos NO verificados (izq) + qué se rompe si alguno es falso (panel oscuro) + qué hay que confirmar primero. El corazón del documento.",
+    /* Los rótulos de las dos columnas. Sin esto, el componente —que nació para la propuesta
+       de sitio web— rotulaba la izquierda "Retos actuales" sobre una lista de supuestos, y
+       la derecha "Por qué " + lo que el brief le hacía escribir al agente, que producía
+       "Por qué qué se rompe si el supuesto es falso". */
+    chips: { retos: "Supuestos", panel: "Qué se rompe" },
+    /* ── EL LARGO SE MIDE EN PALABRAS, NO EN "UNA LÍNEA" ──────────────────────────────
+       La versión anterior ya pedía `detail` de "UNA línea". Sobre el único documento
+       generado, se incumplió 16 de 16 veces: los detalles promediaban 193 caracteres, que
+       son 3 líneas renderizadas. "Una línea" no es medible desde el lado del modelo — no
+       sabe cuánto mide la caja. Los topes de acá son números que sí puede contar. */
     brief:
-      "EL CORAZÓN DE LA GUÍA: los supuestos que se dieron por ciertos y que nadie verificó — de acá salen las preguntas del plan de sesiones. Se rinde como tarjetas a la izquierda + un panel oscuro de consecuencias a la derecha + un objetivo abajo. " +
-      "`intro`: 1 frase de encuadre (opcional). " +
-      "`retos`: LOS SUPUESTOS. Cada uno `title` = el supuesto enunciado como tal, en 5-12 palabras ('Asumimos que hay un solo proceso de ventas'); `detail` = UNA línea con por qué lo asumimos y qué tan firme es el piso ('Ventas lo describió en singular, pero nadie lo confirmó con operaciones'). Sacalos de los huecos del handoff: lo que se prometió sin detallar, lo que se dijo a medias, lo que el alcance da por hecho. " +
-      "`plataforma`: rótulo del panel oscuro → poné exactamente `Qué se rompe si el supuesto es falso`. " +
-      "`porQueBullets`: las CONSECUENCIAS concretas de que un supuesto no se cumpla — `title` corto ('Cronograma se corre') + `detail` de 1 línea ('Si hay dos procesos, el mapeo se duplica y la fase 2 no cierra en 3 semanas'). Consecuencias de ENTREGA (tiempo, alcance, adopción, datos), no genéricas. " +
-      "`objetivo`: 1 frase con QUÉ hay que confirmar primero y por qué ese primero ('Confirmar cuántos procesos de venta existen antes de diseñar el pipeline: todo lo demás depende de eso').",
+      "EL CORAZÓN DE LA GUÍA, y va ESCUETO: los supuestos que se dieron por ciertos y que nadie verificó — de acá salen las preguntas del plan de sesiones. Se lee de un vistazo antes de una reunión, no se estudia. Tarjetas a la izquierda + un panel oscuro de consecuencias a la derecha + un objetivo abajo. " +
+      "`intro`: UNA frase de encuadre, máximo 15 palabras. Si no agrega nada, dejala vacía. " +
+      "`retos`: LOS SUPUESTOS — 4 a 6, ni uno más, ORDENADOS por riesgo de entrega (primero el que, si es falso, sale más caro). `title` = el supuesto en 3 a 8 palabras y SIN arrancar con 'Asumimos que' (el rótulo de la columna ya dice que son supuestos): 'Un solo proceso de ventas'. `detail` = máximo 20 PALABRAS con por qué lo asumimos y qué tan firme es el piso: 'Ventas lo describió en singular; operaciones nunca lo confirmó'. Sacalos de los huecos del handoff: lo que se prometió sin detallar, lo que se dijo a medias, lo que el alcance da por hecho. " +
+      "Si te quedan más de 6, NO los apiles acá: quedate con los 6 de mayor riesgo y asegurate de que los que dejás afuera aparezcan igual como preguntas en «Plan de sesiones». " +
+      "`porQueBullets`: QUÉ SE ROMPE — 3 a 5, uno por consecuencia DISTINTA. NO repitas el supuesto de enfrente con otras palabras: acá va lo que se rompe en la ENTREGA (tiempo, alcance, adopción, datos, plata). `title` = 2 a 5 palabras ('Cronograma se corre', 'Costo no cotizado'); `detail` = máximo 20 PALABRAS y UNA sola idea: 'Si hay dos procesos, el mapeo se duplica y la fase 2 no cierra'. " +
+      "`objetivo`: UNA frase de máximo 25 palabras con QUÉ hay que confirmar primero y por qué ese primero ('Confirmar cuántos procesos de venta existen antes de diseñar el pipeline: todo lo demás depende de eso').",
     schema: asSchema(WEB_DIAGNOSIS_SCHEMA),
   },
   {
