@@ -6,6 +6,16 @@ import PrintClient, { type CanvasPrintData } from "./PrintClient";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * El pseudo-canvas «Resumen del servicio»: NO es una fila de `ProjectCanvas`. Su contenido
+ * son `ClientContextCard` con `canvasId: null` —tarjetas sueltas del proyecto— y este id
+ * inventado es lo que lo distingue de un canvas real en toda esta página.
+ *
+ * Es LA identidad que decide la rama de carga. No usar `isDefault` para eso: ese flag marca
+ * el ANCLA del proyecto, que es el canvas de Kickoff (lib/canvas/canvas-defs.ts).
+ */
+const PSEUDO_DEFAULT_ID = "__pseudo_default__";
+
 // Secciones fijas del canvas default
 const DEFAULT_SECTIONS = [
   { key: "objetivo_alcance",           label: "Objetivo y alcance" },
@@ -76,11 +86,12 @@ export default async function CanvasPrintPage({
   let canvas: { id: string; name: string; isDefault: boolean } | null = null;
 
   if (canvasIdParam === "default") {
-    const def = await prisma.projectCanvas.findFirst({
-      where: { projectId, isDefault: true },
-      select: { id: true, name: true, isDefault: true },
-    });
-    canvas = def ?? { id: "__pseudo_default__", name: "Resumen del servicio", isDefault: true };
+    /* "default" en la URL significa EL PSEUDO-CANVAS «Resumen del servicio» — el que se
+       arma con ClientContextCard. No se consulta la DB: buscar `isDefault:true` devolvía
+       el canvas de KICKOFF (que es el ancla del proyecto, canvas-defs.ts) y por eso el PDF
+       del Resumen salía titulado "Kickoff". El único llamador manda "default" justamente
+       cuando está parado en el Resumen (ProjectCanvasPanel). */
+    canvas = { id: PSEUDO_DEFAULT_ID, name: "Resumen del servicio", isDefault: true };
   } else {
     const found = await prisma.projectCanvas.findUnique({
       where: { id: canvasIdParam },
@@ -109,8 +120,17 @@ export default async function CanvasPrintPage({
     },
   };
 
-  if (canvas.isDefault) {
-    // Canvas default → ClientContextCard
+  /* ⚠ LA RAMA SE DECIDE POR IDENTIDAD, NO POR `isDefault` ────────────────────────────
+     Las tarjetas son `ClientContextCard` con `canvasId: null`: NO cuelgan de ningún canvas,
+     y la única superficie que las muestra es el pseudo-canvas «Resumen». `isDefault` marca
+     otra cosa — el ANCLA del proyecto, que es el canvas de KICKOFF (canvas-defs.ts) — así
+     que ramificar por ahí mandaba al kickoff a buscar su contenido en una tabla donde no
+     tiene ni una fila, y el PDF salía con el encabezado correcto y el cuerpo vacío
+     ("Este canvas aún no tiene contenido para exportar").
+     La lección ya estaba escrita en ProjectCanvasPanel.tsx ("el render se ramifica por
+     NOMBRE, no por isDefault") y no había llegado hasta acá. */
+  if (canvas.id === PSEUDO_DEFAULT_ID) {
+    // Pseudo-canvas «Resumen» → ClientContextCard (sueltas, `canvasId: null`)
     const cards = await prisma.clientContextCard.findMany({
       where: {
         projectId,
