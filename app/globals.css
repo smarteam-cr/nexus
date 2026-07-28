@@ -1372,3 +1372,19 @@ html.light aside .bg-gray-800 {
   .nx-login__note  { font-size: 11.5px; }
 }
 
+
+/* ── Barra de porcentaje (components/ui/ScaleSlider) ────────────────────────
+   El PRIMER `input type="range"` del repo. Vive acá y no en landing-engine.css
+   porque el control se usa en el SHELL de Nexus (ficha del cliente), fuera de
+   `.stl` — el motor de landing solo lo monta de prestado en el popover del hero.
+   `accent-color` pinta pista y perilla con el token de marca sin un solo
+   pseudo-elemento vendor: -webkit-slider-thumb y -moz-range-thumb no se pueden
+   agrupar en una regla (un selector desconocido invalida TODO el bloque), así que
+   evitarlos es lo que mantiene esto en 4 líneas. */
+.stl-range {
+  accent-color: var(--color-brand);
+  height: 20px;
+  cursor: pointer;
+}
+.stl-range:disabled { cursor: not-allowed; opacity: 0.5; }
+.stl-range:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 3px; }

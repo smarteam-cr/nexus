@@ -80,6 +80,24 @@ describe("la variable no se escapa al contenedor", () => {
   });
 });
 
+describe("`logoScale` no entra al schema del agente", () => {
+  // Si entrara, `coerceToSchema` (lib/ai/section-schema.ts) lo aplanaría a `""` —
+  // aplana TODA hoja a string— y el ajuste del documento moriría en la primera
+  // regeneración. Es el mismo pozo del que salieron `brands` y `coverImageUrl`.
+  const DEFS = path.join(RAIZ, "components", "landing", "configs");
+  const archivos = fs.readdirSync(DEFS).filter((f) => f.endsWith(".defs.ts"));
+
+  for (const archivo of archivos) {
+    it(`${archivo}: ningún bloque \`schema:\` menciona logoScale`, () => {
+      const src = fs.readFileSync(path.join(DEFS, archivo), "utf8");
+      // Los schemas de este repo son literales `schema: { … }` en una o pocas líneas.
+      const schemas = src.match(/schema:\s*\{[^}]*(\{[^}]*\}[^}]*)*\}/g) ?? [];
+      const culpables = schemas.filter((s) => s.includes("logoScale"));
+      expect(culpables, "logoScale es data CURADA, no del agente").toEqual([]);
+    });
+  }
+});
+
 describe("el componente aplica la escala solo al logo del cliente", () => {
   it("el estilo se calcula bajo una condición de «es el cliente»", () => {
     // No verifica la lógica (eso es imposible por fs-scan), sino que la condición EXISTA:
@@ -87,9 +105,20 @@ describe("el componente aplica la escala solo al logo del cliente", () => {
     expect(HERO_PARTS).toMatch(/esCliente\s*\?\s*logoScaleStyle\(/);
   });
 
-  it("hay UN solo <img> en la brand-row, y lleva el style", () => {
-    const imgs = HERO_PARTS.match(/<img\b/g) ?? [];
-    expect(imgs.length, "apareció otro <img>: ¿escala también?").toBe(1);
-    expect(HERO_PARTS).toMatch(/<img[^>]*className="stl-brand-logo"[^>]*style=\{escala\}/);
+  it("TODO <img> de la brand-row lleva la clase y el style calculados", () => {
+    // Hay dos ramas (con y sin el editor del popover) que pintan el mismo logo. Contar
+    // no sirve; lo que importa es que ninguna rama se olvide del style — un `<img>` sin
+    // él ignora el tamaño configurado y nadie lo nota hasta ver el documento.
+    const imgs = HERO_PARTS.match(/<img[^>]*>/g) ?? [];
+    expect(imgs.length, "no quedó ningún <img> en la brand-row").toBeGreaterThanOrEqual(1);
+    const sinEscala = imgs.filter((t) => !(t.includes("className={claseLogo}") && t.includes("style={escala}")));
+    expect(sinEscala, "un <img> de la brand-row no aplica clase+escala").toEqual([]);
+  });
+
+  it("el modificador que apaga el filtro solo se pone con versión oscura REAL", () => {
+    // Si se pusiera incondicionalmente, los logos de los clientes que solo tienen un
+    // archivo dejarían de blanquearse y quedarían invisibles sobre el navy.
+    expect(HERO_PARTS).toMatch(/usaVersionOscura\s*=\s*esCliente && !!ctx\.clientLogoDarkUrl/);
+    expect(HERO_PARTS).toMatch(/usaVersionOscura \? " stl-brand-logo--asis" : ""/);
   });
 });

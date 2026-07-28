@@ -193,7 +193,14 @@ export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({
           <HeroUploadButtons ctx={ctx} coverImageUrl={d.coverImageUrl} onCover={(url) => set({ coverImageUrl: url })} />
         </div>
       )}
-      <BrandRow brands={d.brands} ctx={ctx} editable={canEdit} onChange={(next) => set({ brands: next })} />
+      <BrandRow
+        brands={d.brands}
+        ctx={ctx}
+        editable={canEdit}
+        onChange={(next) => set({ brands: next })}
+        logoScale={d.logoScale}
+        onLogoScale={(pct) => set({ logoScale: pct ?? undefined })}
+      />
       {canEdit ? (
         <Editable as="span" className="eyebrow" editable value={d.eyebrow ?? ""} placeholder={sectionEyebrow ?? ""} onCommit={(v) => set({ eyebrow: v })} />
       ) : (

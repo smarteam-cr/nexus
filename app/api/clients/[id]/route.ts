@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
 import { guardAccessToClient, guardCapability } from "@/lib/auth/api-guards";
+import { clampLogoScale } from "@/lib/ui/logo-scale";
 
 // GET /api/clients/[id]
 export async function GET(
@@ -59,6 +60,11 @@ export async function PATCH(
           .map((d: string) => d.trim().toLowerCase().replace(/^@/, ""))
           .filter(Boolean),
       }),
+      // Tamaño del logo. `null` explícito = "volver al default", y por eso se distingue
+      // de `undefined` (= "no lo mandé"): son cosas distintas. El clamp es del servidor
+      // porque la barra es solo una UI — un PATCH a mano con 5000 haría que el logo tape
+      // el documento entero en una propuesta que el cliente está mirando.
+      ...(data.logoScale !== undefined && { logoScale: clampLogoScale(data.logoScale) }),
     },
   });
 

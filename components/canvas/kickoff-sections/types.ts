@@ -150,6 +150,10 @@ export interface KickoffHeroData {
   tags: string[];
   brands?: string[];
   coverImageUrl?: string | null;
+  /** Ajuste de tamaño del logo del cliente PARA ESTE DOCUMENTO, en % (50-200). Pisa a
+   *  `Client.logoScale`; ausente = se usa la base. FUERA del schema del agente, como
+   *  `brands` y `coverImageUrl`. Ver lib/ui/logo-scale.ts. */
+  logoScale?: number | null;
   /** LEGADO: los kickoffs tipados hasta hoy guardan la bajada en `intro`. */
   intro?: string;
   __legacyMd?: string | null;
@@ -171,6 +175,10 @@ export function normalizeHero(data: unknown): KickoffHeroData {
     tags: Array.isArray(d.tags) ? d.tags.filter((t): t is string => typeof t === "string") : [],
     brands: Array.isArray(d.brands) ? d.brands.filter((b): b is string => typeof b === "string") : undefined,
     coverImageUrl: typeof d.coverImageUrl === "string" ? d.coverImageUrl : null,
+    // ⚠ Esta función RECONSTRUYE el objeto campo por campo y `set()` spreadea el
+    // resultado: una key nueva que no se agregue acá se borra al siguiente tipeo del
+    // título, sin error. Es el pozo del que `coverImageUrl` ya salió.
+    logoScale: typeof d.logoScale === "number" ? d.logoScale : undefined,
     __legacyMd: typeof d.__legacyMd === "string" ? d.__legacyMd : null,
   };
 }

@@ -86,7 +86,14 @@ export const HeroSection: FC<SectionProps<HeroData>> = ({
       {editable && (
         <HeroUploadButtons ctx={ctx} coverImageUrl={data.coverImageUrl} onCover={(url) => set({ coverImageUrl: url })} />
       )}
-      <BrandRow brands={data.brands} ctx={ctx} editable={editable} onChange={(next) => set({ brands: next })} />
+      <BrandRow
+        brands={data.brands}
+        ctx={ctx}
+        editable={editable}
+        onChange={(next) => set({ brands: next })}
+        logoScale={data.logoScale}
+        onLogoScale={(pct) => set({ logoScale: pct ?? undefined })}
+      />
       {eyebrow && <span className="eyebrow">{eyebrow}</span>}
       {/* El título es editable, pero el placeholder es el rótulo del propio documento:
           así lo que se ve mientras está vacío ya es el texto correcto, no una plantilla

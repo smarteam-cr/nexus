@@ -21,7 +21,18 @@ import type { KickoffTimelineData, KickoffProceso } from "@/lib/external/kickoff
 //    `titulo`: el NOMBRE del documento en pocas palabras — el título de la página. Es
 //    distinto de `headline`, que es el titular con el mensaje del caso; sin él, una
 //    portada sin generar no tenía ningún título (ver lib/landing/hero-title.ts).
-export interface HeroData { titulo?: string; headline: string; subhead: string; tags: string[]; brands?: string[]; coverImageUrl?: string | null }
+export interface HeroData {
+  titulo?: string;
+  headline: string;
+  subhead: string;
+  tags: string[];
+  brands?: string[];
+  coverImageUrl?: string | null;
+  /** Ajuste de tamaño del logo del cliente PARA ESTE DOCUMENTO, en % (50-200). Pisa a
+   *  `Client.logoScale`; ausente = se usa la base. FUERA del schema del agente, como
+   *  `brands` y `coverImageUrl`. Ver lib/ui/logo-scale.ts. */
+  logoScale?: number | null;
+}
 
 // 2) Diagnóstico — 3 a 6 dolores concretos.
 export interface PainItem { title: string; detail: string }

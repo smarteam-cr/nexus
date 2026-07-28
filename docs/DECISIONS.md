@@ -1127,6 +1127,54 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos
   dry-run-first; el usuario aprueba el `--apply`.
 
+## El logo del cliente: tamaño y variante para fondo oscuro (2026-07-27)
+
+- **El tamaño es un PORCENTAJE, no píxeles.** El logo se pinta en 7 superficies con TRES
+  altos base distintos y ya afinados por separado: 30px sobre el navy del hero, 40px en el
+  cronograma que ve el cliente, 36px en el cronograma interno. Un valor en px obligaría a
+  elegir entre unificar los tres —lo que cambia el aspecto de TODO lo ya publicado— o que
+  el número mienta en dos de las tres. El porcentaje es un multiplicador: cada superficie
+  conserva su alto y el número significa lo mismo en todas.
+- **Dos niveles, y el de arriba es ABSOLUTO.** `Client.logoScale` es la base (aplica a
+  todos los documentos del cliente); `hero.logoScale` la PISA para un documento. Base 120 +
+  documento 150 se ve a **150**, no a 180: si multiplicara, el número que muestra la barra
+  no sería el tamaño que se ve y el control dejaría de ser legible. "Volver al del cliente"
+  **borra** la key, no la iguala — igualar congela el documento y deja de seguir la base.
+- **`logoScale` es NULLABLE sin default.** `null` = "nadie lo tocó", que no es lo mismo que
+  "alguien eligió 100": si mañana se re-afina un alto base, los `null` lo siguen y los 100
+  explícitos quedan pinchados. Mismo criterio que `tamUsd` y `BusinessCase.language`.
+- **El número llega por una variable CSS SIN UNIDAD** (`--logo-scale`), puesta inline solo
+  en el `<img>` del cliente; el alto base sigue en CSS. Los tres logos de la brand-row
+  comparten `.stl-brand-logo`: Smarteam y HubSpot no traen la variable, caen al fallback
+  `1` del `calc` y quedan idénticos. ⚠ Si la variable saliera con unidad (`"120%"`), el
+  `calc` se invalida, `height` cae a `auto` y **el logo se pinta a su resolución natural**
+  en una propuesta que el cliente está mirando. Por eso el string lo construye UNA sola
+  función (`lib/ui/logo-scale.ts`) y hay guard sobre el CSS.
+- **NO se plumbea `theme` hasta las secciones.** La brand-row elige la variante oscura sin
+  preguntarle el fondo a nadie porque los 7 defs con `backdrop:true` son `theme:"dark"`,
+  sin excepción. Pasar `theme` por `SectionProps` sería un dato que ninguna otra sección
+  necesita y encima MENOS seguro: un theme mal seteado produce el mismo bug con más código
+  en el medio. Se sostiene con `lib/ui/landing-hero-theme.test.ts`.
+- **El filtro `brightness(0) invert(1)` se queda como DEFAULT de la clase.** Hoy es lo
+  único que hace visibles los logos de los clientes que solo subieron un archivo —que son
+  todos— aunque les borre el color de marca. Se apaga con el modificador `--asis` solo
+  cuando hay variante oscura real. Dirección elegida a propósito: si el modificador se
+  pierde en un refactor, el peor caso es lo que ya se ve, no un logo invisible.
+- **La variante oscura es la ALTERNATIVA del primario, no un asset suelto**: borrar
+  `logoUrl` borra las dos, y no se puede subir la oscura sin primario. Un logo para fondo
+  oscuro es tinta clara: sobre el blanco del cronograma desaparecería, y `normalizeBrands`
+  decide con `!!clientLogoUrl` si pinta imagen o badge de texto.
+- **El snapshot del business case publicado congela los tres campos, con fallback `??` a lo
+  vivo.** Qué archivo, cuál variante y a qué tamaño son UNA unidad visual: congelar uno y
+  leer los otros vivos garantiza el desajuste. Y como los snapshots ya publicados no traen
+  las keys nuevas, caen a los valores del cliente → una propuesta de hace meses respeta el
+  cambio sin migrar un solo Json.
+- **La barra (`components/ui/ScaleSlider`) es el primer `input type="range"` del repo.**
+  Arrastrar solo pinta (estado local + variable CSS, cero red); commitea al soltar
+  (`pointerUp` + `keyUp` + `blur`, deduplicado) → un arrastre = una escritura. Sin debounce
+  con timer: un timer se pierde al desmontar. El `blur` es la misma doctrina de `Editable`
+  y `PopInput`, y es lo que hace que cerrar el popover con clic afuera no pierda el valor.
+
 ## Línea gráfica Smarteam en el motor de landings (retema 2026-07)
 - **Fuente de verdad de la marca**: el doc autocontenido `prompt-linea-grafica.md` (repo del
   sitio). Paleta: navy `#051849` (tinta Y fondo oscuro) · royal `#0B58D3` (interactivo sobre

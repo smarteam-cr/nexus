@@ -18,11 +18,12 @@
  * `coverImageUrl` y `brands` viven FUERA del schema del agente (los cura el CSE y
  * sobreviven a las regeneraciones por carry-forward de keys no-schema).
  */
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
-import { logoScaleStyle, resolveLogoScale } from "@/lib/ui/logo-scale";
+import { ScaleSlider } from "@/components/ui/ScaleSlider";
+import { LOGO_SCALE_MAX, LOGO_SCALE_MIN, LOGO_SCALE_STEP, logoScaleStyle, resolveLogoScale } from "@/lib/ui/logo-scale";
 import type { LandingContext } from "./types";
 
 /** Píldora translúcida sobre el hero oscuro (Portada / Logo del cliente). */
@@ -128,6 +129,92 @@ export function HeroUploadButtons({
 }
 
 /**
+ * Ajuste del tamaño del logo DESDE EL DOCUMENTO (solo edición).
+ *
+ * El logo se ve como el real y al clickearlo se abre un popover con la barra. Molde de
+ * `CtaEditor` (components/landing/sections.tsx), que ya resolvió las dos cosas que este
+ * patrón rompe: cerrar por clic afuera / Esc, y hacer `blur()` ANTES de desmontar — un
+ * control que se desmonta no dispara `blur`, y ahí es donde `ScaleSlider` comitea.
+ *
+ * Lo que se guarda es un OVERRIDE de este documento, que PISA a la base del cliente. Vive
+ * en el `data` del hero (fuera del schema del agente, como `brands`), así que se persiste
+ * por el `onChange` que ya existe: sin endpoint nuevo.
+ */
+function ClientLogoEditor({
+  children, base, value, onPreview, onCommit,
+}: {
+  children: React.ReactNode;
+  base: number;
+  value: number | null;
+  onPreview: (pct: number | null) => void;
+  onCommit: (pct: number | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const commitFocused = () => {
+      const el = document.activeElement;
+      if (el instanceof HTMLElement && wrapRef.current?.contains(el)) el.blur();
+    };
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        commitFocused();
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { commitFocused(); setOpen(false); } };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <span ref={wrapRef} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title="Ajustar el tamaño del logo en este documento"
+        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "inline-flex" }}
+      >
+        {children}
+      </button>
+      {open && (
+        <div
+          role="dialog"
+          style={{
+            position: "absolute", top: "calc(100% + 10px)", left: 0, zIndex: 30,
+            width: 240, padding: 12, borderRadius: 12, background: "#fff",
+            border: "1px solid rgba(0,0,0,0.10)", boxShadow: "0 12px 32px -8px rgba(5,24,73,0.28)",
+            color: "#1f2937", textAlign: "left",
+          }}
+        >
+          <ScaleSlider
+            value={value}
+            base={base}
+            min={LOGO_SCALE_MIN}
+            max={LOGO_SCALE_MAX}
+            step={LOGO_SCALE_STEP}
+            label="Tamaño en este documento"
+            resetLabel="Usar el del cliente"
+            onPreview={onPreview}
+            onCommit={onCommit}
+          />
+          <p style={{ fontSize: 11, color: "#6b7280", margin: "8px 0 0" }}>
+            {value === null
+              ? `Sigue el tamaño del cliente (${base}%). Movelo para ajustarlo solo acá.`
+              : `Solo en este documento. El del cliente es ${base}%.`}
+          </p>
+        </div>
+      )}
+    </span>
+  );
+}
+
+/**
  * TOKENS CENTINELA de la fila de marcas. Ocupan una posición en el array `brands`
  * (por eso se pueden ARRASTRAR y quitar como cualquier otra marca) pero NO congelan
  * la imagen: se resuelven en cada render contra el ctx VIVO. Así el `@client` de un
@@ -186,7 +273,7 @@ function normalizeBrands(raw: string[] | undefined, ctx: LandingContext): string
  * como imagen. Un token sin logo cargado cae a un badge de texto.
  */
 export function BrandRow({
-  brands: raw, ctx, editable, onChange, logoScale,
+  brands: raw, ctx, editable, onChange, logoScale, onLogoScale,
 }: {
   brands?: string[];
   ctx: LandingContext;
@@ -195,7 +282,12 @@ export function BrandRow({
   /** Ajuste de tamaño de ESTE documento. Pisa a la base del cliente (`ctx.clientLogoScale`);
    *  ausente = se usa la base. Ver lib/ui/logo-scale.ts. */
   logoScale?: number | null;
+  /** Guarda el ajuste de ESTE documento. `null` = borrarlo y volver a la base del cliente. */
+  onLogoScale?: (pct: number | null) => void;
 }) {
+  // Lo que se está arrastrando AHORA (solo pinta; el guardado va al soltar). Separado del
+  // valor persistido para no mandar una escritura por píxel del arrastre.
+  const [previewScale, setPreviewScale] = useState<number | null>(null);
   const all = normalizeBrands(raw, ctx);
   // En LECTURA se descartan las marcas sin nombre: "+ Marca" agrega una vacía y el CSE puede
   // publicar sin completarla; al cliente le quedaría un separador × colgando y una píldora vacía.
@@ -218,14 +310,23 @@ export function BrandRow({
         const sep = i > 0 ? <span className="stl-brand-x">×</span> : null;
         const token = isToken(b);
         const esCliente = b === BRAND_CLIENT;
+        /* El hero SIEMPRE va sobre navy (los 7 defs con `backdrop:true` son `theme:"dark"`,
+           congelado por lib/ui/landing-hero-theme.test.ts), así que acá se puede elegir la
+           versión para fondo oscuro sin preguntarle el tema a nadie. */
+        const usaVersionOscura = esCliente && !!ctx.clientLogoDarkUrl;
         const logo = token
-          ? (esCliente ? ctx.clientLogoUrl : ctx.smarteamLogoUrl)
+          ? (esCliente ? (ctx.clientLogoDarkUrl ?? ctx.clientLogoUrl) : ctx.smarteamLogoUrl)
           : ctx.brandLogos?.[b.trim().toLowerCase()];
         const alt = token ? (esCliente ? ctx.clientName || "Cliente" : "Smarteam") : b;
         /* El tamaño se aplica SOLO al logo del cliente. Los tres logos de la fila comparten
            la clase `.stl-brand-logo`; los otros dos no traen la variable y caen al fallback
            `1` del `calc`, así que quedan clavados en su alto de siempre. */
-        const escala = esCliente ? logoScaleStyle(resolveLogoScale(ctx.clientLogoScale, logoScale)) : undefined;
+        const pctCliente = resolveLogoScale(ctx.clientLogoScale, previewScale ?? logoScale);
+        const escala = esCliente ? logoScaleStyle(pctCliente) : undefined;
+        /* Con versión oscura real el archivo ya está pensado para este fondo: se muestra tal
+           cual. Sin ella queda el filtro que lo aplasta a blanco — que es lo único que hoy
+           hace visibles los logos de los clientes que solo subieron un archivo. */
+        const claseLogo = `stl-brand-logo${usaVersionOscura ? " stl-brand-logo--asis" : ""}`;
         // Los tokens se ARRASTRAN pero no se QUITAN (paridad con el comportamiento previo,
         // donde los logos ni siquiera eran ítems). Permitir quitarlos dejaría un array sin
         // tokens, indistinguible de uno legacy → `normalizeBrands` los reinsertaría solo.
@@ -237,8 +338,20 @@ export function BrandRow({
               <span className="stl-item stl-brand-logo-wrap" style={{ display: "inline-flex", alignItems: "center" }}>
                 {handle}
                 {removable && <RemoveBtn onClick={() => onChange(removeAt(brands, i))} />}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className="stl-brand-logo" src={logo} alt={alt} style={escala} />
+                {esCliente && editable && onLogoScale ? (
+                  <ClientLogoEditor
+                    base={resolveLogoScale(ctx.clientLogoScale)}
+                    value={logoScale ?? null}
+                    onPreview={setPreviewScale}
+                    onCommit={(pct) => { setPreviewScale(null); onLogoScale(pct); }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img className={claseLogo} src={logo} alt={alt} style={escala} />
+                  </ClientLogoEditor>
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img className={claseLogo} src={logo} alt={alt} style={escala} />
+                )}
               </span>
             ) : (
               <span className="stl-item stl-brand-badge">

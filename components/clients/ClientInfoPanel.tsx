@@ -20,6 +20,11 @@ import { useParams } from "next/navigation";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import DocumentUpload from "./DocumentUpload";
 import { LogoUploader } from "@/components/ui/LogoUploader";
+import { ScaleSlider } from "@/components/ui/ScaleSlider";
+import {
+  LOGO_SCALE_DEFAULT, LOGO_SCALE_MAX, LOGO_SCALE_MIN, LOGO_SCALE_STEP,
+  logoHeightCalc, logoScaleStyle, resolveLogoScale,
+} from "@/lib/ui/logo-scale";
 
 type SubTab = "docs" | "stakeholders" | "retos" | "oportunidades" | "marca";
 
@@ -115,30 +120,143 @@ export default function ClientInfoPanel({
 
 function ClientLogoSection({ clientId, projectId }: { clientId: string; projectId: string }) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoDarkUrl, setLogoDarkUrl] = useState<string | null>(null);
+  const [scale, setScale] = useState<number | null>(null);
+  // Lo que se está arrastrando AHORA. Separado de `scale` (lo guardado) para que las
+  // muestras crezcan bajo el dedo sin una request por píxel.
+  const [preview, setPreview] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}/client-logo`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setLogoUrl(d?.logoUrl ?? null))
+      .then((d) => {
+        setLogoUrl(d?.logoUrl ?? null);
+        setLogoDarkUrl(d?.logoDarkUrl ?? null);
+        setScale(typeof d?.logoScale === "number" ? d.logoScale : null);
+      })
       .catch(() => setLogoUrl(null))
       .finally(() => setLoading(false));
   }, [projectId]);
 
-  if (loading) return <div className="h-28 rounded-xl skeleton-shimmer max-w-md" />;
+  const guardarEscala = (pct: number | null) => {
+    setScale(pct);
+    void fetch(`/api/clients/${clientId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ logoScale: pct }),
+    }).catch(() => {});
+  };
+
+  // Delinea, no rellena: espeja la tarjeta real (rounded-xl + border) en vez de un
+  // rectángulo opaco. Es lo que pide lib/ui/skeleton-vocab.test.ts (T1 anti-slab).
+  if (loading) return <div className="h-28 rounded-xl border border-line max-w-md" />;
+
+  const efectivo = resolveLogoScale(preview ?? scale);
+  const estilo = { ...logoScaleStyle(efectivo), height: logoHeightCalc(30) };
 
   return (
-    <section className="rounded-xl bg-surface border border-line p-5 max-w-md">
-      <h3 className="text-sm font-semibold text-fg mb-1">Logo del cliente</h3>
-      <p className="text-xs text-fg-muted mb-4">
-        Aparece en las páginas que ve el cliente (kickoff y cronograma) y en este workspace.
-      </p>
-      <LogoUploader
-        currentUrl={logoUrl}
-        endpoint={`/api/clients/${clientId}/logo`}
-        label="Logo del cliente"
-        hint="PNG, JPG, WebP o SVG · máx 4MB."
-      />
+    <section className="rounded-xl bg-surface border border-line p-5 max-w-md space-y-5">
+      <div>
+        <h3 className="text-sm font-semibold text-fg mb-1">Logo del cliente</h3>
+        <p className="text-xs text-fg-muted mb-4">
+          Aparece en las páginas que ve el cliente (kickoff y cronograma) y en este workspace.
+        </p>
+        <LogoUploader
+          currentUrl={logoUrl}
+          endpoint={`/api/clients/${clientId}/logo`}
+          label="Logo del cliente"
+          hint="PNG, JPG, WebP o SVG · máx 4MB."
+        />
+      </div>
+
+      {logoUrl && (
+        <>
+          <ScaleSlider
+            value={scale}
+            base={LOGO_SCALE_DEFAULT}
+            min={LOGO_SCALE_MIN}
+            max={LOGO_SCALE_MAX}
+            step={LOGO_SCALE_STEP}
+            label="Tamaño del logo"
+            resetLabel="Volver al normal"
+            onPreview={setPreview}
+            onCommit={(pct) => {
+              setPreview(null);
+              guardarEscala(pct);
+            }}
+          />
+
+          {/* Las DOS muestras juntas son el argumento: el mismo archivo sobre los dos
+              fondos en los que Nexus lo va a pintar. Sin versión oscura, la de la derecha
+              muestra la silueta blanca que produce el filtro — que es exactamente lo que
+              hay que ver para entender por qué conviene subir un segundo archivo. */}
+          <div>
+            <p className="text-xs font-medium text-fg-secondary mb-2">Cómo se va a ver</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Muestra titulo="Cronograma" fondo="#ffffff">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={logoUrl} alt="" style={estilo} className="w-auto max-w-full object-contain" />
+              </Muestra>
+              <Muestra titulo="Portada" fondo="#051849">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={logoDarkUrl ?? logoUrl}
+                  alt=""
+                  style={{
+                    ...estilo,
+                    // Espeja `.stl-brand-logo`: sin versión oscura, el hero blanquea el
+                    // archivo. Con ella, se muestra tal cual.
+                    ...(logoDarkUrl ? {} : { filter: "brightness(0) invert(1)", opacity: 0.92 }),
+                  }}
+                  className="w-auto max-w-full object-contain"
+                />
+              </Muestra>
+            </div>
+            {!logoDarkUrl && (
+              <p className="text-[11px] text-fg-muted mt-2">
+                Sobre fondo oscuro el logo se pinta en blanco y pierde sus colores. Subí una
+                versión para fondo oscuro si querés conservarlos.
+              </p>
+            )}
+          </div>
+
+          <div className="pt-1 border-t border-line">
+            <h4 className="text-xs font-semibold text-fg mt-4 mb-1">Versión para fondo oscuro</h4>
+            <p className="text-[11px] text-fg-muted mb-3">
+              Opcional. Se usa en la portada de los documentos, que va sobre azul oscuro. Si no
+              la subís, Nexus pinta el logo principal en blanco.
+            </p>
+            <LogoUploader
+              currentUrl={logoDarkUrl}
+              // El `?variant=dark` viaja tal cual al POST y al DELETE: `LogoUploader` pasa
+              // el endpoint verbatim, así que no hubo que tocarlo.
+              endpoint={`/api/clients/${clientId}/logo?variant=dark`}
+              responseKey="logoDarkUrl"
+              label="Versión oscura"
+              uploadLabel="Subir versión para fondo oscuro"
+              emptyLabel="Sin versión oscura"
+              hint="PNG, JPG, WebP o SVG · máx 4MB."
+            />
+          </div>
+        </>
+      )}
     </section>
+  );
+}
+
+/** Recuadro de vista previa con un fondo fijo (no sigue el tema de Nexus: muestra el
+ *  fondo REAL de la superficie del documento). */
+function Muestra({ titulo, fondo, children }: { titulo: string; fondo: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div
+        className="rounded-lg border border-line flex items-center justify-center p-3 h-20 overflow-hidden"
+        style={{ background: fondo }}
+      >
+        {children}
+      </div>
+      <p className="text-[11px] text-fg-muted mt-1 text-center">{titulo}</p>
+    </div>
   );
 }

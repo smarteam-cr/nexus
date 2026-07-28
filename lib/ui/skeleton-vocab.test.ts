@@ -39,7 +39,6 @@ const DEUDA = {
     "components/canvas/BlockRenderer.tsx:9",
     "components/charts/EChartRenderer.tsx:10",
     "components/clients/ClientCanvasPanel.tsx:141",
-    "components/clients/ClientInfoPanel.tsx:128",
     "components/clients/MinuteDialog.tsx:211",
     "components/clients/ProjectSessionsReview.tsx:152",
     "components/clients/SectionDiscoveryModal.tsx:9",
