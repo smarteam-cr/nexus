@@ -18,6 +18,7 @@
  * `.reveal` / `.hero-backdrop` dentro del contenedor.
  */
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { isBlank } from "@/lib/landing/is-blank";
 import {
   DndContext,
   closestCenter,
@@ -52,15 +53,6 @@ export interface LandingSectionData {
   hidden?: boolean;
 }
 
-/** Una sección está "en blanco" si todos sus strings y arrays lo están. En lectura
- *  (render externo) se omite, para no mostrar encabezados de secciones sin contenido. */
-function isBlank(v: unknown): boolean {
-  if (v == null) return true;
-  if (typeof v === "string") return v.trim() === "";
-  if (Array.isArray(v)) return v.every(isBlank);
-  if (typeof v === "object") return Object.values(v as Record<string, unknown>).every(isBlank);
-  return false;
-}
 
 /**
  * Aviso de que lo que se ve abajo es contenido del FORMATO ANTERIOR (markdown de bloques
@@ -418,9 +410,13 @@ export default function LandingView({
           onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
         />
       );
+      /* `ctxEmpty` PRIMERO. Estaba después del early-return de abajo, y ese return exige
+         `editable`: en LECTURA se salía antes y `ctxEmpty` no se evaluaba nunca. O sea que
+         la promesa "esta sección se apaga sola cuando no tiene de qué alimentarse" no se
+         cumplía justamente donde más importa — la vista del cliente y el PDF. */
+      if (def.ctxEmpty?.(ctx)) return null; // sin cronograma / sin procesos: nada que mostrar
       const needsChrome = editable && (!def.pinned || !def.noHide);
       if (!needsChrome) return <Fragment key={def.key}>{body}</Fragment>;
-      if (def.ctxEmpty?.(ctx)) return null; // nada que envolver (sin cronograma / sin procesos)
       return (
         <div key={def.key} className={`stl-ctx-sec${hidden ? " stl-hidden" : ""}${collapsed ? " stl-collapsed" : ""}`}>
           {chrome}

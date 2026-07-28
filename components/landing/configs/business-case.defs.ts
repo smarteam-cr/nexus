@@ -167,7 +167,12 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
     label: "Llamado a la acción",
     theme: "dark",
     selfTitled: true,
-    empty: { headline: "", subhead: "", buttonLabel: "Agendar siguiente paso" },
+    /* `buttonLabel` VACÍO a propósito: con un default, la sección nunca daba "en blanco"
+       y el PDF imprimía un titular vacío, una bajada vacía y un botón sin destino. Peor:
+       "Limpiar" escribe este mismo `empty` y le avisa al CSE que la sección quedó oculta
+       — con el default, esa promesa era falsa. La lección ya estaba escrita en
+       website.defs.ts y no había llegado hasta acá. */
+    empty: { headline: "", subhead: "", buttonLabel: "" },
     agentHint: "Cierre corto + CTA.",
     brief:
       "Llamado a la acción (dark, cierre narrativo corto). `headline`: UNA PREGUNTA sobre el dolor principal del prospecto, con sus palabras (ej.: '¿Cuántas horas pierde tu equipo moviendo datos a mano?') — nunca una afirmación genérica. `subhead`: aterriza la pregunta en la apuesta del proyecto, honesta y sin venderte de más (fórmula de marca: 'Cuéntanos cómo opera tu equipo hoy y te decimos cuál es tu punto de partida — sin venderte de más.' adaptada a este caso). `buttonLabel`: 'Agendar siguiente paso'.",

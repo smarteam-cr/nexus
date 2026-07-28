@@ -1416,7 +1416,17 @@ model ExternalVerifyAttempt {
 model PrintJobToken {
   id             String    @id @default(cuid())
   token          String    @unique // 64 hex (crypto.randomBytes(32))
-  businessCaseId String
+  // QUÉ documento imprime este token. TEXT libre a propósito: el vocabulario lo define
+  // lib/print/doc-types.ts y lo valida la app contra el registro ANTES de tocar la base —
+  // un enum de Postgres obligaría a una migración cada vez que se suma un tipo.
+  docType        String?
+  // El id de ESE documento: businessCaseId, projectId, roleId… según el tipo.
+  docId          String?
+  // DEPRECATED — eliminar después del 2026-09-30. Reemplazada por `docType`/`docId`
+  // (2026-07-28, al generalizar el PDF a los 8 tipos de documento). Se sigue escribiendo
+  // para el business case (dual-write) y se lee como fallback, así que un token minteado
+  // por el código viejo se consume con el nuevo. Cuando no queden lectores, se dropea.
+  businessCaseId String?
   canvasId       String? // null = canvas activo al momento de generar
   createdByEmail String?
   expiresAt      DateTime

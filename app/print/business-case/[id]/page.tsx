@@ -90,7 +90,16 @@ export default async function BusinessCasePrintPage({
       key: true,
       titleOverride: true,
       eyebrowOverride: true,
-      blocks: { orderBy: { order: "asc" }, take: 1, select: { data: true } },
+      /* Solo CONFIRMED: una propuesta que el agente dejó en DRAFT y el CSE todavía no
+         aceptó no puede irse impresa en el PDF que el vendedor le manda al cliente. Los
+         otros dos consumidores del mismo contenido ya lo filtraban —el publish y la vista
+         externa del kickoff— y esta página se había quedado afuera. */
+      blocks: {
+        where: { status: "CONFIRMED" },
+        orderBy: { order: "asc" },
+        take: 1,
+        select: { data: true },
+      },
     },
   });
 

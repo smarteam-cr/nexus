@@ -1,46 +1,28 @@
 /**
- * lib/business-cases/pdf-job-token.ts
+ * lib/business-cases/pdf-job-token.ts — CASCARÓN. El token vive en `lib/print/job-token.ts`.
  *
- * Token de un solo uso, de vida ultra-corta (60s), para que Puppeteer autentique
- * su navegación interna a /print/business-case/[id] SIN reenviar las cookies
- * reales de sesión Supabase. Mismo patrón de generación que el accessToken de
- * BusinessCaseExternalAccess (randomBytes(32).toString("hex")), pero de un solo
- * uso: consumePdfJobToken() lo marca usado y valida expiración + businessCaseId.
+ * El mecanismo (un solo uso, 60s, para que Puppeteer entre a la página de impresión sin
+ * cookies de sesión) nunca tuvo nada de específico de un caso de negocio, así que se
+ * generalizó a (docType, docId) para servir a los ocho documentos del motor.
+ *
+ * Esto queda solo para no tocar a los dos llamadores del business case en el mismo commit
+ * que la migración. Se borra en la fase de limpieza, cuando la ruta `/print/business-case`
+ * pase a la genérica.
  */
-// "crypto" (sin prefijo node:): con el prefijo, Turbopack emite un chunk externo
-// llamado "[externals]_node:crypto_…" y NTFS no acepta ":" en nombres de archivo
-// → el copiado del standalone falla en builds locales de Windows (EINVAL).
-import { randomBytes } from "crypto";
-import { prisma } from "@/lib/db/prisma";
+import { createPrintJobToken, consumePrintJobToken } from "@/lib/print/job-token";
 
-const TTL_MS = 60_000;
+const DOC_TYPE = "business-case";
 
-export async function createPdfJobToken(
+export function createPdfJobToken(
   businessCaseId: string,
   opts?: { canvasId?: string | null; createdByEmail?: string | null },
 ): Promise<string> {
-  const token = randomBytes(32).toString("hex");
-  await prisma.printJobToken.create({
-    data: {
-      token,
-      businessCaseId,
-      canvasId: opts?.canvasId ?? null,
-      createdByEmail: opts?.createdByEmail ?? null,
-      expiresAt: new Date(Date.now() + TTL_MS),
-    },
-  });
-  return token;
+  return createPrintJobToken(DOC_TYPE, businessCaseId, opts);
 }
 
-/** Valida el token contra la DB (no usado, no expirado, businessCaseId coincide)
- *  y lo marca usado. Devuelve el canvasId asociado (o null = usar el activo). */
-export async function consumePdfJobToken(
+export function consumePdfJobToken(
   token: string,
   businessCaseId: string,
 ): Promise<{ ok: true; canvasId: string | null } | { ok: false }> {
-  const row = await prisma.printJobToken.findUnique({ where: { token } });
-  if (!row || row.businessCaseId !== businessCaseId) return { ok: false };
-  if (row.usedAt || row.expiresAt.getTime() < Date.now()) return { ok: false };
-  await prisma.printJobToken.update({ where: { token }, data: { usedAt: new Date() } });
-  return { ok: true, canvasId: row.canvasId };
+  return consumePrintJobToken(token, DOC_TYPE, businessCaseId);
 }
