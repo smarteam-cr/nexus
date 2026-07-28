@@ -43,10 +43,16 @@ export async function POST(
      vez de después de veinte segundos y una hoja en blanco. */
   /* `canvasId` (opcional) elige QUÉ VERSIÓN del documento exportar. Hoy solo el caso de
      negocio versiona; los demás lo ignoran. Sin body, sale la versión activa. */
-  const body = (await req.json().catch(() => ({}))) as { canvasId?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { canvasId?: unknown; hiddenKeys?: unknown };
   const canvasId = typeof body.canvasId === "string" ? body.canvasId : null;
+  /* Lo que el editor tiene oculto EN PANTALLA y no subió todavía. Solo SUMA ocultamientos
+     —nunca revela— así que no hace falta validarlo contra nada: en el peor caso, alguien
+     saca contenido de su propio PDF. Ver components/print/PrintStaging.tsx. */
+  const ocultasEnPantalla = Array.isArray(body.hiddenKeys)
+    ? body.hiddenKeys.filter((k): k is string => typeof k === "string").slice(0, 200)
+    : [];
 
-  const doc = await loadPrintDoc(tipo, id, { yaAutorizado: true, canvasId });
+  const doc = await loadPrintDoc(tipo, id, { yaAutorizado: true, canvasId, ocultasEnPantalla });
   if (!doc) return NextResponse.json({ error: "Documento no encontrado." }, { status: 404 });
   if (doc.rows.length === 0) {
     return NextResponse.json(
@@ -65,7 +71,14 @@ export async function POST(
 
   try {
     const token = await createPrintJobToken(tipo.id, id, { canvasId, createdByEmail: auth.email });
-    const { pdf, paged } = await renderPathToPdf(`/print/doc/${tipo.id}/${id}?pdfToken=${token}`);
+    /* Las mismas claves viajan en la URL que abre Puppeteer: la página se rinde sola y tiene
+       que llegar al mismo resultado que el chequeo de contenido de arriba. */
+    const ocultarParam = ocultasEnPantalla.length
+      ? `&ocultar=${encodeURIComponent(ocultasEnPantalla.join(","))}`
+      : "";
+    const { pdf, paged } = await renderPathToPdf(
+      `/print/doc/${tipo.id}/${id}?pdfToken=${token}${ocultarParam}`,
+    );
 
     /* Cliente + documento, salteando lo que no aplique: un perfil de puesto no tiene cliente
        y no debe llamarse "cliente-analista-de-datos.pdf". */

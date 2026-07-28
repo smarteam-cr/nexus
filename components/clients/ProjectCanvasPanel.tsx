@@ -20,6 +20,7 @@ import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import CanvasBoundary from "./CanvasBoundary";
 import PrintDocButton from "@/components/print/PrintDocButton";
+import { PrintStagingProvider } from "@/components/print/PrintStaging";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { slugForCanvas } from "@/lib/pieces/registry";
@@ -522,6 +523,10 @@ export default function ProjectCanvasPanel({
   if (loading) return <WorkspaceSkeleton />;
 
   return (
+    /* El editor de un canvas puede tener cambios EN PANTALLA que aún no guardó y que cambian
+       lo que sale impreso (el ojo de "no visible" del kickoff es staged). Este proveedor es
+       el canal por el que se lo cuenta al botón de exportar — ver PrintStaging.tsx. */
+    <PrintStagingProvider>
     <div className="px-6 py-8 space-y-6">
       {/* Widget del proyecto — SIEMPRE visible en la cabecera (antes vivía dentro
           del canvas Resumen). Última/próxima sesión, estado actual, pendientes. */}
@@ -1039,6 +1044,7 @@ export default function ProjectCanvasPanel({
       )}
       </>)}
     </div>
+    </PrintStagingProvider>
   );
 }
 

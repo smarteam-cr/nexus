@@ -40,7 +40,7 @@ export default async function PrintDocPage({
   searchParams,
 }: {
   params: Promise<{ type: string; id: string }>;
-  searchParams: Promise<{ pdfToken?: string; canvasId?: string }>;
+  searchParams: Promise<{ pdfToken?: string; canvasId?: string; ocultar?: string }>;
 }) {
   const { type, id } = await params;
   const sp = await searchParams;
@@ -51,16 +51,20 @@ export default async function PrintDocPage({
   /* Con token: lo consume (un solo uso) y NO pide sesión — Puppeteer navega sin cookies.
      El token está atado a este par (docType, docId), así que uno emitido para otro
      documento no abre éste. Sin token: gate normal, adentro de loadPrintDoc. */
+  /* `ocultar`: lo que el editor tenía oculto en pantalla sin haberlo subido. Solo SUMA
+     ocultamientos, así que aceptarlo de la URL no revela nada — ver PrintStaging.tsx. */
+  const ocultasEnPantalla = (sp.ocultar ?? "").split(",").map((k) => k.trim()).filter(Boolean);
+
   let doc;
   if (sp.pdfToken) {
     const r = await consumePrintJobToken(sp.pdfToken, tipo.id, id);
     if (!r.ok) notFound();
     // `canvasId` solo lo usa el caso de negocio (tiene versiones); viaja en el token para que
     // el PDF exporte exactamente la versión desde la que se pidió.
-    doc = await loadPrintDoc(tipo, id, { yaAutorizado: true, canvasId: r.canvasId });
+    doc = await loadPrintDoc(tipo, id, { yaAutorizado: true, canvasId: r.canvasId, ocultasEnPantalla });
   } else {
     // A mano: `?canvasId=` permite mirar una versión concreta antes de exportarla.
-    doc = await loadPrintDoc(tipo, id, { canvasId: sp.canvasId ?? null });
+    doc = await loadPrintDoc(tipo, id, { canvasId: sp.canvasId ?? null, ocultasEnPantalla });
   }
   if (!doc) notFound();
 

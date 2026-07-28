@@ -18,6 +18,7 @@ import { useState } from "react";
 import { ApiError, extractErrorMessage } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { printDocForPiece, type PrintDocType } from "@/lib/print/doc-types";
+import { useOcultasEnPantalla } from "./PrintStaging";
 
 const ICONO_IMPRESORA = (
   <path
@@ -35,12 +36,19 @@ const CLASES =
 export function PrintDownloadButton({ tipo, docId }: { tipo: PrintDocType; docId: string }) {
   const toast = useToast();
   const [working, setWorking] = useState(false);
+  /* Lo que el editor tiene oculto EN PANTALLA y todavía no subió: el ojo del kickoff es
+     `staged`, así que sin esto el PDF sale con secciones que en pantalla ya no están. */
+  const ocultasEnPantalla = useOcultasEnPantalla();
 
   const download = async () => {
     if (working) return;
     setWorking(true);
     try {
-      const res = await fetch(`/api/print/${tipo.id}/${docId}/export`, { method: "POST" });
+      const res = await fetch(`/api/print/${tipo.id}/${docId}/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hiddenKeys: ocultasEnPantalla }),
+      });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
         throw new ApiError(extractErrorMessage(payload), res.status, payload);
@@ -98,7 +106,9 @@ export function PrintDownloadButton({ tipo, docId }: { tipo: PrintDocType; docId
       {/* Ver la hoja ANTES de exportarla: es la misma página que captura Puppeteer, así que
           revisar acá es revisar el PDF. Vale un ícono discreto, no un segundo botón. */}
       <a
-        href={`/print/doc/${tipo.id}/${docId}`}
+        href={`/print/doc/${tipo.id}/${docId}${
+          ocultasEnPantalla.length ? `?ocultar=${encodeURIComponent(ocultasEnPantalla.join(","))}` : ""
+        }`}
         target="_blank"
         rel="noopener noreferrer"
         className="p-1.5 rounded-lg text-fg-muted hover:text-fg-secondary hover:bg-surface-hover transition-colors"

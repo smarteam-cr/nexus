@@ -139,7 +139,7 @@ async function autorizar(tipo: PrintDocType, docId: string): Promise<void> {
 export async function loadPrintDoc(
   tipo: PrintDocType,
   docId: string,
-  opts?: { yaAutorizado?: boolean; canvasId?: string | null },
+  opts?: { yaAutorizado?: boolean; canvasId?: string | null; ocultasEnPantalla?: string[] },
 ): Promise<PrintDocPayload | null> {
   /* `yaAutorizado` es SOLO para el camino del token de un solo uso: Puppeteer navega sin
      cookies, así que no hay sesión que gatear, y el token —emitido tras autorizar y atado a
@@ -147,7 +147,8 @@ export async function loadPrintDoc(
   if (!opts?.yaAutorizado) await autorizar(tipo, docId);
 
   if (tipo.scope === "role") return await cargarPerfilDePuesto(tipo, docId);
-  if (tipo.scope === "business-case") return await cargarCasoDeNegocio(tipo, docId, opts?.canvasId);
+  if (tipo.scope === "business-case")
+    return await cargarCasoDeNegocio(tipo, docId, opts?.canvasId, opts?.ocultasEnPantalla);
 
   const esCronograma = tipo.id === "timeline";
 
@@ -199,7 +200,15 @@ export async function loadPrintDoc(
      cuya clave es el id de la sección salvo cronograma y procesos. Se leen las dos, así el
      día que un tipo estrene visibilidad no hay que acordarse de este archivo. */
   const ocultasPorKey = hiddenKeysFrom(canvas?.sections);
-  const ocultasKickoff = new Set(proyecto.hiddenKickoffKeys ?? []);
+  /* A lo guardado se le SUMA lo que el editor tiene oculto en pantalla y todavía no subió.
+     El ojo del kickoff es `staged`: vive en el navegador hasta "Subir al cliente", así que
+     sin esto ocultabas una sección, exportabas, y salía igual. Solo SUMA —nunca revela— y
+     por eso no abre nada: lo que el servidor ya considera oculto sigue oculto.
+     Ver components/print/PrintStaging.tsx. */
+  const ocultasKickoff = new Set([
+    ...(proyecto.hiddenKickoffKeys ?? []),
+    ...(opts?.ocultasEnPantalla ?? []),
+  ]);
 
   const esKickoff = tipo.id === "kickoff";
 
@@ -383,6 +392,7 @@ async function cargarCasoDeNegocio(
   tipo: PrintDocType,
   docId: string,
   canvasId?: string | null,
+  ocultasEnPantalla?: string[],
 ): Promise<PrintDocPayload | null> {
   const bc = await prisma.businessCase.findUnique({
     where: { id: docId },
@@ -416,7 +426,7 @@ async function cargarCasoDeNegocio(
   // Anti-IDOR: un canvasId de OTRO caso no debe filtrar contenido ajeno.
   if (!canvas || canvas.businessCaseId !== docId) return null;
 
-  const ocultas = hiddenKeysFrom(canvas.sections);
+  const ocultas = new Set([...hiddenKeysFrom(canvas.sections), ...(ocultasEnPantalla ?? [])]);
   const secciones = await prisma.canvasSection.findMany({
     where: { canvasId: canvas.id },
     orderBy: { order: "asc" },

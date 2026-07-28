@@ -74,6 +74,36 @@ describe("lo que el CSE ocultó no sale impreso", () => {
   });
 });
 
+describe("lo que está oculto EN PANTALLA tampoco, aunque no se haya subido", () => {
+  /* El ojo del kickoff es `staged`: vive en el navegador hasta "Subir al cliente". El PDF se
+     arma en el servidor leyendo la base, así que ocultabas una sección, exportabas, y salía
+     igual — sin error y sin explicación. El editor publica su set y el botón lo manda.
+     Pasó de verdad; ver components/print/PrintStaging.tsx. */
+  it("el cargador SUMA lo oculto en pantalla a lo guardado", () => {
+    const src = leer("lib/print/load-doc.ts");
+    expect(src, "el cargador no recibe lo que el editor tiene oculto sin guardar").toContain(
+      "ocultasEnPantalla",
+    );
+    // ⚠ SUMA, nunca reemplaza: si pisara lo guardado, un pedido sin claves REVELARÍA todo lo
+    // que el CSE había ocultado. Es la diferencia entre una comodidad y un agujero.
+    expect(src, "lo de pantalla tiene que UNIRSE a lo guardado, no reemplazarlo").toMatch(
+      /new Set\(\[[\s\S]{0,80}\.\.\.\(proyecto\.hiddenKickoffKeys/,
+    );
+  });
+
+  it("el editor del kickoff lo publica y el botón lo manda", () => {
+    expect(leer("components/canvas/KickoffWorkspace.tsx")).toContain("usePublicarOcultasEnPantalla");
+    expect(leer("components/print/PrintDocButton.tsx")).toContain("hiddenKeys: ocultasEnPantalla");
+  });
+
+  it("y también viaja en la URL que abre Puppeteer", () => {
+    /* El endpoint chequea el contenido con las claves, pero después la página se rinde SOLA:
+       si no las recibe, imprime lo que el chequeo ya había descartado. */
+    expect(leer("app/api/print/[type]/[id]/export/route.ts")).toContain("ocultar=");
+    expect(leer("app/print/doc/[type]/[id]/page.tsx")).toContain("sp.ocultar");
+  });
+});
+
 describe("lo no confirmado tampoco", () => {
   for (const rel of FUENTES) {
     it(`${rel} filtra los bloques por status CONFIRMED`, () => {

@@ -26,6 +26,7 @@ import { KICKOFF_DEF_BY_KEY } from "@/components/landing/configs/kickoff.defs";
 import PublishBar from "./PublishBar";
 import DocumentAssist from "@/components/ai/DocumentAssist";
 import { useKickoffData } from "./useKickoffData";
+import { usePublicarOcultasEnPantalla } from "@/components/print/PrintStaging";
 import {
   buildKickoffConfig,
   buildKickoffSections,
@@ -77,6 +78,11 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
       : [{ key: "cierre", data: { __noSection: true } }];
     return [...real, ...synthetic, ...cierreFallback];
   }, [k.sections, k.hiddenKeys, k.horarioAssignments]);
+
+  /* El ojo de "no visible" es STAGED (vive acá hasta "Subir al cliente"), pero el PDF se arma
+     en el servidor leyendo la base. Se publica el set para que el botón de exportar lo mande
+     y el documento salga como se ve, sin obligar a publicarle nada al cliente. */
+  usePublicarOcultasEnPantalla(useMemo(() => [...k.hiddenKeys].sort(), [k.hiddenKeys]));
 
   // Al subir un logo nuevo el hero debe repintarlo sin recargar.
   const onClientLogoChange = useCallback((url: string | null) => k.setClientLogoUrl(url), [k]);
