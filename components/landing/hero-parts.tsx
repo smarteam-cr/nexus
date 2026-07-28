@@ -18,11 +18,12 @@
  * `coverImageUrl` y `brands` viven FUERA del schema del agente (los cura el CSE y
  * sobreviven a las regeneraciones por carry-forward de keys no-schema).
  */
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useRef, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
 import { ScaleSlider } from "@/components/ui/ScaleSlider";
+import { usePopoverDismiss } from "@/components/ui/usePopoverDismiss";
 import { LOGO_SCALE_MAX, LOGO_SCALE_MIN, LOGO_SCALE_STEP, logoScaleStyle, resolveLogoScale } from "@/lib/ui/logo-scale";
 import type { LandingContext } from "./types";
 
@@ -131,10 +132,9 @@ export function HeroUploadButtons({
 /**
  * Ajuste del tamaño del logo DESDE EL DOCUMENTO (solo edición).
  *
- * El logo se ve como el real y al clickearlo se abre un popover con la barra. Molde de
- * `CtaEditor` (components/landing/sections.tsx), que ya resolvió las dos cosas que este
- * patrón rompe: cerrar por clic afuera / Esc, y hacer `blur()` ANTES de desmontar — un
- * control que se desmonta no dispara `blur`, y ahí es donde `ScaleSlider` comitea.
+ * El logo se ve como el real y al clickearlo se abre un popover con la barra. El cierre
+ * (clic afuera / Esc, con el `blur()` antes de desmontar que evita perder el valor) lo
+ * aporta `usePopoverDismiss` — el mismo que usa el cronograma.
  *
  * Lo que se guarda es un OVERRIDE de este documento, que PISA a la base del cliente. Vive
  * en el `data` del hero (fuera del schema del agente, como `brands`), así que se persiste
@@ -151,26 +151,7 @@ function ClientLogoEditor({
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const commitFocused = () => {
-      const el = document.activeElement;
-      if (el instanceof HTMLElement && wrapRef.current?.contains(el)) el.blur();
-    };
-    const onDoc = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        commitFocused();
-        setOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { commitFocused(); setOpen(false); } };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  usePopoverDismiss(open, useCallback(() => setOpen(false), []), wrapRef);
 
   return (
     <span ref={wrapRef} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>

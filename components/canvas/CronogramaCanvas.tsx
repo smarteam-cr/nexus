@@ -54,7 +54,12 @@ import { PhaseRegenModal, type RegenProposedTask, type RegenCurrentTask, type Fi
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 import { CronogramaSkeleton } from "@/components/clients/skeletons";
 import { Spinner } from "@/components/ui";
-import { logoHeightCalc, logoScaleStyle, resolveLogoScale } from "@/lib/ui/logo-scale";
+import {
+  LOGO_SCALE_DEFAULT, LOGO_SCALE_MAX, LOGO_SCALE_MIN, LOGO_SCALE_STEP,
+  logoHeightCalc, logoScaleStyle, resolveLogoScale,
+} from "@/lib/ui/logo-scale";
+import { ScaleSlider } from "@/components/ui/ScaleSlider";
+import { usePopoverDismiss } from "@/components/ui/usePopoverDismiss";
 
 interface TaskDraft {
   id?: string;
@@ -287,6 +292,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [applyingPartic, setApplyingPartic] = useState(false);
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
   const [clientLogoScale, setClientLogoScale] = useState<number | null>(null);
+  // Lo que se arrastra AHORA (solo pinta). El guardado va al soltar, una vez.
+  const [previewScale, setPreviewScale] = useState<number | null>(null);
   const keyCounter = useRef(0);
   const nextKey = () => `new-${keyCounter.current++}`;
   // Auto-guardado: cuenta de ediciones locales. Si cambia DURANTE un PUT, no pisamos
@@ -1675,17 +1682,28 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
 
   return (
     <div className="space-y-4">
-      {/* Logo del cliente — paridad con el preview del kickoff (lado Nexus). */}
+      {/* Logo del cliente — paridad con el preview del kickoff (lado Nexus). Clickeable
+          para ajustar el tamaño: acá se edita la BASE del cliente y no un ajuste local,
+          porque el cronograma NO es un canvas con bloques donde guardar uno. Por eso el
+          popover lo dice con todas las letras. */}
       {clientLogoUrl && (
         <div className="flex items-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          {/* `h-9` (36px) sale de la clase y pasa al calc: es el mismo valor, multiplicado. */}
-          <img
-            src={clientLogoUrl}
-            alt="Logo del cliente"
-            className="w-auto max-w-[180px] object-contain"
-            style={{ ...logoScaleStyle(resolveLogoScale(clientLogoScale)), height: logoHeightCalc(36) }}
-          />
+          <LogoSizePopover
+            clientId={clientId}
+            scale={clientLogoScale}
+            onScale={setClientLogoScale}
+            onPreview={setPreviewScale}
+            editable={canEdit}
+          >
+            {/* `h-9` (36px) sale de la clase y pasa al calc: es el mismo valor, multiplicado. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={clientLogoUrl}
+              alt="Logo del cliente"
+              className="w-auto max-w-[180px] object-contain"
+              style={{ ...logoScaleStyle(resolveLogoScale(previewScale ?? clientLogoScale)), height: logoHeightCalc(36) }}
+            />
+          </LogoSizePopover>
         </div>
       )}
 
@@ -2366,6 +2384,76 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         </div>
       )}
 
+    </div>
+  );
+}
+
+
+/**
+ * Ajuste del tamaño del logo desde el cronograma.
+ *
+ * Acá se edita la BASE del cliente (`Client.logoScale`), no un ajuste local: el cronograma
+ * no es un canvas con bloques donde guardar uno propio. El popover lo dice explícitamente
+ * — cambiarlo desde acá mueve también la portada del kickoff, la propuesta y el PDF, y eso
+ * tiene que estar a la vista ANTES de tocar la barra, no descubrirse después.
+ */
+function LogoSizePopover({
+  clientId, scale, onScale, onPreview, editable, children,
+}: {
+  clientId: string;
+  scale: number | null;
+  onScale: (pct: number | null) => void;
+  onPreview: (pct: number | null) => void;
+  editable: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  usePopoverDismiss(open, useCallback(() => setOpen(false), []), wrapRef);
+
+  if (!editable) return <>{children}</>;
+
+  const guardar = (pct: number | null) => {
+    onPreview(null);
+    onScale(pct);
+    void fetch(`/api/clients/${clientId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ logoScale: pct }),
+    }).catch(() => {});
+  };
+
+  return (
+    <div ref={wrapRef} className="relative inline-flex items-center">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title="Ajustar el tamaño del logo"
+        className="inline-flex cursor-pointer rounded-md p-0.5 hover:bg-surface-hover"
+      >
+        {children}
+      </button>
+      {open && (
+        <div
+          role="dialog"
+          className="absolute left-0 top-full z-30 mt-2 w-64 rounded-xl border border-line bg-surface p-3 shadow-lg"
+        >
+          <ScaleSlider
+            value={scale}
+            base={LOGO_SCALE_DEFAULT}
+            min={LOGO_SCALE_MIN}
+            max={LOGO_SCALE_MAX}
+            step={LOGO_SCALE_STEP}
+            label="Tamaño del logo"
+            resetLabel="Volver al normal"
+            onPreview={onPreview}
+            onCommit={guardar}
+          />
+          <p className="mt-2 text-[11px] text-fg-muted">
+            Es el tamaño del cliente: afecta también el kickoff, la propuesta y el PDF.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
