@@ -59,7 +59,8 @@ export default function TimelineLanding({
                 style={{
                   ...logoScaleStyle(resolveLogoScale(clientLogoScale)),
                   height: logoHeightCalc(40),
-                  width: "auto", maxWidth: 180, objectFit: "contain", display: "block", marginBottom: 18,
+                  // El tope de ancho escala junto con el alto (ver CronogramaCanvas).
+                  width: "auto", maxWidth: logoHeightCalc(180), objectFit: "contain", display: "block", marginBottom: 18,
                 }}
               />
             </>

@@ -26,10 +26,24 @@ import type { CSSProperties } from "react";
 
 /** 50% sobre 30px son 15px: el piso de legibilidad de un logo con texto. */
 export const LOGO_SCALE_MIN = 50;
-/** 200% sobre 30px son 60px, donde el logo del cliente ya aplasta al de Smarteam en la
- *  misma fila. Que el tope sea alcanzable y feo es mejor que un tope que corte una
- *  necesidad real. */
-export const LOGO_SCALE_MAX = 200;
+/**
+ * 400%. El techo era 200 y se quedaba CORTO para los logos cuadrados, que son 3 de los 12
+ * cargados. Medido sobre los archivos reales:
+ *
+ *   forma            ancho a 30px de alto     presencia visual
+ *   cuadrado 1:1              30px                  20%
+ *   banda 3,4:1              102px                  68%
+ *   banda 6,2:1              187px                 125%
+ *
+ * El tamaño está atado SOLO al alto —no hay `max-width` en la fila de marcas— y eso es lo
+ * correcto para logos horizontales, que alinean por la base. Pero achica sistemáticamente a
+ * los cuadrados: el ojo lee ÁREA, no alto. Para que un cuadrado iguale el ancho de una banda
+ * típica (102px) necesita alto 102 = 340%, que el techo viejo ni siquiera permitía pedir.
+ *
+ * No se cambió qué significa el 100% (sería re-escalar en silencio los documentos ya
+ * publicados de esos 3 clientes): se abrió el rango para que se pueda pedir.
+ */
+export const LOGO_SCALE_MAX = 400;
 /** Paso 5 → 31 posiciones: resolución suficiente sin fingir precisión de 1%. */
 export const LOGO_SCALE_STEP = 5;
 export const LOGO_SCALE_DEFAULT = 100;

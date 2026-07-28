@@ -154,6 +154,10 @@ function ClientLogoSection({ clientId, projectId }: { clientId: string; projectI
 
   const efectivo = resolveLogoScale(preview ?? scale);
   const estilo = { ...logoScaleStyle(efectivo), height: logoHeightCalc(30) };
+  // Los px concretos: un "200%" no dice nada si no sabés de qué parte. Un logo cuadrado a
+  // 200% son 60×60 — chico al lado de una banda de 102px de ancho, y ver el número lo
+  // explica sin que haya que deducirlo.
+  const altoPx = Math.round((30 * efectivo) / 100);
 
   return (
     <section className="rounded-xl bg-surface border border-line p-5 max-w-md space-y-5">
@@ -192,7 +196,10 @@ function ClientLogoSection({ clientId, projectId }: { clientId: string; projectI
               muestra la silueta blanca que produce el filtro — que es exactamente lo que
               hay que ver para entender por qué conviene subir un segundo archivo. */}
           <div>
-            <p className="text-xs font-medium text-fg-secondary mb-2">Cómo se va a ver</p>
+            <div className="flex items-baseline justify-between mb-2">
+              <p className="text-xs font-medium text-fg-secondary">Cómo se va a ver</p>
+              <p className="text-[11px] tabular-nums text-fg-muted">{altoPx} px de alto</p>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <Muestra titulo="Cronograma" fondo="#ffffff">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -251,7 +258,10 @@ function Muestra({ titulo, fondo, children }: { titulo: string; fondo: string; c
   return (
     <div>
       <div
-        className="rounded-lg border border-line flex items-center justify-center p-3 h-20 overflow-hidden"
+        // Alto suficiente para el TOPE (30px base × 400% = 120px) más aire. La caja
+        // anterior daba 56px útiles: a 200% el logo medía 60 y se RECORTABA, así que la
+        // vista previa era incapaz de mostrar los tamaños grandes que decía mostrar.
+        className="rounded-lg border border-line flex items-center justify-center p-3 h-36 overflow-hidden"
         style={{ background: fondo }}
       >
         {children}

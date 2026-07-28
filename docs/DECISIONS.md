@@ -1135,6 +1135,17 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   elegir entre unificar los tres —lo que cambia el aspecto de TODO lo ya publicado— o que
   el número mienta en dos de las tres. El porcentaje es un multiplicador: cada superficie
   conserva su alto y el número significa lo mismo en todas.
+- **El techo es 400%, no 200 — porque el tamaño está atado solo al ALTO** (2026-07-27).
+  Medido sobre los 12 logos cargados: un cuadrado a 30px de alto mide 30px de ancho; una
+  banda 3,4:1 al mismo alto mide 102px. El cuadrado ocupa el **20%** de la presencia
+  visual, y **3 de los 12 son cuadrados**. Atar el tamaño al alto es lo correcto para
+  logos horizontales —alinean por la base— pero el ojo lee ÁREA: para que un cuadrado
+  iguale el ancho de una banda típica necesita 340%, que el techo viejo ni dejaba pedir.
+  **No se cambió qué significa el 100%**: sería re-escalar en silencio los documentos ya
+  publicados de esos 3 clientes. Se abrió el rango para que se pueda pedir.
+- **El tope de ANCHO de los cronogramas escala con el logo.** Estaba fijo en 180px, y una
+  banda 6,2:1 ya lo toca al 100%: a partir de ahí subir el porcentaje no hacía nada
+  visible y el control parecía roto.
 - **Dos niveles, y el de arriba es ABSOLUTO.** `Client.logoScale` es la base (aplica a
   todos los documentos del cliente); `hero.logoScale` la PISA para un documento. Base 120 +
   documento 150 se ve a **150**, no a 180: si multiplicara, el número que muestra la barra

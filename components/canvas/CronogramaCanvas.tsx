@@ -1700,8 +1700,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             <img
               src={clientLogoUrl}
               alt="Logo del cliente"
-              className="w-auto max-w-[180px] object-contain"
-              style={{ ...logoScaleStyle(resolveLogoScale(previewScale ?? clientLogoScale)), height: logoHeightCalc(36) }}
+              className="w-auto object-contain"
+              style={{
+                ...logoScaleStyle(resolveLogoScale(previewScale ?? clientLogoScale)),
+                height: logoHeightCalc(36),
+                // El tope de ancho ESCALA con el logo. Fijo en 180px, una banda 6,2:1 ya lo
+                // toca al 100% y a partir de ahí subir el % no hacía nada visible.
+                maxWidth: logoHeightCalc(180),
+              }}
             />
           </LogoSizePopover>
         </div>
