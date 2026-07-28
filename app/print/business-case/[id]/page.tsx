@@ -21,7 +21,7 @@ import { parseSectionEntries } from "@/lib/business-cases/section-briefs";
 import { landingConfigFor } from "@/components/landing/configs/templates";
 import { getBrandLogos, brandLogoMap } from "@/lib/external/smarteam-logo";
 import LandingView from "@/components/landing/LandingView";
-import PdfReadySignal from "./PdfReadySignal";
+import PdfReadySignal from "@/components/print/PdfReadySignal";
 
 export const dynamic = "force-dynamic";
 

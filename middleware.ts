@@ -49,7 +49,13 @@ export async function middleware(request: NextRequest) {
   // la hace la propia página validando `?pdfToken=` contra PrintJobToken (un solo
   // uso, 60s) — el middleware solo evita el redirect a "/", no autoriza nada. Sin
   // el query param, la ruta sigue exigiendo sesión normal (bloque de abajo).
-  if (pathname.startsWith("/print/business-case/") && request.nextUrl.searchParams.has("pdfToken")) {
+  //
+  // `/print/doc/` es la ruta GENÉRICA (un tipo de documento por segmento), así que este
+  // prefijo no crece cuando se suma un tipo nuevo — que es medio punto de haberla unificado.
+  // `/print/business-case/` sigue mientras esa ruta exista; se va con ella.
+  const esRutaDeImpresion =
+    pathname.startsWith("/print/doc/") || pathname.startsWith("/print/business-case/");
+  if (esRutaDeImpresion && request.nextUrl.searchParams.has("pdfToken")) {
     return NextResponse.next();
   }
 

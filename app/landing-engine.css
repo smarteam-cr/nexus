@@ -1351,3 +1351,35 @@
 .stl-pdf-mode .stl-hidden-badge {
   display: none !important; /* cinturón y tiradores: mode="read" ya no los renderiza */
 }
+
+/* ── El PDF que NO entra en una sola página ─────────────────────────────────
+   El techo son 18.000px: el límite de Chromium para una página (200 in = 19.200
+   px) con margen. NO se puede subir. Pasado eso hay que paginar, y el fallback
+   viejo hacía `format: "A4"` — Chromium reflowea a 794px de ancho, o sea que el
+   layout que se MIDIÓ a 1000px no es el que se imprime, y como acá no hay reglas
+   de corte, las tarjetas salían partidas al medio y las bandas oscuras cortadas.
+
+   Ahora la página paginada mantiene los 1000px de ancho (con la proporción A4 de
+   alto) y este bloque aporta lo único que falta: dónde SÍ y dónde NO se puede
+   cortar. Solo se aplica en ese caso — el PDF normal sigue siendo corrido y sin
+   ninguna de estas reglas.
+
+   Criterio: un PDF de 40 páginas con cortes limpios es un documento; uno de 40
+   páginas con tarjetas partidas es un documento roto que nadie puede mandar. */
+.stl-pdf-paged .stl-sec,
+.stl-pdf-paged .stl-card,
+.stl-pdf-paged .stl-field-card,
+.stl-pdf-paged .stl-item,
+.stl-pdf-paged .stl-rung,
+.stl-pdf-paged .stl-q-row,
+.stl-pdf-paged table { break-inside: avoid; page-break-inside: avoid; }
+/* Un título nunca queda solo al pie de una página. */
+.stl-pdf-paged .stl-sec-head,
+.stl-pdf-paged .stl-title,
+.stl-pdf-paged .stl-eyebrow,
+.stl-pdf-paged h2,
+.stl-pdf-paged h3 { break-after: avoid; page-break-after: avoid; }
+/* Ni una línea suelta de un párrafo al principio o al final de una página. */
+.stl-pdf-paged p,
+.stl-pdf-paged .stl-prose,
+.stl-pdf-paged .stl-intro { orphans: 3; widows: 3; }

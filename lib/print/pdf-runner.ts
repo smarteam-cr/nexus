@@ -137,14 +137,31 @@ export async function renderPathToPdf(printPath: string): Promise<{ pdf: Buffer;
     }, DOC_WIDTH);
 
     const paged = contentHeight > MAX_PDF_HEIGHT_PX;
-    if (paged) {
-      console.warn(`[pdf-runner] ${printPath}: ${contentHeight}px excede el máximo — sale paginado.`);
+    if (!paged) {
+      const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true, pageRanges: "1" });
+      return { pdf: Buffer.from(pdf), paged: false };
     }
-    const pdf = paged
-      ? await page.pdf({ format: "A4", printBackground: true, margin: { top: 0, bottom: 0, left: 0, right: 0 } })
-      : await page.pdf({ preferCSSPageSize: true, printBackground: true, pageRanges: "1" });
 
-    return { pdf: Buffer.from(pdf), paged };
+    /* No entra en una sola página. El fallback anterior era `format: "A4"`, y eso reflowea
+       el contenido a 794px de ancho: el layout que se MIDIÓ a 1000 no es el que se imprime.
+       Encima `.stl-pdf-mode` no tiene reglas de corte a propósito (el PDF normal es
+       corrido), así que las tarjetas salían partidas al medio y las bandas oscuras cortadas.
+
+       Se pagina a 1000 × 1414 —la proporción A4 AL ANCHO AL QUE SE MIDIÓ— así el layout es
+       el mismo y lo único que cambia es dónde se corta. Y `.stl-pdf-paged` aporta las reglas
+       de corte, que solo existen para este caso. */
+    console.warn(`[pdf-runner] ${printPath}: ${contentHeight}px excede el máximo — sale paginado.`);
+    // Este `@page` se agrega DESPUÉS del que puso la medición, y con la misma especificidad
+    // gana el último: no hace falta borrar el anterior.
+    await page.evaluate((w) => {
+      document.querySelector(".stl-pdf-mode")?.classList.add("stl-pdf-paged");
+      const s = document.createElement("style");
+      s.textContent = `@page { size: ${w}px ${Math.round(w * 1.4142)}px; margin: 0; }`;
+      document.head.appendChild(s);
+    }, DOC_WIDTH);
+    // Sin `pageRanges`: acá SÍ queremos todas las páginas.
+    const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true });
+    return { pdf: Buffer.from(pdf), paged: true };
   } finally {
     await browser?.close().catch(() => {});
   }
