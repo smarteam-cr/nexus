@@ -68,6 +68,11 @@ export interface KickoffLandingData {
   clientName?: string;
   /** Logo de la EMPRESA cliente (Client.logoUrl, bucket público) o null. */
   clientLogoUrl: string | null;
+  /** Segundo archivo del logo, para el fondo OSCURO del hero (Client.logoDarkUrl). Sin él,
+   *  la brand-row cae al logo claro + el filtro que lo pinta como silueta blanca. */
+  clientLogoDarkUrl?: string | null;
+  /** Tamaño base del logo en % (Client.logoScale). Ver lib/ui/logo-scale.ts. */
+  clientLogoScale?: number | null;
   /** Logo de Smarteam (config global) — imagen de la brand-row. */
   smarteamLogoUrl?: string | null;
   /** Mapa nombre→logo (hubspot / insider / smarteam): una marca de TEXTO cuyo nombre

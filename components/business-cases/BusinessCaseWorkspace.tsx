@@ -31,6 +31,8 @@ export default function BusinessCaseWorkspace({
   clientId,
   clientName,
   clientLogoUrl,
+  clientLogoDarkUrl,
+  clientLogoScale,
   smarteamLogoUrl,
   brandLogos,
   publishedAt,
@@ -42,6 +44,10 @@ export default function BusinessCaseWorkspace({
   clientId?: string | null;
   clientName: string;
   clientLogoUrl: string | null;
+  /** Segundo archivo del logo, para el fondo oscuro del hero. Ver lib/ui/logo-scale.ts. */
+  clientLogoDarkUrl?: string | null;
+  /** Tamaño base del logo en % (Client.logoScale). Lo pisa `hero.logoScale` del documento. */
+  clientLogoScale?: number | null;
   /** Logo de marca Smarteam (config global) — el hero lo pinta en la brand-row. */
   smarteamLogoUrl?: string | null;
   /** Logos de plataforma por nombre lowercase (brandLogoMap) — brands de texto con logo. */
@@ -390,6 +396,8 @@ export default function BusinessCaseWorkspace({
               clientName,
               lang: proposalLang,
               clientLogoUrl: clientLogo,
+              clientLogoDarkUrl,
+              clientLogoScale,
               smarteamLogoUrl,
               brandLogos,
               imageUploadUrl: `/api/business-cases/${bcId}/images`,

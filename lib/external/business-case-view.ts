@@ -37,6 +37,8 @@ export type BusinessCaseLandingData = {
   name: string;
   clientName: string;
   clientLogoUrl: string | null;
+  clientLogoDarkUrl: string | null;
+  clientLogoScale: number | null;
   /** Template con el que se publicó (snapshots nuevos). Ausente = hubspot (legacy). */
   templateId?: string;
   sections: BusinessCaseLandingSection[];
@@ -57,7 +59,7 @@ export async function getPublishedBusinessCaseForToken(
           name: true,
           publishedAt: true,
           publishedSnapshot: true,
-          client: { select: { name: true, logoUrl: true } },
+          client: { select: { name: true, logoUrl: true, logoDarkUrl: true, logoScale: true } },
         },
       },
     },
@@ -79,6 +81,11 @@ export async function getPublishedBusinessCaseForToken(
     name: snap.name ?? bc.name,
     clientName: snap.clientName ?? bc.client.name,
     clientLogoUrl: snap.clientLogoUrl ?? bc.client.logoUrl,
+    // `??` a lo VIVO, igual que la URL: los snapshots publicados ANTES de esta tanda no
+    // traen estas keys, así que una propuesta de hace meses respeta la variante y el
+    // tamaño nuevos en el próximo render, sin migrar un solo Json.
+    clientLogoDarkUrl: snap.clientLogoDarkUrl ?? bc.client.logoDarkUrl,
+    clientLogoScale: snap.clientLogoScale ?? bc.client.logoScale,
     templateId: typeof snap.templateId === "string" ? snap.templateId : undefined,
     sections: snap.sections,
   };

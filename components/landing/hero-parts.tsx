@@ -22,6 +22,7 @@ import { Fragment, useRef, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
+import { logoScaleStyle, resolveLogoScale } from "@/lib/ui/logo-scale";
 import type { LandingContext } from "./types";
 
 /** Píldora translúcida sobre el hero oscuro (Portada / Logo del cliente). */
@@ -185,8 +186,16 @@ function normalizeBrands(raw: string[] | undefined, ctx: LandingContext): string
  * como imagen. Un token sin logo cargado cae a un badge de texto.
  */
 export function BrandRow({
-  brands: raw, ctx, editable, onChange,
-}: { brands?: string[]; ctx: LandingContext; editable?: boolean; onChange: (next: string[]) => void }) {
+  brands: raw, ctx, editable, onChange, logoScale,
+}: {
+  brands?: string[];
+  ctx: LandingContext;
+  editable?: boolean;
+  onChange: (next: string[]) => void;
+  /** Ajuste de tamaño de ESTE documento. Pisa a la base del cliente (`ctx.clientLogoScale`);
+   *  ausente = se usa la base. Ver lib/ui/logo-scale.ts. */
+  logoScale?: number | null;
+}) {
   const all = normalizeBrands(raw, ctx);
   // En LECTURA se descartan las marcas sin nombre: "+ Marca" agrega una vacía y el CSE puede
   // publicar sin completarla; al cliente le quedaría un separador × colgando y una píldora vacía.
@@ -208,10 +217,15 @@ export function BrandRow({
       {(b, i, handle) => {
         const sep = i > 0 ? <span className="stl-brand-x">×</span> : null;
         const token = isToken(b);
+        const esCliente = b === BRAND_CLIENT;
         const logo = token
-          ? (b === BRAND_CLIENT ? ctx.clientLogoUrl : ctx.smarteamLogoUrl)
+          ? (esCliente ? ctx.clientLogoUrl : ctx.smarteamLogoUrl)
           : ctx.brandLogos?.[b.trim().toLowerCase()];
-        const alt = token ? (b === BRAND_CLIENT ? ctx.clientName || "Cliente" : "Smarteam") : b;
+        const alt = token ? (esCliente ? ctx.clientName || "Cliente" : "Smarteam") : b;
+        /* El tamaño se aplica SOLO al logo del cliente. Los tres logos de la fila comparten
+           la clase `.stl-brand-logo`; los otros dos no traen la variable y caen al fallback
+           `1` del `calc`, así que quedan clavados en su alto de siempre. */
+        const escala = esCliente ? logoScaleStyle(resolveLogoScale(ctx.clientLogoScale, logoScale)) : undefined;
         // Los tokens se ARRASTRAN pero no se QUITAN (paridad con el comportamiento previo,
         // donde los logos ni siquiera eran ítems). Permitir quitarlos dejaría un array sin
         // tokens, indistinguible de uno legacy → `normalizeBrands` los reinsertaría solo.
@@ -224,7 +238,7 @@ export function BrandRow({
                 {handle}
                 {removable && <RemoveBtn onClick={() => onChange(removeAt(brands, i))} />}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className="stl-brand-logo" src={logo} alt={alt} />
+                <img className="stl-brand-logo" src={logo} alt={alt} style={escala} />
               </span>
             ) : (
               <span className="stl-item stl-brand-badge">

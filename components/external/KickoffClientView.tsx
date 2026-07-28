@@ -62,6 +62,8 @@ export default function KickoffClientView({
         ctx={{
           clientName: data.clientName || data.projectName,
           clientLogoUrl: data.clientLogoUrl,
+          clientLogoDarkUrl: data.clientLogoDarkUrl,
+          clientLogoScale: data.clientLogoScale,
           smarteamLogoUrl: data.smarteamLogoUrl ?? null,
           brandLogos: data.brandLogos,
           // Sin endpoints de subida en la vista del cliente → el hero no pinta los

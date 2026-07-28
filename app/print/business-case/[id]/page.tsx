@@ -52,7 +52,7 @@ export default async function BusinessCasePrintPage({
       caseType: true,
       caseSubtype: true,
       language: true,
-      client: { select: { name: true, logoUrl: true } },
+      client: { select: { name: true, logoUrl: true, logoDarkUrl: true, logoScale: true } },
     },
   });
   if (!bc) notFound();
@@ -114,6 +114,8 @@ export default async function BusinessCasePrintPage({
           lang,
           pdfMode: true, // secciones con piezas async (diagramas) → variante estática
           clientLogoUrl: bc.client.logoUrl,
+          clientLogoDarkUrl: bc.client.logoDarkUrl,
+          clientLogoScale: bc.client.logoScale,
           smarteamLogoUrl: brandLogos.smarteam,
           brandLogos: brandLogoMap(brandLogos),
         }}

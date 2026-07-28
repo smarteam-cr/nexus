@@ -24,6 +24,10 @@ export function useKickoffData(projectId: string, canvasId: string) {
 
   const [timeline, setTimeline] = useState<KickoffTimelineData | null>(null);
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
+  // Variante para fondo oscuro + tamaño base: viven en Client, no en el canvas, y salen
+  // del mismo GET que el logo (client-logo/route.ts).
+  const [clientLogoDarkUrl, setClientLogoDarkUrl] = useState<string | null>(null);
+  const [clientLogoScale, setClientLogoScale] = useState<number | null>(null);
   const [platformLogos, setPlatformLogos] = useState<string[]>([]);
   // Datos de marca del hero (mismas piezas que el hero del Business Case).
   const [clientId, setClientId] = useState<string | null>(null);
@@ -77,6 +81,8 @@ export function useKickoffData(projectId: string, canvasId: string) {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         setClientLogoUrl(d?.logoUrl ?? null);
+        setClientLogoDarkUrl(d?.logoDarkUrl ?? null);
+        setClientLogoScale(typeof d?.logoScale === "number" ? d.logoScale : null);
         setPlatformLogos(Array.isArray(d?.platformLogos) ? d.platformLogos : []);
         setClientId(typeof d?.clientId === "string" ? d.clientId : null);
         setClientName(typeof d?.clientName === "string" ? d.clientName : "");
@@ -224,6 +230,10 @@ export function useKickoffData(projectId: string, canvasId: string) {
     timeline,
     clientLogoUrl,
     setClientLogoUrl,
+    clientLogoDarkUrl,
+    setClientLogoDarkUrl,
+    clientLogoScale,
+    setClientLogoScale,
     platformLogos,
     clientId,
     clientName,

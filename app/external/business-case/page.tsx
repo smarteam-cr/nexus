@@ -44,6 +44,8 @@ export default async function ExternalBusinessCasePage() {
             clientName: data.clientName,
             lang: proposalLang,
             clientLogoUrl: data.clientLogoUrl,
+            clientLogoDarkUrl: data.clientLogoDarkUrl,
+            clientLogoScale: data.clientLogoScale,
             smarteamLogoUrl: brandLogos.smarteam,
             brandLogos: brandLogoMap(brandLogos),
           }}

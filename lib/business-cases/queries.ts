@@ -37,7 +37,7 @@ export async function getBusinessCase(id: string) {
           lastUsedAt: true,
         },
       },
-      client: { select: { id: true, name: true, logoUrl: true, hubspotCompanyId: true } },
+      client: { select: { id: true, name: true, logoUrl: true, logoDarkUrl: true, logoScale: true, hubspotCompanyId: true } },
     },
   });
 }

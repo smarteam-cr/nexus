@@ -26,6 +26,8 @@ export interface DesarrolloViewData {
   projectName: string;
   clientName: string;
   clientLogoUrl: string | null;
+  clientLogoDarkUrl: string | null;
+  clientLogoScale: number | null;
   smarteamLogoUrl: string | null;
   brandLogos: Record<string, string>;
   rows: DesarrolloSectionRow[];
@@ -73,6 +75,8 @@ export async function getDesarrolloForToken(token: string): Promise<DesarrolloVi
     projectName: access.project.name,
     clientName: access.project.client.name,
     clientLogoUrl: access.project.client.logoUrl,
+    clientLogoDarkUrl: access.project.client.logoDarkUrl,
+    clientLogoScale: access.project.client.logoScale,
     smarteamLogoUrl: logos.smarteam ?? null,
     brandLogos,
     rows: sections.map((s) => ({

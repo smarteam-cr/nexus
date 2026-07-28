@@ -177,6 +177,8 @@ export async function getPublishedKickoffForToken(
     projectName: access.project.name,
     clientName: proj?.client?.name ?? "",
     clientLogoUrl: access.project.client.logoUrl,
+    clientLogoDarkUrl: access.project.client.logoDarkUrl,
+    clientLogoScale: access.project.client.logoScale,
     smarteamLogoUrl: logos.smarteam ?? null,
     brandLogos,
     platformLogos: platformLogosFor(proj?.tags ?? [], logos),

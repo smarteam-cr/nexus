@@ -85,6 +85,8 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
     () => ({
       clientName: k.clientName,
       clientLogoUrl: k.clientLogoUrl,
+      clientLogoDarkUrl: k.clientLogoDarkUrl,
+      clientLogoScale: k.clientLogoScale,
       // Piezas del hero, idénticas a las que consume el hero del Business Case.
       smarteamLogoUrl: k.smarteamLogoUrl,
       brandLogos: k.brandLogos,
@@ -104,7 +106,8 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
       },
     }),
     [
-      projectId, k.clientName, k.clientLogoUrl, k.smarteamLogoUrl, k.brandLogos, k.clientId,
+      projectId, k.clientName, k.clientLogoUrl, k.clientLogoDarkUrl, k.clientLogoScale,
+      k.smarteamLogoUrl, k.brandLogos, k.clientId,
       onClientLogoChange, k.timeline, k.procesos, k.platformLogos, k.confirmProceso,
       k.hiddenKeys, k.toggleHidden, k.assignSession,
     ],

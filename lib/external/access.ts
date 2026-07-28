@@ -28,7 +28,9 @@ export interface ActiveAccess {
     timelinePublishedAt: Date | null;
     desarrolloPublishedAt: Date | null;
     /** Empresa cliente (Client) — nombre para titulares + logo para el chrome client-facing. */
-    client: { name: string; logoUrl: string | null };
+    // Los tres campos del logo viajan juntos: qué archivo, cuál variante y a qué tamaño
+    // son una sola unidad visual (ver lib/ui/logo-scale.ts).
+    client: { name: string; logoUrl: string | null; logoDarkUrl: string | null; logoScale: number | null };
   };
 }
 
@@ -55,7 +57,10 @@ export async function resolveActiveAccess(token: string): Promise<ActiveAccess |
           kickoffPublishedAt: true,
           timelinePublishedAt: true,
           desarrolloPublishedAt: true,
-          client: { select: { name: true, logoUrl: true } },
+          // Los tres campos del logo viajan JUNTOS: qué archivo, cuál variante y a qué
+          // tamaño son una sola unidad visual. Este select es el chokepoint de las TRES
+          // superficies externas (kickoff, cronograma, desarrollo) — se agrega acá una vez.
+          client: { select: { name: true, logoUrl: true, logoDarkUrl: true, logoScale: true } },
         },
       },
     },

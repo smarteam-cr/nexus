@@ -41,7 +41,7 @@ export default async function BusinessCasePage({
       caseType: true,
       caseSubtype: true,
       language: true,
-      client: { select: { id: true, name: true, kind: true, logoUrl: true } },
+      client: { select: { id: true, name: true, kind: true, logoUrl: true, logoDarkUrl: true, logoScale: true } },
     },
   });
   if (!bc) notFound();
@@ -87,6 +87,8 @@ export default async function BusinessCasePage({
           clientId={bc.client.id}
           clientName={bc.client.name}
           clientLogoUrl={bc.client.logoUrl}
+          clientLogoDarkUrl={bc.client.logoDarkUrl}
+          clientLogoScale={bc.client.logoScale}
           smarteamLogoUrl={brandLogos.smarteam}
           brandLogos={brandLogoMap(brandLogos)}
           status={bc.status}

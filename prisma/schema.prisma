@@ -150,6 +150,18 @@ model Client {
   hubspotCompanyId String? // ID de la empresa vinculada en HubSpot CRM
   emailDomains     String[] // dominios de email para matching automático de sesiones (ej: "ice.go.cr")
   logoUrl          String? // URL pública del logo del cliente (bucket public-assets) — se muestra en kickoff/cronograma externos
+  // Segundo archivo de logo, para las superficies de fondo OSCURO (el hero de TODOS los
+  // documentos del motor de landing). Es la ALTERNATIVA del primario, no un asset suelto:
+  // borrar `logoUrl` borra también este (un logo para fondo oscuro es tinta clara y sobre
+  // el blanco del cronograma desaparecería). Sin él, el hero cae al filtro histórico
+  // `brightness(0) invert(1)`, que pinta cualquier logo como silueta blanca.
+  logoDarkUrl      String?
+  // Tamaño del logo como PORCENTAJE del alto base de cada superficie (50-200, paso 5).
+  // NULL = sin configurar, que NO es lo mismo que "alguien eligió 100": si mañana se
+  // re-afina un alto base, los NULL siguen el default nuevo y los 100 explícitos no.
+  // Porcentaje y no px porque las tres superficies tienen altos distintos y ya afinados
+  // (30 sobre navy, 40 en el cronograma del cliente, 36 en el interno) — ver lib/ui/logo-scale.ts.
+  logoScale        Int?
   // QUÉ ES esta empresa. Fuente ÚNICA de "¿cuenta como cliente de CS?" — una empresa es
   // UNA sola cosa, así que reemplaza al booleano `isProspect`. El filtro de los listados
   // NO se escribe a mano en cada query: sale de `lib/clients/kind.ts` (CS_CLIENT_WHERE).

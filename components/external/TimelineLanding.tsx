@@ -21,6 +21,7 @@ import { useRef } from "react";
 import TimelineSection, { TIMELINE_CONTAINER } from "@/components/canvas/TimelineSection";
 import { useReveal } from "@/components/canvas/useLandingMotion";
 import type { ExternalTimelineData } from "@/lib/external/timeline-view-types";
+import { logoHeightCalc, logoScaleStyle, resolveLogoScale } from "@/lib/ui/logo-scale";
 
 /* El contenedor sale importado del Gantt, no copiado: era un número repetido en los dos
    archivos y con el tiempo dejaron de coincidir (1024 acá, 1040 en el motor). */
@@ -28,10 +29,14 @@ import type { ExternalTimelineData } from "@/lib/external/timeline-view-types";
 export default function TimelineLanding({
   clientName,
   clientLogoUrl,
+  clientLogoScale,
   timeline,
 }: {
   clientName: string;
   clientLogoUrl: string | null;
+  /** Tamaño base del cliente. Acá NO hay ajuste por documento: el cronograma no es un
+   *  canvas con bloques. Y el fondo es BLANCO, así que siempre va el logo claro. */
+  clientLogoScale?: number | null;
   timeline: ExternalTimelineData;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -51,7 +56,11 @@ export default function TimelineLanding({
                 src={clientLogoUrl}
                 alt={clientName}
                 className="reveal"
-                style={{ height: 40, width: "auto", maxWidth: 180, objectFit: "contain", display: "block", marginBottom: 18 }}
+                style={{
+                  ...logoScaleStyle(resolveLogoScale(clientLogoScale)),
+                  height: logoHeightCalc(40),
+                  width: "auto", maxWidth: 180, objectFit: "contain", display: "block", marginBottom: 18,
+                }}
               />
             </>
           )}

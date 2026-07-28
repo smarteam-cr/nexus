@@ -406,7 +406,21 @@
 
 /* Hero: fila de marca (logo cliente × Smarteam × HubSpot) */
 .stl .stl-brandrow { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 26px; }
-.stl .stl-brand-logo { height: 30px; filter: brightness(0) invert(1); opacity: 0.92; }
+/* Los TRES logos de la fila comparten esta clase. El alto sale de `--logo-scale`, una
+   variable SIN UNIDAD que solo lleva el `<img>` del CLIENTE (hero-parts.tsx): Smarteam y
+   HubSpot no la traen, caen al fallback `1` y quedan clavados en 30px.
+   ⚠ La variable NUNCA lleva unidad. Con "120%" adentro el `calc` se invalida entero, la
+   declaración se descarta y `height` cae a `auto` → el logo se pinta a su resolución
+   natural en una propuesta que el cliente está mirando. El único constructor del string
+   es `logoScaleStyle` (lib/ui/logo-scale.ts), con test.
+   El FILTRO se queda como default a propósito: hoy es lo único que hace visibles los logos
+   de los clientes que solo tienen un archivo. Se apaga con `--asis` (abajo) únicamente
+   cuando hay una versión para fondo oscuro de verdad — así, si el modificador se pierde en
+   un refactor, el peor caso es lo que ya se ve hoy y no un logo invisible. */
+.stl .stl-brand-logo { height: calc(30px * var(--logo-scale, 1)); filter: brightness(0) invert(1); opacity: 0.92; }
+/* Hay versión para fondo oscuro: se muestra el archivo tal cual, a fidelidad completa.
+   El 0.92 existe para suavizar el blanco quemado del filtro; sin filtro, sobra. */
+.stl .stl-brand-logo--asis { filter: none; opacity: 1; }
 .stl .stl-brand-badge {
   display: inline-flex; align-items: center; padding: 6px 15px; border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.04);
@@ -650,8 +664,10 @@
   font-weight: 600; font-size: 15px; color: var(--text); line-height: 1.35;
 }
 
-/* Logo del cliente en el hero */
-.stl .stl-logo { height: 38px; margin-bottom: 26px; filter: brightness(0) invert(1); opacity: 0.92; }
+/* (Acá vivía `.stl-logo`, el logo del cliente del motor ANTERIOR a los tokens `@client`.
+   Se borró en 2026-07-27: ningún JSX la usaba desde que la brand-row unificó los tres
+   logos en `.stl-brand-logo`. Era el candidato obvio a "arreglar el tamaño acá" y no
+   habría hecho nada.) */
 
 /* ── Hero backdrop (grid + glow + parallax) ─────────────────────────────── */
 .stl .hero-backdrop { background: var(--dark-bg); position: relative; overflow: hidden; }

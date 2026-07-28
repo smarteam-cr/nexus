@@ -23,7 +23,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
   if (guard instanceof NextResponse) return guard;
 
   const [client, project, brandLogos] = await Promise.all([
-    prisma.client.findUnique({ where: { id: guard.clientId }, select: { logoUrl: true, name: true } }),
+    prisma.client.findUnique({
+      where: { id: guard.clientId },
+      select: { logoUrl: true, logoDarkUrl: true, logoScale: true, name: true },
+    }),
     prisma.project.findUnique({ where: { id: projectId }, select: { tags: true } }),
     getBrandLogos(),
   ]);
@@ -31,6 +34,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
     clientId: guard.clientId,
     clientName: client?.name ?? "",
     logoUrl: client?.logoUrl ?? null,
+    // Variante para fondo oscuro + tamaño base. Viajan con el logo porque son una sola
+    // unidad visual: congelar uno y leer otro vivo garantiza el desajuste.
+    logoDarkUrl: client?.logoDarkUrl ?? null,
+    logoScale: client?.logoScale ?? null,
     platformLogos: platformLogosFor(project?.tags ?? [], brandLogos),
     smarteamLogoUrl: brandLogos.smarteam ?? null,
     brandLogos,

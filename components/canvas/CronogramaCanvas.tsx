@@ -54,6 +54,7 @@ import { PhaseRegenModal, type RegenProposedTask, type RegenCurrentTask, type Fi
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 import { CronogramaSkeleton } from "@/components/clients/skeletons";
 import { Spinner } from "@/components/ui";
+import { logoHeightCalc, logoScaleStyle, resolveLogoScale } from "@/lib/ui/logo-scale";
 
 interface TaskDraft {
   id?: string;
@@ -285,6 +286,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [particVis, setParticVis] = useState<Set<number>>(new Set()); // índices marcados visibleExternal
   const [applyingPartic, setApplyingPartic] = useState(false);
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
+  const [clientLogoScale, setClientLogoScale] = useState<number | null>(null);
   const keyCounter = useRef(0);
   const nextKey = () => `new-${keyCounter.current++}`;
   // Auto-guardado: cuenta de ediciones locales. Si cambia DURANTE un PUT, no pisamos
@@ -491,7 +493,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   useEffect(() => {
     fetch(`/api/projects/${projectId}/client-logo`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setClientLogoUrl(d?.logoUrl ?? null))
+      .then((d) => {
+        setClientLogoUrl(d?.logoUrl ?? null);
+        setClientLogoScale(typeof d?.logoScale === "number" ? d.logoScale : null);
+      })
       .catch(() => setClientLogoUrl(null));
   }, [projectId]);
 
@@ -1674,7 +1679,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       {clientLogoUrl && (
         <div className="flex items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={clientLogoUrl} alt="Logo del cliente" className="h-9 w-auto max-w-[180px] object-contain" />
+          {/* `h-9` (36px) sale de la clase y pasa al calc: es el mismo valor, multiplicado. */}
+          <img
+            src={clientLogoUrl}
+            alt="Logo del cliente"
+            className="w-auto max-w-[180px] object-contain"
+            style={{ ...logoScaleStyle(resolveLogoScale(clientLogoScale)), height: logoHeightCalc(36) }}
+          />
         </div>
       )}
 

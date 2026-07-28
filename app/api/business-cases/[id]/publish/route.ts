@@ -44,7 +44,7 @@ export async function POST(
       name: true,
       caseType: true,
       caseSubtype: true,
-      client: { select: { name: true, logoUrl: true } },
+      client: { select: { name: true, logoUrl: true, logoDarkUrl: true, logoScale: true } },
     },
   });
   if (!bc) {
@@ -122,6 +122,10 @@ export async function POST(
     name: bc.name,
     clientName: bc.client.name,
     clientLogoUrl: bc.client.logoUrl,
+    // Qué archivo, cuál variante y a qué tamaño son UNA unidad visual: congelar una y
+    // leer las otras vivas garantiza el desajuste (logo viejo con el tamaño del nuevo).
+    clientLogoDarkUrl: bc.client.logoDarkUrl,
+    clientLogoScale: bc.client.logoScale,
     templateId: resolved.templateId,
     caseType: resolved.caseType,
     caseSubtype: resolved.caseSubtype,

@@ -39,6 +39,9 @@ export interface ExternalTimelinePage {
   clientName: string;
   /** Logo de la EMPRESA cliente (Client.logoUrl, bucket público) o null. */
   clientLogoUrl: string | null;
+  /** Tamaño base del logo en % (Client.logoScale). El cronograma NO tiene ajuste propio:
+   *  no es un canvas con bloques, así que usa la base del cliente. Ver lib/ui/logo-scale.ts. */
+  clientLogoScale: number | null;
   timeline: ExternalTimelineData;
 }
 
@@ -195,6 +198,7 @@ export async function getPublishedTimelineForToken(
     projectName: access.project.name,
     clientName: access.project.client.name,
     clientLogoUrl: access.project.client.logoUrl,
+    clientLogoScale: access.project.client.logoScale,
     timeline,
   };
 }

@@ -39,6 +39,7 @@ export default async function ExternalCronogramaPage() {
         <TimelineLanding
           clientName={data.clientName}
           clientLogoUrl={data.clientLogoUrl}
+          clientLogoScale={data.clientLogoScale}
           timeline={data.timeline}
         />
       ) : (

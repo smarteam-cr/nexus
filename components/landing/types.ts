@@ -187,6 +187,15 @@ export interface LandingContext {
    *  y un canvas interactivo saldría vacío. Lo setea app/print/business-case. */
   pdfMode?: boolean;
   clientLogoUrl?: string | null;
+  /** Segundo archivo de logo del cliente, para FONDO OSCURO. El hero del motor SIEMPRE
+   *  es navy (los 7 defs con `backdrop:true` son `theme:"dark"`, congelado por
+   *  lib/ui/landing-hero-theme.test.ts), así que la brand-row usa este si existe. Sin él
+   *  cae al logo claro + el filtro histórico que lo pinta como silueta blanca. */
+  clientLogoDarkUrl?: string | null;
+  /** Tamaño BASE del logo del cliente, en % (50-200). Lo configura el CSE una vez en la
+   *  ficha del cliente y aplica a todos sus documentos; un canvas puede pisarlo con
+   *  `hero.logoScale`. Ver lib/ui/logo-scale.ts. */
+  clientLogoScale?: number | null;
   /** Logo de marca Smarteam (config global de Nexus, getSmarteamLogoUrl). El hero lo
    *  pinta como imagen en la brand-row en lugar del badge de texto "Smarteam". */
   smarteamLogoUrl?: string | null;
