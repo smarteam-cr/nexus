@@ -36,6 +36,8 @@ import type {
   costoPatchSchema,
   gastoCreateSchema,
   gastoPatchSchema,
+  ingresoVariableCreateSchema,
+  ingresoVariablePatchSchema,
 } from "./schema";
 
 export class CobranzaError extends Error {
@@ -827,6 +829,60 @@ export async function deleteCosto(costoId: string, usuarioEmail: string) {
 
 // ── Gastos puntuales (fase 4.5 — SUPER_ADMIN-only) ──────────────────────────────
 // Misma línea dura que los costos: sin tracking de pago, sin fuga de montos.
+
+// ── Ingresos variables ──────────────────────────────────────────────────────────
+// Entradas fuera del ciclo quincenal SIN servicio contratado detrás. No pasan por
+// `cambiarEstadoCobro` porque NO son cobros: no hay factura, ni crédito, ni
+// semáforo, ni INV3 que sostener. `registradoPor` deja la trazabilidad (mismo
+// espíritu que confirmadoPor).
+
+export async function createIngresoVariable(
+  data: z.infer<typeof ingresoVariableCreateSchema>,
+  byEmail: string,
+) {
+  return prisma.ingresoVariable.create({
+    data: {
+      concepto: data.concepto,
+      monto: data.monto,
+      moneda: data.moneda,
+      fecha: dayUTC(data.fecha),
+      clientId: data.clientId ?? null,
+      notas: data.notas ?? null,
+      registradoPor: byEmail,
+    },
+    select: { id: true },
+  });
+}
+
+export async function updateIngresoVariable(
+  ingresoId: string,
+  data: z.infer<typeof ingresoVariablePatchSchema>,
+) {
+  try {
+    return await prisma.ingresoVariable.update({
+      where: { id: ingresoId },
+      data: {
+        ...(data.concepto !== undefined ? { concepto: data.concepto } : {}),
+        ...(data.monto !== undefined ? { monto: data.monto } : {}),
+        ...(data.moneda !== undefined ? { moneda: data.moneda } : {}),
+        ...(data.fecha !== undefined ? { fecha: dayUTC(data.fecha) } : {}),
+        ...(data.clientId !== undefined ? { clientId: data.clientId ?? null } : {}),
+        ...(data.notas !== undefined ? { notas: data.notas ?? null } : {}),
+      },
+      select: { id: true },
+    });
+  } catch {
+    throw new CobranzaError("No se encontró el ingreso", 404);
+  }
+}
+
+export async function deleteIngresoVariable(ingresoId: string) {
+  try {
+    return await prisma.ingresoVariable.delete({ where: { id: ingresoId }, select: { id: true } });
+  } catch {
+    throw new CobranzaError("No se encontró el ingreso", 404);
+  }
+}
 
 export async function createGasto(data: z.infer<typeof gastoCreateSchema>) {
   return prisma.gastoPuntual.create({

@@ -35,17 +35,24 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export default function CostoForm({
   costo,
+  categoriaInicial,
   onClose,
   onSaved,
 }: {
   /** null = crear; con valor = editar. */
   costo: CostoRecurrenteDTO | null;
+  /**
+   * Categoría preseleccionada al CREAR desde una hoja acotada (Herramientas,
+   * Planillas, …). Queda editable a propósito: bloquearla mentiría sobre el
+   * modelo — el costo puede cambiar de categoría y la hoja lo dice con un toast.
+   */
+  categoriaInicial?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const editaBaseFactor = costo != null && costo.montoBase != null && costo.factorCargas != null;
 
-  const [categoria, setCategoria] = useState(costo?.categoria ?? "SALARIO");
+  const [categoria, setCategoria] = useState(costo?.categoria ?? categoriaInicial ?? "SALARIO");
   const [nombre, setNombre] = useState(costo?.nombre ?? "");
   const [moneda, setMoneda] = useState(costo?.moneda ?? "CRC");
   const [frecuencia, setFrecuencia] = useState(costo?.frecuencia ?? "MENSUAL");

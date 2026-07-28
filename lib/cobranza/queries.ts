@@ -801,6 +801,138 @@ export async function loadColaCobros(todayISO: string): Promise<ColaCobroRow[]> 
   });
 }
 
+// ── Ingresos variables ──────────────────────────────────────────────────────────
+// "Entradas de dinero que NO son el flujo constante de cobranza quincenal": un
+// trabajo puntual fuera de plan, o una cuenta rescatada — el proyecto trabado que
+// se destraba, la deuda vieja que finalmente entra.
+//
+// Es una VISTA DERIVADA de los cobros que ya existen, sin tabla propia: así el
+// número no puede discrepar del de Cobranza, y registrar uno sigue siendo el
+// mismo "Registrar pago" de siempre (cero caminos de escritura nuevos).
+
+/**
+ * Días de atraso a partir de los cuales un cobro que finalmente entró cuenta como
+ * RESCATE y no como "pagó tarde". 60 días ≈ dos ciclos de cobro completos: a esa
+ * altura la plata ya se había dado por difícil.
+ */
+export const RESCATE_UMBRAL_DIAS = 60;
+
+export interface IngresoVariableRow {
+  id: string;
+  /** null = ingreso general, sin cliente (solo posible en los REGISTRADOS). */
+  clientId: string | null;
+  clienteNombre: string | null;
+  concepto: string;
+  fechaCobro: string; // ISO — cuándo entró la plata
+  /** Solo los derivados de un cobro la tienen. */
+  fechaProgramada: string | null;
+  /** Días entre lo programado y lo cobrado. null en los registrados a mano. */
+  diasAtraso: number | null;
+  monto: number;
+  moneda: string;
+  /**
+   * REGISTRADO = fila propia de IngresoVariable (se carga desde esta pantalla).
+   * MANUAL / RESCATE = DERIVADOS de un Cobro ya existente (solo lectura acá).
+   */
+  tipo: "REGISTRADO" | "MANUAL" | "RESCATE";
+  notas: string | null;
+  /** Solo en REGISTRADO: quién lo cargó. */
+  registradoPor: string | null;
+}
+
+/**
+ * TODO lo que entró fuera del ciclo quincenal, de DOS orígenes que no se solapan:
+ *
+ *  1. `IngresoVariable` (REGISTRADO) — filas propias, cargadas desde la pantalla.
+ *     Es la única vía para un ingreso SIN servicio contratado detrás, o sin
+ *     cliente. No pueden ser un `Cobro`: ese exige servicioId + cuentaId.
+ *  2. `Cobro` ya COBRADO que entró fuera de ritmo (solo lectura acá):
+ *     - `origen = MANUAL`: pago fuera de plan sobre un servicio existente.
+ *     - atraso > RESCATE_UMBRAL_DIAS: salió de un plan pero entró muchísimo después.
+ *
+ * ⚠ NO hay doble conteo por construcción: un `IngresoVariable` nunca es un `Cobro`
+ * y viceversa. La regla para la persona (dicha en la UI): si la plata vino de un
+ * servicio contratado, se registra en Cobranza; acá van las que no.
+ */
+export async function loadIngresosVariables(todayISO: string): Promise<IngresoVariableRow[]> {
+  void todayISO; // la ventana la define fechaCobro de cada fila, no el día de hoy
+
+  const registrados = await prisma.ingresoVariable.findMany({
+    select: {
+      id: true,
+      concepto: true,
+      monto: true,
+      moneda: true,
+      fecha: true,
+      notas: true,
+      registradoPor: true,
+      clientId: true,
+      client: { select: { name: true } },
+    },
+    orderBy: [{ fecha: "desc" }, { createdAt: "desc" }],
+  });
+
+  const cobros = await prisma.cobro.findMany({
+    where: { estado: "COBRADO", fechaCobro: { not: null }, cuenta: { excluidaOperacion: false } },
+    select: {
+      id: true,
+      origen: true,
+      fechaCobro: true,
+      fechaProgramada: true,
+      monto: true,
+      moneda: true,
+      notas: true,
+      servicio: { select: { tipoServicio: true, descripcion: true } },
+      cuenta: { select: { clientId: true, client: { select: { name: true } } } },
+    },
+    orderBy: { fechaCobro: "desc" },
+  });
+
+  const filas: IngresoVariableRow[] = registrados.map((r) => ({
+    id: r.id,
+    clientId: r.clientId,
+    clienteNombre: r.client?.name ?? null,
+    concepto: r.concepto,
+    fechaCobro: isoDay(r.fecha)!,
+    fechaProgramada: null,
+    diasAtraso: null,
+    monto: num(r.monto)!,
+    moneda: r.moneda,
+    tipo: "REGISTRADO",
+    notas: r.notas,
+    registradoPor: r.registradoPor,
+  }));
+
+  for (const c of cobros) {
+    const cobro = isoDay(c.fechaCobro)!;
+    const programada = isoDay(c.fechaProgramada)!;
+    const atraso = diffDays(programada, cobro);
+    const esManual = c.origen === "MANUAL";
+    const esRescate = atraso > RESCATE_UMBRAL_DIAS;
+    if (!esManual && !esRescate) continue;
+    filas.push({
+      id: c.id,
+      clientId: c.cuenta.clientId,
+      clienteNombre: c.cuenta.client.name,
+      concepto: c.servicio.descripcion ?? c.servicio.tipoServicio,
+      fechaCobro: cobro,
+      fechaProgramada: programada,
+      diasAtraso: atraso,
+      monto: num(c.monto)!,
+      moneda: c.moneda,
+      // Un cobro manual con mucho atraso cuenta como MANUAL: su origen es el
+      // hecho más fuerte (nunca estuvo en el ciclo).
+      tipo: esManual ? "MANUAL" : "RESCATE",
+      notas: c.notas,
+      registradoPor: null,
+    });
+  }
+
+  // Orden único por fecha de entrada, mezclando ambos orígenes.
+  filas.sort((a, b) => (a.fechaCobro < b.fechaCobro ? 1 : a.fechaCobro > b.fechaCobro ? -1 : 0));
+  return filas;
+}
+
 // ── Costos recurrentes + caja neta (fase 4 — SUPER_ADMIN-only) ──────────────────
 // ⚠ PRIVACIDAD: estos DTOs llevan salarios estimados. Consumidos SOLO por routes
 // con `guardCostosAccess` y por el branch condicional de app/cobranza/page.tsx

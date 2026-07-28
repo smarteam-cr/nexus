@@ -7,7 +7,7 @@ import { Menu } from "@/components/ui";
 import RunsIndicator from "@/components/ai/RunsIndicator";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
-import { APP_NAV, canSeeNavItem } from "./nav-config";
+import { APP_NAV, canSeeNavItem, visibleNavChildren } from "./nav-config";
 import NavFlyout, { RolesNavFlyout } from "./NavFlyout";
 
 interface UserLite {
@@ -244,7 +244,7 @@ export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps)
                     return <RolesNavFlyout key={item.key} item={item} isOpen={isOpen} />;
                   }
                   if (item.children) {
-                    const children = item.children.filter((c) => !c.costosOnly || isCostosRole(role));
+                    const children = visibleNavChildren(item, { isCostos: isCostosRole(role) });
                     return <NavFlyout key={item.key} item={item} items={children} isOpen={isOpen} />;
                   }
                   return (
