@@ -30,6 +30,7 @@ import { CtaEditor, CtaButton } from "@/components/landing/sections";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
 import type { SectionProps } from "@/components/landing/types";
 import { Prose, InlineMD } from "@/components/landing/prose";
+import { DiagramStatic } from "@/components/landing/diagram-static";
 import TimelineSection from "@/components/canvas/TimelineSection";
 import { timelineSpan, fmtFull } from "@/lib/timeline/weeks";
 import type { FlowchartData } from "@/components/flowchart/FlowchartViewer";
@@ -354,9 +355,22 @@ export const KickoffProcesosSection: FC<SectionProps<unknown>> = ({ ctx, editabl
             <div key={p.id} className="reveal">
               {editable && p.status && <ProcesoStatusBar status={p.status} onConfirm={onStatus ? (c) => onStatus(p.id, c) : undefined} />}
               {p.title && <h3 className="font-display" style={{ fontSize: 18, color: "var(--text)", marginBottom: 10 }}>{p.title}</h3>}
-              <div style={{ height: "min(72vh, 780px)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "var(--bg, #fff)" }}>
-                <FlowchartViewer data={toFlowchartData(p)} />
-              </div>
+              {ctx.pdfMode ? (
+                /* PDF (Puppeteer): SVG estático y SÍNCRONO. `FlowchartViewer` monta con
+                   `ssr:false` y el export dispara en cuanto las fuentes y las imágenes están
+                   listas — el canvas de React Flow todavía no existe, así que se imprimiría
+                   el ESQUELETO en vez del proceso. Mismo tratamiento que sections-diagram.
+                   Sin alto fijo a propósito: `DiagramStatic` se dimensiona solo, y meterlo en
+                   una caja de `min(72vh,780px)` con overflow lo recortaría. Además `vh` en el
+                   PDF se resuelve contra el viewport del runner (1600px), no contra la hoja. */
+                <div style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 12, background: "#fff" }}>
+                  <DiagramStatic diagram={toFlowchartData(p)} />
+                </div>
+              ) : (
+                <div style={{ height: "min(72vh, 780px)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "var(--bg, #fff)" }}>
+                  <FlowchartViewer data={toFlowchartData(p)} />
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -131,6 +131,11 @@ export default function ExploracionWorkspace({
         ctx={ctx}
         sections={sections}
         mode="edit"
+        // La paleta entra por PROP, no por el div de afuera: `LandingView` pinta su
+        // propio `.stl` y volvía a declararse los tokens de marca encima. El wrapper
+        // exterior se queda porque sí tiñe lo que está FUERA del motor (esqueletos y
+        // la barra sticky).
+        palette="internal"
         showBriefs={false}
         onSectionChange={(key, data) => {
           const s = cs.sections.find((x) => x.key === key);

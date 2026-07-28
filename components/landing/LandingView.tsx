@@ -192,6 +192,7 @@ export default function LandingView({
   ctx,
   sections,
   mode = "read",
+  palette = "brand",
   showBriefs = true,
   onSectionChange,
   onBriefChange,
@@ -221,6 +222,17 @@ export default function LandingView({
   // Modo edición: controles por sección (IA / limpiar) que el workspace inyecta en
   // la esquina de cada sección. No se usa en el render externo (read).
   renderOverlay?: (key: string) => React.ReactNode;
+  /**
+   * Paleta del documento. "internal" = grises + un solo ámbar (los documentos que el
+   * CLIENTE NO ve: exploración, implementación, planificación).
+   *
+   * ⚠ TIENE que entrar POR ACÁ, no envolviendo a `LandingView` en un div externo con
+   * `className="stl stl-internal"`. Ese div exterior matchea `.stl.stl-internal` y sus
+   * tokens se HEREDAN, pero el `.stl` que este componente pinta abajo vuelve a
+   * declararlos con los valores de MARCA sobre sí mismo, y gana para todo su subárbol.
+   * Los tres workspaces internos lo hacían así y se estaban viendo naranjas.
+   */
+  palette?: "brand" | "internal";
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLElement>(null);
@@ -487,7 +499,7 @@ export default function LandingView({
   );
 
   return (
-    <div className="stl" ref={rootRef}>
+    <div className={palette === "internal" ? "stl stl-internal" : "stl"} ref={rootRef}>
       {body}
     </div>
   );
