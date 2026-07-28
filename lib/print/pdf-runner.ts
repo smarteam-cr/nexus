@@ -114,8 +114,41 @@ export async function renderPathToPdf(printPath: string): Promise<{ pdf: Buffer;
     });
     const page = await browser.newPage();
     await page.setViewport({ width: DOC_WIDTH, height: 1600 });
+
+    /* Lo que pasó DENTRO del navegador headless, por si no llega a estar listo.
+     *
+     * El modo de falla que esto ataca: si la página no señaliza, el error dice "tardó
+     * demasiado en renderizar" y punto — no hay forma de saber si fue una fuente lenta, un
+     * componente que reventó al hidratar o una navegación que terminó en 404. Se pierden
+     * horas mirando el archivo equivocado. Estas dos escuchas cuestan nada y convierten un
+     * timeout mudo en un diagnóstico. Solo se vuelcan cuando falla. */
+    const errores: string[] = [];
+    const navegaciones: string[] = [];
+    page.on("pageerror", (err) => {
+      errores.push(`error de la página: ${err instanceof Error ? err.message : String(err)}`);
+    });
+    page.on("console", (m) => {
+      if (m.type() === "error") errores.push(`consola: ${m.text()}`);
+    });
+    page.on("framenavigated", (f) => {
+      if (f === page.mainFrame()) navegaciones.push(f.url());
+    });
+
     await page.goto(url, { waitUntil: "networkidle0", timeout: NAV_TIMEOUT_MS });
-    await page.waitForSelector('body[data-pdf-ready="true"]', { timeout: READY_TIMEOUT_MS });
+    try {
+      await page.waitForSelector('body[data-pdf-ready="true"]', { timeout: READY_TIMEOUT_MS });
+    } catch (e) {
+      /* Más de una navegación del frame principal = la página se recargó sola. Y como el
+         `?pdfToken=` es de UN SOLO USO, la segunda vuelta cae en 404: pantalla vacía que
+         nunca señaliza. Vale la pena nombrarlo aparte, porque la causa está en la página y
+         no acá. */
+      console.error(
+        `[pdf-runner] ${printPath} no señalizó. Navegaciones del frame principal: ` +
+          `${navegaciones.length}${navegaciones.length > 1 ? " (¡se recargó sola!)" : ""}\n` +
+          (errores.length ? errores.slice(0, 8).join("\n") : "(sin errores en el navegador)"),
+      );
+      throw e;
+    }
 
     // PDF CORRIDO — estos documentos son LANDINGS, no documentos paginados: UNA sola
     // página del alto EXACTO del contenido (sin cortes A4 entre secciones, que dejaban

@@ -1,11 +1,22 @@
 /**
- * lib/print/job-token.ts — el pase de un solo uso con el que Puppeteer entra a la página
- * de impresión, para CUALQUIER tipo de documento.
+ * lib/print/job-token.ts — el pase efímero con el que Puppeteer entra a la página de
+ * impresión, para CUALQUIER tipo de documento.
  *
- * Vida ultra-corta (60s) y un solo uso: el runner navega a una URL interna de la propia app
- * y necesita autenticarse SIN reenviar las cookies reales de sesión. Mismo patrón de
- * generación que el accessToken externo (`randomBytes(32).toString("hex")`), pero
- * consumible una vez.
+ * Vida ultra-corta (60s): el runner navega a una URL interna de la propia app y necesita
+ * autenticarse SIN reenviar las cookies reales de sesión. Mismo patrón de generación que el
+ * accessToken externo (`randomBytes(32).toString("hex")`).
+ *
+ * ── DEJÓ DE SER DE UN SOLO USO, Y ES UN ARREGLO ──────────────────────────────
+ * Lo era, y eso rompía el PDF de una forma que no se veía: si la página se vuelve a pedir
+ * —el Fast Refresh de dev recarga cualquier pestaña abierta cuando se toca un archivo, y
+ * Chromium reintenta una navegación fallida— la segunda vuelta daba 404, la hoja quedaba en
+ * blanco, nunca aparecía `data-pdf-ready` y el usuario veía "No se pudo generar el PDF"
+ * quince segundos después, sin ninguna pista.
+ *
+ * Lo que el un-solo-uso compraba era impedir la RE-ejecución de un token filtrado. Pero el
+ * token vive 60 segundos, es de 256 bits y la URL solo existe dentro del contenedor: el TTL
+ * ya acota esa ventana. Se conserva `usedAt` —la primera vez que se usó, para auditoría— y
+ * lo que se saca es el RECHAZO por reuso.
  *
  * ── POR QUÉ (docType, docId) Y NO `businessCaseId` ───────────────────────────
  * El mecanismo nunca tuvo nada de específico de un caso de negocio; la TABLA sí. Al
@@ -56,11 +67,11 @@ export async function createPrintJobToken(
 }
 
 /**
- * Valida el token contra la DB (existe, no usado, no expirado, y el documento coincide) y
- * lo marca usado. Devuelve el `canvasId` asociado (o null = usar el activo).
+ * Valida el token contra la DB (existe, no expirado, y el documento coincide) y anota la
+ * primera vez que se usó. Devuelve el `canvasId` asociado (o null = usar el activo).
  *
- * ⚠ Es de UN SOLO USO: no reintentar la navegación con el mismo token — el segundo intento
- * da 404, que es lo correcto pero confunde si no se sabe.
+ * Vale mientras no expire, así que la MISMA página se puede volver a pedir dentro de esos
+ * 60 segundos — ver el encabezado: exigir un solo uso rompía el PDF ante cualquier recarga.
  */
 export async function consumePrintJobToken(
   token: string,
@@ -73,7 +84,10 @@ export async function consumePrintJobToken(
   const tipo = row.docType ?? TIPO_LEGACY;
   const id = row.docId ?? row.businessCaseId;
   if (tipo !== docType || id !== docId) return { ok: false };
-  if (row.usedAt || row.expiresAt.getTime() < Date.now()) return { ok: false };
-  await prisma.printJobToken.update({ where: { token }, data: { usedAt: new Date() } });
+  if (row.expiresAt.getTime() < Date.now()) return { ok: false };
+  // `usedAt` es la PRIMERA vez (auditoría), no un candado: no se pisa en los reusos.
+  if (!row.usedAt) {
+    await prisma.printJobToken.update({ where: { token }, data: { usedAt: new Date() } });
+  }
   return { ok: true, canvasId: row.canvasId };
 }
