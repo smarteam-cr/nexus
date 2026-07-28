@@ -39,6 +39,18 @@ const DIRS = [
 ];
 
 /**
+ * Componentes SUELTOS que también se rinden dentro del motor, aunque no vivan en una carpeta
+ * de secciones. Se listan a mano porque la carpeta que los contiene es de la app interna.
+ *
+ * `TimelineSection` es el caso que motivó agregar esta lista: el Gantt se monta dentro del
+ * kickoff (`KickoffTimelineSection`) y su grilla vive en un `overflow-x: auto`. Un scroller
+ * imprime SOLO su primer viewport, así que todo cronograma de más de ~14 semanas salía
+ * cortado a la derecha, sin ningún indicio en el PDF de que faltaba algo. El escaneo por
+ * carpeta no lo veía.
+ */
+const ARCHIVOS_SUELTOS = [path.join(RAIZ, "components", "canvas", "TimelineSection.tsx")];
+
+/**
  * Exentos, CON MOTIVO. Entrar acá es una decisión, no un atajo.
  */
 const EXENTOS: Record<string, string> = {
@@ -80,8 +92,8 @@ function archivos(dir: string): string[] {
 describe("todo lo que Puppeteer no captura consulta `pdfMode`", () => {
   it("ningún componente del motor usa un patrón hostil al PDF sin consultarlo", () => {
     const ofensores: string[] = [];
-    for (const dir of DIRS) {
-      for (const full of archivos(dir)) {
+    for (const full of [...DIRS.flatMap(archivos), ...ARCHIVOS_SUELTOS]) {
+      {
         const rel = path.relative(RAIZ, full).replace(/\\/g, "/");
         if (EXENTOS[rel]) continue;
         const src = soloCodigo(fs.readFileSync(full, "utf8"));
@@ -97,6 +109,22 @@ describe("todo lo que Puppeteer no captura consulta `pdfMode`", () => {
         "`ctx.pdfMode ? … : …` (ver components/landing/sections-diagram.tsx) o sumalos a " +
         "EXENTOS con el motivo:\n" + ofensores.join("\n"),
     ).toEqual([]);
+  });
+
+  it("el caso concreto: el Gantt del kickoff se encoge en vez de cortarse", () => {
+    /* No alcanza con que el archivo mencione el modo impresión: la grilla NO puede quedar en
+       un scroller, porque eso es exactamente lo que recorta. Se comprueba que el overflow
+       dependa del modo y que exista el encogido. */
+    const src = fs.readFileSync(path.join(RAIZ, "components", "canvas", "TimelineSection.tsx"), "utf8");
+    expect(src, "el overflow de la grilla no depende del modo impresión").toMatch(
+      /overflowX:\s*pdf \?/,
+    );
+    expect(src, "falta el encogido — sin él, encima, se sale de la hoja").toContain("fitZoom");
+    // Y que el kickoff se lo pase: el prop existe pero nadie lo prende = mismo bug.
+    const ko = fs.readFileSync(
+      path.join(RAIZ, "components", "canvas", "kickoff-sections", "KickoffSections.tsx"), "utf8",
+    );
+    expect(ko).toMatch(/pdf=\{ctx\.pdfMode\}/);
   });
 
   it("el caso concreto: los procesos del kickoff tienen su variante estática", () => {

@@ -333,7 +333,7 @@ export const KickoffTimelineSection: FC<SectionProps<unknown>> = ({ ctx }) => {
   // coordinada que re-tokenice TimelineSection (anotada en DECISIONS).
   return (
     <div className="kickoff-landing">
-      <TimelineSection phases={timeline.phases} anchor={timeline.anchorStartDate ?? null} />
+      <TimelineSection phases={timeline.phases} anchor={timeline.anchorStartDate ?? null} pdf={ctx.pdfMode} />
     </div>
   );
 };

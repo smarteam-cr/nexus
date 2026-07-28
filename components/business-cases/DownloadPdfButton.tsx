@@ -4,7 +4,9 @@ import { useState } from "react";
 import { ApiError, extractErrorMessage } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 
-// ── Descargar PDF (contenido vivo del canvas activo, mismo diseño de la landing) ──
+/* ── Descargar PDF (contenido vivo del canvas indicado, mismo diseño de la landing) ──
+   Pasa por el endpoint GENÉRICO de impresión: el caso de negocio es un tipo más del registro
+   (`lib/print/doc-types.ts`), no un camino aparte. `canvasId` elige la versión. */
 export default function DownloadPdfButton({ bcId, canvasId }: { bcId: string; canvasId: string }) {
   const toast = useToast();
   const [working, setWorking] = useState(false);
@@ -13,7 +15,7 @@ export default function DownloadPdfButton({ bcId, canvasId }: { bcId: string; ca
     if (working) return;
     setWorking(true);
     try {
-      const res = await fetch(`/api/business-cases/${bcId}/export-pdf`, {
+      const res = await fetch(`/api/print/business-case/${bcId}/export`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ canvasId }),

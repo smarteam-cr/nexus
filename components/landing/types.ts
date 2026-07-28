@@ -195,7 +195,7 @@ export interface LandingContext {
   lang?: string | null;
   /** Render para PDF (Puppeteer): las secciones con piezas ASÍNCRONAS (React Flow)
    *  deben renderizar su variante ESTÁTICA — el export dispara al `data-pdf-ready`
-   *  y un canvas interactivo saldría vacío. Lo setea app/print/business-case. */
+   *  y un canvas interactivo saldría vacío. Lo setea app/print/doc. */
   pdfMode?: boolean;
   clientLogoUrl?: string | null;
   /** Segundo archivo de logo del cliente, para FONDO OSCURO. El hero del motor SIEMPRE

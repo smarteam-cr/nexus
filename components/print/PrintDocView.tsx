@@ -18,6 +18,12 @@ import { useMemo } from "react";
 import LandingView from "@/components/landing/LandingView";
 import type { LandingConfig } from "@/components/landing/types";
 import type { PrintDocPayload, PrintRow } from "@/lib/print/load-doc";
+import { landingConfigFor } from "@/components/landing/configs/templates";
+import { landingConfigForRoles } from "@/components/landing/configs/roles";
+import {
+  buildKickoffConfig,
+  buildKickoffSections,
+} from "@/components/canvas/kickoff-landing-adapter";
 import {
   buildDesarrolloConfig,
   buildDesarrolloSections,
@@ -40,27 +46,42 @@ import {
 } from "@/components/canvas/exploracion-landing-adapter";
 
 interface Adaptador {
-  config: (orderedKeys: string[]) => LandingConfig;
+  /** `templateId` solo lo usa el caso de negocio, que elige plantilla por DOCUMENTO. */
+  config: (orderedKeys: string[], templateId: string | null) => LandingConfig;
   sections: (rows: PrintRow[]) => Array<{ key: string; data: unknown }>;
 }
 
 /**
  * docType → su adaptador. Las claves son las de `lib/print/doc-types.ts`; que falte una
  * significa "ese tipo todavía no imprime por acá", y la página responde 404 en vez de una
- * hoja en blanco. `lib/print/doc-adapters.test.ts` cuida que el mapa y el registro no se
+ * hoja en blanco. `lib/print/doc-types.test.ts` cuida que el mapa y el registro no se
  * separen.
  */
+/* Los perfiles de puesto no tienen adaptador propio porque no lo necesitan: su config es
+   fija (sin orden arrastrable) y el loader ya deja la data lista en un bloque CARD. */
+const ADAPTADOR_ROLES: Adaptador = {
+  config: () => landingConfigForRoles(),
+  sections: (rows) =>
+    rows.map((r) => ({ key: r.key, data: r.blocks[0]?.data ?? null })),
+};
+
+/* El caso de negocio elige plantilla POR DOCUMENTO (no por tipo), así que su config sale de
+   `templateId`; las filas ya vienen con la `data` en un bloque CARD, igual que en pantalla. */
+const ADAPTADOR_BUSINESS_CASE: Adaptador = {
+  config: (_keys, templateId) => landingConfigFor(templateId),
+  sections: (rows) => rows.map((r) => ({ key: r.key, data: r.blocks[0]?.data ?? null })),
+};
+
 const ADAPTADORES: Record<string, Adaptador> = {
+  "business-case": ADAPTADOR_BUSINESS_CASE,
+  role: ADAPTADOR_ROLES,
+  kickoff: { config: buildKickoffConfig, sections: buildKickoffSections },
   "tech-requirements": { config: buildDesarrolloConfig, sections: buildDesarrolloSections },
   diagnosis: { config: buildDiagnosticoConfig, sections: buildDiagnosticoSections },
   planning: { config: buildPlanificacionConfig, sections: buildPlanificacionSections },
   implementation: { config: buildImplementacionConfig, sections: buildImplementacionSections },
   exploration: { config: buildExploracionConfig, sections: buildExploracionSections },
 };
-
-export function hasPrintAdapter(docType: string): boolean {
-  return docType in ADAPTADORES;
-}
 
 export default function PrintDocView({ doc }: { doc: PrintDocPayload }) {
   const adaptador = ADAPTADORES[doc.docType];
@@ -69,7 +90,7 @@ export default function PrintDocView({ doc }: { doc: PrintDocPayload }) {
     if (!adaptador) return { config: null, sections: [] };
     const built = adaptador.sections(doc.rows);
     return {
-      config: adaptador.config(doc.rows.map((r) => r.key)),
+      config: adaptador.config(doc.rows.map((r) => r.key), doc.templateId),
       sections: doc.rows.map((r, i) => ({
         key: r.key,
         data: built[i]?.data ?? null,
@@ -77,7 +98,7 @@ export default function PrintDocView({ doc }: { doc: PrintDocPayload }) {
         eyebrowOverride: r.eyebrowOverride,
       })),
     };
-  }, [adaptador, doc.rows]);
+  }, [adaptador, doc.rows, doc.templateId]);
 
   if (!config) return null;
 
@@ -97,6 +118,12 @@ export default function PrintDocView({ doc }: { doc: PrintDocPayload }) {
         clientLogoScale: doc.ctx.clientLogoScale,
         smarteamLogoUrl: doc.ctx.smarteamLogoUrl,
         brandLogos: doc.ctx.brandLogos,
+        /* Solo kickoff, y solo lectura: SIN `onAssignSession`. `HorariosSection` decide si
+           es interactiva con `editable || !!onAssign`, así que pasarlo metería dnd-kit en el
+           PDF — su ausencia es lo que rinde la variante estática. */
+        kickoff: doc.ctx.kickoff
+          ? { timeline: doc.ctx.kickoff.timeline, procesos: doc.ctx.kickoff.procesos }
+          : undefined,
       }}
       sections={sections}
       mode="read"

@@ -222,6 +222,11 @@ export default function PrintClient({
         </button>
       </div>
 
+      {/* Tamaño de hoja para el Ctrl+P de ESTA página. Vivía en globals.css, pero `@page` no
+          acepta selector: desde ahí forzaba A4 en toda la app, y una landing del cliente
+          —banda continua— salía cortada. Acá solo existe en el documento que lo pide. */}
+      <style>{"@page { size: A4; margin: 0; }"}</style>
+
       {/* Documento imprimible */}
       <article className="cp-doc">
         {/* Header del documento */}

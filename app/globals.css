@@ -1038,10 +1038,11 @@ html.light aside .bg-gray-800 {
 .cp-md a { color: #2563eb; text-decoration: underline; }
 
 /* ── Reglas de impresión ──────────────────────────────────────────────── */
-@page {
-  size: A4;
-  margin: 0;  /* el padding interno del .cp-doc actúa como margen */
-}
+/* El `@page { size: A4 }` que estaba acá se mudó a app/print/canvas/**/PrintClient.tsx.
+   `@page` NO se puede acotar con un selector: vale para el documento entero. Declarado en la
+   hoja global, forzaba A4 en CUALQUIER Ctrl+P de la app —incluida una landing del cliente,
+   que es una banda continua y salía cortada en hojas. Ahora vive en la única página que lo
+   necesita, que es lo más parecido a acotarlo que permite CSS. */
 
 @media print {
   .no-print { display: none !important; }

@@ -44,17 +44,15 @@ export async function middleware(request: NextRequest) {
   if (PUBLIC_PATHS.includes(pathname)) return NextResponse.next();
   if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
-  // Bypass puntual: Puppeteer (export-pdf/route.ts, mismo contenedor) navega acá
+  // Bypass puntual: Puppeteer (lib/print/pdf-runner.ts, mismo contenedor) navega acá
   // server-to-server y no tiene cookies de sesión Supabase. La autorización REAL
   // la hace la propia página validando `?pdfToken=` contra PrintJobToken (un solo
   // uso, 60s) — el middleware solo evita el redirect a "/", no autoriza nada. Sin
   // el query param, la ruta sigue exigiendo sesión normal (bloque de abajo).
   //
-  // `/print/doc/` es la ruta GENÉRICA (un tipo de documento por segmento), así que este
-  // prefijo no crece cuando se suma un tipo nuevo — que es medio punto de haberla unificado.
-  // `/print/business-case/` sigue mientras esa ruta exista; se va con ella.
-  const esRutaDeImpresion =
-    pathname.startsWith("/print/doc/") || pathname.startsWith("/print/business-case/");
+  // `/print/doc/` es la ruta GENÉRICA (un tipo de documento por segmento): este prefijo no
+  // crece cuando se suma un tipo nuevo, que es medio punto de haberla unificado.
+  const esRutaDeImpresion = pathname.startsWith("/print/doc/");
   if (esRutaDeImpresion && request.nextUrl.searchParams.has("pdfToken")) {
     return NextResponse.next();
   }

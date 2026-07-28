@@ -40,7 +40,7 @@ export default async function PrintDocPage({
   searchParams,
 }: {
   params: Promise<{ type: string; id: string }>;
-  searchParams: Promise<{ pdfToken?: string }>;
+  searchParams: Promise<{ pdfToken?: string; canvasId?: string }>;
 }) {
   const { type, id } = await params;
   const sp = await searchParams;
@@ -55,9 +55,12 @@ export default async function PrintDocPage({
   if (sp.pdfToken) {
     const r = await consumePrintJobToken(sp.pdfToken, tipo.id, id);
     if (!r.ok) notFound();
-    doc = await loadPrintDoc(tipo, id, { yaAutorizado: true });
+    // `canvasId` solo lo usa el caso de negocio (tiene versiones); viaja en el token para que
+    // el PDF exporte exactamente la versión desde la que se pidió.
+    doc = await loadPrintDoc(tipo, id, { yaAutorizado: true, canvasId: r.canvasId });
   } else {
-    doc = await loadPrintDoc(tipo, id);
+    // A mano: `?canvasId=` permite mirar una versión concreta antes de exportarla.
+    doc = await loadPrintDoc(tipo, id, { canvasId: sp.canvasId ?? null });
   }
   if (!doc) notFound();
 

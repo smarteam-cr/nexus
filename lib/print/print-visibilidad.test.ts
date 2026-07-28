@@ -31,43 +31,51 @@ import path from "node:path";
 
 const RAIZ = process.cwd();
 
-/** Toda página de impresión que cargue secciones de canvas. */
-const PAGINAS = [
+/**
+ * Los DOS caminos que imprimen contenido de canvas:
+ *   · el cargador del motor, que sirve a los ocho tipos de documento;
+ *   · la vista imprimible genérica, para los canvas que no tienen definición en el motor.
+ * No hay un tercero, y ésa es media razón de haber unificado.
+ */
+const FUENTES = [
+  "lib/print/load-doc.ts",
   "app/print/canvas/[clientId]/[canvasId]/page.tsx",
-  "app/print/business-case/[id]/page.tsx",
 ];
 
 const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
 
 describe("lo que el CSE ocultó no sale impreso", () => {
-  it("el camino genérico lee LAS DOS fuentes de «oculta»", () => {
-    const src = leer("app/print/canvas/[clientId]/[canvasId]/page.tsx");
-    expect(src, "falta la fuente del business case (Json de ProjectCanvas.sections)")
-      .toContain("hiddenKeysFrom");
-    expect(src, "falta la fuente del kickoff (columna del PROYECTO)")
-      .toContain("hiddenKickoffKeys");
-    // El resolvedor tiene que ser el MISMO que usa la vista del cliente: la clave del
-    // kickoff es el id de la sección salvo cronograma/procesos, que van por key.
-    expect(src, "la clave del kickoff se resuelve a mano en vez de reusar el helper")
-      .toContain("kickoffHiddenKey");
-  });
+  for (const rel of FUENTES) {
+    it(`${rel} lee LAS DOS fuentes de «oculta»`, () => {
+      const src = leer(rel);
+      expect(src, "falta la fuente del business case (Json de ProjectCanvas.sections)")
+        .toContain("hiddenKeysFrom");
+      expect(src, "falta la fuente del kickoff (columna del PROYECTO)")
+        .toContain("hiddenKickoffKeys");
+      // El resolvedor tiene que ser el MISMO que usa la vista del cliente: la clave del
+      // kickoff es el id de la sección salvo cronograma/procesos, que van por key.
+      expect(src, "la clave del kickoff se resuelve a mano en vez de reusar el helper")
+        .toContain("kickoffHiddenKey");
+    });
 
-  it("y las aplica como FILTRO, no solo las carga", () => {
-    const src = leer("app/print/canvas/[clientId]/[canvasId]/page.tsx");
-    expect(src).toMatch(/\.filter\(\s*\(s\)\s*=>\s*!ocultas/);
-  });
+    it(`${rel} las aplica como FILTRO, no solo las carga`, () => {
+      expect(leer(rel)).toMatch(/\.filter\(\s*\(s\)\s*=>\s*!ocultas/);
+    });
+  }
 
-  it("el PDF del business case sigue derivando `hidden` del Json del canvas", () => {
-    // Acá el helper es `parseSectionEntries` en vez de `hiddenKeysFrom` — misma fuente,
-    // otra forma de leerla (necesita el mapa key→bool, no solo el set de ocultas).
-    const src = leer("app/print/business-case/[id]/page.tsx");
-    expect(src).toContain("parseSectionEntries");
-    expect(src).toMatch(/hidden(ByKey)?/);
+  it("el cargador gatea también el cronograma y los procesos del kickoff", () => {
+    /* No salen de un CanvasBlock, así que el filtro de filas no los toca: se ocultan por su
+       propia key. Sin esto, esconder el cronograma en pantalla y verlo impreso. */
+    const src = leer("lib/print/load-doc.ts");
+    expect(src).toMatch(/ocultasKickoff\.has\("cronograma"\)/);
+    expect(src).toMatch(/ocultasKickoff\.has\("procesos"\)/);
+    // Y un proceso suelto, que se oculta por su id dentro de la sección.
+    expect(src).toMatch(/ocultasKickoff\.has\(p\.id\)/);
   });
 });
 
 describe("lo no confirmado tampoco", () => {
-  for (const rel of PAGINAS) {
+  for (const rel of FUENTES) {
     it(`${rel} filtra los bloques por status CONFIRMED`, () => {
       expect(
         leer(rel),

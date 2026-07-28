@@ -50,7 +50,7 @@ export const PRINT_DOC_TYPES: PrintDocType[] = [
     scope: "business-case",
     label: "Caso de negocio",
     palette: "brand",
-    ready: false,
+    ready: true,
   },
   {
     id: "kickoff",
@@ -58,7 +58,7 @@ export const PRINT_DOC_TYPES: PrintDocType[] = [
     scope: "project-piece",
     label: "Kickoff",
     palette: "brand", // lo ve el cliente
-    ready: false,
+    ready: true,
   },
   {
     id: "tech-requirements",
@@ -108,7 +108,7 @@ export const PRINT_DOC_TYPES: PrintDocType[] = [
     scope: "role",
     label: "Perfil de puesto",
     palette: "brand",
-    ready: false,
+    ready: true,
   },
 ];
 

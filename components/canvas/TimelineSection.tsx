@@ -42,6 +42,7 @@ import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
 import { clientStatusLine } from "@/lib/timeline/client-status";
 import type { ExternalTimelinePhase, ExternalParticularidad } from "@/lib/external/timeline-view-types";
+import { PRINT_PAGE_WIDTH, fitZoom } from "@/lib/print/page-metrics";
 
 /**
  * Contenedor del cronograma. Es MÁS ANCHO que el de los documentos de texto (1280) porque
@@ -128,6 +129,7 @@ export default function TimelineSection({
   showHeader = true,
   showProgress = false,
   particularidades,
+  pdf = false,
 }: {
   phases: ExternalTimelinePhase[];
   anchor: string | null;
@@ -138,6 +140,12 @@ export default function TimelineSection({
   /** Desviaciones curadas visibles al cliente (visibleExternal=true, ya filtradas en el chokepoint).
    *  Solo se renderiza con showProgress (el cronograma compartible, no el kickoff embebido). */
   particularidades?: ExternalParticularidad[];
+  /**
+   * Modo impresión. En pantalla la grilla scrollea de lado; en papel un scroller imprime
+   * SOLO su primer viewport, así que un cronograma de más de ~14 semanas salía cortado a la
+   * derecha sin ningún indicio de que faltaba algo. Acá no scrollea: se encoge hasta caber.
+   */
+  pdf?: boolean;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // "Hoy" es hora de pared del USUARIO: calcularlo en el server rompería la
@@ -179,11 +187,20 @@ export default function TimelineSection({
     });
   };
 
-  const gridCols = { gridTemplateColumns: `minmax(200px, 280px) repeat(${total}, minmax(26px, 1fr))` };
+  /* En papel la columna de fases se achica —el nombre sigue leyéndose— para dejarle todo el
+     ancho posible a las semanas, que es lo que se pierde primero al encoger. */
+  const anchoFase = pdf ? "minmax(120px, 170px)" : "minmax(200px, 280px)";
+  const gridCols = { gridTemplateColumns: `${anchoFase} repeat(${total}, minmax(26px, 1fr))` };
+  /* Ancho que la grilla NECESITA para no apretarse, y cuánto hay que encogerla para que
+     entre. El disponible sale de la hoja: `TIMELINE_CONTAINER` ocupa el 100% del ancho en
+     impresión (en pantalla es 80%: en papel no sobra), menos el padding de la sección y el
+     de la caja. Ver lib/print/page-metrics.ts para por qué es `zoom` y no `transform`. */
+  const anchoGrilla = Math.max(640, (pdf ? 170 : 280) + total * 34);
+  const zoomImpresion = pdf ? fitZoom(anchoGrilla, PRINT_PAGE_WIDTH - 48 - 32) : 1;
 
   return (
     <section className="section-light" style={{ padding: SECTION_PAD }}>
-      <div style={TIMELINE_CONTAINER}>
+      <div style={pdf ? { ...TIMELINE_CONTAINER, width: "100%" } : TIMELINE_CONTAINER}>
         {showHeader && (
           <>
             <span className="eyebrow reveal">Hoja de ruta</span>
@@ -236,8 +253,8 @@ export default function TimelineSection({
         </div>
 
         {/* La grilla */}
-        <div className="reveal" data-stagger="3" style={{ border: "1px solid var(--border)", borderRadius: 16, background: "var(--bg)", overflowX: "auto" }}>
-          <div style={{ minWidth: Math.max(640, 280 + total * 34) }}>
+        <div className="reveal" data-stagger="3" style={{ border: "1px solid var(--border)", borderRadius: 16, background: "var(--bg)", overflowX: pdf ? "visible" : "auto" }}>
+          <div style={{ minWidth: anchoGrilla, ...(zoomImpresion < 1 ? { zoom: zoomImpresion } : {}) }}>
             {/* Cabecera de semanas */}
             <div style={{ ...gridCols, display: "grid", gap: 4, alignItems: "center", padding: "10px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-soft)" }}>
               <div style={SUB_LABEL}>Fase</div>

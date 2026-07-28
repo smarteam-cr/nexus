@@ -27,7 +27,6 @@
     "@hubspot/api-client": "^13.4.0",
     "@prisma/adapter-pg": "^7.4.2",
     "@prisma/client": "^7.4.2",
-    "@react-pdf/renderer": "^4.3.2",
     "@sentry/nextjs": "^10.64.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.99.1",

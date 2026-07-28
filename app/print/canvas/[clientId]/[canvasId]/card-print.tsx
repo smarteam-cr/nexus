@@ -11,7 +11,7 @@
  * debajo. Acá `data` se vuelve documento: prosa, viñetas y tablas simples.
  *
  * ── POR QUÉ APLANAR Y NO REUSAR `LandingView` + `.stl-pdf-mode` ───────────────
- * Existe un camino que YA imprime el motor de landings: app/print/business-case/[id]
+ * Existe un camino que YA imprime el motor de landings: app/print/doc/[type]/[id]
  * monta `LandingView` con `pdfMode`. No se reusa acá, a propósito:
  *   1. Esta página es GENÉRICA para cualquier canvas (handoff, marketing, kickoff,
  *      canvas a medida del CSE). `LandingView` necesita el config + adaptador de SU

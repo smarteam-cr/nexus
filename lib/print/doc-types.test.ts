@@ -84,7 +84,8 @@ describe("registro de documentos imprimibles", () => {
     const bloque = /const ADAPTADORES[\s\S]*?\n};/.exec(src)?.[0] ?? "";
     expect(bloque, "no se encontró el mapa ADAPTADORES").not.toBe("");
     const cableados = new Set(
-      [...bloque.matchAll(/^\s*"?([a-z-]+)"?:\s*\{/gm)].map((m) => m[1]),
+      // La clave, sea el valor un literal (`{ config: … }`) o una constante (`ADAPTADOR_X`).
+      [...bloque.matchAll(/^\s*"?([a-z-]+)"?:\s*[{A-Za-z]/gm)].map((m) => m[1]),
     );
     // Los dos sentidos: un tipo prendido sin adaptador imprime una hoja en blanco; un
     // adaptador sin tipo prendido es código que nunca corre.

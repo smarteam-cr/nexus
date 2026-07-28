@@ -19,7 +19,7 @@ import { createPrintJobToken } from "@/lib/print/job-token";
 import { acquirePdfSlot, pdfErrorMessage, renderPathToPdf, slugify } from "@/lib/print/pdf-runner";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ type: string; id: string }> },
 ) {
   const { type, id } = await params;
@@ -41,7 +41,12 @@ export async function POST(
   /* Se carga el documento ANTES de gastar un Chromium: si no hay nada que imprimir —el canvas
      no existe, o todo su contenido está oculto o en borrador— el 404 sale en milisegundos en
      vez de después de veinte segundos y una hoja en blanco. */
-  const doc = await loadPrintDoc(tipo, id, { yaAutorizado: true });
+  /* `canvasId` (opcional) elige QUÉ VERSIÓN del documento exportar. Hoy solo el caso de
+     negocio versiona; los demás lo ignoran. Sin body, sale la versión activa. */
+  const body = (await req.json().catch(() => ({}))) as { canvasId?: unknown };
+  const canvasId = typeof body.canvasId === "string" ? body.canvasId : null;
+
+  const doc = await loadPrintDoc(tipo, id, { yaAutorizado: true, canvasId });
   if (!doc) return NextResponse.json({ error: "Documento no encontrado." }, { status: 404 });
   if (doc.rows.length === 0) {
     return NextResponse.json(
@@ -59,10 +64,13 @@ export async function POST(
   }
 
   try {
-    const token = await createPrintJobToken(tipo.id, id, { createdByEmail: auth.email });
+    const token = await createPrintJobToken(tipo.id, id, { canvasId, createdByEmail: auth.email });
     const { pdf, paged } = await renderPathToPdf(`/print/doc/${tipo.id}/${id}?pdfToken=${token}`);
 
-    const filename = `${slugify(doc.clientName, "cliente")}-${slugify(doc.docTitle, tipo.id)}.pdf`;
+    /* Cliente + documento, salteando lo que no aplique: un perfil de puesto no tiene cliente
+       y no debe llamarse "cliente-analista-de-datos.pdf". */
+    const partes = [doc.clientName, doc.docTitle].map((p) => slugify(p, "")).filter(Boolean);
+    const filename = `${partes.join("-") || tipo.id}.pdf`;
     return new NextResponse(new Uint8Array(pdf), {
       status: 200,
       headers: {

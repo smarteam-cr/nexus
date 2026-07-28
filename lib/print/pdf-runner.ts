@@ -1,7 +1,7 @@
 /**
  * lib/print/pdf-runner.ts — el motor de PDF, una sola vez para todos los documentos.
  *
- * Extraído tal cual de `app/api/business-cases/[id]/export-pdf/route.ts`, donde vivía
+ * Extraído tal cual del export-pdf del Business Case (ya retirado), donde vivía
  * casado con el Business Case: el semáforo de concurrencia, el `@page` inyectado, el buffer
  * del 4%, el fallback y la traducción de errores no tienen NADA de específico de un caso de
  * negocio. Lo único propio de cada documento es qué URL abrir y cómo se llama el archivo.
@@ -11,6 +11,7 @@
  * viajaron enteros — son el resultado de haber medido, no defaults.
  */
 import puppeteer, { type Browser } from "puppeteer-core";
+import { PRINT_PAGE_WIDTH } from "./page-metrics";
 
 // En prod (Docker) el default es el symlink a Chrome for Testing de Google (ver
 // Dockerfile: /usr/local/bin/chrome-pdf) — el `chromium` de Debian crashea con
@@ -48,9 +49,11 @@ export async function acquirePdfSlot(): Promise<(() => void) | null> {
   };
 }
 
-// Ancho del documento (px): coincide con el viewport para que el layout responsive
-// se resuelva igual que se mide. 1000px conserva los grids multi-columna del diseño.
-export const DOC_WIDTH = 1000;
+/* Ancho del documento (px): coincide con el viewport para que el layout responsive se
+   resuelva igual que se mide. 1000px conserva los grids multi-columna del diseño. Vive en
+   `page-metrics.ts` —puro— porque también lo necesitan componentes del lado cliente que
+   tienen que encoger para caber (el Gantt); acá se re-exporta para no romper a los callers. */
+export const DOC_WIDTH = PRINT_PAGE_WIDTH;
 /** Techo de Chromium para una página: 200 in = 19.200 px. Éste es ese límite con margen,
  *  así que NO se puede subir — pasado eso, se pagina (ver `paged` en el resultado). */
 export const MAX_PDF_HEIGHT_PX = 18_000;
@@ -83,7 +86,7 @@ export function pdfErrorMessage(e: unknown): string {
 /**
  * Abre una ruta INTERNA de la propia app y la devuelve como PDF.
  *
- * `printPath` es absoluto desde la raíz (ej. `/print/business-case/abc?pdfToken=…`): se
+ * `printPath` es absoluto desde la raíz (ej. `/print/doc/kickoff/abc?pdfToken=…`): se
  * resuelve contra 127.0.0.1 y el PORT del proceso, así que nunca sale a la red.
  *
  * `paged: true` avisa que el documento superó el techo y salió paginado en vez de una sola
