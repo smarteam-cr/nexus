@@ -19,6 +19,7 @@ import ImplementacionWorkspace from "@/components/canvas/ImplementacionWorkspace
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import CanvasBoundary from "./CanvasBoundary";
+import PrintDocButton from "@/components/print/PrintDocButton";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { slugForCanvas } from "@/lib/pieces/registry";
@@ -717,19 +718,15 @@ export default function ProjectCanvasPanel({
               las mismas credenciales destraban todas las superficies externas
               (kickoff, cronograma), por eso vive acá y no en un canvas. */}
           <ExternalAccessButton projectId={projectId} />
-          {/* Export PDF — siempre disponible (default y custom canvas) */}
-          <a
-            href={`/print/canvas/${clientId}/${isResumenCanvas ? "default" : (activeCanvasId ?? "default")}?print=1&projectId=${projectId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800 hover:border-gray-700"
-            title="Abre una vista imprimible para guardar como PDF"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
-            Exportar PDF
-          </a>
+          {/* Export PDF. Qué camino toma lo decide el REGISTRO de impresión leyendo la
+              pieza del canvas activo, no un `if` acá: las piezas del motor bajan el PDF con
+              el diseño del documento, y todo lo demás —Resumen, handoff, cronograma, los
+              canvas a medida— sigue con la vista imprimible de siempre. */}
+          <PrintDocButton
+            projectId={projectId}
+            activeSlug={isResumenCanvas ? null : (activeSlug ?? null)}
+            canvasHref={`/print/canvas/${clientId}/${isResumenCanvas ? "default" : (activeCanvasId ?? "default")}?print=1&projectId=${projectId}`}
+          />
 
           {isResumenCanvas && (<>
           <button
