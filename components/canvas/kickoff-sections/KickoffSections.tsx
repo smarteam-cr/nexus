@@ -25,7 +25,7 @@ import { type FC } from "react";
 import dynamic from "next/dynamic";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "@/components/landing/inline";
 import { SortableItems } from "@/components/landing/sortable";
-import { HeroUploadButtons, BrandRow, TagRow } from "@/components/landing/hero-parts";
+import { HeroUploadButtons, BrandRow, TagRow, HeroStat } from "@/components/landing/hero-parts";
 import { CtaEditor, CtaButton } from "@/components/landing/sections";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
 import type { SectionProps } from "@/components/landing/types";
@@ -300,18 +300,6 @@ export const KickoffComparaSection: FC<SectionProps<ComparaData>> = ({ data, edi
     </div>
   );
 };
-
-function HeroStat({ value, unit, label }: { value: string; unit?: string; label: string }) {
-  return (
-    <div style={{ textAlign: "center" }}>
-      <div className="font-display" style={{ color: "var(--dark-text)", fontSize: 28, lineHeight: 1 }}>
-        {value}
-        {unit && <span style={{ fontSize: 14, color: "var(--dark-text-secondary)", marginLeft: 6 }}>{unit}</span>}
-      </div>
-      <div className="eyebrow" style={{ color: "var(--dark-text-muted)", marginTop: 7, fontSize: 11 }}>{label}</div>
-    </div>
-  );
-}
 
 /** Procesos: más ancho que la prosa — los diagramas necesitan lienzo.
  *  Rinden su propia sección (se alimentan del contexto), así que repiten el contenedor

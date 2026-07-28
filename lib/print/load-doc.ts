@@ -26,7 +26,6 @@ import { getBrandLogos, brandLogoMap } from "@/lib/external/smarteam-logo";
 import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
 import {
   kickoffHiddenKey,
-  missingCtxSections,
   comparaSectionHasContent,
   stripProseCompara,
   COMPARA_KEY,
@@ -38,6 +37,8 @@ import type { KickoffTimelineData, KickoffProceso } from "@/lib/external/kickoff
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { getRole } from "@/lib/roles/queries";
 import { ROLE_CONTENT_KEYS } from "@/components/landing/configs/roles.defs";
+import { filasCtxFaltantes, type CanalesConContenido } from "./ctx-rows";
+import { CRONOGRAMA_PORTADA } from "@/components/landing/configs/cronograma.defs";
 import type { PrintDocType } from "./doc-types";
 
 /**
@@ -83,6 +84,8 @@ export interface PrintDocPayload {
       timeline: KickoffTimelineData | null;
       procesos: KickoffProceso[];
     };
+    /** Solo CRONOGRAMA: el ProjectTimeline vivo. Ausente en los demás tipos. */
+    cronograma?: { timeline: KickoffTimelineData };
   };
 }
 
@@ -146,6 +149,8 @@ export async function loadPrintDoc(
   if (tipo.scope === "role") return await cargarPerfilDePuesto(tipo, docId);
   if (tipo.scope === "business-case") return await cargarCasoDeNegocio(tipo, docId, opts?.canvasId);
 
+  const esCronograma = tipo.id === "timeline";
+
   const proyecto = await prisma.project.findUnique({
     where: { id: docId },
     select: {
@@ -164,9 +169,14 @@ export async function loadPrintDoc(
     where: { projectId: docId, ...canvasOf(tipo.pieceSlug!) },
     select: { id: true, sections: true },
   });
-  if (!canvas) return null;
+  /* Sin canvas no hay documento… salvo cuando el canvas no es la fuente del contenido. El
+     Cronograma sale entero de `ProjectTimeline`: su canvas existe solo para ocupar un lugar
+     en el desplegable, con cero secciones. Exigirlo sería 404 en un proyecto con cronograma
+     perfectamente cargado, nada más que porque le falta una fila decorativa. */
+  const canvasEsLaFuente = !esCronograma;
+  if (!canvas && canvasEsLaFuente) return null;
 
-  const secciones = await prisma.canvasSection.findMany({
+  const secciones = !canvas ? [] : await prisma.canvasSection.findMany({
     where: { canvasId: canvas.id },
     orderBy: { order: "asc" },
     select: {
@@ -188,7 +198,7 @@ export async function loadPrintDoc(
      distintos: el Json del canvas (business case) y una columna del PROYECTO (kickoff),
      cuya clave es el id de la sección salvo cronograma y procesos. Se leen las dos, así el
      día que un tipo estrene visibilidad no hay que acordarse de este archivo. */
-  const ocultasPorKey = hiddenKeysFrom(canvas.sections);
+  const ocultasPorKey = hiddenKeysFrom(canvas?.sections);
   const ocultasKickoff = new Set(proyecto.hiddenKickoffKeys ?? []);
 
   const esKickoff = tipo.id === "kickoff";
@@ -219,21 +229,14 @@ export async function loadPrintDoc(
       })),
     }));
 
-  /* Las secciones ctx-driven (cronograma, procesos) no salen de un CanvasBlock. Los kickoffs
-     viejos ni siquiera tienen la CanvasSection, así que se inyecta una fila vacía para que la
-     config las incluya — salvo que estén ocultas, claro. */
-  if (esKickoff) {
-    for (const k of missingCtxSections(rows.map((r) => r.key))) {
-      if (!ocultasKickoff.has(k)) {
-        rows.push({ key: k, titleOverride: null, eyebrowOverride: null, blocks: [] });
-      }
-    }
-  }
-
   /* Cronograma y procesos, VIVOS. Se lee `readClientTimeline` y no la variante publicada a
      propósito, por dos razones: la regla del PDF es contenido vivo, y la publicada ESCRIBE un
      backfill en la base cuando falta el snapshot — una descarga de PDF no puede mutar nada.
-     Los procesos van `onlyConfirmed`: en el editor se ven en borrador, en el papel no. */
+     Los procesos van `onlyConfirmed`: en el editor se ven en borrador, en el papel no.
+
+     ⚠ El instinto para el DOCUMENTO del cronograma es usar la publicada, porque es lo que ve
+     el cliente en su link. No: acá también manda el contenido vivo — el CSE descarga el PDF
+     para revisarlo ANTES de subirlo, igual que con los otros ocho documentos. */
   const kickoff = esKickoff
     ? {
         timeline: ocultasKickoff.has("cronograma") ? null : await readClientTimeline(docId),
@@ -245,6 +248,39 @@ export async function loadPrintDoc(
             ),
       }
     : undefined;
+
+  const cronograma = esCronograma ? { timeline: await readClientTimeline(docId) } : undefined;
+
+  /* Qué canales ctx tienen contenido, POR TIPO. Que se arme por rama no es cosmético: es lo
+     que hace estructuralmente imposible que `hiddenKickoffKeys` apague el documento del
+     cronograma. Que el CSE haya escondido el cronograma DENTRO del landing del kickoff no
+     puede impedir exportar el cronograma como documento propio. */
+  const canales: CanalesConContenido = esKickoff
+    ? {
+        cronograma: (kickoff?.timeline?.phases.length ?? 0) > 0,
+        procesos: (kickoff?.procesos.length ?? 0) > 0,
+      }
+    : esCronograma
+      ? { cronograma: (cronograma?.timeline.phases.length ?? 0) > 0 }
+      : {};
+
+  for (const k of filasCtxFaltantes(tipo.ctxSections, rows.map((r) => r.key), canales)) {
+    if (esKickoff && ocultasKickoff.has(k)) continue;
+    rows.push({ key: k, titleOverride: null, eyebrowOverride: null, blocks: [] });
+  }
+
+  /* La PORTADA del cronograma no tiene CanvasBlock del que salir: se sintetiza acá desde el
+     proyecto, igual que el hero de un perfil de puesto. Va DESPUÉS de resolver el contenido y
+     solo si quedó algo: sin cronograma no hay documento, y `rows: []` es lo que hace hablar
+     al 409 en vez de exportar una portada sola. */
+  if (esCronograma && rows.length > 0) {
+    rows.unshift({
+      key: CRONOGRAMA_PORTADA,
+      titleOverride: null,
+      eyebrowOverride: null,
+      blocks: [{ blockType: "CARD", content: null, data: { subhead: proyecto.name } }],
+    });
+  }
 
   const logos = await getBrandLogos();
   /* Idioma: el motor lo guarda en una clave no-schema (`__lang`) de la portada, el mismo
@@ -277,6 +313,7 @@ export async function loadPrintDoc(
       smarteamLogoUrl: logos.smarteam ?? null,
       brandLogos: brandLogoMap(logos),
       kickoff,
+      cronograma,
     },
   };
 }

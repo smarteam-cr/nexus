@@ -80,6 +80,11 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+# Zona horaria de la operación. Sin esto el contenedor corre en UTC, y el Chromium que
+# genera los PDFs calcula "hoy" con SU reloj: un cronograma exportado por la tarde salía
+# fechado el día siguiente, y en un borde de semana corría el resaltado de la semana actual
+# y los chips de "atrasada". No es cosmético — el documento se le entrega al cliente.
+ENV TZ=America/Costa_Rica
 # openssl + ca-certificates: requeridos por Prisma y por el TLS hacia Supabase.
 # El paquete `chromium` se instala por sus LIBRERÍAS de sistema (nss, atk, gbm,
 # gtk, pango, cairo, x11… vía sus dependencias transitivas — el set COMPLETO que

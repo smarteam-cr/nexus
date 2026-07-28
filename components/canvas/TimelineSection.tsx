@@ -283,7 +283,11 @@ export default function TimelineSection({
               {sorted.map((p, i) => {
                 const range = ranges[i];
                 const meta = p.activityType ? ACTIVITY_META[p.activityType] : null;
-                const isOpen = expanded.has(p.id);
+                /* En papel TODO va abierto: la fila se despliega con un clic y en un PDF nadie
+                   puede hacerlo. Sin esto se imprimían las barras de colores y CERO tareas —
+                   sin notas de fase, sin acciones por semana, sin responsables. Un documento
+                   que no da error y no dice nada. */
+                const isOpen = pdf || expanded.has(p.id);
                 const tasks = p.tasks ?? [];
                 const hasDetail = tasks.length > 0 || !!p.notes?.trim();
 

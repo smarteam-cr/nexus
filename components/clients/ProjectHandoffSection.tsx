@@ -294,6 +294,24 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
               {showDoc ? "Ocultar" : "Ver documento"}
             </button>
           )}
+          {/* El handoff no aparece en el desplegable de canvases, así que nunca pasó por el
+              botón del panel: hasta ahora, a su PDF solo se llegaba escribiendo la URL a
+              mano. Su contenido son bloques de canvas y la vista imprimible ya los rinde
+              bien — le faltaba únicamente la puerta. Mismo enlace que usa ClientInfoPanel. */}
+          {generated && status.canvasId && (
+            <a
+              href={`/print/canvas/${clientId}/${status.canvasId}?print=1&projectId=${projectId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-surface-muted border-line text-fg-secondary hover:bg-surface-hover"
+              title="Abre una vista imprimible para guardar como PDF"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Exportar PDF
+            </a>
+          )}
           {canGenerateHandoff && (
             <button
               onClick={handleGenerate}

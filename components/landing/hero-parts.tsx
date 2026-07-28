@@ -379,3 +379,23 @@ export function TagRow({
     </SortableItems>
   );
 }
+
+/**
+ * Un número de la portada (duración, arranque, cantidad de fases).
+ *
+ * Vivía dentro de `KickoffSections`, pero la portada del documento CRONOGRAMA muestra los
+ * MISMOS tres números derivados del mismo cronograma — y dos copias del mismo bloque es la
+ * forma más segura de que dentro de un año se vean distinto. Usa los tokens `--dark-*`:
+ * asume una portada de fondo oscuro, que es lo que declaran las dos defs.
+ */
+export function HeroStat({ value, unit, label }: { value: string; unit?: string; label: string }) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div className="font-display" style={{ color: "var(--dark-text)", fontSize: 28, lineHeight: 1 }}>
+        {value}
+        {unit && <span style={{ fontSize: 14, color: "var(--dark-text-secondary)", marginLeft: 6 }}>{unit}</span>}
+      </div>
+      <div className="eyebrow" style={{ color: "var(--dark-text-muted)", marginTop: 7, fontSize: 11 }}>{label}</div>
+    </div>
+  );
+}

@@ -262,6 +262,21 @@ export interface LandingContext {
     /** Solo edición: registra una estimación nueva. Rechaza (throw) si el servidor la rechaza. */
     onEstimate?: (input: { hours: number | null; estimatedDate: string | null; note: string }) => Promise<void>;
   };
+  /**
+   * Solo el documento CRONOGRAMA: el `ProjectTimeline` vivo. Sus dos secciones —la portada,
+   * que deriva los números, y el Gantt— lo leen de acá.
+   *
+   * ── POR QUÉ NO REUSA `ctx.kickoff.timeline` ─────────────────────────────────
+   * Es el mismo dato, pero un canal por DOCUMENTO y no por tipo de dato es lo que hace que
+   * cada sección se apague sola donde no corresponde: las del kickoff (procesos, horarios,
+   * su hero con stats) no pueden encenderse en el documento del cronograma, y el Gantt del
+   * cronograma —que sí muestra estado de avance y desvíos— no puede encenderse dentro del
+   * kickoff, que es la hoja de ruta del día uno. Fail-closed por construcción, el mismo
+   * argumento que el de `desarrollo` acá arriba.
+   */
+  cronograma?: {
+    timeline?: KickoffTimelineData | null;
+  };
 }
 
 /** Una estimación como la ve el motor (espejo del DTO de `lib/desarrollo`, sin importarlo:

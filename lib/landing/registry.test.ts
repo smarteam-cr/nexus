@@ -14,6 +14,11 @@
  * incluye lib/**). Contrato completo del motor: ARCHITECTURE §1-WEB.
  */
 import { describe, it, expect } from "vitest";
+import { CRONOGRAMA_SECTION_DEFS } from "@/components/landing/configs/cronograma.defs";
+import {
+  CRONOGRAMA_SECTION_COMPONENTS,
+  landingConfigForCronograma,
+} from "@/components/landing/configs/cronograma";
 import { BC_TEMPLATES } from "@/components/landing/configs/templates.defs";
 import { SECTION_COMPONENTS, landingConfigFor } from "@/components/landing/configs/templates";
 import { KICKOFF_SECTION_DEFS } from "@/components/landing/configs/kickoff.defs";
@@ -325,5 +330,35 @@ describe("Implementación: registry completo + keys congeladas", () => {
       expect(canvasKeys.has(d.key), `la def "${d.key}" no existe como sección del canvas`).toBe(true);
     }
     expect(IMPLEMENTACION_CANVAS.sections.length).toBe(IMPLEMENTACION_SECTION_DEFS.length);
+  });
+});
+
+describe("Cronograma: registry completo + keys congeladas", () => {
+  it("cada def resuelve componente y la config no dropea ninguna", () => {
+    const faltantes = CRONOGRAMA_SECTION_DEFS.filter(
+      (d) => !CRONOGRAMA_SECTION_COMPONENTS[d.sectionType ?? d.key],
+    );
+    expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
+    expect(landingConfigForCronograma().sections.map((s) => s.key)).toEqual(
+      CRONOGRAMA_SECTION_DEFS.map((d) => d.key),
+    );
+  });
+
+  it("snapshot de keys: portada y Gantt, y nada más", () => {
+    /* Es el documento más chico de los nueve, y tiene que seguir siéndolo: todo lo demás del
+       cronograma (avisos, propuestas, publicación) es del EDITOR, no del documento. */
+    expect(CRONOGRAMA_SECTION_DEFS.map((d) => d.key)).toEqual(["portada", "cronograma"]);
+  });
+
+  it("sin componentes huérfanos en CRONOGRAMA_SECTION_COMPONENTS", () => {
+    const usados = new Set(CRONOGRAMA_SECTION_DEFS.map((d) => d.sectionType ?? d.key));
+    expect(Object.keys(CRONOGRAMA_SECTION_COMPONENTS).filter((t) => !usados.has(t))).toEqual([]);
+  });
+
+  it("ninguna de sus secciones la escribe un agente", () => {
+    /* Las dos salen de `ctx` o del proyecto. Si alguna se marcara `agentGenerated`, el
+       catálogo de agentes le ofrecería al CSE generar un texto que nadie va a leer —
+       el motor las pinta desde ProjectTimeline igual. */
+    expect(CRONOGRAMA_SECTION_DEFS.filter((d) => d.agentGenerated).map((d) => d.key)).toEqual([]);
   });
 });

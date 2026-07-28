@@ -36,6 +36,7 @@ const DIRS = [
   path.join(RAIZ, "components", "canvas", "desarrollo-sections"),
   path.join(RAIZ, "components", "canvas", "exploracion-sections"),
   path.join(RAIZ, "components", "canvas", "implementacion-sections"),
+  path.join(RAIZ, "components", "canvas", "cronograma-sections"),
 ];
 
 /**
@@ -111,7 +112,7 @@ describe("todo lo que Puppeteer no captura consulta `pdfMode`", () => {
     ).toEqual([]);
   });
 
-  it("el caso concreto: el Gantt del kickoff se encoge en vez de cortarse", () => {
+  it("el caso concreto: el Gantt se encoge en vez de cortarse, y sale abierto", () => {
     /* No alcanza con que el archivo mencione el modo impresión: la grilla NO puede quedar en
        un scroller, porque eso es exactamente lo que recorta. Se comprueba que el overflow
        dependa del modo y que exista el encogido. */
@@ -120,11 +121,39 @@ describe("todo lo que Puppeteer no captura consulta `pdfMode`", () => {
       /overflowX:\s*pdf \?/,
     );
     expect(src, "falta el encogido — sin él, encima, se sale de la hoja").toContain("fitZoom");
-    // Y que el kickoff se lo pase: el prop existe pero nadie lo prende = mismo bug.
-    const ko = fs.readFileSync(
-      path.join(RAIZ, "components", "canvas", "kickoff-sections", "KickoffSections.tsx"), "utf8",
+    /* Y las fases tienen que salir ABIERTAS. Se despliegan con un clic y en papel nadie puede
+       hacerlo: colapsadas, el PDF imprime las barras de colores y CERO tareas. Es el modo de
+       falla más caro de los dos, porque no da error — sale un documento lindo y hueco. */
+    expect(src, "las fases salen colapsadas en el PDF: barras sin una sola tarea").toMatch(
+      /const isOpen = pdf \|\|/,
     );
-    expect(ko).toMatch(/pdf=\{ctx\.pdfMode\}/);
+  });
+
+  it("TODOS los que montan el Gantt le pasan `pdf` — no solo el kickoff", () => {
+    /* El prop puede existir y no prenderlo nadie: mismo bug. Y esto ya casi pasa una vez —
+       el documento del Cronograma es un segundo montaje, y la comprobación de arriba solo
+       miraba al kickoff. Se busca a los que lo importan y se verifica cada uno. */
+    const candidatos = [
+      "components/canvas/kickoff-sections/KickoffSections.tsx",
+      "components/canvas/cronograma-sections/CronogramaSections.tsx",
+    ];
+    // Exento CON MOTIVO: la página del cliente se ve en pantalla, no se imprime nunca.
+    const EXENTO_EXTERNO = "components/external/TimelineLanding.tsx";
+
+    const montadores = archivos(path.join(RAIZ, "components"))
+      .map((f) => path.relative(RAIZ, f).replace(/\\/g, "/"))
+      .filter((rel) => rel !== EXENTO_EXTERNO && rel !== "components/canvas/TimelineSection.tsx")
+      .filter((rel) => /from "@\/components\/canvas\/TimelineSection"/.test(fs.readFileSync(path.join(RAIZ, rel), "utf8")));
+
+    expect(montadores.sort(), "apareció un montaje del Gantt que esta guarda no conocía").toEqual(
+      candidatos.sort(),
+    );
+    for (const rel of montadores) {
+      expect(
+        fs.readFileSync(path.join(RAIZ, rel), "utf8"),
+        `${rel} monta el Gantt sin pasarle \`pdf\`: en el PDF sale cortado a la derecha`,
+      ).toMatch(/pdf=\{ctx\.pdfMode\}/);
+    }
   });
 
   it("el caso concreto: los procesos del kickoff tienen su variante estática", () => {

@@ -11,8 +11,12 @@
  *
  * ── EL CAMINO GENÉRICO NO CUBRE TODO, A PROPÓSITO ────────────────────────────
  * Solo los documentos del MOTOR de landings entran acá. El handoff, la información del
- * cliente, el cronograma, el «Resumen» y los canvas a medida del CSE no tienen definición
- * en el motor y siguen imprimiéndose por `/print/canvas/**`, que es genérico por diseño.
+ * cliente, el «Resumen» y los canvas a medida del CSE no tienen definición en el motor y
+ * siguen imprimiéndose por `/print/canvas/**`, que es genérico por diseño. Ojo con la
+ * condición para quedarse afuera: esa vista solo sabe leer CanvasSection/CanvasBlock y las
+ * ClientContextCard del «Resumen». Una pieza que no esté en ninguna de las dos y tampoco
+ * acá exporta una hoja vacía, siempre — le pasó al Cronograma durante meses, ver
+ * lib/print/camino-generico.test.ts.
  * Quién va por cuál camino lo decide el botón leyendo `hasPrintDoc(slug)` — un canvas sin
  * pieza cae al fallback por construcción, sin un `if` que haya que mantener.
  */
@@ -41,6 +45,13 @@ export interface PrintDocType {
    * siempre— y `lib/print/doc-types.test.ts` cuida que ninguno quede prendido sin adaptador.
    */
   ready: boolean;
+  /**
+   * Secciones cuyo contenido NO sale de un `CanvasBlock` sino de `ctx` (el cronograma, que
+   * vive en `ProjectTimeline`; los procesos, que viven en flowcharts). El cargador les
+   * inyecta una fila SINTÉTICA para que la config las incluya — y solo cuando su canal trae
+   * algo, para que `rows: []` siga significando "no hay nada que imprimir".
+   */
+  ctxSections?: readonly string[];
 }
 
 export const PRINT_DOC_TYPES: PrintDocType[] = [
@@ -59,6 +70,7 @@ export const PRINT_DOC_TYPES: PrintDocType[] = [
     label: "Kickoff",
     palette: "brand", // lo ve el cliente
     ready: true,
+    ctxSections: ["cronograma", "procesos"],
   },
   {
     id: "tech-requirements",
@@ -101,6 +113,19 @@ export const PRINT_DOC_TYPES: PrintDocType[] = [
     label: "Exploración",
     palette: "internal", // documento INTERNO: no existe superficie externa, por diseño
     ready: true,
+  },
+  {
+    id: "timeline",
+    pieceSlug: "timeline",
+    scope: "project-piece",
+    label: "Cronograma",
+    // De cara al CLIENTE: el mismo contenido ya se le entrega en /external/cronograma.
+    palette: "brand",
+    ready: true,
+    // TODO su contenido es ctx-driven: el canvas de Cronograma no tiene ni una CanvasSection
+    // (`lib/canvas/canvas-defs.ts` lo declara con `sections: []`), y eso es a propósito —
+    // la fuente única es ProjectTimeline. La portada la sintetiza el cargador.
+    ctxSections: ["cronograma"],
   },
   {
     id: "role",

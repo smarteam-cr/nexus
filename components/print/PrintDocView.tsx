@@ -20,6 +20,7 @@ import type { LandingConfig } from "@/components/landing/types";
 import type { PrintDocPayload, PrintRow } from "@/lib/print/load-doc";
 import { landingConfigFor } from "@/components/landing/configs/templates";
 import { landingConfigForRoles } from "@/components/landing/configs/roles";
+import { landingConfigForCronograma } from "@/components/landing/configs/cronograma";
 import {
   buildKickoffConfig,
   buildKickoffSections,
@@ -72,8 +73,17 @@ const ADAPTADOR_BUSINESS_CASE: Adaptador = {
   sections: (rows) => rows.map((r) => ({ key: r.key, data: r.blocks[0]?.data ?? null })),
 };
 
+/* El cronograma tampoco necesita adaptador propio: su orden es FIJO (portada + Gantt) y su
+   contenido sale de `ctx`, no de `data`. La única fila con datos es la portada, y el cargador
+   ya la deja lista en un bloque CARD. */
+const ADAPTADOR_CRONOGRAMA: Adaptador = {
+  config: () => landingConfigForCronograma(),
+  sections: (rows) => rows.map((r) => ({ key: r.key, data: r.blocks[0]?.data ?? null })),
+};
+
 const ADAPTADORES: Record<string, Adaptador> = {
   "business-case": ADAPTADOR_BUSINESS_CASE,
+  timeline: ADAPTADOR_CRONOGRAMA,
   role: ADAPTADOR_ROLES,
   kickoff: { config: buildKickoffConfig, sections: buildKickoffSections },
   "tech-requirements": { config: buildDesarrolloConfig, sections: buildDesarrolloSections },
@@ -124,6 +134,7 @@ export default function PrintDocView({ doc }: { doc: PrintDocPayload }) {
         kickoff: doc.ctx.kickoff
           ? { timeline: doc.ctx.kickoff.timeline, procesos: doc.ctx.kickoff.procesos }
           : undefined,
+        cronograma: doc.ctx.cronograma,
       }}
       sections={sections}
       mode="read"
