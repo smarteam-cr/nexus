@@ -2,7 +2,7 @@
 -- DDL ADITIVO (seguro, no destructivo). Aplicar a mano a la Supabase de PROD ANTES de deployar
 -- el código (la carpeta prisma/migrations está congelada; local == PROD, ver invariante #3).
 --
--- Aplicar:  npx prisma db execute --file scripts/sql/2026-07-21-marketing-post-attribution.sql --schema prisma/schema.prisma
+-- Aplicar:  npx prisma db execute --file scripts/sql/2026-07-21-marketing-post-attribution.sql
 -- Después:  npx prisma generate  (ya corrido localmente)  +  reiniciar el dev server.
 --
 -- Verificado con `prisma migrate diff` = exactamente estos statements, sin drift ajeno.

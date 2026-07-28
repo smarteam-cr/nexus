@@ -22,7 +22,7 @@
 -- correcto, no un error.
 --
 -- Cómo aplicarlo (revisá antes de correr):
---   npx prisma db execute --file scripts/sql/2026-07-24-projectcanvas-slug.sql --schema prisma/schema.prisma
+--   npx prisma db execute --file scripts/sql/2026-07-24-projectcanvas-slug.sql
 -- Después:
 --   npx prisma generate   (NO `db:sync` — eso corre db push y la DB es compartida)
 

@@ -4,7 +4,7 @@
 -- DEPRECATED (ver el comentario del schema) para poder auditar el backfill.
 --
 -- Cómo aplicarlo (revisá antes de correr):
---   npx prisma db execute --file scripts/sql/2026-07-24-client-kind-y-tam.sql --schema prisma/schema.prisma
+--   npx prisma db execute --file scripts/sql/2026-07-24-client-kind-y-tam.sql
 -- Después:
 --   npx prisma generate    (NO `db:sync` — eso corre db push)
 --   reiniciar el dev server (el Prisma client viejo no conoce el enum → falla en silencio)

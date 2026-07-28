@@ -12,7 +12,7 @@
 -- viva de la otra PC — un push lo borraría.
 --
 -- Cómo aplicarlo (revisá antes de correr):
---   npx prisma db execute --file scripts/sql/2026-07-27-ingreso-variable.sql --schema prisma/schema.prisma
+--   npx prisma db execute --file scripts/sql/2026-07-27-ingreso-variable.sql
 -- Después, EN ESTE ORDEN:
 --   npx prisma generate      (NO `db:sync`)
 --   reiniciar el dev server  (el client viejo no conoce la tabla → falla en silencio)

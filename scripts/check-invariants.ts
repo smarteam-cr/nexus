@@ -28,6 +28,13 @@ import { resolveAllSessions } from "@/lib/sessions/resolve-client";
  *   5. Ningún Cobro con fechaEmision sin facturadoPor (Cobranza, espejo de INV3 — Tanda B,
  *      2026-07): "Marcar facturado" es auditable igual que COBRADO; mismo chokepoint
  *      lib/cobranza/mutations.ts#cambiarEstadoCobro.
+ *   6. Ningún `new Pool(` sin `max:` (post-mortem EMAXCONNSESSION jul-2026).
+ *   7. COLUMNAS del schema ⊆ columnas de Postgres — hermano de INV4 y MÁS grave: con una
+ *      columna que el cliente conoce y la DB no, Prisma revienta TODA lectura del modelo
+ *      (no solo los writes), con un mensaje que ni siquiera la nombra ("The column
+ *      `(not available)` does not exist"). Se cae una sección entera de la app. Nació el
+ *      2026-07-27, cuando `Client.logoDarkUrl`/`logoScale` quedaron sin aplicar y /clients
+ *      dejó de cargar sin que nada lo hubiera avisado.
  */
 async function main(): Promise<number> {
   let violations = 0;
@@ -159,6 +166,70 @@ async function main(): Promise<number> {
     walk(dir);
     return hits;
   };
+  // ── Inv 7: COLUMNAS del schema ⊆ columnas de Postgres (hermano de INV4) ──────────
+  //
+  // INV4 cubre los enums; esto cubre las columnas, que es la MISMA clase de deriva y
+  // pega más fuerte: con una columna que el cliente conoce y la DB no, Prisma revienta
+  // TODA lectura del modelo —no solo los writes— con un mensaje que ni siquiera nombra
+  // la columna ("The column `(not available)` does not exist"). Una sección entera de la
+  // app se cae. Pasó el 2026-07-27 con `Client.logoDarkUrl`/`logoScale`: el SQL quedó sin
+  // aplicar y /clients dejó de cargar; nada lo había avisado.
+  //
+  // Se parsea `prisma/schema.prisma` y no el dmmf porque el dmmf de este setup viene
+  // VACÍO (ver la nota de INV4). El texto del schema es exactamente lo que `generate`
+  // convierte en el cliente, así que sirve igual.
+  const schemaSrc = readFileSync(join(process.cwd(), "prisma", "schema.prisma"), "utf8");
+  const modelos = new Map<string, { tabla: string; columnas: string[] }>();
+  for (const m of schemaSrc.matchAll(/^model\s+(\w+)\s*\{([\s\S]*?)^\}/gm)) {
+    modelos.set(m[1], { tabla: m[1], columnas: [] });
+    const cuerpo = m[2];
+    const mapTabla = cuerpo.match(/@@map\("([^"]+)"\)/);
+    if (mapTabla) modelos.get(m[1])!.tabla = mapTabla[1];
+    for (const linea of cuerpo.split("\n")) {
+      const f = linea.trim().match(/^(\w+)\s+(\w+)(\[\])?(\?)?(.*)$/);
+      // Atributos de bloque (@@index, @@unique…) y líneas sueltas no son campos.
+      if (!f || linea.trim().startsWith("@@") || linea.trim().startsWith("//")) continue;
+      const [, campo, tipo, esLista, , resto] = f;
+      // Las RELACIONES no son columnas: su tipo es otro modelo, o traen @relation.
+      if (resto.includes("@relation") || (esLista && !resto.includes("@"))) continue;
+      modelos.get(m[1])!.columnas.push(`${campo} ${tipo} ${resto}`);
+    }
+  }
+  // Segunda pasada: recién ahora se conocen TODOS los modelos, así que se puede decidir
+  // si el tipo de un campo es un modelo (relación) o un escalar/enum (columna).
+  const esperadas = new Map<string, Set<string>>();
+  for (const info of modelos.values()) {
+    const cols = new Set<string>();
+    for (const raw of info.columnas) {
+      const [campo, tipo, resto] = raw.split(" ");
+      if (modelos.has(tipo)) continue; // relación
+      const map = resto.match(/@map\("([^"]+)"\)/);
+      cols.add(map ? map[1] : campo);
+    }
+    if (cols.size > 0) esperadas.set(info.tabla, cols);
+  }
+  const colsDb = await prisma.$queryRaw<Array<{ table_name: string; column_name: string }>>`
+    SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public'`;
+  const dbPorTabla = new Map<string, Set<string>>();
+  for (const r of colsDb) {
+    if (!dbPorTabla.has(r.table_name)) dbPorTabla.set(r.table_name, new Set());
+    dbPorTabla.get(r.table_name)!.add(r.column_name);
+  }
+  const colsFaltantes: string[] = [];
+  for (const [tabla, cols] of esperadas) {
+    const enDb = dbPorTabla.get(tabla);
+    if (!enDb) { colsFaltantes.push(`${tabla} (tabla entera ausente)`); continue; }
+    for (const c of cols) if (!enDb.has(c)) colsFaltantes.push(`${tabla}.${c}`);
+  }
+  if (colsFaltantes.length > 0) {
+    violations++;
+    console.error(`✗ INV7 VIOLADO: el schema declara ${colsFaltantes.length} columna(s) que la DB NO tiene — CUALQUIER lectura de ese modelo revienta:`);
+    for (const c of colsFaltantes.slice(0, 15)) console.error(`    - ${c}`);
+    console.error("  Aplicá el SQL pendiente de scripts/sql/ (`npx prisma db execute --file <archivo>`) y `npx prisma generate`. NUNCA `db push`.");
+  } else {
+    console.log(`✓ INV7: las columnas de los ${esperadas.size} modelos del schema existen todas en la DB.`);
+  }
+
   const runtimePools = [...scanPoolWithoutMax(join(process.cwd(), "lib")), ...scanPoolWithoutMax(join(process.cwd(), "app"))];
   const scriptPools = scanPoolWithoutMax(join(process.cwd(), "scripts")).filter(
     (f) => !f.replace(/\\/g, "/").endsWith("scripts/lib/db.ts"),

@@ -29,7 +29,7 @@
 -- que alguien apague algo a mano.
 --
 -- Cómo aplicarlo (revisá antes de correr):
---   npx prisma db execute --file scripts/sql/2026-07-24-projectcanvas-disabled.sql --schema prisma/schema.prisma
+--   npx prisma db execute --file scripts/sql/2026-07-24-projectcanvas-disabled.sql
 -- Después:  npx prisma generate     ← NUNCA `db push`: la base es compartida entre las
 --                                     dos PC y producción, y un push con el schema viejo
 --                                     dropea lo que la otra PC agregó.

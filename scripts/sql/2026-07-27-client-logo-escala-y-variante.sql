@@ -25,7 +25,7 @@
 -- dos PCs y un push dropea las columnas que la otra todavía no pusheó.
 --
 -- Cómo aplicarlo (revisá antes de correr):
---   npx prisma db execute --file scripts/sql/2026-07-27-client-logo-escala-y-variante.sql --schema prisma/schema.prisma
+--   npx prisma db execute --file scripts/sql/2026-07-27-client-logo-escala-y-variante.sql
 -- Después, EN ESTE ORDEN:
 --   npx prisma generate      (NO `db:sync`)
 --   reiniciar el dev server  (el client viejo no conoce las columnas)

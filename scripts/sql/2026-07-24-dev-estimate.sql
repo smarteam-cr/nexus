@@ -19,7 +19,7 @@
 -- (ver la línea del final, que es obligatoria).
 --
 -- Cómo aplicarlo (revisá antes de correr):
---   npx prisma db execute --file scripts/sql/2026-07-24-dev-estimate.sql --schema prisma/schema.prisma
+--   npx prisma db execute --file scripts/sql/2026-07-24-dev-estimate.sql
 -- Después:
 --   npx prisma generate   (NO `db:sync` — eso corre db push)
 --   reiniciar el dev server (el Prisma client viejo no entra por HMR)
