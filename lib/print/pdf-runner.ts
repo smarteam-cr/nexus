@@ -117,13 +117,13 @@ export async function renderPathToPdf(printPath: string): Promise<{ pdf: Buffer;
 
     /* Lo que pasó DENTRO del navegador headless, por si no llega a estar listo.
      *
-     * El modo de falla que esto ataca: si la página no señaliza, el error dice "tardó
-     * demasiado en renderizar" y punto — no hay forma de saber si fue una fuente lenta, un
-     * componente que reventó al hidratar o una navegación que terminó en 404. Se pierden
-     * horas mirando el archivo equivocado. Estas dos escuchas cuestan nada y convierten un
-     * timeout mudo en un diagnóstico. Solo se vuelcan cuando falla. */
+     * El modo de falla que esto ataca: si la página no señaliza, el error decía "tardó
+     * demasiado en renderizar" y nada más. Con eso no se distingue una fuente lenta de un
+     * componente que revienta al hidratar, de una imagen que no responde, o de React que
+     * nunca arrancó — que son cuatro archivos distintos donde buscar. Cuesta nada y solo se
+     * vuelca cuando falla. */
     const errores: string[] = [];
-    const navegaciones: string[] = [];
+    let navegaciones = 0;
     page.on("pageerror", (err) => {
       errores.push(`error de la página: ${err instanceof Error ? err.message : String(err)}`);
     });
@@ -131,21 +131,36 @@ export async function renderPathToPdf(printPath: string): Promise<{ pdf: Buffer;
       if (m.type() === "error") errores.push(`consola: ${m.text()}`);
     });
     page.on("framenavigated", (f) => {
-      if (f === page.mainFrame()) navegaciones.push(f.url());
+      if (f === page.mainFrame()) navegaciones++;
     });
 
     await page.goto(url, { waitUntil: "networkidle0", timeout: NAV_TIMEOUT_MS });
     try {
       await page.waitForSelector('body[data-pdf-ready="true"]', { timeout: READY_TIMEOUT_MS });
     } catch (e) {
-      /* Más de una navegación del frame principal = la página se recargó sola. Y como el
-         `?pdfToken=` es de UN SOLO USO, la segunda vuelta cae en 404: pantalla vacía que
-         nunca señaliza. Vale la pena nombrarlo aparte, porque la causa está en la página y
-         no acá. */
+      /* Se le PREGUNTA a la página en qué quedó, en vez de deducirlo. `data-pdf-wait` lo va
+         publicando `components/print/PdfReadySignal.tsx`: si falta del todo, React nunca
+         hidrató (y el problema está en el bundle, no en el contenido). */
+      const estado = await page
+        .evaluate(() => {
+          const imgs = Array.from(document.querySelectorAll("img"));
+          return {
+            esperando: document.body?.dataset.pdfWait ?? "(nunca arrancó: React no hidrató)",
+            readyState: document.readyState,
+            imagenes: `${imgs.filter((i) => i.complete).length}/${imgs.length} completas`,
+            rotas: imgs.filter((i) => i.complete && i.naturalWidth === 0).map((i) => i.src).slice(0, 5),
+            texto: (document.body?.innerText ?? "").trim().length,
+            titulo: document.title,
+          };
+        })
+        .catch((err) => ({ evaluacionFallida: String(err) }));
       console.error(
-        `[pdf-runner] ${printPath} no señalizó. Navegaciones del frame principal: ` +
-          `${navegaciones.length}${navegaciones.length > 1 ? " (¡se recargó sola!)" : ""}\n` +
-          (errores.length ? errores.slice(0, 8).join("\n") : "(sin errores en el navegador)"),
+        [
+          `[pdf-runner] ${printPath} no señalizó.`,
+          `  estado: ${JSON.stringify(estado)}`,
+          `  navegaciones del frame principal: ${navegaciones}`,
+          `  ${errores.length ? errores.slice(0, 8).join("\n  ") : "(sin errores en el navegador)"}`,
+        ].join("\n"),
       );
       throw e;
     }
