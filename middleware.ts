@@ -46,8 +46,8 @@ export async function middleware(request: NextRequest) {
 
   // Bypass puntual: Puppeteer (lib/print/pdf-runner.ts, mismo contenedor) navega acá
   // server-to-server y no tiene cookies de sesión Supabase. La autorización REAL
-  // la hace la propia página validando `?pdfToken=` contra PrintJobToken (un solo
-  // uso, 60s) — el middleware solo evita el redirect a "/", no autoriza nada. Sin
+  // la hace la propia página validando `?pdfToken=` contra PrintJobToken (efímero,
+  // 60s) — el middleware solo evita el redirect a "/", no autoriza nada. Sin
   // el query param, la ruta sigue exigiendo sesión normal (bloque de abajo).
   //
   // `/print/doc/` es la ruta GENÉRICA (un tipo de documento por segmento): este prefijo no

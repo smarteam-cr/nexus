@@ -28,7 +28,7 @@ const READY_TIMEOUT_MS = 15_000;
 // encolar minutos en silencio).
 //
 // ⚠ El semáforo es UNO SOLO para TODOS los tipos de documento, a propósito: es un cap del
-// VPS, no del documento. Multiplicar el botón "Descargar PDF" por ocho tipos aumenta la
+// VPS, no del documento. Multiplicar el botón "Descargar PDF" por cada tipo aumenta la
 // presión sobre este mismo par de slots — no darle un semáforo propio a cada tipo.
 const MAX_CONCURRENT_PDF = 2;
 const MAX_QUEUED_PDF = 4;
@@ -52,11 +52,12 @@ export async function acquirePdfSlot(): Promise<(() => void) | null> {
 /* Ancho del documento (px): coincide con el viewport para que el layout responsive se
    resuelva igual que se mide. 1000px conserva los grids multi-columna del diseño. Vive en
    `page-metrics.ts` —puro— porque también lo necesitan componentes del lado cliente que
-   tienen que encoger para caber (el Gantt); acá se re-exporta para no romper a los callers. */
-export const DOC_WIDTH = PRINT_PAGE_WIDTH;
+   tienen que encoger para caber (el Gantt). Acá queda el alias con el que se lee en este
+   archivo — los de afuera importan `PRINT_PAGE_WIDTH` directo. */
+const DOC_WIDTH = PRINT_PAGE_WIDTH;
 /** Techo de Chromium para una página: 200 in = 19.200 px. Éste es ese límite con margen,
  *  así que NO se puede subir — pasado eso, se pagina (ver `paged` en el resultado). */
-export const MAX_PDF_HEIGHT_PX = 18_000;
+const MAX_PDF_HEIGHT_PX = 18_000;
 
 /** Nombre de archivo, una sola regla para todos los documentos. */
 export function slugify(name: string, fallback = "documento"): string {
@@ -95,6 +96,10 @@ export function pdfErrorMessage(e: unknown): string {
 export async function renderPathToPdf(printPath: string): Promise<{ pdf: Buffer; paged: boolean }> {
   const port = process.env.PORT || "3000";
   const url = `http://127.0.0.1:${port}${printPath}`;
+  /* Para los logs, el path SIN query: la query lleva el `?pdfToken=`, que sigue siendo válido
+     hasta que expire (ya no es de un solo uso), así que volcarlo dejaría un pase vivo escrito
+     en el log. El tipo y el id —lo único que sirve para diagnosticar— están en el path. */
+  const rutaParaLog = printPath.split("?")[0];
   let browser: Browser | null = null;
   try {
     browser = await puppeteer.launch({
@@ -156,7 +161,7 @@ export async function renderPathToPdf(printPath: string): Promise<{ pdf: Buffer;
         .catch((err) => ({ evaluacionFallida: String(err) }));
       console.error(
         [
-          `[pdf-runner] ${printPath} no señalizó.`,
+          `[pdf-runner] ${rutaParaLog} no señalizó.`,
           `  estado: ${JSON.stringify(estado)}`,
           `  navegaciones del frame principal: ${navegaciones}`,
           `  ${errores.length ? errores.slice(0, 8).join("\n  ") : "(sin errores en el navegador)"}`,
@@ -201,7 +206,7 @@ export async function renderPathToPdf(printPath: string): Promise<{ pdf: Buffer;
        Se pagina a 1000 × 1414 —la proporción A4 AL ANCHO AL QUE SE MIDIÓ— así el layout es
        el mismo y lo único que cambia es dónde se corta. Y `.stl-pdf-paged` aporta las reglas
        de corte, que solo existen para este caso. */
-    console.warn(`[pdf-runner] ${printPath}: ${contentHeight}px excede el máximo — sale paginado.`);
+    console.warn(`[pdf-runner] ${rutaParaLog}: ${contentHeight}px excede el máximo — sale paginado.`);
     // Este `@page` se agrega DESPUÉS del que puso la medición, y con la misma especificidad
     // gana el último: no hace falta borrar el anterior.
     await page.evaluate((w) => {

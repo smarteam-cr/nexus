@@ -3,7 +3,7 @@
 -- ADITIVO: 2 columnas nullable + backfill + 1 relajación de NOT NULL.
 -- No borra ninguna columna, no borra ninguna fila.
 --
--- POR QUÉ: el PDF del business case se autentica con un token de un solo uso (60s) para
+-- POR QUÉ: el PDF del business case se autentica con un token de efímero (60s) para
 -- que Puppeteer no tenga que reenviar cookies de sesión. Ese mecanismo no tiene nada de
 -- específico de un caso de negocio, pero la tabla sí: `businessCaseId` es NOT NULL. Al
 -- estandarizar la generación de PDFs (kickoff, desarrollo, diagnóstico, planificación,

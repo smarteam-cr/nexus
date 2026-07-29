@@ -1038,11 +1038,19 @@ html.light aside .bg-gray-800 {
 .cp-md a { color: #2563eb; text-decoration: underline; }
 
 /* ── Reglas de impresión ──────────────────────────────────────────────── */
-/* El `@page { size: A4 }` que estaba acá se mudó a app/print/canvas/**/PrintClient.tsx.
-   `@page` NO se puede acotar con un selector: vale para el documento entero. Declarado en la
-   hoja global, forzaba A4 en CUALQUIER Ctrl+P de la app —incluida una landing del cliente,
-   que es una banda continua y salía cortada en hojas. Ahora vive en la única página que lo
-   necesita, que es lo más parecido a acotarlo que permite CSS. */
+/* El `@page { size: A4 }` que estaba acá se mudó al PrintClient de la vista imprimible
+   genérica (app/print/canvas/[clientId]/[canvasId]). `@page` NO se puede acotar con un
+   selector: vale para el documento entero, así que desde la hoja global forzaba A4 en
+   CUALQUIER Ctrl+P de la app —incluida una landing del cliente, que es una banda continua y
+   salía cortada en hojas—. Ahora vive en la única página que lo necesita, que es lo más
+   parecido a acotarlo que permite CSS.
+
+   ⚠ NUNCA escribas una ruta con comodines acá. Los comentarios CSS no anidan y terminan en
+   la primera aparición de asterisco-barra: un `path/x` con dos asteriscos antes de la barra
+   cierra el comentario en el medio de la frase, y todo lo que sigue se convierte en el
+   prelude de un selector que se come el bloque siguiente. Pasó justo acá: se llevó el
+   `@media print` entero, y lightningcss lo descartó con un warning que el build no muestra.
+   Lo cuida lib/ui/print-css.test.ts. */
 
 @media print {
   .no-print { display: none !important; }

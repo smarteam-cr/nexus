@@ -1396,11 +1396,12 @@ model BusinessCaseExternalAccess {
   @@index([businessCaseId])
 }
 
-// Token de un solo uso, de vida ultra-corta, para que Puppeteer (server-to-server,
-// mismo contenedor) autentique su navegación a /print/business-case/[id] SIN
-// reenviar las cookies reales de sesión Supabase (que pueden venir partidas en
-// varias cookies `sb-*`) — mismo principio que BusinessCaseExternalAccess, pero
-// de un solo uso y con TTL de segundos en vez de una sesión de acceso duradera.
+// Token EFÍMERO (TTL 60s) para que Puppeteer (server-to-server, mismo contenedor)
+// autentique su navegación a /print/doc/[type]/[id] SIN reenviar las cookies reales
+// de sesión Supabase (que pueden venir partidas en varias cookies `sb-*`) — mismo
+// principio que BusinessCaseExternalAccess, pero con TTL de segundos en vez de una
+// sesión de acceso duradera. Reusable mientras no expire: exigir un solo uso rompía
+// el PDF ante cualquier recarga de la página. Ver lib/print/job-token.ts.
 // Rate-limit PERSISTIDO del verify-access externo (proyecto y business case).
 // Antes era un Map en memoria: cada deploy lo reseteaba y un atacante podía
 // re-intentar tras cada restart. Una fila por token atacado; el job

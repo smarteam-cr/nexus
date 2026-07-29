@@ -3,8 +3,8 @@ import "server-only";
 /**
  * lib/print/load-doc.ts — carga y AUTORIZA un documento para imprimir. Un solo chokepoint.
  *
- * Que sea uno solo es el argumento central de tener una ruta genérica en vez de ocho: con
- * ocho páginas habría ocho lugares donde olvidarse del anti-IDOR o de filtrar los borradores.
+ * Que sea uno solo es el argumento central de tener una ruta genérica en vez de una por
+ * tipo: así habría un lugar por tipo donde olvidarse del anti-IDOR o de filtrar borradores.
  *
  * ── LAS TRES REGLAS, APLICADAS ACÁ Y NO EN CADA TIPO ─────────────────────────
  *   · contenido VIVO, no el snapshot publicado (igual que el business case: el CSE
@@ -38,6 +38,8 @@ import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { getRole } from "@/lib/roles/queries";
 import { ROLE_CONTENT_KEYS } from "@/components/landing/configs/roles.defs";
 import { filasCtxFaltantes, type CanalesConContenido } from "./ctx-rows";
+import { isBlank } from "@/lib/landing/is-blank";
+import { printDocType } from "./doc-types";
 import { CRONOGRAMA_PORTADA } from "@/components/landing/configs/cronograma.defs";
 import type { PrintDocType } from "./doc-types";
 
@@ -141,7 +143,7 @@ export async function loadPrintDoc(
   docId: string,
   opts?: { yaAutorizado?: boolean; canvasId?: string | null; ocultasEnPantalla?: string[] },
 ): Promise<PrintDocPayload | null> {
-  /* `yaAutorizado` es SOLO para el camino del token de un solo uso: Puppeteer navega sin
+  /* `yaAutorizado` es SOLO para el camino del token efímero: Puppeteer navega sin
      cookies, así que no hay sesión que gatear, y el token —emitido tras autorizar y atado a
      este par (docType, docId)— es la prueba. Cualquier otro caller lo omite. */
   if (!opts?.yaAutorizado) await autorizar(tipo, docId);
@@ -245,7 +247,7 @@ export async function loadPrintDoc(
 
      ⚠ El instinto para el DOCUMENTO del cronograma es usar la publicada, porque es lo que ve
      el cliente en su link. No: acá también manda el contenido vivo — el CSE descarga el PDF
-     para revisarlo ANTES de subirlo, igual que con los otros ocho documentos. */
+     para revisarlo ANTES de subirlo, igual que con los demás documentos del motor. */
   const kickoff = esKickoff
     ? {
         timeline: ocultasKickoff.has("cronograma") ? null : await readClientTimeline(docId),
@@ -477,4 +479,26 @@ async function cargarCasoDeNegocio(
       brandLogos: brandLogoMap(logos),
     },
   };
+}
+
+/**
+ * ¿Hay algo que valga la pena imprimir? Lo consulta el endpoint ANTES de gastar un Chromium.
+ *
+ * ── POR QUÉ NO ALCANZA CON `rows.length` ─────────────────────────────────────
+ * Era lo que hacía, y nunca disparaba: todo canvas nace con sus secciones SEMBRADAS, así que
+ * siempre hay filas. Una sección sin un solo bloque confirmado igual produce una fila con
+ * `blocks: []`. Resultado: un canvas recién creado —o uno donde el agente propuso todo y el
+ * CSE no confirmó nada— pasaba el chequeo, se gastaban veinte segundos de Chromium, y salía
+ * un PDF con la portada y nada más. El aviso "no tiene contenido visible" existía y no se
+ * mostraba nunca.
+ *
+ * Las filas ctx-driven (cronograma, procesos) cuentan como contenido SIN bloques: no salen de
+ * un CanvasBlock por diseño, y el cargador solo las inyecta cuando su canal trae algo.
+ */
+export function hayContenidoImprimible(doc: PrintDocPayload): boolean {
+  const ctxSections = new Set(printDocType(doc.docType)?.ctxSections ?? []);
+  return doc.rows.some((r) => {
+    if (ctxSections.has(r.key)) return true;
+    return r.blocks.some((b) => !isBlank(b.data) || (b.content ?? "").trim() !== "");
+  });
 }

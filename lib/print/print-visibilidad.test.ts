@@ -33,7 +33,7 @@ const RAIZ = process.cwd();
 
 /**
  * Los DOS caminos que imprimen contenido de canvas:
- *   · el cargador del motor, que sirve a los ocho tipos de documento;
+ *   · el cargador del motor, que sirve a todos los tipos del registro;
  *   · la vista imprimible genérica, para los canvas que no tienen definición en el motor.
  * No hay un tercero, y ésa es media razón de haber unificado.
  */

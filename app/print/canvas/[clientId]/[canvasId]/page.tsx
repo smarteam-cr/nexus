@@ -1,5 +1,6 @@
-import { requireConsultantSession } from "@/lib/auth";
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
+import { NextResponse } from "next/server";
+import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
 import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
@@ -41,12 +42,6 @@ export default async function CanvasPrintPage({
   params: Promise<{ clientId: string; canvasId: string }>;
   searchParams: Promise<{ projectId?: string; print?: string }>;
 }) {
-  try {
-    await requireConsultantSession();
-  } catch {
-    redirect("/");
-  }
-
   const { clientId, canvasId: canvasIdParam } = await params;
   const sp = await searchParams;
 
@@ -69,6 +64,16 @@ export default async function CanvasPrintPage({
     projectId = nonStrategy?.id ?? projects[0]?.id ?? null;
   }
   if (!projectId) notFound();
+
+  /* EL GATE, y va acá porque antes de esta línea todavía no se sabe a qué proyecto se está
+     entrando. Antes bastaba con `requireConsultantSession()`, que solo comprueba que HAYA
+     sesión: no que sea un usuario interno, ni que tenga acceso a este cliente, ni que siga
+     activo. Y el `projectId` lo elige quien pide, así que el único chequeo de pertenencia
+     —`found.projectId !== projectId`— comparaba dos valores del mismo origen. Se usa el
+     MISMO guard que el resto de los endpoints de proyecto: no se inventa criterio.
+     404 y no 403: que un proyecto ajeno no se distinga de uno inexistente. */
+  const acceso = await guardAccessToProject(projectId);
+  if (acceso instanceof NextResponse) notFound();
 
   // Cargar metadata del proyecto (info bar)
   const projectMeta = await prisma.project.findUnique({
@@ -138,6 +143,12 @@ export default async function CanvasPrintPage({
         projectId,
         canvasSection: { not: null },
         canvasId: null,
+        /* Solo lo CONFIRMADO, igual que la rama de bloques de abajo. `canvasStatus: "draft"`
+           es lo que el agente propuso y el CSE todavía no aceptó (lo escribe
+           app/api/clients/[id]/analyze); en pantalla se distingue y en el papel no, así que
+           sin este filtro una propuesta sin revisar se iba impresa. La columna es
+           `@default("confirmed")`, así que las tarjetas viejas no se pierden. */
+        canvasStatus: "confirmed",
       },
       select: {
         id: true,

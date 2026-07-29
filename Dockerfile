@@ -111,7 +111,7 @@ COPY --from=builder --chown=node:node /app/node_modules/@prisma ./node_modules/@
 # Chrome for Testing (bajado en el builder) + symlink ESTABLE → el endpoint de
 # export-pdf lo usa vía PUPPETEER_EXECUTABLE_PATH. El symlink por `find` evita
 # hardcodear el número de versión acá (queda pineado en un solo lugar: el ARG
-# CHROME_BUILD_ID del builder). El ENV lo consume export-pdf/route.ts.
+# CHROME_BUILD_ID del builder). El ENV lo consume lib/print/pdf-runner.ts.
 COPY --from=builder --chown=node:node /opt/chrome /opt/chrome
 RUN ln -sf "$(find /opt/chrome -type f -name chrome -path '*chrome-linux64*' | head -1)" /usr/local/bin/chrome-pdf
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chrome-pdf

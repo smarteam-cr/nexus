@@ -1,5 +1,5 @@
 /**
- * POST /api/print/[type]/[id]/export — EL endpoint de PDF. Uno, para los ocho tipos.
+ * POST /api/print/[type]/[id]/export — EL endpoint de PDF. Uno, para todos los tipos.
  *
  * Todo lo pesado está afuera: el motor de Chromium en `lib/print/pdf-runner.ts`, el gate en
  * `lib/print/load-doc.ts`, el token en `lib/print/job-token.ts`. Acá queda el orden en que se
@@ -14,7 +14,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { printDocType } from "@/lib/print/doc-types";
-import { authorizePrintDoc, loadPrintDoc } from "@/lib/print/load-doc";
+import { authorizePrintDoc, hayContenidoImprimible, loadPrintDoc } from "@/lib/print/load-doc";
 import { createPrintJobToken } from "@/lib/print/job-token";
 import { acquirePdfSlot, pdfErrorMessage, renderPathToPdf, slugify } from "@/lib/print/pdf-runner";
 
@@ -54,7 +54,9 @@ export async function POST(
 
   const doc = await loadPrintDoc(tipo, id, { yaAutorizado: true, canvasId, ocultasEnPantalla });
   if (!doc) return NextResponse.json({ error: "Documento no encontrado." }, { status: 404 });
-  if (doc.rows.length === 0) {
+  /* CONTENIDO, no cantidad de filas: todo canvas nace con sus secciones sembradas, así que
+     `rows.length` nunca daba cero y este aviso no se mostraba jamás. Ver el helper. */
+  if (!hayContenidoImprimible(doc)) {
     return NextResponse.json(
       { error: `El ${tipo.label.toLowerCase()} no tiene contenido visible para exportar.` },
       { status: 409 },
@@ -80,9 +82,13 @@ export async function POST(
       `/print/doc/${tipo.id}/${id}?pdfToken=${token}${ocultarParam}`,
     );
 
-    /* Cliente + documento, salteando lo que no aplique: un perfil de puesto no tiene cliente
-       y no debe llamarse "cliente-analista-de-datos.pdf". */
-    const partes = [doc.clientName, doc.docTitle].map((p) => slugify(p, "")).filter(Boolean);
+    /* Cliente + proyecto + documento, salteando lo que no aplique: un perfil de puesto no
+       tiene cliente y no debe llamarse "cliente-analista-de-datos.pdf". El proyecto entra
+       SOLO si se llama distinto que el cliente —en la mayoría se llaman igual y quedaría
+       "metzger-metzger-kickoff"—, y sirve para el caso que sí importa: un cliente con varios
+       proyectos, donde tres kickoffs bajaban con el mismo nombre y el navegador los numeraba. */
+    const proyecto = doc.projectName.trim() === doc.clientName.trim() ? "" : doc.projectName;
+    const partes = [doc.clientName, proyecto, doc.docTitle].map((p) => slugify(p, "")).filter(Boolean);
     const filename = `${partes.join("-") || tipo.id}.pdf`;
     return new NextResponse(new Uint8Array(pdf), {
       status: 200,

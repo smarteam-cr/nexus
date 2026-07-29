@@ -1,14 +1,14 @@
 /**
- * /print/doc/[type]/[id] — LA página de impresión. Una, para los ocho tipos.
+ * /print/doc/[type]/[id] — LA página de impresión. Una, para todos los tipos del registro.
  *
  * Vive fuera de AppShell (mismo principio que /print/canvas): es la hoja que Puppeteer
  * captura, sin barra lateral ni encabezado de la app. También se puede abrir a mano con la
  * sesión normal para revisar el layout antes de exportar — es la forma más rápida de ver
  * exactamente lo que va a salir impreso.
  *
- * ── UNA RUTA Y NO OCHO ───────────────────────────────────────────────────────
- * Con ocho páginas habría ocho lugares donde olvidarse del anti-IDOR, ocho prefijos que
- * agregar al bypass del middleware y ocho copias del wrapper de PDF. Acá `[type]` se valida
+ * ── UNA RUTA Y NO UNA POR TIPO ───────────────────────────────────────────────
+ * Con una página por tipo habría un lugar por tipo donde olvidarse del anti-IDOR, un prefijo
+ * por tipo en el bypass del middleware y una copia por tipo del wrapper de PDF. Acá `[type]` se valida
  * contra el registro ANTES de tocar la base, y el gate está en un solo lugar
  * (`lib/print/load-doc.ts`).
  *
@@ -48,9 +48,9 @@ export default async function PrintDocPage({
   const tipo = printDocType(type);
   if (!tipo) notFound();
 
-  /* Con token: lo consume (un solo uso) y NO pide sesión — Puppeteer navega sin cookies.
+  /* Con token: lo valida y NO pide sesión — Puppeteer navega sin cookies.
      El token está atado a este par (docType, docId), así que uno emitido para otro
-     documento no abre éste. Sin token: gate normal, adentro de loadPrintDoc. */
+     documento no abre éste. Vale mientras no expire (60s), no un solo uso: ver job-token.ts. Sin token: gate normal, adentro de loadPrintDoc. */
   /* `ocultar`: lo que el editor tenía oculto en pantalla sin haberlo subido. Solo SUMA
      ocultamientos, así que aceptarlo de la URL no revela nada — ver PrintStaging.tsx. */
   const ocultasEnPantalla = (sp.ocultar ?? "").split(",").map((k) => k.trim()).filter(Boolean);

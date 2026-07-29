@@ -66,10 +66,25 @@ const ADAPTADOR_ROLES: Adaptador = {
     rows.map((r) => ({ key: r.key, data: r.blocks[0]?.data ?? null })),
 };
 
-/* El caso de negocio elige plantilla POR DOCUMENTO (no por tipo), así que su config sale de
-   `templateId`; las filas ya vienen con la `data` en un bloque CARD, igual que en pantalla. */
+/**
+ * El caso de negocio elige plantilla POR DOCUMENTO (no por tipo), así que su config sale de
+ * `templateId`; las filas ya vienen con la `data` en un bloque CARD, igual que en pantalla.
+ *
+ * ⚠ La plantilla se RECORTA a las keys que llegaron, y en SU orden. Devolverla entera —que es
+ * lo que hacía— rompía dos cosas a la vez, porque `LandingView` recorre la CONFIG y no las
+ * filas: una sección que el vendedor ocultó no tenía fila, el motor caía a su `empty`, y como
+ * el de «Sobre Smarteam» trae textos de fábrica ("HubSpot Partner Elite", "+200 proyectos")
+ * se imprimía igual; y el orden que el vendedor arrastró se perdía a favor del de la
+ * plantilla. Es el mismo recorte que hace el editor (BusinessCaseWorkspace.tsx:129).
+ */
 const ADAPTADOR_BUSINESS_CASE: Adaptador = {
-  config: (_keys, templateId) => landingConfigFor(templateId),
+  config: (keys, templateId) => {
+    const base = landingConfigFor(templateId);
+    const porKey = new Map(base.sections.map((d) => [d.key, d]));
+    const recortada = keys.map((k) => porKey.get(k)).filter((d): d is NonNullable<typeof d> => !!d);
+    // Sin filas (documento recién creado) se muestra la plantilla completa, igual que el editor.
+    return recortada.length ? { ...base, sections: recortada } : base;
+  },
   sections: (rows) => rows.map((r) => ({ key: r.key, data: r.blocks[0]?.data ?? null })),
 };
 

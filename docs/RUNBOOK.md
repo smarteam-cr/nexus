@@ -12,7 +12,7 @@ bajo esa condición:
 
 | Mecanismo | Dónde | Qué pasa con 2+ réplicas |
 |---|---|---|
-| Semáforo de export PDF (máx 2 Chromium + cola de 4) | `app/api/business-cases/[id]/export-pdf/route.ts` | El cap sería POR réplica (2×N Chromiums) |
+| Semáforo de export PDF (máx 2 Chromium + cola de 4) | `lib/print/pdf-runner.ts (cap ÚNICO para todos los tipos del registro de impresión)` | El cap sería POR réplica (2×N Chromiums) |
 | Guard `running` del auto-sync de Google | `lib/google/auto-sync.ts` | Cubierto igual por el claim en DB (CronJobState) |
 | Locks en-proceso de watchdog / signals / partner refresh | `lib/cs/*` | Dos réplicas podrían correr el mismo sweep en paralelo |
 | Guard 409 anti-doble-generación de BC (AgentRun RUNNING ≤5min) | `generate/route.ts` | Sigue funcionando (es contra DB) |

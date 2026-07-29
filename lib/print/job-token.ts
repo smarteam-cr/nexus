@@ -20,7 +20,7 @@
  *
  * ── POR QUÉ (docType, docId) Y NO `businessCaseId` ───────────────────────────
  * El mecanismo nunca tuvo nada de específico de un caso de negocio; la TABLA sí. Al
- * generalizar el PDF a los ocho documentos del motor, el token identifica al documento por
+ * generalizar el PDF a todos los documentos del motor, el token identifica al documento por
  * su tipo (del registro `lib/print/doc-types.ts`) y su id, que según el tipo es un
  * businessCaseId, un projectId o un roleId.
  *
