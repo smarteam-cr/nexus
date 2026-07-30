@@ -8,7 +8,7 @@ import { invalidateGps } from "@/lib/clients/gps-cache";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
-import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
+import { SENTINEL_SERVICE_TYPE, projectCapabilities, resolvePipeline } from "@/lib/projects/kind";
 
 // El id del tab de "Información del cliente" ES el sentinel: el layout lo devuelve como
 // `initialProjectId` cuando el cliente no tiene un único proyecto. Importado y no escrito
@@ -25,6 +25,64 @@ interface ProjectSummary {
   serviceType?: string | null;
   tags?: string[];
   hubspotServiceId?: string | null;
+  // De qué CLASE es (lib/projects/kind.ts). Alimentan la tira de abajo del rail, que es
+  // lo único que le explica al CSE por qué este proyecto no está en su cartera.
+  hubspotPipelineId?: string | null;
+  proyectoInterno?: boolean;
+  hermanoCsProjectId?: string | null;
+}
+
+/**
+ * La tira que explica de qué clase es el proyecto.
+ *
+ * Silenciosa por diseño: si el proyecto es una implementación de Customer Success normal
+ * —no interno, sin hermano— no devuelve nada. Solo habla cuando el proyecto se comporta
+ * distinto de lo que el CSE espera, que es exactamente cuando hace falta.
+ */
+function TiraDeClase({ p, projects }: { p: ProjectSummary; projects: ProjectSummary[] }) {
+  const def = resolvePipeline(p.hubspotPipelineId ?? null);
+  const hermano = p.hermanoCsProjectId
+    ? projects.find((o) => o.id === p.hermanoCsProjectId)
+    : undefined;
+  const caps = projectCapabilities({
+    hubspotPipelineId: p.hubspotPipelineId ?? null,
+    interno: p.proyectoInterno ?? false,
+    tieneHermanoCs: !!p.hermanoCsProjectId,
+  });
+
+  const chips: Array<{ texto: string; ayuda: string }> = [];
+  if (def && def.key !== "customer-success") {
+    chips.push({ texto: def.label, ayuda: def.help });
+  }
+  if (p.proyectoInterno) {
+    chips.push({
+      texto: "Interno",
+      ayuda: "Proyecto de Smarteam para Smarteam. No se factura, no es cartera de nadie y no se le publica nada al cliente.",
+    });
+  }
+  if (p.hermanoCsProjectId) {
+    chips.push({
+      texto: `Hermano de ${hermano?.name ?? "otro proyecto"}`,
+      ayuda: "Cuelga de esa implementación en HubSpot, así que no se factura aparte: cobra el hermano.",
+    });
+  }
+  if (!chips.length) return null;
+
+  return (
+    <div className="px-6 py-2 flex items-center gap-2 flex-wrap border-b border-line bg-surface-muted">
+      {chips.map((c) => (
+        <span
+          key={c.texto}
+          title={c.ayuda}
+          className="px-2 py-0.5 rounded-md text-xs font-medium text-fg-secondary border border-line bg-surface"
+        >
+          {c.texto}
+        </span>
+      ))}
+      {!caps.cobranza && <span className="text-xs text-fg-muted">· no entra a cobranza</span>}
+      {!caps.carteraCs && <span className="text-xs text-fg-muted">· no suma a la cartera de CS</span>}
+    </div>
+  );
 }
 
 // ── Main workspace component ─────────────────────────────────────────────────
@@ -307,6 +365,12 @@ function ProjectSection({
           Información del cliente
         </button>
       </div>
+
+      {/* De qué CLASE es el proyecto activo. Solo aparece cuando hay algo que explicar:
+          para una implementación de Customer Success normal —el 99% de los casos— no se
+          pinta nada. Es la única superficie que responde "¿por qué este proyecto no me
+          aparece en la cartera / en cobranza?" sin tener que abrir HubSpot. */}
+      {activeProject && <TiraDeClase p={activeProject} projects={projects} />}
 
       {/* Content */}
       {isStrategy ? (

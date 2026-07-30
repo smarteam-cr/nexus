@@ -2,6 +2,7 @@ import { getHubspotClient, getSystemHubspotClient } from "./client";
 import { prisma } from "@/lib/db/prisma";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 import { sanitizeTags, normalizeTag } from "@/lib/tags/catalog";
+import { cerradoPorEstadoCrudo, decidirCierre, resolvePipeline } from "@/lib/projects/kind";
 import type { Client } from "@hubspot/api-client";
 
 // ── Mapeo de nombre del proyecto → serviceType + projectType ─────────────────
@@ -49,6 +50,46 @@ export function mergeHubTag(currentTags: string[], hubTag: string | null): strin
   return next;
 }
 
+/**
+ * UNA LÍNEA POR CAMBIO DE ESTADO. No es opcional.
+ *
+ * Este archivo pasó de 862 líneas con CERO logs a decidir el cierre de un proyecto con una
+ * regla nueva, y el cierre es el único paso del sync que pierde información: apagar un
+ * proyecto no guarda el valor anterior, así que revertir el código no lo reenciende. Sin
+ * este rastro, "¿por qué desapareció el proyecto de Fulano?" no tiene respuesta.
+ *
+ * Va a `console.log` y no a `result.debug` a propósito: `debug` se le devuelve a quien
+ * disparó el sync y muere con la respuesta HTTP; esto tiene que quedar en el log del
+ * contenedor, que es donde se mira una semana después.
+ */
+function logTransicion(o: {
+  project: string;
+  de: string;
+  a: string;
+  pipelineId: string | null;
+  stageId: string | null;
+  stageLabel: string | null;
+  rawStatus: string;
+  motivo: string;
+}): void {
+  const pipe = resolvePipeline(o.pipelineId);
+  console.log(
+    `[sync-projects] ${o.de} → ${o.a}  "${o.project}"  ` +
+      `pipeline=${pipe ? pipe.label : o.pipelineId ?? "(ninguno)"}  ` +
+      `etapa=${o.stageLabel ?? o.stageId ?? "(ninguna)"}  ` +
+      `estadoCrudo=${o.rawStatus || "(vacío)"}  motivo=${o.motivo}`,
+  );
+}
+
+/**
+ * Un `booleancheckbox` de HubSpot. Sin marcar llega como `null`, como `""` o directamente
+ * ausente de la respuesta — nunca como `"false"` hasta que alguien lo marca y lo desmarca.
+ * Los tres casos son "no", que es el default de negocio.
+ */
+function parseCheckbox(v: string | null | undefined): boolean {
+  return (v ?? "").trim().toLowerCase() === "true";
+}
+
 function inferServiceMapping(projectName: string | null): ServiceMapping {
   if (!projectName) return { serviceType: "proyecto_temporal", projectType: "USE_CASE", hubTag: null };
 
@@ -77,6 +118,7 @@ const PROJECT_PROPERTIES = [
   "hs_createdate",
   "hs_pipeline",
   "hs_pipeline_stage",    // D.2: etapa actual del pipeline de CS (ancla del cronograma vivo)
+  "proyecto_interno",     // booleancheckbox: proyecto de Smarteam para Smarteam (ver lib/projects/kind.ts)
   "csl_encargado",        // propiedad custom OWNER = CSE encargado (fuente de verdad de la asignación → visibilidad)
   // CS360 — dashboard de la CSL (internal names confirmados por discover-partner-clients.ts):
   "hs_priority",          // low | medium | high
@@ -211,6 +253,115 @@ async function resolvePipelineStageLabel(
   return stages.get(stageId) ?? null;
 }
 
+// ── El HERMANO: asociación proyecto ↔ proyecto ───────────────────────────────
+
+/**
+ * Ids de proyectos asociados a cada proyecto, en UNA llamada por lote de 100.
+ *
+ * En HubSpot un desarrollo o un sitio se cuelga de la implementación de Customer Success
+ * con la asociación por defecto del objeto consigo mismo (typeId 1254, confirmada por
+ * `scripts/inspect-project-pipelines.ts`). Ese vínculo es lo que dice "no me factures
+ * aparte: cobra el hermano".
+ *
+ * Lotes de 100 desde el minuto uno —el techo del endpoint— aunque el resto del sync todavía
+ * pagine a mano: es una llamada nueva y no hay razón para nacer con la deuda.
+ *
+ * Ante CUALQUIER error devuelve un mapa VACÍO, no una excepción. Un hipo de la API no puede
+ * tumbar el sync entero por un dato que solo afecta a la facturación de un caso de borde; el
+ * efecto de no resolverlo es que el proyecto se trata como "aparte", que es el default.
+ */
+async function leerProyectosAsociados(
+  hsClient: Client,
+  ids: string[],
+  slug: string,
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  const LOTE = 100;
+  for (let i = 0; i < ids.length; i += LOTE) {
+    const tanda = ids.slice(i, i + LOTE);
+    try {
+      const res = await hsClient.apiRequest({
+        method: "POST",
+        path: `/crm/v4/associations/${slug}/${slug}/batch/read`,
+        body: { inputs: tanda.map((id) => ({ id })) },
+      });
+      if (!res.ok) continue;
+      const data = (await res.json()) as {
+        results?: Array<{ from?: { id?: string }; to?: Array<{ toObjectId?: number | string }> }>;
+      };
+      for (const r of data.results ?? []) {
+        const desde = r.from?.id;
+        if (!desde) continue;
+        const hacia = (r.to ?? [])
+          .map((t) => (t.toObjectId === undefined ? null : String(t.toObjectId)))
+          .filter((v): v is string => !!v);
+        if (hacia.length) out.set(desde, hacia);
+      }
+    } catch {
+      /* sin asociaciones para esta tanda → todos quedan "aparte" */
+    }
+  }
+  return out;
+}
+
+/**
+ * Resuelve `hermanoCsProjectId` para TODOS los proyectos de un cliente, de una.
+ *
+ * Corre DESPUÉS del loop principal a propósito, y eso es lo que lo hace independiente del
+ * orden: no importa si el desarrollo entró antes o después que su implementación, porque
+ * cuando esta pasada corre los dos ya están en la base. Si el hermano todavía no existe, la
+ * fila queda con el HECHO guardado (`hubspotRelatedProjectIds`) y sin resolución — y la
+ * próxima corrida la completa sola. Por eso no hace falta un cron ni un barrido aparte.
+ *
+ * Se recalcula entero cada vez (mismo patrón que `hubspotPipelineStageLabel`): si en HubSpot
+ * desasocian los proyectos, el vínculo se limpia solo y el desarrollo vuelve a facturarse.
+ */
+async function resolverHermanos(clientId: string, result: SyncResult): Promise<void> {
+  const delCliente = await prisma.project.findMany({
+    where: { clientId, hubspotServiceId: { not: null } },
+    select: {
+      id: true,
+      name: true,
+      hubspotServiceId: true,
+      hubspotPipelineId: true,
+      hubspotRelatedProjectIds: true,
+      hermanoCsProjectId: true,
+    },
+  });
+  const porHsId = new Map(delCliente.map((p) => [p.hubspotServiceId!, p]));
+
+  for (const p of delCliente) {
+    const def = resolvePipeline(p.hubspotPipelineId);
+    // Solo los pipelines que DECLARARON poder ser hermanos. Una implementación de CS nunca
+    // es hermana de nadie: es de quien cuelgan los demás.
+    const puedeSerHermano = def?.canBeSiblingOf.includes("customer-success") ?? false;
+
+    let nuevo: string | null = null;
+    if (puedeSerHermano) {
+      for (const relId of p.hubspotRelatedProjectIds) {
+        const otro = porHsId.get(relId);
+        // Se resuelve SOLO dentro del mismo cliente. Un vínculo que cruza empresas sería un
+        // error de datos en HubSpot, y dejarlo sin resolver (→ "aparte", o sea que se
+        // factura) es el lado seguro de equivocarse.
+        if (!otro || otro.id === p.id) continue;
+        if (resolvePipeline(otro.hubspotPipelineId)?.key === "customer-success") {
+          nuevo = otro.id;
+          break;
+        }
+      }
+    }
+
+    if (nuevo !== p.hermanoCsProjectId) {
+      await prisma.project.update({ where: { id: p.id }, data: { hermanoCsProjectId: nuevo } });
+      result.debug!.push(
+        nuevo
+          ? `Hermano: "${p.name}" cuelga de "${porHsId.get(p.hubspotRelatedProjectIds.find((r) => porHsId.get(r)?.id === nuevo)!)?.name ?? nuevo}" → no se factura aparte`
+          : `Hermano: "${p.name}" ya no cuelga de ninguna implementación → vuelve a facturarse`,
+      );
+    }
+  }
+}
+
 // ── Sync principal ───────────────────────────────────────────────────────────
 
 export interface SyncResult {
@@ -240,17 +391,23 @@ async function verifyProjectInHubspot(hsClient: Client, objectId: string): Promi
     try {
       const res = await hsClient.apiRequest({
         method: "GET",
-        path: `/crm/v3/objects/${slug}/${objectId}?properties=hs_name,hs_status,nombre_del_proyecto,estatus_del_proyecto`,
+        // ⚠ `hs_pipeline` y `hs_pipeline_stage` NO se pedían acá, y sin ellos esta función
+        // no podía aplicar la misma regla de cierre que el loop principal: era una copia
+        // más pobre de la misma decisión, que es la forma más segura de que dos reglas
+        // diverjan. Ahora las dos llaman a `decidirCierre`.
+        path: `/crm/v3/objects/${slug}/${objectId}?properties=hs_name,hs_status,nombre_del_proyecto,estatus_del_proyecto,hs_pipeline,hs_pipeline_stage`,
       });
       if (res.status === 404) { confirmedNotFound = true; continue; }
       if (!res.ok) { ambiguous = true; continue; } // 429/5xx → no concluir nada
       const data = (await res.json()) as { id?: string; properties?: Record<string, string | null> };
       if (data?.id) {
-        const raw = (data.properties?.hs_status || data.properties?.estatus_del_proyecto || "").toLowerCase().trim();
-        const closed =
-          raw === "completed" || raw === "cancelled" ||
-          raw.includes("completado") || raw.includes("cancelado") || raw.includes("cerrado");
-        return closed ? "closed" : "alive";
+        const p = data.properties ?? {};
+        const cierre = decidirCierre({
+          hubspotPipelineId: (p.hs_pipeline ?? "").trim() || null,
+          stageId: (p.hs_pipeline_stage ?? "").trim() || null,
+          rawStatus: p.hs_status || p.estatus_del_proyecto || "",
+        });
+        return cierre === "cerrado" ? "closed" : "alive";
       }
       ambiguous = true;
     } catch (e) {
@@ -603,6 +760,15 @@ export async function syncProjectsForClient(
 
   result.found = projects.length;
 
+  /* Las asociaciones proyecto↔proyecto de TODA la corrida, en una sola llamada. Como los
+     proyectos de una empresa vienen todos juntos, el grafo del hermano se arma sin pedir
+     nada extra por proyecto. */
+  const asociados = await leerProyectosAsociados(
+    hsClient,
+    projects.map((p) => p.id),
+    workingAssocSlug ?? "projects",
+  );
+
   // Supresión de re-sync: hubspotServiceId de proyectos BORRADOS a mano desde Nexus. El sync
   // no los vuelve a crear NI a reactivar (desasociación durable; el objeto en HubSpot queda
   // intacto). Se limpia sacándolo de la lista para "re-agregar a mano".
@@ -647,12 +813,21 @@ export async function syncProjectsForClient(
       continue;
     }
 
-    // ── Saltear proyectos terminados/cancelados ────────────────────────────────
-    if (rawStatus && (
-      rawStatus === "completed" || rawStatus === "cancelled" ||
-      rawStatus.includes("completado") || rawStatus.includes("cancelado") ||
-      rawStatus.includes("cerrado")
-    )) {
+    /* ── Resolver PIPELINE y ETAPA ────────────────────────────────────────────
+       Va ANTES de decidir si el proyecto está terminado, y ése es el arreglo: el
+       `continue` de "terminados" corría antes de que la etapa se resolviera, así que la
+       decisión se tomaba sin el dato del que ahora depende. Es barato acá porque las
+       etapas de un pipeline se cachean por corrida (y la primera llamada se paga igual
+       más abajo para los proyectos que siguen). */
+    const pipelineId = (props.hs_pipeline ?? "").trim() || null;
+    const readSlugForPipeline = workingAssocSlug ?? "projects";
+    const stageId = (props.hs_pipeline_stage ?? "").trim() || null;
+    const stageLabel = await resolvePipelineStageLabel(hsClient, pipelineId, stageId, readSlugForPipeline);
+
+    // ── ¿Terminado? ───────────────────────────────────────────────────────────
+    // La regla vive en lib/projects/kind.ts y la comparte `verifyProjectInHubspot`, que
+    // antes tenía su propia copia (y ni siquiera pedía la etapa).
+    if (decidirCierre({ hubspotPipelineId: pipelineId, stageId, rawStatus }) === "cerrado") {
       const finished = await prisma.project.findUnique({ where: { hubspotServiceId: project.id } });
       if (finished && finished.status === "active") {
         await prisma.project.update({
@@ -660,6 +835,16 @@ export async function syncProjectsForClient(
           data: { status: "inactive" },
         });
         result.updated++; // dispara router.refresh() en WorkspaceClient
+        logTransicion({
+          project: `${finished.name} (${project.id})`,
+          de: "active",
+          a: "inactive",
+          pipelineId,
+          stageLabel,
+          stageId,
+          rawStatus,
+          motivo: cerradoPorEstadoCrudo(rawStatus) ? "estado crudo cerrado" : "etapa terminal del pipeline",
+        });
       } else {
         result.skipped++;
       }
@@ -685,14 +870,13 @@ export async function syncProjectsForClient(
     const ownerName = cslOwner.name ?? stdOwner.name;
     const ownerEmail = cslOwner.email ?? stdOwner.email;
 
-    // ── Resolver pipeline name ─────────────────────────────────────────────
-    const pipelineId = (props.hs_pipeline ?? "").trim() || null;
-    const readSlugForPipeline = workingAssocSlug ?? "projects";
+    /* El NOMBRE del pipeline es solo el rótulo que se muestra; el id (resuelto arriba, antes
+       de decidir el cierre) es el HECHO del que cuelga toda la tabla de decisiones. */
     const pipelineName = await resolvePipelineName(hsClient, pipelineId, readSlugForPipeline);
 
-    // D.2 — etapa actual del pipeline de CS (ancla del cronograma vivo)
-    const stageId = (props.hs_pipeline_stage ?? "").trim() || null;
-    const stageLabel = await resolvePipelineStageLabel(hsClient, pipelineId, stageId, readSlugForPipeline);
+    // `proyecto_interno`: booleancheckbox. Sin marcar llega VACÍO (o ausente), no "false",
+    // y eso SIGNIFICA "no interno" — el default de negocio y el de la columna coinciden.
+    const proyectoInterno = parseCheckbox(props.proyecto_interno);
 
     // ── Parsear fecha de creación ──────────────────────────────────────────
     const createdAtRaw = (props.hs_createdate ?? "").trim();
@@ -722,6 +906,29 @@ export async function syncProjectsForClient(
       }));
 
     if (existing) {
+      /* ── Sobre REACTIVAR ────────────────────────────────────────────────────
+         Esta rama escribe `status: "active"` siempre, y se deja así. La preocupación era
+         que la regla nueva resucitara un proyecto apagado, pero `decidirCierre` UNE las
+         dos señales (etapa terminal o estado crudo) en vez de darle precedencia a una: no
+         puede devolver "abierto" para algo que la regla vieja cerraba, así que la regla
+         no reabre nada por sí sola. Que un proyecto vuelva a `active` exige que una
+         persona lo saque de la etapa terminal Y le cambie el estado en HubSpot, o que lo
+         re-asocie a la empresa — las dos cosas son pedidos explícitos, y hay caminos
+         legítimos que dependen de esto (un proyecto que se desasoció por error).
+         Los borrados a mano DESDE Nexus están protegidos aparte, por `suppressed`.
+         Igual se registra la transición: si alguna vez pasa, tiene que verse. */
+      if (existing.status !== "active") {
+        logTransicion({
+          project: `${existing.name} (${project.id})`,
+          de: existing.status,
+          a: "active",
+          pipelineId,
+          stageId,
+          stageLabel,
+          rawStatus,
+          motivo: "vino en la asociación de la empresa y no está terminado",
+        });
+      }
       await prisma.project.update({
         where: { id: existing.id },
         data: {
@@ -738,6 +945,11 @@ export async function syncProjectsForClient(
           hubspotOwnerEmail:   ownerEmail,
           hubspotCreatedAt:    hubCreatedAtValid,
           hubspotPipelineName: pipelineName,
+          hubspotPipelineId:   pipelineId,
+          proyectoInterno,
+          // El HECHO crudo. Se guarda aunque el otro proyecto todavía no exista en Nexus;
+          // la resolución a `hermanoCsProjectId` la hace `resolverHermanos` al final.
+          hubspotRelatedProjectIds: asociados.get(project.id) ?? [],
           hubspotPipelineStageId:    stageId,
           hubspotPipelineStageLabel: stageLabel,
           hubspotStageSyncedAt:      stageId ? new Date() : null,
@@ -814,11 +1026,28 @@ export async function syncProjectsForClient(
       }
       await prisma.project.update({ where: { id: cand.id }, data: { status: "inactive" } });
       result.updated++; // dispara router.refresh() en WorkspaceClient
+      const porQue = verdict === "gone" ? "no existe (404)" : "en estado cerrado";
       result.debug!.push(
-        `Reconciliación: "${cand.name}" (${cand.hubspotServiceId}) ${verdict === "gone" ? "no existe (404)" : "en estado cerrado"} en HubSpot → inactive`,
+        `Reconciliación: "${cand.name}" (${cand.hubspotServiceId}) ${porQue} en HubSpot → inactive`,
       );
+      logTransicion({
+        project: `${cand.name} (${cand.hubspotServiceId})`,
+        de: "active",
+        a: "inactive",
+        pipelineId: null,
+        stageId: null,
+        stageLabel: null,
+        rawStatus: "",
+        motivo: `reconciliación: no vino en la asociación y ${porQue}`,
+      });
     }
   }
+
+  /* Al final del todo: con todos los proyectos del cliente ya en la base, se resuelve quién
+     cuelga de quién. Va acá y no dentro del loop porque así el orden de llegada no importa. */
+  await resolverHermanos(clientId, result).catch((e) => {
+    result.debug!.push(`No se pudo resolver el hermano: ${(e as Error).message?.slice(0, 120)}`);
+  });
 
   result.debug!.push(`Sync completo: ${result.created} creados, ${result.updated} actualizados, ${result.skipped} saltados`);
   return result;

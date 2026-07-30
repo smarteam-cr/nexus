@@ -21,6 +21,7 @@ import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
 import { normalizeFingerprint } from "@/lib/timeline/particularidad-identity";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
+import { resolvePipeline } from "@/lib/projects/kind";
 
 const AGENT_ID_PROGRESS = "agent-timeline-progress";
 
@@ -111,6 +112,7 @@ export async function regenerateTimelineProgress(
         serviceType: true,
         hubspotServiceId: true,
         hubspotPipelineStageLabel: true,
+        hubspotPipelineId: true,
         client: { select: { name: true, industry: true } },
         timeline: {
           select: {
@@ -150,6 +152,17 @@ export async function regenerateTimelineProgress(
         }).catch(() => { /* best-effort: no romper si falla el update */ });
       }
     }
+
+    /* La etapa solo se le pasa al agente si viene del pipeline de Customer Success.
+       El prompt del agente dice, literal, que la etapa "te dice dónde va el proyecto en el
+       pipeline de Customer Success", y ejemplifica con etapas de ese pipeline. Darle
+       "Pruebas" o "Mockup" de Development o Sitios web lo haría razonar con el vocabulario
+       equivocado, y encima como ANCLA #1 — la fuente que "manda la posición". El prompt ya
+       tiene escrita la degradación para cuando no hay etapa: inferir solo desde las
+       sesiones y el handoff, que es lo correcto acá.
+       La etapa se sigue materializando arriba: se guarda igual, solo no se razona con ella. */
+    const pipelineDelProyecto = resolvePipeline(project.hubspotPipelineId);
+    if (pipelineDelProyecto && pipelineDelProyecto.key !== "customer-success") stageLabel = null;
 
     // 3. Contexto: sesiones pasadas + handoff + cronograma con avance confirmado.
     const [pastSessions, handoffCtx, timelineCtx] = await Promise.all([
