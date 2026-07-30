@@ -7,6 +7,10 @@ import { withDbRetry } from "@/lib/db/retry";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
 import { computeBookends, type FrontSession, type SessionBookends } from "@/lib/sessions/bookends";
 import { loadProjectSetup } from "@/lib/portfolio/project-setup";
+import { canvasOfNested, onlyEnabled } from "@/lib/pieces/canvas-query";
+import { resolverDuenioDelHandoff } from "@/lib/handoff/duenio";
+import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
+import { buildCanvasChips } from "@/lib/flow/canvas-chips";
 import { frentesDeProyecto, type EquipoDeFrente } from "@/lib/projects/kind";
 
 // Sesiones del cliente (Google Meet + Fireflies legacy) → próxima futura y última
@@ -108,6 +112,8 @@ export const GET = withProjectAccess(async (
       hubspotCreatedAt: true,
       hubspotPipelineName: true,
       hubspotPipelineId: true,
+      // Los tags deciden qué piezas le corresponden al proyecto (`piezaAplica`).
+      tags: true,
       // De qué clase es el proyecto: decide qué FRENTES muestra el widget y con qué rótulo.
       proyectoInterno: true,
       hermanoCsProjectId: true,
@@ -292,7 +298,7 @@ export const GET = withProjectAccess(async (
   });
 
   // Pendientes ABIERTOS (no hechos, no borrados) — lo que ve el widget + tab Pendientes.
-  const [openItems, historyRows, setup] = await Promise.all([
+  const [openItems, historyRows, setup, canvases] = await Promise.all([
     prisma.actionItem.findMany({
       where: { projectId, done: false, deletedAt: null },
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
@@ -306,11 +312,47 @@ export const GET = withProjectAccess(async (
       select: actionItemSelect,
       take: 50,
     }),
-    // #5 — señales de setup (qué canvas tiene generados) para el indicador del widget.
-    // El pipeline decide QUÉ pasos de setup le corresponden: un desarrollo no lleva
-    // kickoff, y sin esto le quedaba un chip rojo permanente por algo que nunca va a tener.
+    /* Sigue haciendo falta por DOS señales que no son piezas de canvas y no se pueden
+       derivar de los bloques: el estado de tres valores del Cronograma (vive en
+       ProjectTimeline) y los procesos (viven a nivel CLIENTE). Las otras dos que trae
+       —handoff y kickoff— ya las cubren los chips. */
     loadProjectSetup(projectId, project.clientId, project.hubspotPipelineId),
+    /* Los canvases del proyecto, para el bloque "Canvas". MISMA consulta que el
+       desplegable del panel (`/api/projects/[id]/canvases`), salvo que acá el handoff SÍ
+       entra: en el widget la pregunta es qué documentos tiene el proyecto. */
+    prisma.projectCanvas.findMany({
+      where: { projectId, ...onlyEnabled },
+      select: { id: true, slug: true, name: true },
+    }),
   ]);
+
+  /* ¿Cuáles tienen algo ESCRITO? Criterio único de lib/pieces/piece-content.ts, el mismo
+     que usa el desplegable: un bloque semilla no cuenta, y el Cronograma se mide por sus
+     fases. Sin esto, una pieza recién activada se pintaría de verde estando vacía. */
+  const conContenido = await loadCanvasesConContenido(projectId, canvases);
+
+  /* El handoff puede ser el de OTRO proyecto: un desarrollo que cuelga de una implementación
+     comparte el suyo (lib/handoff/duenio.ts). Sin esto, su canvas propio está vacío y el chip
+     diría "Handoff · pendiente" sobre un documento completo que la sección de abajo está
+     mostrando. */
+  const duenioHandoff = await resolverDuenioDelHandoff(projectId);
+  const handoffDelHermano = duenioHandoff.redirigido
+    ? {
+        generado:
+          (await prisma.canvasBlock.count({
+            where: { section: { canvas: canvasOfNested("handoff", { projectId: duenioHandoff.ownerProjectId }) } },
+          })) > 0,
+      }
+    : null;
+
+  const canvasChips = buildCanvasChips({
+    canvases: canvases.map((c) => ({ ...c, hasContent: conContenido.has(c.id) })),
+    tags: project.tags,
+    hubspotPipelineId: project.hubspotPipelineId,
+    cronograma: setup.cronograma,
+    tieneProcesos: setup.procesos,
+    handoffDelHermano,
+  });
 
   // Para compat hacia atrás: también devolver `pendingItems` con shape antiguo
   // basado en ActionItems (el GPS UI viejo lee `pendingItems`).
@@ -334,6 +376,9 @@ export const GET = withProjectAccess(async (
     actionItems: pendingItemsCompat, // alias semántico
     historyItems, // tareas hechas o borradas (tab Histórico)
     setup, // #5 — { handoff, kickoff, cronograma, procesos } para el indicador del widget
+    /* El bloque "Canvas": qué documentos le corresponden a ESTE proyecto y cuáles ya están.
+       El servidor manda la lista ya filtrada por `piezaAplica`; el widget solo pinta. */
+    canvasChips,
   });
 }));
 

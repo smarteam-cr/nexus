@@ -17,8 +17,23 @@ import { pieceBySlug } from "@/lib/pieces/registry";
 import { piecesInFlowOrder } from "./stage-pieces";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 
-/** Piezas que NO se listan acá, con su motivo. */
+/** Piezas que NO se listan en el DESPLEGABLE, con su motivo. */
 const FUERA_DEL_DESPLEGABLE = new Set(["handoff"]);
+
+export interface OpcionesDeFilas {
+  /**
+   * Incluir el handoff. El desplegable NO lo lista (tiene su propia sección arriba del
+   * panel), pero el bloque "Canvas" del widget SÍ lo cuenta: ahí la pregunta es "¿qué
+   * documentos tiene este proyecto?", y el handoff es uno.
+   */
+  incluirHandoff?: boolean;
+  /**
+   * Incluir los canvases sueltos del CSE. El desplegable los lista —son suyos y nada
+   * desaparece—; el widget no, porque su bloque es un CHECKLIST del recorrido y un canvas
+   * suelto no tiene estado "pendiente": nadie lo espera.
+   */
+  incluirCustom?: boolean;
+}
 
 export type RowState =
   /** Existe y tiene contenido. */
@@ -67,7 +82,10 @@ export interface CanvasParaFila {
  *   · las piezas registradas del recorrido (existan o no en el proyecto),
  *   · más los canvases CUSTOM que alguien haya creado, al final — nada desaparece.
  */
-export function buildPieceRows(canvases: CanvasParaFila[]): PieceRow[] {
+export function buildPieceRows(
+  canvases: CanvasParaFila[],
+  opts: OpcionesDeFilas = {},
+): PieceRow[] {
   const porSlug = new Map<string, CanvasParaFila>();
   const custom: CanvasParaFila[] = [];
   for (const c of canvases) {
@@ -76,7 +94,7 @@ export function buildPieceRows(canvases: CanvasParaFila[]): PieceRow[] {
   }
 
   const delFlujo: PieceRow[] = piecesInFlowOrder("full")
-    .filter((slug) => !FUERA_DEL_DESPLEGABLE.has(slug))
+    .filter((slug) => opts.incluirHandoff || !FUERA_DEL_DESPLEGABLE.has(slug))
     .map((slug) => {
       const pieza = pieceBySlug(slug);
       const canvas = porSlug.get(slug) ?? null;
@@ -90,6 +108,8 @@ export function buildPieceRows(canvases: CanvasParaFila[]): PieceRow[] {
         stale: canvas?.stale ?? false,
       } satisfies PieceRow;
     });
+
+  if (opts.incluirCustom === false) return delFlujo;
 
   // Los canvases sueltos del CSE no son piezas del flujo, pero son suyos: van al final,
   // sin estado de flujo y sin agente.

@@ -9,6 +9,7 @@ import { readGpsCache, writeGpsCache, invalidateGps } from "@/lib/clients/gps-ca
 import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 import { ProjectGpsSkeleton } from "./skeletons";
 import type { Frente, FrenteKey } from "@/lib/projects/kind";
+import type { ChipDeCanvas } from "@/lib/flow/canvas-chips";
 
 export interface PendingItem {
   id?: string;             // ActionItem.id (nuevo) — undefined si viene del Json viejo
@@ -99,6 +100,15 @@ interface GPSData {
   projectInfo?: ProjectInfo;
   historyItems?: PendingItem[]; // tareas hechas o borradas (tab Histórico del modal)
   setup?: SetupSignals; // #5 — qué canvas tiene generados el proyecto (indicador del widget)
+  /**
+   * Los CANVAS del proyecto, ya filtrados por lo que le corresponde (`piezaAplica`) y con su
+   * estado. El servidor decide QUÉ se lista; el widget solo pinta — así una pieza nueva del
+   * recorrido aparece sola, sin tocar React.
+   *
+   * Opcional: una respuesta cacheada de antes de este cambio no lo trae y el bloque no se
+   * pinta (en vez de romper).
+   */
+  canvasChips?: ChipDeCanvas[];
 }
 
 /** La RANURA de almacenamiento del frente, no su rótulo — ver `FrenteKey` en kind.ts. */
@@ -412,6 +422,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
 
   // Los frentes que este proyecto muestra, con su rótulo — los manda el servidor.
   const frentes = data.frentes ?? FRENTES_LEGACY;
+  const canvasChips = data.canvasChips ?? [];
 
   // ── Última de un frente (Ventas / CSE / Desarrollo) ───────────────────────────
   const renderLastFront = (frontKey: FrontKey, label: string) => {
@@ -569,20 +580,26 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             <span className={cardLabel}>Estado actual</span>
           </div>
           <p className="text-sm font-medium text-fg">{data.currentState}</p>
-          {/* #5 — canvas generados del proyecto. Guard por compat de cache (data vieja sin setup). */}
-          {data.setup && (
+          {/* Los CANVAS del proyecto: qué documentos le corresponden y cuáles ya están.
+              La lista viene del servidor YA filtrada por lo que aplica a este proyecto
+              (lib/flow/canvas-chips.ts) — el widget solo pinta. Antes eran cuatro señales
+              fijas y un proyecto con Diagnóstico y Planificación generados se veía igual
+              que uno sin ellos. Guard por compat: una respuesta cacheada vieja no la trae. */}
+          {canvasChips.length > 0 && (
             <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-              <SetupChip state={data.setup.handoff ? "done" : "missing"} label={data.setup.handoff ? "✓ Handoff" : "Sin handoff"} />
-              {/* `null` = no aplica (un desarrollo no lleva kickoff) → no se pinta nada. Un chip
-                  ausente dice "no corresponde"; uno rojo dice "te falta". */}
-              {data.setup.kickoff !== null && (
-                <SetupChip state={data.setup.kickoff ? "done" : "missing"} label={data.setup.kickoff ? "✓ Kickoff" : "Sin kickoff"} />
-              )}
-              <SetupChip
-                state={data.setup.cronograma === "publicado" ? "done" : data.setup.cronograma === "borrador" ? "draft" : "missing"}
-                label={data.setup.cronograma === "publicado" ? "✓ Cronograma" : data.setup.cronograma === "borrador" ? "Cronograma sin subir" : "Sin cronograma"}
-              />
-              <SetupChip state={data.setup.procesos ? "done" : "missing"} label={data.setup.procesos ? "✓ Procesos" : "Sin procesos"} />
+              {canvasChips.map((c) => (
+                <SetupChip
+                  key={c.slug}
+                  state={c.estado === "generada" ? "done" : c.estado === "borrador" ? "draft" : "missing"}
+                  label={
+                    c.estado === "generada"
+                      ? `✓ ${c.label}`
+                      : c.estado === "borrador"
+                        ? `${c.label} sin subir`
+                        : c.label
+                  }
+                />
+              ))}
             </div>
           )}
         </div>

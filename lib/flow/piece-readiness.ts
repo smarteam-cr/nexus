@@ -34,6 +34,19 @@ interface PieceNeeds {
    * exigirle además el tag lo dejaría con un aviso de "no aplica" sobre su pieza central.
    */
   anyPipeline?: ProjectPipelineKey[];
+  /**
+   * Pipelines a los que la pieza NO les corresponde, tengan el tag que tengan.
+   *
+   * Es el caso contrario a `anyPipeline` y se evalúa PRIMERO: un desarrollo no hace kickoff
+   * —no hay landing de arranque que presentarle a un cliente que ya está adentro—, y eso no
+   * se puede expresar con una lista de inclusión sin enumerar los pipelines que sí.
+   *
+   * La regla existía, pero suelta: `pasosDeSetup` la deducía de `seedPieces` para el chip
+   * del widget y nadie más la veía. Acá vive donde ya vive la pregunta "¿esta pieza va en
+   * este proyecto?", así que el desplegable, el widget y cualquier consumidor futuro dan la
+   * misma respuesta.
+   */
+  exceptPipeline?: ProjectPipelineKey[];
   /** Piezas que conviene tener con contenido antes que ésta. */
   afterPieces?: string[];
   /** Cómo se explica el "antes" en una frase (por qué, no solo qué). */
@@ -41,6 +54,12 @@ interface PieceNeeds {
 }
 
 const NEEDS: Record<string, PieceNeeds> = {
+  kickoff: {
+    /* Un desarrollo no lleva kickoff: es la landing con la que se le presenta el arranque a
+       un cliente, y un desarrollo que cuelga de una implementación ya lo tuvo — el suyo es
+       el del hermano. Sitios web SÍ lo lleva (es su landing de cara al cliente). */
+    exceptPipeline: ["development"],
+  },
   "tech-requirements": {
     // hasTechnicalScope(): los mismos dos tags, ahora también del lado de la UI.
     anyTag: ["custom_dev", "insider_one"],
@@ -106,6 +125,21 @@ export function pieceReadiness(slug: string, input: PieceReadinessInput): PieceR
   const needs = NEEDS[slug];
   if (!needs) return OK;
 
+  // 0. ¿Está EXCLUIDA de este pipeline? Va primero: es la exclusión más fuerte y ningún tag
+  //    la levanta. Un desarrollo no hace kickoff aunque le pongan todos los tags del mundo.
+  const keyDelPipeline = resolvePipeline(input.hubspotPipelineId)?.key;
+  if (keyDelPipeline && needs.exceptPipeline?.includes(keyDelPipeline)) {
+    const pieza = pieceBySlug(slug)?.label ?? slug;
+    return {
+      applies: false,
+      ready: true,
+      reason:
+        `«${pieza}» no va en un proyecto de ${pipelineByKey(keyDelPipeline).label}. ` +
+        `Podés agregarla igual si este caso es la excepción.`,
+      shortReason: "No aplica",
+    };
+  }
+
   // 1. ¿Le corresponde? Es lo más fuerte: la pieza directamente no va en este proyecto.
   //    Dos caminos independientes: el tag o el pipeline. Alcanza con uno.
   if (needs.anyTag?.length || needs.anyPipeline?.length) {
@@ -166,8 +200,11 @@ export function piezaAplica(
   input: { tags: string[]; hubspotPipelineId: string | null },
 ): boolean {
   const needs = NEEDS[slug];
-  if (!needs?.anyTag?.length && !needs?.anyPipeline?.length) return true;
-  if (needs.anyTag?.some((t) => input.tags.includes(t))) return true;
+  if (!needs) return true;
   const key = resolvePipeline(input.hubspotPipelineId)?.key;
+  // La exclusión por pipeline gana sobre cualquier tag — mismo orden que `pieceReadiness`.
+  if (key && needs.exceptPipeline?.includes(key)) return false;
+  if (!needs.anyTag?.length && !needs.anyPipeline?.length) return true;
+  if (needs.anyTag?.some((t) => input.tags.includes(t))) return true;
   return !!key && (needs.anyPipeline?.includes(key) ?? false);
 }

@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { SETUP_CANVAS_SLUGS, deriveSetup, pasosDeSetup } from "./project-setup";
 import { pipelineByKey } from "@/lib/projects/kind";
+import { piezaAplica } from "@/lib/flow/piece-readiness";
 
 const DEV = pipelineByKey("development").hubspotPipelineId;
 const CS = pipelineByKey("customer-success").hubspotPipelineId;
@@ -111,12 +112,42 @@ describe("el espejo del widget coincide con el tipo real", () => {
     ).toEqual(real);
   });
 
-  it("el chip del kickoff no se pinta cuando no aplica", () => {
+  it("el widget NO pinta chips con nombres de pieza escritos a mano", () => {
+    /* ── ESTE TEST SE MUDÓ, no se aflojó ──────────────────────────────────────
+       Antes exigía el literal `data.setup.kickoff !== null` en ProjectGPS.tsx: era la
+       excepción, escrita a mano y SOLO para el kickoff, que evitaba el chip rojo permanente
+       en un desarrollo.
+       Ahora el widget pinta la lista que le manda el servidor (`canvasChips`), ya filtrada
+       por `piezaAplica` para TODAS las piezas — no solo el kickoff. La garantía es más
+       fuerte y ya no vive en React, así que lo que hay que cuidar es justamente eso: que
+       nadie vuelva a meter una pieza a mano en el componente. */
     const src = fs.readFileSync(path.join(process.cwd(), "components/clients/ProjectGPS.tsx"), "utf8");
-    expect(
-      src,
-      "el chip de kickoff tiene que estar guardado por `!== null`, o un desarrollo vuelve a " +
-        "mostrar «Sin kickoff» en rojo para siempre",
-    ).toContain("data.setup.kickoff !== null");
+    expect(src, "el widget dejó de pintar la lista del servidor").toContain("canvasChips.map(");
+    for (const literal of ["Sin kickoff", "Sin handoff", "Sin procesos", "Sin cronograma"]) {
+      expect(
+        src.includes(literal),
+        `"${literal}" volvió a estar escrito en el widget. Los rótulos y qué piezas se ` +
+          `listan salen de lib/flow/canvas-chips.ts, que es donde vive la regla.`,
+      ).toBe(false);
+    }
+  });
+});
+
+describe("las dos reglas de «esta pieza le corresponde» no se contradicen", () => {
+  it("`pasosDeSetup` y `piezaAplica` dan la MISMA respuesta", () => {
+    /* Hay dos caminos hacia la misma pregunta: `pasosDeSetup` la deduce de `seedPieces`
+       (con qué nace el proyecto) y `piezaAplica` la lee de las condiciones declaradas. Si se
+       separan, el panel de cartera y el widget del proyecto discrepan sobre el mismo
+       proyecto — y nadie sabe cuál miente. */
+    for (const key of ["customer-success", "development", "web"] as const) {
+      const def = pipelineByKey(key);
+      const porSetup = new Set(pasosDeSetup(def.hubspotPipelineId));
+      for (const slug of SETUP_CANVAS_SLUGS) {
+        expect(
+          piezaAplica(slug, { tags: [], hubspotPipelineId: def.hubspotPipelineId }),
+          `${def.label} · "${slug}": pasosDeSetup dice ${porSetup.has(slug)} y piezaAplica dice lo contrario`,
+        ).toBe(porSetup.has(slug));
+      }
+    }
   });
 });
