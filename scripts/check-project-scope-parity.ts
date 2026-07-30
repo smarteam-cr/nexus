@@ -19,10 +19,8 @@
  * Uso: npx tsx scripts/check-project-scope-parity.ts
  * Sale con código 1 si aparece un delta que no está en la lista de esperados.
  */
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import "dotenv/config";
+import { createScriptDb } from "./lib/db";
 import {
   PROYECTO_NAVEGABLE_WHERE,
   PROYECTO_DE_CARTERA_WHERE,
@@ -32,11 +30,9 @@ import {
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
-});
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+// Pool ACOTADO (max: 2). El pooler de Supabase da ~15 slots compartidos entre prod,
+// las dos PCs de dev y cualquier script suelto — ver scripts/lib/db.ts.
+const { prisma, close } = createScriptDb();
 
 /**
  * Deltas ACEPTADOS, con su motivo. Un delta que no esté acá hace fallar el script.
@@ -177,7 +173,4 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-    await pool.end();
-  });
+  .finally(close);

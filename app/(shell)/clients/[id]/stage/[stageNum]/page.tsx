@@ -1,6 +1,7 @@
 import { requireConsultantSession } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
+import { proyectoNavegableWhere } from "@/lib/projects/scope";
 
 export default async function OldStagePage({
   params,
@@ -25,9 +26,13 @@ export default async function OldStagePage({
   });
   if (!client) notFound();
 
-  // Buscar el primer proyecto activo del cliente
+  /* El primer proyecto NAVEGABLE del cliente — el mismo criterio que el rail, porque a eso
+     se está redirigiendo. Antes era `{ clientId, status: "active" }` a secas, así que si el
+     proyecto activo más viejo del cliente resultaba ser el centinela de "Información del
+     cliente", esta URL vieja redirigía a la página de etapa de un proyecto que no existe
+     como tal. */
   const project = await prisma.project.findFirst({
-    where: { clientId: id, status: "active" },
+    where: proyectoNavegableWhere({ clientId: id }),
     orderBy: { createdAt: "asc" },
     select: { id: true },
   });

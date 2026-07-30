@@ -24,17 +24,13 @@
  *   npx tsx scripts/backfill-project-pipeline.ts
  *   npx tsx scripts/backfill-project-pipeline.ts --apply
  */
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import "dotenv/config";
+import { createScriptDb } from "./lib/db";
 import { resolvePipeline } from "@/lib/projects/kind";
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
-});
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+// Pool ACOTADO (max: 2). El pooler de Supabase da ~15 slots compartidos entre prod,
+// las dos PCs de dev y cualquier script suelto — ver scripts/lib/db.ts.
+const { prisma, close } = createScriptDb();
 
 const APLICAR = process.argv.includes("--apply");
 const LOTE = 100; // techo de la API de batch/read de HubSpot
@@ -214,7 +210,4 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-    await pool.end();
-  });
+  .finally(close);

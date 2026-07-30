@@ -35,6 +35,14 @@ import { resolveAllSessions } from "@/lib/sessions/resolve-client";
  *      `(not available)` does not exist"). Se cae una sección entera de la app. Nació el
  *      2026-07-27, cuando `Client.logoDarkUrl`/`logoScale` quedaron sin aplicar y /clients
  *      dejó de cargar sin que nada lo hubiera avisado.
+ *   8. El HERMANO de un proyecto está sano: no cruza cliente, no es él mismo, y no queda
+ *      un vínculo declarado sin resolver cuando el proyecto apuntado SÍ existe en Nexus.
+ *      Un hermano decide FACTURACIÓN (un desarrollo colgado de una implementación no se
+ *      cobra aparte), así que un vínculo mal resuelto es plata mal contada.
+ *   9. El fragmento SQL y el predicado en memoria de lib/projects/scope.ts devuelven el
+ *      MISMO conjunto sobre los datos reales. `scope.test.ts` ya prueba la lógica contra
+ *      1.080 filas sintéticas; esto la prueba contra la base, que es donde viven los casos
+ *      que a nadie se le ocurrió inventar.
  */
 async function main(): Promise<number> {
   let violations = 0;
@@ -192,7 +200,7 @@ async function main(): Promise<number> {
       const [, campo, tipo, esLista, , resto] = f;
       // Las RELACIONES no son columnas: su tipo es otro modelo, o traen @relation.
       if (resto.includes("@relation") || (esLista && !resto.includes("@"))) continue;
-      modelos.get(m[1])!.columnas.push(`${campo} ${tipo} ${resto}`);
+      modelos.get(m[1])!.columnas.push(`${campo}\u0000${tipo}\u0000${resto}`);
     }
   }
   // Segunda pasada: recién ahora se conocen TODOS los modelos, así que se puede decidir
@@ -201,7 +209,7 @@ async function main(): Promise<number> {
   for (const info of modelos.values()) {
     const cols = new Set<string>();
     for (const raw of info.columnas) {
-      const [campo, tipo, resto] = raw.split(" ");
+      const [campo, tipo, resto] = raw.split("\u0000");
       if (modelos.has(tipo)) continue; // relación
       const map = resto.match(/@map\("([^"]+)"\)/);
       cols.add(map ? map[1] : campo);
@@ -246,6 +254,167 @@ async function main(): Promise<number> {
     console.warn(
       `⚠ INV6 (no bloquea): ${scriptPools.length} script(s) con new Pool( sin max: — legacy one-off tolerado; scripts NUEVOS deben usar scripts/lib/db.ts (createScriptDb, max:2).`,
     );
+  }
+
+  // ── Inv 8: el hermano de un proyecto está sano ──
+  // Decide facturación, así que un vínculo torcido es plata mal contada.
+  const conVinculo = await prisma.project.findMany({
+    where: {
+      OR: [{ hermanoCsProjectId: { not: null } }, { hubspotRelatedProjectIds: { isEmpty: false } }],
+    },
+    select: {
+      id: true,
+      name: true,
+      clientId: true,
+      hubspotServiceId: true,
+      hubspotPipelineId: true,
+      hubspotRelatedProjectIds: true,
+      hermanoCsProjectId: true,
+      updatedAt: true,
+      client: { select: { name: true } },
+    },
+  });
+  const porId = new Map(conVinculo.map((p) => [p.id, p]));
+
+  // 8a. Cruzar cliente. El resolvedor solo mira dentro del mismo cliente, así que esto solo
+  // puede aparecer por un dato viejo o escrito a mano.
+  const hermanosCruzados: string[] = [];
+  // 8b. Hermano de sí mismo.
+  const hermanosDeSiMismo: string[] = [];
+  for (const p of conVinculo) {
+    if (!p.hermanoCsProjectId) continue;
+    if (p.hermanoCsProjectId === p.id) {
+      hermanosDeSiMismo.push(`${p.client.name} · "${p.name}"`);
+      continue;
+    }
+    const otro = porId.get(p.hermanoCsProjectId);
+    // Si el hermano no está en este conjunto hay que traerlo aparte para saber su cliente.
+    const clienteDelOtro =
+      otro?.clientId ??
+      (await prisma.project.findUnique({
+        where: { id: p.hermanoCsProjectId },
+        select: { clientId: true },
+      }))?.clientId ??
+      null;
+    if (clienteDelOtro === null) {
+      // Apunta a un proyecto que ya no existe: degrada a "aparte" (se factura), que es el
+      // lado seguro, pero el dato quedó sucio y hay que verlo.
+      hermanosCruzados.push(`${p.client.name} · "${p.name}" → apunta a un proyecto BORRADO`);
+    } else if (clienteDelOtro !== p.clientId) {
+      hermanosCruzados.push(`${p.client.name} · "${p.name}" → hermano de OTRO cliente`);
+    }
+  }
+  if (hermanosCruzados.length > 0 || hermanosDeSiMismo.length > 0) {
+    violations++;
+    console.error(`✗ INV8: ${hermanosCruzados.length + hermanosDeSiMismo.length} hermano(s) mal resuelto(s):`);
+    for (const s of [...hermanosCruzados, ...hermanosDeSiMismo]) console.error(`    - ${s}`);
+    console.error("  Un hermano decide si el proyecto se factura. Revisar la asociación en HubSpot.");
+  } else {
+    console.log("✓ INV8a/b: ningún hermano cruza cliente ni es hermano de sí mismo.");
+  }
+
+  // 8c. Vínculos declarados que siguen sin resolver aunque el proyecto apuntado YA existe en
+  // Nexus. Uno pendiente es normal (el hermano todavía no entró); uno pendiente con el
+  // objetivo presente significa que `resolverHermanos` no corrió o falló.
+  const idsHsPresentes = new Set(
+    (
+      await prisma.project.findMany({
+        where: { hubspotServiceId: { not: null } },
+        select: { hubspotServiceId: true, clientId: true, hubspotPipelineId: true },
+      })
+    )
+      .filter((p) => p.hubspotPipelineId === "826270797")
+      .map((p) => `${p.clientId}:${p.hubspotServiceId}`),
+  );
+  const SIETE_DIAS = 7 * 24 * 60 * 60 * 1000;
+  const pendientesResolubles = conVinculo.filter(
+    (p) =>
+      p.hermanoCsProjectId === null &&
+      p.hubspotRelatedProjectIds.some((r) => idsHsPresentes.has(`${p.clientId}:${r}`)) &&
+      Date.now() - p.updatedAt.getTime() > SIETE_DIAS,
+  );
+  if (pendientesResolubles.length > 0) {
+    violations++;
+    console.error(
+      `✗ INV8c: ${pendientesResolubles.length} proyecto(s) con un vínculo declarado hace más de 7 días cuyo hermano SÍ existe en Nexus:`,
+    );
+    for (const p of pendientesResolubles) console.error(`    - ${p.client.name} · "${p.name}"`);
+    console.error("  resolverHermanos() (lib/hubspot/sync-projects.ts) no está corriendo o falla.");
+  } else {
+    console.log("✓ INV8c: no hay hermanos resolubles sin resolver.");
+  }
+
+  // ── Inv 9: el fragmento SQL y el predicado en memoria coinciden SOBRE LOS DATOS REALES ──
+  // scope.test.ts prueba la LÓGICA con filas sintéticas; esto la prueba con las filas que
+  // de verdad hay, que es donde aparecen las combinaciones que nadie inventó.
+  {
+    const { esProyectoDeCartera, esProyectoFacturable, esProyectoNavegable, esProyectoClasificable,
+      PROYECTO_DE_CARTERA_WHERE, PROYECTO_FACTURABLE_WHERE, PROYECTO_NAVEGABLE_WHERE,
+      PROYECTO_CLASIFICABLE_WHERE } = await import("@/lib/projects/scope");
+
+    const todos = await prisma.project.findMany({
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        serviceType: true,
+        hubspotServiceId: true,
+        hubspotPipelineId: true,
+        proyectoInterno: true,
+        hermanoCsProjectId: true,
+        client: { select: { name: true, hubspotCompanyId: true, hubspotAccount: { select: { id: true } } } },
+      },
+    });
+
+    const casos = [
+      { nombre: "navegable", where: PROYECTO_NAVEGABLE_WHERE, pred: esProyectoNavegable },
+      { nombre: "cartera", where: PROYECTO_DE_CARTERA_WHERE, pred: esProyectoDeCartera },
+      { nombre: "facturable", where: PROYECTO_FACTURABLE_WHERE, pred: esProyectoFacturable },
+      {
+        nombre: "clasificable",
+        where: PROYECTO_CLASIFICABLE_WHERE,
+        pred: (p: Parameters<typeof esProyectoClasificable>[0]) => esProyectoClasificable(p),
+      },
+    ];
+
+    let drift = 0;
+    for (const caso of casos) {
+      const porSql = new Set(
+        (await prisma.project.findMany({ where: caso.where, select: { id: true } })).map((p) => p.id),
+      );
+      const porMemoria = new Set(
+        todos
+          .filter((p) =>
+            caso.pred(p, {
+              hubspotCompanyId: p.client.hubspotCompanyId,
+              tieneHubspotAccount: !!p.client.hubspotAccount,
+            }),
+          )
+          .map((p) => p.id),
+      );
+      const soloSql = [...porSql].filter((id) => !porMemoria.has(id));
+      const soloMem = [...porMemoria].filter((id) => !porSql.has(id));
+      if (soloSql.length || soloMem.length) {
+        drift++;
+        console.error(
+          `✗ INV9 (${caso.nombre}): SQL=${porSql.size} memoria=${porMemoria.size} — ` +
+            `${soloSql.length} solo en SQL, ${soloMem.length} solo en memoria`,
+        );
+        for (const id of [...soloSql, ...soloMem].slice(0, 5)) {
+          const p = todos.find((x) => x.id === id);
+          console.error(`    - ${p?.client.name} · "${p?.name}"`);
+        }
+      }
+    }
+    if (drift > 0) {
+      violations++;
+      console.error(
+        "  El filtro de proyectos dice una cosa en SQL y otra en memoria. En SQL un predicado " +
+          "NULL descarta la fila; en JavaScript no. Escribí la condición en POSITIVO (lib/projects/scope.ts).",
+      );
+    } else {
+      console.log("✓ INV9: los 4 criterios de alcance coinciden en SQL y en memoria.");
+    }
   }
 
   return violations;

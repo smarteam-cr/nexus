@@ -22,16 +22,12 @@
  *
  * Uso: npx tsx scripts/inspect-project-pipelines.ts
  */
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import "dotenv/config";
+import { createScriptDb } from "./lib/db";
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
-});
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+// Pool ACOTADO (max: 2). El pooler de Supabase da ~15 slots compartidos entre prod,
+// las dos PCs de dev y cualquier script suelto — ver scripts/lib/db.ts.
+const { prisma, close } = createScriptDb();
 
 /* Lo que Elías confirmó. El script NO lo asume: lo VERIFICA contra el portal. */
 const ETAPAS_DE_CIERRE_ESPERADAS: Record<string, { pipelineEsperado: RegExp; stageId: string }> = {
@@ -70,11 +66,31 @@ async function systemToken(): Promise<string> {
   return j.access_token;
 }
 
-async function getJson(token: string, path: string): Promise<{ status: number; body: any }> {
+/**
+ * La respuesta de HubSpot, sin `any`. Un objeto de claves desconocidas describe la forma
+ * real —no sabemos qué manda el portal— y a diferencia de `any` obliga a pasar cada valor
+ * por `str()` o `leerLista()` antes de usarlo, que es exactamente lo que hay que hacer con
+ * datos que vienen de afuera.
+ */
+type JsonHubspot = Record<string, unknown>;
+
+/** Un valor desconocido → string legible. Nunca "[object Object]" ni "undefined". */
+const str = (v: unknown): string => (v === null || v === undefined ? "" : String(v));
+
+/** Un valor desconocido → objeto indexable. Lo que no es objeto es un objeto vacío. */
+const obj = (v: unknown): Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+
+/** Un valor desconocido → lista de objetos. Lo que no es lista es una lista vacía. */
+function leerLista(v: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(v) ? (v.filter((x) => typeof x === "object" && x !== null) as Array<Record<string, unknown>>) : [];
+}
+
+async function getJson(token: string, path: string): Promise<{ status: number; body: JsonHubspot }> {
   const r = await fetch("https://api.hubapi.com" + path, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return { status: r.status, body: await r.json().catch(() => null) };
+  return { status: r.status, body: obj(await r.json().catch(() => null)) };
 }
 
 /**
@@ -129,10 +145,10 @@ async function main() {
     console.log(`⛔ /crm/v3/pipelines/${slug} → HTTP ${pipesRes.status}. Parar.`);
     return;
   }
-  const pipelines: Pipeline[] = (pipesRes.body.results ?? []).map((p: any) => ({
-    id: String(p.id),
-    label: String(p.label),
-    stages: (p.stages ?? []).map((s: any) => ({ id: String(s.id), label: String(s.label) })),
+  const pipelines: Pipeline[] = leerLista(pipesRes.body?.results).map((p) => ({
+    id: str(p.id),
+    label: str(p.label),
+    stages: leerLista(p.stages).map((s) => ({ id: str(s.id), label: str(s.label) })),
   }));
 
   for (const p of pipelines) {
@@ -177,10 +193,10 @@ async function main() {
   const prop = await getJson(token, `/crm/v3/properties/${slug}/proyecto_interno`);
   if (prop.status === 200) {
     console.log("  ✓ EXISTE:", {
-      name: prop.body.name,
-      label: prop.body.label,
-      type: prop.body.type,
-      fieldType: prop.body.fieldType,
+      name: str(prop.body.name),
+      label: str(prop.body.label),
+      type: str(prop.body.type),
+      fieldType: str(prop.body.fieldType),
     });
     if (prop.body.type !== "bool" || prop.body.fieldType !== "booleancheckbox") {
       console.log("  ⚠ NO es booleancheckbox — el parseo de A1 tiene que contemplar este tipo.");
@@ -190,9 +206,9 @@ async function main() {
     const todas = await getJson(token, `/crm/v3/properties/${slug}`);
     if (todas.status === 200) {
       console.log("  Candidatas booleanas del objeto Proyectos:");
-      (todas.body.results ?? [])
-        .filter((p: any) => p.type === "bool" || p.fieldType === "booleancheckbox")
-        .forEach((p: any) => console.log(`    - ${p.name}  (${p.label})`));
+      leerLista(todas.body.results)
+        .filter((pr) => pr.type === "bool" || pr.fieldType === "booleancheckbox")
+        .forEach((pr) => console.log(`    - ${str(pr.name)}  (${str(pr.label)})`));
     }
   }
 
@@ -200,14 +216,10 @@ async function main() {
   console.log("\n═══ PASO 3 · asociación proyecto ↔ proyecto (el hermano) ═══\n");
   const assoc = await getJson(token, `/crm/v4/associations/${slug}/${slug}/labels`);
   if (assoc.status === 200) {
-    const rs = (assoc.body.results ?? []) as Array<{
-      typeId: number;
-      label: string | null;
-      category: string;
-    }>;
+    const rs = leerLista(assoc.body.results);
     if (!rs.length) console.log("  (sin etiquetas — usar la asociación por defecto)");
     for (const a of rs) {
-      console.log(`  typeId ${a.typeId}  label="${a.label ?? "(default)"}"  category=${a.category}`);
+      console.log(`  typeId ${str(a.typeId)}  label="${a.label === null || a.label === undefined ? "(default)" : str(a.label)}"  category=${str(a.category)}`);
     }
   } else {
     console.log(`  HTTP ${assoc.status}: ${JSON.stringify(assoc.body).slice(0, 250)}`);
@@ -240,23 +252,24 @@ async function main() {
     const url =
       `/crm/v3/objects/${slug}?limit=100&properties=${propsPedidas}` +
       (after ? `&after=${encodeURIComponent(after)}` : "");
-    const page: { status: number; body: any } = await getJson(token, url);
+    const page = await getJson(token, url);
     if (page.status !== 200) {
       console.log(`  ⚠ corte de paginación en HTTP ${page.status} tras ${crudos.length} proyectos.`);
       break;
     }
-    for (const r of (page.body.results ?? []) as any[]) {
-      const p = r.properties ?? {};
+    for (const r of leerLista(page.body.results)) {
+      const p = obj(r.properties);
       crudos.push({
-        id: String(r.id),
-        nombre: p.nombre_del_proyecto || p.hs_name || `(sin nombre) ${r.id}`,
-        pipeline: (p.hs_pipeline ?? "").trim() || null,
-        stage: (p.hs_pipeline_stage ?? "").trim() || null,
-        rawStatus: (p.hs_status || p.estatus_del_proyecto || "").trim(),
-        interno: p.proyecto_interno === undefined ? null : p.proyecto_interno,
+        id: str(r.id),
+        nombre: str(p.nombre_del_proyecto) || str(p.hs_name) || `(sin nombre) ${str(r.id)}`,
+        pipeline: str(p.hs_pipeline).trim() || null,
+        stage: str(p.hs_pipeline_stage).trim() || null,
+        rawStatus: (str(p.hs_status) || str(p.estatus_del_proyecto)).trim(),
+        interno: p.proyecto_interno === undefined ? null : str(p.proyecto_interno),
       });
     }
-    after = page.body.paging?.next?.after ?? null;
+    const sigue = obj(obj(page.body.paging).next).after;
+    after = sigue === undefined ? null : str(sigue);
     paginas++;
   } while (after && paginas < 60);
 
@@ -394,7 +407,4 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-    await pool.end();
-  });
+  .finally(close);

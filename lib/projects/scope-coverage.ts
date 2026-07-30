@@ -1,0 +1,116 @@
+/**
+ * lib/projects/scope-coverage.ts — QUIÉN PREGUNTA "¿este proyecto cuenta?" y CON QUÉ CRITERIO.
+ *
+ * Todo archivo que haga una consulta de VARIOS proyectos (`findMany`, `count`, `groupBy`,
+ * `findFirst`, `updateMany`, `aggregate`) tiene que aparecer acá. El test que acompaña a
+ * este registro escanea el repo y falla si alguno no está declarado.
+ *
+ * ── POR QUÉ ES OBLIGATORIO Y NO UNA CONVENCIÓN ───────────────────────────────
+ * Así nacieron las cuatro copias del filtro que esta tanda vino a borrar: alguien escribió
+ * una pantalla nueva, necesitó "los proyectos reales", y lo resolvió escribiendo el criterio
+ * a mano. No fue negligencia — no había dónde importarlo y nadie se enteró. Un comentario
+ * pidiendo disciplina no lo hubiera evitado; una lista que hay que actualizar para que el
+ * build pase, sí.
+ *
+ * La séptima pantalla, dentro de seis meses, va a chocar contra este archivo. Ése es el
+ * único mecanismo que hace que el diseño escale más allá de esta semana.
+ */
+
+/** Los cuatro criterios de `lib/projects/scope.ts`. */
+export type Criterio = "navegable" | "cartera" | "facturable" | "clasificable";
+
+export type Cobertura =
+  /** Usa un fragmento del scope. El test verifica que el archivo LO IMPORTE de verdad. */
+  | { modo: "criterio"; criterio: Criterio }
+  /**
+   * Va a buscar EL contenedor de "Información del cliente" (el centinela). No es una
+   * pregunta de alcance: es un destino con nombre propio. El test verifica que use la
+   * constante del registro y no el literal.
+   */
+  | { modo: "sentinel" }
+  /** Ni lista ni filtra: escribe. Es el espejo de HubSpot. */
+  | { modo: "escritor"; razon: string }
+  /** No necesita criterio, y por qué. */
+  | { modo: "exento"; razon: string };
+
+export const SCOPE_COVERAGE: Record<string, Cobertura> = {
+  // ── Los que usan un criterio ───────────────────────────────────────────────
+  "app/(shell)/clients/[id]/layout.tsx": { modo: "criterio", criterio: "navegable" },
+  "app/(shell)/clients/[id]/page.tsx": { modo: "criterio", criterio: "navegable" },
+  "app/(shell)/clients/[id]/stage/[stageNum]/page.tsx": { modo: "criterio", criterio: "navegable" },
+  "lib/portfolio/load.ts": { modo: "criterio", criterio: "cartera" },
+  "lib/cs/watchdog.ts": { modo: "criterio", criterio: "cartera" },
+  "lib/cobranza/queries.ts": { modo: "criterio", criterio: "facturable" },
+  "app/(shell)/sessions/page.tsx": { modo: "criterio", criterio: "clasificable" },
+  "app/(shell)/sessions/[id]/page.tsx": { modo: "criterio", criterio: "clasificable" },
+  "app/api/projects/[projectId]/project-sessions/route.ts": { modo: "criterio", criterio: "clasificable" },
+  "app/api/clients/[id]/analyze/route.ts": { modo: "criterio", criterio: "clasificable" },
+  "lib/sessions/classify-session-project.ts": { modo: "criterio", criterio: "clasificable" },
+
+  // ── Los que buscan el centinela ────────────────────────────────────────────
+  "lib/canvas/strategy-project.ts": { modo: "sentinel" },
+  "lib/canvas/read-procesos.ts": { modo: "sentinel" },
+  "lib/canvas/sync-procesos-blocks.ts": { modo: "sentinel" },
+  "app/api/projects/[projectId]/procesos/route.ts": { modo: "sentinel" },
+  "app/print/canvas/[clientId]/[canvasId]/page.tsx": { modo: "sentinel" },
+
+  // ── El espejo ──────────────────────────────────────────────────────────────
+  "lib/hubspot/sync-projects.ts": {
+    modo: "escritor",
+    razon:
+      "es el espejo de HubSpot: recorre lo que devuelve la API, no una selección de Nexus. " +
+      "Filtrar acá con un criterio de alcance sería no sincronizar lo que sí existe.",
+  },
+
+  // ── Los exentos, cada uno con su motivo ────────────────────────────────────
+  "lib/canvas/load-canvas-context.ts": {
+    modo: "exento",
+    razon:
+      "el contexto del agente incluye A PROPÓSITO los proyectos ya terminados del cliente, " +
+      "así que no puede usar `clasificable` (que exige activo). Compone el átomo del " +
+      "centinela a mano, con el comentario que lo explica al lado.",
+  },
+  "app/api/clients/[id]/projects/route.ts": {
+    modo: "exento",
+    razon:
+      "devuelve TODOS los proyectos del cliente con su serviceType para que el consumidor " +
+      "decida (la pantalla de ajustes filtra el centinela en el navegador). Angostarlo acá " +
+      "le sacaría opciones a la zona de peligro sin avisar.",
+  },
+  "app/api/handoffs/import-project/route.ts": {
+    modo: "exento",
+    razon: "busca UN proyecto por su id de HubSpot para vincularlo. No es una lista.",
+  },
+  "app/api/handoffs/projects-of-company/route.ts": {
+    modo: "exento",
+    razon:
+      "cruza los proyectos de HubSpot con los de Nexus para el asistente de handoff: " +
+      "necesita ver TODOS, incluidos los que el rail esconde, o el asistente ofrecería " +
+      "crear uno que ya existe.",
+  },
+  "lib/auth/access.ts": {
+    modo: "exento",
+    razon:
+      "cuenta proyectos por `hubspotOwnerEmail` para decidir ACCESO. Angostarlo le quitaría " +
+      "acceso a un CSE por una razón de negocio (que su proyecto no es cartera), que es " +
+      "exactamente lo que la tabla de decisiones promete NO hacer.",
+  },
+  "lib/clients/last-interaction.ts": {
+    modo: "exento",
+    razon:
+      "junta fechas de próxima sesión por cliente. Es una señal temporal agregada, no un " +
+      "listado de proyectos, y esconder una fecha real haría mentir a la columna.",
+  },
+  "lib/cs/load-account.ts": {
+    modo: "exento",
+    razon: "lee propiedades por `id IN` de una lista que loadPortfolio YA filtró por cartera.",
+  },
+  "lib/cs/load-dashboard.ts": {
+    modo: "exento",
+    razon: "lee propiedades por `id IN` de una lista que loadPortfolio YA filtró por cartera.",
+  },
+  "lib/lifecycle/load.ts": {
+    modo: "exento",
+    razon: "carga el ciclo de vida por `id IN` de una lista que el caller ya filtró.",
+  },
+};
