@@ -44,7 +44,7 @@ export const PROPUESTA_CSL_CONTENT: Record<string, unknown> = {
   },
 
   profile: {
-    md: `Smarteam es una consultora de HubSpot que está pasando a ser una **consultoría tecnológica potenciada por IA**. En la práctica eso significa que la IA se encarga del trabajo repetitivo y las personas se dedican a lo que la IA no hace: pensar en el problema del cliente, decidir con criterio, conversar bien y responder rápido.
+    md: `Smarteam es una consultora de HubSpot que está pasando a ser una **consultoría tecnológica potenciada por IA**. En la práctica, la IA se encarga del trabajo repetitivo y las personas hacen lo que la IA no puede: relacionarse con el cliente, ser desafiante cuando hay que serlo, decidir con criterio y sostener las conversaciones difíciles.
 
 **Misión del puesto.** Llevar éxito a todos los clientes, anticipar y mitigar riesgos en las cuentas más complejas, y liderar la estrategia de **retención, salud y expansión** de toda la cartera.`,
   },
@@ -73,7 +73,7 @@ export const PROPUESTA_CSL_CONTENT: Record<string, unknown> = {
       {
         title: "Adopción de IA en el equipo de CSEs",
         detail:
-          "Impulsar que el equipo trabaje con IA de verdad en su día a día. Usarla con criterio es del puesto; construir la herramienta es de Desarrollo.",
+          "Lograr que el equipo adopte la IA en su día a día, aprovechando todas las herramientas disponibles: Nexus, los agentes y lo que ya trae HubSpot.",
       },
       {
         title: "Carga de trabajo y desbloqueo del equipo",
