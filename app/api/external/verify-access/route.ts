@@ -23,7 +23,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/db/prisma";
-import { EXTERNAL_ACCESS_COOKIE } from "@/lib/external/access";
+import { EXTERNAL_ACCESS_COOKIE, publicableAfuera } from "@/lib/external/access";
 import { getRemainingBlockSeconds, registerFailure, clearAttempts } from "@/lib/external/verify-rate-limit";
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -61,7 +61,18 @@ export async function POST(req: NextRequest) {
       id: true,
       passwordHash: true,
       revokedAt: true,
-      project: { select: { id: true, name: true } },
+      project: {
+        select: {
+          id: true,
+          name: true,
+          // De qué CLASE es el proyecto. Este endpoint NO pasa por `resolveActiveAccess`
+          // —hace su propia consulta para canjear la contraseña por la cookie de 30 días—,
+          // así que el check de "¿admite mirones de afuera?" tiene que estar acá también.
+          hubspotPipelineId: true,
+          proyectoInterno: true,
+          hermanoCsProjectId: true,
+        },
+      },
     },
   });
 
@@ -76,6 +87,17 @@ export async function POST(req: NextRequest) {
 
   // Caso 2: acceso revocado. Mismo mensaje genérico — no revelamos el estado.
   if (access.revokedAt) {
+    await bcrypt.compare(password, access.passwordHash);
+    await registerFailure(token, now);
+    return NextResponse.json(GENERIC_INVALID, { status: 401 });
+  }
+
+  /* Caso 2b: el proyecto dejó de admitir publicación externa (se marcó interno en HubSpot).
+     Se trata IGUAL que un acceso revocado —mismo bcrypt para no filtrar por tiempo, mismo
+     mensaje genérico—: para quien está afuera no hay diferencia entre "te revocaron" y
+     "este proyecto ya no se comparte", y contarle cuál de las dos es le dice algo del
+     estado interno que no le corresponde. */
+  if (!publicableAfuera(access.project)) {
     await bcrypt.compare(password, access.passwordHash);
     await registerFailure(token, now);
     return NextResponse.json(GENERIC_INVALID, { status: 401 });

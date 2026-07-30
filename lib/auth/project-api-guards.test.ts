@@ -96,6 +96,9 @@ function routes(dir: string, acc: string[] = []): string[] {
  */
 const GUARDAS = [
   "guardAccessToProject(",
+  // Es `guardAccessToProject` + la exigencia de que el proyecto ADMITA publicación externa
+  // (lib/projects/kind.ts → `publicable`). Acota igual de fuerte; encima, más.
+  "guardPublicacionDeProyecto(",
   "guardProjectHandoffAccess(",
   "guardProjectEditHandoff(",
   "guardProjectGenerateHandoff(",

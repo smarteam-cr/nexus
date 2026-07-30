@@ -15,7 +15,7 @@
  * con guardAccessToProject — solo quien tiene acceso al proyecto comparte/deja de compartir.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardAccessToProject, guardPublicacionDeProyecto } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 export async function GET(
@@ -58,7 +58,8 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardAccessToProject(projectId);
+  // Publicar exige, además del acceso, que el proyecto ADMITA publicación externa.
+  const guard = await guardPublicacionDeProyecto(projectId);
   if (guard instanceof NextResponse) return guard;
 
   const updated = await prisma.project.update({

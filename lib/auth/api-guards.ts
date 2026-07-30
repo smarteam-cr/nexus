@@ -35,6 +35,11 @@ import type { ActionKeyOf, SectionKey } from "./permissions/registry";
 import { isCostosRole } from "./cobranza-roles";
 import type { TeamRole } from "@prisma/client";
 import { pieceByName } from "@/lib/pieces/registry";
+import {
+  motivoNoPublicable,
+  projectCapabilities,
+  type ProjectCapabilities,
+} from "@/lib/projects/kind";
 
 function toErrorResponse(e: unknown): NextResponse | null {
   if (e instanceof UnauthorizedError) {
@@ -129,19 +134,71 @@ export async function guardRole(
  * verifica acceso al cliente dueño, y devuelve el bundle de acceso + el
  * clientId resuelto. Devuelve NextResponse 404 si el proyecto no existe.
  */
+export interface ProjectGuardExtras {
+  clientId: string;
+  /** Qué admite este proyecto (lib/projects/kind.ts). Derivado del mismo row. */
+  capacidades: ProjectCapabilities;
+  /** Por qué NO se le puede publicar al cliente. `null` = sí se puede. */
+  motivoNoPublicable: string | null;
+}
+
 export async function guardAccessToProject(
   projectId: string,
-): Promise<(AccessResult & { clientId: string }) | NextResponse> {
+): Promise<(AccessResult & ProjectGuardExtras) | NextResponse> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { clientId: true },
+    /* Las tres columnas de CLASE viajan en el mismo row que ya se traía: cero queries
+       nuevas para los ~75 llamadores, y el que necesite preguntar "¿este proyecto se
+       factura / se publica / es cartera?" ya tiene la respuesta en la mano. */
+    select: {
+      clientId: true,
+      hubspotPipelineId: true,
+      proyectoInterno: true,
+      hermanoCsProjectId: true,
+    },
   });
   if (!project) {
     return NextResponse.json({ error: "Proyecto no existe" }, { status: 404 });
   }
   const guard = await guardAccessToClient(project.clientId);
   if (guard instanceof NextResponse) return guard;
-  return { ...guard, clientId: project.clientId };
+  const facts = {
+    hubspotPipelineId: project.hubspotPipelineId,
+    interno: project.proyectoInterno,
+    tieneHermanoCs: project.hermanoCsProjectId != null,
+  };
+  return {
+    ...guard,
+    clientId: project.clientId,
+    capacidades: projectCapabilities(facts),
+    motivoNoPublicable: motivoNoPublicable(facts),
+  };
+}
+
+/**
+ * Igual que `guardAccessToProject` pero además exige que al proyecto SE LE PUEDA PUBLICAR
+ * contenido a un cliente. Es la puerta de ESCRITURA de `publicable`.
+ *
+ * ── SOLO EL POST ─────────────────────────────────────────────────────────────
+ * El DELETE (despublicar) NO se gatea, y es deliberado: si un proyecto se marca interno
+ * DESPUÉS de haber publicado algo, gatear el DELETE dejaría ese contenido publicado y sin
+ * forma de bajarlo. El GET tampoco: la pantalla necesita renderizar el estado, y lo que
+ * hace en cambio es deshabilitar el control CON el motivo — un botón deshabilitado que
+ * explica enseña; uno escondido es indistinguible de un bug.
+ *
+ * 409 y no 403 por lo mismo que en lib/lifecycle/gate.ts: no falta un permiso, el recurso
+ * no admite la operación.
+ */
+export async function guardPublicacionDeProyecto(
+  projectId: string,
+): Promise<(AccessResult & ProjectGuardExtras) | NextResponse> {
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+  if (guard.capacidades.publicable) return guard;
+  return NextResponse.json(
+    { error: guard.motivoNoPublicable ?? "Este proyecto no admite publicación externa." },
+    { status: 409 },
+  );
 }
 
 /**

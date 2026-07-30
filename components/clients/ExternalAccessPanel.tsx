@@ -38,6 +38,16 @@ interface AccessState {
   kickoffPublished?: boolean;
   timelinePublished?: boolean;
   desarrolloPublished?: boolean;
+  /**
+   * ¿A este proyecto se le puede publicar contenido a un cliente? Hoy solo lo apaga estar
+   * marcado como INTERNO en HubSpot. Ausente = sí (respuesta vieja cacheada).
+   *
+   * El gate de verdad está en el servidor (`guardPublicacionDeProyecto`, 409). Esto es para
+   * deshabilitar el control CON el motivo en vez de dejar que el usuario coma un error: un
+   * botón deshabilitado que explica enseña; uno escondido es indistinguible de un bug.
+   */
+  publicable?: boolean;
+  motivoNoPublicable?: string | null;
 }
 
 /** Las superficies que este acceso destraba. Un solo lugar: la unión estaba repetida en
@@ -353,6 +363,9 @@ function ManageView({
                 label={l.label}
                 url={l.url}
                 published={l.published}
+                // `publicable === false` explícito: una respuesta vieja sin el campo no
+                // bloquea nada (el gate real vive en el servidor).
+                bloqueo={state.publicable === false ? state.motivoNoPublicable ?? "Este proyecto no admite publicación externa." : null}
                 onTogglePublish={onTogglePublish}
               />
             ))}
@@ -523,12 +536,15 @@ function LinkRow({
   label,
   url,
   published,
+  bloqueo,
   onTogglePublish,
 }: {
   kind: ExternalSurface;
   label: string;
   url: string;
   published: boolean;
+  /** Motivo por el que NO se puede publicar. `null` = se puede. */
+  bloqueo: string | null;
   onTogglePublish: (kind: ExternalSurface, publish: boolean) => Promise<void>;
 }) {
   const [copied, setCopied] = useState(false);
@@ -562,8 +578,12 @@ function LinkRow({
         <div className="flex-1" />
         <button
           onClick={toggle}
-          disabled={toggling}
-          className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border transition-colors disabled:opacity-50 ${
+          // Publicar se bloquea; OCULTAR nunca. Si el proyecto se marcó interno DESPUÉS de
+          // publicar algo, hay que poder bajarlo — bloquear las dos direcciones dejaría
+          // contenido de cliente atrapado.
+          disabled={toggling || (!!bloqueo && !published)}
+          title={bloqueo && !published ? bloqueo : undefined}
+          className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
             published
               ? "border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
               : "border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
@@ -586,15 +606,18 @@ function LinkRow({
           {copied ? "✓" : "Copiar"}
         </button>
       </div>
-      {!published && (
-        <p className="text-[10px] text-amber-600 mt-1">
-          {/* El requerimiento técnico lo abre el desarrollador, no el cliente: mismo link y
-              misma contraseña, otro destinatario. Decir "el cliente" ahí confundiría sobre a
-              quién se le está por dar acceso. */}
-          {kind === "desarrollo" ? "El desarrollador" : "El cliente"} verá &quot;no disponible&quot;
-          hasta que publiques esta superficie.
-        </p>
-      )}
+      {!published &&
+        (bloqueo ? (
+          <p className="text-[10px] text-fg-muted mt-1">{bloqueo}</p>
+        ) : (
+          <p className="text-[10px] text-amber-600 mt-1">
+            {/* El requerimiento técnico lo abre el desarrollador, no el cliente: mismo link y
+                misma contraseña, otro destinatario. Decir "el cliente" ahí confundiría sobre a
+                quién se le está por dar acceso. */}
+            {kind === "desarrollo" ? "El desarrollador" : "El cliente"} verá &quot;no disponible&quot;
+            hasta que publiques esta superficie.
+          </p>
+        ))}
     </div>
   );
 }

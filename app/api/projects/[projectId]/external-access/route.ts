@@ -211,12 +211,22 @@ export async function GET(
     },
   });
 
+  /* ¿Este proyecto ADMITE publicación externa? Sale del guard, que ya lo resolvió con el
+     mismo row que usó para el permiso. Va también en la rama "sin acceso" para que el panel
+     pueda explicarlo ANTES de generar credenciales, y no después de que el botón falle. */
+  const publicable = guard.capacidades.publicable;
+
   if (!access) {
-    return NextResponse.json({ exists: false });
+    return NextResponse.json({ exists: false, publicable, motivoNoPublicable: guard.motivoNoPublicable });
   }
 
   return NextResponse.json({
     exists: true,
+    /* El panel deshabilita los toggles CON el motivo en vez de dejar que el usuario coma
+       un 409. Un control deshabilitado que explica enseña; uno escondido es
+       indistinguible de un bug. El gate real vive en el POST — esto es la cortesía. */
+    publicable,
+    motivoNoPublicable: guard.motivoNoPublicable,
     accessToken: access.accessToken,
     // Texto plano (visible para el CSE). Null en accesos viejos pre-migración →
     // el panel muestra "regenerá para verla". Nunca se devuelve el passwordHash.

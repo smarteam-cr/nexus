@@ -14,7 +14,7 @@
  * siguiente render (el chokepoint externo re-chequea este flag en cada lectura).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardAccessToProject, guardPublicacionDeProyecto } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { freezeKickoffSnapshot } from "@/lib/canvas/kickoff-snapshot";
 import { maybeReanchorToKickoff } from "@/lib/timeline/reanchor";
@@ -46,7 +46,8 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardAccessToProject(projectId);
+  // Publicar exige, además del acceso, que el proyecto ADMITA publicación externa.
+  const guard = await guardPublicacionDeProyecto(projectId);
   if (guard instanceof NextResponse) return guard;
 
   // Congelar el snapshot client-safe ANTES de marcar publicado: publicar el kickoff

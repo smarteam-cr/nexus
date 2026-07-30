@@ -416,6 +416,28 @@ export function fuenteDelCiclo(facts: ProjectFacts): FuenteDelCiclo {
   return def ? { tipo: "pipeline", pipeline: def } : { tipo: "customer-success" };
 }
 
+/**
+ * Por qué este proyecto NO se le puede publicar a un cliente. `null` = sí se puede.
+ *
+ * El texto vive acá, al lado de la celda que lo produce, y no en cada endpoint: los tres
+ * `publish-*`, el resolver de acceso externo y el panel del CSE tienen que decir lo MISMO,
+ * y tres copias de una frase divergen a la primera edición.
+ *
+ * Hoy la única celda que lo apaga es el overlay de interno. Está escrito como una pregunta
+ * a `projectCapabilities` y no como `if (interno)` para que el día que otra fila ponga
+ * `publicable: false`, el motivo salga solo.
+ */
+export function motivoNoPublicable(facts: ProjectFacts): string | null {
+  if (projectCapabilities(facts).publicable) return null;
+  if (facts.interno) {
+    return (
+      "Es un proyecto interno de Smarteam: no hay un cliente del otro lado a quien " +
+      "publicarle. Si esto es un error, destildá «Proyecto interno» en HubSpot."
+    );
+  }
+  return "Este proyecto no admite publicación externa.";
+}
+
 // ── Los FRENTES del widget de sesiones ───────────────────────────────────────
 
 /**

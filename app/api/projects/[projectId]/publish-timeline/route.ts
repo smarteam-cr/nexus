@@ -16,7 +16,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardAccessToProject, guardPublicacionDeProyecto } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { freezeBaselineOnPublish } from "@/lib/timeline/baseline";
 import { readClientTimeline } from "@/lib/external/timeline-view";
@@ -48,7 +48,8 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardAccessToProject(projectId);
+  // Publicar exige, además del acceso, que el proyecto ADMITA publicación externa.
+  const guard = await guardPublicacionDeProyecto(projectId);
   if (guard instanceof NextResponse) return guard;
 
   // Razón del cambio (opcional): el canvas del cronograma la pide en un modal al "Subir";

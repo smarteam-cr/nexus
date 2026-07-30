@@ -10,8 +10,20 @@
  * timelinePublishedAt) NO se chequean acá a propósito: cada chokepoint hace su
  * check explícito en su propio archivo — la seguridad de cada superficie se
  * lee donde se decide, no escondida en el resolver.
+ *
+ * ── DÓNDE VA CADA CHECK, Y POR QUÉ ───────────────────────────────────────────
+ * Por SUPERFICIE → la vista (¿está publicado ESTE kickoff?). Por PROYECTO → acá
+ * (¿este proyecto admite que alguien de afuera lo vea?). `publicable` es del
+ * segundo tipo: no depende de qué superficie se pida, así que ponerlo en las tres
+ * vistas serían tres copias, y la cuarta superficie que alguien agregue mañana
+ * nacería sin él.
+ *
+ * ⚠ Este NO es el único lugar que resuelve un token: `/api/external/verify-access`
+ * hace su propia consulta para canjear la contraseña por la cookie de 30 días y
+ * NO pasa por acá. El mismo check tiene que estar en los DOS.
  */
 import { prisma } from "@/lib/db/prisma";
+import { projectCapabilities } from "@/lib/projects/kind";
 
 /** Nombre de la cookie httpOnly que transporta el token (la setea verify-access). */
 export const EXTERNAL_ACCESS_COOKIE = "nexus_ext_access";
@@ -57,6 +69,10 @@ export async function resolveActiveAccess(token: string): Promise<ActiveAccess |
           kickoffPublishedAt: true,
           timelinePublishedAt: true,
           desarrolloPublishedAt: true,
+          // De qué CLASE es el proyecto: decide si admite mirones de afuera.
+          hubspotPipelineId: true,
+          proyectoInterno: true,
+          hermanoCsProjectId: true,
           // Los tres campos del logo viajan JUNTOS: qué archivo, cuál variante y a qué
           // tamaño son una sola unidad visual. Este select es el chokepoint de las TRES
           // superficies externas (kickoff, cronograma, desarrollo) — se agrega acá una vez.
@@ -70,7 +86,30 @@ export async function resolveActiveAccess(token: string): Promise<ActiveAccess |
   // 2. Acceso revocado → gana sobre la cookie, en CADA lectura.
   if (access.revokedAt) return null;
 
+  /* 3. ¿El proyecto admite publicación externa? Un proyecto interno de Smarteam no tiene
+        cliente del otro lado. Devolver `null` —y no un error propio— es deliberado: para
+        quien está afuera, un proyecto que dejó de ser publicable se comporta igual que un
+        token revocado, sin contarle que existe. */
+  if (!publicableAfuera(access.project)) return null;
+
   return { accessId: access.id, project: access.project };
+}
+
+/**
+ * ¿Este proyecto admite que alguien de AFUERA lo mire? Compartida por los dos lugares que
+ * resuelven un token (este resolver y `/api/external/verify-access`) para que no puedan
+ * responder distinto.
+ */
+export function publicableAfuera(p: {
+  hubspotPipelineId: string | null;
+  proyectoInterno: boolean;
+  hermanoCsProjectId: string | null;
+}): boolean {
+  return projectCapabilities({
+    hubspotPipelineId: p.hubspotPipelineId,
+    interno: p.proyectoInterno,
+    tieneHermanoCs: p.hermanoCsProjectId != null,
+  }).publicable;
 }
 
 /** Marca de uso best-effort — nunca bloquea el render de la superficie. */
