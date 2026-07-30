@@ -77,6 +77,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   // ── Documentación y administración ──────────────────────────────────────────
   roles: { modo: "own" },
   "roles/[id]": { modo: "inherits", de: "roles" },
+  "roles/propuesta-csl": { modo: "inherits", de: "roles" },
   team: { modo: "own" },
   settings: { modo: "own" },
   integrations: { modo: "own" },

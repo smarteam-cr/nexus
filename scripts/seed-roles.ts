@@ -11,8 +11,10 @@
  *     acción concreta y `meta` el número semanal. En imperativo ("Asegura…", "Analiza…").
  *  3. Una medida de predicción es un acto HUMANO: si un agente de Nexus lo puede hacer
  *     (correr un checklist, publicar, limpiar datos), no va acá.
- *  4. `responsibilities` es solo el ALCANCE del puesto: UNA línea por ítem, sin descripción
- *     (el detalle de qué hacer vive en las medidas semanales; si no, se lee dos veces).
+ *  4. `responsibilities`: el título es el ALCANCE en una línea; la descripción dice HASTA DÓNDE
+ *     LLEGA — qué abarca y dónde termina o pasa a otra área. NUNCA la acción semanal: eso vive
+ *     en las medidas de predicción y repetirlo hace que la página se lea dos veces (fue el
+ *     motivo por el que estas descripciones estuvieron vacías entre julio y 2026-07-29).
  *  5. TUTEO siempre (CLAUDE.md §6): "controlas", "haces", "de ti" — nunca voseo.
  *  6. La teoría de 4DX no va en el contenido: vive en los tooltips ⓘ de `roles.defs.ts`.
  *
@@ -37,8 +39,10 @@ const PREAMBULO =
 const WIG_SESSION =
   "1) Cada quien rinde cuentas de su compromiso. 2) Se mira el marcador. 3) Cada quien se compromete a 1-2 movidas para la semana. El torbellino no entra acá.";
 
-/** El alcance del puesto va en una línea: sin `detail` (regla 4). */
-const scope = (...titles: string[]) => ({ items: titles.map((title) => ({ title, detail: "" })) });
+/** Una responsabilidad = [alcance, hasta dónde llega]. Ver regla 4. */
+const scope = (...items: [string, string][]) => ({
+  items: items.map(([title, detail]) => ({ title, detail })),
+});
 
 interface RoleSeed {
   title: string;
@@ -52,7 +56,7 @@ const ROLES: RoleSeed[] = [
   {
     title: "Marketing Operator (MO)",
     area: "Marketing",
-    order: 0,
+    order: 1,
     summary: "Producción visual, video y web ágil con IA — y motor de post-venta para expandir cuentas.",
     content: {
       profile: {
@@ -61,11 +65,26 @@ const ROLES: RoleSeed[] = [
 **Misión.** Producir los activos visuales, de video y de web de Smarteam con metodología AI-First (Figma + Claude), y usar cada entrega web como puerta de entrada para **expandir la cuenta** hacia otros servicios del catálogo.`,
       },
       responsibilities: scope(
-        "Diseño y desarrollo de sitios web con IA",
-        "Detección de expansión en cuentas web",
-        "Producción de video y piezas gráficas",
-        "Publicación de contenido en las plataformas",
-        "Control de calidad UX/UI antes del handoff",
+        [
+          "Diseño y desarrollo de sitios web con IA",
+          "Va del diseño en Figma al código base que entregas a Desarrollo. Ahí termina tu parte: la implementación técnica de ahí en adelante no es tuya.",
+        ],
+        [
+          "Detección de expansión en cuentas web",
+          "Alcanza solo las cuentas donde entregaste web, y llega hasta encuadrar la necesidad: negociarla y cerrarla es de Ventas.",
+        ],
+        [
+          "Producción de video y piezas gráficas",
+          "Va de la idea al archivo final: el guion, el diseño y la edición son tuyos. El tono y la línea de contenido los fija la Marketing Lead.",
+        ],
+        [
+          "Publicación de contenido en las plataformas",
+          "Que las piezas queden publicadas en las redes de Smarteam, con su orden y su momento. Convertir eso en demanda es de la Marketing Lead.",
+        ],
+        [
+          "Control de calidad UX/UI antes del handoff",
+          "Abarca cada pantalla e insumo que va a salir: nada cruza a Desarrollo ni se le muestra al cliente sin pasar por tu revisión.",
+        ],
       ),
       wig: {
         desde: "3 oportunidades de expansión aceptadas por Ventas en el trimestre",
@@ -140,7 +159,7 @@ const ROLES: RoleSeed[] = [
   {
     title: "Marketing Lead (ML)",
     area: "Marketing",
-    order: 1,
+    order: 2,
     summary: "El motor de demanda: prospectos calificados y predecibles para Ventas.",
     content: {
       profile: {
@@ -149,13 +168,34 @@ const ROLES: RoleSeed[] = [
 **Misión.** **Generar demanda para Ventas.** Convertir el área en un motor predecible de prospectos calificados, evolucionando de la coordinación operativa al dominio estratégico (ICP, funnel, alianzas y campañas).`,
       },
       responsibilities: scope(
-        "Generación de demanda y entrega a Ventas",
-        "Eventos, webinars y workshops",
-        "Alianzas y partnerships",
-        "Casos de éxito con Customer Success",
-        "Construcción de activos digitales con IA",
-        "Estrategia de contenido y funnel (ICP)",
-        "Calendario de marketing y disciplina de datos",
+        [
+          "Generación de demanda y entrega a Ventas",
+          "Todo lo que trae prospectos y llega hasta que Ventas los acepta con contexto. La conversación comercial y el cierre no son tuyos.",
+        ],
+        [
+          "Eventos, webinars y workshops",
+          "Elegir cuáles se hacen, a quién se invita y que salgan bien de punta a punta. El seguimiento comercial de quien asistió queda en Ventas.",
+        ],
+        [
+          "Alianzas y partnerships",
+          "La relación del día a día con los aliados y las acciones conjuntas que traen demanda. Cerrar negocio con lo que refieren es de Ventas.",
+        ],
+        [
+          "Casos de éxito con Customer Success",
+          "El material que cuenta resultados reales de clientes, listo para que Ventas lo use. Qué cuenta está en condiciones de contarlo lo define Customer Success.",
+        ],
+        [
+          "Construcción de activos digitales con IA",
+          "Las landings, secuencias y piezas de campaña que capturan demanda en HubSpot. Salen sin pasar por Desarrollo: no esperan a un tercero.",
+        ],
+        [
+          "Estrategia de contenido y funnel (ICP)",
+          "A quién le hablamos y con qué mensaje en cada etapa del funnel. La definición es tuya y Ventas es quien la confirma o la desmiente.",
+        ],
+        [
+          "Calendario de marketing y disciplina de datos",
+          "Que el calendario exista y se cumpla, y que el origen de cada contacto en HubSpot sea confiable. Cubre la atribución de marketing, no el pipeline comercial.",
+        ],
       ),
       wig: {
         desde: "12 leads calificados por mes",
@@ -229,9 +269,11 @@ const ROLES: RoleSeed[] = [
     },
   },
   {
+    // CSL primero en el submenú y en el índice (pedido de Elías, 2026-07-29):
+    // el orden del flyout sale de este campo vía `loadRolesNav`.
     title: "Customer Success Lead (CSL)",
     area: "Customer Success",
-    order: 2,
+    order: 0,
     summary: "Lleva éxito a toda la cartera: anticipa riesgos y lidera retención, salud y expansión (revenue).",
     content: {
       profile: {
@@ -240,21 +282,56 @@ const ROLES: RoleSeed[] = [
 **Misión.** Llevar éxito a todos los clientes, anticipar y mitigar riesgos en cuentas de alta complejidad, y liderar la estrategia de **retención, salud y expansión (revenue)** de toda la cartera.`,
       },
       responsibilities: scope(
-        "Monitoreo de cuentas y detección de riesgo",
-        "Éxito y recomendación del cliente",
-        "Desarrollo del talento del equipo",
-        "Adopción de IA en el equipo de CSEs",
-        "Carga de trabajo y desbloqueo del equipo",
-        "Feedback a Ventas y a Desarrollo",
-        "Expansión de cuentas (cross y upselling)",
-        "Gobernanza del pipeline de proyectos en HubSpot",
+        [
+          "Monitoreo de cuentas y detección de riesgo",
+          "Toda la cartera pasa por tu mirada: cuál está sana y cuál entró en riesgo antes de que la renovación esté en duda. Ejecutar la cuenta sigue siendo del CSE.",
+        ],
+        [
+          "Éxito y recomendación del cliente",
+          "Que el cliente resuelva su problema y quede en condiciones de recomendarnos, no solo que el proyecto se entregue a tiempo. La relación diaria la lleva el CSE.",
+        ],
+        [
+          "Desarrollo del talento del equipo",
+          "Abarca cómo crece el criterio consultivo de cada CSE y su avance en la ruta de madurez. Las cuentas siguen siendo suyas, no pasan a ti.",
+        ],
+        [
+          "Adopción de IA en el equipo de CSEs",
+          "Que el equipo trabaje con IA de verdad en su día a día. Usarla con criterio es tuyo, construir la herramienta es de Desarrollo.",
+        ],
+        [
+          "Carga de trabajo y desbloqueo del equipo",
+          "Cuántas cuentas y de qué complejidad lleva cada CSE, y qué lo está frenando. Lo que no se resuelve dentro del área lo escalas, no lo absorbes.",
+        ],
+        [
+          "Feedback a Ventas y a Desarrollo",
+          "Devolver lo que la implementación revela: dónde lo vendido y lo entregado no coinciden, y qué traba técnica se repite. Decidir el cambio es de cada área.",
+        ],
+        [
+          "Expansión de cuentas (cross y upselling)",
+          "Abarca qué cuentas de la cartera tienen espacio para un servicio nuevo y cuál es su camino de crecimiento. Negociar y cerrar la venta es de Ventas.",
+        ],
+        [
+          "Gobernanza del pipeline de proyectos en HubSpot",
+          "Que en HubSpot el estado de cada proyecto se lea igual que en la realidad, etapa por etapa. Mantener al día el avance del suyo es del CSE.",
+        ],
       ),
+      // WIG por CONDICIONES (no recorrido): cumplir el alcance y la fecha no se
+      // mide de X a Y, se cumple o no. Las `nota` son la letra chica que evita
+      // la discusión de después — se leen en el tooltip de cada condición.
       wig: {
-        desde: "un UUS promedio de cartera de 55",
-        hasta: "un UUS promedio de 75",
-        fecha: "31 de diciembre de 2026",
+        condiciones: [
+          {
+            texto: "El 100% de los proyectos respeta el alcance contratado",
+            nota: "0 extensiones de proyectos regaladas.",
+          },
+          {
+            texto: "El 100% de los proyectos se entrega en la fecha pactada",
+            nota: "O con retrasos imputables exclusivamente al cliente.",
+          },
+        ],
+        fecha: "15 de noviembre",
         contexto:
-          "El Unified Usage Score dice si el cliente realmente usa lo que implementamos. Una cartera que no usa la herramienta no renueva y no se expande, por impecable que haya sido la implementación.",
+          "Regalar alcance y correr la fecha son la misma fuga vista de dos lados: la que se come el margen del proyecto y la credibilidad de la siguiente promesa. Cumplir las dos es lo que hace que la cartera renueve y se expanda, y es la meta de los próximos 6 meses.",
       },
       leadMeasures: {
         items: [

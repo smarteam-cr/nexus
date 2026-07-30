@@ -33,8 +33,23 @@ export interface RoleLevel { level: string; titulo: string; alcance: string; imp
 export interface RoleMaturityData { intro?: string; levels: RoleLevel[] }
 
 // ── 4DX (The 4 Disciplines of Execution) ────────────────────────────────────
-// D1 · WIG: UNA meta con línea de llegada, "de X a Y para [fecha]".
-export interface RoleWigData { desde: string; hasta: string; fecha: string; contexto?: string }
+// D1 · WIG: UNA meta con línea de llegada. Tiene DOS formas, y la sección elige
+// por la forma del DATO (no por un flag ni por el puesto):
+//   · recorrido  — "de X a Y para [fecha]": la meta se mueve sobre una escala.
+//   · condiciones — una o más condiciones que hay que CUMPLIR para esa fecha.
+//     Nació con el CSL: "100% del alcance contratado" y "100% entregado en fecha"
+//     no son un recorrido de X a Y, son cumplir o no cumplir. `nota` es la
+//     precisión que evita la discusión después (se muestra en el tooltip).
+// Convivir así deja migrar un puesto a la vez sin tocar a los otros ni partir la
+// plantilla en dos tipos de sección.
+export interface RoleWigCondicion { texto: string; nota?: string }
+export interface RoleWigData {
+  desde?: string;
+  hasta?: string;
+  condiciones?: RoleWigCondicion[];
+  fecha: string;
+  contexto?: string;
+}
 // D2 · Medidas. Mismo shape para arrastre (lag: el resultado) y predicción (lead: la
 // acción semanal controlable); los rótulos de `detail`/`meta` cambian por variante.
 export interface RoleMeasureItem { title: string; detail: string; meta: string }
@@ -219,26 +234,81 @@ export const RoleMaturitySection: FC<SectionProps<RoleMaturityData>> = ({ data, 
 // ── D1 · WIG — "de X a Y para [fecha]" (banda dark) ──────────────────────────
 export const RoleWigSection: FC<SectionProps<RoleWigData>> = ({ data, editable, onChange }) => {
   const set = (next: Partial<RoleWigData>) => onChange?.({ ...data, ...next });
+  const condiciones = Array.isArray(data.condiciones) ? data.condiciones : [];
+  // La forma la decide el DATO: si hay condiciones, se muestran; si no, el
+  // recorrido de X a Y de siempre. En edición se ofrece pasar de una a la otra
+  // (agregar la primera condición), pero nunca se convierte sola.
+  const esCondiciones = condiciones.length > 0;
+  const setCond = (i: number, next: Partial<RoleWigCondicion>) =>
+    set({ condiciones: replaceAt(condiciones, i, { ...condiciones[i], ...next }) });
+
   return (
     <div className="stl-wig">
+      {esCondiciones ? (
+        <ul className="stl-wig-conds">
+          {condiciones.map((c, i) => (
+            <li key={i} className="stl-wig-cond">
+              {editable && <RemoveBtn onClick={() => set({ condiciones: removeAt(condiciones, i) })} />}
+              <span className="stl-wig-cond-mark" aria-hidden>
+                {IconCheck}
+              </span>
+              <div className="stl-wig-cond-body">
+                <Editable as="div" className="stl-wig-value is-target" editable={editable} value={c.texto}
+                  placeholder="Qué hay que cumplir…" onCommit={(v) => setCond(i, { texto: v })} />
+                {/* La nota es la letra chica que evita la discusión después. En
+                    lectura vive en el tooltip; en edición se muestra para poder
+                    escribirla (si no, sería un campo invisible e ineditable). */}
+                {editable ? (
+                  <Editable as="div" className="stl-wig-cond-note" editable value={c.nota ?? ""}
+                    placeholder="Precisión que evita la discusión después…"
+                    onCommit={(v) => setCond(i, { nota: v })} />
+                ) : (
+                  c.nota && (
+                    <span className="stl-wig-cond-tip" data-tip={c.nota} tabIndex={0} role="note"
+                      aria-label={c.nota}>
+                      ⓘ
+                    </span>
+                  )
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {/* La fila del recorrido y la fecha comparten fila en la forma clásica —
+          se deja EXACTAMENTE como estaba para no mover a los puestos que siguen
+          en ella. Con condiciones, la fecha va sola debajo de la lista. */}
       <div className="stl-wig-row">
-        <div className="stl-wig-part">
-          <div className="stl-wig-label">De</div>
-          <Editable as="div" className="stl-wig-value" editable={editable} value={data.desde}
-            placeholder="Dónde estamos hoy…" onCommit={(v) => set({ desde: v })} />
-        </div>
-        <span className="stl-wig-arrow" aria-hidden>→</span>
-        <div className="stl-wig-part">
-          <div className="stl-wig-label">a</div>
-          <Editable as="div" className="stl-wig-value is-target" editable={editable} value={data.hasta}
-            placeholder="La meta…" onCommit={(v) => set({ hasta: v })} />
-        </div>
+        {!esCondiciones && (
+          <>
+            <div className="stl-wig-part">
+              <div className="stl-wig-label">De</div>
+              <Editable as="div" className="stl-wig-value" editable={editable} value={data.desde ?? ""}
+                placeholder="Dónde estamos hoy…" onCommit={(v) => set({ desde: v })} />
+            </div>
+            <span className="stl-wig-arrow" aria-hidden>→</span>
+            <div className="stl-wig-part">
+              <div className="stl-wig-label">a</div>
+              <Editable as="div" className="stl-wig-value is-target" editable={editable} value={data.hasta ?? ""}
+                placeholder="La meta…" onCommit={(v) => set({ hasta: v })} />
+            </div>
+          </>
+        )}
         <div className="stl-wig-part">
           <div className="stl-wig-label">para</div>
           <Editable as="div" className="stl-wig-value" editable={editable} value={data.fecha}
             placeholder="Fecha límite…" onCommit={(v) => set({ fecha: v })} />
         </div>
       </div>
+
+      {editable && (
+        <AddBtn
+          label={esCondiciones ? "Agregar condición" : "Convertir en condiciones a cumplir"}
+          onClick={() => set({ condiciones: appendItem(condiciones, { texto: "", nota: "" }) })}
+        />
+      )}
+
       <Editable as="p" className="stl-wig-context" editable={editable} value={data.contexto ?? ""}
         placeholder="Por qué ESTA es la meta que más importa…" onCommit={(v) => set({ contexto: v })} />
     </div>
