@@ -36,6 +36,7 @@ export const PROPUESTA_CSL_CONTENT: Record<string, unknown> = {
       { nodo: "CEO" },
       { nodo: "CRO", equipo: "Administración" },
       { nodo: "RevOps & Operations" },
+      { nodo: "Ventas" },
       { nodo: "Customer Success Lead", equipo: "con su equipo de CSEs" },
       { nodo: "Líder de desarrollo", equipo: "con su equipo de devs" },
       { nodo: "Marketing" },
@@ -329,7 +330,7 @@ export const PROPUESTA_CSL_CONTENT: Record<string, unknown> = {
         items: [
           "Jornada diurna continua acumulada.",
           "De 8:00 a.m. a 5:00 p.m. (Costa Rica), de lunes a viernes.",
-          "Agencia de pago: Deel.",
+          "Agencia de pago: Ontop.",
           "Disponibilidad para sesiones estratégicas, reuniones interáreas y acompañamiento de iniciativas prioritarias de la dirección.",
           "Participación activa en espacios de medición, seguimiento, planificación y mejora continua.",
         ],
