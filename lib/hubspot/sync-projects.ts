@@ -168,18 +168,54 @@ export async function resolveCompanyProjectIds(hs: Client, companyId: string): P
 
 // ── Helpers para resolver owner y pipeline ──────────────────────────────────
 
-// Cache en memoria por proceso para evitar fetches repetidos durante un sync
-const ownerCache = new Map<string, { name: string | null; email: string | null }>();
-const pipelineNameCache = new Map<string, string | null>();
+/**
+ * Cache en memoria por proceso CON VENCIMIENTO.
+ *
+ * ── POR QUÉ EL VENCIMIENTO NO ES OPCIONAL ────────────────────────────────────
+ * Estos caches existen para no pedirle a HubSpot el mismo pipeline una vez por proyecto
+ * dentro de una corrida. **Sin vencimiento se comportan como si el portal fuera inmutable, y
+ * no lo es.** El 2026-07-30 a las 16:17 UTC se renombraron tres etapas del pipeline de
+ * Customer Success; hubo un sync a las **16:27** —diez minutos después— que igual materializó
+ * los rótulos viejos, porque el proceso venía vivo desde antes. No falló nada, no se logueó
+ * nada: la base quedó mintiendo hasta el siguiente reinicio del servidor.
+ *
+ * 10 minutos es más que una corrida completa (el ahorro de llamadas se conserva entero) y
+ * menos que un turno de trabajo (nadie convive un día entero con un rótulo viejo).
+ */
+const TTL_CACHE_MS = 10 * 60 * 1000;
+
+function cacheConVencimiento<V>() {
+  const datos = new Map<string, { valor: V; vence: number }>();
+  return {
+    /** `undefined` = no está o venció. Un valor cacheado `null` SÍ se distingue del miss. */
+    get(clave: string): V | undefined {
+      const hit = datos.get(clave);
+      if (!hit) return undefined;
+      if (hit.vence <= Date.now()) {
+        datos.delete(clave);
+        return undefined;
+      }
+      return hit.valor;
+    },
+    set(clave: string, valor: V): V {
+      datos.set(clave, { valor, vence: Date.now() + TTL_CACHE_MS });
+      return valor;
+    },
+  };
+}
+
+const ownerCache = cacheConVencimiento<{ name: string | null; email: string | null }>();
+const pipelineNameCache = cacheConVencimiento<string | null>();
 // D.2 — cache de las etapas de un pipeline (slug:pipelineId → Map<stageId,label>).
-const pipelineStagesCache = new Map<string, Map<string, string>>();
+const pipelineStagesCache = cacheConVencimiento<Map<string, string>>();
 
 async function resolveOwner(
   hs: Client,
   ownerId: string | null | undefined,
 ): Promise<{ name: string | null; email: string | null }> {
   if (!ownerId) return { name: null, email: null };
-  if (ownerCache.has(ownerId)) return ownerCache.get(ownerId)!;
+  const cacheado = ownerCache.get(ownerId);
+  if (cacheado !== undefined) return cacheado;
   try {
     const res = await hs.apiRequest({
       method: "GET",
@@ -209,7 +245,10 @@ async function resolvePipelineName(
 ): Promise<string | null> {
   if (!pipelineId) return null;
   const cacheKey = `${workingSlug}:${pipelineId}`;
-  if (pipelineNameCache.has(cacheKey)) return pipelineNameCache.get(cacheKey)!;
+  // `!== undefined` y no un truthy check: un `null` cacheado (el fetch falló) es una
+  // respuesta legítima y no se debe reintentar dentro de la ventana.
+  const cacheado = pipelineNameCache.get(cacheKey);
+  if (cacheado !== undefined) return cacheado;
   try {
     const res = await hs.apiRequest({
       method: "GET",
