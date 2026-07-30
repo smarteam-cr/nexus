@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { getStageSteps, STAGE_LABELS } from "@/lib/steps";
-import { getProjectStage } from "@/lib/hubspot/stage";
 import { withProjectAccess } from "@/lib/api";
 import { withDbRetry } from "@/lib/db/retry";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
@@ -9,6 +8,8 @@ import { computeBookends, type FrontSession, type SessionBookends } from "@/lib/
 import { loadProjectSetup } from "@/lib/portfolio/project-setup";
 import { canvasOfNested, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { resolverDuenioDelHandoff } from "@/lib/handoff/duenio";
+import { getProjectLifecycle } from "@/lib/lifecycle";
+import { etapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { buildCanvasChips } from "@/lib/flow/canvas-chips";
 import { frentesDeProyecto, type EquipoDeFrente } from "@/lib/projects/kind";
@@ -68,19 +69,14 @@ async function getClientSessionBookends(
   return computeBookends(sessions, Date.now(), emails.salesEmails, porEquipo[equipoDeEntrega]);
 }
 
-/**
- * getProjectStage consulta HubSpot EN VIVO y sin tope: un HubSpot lento colgaba el
- * widget entero. Cap de 1.5s — si no llega, el caller cae al label YA SINCRONIZADO
- * (Project.hubspotPipelineStageLabel). La llamada perdedora sigue en background y
- * termina sola; no se cancela (el SDK no expone abort), solo se deja de esperar.
- */
-const STAGE_TIMEOUT_MS = 1500;
-async function getProjectStageCapped(hubspotServiceId: string) {
-  return Promise.race([
-    getProjectStage(hubspotServiceId).catch(() => null),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), STAGE_TIMEOUT_MS)),
-  ]);
-}
+/* La consulta EN VIVO a HubSpot por la etapa se retiró (2026-07-30). Estaba acá porque el
+   widget mostraba la etapa como texto suelto y quería el valor más fresco posible; costaba
+   un round-trip por apertura y hubo que taparla con un cap de 1.5s porque un HubSpot lento
+   colgaba el widget entero. Hoy la etapa la sirve `etapaParaLaUI`, que lee el label YA
+   SINCRONIZADO (`Project.hubspotPipelineStageLabel`) — el mismo dato, sin la llamada. El
+   sync lo refresca, y desde O2 sus caches vencen a los 10 min, así que "más fresco" ya no
+   justifica pagar la latencia. Si alguien la extraña: el problema real sería un sync
+   atrasado, y se arregla en el sync. */
 
 // GET: obtener datos del GPS del proyecto
 export const GET = withProjectAccess(async (
@@ -123,15 +119,21 @@ export const GET = withProjectAccess(async (
 
   if (!project) return NextResponse.json({ error: "not found" }, { status: 404 });
 
+  /* La ETAPA, normalizada para pintar (lib/lifecycle/etapa-ui.ts): sirve igual para la que
+     manda el pipeline de HubSpot y para el ciclo de 8 etapas de un proyecto sin pipeline. Se
+     mudó acá desde su propia sección + su propio endpoint, así que el widget dejó de ser un
+     segundo lugar donde leer la etapa y pasó a ser el único. */
+  const etapa = etapaParaLaUI(await getProjectLifecycle(projectId));
+
   // Estado actual (HubSpot first, fallback a stage/step internos)
   let currentState: string;
   if (project.hubspotServiceId) {
-    // La etapa se resuelve EN VIVO desde HubSpot (lo más fresco) pero con CAP de 1.5s:
-    // si la llamada falla o no llega a tiempo (token vencido, rate-limit, HubSpot lento),
-    // caer al label YA SINCRONIZADO en el Project (sync-projects) en vez de "Sin etapa"
-    // — el dato existe, solo no se pudo revalidar ahora.
-    const stage = await getProjectStageCapped(project.hubspotServiceId);
-    currentState = stage?.label ?? project.hubspotPipelineStageLabel ?? "Sin etapa";
+    /* ⚠ YA NO se pinta: lo reemplazó el bloque "Etapa", que sale de la etapa materializada.
+       El campo se conserva para no romper una respuesta cacheada vieja, pero SIN la llamada
+       en vivo a HubSpot que hacía antes: era un round-trip por cada render del widget para
+       mostrar, al lado del otro bloque, un rótulo que podía no coincidir con él. Con el
+       vencimiento de los caches del sync (O2), el materializado está a lo sumo 10 min viejo. */
+    currentState = project.hubspotPipelineStageLabel ?? "Sin etapa";
   } else {
     const stageSteps = getStageSteps(project.serviceType);
     const stageLabel = STAGE_LABELS[project.currentStage] ?? `Etapa ${project.currentStage}`;
@@ -372,6 +374,7 @@ export const GET = withProjectAccess(async (
     lastSession,
     fronts, // por ranura ("ventas" / "cs"): { next, last } — el mapa de datos
     frentes, // QUÉ frentes pintar y con qué rótulo, en orden (lib/projects/kind.ts)
+    etapa, // el bloque "Etapa" — null cuando no hay etapa que mostrar
     projectInfo,
     actionItems: pendingItemsCompat, // alias semántico
     historyItems, // tareas hechas o borradas (tab Histórico)

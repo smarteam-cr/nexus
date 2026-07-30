@@ -10,6 +10,8 @@ import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 import { ProjectGpsSkeleton } from "./skeletons";
 import type { Frente, FrenteKey } from "@/lib/projects/kind";
 import type { ChipDeCanvas } from "@/lib/flow/canvas-chips";
+import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
+import StageBadge from "@/components/lifecycle/StageBadge";
 
 export interface PendingItem {
   id?: string;             // ActionItem.id (nuevo) — undefined si viene del Json viejo
@@ -109,6 +111,12 @@ interface GPSData {
    * pinta (en vez de romper).
    */
   canvasChips?: ChipDeCanvas[];
+  /**
+   * La ETAPA lista para pintar, venga del pipeline de HubSpot o del ciclo de 8 etapas.
+   * `null` = no hay etapa que mostrar (hoy: un proyecto del ciclo de CS sin handoff).
+   * Ausente = respuesta cacheada vieja → cae al rótulo plano de `currentState`.
+   */
+  etapa?: EtapaParaLaUI | null;
 }
 
 /** La RANURA de almacenamiento del frente, no su rótulo — ver `FrenteKey` en kind.ts. */
@@ -423,6 +431,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   // Los frentes que este proyecto muestra, con su rótulo — los manda el servidor.
   const frentes = data.frentes ?? FRENTES_LEGACY;
   const canvasChips = data.canvasChips ?? [];
+  const etapa = data.etapa ?? null;
 
   // ── Última de un frente (Ventas / CSE / Desarrollo) ───────────────────────────
   const renderLastFront = (frontKey: FrontKey, label: string) => {
@@ -574,32 +583,57 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
           </div>
         </div>
 
-        {/* Estado actual */}
-        <div className="p-4">
-          <div className="flex items-center gap-1.5 mb-2">
-            <span className={cardLabel}>Estado actual</span>
+        {/* ETAPA + CANVAS — dos bloques, no uno.
+            Antes convivían acá la etapa del pipeline (texto grande) y los chips de canvas,
+            sin separador ni rótulo, y se leían como una sola cosa. Y la etapa además vivía
+            en OTRA sección más abajo con su propio tooltip: dos respuestas a "¿en qué etapa
+            va esto?". Ahora es una sola, acá.
+            `#proyecto-etapa` es el ancla del enlace profundo del panel "Qué hacer acá" del
+            cronograma — se mudó con el bloque; sin ella ese botón no lleva a ningún lado. */}
+        <div className="p-4 space-y-3 scroll-mt-24" id="proyecto-etapa">
+          <div>
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className={cardLabel}>Etapa</span>
+            </div>
+            {etapa ? (
+              <StageBadge
+                stage={etapa.id}
+                label={etapa.label}
+                order={etapa.linea}
+                stepperTitle={etapa.tituloDeLaLinea}
+                source={etapa.curada ? "override" : "inferred"}
+                reasons={etapa.razones}
+                overrideReason={etapa.curadaPorque}
+                size="md"
+              />
+            ) : (
+              <p className="text-sm font-medium text-fg">{data.currentState}</p>
+            )}
           </div>
-          <p className="text-sm font-medium text-fg">{data.currentState}</p>
+
           {/* Los CANVAS del proyecto: qué documentos le corresponden y cuáles ya están.
               La lista viene del servidor YA filtrada por lo que aplica a este proyecto
-              (lib/flow/canvas-chips.ts) — el widget solo pinta. Antes eran cuatro señales
-              fijas y un proyecto con Diagnóstico y Planificación generados se veía igual
-              que uno sin ellos. Guard por compat: una respuesta cacheada vieja no la trae. */}
+              (lib/flow/canvas-chips.ts) — el widget solo pinta. Guard por compat de cache. */}
           {canvasChips.length > 0 && (
-            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-              {canvasChips.map((c) => (
-                <SetupChip
-                  key={c.slug}
-                  state={c.estado === "generada" ? "done" : c.estado === "borrador" ? "draft" : "missing"}
-                  label={
-                    c.estado === "generada"
-                      ? `✓ ${c.label}`
-                      : c.estado === "borrador"
-                        ? `${c.label} sin subir`
-                        : c.label
-                  }
-                />
-              ))}
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className={cardLabel}>Canvas</span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {canvasChips.map((c) => (
+                  <SetupChip
+                    key={c.slug}
+                    state={c.estado === "generada" ? "done" : c.estado === "borrador" ? "draft" : "missing"}
+                    label={
+                      c.estado === "generada"
+                        ? `✓ ${c.label}`
+                        : c.estado === "borrador"
+                          ? `${c.label} sin subir`
+                          : c.label
+                    }
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>

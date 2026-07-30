@@ -30,7 +30,6 @@ import { pieceReadiness } from "@/lib/flow/piece-readiness";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import ProjectHandoffSection from "./ProjectHandoffSection";
 import { WorkspaceSkeleton } from "./skeletons";
-import ProjectLifecyclePanel from "@/components/lifecycle/ProjectLifecyclePanel";
 import { useWorkspace } from "./WorkspaceContext";
 import { useToast } from "@/components/ui/Toast";
 import { readCanvasCache, writeCanvasCache } from "@/lib/clients/canvas-cache";
@@ -538,12 +537,14 @@ export default function ProjectCanvasPanel({
       {/* Handoff por-proyecto — sección dedicada siempre visible (estado + generar + doc). */}
       <ProjectHandoffSection projectId={projectId} clientId={clientId} />
 
-      {/* Ciclo de vida — etapa efectiva + validaciones de salida + modalidad de adopción.
-          El id es el destino de las alarmas de etapa del panel "Qué hacer acá" del cronograma:
-          los gates para cerrarlas viven acá, en esta misma página. */}
-      <div id="proyecto-etapa" className="scroll-mt-24">
-        <ProjectLifecyclePanel projectId={projectId} />
-      </div>
+      {/* La sección "Ciclo de vida" se PLEGÓ dentro del widget (2026-07-30). Eran dos lugares
+          con la misma respuesta a "¿en qué etapa va esto?": el widget mostraba la etapa de
+          HubSpot como texto y esta sección su propio chip con tooltip. Desde que la etapa la
+          manda HubSpot también en las implementaciones, no queda nada que marcar acá —las
+          validaciones de salida se apagaron con el motor de 8 etapas—, así que la etapa vive
+          en el bloque "Etapa" del widget de arriba, con el ancla `#proyecto-etapa`.
+          `ProjectLifecyclePanel` NO se borró: queda parqueado junto al motor, para evaluarlo
+          con las alarmas nuevas basadas en sesiones. */}
 
       {/* Header */}
       <div className="flex items-center justify-between">

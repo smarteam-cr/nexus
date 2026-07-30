@@ -129,18 +129,37 @@ describe("el DTO del ciclo de vida se bifurca, no se unifica", () => {
     ).toContain('lc.fuente === "pipeline"');
   });
 
-  it("el panel monta los dos cuerpos, no oculta la sección", () => {
-    /* El requisito era la MISMA sección: un desarrollo tiene que ver SU ciclo de vida ahí,
-       no un hueco donde los demás tienen algo. */
+  it("el bloque de ETAPA del widget se pinta SIEMPRE, sin condición por tipo", () => {
+    /* ── ESTE TEST SE MUDÓ CON EL BLOQUE ──────────────────────────────────────
+       Exigía que `ProjectCanvasPanel` montara `<ProjectLifecyclePanel>` sin condición: la
+       garantía era "todo proyecto ve su etapa en el MISMO lugar, lo que cambia es el
+       contenido". La sección se plegó dentro del widget (O6), así que la garantía sigue
+       siendo la misma y lo que cambió es dónde vive.
+       El widget se monta sin condición desde `ProjectCanvasPanel`, así que basta con que el
+       bloque no esté detrás de un `if` por tipo de proyecto. */
+    const gps = codigoDe("components/clients/ProjectGPS.tsx");
+    const i = gps.indexOf('id="proyecto-etapa"');
+    expect(i, "el bloque de etapa perdió su ancla").toBeGreaterThan(-1);
+    expect(gps.slice(i, i + 500), "el bloque de etapa dejó de pintar el chip").toContain("StageBadge");
+    expect(
+      codigoDe("components/clients/ProjectCanvasPanel.tsx"),
+      "el widget se dejó de montar sin condición",
+    ).toContain("<ProjectGPS projectId={projectId} clientId={clientId} />");
+  });
+
+  it("el ancla `#proyecto-etapa` sobrevive — es un enlace profundo", () => {
+    /* Es el destino del botón del panel "Qué hacer acá" del cronograma. Si el id desaparece
+       al mover el bloque, ese botón deja de llevar a ningún lado y nada falla: el navegador
+       simplemente no scrollea. */
+    const gps = codigoDe("components/clients/ProjectGPS.tsx");
+    expect(gps).toContain('id="proyecto-etapa"');
+    expect(gps, "sin scroll-mt el ancla queda tapada por el encabezado").toContain("scroll-mt-24");
+  });
+
+  it("ProjectLifecyclePanel NO se borró: queda parqueado con el motor", () => {
     const panel = codigoDe("components/lifecycle/ProjectLifecyclePanel.tsx");
     expect(panel).toContain('data.fuente === "pipeline"');
     expect(panel).toContain("CuerpoDePipeline");
-    const montaje = codigoDe("components/clients/ProjectCanvasPanel.tsx");
-    expect(
-      montaje,
-      "el panel de ciclo de vida no puede montarse bajo condición: la sección es la misma " +
-        "para todos, lo que cambia es su contenido.",
-    ).toContain("<ProjectLifecyclePanel projectId={projectId} />");
   });
 });
 
