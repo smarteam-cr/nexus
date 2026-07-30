@@ -356,3 +356,203 @@ describe("escritor único — solo el espejo de HubSpot declara la clase de un p
     ).toEqual([]);
   });
 });
+
+// ── 4 · PARIDAD ENTRE CREAR Y ACTUALIZAR ─────────────────────────────────────
+
+/**
+ * El candado de arriba es un NOT-EXISTS: pregunta *quién más* escribe estas columnas. Nunca
+ * pregunta si el escritor autorizado las escribe en **todas** sus ramas — y ése fue
+ * exactamente el agujero.
+ *
+ * ── LO QUE PASÓ ──────────────────────────────────────────────────────────────
+ * El sync tenía dos listas de campos escritas a mano, una por rama. La de ACTUALIZAR llevaba
+ * `hubspotPipelineId`, `proyectoInterno` y `hubspotRelatedProjectIds`; la de CREAR no. Los
+ * proyectos que NACEN entran por la rama de creación, así que en su primera sincronización
+ * quedaban sin clase: cartera, vigilante y cobranza los trataban como Customer Success.
+ *
+ * Ninguna de las guardas lo vio, y vale entender por qué: **todas prueban la traducción
+ * (hechos → decisiones); ninguna probaba la ingesta (HubSpot → hechos).** Peor, la fila
+ * "SIN pipeline (sin backfill)" de `kind.test.ts` *bendice* el estado exacto que producía el
+ * bug y lo declara idéntico al comportamiento de siempre.
+ *
+ * ── LA REGLA QUE CONGELA ESTO ────────────────────────────────────────────────
+ * Hay UN objeto `espejo` con todo lo que se copia de HubSpot, y las dos ramas lo spreadean.
+ * Este test verifica las dos mitades: que el espejo esté completo, y que nadie escriba un
+ * proyecto "entero" sin usarlo.
+ */
+const COLUMNAS_ESPEJO = [
+  "hubspotServiceId",
+  "hubspotPipelineId",
+  "proyectoInterno",
+  "hubspotPipelineName",
+  "hubspotPipelineStageId",
+  "hubspotPipelineStageLabel",
+  "hubspotOwnerId",
+  "hubspotOwnerEmail",
+  "serviceType",
+  "projectType",
+];
+
+/**
+ * Escrituras que a propósito NO son el espejo: tocan una sola cosa. Si un `data:` escribe
+ * SOLO estas claves, no tiene por qué traer el espejo entero.
+ *   · `status`             — apagar un proyecto terminado o fantasma.
+ *   · `hermanoCsProjectId` — `resolverHermanos`, que corre al final con todo ya en la base.
+ */
+const CLAVES_DE_ESCRITURA_PARCIAL = new Set(["status", "hermanoCsProjectId"]);
+
+/** El objeto literal de una `const <nombre> = { … }`, con llaves balanceadas. */
+function objetoLiteral(codigo: string, nombre: string): string | null {
+  const m = new RegExp(`\\bconst\\s+${nombre}\\s*=\\s*\\{`).exec(codigo);
+  if (!m) return null;
+  let i = m.index + m[0].length - 1;
+  let nivel = 0;
+  const desde = i;
+  for (; i < codigo.length; i++) {
+    if (codigo[i] === "{") nivel++;
+    else if (codigo[i] === "}") {
+      nivel--;
+      if (nivel === 0) break;
+    }
+  }
+  return codigo.slice(desde, i + 1);
+}
+
+/**
+ * Las claves de primer nivel de un bloque `{ … }` (ignora lo anidado y los spreads).
+ *
+ * ⚠ El detalle que se me escapó la primera vez: la llave de APERTURA del propio bloque no
+ * puede contar como "abrí algo anidado". Si apaga el flag de inicio-de-clave, la primera
+ * clave nunca se captura y un `{ status: "inactive" }` se lee como un objeto sin claves —
+ * que es justo la forma que este test tiene que reconocer como escritura parcial.
+ */
+function clavesDePrimerNivel(bloque: string): string[] {
+  const claves: string[] = [];
+  let nivel = 0;
+  let esperandoClave = false;
+  let token = "";
+  for (let i = 0; i < bloque.length; i++) {
+    const c = bloque[i];
+    if (c === "{" || c === "[" || c === "(") {
+      nivel++;
+      // Solo la llave EXTERNA abre el nivel donde viven las claves que buscamos.
+      if (nivel === 1) { esperandoClave = true; token = ""; }
+      else esperandoClave = false;
+      continue;
+    }
+    if (c === "}" || c === "]" || c === ")") {
+      nivel--;
+      if (nivel === 1) { esperandoClave = false; token = ""; }
+      continue;
+    }
+    if (nivel !== 1) continue;
+    if (c === ",") {
+      esperandoClave = true;
+      token = "";
+      continue;
+    }
+    if (c === ":") {
+      if (esperandoClave && token.trim()) claves.push(token.trim());
+      esperandoClave = false;
+      token = "";
+      continue;
+    }
+    if (/\s/.test(c)) continue;
+    if (esperandoClave) token += c;
+  }
+  return claves;
+}
+
+/** Cada llamada `project.create(…)` / `project.update(…)` con su argumento balanceado. */
+function escriturasDeProyecto(codigo: string): Array<{ tipo: string; cuerpo: string }> {
+  const out: Array<{ tipo: string; cuerpo: string }> = [];
+  const re = /(?:prisma|tx|db)\.project\.(create|update|updateMany|upsert)\s*\(/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(codigo))) {
+    let i = m.index + m[0].length - 1; // sobre el `(`
+    let nivel = 0;
+    const desde = i;
+    for (; i < codigo.length; i++) {
+      if (codigo[i] === "(") nivel++;
+      else if (codigo[i] === ")") {
+        nivel--;
+        if (nivel === 0) break;
+      }
+    }
+    out.push({ tipo: m[1], cuerpo: codigo.slice(desde, i + 1) });
+  }
+  return out;
+}
+
+describe("paridad crear/actualizar — el espejo de HubSpot es UNO solo", () => {
+  const ESPEJO_EN = "lib/hubspot/sync-projects.ts";
+
+  it("existe un objeto `espejo` y trae TODAS las columnas que se copian de HubSpot", () => {
+    const literal = objetoLiteral(codigoDe(ESPEJO_EN), "espejo");
+    expect(
+      literal,
+      `No encontré \`const espejo = { … }\` en ${ESPEJO_EN}. Es el objeto que las dos ramas ` +
+        `spreadean; sin él vuelven las dos listas escritas a mano que ya divergieron una vez.`,
+    ).not.toBeNull();
+
+    const faltantes = COLUMNAS_ESPEJO.filter(
+      (col) => !new RegExp(`(?:^|[\\s{,])${col}\\s*[:,}]`).test(literal!),
+    );
+    expect(
+      faltantes,
+      `El objeto \`espejo\` no copia: ${faltantes.join(", ")}. Un campo que HubSpot manda y ` +
+        `el espejo no trae queda sin escribirse en NINGUNA de las dos ramas.`,
+    ).toEqual([]);
+  });
+
+  it("toda escritura de un proyecto ENTERO spreadea el espejo", () => {
+    const codigo = codigoDe(ESPEJO_EN);
+    const culpables: string[] = [];
+    for (const { tipo, cuerpo } of escriturasDeProyecto(codigo)) {
+      const data = bloquesData(cuerpo)[0];
+      if (!data) continue;
+      if (cuerpo.includes("...espejo")) continue;
+      // Una escritura parcial (solo `status`, solo el hermano) no necesita el espejo.
+      const claves = clavesDePrimerNivel(data);
+      const soloParciales = claves.length > 0 && claves.every((k) => CLAVES_DE_ESCRITURA_PARCIAL.has(k));
+      if (soloParciales) continue;
+      culpables.push(`project.${tipo} con claves [${claves.join(", ")}]`);
+    }
+    expect(
+      culpables,
+      `Estas escrituras arman el proyecto a mano en vez de spreadear \`espejo\`:\n` +
+        `${culpables.join("\n")}\n\n` +
+        `Es exactamente cómo la rama de creación se quedó sin hubspotPipelineId, ` +
+        `proyectoInterno y hubspotRelatedProjectIds: dos listas a mano que divergieron. Si de ` +
+        `verdad es una escritura parcial, sus únicas claves tienen que estar en ` +
+        `CLAVES_DE_ESCRITURA_PARCIAL, con su motivo.`,
+    ).toEqual([]);
+  });
+
+  it("las dos ramas —crear y actualizar— lo usan", () => {
+    const codigo = codigoDe(ESPEJO_EN);
+    const conEspejo = escriturasDeProyecto(codigo).filter((e) => e.cuerpo.includes("...espejo"));
+    const tipos = new Set(conEspejo.map((e) => e.tipo));
+    expect(
+      [...tipos].sort(),
+      `El espejo tiene que usarse en la rama de CREAR y en la de ACTUALIZAR. Encontré: ` +
+        `${[...tipos].join(", ") || "ninguna"}. Los proyectos que NACEN entran por create — ` +
+        `si esa rama no lo usa, el bug vuelve exactamente igual y es invisible.`,
+    ).toEqual(["create", "update"]);
+  });
+
+  it("las asociaciones NO se pisan cuando la lectura de HubSpot falló", () => {
+    /* `leerProyectosAsociados` devuelve `null` si no pudo preguntar. Escribir `[]` en ese
+       caso desvincula a todos los hermanos del cliente y los vuelve FACTURABLES, en
+       silencio y auto-sanándose después — o sea, indiagnosticable. */
+    const codigo = codigoDe(ESPEJO_EN);
+    expect(
+      codigo,
+      "`leerProyectosAsociados` tiene que poder devolver null (no pude preguntar ≠ no hay).",
+    ).toMatch(/Promise<Map<string,\s*string\[\]>\s*\|\s*null>/);
+    expect(
+      codigo,
+      "`hubspotRelatedProjectIds` tiene que OMITIRSE cuando `asociados` es null, no escribirse vacío.",
+    ).toMatch(/\.\.\.\(asociados\s*\?/);
+  });
+});

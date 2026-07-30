@@ -266,15 +266,26 @@ async function resolvePipelineStageLabel(
  * Lotes de 100 desde el minuto uno —el techo del endpoint— aunque el resto del sync todavía
  * pagine a mano: es una llamada nueva y no hay razón para nacer con la deuda.
  *
- * Ante CUALQUIER error devuelve un mapa VACÍO, no una excepción. Un hipo de la API no puede
- * tumbar el sync entero por un dato que solo afecta a la facturación de un caso de borde; el
- * efecto de no resolverlo es que el proyecto se trata como "aparte", que es el default.
+ * ── DEVUELVE `null` CUANDO NO SE PUDO LEER, Y ESO ES LO IMPORTANTE ───────────
+ * Nunca tira: un hipo de la API no puede tumbar el sync entero. Pero tampoco puede devolver
+ * un mapa vacío, porque "no hay asociaciones" y "no pude preguntar" **no son lo mismo** y el
+ * que llama las trataba igual: escribía `hubspotRelatedProjectIds: []`, y después
+ * `resolverHermanos` no encontraba nada y limpiaba `hermanoCsProjectId`.
+ *
+ * O sea: **un solo 429 desvinculaba a todos los hermanos de ese cliente y volvía facturables
+ * a los desarrollos que cuelgan de una implementación.** Sin error, sin excepción, y
+ * auto-sanándose en la corrida siguiente — que es justo lo que garantizaba que nunca se
+ * diagnosticara.
+ *
+ * `null` = no preguntamos. El que llama OMITE el campo y deja el último valor bueno. Es el
+ * mismo criterio que `anyTransient` aplica 500 líneas más arriba para no reconciliar con un
+ * set incompleto: ante la duda, no tocar.
  */
 async function leerProyectosAsociados(
   hsClient: Client,
   ids: string[],
   slug: string,
-): Promise<Map<string, string[]>> {
+): Promise<Map<string, string[]> | null> {
   const out = new Map<string, string[]>();
   const LOTE = 100;
   for (let i = 0; i < ids.length; i += LOTE) {
@@ -285,7 +296,9 @@ async function leerProyectosAsociados(
         path: `/crm/v4/associations/${slug}/${slug}/batch/read`,
         body: { inputs: tanda.map((id) => ({ id })) },
       });
-      if (!res.ok) continue;
+      // Un lote que falla invalida la corrida ENTERA, no solo su tanda: con un mapa parcial
+      // los proyectos de los lotes que sí respondieron se verían "sin hermano".
+      if (!res.ok) return null;
       const data = (await res.json()) as {
         results?: Array<{ from?: { id?: string }; to?: Array<{ toObjectId?: number | string }> }>;
       };
@@ -298,7 +311,7 @@ async function leerProyectosAsociados(
         if (hacia.length) out.set(desde, hacia);
       }
     } catch {
-      /* sin asociaciones para esta tanda → todos quedan "aparte" */
+      return null;
     }
   }
   return out;
@@ -913,6 +926,47 @@ export async function syncProjectsForClient(
       hubspotAdoptionState: trimOrNull(props.estado_de_adopcion),
     };
 
+    /* ── EL ESPEJO: todo lo que este proyecto COPIA de HubSpot ────────────────
+       Una sola vez, y las dos ramas (crear y actualizar) lo spreadean.
+
+       Antes eran dos listas escritas a mano, y divergieron: la rama de creación se quedó
+       sin `hubspotPipelineId`, `proyectoInterno` ni `hubspotRelatedProjectIds` — o sea,
+       justo los tres campos que deciden si un proyecto se factura, si suma a la cartera y
+       si lo vigila el watchdog. Los proyectos que NACEN son los que entran por esa rama,
+       así que en su primera sincronización se comportaban como Customer Success legacy.
+
+       Lo que lo hizo invisible en la revisión: la rama SÍ escribía `hubspotPipelineName` y
+       `hubspotPipelineStageId/Label`. El gemelo cosmético de cada campo que faltaba estaba
+       presente, así que el bloque se leía completo.
+
+       Con una sola fuente, olvidarse deja de ser posible. Lo que NO va acá es lo que las
+       dos ramas tratan distinto a propósito: `tags` (aditivo al actualizar, desde cero al
+       crear), `status` y `clientId`. Están escritos aparte en cada rama, a la vista.
+       La guarda de paridad en lib/projects/scope-coverage.test.ts congela esta división. */
+    const espejo = {
+      name: projectName,
+      hubspotServiceId: project.id,
+      serviceType: mapping.serviceType,
+      projectType: mapping.projectType,
+      hubspotOwnerId: hubOwnerId,
+      hubspotOwnerName: ownerName,
+      hubspotOwnerEmail: ownerEmail,
+      hubspotCreatedAt: hubCreatedAtValid,
+      hubspotPipelineName: pipelineName,
+      hubspotPipelineId: pipelineId,
+      proyectoInterno,
+      hubspotPipelineStageId: stageId,
+      hubspotPipelineStageLabel: stageLabel,
+      hubspotStageSyncedAt: stageId ? new Date() : null,
+      ...csOps,
+      /* El HECHO crudo de la asociación proyecto↔proyecto. Se guarda aunque el hermano
+         todavía no exista en Nexus; la resolución la hace `resolverHermanos` al final.
+         ⚠ Se OMITE cuando la lectura de asociaciones falló (`asociados === null`): pisar
+         con `[]` un dato que no pudimos leer desvincularía a todos los hermanos del cliente
+         y los volvería facturables. Ver `leerProyectosAsociados`. */
+      ...(asociados ? { hubspotRelatedProjectIds: asociados.get(project.id) ?? [] } : {}),
+    };
+
     // Buscar existente por hubspotServiceId o por nombre (evitar duplicados)
     const existing =
       (await prisma.project.findUnique({ where: { hubspotServiceId: project.id } })) ??
@@ -947,28 +1001,11 @@ export async function syncProjectsForClient(
       await prisma.project.update({
         where: { id: existing.id },
         data: {
-          name: projectName,
-          hubspotServiceId: project.id,
-          serviceType: mapping.serviceType,
-          projectType: mapping.projectType,
+          ...espejo,
           // ADITIVO (ver mergeHubTag): el sync no puede borrar la clasificación del
           // agente ni la del CSE. Solo suma su tag derivado del servicio de HubSpot.
           tags: mergeHubTag(existing.tags, mapping.hubTag),
           status: "active",
-          hubspotOwnerId:      hubOwnerId,
-          hubspotOwnerName:    ownerName,
-          hubspotOwnerEmail:   ownerEmail,
-          hubspotCreatedAt:    hubCreatedAtValid,
-          hubspotPipelineName: pipelineName,
-          hubspotPipelineId:   pipelineId,
-          proyectoInterno,
-          // El HECHO crudo. Se guarda aunque el otro proyecto todavía no exista en Nexus;
-          // la resolución a `hermanoCsProjectId` la hace `resolverHermanos` al final.
-          hubspotRelatedProjectIds: asociados.get(project.id) ?? [],
-          hubspotPipelineStageId:    stageId,
-          hubspotPipelineStageLabel: stageLabel,
-          hubspotStageSyncedAt:      stageId ? new Date() : null,
-          ...csOps,
         },
       });
       result.updated++;
@@ -977,26 +1014,14 @@ export async function syncProjectsForClient(
       // ambos, quedaba un proyecto SIN canvases para siempre (la próxima corrida
       // lo encuentra existente → rama update → nunca los crea). Todo-o-nada:
       // si algo falla, el próximo sync lo re-crea completo.
-      const newProject = await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx) => {
         const created = await tx.project.create({
           data: {
+            ...espejo,
             clientId,
-            name: projectName,
-            hubspotServiceId: project.id,
-            serviceType: mapping.serviceType,
-            projectType: mapping.projectType,
             // Proyecto NUEVO: no hay nada curado que preservar, pero igual pasa por
             // mergeHubTag para guardar el SLUG canónico (antes guardaba el label).
             tags: mergeHubTag([], mapping.hubTag),
-            hubspotOwnerId:      hubOwnerId,
-            hubspotOwnerName:    ownerName,
-            hubspotOwnerEmail:   ownerEmail,
-            hubspotCreatedAt:    hubCreatedAtValid,
-            hubspotPipelineName: pipelineName,
-            hubspotPipelineStageId:    stageId,
-            hubspotPipelineStageLabel: stageLabel,
-            hubspotStageSyncedAt:      stageId ? new Date() : null,
-            ...csOps,
             status: "active",
           },
         });
@@ -1004,16 +1029,28 @@ export async function syncProjectsForClient(
         return created;
       });
       result.created++;
-      // Proyecto NUEVO → cambió el panorama del cliente: re-clasificar sus sesiones
-      // recientes (huérfanas + links de IA sin revisar; los locks humanos se respetan).
-      // Superset de autoClassifyOrphanSessions: además de adoptar huérfanas, reconsidera
-      // los links del atajo "único proyecto" que antes quedaban permanentes. Fire-and-
-      // forget (no bloquea el sync) + dynamic import (no arrastra el clasificador al
-      // grafo del sync).
-      void import("@/lib/sessions/reclassify")
-        .then((m) => m.reclassifyClientSessions(clientId))
-        .catch(() => {});
     }
+  }
+
+  /* ── Re-clasificar las sesiones del cliente: UNA vez, no una por proyecto ──────
+     Un proyecto nuevo cambia el panorama del cliente, así que hay que reconsiderar a qué
+     proyecto va cada sesión reciente (huérfanas + links de IA sin revisar; los locks
+     humanos se respetan).
+
+     ⚠ Esto vivía DENTRO del loop, en la rama de creación. Con N proyectos creados en una
+     corrida disparaba N `reclassifyClientSessions(clientId)` concurrentes **para el mismo
+     cliente**, sin mutex, compitiendo por escribir las mismas filas `SessionProject` — y
+     cada corrida cuesta ~US$1 de LLM (ver el encabezado de reclassify.ts). Con Desarrollo
+     cargando ~21 proyectos de golpe eso dejaba de ser teórico.
+
+     El clasificador ya recorre TODAS las sesiones recientes del cliente y ve todos sus
+     proyectos, así que una sola corrida al final hace exactamente el mismo trabajo.
+     Fire-and-forget (no bloquea el sync) + import dinámico (no arrastra el clasificador
+     al grafo del sync). */
+  if (result.created > 0) {
+    void import("@/lib/sessions/reclassify")
+      .then((m) => m.reclassifyClientSessions(clientId))
+      .catch(() => {});
   }
 
   // ── Reconciliación: ocultar proyectos sincronizados que YA NO están en HubSpot ──

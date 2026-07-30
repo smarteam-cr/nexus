@@ -43,6 +43,11 @@ import { resolveAllSessions } from "@/lib/sessions/resolve-client";
  *      MISMO conjunto sobre los datos reales. `scope.test.ts` ya prueba la lógica contra
  *      1.080 filas sintéticas; esto la prueba contra la base, que es donde viven los casos
  *      que a nadie se le ocurrió inventar.
+ *  10. Ningún proyecto sincronizado se quedó SIN CLASE. Un `hubspotServiceId` con
+ *      `hubspotPipelineId` en NULL por más de un día significa que el sync lo escribió y no
+ *      le puso su pipeline — el defecto que tuvo la rama de creación, visto desde los datos
+ *      en vez de desde el código. Mientras dura, ese proyecto se comporta como Customer
+ *      Success: entra a la cartera, al vigilante y a cobranza.
  */
 async function main(): Promise<number> {
   let violations = 0;
@@ -415,6 +420,47 @@ async function main(): Promise<number> {
     } else {
       console.log("✓ INV9: los 4 criterios de alcance coinciden en SQL y en memoria.");
     }
+  }
+
+  // ── Inv 10: ningún proyecto sincronizado ACTIVO se quedó sin clase ──
+  // Un proyecto con hubspotServiceId y sin hubspotPipelineId es uno que el sync escribió sin
+  // decirle de qué pipeline viene. Mientras dura, se comporta como Customer Success.
+  //
+  // Se mira SOLO los activos, y no es para que el invariante pase: los cuatro criterios de
+  // alcance (lib/projects/scope.ts) exigen `status: "active"`, así que un proyecto inactivo
+  // no entra a cartera, ni a cobranza, ni al vigilante. La justificación de este invariante
+  // no le aplica. Hoy eso deja afuera a 18 fantasmas de un portal de cliente al que ya no
+  // tenemos acceso, que van a quedar en NULL para siempre y no molestan a nadie.
+  //
+  // El día de gracia cubre la ventana normal entre aplicar el SQL y correr el backfill.
+  const UN_DIA = 24 * 60 * 60 * 1000;
+  const sinClase = await prisma.project.findMany({
+    where: {
+      status: "active",
+      hubspotServiceId: { not: null },
+      hubspotPipelineId: null,
+      updatedAt: { lt: new Date(Date.now() - UN_DIA) },
+    },
+    select: { name: true, status: true, client: { select: { name: true } } },
+  });
+  if (sinClase.length > 0) {
+    violations++;
+    console.error(
+      `✗ INV10 VIOLADO: ${sinClase.length} proyecto(s) sincronizado(s) sin pipeline resuelto ` +
+        `(se comportan como Customer Success: cartera, vigilante y cobranza).`,
+    );
+    for (const p of sinClase.slice(0, 10)) {
+      console.error(`    - ${p.client.name} · "${p.name}" (${p.status})`);
+    }
+    if (sinClase.length > 10) console.error(`    … y ${sinClase.length - 10} más`);
+    console.error("  Corré: npx tsx scripts/backfill-project-pipeline.ts --apply");
+    console.error(
+      "  Si el backfill los reporta como «no está en ese portal», el objeto de HubSpot ya no\n" +
+        "  existe: el proyecto está de más en Nexus y va por la Zona de peligro de la ficha,\n" +
+        "  no por el backfill.",
+    );
+  } else {
+    console.log("✓ INV10: todo proyecto sincronizado tiene su pipeline resuelto.");
   }
 
   return violations;
