@@ -7,6 +7,7 @@ import { withDbRetry } from "@/lib/db/retry";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
 import { computeBookends, type FrontSession, type SessionBookends } from "@/lib/sessions/bookends";
 import { loadProjectSetup } from "@/lib/portfolio/project-setup";
+import { frentesDeProyecto } from "@/lib/projects/kind";
 
 // Sesiones del cliente (Google Meet + Fireflies legacy) → próxima futura y última
 // pasada, a nivel proyecto y POR FRENTE (Ventas / CSE).
@@ -95,6 +96,9 @@ export const GET = withProjectAccess(async (
       hubspotCreatedAt: true,
       hubspotPipelineName: true,
       hubspotPipelineId: true,
+      // De qué clase es el proyecto: decide qué FRENTES muestra el widget y con qué rótulo.
+      proyectoInterno: true,
+      hermanoCsProjectId: true,
       createdAt: true,
     },
   });
@@ -206,6 +210,17 @@ export const GET = withProjectAccess(async (
     },
   };
 
+  /* QUÉ frentes se pintan y con qué rótulo lo decide el servidor, desde la tabla de
+     lib/projects/kind.ts. El widget solo pinta la lista que recibe: así el cuarto pipeline
+     es una fila y no un `if` adentro de React.
+     `fronts` sigue trayendo los dos pares —es el mapa de datos, cuesta lo mismo— y `frentes`
+     es lo que se muestra. */
+  const frentes = frentesDeProyecto({
+    hubspotPipelineId: project.hubspotPipelineId,
+    interno: project.proyectoInterno,
+    tieneHermanoCs: project.hermanoCsProjectId != null,
+  });
+
   // ── Info del proyecto (propiedades de HubSpot + base) ────────────────────
   const projectInfo = {
     name: project.name,
@@ -295,7 +310,8 @@ export const GET = withProjectAccess(async (
     // Campos enriquecidos (nueva API)
     nextSession,
     lastSession,
-    fronts, // por frente (Ventas / CSE): { next, last } — para agrupar en Última y Próxima
+    fronts, // por ranura ("ventas" / "cs"): { next, last } — el mapa de datos
+    frentes, // QUÉ frentes pintar y con qué rótulo, en orden (lib/projects/kind.ts)
     projectInfo,
     actionItems: pendingItemsCompat, // alias semántico
     historyItems, // tareas hechas o borradas (tab Histórico)

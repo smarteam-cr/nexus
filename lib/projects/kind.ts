@@ -134,6 +134,12 @@ export interface PipelineDef {
    */
   canBeSiblingOf: readonly ProjectPipelineKey[];
   /**
+   * Cómo se llama EN PANTALLA el equipo que entrega este tipo de trabajo. Es el rótulo del
+   * segundo frente del widget de sesiones (ver `frentesDeProyecto`) — un desarrollo no
+   * tiene "CSE", tiene equipo técnico.
+   */
+  frenteDeEntrega: string;
+  /**
    * Slugs del registro de piezas (`lib/pieces/registry.ts`) con los que NACE un proyecto de
    * este tipo. Lo consume `createDefaultCanvases`.
    *
@@ -214,6 +220,7 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     closedStageIds: ["1225193543"], // Finalizado
     initialStageId: "1225193551", // Nuevo proyecto (ex "Hand off")
     canBeSiblingOf: [],
+    frenteDeEntrega: "CSE",
     /* SIN `implementation`: es `createdWithProject: false` en el registro de piezas a
        propósito —se creaba vacía en los 118 proyectos— y ponerla acá la resucitaría. */
     seedPieces: ["handoff", "kickoff", "timeline", "exploration"],
@@ -244,6 +251,7 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     closedStageIds: ["1409932564", "1409897657"], // Finalizado, Cancelado
     initialStageId: "1409898886", // Handoff
     canBeSiblingOf: ["customer-success"],
+    frenteDeEntrega: "Desarrollo",
     seedPieces: ["handoff", "timeline", "tech-requirements"],
     base: BASE_ENTREGA_TECNICA,
   },
@@ -272,6 +280,11 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     // sí se facturan; los que son hermanos no". Se sigue la regla y no la fila abreviada:
     // equivocarse hacia "factura igual" cobra dos veces el mismo trabajo.
     canBeSiblingOf: ["customer-success"],
+    /* "CSE" y no "Web": un sitio es `publicable`, lleva kickoff y hoy lo acompaña un CSE.
+       Cambiarlo sería una decisión de negocio que nadie pidió — y como el frente de entrega
+       ya incluye a Desarrollo (`deliveryEmails = CSE ∪ Development`), las sesiones que se
+       muestran son las mismas: lo único que cambiaría es el rótulo. */
+    frenteDeEntrega: "CSE",
     /* CON `kickoff`: hoy lo recibe y es su landing de cara al cliente — un sitio web es
        `publicable`. Sacárselo sería un cambio que nadie pidió. */
     seedPieces: ["handoff", "kickoff", "timeline", "exploration"],
@@ -401,6 +414,46 @@ export function fuenteDelCiclo(facts: ProjectFacts): FuenteDelCiclo {
      caso real: existe para que agregar una fila con `cicloOchoEtapas: false` y sin etapas
      no produzca un crash, sino el comportamiento de siempre. */
   return def ? { tipo: "pipeline", pipeline: def } : { tipo: "customer-success" };
+}
+
+// ── Los FRENTES del widget de sesiones ───────────────────────────────────────
+
+/**
+ * `key` es la RANURA DE ALMACENAMIENTO, no el rótulo:
+ *  · `"ventas"` → `Project.salesNextSessionDate/Note`
+ *  · `"cs"`     → `Project.csNextSessionDate/Note`
+ *
+ * La ranura "cs" siempre fue la del frente de ENTREGA —lo respalda
+ * `deliveryEmails = CSE ∪ Development`, escrito así en tres lugares—, y el frente de entrega
+ * de un desarrollo es el equipo técnico. Por eso cambia el RÓTULO y no la columna:
+ * renombrarla sería una migración para decir lo que la columna ya decía.
+ */
+export type FrenteKey = "ventas" | "cs";
+export interface Frente {
+  key: FrenteKey;
+  label: string;
+}
+
+const FRENTE_VENTAS: Frente = { key: "ventas", label: "Ventas" };
+
+/**
+ * Qué frentes muestra el widget de sesiones de este proyecto, EN ORDEN.
+ *
+ * El rótulo del frente de entrega sale de la tabla (`frenteDeEntrega`). Lo único que no es
+ * una fila es el overlay del hermano, que va acá con su motivo al lado — igual que
+ * `OVERLAY_INTERNO`:
+ *
+ * ── POR QUÉ UN HERMANO PIERDE "VENTAS" ───────────────────────────────────────
+ * Un desarrollo que cuelga de una implementación no tiene conversación comercial propia: se
+ * vendió con el hermano, y ahí es donde vive. Mostrarle un frente "Ventas" vacío le diría al
+ * equipo que falta agendar algo que no existe — y la tira del proyecto ya enlaza al hermano
+ * para quien quiera verla.
+ */
+export function frentesDeProyecto(facts: ProjectFacts): readonly Frente[] {
+  const def = resolvePipeline(facts.hubspotPipelineId);
+  const entrega: Frente = { key: "cs", label: def?.frenteDeEntrega ?? "CSE" };
+  if (facts.tieneHermanoCs && def?.canBeSiblingOf.includes("customer-success")) return [entrega];
+  return [FRENTE_VENTAS, entrega];
 }
 
 /** Las etapas que cuentan para el "Etapa i/N" y para el stepper, en orden. */

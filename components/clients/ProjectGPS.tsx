@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import { readGpsCache, writeGpsCache, invalidateGps } from "@/lib/clients/gps-cache";
 import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 import { ProjectGpsSkeleton } from "./skeletons";
+import type { Frente, FrenteKey } from "@/lib/projects/kind";
 
 export interface PendingItem {
   id?: string;             // ActionItem.id (nuevo) — undefined si viene del Json viejo
@@ -85,14 +86,32 @@ interface GPSData {
   nextSession?: NextSessionInfo;
   lastSession?: LastSessionInfo;
   fronts?: { ventas: FrontPair; cs: FrontPair };
+  /**
+   * QUÉ frentes pintar y con qué rótulo, EN ORDEN. Lo decide el SERVIDOR desde la tabla de
+   * `lib/projects/kind.ts`: un desarrollo muestra "Desarrollo" donde una implementación
+   * muestra "CSE", y si cuelga de un hermano no muestra "Ventas" (esa conversación vive
+   * allá). El widget solo pinta la lista que recibe.
+   *
+   * Opcional: una respuesta cacheada de antes de este cambio no la trae, y ahí se pinta la
+   * lista de siempre en vez de nada.
+   */
+  frentes?: Frente[];
   projectInfo?: ProjectInfo;
   historyItems?: PendingItem[]; // tareas hechas o borradas (tab Histórico del modal)
   setup?: SetupSignals; // #5 — qué canvas tiene generados el proyecto (indicador del widget)
 }
 
-type FrontKey = "ventas" | "cs";
+/** La RANURA de almacenamiento del frente, no su rótulo — ver `FrenteKey` en kind.ts. */
+type FrontKey = FrenteKey;
 
-// Campos del Project (PUT) donde se persiste el override manual de cada frente.
+/** Fallback de `frentes` para respuestas viejas cacheadas. */
+const FRENTES_LEGACY: Frente[] = [
+  { key: "ventas", label: "Ventas" },
+  { key: "cs", label: "CSE" },
+];
+
+// Campos del Project (PUT) donde se persiste el override manual de cada frente. La clave es
+// la RANURA de almacenamiento, no el rótulo: la columna "cs" es la del frente de ENTREGA.
 const FRONT_FIELDS: Record<FrontKey, { date: string; note: string }> = {
   ventas: { date: "salesNextSessionDate", note: "salesNextSessionNote" },
   cs: { date: "csNextSessionDate", note: "csNextSessionNote" },
@@ -391,7 +410,10 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     <span className="text-[9px] uppercase tracking-wide text-brand bg-brand/10 border border-brand/30 rounded px-1 py-0.5">mixta</span>
   );
 
-  // ── Última de un frente (Ventas / CSE) ────────────────────────────────────────
+  // Los frentes que este proyecto muestra, con su rótulo — los manda el servidor.
+  const frentes = data.frentes ?? FRENTES_LEGACY;
+
+  // ── Última de un frente (Ventas / CSE / Desarrollo) ───────────────────────────
   const renderLastFront = (frontKey: FrontKey, label: string) => {
     const last = data.fronts?.[frontKey]?.last ?? null;
     const d = last?.date ? new Date(last.date) : null;
@@ -422,7 +444,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     );
   };
 
-  // ── Próxima de un frente (Ventas / CSE) — editable (override manual) ───────────
+  // ── Próxima de un frente (Ventas / CSE / Desarrollo) — editable (override manual) ──
   const renderNextFront = (frontKey: FrontKey, label: string) => {
     const next = data.fronts?.[frontKey]?.next ?? null;
     const d = next?.date ? new Date(next.date) : null;
@@ -516,8 +538,9 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             <span className={cardLabel}>Última sesión</span>
           </div>
           <div className="space-y-2.5">
-            {renderLastFront("ventas", "Ventas")}
-            {renderLastFront("cs", "CSE")}
+            {frentes.map((f) => (
+              <div key={f.key}>{renderLastFront(f.key, f.label)}</div>
+            ))}
           </div>
           <button
             onClick={() => setMinuteDialogOpen(true)}
@@ -534,8 +557,9 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             <span className={cardLabel}>Próxima sesión</span>
           </div>
           <div className="space-y-2.5">
-            {renderNextFront("ventas", "Ventas")}
-            {renderNextFront("cs", "CSE")}
+            {frentes.map((f) => (
+              <div key={f.key}>{renderNextFront(f.key, f.label)}</div>
+            ))}
           </div>
         </div>
 
