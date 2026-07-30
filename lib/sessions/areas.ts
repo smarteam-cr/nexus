@@ -43,17 +43,31 @@ export function isDevMember(m: TeamMemberLite): boolean {
  * Devuelve Sets de emails internos (en minúscula) por frente. Un miembro puede caer
  * en varios si su área/rol matchea (raro, pero se respeta).
  * - `deliveryEmails`: entrega de servicio = CSE ∪ Desarrollo.
+ * - `devEmails`: SOLO Desarrollo — ver abajo.
  * - `internalEmails`: TODOS los miembros del equipo (para detectar "cliente" =
  *   participante que NO es interno).
+ *
+ * ── POR QUÉ `devEmails` EXISTE APARTE DE `deliveryEmails` ────────────────────
+ * `deliveryEmails` es la unión a propósito: una integración que lleva solo un dev ES una
+ * sesión de entrega, y sin esa unión el widget de un proyecto de Customer Success mostraba
+ * "Sin agendar" con la reunión ya agendada.
+ *
+ * Pero un proyecto del pipeline Development tiene su PROPIO frente rotulado "Desarrollo", y
+ * ahí la unión miente: en un cliente con dos proyectos, las sesiones del CSE del hermano
+ * ganan por fecha y el frente "Desarrollo" termina mostrando reuniones donde no hubo ningún
+ * dev. Pasó en Wherex. Cada frente mira a su equipo; cuál le toca a cada uno lo declara
+ * `lib/projects/kind.ts`.
  */
 export function classifyTeamEmailsByArea(teamMembers: TeamMemberLite[]): {
   salesEmails: Set<string>;
   cseEmails: Set<string>;
+  devEmails: Set<string>;
   deliveryEmails: Set<string>;
   internalEmails: Set<string>;
 } {
   const salesEmails = new Set<string>();
   const cseEmails = new Set<string>();
+  const devEmails = new Set<string>();
   const deliveryEmails = new Set<string>();
   const internalEmails = new Set<string>();
   for (const m of teamMembers) {
@@ -61,7 +75,8 @@ export function classifyTeamEmailsByArea(teamMembers: TeamMemberLite[]): {
     internalEmails.add(email);
     if (isSalesMember(m)) salesEmails.add(email);
     if (isCseMember(m)) cseEmails.add(email);
+    if (isDevMember(m)) devEmails.add(email);
     if (isCseMember(m) || isDevMember(m)) deliveryEmails.add(email);
   }
-  return { salesEmails, cseEmails, deliveryEmails, internalEmails };
+  return { salesEmails, cseEmails, devEmails, deliveryEmails, internalEmails };
 }

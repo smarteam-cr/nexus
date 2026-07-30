@@ -76,14 +76,19 @@ export function extractSummaryText(summary: unknown): string | null {
 /**
  * Bookends global + por frente a partir de las sesiones YA acotadas al cliente.
  * `sessions` puede venir en cualquier orden (se ordena acá, DESC por fecha).
- * El frente "cs" del GPS es el de ENTREGA (deliveryEmails = CSE ∪ Development,
- * igual que lib/timeline/delivery-sessions.ts). Una sesión mixta cae en ambos.
+ * Una sesión mixta cae en ambos frentes.
+ *
+ * ── LA RANURA "cs" ES EL FRENTE DE ENTREGA, NO "EL CSE" ──────────────────────
+ * Qué Set de emails la alimenta lo decide el CALLER desde la tabla de
+ * `lib/projects/kind.ts` (`equipoDeEntrega`): `CSE ∪ Development` para una implementación o
+ * un sitio, y SOLO Development para un proyecto del pipeline técnico, que tiene frente
+ * propio. Esta función no sabe de pipelines: recibe el conjunto y busca.
  */
 export function computeBookends(
   sessions: BookendSessionRow[],
   now: number,
   salesEmails: Set<string>,
-  deliveryEmails: Set<string>,
+  entregaEmails: Set<string>,
 ): SessionBookends {
   const desc = [...sessions].sort((a, b) => b.date.getTime() - a.date.getTime());
 
@@ -101,7 +106,7 @@ export function computeBookends(
     sessionId: s.id,
     title: s.title,
     date: s.date.toISOString(),
-    mixed: involvesArea(s, salesEmails) && involvesArea(s, deliveryEmails),
+    mixed: involvesArea(s, salesEmails) && involvesArea(s, entregaEmails),
     summary: extractSummaryText(s.summary),
     googleDocId: s.googleDocId,
     googleEventId: s.googleEventId,
@@ -136,7 +141,7 @@ export function computeBookends(
       : null,
     fronts: {
       ventas: frontPair(salesEmails),
-      cs: frontPair(deliveryEmails),
+      cs: frontPair(entregaEmails),
     },
   };
 }

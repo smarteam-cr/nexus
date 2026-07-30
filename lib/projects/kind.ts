@@ -140,6 +140,17 @@ export interface PipelineDef {
    */
   frenteDeEntrega: string;
   /**
+   * A QUIÉN mira ese frente cuando busca la última y la próxima sesión. No se deriva del
+   * rótulo: son dos cosas distintas y confundirlas fue justo el bug (el frente decía
+   * "Desarrollo" y traía sesiones de CSE porque miraba a `deliveryEmails`).
+   *
+   *  · `"entrega"`   → CSE ∪ Desarrollo. Es lo correcto donde NO hay un frente técnico
+   *                    aparte: una integración que lleva solo un dev es una sesión de
+   *                    entrega del proyecto de CS.
+   *  · `"desarrollo"` → solo Desarrollo. Para el pipeline que sí tiene frente propio.
+   */
+  equipoDeEntrega: EquipoDeFrente;
+  /**
    * Slugs del registro de piezas (`lib/pieces/registry.ts`) con los que NACE un proyecto de
    * este tipo. Lo consume `createDefaultCanvases`.
    *
@@ -233,6 +244,7 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     initialStageId: "1225193551", // Handoff (se llamó "Nuevo proyecto" entre 2026-05 y 2026-07)
     canBeSiblingOf: [],
     frenteDeEntrega: "CSE",
+    equipoDeEntrega: "entrega",
     /* SIN `implementation`: es `createdWithProject: false` en el registro de piezas a
        propósito —se creaba vacía en los 118 proyectos— y ponerla acá la resucitaría. */
     seedPieces: ["handoff", "kickoff", "timeline", "exploration"],
@@ -263,7 +275,9 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     closedStageIds: ["1409932564", "1409897657"], // Finalizado, Cancelado
     initialStageId: "1409898886", // Handoff
     canBeSiblingOf: ["customer-success"],
+    // El único con frente técnico propio: mira SOLO a Desarrollo.
     frenteDeEntrega: "Desarrollo",
+    equipoDeEntrega: "desarrollo",
     seedPieces: ["handoff", "timeline", "tech-requirements"],
     base: BASE_ENTREGA_TECNICA,
   },
@@ -297,6 +311,7 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
        ya incluye a Desarrollo (`deliveryEmails = CSE ∪ Development`), las sesiones que se
        muestran son las mismas: lo único que cambiaría es el rótulo. */
     frenteDeEntrega: "CSE",
+    equipoDeEntrega: "entrega",
     /* CON `kickoff`: hoy lo recibe y es su landing de cara al cliente — un sitio web es
        `publicable`. Sacárselo sería un cambio que nadie pidió. */
     seedPieces: ["handoff", "kickoff", "timeline", "exploration"],
@@ -463,12 +478,21 @@ export function motivoNoPublicable(facts: ProjectFacts): string | null {
  * renombrarla sería una migración para decir lo que la columna ya decía.
  */
 export type FrenteKey = "ventas" | "cs";
+
+/**
+ * Qué Set de emails alimenta un frente (`classifyTeamEmailsByArea` en lib/sessions/areas.ts).
+ * Es la respuesta a "¿de quién son las sesiones que muestra este frente?", y va aparte del
+ * rótulo a propósito: el bug fue exactamente que el rótulo cambió y el equipo no.
+ */
+export type EquipoDeFrente = "ventas" | "entrega" | "desarrollo";
+
 export interface Frente {
   key: FrenteKey;
   label: string;
+  equipo: EquipoDeFrente;
 }
 
-const FRENTE_VENTAS: Frente = { key: "ventas", label: "Ventas" };
+const FRENTE_VENTAS: Frente = { key: "ventas", label: "Ventas", equipo: "ventas" };
 
 /**
  * Qué frentes muestra el widget de sesiones de este proyecto, EN ORDEN.
@@ -485,7 +509,12 @@ const FRENTE_VENTAS: Frente = { key: "ventas", label: "Ventas" };
  */
 export function frentesDeProyecto(facts: ProjectFacts): readonly Frente[] {
   const def = resolvePipeline(facts.hubspotPipelineId);
-  const entrega: Frente = { key: "cs", label: def?.frenteDeEntrega ?? "CSE" };
+  const entrega: Frente = {
+    key: "cs",
+    label: def?.frenteDeEntrega ?? "CSE",
+    // Sin fila declarada, la de siempre: CSE ∪ Desarrollo.
+    equipo: def?.equipoDeEntrega ?? "entrega",
+  };
   if (facts.tieneHermanoCs && def?.canBeSiblingOf.includes("customer-success")) return [entrega];
   return [FRENTE_VENTAS, entrega];
 }

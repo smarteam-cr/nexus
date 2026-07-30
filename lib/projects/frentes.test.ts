@@ -67,6 +67,71 @@ describe("LOS FRENTES — (pipeline × hermano) → qué se pinta, transcrito", 
   });
 });
 
+describe("cada frente mira a SU equipo — el rótulo no alcanza", () => {
+  /* EL BUG, transcrito: el frente pasó a rotularse "Desarrollo" y siguió mirando a
+     `deliveryEmails` (CSE ∪ Desarrollo). En Wherex, que tiene dos proyectos, las sesiones
+     recientes del CSE del hermano ganaban por fecha y el frente "Desarrollo" mostraba
+     reuniones donde no participó ni un dev. El rótulo cambió; el equipo, no. */
+  const equipos = (pid: string | null, hermano = false) =>
+    frentesDeProyecto({ hubspotPipelineId: pid, interno: false, tieneHermanoCs: hermano }).map(
+      (f) => [f.label, f.equipo] as const,
+    );
+
+  it("Desarrollo mira SOLO a Desarrollo", () => {
+    expect(equipos(DEV)).toEqual([
+      ["Ventas", "ventas"],
+      ["Desarrollo", "desarrollo"],
+    ]);
+    expect(equipos(DEV, true)).toEqual([["Desarrollo", "desarrollo"]]);
+  });
+
+  it("Customer Success y Sitios web miran a ENTREGA (CSE ∪ Desarrollo)", () => {
+    /* No se angosta a solo CSE: una integración que lleva únicamente un dev ES una sesión de
+       entrega de ese proyecto, y con `cseEmails` el widget mostraba "Sin agendar" con la
+       reunión ya agendada. La regla nueva es para el pipeline que tiene frente propio. */
+    expect(equipos(CS)).toEqual([
+      ["Ventas", "ventas"],
+      ["CSE", "entrega"],
+    ]);
+    expect(equipos(WEB)).toEqual([
+      ["Ventas", "ventas"],
+      ["CSE", "entrega"],
+    ]);
+  });
+
+  it("sin pipeline y pipeline desconocido: ENTREGA, como siempre", () => {
+    expect(equipos(null)).toEqual([
+      ["Ventas", "ventas"],
+      ["CSE", "entrega"],
+    ]);
+    expect(equipos(DESCONOCIDO)[1][1]).toBe("entrega");
+  });
+
+  it("un frente rotulado «Desarrollo» NUNCA mira a entrega", () => {
+    /* La propiedad de fondo, escrita sobre TODAS las combinaciones: si mañana otra fila
+       estrena rótulo técnico, esto la obliga a declarar también su equipo. */
+    for (const pid of [CS, DEV, WEB, DESCONOCIDO, null]) {
+      for (const hermano of [true, false]) {
+        for (const interno of [true, false]) {
+          for (const f of frentesDeProyecto({ hubspotPipelineId: pid, interno, tieneHermanoCs: hermano })) {
+            if (f.label === "Desarrollo") {
+              expect(f.equipo, `pipeline=${pid}: el frente "Desarrollo" mira a ${f.equipo}`).toBe(
+                "desarrollo",
+              );
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it("toda fila declara su equipo de entrega", () => {
+    for (const def of PROJECT_PIPELINES) {
+      expect(["entrega", "desarrollo"], `${def.label}`).toContain(def.equipoDeEntrega);
+    }
+  });
+});
+
 describe("las ranuras de almacenamiento no cambian", () => {
   it("el frente de entrega SIEMPRE guarda en la ranura «cs»", () => {
     /* Renombrar la columna `csNextSessionDate` sería una migración para decir lo que ya

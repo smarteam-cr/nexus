@@ -7,7 +7,7 @@ import { withDbRetry } from "@/lib/db/retry";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
 import { computeBookends, type FrontSession, type SessionBookends } from "@/lib/sessions/bookends";
 import { loadProjectSetup } from "@/lib/portfolio/project-setup";
-import { frentesDeProyecto } from "@/lib/projects/kind";
+import { frentesDeProyecto, type EquipoDeFrente } from "@/lib/projects/kind";
 
 // Sesiones del cliente (Google Meet + Fireflies legacy) → próxima futura y última
 // pasada, a nivel proyecto y POR FRENTE (Ventas / CSE).
@@ -19,7 +19,11 @@ import { frentesDeProyecto } from "@/lib/projects/kind";
 // `[resolvedClientId, date desc]`, mantenido por resolve-sessions), el MISMO dato
 // del que depende /clients para "última actividad". El override manual conserva su
 // precedencia: manualClientId apunta acá O (sin override) la resolución automática.
-async function getClientSessionBookends(clientId: string): Promise<SessionBookends> {
+async function getClientSessionBookends(
+  clientId: string,
+  /** A quién mira el frente de ENTREGA de este proyecto (lib/projects/kind.ts). */
+  equipoDeEntrega: EquipoDeFrente,
+): Promise<SessionBookends> {
   const [team, sessions] = await Promise.all([
     prisma.teamMember.findMany({ select: { email: true, area: true, roleEnum: true } }),
     prisma.firefliesSession.findMany({
@@ -42,14 +46,22 @@ async function getClientSessionBookends(clientId: string): Promise<SessionBooken
     }),
   ]);
 
-  // El frente "CSE" del GPS es el de ENTREGA (deliveryEmails = CSE ∪ Development,
-  // igual que lib/timeline/delivery-sessions.ts): las sesiones técnicas que lleva
-  // solo un Dev/SA (p. ej. una integración SAP) son sesiones de entrega — con solo
-  // cseEmails quedaban fuera de ambos frentes y el widget mostraba "Sin agendar"
-  // aunque hubiera reunión agendada.
-  const { salesEmails, deliveryEmails } = classifyTeamEmailsByArea(team);
+  /* A QUIÉN mira el frente de entrega lo declara la tabla, no este archivo.
+     · `"entrega"` (Customer Success, Sitios web) = CSE ∪ Development, igual que
+       lib/timeline/delivery-sessions.ts: una integración que lleva solo un Dev/SA ES una
+       sesión de entrega, y con solo `cseEmails` el widget mostraba "Sin agendar" con la
+       reunión ya agendada.
+     · `"desarrollo"` = solo Development, para el pipeline que tiene frente técnico propio.
+       Sin esto, el frente rotulado "Desarrollo" traía las sesiones del CSE del proyecto
+       hermano —ganan por fecha— y el rótulo mentía. */
+  const emails = classifyTeamEmailsByArea(team);
+  const porEquipo: Record<EquipoDeFrente, Set<string>> = {
+    ventas: emails.salesEmails,
+    entrega: emails.deliveryEmails,
+    desarrollo: emails.devEmails,
+  };
 
-  return computeBookends(sessions, Date.now(), salesEmails, deliveryEmails);
+  return computeBookends(sessions, Date.now(), emails.salesEmails, porEquipo[equipoDeEntrega]);
 }
 
 /**
@@ -122,8 +134,21 @@ export const GET = withProjectAccess(async (
     currentState = `${stageLabel} → ${stepLabel}`;
   }
 
+  /* QUÉ frentes se pintan, con qué rótulo y A QUIÉN mira cada uno lo decide el servidor
+     desde la tabla de lib/projects/kind.ts. Se resuelve ANTES de buscar las sesiones porque
+     el frente de entrega decide de qué equipo son las que se muestran. */
+  const frentes = frentesDeProyecto({
+    hubspotPipelineId: project.hubspotPipelineId,
+    interno: project.proyectoInterno,
+    tieneHermanoCs: project.hermanoCsProjectId != null,
+  });
+  const frenteDeEntrega = frentes.find((f) => f.key === "cs");
+
   // Auto-rellenado de próxima y última sesión desde FirefliesSession (Google Meet + legacy)
-  const sessionBookends = await getClientSessionBookends(project.clientId);
+  const sessionBookends = await getClientSessionBookends(
+    project.clientId,
+    frenteDeEntrega?.equipo ?? "entrega",
+  );
 
   // Resolver con override manual (si Project.* está seteado, prevalece) — campos legacy.
   const manualNextDate = project.nextSessionDate?.toISOString() ?? null;
@@ -210,16 +235,9 @@ export const GET = withProjectAccess(async (
     },
   };
 
-  /* QUÉ frentes se pintan y con qué rótulo lo decide el servidor, desde la tabla de
-     lib/projects/kind.ts. El widget solo pinta la lista que recibe: así el cuarto pipeline
-     es una fila y no un `if` adentro de React.
-     `fronts` sigue trayendo los dos pares —es el mapa de datos, cuesta lo mismo— y `frentes`
-     es lo que se muestra. */
-  const frentes = frentesDeProyecto({
-    hubspotPipelineId: project.hubspotPipelineId,
-    interno: project.proyectoInterno,
-    tieneHermanoCs: project.hermanoCsProjectId != null,
-  });
+  /* `fronts` sigue trayendo los dos pares —es el mapa de datos, cuesta lo mismo— y `frentes`
+     (resuelto arriba) es lo que se muestra. El widget solo pinta la lista que recibe: así el
+     cuarto pipeline es una fila de la tabla y no un `if` adentro de React. */
 
   // ── Info del proyecto (propiedades de HubSpot + base) ────────────────────
   const projectInfo = {

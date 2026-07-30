@@ -106,8 +106,8 @@ type FrontKey = FrenteKey;
 
 /** Fallback de `frentes` para respuestas viejas cacheadas. */
 const FRENTES_LEGACY: Frente[] = [
-  { key: "ventas", label: "Ventas" },
-  { key: "cs", label: "CSE" },
+  { key: "ventas", label: "Ventas", equipo: "ventas" },
+  { key: "cs", label: "CSE", equipo: "entrega" },
 ];
 
 // Campos del Project (PUT) donde se persiste el override manual de cada frente. La clave es
