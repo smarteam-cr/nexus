@@ -52,7 +52,10 @@ const items = (props: Record<string, unknown>) => ({
  * líneas: uno largo desborda el globo fuera de su banda.
  * La WIG va en banda `dark` a propósito: es LA meta, tiene que ser imposible de pasar por alto.
  */
-const SECTION_META: Record<RoleSectionKey, SectionMeta> = {
+/** Exportado para que la PROPUESTA reuse el shape/tema/renderer de las secciones
+ *  que comparte con el perfil de puesto (ver `propuesta.defs.ts`): solo cambia
+ *  cuáles entran y cómo se titulan. */
+export const SECTION_META: Record<RoleSectionKey, SectionMeta> = {
   profile: {
     eyebrow: "El puesto",
     theme: "light",
@@ -78,9 +81,25 @@ const SECTION_META: Record<RoleSectionKey, SectionMeta> = {
     sectionType: "role_wig",
     tip: "D1 — Una sola meta, con línea de llegada: «de X a Y para [fecha]». Si no se logra, lo demás importa poco.",
     empty: { desde: "", hasta: "", fecha: "", contexto: "" },
-    schema: { type: "object", properties: { desde: str, hasta: str, fecha: str, contexto: str } },
+    schema: {
+      type: "object",
+      properties: {
+        desde: str,
+        hasta: str,
+        condiciones: items({ texto: str, nota: str }),
+        fecha: str,
+        contexto: str,
+      },
+    },
     assistBrief:
-      "UNA sola meta con línea de llegada: `desde` = X actual, `hasta` = Y objetivo, `fecha` = para cuándo. Los números existentes son ejemplos del liderazgo: consérvalos salvo que la instrucción pida cambiarlos. `contexto` opcional, 1 línea.",
+      "UNA sola meta con línea de llegada, en una de DOS formas — respetá la que ya tenga el puesto. " +
+      "(a) Recorrido: `desde` = X actual, `hasta` = Y objetivo. " +
+      "(b) Condiciones a cumplir: `condiciones` = lista de { texto, nota }, cuando la meta no se " +
+      "mueve sobre una escala sino que se cumple o no (ej. «el 100% de los proyectos en la fecha " +
+      "pactada»); `nota` es la precisión que evita la discusión después y se lee en un tooltip. " +
+      "Si hay `condiciones`, NO llenes `desde`/`hasta`. `fecha` = para cuándo, siempre. " +
+      "Los números existentes son ejemplos del liderazgo: consérvalos salvo que la instrucción pida " +
+      "cambiarlos. `contexto` opcional, 1-3 líneas: por qué ESTA es la meta.",
   },
   leadMeasures: {
     eyebrow: "D2 · Medidas de predicción (lead)",

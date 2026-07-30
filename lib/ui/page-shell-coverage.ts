@@ -46,6 +46,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "clients/[id]/stage/[stageNum]/audit/[auditId]": { custom: "detalle de auditoría dentro del stage" },
   "clients/[id]/projects/[projectId]/stage/[stageNum]": { custom: "stage page del proyecto" },
   "roles/[id]": { custom: "página web del rol renderizada por el motor de landing (.stl)" },
+  "roles/propuesta-csl": { custom: "propuesta de contratación renderizada por el motor de landing (.stl)" },
   "business-cases/[id]": { custom: "workspace del BC (header propio + canvas)" },
   "business-cases/new": { custom: "formulario de creación con contenedor propio (candidato a SHELL_NARROW)" },
   "sessions/[id]": { custom: "lectura larga con max-w-5xl propio (candidato a SHELL_WIDE)" },
