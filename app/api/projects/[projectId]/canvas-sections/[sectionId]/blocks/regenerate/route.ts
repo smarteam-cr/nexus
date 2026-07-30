@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
-import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
+import { loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { getSingleBlockOutputInstructions } from "@/lib/canvas/agent-output-schema";
 import { validateBlockPayload } from "@/lib/canvas/validate-block-payload";
 import { parseRegenBody, regenerateTypedSection } from "@/lib/canvas/regenerate-section";
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
 
   // Mismo contexto que usa el agente de kickoff.
   const [handoffCtx, timelineCtx, agent, project] = await Promise.all([
-    loadCanvasContext(projectId, "handoff", { onlyConfirmed: true }),
+    loadHandoffContext(projectId, { onlyConfirmed: true }),
     loadTimelineContext(projectId),
     prisma.agent.findUnique({
       where: { id: KICKOFF_AGENT_ID },

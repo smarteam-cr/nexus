@@ -17,7 +17,7 @@ import { Prisma } from "@prisma/client";
 import { anthropic } from "@/lib/anthropic";
 import { getProjectStage } from "@/lib/hubspot/stage";
 import { getPastSessionsForProject } from "@/lib/sessions/project-sessions";
-import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
+import { loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
 import { normalizeFingerprint } from "@/lib/timeline/particularidad-identity";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
@@ -167,7 +167,7 @@ export async function regenerateTimelineProgress(
     // 3. Contexto: sesiones pasadas + handoff + cronograma con avance confirmado.
     const [pastSessions, handoffCtx, timelineCtx] = await Promise.all([
       getPastSessionsForProject(projectId),
-      loadCanvasContext(projectId, "handoff", { onlyConfirmed: true }),
+      loadHandoffContext(projectId, { onlyConfirmed: true }),
       loadTimelineContext(projectId, { includeProgress: true }),
     ]);
     const sessionsBlock = pastSessions

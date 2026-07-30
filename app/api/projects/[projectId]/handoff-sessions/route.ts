@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
+import { vetoSiElHandoffEsDeOtro } from "@/lib/handoff/duenio";
 import { prisma } from "@/lib/db/prisma";
 import { belongsToClient } from "@/lib/sessions/project-sources";
 
@@ -24,6 +25,9 @@ export async function POST(
   const { projectId } = await params;
   const guard = await guardProjectHandoffAccess(projectId);
   if (guard instanceof NextResponse) return guard;
+  // Qué sesiones alimentan el handoff se decide donde vive el handoff (lib/handoff/duenio.ts).
+  const veto = await vetoSiElHandoffEsDeOtro(projectId);
+  if (veto) return veto;
 
   let body: { sessionId?: unknown; feeds?: unknown };
   try {

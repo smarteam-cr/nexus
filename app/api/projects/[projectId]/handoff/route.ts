@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardProjectEditHandoff, guardProjectGenerateHandoff } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { computeHandoffReadiness } from "@/lib/handoff/feeding";
+import { resolverDuenioDelHandoff, vetoSiElHandoffEsDeOtro } from "@/lib/handoff/duenio";
 import { createHandoffCanvas, reconcileHandoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 
@@ -19,6 +20,37 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { projectId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
+
+  /* ¿El handoff de este proyecto es el de OTRO? Un desarrollo que cuelga de una
+     implementación comparte con ella el alcance vendido (lib/handoff/duenio.ts). Se resuelve
+     PRIMERO: en ese caso no hay nada que generar acá, así que ni se calculan la disponibilidad
+     de material, el último run ni el agente — todo eso describe una generación que no va a
+     pasar en este proyecto. */
+  const duenio = await resolverDuenioDelHandoff(projectId);
+  if (duenio.redirigido) {
+    const owner = await prisma.project.findUnique({
+      where: { id: duenio.ownerProjectId },
+      select: {
+        clientId: true,
+        canvases: { where: canvasOf("handoff"), select: { id: true }, take: 1 },
+      },
+    });
+    const ownerCanvasId = owner?.canvases[0]?.id ?? null;
+    const ownerBlocks = ownerCanvasId
+      ? await prisma.canvasBlock.count({ where: { section: { canvasId: ownerCanvasId } } })
+      : 0;
+    return NextResponse.json({
+      duenio: {
+        redirigido: true as const,
+        projectId: duenio.ownerProjectId,
+        projectName: duenio.hermano?.name ?? null,
+        clientId: owner?.clientId ?? null,
+      },
+      canvasId: ownerCanvasId,
+      generated: ownerBlocks > 0,
+      blockCount: ownerBlocks,
+    });
+  }
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -71,6 +103,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   });
 
   return NextResponse.json({
+    duenio: { redirigido: false as const },
     handoffId: project.handoff?.id ?? null,
     agentId: handoffAgent?.id ?? null,
     canvasId,
@@ -97,6 +130,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { projectId } = await params;
   const guard = await guardProjectEditHandoff(projectId);
   if (guard instanceof NextResponse) return guard;
+  // Las exclusiones son del handoff; si el handoff es del hermano, se editan allá.
+  const veto = await vetoSiElHandoffEsDeOtro(projectId);
+  if (veto) return veto;
 
   let body: { contextExclusions?: unknown };
   try {
@@ -137,6 +173,10 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const { projectId } = await params;
   const guard = await guardProjectGenerateHandoff(projectId);
   if (guard instanceof NextResponse) return guard;
+  /* ACÁ es donde se impide que exista una segunda entidad `Handoff` del mismo trato — y
+     por eso el `@unique` del schema no hace falta tocarlo. */
+  const veto = await vetoSiElHandoffEsDeOtro(projectId);
+  if (veto) return veto;
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },

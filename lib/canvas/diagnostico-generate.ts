@@ -29,7 +29,7 @@ import {
   createOnDemandCanvas,
   reconcileOnDemandCanvasSections,
 } from "@/lib/canvas/default-canvases";
-import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
+import { loadCanvasContext, loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { serializeProcesosForPrompt } from "@/lib/canvas/read-procesos";
 import { loadKnowledgeByTags } from "@/lib/knowledge/load-by-tags";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
@@ -61,7 +61,7 @@ export async function runDiagnosticoGeneration(opts: {
 
   const [canvasId, handoffCtx, exploracionCtx, timelineCtx, escala, project] = await Promise.all([
     opts.canvasId ?? ensureDiagnosticoCanvas(projectId),
-    loadCanvasContext(projectId, "handoff", { onlyConfirmed: false, includeKeys: DIAGNOSTICO_HANDOFF_KEYS }),
+    loadHandoffContext(projectId, { onlyConfirmed: false, includeKeys: DIAGNOSTICO_HANDOFF_KEYS }),
     loadCanvasContext(projectId, "exploration", { onlyConfirmed: false }),
     loadTimelineContext(projectId),
     /* La vara: el doc canónico de la escala + los criterios por nivel/hub.

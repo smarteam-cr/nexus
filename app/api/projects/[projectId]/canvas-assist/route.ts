@@ -19,7 +19,7 @@ import { z } from "zod";
 import { guardAccessToProject, guardPermission } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { runDocumentAssist, type AssistSectionDef } from "@/lib/ai/assist";
-import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
+import { loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { KICKOFF_DEF_BY_KEY, KICKOFF_HANDOFF_KEYS, KICKOFF_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
 import { DESARROLLO_DEF_BY_KEY, DESARROLLO_HANDOFF_KEYS, DESARROLLO_TEMPLATE } from "@/components/landing/configs/desarrollo.defs";
 import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     // MISMO contexto que la generación de cada documento (analyze isKickoffAgent /
     // desarrollo-generate): allowlist por doc — el kickoff/desarrollo los lee gente
     // de afuera y las secciones INTERNAS del handoff no deben entrar al prompt.
-    loadCanvasContext(projectId, "handoff", {
+    loadHandoffContext(projectId, {
       onlyConfirmed: false,
       includeKeys: doc.section === "kickoff" ? KICKOFF_HANDOFF_KEYS : DESARROLLO_HANDOFF_KEYS,
     }),

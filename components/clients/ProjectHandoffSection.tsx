@@ -25,7 +25,18 @@ import {
   invalidateHandoffStatus,
 } from "@/lib/clients/handoff-status-cache";
 
+/**
+ * El handoff de este proyecto puede ser el de OTRO: un desarrollo que cuelga de una
+ * implementación de Customer Success comparte con ella el alcance vendido (lib/handoff/
+ * duenio.ts). En ese caso el GET devuelve un payload MÍNIMO —el documento del dueño y nada
+ * más—, porque acá no hay generación que describir.
+ */
+type DuenioDTO =
+  | { redirigido: false }
+  | { redirigido: true; projectId: string; projectName: string | null; clientId: string | null };
+
 interface HandoffStatus {
+  duenio?: DuenioDTO;
   handoffId: string | null;
   /** Id del agente de handoff, resuelto por grupo en el GET (no hardcodeado). */
   agentId: string | null;
@@ -45,6 +56,103 @@ interface HandoffStatus {
 
 function fmtDate(d: string): string {
   return new Date(d).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/**
+ * La sección cuando el handoff que aplica es el del PROYECTO PRINCIPAL.
+ *
+ * Se muestra el documento —es el alcance que hay que leer para trabajar acá— y se ocultan
+ * Generar/Regenerar, el Contexto y las exclusiones: todo eso decide QUÉ entra al handoff, y
+ * esa decisión se toma donde el handoff vive.
+ *
+ * ── LÍMITE HONESTO ───────────────────────────────────────────────────────────
+ * La solo-lectura del documento es una AFORDANCIA de pantalla, no un permiso nuevo: quien
+ * podría editarlo desde acá tiene la pestaña del hermano a un clic y el mismo permiso allá.
+ * Lo que SÍ está cerrado con servidor es lo específico del handoff —crear la entidad,
+ * cambiar exclusiones, elegir sesiones y fuentes, y regenerar con IA—, que es lo que
+ * produciría dos documentos del mismo trato. Fingir lo contrario sería vender una seguridad
+ * que no existe.
+ */
+function HandoffDelHermano({
+  canvasId,
+  generated,
+  duenio,
+  showDoc,
+  onToggleDoc,
+  canEdit,
+}: {
+  canvasId: string | null;
+  generated: boolean;
+  duenio: { projectId: string; projectName: string | null; clientId: string | null };
+  showDoc: boolean;
+  onToggleDoc: () => void;
+  canEdit: boolean;
+}) {
+  const nombre = duenio.projectName ?? "el proyecto principal";
+  const hrefHermano = duenio.clientId ? `/clients/${duenio.clientId}?tab=${duenio.projectId}` : null;
+  return (
+    <section className="rounded-2xl border border-line bg-surface">
+      <div className="flex items-center gap-3 px-5 py-3.5">
+        <svg className="w-4 h-4 text-fg-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m4 6H4m0 0l4 4m-4-4l4-4" />
+        </svg>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-bold text-fg">Handoff del proyecto principal</h3>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-fg-secondary bg-surface-muted border border-line rounded-full px-2 py-0.5">
+              Solo lectura
+            </span>
+          </div>
+          <p className="text-xs text-fg-muted mt-0.5">
+            Este desarrollo cuelga de{" "}
+            {hrefHermano ? (
+              <a href={hrefHermano} className="text-brand hover:underline font-medium">{nombre}</a>
+            ) : (
+              <strong className="text-fg-secondary">{nombre}</strong>
+            )}
+            : es el mismo alcance vendido, así que comparten handoff. Se genera y se edita allá.
+          </p>
+        </div>
+        {generated && canvasId && (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={onToggleDoc}
+              className="text-xs font-medium text-fg-muted hover:text-fg px-2 py-1.5 rounded-lg hover:bg-surface-hover transition-colors"
+            >
+              {showDoc ? "Ocultar" : "Ver documento"}
+            </button>
+            {duenio.clientId && (
+              <a
+                href={`/print/canvas/${duenio.clientId}/${canvasId}?print=1&projectId=${duenio.projectId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-surface-muted border-line text-fg-secondary hover:bg-surface-hover"
+                title="Abre una vista imprimible para guardar como PDF"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Exportar PDF
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+      {!generated && (
+        <p className="px-5 pb-3.5 -mt-1 text-xs text-fg-muted">
+          {nombre} todavía no tiene su handoff generado.
+        </p>
+      )}
+      {generated && showDoc && canvasId && duenio.clientId && (
+        <div className="border-t border-line">
+          {/* El documento es del hermano: el canvas y el proyecto que se le pasan son los
+              SUYOS. Pasar este projectId acá rendería el canvas contra el proyecto
+              equivocado. */}
+          <CanvasLinearView projectId={duenio.projectId} canvasId={canvasId} canEdit={canEdit} />
+        </div>
+      )}
+    </section>
+  );
 }
 
 export default function ProjectHandoffSection({ projectId, clientId }: { projectId: string; clientId: string }) {
@@ -237,6 +345,19 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   // nivel módulo, así que esta espera extra solo existe en el primer montaje de la sesión.
   if (loading || me === null) return <HandoffSectionSkeleton expanded={me?.capabilities.includes("handoffAnywhere") ?? false} />;
   if (!status) return null;
+
+  if (status.duenio?.redirigido) {
+    return (
+      <HandoffDelHermano
+        canvasId={status.canvasId}
+        generated={status.generated}
+        duenio={status.duenio}
+        showDoc={showDoc}
+        onToggleDoc={() => setShowDoc((v) => !v)}
+        canEdit={canEdit}
+      />
+    );
+  }
 
   const { generated } = status;
   const readiness = status.handoffReadiness ?? { feedingCount: 0, withTranscript: 0, manualSources: 0 };

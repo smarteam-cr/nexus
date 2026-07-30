@@ -18,7 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { IMPLEMENTACION_CANVAS, implementacionSectionSequence } from "@/lib/canvas/canvas-defs";
 import { createOnDemandCanvas, reconcileOnDemandCanvasSections } from "@/lib/canvas/default-canvases";
-import { loadCanvasContext } from "@/lib/canvas/load-canvas-context";
+import { loadCanvasContext, loadHandoffContext } from "@/lib/canvas/load-canvas-context";
 import { serializeProcesosForPrompt } from "@/lib/canvas/read-procesos";
 import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
 import { loadPortalLifecycleContext } from "@/lib/hubspot/lifecycle-context";
@@ -52,7 +52,7 @@ export async function runImplementacionGeneration(opts: {
       opts.canvasId ?? ensureImplementacionCanvas(projectId),
       loadCanvasContext(projectId, "planning", { onlyConfirmed: false }),
       loadCanvasContext(projectId, "diagnosis", { onlyConfirmed: false }),
-      loadCanvasContext(projectId, "handoff", { onlyConfirmed: false }),
+      loadHandoffContext(projectId, { onlyConfirmed: false }),
       loadDesarrolloContext(projectId),
       loadKnowledgeByTags([...BREEZE_KNOWLEDGE_TAGS], 15000),
       prisma.project.findUnique({

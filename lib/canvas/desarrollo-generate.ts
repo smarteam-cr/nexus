@@ -17,7 +17,7 @@ import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { DESARROLLO_CANVAS } from "@/lib/canvas/canvas-defs";
 import { createDesarrolloCanvas, reconcileDesarrolloCanvasSections } from "@/lib/canvas/default-canvases";
-import { loadCanvasContext } from "@/lib/canvas/load-canvas-context";
+import { loadHandoffContext } from "@/lib/canvas/load-canvas-context";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { specToDiagram, relacionToDiagram } from "@/lib/flowchart/spec-to-diagram";
 import { DESARROLLO_TEMPLATE, DESARROLLO_HANDOFF_KEYS } from "@/components/landing/configs/desarrollo.defs";
@@ -57,7 +57,11 @@ export async function runDesarrolloGeneration(opts: {
   // (y del canvas, si ya viene resuelto) → en paralelo en vez de 3 round-trips seguidos.
   const [canvasId, handoffCtx, project] = await Promise.all([
     opts.canvasId ?? ensureDesarrolloCanvas(projectId),
-    loadCanvasContext(projectId, "handoff", {
+    /* `loadHandoffContext` y no `loadCanvasContext`: para un desarrollo que cuelga de una
+       implementación, el alcance vendido vive en el handoff del HERMANO. Con el loader
+       genérico esto devolvía vacío y el prompt de abajo caía a su rama degradada —
+       generaba el requerimiento técnico a ciegas mientras el alcance estaba al lado. */
+    loadHandoffContext(projectId, {
       onlyConfirmed: false,
       includeKeys: DESARROLLO_HANDOFF_KEYS,
     }),

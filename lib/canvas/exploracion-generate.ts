@@ -27,7 +27,7 @@ import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { EXPLORACION_CANVAS } from "@/lib/canvas/canvas-defs";
 import { createExploracionCanvas, reconcileExploracionCanvasSections } from "@/lib/canvas/default-canvases";
-import { loadCanvasContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
+import { loadCanvasContext, loadHandoffContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { EXPLORACION_TEMPLATE, EXPLORACION_HANDOFF_KEYS } from "@/components/landing/configs/exploracion.defs";
 import { buildTagLensBlock } from "@/components/landing/configs/exploracion-lenses";
@@ -77,7 +77,7 @@ export async function runExploracionGeneration(opts: {
   // Todas las fuentes son independientes entre sí → en paralelo, no en serie.
   const [canvasId, handoffCtx, kickoffCtx, timelineCtx, project] = await Promise.all([
     opts.canvasId ?? ensureExploracionCanvas(projectId),
-    loadCanvasContext(projectId, "handoff", { onlyConfirmed: false, includeKeys: EXPLORACION_HANDOFF_KEYS }),
+    loadHandoffContext(projectId, { onlyConfirmed: false, includeKeys: EXPLORACION_HANDOFF_KEYS }),
     loadCanvasContext(projectId, "kickoff", { onlyConfirmed: false }),
     loadTimelineContext(projectId),
     prisma.project.findUnique({

@@ -25,7 +25,7 @@ import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { PLANIFICACION_CANVAS, planificacionSectionSequence } from "@/lib/canvas/canvas-defs";
 import { createOnDemandCanvas, reconcileOnDemandCanvasSections } from "@/lib/canvas/default-canvases";
-import { loadCanvasContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
+import { loadCanvasContext, loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { serializeProcesosForPrompt } from "@/lib/canvas/read-procesos";
 import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
 import { loadPortalLifecycleContext } from "@/lib/hubspot/lifecycle-context";
@@ -91,7 +91,7 @@ export async function runPlanificacionGeneration(opts: {
   const [canvasId, handoffCtx, diagnosticoCtx, exploracionCtx, desarrolloCtx, timelineCtx, project] =
     await Promise.all([
       opts.canvasId ?? ensurePlanificacionCanvas(projectId),
-      loadCanvasContext(projectId, "handoff", { onlyConfirmed: false, includeKeys: PLANIFICACION_HANDOFF_KEYS }),
+      loadHandoffContext(projectId, { onlyConfirmed: false, includeKeys: PLANIFICACION_HANDOFF_KEYS }),
       loadCanvasContext(projectId, "diagnosis", { onlyConfirmed: false }),
       loadCanvasContext(projectId, "exploration", { onlyConfirmed: false }),
       loadDesarrolloContext(projectId),

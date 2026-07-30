@@ -15,6 +15,7 @@ import { prisma } from "@/lib/db/prisma";
 import { extractFingerprint } from "@/lib/timeline/particularidad-identity";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
+import { resolverDuenioDelHandoff } from "@/lib/handoff/duenio";
 
 interface BlockLite {
   blockType: string;
@@ -239,6 +240,34 @@ export async function loadCanvasContext(
     parts.push(`[Sección: ${s.label}]\n${texts.join("\n\n")}`);
   }
   return parts.join("\n\n");
+}
+
+/**
+ * El HANDOFF que le corresponde a este proyecto — que no siempre es el suyo.
+ *
+ * Un desarrollo que cuelga de una implementación de Customer Success comparte con ella el
+ * alcance vendido: su handoff ES el del hermano (ver lib/handoff/duenio.ts). Antes de esto,
+ * los 11 lugares que arman contexto para un agente llamaban `loadCanvasContext(projectId,
+ * "handoff", …)` y recibían VACÍO — y cada prompt caía a su rama degradada sin decirlo.
+ *
+ * ── LA PROCEDENCIA VIAJA ADENTRO DEL TEXTO ───────────────────────────────────
+ * Devuelve `string` y no `{ texto, origen }` a propósito: con un objeto, los 11 call sites
+ * pueden interpolar `texto` y dejar caer `origen` sin que nada falle, y el agente termina
+ * leyendo el alcance de otro proyecto creyendo que es de éste. Metido adentro, la
+ * procedencia no se puede perder por descuido.
+ */
+export async function loadHandoffContext(
+  projectId: string,
+  opts: { onlyConfirmed?: boolean; includeKeys?: readonly string[] } = {},
+): Promise<string> {
+  const duenio = await resolverDuenioDelHandoff(projectId);
+  const texto = await loadCanvasContext(duenio.ownerProjectId, "handoff", opts);
+  if (!texto || !duenio.redirigido) return texto;
+  return (
+    `[Este handoff NO es de este proyecto: es el de "${duenio.hermano?.name ?? "el proyecto principal"}", ` +
+    `la implementación de la que cuelga este desarrollo. El alcance vendido es el mismo — ` +
+    `lo que sigue describe el trato completo, no solo la parte técnica.]\n\n${texto}`
+  );
 }
 
 /**

@@ -27,7 +27,8 @@ import { runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
 import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
 import { runImplementacionGeneration } from "@/lib/canvas/implementacion-generate";
 import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
-import { loadCanvasContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
+import { loadCanvasContext, loadHandoffContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
+import { vetoSiElHandoffEsDeOtro } from "@/lib/handoff/duenio";
 import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
 import { patchBaselinePhaseTasks } from "@/lib/timeline/baseline";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
@@ -357,6 +358,13 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // ── Handoff scopeado al proyecto: sin sesiones clasificadas a ESTE proyecto no
   //    hay nada que investigar → cortar antes de crear el run (sin fallback client-wide).
   if (agent.agentGroup === "handoff" && bodyProjectId) {
+    /* La QUINTA puerta, y la única que de verdad impide el documento duplicado: el botón
+       de la pantalla se puede saltear, pero la generación siempre pasa por acá. Si el
+       handoff de este proyecto es el del hermano, generarlo acá crearía un segundo
+       documento del mismo trato vendido. */
+    const vetoDuenio = await vetoSiElHandoffEsDeOtro(bodyProjectId);
+    if (vetoDuenio) return vetoDuenio;
+
     // Auto-sanar: adoptar las sesiones HUÉRFANAS del cliente (matcheadas a nivel
     // cliente pero sin SessionProject) y reclasificarlas. Cubre el caso del proyecto
     // creado DESPUÉS de que ya existían sesiones (sync de HubSpot) → el handoff
@@ -1574,7 +1582,7 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     // (riesgos_banderas, motivacion_decision "por qué vendimos", acuerdos_promesas
     // comerciales, estado_en_flight) NO se le mandan al modelo — ni siquiera para que
     // las "ignore". El prompt además se lo prohíbe, pero la fuente es el gate real.
-    const handoffCtx = await loadCanvasContext(bodyProjectId, "handoff", {
+    const handoffCtx = await loadHandoffContext(bodyProjectId, {
       onlyConfirmed: false,
       includeKeys: KICKOFF_HANDOFF_KEYS,
     });
@@ -1597,7 +1605,7 @@ ${timelineCtx ? `${timelineCtx}\n\n` : ""}Generá la landing de kickoff de cara 
   // hubiera — por eso gatea por grupo y excluye al principal.
   const isPlanificacionGroupLegacy = agent.agentGroup === "planificacion" && !isPlanificacionAgent;
   if (isPlanificacionGroupLegacy && bodyProjectId) {
-    const handoffCtx = await loadCanvasContext(bodyProjectId, "handoff", { onlyConfirmed: false });
+    const handoffCtx = await loadHandoffContext(bodyProjectId, { onlyConfirmed: false });
     const diagnosticoCtx = await loadCanvasContext(bodyProjectId, "diagnosis", { onlyConfirmed: false });
     userMessage = `Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
@@ -1617,7 +1625,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // curado para que las tareas sean del proyecto real. Sin fechas en el
   // contexto: el agente no las calcula.
   if (isTimelineDetailAgent && bodyProjectId) {
-    const handoffCtx = await loadCanvasContext(bodyProjectId, "handoff", { onlyConfirmed: true });
+    const handoffCtx = await loadHandoffContext(bodyProjectId, { onlyConfirmed: true });
     const timelineCtx = await loadTimelineContext(bodyProjectId, { includeIds: true });
     // Canvas "Desarrollo" (requerimiento técnico) si existe → objetos de HubSpot, llaves de dedup y
     // conexiones reales; ancla las tareas por objeto de la fase técnica en el alcance vendido. "" si no hay.

@@ -13,6 +13,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
+import { vetoSiElHandoffEsDeOtro } from "@/lib/handoff/duenio";
 import { prisma } from "@/lib/db/prisma";
 
 export async function GET(
@@ -40,6 +41,9 @@ export async function POST(
   // fuentes en SUS proyectos). Scope de owner enforced por requireHandoffAccess.
   const guard = await guardProjectHandoffAccess(projectId);
   if (guard instanceof NextResponse) return guard;
+  // Las fuentes pegadas a mano alimentan el handoff: van donde vive el handoff.
+  const veto = await vetoSiElHandoffEsDeOtro(projectId);
+  if (veto) return veto;
 
   let body: { title?: unknown; content?: unknown } = {};
   try {
