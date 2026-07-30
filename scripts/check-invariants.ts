@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { $Enums } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
+import { buscarEtapa, resolvePipeline } from "@/lib/projects/kind";
 
 /**
  * scripts/check-invariants.ts — BLINDAJE DURO de los invariantes medulares de Nexus.
@@ -461,6 +462,58 @@ async function main(): Promise<number> {
     );
   } else {
     console.log("✓ INV10: todo proyecto sincronizado tiene su pipeline resuelto.");
+  }
+
+  // ── Inv 11: ninguna etapa materializada ACTIVA quedó fuera de la tabla ──
+  //
+  // `PROJECT_PIPELINES[].stages` está TRANSCRITO a mano del portal. HubSpot deja agregar y
+  // renombrar etapas desde la UI, y eso pasó: el 2026-07-30 aparecieron 4 etapas nuevas en el
+  // pipeline de Customer Success y la tabla siguió verde todo el día con la versión vieja —
+  // ningún test la miraba contra la realidad.
+  //
+  // Esta invariante cierra el lazo por el único lado que puede: si alguien MUEVE un proyecto a
+  // una etapa que la tabla no declara, se ve. No detecta una etapa nueva que nadie usó todavía
+  // (para eso está `scripts/inspect-project-pipelines.ts`), pero sí el momento en que empieza
+  // a importar.
+  //
+  // Solo ACTIVOS y solo con pipeline RESUELTO: un `hubspotPipelineId` nulo es la fila legacy
+  // (ya la cubre INV10) y un proyecto inactivo no entra a ninguno de los cuatro alcances.
+  const conEtapa = await prisma.project.findMany({
+    where: { status: "active", hubspotPipelineId: { not: null }, hubspotPipelineStageId: { not: null } },
+    select: {
+      name: true,
+      hubspotPipelineId: true,
+      hubspotPipelineStageId: true,
+      hubspotPipelineStageLabel: true,
+      client: { select: { name: true } },
+    },
+  });
+  const etapasHuerfanas = conEtapa.filter((p) => {
+    const def = resolvePipeline(p.hubspotPipelineId);
+    // Pipeline no declarado → fila legacy, no es asunto de esta invariante.
+    return def ? !buscarEtapa(def, p.hubspotPipelineStageId) : false;
+  });
+  if (etapasHuerfanas.length > 0) {
+    violations++;
+    console.error(
+      `✗ INV11 VIOLADO: ${etapasHuerfanas.length} proyecto(s) activo(s) están en una etapa que ` +
+        `lib/projects/kind.ts no declara.`,
+    );
+    for (const p of etapasHuerfanas.slice(0, 10)) {
+      console.error(
+        `    - ${p.client.name} · "${p.name}" → etapa ${p.hubspotPipelineStageId} ` +
+          `("${p.hubspotPipelineStageLabel ?? "sin rótulo"}") del pipeline ${p.hubspotPipelineId}`,
+      );
+    }
+    if (etapasHuerfanas.length > 10) console.error(`    … y ${etapasHuerfanas.length - 10} más`);
+    console.error(
+      "  Alguien agregó o renombró etapas en HubSpot. Corré\n" +
+        "  `npx tsx scripts/inspect-project-pipelines.ts` y transcribí las etapas nuevas a\n" +
+        "  `PROJECT_PIPELINES[].stages`. ⚠ Revisá también `closedStageIds`: si una etapa de\n" +
+        "  cierre cambió de id, hay proyectos que se cierran o se abren mal.",
+    );
+  } else {
+    console.log("✓ INV11: toda etapa materializada activa está declarada en la tabla.");
   }
 
   return violations;

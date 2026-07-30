@@ -370,6 +370,35 @@ describe("LAS ETAPAS — transcritas del portal, no derivadas", () => {
     ]);
   });
 
+  it("Customer Success: la línea completa, LITERAL", () => {
+    /* Faltaba, y por eso el desalineo no rompió nada: el 2026-07-30 el pipeline se rehízo en
+       el portal (3 renombres + 4 etapas nuevas) y la suite siguió verde con la tabla vieja
+       durante todo el día. Transcrita del portal a las 16:17 UTC. */
+    expect(pipelineByKey("customer-success").stages).toEqual([
+      { id: "1225193551", label: "Handoff", enLinea: true, terminal: false },
+      { id: "1410223916", label: "Exploración", enLinea: true, terminal: false },
+      { id: "1410223917", label: "Diagnóstico", enLinea: true, terminal: false },
+      { id: "1410223918", label: "Planificación", enLinea: true, terminal: false },
+      { id: "1225193541", label: "Configuración técnica", enLinea: true, terminal: false },
+      { id: "1225193553", label: "Adopción", enLinea: true, terminal: false },
+      { id: "1410223919", label: "Validación de uso", enLinea: true, terminal: false },
+      { id: "1241442148", label: "Entrega", enLinea: true, terminal: false },
+      { id: "1225193543", label: "Finalizado", enLinea: true, terminal: true },
+      { id: "1370129216", label: "Continuidad", enLinea: false, terminal: false },
+      { id: "1225193545", label: "Bloqueado", enLinea: false, terminal: false },
+    ]);
+  });
+
+  it("los 7 ids VIEJOS de Customer Success siguen todos declarados", () => {
+    /* El rediseño del pipeline renombró tres etapas y agregó cuatro, pero no borró ninguna.
+       Si alguna desapareciera de la tabla, los proyectos parados ahí perderían su rótulo —
+       y uno de esos ids es el que cierra proyectos. */
+    const declarados = new Set(pipelineByKey("customer-success").stages.map((s) => s.id));
+    for (const id of ["1225193551", "1225193541", "1225193553", "1241442148", "1225193543", "1370129216", "1225193545"]) {
+      expect(declarados.has(id), `se perdió la etapa ${id}`).toBe(true);
+    }
+  });
+
   it("«Bloqueado» de Customer Success: fuera de línea y NO terminal", () => {
     /* HubSpot lo marca con `isClosed: true` y acá se le lleva la contraria a propósito:
        hay 3 proyectos ACTIVOS parados ahí. Si alguien "sincroniza" este flag con el

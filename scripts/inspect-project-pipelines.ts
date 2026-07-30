@@ -24,17 +24,33 @@
  */
 import "dotenv/config";
 import { createScriptDb } from "./lib/db";
+import { PROJECT_PIPELINES } from "@/lib/projects/kind";
 
 // Pool ACOTADO (max: 2). El pooler de Supabase da ~15 slots compartidos entre prod,
 // las dos PCs de dev y cualquier script suelto — ver scripts/lib/db.ts.
 const { prisma, close } = createScriptDb();
 
-/* Lo que Elías confirmó. El script NO lo asume: lo VERIFICA contra el portal. */
-const ETAPAS_DE_CIERRE_ESPERADAS: Record<string, { pipelineEsperado: RegExp; stageId: string }> = {
-  "Customer Success CRM": { pipelineEsperado: /customer\s*success/i, stageId: "1225193543" },
-  Development: { pipelineEsperado: /develop|desarrollo/i, stageId: "1409932564" },
-  "Sitios web": { pipelineEsperado: /sitio|web/i, stageId: "1409897129" },
-};
+/**
+ * Lo que la tabla DECLARA, para verificarlo contra el portal. Sale de `PROJECT_PIPELINES` en
+ * vez de estar escrito a mano acá: era una segunda copia de los mismos ids y envejecía sola.
+ *
+ * ── SE COMPARA CONTRA EL ID, NO CONTRA EL NOMBRE ─────────────────────────────
+ * Antes el gate exigía que el label del pipeline calzara con una regex (`/customer\s*success/i`).
+ * El 2026-07-30 el pipeline se renombró a "HubSpot" en el portal y el gate empezó a reportar
+ * NO PASA para siempre — por una razón falsa, con las etapas de cierre intactas. Un gate que
+ * grita en falso deja de leerse, y éste es el que avisa si una etapa de cierre se mudó de
+ * pipeline (lo único que de verdad rompería el cierre de proyectos). El id no lo puede
+ * cambiar nadie desde la UI de HubSpot; el nombre sí.
+ */
+const ETAPAS_DE_CIERRE_ESPERADAS: Record<string, { pipelineId: string; stageId: string }> =
+  Object.fromEntries(
+    PROJECT_PIPELINES.flatMap((p) =>
+      p.closedStageIds.map((stageId, i) => [
+        p.closedStageIds.length > 1 ? `${p.label} [${i + 1}]` : p.label,
+        { pipelineId: p.hubspotPipelineId, stageId },
+      ]),
+    ),
+  );
 
 const PIPELINE_CS_CONOCIDO = "826270797";
 
@@ -172,7 +188,7 @@ async function main() {
       gateOk = false;
       continue;
     }
-    const calza = esperado.pipelineEsperado.test(dueño.label);
+    const calza = dueño.id === esperado.pipelineId;
     idsResueltos[nombre] = dueño.id;
     const etiqueta = dueño.stages.find((s) => s.id === esperado.stageId)!.label;
     console.log(
@@ -180,7 +196,11 @@ async function main() {
         `pipeline ${dueño.id} "${dueño.label}"`,
     );
     if (!calza) {
-      console.log(`      ⚠ el nombre del pipeline no calza con "${nombre}" — CONFIRMAR a mano.`);
+      console.log(
+        `      ⚠ la tabla la declara en el pipeline ${esperado.pipelineId} y el portal la tiene ` +
+          `en ${dueño.id}. Una etapa de cierre que se mudó de pipeline ROMPE el cierre de ` +
+          `proyectos — parar y confirmar a mano.`,
+      );
       gateOk = false;
     }
   }
@@ -274,9 +294,12 @@ async function main() {
   } while (after && paginas < 60);
 
   const etiquetaPipeline = new Map(pipelines.map((p) => [p.id, p.label]));
-  const cierrePorPipeline = new Map<string, string>();
-  for (const [nombre, pid] of Object.entries(idsResueltos)) {
-    cierrePorPipeline.set(pid, ETAPAS_DE_CIERRE_ESPERADAS[nombre].stageId);
+  /* TODAS las etapas de cierre de cada pipeline, no una. Development y Sitios web tienen dos
+     (Finalizado y Cancelado): con un solo valor por pipeline, el censo de abajo daba por
+     "abierto" a todo lo que estuviera en la que se hubiera pisado. */
+  const cierrePorPipeline = new Map<string, Set<string>>();
+  for (const def of PROJECT_PIPELINES) {
+    cierrePorPipeline.set(def.hubspotPipelineId, new Set(def.closedStageIds));
   }
 
   console.log(`  Total de proyectos en el portal: ${crudos.length}\n`);
@@ -347,13 +370,14 @@ async function main() {
   let fueraDeTabla = 0;
 
   for (const c of crudos) {
-    const stageDeCierre = c.pipeline ? cierrePorPipeline.get(c.pipeline) : undefined;
-    if (!stageDeCierre) {
+    const etapasDeCierre = c.pipeline ? cierrePorPipeline.get(c.pipeline) : undefined;
+    if (!etapasDeCierre) {
       fueraDeTabla++;
       continue; // pipeline desconocido → la regla nueva ES la de hoy, no puede haber flip
     }
     const hoy = cerradoHoy(c.rawStatus);
-    const nuevo = c.stage === stageDeCierre;
+    // Cualquiera de las etapas terminales cierra — igual que `decidirCierre`.
+    const nuevo = !!c.stage && etapasDeCierre.has(c.stage);
     if (hoy === nuevo) {
       sinCambio++;
       continue;

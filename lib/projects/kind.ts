@@ -197,15 +197,24 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     hubspotPipelineId: "826270797",
     label: "Customer Success CRM",
     help: "La implementación que compró el cliente. Es la cartera: se factura, la lleva un CSE y corre el ciclo de 8 etapas.",
-    /* Se declaran aunque NO se pinten: un proyecto de CS muestra el ciclo de 8 etapas de
-       Nexus, no éstas (ver `fuenteDelCiclo`). Están acá porque son lo que ata
-       `closedStageIds` a algo legible, y porque la tabla tiene que ser uniforme: la fila
-       que no declara etapas es la que un día se cierra sola sin que nadie lo note. */
+    /* Transcritas del portal el 2026-07-30 a las 16:17 UTC, cuando el pipeline se rehízo
+       para espejar el ciclo de Nexus. Los 4 ids nuevos (Exploración, Diagnóstico,
+       Planificación, Validación de uso) nacieron ese día; los 7 viejos conservan su id y
+       tres cambiaron de rótulo. Nada se borró.
+
+       ⚠ Este pipeline se llama "HubSpot" en el portal desde ese cambio. Acá se lo sigue
+       rotulando "Customer Success CRM" a propósito: es el nombre con el que el equipo lo
+       nombra y el que Nexus muestra. La divergencia queda declarada; nadie lee el label
+       del portal. */
     stages: [
-      { id: "1225193551", label: "Nuevo proyecto", enLinea: true, terminal: false },
-      { id: "1225193541", label: "Arquitectura/Estructuración", enLinea: true, terminal: false },
+      { id: "1225193551", label: "Handoff", enLinea: true, terminal: false },
+      { id: "1410223916", label: "Exploración", enLinea: true, terminal: false },
+      { id: "1410223917", label: "Diagnóstico", enLinea: true, terminal: false },
+      { id: "1410223918", label: "Planificación", enLinea: true, terminal: false },
+      { id: "1225193541", label: "Configuración técnica", enLinea: true, terminal: false },
       { id: "1225193553", label: "Adopción", enLinea: true, terminal: false },
-      { id: "1241442148", label: "Cierre de onboarding", enLinea: true, terminal: false },
+      { id: "1410223919", label: "Validación de uso", enLinea: true, terminal: false },
+      { id: "1241442148", label: "Entrega", enLinea: true, terminal: false },
       { id: "1225193543", label: "Finalizado", enLinea: true, terminal: true },
       /* Fuera de la línea: "Continuidad" es el modo en que vive un servicio recurrente
          DESPUÉS de la implementación, no un paso más de ella. */
@@ -216,9 +225,12 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
          ocultaría de Nexus, que es lo contrario de lo que un bloqueo necesita. */
       { id: "1225193545", label: "Bloqueado", enLinea: false, terminal: false },
     ],
-    // El pipeline de CS no tiene etapa "Cancelado": su única terminal es Finalizado.
+    /* El pipeline de CS no tiene etapa "Cancelado": su única terminal es Finalizado.
+       ⚠ Verificado contra el portal DESPUÉS del cambio de etapas: `1225193543` existe, se
+       sigue llamando "Finalizado" y sigue `isClosed`. Este campo decide si un proyecto
+       desaparece de la cartera y de la cobranza — no se toca sin volver a mirar el portal. */
     closedStageIds: ["1225193543"], // Finalizado
-    initialStageId: "1225193551", // Nuevo proyecto (ex "Hand off")
+    initialStageId: "1225193551", // Handoff (se llamó "Nuevo proyecto" entre 2026-05 y 2026-07)
     canBeSiblingOf: [],
     frenteDeEntrega: "CSE",
     /* SIN `implementation`: es `createdWithProject: false` en el registro de piezas a
