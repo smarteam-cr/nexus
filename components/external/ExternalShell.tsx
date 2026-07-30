@@ -16,6 +16,14 @@ import type { ReactNode } from "react";
 const SMARTEAM_ACCENT = "#E8481C";
 const SMARTEAM_ROYAL = "#0B58D3";
 
+/**
+ * El MISMO ancho que el contenedor del documento (`--stl-w-pagina`, declarado en
+ * `:root` por landing-engine.css) + el mismo padding lateral de 24px. Antes era un
+ * 1100 suelto, así que el logo del chrome quedaba metido hacia adentro respecto del
+ * contenido que envuelve — se veía como un desalineado, porque lo era.
+ */
+const SHELL_MAXW = "var(--stl-w-pagina, 1280px)";
+
 export default function ExternalShell({
   children,
   smarteamLogoUrl = "/logo-smarteam.png",
@@ -32,7 +40,7 @@ export default function ExternalShell({
 
       {/* Nav: logo a la izquierda (vista de cliente, sin menú) */}
       <header style={{ borderBottom: "1px solid #eaeff8", background: "#fff" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "14px 24px", display: "flex", alignItems: "center" }}>
+        <div style={{ maxWidth: SHELL_MAXW, margin: "0 auto", padding: "14px 24px", display: "flex", alignItems: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={smarteamLogoUrl} alt="Smarteam" style={{ height: 30, width: "auto", display: "block" }} />
         </div>
@@ -43,7 +51,7 @@ export default function ExternalShell({
 
       {/* Footer de marca */}
       <footer style={{ borderTop: "1px solid #eaeff8", background: "#fff", fontFamily: "var(--font-jakarta), system-ui, sans-serif" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}>
+        <div style={{ maxWidth: SHELL_MAXW, margin: "0 auto", padding: "28px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={smarteamLogoUrl} alt="Smarteam" style={{ height: 22, width: "auto", display: "block", opacity: 0.9 }} />
           <p style={{ margin: 0, fontSize: 12, color: "#41527a" }}>

@@ -22,16 +22,24 @@
    contraste de cada par la fija lib/ui/landing-brand-contrast.test.ts.
    ============================================================================ */
 
+/* ── ANCHO DE PÁGINA ────────────────────────────────────────────────────────
+   El contenedor de TODOS los documentos del motor, en un solo lugar. Era un número
+   suelto repetido en cuatro archivos (el motor, los procesos del kickoff y las dos
+   vistas del cronograma), así que ensancharlo obligaba a encontrarlos todos y en la
+   práctica quedaban desalineados entre sí.
+   1280 y no más: se busca espacio para presentar al cliente, pero una línea de texto
+   de más de ~90 caracteres se vuelve incómoda de leer — por eso las secciones de prosa
+   siguen teniendo su propio tope (`--stl-w-prosa`) más angosto que el contenedor.
+
+   Vive en `:root` y no en `.stl` porque el CHROME que envuelve al documento también lo
+   necesita: `components/external/ExternalShell.tsx` alinea su logo y su footer con este
+   mismo ancho, y está FUERA del subárbol `.stl`. */
+:root {
+  --stl-w-pagina-base: 1280px;
+  --stl-w-pagina: var(--stl-w-pagina-base);
+}
+
 .stl {
-  /* ── ANCHO DE PÁGINA ──────────────────────────────────────────────────────
-     El contenedor de TODOS los documentos del motor, en un solo lugar. Era un número
-     suelto repetido en cuatro archivos (el motor, los procesos del kickoff y las dos
-     vistas del cronograma), así que ensancharlo obligaba a encontrarlos todos y en la
-     práctica quedaban desalineados entre sí.
-     1280 y no más: se busca espacio para presentar al cliente, pero una línea de texto
-     de más de ~90 caracteres se vuelve incómoda de leer — por eso las secciones de prosa
-     siguen teniendo su propio tope (`--stl-w-prosa`) más angosto que el contenedor. */
-  --stl-w-pagina: 1280px;
   --stl-w-prosa:  860px;
 
   /* Marca — interactivo/acentos */
@@ -1101,6 +1109,28 @@
 /* El objetivo de la WIG es DISPLAY (20-30px) → coral de marca sobre navy (6.47 ✓). */
 .stl .stl-wig-value.is-target { color: var(--accent-display, var(--teal)); }
 .stl .stl-wig-arrow { font-size: 26px; color: #F87B5B; padding-bottom: 4px; }
+/* ── Escala del documento ───────────────────────────────────────────────────
+   La tipografía del motor está en px (y algunos clamp con vw), así que "todo un
+   20% más grande" NO se consigue con un font-size en el contenedor: habría que
+   tocar las ~130 reglas de tamaño. `zoom` escala el subárbol entero —texto,
+   paddings, bordes, SVG— con una sola declaración y sin duplicar el sistema.
+
+   Es un MODIFICADOR OPT-IN: hoy lo usa solo la propuesta de contratación (que se
+   lee en pantalla, de corrido, por una persona que no conoce el documento). Los
+   documentos de cliente NO lo llevan — subirles el tamaño cambiaría todo lo ya
+   publicado, y eso es una decisión aparte.
+
+   El tope de ancho se DIVIDE por el mismo factor a propósito: `zoom` cambia el
+   espacio de coordenadas, así que un tope de 1280 se renderizaría a 1536 físicos
+   y el documento dejaría de alinear con el chrome que lo envuelve (el logo del
+   ExternalShell, que vive fuera del zoom). Dividido, la página mide los mismos
+   1280 físicos de siempre y lo único que cambia es cuánto texto entra por línea
+   — que es exactamente "verlo a 1.2". */
+.stl-escala-120 {
+  zoom: 1.2;
+  --stl-w-pagina: calc(var(--stl-w-pagina-base) / 1.2);
+}
+
 /* ── Cómo es Smarteam: propósito + esqueleto del equipo ───────────────────── */
 .stl .stl-smarteam { max-width: 820px; }
 .stl .stl-smarteam-proposito {
