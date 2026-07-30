@@ -17,8 +17,11 @@ import {
   OVERLAY_INTERNO,
   PROJECT_PIPELINES,
   SENTINEL_SERVICE_TYPE,
+  buscarEtapa,
   cerradoPorEstadoCrudo,
   decidirCierre,
+  fuenteDelCiclo,
+  lineaDeAvance,
   parseProjectPipeline,
   pipelineByKey,
   projectCapabilities,
@@ -333,6 +336,134 @@ describe("decidirCierre — la UNIÓN de las dos señales", () => {
     expect(
       decidirCierre({ hubspotPipelineId: CS, stageId: "1409932564", rawStatus: "on_track" }),
     ).toBe("abierto");
+  });
+});
+
+describe("LAS ETAPAS — transcritas del portal, no derivadas", () => {
+  it("Development: la línea completa, LITERAL", () => {
+    // Es la que SE PINTA. Transcrita de scripts/inspect-project-pipelines.ts (2026-07-30),
+    // en el orden de `displayOrder` del portal.
+    expect(pipelineByKey("development").stages).toEqual([
+      { id: "1409898886", label: "Handoff", enLinea: true, terminal: false },
+      { id: "1409897653", label: "Exploración", enLinea: true, terminal: false },
+      { id: "1409897655", label: "Requerimientos", enLinea: true, terminal: false },
+      { id: "1409932561", label: "Desarrollo", enLinea: true, terminal: false },
+      { id: "1409932562", label: "Pruebas", enLinea: true, terminal: false },
+      { id: "1409932563", label: "Entrega", enLinea: true, terminal: false },
+      { id: "1409932564", label: "Finalizado", enLinea: true, terminal: true },
+      { id: "1409897657", label: "Cancelado", enLinea: false, terminal: true },
+    ]);
+  });
+
+  it("Sitios web: la línea completa, LITERAL — con «Consenso» ANTES que «Desarrollo»", () => {
+    /* El orden del portal NO es el numérico de los ids: …127 (Consenso) va antes que …126
+       (Desarrollo). Ordenar por id —que parece más prolijo— invierte dos etapas. */
+    expect(pipelineByKey("web").stages).toEqual([
+      { id: "1409897123", label: "Handoff", enLinea: true, terminal: false },
+      { id: "1409897124", label: "Exploración", enLinea: true, terminal: false },
+      { id: "1409897125", label: "Mockup", enLinea: true, terminal: false },
+      { id: "1409897127", label: "Consenso", enLinea: true, terminal: false },
+      { id: "1409897126", label: "Desarrollo", enLinea: true, terminal: false },
+      { id: "1409897128", label: "Entrega", enLinea: true, terminal: false },
+      { id: "1409897129", label: "Finalizado", enLinea: true, terminal: true },
+      { id: "1409897130", label: "Cancelado", enLinea: false, terminal: true },
+    ]);
+  });
+
+  it("«Bloqueado» de Customer Success: fuera de línea y NO terminal", () => {
+    /* HubSpot lo marca con `isClosed: true` y acá se le lleva la contraria a propósito:
+       hay 3 proyectos ACTIVOS parados ahí. Si alguien "sincroniza" este flag con el
+       portal, los oculta de Nexus — que es lo contrario de lo que un bloqueo necesita. */
+    const bloqueado = buscarEtapa(pipelineByKey("customer-success"), "1225193545");
+    expect(bloqueado).toEqual({ id: "1225193545", label: "Bloqueado", enLinea: false, terminal: false });
+  });
+
+  it("`closedStageIds` y las etapas `terminal` dicen lo mismo — EN LOS DOS SENTIDOS", () => {
+    /* LA guarda de esta tanda. `closedStageIds` decide si un proyecto desaparece de Nexus
+       (y con él, de la cobranza); `terminal` decide cómo se pinta. Que se separen es la
+       clase de bug que solo se ve a fin de mes. */
+    for (const def of PROJECT_PIPELINES) {
+      const porBandera = def.stages.filter((s) => s.terminal).map((s) => s.id).sort();
+      expect([...def.closedStageIds].sort(), `${def.label}: closedStageIds vs stages.terminal`).toEqual(
+        porBandera,
+      );
+    }
+  });
+
+  it("`initialStageId` es la PRIMERA etapa en línea", () => {
+    // Es con la que nace un proyecto creado desde Nexus. Si apuntara a otra, un proyecto
+    // nuevo aparecería a mitad de su propia línea.
+    for (const def of PROJECT_PIPELINES) {
+      expect(lineaDeAvance(def)[0]?.id, `${def.label}`).toBe(def.initialStageId);
+    }
+  });
+
+  it("ninguna etapa está declarada en dos pipelines", () => {
+    /* `decidirCierre` y `buscarEtapa` resuelven la etapa DENTRO de su pipeline, pero un id
+       repetido volvería ambiguo cualquier diagnóstico. Hoy los ids son globales en HubSpot. */
+    const todas = PROJECT_PIPELINES.flatMap((p) => p.stages.map((s) => s.id));
+    expect(new Set(todas).size).toBe(todas.length);
+  });
+
+  it("toda fila tiene línea de avance y al menos una terminal", () => {
+    for (const def of PROJECT_PIPELINES) {
+      expect(lineaDeAvance(def).length, `${def.label} sin etapas en línea`).toBeGreaterThan(0);
+      expect(def.closedStageIds.length, `${def.label} sin etapa de cierre`).toBeGreaterThan(0);
+    }
+  });
+
+  it("buscarEtapa tolera lo que llega de afuera", () => {
+    const dev = pipelineByKey("development");
+    expect(buscarEtapa(dev, null)).toBeNull();
+    expect(buscarEtapa(dev, "")).toBeNull();
+    // Una etapa que alguien agregó en el portal y nadie transcribió acá: se degrada a
+    // "sin etapa", no rompe.
+    expect(buscarEtapa(dev, "etapa-que-no-existe")).toBeNull();
+    // El "Finalizado" de OTRO pipeline no resuelve dentro de éste.
+    expect(buscarEtapa(dev, "1225193543")).toBeNull();
+    expect(buscarEtapa(dev, " 1409932562 ")?.label).toBe("Pruebas");
+  });
+});
+
+describe("fuenteDelCiclo — quién manda la etapa del proyecto", () => {
+  const filas: Array<{ caso: string; pid: string | null; interno: boolean; hermano: boolean; espera: string }> = [
+    { caso: "Customer Success → el ciclo de 8 etapas de Nexus", pid: CS, interno: false, hermano: false, espera: "customer-success" },
+    { caso: "Customer Success INTERNO → sigue corriendo el ciclo (misma metodología)", pid: CS, interno: true, hermano: false, espera: "customer-success" },
+    { caso: "Development → su propio pipeline de HubSpot", pid: DEV, interno: false, hermano: false, espera: "pipeline" },
+    { caso: "Development hermano → su propio pipeline igual", pid: DEV, interno: false, hermano: true, espera: "pipeline" },
+    { caso: "Development INTERNO → su propio pipeline igual", pid: DEV, interno: true, hermano: false, espera: "pipeline" },
+    { caso: "Sitios web → su propio pipeline de HubSpot", pid: WEB, interno: false, hermano: false, espera: "pipeline" },
+    { caso: "pipeline DESCONOCIDO → el ciclo de siempre (comportamiento legacy)", pid: DESCONOCIDO, interno: false, hermano: false, espera: "customer-success" },
+    { caso: "SIN pipeline → el ciclo de siempre (comportamiento legacy)", pid: null, interno: false, hermano: false, espera: "customer-success" },
+  ];
+
+  for (const f of filas) {
+    it(f.caso, () => {
+      expect(
+        fuenteDelCiclo({ hubspotPipelineId: f.pid, interno: f.interno, tieneHermanoCs: f.hermano }).tipo,
+      ).toBe(f.espera);
+    });
+  }
+
+  it("la rama «pipeline» SIEMPRE trae su fila — nadie tiene que volver a resolverla", () => {
+    const f = fuenteDelCiclo({ hubspotPipelineId: DEV, interno: false, tieneHermanoCs: false });
+    expect(f.tipo).toBe("pipeline");
+    if (f.tipo === "pipeline") expect(f.pipeline.label).toBe("Development");
+  });
+
+  it("es EXACTAMENTE la negación de `cicloOchoEtapas` — no una segunda opinión", () => {
+    /* Se deriva a propósito: dos campos que responden lo mismo se contradicen algún día, y
+       entonces hay que averiguar cuál manda. Esto lo ata. */
+    for (const pid of [CS, DEV, WEB, DESCONOCIDO, null]) {
+      for (const interno of [true, false]) {
+        for (const hermano of [true, false]) {
+          const facts = { hubspotPipelineId: pid, interno, tieneHermanoCs: hermano };
+          expect(fuenteDelCiclo(facts).tipo === "customer-success", `${pid}/${interno}/${hermano}`).toBe(
+            projectCapabilities(facts).cicloOchoEtapas,
+          );
+        }
+      }
+    }
   });
 });
 

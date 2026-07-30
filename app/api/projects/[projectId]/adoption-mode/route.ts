@@ -6,9 +6,13 @@
  *
  *   PATCH { mode: "directa" | "por_pilotos" } → confirma
  *   PATCH { mode: null }                      → limpia (vuelve a "sugerida, sin confirmar")
+ *
+ * La modalidad de adopción es del ciclo de Customer Success: no aplica a un proyecto cuya
+ * etapa manda su pipeline de HubSpot (ver lib/lifecycle/gate.ts). Limpiar sí se permite.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { vetoSiNoCorreCicloDeCs } from "@/lib/lifecycle";
 import { prisma } from "@/lib/db/prisma";
 
 export async function PATCH(
@@ -37,6 +41,9 @@ export async function PATCH(
   if (mode !== "directa" && mode !== "por_pilotos") {
     return NextResponse.json({ error: 'mode debe ser "directa", "por_pilotos" o null' }, { status: 400 });
   }
+  // Después de la rama de limpiar, que se permite siempre.
+  const veto = await vetoSiNoCorreCicloDeCs(projectId);
+  if (veto) return veto;
   await prisma.project.update({
     where: { id: projectId },
     data: {

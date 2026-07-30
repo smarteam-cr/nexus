@@ -6,9 +6,16 @@
  *
  *   PATCH { stage: <ProjectLifecycleStage>, reason? } → fija el override
  *   PATCH { stage: null }                             → limpia (vuelve a la inferida)
+ *
+ * ── NO APLICA A LOS PROYECTOS CON ETAPA DE PIPELINE ──────────────────────────
+ * Y no es una limitación temporal: para un proyecto de Desarrollo o de Sitios web, el sync
+ * recalcula la etapa desde HubSpot en cada corrida pero NUNCA limpiaría un override. Nexus
+ * mostraría para siempre una etapa que HubSpot ya movió — peor que no tener la función.
+ * LIMPIAR sigue permitido, para que un override viejo no quede encerrado.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardCapability } from "@/lib/auth/api-guards";
+import { vetoSiNoCorreCicloDeCs } from "@/lib/lifecycle";
 import { prisma } from "@/lib/db/prisma";
 import type { ProjectLifecycleStage } from "@prisma/client";
 
@@ -55,6 +62,9 @@ export async function PATCH(
       { status: 400 },
     );
   }
+  // Después de la rama de limpiar (que se permite siempre) y de validar la etapa.
+  const veto = await vetoSiNoCorreCicloDeCs(projectId);
+  if (veto) return veto;
   const reason = typeof body.reason === "string" && body.reason.trim() ? body.reason.trim() : null;
 
   await prisma.project.update({

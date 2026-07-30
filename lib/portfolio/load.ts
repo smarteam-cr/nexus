@@ -15,7 +15,7 @@ import { computeProjectSummary, type ProjectSummary, type SummaryLifecycleInput 
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { proyectoDeCarteraWhere } from "@/lib/projects/scope";
-import { loadLifecycleBatch, type ProjectLifecycle } from "@/lib/lifecycle";
+import { loadLifecycleBatch, type LifecycleCs, type ProjectLifecycle } from "@/lib/lifecycle";
 import {
   SETUP_CANVAS_SLUGS,
   blockCountsForStep,
@@ -47,9 +47,15 @@ export interface PortfolioRow {
   // Estado del setup del proyecto (qué artefactos se generaron) — para el checklist de "Sin datos"
   // y las action cards. handoff/kickoff/cronograma son por proyecto; procesos es por CLIENTE.
   setup: SetupSignals;
-  // Ciclo de vida (lib/lifecycle) — la etapa efectiva viaja en summary.stage; acá va el
-  // detalle para la UI (stepper/tooltip/curación) y la propuesta de riesgo pendiente.
-  lifecycle: ProjectLifecycle | null;
+  /**
+   * Ciclo de vida (lib/lifecycle) — la etapa efectiva viaja en summary.stage; acá va el
+   * detalle para la UI (stepper/tooltip/curación) y la propuesta de riesgo pendiente.
+   *
+   * `LifecycleCs` y no la unión: la cartera es, por definición, lo que corre el ciclo de 8
+   * etapas (`proyectoDeCarteraWhere` ya deja afuera Desarrollo, Sitios web e internos). El
+   * tipo lo dice en voz alta, y así la UI del panel puede leer `gates` sin narrowing.
+   */
+  lifecycle: LifecycleCs | null;
   healthProposed: ProjectHealth | null;
   healthProposedReason: string | null;
   healthProposedAt: string | null;
@@ -59,9 +65,24 @@ export interface PortfolioRow {
  * ProjectLifecycle (loader) → input de conciencia de etapa del summary.
  * `lastGateAt` = señal cumplida más reciente (gates o kickoff) — referencia del
  * "hace Nd" de las alarmas tempranas. Lo reusa watchdog-context (mismo mapeo).
+ *
+ * ── EL CUELLO DE BOTELLA ─────────────────────────────────────────────────────
+ * Todo el árbol de alarmas del sistema pasa por acá, así que la rama de pipeline se decide
+ * en esta función y en ninguna otra.
+ *
+ * Y NO devuelve `null` para esa rama, aunque sea lo más corto de escribir: `null` ya
+ * significa "caller legacy sin ciclo de vida", que activa TODAS las alarmas de cronograma.
+ * Fundir los dos estados dejaría al próximo consumidor heredando semántica de Customer
+ * Success sin enterarse.
  */
 export function toSummaryLifecycle(lc: ProjectLifecycle | null): SummaryLifecycleInput | null {
   if (!lc) return null;
+  if (lc.fuente === "pipeline") {
+    /* Un desarrollo no tiene compuertas ni etapas tempranas de CS. La única pregunta
+       honesta que queda es si su cronograma ya es una PROMESA, y eso lo responde la línea
+       base publicada — lo resuelve `computeProjectSummary`, que ya la tiene calculada. */
+    return { fuente: "pipeline", projectCreatedAt: lc.projectCreatedAt };
+  }
   const signalTimes = lc.gates.map((g) => g.markedAt.getTime());
   const kickoffAt = lc.kickoffPublishedAt ?? lc.kickoffSessionAt;
   if (kickoffAt) signalTimes.push(kickoffAt.getTime());
@@ -74,6 +95,18 @@ export function toSummaryLifecycle(lc: ProjectLifecycle | null): SummaryLifecycl
     lastGateAt: signalTimes.length ? new Date(Math.max(...signalTimes)) : null,
     projectCreatedAt: lc.projectCreatedAt,
   };
+}
+
+/**
+ * El ciclo de vida de un proyecto DE CARTERA. Devuelve `null` para cualquier otro — no
+ * porque no tenga ciclo, sino porque el suyo no es éste.
+ *
+ * `loadPortfolio` filtra por `proyectoDeCarteraWhere`, así que en la práctica nunca ve otra
+ * cosa; el narrowing existe para que ese hecho esté escrito una vez y el tipo lo respalde,
+ * en vez de sostenerse sobre un `as` o sobre la memoria de quien lea después.
+ */
+function soloCicloDeCs(lc: ProjectLifecycle | null | undefined): LifecycleCs | null {
+  return lc && lc.fuente === "customer-success" ? lc : null;
 }
 
 export async function loadPortfolio(
@@ -283,7 +316,7 @@ export async function loadPortfolio(
         hasPhases: (tl?.phases?.length ?? 0) > 0,
         hasProcesos: clientsWithProcesos.has(p.clientId),
       }),
-      lifecycle: lifecycleByProject.get(p.id) ?? null,
+      lifecycle: soloCicloDeCs(lifecycleByProject.get(p.id)),
       healthProposed: p.healthProposed,
       healthProposedReason: p.healthProposedReason,
       healthProposedAt: p.healthProposedAt?.toISOString() ?? null,

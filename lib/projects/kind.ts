@@ -76,6 +76,30 @@ export interface ProjectCapabilities {
 
 export type ProjectPipelineKey = "customer-success" | "development" | "web";
 
+/**
+ * Una ETAPA del pipeline, tal como la declara HubSpot.
+ *
+ * DOS booleanos y no un `tipo`, porque son dos preguntas independientes y hay etapas que
+ * las responden distinto:
+ *  · "Cancelado"  → CIERRA el proyecto **y** no es avance. Las dos cosas, a la vez.
+ *  · "Bloqueado"  → ninguna de las dos: el proyecto sigue vivo y no avanzó.
+ *  · "Finalizado" → cierra **y** es el final de la línea.
+ * Un campo único obligaría a elegir cuál de las dos verdades escribir.
+ */
+export interface PipelineStage {
+  /** `hs_pipeline_stage` — el valor que materializa el sync en `hubspotPipelineStageId`. */
+  id: string;
+  label: string;
+  /**
+   * ¿Está en la LÍNEA DE AVANCE? Es lo que cuenta el "Etapa i/N" y lo que pinta el stepper.
+   * Las etapas fuera de línea se muestran igual, pero sin posición y en tono neutro: un
+   * "Cancelado" pintado con el color del avance se lee como progreso.
+   */
+  enLinea: boolean;
+  /** ¿Estar acá CIERRA el proyecto en Nexus? Espeja `closedStageIds`; un test lo ata. */
+  terminal: boolean;
+}
+
 export interface PipelineDef {
   key: ProjectPipelineKey;
   /** El id del pipeline en el objeto Proyectos (0-970) de HubSpot. */
@@ -83,9 +107,23 @@ export interface PipelineDef {
   label: string;
   help: string;
   /**
+   * Las etapas del pipeline, EN EL ORDEN de HubSpot (`displayOrder`). El orden del array
+   * *es* el orden: no hay un campo de posición que pueda contradecirlo.
+   *
+   * Transcritas del portal el 2026-07-30 (`scripts/inspect-project-pipelines.ts`). Sirven
+   * para dos cosas: pintar la etapa de un proyecto que NO corre el ciclo de 8 etapas de CS
+   * (ver `fuenteDelCiclo`), y atar `closedStageIds` a algo legible.
+   */
+  stages: readonly PipelineStage[];
+  /**
    * Etapas TERMINALES. Estar en una de ellas cierra el proyecto en Nexus, sin importar lo
    * que diga el estado crudo — que es justo el punto: nadie actualiza `hs_status`, la gente
    * mueve la tarjeta de etapa.
+   *
+   * ⚠ Se declara APARTE de `stages` a propósito, aunque un test exija que coincidan. Este
+   * campo decide plata y visibilidad, y su contenido lo revisó un humano contra el portal
+   * (el gate de los 12 flips). Derivarlo de `terminal` haría que un typo en una etapa nueva
+   * cerrara proyectos en silencio; declarado dos veces, ese typo rompe el test.
    */
   closedStageIds: readonly string[];
   /** Etapa con la que nace un proyecto creado DESDE Nexus (handoff-sync, y la Tanda C). */
@@ -153,6 +191,25 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     hubspotPipelineId: "826270797",
     label: "Customer Success CRM",
     help: "La implementación que compró el cliente. Es la cartera: se factura, la lleva un CSE y corre el ciclo de 8 etapas.",
+    /* Se declaran aunque NO se pinten: un proyecto de CS muestra el ciclo de 8 etapas de
+       Nexus, no éstas (ver `fuenteDelCiclo`). Están acá porque son lo que ata
+       `closedStageIds` a algo legible, y porque la tabla tiene que ser uniforme: la fila
+       que no declara etapas es la que un día se cierra sola sin que nadie lo note. */
+    stages: [
+      { id: "1225193551", label: "Nuevo proyecto", enLinea: true, terminal: false },
+      { id: "1225193541", label: "Arquitectura/Estructuración", enLinea: true, terminal: false },
+      { id: "1225193553", label: "Adopción", enLinea: true, terminal: false },
+      { id: "1241442148", label: "Cierre de onboarding", enLinea: true, terminal: false },
+      { id: "1225193543", label: "Finalizado", enLinea: true, terminal: true },
+      /* Fuera de la línea: "Continuidad" es el modo en que vive un servicio recurrente
+         DESPUÉS de la implementación, no un paso más de ella. */
+      { id: "1370129216", label: "Continuidad", enLinea: false, terminal: false },
+      /* ⚠ HubSpot marca "Bloqueado" con `isClosed: true` y acá se le lleva la contraria a
+         propósito: hay 3 proyectos ACTIVOS parados ahí (medido 2026-07-30), y un proyecto
+         bloqueado no está terminado — está esperando. Tomar el `isClosed` del portal los
+         ocultaría de Nexus, que es lo contrario de lo que un bloqueo necesita. */
+      { id: "1225193545", label: "Bloqueado", enLinea: false, terminal: false },
+    ],
     // El pipeline de CS no tiene etapa "Cancelado": su única terminal es Finalizado.
     closedStageIds: ["1225193543"], // Finalizado
     initialStageId: "1225193551", // Nuevo proyecto (ex "Hand off")
@@ -167,6 +224,20 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     hubspotPipelineId: "922785384",
     label: "Development",
     help: "Desarrollo o integración. Si cuelga de una implementación de CS es su hermano y no se factura aparte; si va solo, sí.",
+    /* ESTAS SÍ SE PINTAN: un desarrollo no corre el ciclo de 8 etapas de Customer Success
+       —su metodología es otra— y lo que la sección de ciclo de vida le muestra es su propia
+       línea de HubSpot. La mueve el equipo allá; en Nexus es de solo lectura. */
+    stages: [
+      { id: "1409898886", label: "Handoff", enLinea: true, terminal: false },
+      { id: "1409897653", label: "Exploración", enLinea: true, terminal: false },
+      { id: "1409897655", label: "Requerimientos", enLinea: true, terminal: false },
+      { id: "1409932561", label: "Desarrollo", enLinea: true, terminal: false },
+      { id: "1409932562", label: "Pruebas", enLinea: true, terminal: false },
+      { id: "1409932563", label: "Entrega", enLinea: true, terminal: false },
+      { id: "1409932564", label: "Finalizado", enLinea: true, terminal: true },
+      // Cierra el proyecto pero NO es avance: sale de la línea y no cuenta para "Etapa i/N".
+      { id: "1409897657", label: "Cancelado", enLinea: false, terminal: true },
+    ],
     // "Cancelado" NO estaba en los tres ids que dio Elías, pero es tan terminal como
     // "Finalizado" y hoy hay 0 proyectos ahí, así que sumarlo no mueve nada y evita que un
     // proyecto cancelado se quede activo en Nexus para siempre.
@@ -181,6 +252,19 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     hubspotPipelineId: "922688687",
     label: "Sitios web",
     help: "Diseño y desarrollo de sitio. Mismo trato que un desarrollo: hermano de una implementación no se factura aparte.",
+    /* ⚠ El orden es el `displayOrder` del portal, NO el numérico de los ids: "Consenso"
+       (…127) va ANTES que "Desarrollo" (…126). Ordenarlas por id —que es lo que parece
+       prolijo— invertiría dos etapas de la línea. */
+    stages: [
+      { id: "1409897123", label: "Handoff", enLinea: true, terminal: false },
+      { id: "1409897124", label: "Exploración", enLinea: true, terminal: false },
+      { id: "1409897125", label: "Mockup", enLinea: true, terminal: false },
+      { id: "1409897127", label: "Consenso", enLinea: true, terminal: false },
+      { id: "1409897126", label: "Desarrollo", enLinea: true, terminal: false },
+      { id: "1409897128", label: "Entrega", enLinea: true, terminal: false },
+      { id: "1409897129", label: "Finalizado", enLinea: true, terminal: true },
+      { id: "1409897130", label: "Cancelado", enLinea: false, terminal: true },
+    ],
     closedStageIds: ["1409897129", "1409897130"], // Finalizado, Cancelado
     initialStageId: "1409897123", // Handoff
     // ⚠ La tabla del plan escribía la fila de "Sitios web" sin abrir el caso hermano, pero
@@ -284,6 +368,59 @@ export function projectCapabilities(facts: ProjectFacts): ProjectCapabilities {
   if (facts.interno) Object.assign(caps, OVERLAY_INTERNO.apaga);
 
   return caps;
+}
+
+// ── De dónde sale la ETAPA ───────────────────────────────────────────────────
+
+/**
+ * La frontera del ciclo de vida: quién manda la etapa de este proyecto.
+ *
+ *  · `"customer-success"` → el ciclo de 8 etapas de Nexus, con sus compuertas. Es la
+ *    metodología de una implementación de CS, y la infiere `lib/lifecycle/stage-engine.ts`.
+ *  · `"pipeline"` → la etapa la mueve el equipo **en HubSpot** y Nexus la espeja. No hay
+ *    nada que marcar acá: no hay compuertas, no hay override.
+ *
+ * ── SE DERIVA, NO SE DECLARA ─────────────────────────────────────────────────
+ * Sale de `cicloOchoEtapas`, que ya existe, ya está congelado en la tabla de verdad y ya
+ * respeta el overlay de interno. Un campo nuevo que respondiera lo mismo podría un día
+ * contradecirlo, y entonces habría que averiguar cuál de los dos manda.
+ *
+ * Devuelve la fila junto al veredicto porque son inseparables: `"pipeline"` sin saber CUÁL
+ * pipeline no sirve para nada, y separarlo obligaría a todo consumidor a repetir el
+ * `resolvePipeline` y a manejar un `null` que no puede pasar.
+ */
+export type FuenteDelCiclo =
+  | { tipo: "customer-success" }
+  | { tipo: "pipeline"; pipeline: PipelineDef };
+
+export function fuenteDelCiclo(facts: ProjectFacts): FuenteDelCiclo {
+  if (projectCapabilities(facts).cicloOchoEtapas) return { tipo: "customer-success" };
+  const def = resolvePipeline(facts.hubspotPipelineId);
+  /* Invariante: `cicloOchoEtapas === false` SOLO puede venir de una fila declarada — un
+     pipeline desconocido degrada a la fila legacy, que sí lo corre. El fallback no es un
+     caso real: existe para que agregar una fila con `cicloOchoEtapas: false` y sin etapas
+     no produzca un crash, sino el comportamiento de siempre. */
+  return def ? { tipo: "pipeline", pipeline: def } : { tipo: "customer-success" };
+}
+
+/** Las etapas que cuentan para el "Etapa i/N" y para el stepper, en orden. */
+export function lineaDeAvance(def: PipelineDef): readonly PipelineStage[] {
+  return def.stages.filter((s) => s.enLinea);
+}
+
+/**
+ * La etapa de un proyecto dentro de su pipeline. `null` si Nexus todavía no vio ninguna
+ * etapa, o si HubSpot movió el proyecto a una etapa que esta tabla no declara (pasa si
+ * alguien agrega una etapa en el portal y nadie la transcribe acá: se degrada a "sin
+ * etapa" en vez de romper).
+ */
+export function buscarEtapa(
+  def: PipelineDef,
+  stageId: string | null | undefined,
+): PipelineStage | null {
+  if (!stageId) return null;
+  const id = stageId.trim();
+  return def.stages.find((s) => s.id === id) ?? null;
 }
 
 // ── Cierre ───────────────────────────────────────────────────────────────────

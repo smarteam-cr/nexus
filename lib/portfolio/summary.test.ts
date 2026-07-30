@@ -15,7 +15,11 @@
  * Correr: `npm test` (Vitest, proyecto unit).
  */
 import { test, expect } from "vitest";
-import { computeProjectSummary, type SummaryLifecycleInput } from "./summary";
+import {
+  computeProjectSummary,
+  type SummaryLifecycleCs,
+  type SummaryLifecycleInput,
+} from "./summary";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 
 const NOW = new Date("2026-06-21T00:00:00Z");
@@ -178,7 +182,7 @@ test("F — fase DONE con tarea PENDING vencida: la guarda evita el falso atraso
 
 // ── Ciclo de vida ──────────────────────────────────────────────────────────────
 
-function lifecycle(overrides: Partial<SummaryLifecycleInput> = {}): SummaryLifecycleInput {
+function lifecycle(overrides: Partial<SummaryLifecycleCs> = {}): SummaryLifecycleInput {
   return {
     defined: true,
     stage: "CONFIGURACION_TECNICA",
@@ -190,6 +194,9 @@ function lifecycle(overrides: Partial<SummaryLifecycleInput> = {}): SummaryLifec
     ...overrides,
   };
 }
+
+/** Un proyecto cuya etapa manda su pipeline de HubSpot (Desarrollo, Sitios web). */
+const dePipeline: SummaryLifecycleInput = { fuente: "pipeline", projectCreatedAt: d("2026-03-25") };
 
 /** Proyecto con fase vencida (mismo shape que el caso C) para variar la etapa. */
 function overdueInput(lc: SummaryLifecycleInput) {
@@ -226,6 +233,61 @@ test("H — etapa TARDÍA (Configuración técnica): vencida deriva EN_FRICCION 
   expect(s.scheduleAlarmsActive).toBe(true);
   expect(s.riskCandidate).toBe(true);
   expect(s.health.derived).toBe("EN_FRICCION");
+});
+
+// ── Etapa de PIPELINE (Desarrollo, Sitios web) ────────────────────────────────
+
+test("P1 — sin línea base, un proyecto de pipeline NO alarma: el día que aterrizan es neutro", () => {
+  /* Los ~21 desarrollos entran a Nexus sin línea base publicada. Si las alarmas de atraso
+     se encendieran por defecto, el deploy pintaría de rojo una cartera entera de un día
+     para el otro por proyectos que nadie prometió todavía. */
+  const s = computeProjectSummary({
+    status: "active",
+    anchorStartDate: d("2026-04-01"),
+    phases: [
+      { id: "c1", name: "Requerimientos", status: "PENDING", order: 0, durationWeeks: 4, actualStart: null, actualEnd: null, tasks: [] },
+    ],
+    baseline: null,
+    lastProgressAt: null,
+    healthOverride: null,
+    lifecycle: dePipeline,
+    now: NOW,
+  });
+  expect(s.scheduleAlarmsActive).toBe(false);
+  expect(s.riskCandidate).toBe(false);
+  expect(s.health.resolved).toBe("SALUDABLE");
+});
+
+test("P2 — con línea base publicada y fase vencida, SÍ alarma", () => {
+  /* Publicar la línea base es el acto de comprometerse con las fechas: es el equivalente,
+     en esta metodología, a la compuerta «cronograma consensuado» de Customer Success. */
+  const s = computeProjectSummary(overdueInput(dePipeline));
+  expect(s.scheduleAlarmsActive).toBe(true);
+  expect(s.overduePhases).toBe(1);
+  expect(s.riskCandidate).toBe(true);
+  expect(s.health.derived).toBe("EN_FRICCION");
+});
+
+test("P3 — nunca produce etapa ni alarmas del vocabulario de Customer Success", () => {
+  /* `stage` alimenta el chip de las 8 etapas y `stageAlarms` habla de compuertas que este
+     proyecto no tiene. Rellenarlos sería mostrarle al CSE una metodología ajena. */
+  for (const s of [
+    computeProjectSummary(overdueInput(dePipeline)),
+    computeProjectSummary({ ...overdueInput(dePipeline), baseline: null }),
+  ]) {
+    expect(s.stage).toBeNull();
+    expect(s.stageAlarms).toEqual([]);
+  }
+});
+
+test("P4 — `fuente: pipeline` NO es lo mismo que «sin ciclo de vida»", () => {
+  /* `lifecycle: null` significa "caller legacy" y enciende TODAS las alarmas. Si la rama de
+     pipeline hubiera devuelto null para ahorrarse un campo, un desarrollo sin línea base
+     alarmaría igual que antes — justo lo contrario de lo que se buscaba. */
+  const legacy = computeProjectSummary({ ...overdueInput(dePipeline), baseline: null, lifecycle: null });
+  const pipeline = computeProjectSummary({ ...overdueInput(dePipeline), baseline: null });
+  expect(legacy.scheduleAlarmsActive).toBe(true);
+  expect(pipeline.scheduleAlarmsActive).toBe(false);
 });
 
 test("I — el KICKOFF NO ALARMA: es un paso opcional, no bloquea ni ensucia la pantalla", () => {

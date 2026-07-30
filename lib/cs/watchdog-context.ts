@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { TimelineEvent, CsAlert } from "@prisma/client";
 import { computeProjectSummary, type ProjectSummary } from "@/lib/portfolio/summary";
 import { toSummaryLifecycle } from "@/lib/portfolio/load";
-import { getProjectLifecycle, type ProjectLifecycle } from "@/lib/lifecycle";
+import { getProjectLifecycle, type LifecycleCs } from "@/lib/lifecycle";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 import { computePhaseRanges, addWeeks } from "@/lib/timeline/weeks";
 
@@ -22,8 +22,15 @@ export interface WatchdogContext {
   serialized: string;
   /** Resumen determinístico (para el pre-filtro del sweep y la evidencia). */
   summary: ProjectSummary | null;
-  /** Ciclo de vida (etapa efectiva + propuesta de riesgo pendiente) — insumo del runner. */
-  lifecycle: ProjectLifecycle | null;
+  /**
+   * Ciclo de vida (etapa efectiva + propuesta de riesgo pendiente) — insumo del runner.
+   *
+   * `LifecycleCs` y no la unión: el watchdog es de Éxito del cliente y solo corre sobre la
+   * cartera (`PROYECTO_DE_CARTERA_WHERE` filtra el origen de la cola). Si algún día un
+   * proyecto de otro pipeline llegara igual, contribuye `null` — defensa en profundidad, no
+   * un bloque de ciclo de vida traducido a un vocabulario que no es el suyo.
+   */
+  lifecycle: LifecycleCs | null;
 }
 
 function fmtDate(d: Date | null | undefined): string {
@@ -120,7 +127,8 @@ export async function buildWatchdogContext(
   if (!project) return null;
 
   // ── Ciclo de vida (etapa efectiva) — modula qué alarmas aplican ─────────────
-  const lifecycle = await getProjectLifecycle(projectId);
+  const lifecycleCrudo = await getProjectLifecycle(projectId);
+  const lifecycle = lifecycleCrudo?.fuente === "customer-success" ? lifecycleCrudo : null;
 
   // ── Resumen determinístico de salud (reuso del motor del panel) ─────────────
   const tl = project.timeline;
@@ -155,7 +163,10 @@ export async function buildWatchdogContext(
           : null,
         lastProgressAt: tl.changes?.[0]?.createdAt ?? null,
         healthOverride: project.healthStatusOverride,
-        lifecycle: toSummaryLifecycle(lifecycle),
+        // El CRUDO, no el filtrado: si llegara un proyecto de otro pipeline, `toSummary`
+        // ya sabe apagarle las alarmas de CS. Pasarle el `null` del filtro lo mandaría al
+        // camino legacy, que las enciende TODAS — justo al revés.
+        lifecycle: toSummaryLifecycle(lifecycleCrudo),
         now,
       })
     : null;

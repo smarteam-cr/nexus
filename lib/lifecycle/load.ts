@@ -13,7 +13,13 @@ import type { ProjectLifecycleStage, ProjectStageGateKey } from "@prisma/client"
 import { prisma } from "@/lib/db/prisma";
 import { KICKOFF_TITLE_FILTERS, pickKickoffSessionDate } from "@/lib/sessions/kickoff-pick";
 import { RECURRENTE_TAG } from "@/lib/tags/catalog";
-import { projectCapabilities } from "@/lib/projects/kind";
+import {
+  buscarEtapa,
+  fuenteDelCiclo,
+  lineaDeAvance,
+  type PipelineStage,
+  type ProjectPipelineKey,
+} from "@/lib/projects/kind";
 import {
   inferLifecycleStage,
   resolveLifecycleStage,
@@ -25,33 +31,34 @@ import {
   type LifecycleCycle,
 } from "./stage-engine";
 
-export interface ProjectLifecycle {
+/** Lo que todo proyecto tiene, mande su etapa quien la mande. */
+interface LifecycleComun {
   projectId: string;
-  /**
-   * ¿Este proyecto CORRE el ciclo de 8 etapas de Customer Success?
-   *
-   * Sale de `projectCapabilities().cicloOchoEtapas` (lib/projects/kind.ts): false para
-   * Development y Sitios web, cuya etapa la mueve el equipo en HubSpot. Un pipeline que el
-   * registro no conoce degrada a `true` — el comportamiento legacy.
-   *
-   * Hoy lo usa UNA cosa: impedir que `getProjectLifecycle` materialice compuertas de la
-   * metodología de CS en proyectos que no la corren. Todos los demás campos se siguen
-   * calculando igual que siempre; apagar la sección entera es la Tanda B1.
-   */
-  correCicloDeCs: boolean;
+  /** Rótulo de la etapa actual, EN EL VOCABULARIO DE SU FUENTE. */
+  label: string;
+  /** El servicio es recurrente/de continuidad (tag `recurrente`) — ciclo corto. */
+  recurrent: boolean;
+  /** hubspotCreatedAt ?? createdAt — "edad" del proyecto para alarmas tempranas. */
+  projectCreatedAt: Date;
+  isSuccessCase: boolean;
+}
+
+/**
+ * La rama de Customer Success: el ciclo de 8 etapas de Nexus, con sus compuertas. Es todo
+ * lo que existía antes de la tanda de multi-pipeline, sin un solo campo de menos.
+ */
+export interface LifecycleCs extends LifecycleComun {
+  fuente: "customer-success";
   cycle: LifecycleCycle;
   /** El handoff CORRIÓ y clasificó este proyecto (Project.handoffGeneratedAt != null).
    *  Compuerta: sin esto el portal CS muestra un aviso en vez de etapas. */
   defined: boolean;
-  /** El servicio es recurrente/de continuidad (tag `recurrente`) — ciclo corto. */
-  recurrent: boolean;
   /** Etapa EFECTIVA (override del CSE ?? inferida). */
   effective: ProjectLifecycleStage;
   source: "override" | "inferred";
   inferred: ProjectLifecycleStage;
   /** Por qué (cumplido + pendiente), en español legible. */
   reasons: string[];
-  label: string;
   position: { index: number; total: number };
   override: {
     stage: ProjectLifecycleStage;
@@ -71,9 +78,6 @@ export interface ProjectLifecycle {
   kickoffSessionAt: Date | null;
   /** Fecha del gate CRONOGRAMA_CONSENSUADO (insumo de las alarmas por etapa). */
   cronogramaConsensuadoAt: Date | null;
-  /** hubspotCreatedAt ?? createdAt — "edad" del proyecto para alarmas tempranas. */
-  projectCreatedAt: Date;
-  isSuccessCase: boolean;
   adoptionMode: {
     confirmed: AdoptionMode | null;
     suggested: AdoptionMode | null;
@@ -82,6 +86,38 @@ export interface ProjectLifecycle {
   };
   uus: { score: number | null; threshold: number };
 }
+
+/**
+ * La rama de pipeline: la etapa la mueve el equipo EN HUBSPOT y Nexus la espeja. No hay
+ * compuertas que marcar ni override que fijar — no porque falte implementarlo, sino porque
+ * no hay nada acá que curar: el dato vive del otro lado.
+ */
+export interface LifecyclePipeline extends LifecycleComun {
+  fuente: "pipeline";
+  pipeline: { key: ProjectPipelineKey; label: string };
+  /** La etapa según la tabla. `null` si Nexus no vio ninguna, o si HubSpot la movió a una
+   *  que `PROJECT_PIPELINES` no declara (entonces `label` cae al rótulo materializado). */
+  etapa: PipelineStage | null;
+  /** El id crudo materializado por el sync — para diagnosticar el caso "no declarada". */
+  stageId: string | null;
+  stageSyncedAt: Date | null;
+  /** Las etapas EN LÍNEA de su pipeline, en orden — el stepper. */
+  linea: readonly PipelineStage[];
+  /** Posición en la línea. `null` si la etapa está FUERA de ella (Cancelado) o se desconoce. */
+  position: { index: number; total: number } | null;
+}
+
+/**
+ * ⚠ UNIÓN DISCRIMINADA, y eso es el punto.
+ *
+ * Las alternativas eran peores: MAPEAR "Pruebas" de Development a `CONFIGURACION_TECNICA`
+ * inventa una equivalencia entre dos metodologías (lo mismo que `regenerate-progress.ts` ya
+ * se negó a hacer), y RELLENAR con `HAND_OFF` + `gates: []` es una mentira que compila.
+ *
+ * Así, TypeScript enumera los consumidores: nadie puede leer `gates` en una rama que no los
+ * tiene sin que el compilador lo diga.
+ */
+export type ProjectLifecycle = LifecycleCs | LifecyclePipeline;
 
 /** Suma de seats.limit de todos los hubs del snapshot Partner ({ core|sales|…: {limit} }). */
 function seatsTotalFrom(seats: unknown): number | null {
@@ -157,6 +193,11 @@ async function loadLifecycleBatchUncached(
         hubspotPipelineId: true,
         proyectoInterno: true,
         hermanoCsProjectId: true,
+        // La etapa de HubSpot, YA materializada por el sync. Mismo row otra vez: la rama
+        // de pipeline no cuesta una sola query más que la de Customer Success.
+        hubspotPipelineStageId: true,
+        hubspotPipelineStageLabel: true,
+        hubspotStageSyncedAt: true,
       },
     }),
     prisma.projectStageGate.findMany({
@@ -197,6 +238,48 @@ async function loadLifecycleBatchUncached(
   }
 
   for (const p of projects) {
+    const comun = {
+      projectId: p.id,
+      recurrent: p.tags.includes(RECURRENTE_TAG),
+      projectCreatedAt: p.hubspotCreatedAt ?? p.createdAt,
+      isSuccessCase: p.isSuccessCase,
+    };
+
+    /* ── ¿Quién manda la etapa de este proyecto? ────────────────────────────
+       Un desarrollo o un sitio web NO corre el ciclo de 8 etapas de Customer Success: su
+       metodología es la de su propio pipeline, y la mueve el equipo en HubSpot. Todo lo
+       de abajo —compuertas, override, modalidad de adopción, UUS— es vocabulario de CS y
+       no le aplica; forzárselo sería inventarle una equivalencia. */
+    const fuente = fuenteDelCiclo({
+      hubspotPipelineId: p.hubspotPipelineId,
+      interno: p.proyectoInterno,
+      tieneHermanoCs: p.hermanoCsProjectId != null,
+    });
+
+    if (fuente.tipo === "pipeline") {
+      const def = fuente.pipeline;
+      const etapa = buscarEtapa(def, p.hubspotPipelineStageId);
+      const linea = lineaDeAvance(def);
+      const idx = etapa ? linea.findIndex((s) => s.id === etapa.id) : -1;
+      out.set(p.id, {
+        ...comun,
+        fuente: "pipeline",
+        pipeline: { key: def.key, label: def.label },
+        etapa,
+        stageId: p.hubspotPipelineStageId,
+        stageSyncedAt: p.hubspotStageSyncedAt,
+        linea,
+        // Fuera de línea (Cancelado, Bloqueado) → sin posición: un "Etapa 8/7" o un
+        // "Cancelado" contado como avance dicen algo que no es.
+        position: idx >= 0 ? { index: idx + 1, total: linea.length } : null,
+        /* El rótulo cae al que materializó el sync antes que a "sin etapa": si alguien
+           agrega una etapa en el portal y nadie la transcribe en la tabla, se ve el nombre
+           real de HubSpot en vez de un hueco. */
+        label: etapa?.label ?? p.hubspotPipelineStageLabel ?? "Sin etapa en HubSpot",
+      });
+      continue;
+    }
+
     const projectGates = gatesByProject.get(p.id) ?? [];
     const gateDates: Partial<Record<ProjectStageGateKey, Date>> = {};
     for (const g of projectGates) gateDates[g.gate] = g.markedAt;
@@ -220,15 +303,10 @@ async function loadLifecycleBatchUncached(
     const { effective, source } = resolveLifecycleStage(inferred, p.lifecycleStageOverride);
 
     out.set(p.id, {
-      projectId: p.id,
-      correCicloDeCs: projectCapabilities({
-        hubspotPipelineId: p.hubspotPipelineId,
-        interno: p.proyectoInterno,
-        tieneHermanoCs: p.hermanoCsProjectId != null,
-      }).cicloOchoEtapas,
+      ...comun,
+      fuente: "customer-success",
       cycle,
       defined: p.handoffGeneratedAt != null,
-      recurrent: p.tags.includes(RECURRENTE_TAG),
       effective,
       source,
       inferred: inferred.stage,
@@ -253,8 +331,6 @@ async function loadLifecycleBatchUncached(
       kickoffPublishedAt: p.kickoffPublishedAt,
       kickoffSessionAt,
       cronogramaConsensuadoAt: gateDates.CRONOGRAMA_CONSENSUADO ?? null,
-      projectCreatedAt: p.hubspotCreatedAt ?? p.createdAt,
-      isSuccessCase: p.isSuccessCase,
       adoptionMode: {
         confirmed: asAdoptionMode(p.adoptionMode),
         suggested: suggestAdoptionMode({
@@ -299,7 +375,7 @@ async function materializarUsoValidado(
   projectId: string,
   lifecycle: ProjectLifecycle,
 ): Promise<void> {
-  if (!lifecycle.correCicloDeCs) return;
+  if (lifecycle.fuente !== "customer-success") return;
   const uusPasses = lifecycle.uus.score != null && lifecycle.uus.score >= lifecycle.uus.threshold;
   const hasGate = lifecycle.gates.some((g) => g.gate === "USO_VALIDADO");
   if (!uusPasses || hasGate || lifecycle.effective === "HAND_OFF") return;

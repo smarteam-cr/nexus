@@ -3,10 +3,18 @@
 /**
  * components/lifecycle/ProjectLifecyclePanel.tsx
  *
- * Panel "Ciclo de vida" del workspace del proyecto: etapa efectiva (StageBadge)
- * + selector de override (curación, seeAllClients server-side) + checklist de
- * VALIDACIONES DE SALIDA (gates — marcar mueve la etapa inferida) + modalidad de
- * adopción (sugerida por tamaño de cuenta → el CSE confirma).
+ * Panel "Ciclo de vida" del workspace del proyecto. UNA sección, DOS cuerpos según de dónde
+ * salga la etapa del proyecto (el DTO lo discrimina con `fuente`):
+ *
+ *  · Customer Success → etapa efectiva (StageBadge) + selector de override (curación,
+ *    seeAllClients server-side) + checklist de VALIDACIONES DE SALIDA (gates — marcar mueve
+ *    la etapa inferida) + modalidad de adopción (sugerida por tamaño de cuenta → el CSE
+ *    confirma).
+ *  · Pipeline (Desarrollo, Sitios web) → su línea de etapas de HubSpot, de SOLO LECTURA. No
+ *    hay compuertas ni curación: la etapa la mueve el equipo allá. Mostrar acá una checklist
+ *    de una metodología que no corren sería pedirles trabajo que no existe.
+ *
+ * La sección se monta igual en los dos casos: la bifurcación va adentro, no en quien la usa.
  *
  * Self-fetching (GET /api/projects/[id]/lifecycle) → montarlo es una línea.
  */
@@ -21,7 +29,8 @@ import {
   type LifecycleCycle,
 } from "@/lib/lifecycle/stage-engine";
 
-interface LifecycleDTO {
+interface LifecycleCsDTO {
+  fuente?: "customer-success";
   effective: string;
   inferred: string;
   source: "override" | "inferred";
@@ -42,6 +51,21 @@ interface LifecycleDTO {
   uus: { score: number | null; threshold: number };
 }
 
+interface LifecyclePipelineDTO {
+  fuente: "pipeline";
+  pipeline: { key: string; label: string };
+  /** Rótulo de la etapa actual. */
+  label: string;
+  stageId: string | null;
+  /** ¿La etapa está en la línea de avance? (false = Cancelado, Bloqueado, o sin etapa). */
+  enLinea: boolean;
+  position: { index: number; total: number } | null;
+  order: Array<{ id: string; label: string }>;
+  stageSyncedAt: string | null;
+}
+
+type LifecycleDTO = LifecycleCsDTO | LifecyclePipelineDTO;
+
 /** Gates del ciclo full con su copy de checklist (orden = cadena de salida). */
 const GATE_META: Array<{ key: string; label: string; hint: string }> = [
   { key: "ENTENDIMIENTO_CERRADO", label: "Entendimiento cerrado", hint: "Sesiones de exploración cumplidas + notas confirmadas" },
@@ -56,6 +80,82 @@ const SHORT_CYCLE_GATES = new Set(["ENTREGA_REALIZADA"]);
 
 const fmtDay = (iso: string) =>
   new Date(iso).toLocaleDateString("es-CR", { day: "numeric", month: "short" });
+
+/**
+ * El cuerpo de un proyecto cuya etapa manda su pipeline de HubSpot. SOLO LECTURA a
+ * propósito: no hay un formulario escondido ni un "próximamente". El equipo mueve la
+ * tarjeta allá y Nexus la espeja — decirlo explícitamente evita que alguien busque acá el
+ * botón que no existe.
+ */
+function CuerpoDePipeline({
+  data,
+  open,
+  setOpen,
+}: {
+  data: LifecyclePipelineDTO;
+  open: boolean;
+  setOpen: (f: (v: boolean) => boolean) => void;
+}) {
+  const idx = data.position ? data.position.index - 1 : -1;
+  return (
+    <div className="bg-surface border border-line rounded-xl">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2.5 px-4 py-3 text-left"
+      >
+        <span className="text-sm font-semibold text-fg">Ciclo de vida</span>
+        <StageBadge
+          stage={data.stageId ?? ""}
+          source="inferred"
+          order={data.order}
+          label={data.label}
+          stepperTitle={`Etapas de ${data.pipeline.label}`}
+        />
+        <span className="text-[10px] text-fg-muted">{data.pipeline.label} · HubSpot</span>
+        <span className="ml-auto text-fg-muted text-xs">{open ? "▾" : "▸"}</span>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-3 border-t border-line pt-3">
+          <p className="text-[11px] text-fg-secondary">
+            Este proyecto sigue las etapas del pipeline <strong className="text-fg">{data.pipeline.label}</strong> de
+            HubSpot, no el ciclo de 8 etapas de Éxito del cliente. La etapa la mueve el equipo
+            en HubSpot y Nexus la espeja: acá no hay validaciones que marcar.
+          </p>
+
+          <div className="space-y-1">
+            <p className="text-[10px] font-semibold text-fg-muted uppercase tracking-wide">
+              Etapas del pipeline
+            </p>
+            {data.order.map((e, i) => (
+              <div
+                key={e.id}
+                className={`flex items-center gap-2 text-[11px] py-0.5 ${
+                  i < idx ? "text-fg-muted" : i === idx ? "text-fg font-semibold" : "text-fg-muted/60"
+                }`}
+              >
+                <span className="w-3.5 text-center">{i < idx ? "✓" : i === idx ? "●" : "○"}</span>
+                {e.label}
+              </div>
+            ))}
+            {!data.enLinea && (
+              <p className="text-[11px] text-fg-secondary pt-1">
+                Etapa actual: <strong className="text-fg">{data.label}</strong> — está fuera de la
+                línea de avance.
+              </p>
+            )}
+          </div>
+
+          <p className="text-[10px] text-fg-muted">
+            {data.stageSyncedAt
+              ? `Última sincronización de la etapa: ${fmtDay(data.stageSyncedAt)}.`
+              : "Nexus todavía no sincronizó una etapa para este proyecto."}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ProjectLifecyclePanel({ projectId }: { projectId: string }) {
   const toast = useToast();
@@ -91,6 +191,11 @@ export default function ProjectLifecyclePanel({ projectId }: { projectId: string
   // la sección no existía hasta que respondía el fetch y entonces empujaba hacia abajo
   // todo el canvas que tiene debajo.
   if (!data) return <div className="h-[46px] rounded-xl border border-line bg-surface" />;
+
+  if (data.fuente === "pipeline") {
+    return <CuerpoDePipeline data={data} open={open} setOpen={setOpen} />;
+  }
+
   const gateByKey = new Map(data.gates.map((g) => [g.gate, g]));
   const cycleGates = data.cycle === "short" ? GATE_META.filter((g) => SHORT_CYCLE_GATES.has(g.key)) : GATE_META;
   const order = data.cycle === "short" ? SHORT_CYCLE_ORDER : FULL_CYCLE_ORDER;

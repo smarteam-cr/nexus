@@ -47,7 +47,10 @@ export interface SummaryPhase {
  * comportamiento histórico (todas las alarmas de cronograma aplican) — los callers
  * no migrados y los tests viejos no se rompen.
  */
-export interface SummaryLifecycleInput {
+/** El proyecto corre el ciclo de 8 etapas de Customer Success (lo de siempre). */
+export interface SummaryLifecycleCs {
+  /** Ausente = `"customer-success"`: es lo que pasan todos los callers de siempre. */
+  fuente?: "customer-success";
   /** El handoff CORRIÓ y clasificó el proyecto. Si es false → sin juicios de ciclo de
    *  vida: nada de etapas, alarmas ni riesgo (el portal muestra un aviso). La barra de
    *  avance se sigue mostrando. */
@@ -63,6 +66,21 @@ export interface SummaryLifecycleInput {
   /** hubspotCreatedAt ?? createdAt — edad del proyecto. */
   projectCreatedAt: Date | null;
 }
+
+/**
+ * La etapa la manda el PIPELINE de HubSpot (Desarrollo, Sitios web).
+ *
+ * Trae DOS campos y no ocho, y eso es el diseño: no hay compuertas, ni kickoff publicado,
+ * ni etapa del vocabulario de CS. Rellenar esos huecos con `HAND_OFF` y `gates: []` para
+ * que un solo tipo sirviera para las dos cosas sería una mentira que compila; el summary
+ * terminaría midiendo con la regla equivocada sin que nadie lo note.
+ */
+export interface SummaryLifecyclePipeline {
+  fuente: "pipeline";
+  projectCreatedAt: Date | null;
+}
+
+export type SummaryLifecycleInput = SummaryLifecycleCs | SummaryLifecyclePipeline;
 
 export interface SummaryInput {
   status: string; // Project.status: active | paused | completed
@@ -102,9 +120,13 @@ export interface ProjectSummary {
     source: "override" | "derived";
   };
   // ── Ciclo de vida ──
-  /** ¿Las alarmas de cronograma vencido APLICAN? false solo cuando la etapa es
-   *  anterior a CONFIGURACION_TECNICA (el cronograma es tentativo, no consensuado).
-   *  Sin input lifecycle = true (comportamiento histórico). */
+  /** ¿Las alarmas de cronograma vencido APLICAN?
+   *  · Ciclo de CS: false mientras la etapa sea anterior a CONFIGURACION_TECNICA (el
+   *    cronograma es tentativo, no consensuado).
+   *  · Etapa de pipeline (Desarrollo, Sitios web): manda la LÍNEA BASE publicada — no hay
+   *    compuerta de "cronograma consensuado" en esa metodología, y publicar la línea base
+   *    es el acto equivalente de comprometerse con las fechas.
+   *  · Sin input lifecycle = true (comportamiento histórico). */
   scheduleAlarmsActive: boolean;
   stage: { effective: ProjectLifecycleStage; source: "override" | "inferred"; label: string } | null;
   /** Alarmas PROPIAS de etapas tempranas (reemplazan a las de cronograma cuando no aplican). */
@@ -241,9 +263,21 @@ export function computeProjectSummary(input: SummaryInput): ProjectSummary {
   // Sin handoff generado (lc.defined === false) NO hay juicios de ciclo de vida: ni etapa,
   // ni alarmas, ni riesgo (el portal muestra un aviso). La barra de avance se sigue mostrando.
   // Caller legacy sin lifecycle (lc === null) = comportamiento histórico (todo activo).
-  const lc = input.lifecycle ?? null;
+  const entrada = input.lifecycle ?? null;
+  /* Un proyecto cuya etapa manda HubSpot (Desarrollo, Sitios web) no tiene compuertas ni
+     etapas tempranas de CS que vigilar. La única pregunta honesta que queda es si su
+     cronograma ya es una PROMESA, y eso lo responde la línea base publicada.
+
+     El día que aterrizan es NEUTRO por construcción: llegan sin línea base, así que las
+     alarmas de atraso nacen apagadas y se encienden recién cuando alguien publica una —
+     que es exactamente cuando pasan a ser ciertas. */
+  const lc = entrada && entrada.fuente !== "pipeline" ? entrada : null;
   const lcActive = !!lc && lc.defined;
-  const scheduleAlarmsActive = !lc ? true : lcActive && stageAtOrAfter(lc.stage, "CONFIGURACION_TECNICA");
+  const scheduleAlarmsActive = !entrada
+    ? true
+    : entrada.fuente === "pipeline"
+      ? hasBaseline
+      : lcActive && stageAtOrAfter(lc!.stage, "CONFIGURACION_TECNICA");
   const stage = lcActive
     ? { effective: lc!.stage, source: lc!.source, label: STAGE_LABEL_ES[lc!.stage] }
     : null;

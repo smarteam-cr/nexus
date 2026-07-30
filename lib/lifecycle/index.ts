@@ -26,4 +26,11 @@ export {
   type LifecycleCycle,
   type AdoptionMode,
 } from "./stage-engine";
-export { loadLifecycleBatch, getProjectLifecycle, type ProjectLifecycle } from "./load";
+export {
+  loadLifecycleBatch,
+  getProjectLifecycle,
+  type ProjectLifecycle,
+  type LifecycleCs,
+  type LifecyclePipeline,
+} from "./load";
+export { vetoSiNoCorreCicloDeCs, fuenteDelCicloDeProyecto } from "./gate";

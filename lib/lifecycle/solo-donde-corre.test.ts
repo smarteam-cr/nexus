@@ -82,30 +82,47 @@ describe("fuga 1 — la lectura del ciclo de vida no escribe compuertas fuera de
     expect(i, "no encontré la función").toBeGreaterThan(-1);
     // El guard tiene que ser lo PRIMERO: antes de calcular nada y antes del upsert.
     const cuerpo = codigo.slice(i, i + 900);
-    const posGuard = cuerpo.indexOf("correCicloDeCs");
+    const posGuard = cuerpo.indexOf('fuente !== "customer-success"');
     const posUpsert = cuerpo.indexOf("projectStageGate.upsert");
-    expect(posGuard, "falta el guard por `correCicloDeCs`").toBeGreaterThan(-1);
+    expect(posGuard, "falta el guard por `fuente`").toBeGreaterThan(-1);
     expect(posUpsert, "no encontré el upsert").toBeGreaterThan(-1);
     expect(
       posGuard < posUpsert,
-      "el guard de `correCicloDeCs` tiene que estar ANTES del upsert: si no, un desarrollo " +
-        "acumula compuertas de la metodología de CS con solo abrir su pestaña, y esa fila lo " +
-        "vuelve no borrable por el script de limpieza.",
+      "el guard por `fuente` tiene que estar ANTES del upsert: si no, un desarrollo acumula " +
+        "compuertas de la metodología de CS con solo abrir su pestaña, y esa fila lo vuelve " +
+        "no borrable por el script de limpieza.",
     ).toBe(true);
   });
 
-  it("`correCicloDeCs` se deriva del registro, no de una heurística local", () => {
+  it("la FUENTE del ciclo se deriva del registro, no de una heurística local", () => {
     const codigo = codigoDe(LOADER);
     expect(
       codigo,
-      "tiene que salir de `projectCapabilities` (lib/projects/kind.ts), que es la tabla de " +
+      "tiene que salir de `fuenteDelCiclo` (lib/projects/kind.ts), que es la tabla de " +
         "decisiones. Una condición escrita a mano acá sería la quinta copia del criterio.",
-    ).toContain("projectCapabilities");
-    // Y las tres columnas de clase tienen que venir en el select, o `projectCapabilities`
+    ).toContain("fuenteDelCiclo");
+    // Y las tres columnas de clase tienen que venir en el select, o `fuenteDelCiclo`
     // recibiría undefined y devolvería la fila legacy para todos.
     for (const col of ["hubspotPipelineId", "proyectoInterno", "hermanoCsProjectId"]) {
       expect(codigo, `el select del loader no trae ${col}`).toContain(`${col}: true`);
     }
+  });
+
+  it("la rama de pipeline NO puede caer en el camino de las compuertas", () => {
+    /* El `continue` es lo que garantiza que un proyecto cuya etapa manda HubSpot ni siquiera
+       llegue al bloque que arma `gates`, `override` y `adoptionMode`. Sin él, la unión
+       compilaría igual —los campos se agregarían de más— y volveríamos a tener vocabulario
+       de Customer Success sobre un proyecto que no lo corre. */
+    const codigo = codigoDe(LOADER);
+    const i = codigo.indexOf('fuente.tipo === "pipeline"');
+    expect(i, "no encontré la bifurcación por fuente en el loader").toBeGreaterThan(-1);
+    const posContinue = codigo.indexOf("continue;", i);
+    const posGates = codigo.indexOf("gatesByProject.get", i);
+    expect(posContinue, "la rama de pipeline no corta el flujo").toBeGreaterThan(-1);
+    expect(
+      posContinue < posGates,
+      "la rama de pipeline tiene que cortar con `continue` ANTES de armar las compuertas.",
+    ).toBe(true);
   });
 });
 

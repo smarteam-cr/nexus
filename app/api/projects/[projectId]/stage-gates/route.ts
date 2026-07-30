@@ -10,9 +10,15 @@
  *
  * Guard: acceso al proyecto (los gates son trabajo operativo del CSE, no
  * curación de cartera — el override de etapa sí exige seeAllClients).
+ *
+ * Y un segundo guard: las compuertas son de la metodología de CUSTOMER SUCCESS. Un proyecto
+ * de Desarrollo o de Sitios web mueve su etapa en HubSpot — ver lib/lifecycle/gate.ts. El
+ * DELETE queda abierto a propósito: desmarcar es limpiar, y una compuerta vieja tiene que
+ * poder deshacerse aunque el proyecto se haya reclasificado después.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { vetoSiNoCorreCicloDeCs } from "@/lib/lifecycle";
 import { prisma } from "@/lib/db/prisma";
 import type { ProjectStageGateKey } from "@prisma/client";
 
@@ -32,6 +38,8 @@ export async function POST(
   const { projectId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
+  const veto = await vetoSiNoCorreCicloDeCs(projectId);
+  if (veto) return veto;
 
   let raw: unknown;
   try {
