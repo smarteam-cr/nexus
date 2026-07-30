@@ -13,6 +13,7 @@ import type { ProjectLifecycleStage, ProjectStageGateKey } from "@prisma/client"
 import { prisma } from "@/lib/db/prisma";
 import { KICKOFF_TITLE_FILTERS, pickKickoffSessionDate } from "@/lib/sessions/kickoff-pick";
 import { RECURRENTE_TAG } from "@/lib/tags/catalog";
+import { projectCapabilities } from "@/lib/projects/kind";
 import {
   inferLifecycleStage,
   resolveLifecycleStage,
@@ -26,6 +27,18 @@ import {
 
 export interface ProjectLifecycle {
   projectId: string;
+  /**
+   * ¿Este proyecto CORRE el ciclo de 8 etapas de Customer Success?
+   *
+   * Sale de `projectCapabilities().cicloOchoEtapas` (lib/projects/kind.ts): false para
+   * Development y Sitios web, cuya etapa la mueve el equipo en HubSpot. Un pipeline que el
+   * registro no conoce degrada a `true` — el comportamiento legacy.
+   *
+   * Hoy lo usa UNA cosa: impedir que `getProjectLifecycle` materialice compuertas de la
+   * metodología de CS en proyectos que no la corren. Todos los demás campos se siguen
+   * calculando igual que siempre; apagar la sección entera es la Tanda B1.
+   */
+  correCicloDeCs: boolean;
   cycle: LifecycleCycle;
   /** El handoff CORRIÓ y clasificó este proyecto (Project.handoffGeneratedAt != null).
    *  Compuerta: sin esto el portal CS muestra un aviso en vez de etapas. */
@@ -138,6 +151,12 @@ async function loadLifecycleBatchUncached(
         adoptionModeConfirmedAt: true,
         adoptionModeConfirmedBy: true,
         isSuccessCase: true,
+        // De qué CLASE es el proyecto (lib/projects/kind.ts). Mismo row, cero queries
+        // nuevas. Decide si este proyecto CORRE el ciclo de 8 etapas de Customer Success
+        // o si su etapa la manda su pipeline de HubSpot.
+        hubspotPipelineId: true,
+        proyectoInterno: true,
+        hermanoCsProjectId: true,
       },
     }),
     prisma.projectStageGate.findMany({
@@ -202,6 +221,11 @@ async function loadLifecycleBatchUncached(
 
     out.set(p.id, {
       projectId: p.id,
+      correCicloDeCs: projectCapabilities({
+        hubspotPipelineId: p.hubspotPipelineId,
+        interno: p.proyectoInterno,
+        tieneHermanoCs: p.hermanoCsProjectId != null,
+      }).cicloOchoEtapas,
       cycle,
       defined: p.handoffGeneratedAt != null,
       recurrent: p.tags.includes(RECURRENTE_TAG),
@@ -247,33 +271,61 @@ async function loadLifecycleBatchUncached(
 }
 
 /**
- * Ciclo de vida de UN proyecto (null si no existe). Materializa perezosamente el
- * gate USO_VALIDADO con source="system" cuando el UUS lo cumple y nadie lo marcó
- * (best-effort: el motor ya lo da por cumplido sin la fila — la fila deja el
- * EVENTO durable aunque el score baje después).
+ * Materializa perezosamente el gate USO_VALIDADO con `source: "system"` cuando el UUS lo
+ * cumple y nadie lo marcó. Best-effort: el motor ya lo da por cumplido sin la fila — la fila
+ * deja el EVENTO durable aunque el puntaje baje después.
+ *
+ * ── DOS COSAS QUE HAY QUE SABER ──────────────────────────────────────────────
+ *
+ * 1. **Solo para proyectos que corren el ciclo de Customer Success.** `USO_VALIDADO` es una
+ *    compuerta de ESA metodología, y el puntaje que la dispara es del CLIENTE, no del
+ *    proyecto. Sin este filtro, un desarrollo de un cliente sano acumulaba compuertas de CS
+ *    con solo abrir su pestaña — el panel de ciclo de vida se monta para todo proyecto y
+ *    hace fetch al endpoint que llama a esta función. Y esa fila lo volvía **no borrable**
+ *    por `scripts/limpiar-piezas-basura.ts`, que se niega ante "etapas marcadas".
+ *
+ *    El freno `effective !== "HAND_OFF"` no alcanzaba: el clasificador de sesiones incluye a
+ *    los desarrollos a propósito, así que la sesión de kickoff del cliente puede quedar
+ *    linkeada al desarrollo y sacarlo de esa etapa.
+ *
+ * 2. **Es una ESCRITURA disparada por una LECTURA**, y eso es un smell conocido. El lugar
+ *    correcto es donde se escribe el puntaje (`lib/cs/partner-sync.ts`), porque el evento
+ *    real es "el puntaje cruzó el umbral". Mudarla necesita un backfill —los que ya cruzaron
+ *    y nadie leyó nunca materializaron la fila—, así que es su propia tanda. Mientras tanto
+ *    vive acá pero con nombre propio: una función con verbo se ve en un diff, un bloque
+ *    suelto adentro de un getter no.
  */
+async function materializarUsoValidado(
+  projectId: string,
+  lifecycle: ProjectLifecycle,
+): Promise<void> {
+  if (!lifecycle.correCicloDeCs) return;
+  const uusPasses = lifecycle.uus.score != null && lifecycle.uus.score >= lifecycle.uus.threshold;
+  const hasGate = lifecycle.gates.some((g) => g.gate === "USO_VALIDADO");
+  if (!uusPasses || hasGate || lifecycle.effective === "HAND_OFF") return;
+
+  try {
+    await prisma.projectStageGate.upsert({
+      where: { projectId_gate: { projectId, gate: "USO_VALIDADO" } },
+      create: {
+        projectId,
+        gate: "USO_VALIDADO",
+        source: "system",
+        evidence: { uusScore: lifecycle.uus.score, threshold: lifecycle.uus.threshold },
+      },
+      update: {},
+    });
+  } catch (e) {
+    // Solo durabilidad del evento — la etapa ya salió bien sin la fila.
+    console.error("[lifecycle] no se pudo materializar USO_VALIDADO:", e);
+  }
+}
+
+/** Ciclo de vida de UN proyecto (null si no existe). */
 export async function getProjectLifecycle(projectId: string): Promise<ProjectLifecycle | null> {
   const lifecycle = (await loadLifecycleBatch([projectId])).get(projectId) ?? null;
   if (!lifecycle) return null;
 
-  const uusPasses = lifecycle.uus.score != null && lifecycle.uus.score >= lifecycle.uus.threshold;
-  const hasGate = lifecycle.gates.some((g) => g.gate === "USO_VALIDADO");
-  if (uusPasses && !hasGate && lifecycle.effective !== "HAND_OFF") {
-    try {
-      await prisma.projectStageGate.upsert({
-        where: { projectId_gate: { projectId, gate: "USO_VALIDADO" } },
-        create: {
-          projectId,
-          gate: "USO_VALIDADO",
-          source: "system",
-          evidence: { uusScore: lifecycle.uus.score, threshold: lifecycle.uus.threshold },
-        },
-        update: {},
-      });
-    } catch (e) {
-      // Solo durabilidad del evento — la etapa ya salió bien sin la fila.
-      console.error("[lifecycle] no se pudo materializar USO_VALIDADO:", e);
-    }
-  }
+  await materializarUsoValidado(projectId, lifecycle);
   return lifecycle;
 }

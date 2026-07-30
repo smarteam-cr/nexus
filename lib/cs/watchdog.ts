@@ -22,7 +22,7 @@ import { buildWatchdogContext } from "./watchdog-context";
 import { claimDateKey } from "@/lib/jobs/registry";
 import { crDateParts, WEEKDAYS_MON_FRI } from "@/lib/jobs/time";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
-import { proyectoDeCarteraWhere } from "@/lib/projects/scope";
+import { PROYECTO_DE_CARTERA_WHERE, proyectoDeCarteraWhere } from "@/lib/projects/scope";
 
 const AGENT_ID = "agent-cs-watchdog";
 const AGENT_SLUG = "cs-watchdog";
@@ -420,9 +420,21 @@ export async function runWatchdogDebounceTick(now: Date): Promise<void> {
     console.error("[cs-watchdog] reaper falló:", e instanceof Error ? e.message : e);
   });
   await reapStaleCsRuns(now).catch(() => {});
+  /* El filtro de alcance va ACÁ además de en `runForProjectInner`, y no es redundante.
+     El gate de allá devuelve ANTES del claim de eventos, así que un proyecto que no es
+     cartera —un desarrollo con cronograma— entraba a esta cola, ocupaba uno de los
+     MAX_PROJECTS_PER_DEBOUNCE_TICK slots, se salteaba, y sus eventos quedaban sin marcar
+     procesados. O sea: volvía en CADA tick, para siempre. Con 5 desarrollos editándose,
+     los proyectos de CS reales se quedaban sin debounce, y en silencio (el skip no loguea).
+     Filtrando en el origen, esos proyectos no compiten por un slot; sus eventos quedan sin
+     procesar, que es correcto — nunca fueron para el watchdog de Éxito del cliente. */
   const groups = await prisma.timelineEvent.groupBy({
     by: ["projectId"],
-    where: { processedAt: null, processedByRunId: null },
+    where: {
+      processedAt: null,
+      processedByRunId: null,
+      project: PROYECTO_DE_CARTERA_WHERE,
+    },
     _max: { createdAt: true },
   });
   const quiesced = groups
