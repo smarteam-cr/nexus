@@ -3,6 +3,7 @@ import { UnauthorizedError, ForbiddenError } from "@/lib/auth/supabase";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { ensureStrategyProject } from "@/lib/canvas/strategy-project";
+import { esProyectoNavegable } from "@/lib/projects/scope";
 import WorkspaceClient, { type SeededCanvas } from "./WorkspaceClient";
 import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
@@ -75,6 +76,12 @@ export default async function ClientPage({
         serviceType: true,
         tags: true,
         hubspotServiceId: true,
+        // Los tres hechos que declaran de qué CLASE es el proyecto. Se traen aunque el
+        // rail no los muestre: `esProyectoNavegable` los pide, y pedirlos siempre es lo
+        // que impide que este filtro vuelva a divergir del de la pestaña inicial.
+        hubspotPipelineId: true,
+        proyectoInterno: true,
+        hermanoCsProjectId: true,
       },
     }),
     prisma.hubspotAccount.findFirst({
@@ -85,13 +92,16 @@ export default async function ClientPage({
 
   if (!client) notFound();
 
+  /* El rail de proyectos. MISMO criterio que la pestaña inicial del layout —importado, no
+     copiado—: cuando estaban copiados, uno filtraba en SQL y el otro en JavaScript y
+     trataban distinto a los proyectos con `serviceType` NULL, así que el layout podía
+     elegir como pestaña inicial un proyecto que este rail no mostraba. */
   const hasHubspot = !!hubspotAccount || !!client.hubspotCompanyId;
-
-  // Solo mostrar proyectos activos con datos reales. Excluir el proyecto de estrategia
-  // (__strategy__) que se gestiona aparte y nunca va como tab regular.
-  const visibleProjects = hasHubspot
-    ? projects.filter((p) => p.hubspotServiceId && p.status === "active" && p.serviceType !== "__strategy__")
-    : projects.filter((p) => p.status === "active" && p.serviceType !== "__strategy__");
+  const paraFiltro = {
+    hubspotCompanyId: client.hubspotCompanyId,
+    tieneHubspotAccount: !!hubspotAccount,
+  };
+  const visibleProjects = projects.filter((p) => esProyectoNavegable(p, paraFiltro));
 
   // Garantizar que el proyecto de estrategia existe (se crea al primer acceso)
   const strategyRef = await ensureStrategyProject(id);

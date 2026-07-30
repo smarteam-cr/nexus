@@ -14,6 +14,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { extractFingerprint } from "@/lib/timeline/particularidad-identity";
 import { canvasOf } from "@/lib/pieces/canvas-query";
+import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 
 interface BlockLite {
   blockType: string;
@@ -38,9 +39,12 @@ export async function loadPriorRelationshipContext(
 ): Promise<string> {
   const [priorProjects, priorHandoffs] = await Promise.all([
     prisma.project.findMany({
+      /* OJO: acá NO va `status: "active"` — el contexto del agente incluye a propósito los
+         proyectos ya terminados del cliente. Por eso se compone a mano con el átomo del
+         sentinel en vez de usar `proyectoClasificableWhere`, que sí exige activo. */
       where: {
         clientId,
-        serviceType: { not: "__strategy__" },
+        OR: [{ serviceType: null }, { serviceType: { not: SENTINEL_SERVICE_TYPE } }],
         ...(excludeProjectId ? { id: { not: excludeProjectId } } : {}),
       },
       orderBy: { createdAt: "desc" },

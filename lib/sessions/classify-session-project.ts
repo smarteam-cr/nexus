@@ -26,6 +26,7 @@ import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { isLockedLink } from "@/lib/sessions/session-project-locks";
+import { proyectoClasificableWhere } from "@/lib/projects/scope";
 
 export { isLockedLink } from "@/lib/sessions/session-project-locks";
 
@@ -67,13 +68,12 @@ export async function classifySessionToProjects(
   opts: { dryRun?: boolean } = {},
 ): Promise<ClassifyResult> {
   const dryRun = opts.dryRun === true;
-  // 1. Cargar proyectos activos del cliente (excluyendo el de estrategia)
+  // 1. Cargar los proyectos a los que se le puede colgar una sesión. El criterio es el
+  //    ANCHO (lib/projects/scope.ts): incluye a los creados a mano en Nexus, a los de
+  //    Desarrollo y Sitios web, y a los internos — un proyecto interno tiene sesiones
+  //    como cualquier otro, que es justo el caso que destapó todo esto.
   const projects = await prisma.project.findMany({
-    where: {
-      clientId,
-      status: "active",
-      serviceType: { not: "__strategy__" },
-    },
+    where: proyectoClasificableWhere({ clientId }),
     select: {
       id: true, name: true, serviceType: true, currentStage: true,
       createdAt: true, hubspotCreatedAt: true, hubspotDealId: true,

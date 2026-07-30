@@ -22,6 +22,7 @@ import { buildWatchdogContext } from "./watchdog-context";
 import { claimDateKey } from "@/lib/jobs/registry";
 import { crDateParts, WEEKDAYS_MON_FRI } from "@/lib/jobs/time";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
+import { proyectoDeCarteraWhere } from "@/lib/projects/scope";
 
 const AGENT_ID = "agent-cs-watchdog";
 const AGENT_SLUG = "cs-watchdog";
@@ -149,6 +150,18 @@ async function runForProjectInner(
     select: { id: true, clientId: true, healthStatusOverride: true, healthProposed: true },
   });
   if (!project) return { status: "skipped", reason: "no_project", projectId };
+
+  /* ¿Este proyecto es cartera de Customer Success?
+     El gate va ACÁ y no en cada disparador porque las tres vías (debounce, sweep, manual)
+     convergen en esta función: filtrando en una sola no se puede olvidar en otra. El sweep
+     ya venía filtrado —sale de loadPortfolio—, pero el debounce agrupa TimelineEvent sin
+     mirar nada y el manual recibe un projectId de la URL. Un desarrollo con cronograma le
+     generaría alertas de éxito del cliente a un CSE que no lo lleva. */
+  const esCartera = await prisma.project.findFirst({
+    where: proyectoDeCarteraWhere({ id: projectId }),
+    select: { id: true },
+  });
+  if (!esCartera) return { status: "skipped", reason: "no_es_cartera_cs", projectId };
 
   const agent = await prisma.agent.findUnique({ where: { id: AGENT_ID }, select: { systemPrompt: true } });
   if (!agent) return { status: "skipped", reason: "agent_not_seeded", projectId };

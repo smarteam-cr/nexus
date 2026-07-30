@@ -13,7 +13,8 @@ import { prisma } from "@/lib/db/prisma";
 import type { Prisma, ProjectHealth } from "@prisma/client";
 import { computeProjectSummary, type ProjectSummary, type SummaryLifecycleInput } from "./summary";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
-import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
+import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
+import { proyectoDeCarteraWhere } from "@/lib/projects/scope";
 import { loadLifecycleBatch, type ProjectLifecycle } from "@/lib/lifecycle";
 import {
   SETUP_CANVAS_SLUGS,
@@ -79,26 +80,16 @@ export async function loadPortfolio(
   clientWhere: Prisma.ClientWhereInput | null,
 ): Promise<PortfolioRow[]> {
   const projects = await prisma.project.findMany({
-    // Mostrar SOLO proyectos REALES y navegables — el MISMO criterio que el rail de proyectos
-    // del cliente (app/clients/[id]/page.tsx + layout.tsx), para que el panel nunca lleve a un
-    // proyecto que no aparece al entrar al cliente:
-    //   - status "active" → excluye los "inactive" (fantasmas/terminados que marca el sync de HubSpot).
-    //   - NO el sentinel de estrategia "__strategy__" (con OR para conservar los serviceType NULL,
-    //     que `{ not }` de Prisma descartaría).
-    //   - Regla HubSpot: clientes CON HubSpot solo muestran proyectos con hubspotServiceId
-    //     (deja afuera los stubs "Proyecto principal"/"Proyecto {id}" sin servicio); clientes SIN
-    //     HubSpot muestran cualquier proyecto activo.
-    where: {
-      status: "active",
-      OR: [{ serviceType: null }, { serviceType: { not: SENTINEL_SERVICE_TYPE } }],
-      AND: [
-        { OR: [
-          { client: { hubspotCompanyId: null, hubspotAccount: { is: null } } },
-          { hubspotServiceId: { not: null } },
-        ] },
-        ...(clientWhere ? [{ client: clientWhere }] : []),
-      ],
-    },
+    /* La CARTERA de Customer Success. El criterio ya no se escribe acá: vive en
+       lib/projects/scope.ts, que es de donde lo leen también cobranza, el rail de proyectos
+       y la pestaña inicial. Antes estaba copiado en los cuatro, y las copias ya habían
+       divergido (ver el bug de los NULL en el encabezado de scope.ts).
+
+       Sobre lo que ya filtraba, ahora deja afuera lo que NO es cartera de CS: los proyectos
+       de Desarrollo y de Sitios web (que se llevan aparte y no suman carga a un CSE) y todo
+       lo marcado como interno en HubSpot. Un pipeline que el registro no conoce entra igual
+       que siempre. */
+    where: proyectoDeCarteraWhere(clientWhere ? { client: clientWhere } : undefined),
     orderBy: { createdAt: "desc" },
     select: {
       id: true,

@@ -10,6 +10,8 @@ import WorkspaceShell from "@/components/clients/WorkspaceShell";
 // descontinuó.
 
 import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
+import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
+import { proyectoNavegableWhere } from "@/lib/projects/scope";
 
 // Obtiene el nombre de la empresa desde la cuenta del cliente o del sistema
 async function fetchHsCompanyName(
@@ -63,23 +65,21 @@ export default async function ClientLayout({
   if (!client) notFound();
 
   // ── Determinar pestaña inicial ──────────────────────────────────────────
-  // Regla: si el cliente tiene un único proyecto activo (no estrategia),
-  // entrar directamente a ese proyecto. Si tiene 0 o 2+, entrar a Estrategia.
-  // El filtro debe coincidir con `visibleProjects` de page.tsx para que el
-  // tab seleccionado realmente exista en el rail.
-  const hasHubspot = !!client.hubspotAccount || !!client.hubspotCompanyId;
+  // Regla: si el cliente tiene un único proyecto activo (no estrategia), entrar
+  // directamente a ese proyecto. Si tiene 0 o 2+, entrar a Estrategia.
+  //
+  // El filtro TIENE que coincidir con `visibleProjects` de page.tsx o el tab seleccionado
+  // no existe en el rail. No coincidía: acá se filtraba en SQL (`{ not: SENTINEL }`, que
+  // descarta los serviceType NULL) y allá en JavaScript (`!==`, que los conserva). Ahora
+  // los dos importan `esProyectoNavegable` / `PROYECTO_NAVEGABLE_WHERE`, que son el mismo
+  // criterio escrito una vez.
   const activeProjects = await prisma.project.findMany({
-    where: {
-      clientId: id,
-      status: "active",
-      serviceType: { not: "__strategy__" },
-      ...(hasHubspot ? { hubspotServiceId: { not: null } } : {}),
-    },
+    where: proyectoNavegableWhere({ clientId: id }),
     select: { id: true },
     orderBy: { createdAt: "asc" },
   });
   const initialProjectId =
-    activeProjects.length === 1 ? activeProjects[0].id : "__strategy__";
+    activeProjects.length === 1 ? activeProjects[0].id : SENTINEL_SERVICE_TYPE;
 
   // Nombre de empresa live desde HubSpot
   let hsCompanyName: string | null = null;

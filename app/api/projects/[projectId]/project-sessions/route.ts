@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { belongsToClient } from "@/lib/sessions/project-sources";
+import { proyectoClasificableWhere } from "@/lib/projects/scope";
 
 /**
  * GET/POST /api/projects/[projectId]/project-sessions
@@ -37,7 +38,7 @@ export async function GET(
 
   const [activeProjects, links] = await Promise.all([
     prisma.project.count({
-      where: { clientId, status: "active", serviceType: { not: "__strategy__" } },
+      where: proyectoClasificableWhere({ clientId }),
     }),
     prisma.sessionProject.findMany({
       where: { projectId },

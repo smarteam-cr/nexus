@@ -12,6 +12,7 @@ import {
 import { cachedSearchCompaniesByDomains } from "@/lib/hubspot/companies";
 import { getTeamMembers } from "@/lib/cache/team";
 import { getSessionCategories } from "@/lib/cache/session-categories";
+import { PROYECTO_CLASIFICABLE_WHERE } from "@/lib/projects/scope";
 
 // ISR: re-validamos cada 30s. Mutaciones críticas pueden llamar revalidatePath("/sessions")
 // si necesitan reflejarse inmediato.
@@ -80,7 +81,7 @@ export default async function SessionsPage() {
     // "sesión huérfana de proyecto pero el cliente tiene proyectos" vs
     // "cliente sin proyectos en general — no es culpa de la sesión").
     prisma.project.findMany({
-      where: { status: "active", serviceType: { not: "__strategy__" } },
+      where: PROYECTO_CLASIFICABLE_WHERE,
       select: { clientId: true },
       distinct: ["clientId"],
     }),

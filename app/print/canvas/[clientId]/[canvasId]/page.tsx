@@ -4,6 +4,7 @@ import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
 import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
+import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { kickoffHiddenKey } from "@/components/canvas/kickoff-landing-adapter";
 import PrintClient, { type CanvasPrintData } from "./PrintClient";
 
@@ -60,7 +61,7 @@ export default async function CanvasPrintPage({
       select: { id: true, serviceType: true },
       orderBy: { createdAt: "asc" },
     });
-    const nonStrategy = projects.find((p) => p.serviceType !== "__strategy__");
+    const nonStrategy = projects.find((p) => p.serviceType !== SENTINEL_SERVICE_TYPE);
     projectId = nonStrategy?.id ?? projects[0]?.id ?? null;
   }
   if (!projectId) notFound();

@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { syncProjectsForClient } from "@/lib/hubspot/sync-projects";
+import { guardAccessToClient } from "@/lib/auth/api-guards";
 
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  /* Este endpoint NO tenía guard: cualquiera con sesión podía dispararle el sync a
+     cualquier cliente y, de yapa, leerse en `debug` los NOMBRES de sus proyectos y de su
+     empresa en HubSpot. Además gasta llamadas a la API de HubSpot, así que sin gate también
+     era una palanca gratis para agotar la cuota. */
+  const guard = await guardAccessToClient(id);
+  if (guard instanceof NextResponse) return guard;
+
   // force=1 saltea el cooldown en memoria (botón "Reintentar" del usuario). La auto-sync del
   // montaje NO lo pasa → respeta el cooldown y no re-sincroniza en cada navegación.
   const force = _req.nextUrl.searchParams.get("force") === "1";

@@ -3,6 +3,7 @@ import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { readClientProcesos } from "@/lib/canvas/read-procesos";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
+import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 
 /**
  * GET /api/projects/[projectId]/procesos
@@ -61,7 +62,7 @@ export async function PATCH(
   });
   if (!project) return NextResponse.json({ error: "Proyecto no existe" }, { status: 404 });
   const strategy = await prisma.project.findFirst({
-    where: { clientId: project.clientId, serviceType: "__strategy__" },
+    where: { clientId: project.clientId, serviceType: SENTINEL_SERVICE_TYPE },
     select: { id: true },
   });
   const block = strategy

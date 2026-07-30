@@ -12,8 +12,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
-
-const SENTINEL = "__strategy__";
+import { SENTINEL_SERVICE_TYPE as SENTINEL } from "@/lib/projects/kind";
 const CANVAS_NAME = "Información del cliente";
 const CANVAS_SLUG = "client-info";
 const INFO_SECTIONS = [

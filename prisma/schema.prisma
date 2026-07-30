@@ -316,6 +316,28 @@ model Project {
   hubspotCreatedAt    DateTime? // hs_createdate del servicio en HubSpot
   hubspotPipelineName String? // Nombre del pipeline resuelto desde hs_pipeline
 
+  // ── De qué CLASE es este proyecto (lib/projects/kind.ts) ───────────────────
+  // El sync ya calculaba el id del pipeline y solo guardaba el nombre. Ahora se guarda
+  // el HECHO CRUDO y el registro lo traduce a decisiones (cobranza / cartera / publicable
+  // / ciclo de 8 etapas / vigilante). NO hay enum a propósito: los valores espejan
+  // pipelines que se crean en HubSpot cualquier tarde, y un enum no puede guardar uno
+  // desconocido. null = sin backfill o pipeline no declarado → comportamiento legacy.
+  hubspotPipelineId String? // hs_pipeline (826270797 = Customer Success CRM, 922785384 = Development, 922688687 = Sitios web)
+  // Propiedad `proyecto_interno` de HubSpot (booleancheckbox). Un proyecto de Smarteam
+  // para Smarteam: no se factura, no es cartera de nadie y no se le publica al cliente.
+  // NOT NULL DEFAULT false porque un checkbox sin marcar SIGNIFICA "no interno" — al
+  // aplicar la migración los 70 proyectos del portal estaban vacíos (ver el .sql).
+  proyectoInterno Boolean @default(false)
+  // El HECHO de la asociación proyecto↔proyecto en HubSpot (typeId 1254), en ids de
+  // HubSpot. Se guarda SIEMPRE, aunque el otro proyecto todavía no exista en Nexus:
+  // así el orden de llegada deja de importar.
+  hubspotRelatedProjectIds String[] @default([])
+  // La RESOLUCIÓN de lo anterior: el Project.id del hermano de Customer Success, si lo
+  // hay. Recalculado en cada sync (mismo patrón que hubspotPipelineStageLabel). Escalar
+  // sin FK a propósito: un id huérfano degrada a "proyecto aparte", que es la respuesta
+  // correcta, y no rompe un borrado.
+  hermanoCsProjectId String?
+
   // D.2 — etapa actual del pipeline de Customer Success (híbrido: materializada acá
   // por sync-projects y revalidada en vivo al disparar la regeneración del cronograma).
   // El label es lo que el agente de avance razona (ancla #1); el id permite comparar.

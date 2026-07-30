@@ -10,6 +10,8 @@ import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
 import { extractTitleTerms } from "@/lib/utils/matching";
 import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
+import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
+import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { updateCanvasAsync } from "@/lib/canvas/update-agent";
 import { getOutputFormatInstructions, getBlockOutputFormatInstructions } from "@/lib/canvas/agent-output-schema";
@@ -193,9 +195,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // SENTINEL "__strategy__", que NO es un id de Project real → FK violation en
   // agentRun.create (AgentRun_projectId_fkey). Lo resolvemos al proyecto __strategy__
   // real del cliente, o null si no existe (projectId es nullable).
-  if (bodyProjectId === "__strategy__") {
+  if (bodyProjectId === SENTINEL_SERVICE_TYPE) {
     const strat = await prisma.project.findFirst({
-      where: { clientId, serviceType: "__strategy__" },
+      where: { clientId, serviceType: SENTINEL_SERVICE_TYPE },
       select: { id: true },
     });
     bodyProjectId = strat?.id ?? null;
@@ -763,7 +765,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       let isForeignProjectDeal: (dealName: string) => boolean = () => false;
       if (agent.agentGroup === "handoff" && bodyProjectId) {
         const activeProjects = await prisma.project.findMany({
-          where: { clientId, status: "active", serviceType: { not: "__strategy__" } },
+          where: proyectoClasificableWhere({ clientId }),
           select: { id: true, name: true },
         });
         const norm = (s: string) =>

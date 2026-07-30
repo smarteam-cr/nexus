@@ -8,8 +8,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
-
-const SENTINEL = "__strategy__";
+import { SENTINEL_SERVICE_TYPE as SENTINEL } from "@/lib/projects/kind";
 
 export interface ProcesoFlowchart {
   id: string;

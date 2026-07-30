@@ -7,6 +7,7 @@ import ClientSharing from "@/components/clients/ClientSharing";
 import ClientClassification from "@/components/clients/ClientClassification";
 import type { ClientKind } from "@prisma/client";
 import DeleteProjectButton from "@/components/clients/DeleteProjectButton";
+import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 
 interface HubspotAccount {
   id: string;
@@ -85,7 +86,7 @@ export default function ClientSettingsPage() {
       const res = await fetch(`/api/clients/${clientId}/projects`);
       if (!res.ok) return;
       const data: { projects: ProjectRow[] } = await res.json();
-      setProjects((data.projects ?? []).filter((p) => p.serviceType !== "__strategy__"));
+      setProjects((data.projects ?? []).filter((p) => p.serviceType !== SENTINEL_SERVICE_TYPE));
     } catch { /* ignore */ }
   };
 

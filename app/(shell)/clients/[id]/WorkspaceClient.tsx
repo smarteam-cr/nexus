@@ -8,8 +8,13 @@ import { invalidateGps } from "@/lib/clients/gps-cache";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
+import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 
-const STRATEGY_TAB_ID = "__strategy__";
+// El id del tab de "Información del cliente" ES el sentinel: el layout lo devuelve como
+// `initialProjectId` cuando el cliente no tiene un único proyecto. Importado y no escrito
+// a mano — este archivo es un componente de CLIENTE y por eso antes no podía hacerlo (la
+// constante vivía en un módulo que importa Prisma).
+const STRATEGY_TAB_ID = SENTINEL_SERVICE_TYPE;
 const PROCESOS_TAB_ID = "__procesos__";
 
 interface ProjectSummary {

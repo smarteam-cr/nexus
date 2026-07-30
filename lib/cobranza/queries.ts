@@ -7,7 +7,7 @@
  * defensa sistemática contra el bug silencioso de "Decimal no es serializable".
  */
 import { prisma } from "@/lib/db/prisma";
-import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
+import { proyectoClasificableWhere, proyectoFacturableWhere } from "@/lib/projects/scope";
 import {
   computeCajaNeta,
   computeRiesgoPago,
@@ -211,25 +211,20 @@ function serializeCobro(c: CobroRow): CobroDTO {
 // ── Base: clientes con proyecto REAL (filtro canónico del Portfolio) ────────────
 
 /**
- * Devuelve los clientId de clientes con al menos un proyecto REAL y navegable —
- * criterio copiado de lib/portfolio/load.ts (status active + no-sentinel + regla
- * HubSpot) + CS_CLIENT_WHERE. Es el universo v1 del panel de cartera.
+ * Devuelve los clientId de clientes con al menos un proyecto FACTURABLE.
+ *
+ * El criterio ya no está copiado de lib/portfolio/load.ts: los dos importan el mismo
+ * fragmento de lib/projects/scope.ts. `CS_CLIENT_WHERE` se suma acá y NO se mete en el
+ * fragmento porque es una regla del CLIENTE (qué empresa cuenta como cartera), no del
+ * proyecto — y el fragmento tiene que servir también donde el cliente ya viene filtrado.
+ *
+ * Qué deja afuera además de lo de siempre: los proyectos marcados internos y los
+ * desarrollos/sitios que son HERMANOS de una implementación (ahí cobra el hermano, no
+ * ellos). Los que van solos —el caso Judesur— siguen entrando igual.
  */
 async function clientIdsConProyectoReal(): Promise<Map<string, { name: string }>> {
   const projects = await prisma.project.findMany({
-    where: {
-      status: "active",
-      OR: [{ serviceType: null }, { serviceType: { not: SENTINEL_SERVICE_TYPE } }],
-      AND: [
-        {
-          OR: [
-            { client: { hubspotCompanyId: null, hubspotAccount: { is: null } } },
-            { hubspotServiceId: { not: null } },
-          ],
-        },
-        { client: { ...CS_CLIENT_WHERE } },
-      ],
-    },
+    where: proyectoFacturableWhere({ client: { ...CS_CLIENT_WHERE } }),
     select: { clientId: true, client: { select: { name: true } } },
   });
   const map = new Map<string, { name: string }>();
@@ -379,13 +374,14 @@ export async function getCuentaDetail(cuentaId: string): Promise<CuentaDetailDTO
   });
   if (!cuenta) return null;
 
-  // Proyectos reales del cliente para el select de ServicioForm (mismo criterio del panel).
+  /* Proyectos del cliente para el select de ServicioForm. Usa el criterio ANCHO
+     (clasificable), no el facturable del panel: es a propósito. Acá una persona está
+     eligiendo a mano a qué proyecto colgarle un servicio, y angostar la lista le sacaría
+     opciones sin explicarle por qué. Si mañana se quiere que el picker avise "este es
+     hermano de una implementación, cobra el otro", eso es un aviso en la UI, no un filtro
+     silencioso — y es tema de la tanda de cobranza. */
   const proyectos = await prisma.project.findMany({
-    where: {
-      clientId: cuenta.clientId,
-      status: "active",
-      OR: [{ serviceType: null }, { serviceType: { not: SENTINEL_SERVICE_TYPE } }],
-    },
+    where: proyectoClasificableWhere({ clientId: cuenta.clientId }),
     select: { id: true, name: true, timeline: { select: { anchorStartDate: true } } },
     orderBy: { createdAt: "desc" },
   });

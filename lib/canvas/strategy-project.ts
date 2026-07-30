@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
+import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 
 // Secciones predefinidas del canvas "Información del cliente".
 // (Ex "canvas de estrategia" — quitamos handoff_ventas y perfil_cliente.)
@@ -12,10 +13,11 @@ const CLIENT_INFO_SECTIONS = [
   { key: "procesos",           label: "Procesos" }, // migrado del ex-canvas Resumen
 ];
 
-// Nombre interno del project — se mantiene el sentinel "__strategy__" como
-// serviceType para no romper queries en otros archivos que ya filtran por él
-// (switcher de proyectos, layout del cliente, y el panel de cartera).
-export const SENTINEL_SERVICE_TYPE = "__strategy__";
+// El sentinel se MUDÓ a lib/projects/kind.ts, que es puro y client-safe. Vivía acá, en un
+// módulo que importa Prisma, y por eso siete lugares lo escribían a mano: dos de ellos son
+// componentes de cliente y literalmente no podían importarlo. Se reexporta para no romper
+// los imports viejos; lo nuevo importa del registro.
+export { SENTINEL_SERVICE_TYPE };
 const PROJECT_NAME = "Información del cliente";
 const CANVAS_NAME = "Información del cliente";
 // IDENTIDAD de la pieza (lib/pieces/registry.ts). El nombre es solo el rótulo.

@@ -1,6 +1,7 @@
 import { requireConsultantSession } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
+import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import {
   categorizeSession,
   buildInternalDomainsSet,
@@ -149,11 +150,7 @@ export default async function SessionPage({
   // 4. Proyectos del cliente matched (para el selector de override manual)
   const availableProjects = matchedClient
     ? await prisma.project.findMany({
-        where: {
-          clientId: matchedClient.id,
-          status: "active",
-          serviceType: { not: "__strategy__" },
-        },
+        where: proyectoClasificableWhere({ clientId: matchedClient.id }),
         select: { id: true, name: true, serviceType: true },
         orderBy: { createdAt: "desc" },
       })
