@@ -112,9 +112,26 @@ export async function buildAccountBriefContext(clientId: string): Promise<Accoun
   for (const pr of data.projects) {
     const s = pr.summary;
 
-    // Ciclo de vida (lib/lifecycle): en qué etapa está el proyecto y por qué.
+    /* La ETAPA del proyecto. Dos ramas desde que HubSpot manda la de las implementaciones
+       (2026-07-30): la del pipeline —el equipo mueve la tarjeta allá y no hay inferencia que
+       explicar— y la del ciclo de 8 etapas de Nexus, que además dice POR QUÉ.
+       El `switch` está a propósito y no un campo aplanado: si mañana aparece una tercera
+       fuente, TypeScript obliga a decidir qué se le cuenta al agente en vez de mandarle un
+       texto a medio armar. */
     const lc = pr.lifecycle;
-    if (lc) {
+    if (lc?.fuente === "pipeline") {
+      const pos = lc.position ? ` (${lc.position.index}/${lc.position.total})` : "";
+      addSource(
+        {
+          kind: "lifecycle",
+          id: pr.projectId,
+          label: `Etapa · ${pr.projectName}`,
+          date: lc.stageSyncedAt?.toISOString() ?? null,
+        },
+        `Etapa: ${lc.label}${pos} del pipeline ${lc.pipeline.label} de HubSpot. La mueve el ` +
+          `equipo en HubSpot; Nexus la espeja.`,
+      );
+    } else if (lc?.defined) {
       const lastGateAt = lc.gates.length
         ? lc.gates.reduce((max, g) => (g.markedAt > max ? g.markedAt : max), lc.gates[0].markedAt)
         : null;

@@ -14,6 +14,9 @@ import HealthProposalChip from "@/components/lifecycle/HealthProposalChip";
 import RecurrenteBadge from "@/components/lifecycle/RecurrenteBadge";
 import { PRIORITY_META, HS_STATUS_LABEL } from "@/components/cs/dashboard/chart-theme";
 import type { PortfolioRow } from "@/lib/portfolio/load";
+// PURO y client-safe a propósito: `lib/portfolio/load.ts` importa Prisma, así que de ahí
+// solo puede venir el TIPO (que se borra en compilación), nunca una función.
+import { etapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import type { AccountProjectOps } from "@/lib/cs/load-account";
 
 const HEALTH_META: Record<string, { label: string; cls: string }> = {
@@ -41,6 +44,7 @@ export default function ActiveProjectsSection({
         const prio = ops?.hubspotPriority ? PRIORITY_META[ops.hubspotPriority] : null;
         const blocked = ops?.hubspotStatus === "blocked" || /bloquead/i.test(p.stageLabel ?? "");
         const pct = Math.round(p.summary.progress.pct * 100);
+        const etapa = etapaParaLaUI(p.lifecycle);
         return (
           <div key={p.projectId} className="bg-surface border border-line rounded-xl p-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -51,14 +55,19 @@ export default function ActiveProjectsSection({
               {p.summary.health.source === "override" && (
                 <span className="text-[9px] text-fg-muted uppercase tracking-wide" title={p.healthOverrideReason ?? undefined}>curada</span>
               )}
-              {/* Ciclo de vida: solo con handoff generado. Sin él → aviso, sin etapa. */}
-              {p.lifecycle?.defined && p.summary.stage ? (
+              {/* La ETAPA, venga del ciclo de Nexus o del pipeline de HubSpot: `etapaParaLaUI`
+                  normaliza las dos ramas para que esta pantalla no sepa de pipelines.
+                  Devuelve null cuando no hay etapa que mostrar — hoy, un proyecto del ciclo
+                  de CS sin handoff generado. */}
+              {etapa ? (
                 <StageBadge
-                  stage={p.summary.stage.effective}
-                  cycle={p.lifecycle.cycle}
-                  source={p.summary.stage.source}
-                  reasons={p.lifecycle.reasons}
-                  overrideReason={p.lifecycle.override?.reason}
+                  stage={etapa.id}
+                  label={etapa.label}
+                  order={etapa.linea}
+                  stepperTitle={etapa.tituloDeLaLinea}
+                  source={etapa.curada ? "override" : "inferred"}
+                  reasons={etapa.razones}
+                  overrideReason={etapa.curadaPorque}
                 />
               ) : (
                 <Link
@@ -101,8 +110,9 @@ export default function ActiveProjectsSection({
                 </span>
                 {pct}% · {p.summary.progress.tasksDone}/{p.summary.progress.tasksTotal} tareas
               </span>
-              {/* Alarmas de cronograma SOLO cuando aplican (etapa >= configuración técnica);
-                  antes, el cronograma es tentativo y lo que se muestra son las alarmas de etapa. */}
+              {/* Alarmas de cronograma SOLO cuando aplican. Con la etapa mandada por HubSpot,
+                  el criterio es la LÍNEA BASE publicada: hasta que alguien la publica, las
+                  fechas son tentativas y no hay atraso que reclamar. */}
               {p.summary.scheduleAlarmsActive ? (
                 <>
                   {p.summary.overduePhases > 0 && (
@@ -114,10 +124,10 @@ export default function ActiveProjectsSection({
                   {p.summary.overdueTasks > 0 && <span className="text-amber-600">{p.summary.overdueTasks} tareas vencidas</span>}
                   {p.summary.stalled && <span className="text-amber-600">sin actividad {p.summary.daysSinceActivity}d</span>}
                 </>
-              ) : p.lifecycle?.defined ? (
-                // Con handoff pero etapa temprana: el cronograma aún no es promesa.
-                <span className="text-fg-muted">cronograma tentativo (sin consensuar)</span>
-              ) : null /* sin handoff → el badge "Handoff sin generar" ya lo comunica */}
+              ) : etapa ? (
+                // Hay etapa, pero el cronograma todavía no se subió: aún no es una promesa.
+                <span className="text-fg-muted">cronograma sin línea base</span>
+              ) : null /* sin etapa → el badge de al lado ya lo comunica */}
               {p.summary.stageAlarms.map((a) => (
                 <span key={a.key} className="text-amber-600">{a.label}</span>
               ))}

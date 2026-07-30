@@ -35,6 +35,15 @@ const WEB = "922688687";
 /** El pipeline que HubSpot trae de fábrica y que a propósito NO está declarado. */
 const DESCONOCIDO = "default-onboarding-pipeline";
 
+/**
+ * La fila LEGACY: un pipeline que la tabla no declara. Es lo único que existía antes de la
+ * tanda de pipelines y se conserva byte por byte.
+ *
+ * ⚠ Ya NO es la misma que la de Customer Success. Desde 2026-07-30 una implementación no
+ * corre el ciclo de 8 etapas —su etapa la manda HubSpot— y un pipeline desconocido sí, porque
+ * sin pipeline no hay etapas del portal que mostrar. Reusar esta constante para la fila de CS
+ * volvería a fundir los dos casos.
+ */
 const TODO: ProjectCapabilities = {
   cobranza: true,
   carteraCs: true,
@@ -84,13 +93,14 @@ describe("LA TABLA — (pipeline × interno × hermano) → capacidades", () => 
         cobranza: true,
         carteraCs: true,
         publicable: true,
-        cicloOchoEtapas: true,
+        // ← 2026-07-30: su etapa la manda HubSpot, que ahora tiene las mismas 8 etapas.
+        cicloOchoEtapas: false,
         vigilante: true,
         pestana: true,
       },
     },
     {
-      caso: "Customer Success, INTERNO — SmartAgro: misma metodología, sin plata ni cartera",
+      caso: "Customer Success, INTERNO — SmartAgro: sin plata ni cartera, la etapa igual la manda HubSpot",
       hubspotPipelineId: CS,
       interno: true,
       tieneHermanoCs: false,
@@ -98,7 +108,7 @@ describe("LA TABLA — (pipeline × interno × hermano) → capacidades", () => 
         cobranza: false,
         carteraCs: false,
         publicable: false,
-        cicloOchoEtapas: true, // ← conserva el ciclo: la metodología es la misma
+        cicloOchoEtapas: false,
         vigilante: false,
         pestana: true,
       },
@@ -192,7 +202,17 @@ describe("LA TABLA — (pipeline × interno × hermano) → capacidades", () => 
       hubspotPipelineId: CS,
       interno: false,
       tieneHermanoCs: true,
-      espera: TODO, // el hermano no lo toca: `canBeSiblingOf` de CS está vacío
+      // Idéntico a la fila de CS sin hermano: `canBeSiblingOf` de CS está vacío, así que la
+      // columna no lo toca. Lo que NO es igual es la fila legacy (`TODO`), que sí corre el
+      // ciclo de 8 etapas — por eso ya no se puede reusar acá.
+      espera: {
+        cobranza: true,
+        carteraCs: true,
+        publicable: true,
+        cicloOchoEtapas: false,
+        vigilante: true,
+        pestana: true,
+      },
     },
   ];
 
@@ -456,8 +476,8 @@ describe("LAS ETAPAS — transcritas del portal, no derivadas", () => {
 
 describe("fuenteDelCiclo — quién manda la etapa del proyecto", () => {
   const filas: Array<{ caso: string; pid: string | null; interno: boolean; hermano: boolean; espera: string }> = [
-    { caso: "Customer Success → el ciclo de 8 etapas de Nexus", pid: CS, interno: false, hermano: false, espera: "customer-success" },
-    { caso: "Customer Success INTERNO → sigue corriendo el ciclo (misma metodología)", pid: CS, interno: true, hermano: false, espera: "customer-success" },
+    { caso: "Customer Success → su pipeline de HubSpot (desde 2026-07-30)", pid: CS, interno: false, hermano: false, espera: "pipeline" },
+    { caso: "Customer Success INTERNO → su pipeline igual: interno no cambia quién manda la etapa", pid: CS, interno: true, hermano: false, espera: "pipeline" },
     { caso: "Development → su propio pipeline de HubSpot", pid: DEV, interno: false, hermano: false, espera: "pipeline" },
     { caso: "Development hermano → su propio pipeline igual", pid: DEV, interno: false, hermano: true, espera: "pipeline" },
     { caso: "Development INTERNO → su propio pipeline igual", pid: DEV, interno: true, hermano: false, espera: "pipeline" },

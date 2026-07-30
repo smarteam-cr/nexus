@@ -168,14 +168,46 @@ export interface PipelineDef {
   base: ProjectCapabilities;
 }
 
-/** La fila legacy: lo único que existía antes de esta tanda. También es la fila de "no sé". */
-const BASE_CUSTOMER_SUCCESS: ProjectCapabilities = {
+/**
+ * La fila de "NO SÉ QUÉ ES ESTO": un pipeline que la tabla no declara, o un proyecto que
+ * todavía no pasó por el backfill. Es lo único que existía antes de la tanda de pipelines, y
+ * se conserva byte por byte — incluido `cicloOchoEtapas: true`.
+ *
+ * Sigue en `true` A PROPÓSITO aunque el pipeline de Customer Success ya no lo corra: sin
+ * pipeline no hay etapas de HubSpot que mostrar, así que el ciclo de Nexus es lo único que
+ * queda. Es lo que hace que un pipeline nuevo que nadie declaró siga comportándose como
+ * siempre en vez de quedarse sin ciclo de vida.
+ */
+const BASE_LEGACY: ProjectCapabilities = {
   cobranza: true,
   carteraCs: true,
   publicable: true,
   cicloOchoEtapas: true,
   vigilante: true,
   pestana: true,
+};
+
+/**
+ * La implementación de Customer Success. Igual que la legacy salvo por una celda:
+ *
+ * ── `cicloOchoEtapas: false` desde 2026-07-30 ────────────────────────────────
+ * El pipeline de CS en HubSpot pasó a tener EXACTAMENTE las 8 etapas del ciclo de Nexus
+ * (Handoff → Exploración → Diagnóstico → Planificación → Configuración técnica → Adopción →
+ * Validación de uso → Entrega), y la decisión de negocio fue que mande HubSpot, igual que en
+ * los desarrollos: el CSE mueve la tarjeta allá y Nexus la espeja.
+ *
+ * Consecuencias, todas derivadas de esta sola celda: las compuertas de salida, el override de
+ * etapa y la modalidad de adopción responden 409; `getProjectLifecycle` deja de materializar
+ * `USO_VALIDADO`; y las alarmas POR ETAPA se apagan hasta que existan las nuevas, basadas en
+ * lo que se habla en las sesiones (pendiente del roadmap).
+ *
+ * ⚠ El motor de 8 etapas NO se borró: `lib/lifecycle/stage-engine.ts`, las compuertas y los
+ * overrides guardados quedan en pie, sin consumidor, para evaluarlos con las alarmas nuevas.
+ * Volver es cambiar esta celda.
+ */
+const BASE_CUSTOMER_SUCCESS: ProjectCapabilities = {
+  ...BASE_LEGACY,
+  cicloOchoEtapas: false,
 };
 
 /**
@@ -207,7 +239,7 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     key: "customer-success",
     hubspotPipelineId: "826270797",
     label: "Customer Success CRM",
-    help: "La implementación que compró el cliente. Es la cartera: se factura, la lleva un CSE y corre el ciclo de 8 etapas.",
+    help: "La implementación que compró el cliente. Es la cartera: se factura y la lleva un CSE. Su etapa la mueve el equipo en HubSpot.",
     /* Transcritas del portal el 2026-07-30 a las 16:17 UTC, cuando el pipeline se rehízo
        para espejar el ciclo de Nexus. Los 4 ids nuevos (Exploración, Diagnóstico,
        Planificación, Validación de uso) nacieron ese día; los 7 viejos conservan su id y
@@ -392,7 +424,7 @@ export interface ProjectFacts {
 export function projectCapabilities(facts: ProjectFacts): ProjectCapabilities {
   const def = resolvePipeline(facts.hubspotPipelineId);
   // Pipeline desconocido → la fila legacy. Es lo que hace invisible el deploy.
-  const caps: ProjectCapabilities = { ...(def?.base ?? BASE_CUSTOMER_SUCCESS) };
+  const caps: ProjectCapabilities = { ...(def?.base ?? BASE_LEGACY) };
 
   // El hermano solo apaga la cobranza, y solo para los pipelines que declararon poder serlo.
   if (facts.tieneHermanoCs && def?.canBeSiblingOf.includes("customer-success")) {

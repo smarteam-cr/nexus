@@ -15,7 +15,7 @@ import { computeProjectSummary, type ProjectSummary, type SummaryLifecycleInput 
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { proyectoDeCarteraWhere } from "@/lib/projects/scope";
-import { loadLifecycleBatch, type LifecycleCs, type ProjectLifecycle } from "@/lib/lifecycle";
+import { loadLifecycleBatch, type ProjectLifecycle } from "@/lib/lifecycle";
 import {
   SETUP_CANVAS_SLUGS,
   blockCountsForStep,
@@ -49,13 +49,15 @@ export interface PortfolioRow {
   setup: SetupSignals;
   /**
    * Ciclo de vida (lib/lifecycle) — la etapa efectiva viaja en summary.stage; acá va el
-   * detalle para la UI (stepper/tooltip/curación) y la propuesta de riesgo pendiente.
+   * detalle para la UI (stepper/tooltip) y la propuesta de riesgo pendiente.
    *
-   * `LifecycleCs` y no la unión: la cartera es, por definición, lo que corre el ciclo de 8
-   * etapas (`proyectoDeCarteraWhere` ya deja afuera Desarrollo, Sitios web e internos). El
-   * tipo lo dice en voz alta, y así la UI del panel puede leer `gates` sin narrowing.
+   * La UNIÓN, no `LifecycleCs`. Hasta el 2026-07-30 la cartera era toda de proyectos que
+   * corrían el ciclo de 8 etapas de Nexus, así que el tipo estrecho era honesto. Desde que
+   * la etapa de una implementación la manda HubSpot, la cartera entera es de la rama
+   * `pipeline` — con el tipo viejo, `lifecycle` quedaba en `null` para TODOS y el dashboard
+   * perdía su chip de etapa sin que nada fallara.
    */
-  lifecycle: LifecycleCs | null;
+  lifecycle: ProjectLifecycle | null;
   healthProposed: ProjectHealth | null;
   healthProposedReason: string | null;
   healthProposedAt: string | null;
@@ -97,17 +99,9 @@ export function toSummaryLifecycle(lc: ProjectLifecycle | null): SummaryLifecycl
   };
 }
 
-/**
- * El ciclo de vida de un proyecto DE CARTERA. Devuelve `null` para cualquier otro — no
- * porque no tenga ciclo, sino porque el suyo no es éste.
- *
- * `loadPortfolio` filtra por `proyectoDeCarteraWhere`, así que en la práctica nunca ve otra
- * cosa; el narrowing existe para que ese hecho esté escrito una vez y el tipo lo respalde,
- * en vez de sostenerse sobre un `as` o sobre la memoria de quien lea después.
- */
-function soloCicloDeCs(lc: ProjectLifecycle | null | undefined): LifecycleCs | null {
-  return lc && lc.fuente === "customer-success" ? lc : null;
-}
+/* La ETAPA lista para pintar vive en `lib/lifecycle/etapa-ui.ts`, PURO y client-safe: la
+   consume un componente de cliente y este archivo importa Prisma. Un import de valor desde
+   acá arrastra el driver de Postgres al bundle del navegador. */
 
 export async function loadPortfolio(
   clientWhere: Prisma.ClientWhereInput | null,
@@ -316,7 +310,7 @@ export async function loadPortfolio(
         hasPhases: (tl?.phases?.length ?? 0) > 0,
         hasProcesos: clientsWithProcesos.has(p.clientId),
       }),
-      lifecycle: soloCicloDeCs(lifecycleByProject.get(p.id)),
+      lifecycle: lifecycleByProject.get(p.id) ?? null,
       healthProposed: p.healthProposed,
       healthProposedReason: p.healthProposedReason,
       healthProposedAt: p.healthProposedAt?.toISOString() ?? null,

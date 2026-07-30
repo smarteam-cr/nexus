@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { TimelineEvent, CsAlert } from "@prisma/client";
 import { computeProjectSummary, type ProjectSummary } from "@/lib/portfolio/summary";
 import { toSummaryLifecycle } from "@/lib/portfolio/load";
-import { getProjectLifecycle, type LifecycleCs } from "@/lib/lifecycle";
+import { getProjectLifecycle, type ProjectLifecycle } from "@/lib/lifecycle";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 import { computePhaseRanges, addWeeks } from "@/lib/timeline/weeks";
 
@@ -23,14 +23,13 @@ export interface WatchdogContext {
   /** Resumen determinístico (para el pre-filtro del sweep y la evidencia). */
   summary: ProjectSummary | null;
   /**
-   * Ciclo de vida (etapa efectiva + propuesta de riesgo pendiente) — insumo del runner.
+   * La etapa del proyecto, venga del pipeline de HubSpot o del ciclo de 8 etapas de Nexus.
    *
-   * `LifecycleCs` y no la unión: el watchdog es de Éxito del cliente y solo corre sobre la
-   * cartera (`PROYECTO_DE_CARTERA_WHERE` filtra el origen de la cola). Si algún día un
-   * proyecto de otro pipeline llegara igual, contribuye `null` — defensa en profundidad, no
-   * un bloque de ciclo de vida traducido a un vocabulario que no es el suyo.
+   * La UNIÓN desde que la etapa de una implementación la manda HubSpot (2026-07-30): con el
+   * tipo estrecho de antes, la cartera entera caía en `null` y el prompt del agente perdía
+   * su bloque de etapa sin que nada fallara.
    */
-  lifecycle: LifecycleCs | null;
+  lifecycle: ProjectLifecycle | null;
 }
 
 function fmtDate(d: Date | null | undefined): string {
@@ -126,9 +125,8 @@ export async function buildWatchdogContext(
   });
   if (!project) return null;
 
-  // ── Ciclo de vida (etapa efectiva) — modula qué alarmas aplican ─────────────
-  const lifecycleCrudo = await getProjectLifecycle(projectId);
-  const lifecycle = lifecycleCrudo?.fuente === "customer-success" ? lifecycleCrudo : null;
+  // ── Etapa del proyecto — modula qué alarmas aplican ────────────────────────
+  const lifecycle = await getProjectLifecycle(projectId);
 
   // ── Resumen determinístico de salud (reuso del motor del panel) ─────────────
   const tl = project.timeline;
@@ -163,10 +161,7 @@ export async function buildWatchdogContext(
           : null,
         lastProgressAt: tl.changes?.[0]?.createdAt ?? null,
         healthOverride: project.healthStatusOverride,
-        // El CRUDO, no el filtrado: si llegara un proyecto de otro pipeline, `toSummary`
-        // ya sabe apagarle las alarmas de CS. Pasarle el `null` del filtro lo mandaría al
-        // camino legacy, que las enciende TODAS — justo al revés.
-        lifecycle: toSummaryLifecycle(lifecycleCrudo),
+        lifecycle: toSummaryLifecycle(lifecycle),
         now,
       })
     : null;
@@ -366,20 +361,33 @@ export async function buildWatchdogContext(
         .join("\n")
     : "(sin datos de partner — scope no autorizado o cuenta sin match; omití las señales de uso/licencias)";
 
-  // ── Etapa del ciclo de vida (Nexus) — gobierna qué alarmas aplican ──────────
-  const lifecycleBlock = lifecycle
-    ? [
-        `- Etapa: ${lifecycle.label} (${lifecycle.position.index}/${lifecycle.position.total} del ciclo ${lifecycle.cycle === "short" ? "corto" : "completo"}) · fuente: ${lifecycle.source === "override" ? `curada por humano${lifecycle.override?.reason ? ` — "${lifecycle.override.reason}"` : ""}` : "inferida"}`,
-        `- Por qué: ${lifecycle.reasons.join(" · ")}`,
-        `- Alarmas de cronograma vencido: ${summary?.scheduleAlarmsActive !== false ? "APLICAN (el cronograma está consensuado o la etapa es de ejecución)" : "NO APLICAN AÚN — el cronograma es tentativo (sin consensuar). NO emitas TIMELINE_OVERDUE; las señales de etapa temprana van como STAGE_STALLED."}`,
+  /* ── La ETAPA — gobierna qué alarmas aplican ────────────────────────────────
+     Dos ramas desde que HubSpot manda la etapa de las implementaciones. La línea de las
+     alarmas es COMÚN a las dos y se arma una sola vez: es la instrucción más importante del
+     bloque —le dice al agente si puede emitir TIMELINE_OVERDUE— y tenerla escrita dos veces
+     era pedirle que se desincronizara. */
+  const lineaDeAlarmas =
+    `- Alarmas de cronograma vencido: ` +
+    (summary?.scheduleAlarmsActive !== false
+      ? "APLICAN (el cronograma tiene línea base publicada: alguien se comprometió con esas fechas)"
+      : "NO APLICAN AÚN — el cronograma no tiene línea base publicada, así que las fechas son " +
+        "tentativas. NO emitas TIMELINE_OVERDUE.");
+
+  const lifecycleBlock = !lifecycle
+    ? "(sin datos de etapa)"
+    : [
+        lifecycle.fuente === "pipeline"
+          ? `- Etapa: ${lifecycle.label}${lifecycle.position ? ` (${lifecycle.position.index}/${lifecycle.position.total})` : ""} del pipeline ${lifecycle.pipeline.label} de HubSpot. La mueve el equipo allá; Nexus la espeja, no la infiere.`
+          : `- Etapa: ${lifecycle.label} (${lifecycle.position.index}/${lifecycle.position.total} del ciclo ${lifecycle.cycle === "short" ? "corto" : "completo"}) · fuente: ${lifecycle.source === "override" ? `curada por humano${lifecycle.override?.reason ? ` — "${lifecycle.override.reason}"` : ""}` : "inferida"}`,
+        lifecycle.fuente === "customer-success" ? `- Por qué: ${lifecycle.reasons.join(" · ")}` : null,
+        lineaDeAlarmas,
         summary?.stageAlarms.length
           ? `- Alarmas de etapa temprana activas: ${summary.stageAlarms.map((a) => a.label).join(" · ")}`
           : null,
         `- EN RIESGO PROPUESTO pendiente de confirmación del CSE: ${project.healthProposed ? `SÍ (desde ${fmtDate(project.healthProposedAt)}) — no dupliques el hecho` : "no"}`,
       ]
         .filter(Boolean)
-        .join("\n")
-    : "(sin datos de ciclo de vida)";
+        .join("\n");
 
   const serialized = [
     `PROYECTO: ${project.name} (projectId=${project.id})`,
@@ -387,7 +395,7 @@ export async function buildWatchdogContext(
     project.serviceType ? `SERVICIO: ${project.serviceType}` : null,
     `ETAPA EN PIPELINE CS DE HUBSPOT: ${project.hubspotPipelineStageLabel ?? "(sin etapa)"}`,
     "",
-    "=== ETAPA DEL CICLO DE VIDA (Nexus — fuente de verdad de qué alarmas aplican) ===",
+    "=== ETAPA DEL PROYECTO (fuente de verdad de qué alarmas aplican) ===",
     lifecycleBlock,
     "",
     "=== OPERATIVA DEL PROYECTO EN HUBSPOT (status/prioridad/bloqueo/adopción) ===",

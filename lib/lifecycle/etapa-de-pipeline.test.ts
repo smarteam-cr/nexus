@@ -144,6 +144,58 @@ describe("el DTO del ciclo de vida se bifurca, no se unifica", () => {
   });
 });
 
+describe("el motor de 8 etapas queda PARQUEADO, no borrado", () => {
+  /* Decisión de negocio del 2026-07-30: la etapa de una implementación la manda HubSpot, y
+     las alarmas por etapa se apagan hasta que existan las nuevas —las que van a mirar lo que
+     se habló en las sesiones—. Recién ahí se decide si el motor viejo se reusa en algún lado
+     o se retira.
+     Hasta entonces el código se queda ENTERO y sin consumidor, que es un estado incómodo y
+     por eso fácil de "limpiar" sin querer. Estos asserts son el recordatorio. */
+
+  it("el motor sigue existiendo y exportando lo suyo", () => {
+    const engine = codigoDe("lib/lifecycle/stage-engine.ts");
+    for (const exportado of [
+      "export function inferLifecycleStage",
+      "export function resolveLifecycleStage",
+      "export const FULL_CYCLE_ORDER",
+      "export const STAGE_LABEL_ES",
+    ]) {
+      expect(engine, `stage-engine.ts perdió ${exportado}`).toContain(exportado);
+    }
+  });
+
+  it("la rama de Customer Success del loader sigue entera", () => {
+    /* Compuertas, override, modalidad de adopción y UUS: si alguien las borra "porque nadie
+       las lee", volver es reescribirlas en vez de cambiar una celda de la tabla. */
+    const loader = codigoDe("lib/lifecycle/load.ts");
+    for (const campo of ["gates:", "override:", "adoptionMode:", "uus:", "inferLifecycleStage("]) {
+      expect(loader, `el loader perdió ${campo}`).toContain(campo);
+    }
+  });
+
+  it("los tres endpoints de la metodología siguen en pie, con su veto", () => {
+    // Responden 409 para un proyecto cuya etapa manda HubSpot — que hoy son todos, menos
+    // los de pipeline desconocido. Borrarlos sería perder también el camino de vuelta.
+    for (const rel of ENDPOINTS_DE_CS) {
+      expect(fs.existsSync(path.join(RAIZ, rel)), `${rel} desapareció`).toBe(true);
+    }
+  });
+
+  it("volver es UNA celda de la tabla", () => {
+    /* Lo que apagó el ciclo fue `cicloOchoEtapas: false` en la fila de Customer Success.
+       Si alguien empieza a esparcir esa decisión en `if`s por el código, dejar de aplicarla
+       deja de ser reversible. */
+    const kind = codigoDe("lib/projects/kind.ts");
+    const ocurrencias = [...kind.matchAll(/cicloOchoEtapas/g)].length;
+    expect(
+      ocurrencias,
+      "«cicloOchoEtapas» aparece más veces de las esperadas en kind.ts (la interfaz, las dos " +
+        "filas base, el overlay que la respeta y `fuenteDelCiclo`). Si la decisión se repartió, " +
+        "revertirla dejó de ser un cambio de una línea.",
+    ).toBeLessThanOrEqual(6);
+  });
+});
+
 describe("ningún componente decide por pipeline", () => {
   it("los ids de HubSpot no aparecen en components/", () => {
     /* La tabla de decisiones vive en lib/projects/kind.ts. Un id adentro de un .tsx
