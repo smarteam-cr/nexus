@@ -177,7 +177,11 @@ export async function POST(req: NextRequest) {
             });
           }
         }
-        await createDefaultCanvases(project.id, tx);
+        /* `null` por ahora: el asistente de handoff crea el record de HubSpot SIEMPRE en el
+           pipeline de Customer Success (lib/hubspot/handoff-sync.ts), y encima lo hace
+           después, en otro paso. La fila legacy es la respuesta correcta hasta que la Tanda C
+           parametrice el pipeline en el alta. */
+        await createDefaultCanvases(project.id, null, tx);
         const handoffCanvasId = await createHandoffCanvas(project.id, tx);
         const handoff = await tx.handoff.create({
           data: {

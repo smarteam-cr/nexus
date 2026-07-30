@@ -53,7 +53,11 @@ export async function POST(
     },
   });
 
-  await createDefaultCanvases(project.id);
+  /* `null` = sin pipeline, y es literalmente cierto: este alta crea un proyecto suelto en
+     Nexus, sin record en HubSpot. Cae a la fila legacy (las piezas de Customer Success), que
+     es el comportamiento de siempre. La Tanda C —el alta única— es la que va a poder elegir
+     el pipeline acá. */
+  await createDefaultCanvases(project.id, null);
 
   // Proyecto nuevo → cambió el panorama del cliente: re-clasificar sus sesiones
   // recientes (huérfanas + links de IA sin revisar; los locks humanos se respetan).

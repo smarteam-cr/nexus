@@ -18,6 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import { canvasOfNested, canvasOfAnyNested } from "@/lib/pieces/canvas-query";
 import { slugForCanvas } from "@/lib/pieces/registry";
+import { resolvePipeline } from "@/lib/projects/kind";
 
 // Pasos de setup basados en CANVAS (identificados por SLUG de pieza). Extensible: sumar el canvas de
 // diagnóstico/planificación a futuro = una línea acá + su pill en la UI. Cuentan por EXISTENCIA
@@ -35,9 +36,29 @@ export const CONFIRMED_ONLY = new Set<string>(
 
 export interface SetupSignals {
   handoff: boolean;
-  kickoff: boolean;
+  /**
+   * `null` = NO APLICA a este proyecto (su pipeline no nace con kickoff), y es distinto de
+   * `false` = le corresponde y todavía no está.
+   *
+   * Un chip AUSENTE dice "no corresponde"; uno rojo dice "te falta". Sin esta distinción, un
+   * proyecto de Desarrollo mostraba un chip rojo permanente "Sin kickoff" en el widget que
+   * el CSE mira todos los días, por algo que nunca va a tener.
+   */
+  kickoff: boolean | null;
   cronograma: "sin" | "borrador" | "publicado";
   procesos: boolean;
+}
+
+/**
+ * Qué pasos de setup le corresponden a este proyecto.
+ *
+ * Intersecta la lista fija con las piezas con las que el pipeline NACE (`seedPieces`). Un
+ * pipeline nulo o no declarado devuelve la lista completa — la fila legacy, byte por byte.
+ */
+export function pasosDeSetup(hubspotPipelineId: string | null): readonly string[] {
+  const def = resolvePipeline(hubspotPipelineId);
+  if (!def) return SETUP_CANVAS_SLUGS;
+  return SETUP_CANVAS_SLUGS.filter((slug) => def.seedPieces.includes(slug));
 }
 
 /** ¿Este bloque cuenta para su paso? (aplica la regla requireConfirmed por pieza). */
@@ -56,10 +77,13 @@ export function deriveSetup(input: {
   hasActiveBaseline: boolean;
   hasPhases: boolean;
   hasProcesos: boolean;
+  /** Los pasos que le corresponden al proyecto. Ausente = todos (la fila legacy). */
+  aplican?: readonly string[];
 }): SetupSignals {
+  const aplican = input.aplican ?? SETUP_CANVAS_SLUGS;
   return {
     handoff: input.steps.has("handoff"),
-    kickoff: input.steps.has("kickoff"),
+    kickoff: aplican.includes("kickoff") ? input.steps.has("kickoff") : null,
     cronograma: input.hasActiveBaseline ? "publicado" : input.hasPhases ? "borrador" : "sin",
     procesos: input.hasProcesos,
   };
@@ -70,7 +94,11 @@ export function deriveSetup(input: {
  * queries (handoff/kickoff por projectId, cronograma por projectId, procesos por
  * clientId) y delega en `deriveSetup`. N+1 aceptable: es una sola fila, no el batch.
  */
-export async function loadProjectSetup(projectId: string, clientId: string): Promise<SetupSignals> {
+export async function loadProjectSetup(
+  projectId: string,
+  clientId: string,
+  hubspotPipelineId: string | null,
+): Promise<SetupSignals> {
   const [setupBlocks, tl, procesoBlocks] = await Promise.all([
     prisma.canvasBlock.findMany({
       where: { section: { canvas: canvasOfAnyNested(SETUP_CANVAS_SLUGS, { projectId }) } },
@@ -113,5 +141,6 @@ export async function loadProjectSetup(projectId: string, clientId: string): Pro
     hasActiveBaseline: (tl?.baselines?.length ?? 0) > 0,
     hasPhases: (tl?.phases?.length ?? 0) > 0,
     hasProcesos,
+    aplican: pasosDeSetup(hubspotPipelineId),
   });
 }

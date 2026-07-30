@@ -96,9 +96,17 @@ export interface PipelineDef {
    */
   canBeSiblingOf: readonly ProjectPipelineKey[];
   /**
-   * Slugs del registro de piezas (`lib/pieces/registry.ts`) con los que debería nacer un
-   * proyecto de este tipo. DECLARADO acá, todavía NO consumido: hoy manda
-   * `piecesCreatedWithProject()` para todos. Lo consume la Tanda C (altas unificadas).
+   * Slugs del registro de piezas (`lib/pieces/registry.ts`) con los que NACE un proyecto de
+   * este tipo. Lo consume `createDefaultCanvases`.
+   *
+   * ⚠ El `handoff` figura en las tres filas porque a las tres les corresponde, pero NO lo
+   * crea `createDefaultCanvases`: lo monta `createHandoffCanvas` junto con su entidad. La
+   * exclusión está nombrada en `PIEZAS_QUE_NO_NACEN_ACA` y testeada — dejarlo en la lista y
+   * que la función lo ignore *en silencio* sería exactamente la deriva que este repo mata.
+   *
+   * ⚠ Poner acá una pieza `createdWithProject: false` la resucita en TODOS los proyectos
+   * nuevos. Ya pasó: costó retirar 111 cascarones de Handoff vacíos y 234 canvases de
+   * Diagnóstico y Planificación. Un test ata esta lista con el registro de piezas.
    */
   seedPieces: readonly string[];
   /** La fila de la tabla de decisiones, para un proyecto NO interno y SIN hermano. */
@@ -149,7 +157,9 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     closedStageIds: ["1225193543"], // Finalizado
     initialStageId: "1225193551", // Nuevo proyecto (ex "Hand off")
     canBeSiblingOf: [],
-    seedPieces: ["handoff", "kickoff", "timeline", "exploration", "implementation"],
+    /* SIN `implementation`: es `createdWithProject: false` en el registro de piezas a
+       propósito —se creaba vacía en los 118 proyectos— y ponerla acá la resucitaría. */
+    seedPieces: ["handoff", "kickoff", "timeline", "exploration"],
     base: BASE_CUSTOMER_SUCCESS,
   },
   {
@@ -178,7 +188,9 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     // sí se facturan; los que son hermanos no". Se sigue la regla y no la fila abreviada:
     // equivocarse hacia "factura igual" cobra dos veces el mismo trabajo.
     canBeSiblingOf: ["customer-success"],
-    seedPieces: ["handoff", "timeline", "exploration"],
+    /* CON `kickoff`: hoy lo recibe y es su landing de cara al cliente — un sitio web es
+       `publicable`. Sacárselo sería un cambio que nadie pidió. */
+    seedPieces: ["handoff", "kickoff", "timeline", "exploration"],
     base: BASE_ENTREGA_TECNICA,
   },
 ] as const;

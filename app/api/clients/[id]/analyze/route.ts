@@ -45,7 +45,7 @@ import { fetchCompanyTimeline, fetchCompanyTimelineSplit, serializeTimeline, pro
 import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT, RECURRENTE_TAG, hasTechnicalScope } from "@/lib/tags/catalog";
 import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
 import { pieceByAgentGroup } from "@/lib/pieces/registry";
-import { pieceAppliesByTags, pieceReadiness } from "@/lib/flow/piece-readiness";
+import { piezaAplica, pieceReadiness } from "@/lib/flow/piece-readiness";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -423,10 +423,11 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     if (destino && !body.forzar) {
       const proj = await prisma.project.findUnique({
         where: { id: bodyProjectId },
-        select: { tags: true },
+        select: { tags: true, hubspotPipelineId: true },
       });
-      if (!pieceAppliesByTags(destino.slug, proj?.tags ?? [])) {
-        const r = pieceReadiness(destino.slug, { tags: proj?.tags ?? [], piezasConContenido: [] });
+      const hechos = { tags: proj?.tags ?? [], hubspotPipelineId: proj?.hubspotPipelineId ?? null };
+      if (!piezaAplica(destino.slug, hechos)) {
+        const r = pieceReadiness(destino.slug, { ...hechos, piezasConContenido: [] });
         return NextResponse.json(
           { error: "PIECE_NOT_APPLICABLE", message: r.reason, slug: destino.slug },
           { status: 400 },
@@ -2572,8 +2573,21 @@ async function persistTimelineFromAgentOutput(
       // Con el documento ya escrito, la puerta correcta es el botón "Regenerar" del propio
       // canvas: es una acción explícita, con su permiso y su corrida visible.
       try {
-        const proj = await prisma.project.findUnique({ where: { id: bodyProjectId }, select: { tags: true } });
-        if (hasTechnicalScope(proj?.tags ?? [])) {
+        /* `piezaAplica` y no `hasTechnicalScope`: es literalmente la misma pregunta —"¿este
+           proyecto lleva requerimiento técnico?"— y ahora tiene DOS respuestas válidas, el
+           tag o el pipeline de Desarrollo. Sin esto, un desarrollo nace con la pieza vacía.
+           `hasTechnicalScope` se queda como está: además rutea la fase técnica del
+           cronograma, y un proyecto del pipeline Development no necesita eso. */
+        const proj = await prisma.project.findUnique({
+          where: { id: bodyProjectId },
+          select: { tags: true, hubspotPipelineId: true },
+        });
+        if (
+          piezaAplica("tech-requirements", {
+            tags: proj?.tags ?? [],
+            hubspotPipelineId: proj?.hubspotPipelineId ?? null,
+          })
+        ) {
           const pid = bodyProjectId;
           // Crear el canvas SINCRÓNICAMENTE (rápido: find-or-create + reconcile) antes de que
           // el run marque DONE → cuando el front refetchea la lista de canvases, "Desarrollo"

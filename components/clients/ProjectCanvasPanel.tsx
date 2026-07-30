@@ -126,11 +126,14 @@ export default function ProjectCanvasPanel({
   projectId,
   tags,
   serviceType,
+  hubspotPipelineId,
   initialCanvases,
 }: {
   projectId: string;
   tags?: string[];
   serviceType?: string | null;
+  /** De qué pipeline viene (lib/projects/kind.ts). Decide qué piezas le corresponden. */
+  hubspotPipelineId?: string | null;
   /** Canvases sembrados server-side (page.tsx) para el proyecto inicial. */
   initialCanvases?: CanvasMeta[] | null;
 }) {
@@ -573,6 +576,7 @@ export default function ProjectCanvasPanel({
                     const readiness = pieceReadiness(row.slug, {
                       tags: tags ?? [],
                       piezasConContenido,
+                      hubspotPipelineId: hubspotPipelineId ?? null,
                     });
                     return (
                       <div

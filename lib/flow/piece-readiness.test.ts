@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { pieceReadiness, pieceAppliesByTags } from "./piece-readiness";
+import { pieceReadiness, piezaAplica } from "./piece-readiness";
+import { pipelineByKey } from "@/lib/projects/kind";
 import { canvasDefForSlug } from "@/lib/canvas/canvas-defs";
 import { piecesInFlowOrder } from "./stage-pieces";
 import { pieceBySlug } from "@/lib/pieces/registry";
 
-const sinNada = { tags: [] as string[], piezasConContenido: [] as string[] };
+/* `hubspotPipelineId: null` = pipeline desconocido, que es la fila LEGACY. Todos los casos
+   de abajo que no lo pisan están probando el comportamiento de siempre. */
+const sinNada = {
+  tags: [] as string[],
+  piezasConContenido: [] as string[],
+  hubspotPipelineId: null as string | null,
+};
 
 describe("una pieza que los tags NO justifican", () => {
   it("avisa con el rótulo que ve el usuario, no con el slug", () => {
@@ -24,8 +31,8 @@ describe("una pieza que los tags NO justifican", () => {
     expect(pieceReadiness("tech-requirements", { ...sinNada, tags: ["insider_one"] }).applies).toBe(
       true,
     );
-    expect(pieceAppliesByTags("tech-requirements", ["custom_dev"])).toBe(true);
-    expect(pieceAppliesByTags("tech-requirements", ["sales_hub"])).toBe(false);
+    expect(piezaAplica("tech-requirements", { tags: ["custom_dev"], hubspotPipelineId: null })).toBe(true);
+    expect(piezaAplica("tech-requirements", { tags: ["sales_hub"], hubspotPipelineId: null })).toBe(false);
   });
 
   it("NUNCA bloquea: el aviso no impide nada", () => {
@@ -33,6 +40,55 @@ describe("una pieza que los tags NO justifican", () => {
     // CSE peleando con la herramienta.
     const r = pieceReadiness("tech-requirements", sinNada);
     expect(r.reason).toContain("Podés agregarla igual");
+  });
+});
+
+describe("el pipeline es un camino INDEPENDIENTE del tag", () => {
+  /* Las cuatro esquinas. La pieza `tech-requirements` le corresponde a un proyecto por el
+     tag O por venir del pipeline de Desarrollo — nunca hace falta que se den las dos. */
+  const DEV = pipelineByKey("development").hubspotPipelineId;
+  const CS = pipelineByKey("customer-success").hubspotPipelineId;
+
+  it("Desarrollo SIN tags: le corresponde igual", () => {
+    /* Es el caso que motivó el cambio: un desarrollo veía "Sin tag Desarrollo a medida"
+       sobre su pieza central, porque nada deriva el tag desde el pipeline. */
+    const r = pieceReadiness("tech-requirements", { ...sinNada, hubspotPipelineId: DEV });
+    expect(r.applies).toBe(true);
+    expect(r.reason).toBeNull();
+  });
+
+  it("Customer Success SIN tags: NO le corresponde — el camino legacy, intacto", () => {
+    const r = pieceReadiness("tech-requirements", { ...sinNada, hubspotPipelineId: CS });
+    expect(r.applies).toBe(false);
+    expect(r.reason).toContain("Integración / Desarrollo a medida");
+  });
+
+  it("Customer Success CON el tag: le corresponde — el camino de siempre", () => {
+    const r = pieceReadiness("tech-requirements", {
+      ...sinNada,
+      tags: ["custom_dev"],
+      hubspotPipelineId: CS,
+    });
+    expect(r.applies).toBe(true);
+  });
+
+  it("sin pipeline y sin tags: NO le corresponde (fila legacy, byte por byte)", () => {
+    expect(pieceReadiness("tech-requirements", sinNada).applies).toBe(false);
+  });
+
+  it("el motivo nombra los DOS caminos, no solo el tag", () => {
+    /* Si solo dijera "te falta el tag", alguien buscando por qué no aparece la pieza en un
+       proyecto de CS se llevaría media respuesta. */
+    const r = pieceReadiness("tech-requirements", { ...sinNada, hubspotPipelineId: CS });
+    expect(r.reason).toContain("Development");
+  });
+
+  it("todo `anyPipeline` declarado es una clave válida del registro de pipelines", () => {
+    // Un typo acá desactiva la puerta en silencio: nunca matchea y nadie se entera.
+    for (const slug of ["tech-requirements"]) {
+      const r = pieceReadiness(slug, { ...sinNada, hubspotPipelineId: DEV });
+      expect(r.applies, `"${slug}" declara un pipeline que no resuelve`).toBe(true);
+    }
   });
 });
 

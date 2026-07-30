@@ -104,7 +104,8 @@ const EMPTY_PAIR: FrontPair = { next: null, last: null };
 // no arrastrar el módulo server —prisma— al bundle del cliente). El indicador del widget las usa.
 type SetupSignals = {
   handoff: boolean;
-  kickoff: boolean;
+  /** `null` = no le corresponde a este proyecto (su pipeline no nace con kickoff) → sin chip. */
+  kickoff: boolean | null;
   cronograma: "sin" | "borrador" | "publicado";
   procesos: boolean;
 };
@@ -548,7 +549,11 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
           {data.setup && (
             <div className="mt-2 flex items-center gap-1.5 flex-wrap">
               <SetupChip state={data.setup.handoff ? "done" : "missing"} label={data.setup.handoff ? "✓ Handoff" : "Sin handoff"} />
-              <SetupChip state={data.setup.kickoff ? "done" : "missing"} label={data.setup.kickoff ? "✓ Kickoff" : "Sin kickoff"} />
+              {/* `null` = no aplica (un desarrollo no lleva kickoff) → no se pinta nada. Un chip
+                  ausente dice "no corresponde"; uno rojo dice "te falta". */}
+              {data.setup.kickoff !== null && (
+                <SetupChip state={data.setup.kickoff ? "done" : "missing"} label={data.setup.kickoff ? "✓ Kickoff" : "Sin kickoff"} />
+              )}
               <SetupChip
                 state={data.setup.cronograma === "publicado" ? "done" : data.setup.cronograma === "borrador" ? "draft" : "missing"}
                 label={data.setup.cronograma === "publicado" ? "✓ Cronograma" : data.setup.cronograma === "borrador" ? "Cronograma sin subir" : "Sin cronograma"}

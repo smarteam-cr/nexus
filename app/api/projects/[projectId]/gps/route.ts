@@ -94,6 +94,7 @@ export const GET = withProjectAccess(async (
       hubspotOwnerEmail: true,
       hubspotCreatedAt: true,
       hubspotPipelineName: true,
+      hubspotPipelineId: true,
       createdAt: true,
     },
   });
@@ -273,7 +274,9 @@ export const GET = withProjectAccess(async (
       take: 50,
     }),
     // #5 — señales de setup (qué canvas tiene generados) para el indicador del widget.
-    loadProjectSetup(projectId, project.clientId),
+    // El pipeline decide QUÉ pasos de setup le corresponden: un desarrollo no lleva
+    // kickoff, y sin esto le quedaba un chip rojo permanente por algo que nunca va a tener.
+    loadProjectSetup(projectId, project.clientId, project.hubspotPipelineId),
   ]);
 
   // Para compat hacia atrás: también devolver `pendingItems` con shape antiguo

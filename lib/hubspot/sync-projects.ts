@@ -1025,7 +1025,8 @@ export async function syncProjectsForClient(
             status: "active",
           },
         });
-        await createDefaultCanvases(created.id, tx);
+        // El pipeline decide QUÉ piezas nacen. Ya está en la mano dentro de la transacción.
+        await createDefaultCanvases(created.id, pipelineId, tx);
         return created;
       });
       result.created++;

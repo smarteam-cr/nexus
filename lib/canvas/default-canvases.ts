@@ -8,6 +8,7 @@ import {
   DESARROLLO_CANVAS,
   EXPLORACION_CANVAS,
   DEFAULT_PROJECT_CANVASES,
+  canvasDefForSlug,
   AGENT_GROUP_TO_CANVAS,
   kickoffSectionSequence,
   desarrolloSectionSequence,
@@ -17,6 +18,7 @@ import { templateById, templateDefsByKey } from "@/components/landing/configs/te
 import { HUBSPOT_TEMPLATE_ID } from "@/lib/business-cases/case-types";
 import { buildTemplateMetaEntry } from "@/lib/business-cases/template-meta";
 import { piecesCreatedWithProject } from "@/lib/pieces/registry";
+import { resolvePipeline } from "@/lib/projects/kind";
 
 // Re-export de las definiciones PURAS (viven en canvas-defs.ts, SIN Prisma) para
 // que los importadores de servidor existentes (analyze/route.ts, etc.) sigan
@@ -30,20 +32,53 @@ export type { CanvasDefinition };
 type Db = Prisma.TransactionClient;
 
 /**
- * Crea las piezas con las que NACE un proyecto, con sus CanvasSection.
- * NO incluye Handoff (es entidad cliente-level; usar createHandoffCanvas).
+ * Piezas que un pipeline declara en `seedPieces` pero que NO se crean acá.
  *
- * Qué piezas nacen lo decide el REGISTRO (`piecesCreatedWithProject`), no una lista
- * fija acá: es una decisión de producto y tiene que vivir en un solo lugar. Desde
- * 2026-07-24 Diagnóstico y Planificación quedaron fuera — se creaban en los 118
- * proyectos y se usaron en uno.
+ * El `handoff` le corresponde a los tres pipelines, pero lo monta `createHandoffCanvas`
+ * junto con su entidad `Handoff`. Se deja en `seedPieces` (es verdad que le corresponde) y
+ * se excluye ACÁ, con nombre y motivo: que la función lo ignorara en silencio sería la
+ * misma deriva que este repo mata con guardas.
  */
-export async function createDefaultCanvases(projectId: string, db: Db = prisma) {
-  // El registro manda QUÉ piezas; canvas-defs manda CÓMO es cada una (secciones,
-  // orden, defaults). Se cruzan por slug: una pieza marcada para nacer sin definición
-  // acá se ignora en silencio en vez de romper la creación del proyecto.
-  const aCrear = piecesCreatedWithProject()
-    .map((p) => DEFAULT_PROJECT_CANVASES.find((c) => c.slug === p.slug))
+const PIEZAS_QUE_NO_NACEN_ACA = new Set(["handoff"]);
+
+/**
+ * Crea las piezas con las que NACE un proyecto, con sus CanvasSection.
+ *
+ * ── QUIÉN DECIDE QUÉ PIEZAS ──────────────────────────────────────────────────
+ * Depende de si sabemos de qué pipeline viene el proyecto:
+ *
+ *   · pipeline DECLARADO  → manda `PipelineDef.seedPieces` (lib/projects/kind.ts).
+ *   · pipeline nulo o no declarado → manda `piecesCreatedWithProject()` (el registro de
+ *     piezas), que es la fila legacy.
+ *
+ * No son dos fuentes para la misma pregunta: son una fuente por pregunta. Y un test las ata
+ * — la fila de Customer Success ES la lista legacy, en los dos sentidos. Si alguien da vuelta
+ * un booleano en el registro de piezas sin tocar la tabla de pipelines, falla nombrando los
+ * dos archivos.
+ *
+ * ⚠ El `hubspotPipelineId` va en SEGUNDA posición, antes del `db` opcional, a propósito: así
+ * un llamador nuevo no se lo puede olvidar y recibir en silencio las piezas de Customer
+ * Success en un proyecto de Desarrollo. Un proyecto con las piezas equivocadas se ve normal.
+ *
+ * NO incluye Handoff (ver `PIEZAS_QUE_NO_NACEN_ACA`).
+ */
+export async function createDefaultCanvases(
+  projectId: string,
+  hubspotPipelineId: string | null,
+  db: Db = prisma,
+) {
+  const def = resolvePipeline(hubspotPipelineId);
+  const slugs = (def?.seedPieces ?? piecesCreatedWithProject().map((p) => p.slug)).filter(
+    (s) => !PIEZAS_QUE_NO_NACEN_ACA.has(s),
+  );
+
+  /* El lookup va contra `canvasDefForSlug` y NO contra `DEFAULT_PROJECT_CANVASES`: ese array
+     no contiene `tech-requirements` (vive suelto como DESARROLLO_CANVAS), así que con el
+     filtro de abajo un proyecto de Desarrollo nacería sin su pieza central **y sin error**.
+     Una pieza declarada sin definición sigue descartándose —no puede romper la creación del
+     proyecto— pero eso ahora está cubierto por un test, no por la suerte. */
+  const aCrear = slugs
+    .map((slug) => canvasDefForSlug(slug))
     .filter((c): c is CanvasDefinition => !!c);
 
   await db.projectCanvas.createMany({
