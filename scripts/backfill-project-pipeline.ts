@@ -25,12 +25,19 @@
  *   npx tsx scripts/backfill-project-pipeline.ts --apply
  */
 import "dotenv/config";
-import { createScriptDb } from "./lib/db";
+import { prisma } from "@/lib/db/prisma";
 import { resolvePipeline } from "@/lib/projects/kind";
+import { resolverHermanos } from "@/lib/hubspot/sync-projects";
 
-// Pool ACOTADO (max: 2). El pooler de Supabase da ~15 slots compartidos entre prod,
-// las dos PCs de dev y cualquier script suelto — ver scripts/lib/db.ts.
-const { prisma, close } = createScriptDb();
+/* ⚠ Este script NO usa `createScriptDb`, y es a propósito.
+   La regla de la casa —scripts nuevos con pool acotado (max: 2)— existe para no comerse el
+   presupuesto de ~15 slots que el pooler de Supabase comparte entre producción, las dos PCs
+   de dev y cualquier script suelto. Pero acá el script importa `resolverHermanos` de
+   lib/hubspot/sync-projects, que arrastra `lib/db/prisma` — y ese módulo crea su pool al
+   cargarse. Con `createScriptDb` habría DOS pools abiertos (2 + 4 = 6 conexiones) en vez de
+   uno: la regla se cumpliría al pie de la letra y el resultado sería peor. Se usa el pool de
+   la app, que ya tiene su propio techo por entorno. Mismo criterio que check-invariants.ts. */
+const close = () => prisma.$disconnect();
 
 const APLICAR = process.argv.includes("--apply");
 const LOTE = 100; // techo de la API de batch/read de HubSpot
@@ -94,6 +101,40 @@ async function leerLote(token: string, ids: string[]): Promise<Map<string, Leido
   return out;
 }
 
+/**
+ * Las asociaciones proyecto↔proyecto de un lote. Mismo endpoint y mismos lotes de 100 que el
+ * sync (`leerProyectosAsociados`), replicado acá porque el script habla con la API cruda y no
+ * con el cliente de HubSpot.
+ */
+async function leerAsociaciones(token: string, ids: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  for (let i = 0; i < ids.length; i += LOTE) {
+    const tanda = ids.slice(i, i + LOTE);
+    try {
+      const res = await fetch("https://api.hubapi.com/crm/v4/associations/0-970/0-970/batch/read", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ inputs: tanda.map((id) => ({ id })) }),
+      });
+      if (!res.ok) continue;
+      const data = (await res.json()) as {
+        results?: Array<{ from?: { id?: string }; to?: Array<{ toObjectId?: number | string }> }>;
+      };
+      for (const r of data.results ?? []) {
+        const desde = r.from?.id;
+        if (!desde) continue;
+        const hacia = (r.to ?? [])
+          .map((x) => (x.toObjectId === undefined ? null : String(x.toObjectId)))
+          .filter((v): v is string => !!v);
+        if (hacia.length) out.set(desde, hacia);
+      }
+    } catch {
+      /* sin asociaciones → todos quedan "aparte", que es el default seguro */
+    }
+  }
+  return out;
+}
+
 async function main() {
   const pendientes = await prisma.project.findMany({
     where: { hubspotServiceId: { not: null }, hubspotPipelineId: null },
@@ -140,6 +181,7 @@ async function main() {
 
   let resueltos = 0;
   let escritos = 0;
+  const clientesTocados = new Set<string>();
   const noResueltos: Array<{ etiqueta: string; motivo: string }> = [];
   for (const p of sinPortal) {
     noResueltos.push({
@@ -162,7 +204,11 @@ async function main() {
 
     for (let i = 0; i < lista.length; i += LOTE) {
       const tanda = lista.slice(i, i + LOTE);
-      const leidos = await leerLote(token, tanda.map((p) => p.hubspotServiceId!));
+      const hsIds = tanda.map((p) => p.hubspotServiceId!);
+      const [leidos, asociaciones] = await Promise.all([
+        leerLote(token, hsIds),
+        leerAsociaciones(token, hsIds),
+      ]);
 
       for (const p of tanda) {
         const dato = leidos.get(p.hubspotServiceId!);
@@ -176,21 +222,48 @@ async function main() {
           continue;
         }
         resueltos++;
+        const rel = asociaciones.get(p.hubspotServiceId!) ?? [];
         const def = resolvePipeline(dato.pipelineId);
         console.log(
           `  ${etiqueta}\n      → pipeline ${dato.pipelineId} ` +
             `${def ? `("${def.label}")` : "(NO declarado en el registro → legacy)"}` +
-            `${dato.interno ? "  · INTERNO" : ""}`,
+            `${dato.interno ? "  · INTERNO" : ""}` +
+            `${rel.length ? `  · ${rel.length} proyecto(s) asociado(s)` : ""}`,
         );
         if (APLICAR) {
           await prisma.project.update({
             where: { id: p.id },
-            data: { hubspotPipelineId: dato.pipelineId, proyectoInterno: dato.interno },
+            data: {
+              hubspotPipelineId: dato.pipelineId,
+              proyectoInterno: dato.interno,
+              hubspotRelatedProjectIds: rel,
+            },
           });
           escritos++;
+          clientesTocados.add(p.clientId);
         }
       }
     }
+  }
+
+  /* ── Resolver los HERMANOS de los clientes tocados ─────────────────────────
+     Sin esto quedaría una ventana —desde que el backfill escribe el pipeline hasta que
+     alguien abra la ficha del cliente y dispare el sync— en la que un desarrollo que SÍ
+     cuelga de una implementación se ve como "aparte" y por lo tanto FACTURABLE. Con 21
+     proyectos cargados a mano, esa ventana serían varios proyectos apareciendo en cobranza
+     por una razón que no existe. Se cierra acá, en la misma corrida. */
+  if (APLICAR && clientesTocados.size > 0) {
+    console.log(`\n── Resolviendo hermanos en ${clientesTocados.size} cliente(s) ──`);
+    let vinculos = 0;
+    for (const clientId of clientesTocados) {
+      vinculos += await resolverHermanos(clientId, (m) => console.log(`  ${m}`));
+    }
+    console.log(`  ${vinculos} vínculo(s) actualizado(s).`);
+  } else if (!APLICAR) {
+    console.log(
+      `\n  (en --apply también se resuelven los hermanos de los clientes tocados, para que` +
+        ` ningún desarrollo hermano aparezca en cobranza mientras espera el próximo sync)`,
+    );
   }
 
   console.log(`\n── Resumen ──`);

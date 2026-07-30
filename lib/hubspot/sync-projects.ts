@@ -315,8 +315,19 @@ async function leerProyectosAsociados(
  *
  * Se recalcula entero cada vez (mismo patrón que `hubspotPipelineStageLabel`): si en HubSpot
  * desasocian los proyectos, el vínculo se limpia solo y el desarrollo vuelve a facturarse.
+ *
+ * EXPORTADA porque el backfill también la necesita: después de cargar proyectos a mano en
+ * HubSpot hay que poder resolver los vínculos de una, sin esperar a que alguien abra la ficha
+ * de cada cliente. Entre "sé el pipeline" y "sé de quién cuelgo" hay una ventana en la que un
+ * desarrollo hermano se ve FACTURABLE, y esa ventana es plata mal contada.
+ *
+ * `log` es opcional: el sync le pasa su `debug`, el backfill la consola. Devuelve cuántos
+ * vínculos cambiaron.
  */
-async function resolverHermanos(clientId: string, result: SyncResult): Promise<void> {
+export async function resolverHermanos(
+  clientId: string,
+  log?: (mensaje: string) => void,
+): Promise<number> {
   const delCliente = await prisma.project.findMany({
     where: { clientId, hubspotServiceId: { not: null } },
     select: {
@@ -329,6 +340,7 @@ async function resolverHermanos(clientId: string, result: SyncResult): Promise<v
     },
   });
   const porHsId = new Map(delCliente.map((p) => [p.hubspotServiceId!, p]));
+  let cambios = 0;
 
   for (const p of delCliente) {
     const def = resolvePipeline(p.hubspotPipelineId);
@@ -353,13 +365,16 @@ async function resolverHermanos(clientId: string, result: SyncResult): Promise<v
 
     if (nuevo !== p.hermanoCsProjectId) {
       await prisma.project.update({ where: { id: p.id }, data: { hermanoCsProjectId: nuevo } });
-      result.debug!.push(
+      cambios++;
+      const nombreDelHermano = delCliente.find((o) => o.id === nuevo)?.name ?? nuevo;
+      log?.(
         nuevo
-          ? `Hermano: "${p.name}" cuelga de "${porHsId.get(p.hubspotRelatedProjectIds.find((r) => porHsId.get(r)?.id === nuevo)!)?.name ?? nuevo}" → no se factura aparte`
+          ? `Hermano: "${p.name}" cuelga de "${nombreDelHermano}" → no se factura aparte`
           : `Hermano: "${p.name}" ya no cuelga de ninguna implementación → vuelve a facturarse`,
       );
     }
   }
+  return cambios;
 }
 
 // ── Sync principal ───────────────────────────────────────────────────────────
@@ -1045,7 +1060,7 @@ export async function syncProjectsForClient(
 
   /* Al final del todo: con todos los proyectos del cliente ya en la base, se resuelve quién
      cuelga de quién. Va acá y no dentro del loop porque así el orden de llegada no importa. */
-  await resolverHermanos(clientId, result).catch((e) => {
+  await resolverHermanos(clientId, (m) => result.debug!.push(m)).catch((e) => {
     result.debug!.push(`No se pudo resolver el hermano: ${(e as Error).message?.slice(0, 120)}`);
   });
 
