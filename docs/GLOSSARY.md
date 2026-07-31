@@ -253,11 +253,33 @@
 - **finalizado / baja** (`CostoRecurrente.finalizadoEl`): baja DEFINITIVA de un costo
   (renuncia, desvinculación, cancelación) — distinta de la pausa (`activo=false`, temporal).
   Sale del burn pasada la fecha, va al Histórico, y genera un movimiento BAJA.
+- **tipo de documento** (`RoleProfile.docType`): qué CLASE de documento es una fila de
+  /roles y, por lo tanto, con qué PLANTILLA del motor se renderiza. **PERFIL** = perfil de
+  puesto (11 secciones, el bloque 4DX, se le muestra a quien YA está en el equipo);
+  **PROPUESTA** = propuesta de contratación (10 secciones: cómo es Smarteam, partnerships y
+  la propuesta económica en vez del marcador y la ruta de madurez; se le muestra a quien
+  está decidiendo si entra). Se elige al crear y NO se cambia: el `content` quedaría con
+  keys de la otra plantilla.
+- **documento compartido** (`RoleProfileShare`): un documento de /roles que dirección le dio
+  a una persona del equipo para LEER. Aparece en su sección Roles y en su submenú; no lo
+  puede editar, ni re-compartir, ni publicar, ni descargar en PDF. Sin compartir, el
+  documento responde 404 —no 403— para esa persona.
+- **link público** (`RoleProfile.publicToken`): la URL oculta de un documento de /roles
+  (`/external/doc/<token>`). Token de 64 hex, sin login y sin contraseña: **la URL ES el
+  secreto**. Publicar lo genera; revocar lo pone en null y el link muere sin vuelta atrás
+  (republicar da uno nuevo). Desactivar el documento también lo apaga.
 - **Roles** (sección del sidebar, `RoleProfile`): docs de los roles y responsabilidades del
-  equipo, SOLO SUPER_ADMIN. Cada rol es un PUESTO libre (título + área, no atado al enum
-  `TeamRole` ni a una persona) que se renderiza y edita con el MISMO motor de landing
+  equipo — y, desde el 2026-07-30, también propuestas de contratación (ver **tipo de documento**).
+  ~~SOLO SUPER_ADMIN~~ → **crear, editar, compartir y publicar siguen siendo de dirección**
+  (`canEditRoleDocs` en la página, `guardRolesAdmin` en toda escritura de la API), pero LEER tiene
+  hoy **tres clases de lector**: dirección (ve todo), quien tenga un **documento compartido** (lo
+  ve read-only, con `RoleDocView`) y cualquiera con el **link público** (sin login). Sin
+  compartir, el documento responde 404. Cada rol es un PUESTO libre (título + área, no atado al
+  enum `TeamRole` ni a una persona) que se renderiza y edita con el MISMO motor de landing
   (`LandingView`) que el business case y el kickoff (`/roles/[id]`, con `RoleWorkspace` y su toggle
-  Editar): plantilla fija de **11** secciones ricas — perfil, responsabilidades (cards), el
+  Editar). ~~Plantilla fija de **11** secciones~~ → la plantilla la elige el `docType`
+  (**PERFIL** 11 secciones · **PROPUESTA** 10 — ver **tipo de documento**); las del PERFIL son
+  perfil, responsabilidades (cards), el
   **bloque 4DX** (WIG · lo que hago cada semana · cómo sé si funciona · el marcador en HubSpot ·
   la cadencia), caminos de éxito y de fracaso (cards), ruta de madurez (escalera L1→L5) y período
   de transición — con edición WYSIWYG in-situ, drag&drop de ítems y tooltips ⓘ por sección. Los
@@ -266,8 +288,9 @@
   contenido vive como JSON estructurado en
   `RoleProfile.content` (NO en `CanvasBlock`: se reusa la PRESENTACIÓN/EDICIÓN del motor, no el
   motor de datos — ver DECISIONS). El contenido es curaduría humana con **assist de documento**
-  opcional ("✨ Mejorar con IA": la IA propone, el humano revisa y aplica — ver abajo); gate
-  hardcodeado fuera de la matriz de permisos (mismo criterio que Costos); RLS deny (tabla interna).
+  opcional ("✨ Mejorar con IA": la IA propone, el humano revisa y aplica — ver abajo; en una
+  PROPUESTA todavía responde 409); gate de escritura hardcodeado fuera de la matriz de permisos
+  (mismo criterio que Costos); RLS deny (tabla interna).
 - **assist de documento** (`lib/ai/assist.ts` → `runDocumentAssist`): el modo "mejorar por
   instrucción" de un documento del motor de landing (Roles, kickoff, business case, desarrollo).
   One-shot: instrucción → la IA lee el documento ENTERO (y puede **investigar en línea** vía la

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { requireUser, UnauthorizedError } from "@/lib/auth/supabase";
 import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
+import { hasSharedRoleDocs } from "@/lib/roles/access";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import SidebarShell from "./SidebarShell";
 import CsAlertNotifier from "@/components/cs/CsAlertNotifier";
@@ -30,13 +31,24 @@ export default async function AppShell({
     ? await getEffectivePermissions(user.teamMember)
     : { v: 1, sections: {} };
 
+  const isSuperAdmin = user.teamMember?.roleEnum === "SUPER_ADMIN";
+
+  /* ¿Le compartieron algún documento de Roles? Es lo único que enciende ese ítem del menú
+     para quien no es dirección. Se paga SOLO si hace falta: para un SUPER_ADMIN la respuesta
+     es sí por definición, y sin TeamMember no hay a quién compartirle. La query es un
+     `findFirst` por índice — este archivo corre en CADA navegación y en 2026-07 se sacó de
+     acá `getClientsForSidebar` justo por ser el query más caliente del proyecto. */
+  const hasSharedDocs =
+    isSuperAdmin || !user.teamMember ? false : await hasSharedRoleDocs(user.teamMember.id);
+
   // Info compacta para el avatar del sidebar + gating de navegación.
   const userLite = {
     email: user.email,
     name: user.teamMember?.name ?? user.email,
     role: user.teamMember?.roleEnum ?? null,
-    isSuperAdmin: user.teamMember?.roleEnum === "SUPER_ADMIN",
+    isSuperAdmin,
     permissions,
+    hasSharedDocs,
   };
 
   // Ancho del sidebar resuelto en SSR (mismo mecanismo que la cookie nexus-theme):

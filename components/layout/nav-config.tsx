@@ -24,7 +24,9 @@ import { MARKETING_NAV_GROUPS } from "@/components/marketing/nav-config";
 export type NavGate =
   | { kind: "always" }
   | { kind: "permission"; section: string; action: string }
-  | { kind: "superAdmin" };
+  | { kind: "superAdmin" }
+  /** Dirección, MÁS quien tenga algún documento de Roles compartido (ver `hasSharedDocs`). */
+  | { kind: "superAdminOrSharedDocs" };
 
 export interface NavChildConfig {
   href: string;
@@ -69,6 +71,11 @@ export interface NavItemConfig {
 export interface NavContext {
   isSuperAdmin: boolean;
   permissions: PermissionMap;
+  /**
+   * ¿Tiene AL MENOS UN documento de Roles compartido? No es un permiso ni un rol: es un
+   * HECHO de datos, y por eso no se puede derivar de `permissions`. Lo calcula AppShell.
+   */
+  hasSharedDocs?: boolean;
 }
 
 /** Espeja 1:1 los booleanos canSeeX del Sidebar pre-migración. PURO y testeable. */
@@ -76,6 +83,8 @@ export function canSeeNavItem(item: Pick<NavItemConfig, "gate">, ctx: NavContext
   const gate = item.gate ?? { kind: "always" as const };
   if (gate.kind === "always") return true;
   if (gate.kind === "superAdmin") return ctx.isSuperAdmin;
+  // Roles: dirección lo administra; el resto entra solo si le compartieron algo.
+  if (gate.kind === "superAdminOrSharedDocs") return ctx.isSuperAdmin || ctx.hasSharedDocs === true;
   const sections = (ctx.permissions?.sections ?? {}) as Record<
     string,
     Record<string, boolean> | undefined
@@ -268,7 +277,9 @@ export const APP_NAV: readonly NavItemConfig[] = [
     key: "roles",
     label: "Roles",
     href: "/roles",
-    gate: { kind: "superAdmin" },
+    // No es `superAdmin` a secas: un documento compartido tiene que ser ALCANZABLE, o el
+    // compartir no sirve de nada. Administrarlo sigue siendo de dirección.
+    gate: { kind: "superAdminOrSharedDocs" },
     group: "administracion",
     dynamicChildren: "roles",
     icon: icon(

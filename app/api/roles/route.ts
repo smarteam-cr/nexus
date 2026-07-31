@@ -1,18 +1,22 @@
 /**
- * /api/roles — perfiles de puesto del equipo. GET lista · POST crea.
- * Superficie SOLO SUPER_ADMIN (guardRolesAdmin).
+ * /api/roles — documentos de Roles (perfiles de puesto y propuestas).
+ *
+ * GET lista lo VISIBLE para quien pregunta (SUPER_ADMIN todo; el resto, lo que le
+ * compartieron — `visibleRoleWhere`). POST crea, y eso sigue siendo SOLO SUPER_ADMIN:
+ * compartir da lectura, nunca escritura.
  */
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { guardRolesAdmin } from "@/lib/auth/api-guards";
+import { guardInternalUser, guardRolesAdmin } from "@/lib/auth/api-guards";
 import { loadRoles } from "@/lib/roles/queries";
 import { createRole } from "@/lib/roles/mutations";
 import { roleCreateSchema } from "@/lib/roles/schema";
 
 export async function GET() {
-  const guard = await guardRolesAdmin();
+  const guard = await guardInternalUser();
   if (guard instanceof NextResponse) return guard;
-  return NextResponse.json({ roles: await loadRoles() });
+  const roles = await loadRoles({ role: guard.role, teamMemberId: guard.teamMember.id });
+  return NextResponse.json({ roles });
 }
 
 export async function POST(req: NextRequest) {
@@ -34,6 +38,7 @@ export async function POST(req: NextRequest) {
   }
   const d = parsed.data;
   const role = await createRole({
+    docType: d.docType,
     title: d.title,
     area: d.area ?? null,
     summary: d.summary ?? null,

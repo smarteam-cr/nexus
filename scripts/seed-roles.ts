@@ -270,7 +270,8 @@ const ROLES: RoleSeed[] = [
   },
   {
     // CSL primero en el submenú y en el índice (pedido de Elías, 2026-07-29):
-    // el orden del flyout sale de este campo vía `loadRolesNav`.
+    // el orden del flyout sale de este campo vía `loadRoles` (GET /api/roles), que ordena
+    // por [active, order, title]; `RolesNavFlyout` después agrupa por `docType`.
     title: "Customer Success Lead (CSL)",
     area: "Customer Success",
     order: 0,
@@ -404,7 +405,13 @@ const ROLES: RoleSeed[] = [
 async function main() {
   console.log(APPLY ? "APLICANDO seed de Roles…\n" : "DRY-RUN del seed de Roles (nada se escribe)…\n");
   for (const r of ROLES) {
-    const existing = await prisma.roleProfile.findFirst({ where: { title: r.title }, select: { id: true } });
+    // ⚠ El filtro por `docType` NO es cosmético: el `update` de abajo reemplaza `content`
+    // ENTERO. Sin él, una PROPUESTA que se llame igual que un puesto (pasa: la propuesta del
+    // CSL comparte nombre con el rol) quedaría machacada con el contenido del perfil.
+    const existing = await prisma.roleProfile.findFirst({
+      where: { title: r.title, docType: "PERFIL" },
+      select: { id: true },
+    });
     const data = { title: r.title, area: r.area, order: r.order, summary: r.summary, content: r.content };
     if (existing) {
       console.log(`~ ${r.title} — ${APPLY ? "ACTUALIZANDO" : "existe → se actualizaría"} (${existing.id})`);

@@ -148,8 +148,12 @@ export default function NavFlyout({
 }
 
 /**
- * Flyout de Roles: hijos DINÁMICOS (la lista de perfiles viene de /api/roles).
- * Solo se monta para SUPER_ADMIN (gate del nav-config) → sin fuga del listado.
+ * Flyout de Roles: hijos DINÁMICOS (la lista viene de /api/roles, que ya filtra por lo
+ * VISIBLE para quien pregunta — dirección ve todo; el resto, lo que le compartieron).
+ *
+ * Los hijos se agrupan por TIPO con el mismo mecanismo de `section` que usa Finanzas: sin
+ * eso, un perfil y una propuesta del mismo puesto aparecen dos veces con el mismo nombre y
+ * no hay forma de saber cuál es cuál.
  */
 export function RolesNavFlyout({
   item,
@@ -158,30 +162,38 @@ export function RolesNavFlyout({
   item: Pick<NavItemConfig, "href" | "label" | "icon" | "match">;
   isOpen: boolean;
 }) {
-  const [roles, setRoles] = useState<{ id: string; title: string }[]>([]);
+  const [docs, setDocs] = useState<{ id: string; title: string; docType: string }[]>([]);
 
   useEffect(() => {
     let alive = true;
-    fetchJson<{ roles: { id: string; title: string }[] }>("/api/roles")
+    fetchJson<{ roles: { id: string; title: string; docType: string }[] }>("/api/roles")
       .then((d) => {
-        if (alive) setRoles(d.roles.map((r) => ({ id: r.id, title: r.title })));
+        if (alive) setDocs(d.roles.map((r) => ({ id: r.id, title: r.title, docType: r.docType })));
       })
       .catch(() => {
-        /* sin lista: el flyout muestra solo "Todos los roles" */
+        /* sin lista: el flyout muestra solo "Todos los documentos" */
       });
     return () => {
       alive = false;
     };
   }, []);
 
+  // Orden: perfiles y después propuestas. `groupNavChildren` arma los bloques por RUNS
+  // consecutivos, así que el orden de este array ES el orden visual.
+  const porTipo = (t: string) =>
+    docs
+      .filter((d) => d.docType === t)
+      .map((d) => ({
+        href: `/roles/${d.id}`,
+        label: d.title,
+        exact: true,
+        section: t === "PERFIL" ? "Perfiles de puesto" : "Propuestas",
+      }));
+
   const items: PanelItem[] = [
-    { href: "/roles", label: "Todos los roles", exact: true },
-    ...roles.map((r, i) => ({
-      href: `/roles/${r.id}`,
-      label: r.title,
-      exact: true,
-      separatorBefore: i === 0,
-    })),
+    { href: "/roles", label: "Todos los documentos", exact: true },
+    ...porTipo("PERFIL"),
+    ...porTipo("PROPUESTA"),
   ];
 
   return <NavFlyout item={item} items={items} isOpen={isOpen} />;

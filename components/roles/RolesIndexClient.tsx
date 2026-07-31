@@ -1,10 +1,13 @@
 "use client";
 
 /**
- * Índice de perfiles de puesto (Roles). Lista + alta de METADATOS (título, área,
- * resumen) en un drawer; el CONTENIDO de cada rol se edita in-situ en su página
- * (/roles/[id], con el motor de landing). Crear un rol navega directo a su página
- * para llenarlo (patrón business case: crear el shell → editar en el workspace).
+ * Índice de documentos de Roles: perfiles de puesto Y propuestas de contratación. Lista +
+ * alta de METADATOS (tipo, título, área, resumen) en un drawer; el CONTENIDO se edita
+ * in-situ en su página (/roles/[id], con el motor de landing). Crear navega directo a esa
+ * página (patrón business case: crear el shell → llenarlo en el workspace).
+ *
+ * `canEdit` viene del server (es SUPER_ADMIN): quien tiene documentos COMPARTIDOS entra
+ * acá a leer, así que el alta, el activar/desactivar y el borrar no se le pintan.
  */
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
@@ -12,9 +15,11 @@ import { useRouter } from "next/navigation";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog, EmptyState, Badge, Drawer, ListSkeleton } from "@/components/ui";
+import { ROLE_DOC_TYPE_LABEL, type RoleDocTypeValue } from "@/lib/roles/schema";
 
 type RoleRow = {
   id: string;
+  docType: RoleDocTypeValue;
   title: string;
   area: string | null;
   summary: string | null;
@@ -22,17 +27,26 @@ type RoleRow = {
 };
 
 interface MetaForm {
+  docType: RoleDocTypeValue;
   title: string;
   area: string;
   summary: string;
 }
 
-const EMPTY_FORM: MetaForm = { title: "", area: "", summary: "" };
+const EMPTY_FORM: MetaForm = { docType: "PERFIL", title: "", area: "", summary: "" };
 
 const INPUT_CLS =
   "w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted focus:outline-none focus:border-brand";
 
-export default function RolesIndexClient() {
+/** Qué se llena en cada tipo — el drawer lo dice para que la elección no sea a ciegas. */
+const AYUDA_POR_TIPO: Record<RoleDocTypeValue, string> = {
+  PERFIL:
+    "Se abre su página para llenar las secciones del puesto (perfil, responsabilidades, el bloque 4DX, caminos de éxito y fracaso, ruta de madurez y transición).",
+  PROPUESTA:
+    "Se abre su página para llenar la propuesta (cómo es Smarteam, perfil, responsabilidades, la meta, sesiones de seguimiento y la propuesta económica).",
+};
+
+export default function RolesIndexClient({ canEdit = true }: { canEdit?: boolean }) {
   const toast = useToast();
   const router = useRouter();
   const [rows, setRows] = useState<RoleRow[]>([]);
@@ -56,8 +70,8 @@ export default function RolesIndexClient() {
     load();
   }, [load]);
 
-  const openCreate = () => {
-    setForm(EMPTY_FORM);
+  const openCreate = (docType: RoleDocTypeValue) => {
+    setForm({ ...EMPTY_FORM, docType });
     setDrawerOpen(true);
   };
   const closeDrawer = () => {
@@ -74,9 +88,17 @@ export default function RolesIndexClient() {
       const { role } = await fetchJson<{ role: { id: string } }>("/api/roles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: form.title.trim(), area: clean(form.area), summary: clean(form.summary) }),
+        body: JSON.stringify({
+          docType: form.docType,
+          title: form.title.trim(),
+          area: clean(form.area),
+          summary: clean(form.summary),
+        }),
       });
-      toast.success("Rol creado. Completá su contenido.");
+      // El participio concuerda con el TIPO: "Perfil de puesto" es masculino y "Propuesta"
+      // femenino — con un solo texto, uno de los dos sale mal escrito siempre.
+      const creado = form.docType === "PERFIL" ? "creado" : "creada";
+      toast.success(`${ROLE_DOC_TYPE_LABEL[form.docType]} ${creado}. Completa su contenido.`);
       router.push(`/roles/${role.id}`);
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo crear.");
@@ -109,14 +131,23 @@ export default function RolesIndexClient() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
-        <button
-          onClick={openCreate}
-          className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-fg hover:bg-primary-hover"
-        >
-          + Nuevo rol
-        </button>
-      </div>
+      {canEdit && (
+        <div className="flex justify-end gap-2">
+          {/* Dos botones y no un menú: son dos documentos distintos, no una variante de uno. */}
+          <button
+            onClick={() => openCreate("PERFIL")}
+            className="px-4 py-2 text-sm rounded-lg border border-line text-fg-secondary hover:bg-surface-hover"
+          >
+            + Perfil de puesto
+          </button>
+          <button
+            onClick={() => openCreate("PROPUESTA")}
+            className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-fg hover:bg-primary-hover"
+          >
+            + Propuesta
+          </button>
+        </div>
+      )}
 
       {loading ? (
         // Skeleton estructural: replica la cáscara del estado cargado y reserva su altura
@@ -125,8 +156,12 @@ export default function RolesIndexClient() {
       ) : rows.length === 0 ? (
         <EmptyState
           variant="dashed"
-          title="Todavía no hay roles"
-          description="Crea el primero con el botón de arriba. Cada rol se ve como una página resumida del puesto."
+          title={canEdit ? "Todavía no hay documentos" : "Todavía no hay nada compartido contigo"}
+          description={
+            canEdit
+              ? "Crea el primero con los botones de arriba: un perfil de puesto documenta un rol del equipo; una propuesta se le presenta a alguien que está decidiendo si entra."
+              : "Cuando alguien de dirección comparta un perfil de puesto o una propuesta, va a aparecer acá."
+          }
         />
       ) : (
         <ul className="space-y-2">
@@ -139,6 +174,10 @@ export default function RolesIndexClient() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-fg">
                     {r.title}
+                    {/* El TIPO va primero entre los chips: decide qué documento estás por abrir. */}
+                    <Badge size="xs" className="ml-2">
+                      {ROLE_DOC_TYPE_LABEL[r.docType]}
+                    </Badge>
                     {r.area && <span className="ml-2 text-xs text-fg-muted">{r.area}</span>}
                     {!r.active && (
                       <Badge size="xs" className="ml-2">
@@ -150,17 +189,21 @@ export default function RolesIndexClient() {
                 </div>
                 <span className="flex-shrink-0 flex items-center gap-2">
                   <Link href={`/roles/${r.id}`} className="text-xs text-brand hover:underline">
-                    Abrir y editar
+                    {canEdit ? "Abrir y editar" : "Abrir"}
                   </Link>
-                  <button onClick={() => toggleActive(r)} className="text-xs text-fg-muted hover:text-fg">
-                    {r.active ? "Desactivar" : "Activar"}
-                  </button>
-                  <button
-                    onClick={() => setConfirmDeleteId(r.id)}
-                    className="text-xs text-red-400 hover:text-red-300"
-                  >
-                    Borrar
-                  </button>
+                  {canEdit && (
+                    <>
+                      <button onClick={() => toggleActive(r)} className="text-xs text-fg-muted hover:text-fg">
+                        {r.active ? "Desactivar" : "Activar"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(r.id)}
+                        className="text-xs text-red-400 hover:text-red-300"
+                      >
+                        Borrar
+                      </button>
+                    </>
+                  )}
                 </span>
               </div>
             </li>
@@ -171,7 +214,7 @@ export default function RolesIndexClient() {
       <Drawer
         open={drawerOpen}
         onClose={closeDrawer}
-        title="Nuevo rol"
+        title={form.docType === "PERFIL" ? "Nuevo perfil de puesto" : "Nueva propuesta"}
         footer={
           <>
             <button
@@ -212,11 +255,7 @@ export default function RolesIndexClient() {
             placeholder="Resumen de una línea (subtítulo)…"
             className={INPUT_CLS}
           />
-          <p className="pt-1 text-[11px] text-fg-muted">
-            Al crearlo se abre su página para llenar las secciones (perfil, responsabilidades,
-            KPIs, caminos de éxito y fracaso, ruta de madurez y transición) con cards, tablas y
-            edición directa.
-          </p>
+          <p className="pt-1 text-[11px] text-fg-muted">{AYUDA_POR_TIPO[form.docType]}</p>
         </div>
       </Drawer>
 

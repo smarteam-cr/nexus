@@ -18,8 +18,11 @@ import type { PermissionMap } from "@/lib/auth/permissions/types";
 function ctx(
   isSuperAdmin: boolean,
   sections: Record<string, Record<string, boolean>>,
+  // Default `false` a propósito: los casos congelados de arriba NO se editan al sumar
+  // este eje — siguen probando exactamente lo mismo que probaban.
+  hasSharedDocs = false,
 ): NavContext {
-  return { isSuperAdmin, permissions: { sections } as unknown as PermissionMap };
+  return { isSuperAdmin, permissions: { sections } as unknown as PermissionMap, hasSharedDocs };
 }
 
 const visibles = (c: NavContext) =>
@@ -84,7 +87,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
     expect(visibles(c)).toEqual(["clients", "marketing", "finanzas", "sessions", "knowledge"]);
   });
 
-  it("Equipo y Roles son gate DURO de SUPER_ADMIN: ningún permiso los enciende", () => {
+  it("Equipo es gate DURO de SUPER_ADMIN: ningún permiso lo enciende", () => {
     const c = ctx(false, {
       clientes: { viewAll: true },
       ventas: { read: true },
@@ -93,9 +96,34 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       agentes: { read: true },
       configuracion: { read: true },
     });
+    expect(visibles(c)).not.toContain("team");
+  });
+
+  // ── Roles: dejó de ser gate duro cuando los documentos se pudieron COMPARTIR ──
+  // Administrarlos sigue siendo de dirección; lo que abre el ítem para el resto no es un
+  // permiso sino un HECHO: que le hayan compartido algo. Si el ítem no se encendiera, un
+  // documento compartido sería inalcanzable y compartir no serviría de nada.
+  it("Roles NO se enciende con permisos: hace falta tener algo compartido", () => {
+    const c = ctx(false, {
+      clientes: { viewAll: true },
+      ventas: { read: true },
+      cobranza: { read: true },
+      auditoria: { read: true },
+      agentes: { read: true },
+      configuracion: { read: true },
+    });
+    expect(visibles(c)).not.toContain("roles");
+  });
+
+  it("con un documento compartido, Roles aparece — y Equipo NO", () => {
+    const c = ctx(false, {}, true);
     const v = visibles(c);
+    expect(v).toContain("roles");
     expect(v).not.toContain("team");
-    expect(v).not.toContain("roles");
+  });
+
+  it("sin ningún permiso, un compartido ve los universales + Roles", () => {
+    expect(visibles(ctx(false, {}, true))).toEqual([...UNIVERSALES, "roles"]);
   });
 
   it("un permiso con valor false NO abre el gate (solo true explícito)", () => {

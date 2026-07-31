@@ -36,6 +36,7 @@ import { readClientProcesos } from "@/lib/canvas/read-procesos";
 import type { KickoffTimelineData, KickoffProceso } from "@/lib/external/kickoff-view-types";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { getRole } from "@/lib/roles/queries";
+import { SYSTEM_SUBJECT } from "@/lib/roles/access";
 import { ROLE_CONTENT_KEYS } from "@/components/landing/configs/roles.defs";
 import { filasCtxFaltantes, type CanalesConContenido } from "./ctx-rows";
 import { isBlank } from "@/lib/landing/is-blank";
@@ -345,8 +346,18 @@ async function cargarPerfilDePuesto(
   tipo: PrintDocType,
   docId: string,
 ): Promise<PrintDocPayload | null> {
-  const role = await getRole(docId);
+  /* Sin filtro de visibilidad, y a propósito: el gate de este scope es SUPER_ADMIN
+     (`authorizePrintDoc`), que ve todo igual — y en el camino del token efímero no hay
+     sesión de la que sacar un subject. `SYSTEM_SUBJECT` lo declara en vez de omitirlo:
+     omitir era lo que hacía indistinguible "ya gateé" de "me olvidé del filtro". */
+  const role = await getRole(docId, SYSTEM_SUBJECT);
   if (!role) return null;
+
+  /* ⚠ SOLO perfiles: el adaptador de abajo arma el documento con la plantilla de ROLES
+     (`ADAPTADOR_ROLES` → `landingConfigForRoles`). Una propuesta pasaba el chequeo de
+     "hay contenido imprimible" —comparten 7 secciones— y salía un PDF sin la oferta y sin
+     "Cómo es Smarteam", sin un solo aviso. Fail-closed acá; el botón también se esconde. */
+  if (role.docType !== "PERFIL") return null;
 
   /* Se empaqueta en un bloque CARD sintético para viajar por la MISMA tubería que el resto:
      así el adaptador de impresión es uno solo y no hay una segunda forma de `PrintRow`. */

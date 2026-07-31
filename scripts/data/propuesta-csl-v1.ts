@@ -1,19 +1,14 @@
 /**
- * lib/propuestas/csl.ts — contenido de la propuesta de contratación del
- * Customer Success Lead.
+ * scripts/data/propuesta-csl-v1.ts — la SEMILLA de la propuesta del CSL.
  *
- * ⚠ HARDCODEADO A PROPÓSITO (2026-07-30, pedido de Elías: "necesito verlo
- * rápido"). Es la versión 1 de un documento que todavía está tomando forma: en
- * cuanto la estructura se estabilice, esto pasa a una fila propia para editarse
- * in-situ como los perfiles de puesto, y esta constante se borra.
+ * Nació hardcodeada en `lib/propuestas/csl.ts` (2026-07-30, "necesito verlo rápido") y
+ * ese archivo ya no existe: el documento vive en una fila de `RoleProfile` y se edita
+ * in-situ como cualquier otro. Esto quedó como el contenido con el que se creó, para que
+ * `scripts/seed-propuesta-csl.ts` sea reproducible.
  *
- * Mientras tanto: la página lo renderiza en LECTURA. Cambiar un monto o un texto
- * es editar este archivo.
- *
- * Qué se comparte con el perfil de puesto (`scripts/seed-roles.ts`, rol CSL):
- * perfil, responsabilidades, meta, acciones y caminos de éxito/fracaso son copia
- * de ese contenido. NO están sincronizados — si el rol cambia, esto no se entera.
- * Es el costo aceptado de la copia rápida.
+ * ⚠ NO es la fuente de verdad: si Elías edita la propuesta desde Nexus, este archivo
+ * queda viejo — y está bien. Re-correr el seed NO pisa el contenido (ver el script).
+ * Ningún código de la app lo importa.
  */
 
 export const PROPUESTA_CSL_HERO = {

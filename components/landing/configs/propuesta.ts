@@ -25,8 +25,11 @@ import {
   PropuestaSmarteamSection,
 } from "../sections-propuesta";
 
+// Exportado para que `lib/roles/propuesta.test.ts` pueda congelar el registro: sin esto,
+// un typo de `sectionType` desaparece una sección en silencio (`toSectionDef` devuelve null
+// sin romper) — y la que desaparecería podría ser la oferta económica.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const PROPUESTA_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
+export const PROPUESTA_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
   role_hero: RoleHeroSection,
   role_prose: RoleProseSection,
   role_cards: RoleResponsibilitiesSection,

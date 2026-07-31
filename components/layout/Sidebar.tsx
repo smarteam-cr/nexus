@@ -17,6 +17,8 @@ interface UserLite {
   isSuperAdmin: boolean;
   /** Mapa EFECTIVO sección×acción (resuelto en AppShell, server-side). */
   permissions: PermissionMap;
+  /** ¿Le compartieron algún documento de Roles? Enciende ese ítem del menú. */
+  hasSharedDocs: boolean;
 }
 
 interface SidebarProps {
@@ -176,7 +178,11 @@ export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps)
   // la seguridad real vive en cada página/endpoint.
   const role = user.role ?? "";
   const isSuperAdmin = user.isSuperAdmin || role === "SUPER_ADMIN";
-  const navCtx = { isSuperAdmin, permissions: user.permissions };
+  const navCtx = {
+    isSuperAdmin,
+    permissions: user.permissions,
+    hasSharedDocs: user.hasSharedDocs,
+  };
 
   return (
     <aside className="w-full bg-background border-r border-line flex flex-col sticky top-0 h-screen overflow-hidden">

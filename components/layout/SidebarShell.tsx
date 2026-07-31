@@ -12,6 +12,8 @@ interface UserLite {
   isSuperAdmin: boolean;
   /** Mapa EFECTIVO sección×acción (resuelto en AppShell, server-side). */
   permissions: PermissionMap;
+  /** ¿Le compartieron algún documento de Roles? Enciende ese ítem del menú. */
+  hasSharedDocs: boolean;
 }
 
 interface Props {

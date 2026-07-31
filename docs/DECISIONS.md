@@ -720,12 +720,22 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   `TeamRole` (permisos) ni a un `TeamMember` (persona) — es documentación de PUESTOS, que sobrevive
   a que entre/salga gente. *Por qué libre y no el enum:* el equipo tiene puestos que no son un rol
   de permisos (ej. "Asistente de Finanzas", "Diseñador"); atarlo al enum los dejaría afuera.
-- **Solo SUPER_ADMIN, gate hardcodeado FUERA de la matriz de permisos** (mismo criterio que
+- ~~**Solo SUPER_ADMIN, gate hardcodeado FUERA de la matriz de permisos** (mismo criterio que
   Costos): `role === "SUPER_ADMIN"` en la página (`redirect` antes de cualquier query), en el
-  sidebar (`{isSuperAdmin && <RolesFlyout/>}`) y en la API (`guardRolesAdmin` en `api-guards.ts`,
-  403). NO se agregó una sección al registry de permisos: una sección de docs de dirección no debe
-  ser delegable por plantilla, y SUPER_ADMIN ya es all-true en el engine — una celda de matriz no
-  compraría nada. Se evita el churn del modal de /team.
+  sidebar (`{isSuperAdmin && <RolesFlyout/>}`)~~ — **SUPERSEDED por §"Roles: dos tipos de
+  documento, compartir y link público (2026-07-30)"** en todo lo que hace a la LECTURA. Lo único
+  de este bullet que sigue vivo tal cual es el gate de ESCRITURA en la API (`guardRolesAdmin` en
+  `api-guards.ts`, 403 — lo exige un escaneo estructural, `lib/roles/api-guards.test.ts`). Hoy:
+  la página de un documento NO redirige por rol, responde **`notFound()`** cuando `getRole` no
+  devuelve fila (404 y no 403 a propósito: confirmar que una propuesta existe ya es información),
+  y el índice lista lo que deje pasar **`visibleRoleWhere`** (`lib/roles/access.ts`) — la misma
+  regla para "qué lista veo" y "puedo abrir este". `RolesFlyout` **ya no existe**: se borró en la
+  ola A4 (sidebar declarativo) y hoy es `RolesNavFlyout` sobre el `NavFlyout` único, con el gate
+  `superAdminOrSharedDocs` de `nav-config.tsx`, que se alimenta de un HECHO de datos
+  (`hasSharedDocs`) y no de un rol. **Sigue en pie el porqué:** NO se agregó una sección al
+  registry de permisos — una sección de docs de dirección no debe ser delegable por plantilla, y
+  SUPER_ADMIN ya es all-true en el engine, así que una celda de matriz no compraría nada. Se evita
+  el churn del modal de /team.
 - **Plantilla FIJA de 11 secciones** (fuente única `ROLE_SECTIONS` en `lib/roles/schema.ts`):
   Perfil · Responsabilidades · **[bloque 4DX: WIG · Predicción · Arrastre · Marcador · Cadencia]** ·
   Caminos de éxito · Caminos de fracaso · Ruta de madurez · Período de transición.
@@ -868,6 +878,60 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   paso el acceso externo token+password) merece su propio plan con su propio análisis de riesgo.
   Mientras tanto, un tipo nuevo que publique copia el patrón `publishedSnapshot` congelado +
   chokepoint server-side fail-closed (ARCHITECTURE §1-WEB punto 7).
+
+## Roles: dos tipos de documento, compartir y link público (2026-07-30)
+> Disparador: la propuesta de contratación del CSL se construyó como un parche —contenido
+> hardcodeado en `lib/propuestas/csl.ts`, dos páginas propias y una URL pública sin token—
+> y ya se presentó. Elías pidió ordenar: crear los dos tipos desde /roles, poder compartir
+> cada documento con una persona, y que cada uno tenga su URL pública oculta.
+- **UN enum en la misma tabla, no una tabla nueva.** `RoleProfile.docType` (`PERFIL |
+  PROPUESTA`) discrimina qué PLANTILLA del motor renderiza la fila. El storage ya era
+  genérico (un mapa Json `{sección: data}`), así que lo único que cambiaba entre los dos
+  documentos era el template config — y ese ya existía (`propuesta.defs.ts`, en producción
+  desde el día anterior). El par `contentKeysForDocType`/`landingConfigForDocType` vive
+  PARTIDO en dos archivos (`lib/roles/doc-type.ts` server-safe y `configs/doc-type.ts`
+  client) porque `lib/print/load-doc.ts` es `server-only` y no puede arrastrar renderers.
+- **`docType` se elige al crear y NO es patchable** (`rolePatchSchema.omit`). Cambiarlo
+  dejaría el `content` con las keys de la otra plantilla: un documento a medias, en
+  silencio.
+- **Compartir da SOLO LECTURA, y se sirve con OTRO COMPONENTE.** `RoleWorkspace` lleva
+  adentro el autosave con debounce, el flush `keepalive` en `pagehide` y el CTA de IA, y
+  `Editable` comitea al desmontarse: un `canEdit=false` habría dejado vivo el camino de
+  escritura y le dispararía PATCHes 403 en la cara al lector. El compartido monta
+  `RoleDocView`. Misma doctrina que Exploración: *no existe el camino, no es un flag apagado*.
+- **El filtro de lectura es UNO** (`visibleRoleWhere`, lib/roles/access.ts) y las dos
+  preguntas —"¿qué lista veo?" y "¿puedo abrir este?"— se COMPONEN de él. Y responde
+  **404, no 403**: en una lista de propuestas de contratación, confirmar que un documento
+  existe ya es información. RLS no protege de esto (Prisma bypassa); la policy deny-all de
+  `RoleProfile`/`RoleProfileShare` tapa al `anon` de Supabase, nada más.
+- **`RoleProfileShare` no tiene GRANT/REVOKE** (a diferencia de `ClientAssignment`): acá el
+  default es "solo dirección", así que no hay acceso heredado que revocar — la fila ES el
+  acceso y borrarla lo quita. Índice propio por `teamMemberId`: el `@@unique` lidera por
+  `roleId` y no sirve para el filtro por persona, que es el camino caliente (sidebar).
+- **El ítem "Roles" del sidebar deja de ser gate duro.** Un documento compartido tiene que
+  ser ALCANZABLE o compartir no sirve de nada. El gate nuevo (`superAdminOrSharedDocs`) se
+  alimenta de un HECHO de datos, no de un permiso: `hasSharedDocs`, que AppShell calcula
+  con un `findFirst` y **solo si el usuario no es SUPER_ADMIN** (para él la respuesta es sí
+  por definición; ese archivo corre en cada navegación y ya se le sacó una query por
+  caliente). Administrar sigue siendo de dirección.
+- **El link público: el TOKEN es la capability.** 64 hex (256 bits), sin contraseña y sin
+  cookie — la URL ES el secreto. `publicPublishedAt`/`ByEmail` son auditoría y NUNCA se
+  consultan como gate: dos fuentes para el mismo bit divergen (§2.1). Revocar pone el token
+  en `null`, así que el link viejo muere y no vuelve; republicar genera otro. Por eso NO hay
+  tabla de acceso aparte (a diferencia de `ProjectExternalAccess`, que sí necesita password,
+  cookie y rate limit). La página pública es `force-dynamic`: con el full route cache de
+  Next, revocar no surtiría efecto.
+- **El assist de IA responde 409 en propuestas, por ahora.** `rolesAssistContract` deriva de
+  las 11 secciones del perfil, y las 3 secciones propias de la propuesta (Smarteam,
+  partnerships, oferta) tienen `schema: {properties:{}}` → `coerceToSchema` las VACIARÍA al
+  aplicar. Habilitarlo = escribir esos schemas primero. Mismo criterio para el PDF: el
+  adaptador de impresión arma el documento con la plantilla de roles, así que una propuesta
+  saldría sin la oferta — el loader corta fail-closed y el botón ni se pinta.
+- **La propuesta del CSL se migró a una fila con id explícito** (`propuesta-csl-v1`) y su
+  contenido quedó como semilla en `scripts/data/`. La URL vieja sobrevive 5 días como
+  REDIRECT que resuelve el token vivo (nunca `permanentRedirect`: un 308 cacheado
+  sobreviviría a la revocación) — si sirviera contenido propio, revocar no cerraría nada.
+  **Se borra el 2026-08-04** junto con `lib/roles/csl-legacy.ts`.
 
 ## Exploración (descubrimiento del negocio del cliente)
 - **Qué es y por qué**: cuando el kickoff ya pasó y el proyecto arranca, el CSE tiene que

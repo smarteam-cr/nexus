@@ -13,12 +13,12 @@
  *
  * REUSA los componentes de `sections-roles.tsx`: lo único propio es la oferta.
  *
- * ⚠ Estado: la propuesta del CSL es el primer caso y su contenido está
- * HARDCODEADO en `lib/propuestas/csl.ts` — a pedido, para verlo rápido. Cuando
- * la forma se estabilice, el paso siguiente es guardarlo (una fila propia) para
- * que se edite in-situ como los roles. Hasta entonces se renderiza en LECTURA.
+ * STORAGE: comparte tabla con los perfiles de puesto (`RoleProfile`, discriminada por
+ * `docType`). Nació hardcodeada para verla rápido; desde el 2026-07-30 es una fila más y
+ * se edita in-situ, se comparte y se publica como cualquier documento de /roles.
  */
 import type { BCSectionDef } from "./business-case.defs";
+import type { RoleSectionKey } from "@/lib/roles/schema";
 import { SECTION_META } from "./roles.defs";
 
 const NO_AGENT = { agentGenerated: false, agentHint: "", brief: "" } as const;
@@ -93,6 +93,25 @@ const OFERTA_DEF: BCSectionDef = {
   ...NO_AGENT,
 };
 
+/**
+ * Las 3 secciones PROPIAS de la propuesta. El resto se hereda de `SECTION_META` (roles).
+ *
+ * El par de tipos de abajo es un GUARD DE COMPILACIÓN, no decoración: antes esto era
+ * `SECTION_META[s.key as keyof typeof SECTION_META]` y el `as` mataba al compilador — si
+ * mañana se saca una sección de `ROLE_SECTIONS`, ese código compilaba igual y reventaba con
+ * un TypeError al importar, tumbando toda página que muestre una propuesta. Ahora, una key
+ * heredada que no exista en la plantilla de roles NO COMPILA.
+ */
+const PROPIAS = {
+  smarteam: SMARTEAM_DEF,
+  partnerships: PARTNERSHIPS_DEF,
+  oferta: OFERTA_DEF,
+} as const;
+type PropiaKey = keyof typeof PROPIAS;
+type KeyHeredada = Exclude<PropuestaSectionKey, PropiaKey>;
+const _heredadasExistenEnRoles: RoleSectionKey = null as unknown as KeyHeredada;
+void _heredadasExistenEnRoles;
+
 const HERO_SCHEMA = {
   type: "object",
   properties: { title: { type: "string" }, area: { type: "string" }, summary: { type: "string" } },
@@ -113,13 +132,12 @@ export const PROPUESTA_SECTION_DEFS: BCSectionDef[] = [
     ...NO_AGENT,
   },
   ...PROPUESTA_SECTIONS.map((s): BCSectionDef => {
-    if (s.key === "smarteam") return SMARTEAM_DEF;
-    if (s.key === "partnerships") return PARTNERSHIPS_DEF;
-    if (s.key === "oferta") return OFERTA_DEF;
+    const propia = PROPIAS[s.key as PropiaKey];
+    if (propia) return propia;
     // El resto hereda del perfil de puesto TODO salvo el título: mismo tipo de
     // sección, mismo shape, mismo tema. Si mañana cambia un renderer de roles,
     // la propuesta lo hereda sola.
-    const m = SECTION_META[s.key as keyof typeof SECTION_META];
+    const m = SECTION_META[s.key as KeyHeredada];
     return {
       key: s.key,
       label: s.label,

@@ -1,27 +1,38 @@
 /**
- * /roles — índice de perfiles de puesto del equipo. SOLO SUPER_ADMIN. El redirect
- * corta ANTES de renderizar el cliente. El CRUD y la lista viven en el cliente
- * (fetch a /api/roles, guardado por guardRolesAdmin).
+ * /roles — índice de los documentos de Roles: perfiles de puesto Y propuestas.
+ *
+ * Ya NO es un redirect para todo no-SUPER_ADMIN: quien tenga un documento COMPARTIDO entra
+ * acá a leerlo. Lo que decide qué ve cada quien es `visibleRoleWhere` (dentro del GET de
+ * /api/roles); lo que decide si puede TOCAR algo es `canEditRoleDocs`, que baja como
+ * `canEdit` y apaga el alta, el activar/desactivar y el borrar.
+ *
+ * Sin sesión interna sí seguimos redirigiendo: esta ruta no tiene nada que ofrecerle.
  */
 import { redirect } from "next/navigation";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { PageHeader } from "@/components/ui";
 import { requireInternalUser } from "@/lib/auth/supabase";
+import { canEditRoleDocs } from "@/lib/roles/access";
 import RolesIndexClient from "@/components/roles/RolesIndexClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function RolesPage() {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || ctx.role !== "SUPER_ADMIN") redirect("/clients");
+  if (!ctx) redirect("/clients");
+  const canEdit = canEditRoleDocs({ role: ctx.role });
 
   return (
     <div className={SHELL_DEFAULT}>
       <PageHeader
         title="Roles"
-        description="Roles y responsabilidades del equipo. Cada puesto es una página resumida — crea, edita y abre su documento."
+        description={
+          canEdit
+            ? "Perfiles de puesto del equipo y propuestas de contratación. Cada documento es una página propia — crea, edita y compártela."
+            : "Los documentos que dirección compartió contigo."
+        }
       />
-      <RolesIndexClient />
+      <RolesIndexClient canEdit={canEdit} />
     </div>
   );
 }

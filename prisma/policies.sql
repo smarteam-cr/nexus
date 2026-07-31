@@ -99,6 +99,27 @@ CREATE POLICY deny_all_non_superuser ON "CostoMovimiento"
   TO PUBLIC
   USING (false);
 
+-- 6) Ídem para RoleProfile y RoleProfileShare (Roles: perfiles de puesto y propuestas
+--    de contratación): un documento PROPUESTA lleva la oferta salarial, así que pesa lo
+--    mismo que un salario de CostoRecurrente. Deny-all RESTRICTIVE contra el `anon` de
+--    Supabase. NO protege del rol interno (Prisma conecta con BYPASSRLS) — eso lo hace
+--    `visibleRoleWhere` en lib/roles/access.ts.
+--    ⚠ Nacieron en scripts/sql/2026-07-30-role-doctype-share-publico.sql, que se corre UNA
+--    vez; viven acá para que `npm run db:policies` las RESTABLEZCA en cada corrida.
+DROP POLICY IF EXISTS deny_all_non_superuser ON "RoleProfile";
+CREATE POLICY deny_all_non_superuser ON "RoleProfile"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "RoleProfileShare";
+CREATE POLICY deny_all_non_superuser ON "RoleProfileShare"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- VERIFICACIÓN (el runner con --apply ya la corre):
 --   SELECT tablename FROM pg_tables

@@ -14,7 +14,21 @@
  */
 import { z } from "zod";
 
+/**
+ * Los dos tipos de documento que viven en `RoleProfile`. Espejo client-safe del enum
+ * `RoleDocType` de Prisma (que no se puede importar acá sin arrastrar el cliente).
+ * El tipo NO es cosmético: decide con qué PLANTILLA del motor se renderiza la fila.
+ */
+export const ROLE_DOC_TYPES = ["PERFIL", "PROPUESTA"] as const;
+export type RoleDocTypeValue = (typeof ROLE_DOC_TYPES)[number];
+
+export const ROLE_DOC_TYPE_LABEL: Record<RoleDocTypeValue, string> = {
+  PERFIL: "Perfil de puesto",
+  PROPUESTA: "Propuesta",
+};
+
 export const roleCreateSchema = z.object({
+  docType: z.enum(ROLE_DOC_TYPES).default("PERFIL"),
   title: z.string().trim().min(1).max(120),
   area: z.string().trim().max(120).nullish(),
   summary: z.string().trim().max(500).nullish(),
@@ -23,7 +37,12 @@ export const roleCreateSchema = z.object({
   content: z.record(z.string(), z.unknown()).optional(),
 });
 
-export const rolePatchSchema = roleCreateSchema.partial().extend({
+/**
+ * ⚠ `docType` se OMITE a propósito: el tipo se elige al crear y no se cambia después.
+ * Cambiarlo dejaría el `content` lleno de keys que la otra plantilla no renderiza (y sin
+ * las que sí necesita) — un documento a medias, en silencio.
+ */
+export const rolePatchSchema = roleCreateSchema.omit({ docType: true }).partial().extend({
   active: z.boolean().optional(),
   order: z.number().int().min(0).optional(),
 });

@@ -1537,6 +1537,8 @@ model TeamMember {
   // SUPER_ADMIN-only (salarios estimados, Cobranza fase 4) — JAMÁS incluir esta
   // relación desde endpoints no-costos; Prisma no la trae sin include explícito.
   costosRecurrentes       CostoRecurrente[]       @relation("CostosDePersona")
+  // Documentos de /roles compartidos con esta persona (solo lectura).
+  roleShares              RoleProfileShare[]
 }
 
 enum TeamRole {
@@ -3146,12 +3148,26 @@ model IngresoVariable {
 }
 
 // ── Roles (roles y responsabilidades del equipo) ────────────────────────────────
-// Perfil de PUESTO libre (no atado al enum TeamRole ni a un TeamMember) que se
-// documenta a mano y se renderiza como una página web resumida. Plantilla fija de
-// 11 secciones (fuente única: ROLE_SECTIONS en lib/roles/schema.ts). Sin IA. Superficie SOLO SUPER_ADMIN (docs internos de
-// dirección) — RLS deny (tabla interna, sin policy SELECT).
+// Documento de PUESTO libre (no atado al enum TeamRole ni a un TeamMember) que se
+// documenta a mano y se renderiza como una página web resumida. DOS plantillas, que
+// elige `docType`: PERFIL (11 secciones, fuente única ROLE_SECTIONS en
+// lib/roles/schema.ts) y PROPUESTA (10, PROPUESTA_SECTION_DEFS). La IA PROPONE desde el
+// 2026-07-20 (assist de documento, POST /api/roles/[id]/assist — el humano revisa y
+// aplica; en PROPUESTA todavía 409). ESCRIBIR es solo de dirección (guardRolesAdmin);
+// LEER se comparte: `RoleProfileShare` (read-only, filtro visibleRoleWhere) y el
+// `publicToken` de abajo (link público sin login). La RLS deny-all sigue siendo contra el
+// `anon` de Supabase — no contra roles internos (Prisma bypassa RLS).
+/// Qué CLASE de documento es una fila de RoleProfile. Comparten storage (el mismo mapa Json
+/// de secciones) y cambian de PLANTILLA al renderizar: PERFIL usa la config de roles,
+/// PROPUESTA la de propuesta (que reusa 7 de sus secciones y suma oferta económica).
+enum RoleDocType {
+  PERFIL
+  PROPUESTA
+}
+
 model RoleProfile {
-  id             String  @id @default(cuid())
+  id             String      @id @default(cuid())
+  docType        RoleDocType @default(PERFIL)
   title          String // nombre del puesto (ej. "CSE", "Asistente de Finanzas")
   area           String? // área/equipo (ej. "Customer Success") — opcional
   summary        String? @db.Text // resumen de 1 línea (subtítulo del hero)
@@ -3167,8 +3183,35 @@ model RoleProfile {
   order          Int     @default(0)
   createdByEmail String? // quién lo creó (auditoría liviana)
 
+  // Link PÚBLICO oculto: `publicToken` ES la capability (64 hex = 256 bits). null = no
+  // publicado; revocar = ponerlo en null. Los otros dos son AUDITORÍA y nunca se consultan
+  // como gate: dos fuentes para el mismo bit divergen (§2.1).
+  publicToken            String?   @unique
+  publicPublishedAt      DateTime?
+  publicPublishedByEmail String?
+
+  shares RoleProfileShare[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([active, order])
+}
+
+/// Un documento de /roles compartido de SOLO LECTURA con una persona del equipo.
+/// Sin GRANT/REVOKE (a diferencia de ClientAssignment): acá el default es "solo Super Admin",
+/// así que no hay acceso heredado que revocar — la fila ES el acceso.
+model RoleProfileShare {
+  id             String      @id @default(cuid())
+  roleId         String
+  role           RoleProfile @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  teamMemberId   String
+  teamMember     TeamMember  @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+  grantedByEmail String // quién lo compartió (auditoría)
+  createdAt      DateTime    @default(now())
+
+  @@unique([roleId, teamMemberId])
+  // El @@unique lidera por roleId: NO sirve para el filtro por PERSONA (la lista visible y
+  // el "¿tengo algo compartido?" del sidebar), que es el camino caliente.
+  @@index([teamMemberId])
 }

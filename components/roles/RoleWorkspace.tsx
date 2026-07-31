@@ -24,8 +24,9 @@ import { useUndo } from "@/components/ui/UndoProvider";
 import AssistDialog from "@/components/ai/AssistDialog";
 import { AgentProposal } from "@/components/ai/AgentProposal";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
-import { landingConfigForRoles } from "@/components/landing/configs/roles";
-import { ROLE_CONTENT_KEYS, ROLE_SECTION_DEFS } from "@/components/landing/configs/roles.defs";
+import { landingConfigForDocType } from "@/components/landing/configs/doc-type";
+import { contentKeysForDocType, escalaForDocType, sectionDefsForDocType } from "@/lib/roles/doc-type";
+import { ROLE_DOC_TYPE_LABEL, type RoleDocTypeValue } from "@/lib/roles/schema";
 
 /** Respuesta de POST /api/roles/[id]/assist (espejo de DocumentAssistResult + runId). */
 interface AssistResult {
@@ -47,6 +48,7 @@ const ASSIST_CHIPS = [
 
 interface RoleInput {
   id: string;
+  docType: RoleDocTypeValue;
   title: string;
   area: string | null;
   summary: string | null;
@@ -55,12 +57,13 @@ interface RoleInput {
 
 type SaveState = "idle" | "saving" | "saved";
 
-/** Label humano de una sección para el toast de undo ("Edición en Responsabilidades"). */
-const SECTION_LABELS: Record<string, string> = Object.fromEntries(
-  ROLE_SECTION_DEFS.map((d) => [d.key, d.label]),
-);
-
 export default function RoleWorkspace({ role }: { role: RoleInput }) {
+  const docType = role.docType;
+  // Label humano de una sección para el toast de undo ("Edición en Responsabilidades").
+  // Sale de la plantilla del TIPO: las dos comparten keys con títulos distintos.
+  const SECTION_LABELS: Record<string, string> = Object.fromEntries(
+    sectionDefsForDocType(docType).map((d) => [d.key, d.label]),
+  );
   const toast = useToast();
   const { pushUndo, registerScope } = useUndo();
   const undoScope = `roles:${role.id}`;
@@ -252,8 +255,13 @@ export default function RoleWorkspace({ role }: { role: RoleInput }) {
 
   const sections: LandingSectionData[] = [
     { key: "hero", data: { title: meta.title, area: meta.area, summary: meta.summary } },
-    ...ROLE_CONTENT_KEYS.map((k) => ({ key: k, data: content[k] ?? null })),
+    ...contentKeysForDocType(docType).map((k) => ({ key: k, data: content[k] ?? null })),
   ];
+
+  // El assist todavía NO corre en propuestas: 3 de sus secciones (Smarteam, partnerships y la
+  // oferta) tienen el schema vacío, y `coerceToSchema` las VACIARÍA al aplicar. El endpoint
+  // responde 409; acá directamente no se ofrece el botón.
+  const asistible = docType === "PERFIL";
 
   return (
     <div>
@@ -261,7 +269,9 @@ export default function RoleWorkspace({ role }: { role: RoleInput }) {
         <p className="text-xs text-fg-muted">
           {editing
             ? "Edita el contenido directamente. Arrastra ⠿ para reordenar los ítems. Se guarda solo."
-            : "Vista del perfil. Toca “Editar” para modificarlo."}
+            : `Vista de ${ROLE_DOC_TYPE_LABEL[docType].toLowerCase()}. Toca “Editar” para ${
+                docType === "PERFIL" ? "modificarlo" : "modificarla"
+              }.`}
         </p>
         <div className="flex items-center gap-3">
           {editing && (
@@ -269,14 +279,16 @@ export default function RoleWorkspace({ role }: { role: RoleInput }) {
               {saveState === "saving" ? "Guardando…" : saveState === "saved" ? "Guardado ✓" : ""}
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => setAssistOpen(true)}
-            disabled={assistLoading}
-            className="px-3 py-1.5 text-sm font-medium rounded-lg border border-line text-fg-secondary hover:border-brand hover:text-brand transition-colors disabled:opacity-50"
-          >
-            ✨ Mejorar con IA
-          </button>
+          {asistible && (
+            <button
+              type="button"
+              onClick={() => setAssistOpen(true)}
+              disabled={assistLoading}
+              className="px-3 py-1.5 text-sm font-medium rounded-lg border border-line text-fg-secondary hover:border-brand hover:text-brand transition-colors disabled:opacity-50"
+            >
+              ✨ Mejorar con IA
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setEditing((e) => !e)}
@@ -357,9 +369,13 @@ export default function RoleWorkspace({ role }: { role: RoleInput }) {
         </AgentProposal>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-line">
+      <div
+        className={[escalaForDocType(docType), "overflow-hidden rounded-2xl border border-line"]
+          .filter(Boolean)
+          .join(" ")}
+      >
         <LandingView
-          config={landingConfigForRoles()}
+          config={landingConfigForDocType(docType)}
           ctx={{ clientName: "" }}
           sections={sections}
           mode={editing ? "edit" : "read"}

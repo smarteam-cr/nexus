@@ -20,6 +20,7 @@ import { z } from "zod";
 import { guardRolesAdmin } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getRole } from "@/lib/roles/queries";
+import { SYSTEM_SUBJECT } from "@/lib/roles/access";
 import { runDocumentAssist } from "@/lib/ai/assist";
 import { rolesAssistContract } from "@/components/landing/configs/roles.defs";
 
@@ -39,8 +40,24 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     return NextResponse.json({ error: "Escribe una instrucción (4 a 2000 caracteres)." }, { status: 400 });
   }
 
-  const role = await getRole(id);
-  if (!role) return NextResponse.json({ error: "Rol no encontrado" }, { status: 404 });
+  /* Lectura sin filtrar, y a propósito: `guardRolesAdmin` de arriba ya exigió SUPER_ADMIN,
+     que ve todo igual. El centinela lo dice EXPLÍCITO en vez de omitir el subject, que era
+     lo que antes hacía indistinguible "ya gateé" de "me olvidé". */
+  const role = await getRole(id, SYSTEM_SUBJECT);
+  if (!role) return NextResponse.json({ error: "Documento no encontrado" }, { status: 404 });
+
+  /* ⚠ El assist todavía NO corre en PROPUESTAS. `rolesAssistContract` deriva de las 11
+     secciones del PERFIL: sobre una propuesta propondría secciones que su plantilla no
+     renderiza y NO propondría las suyas (Smarteam, partnerships, oferta) — que además tienen
+     el schema vacío, así que `coerceToSchema` las VACIARÍA al aplicar. Habilitarlo = escribir
+     esos 3 schemas y un contrato propio. Hasta entonces, 409 explícito en vez de un
+     documento roto en silencio. */
+  if (role.docType !== "PERFIL") {
+    return NextResponse.json(
+      { error: "El assist de IA todavía no está disponible para propuestas." },
+      { status: 409 },
+    );
+  }
 
   const agent = await prisma.agent.findUnique({
     where: { id: AGENT_ID },

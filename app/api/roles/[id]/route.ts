@@ -1,10 +1,12 @@
 /**
  * /api/roles/[id] — GET uno · PATCH campos/active/order · DELETE.
- * Superficie SOLO SUPER_ADMIN (guardRolesAdmin).
+ *
+ * GET lo puede leer quien lo tenga COMPARTIDO (el filtro va dentro de `getRole`); toda
+ * ESCRITURA sigue siendo SOLO SUPER_ADMIN (`guardRolesAdmin`).
  */
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { guardRolesAdmin } from "@/lib/auth/api-guards";
+import { guardInternalUser, guardRolesAdmin } from "@/lib/auth/api-guards";
 import { getRole } from "@/lib/roles/queries";
 import { updateRole, deleteRole } from "@/lib/roles/mutations";
 import { rolePatchSchema } from "@/lib/roles/schema";
@@ -12,11 +14,14 @@ import { rolePatchSchema } from "@/lib/roles/schema";
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
-  const guard = await guardRolesAdmin();
+  const guard = await guardInternalUser();
   if (guard instanceof NextResponse) return guard;
   const { id } = await params;
-  const role = await getRole(id);
-  if (!role) return NextResponse.json({ error: "El rol no existe" }, { status: 404 });
+  // Sin compartir → `getRole` devuelve null → 404, el MISMO que si no existiera. Un 403
+  // confirmaría que el documento existe: en una lista de propuestas de contratación, eso
+  // ya es información.
+  const role = await getRole(id, { role: guard.role, teamMemberId: guard.teamMember.id });
+  if (!role) return NextResponse.json({ error: "El documento no existe" }, { status: 404 });
   return NextResponse.json({ role });
 }
 
