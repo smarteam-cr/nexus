@@ -1,6 +1,8 @@
 import type { Client as HsClient } from "@hubspot/api-client";
-import { getSystemHubspotClient, getSystemAccessToken, getPortalInfo } from "@/lib/hubspot/client";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { prisma } from "@/lib/db/prisma";
+import { crearProjectRecord, hasProjectsWriteScope } from "@/lib/hubspot/project-record";
+import { pipelineByKey } from "@/lib/projects/kind";
 
 /**
  * lib/hubspot/handoff-sync.ts  (Fase 5 del bloque de fundación)
@@ -23,29 +25,15 @@ import { prisma } from "@/lib/db/prisma";
  * (token-info / getPortalInfo).
  */
 
-// Pipeline "Customer Success CRM" + etapa "Hand off" (confirmados por inspección).
-export const HUBSPOT_CS_PIPELINE_ID = "826270797";
-export const HUBSPOT_HANDOFF_STAGE_ID = "1225193551";
-
-// Objeto "projects" (confirmado por inspección): objectTypeId 0-970, nombre = hs_name.
-const PROJECTS_OBJECT_TYPE = "0-970";
-const PROJECT_NAME_PROPERTY = "hs_name";
+/* El pipeline y la etapa inicial ya NO viven acá. Eran una copia de la fila de Customer Success
+   de `lib/projects/kind.ts` —los mismos dos ids, escritos dos veces— y envejecían por separado.
+   Ahora salen de la tabla, y el POST lo hace `lib/hubspot/project-record.ts`, el único módulo
+   autorizado a crear un proyecto en HubSpot. */
 
 // Flag de onboarding en la COMPANY (checkbox booleano). Confirmado por Elías:
 // internal name `nexus` (label "Nexus") — "true" era el VALOR del checkbox, no el
 // nombre. Se setea en true al sincronizar. Si null, no se escribe ninguna prop.
 const COMPANY_HANDOFF_FLAG_PROPERTY: string | null = "nexus";
-
-/** token-info: ¿el token del sistema tiene el scope de escritura de projects? */
-export async function hasProjectsWriteScope(): Promise<boolean> {
-  try {
-    const token = await getSystemAccessToken();
-    const info = await getPortalInfo(token);
-    return info.scopes?.includes("crm.objects.projects.write") ?? false;
-  } catch {
-    return false;
-  }
-}
 
 export type SyncStatus = "synced" | "linked" | "skipped" | "no_scope" | "failed";
 export interface SyncResult {
@@ -104,18 +92,24 @@ export async function syncHandoffToHubspot(handoffId: string): Promise<SyncResul
     // ── CASO B: no hay record en HubSpot → crear y LINKEAR al Project ───────────
     // Setear Project.hubspotServiceId = nuevo record para que sync-projects lo
     // RECONOZCA (update) en vez de re-importarlo como Project nuevo (el bug).
-    const newProjectId = await createProjectRecord(hs, {
-      name: handoff.project.name || handoff.client.name || "Proyecto",
+    /* Las asociaciones viajan DENTRO del POST (ver `project-record.ts`). Antes se hacían en
+       dos llamadas más, después de crear: un timeout en el medio dejaba un record sin empresa,
+       que el espejo no puede descubrir nunca — o sea, basura irrecuperable en el CRM. */
+    const newProjectId = await crearProjectRecord(hs, {
+      nombre: handoff.project.name || handoff.client.name || "Proyecto",
+      /* Este camino es el del handoff clásico y nace SIEMPRE como implementación: es el flujo
+         de Ventas → Customer Success. El alta única (Tanda C) es la que elige el tipo. */
+      pipeline: pipelineByKey("customer-success"),
       // Solo CASO B (creación). Si el handoff nació del stepper, trae el owner a setear.
       ownerId: handoff.hubspotOwnerIdOnCreate,
+      empresaId: companyId,
+      tratoId: handoff.hubspotDealId,
     });
     // Link inmediato y secuencial (project primero): si el 2º update fallara, el retry
     // entra por CASO A (project.hubspotServiceId ya seteado) → linkea, no duplica.
     await prisma.project.update({ where: { id: handoff.projectId }, data: { hubspotServiceId: newProjectId } });
     await prisma.handoff.update({ where: { id: handoffId }, data: { hubspotProjectId: newProjectId } });
 
-    if (companyId) await associateDefault(hs, newProjectId, "companies", companyId);
-    if (handoff.hubspotDealId) await associateDefault(hs, newProjectId, "deals", handoff.hubspotDealId);
     if (companyId && COMPANY_HANDOFF_FLAG_PROPERTY) {
       await writeCompanyFlag(hs, companyId, COMPANY_HANDOFF_FLAG_PROPERTY);
     }
@@ -147,43 +141,11 @@ export async function retryPendingHandoffs(): Promise<SyncResult[]> {
   return results;
 }
 
-/** Crea el record "projects" en el pipeline/etapa correctos. Devuelve su id. */
-async function createProjectRecord(
-  hs: HsClient,
-  { name, ownerId }: { name: string; ownerId?: string | null },
-): Promise<string> {
-  const res = await hs.apiRequest({
-    method: "POST",
-    path: `/crm/v3/objects/${PROJECTS_OBJECT_TYPE}`,
-    body: {
-      properties: {
-        [PROJECT_NAME_PROPERTY]: name,
-        hs_pipeline: HUBSPOT_CS_PIPELINE_ID,
-        hs_pipeline_stage: HUBSPOT_HANDOFF_STAGE_ID,
-        // Owner solo si el handoff nació del stepper (se persiste en hubspotOwnerIdOnCreate).
-        ...(ownerId ? { hubspot_owner_id: ownerId } : {}),
-      },
-    },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`crear project HubSpot falló (${res.status}): ${body.slice(0, 300)}`);
-  }
-  const created = (await res.json()) as { id: string };
-  return created.id;
-}
-
-/** Asociación default v4 (upsert — no duplica). */
-async function associateDefault(hs: HsClient, projectId: string, toType: string, toId: string): Promise<void> {
-  const res = await hs.apiRequest({
-    method: "PUT",
-    path: `/crm/v4/objects/${PROJECTS_OBJECT_TYPE}/${projectId}/associations/default/${toType}/${toId}`,
-  });
-  if (!res.ok && res.status !== 200 && res.status !== 201) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`asociar project→${toType} falló (${res.status}): ${body.slice(0, 200)}`);
-  }
-}
+/* `createProjectRecord` y `associateDefault` se fueron a `lib/hubspot/project-record.ts`
+   (2026-07-30). No fue solo mudanza: las asociaciones pasaron a viajar DENTRO del POST de
+   creación. Antes eran dos llamadas posteriores, y un timeout entre medio dejaba un record sin
+   empresa — que el espejo no puede descubrir nunca, porque encuentra proyectos recorriendo las
+   asociaciones de la company. Basura irrecuperable, sin error. */
 
 /** Marca el flag (checkbox booleano) en la company. Idempotente (set true). */
 async function writeCompanyFlag(hs: HsClient, companyId: string, property: string): Promise<void> {
