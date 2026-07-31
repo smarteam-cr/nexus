@@ -1,4 +1,5 @@
 import { getHubspotClient, getSystemHubspotClient } from "./client";
+import { ESTADOS_DE_ALTA, altaTerminada } from "@/lib/projects/alta";
 import { prisma } from "@/lib/db/prisma";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 import { sanitizeTags, normalizeTag } from "@/lib/tags/catalog";
@@ -497,11 +498,50 @@ async function verifyProjectInHubspot(hsClient: Client, objectId: string): Promi
 const SYNC_COOLDOWN_MS = 10 * 60 * 1000; // 10 min
 const lastSyncByClient = new Map<string, number>();
 
+/** Los estados de alta que NO están en curso. Derivado de la tabla, no escrito a mano. */
+const ESTADOS_TERMINADOS = ESTADOS_DE_ALTA.filter(altaTerminada);
+
+/**
+ * Espeja UN SOLO proyecto de HubSpot, recién creado por el alta única (Tanda C).
+ *
+ * ── POR QUÉ NO ES LA CORRIDA COMPLETA ────────────────────────────────────────
+ * La corrida completa es lo más caro del sistema —descubre los proyectos recorriendo las
+ * asociaciones de la empresa, con su cascada de fallbacks, y después lee las propiedades de
+ * todos— y encima tiene 10 minutos de cooldown. Meterla adentro de un click sería pagar todo
+ * eso para traer un proyecto que YA sabemos cuál es.
+ *
+ * ── POR QUÉ REUSA EL MISMO RECORRIDO EN VEZ DE COPIARLO ──────────────────────
+ * La alternativa era extraer la materialización a un módulo aparte y llamarla desde los dos
+ * lados. Sería una SEGUNDA implementación de "qué columnas escribe el espejo", y la guarda que
+ * exige que ambas escriban lo mismo tendría que comparar dos listas — que es justo el tipo de
+ * test que se queda viejo. Acá no hay dos: es el mismo código con una entrada más angosta, así
+ * que la paridad es cierta por construcción.
+ */
+export async function espejarProyectoRecienCreado(
+  clientId: string,
+  hubspotServiceId: string,
+): Promise<SyncResult> {
+  return syncProjectsForClient(clientId, { force: true, soloRecord: hubspotServiceId });
+}
+
 export async function syncProjectsForClient(
   clientId: string,
-  opts: { force?: boolean } = {},
+  opts: {
+    force?: boolean;
+    /**
+     * Espejar SOLO este record, salteando el descubrimiento por asociaciones de la empresa.
+     * Lo usa `espejarProyectoRecienCreado`.
+     *
+     * ⚠ Apaga DOS pasos finales que asumen "vinieron todos los proyectos del cliente":
+     * la reconciliación (que desactivaría el resto de la cartera) y la reclasificación de
+     * sesiones (que la paga el motor del alta, una sola vez). El tercero, resolver el hermano,
+     * SÍ corre: es lo que el motor necesita para dar el alta por terminada.
+     */
+    soloRecord?: string;
+  } = {},
 ): Promise<SyncResult> {
   const result: SyncResult = { found: 0, created: 0, updated: 0, skipped: 0, errors: [], debug: [] };
+  const dirigido = opts.soloRecord?.trim() || null;
 
   if (!opts.force) {
     const last = lastSyncByClient.get(clientId) ?? 0;
@@ -510,7 +550,11 @@ export async function syncProjectsForClient(
       return result;
     }
   }
-  lastSyncByClient.set(clientId, Date.now());
+  /* El espejo dirigido NO reclama el cooldown: es una lectura puntual de un record conocido, no
+     la corrida cara que el cooldown existe para espaciar. Si lo reclamara, un alta le robaría la
+     ventana a la sincronización completa del cliente y la ficha quedaría desactualizada 10 min
+     por haber creado un proyecto. */
+  if (!dirigido) lastSyncByClient.set(clientId, Date.now());
 
   // 1. Obtener client + HubspotAccount (query directa para evitar quirks del relation lookup)
   const [client, hubspotAccount] = await Promise.all([
@@ -533,9 +577,23 @@ export async function syncProjectsForClient(
   //    Caso A: cliente tiene su propio portal HubSpot → usar su cuenta
   //    Caso B: cliente está en el portal del sistema (Smarteam) → usar cuenta del sistema
   let hsClient: Client;
-  const usingSystemAccount = !hubspotAccount;
+  /* El espejo dirigido lee SIEMPRE del portal del SISTEMA, sin excepción: el record lo acaba de
+     crear el alta ahí. Si un cliente tuviera portal propio, la rama de abajo lo mandaría a
+     buscarlo al portal equivocado y el alta se quedaría trabada para siempre — un 404 que no es
+     un 404, sino "estás mirando el CRM de otro". Hoy no hay ningún cliente con portal propio
+     (0 de 165, medido el 2026-07-30), así que esto no cambia nada para nadie; está escrito para
+     el día que aparezca uno. */
+  const usingSystemAccount = dirigido ? true : !hubspotAccount;
 
-  if (hubspotAccount) {
+  if (dirigido) {
+    try {
+      hsClient = await getSystemHubspotClient();
+      result.debug!.push(`✓ Espejo dirigido del record ${dirigido} (portal del sistema)`);
+    } catch (e) {
+      result.errors.push(`Error al obtener HubSpot client del sistema: ${(e as Error).message}`);
+      return result;
+    }
+  } else if (hubspotAccount) {
     try {
       hsClient = await getHubspotClient(hubspotAccount.id);
       result.debug!.push(`✓ Usando cuenta HubSpot del cliente: ${hubspotAccount.hubName ?? hubspotAccount.id}`);
@@ -592,7 +650,11 @@ export async function syncProjectsForClient(
   //      b) descubrimiento por schema (objeto cuyo nombre incluye project/proyecto) — autoritativo
   //      c) fallbacks numéricos SOLO si no identificamos el objeto y NO hubo error transitorio
   //         (sino abortamos la corrida para no reconciliar con un set incompleto).
-  let projectIds: string[] = [];
+  /* En el espejo dirigido el descubrimiento ya está resuelto: sabemos exactamente qué record
+     traer, porque lo acabamos de crear. Arrancar con el id puesto saltea toda la cascada de
+     abajo —que existe para AVERIGUAR qué proyectos tiene la empresa— y de paso saltea su bloque
+     de error, que corta la corrida cuando no encuentra ninguno. */
+  let projectIds: string[] = dirigido ? [dirigido] : [];
   let workingAssocSlug: string | null = null;
   let objectIdentified = false; // ¿pudimos identificar el objeto Proyectos del portal?
   let anyTransient = false;     // ¿hubo algún error transitorio (timeout/5xx) consultando?
@@ -623,19 +685,22 @@ export async function syncProjectsForClient(
     }
   };
 
-  // a) Slugs nombrados canónicos.
-  for (const slug of NAMED_PROJECT_SLUGS) {
-    const r = await queryAssoc(slug);
-    if (r.kind === "transient") anyTransient = true;
-    if (r.kind === "ok") {
-      objectIdentified = true;
-      if (r.ids.length > 0) {
-        projectIds = r.ids;
-        workingAssocSlug = slug;
-        result.debug!.push(`✓ ${r.ids.length} proyectos via slug "${slug}"`);
-        break;
+  // a) Slugs nombrados canónicos. (Guardado igual que (b) y (c): con el id ya puesto por el
+  //    espejo dirigido, no hay nada que descubrir.)
+  if (projectIds.length === 0) {
+    for (const slug of NAMED_PROJECT_SLUGS) {
+      const r = await queryAssoc(slug);
+      if (r.kind === "transient") anyTransient = true;
+      if (r.kind === "ok") {
+        objectIdentified = true;
+        if (r.ids.length > 0) {
+          projectIds = r.ids;
+          workingAssocSlug = slug;
+          result.debug!.push(`✓ ${r.ids.length} proyectos via slug "${slug}"`);
+          break;
+        }
+        result.debug!.push(`Slug "${slug}": 0 asociaciones (objeto existe, empresa sin proyectos)`);
       }
-      result.debug!.push(`Slug "${slug}": 0 asociaciones (objeto existe, empresa sin proyectos)`);
     }
   }
 
@@ -1006,11 +1071,27 @@ export async function syncProjectsForClient(
       ...(asociados ? { hubspotRelatedProjectIds: asociados.get(project.id) ?? [] } : {}),
     };
 
-    // Buscar existente por hubspotServiceId o por nombre (evitar duplicados)
+    /* Buscar existente por hubspotServiceId o —si no hay— por NOMBRE, para no duplicar un
+       proyecto que Nexus creó a mano y todavía no tiene su id de HubSpot.
+       ── LA ADOPCIÓN POR NOMBRE ESTÁ ACOTADA, Y ANTES NO LO ESTABA ─────────────
+       Buscaba `{ clientId, name, hubspotServiceId: null }` a secas. Dos agujeros, los dos
+       silenciosos y auto-sanándose (que es lo que garantiza que no se diagnostiquen nunca):
+        1. Sin filtrar por `status`, adoptaba un proyecto INACTIVO — lo resucitaba con su
+           cobranza y sus documentos viejos, porque la rama de update escribe `status:"active"`.
+        2. Sin mirar el alta, podía quedarse con el proyecto de un ALTA EN CURSO y pegarle el
+           record equivocado: el alta esperaba SU id y le llegaba otro. */
     const existing =
       (await prisma.project.findUnique({ where: { hubspotServiceId: project.id } })) ??
       (await prisma.project.findFirst({
-        where: { clientId, name: projectName, hubspotServiceId: null },
+        where: {
+          clientId,
+          name: projectName,
+          hubspotServiceId: null,
+          status: "active",
+          // Positivo y con el NULL explícito: `notIn` descartaría las filas en NULL, que son
+          // casi todas (ver lib/projects/scope.ts, mismo cuidado).
+          OR: [{ altaEstado: null }, { altaEstado: { in: [...ESTADOS_TERMINADOS] } }],
+        },
       }));
 
     if (existing) {
@@ -1087,7 +1168,10 @@ export async function syncProjectsForClient(
      proyectos, así que una sola corrida al final hace exactamente el mismo trabajo.
      Fire-and-forget (no bloquea el sync) + import dinámico (no arrastra el clasificador
      al grafo del sync). */
-  if (result.created > 0) {
+  /* El espejo dirigido NO la dispara: la reclasificación cuesta ~US$1 de modelo por corrida y en
+     el alta única la paga el motor UNA sola vez al terminar, sellada, para que reintentar no la
+     cobre N veces. Si se disparara acá también, cada reintento sumaría un dólar. */
+  if (result.created > 0 && !dirigido) {
     void import("@/lib/sessions/reclassify")
       .then((m) => m.reclassifyClientSessions(clientId))
       .catch(() => {});
@@ -1098,7 +1182,12 @@ export async function syncProjectsForClient(
   // projectIds (>0) — si fuera 0 el flujo ya cortó antes (L276), así un fallo de la
   // API de HubSpot NO desactiva todo. NUNCA toca proyectos sin hubspotServiceId
   // (manuales / handoff / sentinel __strategy__): esos no son de HubSpot.
-  if (projectIds.length > 0) {
+  /* ⛔ EL ESPEJO DIRIGIDO NO RECONCILIA, y es el guardarraíl más importante de este cambio.
+     Esta reconciliación desactiva todo proyecto activo que no vino en `projectIds`, y en el
+     espejo dirigido `projectIds` tiene UN elemento: desactivaría el resto de la cartera del
+     cliente. No es una optimización — es la diferencia entre traer un proyecto y borrar del
+     mapa a todos sus hermanos. */
+  if (projectIds.length > 0 && !dirigido) {
     // Candidatos: proyectos sincronizados (hubspotServiceId) activos que NO vinieron
     // en el set de asociaciones de ESTA corrida. ANTES era un updateMany ciego — pero
     // `projectIds` puede estar incompleto/erróneo (hipo de la API → fallback a un slug
