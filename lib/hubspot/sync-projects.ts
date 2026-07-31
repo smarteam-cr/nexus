@@ -931,6 +931,23 @@ export async function syncProjectsForClient(
     // Si no existe → no crear tab vacío.
     const hasRealProps = !!(realName || rawStatus);
     if (!hasRealProps) {
+      /* ⛔ EL ESPEJO DIRIGIDO NO PUEDE CONCLUIR "este proyecto ya no existe".
+         Arriba hay un último recurso que, si fallan las tres formas de leer propiedades, arma
+         los proyectos con `properties: {}`. Para la corrida completa eso significa "HubSpot no
+         me lo devolvió, probablemente se borró" y apagarlo es razonable. Para el espejo dirigido
+         es exactamente al revés de la verdad: entramos SABIENDO cuál es, porque lo acabamos de
+         crear. Un 429 o un 5xx apagaría el proyecto recién nacido —sacándolo del rail, que es la
+         única pantalla donde vive el botón "Reintentar"— y encima devolvería `errors: []` con un
+         `updated`, indistinguible del éxito: el motor lo daría por bueno.
+         Acá el fallo se REPORTA, para que el alta quede pendiente y se pueda reintentar. */
+      if (dirigido) {
+        result.errors.push(
+          `HubSpot no devolvió las propiedades del proyecto ${project.id}. El alta queda ` +
+            `pendiente: se reintenta, no se descarta.`,
+        );
+        result.skipped++;
+        continue;
+      }
       const ghost = await prisma.project.findUnique({ where: { hubspotServiceId: project.id } });
       if (ghost && ghost.status === "active") {
         await prisma.project.update({

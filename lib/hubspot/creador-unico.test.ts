@@ -83,15 +83,51 @@ function bloquesApiRequest(codigo: string): string[] {
 }
 
 /**
- * ¿Este bloque CREA un proyecto? Tiene que ser POST **y** apuntar al objeto de proyectos.
+ * Los identificadores que, EN ESTE ARCHIVO, valen el objeto de proyectos.
  *
- * El id del objeto aparece legítimamente en lecturas (batch/read de asociaciones, search), así
- * que "menciona 0-970" no alcanza; y hay muchos POST a otros objetos, así que "es POST" tampoco.
+ * ⚠ SIN ESTO LA GUARDA NO ATRAPABA AL CREADOR QUE ESTE MISMO COMMIT BORRÓ. La versión anterior
+ * exigía que `0-970` u `OBJETO_PROYECTOS` aparecieran DENTRO del bloque de la llamada. Pero el
+ * creador viejo de `handoff-sync.ts` tenía la constante arriba del archivo
+ * (`const PROJECTS_OBJECT_TYPE = "0-970"`) e interpolaba `${PROJECTS_OBJECT_TYPE}` en la ruta:
+ * el bloque no contenía ninguna de las dos cadenas y habría pasado en verde.
+ *
+ * O sea: la guarda prohibía exactamente el patrón que NO detectaba. Y ese estilo ya existe en
+ * producción (`sync-projects.ts` interpola slugs igual), así que es el copy-paste natural.
  */
-function esCreacionDeProyecto(bloque: string): boolean {
-  const esPost = /method\s*:\s*["'`]POST["'`]/.test(bloque);
-  const alObjeto = /0-970|OBJETO_PROYECTOS/.test(bloque);
-  return esPost && alObjeto;
+function aliasDelObjeto(codigo: string): string[] {
+  const alias = new Set<string>(["OBJETO_PROYECTOS"]);
+  // const/let/var X = "0-970"  (con o sin anotación de tipo)
+  const asignacion = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=\n]+)?=\s*["'`]0-970["'`]/g;
+  let m: RegExpExecArray | null;
+  while ((m = asignacion.exec(codigo))) alias.add(m[1]);
+  // import { OBJETO_PROYECTOS as X }
+  const importAlias = /OBJETO_PROYECTOS\s+as\s+([A-Za-z_$][\w$]*)/g;
+  while ((m = importAlias.exec(codigo))) alias.add(m[1]);
+  return [...alias];
+}
+
+/**
+ * ¿Este bloque CREA un proyecto?
+ *
+ * ── EN HUBSPOT LAS LECTURAS TAMBIÉN SON POST, Y ESO ES LO QUE DISTINGUE ──────
+ * "POST + menciona el objeto" NO alcanza: `batch/read` y `search` son POST y viven en la misma
+ * ruta. Al endurecer esta guarda para que viera las constantes de módulo, empezó a marcar
+ * `app/api/handoffs/projects-of-company/route.ts`, que solo LEE
+ * (`POST /crm/v3/objects/${PROJECTS_OBJECT_TYPE}/batch/read`).
+ *
+ * Lo que separa crear de leer es dónde TERMINA la ruta: la creación apunta al objeto y nada
+ * más; toda lectura cuelga un sufijo detrás. Por eso se compara el final de la ruta y no su
+ * contenido — es la única forma de que la guarda sea a la vez estricta con lo que prohíbe y
+ * silenciosa con lo legítimo.
+ */
+function esCreacionDeProyecto(bloque: string, alias: string[]): boolean {
+  if (!/method\s*:\s*["'`]POST["'`]/.test(bloque)) return false;
+  const m = bloque.match(/path\s*:\s*[`"']([^`"']*)[`"']/);
+  if (!m) return false;
+  const ruta = m[1];
+  if (!ruta.includes("/crm/v3/objects/")) return false;
+  const finales = ["0-970", ...alias.map((a) => "${" + a + "}")];
+  return finales.some((f) => ruta.endsWith(f));
 }
 
 describe("nadie más crea un proyecto en HubSpot", () => {
@@ -104,8 +140,12 @@ describe("nadie más crea un proyecto en HubSpot", () => {
     for (const f of PRODUCCION) {
       const r = rel(f);
       if (r === "lib/hubspot/project-record.ts") continue;
-      const codigo = sinComentarios(sinImports(fs.readFileSync(f, "utf8")));
-      if (bloquesApiRequest(codigo).some(esCreacionDeProyecto)) culpables.push(r);
+      const crudo = fs.readFileSync(f, "utf8");
+      // Los alias se buscan en el archivo COMPLETO (la constante suele vivir arriba, y el
+      // import es justamente una línea de import), pero la detección corre sobre el cuerpo.
+      const alias = aliasDelObjeto(crudo);
+      const codigo = sinComentarios(sinImports(crudo));
+      if (bloquesApiRequest(codigo).some((b) => esCreacionDeProyecto(b, alias))) culpables.push(r);
     }
     expect(
       culpables,

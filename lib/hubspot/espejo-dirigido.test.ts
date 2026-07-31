@@ -76,6 +76,18 @@ describe("el espejo dirigido apaga lo que asume la corrida completa", () => {
     expect(trozo, "resolverHermanos quedó detrás de un guard de `dirigido`").not.toContain("dirigido");
   });
 
+  it("NO concluye «este proyecto no existe» cuando HubSpot no devuelve propiedades", () => {
+    /* El sync tiene un último recurso: si fallan las tres formas de leer propiedades, arma los
+       proyectos con `properties: {}`. Para la corrida completa eso significa "probablemente se
+       borró" y apagarlo es razonable. Para el espejo dirigido es al revés de la verdad —entramos
+       sabiendo cuál es, porque lo acabamos de crear—, así que un 429 apagaría el proyecto recién
+       nacido, sacándolo del rail (la única pantalla con el botón "Reintentar") y devolviendo
+       `errors: []`: indistinguible del éxito para el motor. */
+    const bloque = bloqueDesde("if (!hasRealProps)");
+    expect(bloque, "la rama del proyecto fantasma no distingue el espejo dirigido").toContain("dirigido");
+    expect(bloque, "el fallo tiene que REPORTARSE, no pasar como éxito").toContain("result.errors.push");
+  });
+
   it("no reclama el cooldown — un alta no puede dejar la ficha 10 min desactualizada", () => {
     expect(sinComentarios).toMatch(/if\s*\(\s*!dirigido\s*\)\s*lastSyncByClient\.set/);
   });
