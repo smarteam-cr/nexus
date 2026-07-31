@@ -31,8 +31,11 @@ export default function PropuestaView({
     ...PROPUESTA_CONTENT_KEYS.map((k) => ({ key: k, data: content[k] ?? null })),
   ];
 
+  // `stl-escala-120`: la propuesta se lee 20% más grande que el resto de los
+  // documentos del motor (ver el modificador en landing-engine.css).
+  const clase = framed ? "stl-escala-120 overflow-hidden rounded-2xl border border-line" : "stl-escala-120";
   return (
-    <div className={framed ? "overflow-hidden rounded-2xl border border-line" : undefined}>
+    <div className={clase}>
       <LandingView
         config={landingConfigForPropuesta()}
         ctx={{ clientName: "" }}
