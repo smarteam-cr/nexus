@@ -34,7 +34,13 @@ export default function ProposalGlobalStrip({
   const globales = deltas.filter((d) => d.kind === "SET_ANCHOR" || d.kind === "REORDER_PHASES");
 
   return (
-    <div className="rounded-xl border border-blue-700/50 bg-blue-900/15 px-3 py-2 space-y-1.5">
+    /* El ancla del CTA azul del encabezado. Ese botón NO acepta: baja hasta acá, donde cada
+       cambio se ve con su detalle y su aceptar/descartar. Aceptar seis cambios de estructura sin
+       verlos es difícil de deshacer, y la fila de CTAs no tiene espacio para explicarlos. */
+    <div
+      id="cronograma-propuesta"
+      className="scroll-mt-24 rounded-xl border border-blue-700/50 bg-blue-900/15 px-3 py-2 space-y-1.5"
+    >
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[11px] font-bold uppercase tracking-wider text-blue-300">
           La IA sugiere {plural(deltas.length, "cambio de estructura", "cambios de estructura")}

@@ -177,3 +177,52 @@ test("describeChanges: NADA queda escondido detrás de un +N", () => {
 test("describeChanges: un solo cambio se lee igual que antes", () => {
   expect(describeChanges([{ field: "durationWeeks", from: 4, to: 6 }])).toBe("4 → 6 semanas");
 });
+
+// ── La propuesta NO puede vaciar la fila de acciones del cronograma ──────────
+
+import fs from "node:fs";
+import path from "node:path";
+
+/**
+ * ── LA FALLA QUE ATACA, y que estaba VIVA ────────────────────────────────────
+ * Con una propuesta de estructura pendiente, la fila de CTAs del encabezado del cronograma
+ * quedaba VACÍA: los tres botones estaban detrás de un `!proposal`.
+ *
+ * Y eso era falso para la propuesta de ESTRUCTURA: no congela nada. El Gantt sigue editable, los
+ * deltas se dibujan adentro como badges, y el aviso ámbar de abajo igual ofrece "Genera las
+ * tareas". O sea que la acción existía —pero solo enterrada en un banner—, y el usuario veía
+ * cuatro avisos apilados y ningún botón donde los busca.
+ *
+ * Solo la propuesta del ASSIST (la que trae tareas) sí reemplaza el Gantt por una vista de solo
+ * lectura: ahí esconder las acciones es correcto, y por eso el gate es `structureOnlyProposal`
+ * y no `proposal` a secas.
+ *
+ * Se verifica sobre el texto porque es un gate de JSX dentro de un componente de 2.200 líneas
+ * que habla con seis endpoints: montarlo entero para leer una condición cuesta más de lo que
+ * protege. El assert nombra la condición exacta, no una palabra suelta.
+ */
+test("con una propuesta de ESTRUCTURA, el cronograma conserva sus acciones", () => {
+  const src = fs.readFileSync(
+    path.join(process.cwd(), "components/canvas/CronogramaCanvas.tsx"),
+    "utf8",
+  );
+
+  expect(
+    src,
+    "el CTA de generar/re-chequear volvió a esconderse ante cualquier propuesta: con una de " +
+      "estructura el Gantt sigue vivo y la fila de acciones no puede quedar vacía",
+  ).toContain("(!proposal || structureOnlyProposal)");
+
+  expect(
+    src,
+    "desapareció el CTA que lleva a revisar los cambios propuestos desde la fila de acciones",
+  ).toMatch(/canEdit && structureOnlyProposal && proposalDeltas\.length > 0/);
+
+  // El CTA lleva al ancla; no acepta desde el encabezado (aceptar N cambios sin verlos es
+  // difícil de deshacer, y la fila no tiene espacio para explicarlos).
+  expect(src).toContain('getElementById("cronograma-propuesta")');
+  expect(
+    fs.readFileSync(path.join(process.cwd(), "components/canvas/ProposalGlobalStrip.tsx"), "utf8"),
+    "el ancla del CTA se perdió: el botón del encabezado quedaría llevando a ningún lado",
+  ).toContain('id="cronograma-propuesta"');
+});

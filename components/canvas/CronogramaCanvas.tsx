@@ -1724,11 +1724,33 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               {chainingProgress ? "Evaluando avance…" : "Creando tareas…"}
             </span>
           )}
+          {/* La propuesta de estructura, en la MISMA fila que las demás acciones.
+              ── LA FALLA QUE ARREGLA ─────────────────────────────────────────
+              Con una propuesta pendiente, esta fila quedaba VACÍA: el gate `!proposal` escondía
+              los tres botones. Pero una propuesta de estructura NO congela el cronograma —el
+              Gantt sigue editable y el aviso ámbar de abajo igual ofrece "Genera las tareas"—,
+              así que la acción existía pero solo enterrada en un banner. Quedaban cuatro avisos
+              apilados antes de ver el Gantt y ningún botón donde uno los busca.
+              NO acepta: baja hasta la franja, donde cada cambio se ve con su detalle. */}
+          {canEdit && structureOnlyProposal && proposalDeltas.length > 0 && (
+            <button
+              onClick={() =>
+                document
+                  .getElementById("cronograma-propuesta")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-fg hover:bg-primary-hover transition-colors"
+              title="La IA propuso cambios de estructura desde el handoff — se revisan uno por uno"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+              Revisar {proposalDeltas.length} {proposalDeltas.length === 1 ? "cambio" : "cambios"}
+            </button>
+          )}
           {/* CTA bi-estado (#2): sin tareas (y nunca publicado) → "Generar cronograma" (crea las
               tareas iniciales); ya con tareas o publicado → "Chequear avance" (D.2). El gate
               !hasPublishedOnce evita regenerar sobre un cronograma vivo (borraría fechas/avance),
               aun si se borraron las tareas post-publicación. */}
-          {canEdit && phases.length > 0 && !proposal && (
+          {canEdit && phases.length > 0 && (!proposal || structureOnlyProposal) && (
             !hasPublishedOnce && !hasAiDetail ? (
               // Cronograma VIRGEN: "Generar cronograma" solo si tiene el permiso; si no,
               // no mostrar nada (NO caer al botón de avance — no hay avance que chequear
