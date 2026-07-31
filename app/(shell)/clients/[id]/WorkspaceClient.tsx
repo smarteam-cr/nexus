@@ -8,7 +8,12 @@ import { invalidateGps } from "@/lib/clients/gps-cache";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
-import { SENTINEL_SERVICE_TYPE, projectCapabilities, resolvePipeline } from "@/lib/projects/kind";
+import {
+  SENTINEL_SERVICE_TYPE,
+  hechosDeProyecto,
+  projectCapabilities,
+  resolvePipeline,
+} from "@/lib/projects/kind";
 
 // El id del tab de "Información del cliente" ES el sentinel: el layout lo devuelve como
 // `initialProjectId` cuando el cliente no tiene un único proyecto. Importado y no escrito
@@ -30,6 +35,8 @@ interface ProjectSummary {
   hubspotPipelineId?: string | null;
   proyectoInterno?: boolean;
   hermanoCsProjectId?: string | null;
+  /** `Project.altaEstado` — un alta a medio hacer no cobra ni se publica (lib/projects/alta.ts). */
+  altaEstado?: string | null;
 }
 
 /**
@@ -44,11 +51,14 @@ function TiraDeClase({ p, projects }: { p: ProjectSummary; projects: ProjectSumm
   const hermano = p.hermanoCsProjectId
     ? projects.find((o) => o.id === p.hermanoCsProjectId)
     : undefined;
-  const caps = projectCapabilities({
-    hubspotPipelineId: p.hubspotPipelineId ?? null,
-    interno: p.proyectoInterno ?? false,
-    tieneHermanoCs: !!p.hermanoCsProjectId,
-  });
+  const caps = projectCapabilities(
+    hechosDeProyecto({
+      hubspotPipelineId: p.hubspotPipelineId ?? null,
+      proyectoInterno: p.proyectoInterno ?? false,
+      hermanoCsProjectId: p.hermanoCsProjectId ?? null,
+      altaEstado: p.altaEstado ?? null,
+    }),
+  );
 
   const chips: Array<{ texto: string; ayuda: string }> = [];
   if (def && def.key !== "customer-success") {

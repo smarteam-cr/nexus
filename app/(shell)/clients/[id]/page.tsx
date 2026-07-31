@@ -82,6 +82,7 @@ export default async function ClientPage({
         hubspotPipelineId: true,
         proyectoInterno: true,
         hermanoCsProjectId: true,
+        altaEstado: true,
       },
     }),
     prisma.hubspotAccount.findFirst({

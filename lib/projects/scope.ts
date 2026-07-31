@@ -27,6 +27,7 @@
  */
 import type { Prisma } from "@prisma/client";
 import { PROJECT_PIPELINES, SENTINEL_SERVICE_TYPE } from "./kind";
+import { ESTADOS_DE_ALTA, altaEnCurso, altaTerminada, parseEstadoDeAlta } from "./alta";
 
 // ── Las formas mínimas que necesita un filtro en memoria ─────────────────────
 
@@ -38,6 +39,16 @@ export interface ProyectoParaFiltro {
   hubspotPipelineId: string | null;
   proyectoInterno: boolean;
   hermanoCsProjectId: string | null;
+  /**
+   * `Project.altaEstado` (Tanda C — ver `lib/projects/alta.ts`). `null` para todo lo que no
+   * nació por el alta única, que es el 99%.
+   *
+   * Agregarlo acá NO es opcional aunque el filtro pudiera compilar sin él: el evaluador de
+   * `scope.test.ts` tira un error con nombre y apellido si un fragmento menciona una columna
+   * que esta interfaz no declara, justamente para que una condición nueva no quede sin
+   * cobertura.
+   */
+  altaEstado: string | null;
 }
 
 /**
@@ -87,16 +98,63 @@ const NO_ES_SENTINEL: CriterioDeProyecto = {
  * Regla de HubSpot: un cliente CON portal muestra solo proyectos sincronizados (deja afuera
  * los stubs "Proyecto {id}" sin servicio); un cliente SIN portal muestra cualquiera.
  */
+const RAMAS_REGLA_HUBSPOT: readonly Prisma.ProjectWhereInput[] = [
+  { client: { hubspotCompanyId: null, hubspotAccount: { is: null } } },
+  { hubspotServiceId: { not: null } },
+];
+
+const cumpleReglaHubspot = (p: ProyectoParaFiltro, c: ClienteParaFiltro) =>
+  (c.hubspotCompanyId === null && !c.tieneHubspotAccount) || p.hubspotServiceId !== null;
+
 const REGLA_HUBSPOT: CriterioDeCliente = {
   nombre: "regla-hubspot",
-  where: {
-    OR: [
-      { client: { hubspotCompanyId: null, hubspotAccount: { is: null } } },
-      { hubspotServiceId: { not: null } },
-    ],
-  },
-  cumple: (p, c) =>
-    (c.hubspotCompanyId === null && !c.tieneHubspotAccount) || p.hubspotServiceId !== null,
+  where: { OR: [...RAMAS_REGLA_HUBSPOT] },
+  cumple: cumpleReglaHubspot,
+};
+
+// ── Los átomos del ALTA (Tanda C) ────────────────────────────────────────────
+// Las dos listas se DERIVAN de la tabla de verdad de `lib/projects/alta.ts`. Escritas a mano
+// serían una tercera copia de la misma regla, y la que se olvidaría de actualizar.
+
+const ESTADOS_EN_CURSO = ESTADOS_DE_ALTA.filter(altaEnCurso);
+const ESTADOS_TERMINADOS = ESTADOS_DE_ALTA.filter(altaTerminada);
+
+/**
+ * El alta de este proyecto YA TERMINÓ. Entra a CARTERA y a FACTURABLE.
+ *
+ * ── LOS NULL SON EL 99%, Y POR ESO ESTÁ ESCRITO ASÍ ──────────────────────────
+ * `{ altaEstado: { notIn: [...los en curso] } }` parece lo obvio y sería una catástrofe: en
+ * SQL, `NOT IN` sobre una columna NULL vale NULL, y una fila con predicado NULL no entra en el
+ * resultado. Como todo lo que existe hoy tiene `altaEstado` en NULL, ese filtro **vaciaría
+ * cobranza y la cartera de un saque**. Es exactamente el bug del sentinel que encabeza este
+ * archivo, sobre la columna con más NULL de la tabla.
+ *
+ * De ahí el `OR` con `null` explícito y el `in` en positivo.
+ */
+const ALTA_TERMINADA: CriterioDeProyecto = {
+  nombre: "alta-terminada",
+  where: { OR: [{ altaEstado: null }, { altaEstado: { in: [...ESTADOS_TERMINADOS] } }] },
+  cumple: (p) => altaTerminada(parseEstadoDeAlta(p.altaEstado)),
+};
+
+/**
+ * La regla de HubSpot, MÁS los proyectos con el alta todavía en curso. Reemplaza a
+ * `REGLA_HUBSPOT` **solo dentro de NAVEGABLE**.
+ *
+ * ── POR QUÉ NO SE RELAJA LA REGLA, SE LE SUMA UNA RAMA ───────────────────────
+ * `REGLA_HUBSPOT` existe para esconder los stubs "Proyecto {id}" de los clientes con portal, y
+ * eso sigue haciendo falta. Lo que cambia es que un alta a medio hacer TAMBIÉN se ve —todavía
+ * no tiene `hubspotServiceId`, que es justo el síntoma del problema que hay que ir a
+ * arreglar—. Sin esta rama, el proyecto que acabás de crear es invisible en la única pantalla
+ * desde la que se puede apretar "Reintentar".
+ *
+ * ⚠ NO resucita al contenedor "Información del cliente": ése queda afuera por `NO_ES_SENTINEL`,
+ * que sigue en NAVEGABLE. La invariante de TRES lados de `scope.test.ts` lo exige.
+ */
+const REGLA_HUBSPOT_O_ALTA_EN_CURSO: CriterioDeCliente = {
+  nombre: "regla-hubspot-o-alta-en-curso",
+  where: { OR: [...RAMAS_REGLA_HUBSPOT, { altaEstado: { in: [...ESTADOS_EN_CURSO] } }] },
+  cumple: (p, c) => cumpleReglaHubspot(p, c) || altaEnCurso(parseEstadoDeAlta(p.altaEstado)),
 };
 
 // ── Los átomos derivados del registro de pipelines ───────────────────────────
@@ -205,7 +263,11 @@ function componerCon(
  * decisiones. Nadie pierde acceso a su proyecto por esta tanda; la cuarentena es de
  * cobranza, cartera, vigilante y publicación, nunca de navegación.
  */
-const NAVEGABLE: readonly CriterioDeCliente[] = [ACTIVO, NO_ES_SENTINEL, REGLA_HUBSPOT];
+const NAVEGABLE: readonly CriterioDeCliente[] = [
+  ACTIVO,
+  NO_ES_SENTINEL,
+  REGLA_HUBSPOT_O_ALTA_EN_CURSO,
+];
 
 /** DE CARTERA — el panel de cartera, Éxito del cliente, CS360 y el watchdog. */
 const DE_CARTERA: readonly CriterioDeCliente[] = [
@@ -214,6 +276,7 @@ const DE_CARTERA: readonly CriterioDeCliente[] = [
   REGLA_HUBSPOT,
   CUENTA_PARA_CARTERA,
   NO_ES_INTERNO,
+  ALTA_TERMINADA,
 ];
 
 /** FACTURABLE — el panel de Cobranza. */
@@ -224,6 +287,7 @@ const FACTURABLE: readonly CriterioDeCliente[] = [
   PIPELINE_FACTURABLE,
   NO_ES_INTERNO,
   NO_ES_HERMANO_DE_CS,
+  ALTA_TERMINADA,
 ];
 
 /**

@@ -36,6 +36,7 @@ import {
   type ProyectoParaFiltro,
 } from "./scope";
 import { SENTINEL_SERVICE_TYPE } from "./kind";
+import { ESTADOS_DE_ALTA, altaEnCurso, parseEstadoDeAlta } from "./alta";
 
 // ── El evaluador con semántica de SQL ────────────────────────────────────────
 
@@ -139,6 +140,7 @@ const PROYECTO_BASE: ProyectoParaFiltro = {
   hubspotPipelineId: CS,
   proyectoInterno: false,
   hermanoCsProjectId: null,
+  altaEstado: null,
 };
 
 const CLIENTE_CON_PORTAL: ClienteParaFiltro = { hubspotCompanyId: "co1", tieneHubspotAccount: false };
@@ -158,19 +160,26 @@ function todasLasFilas(): Fila[] {
         for (const hubspotPipelineId of [CS, DEV, WEB, DESCONOCIDO, null]) {
           for (const proyectoInterno of [true, false]) {
             for (const hermanoCsProjectId of ["otro-proyecto", null]) {
-              for (const c of [CLIENTE_CON_PORTAL, CLIENTE_SIN_PORTAL, CLIENTE_CON_CUENTA]) {
-                filas.push({
-                  p: {
-                    ...PROYECTO_BASE,
-                    status,
-                    serviceType,
-                    hubspotServiceId,
-                    hubspotPipelineId,
-                    proyectoInterno,
-                    hermanoCsProjectId,
-                  },
-                  c,
-                });
+              /* Los CUATRO valores del alta, `null` incluido y primero. `null` es el 99% de la
+                 base real —todo lo anterior a la Tanda C y todo lo que entra por el espejo—,
+                 así que es el que de verdad tiene que coincidir entre el SQL y la memoria: un
+                 `notIn` mal escrito lo trata como "no cumple" y vacía cobranza entera. */
+              for (const altaEstado of [null, ...ESTADOS_DE_ALTA]) {
+                for (const c of [CLIENTE_CON_PORTAL, CLIENTE_SIN_PORTAL, CLIENTE_CON_CUENTA]) {
+                  filas.push({
+                    p: {
+                      ...PROYECTO_BASE,
+                      status,
+                      serviceType,
+                      hubspotServiceId,
+                      hubspotPipelineId,
+                      proyectoInterno,
+                      hermanoCsProjectId,
+                      altaEstado,
+                    },
+                    c,
+                  });
+                }
               }
             }
           }
@@ -244,13 +253,30 @@ describe("los fragmentos son seguros de spreadear", () => {
 });
 
 describe("cada criterio dice de qué está hecho", () => {
-  it("navegable es el más ancho: cartera y facturable lo CONTIENEN", () => {
+  it("navegable es el más ancho: cartera y facturable están CONTENIDOS en él", () => {
     /* No es cosmético: garantiza que un proyecto que se factura o que suma a la cartera
-       SIEMPRE tenga pestaña. Si algún día cartera dejara de contener a navegable, habría
-       un proyecto que cobra y al que nadie puede entrar. */
-    for (const criterio of ["cartera", "facturable"] as const) {
-      for (const atomo of ATOMOS_POR_CRITERIO.navegable) {
-        expect(ATOMOS_POR_CRITERIO[criterio], `${criterio} perdió el átomo "${atomo}"`).toContain(atomo);
+       SIEMPRE tenga pestaña. Si cartera dejara de estar contenida en navegable, habría un
+       proyecto que cobra y al que nadie puede entrar.
+     *
+     * ── SE COMPRUEBA EL CONJUNTO, NO LOS NOMBRES DE LOS ÁTOMOS ─────────────────
+     * Antes esto exigía que cada átomo de navegable apareciera TAMBIÉN en cartera y en
+     * facturable. Era un proxy barato, y la Tanda C lo rompió sin romper la propiedad: para
+     * que un alta a medio hacer se vea, navegable pasó a usar `regla-hubspot-o-alta-en-curso`
+     * mientras cartera y facturable siguen con `regla-hubspot` (más `alta-terminada`). La
+     * contención sigue valiendo —quien cumple `regla-hubspot` cumple la versión con el `O`—
+     * pero los nombres ya no calzan.
+     *
+     * Comprobar el conjunto sobre todas las filas sintéticas es estrictamente más fuerte:
+     * mide lo que el párrafo de arriba promete, y no se puede engañar renombrando un átomo
+     * ni componiendo el mismo criterio de otra forma. */
+    for (const fila of todasLasFilas()) {
+      const navegable = esProyectoNavegable(fila.p, fila.c);
+      const donde = JSON.stringify(fila);
+      if (esProyectoDeCartera(fila.p, fila.c)) {
+        expect(navegable, `es de CARTERA pero no navegable: ${donde}`).toBe(true);
+      }
+      if (esProyectoFacturable(fila.p, fila.c)) {
+        expect(navegable, `es FACTURABLE pero no navegable: ${donde}`).toBe(true);
       }
     }
   });
@@ -268,14 +294,16 @@ describe("cada criterio dice de qué está hecho", () => {
   });
 });
 
-describe("casos con nombre y apellido", () => {
-  const nav = (p: Partial<ProyectoParaFiltro>, c = CLIENTE_CON_PORTAL) =>
-    esProyectoNavegable({ ...PROYECTO_BASE, ...p }, c);
-  const fact = (p: Partial<ProyectoParaFiltro>, c = CLIENTE_CON_PORTAL) =>
-    esProyectoFacturable({ ...PROYECTO_BASE, ...p }, c);
-  const cart = (p: Partial<ProyectoParaFiltro>, c = CLIENTE_CON_PORTAL) =>
-    esProyectoDeCartera({ ...PROYECTO_BASE, ...p }, c);
+// Atajos de los tres criterios sobre la fila base. En scope de módulo —y no dentro de un
+// `describe`— porque los usan los dos bloques de casos con nombre.
+const nav = (p: Partial<ProyectoParaFiltro>, c = CLIENTE_CON_PORTAL) =>
+  esProyectoNavegable({ ...PROYECTO_BASE, ...p }, c);
+const fact = (p: Partial<ProyectoParaFiltro>, c = CLIENTE_CON_PORTAL) =>
+  esProyectoFacturable({ ...PROYECTO_BASE, ...p }, c);
+const cart = (p: Partial<ProyectoParaFiltro>, c = CLIENTE_CON_PORTAL) =>
+  esProyectoDeCartera({ ...PROYECTO_BASE, ...p }, c);
 
+describe("casos con nombre y apellido", () => {
   it("el proyecto con serviceType NULO es navegable (no es el centinela)", () => {
     expect(nav({ serviceType: null })).toBe(true);
   });
@@ -326,5 +354,66 @@ describe("casos con nombre y apellido", () => {
     expect(esProyectoClasificable({ ...PROYECTO_BASE, hubspotServiceId: null })).toBe(true);
     expect(esProyectoClasificable({ ...PROYECTO_BASE, proyectoInterno: true })).toBe(true);
     expect(esProyectoClasificable({ ...PROYECTO_BASE, hubspotPipelineId: DEV })).toBe(true);
+  });
+});
+
+describe("el ALTA en curso: se ve, y no cobra (Tanda C)", () => {
+  /** Un alta a medio hacer, en el estado más crudo: sin id de HubSpot todavía. */
+  const enCurso = { hubspotServiceId: null, altaEstado: "pendiente_crm" as const };
+
+  it("se VE aunque el cliente tenga portal y el proyecto no tenga id de HubSpot", () => {
+    /* Es LA razón de existir del átomo. Sin él, el proyecto que acabás de crear es invisible
+       justo en la única pantalla desde la que se puede apretar "Reintentar", y el usuario
+       cree que se perdió. */
+    expect(nav(enCurso, CLIENTE_CON_PORTAL)).toBe(true);
+    expect(nav(enCurso, CLIENTE_CON_CUENTA)).toBe(true);
+    expect(nav(enCurso, CLIENTE_SIN_PORTAL)).toBe(true);
+  });
+
+  it("NO cobra y NO suma a la cartera, en los dos estados en curso", () => {
+    for (const altaEstado of ESTADOS_DE_ALTA.filter(altaEnCurso)) {
+      expect(fact({ altaEstado }), altaEstado).toBe(false);
+      expect(cart({ altaEstado }), altaEstado).toBe(false);
+    }
+  });
+
+  it("`listo` y `null` se comportan IDÉNTICO — es lo que hace invisible el deploy", () => {
+    /* La invariante más importante de la migración: los ~100 proyectos que ya existen quedan
+       en NULL. Si NULL no diera exactamente lo mismo que 'listo', aplicar el SQL sacaría a
+       todos los proyectos de cobranza y de la cartera al mismo tiempo. */
+    for (const c of [CLIENTE_CON_PORTAL, CLIENTE_SIN_PORTAL, CLIENTE_CON_CUENTA]) {
+      expect(nav({ altaEstado: null }, c)).toBe(nav({ altaEstado: "listo" }, c));
+    }
+    expect(fact({ altaEstado: null })).toBe(fact({ altaEstado: "listo" }));
+    expect(cart({ altaEstado: null })).toBe(cart({ altaEstado: "listo" }));
+  });
+
+  /**
+   * LA INVARIANTE DE TRES LADOS, y no de dos.
+   *
+   * La tentación es escribir "navegable ⟺ el alta terminó", y sería falso: el contenedor
+   * "Información del cliente" (`SENTINEL_SERVICE_TYPE`) es un Project ACTIVO, sin id de
+   * HubSpot y con el alta en NULL — o sea, indistinguible de un alta terminada por esas dos
+   * columnas— y NO tiene que verse. Lo saca `NO_ES_SENTINEL`, que sigue en NAVEGABLE.
+   *
+   * Escrito como dos lados, la primera vez que alguien "simplifique" el átomo del alta se
+   * llevaría puesto el sentinel y el contenedor aparecería como un proyecto más en el rail.
+   */
+  it("no es navegable ⟺ (el alta está en curso) O (no es un proyecto de verdad) O (la regla de HubSpot)", () => {
+    const sentinel = { serviceType: SENTINEL_SERVICE_TYPE, altaEstado: null };
+    expect(nav(sentinel, CLIENTE_SIN_PORTAL)).toBe(false);
+    // …y con el alta en curso TAMPOCO: el atajo del alta no puede resucitarlo.
+    expect(nav({ ...sentinel, altaEstado: "pendiente_crm" }, CLIENTE_SIN_PORTAL)).toBe(false);
+    // Un proyecto de verdad con el alta en curso sí se ve. Los tres lados son independientes.
+    expect(nav({ serviceType: "loop_sales", ...enCurso }, CLIENTE_CON_PORTAL)).toBe(true);
+  });
+
+  it("el estado que llega de la base se valida: basura NO cuenta como alta en curso", () => {
+    /* `altaEstado` es TEXT sin enum de Postgres. Un valor que el código no conoce tiene que
+       degradar a "terminada" —el comportamiento de siempre— y no a "en curso", que sacaría al
+       proyecto de cobranza sin que nadie lo haya pedido. */
+    expect(parseEstadoDeAlta("pendiente_de_algo")).toBeNull();
+    expect(fact({ altaEstado: "pendiente_de_algo" })).toBe(true);
+    expect(cart({ altaEstado: "pendiente_de_algo" })).toBe(true);
   });
 });

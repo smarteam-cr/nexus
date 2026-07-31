@@ -204,14 +204,27 @@ describe("el motor de 8 etapas queda PARQUEADO, no borrado", () => {
     /* Lo que apagó el ciclo fue `cicloOchoEtapas: false` en la fila de Customer Success.
        Si alguien empieza a esparcir esa decisión en `if`s por el código, dejar de aplicarla
        deja de ser reversible. */
+    /* Los lugares donde «cicloOchoEtapas» PUEDE aparecer en código, cada uno nombrado. El
+       presupuesto sale del largo de esta lista y no de un número suelto: así, subirlo obliga a
+       escribir QUÉ lugar nuevo se está aceptando, en vez de cambiar un 6 por un 7 y seguir. */
+    const LUGARES_ESPERADOS = [
+      "la celda de la interfaz ProjectCapabilities",
+      "la fila base LEGACY (que la conserva en true)",
+      "la fila base de Customer Success (que la apagó — LA celda)",
+      "la fila base de entrega técnica",
+      "el `respeta` de OVERLAY_INTERNO",
+      "el `respeta` de OVERLAY_ALTA_EN_CURSO (Tanda C — no es una decisión del alta)",
+      "`fuenteDelCiclo`, que la DERIVA en vez de opinar",
+    ];
     const kind = codigoDe("lib/projects/kind.ts");
     const ocurrencias = [...kind.matchAll(/cicloOchoEtapas/g)].length;
     expect(
       ocurrencias,
-      "«cicloOchoEtapas» aparece más veces de las esperadas en kind.ts (la interfaz, las dos " +
-        "filas base, el overlay que la respeta y `fuenteDelCiclo`). Si la decisión se repartió, " +
-        "revertirla dejó de ser un cambio de una línea.",
-    ).toBeLessThanOrEqual(6);
+      "«cicloOchoEtapas» aparece más veces de las esperadas en kind.ts. Los lugares aceptados " +
+        `son:\n  · ${LUGARES_ESPERADOS.join("\n  · ")}\n` +
+        "Si la decisión se repartió en `if`s por el código, revertirla dejó de ser un cambio " +
+        "de una línea.",
+    ).toBeLessThanOrEqual(LUGARES_ESPERADOS.length);
   });
 });
 

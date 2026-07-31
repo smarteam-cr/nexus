@@ -19,7 +19,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { fuenteDelCiclo, type FuenteDelCiclo } from "@/lib/projects/kind";
+import { fuenteDelCiclo, hechosDeProyecto, type FuenteDelCiclo } from "@/lib/projects/kind";
 
 /**
  * ¿Quién manda la etapa de este proyecto? Tres columnas del mismo row. `null` = no existe.
@@ -27,14 +27,15 @@ import { fuenteDelCiclo, type FuenteDelCiclo } from "@/lib/projects/kind";
 export async function fuenteDelCicloDeProyecto(projectId: string): Promise<FuenteDelCiclo | null> {
   const p = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { hubspotPipelineId: true, proyectoInterno: true, hermanoCsProjectId: true },
+    select: {
+      hubspotPipelineId: true,
+      proyectoInterno: true,
+      hermanoCsProjectId: true,
+      altaEstado: true,
+    },
   });
   if (!p) return null;
-  return fuenteDelCiclo({
-    hubspotPipelineId: p.hubspotPipelineId,
-    interno: p.proyectoInterno,
-    tieneHermanoCs: p.hermanoCsProjectId != null,
-  });
+  return fuenteDelCiclo(hechosDeProyecto(p));
 }
 
 /**

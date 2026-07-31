@@ -338,6 +338,39 @@ model Project {
   // correcta, y no rompe un borrado.
   hermanoCsProjectId String?
 
+  // ── En qué punto quedó el ALTA de este proyecto (Tanda C — lib/projects/alta.ts) ──
+  // Dar de alta un proyecto son DOS escrituras en dos sistemas (la fila acá y el record en
+  // HubSpot) y entre una y otra hay red. Esto hace que "quedó a medias" sea un estado del
+  // negocio —se ve, se retoma, y mientras tanto no cobra ni suma a la cartera— en vez de una
+  // fila sin `hubspotServiceId`, que Nexus directamente no muestra.
+  //
+  // NULL = no nació por el alta única: o es anterior a la Tanda C, o lo trajo el espejo desde
+  // HubSpot (el camino del 99%). NULL responde IGUAL que 'listo' en todas las preguntas, y por
+  // eso aplicar la migración no cambió una sola pantalla.
+  altaEstado String? // 'pendiente_crm' | 'pendiente_espejo' | 'listo' | null
+  // ── El RECIBO de lo que pidió la persona. NO decide nada ─────────────────────
+  // ⚠ La verdad del tipo y del hermano la escribe el ESPEJO leyéndolos de HubSpot. Estas
+  // columnas guardan lo DECLARADO para poder exigir que el espejo lo haya confirmado antes de
+  // dar el alta por terminada. Ninguna es una de las cuatro columnas de clase, así que la
+  // guarda de escritor único (lib/projects/scope-coverage.test.ts) no las alcanza ni le hace
+  // falta: si el recibo alimentara la tabla de decisiones, Nexus estaría decidiendo
+  // facturación con lo que alguien tipeó en un formulario.
+  altaPipelineElegido  String? // el pipeline que eligió; se compara contra el que devuelve HubSpot
+  altaInternoDeclarado Boolean? // marcó "proyecto interno de Smarteam" (habilita la excepción al trato)
+  altaHermanoHsId      String? // id de HubSpot de la implementación de la que dijo que cuelga
+  altaSinTratoMotivo   String? // por qué se aceptó sin trato ganado
+  // ── Telemetría del reintento (alimenta el cartel y el diagnóstico) ───────────
+  altaError           String?
+  altaIntentos        Int       @default(0)
+  altaUltimoIntentoAt DateTime?
+  // Acota la adopción: solo se adopta un record de HubSpot creado DESPUÉS de este instante,
+  // así el alta nunca se apropia de un proyecto viejo de la misma empresa.
+  altaIniciadaAt      DateTime?
+  altaActorEmail      String?
+  // El sello que hace que la reclasificación de sesiones (~US$1 por corrida) se pague UNA vez
+  // aunque se reintente diez. Se escribe en la misma operación que la dispara.
+  altaReclasificadoAt DateTime?
+
   // D.2 — etapa actual del pipeline de Customer Success (híbrido: materializada acá
   // por sync-projects y revalidada en vivo al disparar la regeneración del cronograma).
   // El label es lo que el agente de avance razona (ancla #1); el id permite comparar.

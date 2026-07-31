@@ -24,7 +24,7 @@ const DESCONOCIDO = "default-onboarding-pipeline";
 
 /** Lo que se ve en pantalla, en orden. */
 const rotulos = (pid: string | null, interno = false, hermano = false) =>
-  frentesDeProyecto({ hubspotPipelineId: pid, interno, tieneHermanoCs: hermano }).map((f) => f.label);
+  frentesDeProyecto({ hubspotPipelineId: pid, interno, tieneHermanoCs: hermano, altaEnCurso: false }).map((f) => f.label);
 
 describe("LOS FRENTES — (pipeline × hermano) → qué se pinta, transcrito", () => {
   it("Customer Success → Ventas · CSE", () => {
@@ -73,7 +73,7 @@ describe("cada frente mira a SU equipo — el rótulo no alcanza", () => {
      recientes del CSE del hermano ganaban por fecha y el frente "Desarrollo" mostraba
      reuniones donde no participó ni un dev. El rótulo cambió; el equipo, no. */
   const equipos = (pid: string | null, hermano = false) =>
-    frentesDeProyecto({ hubspotPipelineId: pid, interno: false, tieneHermanoCs: hermano }).map(
+    frentesDeProyecto({ hubspotPipelineId: pid, interno: false, tieneHermanoCs: hermano, altaEnCurso: false }).map(
       (f) => [f.label, f.equipo] as const,
     );
 
@@ -113,7 +113,7 @@ describe("cada frente mira a SU equipo — el rótulo no alcanza", () => {
     for (const pid of [CS, DEV, WEB, DESCONOCIDO, null]) {
       for (const hermano of [true, false]) {
         for (const interno of [true, false]) {
-          for (const f of frentesDeProyecto({ hubspotPipelineId: pid, interno, tieneHermanoCs: hermano })) {
+          for (const f of frentesDeProyecto({ hubspotPipelineId: pid, interno, tieneHermanoCs: hermano, altaEnCurso: false })) {
             if (f.label === "Desarrollo") {
               expect(f.equipo, `pipeline=${pid}: el frente "Desarrollo" mira a ${f.equipo}`).toBe(
                 "desarrollo",
@@ -140,7 +140,7 @@ describe("las ranuras de almacenamiento no cambian", () => {
        desaparece de la pantalla. */
     for (const pid of [CS, DEV, WEB, DESCONOCIDO, null]) {
       for (const hermano of [true, false]) {
-        const fs_ = frentesDeProyecto({ hubspotPipelineId: pid, interno: false, tieneHermanoCs: hermano });
+        const fs_ = frentesDeProyecto({ hubspotPipelineId: pid, interno: false, tieneHermanoCs: hermano, altaEnCurso: false });
         expect(fs_[fs_.length - 1].key, `pipeline=${pid} hermano=${hermano}`).toBe("cs");
       }
     }

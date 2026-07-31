@@ -23,7 +23,11 @@
  * NO pasa por acá. El mismo check tiene que estar en los DOS.
  */
 import { prisma } from "@/lib/db/prisma";
-import { projectCapabilities } from "@/lib/projects/kind";
+import {
+  hechosDeProyecto,
+  projectCapabilities,
+  type FilaParaHechos,
+} from "@/lib/projects/kind";
 
 /** Nombre de la cookie httpOnly que transporta el token (la setea verify-access). */
 export const EXTERNAL_ACCESS_COOKIE = "nexus_ext_access";
@@ -73,6 +77,7 @@ export async function resolveActiveAccess(token: string): Promise<ActiveAccess |
           hubspotPipelineId: true,
           proyectoInterno: true,
           hermanoCsProjectId: true,
+          altaEstado: true,
           // Los tres campos del logo viajan JUNTOS: qué archivo, cuál variante y a qué
           // tamaño son una sola unidad visual. Este select es el chokepoint de las TRES
           // superficies externas (kickoff, cronograma, desarrollo) — se agrega acá una vez.
@@ -100,16 +105,8 @@ export async function resolveActiveAccess(token: string): Promise<ActiveAccess |
  * resuelven un token (este resolver y `/api/external/verify-access`) para que no puedan
  * responder distinto.
  */
-export function publicableAfuera(p: {
-  hubspotPipelineId: string | null;
-  proyectoInterno: boolean;
-  hermanoCsProjectId: string | null;
-}): boolean {
-  return projectCapabilities({
-    hubspotPipelineId: p.hubspotPipelineId,
-    interno: p.proyectoInterno,
-    tieneHermanoCs: p.hermanoCsProjectId != null,
-  }).publicable;
+export function publicableAfuera(p: FilaParaHechos): boolean {
+  return projectCapabilities(hechosDeProyecto(p)).publicable;
 }
 
 /** Marca de uso best-effort — nunca bloquea el render de la superficie. */

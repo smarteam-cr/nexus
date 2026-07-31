@@ -29,6 +29,10 @@
  *
  * Ver `lib/projects/scope.ts` para los fragmentos de consulta derivados de esta tabla.
  */
+// `alta.ts` es una hoja: no importa nada, y en particular no importa a este archivo. La
+// dirección de la flecha importa — si algún día se invirtiera, kind ↔ alta se volverían un
+// ciclo y los dos dejarían de ser client-safe.
+import { altaEnCurso, parseEstadoDeAlta } from "./alta";
 
 // ── El sentinel ──────────────────────────────────────────────────────────────
 
@@ -375,6 +379,44 @@ export const OVERLAY_INTERNO = {
   respeta: readonly (keyof ProjectCapabilities)[];
 };
 
+/**
+ * Lo que cambia mientras el ALTA todavía no terminó (Tanda C — ver `lib/projects/alta.ts`).
+ *
+ * Dar de alta un proyecto son dos escrituras en dos sistemas, y entre una y otra hay red. Este
+ * overlay es la CUARENTENA de esa ventana: el proyecto existe y se puede abrir para ir a
+ * arreglarlo, pero no participa de nada que tenga consecuencias afuera.
+ *
+ * ── POR QUÉ APAGA EXACTAMENTE ESTAS CUATRO ───────────────────────────────────
+ *  · `cobranza`  — todavía no se sabe si cobra. El tipo lo dice HubSpot, y HubSpot todavía no
+ *                  contestó; darlo por facturable mientras tanto es facturar una suposición.
+ *  · `carteraCs` — le sumaría carga a un CSE por un proyecto que puede no llegar a existir.
+ *  · `publicable`— no se le puede mostrar al cliente algo que todavía no terminó de nacer.
+ *  · `vigilante` — el watchdog alarmaría sobre un proyecto a medio crear, y su aviso sería
+ *                  ruido: la acción correcta no es "hacé algo con el cliente", es "terminá de
+ *                  crearlo", y para eso está el cartel con su botón.
+ *
+ * Es el mismo patrón que `OVERLAY_INTERNO` a propósito: son dos hechos distintos que apagan el
+ * mismo conjunto de subsistemas, y tenerlos con la misma forma es lo que hace que se puedan
+ * leer juntos en `projectCapabilities` sin que ninguno tape al otro.
+ */
+export const OVERLAY_ALTA_EN_CURSO = {
+  apaga: { cobranza: false, carteraCs: false, publicable: false, vigilante: false },
+  /**
+   * Lo que SIGUE IGUAL, y es la mitad del punto:
+   *  · `pestana`         — si no se pudiera abrir, el alta trabada sería otra vez invisible y
+   *                        no habría desde dónde apretar "Reintentar". Todo el diseño de la
+   *                        Tanda C se cae si esta celda se apaga.
+   *  · `cicloOchoEtapas` — no es una decisión del alta. Depende del pipeline, y cuando el alta
+   *                        termine el pipeline va a estar materializado; mientras tanto vale
+   *                        lo que diga la fila legacy, igual que para cualquier proyecto sin
+   *                        pipeline resuelto.
+   */
+  respeta: ["pestana", "cicloOchoEtapas"],
+} as const satisfies {
+  apaga: Partial<ProjectCapabilities>;
+  respeta: readonly (keyof ProjectCapabilities)[];
+};
+
 // ── Resolución ───────────────────────────────────────────────────────────────
 
 /**
@@ -414,10 +456,47 @@ export interface ProjectFacts {
    * —que consulta todo el sistema— se queda pura y enumerable en un test.
    */
   tieneHermanoCs: boolean;
+  /**
+   * ¿El alta de este proyecto todavía no terminó? (`altaEnCurso(project.altaEstado)`, de
+   * `lib/projects/alta.ts`).
+   *
+   * Entra como PRIMITIVO y es OBLIGATORIO, no opcional con default. Un opcional se puede
+   * olvidar, y olvidarlo acá significa que un proyecto a medio crear entra a Cobranza —que es
+   * exactamente el agujero que la Tanda C vino a tapar—. Siendo obligatorio, el compilador
+   * enumera a los tres llamadores y obliga a contestar la pregunta en cada uno.
+   */
+  altaEnCurso: boolean;
 }
 
 /**
- * LA función. Tres hechos primitivos → las seis decisiones. Sin base de datos, sin async,
+ * La fila mínima de `Project` con la que se arman los hechos. Es un subconjunto estructural:
+ * cualquier `select` que traiga estas cuatro columnas encaja.
+ */
+export interface FilaParaHechos {
+  hubspotPipelineId: string | null;
+  proyectoInterno: boolean;
+  hermanoCsProjectId: string | null;
+  altaEstado: string | null;
+}
+
+/**
+ * Fila de `Project` → los hechos. Existe para que agregar un hecho nuevo sea UNA edición y no
+ * una por llamador: cuando `altaEnCurso` se sumó a `ProjectFacts`, el compilador enumeró ocho
+ * lugares que armaban el mismo objeto literal a mano. El próximo hecho entra acá y listo.
+ *
+ * Lo que NO hace: consultar la base. Sigue siendo puro — quien llama ya tiene la fila.
+ */
+export function hechosDeProyecto(p: FilaParaHechos): ProjectFacts {
+  return {
+    hubspotPipelineId: p.hubspotPipelineId,
+    interno: p.proyectoInterno,
+    tieneHermanoCs: p.hermanoCsProjectId != null,
+    altaEnCurso: altaEnCurso(parseEstadoDeAlta(p.altaEstado)),
+  };
+}
+
+/**
+ * LA función. Cuatro hechos primitivos → las seis decisiones. Sin base de datos, sin async,
  * sin excepciones: una tabla de verdad que se puede escribir entera en un test (y está
  * escrita entera, en `kind.test.ts`).
  */
@@ -438,6 +517,12 @@ export function projectCapabilities(facts: ProjectFacts): ProjectCapabilities {
      hoy hay 0 proyectos marcados internos, así que la ventana previa al backfill no cambia
      para nadie.) */
   if (facts.interno) Object.assign(caps, OVERLAY_INTERNO.apaga);
+
+  /* La cuarentena del alta sin terminar. Va DESPUÉS del overlay de interno y no antes, aunque
+     hoy los dos apaguen exactamente lo mismo: si algún día uno de los dos prendiera una celda
+     en vez de apagarla, el orden pasaría a importar, y el que tiene que ganar es éste —un
+     proyecto que todavía no terminó de existir no puede cobrar por ninguna razón. */
+  if (facts.altaEnCurso) Object.assign(caps, OVERLAY_ALTA_EN_CURSO.apaga);
 
   return caps;
 }

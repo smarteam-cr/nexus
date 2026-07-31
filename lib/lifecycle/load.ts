@@ -16,6 +16,7 @@ import { RECURRENTE_TAG } from "@/lib/tags/catalog";
 import {
   buscarEtapa,
   fuenteDelCiclo,
+  hechosDeProyecto,
   lineaDeAvance,
   type PipelineStage,
   type ProjectPipelineKey,
@@ -193,6 +194,7 @@ async function loadLifecycleBatchUncached(
         hubspotPipelineId: true,
         proyectoInterno: true,
         hermanoCsProjectId: true,
+        altaEstado: true,
         // La etapa de HubSpot, YA materializada por el sync. Mismo row otra vez: la rama
         // de pipeline no cuesta una sola query más que la de Customer Success.
         hubspotPipelineStageId: true,
@@ -250,11 +252,7 @@ async function loadLifecycleBatchUncached(
        metodología es la de su propio pipeline, y la mueve el equipo en HubSpot. Todo lo
        de abajo —compuertas, override, modalidad de adopción, UUS— es vocabulario de CS y
        no le aplica; forzárselo sería inventarle una equivalencia. */
-    const fuente = fuenteDelCiclo({
-      hubspotPipelineId: p.hubspotPipelineId,
-      interno: p.proyectoInterno,
-      tieneHermanoCs: p.hermanoCsProjectId != null,
-    });
+    const fuente = fuenteDelCiclo(hechosDeProyecto(p));
 
     if (fuente.tipo === "pipeline") {
       const def = fuente.pipeline;

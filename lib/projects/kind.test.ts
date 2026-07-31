@@ -14,6 +14,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  OVERLAY_ALTA_EN_CURSO,
   OVERLAY_INTERNO,
   PROJECT_PIPELINES,
   SENTINEL_SERVICE_TYPE,
@@ -218,11 +219,15 @@ describe("LA TABLA — (pipeline × interno × hermano) → capacidades", () => 
 
   for (const f of filas) {
     it(f.caso, () => {
+      /* `altaEnCurso: false` y la tabla NO gana un cuarto eje, por el mismo motivo por el que
+         no lo ganó `interno`: duplicaría las filas y el 90% de las celdas quedarían idénticas.
+         El alta en curso es un OVERLAY y se prueba como tal, en su propio bloque de abajo. */
       expect(
         projectCapabilities({
           hubspotPipelineId: f.hubspotPipelineId,
           interno: f.interno,
           tieneHermanoCs: f.tieneHermanoCs,
+          altaEnCurso: false,
         }),
       ).toEqual(f.espera);
     });
@@ -239,6 +244,7 @@ describe("las tres invariantes que salen de la tabla", () => {
           hubspotPipelineId: pid,
           interno: true,
           tieneHermanoCs: hermano,
+          altaEnCurso: false,
         });
         expect(caps.cobranza, `pipeline=${pid}`).toBe(false);
         expect(caps.carteraCs, `pipeline=${pid}`).toBe(false);
@@ -251,10 +257,43 @@ describe("las tres invariantes que salen de la tabla", () => {
     for (const pid of [CS, DEV, WEB, DESCONOCIDO, null]) {
       for (const interno of [true, false]) {
         for (const hermano of [true, false]) {
-          expect(
-            projectCapabilities({ hubspotPipelineId: pid, interno, tieneHermanoCs: hermano }).pestana,
-            `pipeline=${pid} interno=${interno} hermano=${hermano}`,
-          ).toBe(true);
+          /* El alta en curso entra al barrido: si esa celda se apagara, un proyecto a medio
+             crear sería INVISIBLE justo en la única pantalla desde la que se puede apretar
+             "Reintentar", y todo el diseño de la Tanda C se cae. */
+          for (const alta of [true, false]) {
+            expect(
+              projectCapabilities({
+                hubspotPipelineId: pid,
+                interno,
+                tieneHermanoCs: hermano,
+                altaEnCurso: alta,
+              }).pestana,
+              `pipeline=${pid} interno=${interno} hermano=${hermano} alta=${alta}`,
+            ).toBe(true);
+          }
+        }
+      }
+    }
+  });
+
+  it("EL ALTA EN CURSO apaga cobranza, cartera, publicación y vigilante — SIEMPRE", () => {
+    /* Incondicional, igual que el overlay de interno: mientras el alta no termina no se sabe
+       ni siquiera de qué tipo es el proyecto —el tipo lo dice HubSpot y HubSpot todavía no
+       contestó—, así que darlo por facturable es facturar una suposición. */
+    for (const pid of [CS, DEV, WEB, DESCONOCIDO, null]) {
+      for (const interno of [true, false]) {
+        for (const hermano of [true, false]) {
+          const caps = projectCapabilities({
+            hubspotPipelineId: pid,
+            interno,
+            tieneHermanoCs: hermano,
+            altaEnCurso: true,
+          });
+          const donde = `pipeline=${pid} interno=${interno} hermano=${hermano}`;
+          expect(caps.cobranza, donde).toBe(false);
+          expect(caps.carteraCs, donde).toBe(false);
+          expect(caps.publicable, donde).toBe(false);
+          expect(caps.vigilante, donde).toBe(false);
         }
       }
     }
@@ -263,13 +302,20 @@ describe("las tres invariantes que salen de la tabla", () => {
   it("un pipeline desconocido Y no interno es EXACTAMENTE el comportamiento de hoy", () => {
     // Es lo que hace que el deploy sea invisible mientras el backfill no corrió.
     expect(
-      projectCapabilities({ hubspotPipelineId: "un-pipeline-que-nadie-declaro", interno: false, tieneHermanoCs: false }),
+      projectCapabilities({
+        hubspotPipelineId: "un-pipeline-que-nadie-declaro",
+        interno: false,
+        tieneHermanoCs: false,
+        altaEnCurso: false,
+      }),
     ).toEqual(TODO);
   });
 
-  it("el overlay declara qué NO toca, y de verdad no lo toca", () => {
-    for (const clave of OVERLAY_INTERNO.respeta) {
-      expect(Object.keys(OVERLAY_INTERNO.apaga)).not.toContain(clave);
+  it("los overlays declaran qué NO tocan, y de verdad no lo tocan", () => {
+    for (const overlay of [OVERLAY_INTERNO, OVERLAY_ALTA_EN_CURSO]) {
+      for (const clave of overlay.respeta) {
+        expect(Object.keys(overlay.apaga)).not.toContain(clave);
+      }
     }
   });
 });
@@ -489,13 +535,18 @@ describe("fuenteDelCiclo — quién manda la etapa del proyecto", () => {
   for (const f of filas) {
     it(f.caso, () => {
       expect(
-        fuenteDelCiclo({ hubspotPipelineId: f.pid, interno: f.interno, tieneHermanoCs: f.hermano }).tipo,
+        fuenteDelCiclo({
+          hubspotPipelineId: f.pid,
+          interno: f.interno,
+          tieneHermanoCs: f.hermano,
+          altaEnCurso: false,
+        }).tipo,
       ).toBe(f.espera);
     });
   }
 
   it("la rama «pipeline» SIEMPRE trae su fila — nadie tiene que volver a resolverla", () => {
-    const f = fuenteDelCiclo({ hubspotPipelineId: DEV, interno: false, tieneHermanoCs: false });
+    const f = fuenteDelCiclo({ hubspotPipelineId: DEV, interno: false, tieneHermanoCs: false, altaEnCurso: false });
     expect(f.tipo).toBe("pipeline");
     if (f.tipo === "pipeline") expect(f.pipeline.label).toBe("Development");
   });
@@ -506,7 +557,7 @@ describe("fuenteDelCiclo — quién manda la etapa del proyecto", () => {
     for (const pid of [CS, DEV, WEB, DESCONOCIDO, null]) {
       for (const interno of [true, false]) {
         for (const hermano of [true, false]) {
-          const facts = { hubspotPipelineId: pid, interno, tieneHermanoCs: hermano };
+          const facts = { hubspotPipelineId: pid, interno, tieneHermanoCs: hermano, altaEnCurso: false };
           expect(fuenteDelCiclo(facts).tipo === "customer-success", `${pid}/${interno}/${hermano}`).toBe(
             projectCapabilities(facts).cicloOchoEtapas,
           );

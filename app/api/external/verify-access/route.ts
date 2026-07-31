@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
           hubspotPipelineId: true,
           proyectoInterno: true,
           hermanoCsProjectId: true,
+          altaEstado: true,
         },
       },
     },

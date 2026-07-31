@@ -12,7 +12,7 @@ import { getProjectLifecycle } from "@/lib/lifecycle";
 import { etapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { buildCanvasChips } from "@/lib/flow/canvas-chips";
-import { frentesDeProyecto, type EquipoDeFrente } from "@/lib/projects/kind";
+import { frentesDeProyecto, hechosDeProyecto, type EquipoDeFrente } from "@/lib/projects/kind";
 
 // Sesiones del cliente (Google Meet + Fireflies legacy) → próxima futura y última
 // pasada, a nivel proyecto y POR FRENTE (Ventas / CSE).
@@ -113,6 +113,7 @@ export const GET = withProjectAccess(async (
       // De qué clase es el proyecto: decide qué FRENTES muestra el widget y con qué rótulo.
       proyectoInterno: true,
       hermanoCsProjectId: true,
+      altaEstado: true,
       createdAt: true,
     },
   });
@@ -145,11 +146,7 @@ export const GET = withProjectAccess(async (
   /* QUÉ frentes se pintan, con qué rótulo y A QUIÉN mira cada uno lo decide el servidor
      desde la tabla de lib/projects/kind.ts. Se resuelve ANTES de buscar las sesiones porque
      el frente de entrega decide de qué equipo son las que se muestran. */
-  const frentes = frentesDeProyecto({
-    hubspotPipelineId: project.hubspotPipelineId,
-    interno: project.proyectoInterno,
-    tieneHermanoCs: project.hermanoCsProjectId != null,
-  });
+  const frentes = frentesDeProyecto(hechosDeProyecto(project));
   const frenteDeEntrega = frentes.find((f) => f.key === "cs");
 
   // Auto-rellenado de próxima y última sesión desde FirefliesSession (Google Meet + legacy)

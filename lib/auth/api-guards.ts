@@ -36,6 +36,7 @@ import { isCostosRole } from "./cobranza-roles";
 import type { TeamRole } from "@prisma/client";
 import { pieceByName } from "@/lib/pieces/registry";
 import {
+  hechosDeProyecto,
   motivoNoPublicable,
   projectCapabilities,
   type ProjectCapabilities,
@@ -147,14 +148,16 @@ export async function guardAccessToProject(
 ): Promise<(AccessResult & ProjectGuardExtras) | NextResponse> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    /* Las tres columnas de CLASE viajan en el mismo row que ya se traía: cero queries
-       nuevas para los ~75 llamadores, y el que necesite preguntar "¿este proyecto se
-       factura / se publica / es cartera?" ya tiene la respuesta en la mano. */
+    /* Las columnas de CLASE viajan en el mismo row que ya se traía: cero queries nuevas para
+       los ~75 llamadores, y el que necesite preguntar "¿este proyecto se factura / se publica
+       / es cartera?" ya tiene la respuesta en la mano. `altaEstado` se sumó por lo mismo: un
+       proyecto con el alta a medio hacer NO es publicable, y ésta es la puerta que lo decide. */
     select: {
       clientId: true,
       hubspotPipelineId: true,
       proyectoInterno: true,
       hermanoCsProjectId: true,
+      altaEstado: true,
     },
   });
   if (!project) {
@@ -162,11 +165,7 @@ export async function guardAccessToProject(
   }
   const guard = await guardAccessToClient(project.clientId);
   if (guard instanceof NextResponse) return guard;
-  const facts = {
-    hubspotPipelineId: project.hubspotPipelineId,
-    interno: project.proyectoInterno,
-    tieneHermanoCs: project.hermanoCsProjectId != null,
-  };
+  const facts = hechosDeProyecto(project);
   return {
     ...guard,
     clientId: project.clientId,
