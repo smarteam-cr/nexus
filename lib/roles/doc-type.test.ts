@@ -36,7 +36,8 @@ describe("compartir tabla no puede salir caro", () => {
   it("el seed de roles filtra por docType (o pisaría una propuesta homónima)", () => {
     // `seed-roles.ts` busca por TÍTULO y su update reemplaza `content` ENTERO. La propuesta
     // del CSL se llama casi igual que el rol: sin este filtro, un `--apply` la destruye.
-    const src = fs.readFileSync(path.join(RAIZ, "scripts", "seed-roles.ts"), "utf8");
+    // (Archivado el 2026-08-01 — sigue siendo corrible, el guard viaja con él.)
+    const src = fs.readFileSync(path.join(RAIZ, "scripts", "archive", "seed-roles.ts"), "utf8");
     const m = src.match(/findFirst\(\{[\s\S]{0,200}?\}\)/);
     expect(m, "no se encontró el findFirst del seed").toBeTruthy();
     expect(m![0]).toContain("docType");

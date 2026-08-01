@@ -4,8 +4,8 @@ import * as dotenv from "dotenv";
 
 dotenv.config();
 
-import { assertProdWriteAllowed } from "../scripts/lib/guard";
-import { createScriptPool } from "../scripts/lib/db";
+import { assertProdWriteAllowed } from "../lib/guard";
+import { createScriptPool } from "../lib/db";
 
 // Este seed ESCRIBE siempre (no tiene --apply): el guard corre incondicional.
 assertProdWriteAllowed("prisma/seed-agents.ts");

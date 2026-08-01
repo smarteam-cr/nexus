@@ -20,12 +20,15 @@
  * `docType` se listaría y renderizaría con la plantilla de perfil de puesto.
  */
 import "dotenv/config";
-import { resolverApply } from "./lib/guard";
+import { resolverApply } from "../lib/guard";
 import { randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { PROPUESTA_CSL_ID } from "@/lib/roles/csl-legacy";
-import { PROPUESTA_CSL_HERO, PROPUESTA_CSL_CONTENT } from "./data/propuesta-csl-v1";
+import { PROPUESTA_CSL_HERO, PROPUESTA_CSL_CONTENT } from "../data/propuesta-csl-v1";
+
+// Inlineado al archivar (2026-08-01): venía de @/lib/roles/csl-legacy, que se borra el
+// 2026-08-04 junto con el puente /external/propuesta/csl — el archivo no debe romper tsc.
+const PROPUESTA_CSL_ID = "propuesta-csl-v1";
 
 const APPLY = resolverApply();
 

@@ -21,7 +21,7 @@
  * Dry-run por default. Aplicar: npx tsx scripts/seed-test-user.ts --apply
  */
 import { PrismaClient } from "@prisma/client";
-import { resolverApply } from "./lib/guard";
+import { resolverApply } from "../lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";

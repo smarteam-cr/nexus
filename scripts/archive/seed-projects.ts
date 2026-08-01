@@ -4,6 +4,11 @@ import pg from "pg";
 import * as dotenv from "dotenv";
 dotenv.config();
 
+import { assertProdWriteAllowed } from "../lib/guard";
+
+// Guard agregado al ARCHIVAR (2026-08-01): escribe siempre (no tiene --apply).
+assertProdWriteAllowed("scripts/archive/seed-projects.ts");
+
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });

@@ -6,7 +6,7 @@
  *
  * Resuelve el token vivo y redirige, pero SOLO mientras el link publicado siga siendo EL
  * ORIGINAL de la migración (`publicPublishedByEmail === "seed:propuesta-csl"`, la firma que
- * escribe `scripts/seed-propuesta-csl.ts`). Republicar desde /roles pisa ese campo con el
+ * escribe `scripts/archive/seed-propuesta-csl.ts`). Republicar desde /roles pisa ese campo con el
  * email de quien publica → el puente deja de redirigir y muere solo. Es exactamente lo que
  * se quiere: republicar ES el mecanismo para matar un link filtrado, y un puente que
  * resolviera el token vivo sin condición volvería a entregar el token NUEVO, anulando la

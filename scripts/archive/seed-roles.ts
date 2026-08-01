@@ -25,7 +25,7 @@
  *   npx tsx scripts/seed-roles.ts --apply    # escribe a la DB
  */
 import "dotenv/config";
-import { resolverApply } from "./lib/guard";
+import { resolverApply } from "../lib/guard";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 

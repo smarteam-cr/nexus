@@ -14,6 +14,12 @@ import { PrismaClient, type KnowledgeType, type KnowledgeStatus, type TagCategor
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
+import { assertProdWriteAllowed } from "../lib/guard";
+
+// Guard agregado al ARCHIVAR (2026-08-01): escribe siempre (no tiene --apply). Además
+// lee archivos de un Downloads local que ya no existe — es un registro histórico.
+assertProdWriteAllowed("scripts/archive/seed-process-knowledge.ts");
+
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 

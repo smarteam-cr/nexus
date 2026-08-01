@@ -4,7 +4,7 @@
  * Nació hardcodeada en `lib/propuestas/csl.ts` (2026-07-30, "necesito verlo rápido") y
  * ese archivo ya no existe: el documento vive en una fila de `RoleProfile` y se edita
  * in-situ como cualquier otro. Esto quedó como el contenido con el que se creó, para que
- * `scripts/seed-propuesta-csl.ts` sea reproducible.
+ * `scripts/archive/seed-propuesta-csl.ts` sea reproducible (archivado: ya corrió en prod).
  *
  * ⚠ NO es la fuente de verdad: si Elías edita la propuesta desde Nexus, este archivo
  * queda viejo — y está bien. Re-correr el seed NO pisa el contenido (ver el script).
