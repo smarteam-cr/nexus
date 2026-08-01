@@ -1,0 +1,244 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db/prisma";
+import { guardPermission, guardAccessToClient, guardCapability } from "@/lib/auth/api-guards";
+import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
+import { hasProjectsWriteScope } from "@/lib/hubspot/project-record";
+import { avanzarAlta } from "@/lib/projects/alta-runner";
+import { exigeTratoGanado, parseProjectPipeline, resolvePipeline } from "@/lib/projects/kind";
+import { sanitizeTags } from "@/lib/tags/catalog";
+
+/**
+ * POST /api/projects — EL ALTA ÚNICA (Tanda C).
+ *
+ * Deja el proyecto creado en Nexus **y** en HubSpot, del tipo elegido. Si HubSpot falla en el
+ * medio, el proyecto queda con el alta a medio hacer: se ve, se puede retomar, y mientras tanto
+ * no cobra, no suma a la cartera de nadie y no se le publica nada al cliente.
+ *
+ * ── LO QUE ESTE ENDPOINT NO HACE ─────────────────────────────────────────────
+ * NO crea la entidad Handoff. Nace en la transición a «listo» (ver `alta-runner.ts`), cuando el
+ * tipo y el hermano ya están materializados: acá todavía valen null y la regla que decide
+ * «handoff propio o el del hermano» diría siempre «propio».
+ *
+ * NO escribe la clase del proyecto en Nexus. El tipo elegido viaja a HubSpot y vuelve por el
+ * espejo — si Nexus lo guardara, el sync lo revertiría en diez minutos sobre un campo que
+ * decide facturación (ver la guarda de escritor único en `scope-coverage.test.ts`).
+ *
+ * NO pide fecha estimada de arranque. `anchorStartDate` y `fechaInicioFacturacion` son plata.
+ */
+
+interface Body {
+  /** Cliente existente. Alternativa: `companyId` + `companyName` para uno nuevo. */
+  clientId?: string;
+  companyId?: string;
+  companyName?: string;
+  domain?: string;
+  /** Nombre del proyecto. Sin default: un «Onboarding» genérico hace que dos altas se mezclen. */
+  nombre?: string;
+  /** Clave del pipeline: "customer-success" | "development" | "web". */
+  pipeline?: string;
+  interno?: boolean;
+  /** Id de HubSpot de la implementación de la que cuelga, si es un hermano. */
+  hermanoHsId?: string;
+  dealId?: string;
+  /** Por qué se acepta sin trato ganado. Obligatorio cuando el proyecto cobra. */
+  sinTratoMotivo?: string;
+  /** ADJUNTAR: el record ya existe en HubSpot y se elige del picker. */
+  hubspotServiceId?: string;
+}
+
+const malo = (error: string, status = 400) => NextResponse.json({ error }, { status });
+
+export async function POST(req: NextRequest) {
+  const guard = await guardPermission("proyectos", "create");
+  if (guard instanceof NextResponse) return guard;
+
+  let body: Body;
+  try {
+    body = (await req.json()) as Body;
+  } catch {
+    return malo("Cuerpo inválido");
+  }
+
+  // ── Precondiciones: TODAS antes de escribir nada ────────────────────────────
+  const nombre = body.nombre?.trim();
+  if (!nombre) return malo("El proyecto necesita un nombre.");
+
+  const pipeline = parseProjectPipeline(body.pipeline);
+  if (!pipeline) return malo("Elegí de qué tipo es el proyecto.");
+
+  const interno = body.interno === true;
+  const hermanoHsId = body.hermanoHsId?.trim() || null;
+  const dealId = body.dealId?.trim() || null;
+  const sinTratoMotivo = body.sinTratoMotivo?.trim() || null;
+
+  /* La regla del trato se DERIVA de si el proyecto cobra, no se declara. Así la excepción del
+     interno y la del hermano caen solas de la tabla de decisiones: el día que una fila cambie de
+     `cobranza`, esta regla la sigue sin que nadie se acuerde de tocarla acá. */
+  if (exigeTratoGanado({ pipeline, interno, tieneHermano: !!hermanoHsId })) {
+    if (!dealId && !sinTratoMotivo) {
+      return malo("Este proyecto se le cobra al cliente: elegí el trato ganado o explicá por qué va sin trato.");
+    }
+  }
+
+  // ── El cliente ──────────────────────────────────────────────────────────────
+  let clientId: string;
+  if (body.clientId) {
+    const g = await guardAccessToClient(body.clientId);
+    if (g instanceof NextResponse) return g;
+    clientId = body.clientId;
+  } else if (body.companyId && body.companyName?.trim()) {
+    /* Crear un cliente NUEVO desde una empresa de HubSpot es dar de alta una cuenta que nadie
+       tenía, así que pide ver la cartera completa. Los tres roles con `proyectos.create` ya la
+       tienen; el candado es para el día que alguien prenda la celda a un CSE desde /team: sin
+       esto podría fabricar clientes con empresas que no le tocan. Elegir un cliente EXISTENTE
+       (la rama de arriba) sigue pasando por su propio acceso. */
+    const verTodo = await guardCapability("seeAllClients");
+    if (verTodo instanceof NextResponse) return verTodo;
+
+    const existente = await prisma.client.findFirst({
+      where: { hubspotCompanyId: body.companyId },
+      select: { id: true },
+    });
+    clientId =
+      existente?.id ??
+      (
+        await prisma.client.create({
+          data: {
+            name: body.companyName.trim(),
+            company: body.companyName.trim(),
+            hubspotCompanyId: body.companyId,
+            emailDomains: body.domain ? [body.domain.trim().toLowerCase()] : [],
+          },
+          select: { id: true },
+        })
+      ).id;
+  } else {
+    return malo("Falta el cliente (o la empresa de HubSpot para crearlo).");
+  }
+
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { hubspotCompanyId: true, ignoredHubspotServiceIds: true },
+  });
+  if (!client?.hubspotCompanyId) {
+    return malo("Ese cliente no tiene empresa en HubSpot. Primero se crea la empresa allá.");
+  }
+
+  // ── El hermano: solo una implementación de Customer Success del MISMO cliente ─
+  if (hermanoHsId) {
+    const hermano = await prisma.project.findUnique({
+      where: { hubspotServiceId: hermanoHsId },
+      select: { clientId: true, hubspotPipelineId: true },
+    });
+    if (!hermano || hermano.clientId !== clientId) {
+      return malo("El proyecto del que cuelga no es de este cliente.");
+    }
+    if (resolvePipeline(hermano.hubspotPipelineId)?.key !== "customer-success") {
+      return malo("Solo se puede colgar de una implementación de Customer Success.");
+    }
+    if (!pipeline.canBeSiblingOf.includes("customer-success")) {
+      return malo(`Un proyecto de ${pipeline.label} no puede colgar de una implementación.`);
+    }
+  }
+
+  // ── ADJUNTAR: el record elegido no puede estar borrado a propósito ni tomado ──
+  const adjuntar = body.hubspotServiceId?.trim() || null;
+  if (adjuntar) {
+    if (client.ignoredHubspotServiceIds.includes(adjuntar)) {
+      return NextResponse.json(
+        {
+          error:
+            "Ese proyecto se borró a propósito desde Nexus y no se re-agrega solo. " +
+            "Para reactivarlo: scripts/unignore-hubspot-service.ts",
+        },
+        { status: 409 },
+      );
+    }
+    const tomado = await prisma.project.findUnique({
+      where: { hubspotServiceId: adjuntar },
+      select: { id: true, name: true },
+    });
+    if (tomado) {
+      return NextResponse.json(
+        { error: `Ese proyecto ya existe en Nexus como «${tomado.name}».`, projectId: tomado.id },
+        { status: 409 },
+      );
+    }
+  }
+
+  /* El scope se comprueba ANTES de crear la fila: sin él, el alta nacería condenada a quedar en
+     `pendiente_crm` para siempre y el usuario vería un proyecto trabado sin saber por qué. */
+  if (!adjuntar && !(await hasProjectsWriteScope())) {
+    return NextResponse.json(
+      { error: "La app no tiene permiso para crear proyectos en HubSpot. Hay que re-autorizarla." },
+      { status: 409 },
+    );
+  }
+
+  // ── La escritura ────────────────────────────────────────────────────────────
+  const projectId = await prisma.$transaction(async (tx) => {
+    const proyecto = await tx.project.create({
+      data: {
+        clientId,
+        name: nombre,
+        status: "active",
+        hubspotDealId: dealId,
+        /* ADJUNTAR arranca un paso más adelante: el record ya existe, solo falta traerlo.
+           El resto arranca en `pendiente_crm`, que es lo que pone al proyecto en cuarentena
+           —no cobra, no suma a la cartera, no se publica— hasta que HubSpot confirme. */
+        hubspotServiceId: adjuntar,
+        altaEstado: adjuntar ? "pendiente_espejo" : "pendiente_crm",
+        altaPipelineElegido: pipeline.hubspotPipelineId,
+        altaInternoDeclarado: interno,
+        altaHermanoHsId: hermanoHsId,
+        altaSinTratoMotivo: sinTratoMotivo,
+        altaIniciadaAt: new Date(),
+        altaActorEmail: guard.user.email,
+      },
+      select: { id: true },
+    });
+
+    /* Propagación BC→Project: si hay un business case del mismo trato, su clasificación nace en
+       el proyecto. Es el segundo comportamiento que solo sabía hacer el camino viejo; sin
+       replicarlo los proyectos nacerían grises y nadie se enteraría. Escopado por `clientId`:
+       `hubspotDealId` no es único en BusinessCase, así que sin eso podría leer el de otro. */
+    if (dealId) {
+      const bc = await tx.businessCase.findFirst({
+        where: { hubspotDealId: dealId, clientId },
+        select: { tags: true, implementationType: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (bc && (bc.tags.length > 0 || bc.implementationType)) {
+        await tx.project.update({
+          where: { id: proyecto.id },
+          data: {
+            tags: sanitizeTags(bc.tags),
+            ...(bc.implementationType ? { implementationType: bc.implementationType } : {}),
+          },
+        });
+      }
+    }
+
+    // Las piezas del TIPO elegido, no las de Customer Success por descarte.
+    await createDefaultCanvases(proyecto.id, pipeline.hubspotPipelineId, tx);
+    return proyecto.id;
+  });
+
+  /* El motor corre EN LÍNEA: la persona está esperando y lo que pidió es un proyecto creado, no
+     una promesa. Si falla, el alta queda pendiente con su motivo escrito y el cartel ofrece
+     "Reintentar" — por eso este `await` no se envuelve en un try: `avanzarAlta` no tira, deja
+     el error en la fila y lo devuelve. */
+  const alta = await avanzarAlta(projectId);
+
+  return NextResponse.json(
+    {
+      projectId,
+      clientId,
+      estado: alta.estado,
+      termino: alta.termino,
+      error: alta.error,
+      hubspotServiceId: alta.hubspotServiceId,
+    },
+    { status: 201 },
+  );
+}

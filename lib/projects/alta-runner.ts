@@ -143,6 +143,10 @@ export async function avanzarAlta(projectId: string): Promise<ResultadoDelAlta> 
           empresaId: p.client.hubspotCompanyId,
           tratoId: p.hubspotDealId,
           hermanoHsId: p.altaHermanoHsId,
+          /* El record nace con dueño asignado, igual que por el camino viejo. Es uno de los dos
+             comportamientos que solo sabía hacer el asistente de handoff; sin replicarlo, los
+             proyectos nuevos nacerían sin dueño en el CRM y nada lo avisaría. */
+          ownerId: process.env.HUBSPOT_HANDOFF_OWNER_ID || null,
         });
       } catch (e) {
         return fallar(projectId, estado, null, e instanceof Error ? e.message : String(e));

@@ -527,6 +527,33 @@ export function projectCapabilities(facts: ProjectFacts): ProjectCapabilities {
   return caps;
 }
 
+/**
+ * ¿Para dar de alta este proyecto hace falta un trato ganado?
+ *
+ * Se DERIVA de `cobranza` en vez de declararse. Es la diferencia entre una regla y una copia:
+ * "si se le cobra al cliente, tiene que haber un trato" vale para siempre, mientras que una
+ * lista de excepciones («salvo internos, salvo hermanos…») hay que acordarse de actualizarla el
+ * día que una fila de la tabla cambie de opinión. Las dos excepciones que hoy existen —el
+ * proyecto interno y el que cuelga de una implementación— caen solas, porque las dos ya apagan
+ * `cobranza`.
+ *
+ * Vive acá y no en `lib/projects/alta.ts` porque necesita la tabla, y `alta.ts` es una hoja que
+ * este archivo importa: al revés sería un ciclo.
+ */
+export function exigeTratoGanado(opts: {
+  pipeline: PipelineDef;
+  interno: boolean;
+  tieneHermano: boolean;
+}): boolean {
+  return projectCapabilities({
+    hubspotPipelineId: opts.pipeline.hubspotPipelineId,
+    interno: opts.interno,
+    tieneHermanoCs: opts.tieneHermano,
+    // El alta todavía no empezó: la cuarentena no puede opinar sobre si el proyecto cobra.
+    altaEnCurso: false,
+  }).cobranza;
+}
+
 // ── De dónde sale la ETAPA ───────────────────────────────────────────────────
 
 /**

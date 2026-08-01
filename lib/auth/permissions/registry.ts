@@ -120,6 +120,16 @@ export const PERMISSION_SECTIONS = [
     label: "Proyectos (estructura)",
     actions: [
       {
+        // Dar de alta un proyecto (Tanda C). Es celda PROPIA y no reusa `handoff.create`
+        // a propósito: arrancar un proyecto y redactar su documento de handoff son dos
+        // cosas distintas. Hoy los líderes de CS pueden editar, generar y regenerar un
+        // handoff pero no pueden arrancar un proyecto — una asimetría que existía solo
+        // porque el único botón de alta vivía adentro del asistente de handoff.
+        key: "create",
+        label: "Dar de alta un proyecto",
+        enforced: true,
+      },
+      {
         key: "deleteCanvas",
         label: "Eliminar un canvas del proyecto",
         enforced: true,

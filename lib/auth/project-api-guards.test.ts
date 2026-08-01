@@ -110,15 +110,36 @@ const GUARDAS = [
 ];
 
 /**
- * Handlers eximidos, con su motivo. No es un permiso incondicional: el test verifica
- * abajo que el handler siga siendo inerte. Si alguien lo revive con lógica real, la
- * excepción deja de aplicar y esto falla.
+ * Handlers eximidos, con su motivo. NUNCA es un permiso incondicional: cada excepción trae la
+ * condición que la sostiene, y el test la verifica. Si el handler deja de cumplirla, la
+ * excepción caduca sola y esto falla.
+ *
+ *   `inerte` — el handler no hace nada (responde 410 sin tocar la DB).
+ *   `exige`  — el handler SÍ hace algo, pero acota por otra unidad. Se listan las guardas
+ *              concretas que lo acotan; tienen que estar TODAS.
  */
-const EXENTOS: Record<string, { metodos: string[]; motivo: string; inerte: boolean }> = {
+const EXENTOS: Record<
+  string,
+  { metodos: string[]; motivo: string; inerte?: boolean; exige?: string[] }
+> = {
   "app/api/projects/[projectId]/canvas/route.ts": {
     metodos: ["PUT"],
     motivo: "DESACTIVADO desde la migración a ClientContextCard: responde 410 sin tocar la DB.",
     inerte: true,
+  },
+  "app/api/projects/route.ts": {
+    metodos: ["POST"],
+    motivo:
+      "EL ALTA (Tanda C): es el único handler del árbol que CREA el proyecto. No puede acotar a " +
+      "un proyecto porque todavía no existe — la unidad correcta es el CLIENTE. La excepción " +
+      "vale mientras siga gateado por la celda `proyectos.create` Y acotado al cliente: " +
+      "`guardAccessToClient` para uno existente, `seeAllClients` para fabricar uno nuevo desde " +
+      "una empresa de HubSpot.",
+    exige: [
+      'guardPermission("proyectos", "create")',
+      "guardAccessToClient(",
+      'guardCapability("seeAllClients")',
+    ],
   },
 };
 
@@ -149,12 +170,26 @@ describe("ninguna ruta de proyecto queda sin guarda", () => {
         const metodo = hs[i][1];
         const cuerpo = src.slice(hs[i].index!, i + 1 < hs.length ? hs[i + 1].index! : src.length);
         if (exento?.metodos.includes(metodo)) {
-          // La exención vale solo mientras el handler siga sin hacer nada.
-          expect(
-            exento.inerte && cuerpo.includes("status: 410") && !cuerpo.includes("prisma."),
-            `${rel} ${metodo} está eximido por "${exento.motivo}" pero dejó de ser inerte — ` +
-              "quitá la excepción y ponele guarda.",
-          ).toBe(true);
+          if (exento.inerte) {
+            // La exención vale solo mientras el handler siga sin hacer nada.
+            expect(
+              cuerpo.includes("status: 410") && !cuerpo.includes("prisma."),
+              `${rel} ${metodo} está eximido por "${exento.motivo}" pero dejó de ser inerte — ` +
+                "quitá la excepción y ponele guarda.",
+            ).toBe(true);
+          } else {
+            // La exención vale solo mientras el handler siga acotando por la otra unidad.
+            const faltan = (exento.exige ?? []).filter((g) => !cuerpo.includes(g));
+            expect(
+              faltan,
+              `${rel} ${metodo} está eximido por "${exento.motivo}" pero perdió las guardas que ` +
+                `sostienen la excepción: ${faltan.join(", ")}`,
+            ).toEqual([]);
+            expect(
+              (exento.exige ?? []).length,
+              `la excepción de ${rel} ${metodo} no declara ninguna condición: sería un pase libre`,
+            ).toBeGreaterThan(0);
+          }
           continue;
         }
         if (!GUARDAS.some((g) => cuerpo.includes(g))) ofensores.push(`${rel} → ${metodo}`);

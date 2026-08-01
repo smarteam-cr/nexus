@@ -77,6 +77,10 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     implementacion: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "delete", "generate"],
+    // Dar de alta un proyecto (Tanda C). Ventas ya lo hacía: el único botón de alta
+    // vivía adentro del asistente de handoff, que exige `handoff.create`. La celda
+    // propia no le amplía nada — le pone nombre a lo que ya podía.
+    proyectos: ["create"],
     ventas: ["read", "write"],
     marketing: ["read"],
     conocimientos: ["write"],
@@ -103,6 +107,11 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     // que ya se pidió y vive en la semilla, no en el default— el canal de sugerencias
     // tiene que sobrevivir. Es la razón de ser de la celda.
     cronograma: ["write", "delete", "generate", "suggest"],
+    // Igual que Ventas: DEV ya daba de alta por el asistente de handoff. Además es
+    // el rol que arranca los proyectos de Desarrollo y de Sitios web, que con la
+    // arquitectura multi-pipeline son altas de pleno derecho, no anexos de una
+    // implementación.
+    proyectos: ["create"],
     ventas: ["read", "write"],
     marketing: ["read"],
     conocimientos: ["write"],
@@ -122,9 +131,15 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     implementacion: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "delete", "generate", "regenerate"],
-    // Único rol operativo (fuera de SUPER_ADMIN) que puede borrar un canvas entero.
-    // Misma doctrina que `cronograma.delete`: el CSE suspende, el líder borra.
-    proyectos: ["deleteCanvas"],
+    // `deleteCanvas`: único rol operativo (fuera de SUPER_ADMIN) que puede borrar un
+    // canvas entero. Misma doctrina que `cronograma.delete`: el CSE suspende, el líder borra.
+    //
+    // `create` es la ÚNICA ampliación real de la Tanda C: hasta hoy un líder de CS podía
+    // editar, generar y regenerar un handoff pero no arrancar el proyecto que lo contiene,
+    // porque el botón de alta vivía adentro del asistente de Ventas. Se resuelve con esta
+    // celda y NO tocando `handoff.create` — son dos cosas distintas, y mezclarlas obligaría
+    // a romper las tablas congeladas de roles.
+    proyectos: ["create", "deleteCanvas"],
     ventas: ["read", "write"],
     marketing: ["read", "write"],
     conocimientos: ["write"],
