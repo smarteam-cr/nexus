@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardCapability } from "@/lib/auth/api-guards";
+import { guardLecturaParaArrancar } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { resolveCompanyProjectIds } from "@/lib/hubspot/sync-projects";
@@ -13,12 +13,13 @@ import { canvasOfNested } from "@/lib/pieces/canvas-query";
  *   - nexusProjectId: el Project de Nexus mapeado (si ya se importó) — adjuntable directo.
  *   - hasHandoff: si ese proyecto ya tiene handoff (para filtrarlo y evitar el 409).
  * Los que NO tienen nexusProjectId se importan al adjuntar (decisión: importar y adjuntar).
- * Solo lectura. (El gate sube a createHandoff junto con /lookup en la pieza de gating.)
+ * Solo lectura. El gate es `guardLecturaParaArrancar`: sirve tanto al asistente de handoff
+ * como al botón de alta, que son los dos caminos legítimos que necesitan esta lista.
  */
 const PROJECTS_OBJECT_TYPE = "0-970";
 
 export async function GET(req: NextRequest) {
-  const guard = await guardCapability("createHandoff");
+  const guard = await guardLecturaParaArrancar();
   if (guard instanceof NextResponse) return guard;
 
   const companyId = req.nextUrl.searchParams.get("companyId")?.trim() ?? "";

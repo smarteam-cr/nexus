@@ -386,6 +386,48 @@ export async function guardPermission<S extends SectionKey>(
 }
 
 /**
+ * LAS LECTURAS PREVIAS a arrancar un proyecto: buscar una empresa por dominio en HubSpot,
+ * ver qué proyectos ya tiene y traerse uno que existe allá pero no acá.
+ *
+ * ── POR QUÉ NO ES UNA CELDA SOLA ─────────────────────────────────────────────
+ * Estas tres puertas nacieron dentro del asistente de handoff, así que exigían `handoff.create`.
+ * Con el alta única hay DOS caminos legítimos que las necesitan: el asistente viejo (que
+ * redacta un handoff) y el botón nuevo (que da de alta un proyecto). Y los líderes de CS
+ * tienen la segunda celda pero NO la primera — o sea que sin esto la líder de CS ve el botón
+ * y come un error en la primera pantalla, justo el rol que se pidió habilitar.
+ *
+ * Se resuelve con la pregunta real —"¿esta persona puede arrancar algo?"— en vez de ampliar
+ * `handoff.create`, que le daría a CSL la capacidad de redactar handoffs por la puerta de
+ * atrás y obligaría a mover las tablas congeladas de roles.
+ *
+ * Son LECTURAS (salvo `import-project`, que solo trae a Nexus lo que ya existe en HubSpot):
+ * ninguna crea nada en el CRM. Las escrituras siguen pidiendo su celda propia.
+ */
+export async function guardLecturaParaArrancar(): Promise<
+  Awaited<ReturnType<typeof requireInternalUser>> | NextResponse
+> {
+  try {
+    const ctx = await requireInternalUser();
+    const puede =
+      (await can(ctx.teamMember, "proyectos", "create")) ||
+      (await can(ctx.teamMember, "handoff", "create"));
+    if (puede) return ctx;
+    return NextResponse.json(
+      {
+        error:
+          `Tu rol (${ctx.role}) no puede arrancar proyectos ni handoffs, así que no busca ` +
+          "empresas en HubSpot.",
+      },
+      { status: 403 },
+    );
+  } catch (e) {
+    const r = toErrorResponse(e);
+    if (r) return r;
+    throw e;
+  }
+}
+
+/**
  * Acceso al área de VENTAS (Business Cases). Consulta la celda `ventas.read`
  * del mapa EFECTIVO (default = VENTAS/DEV/CSL/SUPER_ADMIN — la vieja whitelist
  * SALES_AREA_ROLES; editable por plantilla/overrides desde /team).

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Table, Avatar, Badge, EmptyState, type TableColumn } from "@/components/ui";
 import DeleteClientButton from "./DeleteClientButton";
 import NewClientButton from "./NewClientButton";
-import HandoffStepper from "@/components/handoffs/HandoffStepper";
+import NuevoProyectoStepper from "@/components/projects/NuevoProyectoStepper";
 import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 import { CLIENT_KINDS, CLIENT_KIND_META, formatTamUsd } from "@/lib/clients/kind";
 import type { ClientKind } from "@prisma/client";
@@ -379,7 +379,10 @@ export default function ClientsGrid({
         initialSort={{ key: "lastInteraction", dir: "desc" }}
         action={
           <div className="flex items-center gap-2">
-            <HandoffStepper />
+            {/* El alta única (Tanda C). El asistente de handoff sigue en el archivo pero ya no
+                se monta: si algo del botón nuevo falla, volver a mostrarlo es descomentar una
+                línea. Se retira de verdad recién cuando el botón esté probado en vivo. */}
+            <NuevoProyectoStepper />
             <NewClientButton />
           </div>
         }

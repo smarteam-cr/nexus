@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardCapability } from "@/lib/auth/api-guards";
+import { guardLecturaParaArrancar } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { syncProjectsForClient } from "@/lib/hubspot/sync-projects";
 
@@ -12,7 +12,8 @@ import { syncProjectsForClient } from "@/lib/hubspot/sync-projects";
  *   2. syncProjectsForClient → trae los proyectos de la company a Nexus.
  *   3. Resuelve el Project de Nexus por hubspotServiceId === el record elegido.
  * Devuelve { clientId, nexusProjectId } para que el front llame a POST /api/handoffs
- * con targetProjectId. (El gate sube a createHandoff en la pieza de gating.)
+ * con targetProjectId. Gate: `guardLecturaParaArrancar` — no crea nada en HubSpot, solo trae
+ * a Nexus un proyecto que allá ya existe.
  */
 interface Body {
   companyId?: string;
@@ -22,7 +23,7 @@ interface Body {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await guardCapability("createHandoff");
+  const guard = await guardLecturaParaArrancar();
   if (guard instanceof NextResponse) return guard;
 
   let body: Body;

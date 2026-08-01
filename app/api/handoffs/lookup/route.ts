@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardCapability } from "@/lib/auth/api-guards";
+import { guardLecturaParaArrancar } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient, forceRefreshSystemToken } from "@/lib/hubspot/client";
 import { fetchCompanyDeals } from "@/lib/hubspot/deals";
@@ -7,13 +7,13 @@ import { fetchCompanyDeals } from "@/lib/hubspot/deals";
 /**
  * GET /api/handoffs/lookup?domain=<dominio>
  *
- * Para el flujo de creación de handoff "cliente nuevo": busca la company por
+ * Para arrancar algo con un cliente nuevo —un handoff o un proyecto—: busca la company por
  * dominio en el CRM de Smarteam (HubSpot SISTEMA) y devuelve sus deals (ganados
  * primero). También indica si ya existe un Client de Nexus vinculado a esa company
  * (para reusarlo en vez de duplicar). No crea nada — solo lectura.
  */
 export async function GET(req: NextRequest) {
-  const guard = await guardCapability("createHandoff");
+  const guard = await guardLecturaParaArrancar();
   if (guard instanceof NextResponse) return guard;
 
   const domain = req.nextUrl.searchParams.get("domain")?.trim().toLowerCase() ?? "";
