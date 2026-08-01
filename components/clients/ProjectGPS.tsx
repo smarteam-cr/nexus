@@ -12,6 +12,8 @@ import type { Frente, FrenteKey } from "@/lib/projects/kind";
 import type { ChipDeCanvas } from "@/lib/flow/canvas-chips";
 import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import StageBadge from "@/components/lifecycle/StageBadge";
+import AltaTrabada from "@/components/projects/AltaTrabada";
+
 
 export interface PendingItem {
   id?: string;             // ActionItem.id (nuevo) — undefined si viene del Json viejo
@@ -117,6 +119,17 @@ interface GPSData {
    * Ausente = respuesta cacheada vieja → cae al rótulo plano de `currentState`.
    */
   etapa?: EtapaParaLaUI | null;
+  /**
+   * El alta que quedó a medio hacer (Tanda C). Ausente en respuestas cacheadas viejas y, en
+   * el 99% de los proyectos, con `estado` en null — el cartel decide no pintarse leyendo el
+   * estado, así que ambos casos terminan igual.
+   */
+  alta?: {
+    estado?: string | null;
+    error?: string | null;
+    ultimoIntentoAt?: string | null;
+    intentos?: number | null;
+  } | null;
 }
 
 /** La RANURA de almacenamiento del frente, no su rótulo — ver `FrenteKey` en kind.ts. */
@@ -518,6 +531,28 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
 
   return (
     <div className="mb-6 bg-surface border border-line rounded-xl overflow-hidden">
+      {/* El alta a medio hacer, ARRIBA de todo y en su versión completa: el widget es donde
+          alguien va a averiguar por qué el proyecto se comporta raro, así que acá el cartel
+          tiene que traer el motivo y el último intento, no solo el rótulo. */}
+      {data.alta?.estado && (
+        <div className="p-4 pb-0">
+          <AltaTrabada
+            projectId={projectId}
+            altaEstado={data.alta.estado}
+            altaError={data.alta.error}
+            altaUltimoIntentoAt={data.alta.ultimoIntentoAt}
+            altaIntentos={data.alta.intentos}
+            /* El widget guarda su respuesta en caché. Sin invalidar, recargar volvería a
+               pintar el cartel sobre un alta que ya terminó — y el botón parecería no haber
+               hecho nada. */
+            onTermino={() => {
+              invalidateGps(projectId);
+              window.location.reload();
+            }}
+          />
+        </div>
+      )}
+
       {/* Info bar del proyecto (desde HubSpot) */}
       {info && (info.name || info.pipelineName || info.cseEncargado || createdAtStr) && (
         <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-surface-muted border-b border-line text-xs">

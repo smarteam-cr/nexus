@@ -90,3 +90,39 @@ export function parseEstadoDeAlta(v: unknown): EstadoDeAlta | null {
     ? (v as EstadoDeAlta)
     : null;
 }
+
+/**
+ * CÓMO SE LE CUENTA A UNA PERSONA. Vive acá y no en el componente porque el cartel aparece en
+ * dos lugares (el rail de la ficha del cliente y el widget del proyecto) y dos textos que
+ * dicen casi lo mismo se desincronizan: uno se corrige y el otro queda contando la versión
+ * vieja del problema.
+ *
+ * El texto no dice "error" ni "falló": dice QUÉ FALTA y QUÉ PASA MIENTRAS TANTO. Quien lo lee
+ * necesita decidir si esperar o avisar, y para eso el dato útil es que el proyecto no está
+ * perdido y no está cobrando — no cuál de las dos llamadas HTTP no volvió.
+ */
+export const EXPLICACION_DEL_PASO: Record<
+  PasoDelAlta,
+  { titulo: string; detalle: string }
+> = {
+  "crear-en-hubspot": {
+    titulo: "Falta crearlo en HubSpot",
+    detalle:
+      "El proyecto ya existe en Nexus pero todavía no en el CRM. Reintentar no lo duplica: " +
+      "si el intento anterior alcanzó a crearlo, lo adopta en vez de crear otro.",
+  },
+  "traer-de-hubspot": {
+    titulo: "Falta traerlo de HubSpot",
+    detalle:
+      "El proyecto ya existe en el CRM. Falta que Nexus lo lea para saber de qué tipo es y " +
+      "de qué proyecto cuelga. Este paso solo lee: reintentarlo no cambia nada allá.",
+  },
+};
+
+/**
+ * La consecuencia, escrita una sola vez. Es lo que evita la llamada de "¿lo perdimos?": el
+ * proyecto se ve y se abre, pero está en cuarentena hasta que el alta termine.
+ */
+export const MIENTRAS_TANTO =
+  "Mientras tanto se puede abrir, pero no se factura, no entra en la cartera de nadie y no se " +
+  "le publica nada al cliente.";

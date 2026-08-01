@@ -114,6 +114,10 @@ export const GET = withProjectAccess(async (
       proyectoInterno: true,
       hermanoCsProjectId: true,
       altaEstado: true,
+      // El diagnóstico del alta trabada, para el cartel con "Reintentar" dentro del widget.
+      altaError: true,
+      altaUltimoIntentoAt: true,
+      altaIntentos: true,
       createdAt: true,
     },
   });
@@ -379,6 +383,15 @@ export const GET = withProjectAccess(async (
     /* El bloque "Canvas": qué documentos le corresponden a ESTE proyecto y cuáles ya están.
        El servidor manda la lista ya filtrada por `piezaAplica`; el widget solo pinta. */
     canvasChips,
+    /* El alta a medio hacer. Va siempre —también cuando terminó— porque el widget no puede
+       distinguir "no hay bloque" de "todavía no cargó": el componente decide no pintar nada
+       leyendo el estado, no la ausencia del campo. */
+    alta: {
+      estado: project.altaEstado,
+      error: project.altaError,
+      ultimoIntentoAt: project.altaUltimoIntentoAt?.toISOString() ?? null,
+      intentos: project.altaIntentos,
+    },
   });
 }));
 

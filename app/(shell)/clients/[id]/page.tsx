@@ -82,7 +82,13 @@ export default async function ClientPage({
         hubspotPipelineId: true,
         proyectoInterno: true,
         hermanoCsProjectId: true,
+        // El alta a medio hacer y su diagnóstico. Van en el mismo row porque el cartel que
+        // los muestra vive en el rail: pedirlos aparte sería una query por proyecto para un
+        // caso que en el 99% de las filas no dispara nada.
         altaEstado: true,
+        altaError: true,
+        altaUltimoIntentoAt: true,
+        altaIntentos: true,
       },
     }),
     prisma.hubspotAccount.findFirst({

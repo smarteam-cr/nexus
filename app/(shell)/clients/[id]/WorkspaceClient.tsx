@@ -8,6 +8,7 @@ import { invalidateGps } from "@/lib/clients/gps-cache";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
+import AltaTrabada from "@/components/projects/AltaTrabada";
 import {
   SENTINEL_SERVICE_TYPE,
   hechosDeProyecto,
@@ -37,6 +38,10 @@ interface ProjectSummary {
   hermanoCsProjectId?: string | null;
   /** `Project.altaEstado` — un alta a medio hacer no cobra ni se publica (lib/projects/alta.ts). */
   altaEstado?: string | null;
+  /** Diagnóstico del alta trabada: alimentan el cartel con el botón "Reintentar". */
+  altaError?: string | null;
+  altaUltimoIntentoAt?: Date | string | null;
+  altaIntentos?: number | null;
 }
 
 /**
@@ -381,6 +386,29 @@ function ProjectSection({
           pinta nada. Es la única superficie que responde "¿por qué este proyecto no me
           aparece en la cartera / en cobranza?" sin tener que abrir HubSpot. */}
       {activeProject && <TiraDeClase p={activeProject} projects={projects} />}
+
+      {/* El alta que quedó a medio hacer, con su botón de retomar. Va ARRIBA del contenido y
+          no adentro de un panel: mientras el alta no termine, el proyecto no cobra, no suma a
+          la cartera y no se le publica nada al cliente — o sea que casi todo lo que se ve más
+          abajo está contando una versión incompleta de la verdad. */}
+      {activeProject && (
+        <AltaTrabada
+          variante="compacto"
+          projectId={activeProject.id}
+          altaEstado={activeProject.altaEstado}
+          altaError={activeProject.altaError}
+          altaUltimoIntentoAt={
+            activeProject.altaUltimoIntentoAt
+              ? new Date(activeProject.altaUltimoIntentoAt).toISOString()
+              : null
+          }
+          altaIntentos={activeProject.altaIntentos}
+          onTermino={() => {
+            invalidateGps(activeProject.id);
+            window.location.reload();
+          }}
+        />
+      )}
 
       {/* Content */}
       {isStrategy ? (
