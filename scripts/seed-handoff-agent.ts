@@ -1,32 +1,30 @@
 /**
  * scripts/seed-handoff-agent.ts
  *
- * Reorienta el agente "Análisis inicial" (id cmmla1g1x00005wijix3qnr7u) al
- * propósito de handoff Sales→CS (Fase 2 del módulo externo).
+ * Fuente canónica del agente "Handoff Sales→CS" (id cmmla1g1x00005wijix3qnr7u).
  *
- * Mantiene el MISMO id del agente — no crea uno nuevo. Los 61 AgentRun
- * históricos siguen apuntando a este agente con su output viejo (auditoría).
+ * Historia: nació como "Análisis inicial" y se REORIENTÓ a handoff Sales→CS
+ * (Fase 2 del módulo externo) conservando el MISMO id — los 61 AgentRun
+ * históricos siguen apuntando a él con su output viejo (auditoría).
  *
- * Cambios:
- *   - name: "Análisis inicial" → "Handoff Sales→CS"
- *   - description: actualizada
- *   - agentGroup: "preparacion" → "handoff" (routea al canvas Handoff)
- *   - defaultCanvasSection: "objetivo_alcance" → "acuerdos_promesas"
- *   - systemPrompt: 10 cards laser-focused + cronograma estructurado, sin suggestions
+ * UPSERT (2026-08-01): en una base vacía (local F1) crea la fila completa; en
+ * prod actualiza name/description/agentGroup/defaultCanvasSection/systemPrompt
+ * sin tocar el resto. La entrada @deprecated que vivía en prisma/seed.ts se
+ * borró — este script es el único dueño de la definición.
  *
  * Idempotente — corrida 2 veces deja el mismo estado.
  *
- * Uso: npx tsx scripts/seed-handoff-agent.ts
+ * Uso: npx tsx scripts/seed-handoff-agent.ts  (guard: exige ALLOW_PROD_WRITE=1 contra prod)
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, AgentStatus, AgentOutputType, AgentScope, AgentType } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import "dotenv/config";
+import { assertProdWriteAllowed } from "./lib/guard";
+import { createScriptPool } from "./lib/db";
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
-});
+// Este seed ESCRIBE siempre (no tiene --apply): el guard corre incondicional.
+assertProdWriteAllowed("scripts/seed-handoff-agent.ts");
+const { pool } = createScriptPool();
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 const AGENT_ID = "cmmla1g1x00005wijix3qnr7u";
@@ -180,26 +178,48 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
 IMPORTANTE: el ejemplo de content arriba describe QUÉ debe ir en cada sección — NO copies ese texto literalmente. Generá contenido REAL basado en las fuentes del cliente. Si una sección no tiene evidencia suficiente, el content de su block debe decir "⚠️ Por validar con cliente: [pregunta específica para la primera reunión de CS]". El JSON SIEMPRE debe tener las 10 secciones con sus keys exactos (no podés omitir ninguna), pero pueden ser placeholders cuando falta info. El cronograma SÍ puede venir vacío ("phases": []) si no hay info clara.`;
 
 async function main() {
-  console.log("Actualizando agente Handoff Sales→CS...\n");
+  console.log("Sembrando agente Handoff Sales→CS...\n");
 
   const existing = await prisma.agent.findUnique({
     where: { id: AGENT_ID },
     select: { id: true, name: true, agentGroup: true, defaultCanvasSection: true },
   });
 
-  if (!existing) {
-    console.error(`❌ No existe agente con id=${AGENT_ID}. ¿Fue eliminado?`);
-    process.exit(1);
+  if (existing) {
+    console.log("Estado actual:");
+    console.log(`  name:                 ${existing.name}`);
+    console.log(`  agentGroup:           ${existing.agentGroup}`);
+    console.log(`  defaultCanvasSection: ${existing.defaultCanvasSection}`);
+  } else {
+    console.log(`No existe agente con id=${AGENT_ID} — se crea de cero (base nueva/local).`);
   }
 
-  console.log("Estado actual:");
-  console.log(`  name:                 ${existing.name}`);
-  console.log(`  agentGroup:           ${existing.agentGroup}`);
-  console.log(`  defaultCanvasSection: ${existing.defaultCanvasSection}`);
-
-  const updated = await prisma.agent.update({
+  // UPSERT (2026-08-01): antes era update-only con exit 1 si faltaba la fila — eso
+  // ataba este seed a que la entrada vieja de prisma/seed.ts la reviviera primero.
+  // Esa entrada @deprecated se borró; en una base vacía el create ES la definición
+  // canónica completa. En prod (fila existente) el update no toca status/outputType/
+  // associatedStages/associatedStep/groupOrder/additionalInstructions, como siempre.
+  const updated = await prisma.agent.upsert({
     where: { id: AGENT_ID },
-    data: {
+    create: {
+      id: AGENT_ID,
+      name: "Handoff Sales→CS",
+      description:
+        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 10 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
+      status: AgentStatus.ACTIVE,
+      agentType: AgentType.SECTION,
+      outputType: AgentOutputType.CARDS,
+      scope: AgentScope.CLIENT,
+      agentGroup: "handoff",
+      groupOrder: 0,
+      associatedStages: [1],
+      associatedStep: 0,
+      sectionLabel: null,
+      defaultCanvasSection: "acuerdos_promesas",
+      additionalInstructions: null,
+      systemPrompt: HANDOFF_SYSTEM_PROMPT,
+    },
+    update: {
       name: "Handoff Sales→CS",
       description:
         "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 10 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
