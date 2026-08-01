@@ -63,6 +63,15 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   },
 
   // ── Los exentos, cada uno con su motivo ────────────────────────────────────
+  "lib/projects/alta-runner.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: pregunta si ALGÚN proyecto —el que sea, activo o " +
+      "no, del cliente que sea— ya reclamó un id de HubSpot que el alta está por adoptar. " +
+      "`hubspotServiceId` es único en toda la tabla, así que acotar la búsqueda con un criterio " +
+      "de alcance dejaría afuera justo al que hay que encontrar (un proyecto inactivo lo " +
+      "reclama igual) y el alta se apropiaría de un record ajeno.",
+  },
   "lib/canvas/load-canvas-context.ts": {
     modo: "exento",
     razon:

@@ -615,10 +615,15 @@ export async function syncProjectsForClient(
     return result;
   }
 
-  // 3. Resolver hubspotCompanyId — si no está guardado, buscarlo por nombre
+  /* 3. Resolver hubspotCompanyId — si no está guardado, buscarlo por nombre.
+     ⛔ El espejo dirigido NO pasa por acá, y es el último de la familia "esto asume que hay que
+        DESCUBRIR los proyectos del cliente" que faltaba guardar. En modo dirigido ya sabemos qué
+        record traer, así que este dato no se usa para nada — pero podía cortar la corrida antes
+        de traerlo (un cliente sin empresa vinculada dejaría el alta trabada por un dato que no
+        hace falta) o guardar en el cliente una empresa resuelta por parecido de nombre. */
   let companyId = client.hubspotCompanyId;
 
-  if (!companyId) {
+  if (!companyId && !dirigido) {
     result.debug!.push("hubspotCompanyId no guardado — buscando empresa en HubSpot por nombre...");
     companyId = await findCompanyId(hsClient, {
       clientName: client.name,
@@ -641,7 +646,7 @@ export async function syncProjectsForClient(
       return result;
     }
   } else {
-    result.debug!.push(`✓ hubspotCompanyId: ${companyId}`);
+    result.debug!.push(companyId ? `✓ hubspotCompanyId: ${companyId}` : "sin hubspotCompanyId (no hace falta: espejo dirigido)");
   }
 
   // 4. Buscar proyectos HubSpot asociados a la empresa.
