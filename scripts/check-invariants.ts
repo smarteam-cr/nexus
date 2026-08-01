@@ -543,6 +543,10 @@ async function main(): Promise<number> {
     "scripts/check-invariants.ts", // este archivo: menciona --apply solo en mensajes
     "scripts/verify-rls-anon.ts", // read-only: imprime la remediación con --apply
     "scripts/lib/guard.ts", // el guard mismo
+    // Manager de la base LOCAL: el "--apply" que contiene es el argv que le PASA a los
+    // seeds del catálogo (F3), y toda URL que construye es urlDe() = localhost:5433 —
+    // jamás lee DATABASE_URL para escribir. Los seeds que lanza sí corren su guard.
+    "scripts/local-db.ts",
   ]);
   const USA_GUARD = /resolverApply|assertProdWriteAllowed/;
   const sinGuard: string[] = [];

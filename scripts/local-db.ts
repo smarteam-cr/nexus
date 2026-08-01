@@ -16,6 +16,8 @@
  *   status     ¿está corriendo?
  *   bootstrap  aplica el schema COMPLETO a nexus_local y nexus_test:
  *              0_init (migrate deploy) → after.sql → policies.sql
+ *   seed       puebla nexus_local: catálogo (agentes/prompts/config/equipo
+ *              ficticio) + el fixture fx- (scripts/seed-fixture.ts). F3.
  *   reset      down + borrar datos + up + bootstrap  ← "rehacerla en segundos"
  *   url        imprime las connection strings
  *
@@ -145,6 +147,76 @@ async function bootstrap(): Promise<void> {
   for (const db of BASES) console.log(`  ${db}: ${urlDe(db)}`);
 }
 
+// ── seed: catálogo + fixture contra nexus_local ────────────────────────────────
+// Lista EXPLÍCITA a propósito (no un glob): un one-off nuevo en scripts/ no debe
+// colarse al bootstrap local en silencio. Los demos de cobranza NO están acá —
+// son opcionales y se corren a mano (seed-cobranza-demo → -historia). El orden
+// importa donde hay dependencias (team antes que app-users; el fixture al final).
+const CATALOGO_SEEDS = [
+  // Núcleo: agentes + tags + conocimiento base
+  "prisma/seed.ts",
+  "prisma/seed-tags.ts",
+  "prisma/seed-knowledge.ts",
+  // Equipo (roster FICTICIO — los correos reales no van al repo) + identidades + permisos
+  "scripts/seed-team.ts",
+  "scripts/seed-app-users.ts",
+  "scripts/seed-role-permissions.ts",
+  "scripts/seed-session-categories.ts",
+  // Agentes por módulo (prompts en DB, upserts idempotentes)
+  "scripts/seed-analysis-agents.ts",
+  "scripts/seed-canvas-agents.ts",
+  "scripts/seed-handoff-agent.ts",
+  "scripts/seed-kickoff-agent.ts",
+  "scripts/seed-diagnostico-agent.ts",
+  "scripts/seed-planificacion-agent.ts",
+  "scripts/seed-implementacion-agent.ts",
+  "scripts/seed-desarrollo-agent.ts",
+  "scripts/seed-exploracion-agent.ts",
+  "scripts/seed-post-session-agent.ts",
+  "scripts/seed-participants-analyzer.ts",
+  "scripts/seed-session-project-classifier.ts",
+  "scripts/seed-timeline-detail-agent.ts",
+  "scripts/seed-timeline-progress-agent.ts",
+  "scripts/seed-roles-assist-agent.ts",
+  // Conocimiento versionado en el repo
+  "scripts/seed-breeze-knowledge.ts",
+  "scripts/seed-escala-rendimiento.ts",
+  "scripts/seed-escala-criterios.ts",
+  "scripts/seed-caminos-opuestos.ts",
+  // Marketing (settings + ICP + personas)
+  "scripts/seed-marketing-module.ts",
+  "scripts/seed-buyer-personas.ts",
+  // El mundo ficticio fx- (clientes/proyectos/sesiones/cobranza/roles) — SIEMPRE último
+  "scripts/seed-fixture.ts",
+];
+
+async function seed(): Promise<void> {
+  if (!estaCorriendo()) up();
+  await ensureDatabases();
+  const url = urlDe("nexus_local"); // nexus_test se trunca por test — no se siembra
+  const fallidos: string[] = [];
+  for (const script of CATALOGO_SEEDS) {
+    console.log(`\n━━ ${script} ━━`);
+    // "--apply" para los dry-run-first; los que no lo parsean lo ignoran. En
+    // localhost el guard no exige ALLOW_PROD_WRITE (a propósito).
+    const r = spawnSync("npx", ["tsx", script, "--apply"], {
+      cwd: RAIZ,
+      env: { ...process.env, DATABASE_URL: url },
+      stdio: "inherit",
+      shell: process.platform === "win32",
+    });
+    if (r.status !== 0) fallidos.push(script);
+  }
+  console.log("\n──────────────────────────────────");
+  if (fallidos.length) {
+    console.error(`✗ seed terminó con ${fallidos.length} fallo(s):`);
+    for (const f of fallidos) console.error(`   · ${f}`);
+    process.exit(1);
+  }
+  console.log(`✓ seed completo: ${CATALOGO_SEEDS.length} scripts contra nexus_local.`);
+  console.log("  Demos opcionales de Cobranza: npx tsx scripts/seed-cobranza-demo.ts --apply → -historia.");
+}
+
 async function main(): Promise<void> {
   const cmd = process.argv[2] ?? "status";
   switch (cmd) {
@@ -161,6 +233,9 @@ async function main(): Promise<void> {
     case "bootstrap":
       await bootstrap();
       break;
+    case "seed":
+      await seed();
+      break;
     case "reset":
       down();
       rmSync(join(RAIZ, ".local-db"), { recursive: true, force: true });
@@ -172,7 +247,7 @@ async function main(): Promise<void> {
       for (const db of BASES) console.log(`${db}: ${urlDe(db)}`);
       break;
     default:
-      console.error(`Comando desconocido: ${cmd}. Usá up | down | status | bootstrap | reset | url`);
+      console.error(`Comando desconocido: ${cmd}. Usá up | down | status | bootstrap | seed | reset | url`);
       process.exit(1);
   }
 }

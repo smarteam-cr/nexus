@@ -12,6 +12,7 @@
  *   npx tsx scripts/seed-app-users.ts --apply  # ejecuta
  */
 import { PrismaClient } from "@prisma/client";
+import { sslParaConexion } from "@/lib/db/ssl";
 import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -19,7 +20,7 @@ import "dotenv/config";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
+  ssl: sslParaConexion(process.env.DATABASE_URL),
 });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 

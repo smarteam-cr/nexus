@@ -11,6 +11,7 @@
  * (lo maneja Prisma vía @updatedAt).
  */
 import { PrismaClient, KnowledgeType, KnowledgeStatus, TagCategory } from "@prisma/client";
+import { sslParaConexion } from "@/lib/db/ssl";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { readFileSync } from "fs";
@@ -19,7 +20,7 @@ import "dotenv/config";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
+  ssl: sslParaConexion(process.env.DATABASE_URL),
 });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });

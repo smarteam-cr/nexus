@@ -1,10 +1,15 @@
 /**
  * scripts/seed-cobranza-demo.ts
  *
- * Siembra data de DEMO para el módulo Cobranza sobre clientes REALES con proyecto
- * activo (los primeros 4 sin cuenta configurada). Produce los 4 colores del
- * semáforo + 1 catch-up + 1 divergencia de arranque — lo que el demo necesita y
- * el UI no debería facilitar crear (fechas retrodatadas).
+ * Siembra data de DEMO para el módulo Cobranza sobre clientes FICTICIOS que este
+ * mismo script crea (fx-demo-cobranza-*, dominio example.com). Produce los 4
+ * colores del semáforo + 1 catch-up + 1 divergencia de arranque — lo que el demo
+ * necesita y el UI no debería facilitar crear (fechas retrodatadas).
+ *
+ * ⛔ REESCRITO (F3, 2026-08-01 — decisión de Elías): antes seleccionaba "los
+ * primeros 4 clientes REALES sin cuenta" y les sembraba deuda de mentira encima.
+ * Ahora JAMÁS toca un cliente real y SOLO corre contra la base local (rechaza
+ * prod sin excepción — acá no existe la salida ALLOW_PROD_WRITE).
  *
  * Escenarios:
  *   A) VERDE    — implementación PAREJO 3 cuotas, arranque hace 3 meses; se generan
@@ -31,18 +36,17 @@
  *   Además el primer COBRADO del escenario A lleva referenciaExterna (Mercury).
  *
  * Idempotente: salta clientes que ya tienen cuenta. Marca notas "[demo cobranza]"
- * y los Clients demo llevan sourceExternalId "demo-*". DRY-RUN por default;
- * escribe SOLO con --apply (local == PROD — el usuario revisa y aprueba).
- * LIMPIEZA: scripts/cleanup-cobranza-demo.ts (dry-run-first).
+ * y los Clients demo llevan prefijo fx-demo-*. DRY-RUN por default; escribe SOLO
+ * con --apply. LIMPIEZA: scripts/cleanup-cobranza-demo.ts (dry-run-first) — o
+ * re-correr seed-fixture.ts, que borra todo el mundo fx-.
  *
  * Uso:
  *   npx tsx scripts/seed-cobranza-demo.ts            # dry-run
  *   npx tsx scripts/seed-cobranza-demo.ts --apply    # aplica
  */
 import "dotenv/config";
-import { resolverApply } from "./lib/guard";
+import { resolverApply, esHostProduccion, describirDestino } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
-import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import {
   createCuenta,
   createServicio,
@@ -54,7 +58,23 @@ import {
 } from "@/lib/cobranza/mutations";
 import { ingestCuentasEntrantes } from "@/lib/cobranza/ingest";
 import { crDateParts } from "@/lib/jobs/time";
-import { CS_CLIENT_WHERE } from "../lib/clients/kind";
+
+// ── SOLO base local (mismo criterio que seed-fixture.ts): rechaza prod SIN excepción.
+const HOSTS_LOCALES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+{
+  const url = process.env.DATABASE_URL;
+  let host = "";
+  try {
+    host = new URL(url ?? "").hostname;
+  } catch {
+    host = "";
+  }
+  if (!url || esHostProduccion(url) || !HOSTS_LOCALES.has(host)) {
+    console.error(`⛔ seed-cobranza-demo SOLO corre contra una base LOCAL. Destino: ${describirDestino(url)}`);
+    console.error("   La deuda de mentira jamás se siembra sobre la base compartida (decisión 2026-08-01).");
+    process.exit(1);
+  }
+}
 
 const APPLY = resolverApply();
 const SEED_EMAIL = "seed-cobranza-demo";
@@ -71,37 +91,55 @@ function mesesDesdeHoy(delta: number): string {
 async function main() {
   console.log(`Modo: ${APPLY ? "APPLY (escribe)" : "DRY-RUN (no escribe)"}\n`);
 
-  // Clientes con proyecto REAL (filtro canónico) y SIN cuenta configurada.
-  const projects = await prisma.project.findMany({
-    where: {
-      status: "active",
-      OR: [{ serviceType: null }, { serviceType: { not: SENTINEL_SERVICE_TYPE } }],
-      AND: [
-        {
-          OR: [
-            { client: { hubspotCompanyId: null, hubspotAccount: { is: null } } },
-            { hubspotServiceId: { not: null } },
-          ],
-        },
-        { client: { ...CS_CLIENT_WHERE, cuentaFinanciera: { is: null } } },
-      ],
-    },
-    select: {
-      id: true,
-      name: true,
-      clientId: true,
-      client: { select: { name: true } },
-      timeline: { select: { anchorStartDate: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-  const porCliente = new Map<string, (typeof projects)[number]>();
-  for (const p of projects) if (!porCliente.has(p.clientId)) porCliente.set(p.clientId, p);
-  const candidatos = [...porCliente.values()].slice(0, 4);
-
-  if (candidatos.length < 4) {
-    console.log(`⚠ Solo ${candidatos.length} cliente(s) sin cuenta disponibles — se siembran los que haya.`);
+  // Clientes FICTICIOS propios del demo (fx-demo-*): se crean acá mismo, nunca
+  // se selecciona un cliente existente. El prefijo fx- los hace parte del mundo
+  // del fixture — re-correr seed-fixture.ts los limpia junto con todo lo demás.
+  const DEMO_CLIENTES = [
+    { id: "fx-demo-cobranza-a", name: "FX Demo Cobranza Verde (ficticia)" },
+    { id: "fx-demo-cobranza-b", name: "FX Demo Cobranza Amarilla (ficticia)" },
+    { id: "fx-demo-cobranza-c", name: "FX Demo Cobranza Roja (ficticia)" },
+    { id: "fx-demo-cobranza-d", name: "FX Demo Cobranza Gris (ficticia)" },
+  ];
+  type Candidato = {
+    id: string; // projectId
+    name: string;
+    clientId: string;
+    client: { name: string };
+    timeline: { anchorStartDate: Date | null } | null;
+  };
+  const candidatos: Candidato[] = [];
+  for (const [i, c] of DEMO_CLIENTES.entries()) {
+    const projectId = c.id.replace("fx-demo-", "fx-demo-proj-");
+    // El escenario A necesita anchor en el cronograma para la divergencia (E).
+    const conAnchor = i === 0;
+    if (APPLY) {
+      await prisma.client.upsert({
+        where: { id: c.id },
+        create: { id: c.id, name: c.name, kind: "CLIENTE", emailDomains: [], notes: MARK },
+        update: { name: c.name },
+      });
+      await prisma.project.upsert({
+        where: { id: projectId },
+        create: { id: projectId, clientId: c.id, name: `Proyecto demo cobranza (${c.name})`, status: "active" },
+        update: {},
+      });
+      if (conAnchor) {
+        await prisma.projectTimeline.upsert({
+          where: { projectId },
+          create: { id: projectId.replace("fx-demo-proj-", "fx-demo-tl-"), projectId, anchorStartDate: new Date(`${mesesDesdeHoy(-3)}T12:00:00Z`) },
+          update: {},
+        });
+      }
+    }
+    candidatos.push({
+      id: projectId,
+      name: `Proyecto demo cobranza (${c.name})`,
+      clientId: c.id,
+      client: { name: c.name },
+      timeline: conAnchor ? { anchorStartDate: new Date(`${mesesDesdeHoy(-3)}T12:00:00Z`) } : null,
+    });
   }
+  console.log(`Clientes demo (ficticios, creados por este script): ${DEMO_CLIENTES.map((c) => c.name).join(" · ")}`);
 
   const escenarios = [
     { key: "A-VERDE", tipo: "IMPLEMENTACION" as const, moneda: "USD" as const, monto: 6000, inicio: mesesDesdeHoy(-3), plan: "PAREJO" as const, numCuotas: 3, cobrar: 2, divergencia: true },

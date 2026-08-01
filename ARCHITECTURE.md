@@ -39,8 +39,8 @@ Monolito App Router, sin `src/`:
 | `app/` | 67 `page.tsx` + ~252 `route.ts` en SEIS superficies con reglas de auth DISTINTAS: `(shell)/` (interna: sidebar + sesión), `api/`, `external/` (pública por token), `print/` (render PDF, bypass `?pdfToken=`), `portal/`, `auth/`, más la raíz pública (login). El criterio vive en `middleware.ts` (PUBLIC_PATHS / PUBLIC_PREFIXES) |
 | `lib/` | 42 módulos de dominio (forma ideal: vertical slice, §1) + infra compartida (`lib/db/`, `lib/auth/`, `lib/anthropic.ts`) |
 | `components/` | React por módulo; `components/ui` = el vocabulario del §1-UI; `components/landing` = el motor de documentos del §1-WEB |
-| `scripts/` | ~158 `.ts` de operación (dry-run-first + guard anti-prod, ver cap. D) + `scripts/sql/` (los DDL a mano) + `deploy.sh` |
-| `prisma/` | `schema.prisma` (86 modelos, 78 enums) + `migrations/0_init` (baseline, cap. D) + `migrations-archive/` + `policies.sql` (RLS idempotente) + 4 seeds |
+| `scripts/` | ~158 `.ts` de operación (dry-run-first + guard anti-prod, ver cap. D) + `scripts/sql/` (los DDL a mano) + `scripts/archive/` (one-offs históricos, no son catálogo) + `deploy.sh` |
+| `prisma/` | `schema.prisma` (86 modelos, 78 enums) + `migrations/0_init` (baseline, cap. D) + `migrations-archive/` + `policies.sql` (RLS idempotente) + 3 seeds |
 | `docs/` | `DECISIONS` (el porqué, no re-litigar) · `GLOSSARY` · `RUNBOOK` (operación de PROD) · `KNOWN-ERRORS` · `CHANGELOG` |
 | `hooks/` | 3 hooks React globales (hay 1 más en `lib/hooks/` — deuda de consolidación) |
 
@@ -64,14 +64,19 @@ Trampas de todos los días: tras cambiar el schema → `npx prisma generate` + *
 server** (el client viejo no entra por HMR); tras un `git pull` que toque CSS/config →
 `rm -rf .next` + reiniciar; el navegador del preview NO está logueado (middleware → login).
 
-**Base LOCAL** (F1, 2026-08-01): Postgres 17 EMBEBIDO vía npm — sin Docker, la otra PC lo
-hereda con `npm install`. `npm run db:local -- up | bootstrap | reset | down | status`
+**Base LOCAL** (F1+F3, 2026-08-01): Postgres 17 EMBEBIDO vía npm — sin Docker, la otra PC lo
+hereda con `npm install`. `npm run db:local -- up | bootstrap | seed | reset | down | status`
 (`scripts/local-db.ts`): levanta `localhost:5433` con `nexus_local` + `nexus_test`, schema
 completo (0_init + after.sql + policies), reset TOTAL en ~20 s. Datos en `.local-db/`
 (gitignoreado). Sin pgvector (los binarios no lo traen — la columna `embedding` no tiene
 lectores y se omite con NOTICE). El guard no exige `ALLOW_PROD_WRITE` en localhost, a
-propósito. El `.env` de dev sigue apuntando a PROD — el switch es una decisión coordinada
-entre las 2 PCs, no un default.
+propósito. **`seed`** puebla `nexus_local` con el catálogo (agentes/prompts/permisos +
+equipo FICTICIO — los datos reales del equipo no van al repo) y el mundo `fx-` de
+`scripts/seed-fixture.ts` (3 empresas, 2 proyectos con canvases reales, cronograma,
+cobranza con los 5 colores, roles); el fixture y los demos de cobranza **rechazan prod SIN
+excepción** (ni `ALLOW_PROD_WRITE` los destraba — solo aceptan hosts loopback). Los seeds
+one-off históricos viven en `scripts/archive/` y NO entran al bootstrap. El `.env` de dev
+sigue apuntando a PROD — el switch es una decisión coordinada entre las 2 PCs, no un default.
 
 ### D. Base de datos y migraciones (el flujo REAL)
 

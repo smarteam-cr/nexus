@@ -25,7 +25,7 @@
  *
  * Idempotente: salta la historia si la cuenta ya tiene cobros marcados y la
  * serie si ya hay snapshots del seed. DRY-RUN por default; escribe SOLO con
- * --apply (local == PROD — el usuario revisa y aprueba).
+ * --apply. ⛔ SOLO contra base local (rechaza prod sin excepción — F3 2026-08-01).
  * LIMPIEZA: scripts/cleanup-cobranza-demo.ts (borra cuentas demo por cascade,
  * snapshots del seed, y con --snapshots-todos TODA la historia de cortes).
  *
@@ -33,10 +33,28 @@
  *   npx tsx scripts/seed-cobranza-demo-historia.ts --apply    # aplica
  */
 import "dotenv/config";
-import { resolverApply } from "./lib/guard";
+import { resolverApply, esHostProduccion, describirDestino } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import { cambiarEstadoCobro } from "@/lib/cobranza/mutations";
+
+// ── SOLO base local (mismo criterio que seed-fixture.ts y seed-cobranza-demo.ts):
+// la historia de mentira jamás se siembra sobre la base compartida. Rechaza prod
+// SIN excepción — acá no existe la salida ALLOW_PROD_WRITE (decisión 2026-08-01).
+const HOSTS_LOCALES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+{
+  const url = process.env.DATABASE_URL;
+  let host = "";
+  try {
+    host = new URL(url ?? "").hostname;
+  } catch {
+    host = "";
+  }
+  if (!url || esHostProduccion(url) || !HOSTS_LOCALES.has(host)) {
+    console.error(`⛔ seed-cobranza-demo-historia SOLO corre contra una base LOCAL. Destino: ${describirDestino(url)}`);
+    process.exit(1);
+  }
+}
 import { buildCarteraEngineInput } from "@/lib/cobranza/queries";
 import {
   addDaysISO,
