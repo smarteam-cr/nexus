@@ -26,7 +26,7 @@ import { Pool } from "pg";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import "dotenv/config";
-import { imprimirDestino } from "./guard";
+import { imprimirDestino, describirDestino } from "./guard";
 import { sslParaConexion } from "../../lib/db/ssl";
 
 const SCRIPT_POOL_MAX = 2;
@@ -64,6 +64,34 @@ export function createScriptDb(): {
     close: async () => {
       await prisma.$disconnect().catch(() => {});
       await close().catch(() => {});
+    },
+  };
+}
+
+/**
+ * Variante de `createScriptDb` con URL EXPLÍCITA (no la ambiente `DATABASE_URL`). Para
+ * scripts que hablan con DOS bases a la vez (ej. `local-pull-context.ts`: lee de prod,
+ * escribe en local) — ahí `DATABASE_URL` sirve para UN solo lado y el otro necesita su
+ * propia connection string. `etiqueta` identifica cuál de las dos es en el log.
+ */
+export function createScriptDbFor(
+  url: string,
+  etiqueta: string,
+): { prisma: PrismaClient; pool: Pool; close: () => Promise<void> } {
+  console.error(`[db] ${etiqueta} → destino: ${describirDestino(url)}`);
+  const pool = new Pool({
+    connectionString: url,
+    ssl: sslParaConexion(url),
+    max: SCRIPT_POOL_MAX,
+    idleTimeoutMillis: 10_000,
+  });
+  const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+  return {
+    prisma,
+    pool,
+    close: async () => {
+      await prisma.$disconnect().catch(() => {});
+      await pool.end().catch(() => {});
     },
   };
 }

@@ -45,7 +45,7 @@
  *   npx tsx scripts/seed-cobranza-demo.ts --apply    # aplica
  */
 import "dotenv/config";
-import { resolverApply, esHostProduccion, describirDestino } from "./lib/guard";
+import { resolverApply, assertLocalWriteOnly } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import {
   createCuenta,
@@ -60,21 +60,8 @@ import { ingestCuentasEntrantes } from "@/lib/cobranza/ingest";
 import { crDateParts } from "@/lib/jobs/time";
 
 // ── SOLO base local (mismo criterio que seed-fixture.ts): rechaza prod SIN excepción.
-const HOSTS_LOCALES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
-{
-  const url = process.env.DATABASE_URL;
-  let host = "";
-  try {
-    host = new URL(url ?? "").hostname;
-  } catch {
-    host = "";
-  }
-  if (!url || esHostProduccion(url) || !HOSTS_LOCALES.has(host)) {
-    console.error(`⛔ seed-cobranza-demo SOLO corre contra una base LOCAL. Destino: ${describirDestino(url)}`);
-    console.error("   La deuda de mentira jamás se siembra sobre la base compartida (decisión 2026-08-01).");
-    process.exit(1);
-  }
-}
+// La deuda de mentira jamás se siembra sobre la base compartida (decisión 2026-08-01).
+assertLocalWriteOnly(process.env.DATABASE_URL, "seed-cobranza-demo");
 
 const APPLY = resolverApply();
 const SEED_EMAIL = "seed-cobranza-demo";

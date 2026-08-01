@@ -23,27 +23,10 @@
 import "dotenv/config";
 import { prisma } from "@/lib/db/prisma";
 import { createDefaultCanvases, createHandoffCanvas } from "@/lib/canvas/default-canvases";
-import { describirDestino, esHostProduccion } from "./lib/guard";
+import { assertLocalWriteOnly } from "./lib/guard";
 
 // ── Rechazo duro de prod (sin la salida ALLOW_PROD_WRITE, a propósito) ─────────
-const HOSTS_LOCALES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
-function assertBaseLocal(): void {
-  const url = process.env.DATABASE_URL;
-  let host = "";
-  try {
-    host = new URL(url ?? "").hostname;
-  } catch {
-    host = "";
-  }
-  if (!url || esHostProduccion(url) || !HOSTS_LOCALES.has(host)) {
-    console.error(`⛔ seed-fixture SOLO corre contra una base LOCAL (localhost). Destino: ${describirDestino(url)}`);
-    console.error("   Este script NO acepta ALLOW_PROD_WRITE: el mundo ficticio jamás va a la base compartida.");
-    console.error("   Levantá la local con `npm run db:local -- up` y corré `npm run db:local -- seed`.");
-    process.exit(1);
-  }
-  console.log(`[db] destino: ${describirDestino(url)} (local ✓)`);
-}
-assertBaseLocal();
+assertLocalWriteOnly(process.env.DATABASE_URL, "seed-fixture");
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const dia = (offset: number): Date => {

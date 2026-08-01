@@ -14,6 +14,7 @@
     "test:all": "vitest run",
     "db:policies": "npx tsx scripts/apply-policies.ts --apply",
     "db:local": "npx tsx scripts/local-db.ts",
+    "db:local:pull": "npx tsx scripts/local-pull-context.ts",
     "check:invariants": "npx tsx scripts/check-invariants.ts"
   },
   "dependencies": {

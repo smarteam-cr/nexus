@@ -107,6 +107,31 @@ export function resolverApply(): boolean {
   return apply;
 }
 
+// Hosts LOCALES reconocidos (loopback en sus tres formas). Vive acá y no en cada script
+// para que "qué cuenta como local" tenga una sola definición.
+const HOSTS_LOCALES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+/**
+ * Aborta si `url` NO es un host local — SIN excepción, ni con `ALLOW_PROD_WRITE=1`. Para
+ * escrituras que JAMÁS deben tocar la base compartida (datos ficticios del fixture, copias
+ * de contexto real para pruebas): a diferencia de `assertProdWriteAllowed`, acá no existe
+ * la salida de autorizar prod — es un candado, no un semáforo. `contexto` sale en el mensaje.
+ */
+export function assertLocalWriteOnly(url: string | undefined, contexto = "escritura"): void {
+  let host = "";
+  try {
+    host = new URL(url ?? "").hostname;
+  } catch {
+    host = "";
+  }
+  if (!url || esHostProduccion(url) || !HOSTS_LOCALES.has(host)) {
+    console.error(`⛔ ${contexto} SOLO corre contra una base LOCAL (localhost). Destino: ${describirDestino(url)}`);
+    console.error("   Este script NO acepta ALLOW_PROD_WRITE — no hay forma de autorizarlo contra prod.");
+    process.exit(1);
+  }
+  console.error(`[db] destino: ${describirDestino(url)} (local ✓)`);
+}
+
 /**
  * Gate para el CLI de Prisma — lo llama `prisma.config.ts`, que se ejecuta en TODOS los
  * comandos (`generate`, `validate`, `db execute`, `migrate ...`). Por eso:

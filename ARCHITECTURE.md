@@ -78,6 +78,17 @@ excepción** (ni `ALLOW_PROD_WRITE` los destraba — solo aceptan hosts loopback
 one-off históricos viven en `scripts/archive/` y NO entran al bootstrap. El `.env` de dev
 sigue apuntando a PROD — el switch es una decisión coordinada entre las 2 PCs, no un default.
 
+**Contexto REAL para pruebas de juicio del agente** (`npm run db:local:pull -- --client
+"nombre"`, `scripts/local-pull-context.ts`): el mundo `fx-` prueba que la plomería
+funciona, pero no sirve para validar si un agente entendió bien una conversación —eso
+exige un transcript real y a alguien que estuvo en la llamada—. Este script copia, de
+PROD (solo lectura, sin gate — leer no es peligroso) a `nexus_local`, el Client + sus
+Project + FirefliesSession (con transcript) + SessionProject de un cliente puntual, más
+el roster INTERNO completo de Smarteam (así el filtro "¿hay Ventas en la sala?" y el
+login local se comportan igual que en prod). El DESTINO es SIEMPRE local — mismo candado
+sin excepción que el fixture. Dry-run por default; `--apply` escribe. Idempotente (ids
+reales de prod, upsert). No copia Cobranza/Timeline/Canvas — la generación crea los suyos.
+
 ### D. Base de datos y migraciones (el flujo REAL)
 
 - **Dónde vive la config**: el `datasource` de `prisma/schema.prisma` NO declara URL —

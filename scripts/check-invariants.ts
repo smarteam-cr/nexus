@@ -547,6 +547,13 @@ async function main(): Promise<number> {
     // seeds del catálogo (F3), y toda URL que construye es urlDe() = localhost:5433 —
     // jamás lee DATABASE_URL para escribir. Los seeds que lanza sí corren su guard.
     "scripts/local-db.ts",
+    // Copia contexto real de prod a la base local (F3+): el "--apply" controla si
+    // ESCRIBE en el DESTINO, que es un literal hardcodeado (localhost:5433/nexus_local,
+    // nunca DATABASE_URL) gateado por assertLocalWriteOnly — mismo candado que
+    // seed-fixture.ts, solo que además referenciado por nombre distinto (createScriptDbFor)
+    // porque habla con DOS bases a la vez. La LECTURA de prod no está gateada (leer no es
+    // peligroso — doctrina del guard), y el script exige por su cuenta que la fuente SEA prod.
+    "scripts/local-pull-context.ts",
   ]);
   const USA_GUARD = /resolverApply|assertProdWriteAllowed/;
   const sinGuard: string[] = [];
