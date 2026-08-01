@@ -24,6 +24,7 @@
  *   npx tsx scripts/cleanup-handoff-dup-projects.ts --apply   # aplica
  */
 import "dotenv/config"; // primero: @/lib/db/prisma lee DATABASE_URL al cargar.
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 
@@ -34,7 +35,7 @@ async function blockCount(projectId: string): Promise<number> {
 }
 
 async function main() {
-  const apply = process.argv.includes("--apply");
+  const apply = resolverApply();
   console.log(`Modo: ${apply ? "APLICAR" : "DRY-RUN (--apply para ejecutar)"}\n`);
 
   const handoffs = await prisma.handoff.findMany({

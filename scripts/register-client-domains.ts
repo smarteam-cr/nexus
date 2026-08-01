@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 
 /**
@@ -14,7 +15,7 @@ import { prisma } from "@/lib/db/prisma";
  *   npx tsx scripts/register-client-domains.ts            # muestra el plan
  *   npx tsx scripts/register-client-domains.ts --apply    # escribe (PROD)
  */
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 const DOMAINS = [
   "grupoinve.com", "selvatura.com", "teamnet.com.mx", "stratospherecorp.com", "ferreterianoelito.com",

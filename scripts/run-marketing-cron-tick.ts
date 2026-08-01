@@ -11,9 +11,10 @@
  * activo, e imprime la decisión SIN escribir.
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 
 async function main() {
-  const apply = process.argv.includes("--apply");
+  const apply = resolverApply();
   const atIdx = process.argv.indexOf("--at");
   const now = atIdx !== -1 && process.argv[atIdx + 1] ? new Date(process.argv[atIdx + 1]) : new Date();
   if (isNaN(now.getTime())) {

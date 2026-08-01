@@ -25,6 +25,7 @@
  *   npx tsx scripts/backfill-project-pipeline.ts --apply
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { resolverHermanos } from "@/lib/hubspot/sync-projects";
@@ -39,7 +40,7 @@ import { resolverHermanos } from "@/lib/hubspot/sync-projects";
    la app, que ya tiene su propio techo por entorno. Mismo criterio que check-invariants.ts. */
 const close = () => prisma.$disconnect();
 
-const APLICAR = process.argv.includes("--apply");
+const APLICAR = resolverApply();
 const LOTE = 100; // techo de la API de batch/read de HubSpot
 
 async function tokenDeCuenta(accountId: string): Promise<string | null> {

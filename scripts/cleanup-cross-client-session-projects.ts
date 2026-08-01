@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 
 /**
@@ -21,7 +22,7 @@ import { prisma } from "@/lib/db/prisma";
  *   npx tsx scripts/cleanup-cross-client-session-projects.ts            # dry-run
  *   npx tsx scripts/cleanup-cross-client-session-projects.ts --apply    # borra (PROD)
  */
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 async function main() {
   console.log(

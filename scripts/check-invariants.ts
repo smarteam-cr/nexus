@@ -49,6 +49,15 @@ import { buscarEtapa, resolvePipeline } from "@/lib/projects/kind";
  *      le puso su pipeline — el defecto que tuvo la rama de creación, visto desde los datos
  *      en vez de desde el código. Mientras dura, ese proyecto se comporta como Customer
  *      Success: entra a la cartera, al vigilante y a cobranza.
+ *  11. Toda etapa materializada activa está declarada en `PROJECT_PIPELINES` — si HubSpot
+ *      ganó etapas nuevas y nadie las transcribió, hay proyectos clasificados a ciegas.
+ *  12. GUARD ANTI-PROD: todo script de `scripts/` que maneje `--apply` importa el guard
+ *      (`scripts/lib/guard.ts` → resolverApply/assertProdWriteAllowed), `prisma.config.ts`
+ *      llama a `guardPrismaCli` (el chokepoint del CLI de Prisma — en v7 `db execute` y
+ *      `migrate *` NO aceptan URL por flag, la leen SOLO del config), los seeds de
+ *      `prisma/` corren el guard incondicional, y `scripts/lib/db.ts` imprime el destino.
+ *      Es lo que convierte "correr un --apply por reflejo" en una decisión explícita
+ *      (ALLOW_PROD_WRITE=1) contra la base que es PRODUCCIÓN.
  */
 async function main(): Promise<number> {
   let violations = 0;
@@ -133,7 +142,8 @@ async function main(): Promise<number> {
     violations++;
     console.error(`✗ INV4 VIOLADO: el cliente Prisma conoce ${missing.length} valor(es) de enum que la DB NO tiene — un write con ellos falla:`);
     for (const m of missing.slice(0, 15)) console.error(`    - ${m}`);
-    console.error('  Corré `npm run db:sync` (¡nunca `db push` solo!) y reiniciá el server. Ver ARCHITECTURE.md ("migraciones silenciosas").');
+    console.error("  Aplicá el .sql pendiente de scripts/sql/ (o escribilo: DDL ADITIVO a mano, nunca db push),");
+    console.error("  después `npx prisma generate` y reiniciá el dev server. Ver ARCHITECTURE.md Parte 0 · cap. D.");
   } else {
     console.log(`✓ INV4: los ${Object.keys($Enums).length} enums del cliente generado existen completos en la DB.`);
   }
@@ -515,6 +525,70 @@ async function main(): Promise<number> {
     );
   } else {
     console.log("✓ INV11: toda etapa materializada activa está declarada en la tabla.");
+  }
+
+  // ── Inv 12: el guard anti-prod está cableado en TODOS los caminos de escritura ─────
+  //
+  // La base es PRODUCCIÓN (invariante #3 de CLAUDE.md): un `--apply` corrido por reflejo
+  // escribe sobre datos reales. Este invariante es DURO desde el día 1 (deuda inicial 0:
+  // el sweep de la misma tanda migró los 60 scripts) y verifica cuatro cosas:
+  //   (a) todo scripts/**/*.ts que maneje `--apply` usa el guard (resolverApply /
+  //       assertProdWriteAllowed) — allowlist para los 2 reporters read-only que solo
+  //       IMPRIMEN comandos de remediación con --apply;
+  //   (b) prisma.config.ts llama a guardPrismaCli (chokepoint del CLI de Prisma);
+  //   (c) scripts/lib/db.ts imprime el destino (imprimirDestino);
+  //   (d) los seeds de prisma/ corren assertProdWriteAllowed incondicional.
+  const norm = (p: string) => p.replace(/\\/g, "/");
+  const ALLOWLIST_INV12 = new Set([
+    "scripts/check-invariants.ts", // este archivo: menciona --apply solo en mensajes
+    "scripts/verify-rls-anon.ts", // read-only: imprime la remediación con --apply
+    "scripts/lib/guard.ts", // el guard mismo
+  ]);
+  const USA_GUARD = /resolverApply|assertProdWriteAllowed/;
+  const sinGuard: string[] = [];
+  const walkGuard = (d: string) => {
+    for (const name of readdirSync(d)) {
+      if (name === "node_modules" || name.startsWith(".")) continue;
+      const full = join(d, name);
+      if (statSync(full).isDirectory()) {
+        walkGuard(full);
+        continue;
+      }
+      if (!/\.(ts|mts)$/.test(name)) continue;
+      const rel = norm(full).replace(norm(process.cwd()) + "/", "");
+      if (ALLOWLIST_INV12.has(rel)) continue;
+      const src = readFileSync(full, "utf8");
+      if (src.includes("--apply") && !USA_GUARD.test(src)) sinGuard.push(rel);
+    }
+  };
+  walkGuard(join(process.cwd(), "scripts"));
+
+  const configSrc = readFileSync(join(process.cwd(), "prisma.config.ts"), "utf8");
+  const dbSrc = readFileSync(join(process.cwd(), "scripts", "lib", "db.ts"), "utf8");
+  const seedsSinGuard = readdirSync(join(process.cwd(), "prisma"))
+    .filter((f) => /^seed.*\.ts$/.test(f))
+    .filter((f) => !USA_GUARD.test(readFileSync(join(process.cwd(), "prisma", f), "utf8")));
+
+  const problemasInv12: string[] = [];
+  if (sinGuard.length > 0)
+    problemasInv12.push(
+      `${sinGuard.length} script(s) con --apply SIN el guard: ${sinGuard.slice(0, 10).join(", ")}${sinGuard.length > 10 ? " …" : ""}`,
+    );
+  if (!configSrc.includes("guardPrismaCli"))
+    problemasInv12.push("prisma.config.ts no llama a guardPrismaCli (el CLI de Prisma quedó sin chokepoint)");
+  if (!dbSrc.includes("imprimirDestino"))
+    problemasInv12.push("scripts/lib/db.ts no imprime el destino (imprimirDestino)");
+  if (seedsSinGuard.length > 0)
+    problemasInv12.push(`seed(s) de prisma/ sin guard incondicional: ${seedsSinGuard.join(", ")}`);
+
+  if (problemasInv12.length > 0) {
+    violations++;
+    console.error("✗ INV12 VIOLADO: el guard anti-prod tiene huecos:");
+    for (const p of problemasInv12) console.error(`    - ${p}`);
+    console.error("  Importá scripts/lib/guard.ts: `const APPLY = resolverApply()` en scripts con --apply,");
+    console.error("  `assertProdWriteAllowed()` en seeds que escriben siempre.");
+  } else {
+    console.log("✓ INV12: el guard anti-prod cubre scripts --apply, el CLI de Prisma y los seeds.");
   }
 
   return violations;

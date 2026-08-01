@@ -16,6 +16,7 @@
  *   npx tsx scripts/migrate-strategy-to-client-info.ts --apply  # ejecuta
  */
 import { PrismaClient } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -29,7 +30,7 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 const REMOVED_SECTION_KEYS = ["handoff_ventas", "perfil_cliente"];
 
 async function main() {
-  const apply = process.argv.includes("--apply");
+  const apply = resolverApply();
   console.log(`Modo: ${apply ? "APLICAR" : "DRY-RUN (usa --apply para ejecutar)"}\n`);
 
   // 1. Projects con serviceType=__strategy__

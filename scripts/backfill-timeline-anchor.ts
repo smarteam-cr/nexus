@@ -13,10 +13,11 @@
  * Aplicar:            npx tsx scripts/backfill-timeline-anchor.ts --apply
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 async function main() {
   console.log(APPLY ? "── MODO APPLY (escribe) ──\n" : "── DRY-RUN (no escribe; usá --apply) ──\n");

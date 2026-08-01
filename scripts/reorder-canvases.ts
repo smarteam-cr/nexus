@@ -11,11 +11,12 @@
  * Dry-run por default. Aplicar con: npx tsx scripts/reorder-canvases.ts --apply
  */
 import { PrismaClient } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 // Orden destino por NOMBRE de canvas (los 4 estándar del dropdown).
 const ORDER_BY_NAME: Record<string, number> = {

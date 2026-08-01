@@ -21,12 +21,13 @@
  * Dry-run por default. Aplicar con: npx tsx scripts/backfill-kickoff-sections.ts --apply
  */
 import { PrismaClient, Prisma } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 import { KICKOFF_CANVAS, kickoffSectionSequence } from "../lib/canvas/canvas-defs";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 const CANON = KICKOFF_CANVAS.sections;
 const LABEL_BY_KEY = new Map(CANON.map((s) => [s.key, s.label]));

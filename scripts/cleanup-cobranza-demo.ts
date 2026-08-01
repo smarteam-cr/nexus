@@ -28,9 +28,10 @@
  *   npx tsx scripts/cleanup-cobranza-demo.ts --snapshots-todos --apply  # + reset de cortes
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const SNAPSHOTS_TODOS = process.argv.includes("--snapshots-todos");
 const MARK = "[demo cobranza]";
 const TRIGGER_HISTORIA = "seed-demo-historia";

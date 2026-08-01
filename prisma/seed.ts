@@ -3,17 +3,17 @@ dotenv.config();
 
 import { PrismaClient, AgentStatus, AgentOutputType, AgentScope, AgentType } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import {
   MAPEO_SYSTEM_PROMPT,
   MAPEO_ADDITIONAL_INSTRUCTIONS,
   MAPEO_DESCRIPTION,
 } from "../lib/agents/mapeo-prompt";
+import { assertProdWriteAllowed } from "../scripts/lib/guard";
+import { createScriptPool } from "../scripts/lib/db";
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
-});
+// Este seed ESCRIBE siempre (no tiene --apply): el guard corre incondicional.
+assertProdWriteAllowed("prisma/seed.ts");
+const { pool } = createScriptPool();
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 

@@ -27,6 +27,7 @@
  *   Flags: --client <id|nombre> (acota a un cliente) · --sin-saneo (solo gates)
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import type { ProjectStageGateKey, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -39,7 +40,7 @@ import { KICKOFF_TITLE_FILTERS } from "@/lib/sessions/kickoff-pick";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const SKIP_SANEO = process.argv.includes("--sin-saneo");
 function argValue(flag: string): string | null {
   const i = process.argv.indexOf(flag);

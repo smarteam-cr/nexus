@@ -13,9 +13,10 @@
  * Aplicar:            npx tsx scripts/backfill-handoff-generated.ts --apply
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
 async function main() {

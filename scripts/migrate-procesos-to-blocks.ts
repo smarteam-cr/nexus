@@ -19,6 +19,7 @@
  *   npx tsx scripts/migrate-procesos-to-blocks.ts --apply
  */
 import { PrismaClient } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -73,7 +74,7 @@ async function ensureProcesosSection(clientId: string): Promise<string> {
 }
 
 async function main() {
-  const apply = process.argv.includes("--apply");
+  const apply = resolverApply();
   console.log(`Modo: ${apply ? "APLICAR" : "DRY-RUN (--apply para ejecutar)"}\n`);
 
   const cards = await prisma.clientContextCard.findMany({

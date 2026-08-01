@@ -13,6 +13,7 @@
  *   npx tsx scripts/cleanup-agents.ts --apply    (borra de verdad)
  */
 import { PrismaClient } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -20,7 +21,7 @@ import "dotenv/config";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 // Targets a borrar (todos detectados con 0 runs en la auditoría). El "keep" es el
 // agente canónico que cumple esa función y se queda.

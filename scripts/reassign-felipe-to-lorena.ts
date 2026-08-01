@@ -18,11 +18,12 @@
  * Dry-run por default. Aplicar con: npx tsx scripts/reassign-felipe-to-lorena.ts --apply
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { syncProjectsForClient } from "@/lib/hubspot/sync-projects";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 const FELIPE_EMAIL = "asepulveda@smarteamcr.com";
 const FELIPE_HS_OWNER_ID = "80566917";

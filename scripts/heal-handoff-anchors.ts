@@ -21,8 +21,9 @@
  * Aplicar:            npx tsx scripts/heal-handoff-anchors.ts --apply
  */
 import { createScriptDb } from "./lib/db";
+import { resolverApply } from "./lib/guard";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
 async function main() {

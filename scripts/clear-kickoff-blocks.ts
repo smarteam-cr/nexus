@@ -12,6 +12,7 @@
  *   npx tsx scripts/clear-kickoff-blocks.ts almotec --apply   # borra
  */
 import { PrismaClient } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -24,7 +25,7 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 async function main() {
   const args = process.argv.slice(2);
-  const apply = args.includes("--apply");
+  const apply = resolverApply();
   const term = args.find((a) => !a.startsWith("--")) ?? "almotec";
   console.log(`Filtro: "${term}"  |  Modo: ${apply ? "APLICAR" : "DRY-RUN (usa --apply para borrar)"}\n`);
 

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 
 /**
@@ -26,7 +27,7 @@ import { prisma } from "@/lib/db/prisma";
  *   npx tsx scripts/purge-future-sessions.ts            (análisis, no escribe)
  *   npx tsx scripts/purge-future-sessions.ts --apply    (borra las sintéticas)
  */
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 // Margen de seguridad: el sync legítimo escribe hasta now+1d (timeMax) — acá
 // solo se consideran "futuras" las de now+2d en adelante, para no rozar jamás

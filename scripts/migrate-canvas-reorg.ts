@@ -18,6 +18,7 @@
  *   npx tsx scripts/migrate-canvas-reorg.ts --apply   # aplica
  */
 import { PrismaClient } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -41,7 +42,7 @@ const CANVASES_TO_DELETE = ["Ejecución", "Adopción", "Resumen"];
 const DISCARD_CARD_SECTIONS = ["objetivo_alcance", "hipotesis_recomendaciones", "plan_implementacion"];
 
 async function main() {
-  const apply = process.argv.includes("--apply");
+  const apply = resolverApply();
   console.log(`Modo: ${apply ? "APLICAR" : "DRY-RUN (--apply para ejecutar)"}\n`);
 
   const allProjects = await prisma.project.findMany({ select: { id: true, name: true, serviceType: true } });

@@ -15,6 +15,7 @@
  *   npx tsx scripts/reset-client-onboarding.ts sfera --apply
  */
 import { PrismaClient, Prisma } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -23,7 +24,7 @@ const SENTINEL = "__strategy__";
 const INFO_CANVAS = "Información del cliente";
 
 const args = process.argv.slice(2).filter((a) => a !== "--apply");
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const CLIENT_TERM = args[0] ?? "";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });

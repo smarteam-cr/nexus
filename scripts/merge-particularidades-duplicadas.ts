@@ -20,10 +20,11 @@
  *       npx tsx scripts/merge-particularidades-duplicadas.ts --apply
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { buildDedupeKey, fingerprintFromTitle } from "@/lib/timeline/particularidad-identity";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 const STOP = new Set(["para", "que", "con", "los", "las", "del", "una", "por", "sobre", "entre", "como", "sus", "este", "esta"]);
 function tokens(s: string): Set<string> {

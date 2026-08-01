@@ -20,13 +20,14 @@
  * `docType` se listaría y renderizaría con la plantilla de perfil de puesto.
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { PROPUESTA_CSL_ID } from "@/lib/roles/csl-legacy";
 import { PROPUESTA_CSL_HERO, PROPUESTA_CSL_CONTENT } from "./data/propuesta-csl-v1";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 /**
  * Firma de la semilla. Va en `createdByEmail` (auditoría) y en `publicPublishedByEmail`,

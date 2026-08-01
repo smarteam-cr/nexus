@@ -26,6 +26,7 @@ import { Pool } from "pg";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import "dotenv/config";
+import { imprimirDestino } from "./guard";
 
 const SCRIPT_POOL_MAX = 2;
 
@@ -35,6 +36,9 @@ export function createScriptPool(): { pool: Pool; close: () => Promise<void> } {
     console.error("ERROR: falta DATABASE_URL en el entorno (.env).");
     process.exit(1);
   }
+  // Que NINGÚN script (ni los read-only) corra sin decir contra qué base — el guard duro
+  // de escritura es assertProdWriteAllowed()/resolverApply() (scripts/lib/guard.ts, INV12).
+  imprimirDestino("script");
   const pool = new Pool({
     connectionString: url,
     ssl: { rejectUnauthorized: false },

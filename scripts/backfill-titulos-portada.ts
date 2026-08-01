@@ -34,6 +34,7 @@
  *   npx tsx scripts/backfill-titulos-portada.ts --slug=kickoff   # acota a un tipo
  */
 import { createScriptDb } from "./lib/db";
+import { resolverApply } from "./lib/guard";
 import type { Prisma } from "@prisma/client";
 import { anthropic } from "@/lib/anthropic";
 import { loadCanvasContext } from "@/lib/canvas/load-canvas-context";
@@ -44,7 +45,7 @@ import { HERO_TITLE_MAX_CHARS } from "@/lib/landing/hero-title";
 const { prisma, close } = createScriptDb();
 
 const MODEL = "claude-sonnet-4-6";
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const SLUG_FILTRO = process.argv.find((a) => a.startsWith("--slug="))?.split("=")[1] ?? null;
 /**
  * Portadas VACÍAS cuyo documento SÍ tiene cuerpo escrito: se les redacta la portada

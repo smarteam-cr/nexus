@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
 
@@ -8,7 +9,7 @@ import { resolveAllSessions } from "@/lib/sessions/resolve-client";
  *   npx tsx scripts/backfill-resolved-client.ts            (dry-run)
  *   npx tsx scripts/backfill-resolved-client.ts --apply    (escribe)
  */
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 async function main() {
   console.log(APPLY ? "=== APPLY (escribe) ===" : "=== DRY-RUN (no escribe) ===");

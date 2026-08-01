@@ -26,6 +26,7 @@
  *   npx tsx scripts/reset-all-onboarding.ts --apply    # borra de verdad (PROD)
  */
 import { PrismaClient, Prisma } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -33,7 +34,7 @@ import "dotenv/config";
 const SENTINEL = "__strategy__";
 const INFO_CANVAS = "Información del cliente";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });

@@ -40,6 +40,7 @@
  *   npx tsx scripts/seed-cobranza-demo.ts --apply    # aplica
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import {
@@ -55,7 +56,7 @@ import { ingestCuentasEntrantes } from "@/lib/cobranza/ingest";
 import { crDateParts } from "@/lib/jobs/time";
 import { CS_CLIENT_WHERE } from "../lib/clients/kind";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const SEED_EMAIL = "seed-cobranza-demo";
 const MARK = "[demo cobranza]";
 

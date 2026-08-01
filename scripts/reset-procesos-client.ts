@@ -10,13 +10,14 @@
  *   npx tsx scripts/reset-procesos-client.ts wherex --apply   # BORRA
  */
 import { PrismaClient } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
 const SENTINEL = "__strategy__";
 const CANVAS_NAME = "Información del cliente";
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const NAME = process.argv.slice(2).find((a) => !a.startsWith("--")) ?? "wherex";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });

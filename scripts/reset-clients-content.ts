@@ -37,6 +37,7 @@
  *   cd /d/Proyectos/nexus && npx tsx scripts/reset-clients-content.ts --apply    # BORRA (PROD)
  */
 import { PrismaClient, Prisma, CardSource } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -45,7 +46,7 @@ const SENTINEL = "__strategy__";
 const INFO_CANVAS = "Información del cliente";
 const CONTENT_CANVASES = ["Handoff", "Kickoff", "Diagnóstico", "Planificación"];
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const DO_MINUTES = process.argv.includes("--minutes");
 const DO_ACTIONS = process.argv.includes("--actions");
 

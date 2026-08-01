@@ -16,6 +16,7 @@
  *   npx tsx scripts/migrate-add-handoff-canvas.ts --apply  # ejecuta
  */
 import { PrismaClient } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -43,7 +44,7 @@ const HANDOFF_SECTIONS = [
 ];
 
 async function main() {
-  const apply = process.argv.includes("--apply");
+  const apply = resolverApply();
   console.log(`Modo: ${apply ? "APLICAR" : "DRY-RUN (usa --apply para ejecutar)"}\n`);
 
   const projects = await prisma.project.findMany({

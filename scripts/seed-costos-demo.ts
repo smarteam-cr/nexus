@@ -31,9 +31,10 @@
  *   npx tsx scripts/seed-costos-demo.ts --apply    # aplica
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const MARK = "[demo cobranza]";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;

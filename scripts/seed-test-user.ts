@@ -21,11 +21,12 @@
  * Dry-run por default. Aplicar: npx tsx scripts/seed-test-user.ts --apply
  */
 import { PrismaClient } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const TEST_EMAIL = "info@smarteamcr.com";
 const MIRROR_EMAIL = "hgomez@smarteamcr.com";
 const GRANTED_BY_EMAIL = "egonzalez@smarteamcr.com";

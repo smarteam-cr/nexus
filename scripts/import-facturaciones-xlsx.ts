@@ -21,6 +21,7 @@
  *   ya esté aplicada (enums CONECTOR e IMPORTACION).
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import ExcelJS from "exceljs";
@@ -48,7 +49,7 @@ const argv = process.argv.slice(2);
 const flag = (n: string) => argv.includes(`--${n}`);
 const opt = (n: string) => argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null;
 
-const APPLY = flag("apply");
+const APPLY = resolverApply();
 const ESCRIBIR_MAPA = flag("escribir-mapa");
 const FILE = opt("file") ?? XLSX_DEFAULT;
 const MAPA_PATH = resolve(opt("mapa") ?? MAPA_DEFAULT);

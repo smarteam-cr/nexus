@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 
@@ -38,7 +39,7 @@ import type { Prisma } from "@prisma/client";
  *   npx tsx scripts/merge-duplicate-clients.ts            # plan (no escribe)
  *   npx tsx scripts/merge-duplicate-clients.ts --apply    # ejecuta (PROD)
  */
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 // Pares {canónico, dup} hardcodeados por id (de scripts/inspect-duplicate-clients.ts) para
 // no depender de búsquedas por nombre. Se re-valida en runtime que el canónico sea el mayor.

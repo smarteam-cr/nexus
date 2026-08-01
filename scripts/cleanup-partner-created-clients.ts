@@ -23,6 +23,7 @@
  * vinculado, reporta y no fuerza (clientId es @unique en el snapshot).
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "../lib/db/prisma";
 import { PARTNER_CREATE_SKIP } from "../lib/cs/partner-sync";
 
@@ -38,7 +39,7 @@ const MERGES: Array<[string, string]> = [
 const BATCH_CUTOFF = new Date("2026-07-10T15:30:00Z");
 
 async function main() {
-  const apply = process.argv.includes("--apply");
+  const apply = resolverApply();
   console.log(apply ? "MODO APPLY" : "MODO DRY-RUN (nada se escribe)");
 
   const batch = await prisma.client.findMany({

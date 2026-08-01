@@ -9,8 +9,9 @@
  * Dry-run por default. Aplicar con: npx tsx scripts/deactivate-team-members.ts --apply
  */
 import { createScriptDb } from "./lib/db";
+import { resolverApply } from "./lib/guard";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 const TO_DEACTIVATE: { email: string; reason: string }[] = [
   { email: "bcenteno@smarteamcr.com", reason: "Ya no forma parte del equipo" },

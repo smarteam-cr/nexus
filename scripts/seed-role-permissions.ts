@@ -18,6 +18,7 @@
  * Aplicar:            npx tsx scripts/seed-role-permissions.ts --apply
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import type { TeamRole } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
@@ -25,7 +26,7 @@ import { PERMISSION_SECTIONS } from "@/lib/auth/permissions/registry";
 import { DEFAULT_MATRIX } from "@/lib/auth/permissions/defaults";
 import { parsePermissionMapLoose } from "@/lib/auth/permissions/schema";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const SEEDED_BY = "seed-role-permissions.ts";
 
 // Filtro opcional `--role=DEV` (repetible con comas) para sembrar SOLO ciertos roles —

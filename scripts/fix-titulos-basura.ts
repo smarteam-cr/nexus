@@ -20,6 +20,7 @@
  *   npx tsx scripts/fix-titulos-basura.ts --apply
  */
 import { createScriptDb } from "./lib/db";
+import { resolverApply } from "./lib/guard";
 import type { Prisma } from "@prisma/client";
 
 // Presupuesto de conexiones ACOTADO (scripts/lib/db.ts): el pooler comparte ~15 slots
@@ -27,7 +28,7 @@ import type { Prisma } from "@prisma/client";
 const { prisma, close } = createScriptDb();
 
 const BASURA = "[object Object]";
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 /** Devuelve la data sin las claves de texto que quedaron con la cadena basura. */
 function limpiar(data: Record<string, unknown>): { limpia: Record<string, unknown>; claves: string[] } {

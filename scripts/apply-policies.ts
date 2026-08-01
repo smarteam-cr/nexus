@@ -5,21 +5,22 @@
  * pgvector + columna embedding + policy RESTRICTIVE de HubspotAccount) contra la
  * base apuntada por DATABASE_URL. Idempotente.
  *
- * Correr DESPUÉS de `npm run db:sync` (prisma db push) en un proyecto Supabase
- * nuevo, o como hardening del actual. Versiona lo que vivía como SQL ad-hoc en la
- * consola + ARCHITECTURE.md §4.5.
+ * Correr DESPUÉS de aplicar el schema (bootstrap de un proyecto Supabase nuevo:
+ * prisma/migrations/0_init + su after.sql), o como hardening del actual. Versiona lo
+ * que vivía como SQL ad-hoc en la consola + ARCHITECTURE.md §4.5.
  *
  * Uso:
- *   npx tsx scripts/apply-policies.ts            # dry-run: imprime el SQL, no ejecuta
- *   npx tsx scripts/apply-policies.ts --apply    # ejecuta contra DATABASE_URL
- *   npm run db:policies                          # = --apply
+ *   npx tsx scripts/apply-policies.ts                     # dry-run: imprime el SQL, no ejecuta
+ *   ALLOW_PROD_WRITE=1 npx tsx scripts/apply-policies.ts --apply   # ejecuta contra DATABASE_URL
+ *   ALLOW_PROD_WRITE=1 npm run db:policies                # = --apply (el guard exige la variable)
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createScriptPool } from "./lib/db";
+import { resolverApply } from "./lib/guard";
 
 async function main() {
-  const apply = process.argv.includes("--apply");
+  const apply = resolverApply();
   const sqlPath = join(process.cwd(), "prisma", "policies.sql");
   const sql = readFileSync(sqlPath, "utf8");
 

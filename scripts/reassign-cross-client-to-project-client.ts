@@ -14,11 +14,12 @@
  * Aplicar:              npx tsx scripts/reassign-cross-client-to-project-client.ts --apply
  */
 import { PrismaClient } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,

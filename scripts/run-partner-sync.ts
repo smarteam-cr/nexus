@@ -7,11 +7,12 @@
  *     de los records sin match (revisar el plan del dry-run ANTES).
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "../lib/db/prisma";
 import { syncPartnerClients } from "../lib/cs/partner-sync";
 
 async function main() {
-  const apply = process.argv.includes("--apply");
+  const apply = resolverApply();
   console.log(apply ? "MODO APPLY (crea Clients)" : "MODO DRY-RUN de creación (snapshots sí, Clients no)");
 
   const r = await syncPartnerClients({ createClients: apply });

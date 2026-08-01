@@ -11,13 +11,14 @@
  *   npx tsx scripts/unignore-hubspot-service.ts --client <id|nombre> --service <serviceId> --apply
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 
 function argValue(flag: string): string | null {
   const i = process.argv.indexOf(flag);
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : null;
 }
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const CLIENT_ARG = argValue("--client");
 const SERVICE_ID = argValue("--service");
 

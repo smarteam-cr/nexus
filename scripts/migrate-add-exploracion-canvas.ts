@@ -23,6 +23,7 @@
  *   npx tsx scripts/migrate-add-exploracion-canvas.ts --apply  # ejecuta
  */
 import { createScriptDb } from "./lib/db";
+import { resolverApply } from "./lib/guard";
 import { EXPLORACION_CANVAS } from "../lib/canvas/canvas-defs";
 import type { Prisma } from "@prisma/client";
 
@@ -33,7 +34,7 @@ const CANVAS_NAME = EXPLORACION_CANVAS.name;
 const STRATEGY_SENTINEL = "__strategy__";
 
 async function main() {
-  const apply = process.argv.includes("--apply");
+  const apply = resolverApply();
   console.log(`Canvas: "${CANVAS_NAME}" (${EXPLORACION_CANVAS.sections.length} secciones)`);
   console.log(`Modo: ${apply ? "APLICAR" : "DRY-RUN (usa --apply para ejecutar)"}\n`);
 

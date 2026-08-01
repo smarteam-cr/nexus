@@ -33,6 +33,7 @@
  *   npx tsx scripts/seed-cobranza-demo-historia.ts --apply    # aplica
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import { cambiarEstadoCobro } from "@/lib/cobranza/mutations";
@@ -45,7 +46,7 @@ import {
 } from "@/lib/cobranza/engine";
 import { crDateParts } from "@/lib/jobs/time";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const SEED_EMAIL = "seed-cobranza-demo";
 const MARK = "[demo cobranza]";
 const MARK_H = "[demo cobranza historia]";

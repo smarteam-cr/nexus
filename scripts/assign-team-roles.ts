@@ -13,11 +13,12 @@
  * Dry-run por default. Aplicar con: npx tsx scripts/assign-team-roles.ts --apply
  */
 import { PrismaClient, type TeamRole } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 const ASSIGNMENTS: Record<string, { roleEnum: TeamRole; area: string }> = {
   "egonzalez@smarteamcr.com": { roleEnum: "SUPER_ADMIN", area: "RevOps" },

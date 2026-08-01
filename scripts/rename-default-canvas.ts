@@ -5,6 +5,7 @@
  * Uso: npx tsx scripts/rename-default-canvas.ts [--apply]
  */
 import { PrismaClient } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -16,7 +17,7 @@ const pool = new Pool({
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 async function main() {
-  const apply = process.argv.includes("--apply");
+  const apply = resolverApply();
   const result = apply
     ? await prisma.projectCanvas.updateMany({
         where: { name: "Resumen del servicio", isDefault: true },

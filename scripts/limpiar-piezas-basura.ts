@@ -22,6 +22,7 @@
  *   ... --solo=piezas|proyectos|tecnica                 → una parte a la vez
  */
 import { createScriptDb } from "./lib/db";
+import { resolverApply } from "./lib/guard";
 import { Prisma } from "@prisma/client";
 import { hasTechnicalScope } from "../lib/tags/catalog";
 import { slugForCanvas } from "../lib/pieces/registry";
@@ -37,7 +38,7 @@ import {
 // con producción y las dos PCs de dev; un pool sin tope se comía 10 él solo.
 const { prisma, close } = createScriptDb();
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const SOLO = process.argv.find((a) => a.startsWith("--solo="))?.split("=")[1] ?? "todo";
 const hace = (parte: string) => SOLO === "todo" || SOLO === parte;
 

@@ -13,12 +13,13 @@
  *   npx tsx scripts/seed-buyer-personas.ts --apply    # aplica
  */
 import { PrismaClient } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 import { PERSONAS_SEED } from "../lib/marketing/seed-data";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,

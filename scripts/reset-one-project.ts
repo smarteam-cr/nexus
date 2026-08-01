@@ -9,12 +9,13 @@
  *   npx tsx scripts/reset-one-project.ts "Visual Branding" --apply   # BORRA (PROD)
  */
 import { PrismaClient, Prisma } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
 const RESET_CANVASES = ["Handoff", "Kickoff"];
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const name = process.argv.slice(2).find((a) => !a.startsWith("--")) || "";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });

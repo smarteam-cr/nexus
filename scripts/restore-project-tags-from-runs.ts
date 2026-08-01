@@ -22,9 +22,10 @@
  *   npx tsx scripts/restore-project-tags-from-runs.ts --apply
  */
 import { createScriptDb } from "./lib/db";
+import { resolverApply } from "./lib/guard";
 import { sanitizeTags } from "../lib/tags/catalog";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const HANDOFF_AGENT_ID = "cmmla1g1x00005wijix3qnr7u";
 
 const { prisma, close } = createScriptDb();

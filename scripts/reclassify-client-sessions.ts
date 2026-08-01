@@ -20,6 +20,7 @@
  *   Flags: --since <días> (default 90) · --max <n> sesiones por cliente (default 30)
  */
 import "dotenv/config";
+import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { classifySessionToProjects } from "@/lib/sessions/classify-session-project";
 import { isLockedLink } from "@/lib/sessions/session-project-locks";
@@ -29,7 +30,7 @@ function argValue(flag: string): string | null {
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : null;
 }
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const ALL_MULTI = process.argv.includes("--all-multi");
 const CLIENT_ARG = argValue("--client");
 const SINCE_DAYS = Number(argValue("--since") ?? 90);

@@ -11,12 +11,13 @@
  *   npx tsx scripts/delete-canvas.ts wherex test --apply
  */
 import { PrismaClient } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
 const args = process.argv.slice(2).filter((a) => a !== "--apply");
-const APPLY = process.argv.includes("--apply");
+const APPLY = resolverApply();
 const CLIENT_TERM = args[0] ?? "wherex";
 const CANVAS_NAME = args[1] ?? "test";
 

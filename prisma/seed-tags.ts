@@ -1,14 +1,15 @@
 import { PrismaClient, TagCategory } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import * as dotenv from "dotenv";
 
 dotenv.config();
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
-});
+import { assertProdWriteAllowed } from "../scripts/lib/guard";
+import { createScriptPool } from "../scripts/lib/db";
+
+// Este seed ESCRIBE siempre (no tiene --apply): el guard corre incondicional.
+assertProdWriteAllowed("prisma/seed-tags.ts");
+const { pool } = createScriptPool();
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
