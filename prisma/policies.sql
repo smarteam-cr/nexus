@@ -25,11 +25,19 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- 1) Extensión pgvector + columna vector de KnowledgeEmbedding (1024 dims).
---    Prisma no modela el tipo `vector`; se crea por SQL (ver schema.prisma:1023-1024).
-CREATE EXTENSION IF NOT EXISTS vector;
-
-ALTER TABLE IF EXISTS "KnowledgeEmbedding"
-  ADD COLUMN IF NOT EXISTS embedding vector(1024);
+--    Prisma no modela el tipo `vector`; se crea por SQL (el modelo vive en schema.prisma
+--    con la columna como comentario). TOLERANTE a pgvector ausente: el Postgres LOCAL
+--    embebido (db:local, F1 2026-08-01) no trae la extensión — ahí se emite un NOTICE y
+--    se sigue, porque la columna embedding no tiene hoy ni un lector ni un escritor en
+--    lib/ o app/ (auditado 2026-08-01). En Supabase la extensión existe y esto es un no-op.
+DO $$
+BEGIN
+  CREATE EXTENSION IF NOT EXISTS vector;
+  ALTER TABLE IF EXISTS "KnowledgeEmbedding"
+    ADD COLUMN IF NOT EXISTS embedding vector(1024);
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'pgvector no disponible en este servidor (%). Columna embedding OMITIDA — sin efecto: no tiene lectores.', SQLERRM;
+END $$;
 
 -- 2) RLS en TODAS las tablas de `public` excepto `_prisma_migrations` (metadata
 --    interna de Prisma, no se expone vía PostgREST). Bloque dinámico → cubre

@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
+import { sslParaConexion } from "./ssl";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -21,7 +22,8 @@ const POOL_MAX = Number(
 function createPrismaClient() {
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL!,
-    ssl: { rejectUnauthorized: false },
+    // Supabase → TLS; el Postgres local embebido (db:local) no habla TLS → sin ssl.
+    ssl: sslParaConexion(process.env.DATABASE_URL),
     max: POOL_MAX,
     idleTimeoutMillis: 30_000, // mantener conexiones tibias entre navegaciones
     // 10s y no 5s: con max chico, las ráfagas del workspace (~10 requests

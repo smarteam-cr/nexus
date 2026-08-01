@@ -96,6 +96,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Salidas nuestras que el default de Next NO conoce: el dist de la segunda instancia
+    // de dev (NEXT_DIST_DIR=.next-alt) y los datos del Postgres local embebido. Sin esto,
+    // correr una segunda instancia envenenaba el lint con ~650 errores de chunks generados
+    // (mordido el 2026-08-01 durante F1).
+    ".next-alt/**",
+    ".local-db/**",
   ]),
 ]);
 

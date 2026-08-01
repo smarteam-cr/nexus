@@ -19,10 +19,16 @@
 -- 1) pgvector: la columna vive solo en SQL — en prisma/schema.prisma es un comentario
 --    (Prisma no modela `vector(1024)`), y por eso todo `migrate diff` contra la base viva
 --    la propone como DROP: ese es el RUIDO ESPERADO del detector de drift, no un drift real.
-CREATE EXTENSION IF NOT EXISTS vector;
-
-ALTER TABLE IF EXISTS "KnowledgeEmbedding"
-  ADD COLUMN IF NOT EXISTS embedding vector(1024);
+--    TOLERANTE a pgvector ausente (el Postgres LOCAL embebido de db:local no lo trae; la
+--    columna no tiene lectores — auditado 2026-08-01): NOTICE y sigue.
+DO $$
+BEGIN
+  CREATE EXTENSION IF NOT EXISTS vector;
+  ALTER TABLE IF EXISTS "KnowledgeEmbedding"
+    ADD COLUMN IF NOT EXISTS embedding vector(1024);
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'pgvector no disponible (%). Columna embedding OMITIDA.', SQLERRM;
+END $$;
 
 -- 2) CHECK de Client.logoScale (origen: scripts/sql/2026-07-27-logo-scale-techo-400.sql —
 --    rango 50..400, NULL-permisivo; el porqué del techo 400 está en DECISIONS §El logo).

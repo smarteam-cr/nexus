@@ -35,6 +35,8 @@ yarn-error.log*
 .env*
 # la plantilla SÍ se commitea (valores vacíos, no secretos)
 !.env.example
+# .env.test apunta a la base LOCAL embebida (localhost, sin secretos) — se versiona
+!.env.test
 
 # vercel
 .vercel
@@ -49,3 +51,6 @@ next-env.d.ts
 .claude/
 .env.local
 backups/
+
+# Base local embebida (F1) — datos y logs, nunca versionados
+/.local-db/

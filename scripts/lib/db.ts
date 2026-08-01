@@ -27,6 +27,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import "dotenv/config";
 import { imprimirDestino } from "./guard";
+import { sslParaConexion } from "../../lib/db/ssl";
 
 const SCRIPT_POOL_MAX = 2;
 
@@ -41,7 +42,8 @@ export function createScriptPool(): { pool: Pool; close: () => Promise<void> } {
   imprimirDestino("script");
   const pool = new Pool({
     connectionString: url,
-    ssl: { rejectUnauthorized: false },
+    // Supabase → TLS; el Postgres local embebido (db:local) no habla TLS → sin ssl.
+    ssl: sslParaConexion(url),
     max: SCRIPT_POOL_MAX,
     // Un script no debe dejar conexiones idle colgadas del budget compartido.
     idleTimeoutMillis: 10_000,

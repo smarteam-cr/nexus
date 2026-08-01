@@ -13,6 +13,7 @@
     "test:cov": "vitest run --project unit --coverage",
     "test:all": "vitest run",
     "db:policies": "npx tsx scripts/apply-policies.ts --apply",
+    "db:local": "npx tsx scripts/local-db.ts",
     "check:invariants": "npx tsx scripts/check-invariants.ts"
   },
   "dependencies": {
@@ -71,6 +72,7 @@
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.9",
     "dotenv": "^17.4.2",
+    "embedded-postgres": "^17.10.0-beta.17",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "exceljs": "^4.4.0",
