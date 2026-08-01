@@ -217,10 +217,10 @@ export default function WorkspaceClient({
       {/* Indicador discreto de sync de fondo (F4) — desaparece al terminar bien. */}
       {syncing && (
         <div
-          className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border border-gray-700 bg-gray-900/90 px-3 py-1.5 text-[11px] font-medium text-gray-300 shadow-lg backdrop-blur"
+          className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border border-line bg-surface/90 px-3 py-1.5 text-[11px] font-medium text-fg-secondary shadow-lg backdrop-blur"
           title="Sincronizando con HubSpot y Google en segundo plano"
         >
-          <span className="w-3 h-3 border-2 border-gray-600 border-t-blue-400 rounded-full animate-spin" />
+          <span className="w-3 h-3 border-2 border-line border-t-brand rounded-full animate-spin" />
           Sincronizando…
         </div>
       )}
@@ -329,7 +329,7 @@ function ProjectSection({
   return (
     <div>
       {/* Tab bar */}
-      <div className="border-b border-gray-800 px-6 flex items-center gap-1 overflow-x-auto">
+      <div className="border-b border-line px-6 flex items-center gap-1 overflow-x-auto">
         {projects.map((p) => {
           const isActive = p.id === activeProjectId;
           return (
@@ -338,8 +338,8 @@ function ProjectSection({
               onClick={() => selectTab(p.id)}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 isActive
-                  ? "border-brand text-white"
-                  : "border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700"
+                  ? "border-brand text-fg"
+                  : "border-transparent text-fg-muted hover:text-fg-secondary hover:border-line"
               }`}
             >
               {p.name}
@@ -353,8 +353,8 @@ function ProjectSection({
           onClick={() => selectTab(PROCESOS_TAB_ID)}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
             isProcesos
-              ? "border-brand text-white"
-              : "border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700"
+              ? "border-brand text-fg"
+              : "border-transparent text-fg-muted hover:text-fg-secondary hover:border-line"
           }`}
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -370,8 +370,8 @@ function ProjectSection({
           onClick={() => selectTab(STRATEGY_TAB_ID)}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
             isStrategy
-              ? "border-brand text-white"
-              : "border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700"
+              ? "border-brand text-fg"
+              : "border-transparent text-fg-muted hover:text-fg-secondary hover:border-line"
           }`}
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

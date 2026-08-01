@@ -67,7 +67,10 @@ const DEUDA_TOKENS: Record<string, number> = {
   "app/(shell)/clients/[id]/stage/[stageNum]/NewAuditButtonClient.tsx": 7,
   "app/(shell)/clients/[id]/stage/[stageNum]/NewImplementationButton.tsx": 13,
   "app/(shell)/clients/[id]/StageTabs.tsx": 7,
-  "app/(shell)/clients/[id]/WorkspaceClient.tsx": 17,
+  // WorkspaceClient salió de la deuda: el rail de proyectos pintaba la pestaña ACTIVA con
+  // `text-white`, o sea texto blanco sobre fondo blanco en modo claro. El síntoma no era
+  // "se ve feo" sino "el cliente parece tener un solo proyecto" — se descubrió probando el
+  // alta, cuando tres proyectos nuevos no aparecían por ningún lado.
   "app/(shell)/clients/ClientsGrid.tsx": 14,
   "app/(shell)/clients/DeleteClientButton.tsx": 1,
   "app/(shell)/clients/NewClientButton.tsx": 3,
