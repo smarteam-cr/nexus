@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { resolveCompanyProjectIds } from "@/lib/hubspot/sync-projects";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
+import { ordenarPorAntiguedad } from "@/lib/projects/lista-de-empresa";
 
 /**
  * GET /api/handoffs/projects-of-company?companyId=<id>
@@ -54,7 +55,11 @@ export async function GET(req: NextRequest) {
     // proyecto debe poder re-adjuntarse desde el stepper.
     const nexusProjects = await prisma.project.findMany({
       where: { hubspotServiceId: { in: ids } },
-      select: { id: true, hubspotServiceId: true },
+      /* `hubspotPipelineId` se LEE (no se escribe: sigue teniendo un solo escritor, ver la
+         guarda en scope-coverage.test.ts). Viaja al DTO para que la pantalla pueda ofrecer como
+         "padre" solo lo que el servidor va a aceptar como padre — una implementación de CS. Sin
+         esto, el desplegable ofrece desarrollos y el rechazo llega recién al enviar. */
+      select: { id: true, hubspotServiceId: true, hubspotPipelineId: true },
     });
     const generated = new Set<string>();
     for (const np of nexusProjects) {
@@ -64,7 +69,14 @@ export async function GET(req: NextRequest) {
       if (blocks > 0) generated.add(np.id);
     }
     const byServiceId = new Map(
-      nexusProjects.map((p) => [p.hubspotServiceId!, { nexusProjectId: p.id, hasHandoff: generated.has(p.id) }]),
+      nexusProjects.map((p) => [
+        p.hubspotServiceId!,
+        {
+          nexusProjectId: p.id,
+          hasHandoff: generated.has(p.id),
+          nexusPipelineId: p.hubspotPipelineId,
+        },
+      ]),
     );
 
     const projects = records.map((r) => {
@@ -76,10 +88,17 @@ export async function GET(req: NextRequest) {
         createdAt: r.properties.hs_createdate ?? null,
         nexusProjectId: nexus?.nexusProjectId ?? null,
         hasHandoff: nexus?.hasHandoff ?? false,
+        /** El tipo MATERIALIZADO en Nexus. `null` = el proyecto todavía no está acá. */
+        nexusPipelineId: nexus?.nexusPipelineId ?? null,
       };
     });
 
-    return NextResponse.json({ projects });
+    /* ⚠ EL ORDEN SE DECIDE ACÁ, no se hereda de HubSpot. `resolveCompanyProjectIds` devuelve las
+       asociaciones en el orden que le da la gana la API —medido en vivo el 2026-08-01: dos
+       llamadas con segundos de diferencia, distinto orden— y esta lista alimenta el desplegable
+       de "¿de qué implementación cuelga?". Elegir "el segundo" mirando la pantalla y que se
+       cuelgue de otro es un error de facturación silencioso. Ver lib/projects/lista-de-empresa.ts. */
+    return NextResponse.json({ projects: ordenarPorAntiguedad(projects) });
   } catch (e) {
     console.error("[handoffs/projects-of-company] error:", e);
     return NextResponse.json({ error: "No se pudieron traer los proyectos." }, { status: 500 });

@@ -93,9 +93,9 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "app/api/handoffs/projects-of-company/route.ts": {
     modo: "exento",
     razon:
-      "cruza los proyectos de HubSpot con los de Nexus para el asistente de handoff: " +
-      "necesita ver TODOS, incluidos los que el rail esconde, o el asistente ofrecería " +
-      "crear uno que ya existe.",
+      "cruza los proyectos de HubSpot con los de Nexus para el alta única y para el asistente " +
+      "de handoff: necesita ver TODOS, incluidos los que el rail esconde, o se ofrecería crear " +
+      "uno que ya existe.",
   },
   "lib/auth/access.ts": {
     modo: "exento",

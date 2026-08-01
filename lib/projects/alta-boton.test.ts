@@ -107,6 +107,23 @@ describe("el formulario no copia la regla del trato", () => {
     expect(src).toContain("exigeTratoGanado(");
   });
 
+  it("el desplegable de hermanos ofrece SOLO implementaciones de Customer Success", () => {
+    /* Encontrado en vivo: el desplegable listaba todo proyecto del cliente que estuviera en
+       Nexus, incluidos desarrollos y sitios web. Elegir uno de ésos como "padre" es un rechazo
+       del servidor —correcto, pero tardío: llega recién al enviar, con el formulario ya lleno.
+       La pantalla filtra por la MISMA tabla contra la que el servidor rechaza. */
+    const src = leer(BOTON);
+    expect(src).toContain('resolvePipeline(p.nexusPipelineId)?.key === "customer-success"');
+  });
+
+  it("las opciones que la persona elige pasan por el desambiguador", () => {
+    /* Dos proyectos homónimos en el desplegable son dos filas idénticas: con el orden ya fijo
+       no es peligroso, pero sigue siendo imposible saber cuál es cuál. */
+    const src = leer(BOTON);
+    expect(src).toContain("etiquetarAmbiguos(");
+    expect(src, "el desplegable volvió a pintar el nombre crudo").not.toContain("Cuelga de {p.name}");
+  });
+
   it("los tipos salen de la tabla, y ningún id de pipeline se escribe en la pantalla", () => {
     const src = leer(BOTON);
     expect(src, "la lista de tipos dejó de salir de lib/projects/kind.ts").toContain(

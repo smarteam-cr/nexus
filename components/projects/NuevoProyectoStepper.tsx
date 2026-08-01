@@ -29,8 +29,14 @@ import { Modal, Button, Input } from "@/components/ui";
 import { useMe } from "@/hooks/useMe";
 import SessionSelectionReview from "@/components/clients/SessionSelectionReview";
 import { UnreviewedSessionsChip } from "@/components/clients/ProjectSessionsReview";
-import { PROJECT_PIPELINES, exigeTratoGanado, pipelineByKey } from "@/lib/projects/kind";
+import {
+  PROJECT_PIPELINES,
+  exigeTratoGanado,
+  pipelineByKey,
+  resolvePipeline,
+} from "@/lib/projects/kind";
 import type { ProjectPipelineKey } from "@/lib/projects/kind";
+import { etiquetarAmbiguos, nombreYaUsado } from "@/lib/projects/lista-de-empresa";
 
 /** Las rutas que este botón consume. Importadas por la guarda de paridad, no repetidas. */
 export const RUTAS_DEL_ALTA = {
@@ -60,6 +66,8 @@ interface ProyectoDeLaEmpresa {
   createdAt: string | null;
   nexusProjectId: string | null;
   hasHandoff: boolean;
+  /** El tipo MATERIALIZADO en Nexus. `null` = todavía no está acá, o es anterior a la Tanda A. */
+  nexusPipelineId: string | null;
 }
 
 type Paso = "empresa" | "proyecto" | "listo";
@@ -193,11 +201,31 @@ export default function NuevoProyectoStepper() {
 
   const def = pipelineByKey(tipo);
   const adjuntando = seleccion !== "nuevo";
+
+  /* ADJUNTAR es solo para lo que TODAVÍA NO está en Nexus. Los que ya están se mostraban como
+     opciones deshabilitadas y la primera persona que lo usó intentó elegirlas y se trabó: en una
+     lista de "elegí uno", una fila que no se puede elegir no informa, estorba. Se resumen abajo
+     en una línea, que sigue sirviendo para no crear un duplicado sin darse cuenta. */
+  const adjuntables = proyectosHs.filter((p) => !p.nexusProjectId);
+  const yaEnNexus = proyectosHs.filter((p) => !!p.nexusProjectId);
+
   /* Solo se puede colgar de una IMPLEMENTACIÓN de Customer Success que ya esté en Nexus.
-     Los que todavía no se importaron no aparecen: el alta necesita su id de HubSpot y su
-     fila en Nexus para poder validarlo. */
-  const hermanosPosibles = proyectosHs.filter((p) => !!p.nexusProjectId);
+     Las dos condiciones importan: el tipo, porque es lo que el servidor acepta como padre
+     (`resolvePipeline(...).key === "customer-success"` en app/api/projects/route.ts); y estar en
+     Nexus, porque el alta valida el hermano contra su fila de acá. Antes se filtraba solo por lo
+     segundo, así que el desplegable ofrecía desarrollos y el rechazo llegaba recién al enviar,
+     con el formulario entero ya lleno. */
+  const hermanosPosibles = etiquetarAmbiguos(
+    proyectosHs.filter(
+      (p) => !!p.nexusProjectId && resolvePipeline(p.nexusPipelineId)?.key === "customer-success",
+    ),
+  );
   const puedeTenerHermano = def.canBeSiblingOf.length > 0 && hermanosPosibles.length > 0;
+
+  /* Aviso, nunca bloqueo. Dos proyectos del mismo cliente pueden llamarse igual con toda
+     legitimidad; lo que no puede pasar es crear un homónimo SIN QUERER — y el campo viene con el
+     nombre de la empresa por defecto, así que pasa fácil. */
+  const nombreChoca = adjuntando ? null : nombreYaUsado(nombre, proyectosHs);
 
   const tratosGanados = (busqueda?.deals ?? []).filter((d) => d.isWon);
   /* La MISMA función que usa el endpoint. Si la pantalla la copiara, un día pediría trato
@@ -441,31 +469,23 @@ export default function NuevoProyectoStepper() {
             </div>
 
             {/* Nuevo o adjuntar uno que ya está en HubSpot */}
-            {proyectosHs.length > 0 && (
+            {adjuntables.length > 0 && (
               <div className="space-y-1.5">
                 <p className="text-2xs font-medium text-fg-muted uppercase tracking-wider">
-                  Ya en HubSpot
+                  Ya en HubSpot, todavía no en Nexus
                 </p>
-                {proyectosHs.map((p) => (
+                {etiquetarAmbiguos(adjuntables).map((p) => (
                   <label
                     key={p.hubspotProjectId}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-line ${
-                      p.nexusProjectId ? "opacity-60 cursor-not-allowed" : "hover:bg-surface-hover cursor-pointer"
-                    }`}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer"
                   >
                     <input
                       type="radio"
                       name="alta-proyecto"
-                      disabled={!!p.nexusProjectId}
                       checked={seleccion === p.hubspotProjectId}
-                      onChange={() => !p.nexusProjectId && setSeleccion(p.hubspotProjectId)}
+                      onChange={() => setSeleccion(p.hubspotProjectId)}
                     />
-                    <span className="text-sm text-fg flex-1 truncate">{p.name}</span>
-                    {p.nexusProjectId && (
-                      <span className="text-[10px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
-                        ya está en Nexus
-                      </span>
-                    )}
+                    <span className="text-sm text-fg flex-1 truncate">{p.etiqueta}</span>
                   </label>
                 ))}
                 <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer">
@@ -478,6 +498,18 @@ export default function NuevoProyectoStepper() {
                   <span className="text-sm text-fg">Crear uno nuevo</span>
                 </label>
               </div>
+            )}
+
+            {/* Los que ya están en Nexus NO son opciones —traerlos otra vez no significa nada—
+                pero decir cuántos hay evita el duplicado por desconocimiento, que es la razón por
+                la que esta sección existe. */}
+            {yaEnNexus.length > 0 && (
+              <p className="text-[11px] text-fg-muted leading-relaxed">
+                {yaEnNexus.length === 1
+                  ? "Esta empresa ya tiene 1 proyecto en Nexus."
+                  : `Esta empresa ya tiene ${yaEnNexus.length} proyectos en Nexus.`}{" "}
+                Si el que buscás es uno de ésos, no hace falta crearlo: ya está.
+              </p>
             )}
 
             {adjuntando ? (
@@ -529,6 +561,12 @@ export default function NuevoProyectoStepper() {
                     onChange={(e) => setNombre(e.target.value)}
                     placeholder="Nombre del proyecto"
                   />
+                  {nombreChoca && (
+                    <p className="text-[11px] text-warn-ink bg-warn-surface border border-warn-line rounded-lg px-2.5 py-1.5 leading-relaxed">
+                      Este cliente ya tiene un proyecto llamado «{nombreChoca}». Podés seguir igual,
+                      pero después van a ser difíciles de distinguir.
+                    </p>
+                  )}
                 </div>
 
                 {/* De qué cuelga */}
@@ -548,7 +586,7 @@ export default function NuevoProyectoStepper() {
                       <option value="">Va solo (se factura aparte)</option>
                       {hermanosPosibles.map((p) => (
                         <option key={p.hubspotProjectId} value={p.hubspotProjectId}>
-                          Cuelga de {p.name}
+                          Cuelga de {p.etiqueta}
                         </option>
                       ))}
                     </select>
