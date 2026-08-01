@@ -26,8 +26,9 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   rotación entre PROD y local (comparten la cuenta del sistema). *Guarda:* `forceRefreshSystemToken`
   + retry-on-401 en `/api/handoffs/lookup`.
 - **"Unknown field" / P2022 tras cambiar el schema.** *Causa:* el dev server tiene el Prisma client
-  viejo (no entra por HMR) o la columna no se aplicó a PROD a mano. *Guarda:* tras `npm run db:sync`
-  reiniciar el dev server; aplicar la migración a mano a PROD.
+  viejo (no entra por HMR) o la columna no se aplicó a PROD a mano. *Guarda:* tras aplicar el `.sql`
+  correr `npx prisma generate` y reiniciar el dev server (flujo completo: ARCHITECTURE Parte 0 ·
+  cap. D); INV7 de `check:invariants` detecta la columna sin aplicar.
 - **CSS/estilos rotos tras `git pull`.** *Causa:* caché de Turbopack stale. *Guarda:* `rm -rf .next`
   + reiniciar (un restart solo no alcanza).
 - **El preview del navegador no está logueado** → middleware redirige al login. *Guarda:* el E2E de

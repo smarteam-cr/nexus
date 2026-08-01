@@ -1,6 +1,7 @@
 # Glosario de dominio — Nexus
 
-- **Sesión** (`FirefliesSession`): una reunión (Google Meet, ingerida vía Fireflies). Tiene
+- **Sesión** (`FirefliesSession`): una reunión de Google Meet (el modelo conserva el nombre
+  "Fireflies" por historia — esa integración se eliminó el 2026-06-04). Tiene
   `participants` (emails), `transcript`, `summary`, `organizerEmail`. ~16k filas.
 - **`resolvedClientId`**: materialización de a qué Client pertenece la sesión — **fuente única
   de ownership**. La calcula `categorizeSession` y la persiste `lib/sessions/resolve-client.ts`.

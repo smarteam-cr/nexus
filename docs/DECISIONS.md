@@ -64,9 +64,12 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   Van dentro de `publishedSnapshot` (congeladas al "Subir"). *Origen:* el CSE las crea a mano o
   acepta una propuesta del agente de avance (borrador `pendingParticularidades`, hermano de
   `pendingProgress` pero con apply SEPARADO — aceptar avance ≠ aceptar desviaciones; nada se crea
-  sin que el CSE apruebe). *Schema:* `db push` (aditivo), NO migración — el repo abandonó las
-  migraciones en marzo 2026 (carpeta congelada); una migración normal resetearía la base
-  compartida. Se sigue `npm run db:sync`.
+  sin que el CSE apruebe). *Schema:* ~~`db push` (aditivo), NO migración… Se sigue
+  `npm run db:sync`~~ — **SUPERSEDED 2026-08-01**: `db push` quedó prohibido (dropeó
+  `RoleProfile` una vez) y `db:sync` se eliminó de package.json. Lo que sigue vigente de esta
+  decisión es el fondo: el repo NO usa `prisma migrate` clásico y la base compartida jamás se
+  resetea. El flujo actual es SQL ADITIVO a mano + `prisma generate`, gateado por el guard
+  anti-prod (ARCHITECTURE Parte 0 · cap. D).
 - **Eje de tipificación de un HECHO detectado = su DESTINO (dónde aterriza + quién actúa), NO el
   tema.** *Por qué:* el agente de avance sacaba una bolsa mezclada de hechos con un solo balde
   (`Particularidad`), así que el tipo se degradaba (`SOLICITUD` = un pendiente/insumo del cliente

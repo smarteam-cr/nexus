@@ -6,8 +6,8 @@
 -- consola de Supabase.
 --
 -- IDEMPOTENTE: se puede correr múltiples veces sin efectos colaterales.
--- Correr DESPUÉS de `npm run db:sync` (prisma db push) en cualquier proyecto
--- Supabase nuevo, o como hardening del actual.
+-- Correr DESPUÉS de aplicar el schema (bootstrap: prisma/migrations/0_init +
+-- su after.sql) en cualquier proyecto Supabase nuevo, o como hardening del actual.
 --
 -- Runner:
 --   npx tsx scripts/apply-policies.ts           # dry-run (imprime, no ejecuta)

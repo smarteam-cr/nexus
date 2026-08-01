@@ -1,15 +1,16 @@
 # Nexus — guía para Claude Code
 
 Nexus es el sistema interno de Smarteam (agencia HubSpot) para gestionar clientes: ingiere
-sesiones (Google Meet / Fireflies), las clasifica por cliente y proyecto, y genera handoff,
-kickoff, cronograma y procesos con agentes (Claude). Stack: **Next.js 16** (App Router,
-Turbopack) · **Prisma 7** (`@prisma/adapter-pg`) · **Supabase** Postgres · **Tailwind v4** ·
-Anthropic SDK · HubSpot/Google/Fireflies.
+sesiones de Google Meet, las clasifica por cliente y proyecto, y genera handoff, kickoff,
+cronograma y procesos con agentes (Claude). Stack: **Next.js 16** (App Router, Turbopack) ·
+**Prisma 7** (`@prisma/adapter-pg`) · **Supabase** Postgres · **Tailwind v4** · Anthropic
+SDK · HubSpot/Google Workspace/Apify (versiones exactas: ARCHITECTURE Parte 0 · cap. A).
 
-- Arquitectura detallada: @ARCHITECTURE.md
+- Arquitectura detallada + referencia rápida (stack/local/DB/tests): @ARCHITECTURE.md
 - Decisiones tomadas (no re-litigar): @docs/DECISIONS.md
 - Glosario de dominio: @docs/GLOSSARY.md
 - Errores conocidos (no tropezar dos veces): @docs/KNOWN-ERRORS.md
+- Operación de PRODUCCIÓN (deploy, rollback, jobs, invariantes de infra): @docs/RUNBOOK.md
 
 ## ⛔ INVARIANTES MEDULARES (no negociables)
 
@@ -25,9 +26,14 @@ Anthropic SDK · HubSpot/Google/Fireflies.
    stopwords del title-match: NUNCA stopwordear un token que sea el nombre distintivo de un
    cliente real (`smarteam`, `distribuidora`…). Ver DECISIONS.
 3. **`.env` apunta a PRODUCCIÓN** (una sola Supabase; local == PROD). Toda operación
-   destructiva / DDL / escritura masiva es **dry-run-first** y la aplica el usuario tras revisar.
-   Las migraciones se aplican **a mano** a PROD (el deploy NO corre `db push`).
-4. **`.env.example` NUNCA se commitea** (tiene secretos reales). Excluilo de todo `git add`.
+   destructiva / DDL / escritura masiva es **dry-run-first** y la aplica el usuario tras revisar,
+   SIEMPRE con `ALLOW_PROD_WRITE=1`: el guard (`scripts/lib/guard.ts`, INV12) imprime el host y
+   aborta cualquier `--apply`, seed o comando de escritura del CLI de Prisma sin esa variable.
+   Las migraciones son SQL ADITIVO a mano (flujo completo: ARCHITECTURE Parte 0 · cap. D);
+   `db push` está prohibido y `db:sync` ya no existe.
+4. **Los secretos van SOLO en `.env`** (gitignoreado, nunca se commitea). `.env.example` es la
+   plantilla SIN secretos (verificado en disco y en todo el historial de git el 2026-08-01):
+   toda variable nueva que el código lea se declara ahí con placeholder vacío.
 5. **Tema = tokens semánticos, NO grises crudos.** Modo claro es el **default**; la fuente de
    verdad es la cookie `nexus-theme` que el SSR (`app/layout.tsx`) lee y materializa como
    `<html class="light">` (sin parpadeo). En UI interna usá SOLO los tokens —flipean solos en
@@ -60,7 +66,8 @@ Anthropic SDK · HubSpot/Google/Fireflies.
   siendo `npm run check:invariants` + el ojo.
 - Antes de commitear: correr **`/ship-nexus`** (invariantes + tsc/lint en lo tocado + checklist).
 - **No push hasta que el usuario lo pida.**
-- Tras `npm run db:sync` (cambio de schema): **reiniciar el dev server** (el Prisma client viejo
-  no entra por HMR). Tras `git pull` que toca CSS/config: `rm -rf .next` + reiniciar.
+- Tras un cambio de schema (aplicar el `.sql` + `npx prisma generate`): **reiniciar el dev
+  server** (el Prisma client viejo no entra por HMR). Tras `git pull` que toca CSS/config:
+  `rm -rf .next` + reiniciar.
 - El navegador del preview NO está logueado (middleware → login) → el E2E de UI autenticada lo
   hace el usuario por HMR; el bar de Claude = tsc+lint limpio + dev compila.

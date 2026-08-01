@@ -28,20 +28,24 @@ a claims en DB (mismo patrón `CronJobState`/`claimDateKey` que ya usan los jobs
 ## Invariante #2 — DB COMPARTIDA ENTRE 2 PCs (dual-PC)
 
 La misma Supabase Postgres la usan las dos máquinas de desarrollo Y producción.
-Reglas duras:
+**`prisma db push` está PROHIBIDO en cualquier forma** (ver "Lo que deploy.sh NO
+hace" más abajo — ya se llevó `RoleProfile` una vez; hasta el 2026-08-01 esta
+sección regulaba cómo usarlo "bien" y contradecía la prohibición del mismo
+archivo). Reglas duras vigentes:
 
 1. **Schema SOLO aditivo** — nunca drop/rename/reorder de columnas o valores de
-   enum existentes. Un `db push` con un schema desactualizado DROPEA lo que la
-   otra PC agregó.
-2. **`git pull` SIEMPRE antes de `prisma db push`** (así el schema local incluye
-   lo de la otra PC).
-3. Un solo `db push` por fase de trabajo; avisar a la otra PC tras pushear schema.
+   enum existentes. El DDL va por `.sql` a mano en `scripts/sql/` (flujo completo:
+   ARCHITECTURE Parte 0 · cap. D), gateado por `ALLOW_PROD_WRITE=1`.
+2. **`git pull` SIEMPRE antes de aplicar DDL** (así el schema local incluye lo de
+   la otra PC) y `prisma migrate diff --from-config-datasource --to-schema
+   prisma/schema.prisma --script` como detector de drift ajeno ANTES de aplicar.
+3. Avisar a la otra PC tras aplicar un `.sql` + pushear el schema.
 4. Para flags/overrides nuevos, preferir un campo Json YA existente antes que
    una columna nueva sin coordinar (ej.: los briefs viven en
    `ProjectCanvas.sections`).
-5. **`prisma db push` JAMÁS contra el puerto `:6543`** (transaction pooling):
-   DDL a través del pooler en transaction mode produce bugs sutiles. Siempre
-   contra el host directo `:5432` — que es lo que las PCs de dev ya usan.
+5. **DDL JAMÁS contra el puerto `:6543`** (transaction pooling): DDL a través del
+   pooler en transaction mode produce bugs sutiles. Siempre contra el host
+   directo `:5432` — que es lo que las PCs de dev ya usan.
 
 ## Invariante #3 — PRESUPUESTO DE CONEXIONES (pooler compartido)
 
@@ -105,17 +109,23 @@ dos pasos manuales distintos que se olvidan por separado.
   del código (que trae las secciones), después el re-seed del prompt. Al revés, el agente
   escribe secciones que la versión corriendo todavía no sabe pintar.
 
-Checklist corto para un deploy que trae los tres:
+Checklist corto para un deploy que trae los tres (el guard anti-prod exige
+`ALLOW_PROD_WRITE=1` en los pasos 1 y 3 — sin la variable abortan; en PowerShell es
+`$env:ALLOW_PROD_WRITE="1"`):
 
 ```bash
-psql "$DATABASE_URL" -f scripts/sql/AAAA-MM-DD-loquesea.sql   # 1) desde dev, antes
+ALLOW_PROD_WRITE=1 npx prisma db execute --file scripts/sql/AAAA-MM-DD-loquesea.sql  # 1) desde dev, ANTES
 ```
 ```bash
 cd /opt/smartflow/Nexus && bash scripts/deploy.sh              # 2) en el VPS
 ```
 ```bash
-npx tsx scripts/seed-EL-AGENTE.ts                              # 3) desde dev, después
+ALLOW_PROD_WRITE=1 npx tsx scripts/seed-EL-AGENTE.ts           # 3) desde dev, después
 ```
+
+(El `psql "$DATABASE_URL" -f` que estaba acá se retiró a propósito: era el único camino de
+escritura que ningún guard podía interceptar. `db execute` pasa por `prisma.config.ts`, que
+es donde vive el guard del CLI.)
 
 ## Sentry (observabilidad)
 

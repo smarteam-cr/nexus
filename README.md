@@ -1,56 +1,53 @@
 # Nexus
 
-Workspace de consultoría de implementación de HubSpot potenciado por IA. Permite planificar y ejecutar proyectos de CRM con agentes de IA, gestión de clientes, análisis de transcripciones (Fireflies) y auditoría de HubSpot.
+Workspace interno de Smarteam (consultora de HubSpot): gestiona clientes y proyectos, ingiere
+sesiones de Google Meet, y genera handoff, kickoff, cronograma y documentos con agentes de
+Claude.
 
 ## Stack
 
-- **Frontend/Backend**: Next.js 15 (App Router) + TypeScript
-- **Base de datos**: Supabase PostgreSQL + Prisma 7 (`@prisma/adapter-pg`)
-- **IA**: Claude API (`claude-sonnet-4-6`) vía Anthropic SDK
-- **Auth**: HubSpot OAuth
-- **Integraciones**: Fireflies API, HubSpot API (`@hubspot/api-client`)
+Next.js 16 (App Router) · React 19 · TypeScript · Prisma 7 (`@prisma/adapter-pg`) sobre
+Supabase Postgres · Tailwind v4 · Supabase Auth · Anthropic SDK · HubSpot / Google Workspace /
+Apify. Versiones exactas y el mapa del repo: **ARCHITECTURE.md · Parte 0**.
 
 ## Setup local
 
-### 1. Clonar e instalar dependencias
-
 ```bash
-git clone <repo-url>
-cd nexus
+git clone <repo-url> && cd nexus
 npm install
+cp .env.example .env    # plantilla SIN secretos — los valores reales los pasa el equipo
+npx prisma generate     # no hay postinstall: el cliente Prisma no se genera solo
+npm run dev             # → http://localhost:3004
 ```
 
-### 2. Variables de entorno
+Mínimo para arrancar y loguearse: `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
+## ⚠ Lo que hay que saber ANTES de tocar nada
+
+- **`DATABASE_URL` apunta a PRODUCCIÓN.** No existe base local (todavía): local == PROD, y la
+  comparten dos PCs de desarrollo. Todo script que escribe es dry-run por default y exige
+  `--apply` + `ALLOW_PROD_WRITE=1` (un guard aborta si falta).
+- **`prisma db push` y `prisma migrate dev` están PROHIBIDOS** contra esta base: dropean
+  objetos que el schema no declara (ya pasó). Las migraciones son SQL aditivo a mano — el
+  flujo completo está en ARCHITECTURE.md · Parte 0 · cap. D.
+- Tras cualquier cambio de schema: `npx prisma generate` + reiniciar el dev server.
+
+## Tests
 
 ```bash
-cp .env.example .env
+npm test                # la suite real (vitest, project unit — todo lib/**)
+npm run check:invariants  # los invariantes de datos, contra la DB real
 ```
 
-Completa cada variable en `.env`:
+## Documentación
 
-| Variable | Descripción |
+| Pregunta | Documento |
 |---|---|
-| `DATABASE_URL` | Connection string de Supabase PostgreSQL |
-| `HUBSPOT_CLIENT_ID` | App de HubSpot (OAuth) |
-| `HUBSPOT_CLIENT_SECRET` | Secret de la app de HubSpot |
-| `HUBSPOT_REDIRECT_URI` | Callback OAuth (ej: `http://localhost:3000/api/auth/callback`) |
-| `ANTHROPIC_API_KEY` | API key de Anthropic |
-| `APP_URL` | URL base de la app (ej: `http://localhost:3000`) |
-| `CONSULTANT_SECRET` | Token de sesión para consultores |
-| `DATA_LAKE_URL` | URL del Supabase secundario (Data Lake) |
-| `DATA_LAKE_PUBLISHABLE_KEY` | Publishable key del Data Lake |
-| `DATA_LAKE_SECRET_KEY` | Secret key del Data Lake |
-
-### 3. Sincronizar schema de base de datos
-
-```bash
-npx prisma db push
-```
-
-### 4. Correr en desarrollo
-
-```bash
-npm run dev
-```
-
-Abre [http://localhost:3000](http://localhost:3000).
+| ¿Cómo está construido y qué reglas rigen? | `ARCHITECTURE.md` (Parte 0 = referencia rápida; §0–§13 = constitución) |
+| ¿Por qué está así? (no re-litigar) | `docs/DECISIONS.md` |
+| ¿Cómo se opera producción / deploy? | `docs/RUNBOOK.md` |
+| ¿Qué significa este término? | `docs/GLOSSARY.md` |
+| ¿Este error ya lo vimos? | `docs/KNOWN-ERRORS.md` |
+| ¿Qué cambió y cuándo? | `docs/CHANGELOG.md` |
+| Reglas para agentes (Claude Code) | `CLAUDE.md` |
