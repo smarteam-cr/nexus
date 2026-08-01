@@ -23,6 +23,10 @@ npm run dev             # → http://localhost:3004
 Mínimo para arrancar y loguearse: `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
+**Dos instancias en paralelo** — `npm run dev` (3004) va contra la base de PRODUCCIÓN;
+`npm run dev:local` (3005) contra la base local con datos de prueba, sin tocar el `.env`.
+Ver ARCHITECTURE.md · Parte 0 · cap. C.
+
 ## ⚠ Lo que hay que saber ANTES de tocar nada
 
 - **`DATABASE_URL` apunta a PRODUCCIÓN.** No existe base local (todavía): local == PROD, y la

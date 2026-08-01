@@ -49,8 +49,19 @@ Monolito App Router, sin `src/`:
 ```bash
 npm install          # NO hay postinstall: el cliente Prisma no se genera solo
 npx prisma generate
-npm run dev          # → http://localhost:3004
+npm run dev          # → http://localhost:3004  (base de PRODUCCIÓN)
+npm run dev:local    # → http://localhost:3005  (base LOCAL, datos de prueba)
 ```
+
+**DOS instancias, no un switch** (2026-08-01): la app corre en 3004 contra PROD (el Nexus
+de trabajo diario) y, en paralelo, en 3005 contra la base local (`scripts/dev-local.ts`).
+Se decidió así en vez de repuntar el `.env`: Nexus se usa TODOS LOS DÍAS para trabajo real,
+y un `.env` conmutado obliga a editarlo de ida y vuelta — el paso manual que se olvida y
+termina en "¿por qué no veo a mis clientes?". Las dos conviven porque difieren en las TRES
+cosas que se pisan: puerto, `DATABASE_URL` (inyectada por el script, el `.env` del disco
+NO se toca) y `distDir` (`.next-alt` vs `.next` — comparten caché de Turbopack y se
+corrompen). `dev:local` verifica que la base local responda ANTES de arrancar, para que el
+fallo sea un mensaje claro y no un error de Prisma en medio de una página.
 
 Puerto **3004**<!-- sync:dev-port -->. Env mínimo para arrancar y poder loguearse:
 `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (la plantilla es

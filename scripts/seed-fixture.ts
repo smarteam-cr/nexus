@@ -155,22 +155,52 @@ async function sembrarProyectos() {
 }
 
 async function sembrarSesiones() {
+  // Las 4 sesiones de A ejercitan LAS TRES ramas de classifyHandoffSession
+  // (lib/handoff/session-relevance.ts), que es lo que decide qué alimenta el handoff:
+  //   1. excluir-por-título gana sobre todo  → "weekly"
+  //   2. incluir-por-título                  → "hand off", "kickoff"
+  //   3. título neutro → ¿hay VENTAS interno en la sala?
+  //        · con Ventas   → entra  ("descubrimiento" + fx.ventas)
+  //        · sin Ventas   → queda afuera (la weekly, que además cae por el título)
+  // Sin una sesión con Ventas en la sala, esa tercera rama —la más sutil, y la que
+  // depende del ROSTER INTERNO— nunca se probaba en local.
+  const VENTAS = EQUIPO[2]; // Vera Ventas Ficticia (area: "Ventas")
   const sesiones = [
     {
       id: "fx-ses-descubrimiento",
-      title: "FX Alfa — Descubrimiento (ficticia)",
-      date: dia(-50),
+      title: "FX Alfa — Descubrimiento (ficticia)", // título NEUTRO
+      date: dia(-60),
       clientId: CLIENTE_A.id,
       dominio: CLIENTE_A.dominio,
       projectId: "fx-project-crm",
+      internos: [VENTAS.email], // ← entra al handoff por "Ventas en la sala"
+    },
+    {
+      id: "fx-ses-handoff",
+      title: "FX Alfa — Hand Off Ventas→CS (ficticia)", // título de VENTA
+      date: dia(-45),
+      clientId: CLIENTE_A.id,
+      dominio: CLIENTE_A.dominio,
+      projectId: "fx-project-crm",
+      internos: [VENTAS.email, CSE.email],
     },
     {
       id: "fx-ses-kickoff",
-      title: "FX Alfa — Kickoff CRM (ficticia)",
+      title: "FX Alfa — Kickoff CRM (ficticia)", // "kickoff" TAMBIÉN es include
       date: dia(-40),
       clientId: CLIENTE_A.id,
       dominio: CLIENTE_A.dominio,
       projectId: "fx-project-crm",
+      internos: [CSE.email],
+    },
+    {
+      id: "fx-ses-weekly",
+      title: "FX Alfa — Weekly de implementación (ficticia)", // EXCLUIDA por título
+      date: dia(-10),
+      clientId: CLIENTE_A.id,
+      dominio: CLIENTE_A.dominio,
+      projectId: "fx-project-crm",
+      internos: [CSE.email],
     },
     // Sesión del PROSPECTO, resuelta a B y SIN link a proyectos de A: el fixture
     // jamás siembra un SessionProject cross-cliente (INV1 debe quedar verde).
@@ -181,6 +211,7 @@ async function sembrarSesiones() {
       clientId: CLIENTE_B.id,
       dominio: CLIENTE_B.dominio,
       projectId: null,
+      internos: [VENTAS.email],
     },
   ];
   for (const s of sesiones) {
@@ -190,10 +221,10 @@ async function sembrarSesiones() {
         title: s.title,
         date: s.date,
         duration: 45,
-        participants: [CSE.email, `gerencia@${s.dominio}`],
+        participants: [...s.internos, `gerencia@${s.dominio}`],
         transcript: `Transcripción ficticia de "${s.title}". Nada de esto ocurrió: es utilería del fixture local.`,
         source: "google_meet",
-        organizerEmail: CSE.email,
+        organizerEmail: s.internos[0],
         resolvedClientId: s.clientId,
       },
     });
@@ -203,14 +234,15 @@ async function sembrarSesiones() {
           id: s.id.replace("fx-ses-", "fx-sp-"),
           sessionId: s.id,
           projectId: s.projectId,
-          isPrimary: true,
+          isPrimary: s.id === "fx-ses-handoff",
           source: "manual",
           included: true,
         },
       });
     }
   }
-  console.log("✓ Sesiones: 3 (2 de A linkeadas, 1 de B sin link — cero cruces, INV1 verde)");
+  console.log("✓ Sesiones: 5 (4 de A linkeadas — venta/handoff/kickoff/weekly, 1 de B sin link)");
+  console.log("  ejercitan las 3 ramas del filtro del handoff (excluir/incluir por título · Ventas en la sala)");
 }
 
 async function sembrarCronograma() {
