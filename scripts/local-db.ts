@@ -18,6 +18,8 @@
  *              0_init (migrate deploy) → after.sql → policies.sql
  *   seed       puebla nexus_local: catálogo (agentes/prompts/config/equipo
  *              ficticio) + el fixture fx- (scripts/seed-fixture.ts). F3.
+ *   acceso     copia el ROSTER INTERNO real de prod → nexus_local, para poder
+ *              ENTRAR a la instancia local con tu cuenta de Google de siempre.
  *   reset      down + borrar datos + up + bootstrap  ← "rehacerla en segundos"
  *   url        imprime las connection strings
  *
@@ -29,6 +31,10 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
+import "dotenv/config";
+import { assertLocalWriteOnly, describirDestino, esHostProduccion } from "./lib/guard";
+import { createScriptDbFor } from "./lib/db";
+import { copiarRosterInterno } from "./lib/roster";
 
 const RAIZ = process.cwd();
 const PUERTO = 5433;
@@ -217,6 +223,42 @@ async function seed(): Promise<void> {
   console.log("  Demos opcionales de Cobranza: npx tsx scripts/seed-cobranza-demo.ts --apply → -historia.");
 }
 
+/**
+ * `acceso` — copia el roster INTERNO real (TeamMember + AppUser INTERNAL) de prod a la local.
+ *
+ * Por qué hace falta: Supabase Auth es UNO SOLO (prod y local comparten proyecto de auth; lo
+ * único que cambia es dónde vive la DATA). Al entrar a la instancia local el login de Google
+ * anda y devuelve tu correo REAL, pero `requireUser` busca `AppUser` POR EMAIL y la local solo
+ * tiene los ficticios del fixture → "Usuario autenticado pero sin AppUser". Esto lo cierra.
+ *
+ * Va SEPARADO de `seed` a propósito: `seed` es el mundo ficticio y funciona sin acceso a prod;
+ * esto LEE de prod (solo lectura) y por eso es una decisión aparte y explícita.
+ */
+async function acceso(): Promise<void> {
+  const urlProd = process.env.DATABASE_URL;
+  if (!urlProd || !esHostProduccion(urlProd)) {
+    console.error(`⛔ La FUENTE debe ser producción. DATABASE_URL actual: ${describirDestino(urlProd)}`);
+    console.error("   Corré este comando con tu .env normal (el que apunta a prod).");
+    process.exit(1);
+  }
+  if (!estaCorriendo()) up();
+  await ensureDatabases();
+
+  const destinoUrl = urlDe("nexus_local");
+  assertLocalWriteOnly(destinoUrl, "db:local acceso (destino)");
+
+  const origen = createScriptDbFor(urlProd, "origen (prod, solo lectura)");
+  const destino = createScriptDbFor(destinoUrl, "destino (local)");
+  try {
+    const r = await copiarRosterInterno(origen.prisma, destino.prisma);
+    console.log(`\n✓ Roster interno copiado: ${r.teamMembers} personas · ${r.appUsers} accesos.`);
+    console.log("  Ya podés entrar a http://localhost:3005 con tu cuenta de Google de siempre.");
+  } finally {
+    await origen.close();
+    await destino.close();
+  }
+}
+
 async function main(): Promise<void> {
   const cmd = process.argv[2] ?? "status";
   switch (cmd) {
@@ -236,6 +278,9 @@ async function main(): Promise<void> {
     case "seed":
       await seed();
       break;
+    case "acceso":
+      await acceso();
+      break;
     case "reset":
       down();
       rmSync(join(RAIZ, ".local-db"), { recursive: true, force: true });
@@ -247,7 +292,7 @@ async function main(): Promise<void> {
       for (const db of BASES) console.log(`${db}: ${urlDe(db)}`);
       break;
     default:
-      console.error(`Comando desconocido: ${cmd}. Usá up | down | status | bootstrap | seed | reset | url`);
+      console.error(`Comando desconocido: ${cmd}. Usá up | down | status | bootstrap | seed | acceso | reset | url`);
       process.exit(1);
   }
 }

@@ -43,6 +43,7 @@ Ver ARCHITECTURE.md · Parte 0 · cap. C.
 npm test                  # la suite unit (vitest — todo lib/**, sin DB)
 npm run db:local -- up    # Postgres 17 local embebido (localhost:5433; bootstrap si es nueva)
 npm run db:local -- seed  # puebla nexus_local: catálogo + mundo ficticio fx- (solo local)
+npm run db:local -- acceso # copia el equipo real de prod → poder ENTRAR con tu cuenta
 npm run test:int          # integración contra la base local nexus_test (trunca tablas)
 npm run check:invariants  # los invariantes de datos, contra la DB real
 ```

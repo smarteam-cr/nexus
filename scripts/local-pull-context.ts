@@ -35,6 +35,7 @@ import "dotenv/config";
 import type { Prisma } from "@prisma/client";
 import { assertLocalWriteOnly, describirDestino, esHostProduccion } from "./lib/guard";
 import { createScriptDbFor } from "./lib/db";
+import { copiarRosterInterno } from "./lib/roster";
 
 // Prisma tipa las columnas Json? como `JsonValue` (incluye `null`) al LEER, pero exige el
 // sentinel `Prisma.JsonNull` al ESCRIBIR — fricción conocida de su generador, no un bug real:
@@ -113,7 +114,6 @@ async function main() {
     }
 
     const equipoInterno = await origen.prisma.teamMember.findMany({});
-    const appUsersInternos = await origen.prisma.appUser.findMany({ where: { kind: "INTERNAL" } });
 
     console.log(`\nCliente: ${cliente.name}`);
     console.log(`Proyectos (${proyectos.length}): ${proyectos.map((p) => p.name).join(", ")}`);
@@ -129,20 +129,10 @@ async function main() {
 
     console.log("\nEscribiendo en local…");
 
-    for (const m of equipoInterno) {
-      await destino.prisma.teamMember.upsert({
-        where: { id: m.id },
-        create: asInput<Prisma.TeamMemberUncheckedCreateInput>(m),
-        update: asInput<Prisma.TeamMemberUncheckedUpdateInput>(m),
-      });
-    }
-    for (const u of appUsersInternos) {
-      await destino.prisma.appUser.upsert({
-        where: { id: u.id },
-        create: asInput<Prisma.AppUserUncheckedCreateInput>(u),
-        update: asInput<Prisma.AppUserUncheckedUpdateInput>(u),
-      });
-    }
+    // El roster interno (TeamMember + AppUser INTERNAL) va por el helper compartido:
+    // es exactamente lo mismo que hace `npm run db:local -- acceso`.
+    await copiarRosterInterno(origen.prisma, destino.prisma);
+
     await destino.prisma.client.upsert({
       where: { id: cliente.id },
       create: asInput<Prisma.ClientUncheckedCreateInput>(cliente),

@@ -63,6 +63,15 @@ NO se toca) y `distDir` (`.next-alt` vs `.next` — comparten caché de Turbopac
 corrompen). `dev:local` verifica que la base local responda ANTES de arrancar, para que el
 fallo sea un mensaje claro y no un error de Prisma en medio de una página.
 
+⚠ **Para ENTRAR a la instancia local hace falta `npm run db:local -- acceso`** (una vez):
+Supabase Auth es UNO SOLO — prod y local comparten el proyecto de auth, lo único que cambia
+es dónde vive la DATA. El login de Google anda y devuelve tu correo REAL, pero `requireUser`
+busca `AppUser` POR EMAIL y la base local solo tiene los ficticios del fixture → *"Usuario
+autenticado pero sin AppUser"*. `acceso` copia el roster interno real (TeamMember + AppUser
+INTERNAL, ~19 filas) de prod a la local; va SEPARADO de `seed` a propósito, porque `seed` es
+el mundo ficticio y funciona sin acceso a prod. Es lo mismo que hace `local-pull-context.ts`
+(helper compartido `scripts/lib/roster.ts`) — correr cualquiera de los dos alcanza.
+
 Puerto **3004**<!-- sync:dev-port -->. Env mínimo para arrancar y poder loguearse:
 `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (la plantilla es
 `.env.example` — sin secretos; los valores reales los pasa el equipo).
