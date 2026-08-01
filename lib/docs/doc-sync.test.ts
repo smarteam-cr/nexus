@@ -91,7 +91,9 @@ describe("marcadores sync de ARCHITECTURE Parte 0", () => {
       for (const nombre of readdirSync(d)) {
         const full = join(d, nombre);
         if (statSync(full).isDirectory()) walk(full);
-        else if (nombre.endsWith(".test.ts")) n++;
+        // Paridad con el project `unit` de vitest: los *.int.test.ts van al project
+        // `integration` (otra suite, otra base) y NO cuentan acá.
+        else if (nombre.endsWith(".test.ts") && !nombre.endsWith(".int.test.ts")) n++;
       }
     };
     walk(join(RAIZ, "lib"));

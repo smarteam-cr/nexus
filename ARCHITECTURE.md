@@ -64,6 +64,15 @@ Trampas de todos los días: tras cambiar el schema → `npx prisma generate` + *
 server** (el client viejo no entra por HMR); tras un `git pull` que toque CSS/config →
 `rm -rf .next` + reiniciar; el navegador del preview NO está logueado (middleware → login).
 
+**Base LOCAL** (F1, 2026-08-01): Postgres 17 EMBEBIDO vía npm — sin Docker, la otra PC lo
+hereda con `npm install`. `npm run db:local -- up | bootstrap | reset | down | status`
+(`scripts/local-db.ts`): levanta `localhost:5433` con `nexus_local` + `nexus_test`, schema
+completo (0_init + after.sql + policies), reset TOTAL en ~20 s. Datos en `.local-db/`
+(gitignoreado). Sin pgvector (los binarios no lo traen — la columna `embedding` no tiene
+lectores y se omite con NOTICE). El guard no exige `ALLOW_PROD_WRITE` en localhost, a
+propósito. El `.env` de dev sigue apuntando a PROD — el switch es una decisión coordinada
+entre las 2 PCs, no un default.
+
 ### D. Base de datos y migraciones (el flujo REAL)
 
 - **Dónde vive la config**: el `datasource` de `prisma/schema.prisma` NO declara URL —
@@ -112,11 +121,15 @@ corre migraciones ni seeds (cap. D + RUNBOOK).
 
 ### F. Los tests: cinco familias que se rompen por razones distintas
 
-**131**<!-- sync:test-files --> archivos `*.test.ts`, todos bajo `lib/` — el project `unit` de
-vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y nada avisa.
-`npm test` es la suite real. El project `integration` es un esqueleto declarado y sin
-construir (no existen `test/`, `.env.test` ni ningún `*.int.test.ts`) — `npm run test:int`
-no corre nada, y construirlo es parte del plan de base local.
+**131**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+`unit` de vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y
+nada avisa. `npm test` es la suite unit. Desde el 2026-08-01 (F4) el project `integration`
+está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `nexus_test`
+(`test/setup.integration.ts` carga `.env.test` con override, ABORTA si el host es Supabase,
+y TRUNCA todas las tablas antes de cada caso — por eso `fileParallelism: false`). Prerequisito:
+`npm run db:local -- up`. Los primeros cubren el chokepoint de sesiones (invariante #1) y
+`visibleRoleWhere` con filas reales. Integration NO corre en CI todavía (falta el service
+container — pendiente declarado en ci.yml).
 
 | Familia | Ejemplo | Se rompe cuando… | Se arregla… |
 |---|---|---|---|
@@ -517,7 +530,7 @@ carpeta de su integración.
 
 **La suite vive y frena merges**: 130 archivos / ~1500 casos bajo `lib/` (el conteo exacto lo vigila `doc-sync`), organizados en las cinco familias de la Parte 0 · cap. F — unit de motor, golden, ratchets, escaneos estructurales y registros congelados. Módulo nuevo sin tests = módulo no terminado (regla de arriba, ahora sí cumplida por los módulos recientes: cobranza, timeline, roles, marketing…). Los módulos viejos sin cobertura se cubren cuando se tocan.
 
-> *Pendiente real*: tests de integración HTTP contra una DB de prueba — el project `integration` de vitest está declarado y VACÍO (sin `test/`, sin `.env.test`, 0 archivos `*.int.test.ts`). Se construye con la base local (plan aparte); hasta entonces `npm run test:int` no corre nada.
+> El project `integration` está VIVO desde el 2026-08-01 (F4): `npm run test:int` contra la base local `nexus_test` (ver Parte 0 · cap. F). *Pendiente real*: crecer la suite (hoy cubre el chokepoint de sesiones y el acceso de Roles) y llevarla al CI con un service container.
 
 ---
 

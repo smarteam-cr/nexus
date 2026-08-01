@@ -36,7 +36,9 @@ Mínimo para arrancar y loguearse: `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
 ## Tests
 
 ```bash
-npm test                # la suite real (vitest, project unit — todo lib/**)
+npm test                  # la suite unit (vitest — todo lib/**, sin DB)
+npm run db:local -- up    # Postgres 17 local embebido (localhost:5433; bootstrap si es nueva)
+npm run test:int          # integración contra la base local nexus_test (trunca tablas)
 npm run check:invariants  # los invariantes de datos, contra la DB real
 ```
 
