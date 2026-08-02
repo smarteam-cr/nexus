@@ -252,7 +252,12 @@ async function acceso(): Promise<void> {
   try {
     const r = await copiarRosterInterno(origen.prisma, destino.prisma);
     console.log(`\n✓ Roster interno copiado: ${r.teamMembers} personas · ${r.appUsers} accesos.`);
-    console.log("  Ya podés entrar a http://localhost:3005 con tu cuenta de Google de siempre.");
+    // ⚠ Se nombra el COMANDO, no el puerto. Acá decía "localhost:3005" y quedó viejo al dar
+    // vuelta el default (638150a → 2aab972): mandaba a la base de PRODUCCIÓN en la misma
+    // frase que anuncia "ya tenés tu base local" — el opuesto exacto del propósito de la
+    // tanda. `npm run dev` es un contrato estable; el número de puerto es un detalle que
+    // ya se movió una vez. (Lo cazó la otra PC al correr el flujo completo, 2026-08-02.)
+    console.log("  Levantá la app con `npm run dev` y entrá con tu cuenta de Google de siempre.");
   } finally {
     await origen.close();
     await destino.close();
