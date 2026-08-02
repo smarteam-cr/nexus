@@ -82,6 +82,16 @@ se disparan a mano. HubSpot degrada solo (su token vive en la tabla `HubspotAcco
 en local). Regla que queda: **a la base local las sesiones entran por donde uno DECIDE** —
 el fixture o `db:local:pull` —, nunca por un sync automático.
 
+**Probar el flujo "creo un proyecto en HubSpot y Nexus lo agarra" en local**:
+`npm run db:local -- hubspot` copia la conexión (`HubspotAccount`) de prod a la local. El
+token de HubSpot NO vive en el `.env` — vive en la BASE (`lib/hubspot/client.ts` lo busca con
+`findFirst({isSystem:true})`), y la local nace sin ninguna fila, así que sin esto el sync no
+tiene con qué autenticarse. ⚠ Con la conexión copiada el Nexus local habla con el HubSpot
+REAL: leer es inocuo (es lo que habilita la prueba) pero hay caminos que ESCRIBEN allá (crear
+handoff, handoff-sync, borradores sociales) — **la base queda aislada, HubSpot no**. Es el
+mismo riesgo que ya se corre probando en producción; lo que cambia es que los proyectos de
+prueba aterrizan en `nexus_local` y no en la base de los clientes.
+
 ⚠ **Para ENTRAR a la instancia local hace falta `npm run db:local -- acceso`** (una vez):
 Supabase Auth es UNO SOLO — prod y local comparten el proyecto de auth, lo único que cambia
 es dónde vive la DATA. El login de Google anda y devuelve tu correo REAL, pero `requireUser`

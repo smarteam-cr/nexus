@@ -20,6 +20,8 @@
  *              ficticio) + el fixture fx- (scripts/seed-fixture.ts). F3.
  *   acceso     copia el ROSTER INTERNO real de prod → nexus_local, para poder
  *              ENTRAR a la instancia local con tu cuenta de Google de siempre.
+ *   hubspot    copia la CONEXIÓN a HubSpot de prod → nexus_local, para poder probar
+ *              el flujo "creo un proyecto en HubSpot y Nexus lo agarra" en local.
  *   reset      down + borrar datos + up + bootstrap  ← "rehacerla en segundos"
  *   url        imprime las connection strings
  *
@@ -32,6 +34,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from "node
 import { join } from "node:path";
 import { Client } from "pg";
 import "dotenv/config";
+import type { Prisma } from "@prisma/client";
 import { assertLocalWriteOnly, describirDestino, esHostProduccion } from "./lib/guard";
 import { createScriptDbFor } from "./lib/db";
 import { copiarRosterInterno } from "./lib/roster";
@@ -264,6 +267,78 @@ async function acceso(): Promise<void> {
   }
 }
 
+/**
+ * `hubspot` — copia la conexión a HubSpot (tabla `HubspotAccount`) de prod a la local.
+ *
+ * Por qué hace falta: el token de HubSpot NO vive en el `.env`, vive en la BASE
+ * (`lib/hubspot/client.ts` lo busca con `findFirst({ isSystem: true })`). La base local
+ * nace sin ninguna fila, así que el sync no tiene con qué autenticarse y el flujo
+ * "creo un proyecto en HubSpot → Nexus lo agarra" no se puede probar en local.
+ *
+ * ⚠ LO QUE ESTO IMPLICA, a propósito y para saberlo: con la conexión copiada, el Nexus
+ * local habla con el HubSpot REAL. Leer es inocuo (es lo que habilita la prueba), pero
+ * hay caminos que ESCRIBEN allá (crear un handoff crea su objeto, handoff-sync,
+ * borradores sociales). O sea: la base queda aislada, HubSpot NO. Es el mismo riesgo que
+ * ya se corre probando en producción — la diferencia es que ahora los proyectos de prueba
+ * aterrizan en la base local y no en la de los clientes.
+ *
+ * Los tokens NUNCA se imprimen. Van a la base local, que está gitignoreada.
+ */
+async function hubspot(): Promise<void> {
+  const urlProd = process.env.DATABASE_URL;
+  if (!urlProd || !esHostProduccion(urlProd)) {
+    console.error(`⛔ La FUENTE debe ser producción. DATABASE_URL actual: ${describirDestino(urlProd)}`);
+    process.exit(1);
+  }
+  if (!estaCorriendo()) up();
+  await ensureDatabases();
+
+  const destinoUrl = urlDe("nexus_local");
+  assertLocalWriteOnly(destinoUrl, "db:local hubspot (destino)");
+
+  const origen = createScriptDbFor(urlProd, "origen (prod, solo lectura)");
+  const destino = createScriptDbFor(destinoUrl, "destino (local)");
+  try {
+    const cuentas = await origen.prisma.hubspotAccount.findMany({ where: { isSystem: true } });
+    if (!cuentas.length) {
+      console.error("⛔ No hay ninguna cuenta de HubSpot de sistema en producción.");
+      process.exit(1);
+    }
+    // Los ids de Client de prod no existen en la local: si la cuenta cuelga de uno, se
+    // desvincula (el sync solo necesita `isSystem`, no el clientId) en vez de reventar
+    // por la FK. Hoy la del sistema viene con clientId null, pero no se asume.
+    const idsLocales = new Set(
+      (await destino.prisma.client.findMany({ select: { id: true } })).map((c) => c.id),
+    );
+    for (const cuenta of cuentas) {
+      const fila = {
+        ...cuenta,
+        clientId: cuenta.clientId && idsLocales.has(cuenta.clientId) ? cuenta.clientId : null,
+      };
+      await destino.prisma.hubspotAccount.upsert({
+        where: { id: cuenta.id },
+        create: asInputHubspot(fila),
+        update: asInputHubspot(fila),
+      });
+      // Metadata, NUNCA los tokens.
+      console.log(`  · portal ${cuenta.hubspotPortalId} (${cuenta.hubName ?? "sin nombre"})`);
+    }
+    console.log(`\n✓ Conexión a HubSpot copiada: ${cuentas.length} cuenta(s) de sistema.`);
+    console.log("  Ya podés probar en local: creá el proyecto en HubSpot y sincronizá desde Nexus.");
+    console.log("  ⚠ El Nexus local ahora habla con el HubSpot REAL — leer es inocuo, pero hay");
+    console.log("    acciones que escriben allá (crear handoff, sync). La BASE sigue aislada.");
+  } finally {
+    await origen.close();
+    await destino.close();
+  }
+}
+
+// Mismo cast documentado que en local-pull-context.ts: Prisma tipa Json? como JsonValue al
+// LEER y exige su sentinel al ESCRIBIR; acá se copia la fila 1:1 entre dos clientes del
+// MISMO schema (`portalSnapshot` es la única columna Json de este modelo).
+const asInputHubspot = (row: object): Prisma.HubspotAccountUncheckedCreateInput =>
+  row as unknown as Prisma.HubspotAccountUncheckedCreateInput;
+
 async function main(): Promise<void> {
   const cmd = process.argv[2] ?? "status";
   switch (cmd) {
@@ -286,6 +361,9 @@ async function main(): Promise<void> {
     case "acceso":
       await acceso();
       break;
+    case "hubspot":
+      await hubspot();
+      break;
     case "reset":
       down();
       rmSync(join(RAIZ, ".local-db"), { recursive: true, force: true });
@@ -297,7 +375,7 @@ async function main(): Promise<void> {
       for (const db of BASES) console.log(`${db}: ${urlDe(db)}`);
       break;
     default:
-      console.error(`Comando desconocido: ${cmd}. Usá up | down | status | bootstrap | seed | acceso | reset | url`);
+      console.error(`Comando desconocido: ${cmd}. Usá up | down | status | bootstrap | seed | acceso | hubspot | reset | url`);
       process.exit(1);
   }
 }
