@@ -156,6 +156,23 @@ export default function WorkspaceClient({
   }, []);
 
   /**
+   * Estado del sync que pidió una PERSONA, separado del contador de fondo de arriba.
+   *
+   * `syncing` es true cuando corre CUALQUIERA de los dos syncs de fondo — el de HubSpot y el
+   * de Google—, y eso está bien para el indicador flotante ("algo está pasando"). Pero atarle
+   * el botón "Actualizar" tendría dos consecuencias falsas: se pintaría "Actualizando…" solo,
+   * al abrir la ficha, por una corrida de Google que nadie pidió; y el guard de re-entrada lo
+   * dejaría MUDO en esa ventana (click → return silencioso). Un botón que miente sobre lo que
+   * está haciendo y que a veces no hace nada sin decirlo es justo el defecto que esta tanda
+   * vino a cerrar.
+   *
+   * El ref es para el guard (una lectura fresca dentro del callback, sin depender del closure)
+   * y el state es para pintar. Mismo par que `activeSyncs`/`syncing`.
+   */
+  const manualEnCurso = useRef(false);
+  const [sincronizandoManual, setSincronizandoManual] = useState(false);
+
+  /**
    * Sincronización con HubSpot. DOS modos, y la diferencia no es cosmética:
    *
    *  · `force=false, avisar=false` — la de FONDO, al entrar al cliente. Respeta el cooldown de
@@ -169,9 +186,14 @@ export default function WorkspaceClient({
    * es peor que no tener botón.
    */
   const runHubspotSync = useCallback(async (force = false, avisar = false) => {
-    // Guard de re-entrada: el server ya tiene mutex, pero frenar acá evita el viaje de ida
-    // y que el usuario vea dos toasts por un doble click.
-    if (avisar && activeSyncs.current > 0) return;
+    // Guard de re-entrada: el server ya tiene mutex, pero frenar acá evita el viaje de ida y
+    // que el usuario vea dos toasts por un doble click. Mira SOLO las corridas manuales: si
+    // mirara el contador global, un sync de fondo de Google dejaría el botón mudo.
+    if (avisar) {
+      if (manualEnCurso.current) return;
+      manualEnCurso.current = true;
+      setSincronizandoManual(true);
+    }
     startSync();
     if (avisar) toast.info("Buscando proyectos nuevos en HubSpot… puede tardar un momento.");
     try {
@@ -191,12 +213,18 @@ export default function WorkspaceClient({
           // Los errores del sync ya vienen redactados para humano — se muestran tal cual.
           toast.error(primerError);
         } else if (data.omitido) {
-          // El server frenó a propósito. Decirlo es la diferencia entre "no pasó nada" y
-          // "no hacía falta": sin esto el botón parece roto.
+          /* El server frenó a propósito. Decirlo es la diferencia entre "no pasó nada" y
+             "no hacía falta": sin esto el botón parece roto.
+             ⚠ El caso "piso" NO puede decir "se sincronizó": el piso también se aplica cuando el
+             intento anterior FALLÓ (el cooldown se reclama al arrancar, a propósito, para hacer
+             back-off ante presión de pool). Afirmar un éxito que no ocurrió es peor que el
+             silencio que vinimos a arreglar — por eso habla de INTENTO, que es cierto siempre. */
           toast.info(
             data.omitido === "en_vuelo"
               ? "Ya había una sincronización en curso; te muestro su resultado."
-              : "Se sincronizó hace un momento. Probá de nuevo en un rato.",
+              : data.omitido === "piso"
+                ? "Se intentó hace menos de un minuto. Esperá un momento y volvé a probar."
+                : "Ya se sincronizó hace poco. Probá de nuevo en un rato.",
           );
         } else if (data.created || data.updated) {
           const partes = [
@@ -215,6 +243,10 @@ export default function WorkspaceClient({
       });
     } finally {
       endSync();
+      if (avisar) {
+        manualEnCurso.current = false;
+        setSincronizandoManual(false);
+      }
     }
   }, [clientId, router, toast, startSync, endSync]);
 
@@ -305,7 +337,7 @@ export default function WorkspaceClient({
           initialCanvases={initialCanvases}
           initialCanvasesProjectId={initialCanvasesProjectId}
           hasHubspot={hasHubspot}
-          syncing={syncing}
+          sincronizando={sincronizandoManual}
           onSync={() => void runHubspotSync(true, true)}
         />
       </div>
@@ -323,7 +355,7 @@ function ProjectSection({
   initialCanvases,
   initialCanvasesProjectId,
   hasHubspot,
-  syncing,
+  sincronizando,
   onSync,
 }: {
   clientId: string;
@@ -334,8 +366,12 @@ function ProjectSection({
   initialCanvasesProjectId: string | null;
   /** Sin conexión a HubSpot no hay nada que actualizar → el botón ni se pinta. */
   hasHubspot: boolean;
-  /** Compartido con el indicador flotante y el banner: UN solo estado de "sincronizando". */
-  syncing: boolean;
+  /**
+   * SOLO la corrida que pidió una persona — deliberadamente NO el `syncing` global del
+   * workspace, que también se prende con el sync de fondo de Google: el botón se pintaría
+   * "Actualizando…" al abrir la ficha sin que nadie lo tocara.
+   */
+  sincronizando: boolean;
   onSync: () => void;
 }) {
   const { activeProjectId, setActiveProjectId } = useWorkspace();
@@ -453,11 +489,11 @@ function ProjectSection({
           variant="secondary"
           size="xs"
           className="ml-3 shrink-0"
-          loading={syncing}
+          loading={sincronizando}
           onClick={onSync}
           title="Traer de HubSpot los proyectos de este cliente"
         >
-          {syncing ? "Actualizando…" : "Actualizar"}
+          {sincronizando ? "Actualizando…" : "Actualizar"}
         </Button>
       )}
       </div>

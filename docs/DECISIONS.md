@@ -507,6 +507,38 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
 - **"Gris que no se note" = `variant="secondary"`, no `ghost`.** En este repo `ghost` es brand
   translúcido; la variante discreta es `secondary` (`bg-surface-hover` + `border-line` +
   `text-fg-secondary`). Cero grises crudos: el archivo no suma ofensores al ratchet.
+- **El ORDEN de los tres frenos importa, y el primer borrador lo tenía al revés** (corregido por
+  la revisión adversarial del mismo día): el mutex iba ANTES del cooldown, así que la corrida
+  automática del montaje —que nadie está esperando— se enganchaba a la corrida viva y sostenía su
+  request HTTP los minutos que durara, para recibir el MISMO snapshot que el cooldown devuelve
+  gratis. Con varias personas abriendo la misma ficha eso acumula requests colgados justo bajo la
+  presión que estos frenos vinieron a bajar. Orden correcto: **cooldown (para quien no espera) →
+  mutex (para quien sí) → piso**. El mutex queda incondicional igual, para el borde de una corrida
+  más larga que el cooldown.
+- **Un mutex sin techo de vida es un candado permanente.** El cliente de HubSpot no tiene timeout
+  configurado; una llamada que nunca resuelve dejaba la entrada del Map viva para siempre y toda
+  llamada posterior de ese cliente se enganchaba a una promesa muerta. `MUTEX_MAX_MS` (5 min)
+  permite arrancar de nuevo pasado ese punto — se aceptan dos corridas simultáneas en ese borde a
+  propósito: es justo lo que cubre la guarda de P2002, y una corrida de más cuesta infinitamente
+  menos que una ficha trabada para siempre. El `.finally` compara la PROMESA (no la clave) antes
+  de borrar, o una corrida colgada que despierta tarde le sacaría el mutex a la corrida nueva.
+- **El piso se mide desde que TERMINÓ la corrida anterior, no desde que arrancó.** El cooldown se
+  reclama al arrancar (y así queda: reclamarlo temprano es lo que hace que un fallo también
+  espacie), pero medir el piso desde ahí lo dejaba vencido en el instante en que terminaba una
+  corrida larga — justo el caso caro que el piso quería espaciar.
+- **El mensaje del piso NO puede afirmar que se sincronizó.** El piso también aplica cuando el
+  intento anterior FALLÓ, así que "se sincronizó hace un momento" sería mentira en el peor momento
+  posible. Habla de INTENTO, que es cierto siempre.
+- **La guarda de re-entrada del botón mira SOLO las corridas manuales.** Atarla al contador global
+  de syncs de fondo tenía dos consecuencias falsas: el botón se pintaba "Actualizando…" al abrir la
+  ficha por una corrida de Google que nadie pidió, y en esa ventana el "Reintentar" del toast de
+  error se tragaba el click sin decir nada (y el toast se cerraba igual). Un botón que miente sobre
+  lo que hace y que a veces no hace nada sin avisar es el defecto que esta tanda vino a cerrar.
+- **El catch de P2002 NO escribe `tags`.** El primer borrador ponía `mergeHubTag([], hubTag)`, que
+  declara "esta fila no tiene nada curado" — y es falso en un caso real: un proyecto dado de alta
+  desde Nexus nace con los tags heredados del business case. Ese update habría borrado curaduría
+  humana en silencio. No tocar el campo es correcto en todos los casos: los tags los acaba de
+  escribir la corrida que ganó la carrera.
 - **Sin capability nueva.** El endpoint ya existía y ya está gateado por `guardAccessToClient`; el
   botón no amplía a quién le llega el sync —le llega a todo el que abre la ficha, porque la
   auto-sync ya corre sola— solo lo hace pedible. Agregar una celda al registry para una acción que

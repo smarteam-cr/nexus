@@ -86,6 +86,47 @@ describe("syncProjectsForClient — el portón", () => {
     expect(rb.errors).toEqual(ra.errors);
   });
 
+  it("A2b · SIN force, con una corrida viva, NO se engancha: corta por cooldown", async () => {
+    /* Regresión cazada en la revisión adversarial del 2026-08-02. El primer borrador consultaba
+       el mutex ANTES del cooldown, así que la sync automática del montaje —que nadie está
+       esperando— se enganchaba y sostenía su request HTTP los minutos que durara la corrida,
+       para recibir el MISMO snapshot que el cooldown devuelve gratis. Con varias personas
+       abriendo la misma ficha, eso acumula requests colgados justo bajo la presión que estos
+       frenos vinieron a bajar. */
+    const { syncProjectsForClient } = await cargarModulo();
+    let liberar!: () => void;
+    h.freno = new Promise<void>((res) => { liberar = res; });
+
+    const viva = syncProjectsForClient("c1", { force: true });
+    await Promise.resolve();
+
+    // Resuelve YA, sin esperar a que se libere la corrida viva: eso es lo que se prueba.
+    const deFondo = await syncProjectsForClient("c1");
+    expect(deFondo.omitido).toBe("cooldown");
+    expect(h.corridas).toBe(1);
+
+    liberar();
+    await viva;
+  });
+
+  it("A2c · una corrida COLGADA no traba al cliente para siempre (techo del mutex)", async () => {
+    /* Sin techo, la única salida del Map es que la promesa settle. `correrSync` habla con HubSpot
+       decenas de veces con un cliente sin timeout: una llamada que nunca resuelve dejaba la
+       entrada viva para siempre y TODA llamada posterior de ese cliente se enganchaba a una
+       promesa muerta. El mutex, puesto para que el sistema no se ahogue, ahogaba la ficha. */
+    const { syncProjectsForClient } = await cargarModulo();
+    // Freno que NUNCA se libera: simula la llamada colgada.
+    h.freno = new Promise<void>(() => {});
+    void syncProjectsForClient("c1", { force: true });
+    await Promise.resolve();
+
+    h.freno = null;
+    ahora += 5 * 60_000 + 1; // pasado el techo de 5 min
+    const r = await syncProjectsForClient("c1", { force: true });
+    expect(r.omitido).toBeUndefined();
+    expect(h.corridas).toBe(2);
+  });
+
   it("A3 · dos clientes distintos NO se bloquean entre sí (el mutex es por cliente)", async () => {
     const { syncProjectsForClient } = await cargarModulo();
     let liberar!: () => void;
@@ -141,6 +182,25 @@ describe("syncProjectsForClient — cooldown y piso", () => {
     const r = await syncProjectsForClient("c1");
     expect(h.corridas).toBe(2);
     expect(r.omitido).toBeUndefined();
+  });
+
+  it("B2b · el piso se mide desde que TERMINÓ la corrida, no desde que arrancó", async () => {
+    /* Cazado en la revisión adversarial. El piso miraba `lastSyncByClient`, que se reclama al
+       ARRANCAR: una corrida de 3 minutos dejaba el piso vencido en el instante en que terminaba
+       —justo el caso caro, que es el que el piso quería espaciar—. Acá la corrida "dura" 90 s. */
+    const { syncProjectsForClient } = await cargarModulo();
+    let liberar!: () => void;
+    h.freno = new Promise<void>((res) => { liberar = res; });
+    const larga = syncProjectsForClient("c1", { force: true });
+    await Promise.resolve();
+    ahora += 90_000; // la corrida tardó 90 s
+    liberar();
+    await larga;
+
+    // Justo al terminar: el arranque quedó a 90 s (piso vencido), pero el FIN fue recién.
+    const r = await syncProjectsForClient("c1", { force: true });
+    expect(r.omitido).toBe("piso");
+    expect(h.corridas).toBe(1);
   });
 
   it("B3 · CON force, dentro del piso de 60 s: omitido=piso — force NO lo saltea", async () => {

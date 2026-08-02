@@ -522,6 +522,33 @@ const lastSyncByClient = new Map<string, number>();
  * el caso "una atrás de otra".
  */
 const SYNC_FLOOR_MS = 60 * 1000;
+/**
+ * Cuándo TERMINÓ la última corrida. El piso se mide desde acá y no desde `lastSyncByClient`,
+ * que se reclama al ARRANCAR: con el claim de arranque, una corrida de 3 minutos deja el piso
+ * vencido en el instante en que termina — justo el caso caro, que es el que el piso quería
+ * espaciar. El cooldown sigue midiéndose desde el arranque (su semántica no cambia: es back-off
+ * de la corrida automática, y reclamarlo temprano es lo que hace que un fallo también espacie).
+ */
+const ultimoFinPorCliente = new Map<string, number>();
+
+/**
+ * Techo de vida de una entrada del mutex. `correrSync` habla con HubSpot decenas de veces con un
+ * cliente que NO tiene timeout configurado (`lib/hubspot/client.ts`): si una de esas llamadas
+ * nunca resuelve, la promesa queda pendiente para siempre, el `.finally` no corre y —sin este
+ * techo— toda llamada posterior de ese cliente se engancharía a una promesa muerta. O sea: el
+ * mutex, puesto para que el sistema no se ahogue, ahogaría al cliente de forma permanente.
+ *
+ * Pasado el techo, la entrada se ignora y se arranca una corrida nueva. Se aceptan dos corridas
+ * simultáneas en ese borde a propósito: es exactamente lo que la guarda de P2002 cubre, y el
+ * costo de una corrida de más es infinitamente menor que el de una ficha trabada para siempre.
+ * 5 min es cómodamente más que cualquier corrida real observada.
+ */
+const MUTEX_MAX_MS = 5 * 60 * 1000;
+
+interface CorridaViva {
+  arrancada: number;
+  promesa: Promise<SyncResult>;
+}
 
 /**
  * Corridas VIVAS por cliente. El cooldown no alcanza para el doble click: se reclama al arrancar,
@@ -535,7 +562,7 @@ const SYNC_FLOOR_MS = 60 * 1000;
  * saber. El espejo dirigido queda FUERA: es una lectura puntual de un record conocido, no compite
  * por nada y bloquearlo rompería el alta única.
  */
-const enVueloPorCliente = new Map<string, Promise<SyncResult>>();
+const enVueloPorCliente = new Map<string, CorridaViva>();
 
 /** Result en ceros con el motivo de por qué no se corrió. */
 function sinCorrer(motivo: NonNullable<SyncResult["omitido"]>, detalle: string): SyncResult {
@@ -590,8 +617,16 @@ export interface SyncOpts {
  * cooldown alcanzaba. Con una persona apretando un botón hay dos casos nuevos que el cooldown no
  * cubre —simultáneo y uno-atrás-de-otro— y los cubren el mutex y el piso duro.
  *
- * Orden deliberado: primero el mutex (engancharse a una corrida viva es mejor respuesta que
- * "esperá"), después el cooldown, y el piso al final porque es el más restrictivo.
+ * ORDEN DE LOS TRES FRENOS, y por qué (el primer borrador los tenía al revés):
+ *   1. **Cooldown**, antes que nada, para quien NO pasó `force`. Nadie está esperando esa
+ *      respuesta: es la corrida de fondo del montaje. Como el claim se hace al arrancar, una
+ *      corrida viva SIEMPRE implica cooldown activo — si el mutex fuera primero, esos llamadores
+ *      se engancharían y sostendrían un request HTTP los minutos que tarde la corrida para
+ *      recibir EXACTAMENTE el mismo snapshot que esta línea les devuelve gratis.
+ *   2. **Mutex**, que es para quien SÍ está esperando (el botón). Queda incondicional —no "solo
+ *      si force"— para cubrir el borde de una corrida más larga que el cooldown: ahí un llamador
+ *      sin force pasa el filtro de arriba y esto evita una segunda corrida en paralelo.
+ *   3. **Piso duro**, el más restrictivo, al final.
  */
 export async function syncProjectsForClient(clientId: string, opts: SyncOpts = {}): Promise<SyncResult> {
   /* El espejo dirigido pasa DERECHO: es una lectura puntual de un record que ya sabemos cuál es,
@@ -600,24 +635,31 @@ export async function syncProjectsForClient(clientId: string, opts: SyncOpts = {
      ventana a la corrida completa y la ficha quedaría 10 min desactualizada por haber dado un alta. */
   if (opts.soloRecord?.trim()) return correrSync(clientId, opts);
 
-  const viva = enVueloPorCliente.get(clientId);
-  if (viva) return viva.then((r) => ({ ...r, omitido: "en_vuelo" as const }));
+  const ahora = Date.now();
 
-  const desde = Date.now() - (lastSyncByClient.get(clientId) ?? 0);
-  if (!opts.force && desde < SYNC_COOLDOWN_MS) {
+  if (!opts.force && ahora - (lastSyncByClient.get(clientId) ?? 0) < SYNC_COOLDOWN_MS) {
     return sinCorrer("cooldown", "Cooldown activo — sync omitida (el botón Actualizar la fuerza).");
   }
-  if (desde < SYNC_FLOOR_MS) {
+
+  const viva = enVueloPorCliente.get(clientId);
+  if (viva && ahora - viva.arrancada < MUTEX_MAX_MS) {
+    return viva.promesa.then((r) => ({ ...r, omitido: "en_vuelo" as const }));
+  }
+
+  if (ahora - (ultimoFinPorCliente.get(clientId) ?? 0) < SYNC_FLOOR_MS) {
     return sinCorrer("piso", `Piso de ${SYNC_FLOOR_MS / 1000}s — se sincronizó recién, ni force lo saltea.`);
   }
 
   // Claim AL ARRANCAR (no al terminar): un fallo por presión de pool también hace back-off.
-  lastSyncByClient.set(clientId, Date.now());
-  const corrida = correrSync(clientId, opts).finally(() => {
-    enVueloPorCliente.delete(clientId);
+  lastSyncByClient.set(clientId, ahora);
+  const promesa: Promise<SyncResult> = correrSync(clientId, opts).finally(() => {
+    ultimoFinPorCliente.set(clientId, Date.now());
+    /* Se compara la PROMESA, no la clave: si esta corrida quedó colgada más de `MUTEX_MAX_MS`,
+       la entrada del Map ya es de OTRA corrida y borrarla la dejaría sin mutex. */
+    if (enVueloPorCliente.get(clientId)?.promesa === promesa) enVueloPorCliente.delete(clientId);
   });
-  enVueloPorCliente.set(clientId, corrida);
-  return corrida;
+  enVueloPorCliente.set(clientId, { arrancada: ahora, promesa });
+  return promesa;
 }
 
 async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult> {
@@ -1254,12 +1296,27 @@ async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult>
            la fila. Duck-typing del code (patrón del repo: con driver adapters el instanceof puede
            fallar por doble copia del client). */
         if ((e as { code?: string })?.code !== "P2002") throw e;
-        await prisma.project.update({
-          where: { hubspotServiceId: project.id },
-          data: { ...espejo, tags: mergeHubTag([], mapping.hubTag), status: "active" },
-        });
-        result.updated++;
-        result.debug!.push(`Carrera al crear "${projectName}" — la ganó otra corrida; se actualizó.`);
+        try {
+          await prisma.project.update({
+            where: { hubspotServiceId: project.id },
+            // SIN `tags`: los acaba de escribir la corrida que ganó la carrera. Pasarle
+            // `mergeHubTag([], …)` sería declarar "esta fila no tiene nada curado" — cierto hoy
+            // (la fila nació hace milisegundos) pero es una suposición que no hace falta hacer:
+            // no tocar el campo es correcto en todos los casos.
+            data: { ...espejo, status: "active" },
+          });
+          result.updated++;
+          result.debug!.push(`Carrera al crear "${projectName}" — la ganó otra corrida; se actualizó.`);
+        } catch (e2: unknown) {
+          /* No se re-lanza: el PUNTO de toda esta guarda es que la carrera de UN proyecto no
+             aborte la corrida del cliente entero. Si acá volviéramos a tirar (p.ej. P2025 porque
+             la fila desapareció entre medio) reproduciríamos exactamente el 500 que vinimos a
+             evitar. Se reporta en `errors` —que la UI muestra— y la corrida sigue. */
+          result.skipped++;
+          result.errors.push(
+            `No se pudo actualizar "${projectName}" tras una carrera al crearlo: ${(e2 as Error).message?.slice(0, 120)}`,
+          );
+        }
       }
     }
   }
