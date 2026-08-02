@@ -439,6 +439,17 @@ export interface SyncResult {
   skipped: number;
   errors: string[];
   debug?: string[];
+  /**
+   * Por qué esta corrida NO hizo nada. Sin este campo, una corrida frenada devuelve ceros
+   * indistinguibles de "miré y no había nada nuevo" — y quien la disparó a mano no tiene cómo
+   * saber si esperar o si ya está al día. `debug` no sirve para eso: es prosa para diagnosticar,
+   * no una señal que la UI pueda ramificar.
+   *   · "cooldown"  → dentro de los 10 min y sin `force`.
+   *   · "piso"      → dentro del piso duro; ni `force` lo saltea.
+   *   · "en_vuelo"  → había una corrida viva para este cliente y este llamador se enganchó a
+   *                   ella; los conteos son los de ESA corrida, no los de una segunda.
+   */
+  omitido?: "cooldown" | "piso" | "en_vuelo";
 }
 
 /**
@@ -492,11 +503,44 @@ async function verifyProjectInHubspot(hsClient: Client, objectId: string): Promi
 // Cooldown EN MEMORIA de la auto-sync: corre en CADA montaje de la vista de cliente y es el peor
 // consumidor del pool (muchas queries + round-trips lentos a HubSpot). Prod es proceso único → este
 // Map cubre a todos los usuarios: el primero en entrar sincroniza, el resto (dentro del cooldown)
-// salta sin tocar DB ni HubSpot. El botón "Reintentar" pasa force=true para saltearlo. Se setea al
+// salta sin tocar DB ni HubSpot. El botón "Actualizar" pasa force=true para saltearlo. Se setea al
 // arrancar (claim), así un fallo por presión de pool TAMBIÉN hace back-off en vez de reintentar en
 // cada navegación y empeorar la congestión.
 const SYNC_COOLDOWN_MS = 10 * 60 * 1000; // 10 min
 const lastSyncByClient = new Map<string, number>();
+
+/**
+ * PISO DURO que ni `force` saltea. El cooldown de 10 min existe para espaciar la corrida
+ * AUTOMÁTICA; `force` lo saltea a propósito porque una persona pidió datos frescos. Pero eso
+ * dejaba a `force` sin ningún freno, y desde que hay un botón visible (Tanda 2026-08-02) eso es
+ * una palanca: mantener apretado el botón = N corridas de lo más caro del sistema contra un pool
+ * de 10 conexiones dentro de un pooler de ~15 slots compartidos con las 2 PCs de dev
+ * (RUNBOOK invariante #3, cuyo post-mortem ya costó 147 EMAXCONNSESSION).
+ *
+ * 60 s no molesta a nadie: es más de lo que tarda la corrida y menos de lo que tarda una persona
+ * en hacer algo en HubSpot y volver. El mutex de abajo cubre el caso simultáneo; el piso cubre
+ * el caso "una atrás de otra".
+ */
+const SYNC_FLOOR_MS = 60 * 1000;
+
+/**
+ * Corridas VIVAS por cliente. El cooldown no alcanza para el doble click: se reclama al arrancar,
+ * sí, pero `force` no lo mira — así que dos clicks simultáneos con `force` arrancaban DOS corridas
+ * completas del mismo cliente, en paralelo, sobre las mismas filas. Y no era solo desperdicio: la
+ * creación de proyecto es check-then-act sobre `Project.hubspotServiceId @unique` (findUnique →
+ * create), así que las dos ven "no existe" y las dos crean → P2002.
+ *
+ * Con este Map, el segundo llamador se ENGANCHA a la promesa viva en vez de arrancar otra corrida.
+ * Recibe el resultado real de esa corrida (marcado `omitido:"en_vuelo"`), que es lo que quería
+ * saber. El espejo dirigido queda FUERA: es una lectura puntual de un record conocido, no compite
+ * por nada y bloquearlo rompería el alta única.
+ */
+const enVueloPorCliente = new Map<string, Promise<SyncResult>>();
+
+/** Result en ceros con el motivo de por qué no se corrió. */
+function sinCorrer(motivo: NonNullable<SyncResult["omitido"]>, detalle: string): SyncResult {
+  return { found: 0, created: 0, updated: 0, skipped: 0, errors: [], debug: [detalle], omitido: motivo };
+}
 
 /** Los estados de alta que NO están en curso. Derivado de la tabla, no escrito a mano. */
 const ESTADOS_TERMINADOS = ESTADOS_DE_ALTA.filter(altaTerminada);
@@ -524,37 +568,61 @@ export async function espejarProyectoRecienCreado(
   return syncProjectsForClient(clientId, { force: true, soloRecord: hubspotServiceId });
 }
 
-export async function syncProjectsForClient(
-  clientId: string,
-  opts: {
-    force?: boolean;
-    /**
-     * Espejar SOLO este record, salteando el descubrimiento por asociaciones de la empresa.
-     * Lo usa `espejarProyectoRecienCreado`.
-     *
-     * ⚠ Apaga DOS pasos finales que asumen "vinieron todos los proyectos del cliente":
-     * la reconciliación (que desactivaría el resto de la cartera) y la reclasificación de
-     * sesiones (que la paga el motor del alta, una sola vez). El tercero, resolver el hermano,
-     * SÍ corre: es lo que el motor necesita para dar el alta por terminada.
-     */
-    soloRecord?: string;
-  } = {},
-): Promise<SyncResult> {
+export interface SyncOpts {
+  force?: boolean;
+  /**
+   * Espejar SOLO este record, salteando el descubrimiento por asociaciones de la empresa.
+   * Lo usa `espejarProyectoRecienCreado`.
+   *
+   * ⚠ Apaga DOS pasos finales que asumen "vinieron todos los proyectos del cliente":
+   * la reconciliación (que desactivaría el resto de la cartera) y la reclasificación de
+   * sesiones (que la paga el motor del alta, una sola vez). El tercero, resolver el hermano,
+   * SÍ corre: es lo que el motor necesita para dar el alta por terminada.
+   */
+  soloRecord?: string;
+}
+
+/**
+ * LA PUERTA de la sincronización: decide SI se corre. El trabajo está en `correrSync`.
+ *
+ * Se partió en dos (2026-08-02) al exponer un botón "Actualizar" en la ficha del cliente. Hasta
+ * entonces el único disparador era el montaje de la pantalla, que nunca pasa `force`, así que el
+ * cooldown alcanzaba. Con una persona apretando un botón hay dos casos nuevos que el cooldown no
+ * cubre —simultáneo y uno-atrás-de-otro— y los cubren el mutex y el piso duro.
+ *
+ * Orden deliberado: primero el mutex (engancharse a una corrida viva es mejor respuesta que
+ * "esperá"), después el cooldown, y el piso al final porque es el más restrictivo.
+ */
+export async function syncProjectsForClient(clientId: string, opts: SyncOpts = {}): Promise<SyncResult> {
+  /* El espejo dirigido pasa DERECHO: es una lectura puntual de un record que ya sabemos cuál es,
+     no compite por nada, y frenarlo rompería el alta única (que lo llama en línea y espera SU
+     resultado). Tampoco reclama el cooldown: si lo hiciera, crear un proyecto le robaría la
+     ventana a la corrida completa y la ficha quedaría 10 min desactualizada por haber dado un alta. */
+  if (opts.soloRecord?.trim()) return correrSync(clientId, opts);
+
+  const viva = enVueloPorCliente.get(clientId);
+  if (viva) return viva.then((r) => ({ ...r, omitido: "en_vuelo" as const }));
+
+  const desde = Date.now() - (lastSyncByClient.get(clientId) ?? 0);
+  if (!opts.force && desde < SYNC_COOLDOWN_MS) {
+    return sinCorrer("cooldown", "Cooldown activo — sync omitida (el botón Actualizar la fuerza).");
+  }
+  if (desde < SYNC_FLOOR_MS) {
+    return sinCorrer("piso", `Piso de ${SYNC_FLOOR_MS / 1000}s — se sincronizó recién, ni force lo saltea.`);
+  }
+
+  // Claim AL ARRANCAR (no al terminar): un fallo por presión de pool también hace back-off.
+  lastSyncByClient.set(clientId, Date.now());
+  const corrida = correrSync(clientId, opts).finally(() => {
+    enVueloPorCliente.delete(clientId);
+  });
+  enVueloPorCliente.set(clientId, corrida);
+  return corrida;
+}
+
+async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult> {
   const result: SyncResult = { found: 0, created: 0, updated: 0, skipped: 0, errors: [], debug: [] };
   const dirigido = opts.soloRecord?.trim() || null;
-
-  if (!opts.force) {
-    const last = lastSyncByClient.get(clientId) ?? 0;
-    if (Date.now() - last < SYNC_COOLDOWN_MS) {
-      result.debug!.push("Cooldown activo — sync omitida (usá 'Reintentar' para forzar).");
-      return result;
-    }
-  }
-  /* El espejo dirigido NO reclama el cooldown: es una lectura puntual de un record conocido, no
-     la corrida cara que el cooldown existe para espaciar. Si lo reclamara, un alta le robaría la
-     ventana a la sincronización completa del cliente y la ficha quedaría desactualizada 10 min
-     por haber creado un proyecto. */
-  if (!dirigido) lastSyncByClient.set(clientId, Date.now());
 
   // 1. Obtener client + HubspotAccount (query directa para evitar quirks del relation lookup)
   const [client, hubspotAccount] = await Promise.all([
@@ -1156,22 +1224,43 @@ export async function syncProjectsForClient(
       // ambos, quedaba un proyecto SIN canvases para siempre (la próxima corrida
       // lo encuentra existente → rama update → nunca los crea). Todo-o-nada:
       // si algo falla, el próximo sync lo re-crea completo.
-      await prisma.$transaction(async (tx) => {
-        const created = await tx.project.create({
-          data: {
-            ...espejo,
-            clientId,
-            // Proyecto NUEVO: no hay nada curado que preservar, pero igual pasa por
-            // mergeHubTag para guardar el SLUG canónico (antes guardaba el label).
-            tags: mergeHubTag([], mapping.hubTag),
-            status: "active",
-          },
+      try {
+        await prisma.$transaction(async (tx) => {
+          const created = await tx.project.create({
+            data: {
+              ...espejo,
+              clientId,
+              // Proyecto NUEVO: no hay nada curado que preservar, pero igual pasa por
+              // mergeHubTag para guardar el SLUG canónico (antes guardaba el label).
+              tags: mergeHubTag([], mapping.hubTag),
+              status: "active",
+            },
+          });
+          // El pipeline decide QUÉ piezas nacen. Ya está en la mano dentro de la transacción.
+          await createDefaultCanvases(created.id, pipelineId, tx);
+          return created;
         });
-        // El pipeline decide QUÉ piezas nacen. Ya está en la mano dentro de la transacción.
-        await createDefaultCanvases(created.id, pipelineId, tx);
-        return created;
-      });
-      result.created++;
+        result.created++;
+      } catch (e: unknown) {
+        /* CARRERA sobre `Project.hubspotServiceId @unique`: el bloque de arriba es check-then-act
+           (findUnique → create), así que dos corridas concurrentes del mismo cliente ven las dos
+           "no existe" y las dos crean. El mutex `enVueloPorCliente` hace que eso sea muy difícil,
+           pero no imposible (dos procesos, o una corrida dirigida del alta cruzándose con la
+           completa), y el modo de falla SIN esta guarda era caro y silencioso: la excepción se
+           escapaba del loop hasta la route (500) y cortaba la corrida ANTES de la reconciliación y
+           de resolverHermanos, dejando al cliente a medio sincronizar Y con el cooldown ya
+           reclamado — o sea sin auto-reparación por 10 minutos.
+           Degradar a update es exactamente lo que habría hecho la rama de arriba si hubiera visto
+           la fila. Duck-typing del code (patrón del repo: con driver adapters el instanceof puede
+           fallar por doble copia del client). */
+        if ((e as { code?: string })?.code !== "P2002") throw e;
+        await prisma.project.update({
+          where: { hubspotServiceId: project.id },
+          data: { ...espejo, tags: mergeHubTag([], mapping.hubTag), status: "active" },
+        });
+        result.updated++;
+        result.debug!.push(`Carrera al crear "${projectName}" — la ganó otra corrida; se actualizó.`);
+      }
     }
   }
 
