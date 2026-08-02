@@ -25,6 +25,15 @@
  * La base local tiene que estar arriba: `npm run db:local -- up` (y `-- seed` + `-- acceso`
  * la primera vez).
  */
+/* Sin esto, `process.env.DATABASE_URL` es undefined ACÁ y el chequeo de la línea ~37 abortaba
+   `npm run dev:prod` con "Falta DATABASE_URL en el .env" aunque la variable estuviera declarada.
+   Falso negativo puro: Next lee el `.env` por su cuenta en el proceso HIJO, así que la app habría
+   arrancado bien — el único roto era el guard. No se detectó antes porque la verificación de la
+   inversión de defaults (2026-08-01) se hizo sobre la instancia LOCAL, que no lee esta variable
+   (se la inyecta). Lección: un guard que nunca se ejercitó no está verificado.
+   ⚠ Cargar el `.env` acá NO afecta el aislamiento del modo local: el spawn de abajo pisa
+   `DATABASE_URL` y blanquea las credenciales de Google DESPUÉS del spread de `process.env`. */
+import "dotenv/config";
 import { spawn, spawnSync } from "node:child_process";
 
 const CONTRA_PROD = process.argv.includes("--prod");
@@ -89,6 +98,12 @@ if (CONTRA_PROD) {
  *
  * Las sesiones de la base local entran por donde uno DECIDE: el fixture, o
  * `npm run db:local:pull -- --client "..."`. Nunca por un sync automático.
+ *
+ * ⚠ REGLA PARA EL PRÓXIMO SPAWN DE ESTE ARCHIVO: desde que el script carga `dotenv/config`
+ * (arriba), el proceso PADRE tiene en memoria el `.env` ENTERO — Google, ANTHROPIC, la service
+ * role de Supabase, el token de Apify y el `DATABASE_URL` de PROD. Cualquier hijo que se lance
+ * sin blanquear explícitamente los HEREDA. El blanqueo de abajo funciona porque se spreadea
+ * DESPUÉS de `...process.env` (la última escritura gana), no porque el padre esté limpio.
  */
 const SIN_INTEGRACIONES_DE_ENTRADA = {
   GOOGLE_SERVICE_ACCOUNT_KEY: "",
