@@ -64,8 +64,36 @@ if (CONTRA_PROD) {
   }
   console.log(`\n🧪 Nexus LOCAL (datos de prueba) → http://localhost:${PUERTO}`);
   console.log("   Base descartable: rompé lo que quieras, se rehace con `db:local -- reset`.");
+  console.log("   Sync de Google APAGADO (las sesiones entran por el fixture o db:local:pull).");
   console.log("   ¿Necesitás datos REALES? → npm run dev:prod (puerto 3005).\n");
 }
+
+/**
+ * Aislar la base NO alcanza: hay que aislar también las INTEGRACIONES DE ENTRADA.
+ *
+ * Mordido el 2026-08-02: con la base local ya conectada, el auto-sync de Google
+ * (`lib/google/auto-sync.ts`, se dispara SOLO en background al usar la app, cooldown
+ * de 20 min) metió 4.771 sesiones REALES de Google Workspace en `nexus_local`, y el
+ * agente post-sesión les corrió encima creando 160 ActionItems — consumiendo API de
+ * Anthropic de verdad. La base estaba aislada; las credenciales del `.env` no.
+ *
+ * Se apagan BORRANDO las credenciales, no con un flag nuevo: `autoSyncGoogleMeet` ya
+ * chequea su presencia y devuelve `{skipped, reason:"google_not_configured"}`. Cero
+ * ramas nuevas en el código de producción.
+ *
+ * Lo que SÍ se conserva en local, a propósito:
+ *   · ANTHROPIC_API_KEY — probar que el handoff/kickoff GENERAN bien es justamente
+ *     para lo que existe este entorno. Los agentes se disparan a mano, no solos.
+ *   · HubSpot — su token vive en la tabla `HubspotAccount`, que en la base local está
+ *     vacía; la app ya degrada con "Sin actividad en HubSpot".
+ *
+ * Las sesiones de la base local entran por donde uno DECIDE: el fixture, o
+ * `npm run db:local:pull -- --client "..."`. Nunca por un sync automático.
+ */
+const SIN_INTEGRACIONES_DE_ENTRADA = {
+  GOOGLE_SERVICE_ACCOUNT_KEY: "",
+  GOOGLE_ADMIN_EMAIL: "",
+};
 
 const hijo = spawn("npx", ["next", "dev", "-p", String(PUERTO)], {
   stdio: "inherit",
@@ -73,7 +101,7 @@ const hijo = spawn("npx", ["next", "dev", "-p", String(PUERTO)], {
   env: {
     ...process.env,
     // Contra prod: se respeta el DATABASE_URL del .env. Contra local: se inyecta.
-    ...(CONTRA_PROD ? {} : { DATABASE_URL: URL_LOCAL }),
+    ...(CONTRA_PROD ? {} : { DATABASE_URL: URL_LOCAL, ...SIN_INTEGRACIONES_DE_ENTRADA }),
     NEXT_DIST_DIR: DIST_DIR,
   },
 });

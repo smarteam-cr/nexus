@@ -68,6 +68,20 @@ que legítimamente apuntan a prod bajo `ALLOW_PROD_WRITE`) y en `distDir` (`.nex
 `.next-alt`: Next 16 lockea `.next/dev`). El modo local verifica que la base responda ANTES
 de arrancar, para que el fallo sea un mensaje claro y no un error de Prisma a media página.
 
+⚠ **Aislar la BASE no alcanza: hay que aislar las INTEGRACIONES DE ENTRADA.** Mordido el
+2026-08-02, apenas la local entró en uso: el auto-sync de Google (`lib/google/auto-sync.ts`
+— se dispara SOLO en background al usar la app, con cooldown de 20 min) metió **4.771
+sesiones REALES** de Google Workspace en `nexus_local`, y el agente post-sesión les corrió
+encima creando 160 `ActionItem` **consumiendo API de Anthropic de verdad**. La base estaba
+aislada; las credenciales del `.env` no. `scripts/dev-local.ts` ahora BORRA
+`GOOGLE_SERVICE_ACCOUNT_KEY`/`GOOGLE_ADMIN_EMAIL` en modo local — no con un flag nuevo, sino
+aprovechando que `autoSyncGoogleMeet` ya devuelve `{skipped:"google_not_configured"}` sin
+ellas (cero ramas nuevas en código de producción). **`ANTHROPIC_API_KEY` SÍ se conserva**:
+probar que el handoff/kickoff generan bien es para lo que existe este entorno, y los agentes
+se disparan a mano. HubSpot degrada solo (su token vive en la tabla `HubspotAccount`, vacía
+en local). Regla que queda: **a la base local las sesiones entran por donde uno DECIDE** —
+el fixture o `db:local:pull` —, nunca por un sync automático.
+
 ⚠ **Para ENTRAR a la instancia local hace falta `npm run db:local -- acceso`** (una vez):
 Supabase Auth es UNO SOLO — prod y local comparten el proyecto de auth, lo único que cambia
 es dónde vive la DATA. El login de Google anda y devuelve tu correo REAL, pero `requireUser`
