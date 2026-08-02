@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
 import { useToast } from "@/components/ui/Toast";
+import { Button } from "@/components/ui/Button";
 import { invalidateGps } from "@/lib/clients/gps-cache";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
@@ -154,10 +155,25 @@ export default function WorkspaceClient({
     if (activeSyncs.current === 0) setSyncing(false);
   }, []);
 
-  // Sincronización con HubSpot al entrar al cliente (background). Reintentable. `force` saltea el
-  // cooldown server-side (solo el botón "Reintentar" lo usa; la auto-sync respeta el cooldown).
-  const runHubspotSync = useCallback(async (force = false) => {
+  /**
+   * Sincronización con HubSpot. DOS modos, y la diferencia no es cosmética:
+   *
+   *  · `force=false, avisar=false` — la de FONDO, al entrar al cliente. Respeta el cooldown de
+   *    10 min del server y no dice nada: nadie la pidió.
+   *  · `force=true, avisar=true`  — la que dispara una PERSONA (el botón "Actualizar" y el del
+   *    banner). Saltea el cooldown y SIEMPRE cuenta qué pasó.
+   *
+   * Lo segundo es la parte que faltaba: hasta el 2026-08-02 el éxito era MUDO —solo un
+   * `router.refresh()` si algo había cambiado—, así que una corrida frenada por el cooldown y
+   * una que miró y no encontró nada se veían exactamente igual: nada. Un botón que no contesta
+   * es peor que no tener botón.
+   */
+  const runHubspotSync = useCallback(async (force = false, avisar = false) => {
+    // Guard de re-entrada: el server ya tiene mutex, pero frenar acá evita el viaje de ida
+    // y que el usuario vea dos toasts por un doble click.
+    if (avisar && activeSyncs.current > 0) return;
     startSync();
+    if (avisar) toast.info("Buscando proyectos nuevos en HubSpot… puede tardar un momento.");
     try {
       const res = await fetch(`/api/clients/${clientId}/sync-projects${force ? "?force=1" : ""}`, { method: "POST" });
       if (!res.ok) throw new Error("sync failed");
@@ -169,10 +185,33 @@ export default function WorkspaceClient({
       });
       setSyncDone(true);
       if (data.created || data.updated) router.refresh();
+      if (avisar) {
+        const primerError = Array.isArray(data.errors) ? data.errors[0] : null;
+        if (primerError) {
+          // Los errores del sync ya vienen redactados para humano — se muestran tal cual.
+          toast.error(primerError);
+        } else if (data.omitido) {
+          // El server frenó a propósito. Decirlo es la diferencia entre "no pasó nada" y
+          // "no hacía falta": sin esto el botón parece roto.
+          toast.info(
+            data.omitido === "en_vuelo"
+              ? "Ya había una sincronización en curso; te muestro su resultado."
+              : "Se sincronizó hace un momento. Probá de nuevo en un rato.",
+          );
+        } else if (data.created || data.updated) {
+          const partes = [
+            data.created ? `${data.created} proyecto${data.created === 1 ? "" : "s"} nuevo${data.created === 1 ? "" : "s"}` : null,
+            data.updated ? `${data.updated} actualizado${data.updated === 1 ? "" : "s"}` : null,
+          ].filter(Boolean);
+          toast.success(`HubSpot: ${partes.join(" y ")}.`);
+        } else {
+          toast.success("Todo al día: no hay proyectos nuevos en HubSpot.");
+        }
+      }
     } catch {
       setSyncDone(true);
       toast.error("No se pudo sincronizar con HubSpot.", {
-        action: { label: "Reintentar", onClick: () => void runHubspotSync(true) },
+        action: { label: "Reintentar", onClick: () => void runHubspotSync(true, true) },
       });
     } finally {
       endSync();
@@ -244,8 +283,12 @@ export default function WorkspaceClient({
                     : "Revisá en HubSpot que el proyecto esté asociado a la empresa de este cliente, y reintentá."}
                 </p>
               </div>
+              {/* ⚠ Llamaba `runHubspotSync()` SIN force, o sea que dentro del cooldown de 10 min
+                  no hacía absolutamente nada — y el cooldown YA estaba reclamado por la auto-sync
+                  del montaje, así que ése era el caso NORMAL. Un botón que dice "Reintentar" y no
+                  reintenta. (Los comentarios de tres archivos daban por hecho que sí forzaba.) */}
               <button
-                onClick={() => void runHubspotSync()}
+                onClick={() => void runHubspotSync(true, true)}
                 disabled={syncing}
                 className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-100 transition-colors disabled:opacity-50"
               >
@@ -261,6 +304,9 @@ export default function WorkspaceClient({
           strategyCanvasId={strategyCanvasId}
           initialCanvases={initialCanvases}
           initialCanvasesProjectId={initialCanvasesProjectId}
+          hasHubspot={hasHubspot}
+          syncing={syncing}
+          onSync={() => void runHubspotSync(true, true)}
         />
       </div>
     </div>
@@ -276,6 +322,9 @@ function ProjectSection({
   strategyCanvasId,
   initialCanvases,
   initialCanvasesProjectId,
+  hasHubspot,
+  syncing,
+  onSync,
 }: {
   clientId: string;
   projects: ProjectSummary[];
@@ -283,6 +332,11 @@ function ProjectSection({
   strategyCanvasId: string;
   initialCanvases: SeededCanvas[] | null;
   initialCanvasesProjectId: string | null;
+  /** Sin conexión a HubSpot no hay nada que actualizar → el botón ni se pinta. */
+  hasHubspot: boolean;
+  /** Compartido con el indicador flotante y el banner: UN solo estado de "sincronizando". */
+  syncing: boolean;
+  onSync: () => void;
 }) {
   const { activeProjectId, setActiveProjectId } = useWorkspace();
   const router = useRouter();
@@ -328,8 +382,11 @@ function ProjectSection({
 
   return (
     <div>
-      {/* Tab bar */}
-      <div className="border-b border-line px-6 flex items-center gap-1 overflow-x-auto">
+      {/* Tab bar. El scroll horizontal vive en el contenedor INTERNO, no en la fila: si no,
+          con muchos proyectos el botón "Actualizar" se iría con el scroll y dejaría de estar
+          donde uno lo busca. */}
+      <div className="border-b border-line px-6 flex items-center">
+      <div className="flex items-center gap-1 overflow-x-auto flex-1 min-w-0">
         {projects.map((p) => {
           const isActive = p.id === activeProjectId;
           return (
@@ -379,6 +436,30 @@ function ProjectSection({
           </svg>
           Información del cliente
         </button>
+      </div>
+
+      {/* Traer AHORA los proyectos de HubSpot.
+          Por qué existe: la sincronización automática del montaje corre SIN `force`, así que
+          respeta el cooldown de 10 min del server — recargar la página cinco veces no baja un
+          solo dato nuevo. Sin este botón no había forma de pedir datos frescos a demanda: el
+          "Reintentar" del banner solo se pinta cuando el cliente quedó con CERO proyectos, y el
+          del toast solo cuando el pedido TIRA. El caso normal —"acabo de crear el proyecto en
+          HubSpot, traelo"— no tenía puerta.
+          Discreto a propósito (`secondary`, `xs`): es una acción de mantenimiento, no el trabajo
+          de la pantalla. Los frenos que lo hacen seguro (mutex + piso duro) están en el server,
+          donde no dependen de que la UI se porte bien. */}
+      {hasHubspot && (
+        <Button
+          variant="secondary"
+          size="xs"
+          className="ml-3 shrink-0"
+          loading={syncing}
+          onClick={onSync}
+          title="Traer de HubSpot los proyectos de este cliente"
+        >
+          {syncing ? "Actualizando…" : "Actualizar"}
+        </Button>
+      )}
       </div>
 
       {/* De qué CLASE es el proyecto activo. Solo aparece cuando hay algo que explicar:

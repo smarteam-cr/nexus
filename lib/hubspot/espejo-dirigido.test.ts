@@ -89,7 +89,18 @@ describe("el espejo dirigido apaga lo que asume la corrida completa", () => {
   });
 
   it("no reclama el cooldown — un alta no puede dejar la ficha 10 min desactualizada", () => {
-    expect(sinComentarios).toMatch(/if\s*\(\s*!dirigido\s*\)\s*lastSyncByClient\.set/);
+    /* El invariante no cambió; el mecanismo sí. Antes era `if (!dirigido) lastSyncByClient.set(…)`
+       DENTRO del recorrido. Desde que el portón se separó del trabajo (2026-08-02, al exponer el
+       botón "Actualizar"), el espejo dirigido RETORNA en la primera línea de la puerta, antes de
+       que ésta llegue a mirar —o reclamar— el cooldown. Se afirma el ORDEN y no un texto exacto:
+       lo que importa es que la salida temprana siga estando ARRIBA del claim.
+       La prueba de COMPORTAMIENTO de este mismo invariante vive en `lib/hubspot/sync-gate.test.ts`
+       (caso C2), que lo ejercita corriendo el código en vez de leyéndolo. */
+    const salidaTemprana = sinComentarios.indexOf("if (opts.soloRecord?.trim()) return correrSync");
+    const claim = sinComentarios.indexOf("lastSyncByClient.set");
+    expect(salidaTemprana, "desapareció la salida temprana del espejo dirigido en el portón").toBeGreaterThan(-1);
+    expect(claim, "desapareció el claim del cooldown").toBeGreaterThan(-1);
+    expect(salidaTemprana, "el espejo dirigido pasó a reclamar el cooldown").toBeLessThan(claim);
   });
 
   it("lee SIEMPRE del portal del sistema, nunca del portal propio del cliente", () => {

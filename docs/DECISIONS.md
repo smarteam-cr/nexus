@@ -461,6 +461,57 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
     orden, gates, criterios—, no exportar lo que ya estaba escrito. Ante la duda: si el diff
     cambia lo que devuelve `inferLifecycleStage` para algún input, está prohibido.
 
+## Sync de HubSpot a demanda: el botón "Actualizar" de la ficha del cliente (2026-08-02)
+> Disparador: Elías pidió "un CTA gris arriba, que traiga la info de HubSpot sobre sus proyectos".
+> La primera hipótesis —que era redundante porque el sync ya corre al abrir la ficha— resultó
+> FALSA al verificarla, y en el camino apareció un botón roto que llevaba meses en pantalla.
+- **No era redundante: recargar la página NO trae datos nuevos.** El sync del montaje
+  (`WorkspaceClient.tsx`, `setTimeout` de 1,5 s) llama `runHubspotSync()` SIN `force`, así que
+  respeta el cooldown de 10 min y devuelve ceros. Los dos disparadores manuales que existían son
+  inalcanzables en el caso normal: el "Reintentar" del toast solo aparece si el `fetch` TIRA, y el
+  del banner ámbar solo se pinta si el cliente quedó con CERO proyectos. El caso que importa
+  —"acabo de crear el proyecto en HubSpot, traelo"— no tenía puerta.
+- **El "Reintentar" del banner estaba roto y nadie lo notó**: llamaba `runHubspotSync()` sin
+  `force`, o sea que dentro del cooldown —que la auto-sync del montaje YA había reclamado, o sea
+  siempre— no hacía absolutamente nada. Los comentarios de TRES archivos (el módulo, la route y el
+  propio handler) daban por hecho que forzaba. Es el modo de falla que este trabajo tiene que
+  evitar repetir: un botón que no contesta es peor que no tener botón.
+- **Primero los frenos, después el botón.** `force` saltea el cooldown entero y no tenía ningún
+  otro tope; exponerlo en un click sin salvaguardas era una palanca. Se agregaron tres, y viven en
+  el SERVER —no en la UI— porque ahí no dependen de que el cliente se porte bien: (1) **mutex de
+  corrida viva por cliente** (el segundo llamador se engancha a la promesa en curso y recibe su
+  resultado, marcado `omitido:"en_vuelo"`); (2) **piso duro de 60 s** que ni `force` saltea —el
+  mutex cubre lo simultáneo, el piso cubre "una atrás de otra"—; (3) **try/catch de P2002** en la
+  creación, que es check-then-act sobre `Project.hubspotServiceId @unique`: sin eso una carrera
+  tiraba un 500 que cortaba la corrida ANTES de la reconciliación y de `resolverHermanos`, dejando
+  al cliente a medio sincronizar y con el cooldown ya consumido (o sea sin auto-reparación por 10
+  minutos). Esto NO es un refresco inocuo: el sync desactiva proyectos por tres caminos y reescribe
+  `hermanoCsProjectId`, que decide si un proyecto se factura aparte.
+- **`SyncResult.omitido` existe porque una corrida frenada devolvía ceros indistinguibles de "miré
+  y no había nada nuevo".** `debug` no servía: es prosa para diagnosticar, no una señal que la UI
+  pueda ramificar. Con el campo, el botón puede decir "se sincronizó hace un momento" en vez de
+  quedarse mudo — que era exactamente el defecto del banner.
+- **El éxito dejó de ser mudo.** Hasta ahora el sync solo hacía `router.refresh()` si algo había
+  cambiado: sin cambios no pasaba NADA en pantalla. El modo `avisar` (solo cuando lo dispara una
+  persona; la corrida de fondo sigue callada) sigue el patrón de la casa para acciones que hablan
+  con un tercero: `toast.info` al arrancar + `toast.success` CON CONTEO + `toast.error` con el
+  mensaje del server tal cual (los errores del sync ya vienen redactados para humano).
+- **Va en la fila de pestañas, NO en la cabecera** (contradice la ubicación pedida, con razón
+  técnica): la cabecera es `layout.tsx`, un Server Component; un botón ahí obliga a una isla
+  cliente NUEVA que no conoce el estado `syncing` del workspace → dos indicadores girando por
+  separado y una corrida manual encima del auto-sync del montaje. Además esa cabecera ya tiene 4
+  controles con el MISMO gris terciario: un quinto le daría a la acción más cara y más mutante del
+  sistema el mismo peso visual que el engranaje de Configuración. La tab bar está 40 px más abajo,
+  ya es cliente y ya tiene el estado. El scroll horizontal se movió al contenedor INTERNO para que
+  el botón no se vaya con las pestañas cuando el cliente tiene muchos proyectos.
+- **"Gris que no se note" = `variant="secondary"`, no `ghost`.** En este repo `ghost` es brand
+  translúcido; la variante discreta es `secondary` (`bg-surface-hover` + `border-line` +
+  `text-fg-secondary`). Cero grises crudos: el archivo no suma ofensores al ratchet.
+- **Sin capability nueva.** El endpoint ya existía y ya está gateado por `guardAccessToClient`; el
+  botón no amplía a quién le llega el sync —le llega a todo el que abre la ficha, porque la
+  auto-sync ya corre sola— solo lo hace pedible. Agregar una celda al registry para una acción que
+  ya ocurre sin permiso extra sería teatro.
+
 ## Cobranza — criterio ÚNICO de "vencido" (2026-07-24, decisión de Finanzas)
 > **Vencido = factura EMITIDA + crédito del cliente consumido.** Lo que no se facturó NO está
 > vencido: *"siempre van a haber facturas sin hacer y eso no significa que estén vencidas, solo
