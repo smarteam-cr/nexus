@@ -127,16 +127,30 @@ excepción** (ni `ALLOW_PROD_WRITE` los destraba — solo aceptan hosts loopback
 one-off históricos viven en `scripts/archive/` y NO entran al bootstrap. El `.env` de dev
 sigue apuntando a PROD — el switch es una decisión coordinada entre las 2 PCs, no un default.
 
-**Contexto REAL para pruebas de juicio del agente** (`npm run db:local:pull -- --client
-"nombre"`, `scripts/local-pull-context.ts`): el mundo `fx-` prueba que la plomería
-funciona, pero no sirve para validar si un agente entendió bien una conversación —eso
-exige un transcript real y a alguien que estuvo en la llamada—. Este script copia, de
-PROD (solo lectura, sin gate — leer no es peligroso) a `nexus_local`, el Client + sus
-Project + FirefliesSession (con transcript) + SessionProject de un cliente puntual, más
-el roster INTERNO completo de Smarteam (así el filtro "¿hay Ventas en la sala?" y el
-login local se comportan igual que en prod). El DESTINO es SIEMPRE local — mismo candado
-sin excepción que el fixture. Dry-run por default; `--apply` escribe. Idempotente (ids
-reales de prod, upsert). No copia Cobranza/Timeline/Canvas — la generación crea los suyos.
+**Contexto REAL para pruebas de juicio del agente** (`npm run db:local:pull`,
+`scripts/local-pull-context.ts`): el mundo `fx-` prueba que la plomería funciona, pero no
+sirve para validar si un agente entendió bien una conversación —eso exige un transcript
+real y a alguien que estuvo en la llamada—. Este script copia, de PROD (solo lectura, sin
+gate — leer no es peligroso) a `nexus_local`, el Client + sus Project + FirefliesSession
+(con transcript) + SessionProject, más el roster INTERNO completo de Smarteam (así el
+filtro "¿hay Ventas en la sala?" y el login local se comportan igual que en prod). Tres
+formas de elegir a quién traer:
+
+```bash
+npm run db:local:pull -- --client "Wherex"                 # uno
+npm run db:local:pull -- --client "Wherex,Honda,kölbi"     # varios, por nombre
+npm run db:local:pull -- --recientes 10 --apply            # los N con la sesión más reciente
+```
+
+`--recientes` ordena por ÚLTIMA sesión y no por cantidad (un cliente con 80 sesiones de
+hace un año no sirve para probar lo de hoy) y se limita a la cartera (`kind=CLIENTE`). Con
+varios nombres, los que no resuelven se reportan TODOS juntos antes de abortar — enterarse
+de a un error por corrida, en un lote de 8, es inaceptable. El DESTINO es SIEMPRE local —
+mismo candado sin excepción que el fixture. Dry-run por default; `--apply` escribe.
+Idempotente (ids reales de prod, upsert) y ACUMULATIVO: traer un cliente no borra los
+anteriores (`db:local -- reset` vacía). Sin tope de sesiones por cliente, a propósito:
+medido contra prod son ~22 sesiones y ~31 kB de transcript por cliente ⇒ 10 clientes ≈ 5-7 MB.
+No copia Cobranza/Timeline/Canvas — la generación crea los suyos.
 
 ### D. Base de datos y migraciones (el flujo REAL)
 

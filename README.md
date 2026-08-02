@@ -46,6 +46,7 @@ npm run db:local -- up    # Postgres 17 local embebido (localhost:5433; bootstra
 npm run db:local -- seed  # puebla nexus_local: catálogo + mundo ficticio fx- (solo local)
 npm run db:local -- acceso # copia el equipo real de prod → poder ENTRAR con tu cuenta
 npm run db:local -- hubspot # copia la conexión a HubSpot → probar el sync en local
+npm run db:local:pull -- --recientes 10 --apply   # trae clientes REALES de prod a la local
 npm run test:int          # integración contra la base local nexus_test (trunca tablas)
 npm run check:invariants  # los invariantes de datos, contra la DB real
 ```
