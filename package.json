@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3004",
-    "dev:local": "npx tsx scripts/dev-local.ts",
+    "dev": "npx tsx scripts/dev-local.ts",
+    "dev:prod": "npx tsx scripts/dev-local.ts --prod",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

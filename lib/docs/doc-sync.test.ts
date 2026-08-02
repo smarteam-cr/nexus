@@ -75,13 +75,20 @@ describe("marcadores sync de ARCHITECTURE Parte 0", () => {
     });
   }
 
-  it("sync:dev-port == el puerto del script dev de package.json", () => {
+  it("sync:dev-port == el puerto real del dev server", () => {
+    // El puerto se declaraba inline en package.json (`next dev -p 3004`); desde el
+    // 2026-08-01 `npm run dev` pasa por scripts/dev-local.ts (que además elige la BASE:
+    // local por default, prod con --prod) y el puerto vive ahí. El test sigue el dato,
+    // no el archivo: lo que se congela es que el doc no pueda mentir sobre el puerto.
     const dev = (JSON.parse(leer("package.json")).scripts?.dev ?? "") as string;
-    const puerto = /-p\s+(\d+)/.exec(dev)?.[1];
-    expect(puerto, "el script dev de package.json ya no declara un puerto con -p").toBeTruthy();
+    const puerto = /-p\s+(\d+)/.exec(dev)?.[1] ?? /PUERTO\s*=\s*CONTRA_PROD\s*\?\s*\d+\s*:\s*(\d+)/.exec(leer("scripts/dev-local.ts"))?.[1];
+    expect(
+      puerto,
+      "no encontré el puerto del dev server ni en package.json (-p) ni en scripts/dev-local.ts",
+    ).toBeTruthy();
     expect(
       marcadores["dev-port"],
-      `El doc dice puerto ${marcadores["dev-port"]}, package.json dice ${puerto}.`,
+      `El doc dice puerto ${marcadores["dev-port"]}, el dev server usa ${puerto}.`,
     ).toBe(puerto);
   });
 

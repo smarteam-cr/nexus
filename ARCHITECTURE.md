@@ -49,19 +49,24 @@ Monolito App Router, sin `src/`:
 ```bash
 npm install          # NO hay postinstall: el cliente Prisma no se genera solo
 npx prisma generate
-npm run dev          # → http://localhost:3004  (base de PRODUCCIÓN)
-npm run dev:local    # → http://localhost:3005  (base LOCAL, datos de prueba)
+npm run dev          # → http://localhost:3004  (base LOCAL — el default)
+npm run dev:prod     # → http://localhost:3005  (base de PRODUCCIÓN — excepcional)
 ```
 
-**DOS instancias, no un switch** (2026-08-01): la app corre en 3004 contra PROD (el Nexus
-de trabajo diario) y, en paralelo, en 3005 contra la base local (`scripts/dev-local.ts`).
-Se decidió así en vez de repuntar el `.env`: Nexus se usa TODOS LOS DÍAS para trabajo real,
-y un `.env` conmutado obliga a editarlo de ida y vuelta — el paso manual que se olvida y
-termina en "¿por qué no veo a mis clientes?". Las dos conviven porque difieren en las TRES
-cosas que se pisan: puerto, `DATABASE_URL` (inyectada por el script, el `.env` del disco
-NO se toca) y `distDir` (`.next-alt` vs `.next` — comparten caché de Turbopack y se
-corrompen). `dev:local` verifica que la base local responda ANTES de arrancar, para que el
-fallo sea un mensaje claro y no un error de Prisma en medio de una página.
+**El default es la base LOCAL** (2026-08-01): el trabajo diario en esta máquina es escribir
+código nuevo, y la validación con datos REALES ocurre en producción, con Customer Success.
+Desarrollar contra la base de los clientes era el defecto histórico que este plan cerró (un
+`db push` ya se llevó `RoleProfile` una vez). `npm run dev:prod` (3005) queda para el caso
+excepcional de tener que MIRAR datos reales, y avisa en rojo al arrancar.
+
+El **puerto 3004 se conserva** para el default: es el mismo en el que corre el contenedor de
+producción (`docker-compose`: `PORT: "3004"`) y esa paridad es deliberada. **Cambiar de base
+NO cambia el puerto** — son ejes independientes. Las dos instancias pueden convivir porque
+difieren en puerto, en `DATABASE_URL` (inyectada por `scripts/dev-local.ts`; el `.env` del
+disco NO se toca — sigue siendo la fuente para los scripts de operación y el CLI de Prisma,
+que legítimamente apuntan a prod bajo `ALLOW_PROD_WRITE`) y en `distDir` (`.next` /
+`.next-alt`: Next 16 lockea `.next/dev`). El modo local verifica que la base responda ANTES
+de arrancar, para que el fallo sea un mensaje claro y no un error de Prisma a media página.
 
 ⚠ **Para ENTRAR a la instancia local hace falta `npm run db:local -- acceso`** (una vez):
 Supabase Auth es UNO SOLO — prod y local comparten el proyecto de auth, lo único que cambia
