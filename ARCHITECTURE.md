@@ -49,19 +49,25 @@ Monolito App Router, sin `src/`:
 ```bash
 npm install          # NO hay postinstall: el cliente Prisma no se genera solo
 npx prisma generate
-npm run dev          # → http://localhost:3004  (base LOCAL — el default)
-npm run dev:prod     # → http://localhost:3005  (base de PRODUCCIÓN — excepcional)
+npm run dev          # → http://localhost:3005  (base LOCAL — el default)
+npm run dev:prod     # → http://localhost:3004  (base de PRODUCCIÓN — con aviso en rojo)
 ```
 
 **El default es la base LOCAL** (2026-08-01): el trabajo diario en esta máquina es escribir
 código nuevo, y la validación con datos REALES ocurre en producción, con Customer Success.
 Desarrollar contra la base de los clientes era el defecto histórico que este plan cerró (un
-`db push` ya se llevó `RoleProfile` una vez). `npm run dev:prod` (3005) queda para el caso
-excepcional de tener que MIRAR datos reales, y avisa en rojo al arrancar.
+`db push` ya se llevó `RoleProfile` una vez). `npm run dev:prod` (3004) queda para MIRAR
+datos reales, y avisa en rojo al arrancar.
 
-El **puerto 3004 se conserva** para el default: es el mismo en el que corre el contenedor de
-producción (`docker-compose`: `PORT: "3004"`) y esa paridad es deliberada. **Cambiar de base
-NO cambia el puerto** — son ejes independientes. Las dos instancias pueden convivir porque
+**Por qué la de PRODUCCIÓN está en el 3004** (2026-08-02, corrige el reparto original): el
+`.env` tiene el puerto escrito adentro en dos lugares que gobiernan OAuth —
+`APP_URL="http://localhost:3004"` y `HUBSPOT_REDIRECT_URI=".../3004/api/auth/callback"` — así
+que con la instancia de prod en otro puerto el login de Google rebotaba al 3004 y, peor,
+reconectar HubSpot mandaba el callback al 3004 → el token terminaba escrito en la base LOCAL.
+Alinear el puerto con lo que el `.env` ya declara sale gratis y no exige tocar el registro de
+la URL de callback en HubSpot. De paso la paridad con el contenedor de producción
+(`docker-compose`: `PORT: "3004"`) queda donde significa algo: la instancia que habla con
+datos reales corre en el mismo puerto que producción. Las dos instancias conviven porque
 difieren en puerto, en `DATABASE_URL` (inyectada por `scripts/dev-local.ts`; el `.env` del
 disco NO se toca — sigue siendo la fuente para los scripts de operación y el CLI de Prisma,
 que legítimamente apuntan a prod bajo `ALLOW_PROD_WRITE`) y en `distDir` (`.next` /
@@ -101,7 +107,8 @@ INTERNAL, ~19 filas) de prod a la local; va SEPARADO de `seed` a propósito, por
 el mundo ficticio y funciona sin acceso a prod. Es lo mismo que hace `local-pull-context.ts`
 (helper compartido `scripts/lib/roster.ts`) — correr cualquiera de los dos alcanza.
 
-Puerto **3004**<!-- sync:dev-port -->. Env mínimo para arrancar y poder loguearse:
+`npm run dev` escucha en el puerto **3005**<!-- sync:dev-port --> (la base LOCAL; el 3004 es
+`dev:prod`). Env mínimo para arrancar y poder loguearse:
 `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (la plantilla es
 `.env.example` — sin secretos; los valores reales los pasa el equipo).
 

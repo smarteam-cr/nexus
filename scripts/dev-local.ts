@@ -1,26 +1,36 @@
 /**
- * scripts/dev-local.ts — el dev server de TODOS LOS DÍAS: puerto 3004, base LOCAL.
+ * scripts/dev-local.ts — las DOS instancias de desarrollo, una por comando.
  *
- * Es lo que corre `npm run dev`. Desarrollar contra la base que usan los clientes fue el
- * defecto histórico que este plan vino a cerrar (un `db push` ya se llevó la tabla
- * RoleProfile una vez): el trabajo diario es escribir código nuevo, y para eso la base
- * correcta es una descartable. La validación con datos REALES ocurre donde corresponde —
- * en producción, con Customer Success (decisión de Elías, 2026-08-01).
+ *   npm run dev        → http://localhost:3005   base LOCAL       ← el default, seguro
+ *   npm run dev:prod   → http://localhost:3004   base PRODUCCIÓN  ← explícito, con aviso
  *
- *   npm run dev        → http://localhost:3004   base LOCAL       ← el default, seguro
- *   npm run dev:prod   → http://localhost:3005   base PRODUCCIÓN  ← explícito, excepcional
+ * Desarrollar contra la base que usan los clientes fue el defecto histórico que este plan
+ * vino a cerrar (un `db push` ya se llevó la tabla RoleProfile una vez): para escribir código
+ * nuevo la base correcta es una descartable. Por eso el DEFAULT sigue siendo la local.
  *
- * El 3004 se conserva a propósito: es el MISMO puerto en el que corre el contenedor de
- * producción (docker-compose: `PORT: "3004"`), y esa paridad es deliberada. Cambiar de
- * base NO cambia el puerto — son cosas independientes.
+ * ── POR QUÉ LA DE PRODUCCIÓN ESTÁ EN EL 3004 (y no al revés, 2026-08-02) ──────
+ * El `.env` tiene el puerto ESCRITO ADENTRO en dos lugares que gobiernan OAuth:
+ * `APP_URL="http://localhost:3004"` y `HUBSPOT_REDIRECT_URI=".../3004/api/auth/callback"`.
+ * Con la instancia de prod en otro puerto, dos flujos se rompían de forma silenciosa:
+ *   · el login con Google rebotaba al 3004 (poco visible: la cookie de sesión se comparte
+ *     entre puertos del mismo host, así que solo mordía al re-loguearse);
+ *   · reconectar HubSpot desde el otro puerto mandaba el callback al 3004 — o sea que el
+ *     token terminaba escrito en la base LOCAL en vez de en la de producción.
+ * Alinear el puerto con lo que el `.env` ya declara sale gratis y no exige tocar nada del
+ * lado de HubSpot (esa URL de callback está registrada allá). El 3004 además es el puerto
+ * del contenedor de producción (docker-compose: `PORT: "3004"`), así que la instancia que
+ * habla con datos reales queda en el mismo puerto que producción — la paridad que Elías
+ * pidió conservar, ahora aplicada a la instancia donde de verdad significa algo.
  *
  * Tres cosas difieren entre las dos instancias para que puedan convivir sin pisarse:
- *   1. El PUERTO (3004 / 3005) — dos procesos no pueden escuchar el mismo.
+ *   1. El PUERTO (3004 prod / 3005 local) — dos procesos no pueden escuchar el mismo.
  *   2. La BASE (`DATABASE_URL` inyectada acá; el `.env` del disco NO se toca — sigue
  *      siendo la fuente para los scripts de operación y el CLI de Prisma, que
  *      legítimamente apuntan a prod y están gateados por ALLOW_PROD_WRITE).
- *   3. El DIRECTORIO DE BUILD (`.next` / `.next-alt`) — Next 16 lockea `.next/dev`
- *      (un solo `next dev` por directorio) y comparten caché de Turbopack.
+ *   3. El DIRECTORIO DE BUILD — `.next` para la LOCAL, `.next-alt` para la de prod. Next 16
+ *      lockea `.next/dev` (un solo `next dev` por directorio) y comparten caché de
+ *      Turbopack. ⚠ Si hay que limpiar caché tras un pull con CSS, borrá el que corresponda
+ *      a la instancia que estés usando (`rm -rf .next-alt` si estás en el 3004).
  *
  * La base local tiene que estar arriba: `npm run db:local -- up` (y `-- seed` + `-- acceso`
  * la primera vez).
@@ -39,7 +49,7 @@ import { spawn, spawnSync } from "node:child_process";
 const CONTRA_PROD = process.argv.includes("--prod");
 
 const URL_LOCAL = "postgresql://postgres:postgres@localhost:5433/nexus_local";
-const PUERTO = CONTRA_PROD ? 3005 : 3004;
+const PUERTO = CONTRA_PROD ? 3004 : 3005;
 const DIST_DIR = CONTRA_PROD ? ".next-alt" : ".next";
 
 if (CONTRA_PROD) {
@@ -49,8 +59,8 @@ if (CONTRA_PROD) {
     process.exit(1);
   }
   console.log(`\n🔴 Nexus contra PRODUCCIÓN → http://localhost:${PUERTO}`);
-  console.log("   DATOS REALES DE CLIENTES. Es para MIRAR, no para experimentar.");
-  console.log("   Para desarrollar usá `npm run dev` (3004, base local).\n");
+  console.log("   DATOS REALES DE CLIENTES. Cuidado con lo que tocás.");
+  console.log("   ¿Vas a construir algo nuevo? → npm run dev (3005, base de pruebas).\n");
 } else {
   // ¿La base local responde? Sin esto el server arranca igual y falla recién al primer
   // query, con un error de Prisma en medio de una página — mucho más difícil de leer.
@@ -68,13 +78,13 @@ if (CONTRA_PROD) {
     console.error("   Levantala con:  npm run db:local -- up");
     console.error("   Primera vez:    npm run db:local -- seed   (datos de prueba)");
     console.error("                   npm run db:local -- acceso (para poder entrar)");
-    console.error("\n   ¿Necesitás ver datos REALES? → npm run dev:prod (puerto 3005)");
+    console.error("\n   ¿Necesitás ver datos REALES? → npm run dev:prod (puerto 3004)");
     process.exit(1);
   }
   console.log(`\n🧪 Nexus LOCAL (datos de prueba) → http://localhost:${PUERTO}`);
   console.log("   Base descartable: rompé lo que quieras, se rehace con `db:local -- reset`.");
   console.log("   Sync de Google APAGADO (las sesiones entran por el fixture o db:local:pull).");
-  console.log("   ¿Necesitás datos REALES? → npm run dev:prod (puerto 3005).\n");
+  console.log("   ¿Necesitás datos REALES? → npm run dev:prod (puerto 3004).\n");
 }
 
 /**

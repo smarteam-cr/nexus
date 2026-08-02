@@ -99,7 +99,7 @@ npm run db:local:pull -- --client "Wherex,Honda Costa Rica,kölbi" --apply
 ```
 
 Después: **reportá los conteos que imprime el script** (clientes, proyectos, sesiones, cuántas
-con transcript) y decile que recargue el 3004. NO hace falta reiniciar el dev server (los datos
+con transcript) y decile que recargue el 3005. NO hace falta reiniciar el dev server (los datos
 no entran por el Prisma client) ni correr `db:local -- acceso` (el pull ya copia el roster).
 
 Notas para no equivocarse:

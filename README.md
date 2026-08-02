@@ -17,7 +17,7 @@ git clone <repo-url> && cd nexus
 npm install
 cp .env.example .env    # plantilla SIN secretos — los valores reales los pasa el equipo
 npx prisma generate     # no hay postinstall: el cliente Prisma no se genera solo
-npm run dev             # → http://localhost:3004  (base LOCAL de pruebas)
+npm run dev             # → http://localhost:3005  (base LOCAL de pruebas)
 ```
 
 Mínimo para arrancar y loguearse: `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
@@ -26,7 +26,8 @@ Mínimo para arrancar y loguearse: `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
 ⚠ **`npm run dev` va contra la base LOCAL de pruebas**, no contra producción — desarrollar
 contra los datos de los clientes era el defecto que este repo cerró. Antes de la primera
 corrida: `npm run db:local -- up` + `-- seed` + `-- acceso`. Para MIRAR datos reales
-(excepcional): `npm run dev:prod` (3005). Ver ARCHITECTURE.md · Parte 0 · cap. C.
+(o para operar): `npm run dev:prod` (3004 — el puerto que el `.env` declara en `APP_URL` y en
+el callback de HubSpot). Ver ARCHITECTURE.md · Parte 0 · cap. C.
 
 ## ⚠ Lo que hay que saber ANTES de tocar nada
 
