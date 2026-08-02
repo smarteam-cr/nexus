@@ -18,6 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import type { CsAlertCategory, CsAlertSeverity } from "@prisma/client";
 import { anthropic } from "@/lib/anthropic";
+import { MS_SIN_LATIDO_PARA_COLGADA } from "@/lib/agents/run-colgada";
 import { buildWatchdogContext } from "./watchdog-context";
 import { claimDateKey } from "@/lib/jobs/registry";
 import { crDateParts, WEEKDAYS_MON_FRI } from "@/lib/jobs/time";
@@ -32,7 +33,11 @@ const MAX_PROJECTS_PER_SWEEP = 10;
 const COLD_DAYS_THRESHOLD = 21;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const STALE_CLAIM_MS = 30 * 60 * 1000; // claim sin cerrar en 30 min = run muerto → liberar
+/* "Run muerto" se define UNA vez, en lib/agents/run-colgada.ts, y este reaper la reusa. El
+   número era el mismo (30 min) escrito acá por su cuenta; el problema no era el valor sino que
+   cada familia tuviera el suyo — así el agente de cronograma quedó 23 días colgado porque
+   nadie lo había anotado en ninguna lista. Si el umbral se mueve, se mueve para todos. */
+const STALE_CLAIM_MS = MS_SIN_LATIDO_PARA_COLGADA; // claim sin cerrar = run muerto → liberar
 const MAX_ERROR_RUNS_PER_HOUR = 3; // backoff: proyecto con 3 runs ERROR/hora se saltea
 
 // Mutex por proyecto EN PROCESO (server Node persistente): evita que manual +

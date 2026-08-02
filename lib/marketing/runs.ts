@@ -22,7 +22,16 @@ import { getInspirationProvider, InspirationProviderError } from "./inspiration"
 import { runGenerateIdeasAgent, GenerationParseError } from "./agents/generate-ideas";
 
 const POSTS_PER_SOURCE = 20;
-/** Un run RUNNING más viejo que esto se considera zombi (proceso reiniciado). */
+/**
+ * Un run RUNNING más viejo que esto NO bloquea el arranque de otro (proceso reiniciado).
+ *
+ * ⚠ NO es el umbral de "esta corrida murió" — ése vive en lib/agents/run-colgada.ts y son 30
+ * minutos. Se dejan distintos A PROPÓSITO porque responden preguntas distintas: acá se decide
+ * "¿me niego a arrancar otro?" (equivocarse hacia el lado corto solo permite un run de más),
+ * allá se decide "¿le digo a la persona que lo suyo se murió?" (equivocarse hacia el lado
+ * corto es mentirle y hacer que relance al pedo). Coinciden en ser minutos y en nada más;
+ * unificarlas sería juntar dos conceptos porque comparten el tipo de dato.
+ */
 const STALE_RUNNING_MS = 15 * 60 * 1000;
 
 /** ¿Hay una corrida en curso (no zombi)? Para el guard 409 y el cron. */
