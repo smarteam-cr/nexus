@@ -71,3 +71,44 @@ SDK · HubSpot/Google Workspace/Apify (versiones exactas: ARCHITECTURE Parte 0 �
   `rm -rf .next` + reiniciar.
 - El navegador del preview NO está logueado (middleware → login) → el E2E de UI autenticada lo
   hace el usuario por HMR; el bar de Claude = tsc+lint limpio + dev compila.
+
+## Receta: "traeme clientes a la local" (EJECUTAR COMPLETO, sin preguntar)
+
+Cuando Elías pida traer clientes / datos reales / contexto real a la base local —en esta PC o
+en la otra— **corré la secuencia entera hasta el `--apply`**. No pares en el dry-run ni pidas
+confirmación: el destino es SIEMPRE `nexus_local`, con candado sin excepción
+(`assertLocalWriteOnly`, ni `ALLOW_PROD_WRITE` lo destraba), y de PROD solo se LEE. No hay
+nada que aprobar. El `.env` NO se toca.
+
+```bash
+npm run db:local -- up          # 1. la base local tiene que estar arriba (idempotente)
+```
+
+**Por actividad** — el default cuando no nombra a nadie ("traeme unos clientes", "armá un
+ambiente parecido al real"). Trae los N de CARTERA con la sesión MÁS RECIENTE. Si no dice
+cuántos, usá **10**:
+
+```bash
+npm run db:local:pull -- --recientes 10 --apply
+```
+
+**Por nombre** — cuando nombra clientes concretos. Coma como separador, comillas siempre:
+
+```bash
+npm run db:local:pull -- --client "Wherex,Honda Costa Rica,kölbi" --apply
+```
+
+Después: **reportá los conteos que imprime el script** (clientes, proyectos, sesiones, cuántas
+con transcript) y decile que recargue el 3004. NO hace falta reiniciar el dev server (los datos
+no entran por el Prisma client) ni correr `db:local -- acceso` (el pull ya copia el roster).
+
+Notas para no equivocarse:
+- Es ACUMULATIVO e idempotente: sumar clientes no borra los anteriores ni duplica. Para empezar
+  de cero, `npm run db:local -- reset` (rehace catálogo + mundo `fx-`).
+- Un nombre que matchea varios aborta el LOTE ENTERO mostrando los candidatos: releé la salida,
+  elegí el nombre exacto y volvé a correr. No inventes cuál era.
+- `--project <id>` solo vale con UN cliente.
+- Si además quiere probar el ciclo "creo el proyecto en HubSpot y Nexus lo agarra":
+  `npm run db:local -- hubspot` (copia la conexión; el token vive en la tabla `HubspotAccount`,
+  no en el `.env`). ⚠ Con eso el Nexus local habla con el HubSpot REAL — leer es inocuo, pero
+  crear handoff / handoff-sync / borradores sociales SÍ escriben allá.
