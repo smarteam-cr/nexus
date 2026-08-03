@@ -5,6 +5,8 @@ import { $Enums } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
 import { buscarEtapa, resolvePipeline } from "@/lib/projects/kind";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
+import { detectarFusionesEnLote } from "@/lib/hubspot/empresa-fusionada";
 
 /**
  * scripts/check-invariants.ts — BLINDAJE DURO de los invariantes medulares de Nexus.
@@ -56,6 +58,11 @@ import { buscarEtapa, resolvePipeline } from "@/lib/projects/kind";
  *      llama a `guardPrismaCli` (el chokepoint del CLI de Prisma — en v7 `db execute` y
  *      `migrate *` NO aceptan URL por flag, la leen SOLO del config), los seeds de
  *      `prisma/` corren el guard incondicional, y `scripts/lib/db.ts` imprime el destino.
+ *  13. Ninguna empresa de HubSpot que Nexus guarda quedó FUSIONADA. Al fusionar dos empresas,
+ *      la perdedora sigue respondiendo por su id —devuelve los datos del sobreviviente— pero
+ *      sus ASOCIACIONES se mudaron. Nexus, que descubre los proyectos preguntando "¿qué cuelga
+ *      de esta empresa?", pregunta sobre una lápida y recibe cero: el síntoma es "creé un
+ *      proyecto en HubSpot y no aparece", con una causa que no se parece en nada al efecto.
  *      Es lo que convierte "correr un --apply por reflejo" en una decisión explícita
  *      (ALLOW_PROD_WRITE=1) contra la base que es PRODUCCIÓN.
  */
@@ -600,6 +607,75 @@ async function main(): Promise<number> {
     console.error("  `assertProdWriteAllowed()` en seeds que escriben siempre.");
   } else {
     console.log("✓ INV12: el guard anti-prod cubre scripts --apply, el CLI de Prisma y los seeds.");
+  }
+
+  // ── Inv 13: ninguna empresa guardada quedó fusionada en HubSpot ─────────────
+  //
+  // El ÚNICO invariante que hace llamadas HTTP explícitas a HubSpot, y por eso se hace en
+  // LOTE: `batch/read` acepta 100 ids, así que los ~158 clientes se revisan en 2 llamadas en
+  // vez de 158 (medido contra producción). Sin el lote esto sumaría un minuto a un comando
+  // que corre antes de cada commit, y un gate que tarda es un gate que se saltea.
+  //
+  // Molde de INV2: TODO envuelto en try/catch, y una caída de HubSpot imprime "no verificable"
+  // SIN contar violación. Un portal caído no puede pintar el gate en rojo.
+  try {
+    /* Los DOS lugares donde vive un id de empresa. `BusinessCase.hubspotCompanyId` es una copia
+       denormalizada que se estampa al crear el BC y que nadie cascadea: mirar solo `Client`
+       dejaría el invariante EN VERDE con una lápida viva en la otra tabla. */
+    const [clientes, bcs] = await Promise.all([
+      prisma.client.findMany({
+        where: { hubspotCompanyId: { not: null } },
+        select: { name: true, hubspotCompanyId: true },
+      }),
+      prisma.businessCase.findMany({
+        where: { hubspotCompanyId: { not: null } },
+        select: { name: true, hubspotCompanyId: true },
+      }),
+    ]);
+    const conEmpresa = [
+      ...clientes.map((c) => ({ name: c.name, hubspotCompanyId: c.hubspotCompanyId })),
+      ...bcs.map((b) => ({ name: `BC «${b.name}»`, hubspotCompanyId: b.hubspotCompanyId })),
+    ];
+    if (conEmpresa.length === 0) {
+      console.log("✓ INV13: no hay clientes con empresa de HubSpot que revisar.");
+    } else {
+      const hs = await getSystemHubspotClient();
+      const veredictos = await detectarFusionesEnLote(
+        hs,
+        conEmpresa.map((c) => c.hubspotCompanyId!),
+      );
+      const fusionadas = conEmpresa
+        .map((c) => ({ c, v: veredictos.get(c.hubspotCompanyId!) }))
+        .filter((x) => x.v?.estado === "fusionada");
+      const ilegibles = [...veredictos.values()].filter((v) => v.estado === "ilegible").length;
+
+      if (fusionadas.length > 0) {
+        violations++;
+        console.error(
+          `✗ INV13 VIOLADO: ${fusionadas.length} cliente(s) apuntan a una empresa FUSIONADA ` +
+            `(sus proyectos viven en el sobreviviente y Nexus no los ve).`,
+        );
+        for (const { c, v } of fusionadas.slice(0, 10)) {
+          const dest = v?.estado === "fusionada" ? v.idSobreviviente : "?";
+          console.error(`    - ${c.name}: guarda ${c.hubspotCompanyId} → sobreviviente ${dest}`);
+        }
+        if (fusionadas.length > 10) console.error(`    … y ${fusionadas.length - 10} más`);
+        console.error("  Corré: npx tsx scripts/reapuntar-empresa-fusionada.ts --apply");
+      } else {
+        console.log(
+          `✓ INV13: las empresas guardadas siguen vigentes ` +
+            `(${clientes.length} cliente(s) + ${bcs.length} business case(s), ` +
+            `${new Set(conEmpresa.map((x) => x.hubspotCompanyId)).size} empresa(s) distintas).`,
+        );
+      }
+      // Se REPORTA aparte y no cuenta: un id ilegible puede ser de otro portal o un 429, y
+      // ninguno de los dos es una fusión. Pero callarlo dejaría al invariante ciego sin avisar.
+      if (ilegibles > 0) {
+        console.warn(`⚠ INV13 (no bloquea): ${ilegibles} empresa(s) no se pudieron verificar.`);
+      }
+    }
+  } catch (e) {
+    console.error("⚠ INV13 no verificable (¿HubSpot caído o sin cuenta del sistema?):", e instanceof Error ? e.message : e);
   }
 
   return violations;

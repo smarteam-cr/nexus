@@ -32,6 +32,15 @@ export async function GET(req: NextRequest) {
     const hs = await getSystemHubspotClient();
     const ids = await resolveCompanyProjectIds(hs, companyId);
     if (ids.length === 0) {
+      /* ⚠ Acá NO se pregunta por una fusión, y es a propósito. Los dos llamadores de esta ruta
+         mandan el `companyId` que salió de `/api/handoffs/lookup`, que busca POR DOMINIO — y el
+         buscador de HubSpot solo devuelve fichas VIVAS. O sea que el id que llega acá es
+         siempre el sobreviviente y `detectarFusion` respondería "vigente" el 100% de las veces:
+         una llamada pagada en el caso más común del alta (empresa nueva, todavía sin proyectos)
+         a cambio de un aviso que no puede dispararse nunca.
+
+         La fusión SÍ se detecta donde el id viejo llega de verdad: `correrSync`, que lee el
+         `hubspotCompanyId` guardado en el Client. Ver lib/hubspot/empresa-fusionada.ts. */
       return NextResponse.json({ projects: [] });
     }
 

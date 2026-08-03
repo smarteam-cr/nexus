@@ -195,7 +195,23 @@ export default function WorkspaceClient({
       setSincronizandoManual(true);
     }
     startSync();
-    if (avisar) toast.info("Buscando proyectos nuevos en HubSpot… puede tardar un momento.");
+    /* El aviso de arranque se GUARDA para poder descartarlo cuando llega el resultado. Sin el
+       id, los dos toasts se apilan y parecen contradecirse ("buscando…" arriba de "todo al
+       día"). `dismiss` existe en la API del Toast desde el día uno y no lo usaba nadie.
+       Duración alta en vez de 0: si el fetch queda colgado, un toast sticky no se va nunca —
+       el proveedor vive en el layout y no se desmonta al navegar. */
+    let avisoId: number | null = null;
+    if (avisar) {
+      avisoId = toast.info("Buscando proyectos nuevos en HubSpot… puede tardar un momento.", {
+        duration: 30_000,
+      });
+    }
+    const cerrarAviso = () => {
+      if (avisoId !== null) {
+        toast.dismiss(avisoId);
+        avisoId = null;
+      }
+    };
     try {
       const res = await fetch(`/api/clients/${clientId}/sync-projects${force ? "?force=1" : ""}`, { method: "POST" });
       if (!res.ok) throw new Error("sync failed");
@@ -207,6 +223,7 @@ export default function WorkspaceClient({
       });
       setSyncDone(true);
       if (data.created || data.updated) router.refresh();
+      cerrarAviso(); // el resultado REEMPLAZA al aviso, no se apila encima
       if (avisar) {
         const primerError = Array.isArray(data.errors) ? data.errors[0] : null;
         if (primerError) {
@@ -238,10 +255,17 @@ export default function WorkspaceClient({
       }
     } catch {
       setSyncDone(true);
-      toast.error("No se pudo sincronizar con HubSpot.", {
-        action: { label: "Reintentar", onClick: () => void runHubspotSync(true, true) },
-      });
+      cerrarAviso();
+      /* ⚠ Gateado por `avisar`, que antes NO lo estaba: el sync de FONDO del montaje —que nadie
+         pidió— podía dejar un error con acción "Reintentar", y como los toasts con acción son
+         sticky por diseño, quedaba clavado en pantalla para siempre. */
+      if (avisar) {
+        toast.error("No se pudo sincronizar con HubSpot.", {
+          action: { label: "Reintentar", onClick: () => void runHubspotSync(true, true) },
+        });
+      }
     } finally {
+      cerrarAviso(); // red de seguridad: idempotente, cubre cualquier camino que se me escape
       endSync();
       if (avisar) {
         manualEnCurso.current = false;
