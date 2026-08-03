@@ -319,3 +319,12 @@
 - **WIG Session** (D4): la reunión semanal (≤20 min, mismo día y hora, sagrada) donde ocurre la
   ejecución. Formato fijo de 3 pasos: rendir cuentas de los compromisos → mirar el marcador →
   comprometer 1-2 movidas que muevan las medidas de predicción. El torbellino NO entra a la sesión.
+- **Documentación** (sección del sidebar, `/documentacion`): el manual de Nexus **para el equipo
+  de Smarteam** —no para desarrolladores— en 4 pestañas sincronizadas a la URL (`?s=agentes`):
+  cómo funciona · los documentos · los agentes · HubSpot. Sin gate: la ve todo el mundo. Su
+  contenido vive en el REPO (`lib/manual/`), no en la base, y está partido en dos: lo **derivado**
+  (`armar.ts`, puro — sale de los registros del código, así que se actualiza solo cuando alguien
+  agrega un canvas o cambia una etapa) y lo **escrito a mano** (`contenido.ts` — para qué sirve
+  cada documento y cuándo se abre, que es lo único que ningún registro sabe). Los **prompts de los
+  agentes NO aparecen**: viven detrás del permiso de `/agents` y ahí se quedan. Ver DECISIONS
+  §Documentación de la app.

@@ -75,6 +75,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "business-cases/new": { modo: "inherits", de: "business-cases" },
 
   // ── Documentación y administración ──────────────────────────────────────────
+  documentacion: { modo: "own" },
   roles: { modo: "own" },
   "roles/[id]": { modo: "inherits", de: "roles" },
   team: { modo: "own" },

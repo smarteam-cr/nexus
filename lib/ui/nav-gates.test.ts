@@ -28,10 +28,13 @@ function ctx(
 const visibles = (c: NavContext) =>
   APP_NAV.filter((it) => canSeeNavItem(it, c)).map((it) => it.key);
 
-const UNIVERSALES = ["clients", "marketing", "sessions", "knowledge"];
+/* Los que ve TODO rol interno. `documentacion` se sumó el 2026-08-02: explicar la herramienta
+   no es un privilegio, y un manual que solo ven algunos no cumple su función.
+   ⚠ El orden importa: `visibles()` respeta el orden de APP_NAV. */
+const UNIVERSALES = ["clients", "marketing", "sessions", "knowledge", "documentacion"];
 
 describe("gates del sidebar congelados (espejo de los booleanos pre-migración)", () => {
-  it("SUPER_ADMIN ve los 12 ítems", () => {
+  it("SUPER_ADMIN ve los 13 ítems", () => {
     const c = ctx(true, {
       clientes: { viewAll: true },
       ventas: { read: true },
@@ -49,6 +52,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       "audits",
       "sessions",
       "knowledge",
+      "documentacion",
       "agents",
       "team",
       "roles",
@@ -77,6 +81,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       "audits",
       "sessions",
       "knowledge",
+      "documentacion",
       "agents",
       "config",
     ]);
@@ -84,7 +89,14 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
 
   it("cobranza.read habilita Finanzas (perfil ADMIN) y nada más", () => {
     const c = ctx(false, { cobranza: { read: true } });
-    expect(visibles(c)).toEqual(["clients", "marketing", "finanzas", "sessions", "knowledge"]);
+    expect(visibles(c)).toEqual([
+      "clients",
+      "marketing",
+      "finanzas",
+      "sessions",
+      "knowledge",
+      "documentacion",
+    ]);
   });
 
   it("Equipo es gate DURO de SUPER_ADMIN: ningún permiso lo enciende", () => {

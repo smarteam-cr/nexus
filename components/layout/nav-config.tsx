@@ -254,6 +254,18 @@ export const APP_NAV: readonly NavItemConfig[] = [
     ),
   },
   {
+    // El manual de la app: cómo funciona, qué hace cada documento, cómo se conecta con HubSpot.
+    // SIN gate a propósito — explicar la herramienta no es un privilegio, y una documentación
+    // que solo ven algunos no cumple su función. Las pestañas son in-page (`?s=`), no hijos.
+    key: "documentacion",
+    label: "Documentación",
+    href: "/documentacion",
+    group: "operacion",
+    icon: icon(
+      "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+    ),
+  },
+  {
     key: "agents",
     label: "Agentes",
     href: "/agents",

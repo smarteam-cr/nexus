@@ -1443,3 +1443,59 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
     el hueco de scope-creep que el PUT/assist NO cubren), invalida `pendingProgress`, `lastEditedByHuman`,
     auto-cierre de fase, audit `TimelineChange`. Gate `editTimeline`. El agente de re-chequeo respeta lo
     marcado DONE (`isTerminalHuman`, lee `TimelineTask.status`).
+
+## Documentación de la app (`/documentacion`, 2026-08-02)
+> Nexus no tenía documentación de PRODUCTO. Lo que existía está escrito para desarrolladores
+> (`ARCHITECTURE.md`, este archivo) o para el modelo (los `brief` de los agentes), y nada de eso
+> sirve para que alguien de CS, Ventas o Marketing entienda qué hace la app, cuándo abrir cada
+> documento o qué le genera cada agente. Dos decisiones de encuadre, tomadas por Elías: la
+> **audiencia es el equipo de Smarteam** (lenguaje de negocio, cero jerga técnica) y el
+> **contenido vive en el REPO, no en la base** (viaja con el deploy, se revisa como código y no
+> puede desincronizarse entre ambientes; cambiar una frase es un commit).
+- **Lo que una estructura ya sabe se DERIVA; solo se escribe a mano lo que ninguna estructura
+  sabe.** La mitad de lo que había que documentar ya era un dato consultable: qué documentos
+  existen y si nacen con el proyecto (`PIECES`), sus secciones en orden (`CANVAS_DEF_BY_SLUG`),
+  qué agente los genera (`CANVAS_PRIMARY_AGENT`), en qué etapa se trabajan (`STAGE_FLOW`), los
+  pipelines de HubSpot con sus etapas (`PROJECT_PIPELINES`) y qué propiedades se leen
+  (`PROJECT_PROPERTIES`). A mano queda lo que ningún registro contesta: **para qué sirve** y
+  **cuándo lo abro**. Una doc escrita 100 % a mano miente a los tres meses; ésta se actualiza
+  sola cuando alguien agrega un canvas. `lib/manual/armar.ts` es puro (sin Prisma) justamente
+  para poder testear esa derivación.
+- **El guard es un test, no el tipo — porque `PieceDefinition.slug` es `string`.** El plan pedía
+  `Record<PieceSlug, …>` para que agregar una pieza sin explicarla no compilara, pero el registro
+  no expone un union de slugs y estrechar `registry.ts` para esto era mover una pieza medular por
+  una comodidad de la doc. Se usa el patrón de la casa (`skeleton-coverage.ts`,
+  `page-shell-coverage.ts`): `Record<string, …>` + un test que falla con el mensaje accionable y
+  la línea lista para pegar. Cubre además el caso inverso —explicaciones huérfanas de documentos
+  que ya no existen— que el tipo no cubriría.
+- **Los PROMPTS de los agentes NO cruzan.** Esta sección no tiene gate (la ve todo el equipo),
+  mientras que el catálogo de `/agents` está detrás de un permiso justamente porque muestra y
+  edita los prompts. Traerlos acá sería mover esa frontera sin decidirlo. Lo sostiene
+  `lib/manual/manual.test.ts`: `FilaDeAgente` (el tipo que consume el armado) no declara
+  `systemPrompt`/`additionalInstructions`, y un escaneo estructural verifica que ni la página ni
+  el armado los nombren. El escaneo **strippea los comentarios** antes de buscar: los dos
+  archivos EXPLICAN por qué el prompt no está, y un test que prohibiera esa explicación empujaría
+  a borrarla — el resultado opuesto al que se busca.
+- **`PROJECT_PROPERTIES` se extrajo a `lib/hubspot/project-properties.ts`.** Vivía dentro de
+  `sync-projects.ts`, que arrastra Prisma y el cliente de HubSpot; importarlo desde un módulo de
+  documentación puro habría contaminado la cadena y roto el test. El archivo nuevo es una lista
+  de strings más los 4 grupos de presentación — cero lógica.
+- **Se descartó el motor `LandingView`** aunque sea el renderer reusable del repo: es tema claro
+  con hex literal y no acompaña el modo oscuro, así que quedaría como una isla blanca dentro de
+  la app. El motor es para documentos que se leen solos (roles, kickoff, business case), no para
+  una pantalla de módulo. La pantalla usa `Tabs`/`Card` y **solo tokens semánticos**.
+- **Una ruta con 4 pestañas en la URL (`?s=agentes`), no 4 rutas.** Un link a una sección
+  concreta se pega en un chat, que es la mitad de para qué sirve una documentación; y 4 rutas
+  serían 8 entradas de registro (skeleton + page-shell) para contenido que hoy cabe en una
+  pantalla. `router.replace` y no `push`: cada clic de pestaña no es un paso del historial.
+- **El HANDOFF es el caso especial del armado.** `CANVAS_DEF_BY_SLUG` lo excluye a propósito (no
+  se activa desde el desplegable, lo monta el flujo de handoffs), así que la derivación ingenua
+  lo mostraba con **cero secciones** — el documento con el que arranca todo, vacío. `seccionesDe`
+  lo resuelve contra `HANDOFF_CANVAS` y hay un test que lo congela. Las que devuelven vacío y
+  está BIEN que lo hagan: Cronograma (su contenido son fases y tareas) e Información del cliente
+  y Business Case (su composición vive en otro registro).
+- **Iteración prevista, no ahora**: markdown en el contenido; una página por documento
+  (`/documentacion/kickoff`) con un "¿qué es esto?" en el header de cada canvas; el campo que hoy
+  no existe en ninguna parte (**qué mirar y qué corregir en la salida de cada agente**); y llenar
+  el `tip` por sección en los 6 canvases que lo tienen vacío — es documentación que envejece a la
+  misma velocidad que el código porque vive en el mismo archivo que la sección.

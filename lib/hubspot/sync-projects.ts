@@ -1,4 +1,5 @@
 import { getHubspotClient, getSystemHubspotClient } from "./client";
+import { PROJECT_PROPERTIES } from "./project-properties";
 import { ESTADOS_DE_ALTA, altaTerminada } from "@/lib/projects/alta";
 import { prisma } from "@/lib/db/prisma";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
@@ -104,30 +105,10 @@ function inferServiceMapping(projectName: string | null): ServiceMapping {
   return { serviceType: "proyecto_temporal", projectType: "USE_CASE", hubTag: null };
 }
 
-// ── Propiedades a leer del objeto Proyectos de HubSpot ──────────────────────
-const PROJECT_PROPERTIES = [
-  "hs_name",
-  "hs_status",
-  "hs_object_id",
-  "nombre_del_proyecto",
-  "servicio_contratado",
-  "estatus_del_proyecto",
-  "tipo_de_servicio",
-  "account_manager",
-  // Para meta info del proyecto que se muestra en el GPS
-  "hubspot_owner_id",
-  "hs_createdate",
-  "hs_pipeline",
-  "hs_pipeline_stage",    // D.2: etapa actual del pipeline de CS (ancla del cronograma vivo)
-  "proyecto_interno",     // booleancheckbox: proyecto de Smarteam para Smarteam (ver lib/projects/kind.ts)
-  "csl_encargado",        // propiedad custom OWNER = CSE encargado (fuente de verdad de la asignación → visibilidad)
-  // CS360 — dashboard de la CSL (internal names confirmados por discover-partner-clients.ts):
-  "hs_priority",          // low | medium | high
-  "motivo_de_bloqueo",    // enum radio 7 valores ("Cliente pidió pausa", "Atraso por Smarteam", …)
-  "detalle_del_motivo_de_bloqueo", // texto libre "| Desarrollo"
-  "detalle_del_motivo_de_bloqueo__implementaciones", // texto libre "| Implementaciones"
-  "estado_de_adopcion",   // No iniciado | Bajo | Medio | Alto
-];
+/* Las propiedades a leer del objeto Proyectos viven en su propio módulo desde 2026-08-02:
+   la sección de Documentación muestra la lista REAL, y para eso tiene que poder importarla
+   sin arrastrar este archivo (que trae el cliente de HubSpot y Prisma). Ver
+   `lib/hubspot/project-properties.ts`. */
 
 // ── Slugs del objeto Proyectos ───────────────────────────────────────────────
 // CANÓNICOS: "projects"/"PROJECT" son el objeto Proyectos estándar de HubSpot.
