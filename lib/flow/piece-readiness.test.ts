@@ -80,7 +80,7 @@ describe("el pipeline es un camino INDEPENDIENTE del tag", () => {
     /* Si solo dijera "te falta el tag", alguien buscando por qué no aparece la pieza en un
        proyecto de CS se llevaría media respuesta. */
     const r = pieceReadiness("tech-requirements", { ...sinNada, hubspotPipelineId: CS });
-    expect(r.reason).toContain("Development");
+    expect(r.reason).toContain("Desarrollo e integración");
   });
 
   it("todo `anyPipeline` declarado es una clave válida del registro de pipelines", () => {

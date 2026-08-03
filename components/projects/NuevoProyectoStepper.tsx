@@ -37,6 +37,7 @@ import {
 } from "@/lib/projects/kind";
 import type { ProjectPipelineKey } from "@/lib/projects/kind";
 import { etiquetarAmbiguos, nombreYaUsado } from "@/lib/projects/lista-de-empresa";
+import { armarCuerpoDelAlta } from "@/lib/projects/alta";
 
 /** Las rutas que este botón consume. Importadas por la guarda de paridad, no repetidas. */
 export const RUTAS_DEL_ALTA = {
@@ -220,7 +221,11 @@ export default function NuevoProyectoStepper() {
       (p) => !!p.nexusProjectId && resolvePipeline(p.nexusPipelineId)?.key === "customer-success",
     ),
   );
-  const puedeTenerHermano = def.canBeSiblingOf.length > 0 && hermanosPosibles.length > 0;
+  /* Un proyecto INTERNO no cuelga de nadie, así que ni se pregunta. La regla de verdad vive en
+     `armarCuerpoDelAlta` —esconder un campo no limpia su valor— y esto es solo la mitad visible:
+     no tiene sentido pedir un dato que el envío va a descartar. */
+  const puedeTenerHermano =
+    !interno && def.canBeSiblingOf.length > 0 && hermanosPosibles.length > 0;
 
   /* Aviso, nunca bloqueo. Dos proyectos del mismo cliente pueden llamarse igual con toda
      legitimidad; lo que no puede pasar es crear un homónimo SIN QUERER — y el campo viene con el
@@ -251,21 +256,21 @@ export default function NuevoProyectoStepper() {
         ? proyectosHs.find((p) => p.hubspotProjectId === seleccion)
         : undefined;
 
-      const cuerpo: Record<string, unknown> = {
-        nombre: adjuntado ? adjuntado.name : nombre.trim(),
+      /* El cuerpo lo arma una función PURA. Acá vivía suelto, y ahí se escondía el bug del
+         hermano fantasma: esconder un campo no es lo mismo que limpiarlo. */
+      const cuerpo = armarCuerpoDelAlta({
+        nombre,
         pipeline: tipo,
         interno,
-      };
-      if (busqueda.existingClientId) cuerpo.clientId = busqueda.existingClientId;
-      else {
-        cuerpo.companyId = empresa.id;
-        cuerpo.companyName = empresa.name;
-        cuerpo.domain = empresa.domain;
-      }
-      if (hermanoHsId) cuerpo.hermanoHsId = hermanoHsId;
-      if (tratoId) cuerpo.dealId = tratoId;
-      if (sinTratoMotivo.trim()) cuerpo.sinTratoMotivo = sinTratoMotivo.trim();
-      if (adjuntado) cuerpo.hubspotServiceId = adjuntado.hubspotProjectId;
+        hermanoHsId,
+        tratoId,
+        sinTratoMotivo,
+        clientId: busqueda.existingClientId,
+        companyId: empresa.id,
+        companyName: empresa.name,
+        domain: empresa.domain,
+        adjuntar: adjuntado ?? null,
+      });
 
       const res = await fetch(RUTAS_DEL_ALTA.crear, {
         method: "POST",
@@ -599,7 +604,14 @@ export default function NuevoProyectoStepper() {
                     type="checkbox"
                     className="mt-1"
                     checked={interno}
-                    onChange={(e) => setInterno(e.target.checked)}
+                    onChange={(e) => {
+                      setInterno(e.target.checked);
+                      /* Se limpia al MARCAR: si no, desmarcar más tarde reviviría un hermano
+                         que la persona ya no está viendo desde hace rato. El envío lo descarta
+                         igual (`armarCuerpoDelAlta`), pero el estado no puede quedar mintiendo:
+                         `exigeTratoGanado` lo lee para decidir si pedir el trato. */
+                      if (e.target.checked) setHermanoHsId("");
+                    }}
                   />
                   <span className="flex-1 min-w-0">
                     <span className="text-sm text-fg block">Proyecto interno de Smarteam</span>

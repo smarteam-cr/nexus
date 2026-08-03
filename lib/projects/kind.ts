@@ -242,17 +242,19 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
   {
     key: "customer-success",
     hubspotPipelineId: "826270797",
-    label: "Customer Success CRM",
+    label: "Implementación de HubSpot",
     help: "La implementación que compró el cliente. Es la cartera: se factura y la lleva un CSE. Su etapa la mueve el equipo en HubSpot.",
     /* Transcritas del portal el 2026-07-30 a las 16:17 UTC, cuando el pipeline se rehízo
        para espejar el ciclo de Nexus. Los 4 ids nuevos (Exploración, Diagnóstico,
        Planificación, Validación de uso) nacieron ese día; los 7 viejos conservan su id y
        tres cambiaron de rótulo. Nada se borró.
 
-       ⚠ Este pipeline se llama "HubSpot" en el portal desde ese cambio. Acá se lo sigue
-       rotulando "Customer Success CRM" a propósito: es el nombre con el que el equipo lo
-       nombra y el que Nexus muestra. La divergencia queda declarada; nadie lee el label
-       del portal. */
+       Este pipeline se llama "HubSpot" en el portal desde ese cambio, y en Nexus se llamaba
+       "Customer Success CRM". El 2026-08-02 pasó a "Implementación de HubSpot": el nombre viejo
+       describía el ÁREA que lo lleva, no lo que el proyecto ES, y en el formulario de alta —donde
+       alguien elige entre tres tipos sin conocer el vocabulario interno— eso obligaba a leer la
+       descripción para entender la opción. El nombre nuevo además ACERCA el rótulo al del portal
+       en vez de alejarlo. Nadie lee el label del portal: el que manda es éste. */
     stages: [
       { id: "1225193551", label: "Handoff", enLinea: true, terminal: false },
       { id: "1410223916", label: "Exploración", enLinea: true, terminal: false },
@@ -289,7 +291,7 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
   {
     key: "development",
     hubspotPipelineId: "922785384",
-    label: "Development",
+    label: "Desarrollo e integración",
     help: "Desarrollo o integración. Si cuelga de una implementación de CS es su hermano y no se factura aparte; si va solo, sí.",
     /* ESTAS SÍ SE PINTAN: un desarrollo no corre el ciclo de 8 etapas de Customer Success
        —su metodología es otra— y lo que la sección de ciclo de vida le muestra es su propia

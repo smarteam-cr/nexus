@@ -91,6 +91,66 @@ export function parseEstadoDeAlta(v: unknown): EstadoDeAlta | null {
     : null;
 }
 
+/** Lo que el formulario junta antes de armar el pedido. */
+export interface EleccionesDelAlta {
+  nombre: string;
+  /** Clave del pipeline: "customer-success" | "development" | "web". */
+  pipeline: string;
+  interno: boolean;
+  /** Id de HubSpot de la implementación de la que cuelga. `""`/null = va solo. */
+  hermanoHsId?: string | null;
+  tratoId?: string | null;
+  sinTratoMotivo?: string | null;
+  /** Cliente ya existente en Nexus. */
+  clientId?: string | null;
+  /** …o la empresa de HubSpot con la que crearlo. */
+  companyId?: string | null;
+  companyName?: string | null;
+  domain?: string | null;
+  /** ADJUNTAR: el record ya existe en HubSpot. Su nombre pisa al tipeado. */
+  adjuntar?: { hubspotProjectId: string; name: string } | null;
+}
+
+/**
+ * ARMA EL CUERPO del POST del alta. Puro, para que las reglas se puedan escribir en un test.
+ *
+ * ── POR QUÉ NO VIVE EN EL COMPONENTE ─────────────────────────────────────────
+ * Vivía suelto adentro del `onClick`, y ahí escondió un bug: si alguien elegía un hermano y
+ * DESPUÉS marcaba "interno", la pantalla dejaba de mostrar el desplegable pero el valor seguía
+ * viajando en el envío. El proyecto nacía colgado de otro sin que nadie lo hubiera pedido y sin
+ * que nada lo mostrara.
+ *
+ * Esconder un campo NO es lo mismo que limpiarlo. Un formulario dice lo que MANDA, no lo que
+ * enseña — y eso solo se puede verificar si el armado es una función que se puede llamar sola.
+ */
+export function armarCuerpoDelAlta(e: EleccionesDelAlta): Record<string, unknown> {
+  const cuerpo: Record<string, unknown> = {
+    nombre: (e.adjuntar?.name ?? e.nombre).trim(),
+    pipeline: e.pipeline,
+    interno: e.interno,
+  };
+
+  if (e.clientId) cuerpo.clientId = e.clientId;
+  else if (e.companyId) {
+    cuerpo.companyId = e.companyId;
+    cuerpo.companyName = e.companyName;
+    cuerpo.domain = e.domain;
+  }
+
+  /* ⚠ LA REGLA: un proyecto interno NO cuelga de nadie.
+     Colgar hace tres cosas —apaga la cobranza, esconde el frente de Ventas y redirige el handoff
+     al del hermano—. "Interno" ya apaga la cobranza, así que ahí se pisan; pero las otras dos
+     seguirían aplicando, y quien marca "interno" no está pidiendo que su documento lo gobierne
+     otro proyecto. Se limpia acá, en el único lugar por donde pasa el envío. */
+  if (e.hermanoHsId && !e.interno) cuerpo.hermanoHsId = e.hermanoHsId;
+
+  if (e.tratoId) cuerpo.dealId = e.tratoId;
+  if (e.sinTratoMotivo?.trim()) cuerpo.sinTratoMotivo = e.sinTratoMotivo.trim();
+  if (e.adjuntar) cuerpo.hubspotServiceId = e.adjuntar.hubspotProjectId;
+
+  return cuerpo;
+}
+
 /**
  * CÓMO SE LE CUENTA A UNA PERSONA. Vive acá y no en el componente porque el cartel aparece en
  * dos lugares (el rail de la ficha del cliente y el widget del proyecto) y dos textos que
