@@ -1568,3 +1568,37 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   superficies externas, 3 accesos, 4 mecanismos de publicación, hoy resumidos en una píldora); y
   llenar el `tip` por sección en los 6 canvases vacíos — la única propuesta que mejora la
   documentación **sin que nadie entre a `/documentacion`**.
+
+## Una empresa fusionada no puede partir un cliente en dos (2026-08-03)
+
+**El hecho:** al fusionar dos empresas en HubSpot, la perdedora sigue respondiendo `200` con los
+datos de la ganadora. Solo se mudan las asociaciones. Medido en el portal real: **10 de las 158**
+empresas que Nexus guarda absorbieron a otra — 21 fichas sepultadas. No es un caso exótico.
+
+**El problema:** los formularios que dan de alta algo desde cero reciben el id de la empresa de una
+búsqueda por dominio, que solo devuelve fichas **vivas**. Nexus guarda el id que tenía el día que
+se vinculó el cliente. Si hubo fusión, los dos ids no coinciden, el cliente "no existe" y se crea
+**un segundo cliente para la misma cuenta**.
+
+**Lo decidido:**
+
+1. **Encontrar y reapuntar son la misma operación.** Reusar el cliente sin arreglarle el id sería
+   igual de malo por el otro lado: el motor del alta cuelga el registro nuevo de HubSpot de
+   `client.hubspotCompanyId`, o sea de la lápida, y el sync siguiente vuelve a encontrar cero.
+2. **La pregunta por la fusión va en las ALTAS; el desempate va en las DOS puntas.** Es un corte
+   fino que se ganó dos veces. Si el buscador *resolviera* el cliente, el formulario mandaría
+   `clientId` en vez de `companyId` —son excluyentes— y la rama que arregla y reapunta no correría
+   nunca: cablearlo **apaga** el arreglo. Pero al revés también falla: cuando la empresa viva ya
+   tiene clientes, el buscador siempre devuelve uno y el alta entra por `clientId`, así que la
+   regla del punto 3 quedaba inalcanzable **justo en el camino que factura**. Por eso el buscador
+   desempata con la misma función pura —sin red y sin escribir— y devuelve `null` cuando no puede.
+3. **El desempate entre dos clientes de una misma empresa prefiere `CLIENTE` sobre `PROSPECTO`,**
+   y con dos `CLIENTE` de verdad **no elige**. Es de plata: un proyecto que nace en un prospecto
+   queda fuera de cobranza, de la cartera y del vigilante, sin ningún error. Hay un caso vivo
+   (empresa `53154855252`: «Areyas» prospecto y «Areyá» cliente).
+4. **El reapunte automático queda acotado a ese caso.** Barrer la cartera entera sigue siendo el
+   script manual con `--apply` + `ALLOW_PROD_WRITE=1`: ahí nadie pidió nada y conviene mirar antes.
+
+**Descartado — resolver por dominio (`emailDomains`)** en vez de por el historial de fusión: sería
+un arreglo de tres líneas y cero llamadas, pero solo **124 de 158** clientes tienen el dominio
+cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que afirma HubSpot.

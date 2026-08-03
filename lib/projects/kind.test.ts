@@ -548,7 +548,7 @@ describe("fuenteDelCiclo — quién manda la etapa del proyecto", () => {
   it("la rama «pipeline» SIEMPRE trae su fila — nadie tiene que volver a resolverla", () => {
     const f = fuenteDelCiclo({ hubspotPipelineId: DEV, interno: false, tieneHermanoCs: false, altaEnCurso: false });
     expect(f.tipo).toBe("pipeline");
-    if (f.tipo === "pipeline") expect(f.pipeline.label).toBe("Development");
+    if (f.tipo === "pipeline") expect(f.pipeline.label).toBe("Desarrollo e integración");
   });
 
   it("es EXACTAMENTE la negación de `cicloOchoEtapas` — no una segunda opinión", () => {

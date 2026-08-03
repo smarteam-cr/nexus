@@ -4,7 +4,6 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Table, Avatar, Badge, EmptyState, type TableColumn } from "@/components/ui";
 import DeleteClientButton from "./DeleteClientButton";
-import NewClientButton from "./NewClientButton";
 import NuevoProyectoStepper from "@/components/projects/NuevoProyectoStepper";
 import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 import { CLIENT_KINDS, CLIENT_KIND_META, formatTamUsd } from "@/lib/clients/kind";
@@ -379,11 +378,16 @@ export default function ClientsGrid({
         initialSort={{ key: "lastInteraction", dir: "desc" }}
         action={
           <div className="flex items-center gap-2">
-            {/* El alta única (Tanda C). El asistente de handoff sigue en el archivo pero ya no
-                se monta: si algo del botón nuevo falla, volver a mostrarlo es descomentar una
-                línea. Se retira de verdad recién cuando el botón esté probado en vivo. */}
+            {/* UN SOLO BOTÓN. El asistente de handoff y `NewClientButton` siguen en sus archivos
+                pero ya no se montan: volver a mostrar cualquiera es una línea.
+
+                "Nuevo cliente" no era redundante con éste, era una TRAMPA: creaba un cliente
+                con nombre y empresa SIN exigir que existiera en HubSpot, y el alta después lo
+                rechazaba ("Ese cliente no tiene empresa en HubSpot"). Al medirlo: 7 clientes sin
+                empresa, 6 de ellos con CERO proyectos — fichas que no pueden tener un proyecto,
+                ni handoff, ni cronograma. No se pierde ninguna capacidad sacándolo; lo que
+                permitía hacer es exactamente lo que después no servía. */}
             <NuevoProyectoStepper />
-            <NewClientButton />
           </div>
         }
         empty={

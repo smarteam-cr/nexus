@@ -12,6 +12,12 @@ import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { createBusinessCase } from "@/lib/business-cases";
 import { createBusinessCaseCanvas } from "@/lib/canvas/default-canvases";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
+import {
+  anotarReapunte,
+  reapuntarEnTx,
+  resolverClienteDeLaEmpresa,
+} from "@/lib/hubspot/cliente-de-la-empresa";
 import { bcTypeOrNull, seedTagsFor, DEFAULT_BC_TYPE_ID } from "@/lib/business-cases/case-types";
 
 export async function POST(req: NextRequest) {
@@ -63,26 +69,43 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Sub-tipo desconocido para ese tipo de caso." }, { status: 400 });
   }
 
-  // find-or-create Client — prospecto si es nuevo (no ensucia los listados de CS).
-  let client = await prisma.client.findFirst({
-    where: { hubspotCompanyId: companyId },
-    select: { id: true },
-  });
-  if (!client) {
-    client = await prisma.client.create({
-      data: {
-        name: companyName,
-        company: companyName,
-        hubspotCompanyId: companyId,
-        emailDomains: domain ? [domain] : [],
-        kind: "PROSPECTO",
-      },
-      select: { id: true },
-    });
+  /* find-or-create Client — prospecto si es nuevo (no ensucia los listados de CS).
+     El buscador de empresas entrega SIEMPRE la ficha viva, así que un `findFirst` por ese id no
+     encuentra al cliente que quedó guardado bajo una empresa fusionada y fabrica un segundo
+     cliente para la misma cuenta. Ver lib/hubspot/cliente-de-la-empresa.ts. */
+  const resolucion = await resolverClienteDeLaEmpresa(await getSystemHubspotClient(), companyId);
+  if (resolucion.estado === "ambiguo") {
+    return NextResponse.json({ error: resolucion.mensaje }, { status: 409 });
+  }
+
+  let clientId: string;
+  if (resolucion.estado === "ninguno") {
+    clientId = (
+      await prisma.client.create({
+        data: {
+          name: companyName,
+          company: companyName,
+          hubspotCompanyId: companyId,
+          emailDomains: domain ? [domain] : [],
+          kind: "PROSPECTO",
+        },
+        select: { id: true },
+      })
+    ).id;
+  } else {
+    clientId = resolucion.clientId;
+    /* ⚠ Reusar NO cambia el `kind`. Si el cliente ya era CLIENTE, degradarlo a PROSPECTO por
+       abrirle un caso de negocio lo sacaría de la cartera de CS y de cobranza. */
+    if (resolucion.estado === "encontrado-fusionado") {
+      const { businessCases } = await prisma.$transaction((tx) =>
+        reapuntarEnTx(tx, resolucion.reapunte),
+      );
+      console.warn(anotarReapunte(resolucion.reapunte, resolucion.nombre, businessCases));
+    }
   }
 
   const bc = await createBusinessCase({
-    clientId: client.id,
+    clientId,
     name: name || `Caso de negocio — ${companyName}`,
     hubspotCompanyId: companyId,
     hubspotDealId: dealId,

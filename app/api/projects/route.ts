@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { guardPermission, guardAccessToClient, guardCapability } from "@/lib/auth/api-guards";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
+import {
+  anotarReapunte,
+  reapuntarEnTx,
+  resolverClienteDeLaEmpresa,
+  type Reapunte,
+} from "@/lib/hubspot/cliente-de-la-empresa";
 import { hasProjectsWriteScope } from "@/lib/hubspot/project-record";
 import { avanzarAlta } from "@/lib/projects/alta-runner";
 import { exigeTratoGanado, parseProjectPipeline, resolvePipeline } from "@/lib/projects/kind";
@@ -82,6 +89,9 @@ export async function POST(req: NextRequest) {
 
   // ── El cliente ──────────────────────────────────────────────────────────────
   let clientId: string;
+  /** Se llenan solo cuando el alta cae en un cliente que YA existía. Viajan a la respuesta. */
+  let reusado: { nombre: string; reapuntado: boolean } | null = null;
+  let reapunte: Reapunte | null = null;
   if (body.clientId) {
     const g = await guardAccessToClient(body.clientId);
     if (g instanceof NextResponse) return g;
@@ -95,13 +105,14 @@ export async function POST(req: NextRequest) {
     const verTodo = await guardCapability("seeAllClients");
     if (verTodo instanceof NextResponse) return verTodo;
 
-    const existente = await prisma.client.findFirst({
-      where: { hubspotCompanyId: body.companyId },
-      select: { id: true },
-    });
-    clientId =
-      existente?.id ??
-      (
+    /* NO es un `findFirst` por el id: si la empresa se fusionó, el cliente está guardado bajo la
+       ficha vieja y el id que llega acá es el de la nueva, así que no matchearía y nacería un
+       cliente duplicado. Ver lib/hubspot/cliente-de-la-empresa.ts. */
+    const resolucion = await resolverClienteDeLaEmpresa(await getSystemHubspotClient(), body.companyId);
+    if (resolucion.estado === "ambiguo") return malo(resolucion.mensaje, 409);
+
+    if (resolucion.estado === "ninguno") {
+      clientId = (
         await prisma.client.create({
           data: {
             name: body.companyName.trim(),
@@ -112,6 +123,15 @@ export async function POST(req: NextRequest) {
           select: { id: true },
         })
       ).id;
+    } else {
+      clientId = resolucion.clientId;
+      reusado = { nombre: resolucion.nombre, reapuntado: resolucion.estado === "encontrado-fusionado" };
+      /* El reapunte NO se aplica acá: se guarda y se escribe recién en la transacción que crea el
+         proyecto, más abajo. Entre este punto y esa transacción hay seis salidas que rechazan el
+         alta (hermano inválido, record en la denylist, record ya tomado, sin scope de escritura),
+         y cualquiera de ellas dejaría un cliente movido por un alta que nunca existió. */
+      if (resolucion.estado === "encontrado-fusionado") reapunte = resolucion.reapunte;
+    }
   } else {
     return malo("Falta el cliente (o la empresa de HubSpot para crearlo).");
   }
@@ -177,6 +197,16 @@ export async function POST(req: NextRequest) {
 
   // ── La escritura ────────────────────────────────────────────────────────────
   const projectId = await prisma.$transaction(async (tx) => {
+    /* Acá, y no antes: ya pasaron TODAS las precondiciones, así que el cliente se mueve a la
+       empresa viva solo si el proyecto nace de verdad. Y tiene que ser antes de `avanzarAlta`,
+       que lee `client.hubspotCompanyId` de la base para colgar el registro nuevo de HubSpot: si
+       la lápida siguiera ahí, el proyecto nacería asociado a una ficha muerta y el sync volvería
+       a encontrar cero — el síntoma exacto que todo esto vino a matar. */
+    if (reapunte) {
+      const { businessCases } = await reapuntarEnTx(tx, reapunte);
+      console.warn(anotarReapunte(reapunte, reusado?.nombre ?? "", businessCases));
+    }
+
     const proyecto = await tx.project.create({
       data: {
         clientId,
@@ -238,6 +268,10 @@ export async function POST(req: NextRequest) {
       termino: alta.termino,
       error: alta.error,
       hubspotServiceId: alta.hubspotServiceId,
+      /* Que la persona se entere de que el proyecto NO nació en un cliente nuevo. Sin esto el
+         alta dice "empresa nueva" en el paso 1 y termina en un cliente que ya existía, sin que
+         nada lo explique. */
+      clienteReusado: reusado,
     },
     { status: 201 },
   );

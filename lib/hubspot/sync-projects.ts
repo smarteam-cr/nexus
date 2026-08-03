@@ -6,6 +6,7 @@ import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 import { sanitizeTags, normalizeTag } from "@/lib/tags/catalog";
 import { cerradoPorEstadoCrudo, decidirCierre, resolvePipeline } from "@/lib/projects/kind";
 import type { Client } from "@hubspot/api-client";
+import { detectarFusion, explicarFusion } from "@/lib/hubspot/empresa-fusionada";
 
 // ── Mapeo de nombre del proyecto → serviceType + projectType ─────────────────
 
@@ -863,6 +864,22 @@ async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult>
         `(error transitorio de HubSpot). Se omite esta corrida para no reconciliar con datos incompletos.`,
       );
       return result;
+    }
+    /* ── ANTES DE DECIR "no tiene proyectos", PREGUNTAR SI LA EMPRESA SIGUE SIENDO ELLA ──
+       Con `objectIdentified` sabemos que HubSpot entendió la pregunta y contestó "cero". Eso
+       es cierto para dos situaciones muy distintas: un cliente que de verdad no tiene proyectos
+       todavía, y uno cuya empresa se FUSIONÓ con otra — donde los proyectos existen, pero
+       colgando del sobreviviente. Las dos daban el mismo texto, y el texto mandaba a buscar el
+       problema exactamente donde no estaba (pasó con Spectrum el 2026-08-03).
+
+       La llamada extra se paga SOLO acá: es el único punto donde ya se sabe que algo no cierra,
+       y para un cliente legítimamente sin proyectos cuesta un GET con `properties=name`. */
+    if (objectIdentified && companyId) {
+      const veredicto = await detectarFusion(hsClient, companyId);
+      if (veredicto.estado === "fusionada") {
+        result.errors.push(explicarFusion(companyId, veredicto.idSobreviviente));
+        return result;
+      }
     }
     result.errors.push(
       objectIdentified
