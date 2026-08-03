@@ -320,11 +320,21 @@
   ejecución. Formato fijo de 3 pasos: rendir cuentas de los compromisos → mirar el marcador →
   comprometer 1-2 movidas que muevan las medidas de predicción. El torbellino NO entra a la sesión.
 - **Documentación** (sección del sidebar, `/documentacion`): el manual de Nexus **para el equipo
-  de Smarteam** —no para desarrolladores— en 4 pestañas sincronizadas a la URL (`?s=agentes`):
-  cómo funciona · los documentos · los agentes · HubSpot. Sin gate: la ve todo el mundo. Su
-  contenido vive en el REPO (`lib/manual/`), no en la base, y está partido en dos: lo **derivado**
-  (`armar.ts`, puro — sale de los registros del código, así que se actualiza solo cuando alguien
-  agrega un canvas o cambia una etapa) y lo **escrito a mano** (`contenido.ts` — para qué sirve
-  cada documento y cuándo se abre, que es lo único que ningún registro sabe). Los **prompts de los
-  agentes NO aparecen**: viven detrás del permiso de `/agents` y ahí se quedan. Ver DECISIONS
-  §Documentación de la app.
+  de Smarteam** —no para desarrolladores—: cómo funciona · el recorrido · los documentos · los
+  agentes · HubSpot. Sin gate: la ve todo el mundo. **Es UNA página larga servida entera desde el
+  servidor, con las secciones ancladas y un índice de salto** — no tiene pestañas a propósito: con
+  render condicional el Ctrl+F del navegador (el único buscador que necesita) veía la cuarta parte
+  del manual, y un link con ancla llegaba antes de que el destino existiera. Su contenido vive en
+  el REPO (`lib/manual/`), no en la base, y está partido en dos: lo **derivado** (`armar.ts`, puro
+  — los documentos, sus secciones, el recorrido completo del motor de etapas y los pipelines de
+  HubSpot; se actualiza solo cuando alguien agrega un canvas o una etapa) y lo **escrito a mano**
+  (`contenido.ts` — para qué sirve cada documento, cuándo se abre y qué hace cada agente, que es
+  lo único que ningún registro sabe). **Nada sale de texto libre de la base**: ni los prompts (que
+  viven detrás del permiso de `/agents`) ni `Agent.description`, que llegó a publicar jerga de
+  desarrollador. Se llega desde el sidebar o desde el "¿Qué es esto?" del encabezado de cualquier
+  canvas. Ver DECISIONS §Documentación de la app y §Documentación: el rediseño de lectura.
+- **ancla del manual** (`lib/manual/anclas.ts`): el fragmento de URL con el que se comparte un
+  pedazo concreto de la Documentación — `#doc-kickoff` para un documento, el id del agente para un
+  agente, `#documentos`/`#agentes`/… para una sección. Se declaran en un registro único (patrón
+  `project-action-targets.ts`) y un test falla si un documento del registro se queda sin la suya:
+  un documento sin ancla es un documento que no se puede mandar por chat.

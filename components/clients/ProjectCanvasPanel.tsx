@@ -23,7 +23,7 @@ import PrintDocButton from "@/components/print/PrintDocButton";
 import { PrintStagingProvider } from "@/components/print/PrintStaging";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
-import { slugForCanvas } from "@/lib/pieces/registry";
+import { slugForCanvas, pieceBySlug, pieceLabel } from "@/lib/pieces/registry";
 import { buildPieceRows, type RowState } from "@/lib/flow/dropdown-rows";
 import { AVISO_DESACTUALIZADA, AVISO_DESACTUALIZADA_LARGO } from "@/lib/pieces/piece-staleness";
 import { pieceReadiness } from "@/lib/flow/piece-readiness";
@@ -714,6 +714,19 @@ export default function ProjectCanvasPanel({
               (activeSlug === "handoff" || activeSlug === "kickoff") && (
                 <UnreviewedSessionsChip projectId={projectId} />
               )}
+            {/* Puerta al manual, en el momento de la duda. La sección /documentacion existe
+                desde el 2026-08-02 y su única entrada era acordarse del ítem del sidebar — para
+                un equipo que la abre pocas veces al mes, eso es no tenerla. Va acá porque es
+                donde alguien se pregunta "¿y esto para qué era?", con el slug ya resuelto. */}
+            {!isResumenCanvas && activeSlug && pieceBySlug(activeSlug) && (
+              <a
+                href={`/documentacion#doc-${activeSlug}`}
+                className="shrink-0 text-xs text-fg-muted hover:text-fg transition-colors"
+                title={`Qué es el canvas ${pieceLabel(activeSlug)} y cuándo se usa`}
+              >
+                ¿Qué es esto?
+              </a>
+            )}
           </div>
           {isResumenCanvas && (
             <p className="text-sm text-gray-400 mt-0.5">

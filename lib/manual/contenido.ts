@@ -3,13 +3,17 @@
  *
  * ── LA REGLA DE ESTE MÓDULO ──────────────────────────────────────────────────
  * Acá va SOLO lo que ninguna estructura del código sabe: para qué sirve un documento, cuándo
- * lo abrís, qué te ahorra. Todo lo demás —qué documentos existen, sus secciones, qué agente
- * los genera, en qué etapa se trabajan, los pipelines de HubSpot— se DERIVA de los registros
- * que ya son fuente de verdad (ver `lib/manual/armar.ts`).
+ * lo abres, qué te ahorra. Todo lo demás —qué documentos existen, sus secciones, qué agente
+ * los genera, en qué etapa se trabajan, el orden del recorrido, los pipelines de HubSpot— se
+ * DERIVA de los registros que ya son fuente de verdad (ver `lib/manual/armar.ts`).
  *
  * El motivo es simple: una documentación escrita 100% a mano miente a los tres meses. Ésta se
  * actualiza sola cuando alguien agrega un canvas, y `lib/manual/manual.test.ts` falla si ese
  * canvas nuevo se quedó sin su párrafo — la omisión no puede pasar en silencio.
+ *
+ * ⚠ El recorrido fue el contraejemplo: hasta el 2026-08-02 las etapas estaban escritas a mano
+ * acá, y decían SIETE mientras el motor tenía NUEVE. Ahora la lista y el orden se derivan; a
+ * mano queda una frase por etapa, con su guard.
  *
  * ── AUDIENCIA ────────────────────────────────────────────────────────────────
  * El EQUIPO de Smarteam (CS, Ventas, Marketing, Finanzas). Lenguaje de negocio, tuteo, cero
@@ -26,11 +30,11 @@ export interface BloqueNarrativo {
 export interface DocDePieza {
   /** Qué problema resuelve, en una o dos frases. */
   paraQue: string;
-  /** En qué momento del trabajo lo abrís. */
+  /** En qué momento del trabajo lo abres. */
   cuando: string;
 }
 
-// ── Pestaña "Cómo funciona" ────────────────────────────────────────────────────
+// ── Sección "Cómo funciona" ────────────────────────────────────────────────────
 
 export const QUE_ES: BloqueNarrativo = {
   titulo: "Qué es Nexus",
@@ -50,12 +54,12 @@ export const QUE_TE_AHORRA: BloqueNarrativo = {
     {
       titulo: "Escuchar grabaciones para entender qué se vendió",
       detalle:
-        "El traspaso se arma leyendo las sesiones de venta del proyecto. En vez de repasar seis reuniones, revisás un documento y corregís lo que esté mal.",
+        "El traspaso se arma leyendo las sesiones de venta del proyecto. En vez de repasar seis reuniones, revisas un documento y corriges lo que esté mal.",
     },
     {
       titulo: "Rearmar el cronograma desde cero en cada proyecto",
       detalle:
-        "El plan se propone a partir de lo que se vendió y del tipo de proyecto. Vos ajustás fechas y responsables; no partís de una hoja en blanco.",
+        "El plan se propone a partir de lo que se vendió y del tipo de proyecto. Tú ajustas fechas y responsables; no partes de una hoja en blanco.",
     },
     {
       titulo: "Perder el contexto cuando alguien cambia de proyecto",
@@ -84,7 +88,7 @@ export const QUE_NO_HACE: BloqueNarrativo = {
     {
       titulo: "No es el CRM",
       detalle:
-        "Las empresas, los tratos y la etapa de cada proyecto se manejan en HubSpot. Si movés la tarjeta allá, Nexus lo refleja; al revés no.",
+        "Las empresas, los tratos y la etapa de cada proyecto se manejan en HubSpot. Si mueves la tarjeta allá, Nexus lo refleja; al revés no.",
     },
     {
       titulo: "No es contabilidad",
@@ -92,69 +96,62 @@ export const QUE_NO_HACE: BloqueNarrativo = {
         "Cobranza controla a quién le toca cobrar y cómo va cada cobro. Las facturas, la conciliación bancaria y la contabilidad viven en Odoo y Mercury.",
     },
     {
-      titulo: "No decide por vos",
+      titulo: "No decide por ti",
       detalle:
         "Todo lo que escribe un agente es un borrador. Nada se publica al cliente ni se da por bueno sin que una persona lo revise.",
     },
     {
       titulo: "No manda correos solo",
       detalle:
-        "Cuando redacta un mensaje de cobro, lo deja listo para que vos lo edites y lo envíes. No sale nada automáticamente.",
+        "Cuando redacta un mensaje de cobro, lo deja listo para que tú lo edites y lo envíes. No sale nada automáticamente.",
     },
   ],
 };
 
-export const EL_RECORRIDO: BloqueNarrativo = {
-  titulo: "El recorrido de un cliente",
+// ── Sección "El recorrido" ─────────────────────────────────────────────────────
+
+export const INTRO_RECORRIDO: BloqueNarrativo = {
+  titulo: "Cómo avanza un proyecto",
   parrafos: [
-    "Un proyecto de implementación pasa por estas etapas. Cada una tiene un documento que la cierra, y ese documento es el que aparece en el menú del proyecto.",
-    "No todos los proyectos las recorren todas: un desarrollo o un sitio web tienen su propio camino, más corto.",
-  ],
-  bullets: [
-    {
-      titulo: "1 · Traspaso y arranque",
-      detalle:
-        "Ventas cierra y le pasa el cliente a Customer Success. Se arma el traspaso con lo que se vendió, y con eso el documento de arranque que se le presenta al cliente.",
-    },
-    {
-      titulo: "2 · Exploración",
-      detalle:
-        "Entender el negocio del cliente de verdad: qué hace, cómo trabaja hoy, qué dimos por supuesto y todavía nadie confirmó.",
-    },
-    {
-      titulo: "3 · Diagnóstico",
-      detalle: "Qué encontramos y qué le está costando plata o tiempo al cliente.",
-    },
-    {
-      titulo: "4 · Planificación",
-      detalle: "Qué vamos a hacer, en qué orden y para cuándo. Acá nace el cronograma que el cliente aprueba.",
-    },
-    {
-      titulo: "5 · Configuración técnica",
-      detalle:
-        "Se construye: lo que se configura en HubSpot y, si el proyecto lo incluye, lo que hay que desarrollar a la medida.",
-    },
-    {
-      titulo: "6 · Adopción y validación",
-      detalle:
-        "El cliente empieza a usarlo y se confirma que efectivamente lo usa. Acá ya no hay un documento que generar: hay acompañamiento.",
-    },
-    {
-      titulo: "7 · Entrega",
-      detalle: "Se cierra el proyecto y, si corresponde, arranca la continuidad.",
-    },
+    "Un proyecto de implementación recorre estas etapas en orden. La etapa en la que está no la elige nadie a mano: Nexus la deduce de lo que ya pasó —si el arranque se publicó, si el cronograma se consensuó, si la demo se aprobó— y por eso siempre refleja el estado real, no el que alguien se acordó de marcar.",
+    "Las etapas con documento son en las que hay algo que abrir y trabajar. Las que aparecen como hito no tienen documento a propósito: se marcan cuando ocurren y ya.",
   ],
 };
 
-// ── Pestaña "Documentos" ───────────────────────────────────────────────────────
-
-export const INTRO_DOCUMENTOS: BloqueNarrativo = {
-  titulo: "Los documentos de un proyecto",
-  parrafos: [
-    "Cada proyecto tiene un menú de documentos. Algunos nacen con el proyecto y otros aparecen solo si hacen falta.",
-    "Los que dicen «lo ve el cliente» se le pueden publicar con un enlace; el resto son de uso interno y el cliente nunca los ve.",
-  ],
+/**
+ * Una frase por etapa: qué pasa ahí, en lenguaje de negocio. TODO lo demás de esta sección
+ * —el orden, los nombres, qué documento se trabaja, cuál la cierra, cuáles son hitos y cuáles
+ * son solo del ciclo de continuidad— se deriva del motor de etapas.
+ *
+ * ⚠ Las claves son las etapas del motor. `manual.test.ts` falla si el motor gana una etapa y
+ * acá no está — que es exactamente lo que pasó con la versión anterior de este bloque, escrita
+ * entera a mano: decía siete etapas y el producto mostraba nueve.
+ */
+export const ETAPAS: Record<string, string> = {
+  HAND_OFF:
+    "Ventas cierra y le pasa el cliente a Customer Success. Se arma el traspaso con lo que se vendió y lo que se prometió, y con eso el documento de arranque que se le presenta al cliente.",
+  EXPLORACION:
+    "Entender el negocio del cliente de verdad: cómo trabaja hoy, qué nos dijo y qué estamos dando por supuesto sin que nadie lo haya confirmado.",
+  DIAGNOSTICO:
+    "Nombrar con evidencia qué encontramos: dónde pierde tiempo, dónde se le caen los datos, qué le está costando plata.",
+  PLANIFICACION:
+    "Qué vamos a hacer, en qué orden y para cuándo. Acá nace el cronograma que el cliente aprueba y contra el que se mide el resto del proyecto.",
+  CONFIGURACION_TECNICA:
+    "Se construye: lo que se configura en HubSpot y, si el proyecto lo incluye, lo que hay que desarrollar a la medida.",
+  ADOPCION:
+    "El cliente empieza a usarlo con acompañamiento. Ya no hay documento que generar: hay sesiones y seguimiento.",
+  OPERACION_CONTINUA:
+    "El ritmo normal de una cuenta de continuidad: se trabaja mes a mes sin el recorrido completo de una implementación.",
+  VALIDACION_USO:
+    "Confirmar que el cliente efectivamente lo usa, no solo que se lo entregamos. Es la diferencia entre una entrega y una adopción real.",
+  ENTREGA: "Se cierra el proyecto y, si corresponde, arranca la continuidad.",
+  FINALIZADO: "El proyecto terminó. Queda como historia consultable del cliente.",
 };
+
+// ── Sección "Los documentos" ───────────────────────────────────────────────────
+
+export const INTRO_DOCUMENTOS =
+  "Cada proyecto tiene un menú de documentos. Algunos nacen con el proyecto y otros aparecen solo si hacen falta. Los que dicen «lo ve el cliente» se le pueden publicar con un enlace; el resto son de uso interno y el cliente nunca los ve.";
 
 /**
  * Un párrafo por documento. La CLAVE es el identificador estable de la pieza
@@ -191,7 +188,7 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
   diagnosis: {
     paraQue:
       "Qué encontramos al mirar cómo trabaja el cliente hoy: dónde pierde tiempo, dónde se le caen los datos, qué le está costando.",
-    cuando: "Cuando ya entendiste el negocio y podés nombrar los problemas con evidencia.",
+    cuando: "Cuando ya entendiste el negocio y puedes nombrar los problemas con evidencia.",
   },
   planning: {
     paraQue:
@@ -213,7 +210,7 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
     paraQue:
       "El contexto del cliente que se va acumulando reunión tras reunión, más los procesos que le mapeamos. No pertenece a un proyecto: es del cliente entero y sobrevive a los proyectos.",
     cuando:
-      "Cuando necesitás entender al cliente por encima de un proyecto puntual, o cuando entra alguien nuevo a la cuenta.",
+      "Cuando necesitas entender al cliente por encima de un proyecto puntual, o cuando entra alguien nuevo a la cuenta.",
   },
   "business-case": {
     paraQue:
@@ -223,18 +220,64 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
   },
 };
 
-// ── Pestaña "Agentes" ──────────────────────────────────────────────────────────
+/**
+ * Los documentos que NO tienen secciones, y por qué. Sin esto la ficha simplemente no pinta
+ * nada y el lector no puede distinguir «no aplica» de «falta documentar».
+ */
+export const SIN_SECCIONES: Record<string, string> = {
+  timeline: "Su contenido son fases y tareas en una línea de tiempo, no secciones de texto.",
+  "client-info": "Se arma con los bloques que los agentes van sumando reunión tras reunión.",
+  "business-case": "Sus secciones dependen del tipo de propuesta que elija Ventas al crearla.",
+};
+
+// ── Sección "Los agentes" ──────────────────────────────────────────────────────
+
+/**
+ * Qué hace cada agente, en lenguaje de negocio.
+ *
+ * ── POR QUÉ ESTO NO SALE DE LA BASE ──────────────────────────────────────────
+ * Hasta el 2026-08-02 esta pantalla mostraba `Agent.description`: texto libre de la base,
+ * editable desde `/agents` sin deploy, sin test y sin regla de audiencia. En la única pantalla
+ * que declara "cero jerga técnica" se leía «Extrae información de las cards generadas por otros
+ * agentes» y «lista de ActionItems con owner y dueDate sugeridos». Peor: el guard de privacidad
+ * solo prohíbe el prompt, así que nada impedía que alguien pegara uno en ese campo y quedara
+ * publicado, sin gate, a toda la empresa.
+ *
+ * La clave es el GRUPO del agente, no su id: el del handoff es un cuid y el catálogo evita
+ * hardcodearlo a propósito. `AGENT_GROUP_TO_CANVAS` es el registro estable de los grupos, y
+ * `manual.test.ts` falla si aparece uno sin frase.
+ */
+export const DOC_AGENTES: Record<string, string> = {
+  handoff:
+    "Lee las reuniones de venta del proyecto y arma el traspaso: qué se vendió, qué se prometió, quién es quién del lado del cliente y una primera propuesta de fases.",
+  kickoff:
+    "Toma el traspaso y lo convierte en el documento de arranque que se le presenta al cliente, con el tono y la línea gráfica de Smarteam.",
+  cronograma:
+    "Baja las fases del proyecto a tareas por semana, con responsable y duración, para que el plan deje de ser un título y se pueda seguir.",
+  exploracion:
+    "Compara lo que el cliente ya nos dijo contra lo que estamos dando por supuesto, y de ahí saca las preguntas para las próximas reuniones.",
+  diagnostico:
+    "Junta lo que se entendió del negocio y lo ordena en hallazgos con evidencia: qué está roto, dónde duele y qué le cuesta al cliente.",
+  planificacion:
+    "Propone qué hacer con cada hallazgo del diagnóstico y en qué orden, antes de comprometer fechas.",
+  desarrollo:
+    "Describe qué hay que construir a la medida —integraciones, automatizaciones, objetos— con su arquitectura y su estimación.",
+  implementacion:
+    "Arma la guía de configuración semana a semana: qué hay que dejar listo en HubSpot según el cronograma.",
+  businesscase:
+    "Escribe la propuesta comercial para un prospecto a partir de lo que se habló con él: qué le duele, qué le proponemos y qué gana.",
+};
 
 export const INTRO_AGENTES: BloqueNarrativo = {
   titulo: "Qué es un agente",
   parrafos: [
-    "Un agente es una tarea de inteligencia artificial con un encargo concreto: leer cierto material y escribir cierto documento. No es un chat: no se conversa con él, se lo dispara y devuelve un borrador.",
-    "Algunos los disparás vos con el botón «Generar» del documento. Otros corren solos cuando entra una reunión nueva.",
+    "Un agente es una tarea de inteligencia artificial con un encargo concreto: leer cierto material y escribir cierto documento. No es un chat: no se conversa con él, se dispara y devuelve un borrador.",
+    "Algunos los disparas tú con el botón «Generar» del documento. Otros corren solos cuando entra una reunión nueva.",
     "Lo que escriben SIEMPRE es un borrador. La regla del equipo es revisarlo antes de darlo por bueno, y con más razón antes de que lo vea el cliente.",
   ],
 };
 
-// ── Pestaña "HubSpot" ──────────────────────────────────────────────────────────
+// ── Sección "HubSpot" ──────────────────────────────────────────────────────────
 
 export const INTRO_HUBSPOT: BloqueNarrativo = {
   titulo: "Cómo se conecta con HubSpot",

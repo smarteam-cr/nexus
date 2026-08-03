@@ -1484,18 +1484,87 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   con hex literal y no acompaña el modo oscuro, así que quedaría como una isla blanca dentro de
   la app. El motor es para documentos que se leen solos (roles, kickoff, business case), no para
   una pantalla de módulo. La pantalla usa `Tabs`/`Card` y **solo tokens semánticos**.
-- **Una ruta con 4 pestañas en la URL (`?s=agentes`), no 4 rutas.** Un link a una sección
-  concreta se pega en un chat, que es la mitad de para qué sirve una documentación; y 4 rutas
-  serían 8 entradas de registro (skeleton + page-shell) para contenido que hoy cabe en una
-  pantalla. `router.replace` y no `push`: cada clic de pestaña no es un paso del historial.
+- **Una ruta, no cuatro** (sigue en pie): 4 rutas serían 8 entradas de registro —skeleton +
+  page-shell— para contenido que cabe en una pantalla. ~~Con 4 pestañas en la URL
+  (`?s=agentes`)~~ → **CORREGIDO el 2026-08-02, mismo día**: las pestañas se fueron y la página
+  entera se sirve seguida. Ver la sección siguiente.
 - **El HANDOFF es el caso especial del armado.** `CANVAS_DEF_BY_SLUG` lo excluye a propósito (no
   se activa desde el desplegable, lo monta el flujo de handoffs), así que la derivación ingenua
   lo mostraba con **cero secciones** — el documento con el que arranca todo, vacío. `seccionesDe`
   lo resuelve contra `HANDOFF_CANVAS` y hay un test que lo congela. Las que devuelven vacío y
   está BIEN que lo hagan: Cronograma (su contenido son fases y tareas) e Información del cliente
   y Business Case (su composición vive en otro registro).
-- **Iteración prevista, no ahora**: markdown en el contenido; una página por documento
-  (`/documentacion/kickoff`) con un "¿qué es esto?" en el header de cada canvas; el campo que hoy
-  no existe en ninguna parte (**qué mirar y qué corregir en la salida de cada agente**); y llenar
-  el `tip` por sección en los 6 canvases que lo tienen vacío — es documentación que envejece a la
-  misma velocidad que el código porque vive en el mismo archivo que la sección.
+
+## Documentación: el rediseño de lectura (2026-08-02, mismo día que el módulo)
+
+> Elías pidió mejorar la estructura UX/UI e investigar cómo lo resuelven otras documentaciones de
+> producto y de API. La investigación (Diátaxis, GOV.UK Design System, Baymard, NN/g, Stripe,
+> Twilio, help centers de producto, docs generadas de código) devolvió un diagnóstico que no era
+> de maquetación: **tres cuartas partes del manual no estaban en el DOM**.
+
+- **La pregunta correcta no era "¿pestañas o rutas?" sino "¿el manual está en el DOM?".** El
+  render condicional `{activa === "documentos" && …}` montaba un panel de cuatro, así que el
+  **Ctrl+F del navegador —el único buscador que una documentación de ~40 unidades necesita, y el
+  que la investigación descartó reemplazar por unanimidad (el umbral para un motor propio está en
+  100-200 páginas)— veía el 25 % y devolvía "no encontrado" sin avisar**. Las 4 rutas empeoran eso
+  (parten el Ctrl+F en cuatro) y `hidden="until-found"` es frágil (React serializa `hidden` como
+  booleano y hay que escuchar `beforematch`). Todo servido seguido resuelve tres cosas de una:
+  Ctrl+F completo, anclas nativas, y **la pantalla vuelve a ser Server Component** — lo que NO es
+  cosmético: con el panel resolviéndose en el cliente, un link `#doc-kickoff` llegaba antes de que
+  el destino existiera y el navegador no saltaba. Sin esto, el puntero desde el canvas tampoco
+  rinde. Evidencia externa: GOV.UK dice literalmente *no usar pestañas como navegación de página*,
+  y Baymard midió que el contenido tras pestañas horizontales *"se pasa por alto repetidamente,
+  incluso buscándolo activamente"*. **No hizo falta redirect de `?s=`: el módulo nació el mismo
+  día y nunca se deployó, así que no existe un solo link viejo.**
+- **El índice de salto es forma NUEVA, no un `<Tabs>` reusado.** Parece una tab bar y no lo es: el
+  modo navegación de `Tabs` marca el activo con `usePathname`, y cinco `href` al MISMO path
+  dejarían los cinco con `aria-current="page"`; además `role="tab"` sobre un ancla es semántica
+  falsa (un tab controla un tabpanel, no desplaza). Vive en `components/manual/` con la razón
+  escrita y se promueve a `components/ui` con su ratchet si aparece un segundo consumidor —
+  §1-UI punto 5 pide agregar la forma al vocabulario, y un ratchet para un consumidor único es
+  teatro. **Sin scroll-spy a propósito**: un `IntersectionObserver` obligaría a volver cliente la
+  única pantalla del módulo que puede ser 100 % servidor, por una mejora cosmética.
+- **`Agent.description` DEJA de leerse: era una fuga con la misma forma que el prompt, por otra
+  puerta.** No era ni derivado ni contenido del repo — es texto libre de la base, editable desde
+  `/agents` sin deploy, sin test y sin regla de audiencia. En la única pantalla que declara "cero
+  jerga técnica" se leía «Extrae información de las cards generadas por otros agentes»
+  (`seed-canvas-agents.ts`). Y el guard de privacidad solo prohibía `systemPrompt`, así que nada
+  impedía pegar un prompt ahí y publicarlo, sin gate, a toda la empresa. Ahora la explicación vive
+  en `DOC_AGENTES` (contenido.ts) con el mismo trato que `DOC_PIEZAS`. **La clave es el GRUPO del
+  agente, no su id**: el del handoff es un cuid y el catálogo evita hardcodearlo a propósito;
+  `AGENT_GROUP_TO_CANVAS` es el registro estable, y el test falla si aparece un grupo sin frase.
+- **El recorrido se DERIVA del motor de etapas.** Era el único bloque que incumplía la regla
+  fundacional del módulo, y ya mentía: `contenido.ts` listaba **7** etapas mientras
+  `FULL_CYCLE_ORDER` tiene **9**, y la píldora "Etapa:" de la misma pantalla usaba el otro
+  vocabulario (`STAGE_LABEL_ES`). Ahora el orden, los nombres, qué documento se trabaja, cuál
+  cierra la etapa (`STAGE_FLOW[].primary`), el hecho que la cierra (`doneLabel`), las 4
+  etapas-hito sin documento y el ciclo corto salen del motor; a mano queda una frase por etapa,
+  con su guard. Es LECTURA de `stage-engine.ts` — la regla que lo congela no se toca.
+- **`generadoPor` y `tieneAgente` son preguntas distintas, y confundirlas mentía.**
+  `CANVAS_PRIMARY_AGENT` solo conoce los botones anclados al nombre del canvas; el handoff y el
+  cronograma tienen el suyo en otra parte de la pantalla. Derivar "lo escribe un agente" de ese
+  mapa habría dicho que los dos documentos más importantes del arranque no los genera nadie. La
+  respuesta correcta es `PieceDefinition.agentGroup`.
+- **Las secciones de cada documento dejan de estar colapsadas; el apéndice de HubSpot no.**
+  "¿Qué trae el kickoff?" es probablemente el dato que más se viene a buscar y detrás de un
+  `<details>` no lo alcanza ni el ojo ni Ctrl+F. La excepción legítima son los 19 nombres internos
+  de propiedades: no es contenido comparable, es una lista que se consulta para ir a buscarla a
+  HubSpot (NN/g admite el colapsable justo cuando la mayoría no necesita el contenido) — y va con
+  `CollapsibleSection` de `components/ui`, no con otro `<details>` crudo.
+- **Descartado tras evaluarlo, para no re-litigarlo**: motor de búsqueda (Algolia/Pagefind/
+  MiniSearch), command palette propio, tabla comparativa de los 10 documentos (con todo en el DOM
+  es el mismo contenido dos veces en la misma página; la comparabilidad la da la plantilla fija de
+  4 zonas), "#" copiable al hover (nadie copia anclas a mano; serían ~40 controles invisibles por
+  teclado), librería de markdown, motor `LandingView`, versionado, i18n, analytics por artículo,
+  widget "¿te sirvió?", breadcrumbs, prev/next, y una banda de frescura con test de caducidad —
+  un ratchet que se satisface bumpeando una fecha es peor que no tenerlo.
+- **Iteración prevista, no ahora**: las recetas "cómo hago X" (el ítem más caro de mantener: sus
+  nombres de pantalla y de botón tienen que COMPONERSE desde `nav-config.tsx` y
+  `CANVAS_PRIMARY_AGENT`, nunca como strings sueltos, más un test de que toda ruta citada existe);
+  **qué revisar en el borrador** de cada documento; "cuando algo sale raro" —probablemente el
+  contenido de más valor que falta, y por eso **no se inventa**: merece una pasada con síntomas
+  reales del equipo—; "quién puede hacer qué" (19 secciones × 45 celdas × 7 roles, todo con label
+  en español ya escrito, costo de mantenimiento cero); "qué ve exactamente el cliente" (6
+  superficies externas, 3 accesos, 4 mecanismos de publicación, hoy resumidos en una píldora); y
+  llenar el `tip` por sección en los 6 canvases vacíos — la única propuesta que mejora la
+  documentación **sin que nadie entre a `/documentacion`**.

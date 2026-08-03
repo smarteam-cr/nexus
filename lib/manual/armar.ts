@@ -19,12 +19,75 @@
 import { PIECES, pieceLabel, type PieceDefinition } from "@/lib/pieces/registry";
 import { CANVAS_DEF_BY_SLUG, HANDOFF_CANVAS, AGENT_GROUP_TO_CANVAS } from "@/lib/canvas/canvas-defs";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
-import { piecesInFlowOrder, stageForPiece } from "@/lib/flow/stage-pieces";
-import { STAGE_LABEL_ES } from "@/lib/lifecycle/stage-engine";
+import { piecesInFlowOrder, stageForPiece, flowForStage } from "@/lib/flow/stage-pieces";
+import {
+  STAGE_LABEL_ES,
+  STAGE_EXIT_STEPS,
+  FULL_CYCLE_ORDER,
+  SHORT_CYCLE_ORDER,
+} from "@/lib/lifecycle/stage-engine";
 import { PROJECT_PIPELINES } from "@/lib/projects/kind";
 import { PROJECT_PROPERTIES, GRUPOS_DE_PROPIEDAD } from "@/lib/hubspot/project-properties";
 import { AGENT_CATEGORIES, categorizeAgent, agentTriggerHint, type AgentCategoryKey } from "@/lib/agents/catalog";
-import { DOC_PIEZAS } from "./contenido";
+import { DOC_PIEZAS, DOC_AGENTES, ETAPAS } from "./contenido";
+
+// ── El recorrido ───────────────────────────────────────────────────────────────
+
+export interface EtapaDoc {
+  /** La clave de la etapa en el motor — también la clave de su frase escrita a mano. */
+  clave: string;
+  nombre: string;
+  /** Posición dentro de su ciclo, 1-based. Es el "3 de 9" que muestra el producto. */
+  posicion: number;
+  /** La frase escrita a mano: qué pasa en esta etapa. */
+  queEs: string;
+  /** Los documentos que se trabajan acá, en orden de trabajo. Vacío = es un hito. */
+  documentos: { slug: string; nombre: string }[];
+  /** El documento cuya salida cierra la etapa. null = no se cierra con un documento. */
+  cierraCon: { slug: string; nombre: string } | null;
+  /** El hecho que la cierra, en lenguaje de negocio ("Cronograma consensuado"). */
+  seCierraCon: string | null;
+  /** No hay documento que abrir: la etapa se marca cuando ocurre. */
+  esHito: boolean;
+}
+
+const CIERRE_POR_ETAPA = new Map(STAGE_EXIT_STEPS.map((s) => [s.stage as string, s.doneLabel]));
+
+function armarEtapas(orden: readonly string[]): EtapaDoc[] {
+  return orden.map((clave, i) => {
+    const flujo = flowForStage(clave as Parameters<typeof flowForStage>[0]);
+    const piezas = (flujo?.pieces ?? []).map((slug) => ({ slug, nombre: pieceLabel(slug) }));
+    const primaria = flujo?.primary ?? null;
+    return {
+      clave,
+      nombre: STAGE_LABEL_ES[clave as keyof typeof STAGE_LABEL_ES] ?? clave,
+      posicion: i + 1,
+      // El `?? ""` no es un default silencioso: `manual.test.ts` falla si falta la frase.
+      queEs: ETAPAS[clave] ?? "",
+      documentos: piezas,
+      cierraCon: primaria ? { slug: primaria, nombre: pieceLabel(primaria) } : null,
+      seCierraCon: CIERRE_POR_ETAPA.get(clave) ?? null,
+      esHito: piezas.length === 0,
+    };
+  });
+}
+
+/**
+ * El recorrido completo de una implementación, derivado del motor de etapas.
+ *
+ * Antes esto eran siete bullets escritos a mano que ya no coincidían con las nueve etapas del
+ * producto — el único bloque del módulo que incumplía su propia regla. Ahora el orden, los
+ * nombres, qué documento se trabaja y cuál cierra cada etapa salen del mismo lugar del que los
+ * saca la ficha del proyecto, así que no pueden contar historias distintas.
+ */
+export function armarRecorrido(): EtapaDoc[] {
+  return armarEtapas(FULL_CYCLE_ORDER);
+}
+
+/** El ciclo corto: el camino de las cuentas de continuidad, que no hacen el recorrido entero. */
+export function armarCicloCorto(): EtapaDoc[] {
+  return armarEtapas(SHORT_CYCLE_ORDER);
+}
 
 // ── Documentos ─────────────────────────────────────────────────────────────────
 
@@ -41,6 +104,21 @@ export interface DocumentoDoc {
   etiquetas: string[];
   /** Texto del botón que lo genera, si tiene agente propio en su encabezado. */
   generadoPor: string | null;
+  /**
+   * El agente detrás de ese botón. Va aparte del label porque es lo que permite ENLAZAR el
+   * documento con su agente: el registro ya resolvía la relación y se quedaba solo con el
+   * texto, así que en pantalla decía "Botón: Generar kickoff" sin forma de llegar al agente.
+   */
+  generadoPorId: string | null;
+  /**
+   * Lo escribe un agente, aunque su botón no viva en el encabezado del canvas.
+   *
+   * ⚠ Es una pregunta DISTINTA de `generadoPor`, y confundirlas produce una mentira concreta:
+   * `CANVAS_PRIMARY_AGENT` solo conoce los botones anclados al nombre del canvas, así que el
+   * handoff y el cronograma —que tienen su propio disparador en otra parte de la pantalla—
+   * saldrían como si nadie los generara.
+   */
+  tieneAgente: boolean;
   /** Sus secciones, en el orden real en que se crean. */
   secciones: string[];
 }
@@ -102,6 +180,8 @@ export function armarDocumentos(): DocumentoDoc[] {
         etapa: etapa ? STAGE_LABEL_ES[etapa] : null,
         etiquetas: etiquetasDe(p),
         generadoPor: CANVAS_PRIMARY_AGENT[p.slug]?.label ?? null,
+        generadoPorId: CANVAS_PRIMARY_AGENT[p.slug]?.agentId ?? null,
+        tieneAgente: p.agentGroup !== null,
         secciones: seccionesDe(p.slug),
       };
     });
@@ -109,11 +189,15 @@ export function armarDocumentos(): DocumentoDoc[] {
 
 // ── Agentes ────────────────────────────────────────────────────────────────────
 
-/** La forma MÍNIMA que necesita el armado. Deliberadamente sin `systemPrompt`. */
+/**
+ * La forma MÍNIMA que necesita el armado. Deliberadamente sin `systemPrompt` — y desde el
+ * 2026-08-02 también sin `description`: ese campo es texto libre de la base, editable sin
+ * deploy y sin regla de audiencia, y esta pantalla no tiene gate. La explicación de cada agente
+ * vive curada en `contenido.ts` (ver `DOC_AGENTES`).
+ */
 export interface FilaDeAgente {
   id: string;
   name: string;
-  description: string | null;
   status: string;
   agentType: string;
   agentGroup: string | null;
@@ -122,11 +206,14 @@ export interface FilaDeAgente {
 export interface AgenteDoc {
   id: string;
   nombre: string;
+  /** La frase curada de `DOC_AGENTES`, por grupo. null = no tiene una escrita todavía. */
   descripcion: string | null;
   /** Dónde se dispara, en lenguaje de pantalla ("Canvas Kickoff", "Automático (Google Meet)"). */
   disparo: string;
   /** En qué documento escribe. null = no escribe en un documento del proyecto. */
   escribeEn: string | null;
+  /** El slug de ese documento — la otra mitad del enlace documento↔agente. */
+  escribeEnSlug: string | null;
   activo: boolean;
 }
 
@@ -154,9 +241,10 @@ export function armarAgentes(filas: FilaDeAgente[]): CategoriaDeAgentes[] {
         return {
           id: f.id,
           nombre: f.name,
-          descripcion: f.description,
+          descripcion: f.agentGroup ? (DOC_AGENTES[f.agentGroup] ?? null) : null,
           disparo: agentTriggerHint(f),
           escribeEn: slug ? pieceLabel(slug) : null,
+          escribeEnSlug: slug ?? null,
           activo: f.status === "ACTIVE",
         };
       })
