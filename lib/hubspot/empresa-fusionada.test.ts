@@ -5,6 +5,8 @@ import {
   detectarFusion,
   detectarFusionesEnLote,
   explicarFusion,
+  idsAbsorbidosPor,
+  parsearIdsFusionados,
   type LectorDeHubspot,
 } from "./empresa-fusionada";
 
@@ -198,6 +200,68 @@ describe("el mensaje sirve para actuar", () => {
   });
 });
 
+describe("los ids que una empresa se comió (el sentido inverso)", () => {
+  it("la tabla del formato, transcrita del portal real", () => {
+    /* Medido el 2026-08-03 pidiendo la company 57140844832 (Spectrum). NO se deriva de nada:
+       es lo que HubSpot devolvió, textual. */
+    const CRUDO = "52577965185;55883608421;55881343889;57173874205;55868903093;57173936535";
+    expect(parsearIdsFusionados(CRUDO, "57140844832")).toEqual([
+      "52577965185",
+      "55883608421",
+      "55881343889",
+      "57173874205",
+      "55868903093",
+      "57173936535",
+    ]);
+  });
+
+  it("sin fusiones: null, vacío y espacios dan lista vacía", () => {
+    for (const v of [null, undefined, "", "   ", ";;", " ; ; "]) {
+      expect(parsearIdsFusionados(v, "1")).toEqual([]);
+    }
+  });
+
+  it("nunca se devuelve a sí misma", () => {
+    /* Hoy HubSpot no la incluye, pero eso no es una promesa. Si volviera, el buscador de clientes
+       se encontraría a sí mismo y creería que hay dos clientes para una empresa. */
+    expect(parsearIdsFusionados("111;222;111", "111")).toEqual(["222"]);
+  });
+
+  it("no repite un id que venga dos veces", () => {
+    expect(parsearIdsFusionados("222;222;333", "111")).toEqual(["222", "333"]);
+  });
+
+  it("un fallo de HubSpot da lista vacía, no una excepción", async () => {
+    /* «No pude preguntar» se trata como «no hay», a propósito: el peor caso es caer en el
+       comportamiento de antes. Cortar el alta por un 429 rompería un camino que hoy funciona. */
+    const roto = { apiRequest: async () => ({ ok: false, status: 429, json: async () => ({}) }) };
+    expect(await idsAbsorbidosPor(roto, "1")).toEqual([]);
+
+    const explota = {
+      apiRequest: async () => {
+        throw new Error("red caída");
+      },
+    };
+    expect(await idsAbsorbidosPor(explota, "1")).toEqual([]);
+  });
+
+  it("lee la propiedad de HubSpot, no otra", async () => {
+    let pedido = "";
+    const hs = {
+      apiRequest: async (o: { path: string }) => {
+        pedido = o.path;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ properties: { hs_merged_object_ids: "9;8" } }),
+        };
+      },
+    };
+    expect(await idsAbsorbidosPor(hs, "7")).toEqual(["9", "8"]);
+    expect(pedido).toContain("hs_merged_object_ids");
+  });
+});
+
 describe("está cableado donde el síntoma aparece", () => {
   const RAIZ = process.cwd();
   const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
@@ -209,13 +273,17 @@ describe("está cableado donde el síntoma aparece", () => {
     expect(src).toContain("explicarFusion(");
   });
 
-  it("el alta NO pregunta por fusiones, y está escrito por qué", () => {
+  it("hacia ADELANTE el alta no pregunta, y está escrito por qué", () => {
     /* Congela una DECISIÓN, no una ausencia. `projects-of-company` también devuelve cero
        proyectos, así que parece la otra superficie a cablear — y llegué a cablearla. Pero sus
        dos llamadores mandan el id que salió de `/api/handoffs/lookup`, que busca POR DOMINIO, y
        el buscador de HubSpot solo devuelve fichas VIVAS: el id que llega ahí es siempre el
        sobreviviente. El aviso no podía dispararse nunca y costaba una llamada en el caso más
-       común del alta. Si alguien lo agrega de nuevo, que sea leyendo este motivo. */
+       común del alta. Si alguien lo agrega de nuevo, que sea leyendo este motivo.
+
+       ⚠ No confundir con la pregunta INVERSA —«¿esta empresa viva se comió a alguna que Nexus
+       guarda?»—, que el alta SÍ hace y que vive en cliente-de-la-empresa.ts. Son dos direcciones
+       distintas del mismo hecho: acá el id que se tiene está vivo, allá puede estar muerto. */
     const ruta = leer("app/api/handoffs/projects-of-company/route.ts");
     expect(ruta, "volvió el aviso que no puede dispararse").not.toContain("detectarFusion(");
     expect(ruta).toContain("POR DOMINIO");

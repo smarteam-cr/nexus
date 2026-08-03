@@ -14,10 +14,17 @@
  *
  * DRY-RUN por defecto. Con `--apply` escribe (y contra producción exige `ALLOW_PROD_WRITE=1`).
  *
- * ── LO QUE NO HACE ───────────────────────────────────────────────────────────
- * No corre solo. Reapuntar un cliente a otra empresa es cambiar de qué compañía cuelga toda su
- * información, y aunque la fusión lo haga obvio, es una decisión con consecuencias (proyectos,
- * cobranza, cartera). El sync DETECTA la fusión y lo dice; corregirla es un acto deliberado.
+ * ── DÓNDE MÁS PASA ESTO, Y POR QUÉ ACÁ SIGUE SIENDO A MANO ───────────────────
+ * Desde el 2026-08-03 hay UN caso en que Nexus reapunta solo, y está acotado a propósito: cuando
+ * un alta está por CREAR un cliente para una empresa, y resulta que el cliente ya existía bajo una
+ * ficha que se fusionó dentro de ésa. Ahí no reapuntar es peor —o nace un cliente duplicado, o el
+ * proyecto nuevo queda colgado de una lápida—, y la equivalencia no es una corazonada: la afirma
+ * HubSpot en `hs_merged_object_ids`. Ver lib/hubspot/cliente-de-la-empresa.ts.
+ *
+ * Este script sigue siendo manual porque hace algo distinto: barre TODA la cartera sin que nadie
+ * haya pedido nada, y ahí el reapunte sí es una decisión con consecuencias (proyectos, cobranza,
+ * cartera) que conviene mirar antes de aplicar. El sync DETECTA la fusión y la dice; barrerla
+ * entera es un acto deliberado.
  */
 import "dotenv/config";
 import { resolverApply } from "./lib/guard";

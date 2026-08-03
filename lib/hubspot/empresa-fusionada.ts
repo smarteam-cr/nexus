@@ -89,6 +89,66 @@ export async function detectarFusion(
   }
 }
 
+// ── El sentido INVERSO: quiénes se fusionaron DENTRO de esta empresa ────────
+
+/**
+ * La propiedad de HubSpot que guarda el historial de fusión de una company: los ids de las
+ * fichas que se absorbieron, separados por `;`. La trae **cualquiera** de las dos puntas —se le
+ * pregunte al sobreviviente o a una lápida, la respuesta es la misma lista— porque el registro
+ * que responde es siempre el sobreviviente.
+ */
+const PROP_FUSIONADAS = "hs_merged_object_ids";
+
+/**
+ * Parte la lista cruda. Puro y aparte porque el formato es un dato MEDIDO, no una suposición, y
+ * un dato medido merece una tabla que se pueda escribir entera en un test.
+ *
+ * Medido contra el portal real el 2026-08-03 (Spectrum, id 57140844832):
+ *   "52577965185;55883608421;55881343889;57173874205;55868903093;57173936535"
+ * Seis ids, sin espacios, y **sin incluirse a sí misma**. Aun así se filtra el id propio: que hoy
+ * no venga no es una promesa de HubSpot, y devolverlo haría que el buscador se encuentre a sí
+ * mismo y crea que hay dos clientes para una empresa.
+ */
+export function parsearIdsFusionados(raw: string | null | undefined, idPropio: string): string[] {
+  if (!raw) return [];
+  const vistos = new Set<string>();
+  for (const parte of String(raw).split(";")) {
+    const id = parte.trim();
+    if (id && id !== idPropio) vistos.add(id);
+  }
+  return [...vistos];
+}
+
+/**
+ * ¿Qué empresas se fusionaron dentro de ésta?
+ *
+ * Es la pregunta inversa a `detectarFusion`, y es la que hace falta cuando lo que se tiene es el
+ * id VIVO —el que sale de buscar por dominio— y hay que averiguar si algún cliente de Nexus
+ * quedó apuntando a una de sus lápidas. Ir al revés (revisar los 158 ids guardados uno por uno)
+ * daría la misma respuesta pagando cien veces más.
+ *
+ * Devuelve `[]` cuando no hay fusiones **y también cuando no se pudo saber**: acá "no sé" y "no
+ * hay" se tratan igual a propósito. El peor caso de equivocarse es caer en el comportamiento de
+ * antes —crear un cliente nuevo—, mientras que cortar el alta por un 429 de HubSpot rompería un
+ * camino que hoy funciona.
+ */
+export async function idsAbsorbidosPor(
+  hs: LectorDeHubspot,
+  idSobreviviente: string,
+): Promise<string[]> {
+  try {
+    const r = await hs.apiRequest({
+      method: "GET",
+      path: `/crm/v3/objects/companies/${idSobreviviente}?properties=${PROP_FUSIONADAS}`,
+    });
+    if (!r.ok) return [];
+    const d = (await r.json()) as { properties?: Record<string, string | null> };
+    return parsearIdsFusionados(d.properties?.[PROP_FUSIONADAS], idSobreviviente);
+  } catch {
+    return [];
+  }
+}
+
 // ── Revisar MUCHAS de una ───────────────────────────────────────────────────
 
 /** Cuántos ids acepta `batch/read` de una. Límite de HubSpot. */

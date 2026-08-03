@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient, forceRefreshSystemToken } from "@/lib/hubspot/client";
+import { elegirCandidato } from "@/lib/hubspot/cliente-de-la-empresa";
 import { fetchCompanyDeals } from "@/lib/hubspot/deals";
 
 export async function GET(req: NextRequest) {
@@ -58,13 +59,27 @@ export async function GET(req: NextRequest) {
     }
 
     const company = companies[0];
-    const [deals, existing] = await Promise.all([
+    const [deals, candidatos] = await Promise.all([
       fetchCompanyDeals(hs, company.id),
-      prisma.client.findFirst({
+      /* ⚠ `findMany` + desempate, no `findFirst`. La columna no es única y hay un caso vivo con
+         DOS clientes sobre la misma empresa: «Areyas» [PROSPECTO] y «Areyá» [CLIENTE]. Un
+         `findFirst` sin orden devolvía cualquiera de los dos, y si devolvía el prospecto el
+         formulario mandaba ESE cliente y el proyecto nacía fuera de cobranza, de la cartera y del
+         vigilante, sin ningún error.
+
+         Con ambigüedad real (dos CLIENTE) se devuelve `null` A PROPÓSITO: así el formulario manda
+         la empresa en vez del cliente, el alta entra por la rama que sí sabe explicarlo y la
+         persona ve por qué, en vez de que Nexus elija a ciegas.
+
+         Lo que este buscador sigue SIN hacer es preguntarle a HubSpot por fusiones ni reapuntar
+         nada — eso vive solo en las altas. Ver lib/hubspot/cliente-de-la-empresa.ts. */
+      prisma.client.findMany({
         where: { hubspotCompanyId: company.id },
         select: { id: true, name: true, kind: true },
       }),
     ]);
+    const eleccion = elegirCandidato(candidatos);
+    const existing = eleccion.estado === "uno" ? eleccion.cliente : null;
 
     return NextResponse.json({
       company: {

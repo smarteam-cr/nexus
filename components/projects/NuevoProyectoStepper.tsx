@@ -122,7 +122,13 @@ export default function NuevoProyectoStepper() {
   /** "nuevo" | hubspotProjectId del que se adjunta. */
   const [seleccion, setSeleccion] = useState("nuevo");
 
-  const [creado, setCreado] = useState<{ clientId: string; projectId: string; termino: boolean } | null>(
+  const [creado, setCreado] = useState<{
+    clientId: string;
+    projectId: string;
+    termino: boolean;
+    /** Presente solo si el alta cayó en un cliente que ya existía. */
+    clienteReusado?: { nombre: string; reapuntado: boolean } | null;
+  } | null>(
     null,
   );
 
@@ -281,6 +287,7 @@ export default function NuevoProyectoStepper() {
         projectId?: string;
         clientId?: string;
         termino?: boolean;
+        clienteReusado?: { nombre: string; reapuntado: boolean } | null;
         error?: string;
       };
       if (res.status === 409 && data.projectId && data.clientId) {
@@ -295,7 +302,12 @@ export default function NuevoProyectoStepper() {
       /* Se llega a "listo" aunque el alta NO haya terminado. Es deliberado: el proyecto ya
          existe en Nexus, se puede abrir, y el cartel de adentro ofrece "Reintentar". Tratar
          el alta a medias como un fracaso dejaría a la persona sin ningún lugar adonde ir. */
-      setCreado({ clientId: data.clientId, projectId: data.projectId, termino: !!data.termino });
+      setCreado({
+        clientId: data.clientId,
+        projectId: data.projectId,
+        termino: !!data.termino,
+        clienteReusado: data.clienteReusado ?? null,
+      });
       setPaso("listo");
       router.refresh();
     } catch (e) {
@@ -681,6 +693,16 @@ export default function NuevoProyectoStepper() {
         {/* ── Paso 3 · listo ────────────────────────────────────────────────── */}
         {paso === "listo" && creado && (
           <div className="space-y-3">
+            {/* El paso 1 dijo "empresa nueva" y el proyecto terminó en un cliente que ya estaba:
+                pasa cuando la empresa se fusionó en HubSpot y Nexus guardaba la ficha vieja. Sin
+                esta línea la persona no tiene forma de enterarse. */}
+            {creado.clienteReusado && (
+              <p className="text-xs text-fg-muted">
+                Se usó el cliente que ya existía: <strong>{creado.clienteReusado.nombre}</strong>.
+                {creado.clienteReusado.reapuntado &&
+                  " Su empresa se había fusionado en HubSpot y quedó apuntando a la ficha vigente."}
+              </p>
+            )}
             {creado.termino ? (
               <div className="rounded-lg border border-line bg-surface-muted px-3 py-2">
                 <p className="text-sm font-semibold text-fg">Proyecto creado</p>
