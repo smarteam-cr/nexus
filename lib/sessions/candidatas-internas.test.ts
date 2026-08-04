@@ -139,6 +139,45 @@ describe("está cableado, y con los frenos puestos", () => {
     expect(src, "el piso de 2026 dejó de aplicarse").toContain("PISO_REUNIONES_INTERNAS");
   });
 
+  it("el tope se aplica DESPUÉS de filtrar, no antes", () => {
+    /* LA guarda del volumen, y la más fácil de romper "optimizando": poner un `take` en la
+       consulta de huérfanas parece prudente y hace exactamente lo contrario. De las ~4.900 sin
+       dueño solo una fracción son reuniones de puertas adentro, así que cortar en crudo se lleva
+       puesto todo lo que no esté en la cola más reciente — y el buscador del modal filtra en el
+       NAVEGADOR, sobre lo que ya llegó, así que no hay segunda puerta: la reunión de marzo queda
+       inalcanzable y la pantalla se ve perfecta, con su lista y su buscador. El caso de uso entero
+       de este grupo es encontrar UNA reunión vieja. */
+    const src = leer("app/api/projects/[projectId]/session-candidates/route.ts");
+    /* Se mira SOLO el tramo de la consulta de huérfanas —del piso hasta el filtro— porque el otro
+       grupo (el del cliente) sí tiene su propio `take` legítimo y escanear el archivo entero daría
+       un falso positivo el día uno.
+       ⚠ `lastIndexOf`, no `indexOf`: los dos símbolos se IMPORTAN arriba del archivo, y anclando
+       a la primera aparición el tramo salía de un import al otro —dos líneas— o directamente
+       vacío si el orden del import se invertía. La guarda pasaba siempre. Se cazó rompiéndola a
+       propósito; por eso abajo se verifica también que el tramo tenga tamaño de consulta. */
+    const desde = src.lastIndexOf("PISO_REUNIONES_INTERNAS");
+    const hasta = src.lastIndexOf("esReunionDePuertasAdentro");
+    const consulta = src.slice(desde, hasta);
+    expect(
+      consulta.length,
+      "el tramo quedó vacío: la guarda no está mirando la consulta y no puede fallar",
+    ).toBeGreaterThan(200);
+    expect(consulta, "volvió el `take` antes del filtro de puertas adentro").not.toMatch(/take:/);
+    expect(src, "el tope después del filtro desapareció").toMatch(
+      /esReunionDePuertasAdentro[\s\S]{0,120}\.slice\(/,
+    );
+  });
+
+  it("la lista sale ordenada por fecha, no como vino", () => {
+    /* Al concatenar el grupo interno se pierde el `date desc` de la consulta. En una lista de la
+       que hay que elegir a mano, el orden es la mitad de la usabilidad — y su ausencia no rompe
+       nada, solo hace la pantalla peor sin que nadie sepa por qué. */
+    const src = leer("app/api/projects/[projectId]/session-candidates/route.ts");
+    expect(src, "el orden por fecha se perdió al mezclar los dos grupos").toContain(
+      "b.date.getTime() - a.date.getTime()",
+    );
+  });
+
   it("el buscador del modal mira participantes, no solo el título", () => {
     const src = leer("components/clients/SessionSelectionReview.tsx");
     expect(src).toContain("coincideConLaBusqueda(");

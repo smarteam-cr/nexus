@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
       method: "POST",
       path: `/crm/v3/objects/${PROJECTS_OBJECT_TYPE}/batch/read`,
       body: {
-        properties: ["hs_name", "hs_pipeline_stage", "hs_createdate", "proyecto_interno"],
+        properties: ["hs_name", "hs_pipeline_stage", "hs_createdate", "proyecto_interno", "hs_pipeline"],
         inputs: ids.map((id) => ({ id })),
       },
     });
@@ -106,6 +106,11 @@ export async function GET(req: NextRequest) {
            que Nexus no puede cumplir. Mismo criterio que `nexusPipelineId`, que se lee y no se
            escribe. */
         interno: parseCheckbox(r.properties.proyecto_interno),
+        /* El pipeline que el record tiene EN HUBSPOT — distinto de `nexusPipelineId`, que es null
+           mientras el proyecto no esté acá. Viaja porque al adjuntar el tipo también lo dicta
+           HubSpot: mandar el del formulario deja el alta esperando para siempre a que el espejo
+           devuelva un tipo que nunca va a coincidir. */
+        hubspotPipelineId: r.properties.hs_pipeline ?? null,
       };
     });
 

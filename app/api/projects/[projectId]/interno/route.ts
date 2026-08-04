@@ -67,9 +67,27 @@ export async function PATCH(
   const hs = await getSystemHubspotClient();
   await actualizarProyectoInterno(hs, proyecto.hubspotServiceId, body.interno);
 
-  /* Traer el espejo YA, en vez de esperar los diez minutos del sync: si la pantalla se recargara
-     con el valor viejo, la persona apretaría de nuevo pensando que no funcionó. */
-  await espejarProyectoRecienCreado(guard.clientId, proyecto.hubspotServiceId);
+  /* Traer el espejo YA, en vez de esperar a que alguien abra la ficha del cliente: si la pantalla
+     se recargara con el valor viejo, la persona apretaría de nuevo pensando que no funcionó.
+
+     ⚠ Y HAY QUE MIRAR SI FALLÓ. `espejarProyectoRecienCreado` no tira ante un 429 o un 5xx de
+     HubSpot: acumula el motivo en `errors` y vuelve normal. Sin este chequeo, el cambio quedaba
+     escrito ALLÁ y no acá —o sea, HubSpot diciendo "interno" y Nexus cobrando— y la respuesta era
+     un 200 con el valor viejo que la pantalla celebraba en verde. La divergencia no la cerraba
+     nadie: el sync de ese cliente solo corre cuando alguien abre su ficha.
+     Es el mismo llamado que `alta-runner.ts` ya trata como fatal si trae errores. */
+  const espejo = await espejarProyectoRecienCreado(guard.clientId, proyecto.hubspotServiceId);
+  if (espejo.errors.length > 0) {
+    return NextResponse.json(
+      {
+        error:
+          `Se marcó en HubSpot, pero Nexus no pudo confirmarlo (${espejo.errors[0]}). ` +
+          `Volvé a intentar en un minuto: el cambio allá ya está hecho y repetirlo no duplica nada.`,
+        interno: proyecto.proyectoInterno,
+      },
+      { status: 502 },
+    );
+  }
 
   const despues = await prisma.project.findUnique({
     where: { id: projectId },

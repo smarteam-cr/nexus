@@ -115,7 +115,13 @@ export interface EleccionesDelAlta {
    * valor del formulario, el día que el picker dejara de traer el campo el alta volvería en
    * silencio a creerle a la casilla — que es exactamente la mentira que esto vino a matar.
    */
-  adjuntar?: { hubspotProjectId: string; name: string; interno: boolean } | null;
+  adjuntar?: {
+    hubspotProjectId: string;
+    name: string;
+    interno: boolean;
+    /** La clave del pipeline REAL del record. `null` = HubSpot lo tiene en uno que Nexus no conoce. */
+    pipeline: string | null;
+  } | null;
 }
 
 /**
@@ -131,9 +137,16 @@ export interface EleccionesDelAlta {
  * enseña — y eso solo se puede verificar si el armado es una función que se puede llamar sola.
  */
 export function armarCuerpoDelAlta(e: EleccionesDelAlta): Record<string, unknown> {
+  /* AL ADJUNTAR MANDA HUBSPOT, para todo lo que el record ya define: el nombre, el tipo y la
+     marca de interno. Lo que el formulario opine sobre qué ES un proyecto no aplica a uno que ya
+     existe — y no es una preferencia estética: el motor del alta compara lo que volvió del espejo
+     contra lo que se declaró, y si no coinciden **el alta no termina nunca**. El proyecto queda en
+     cuarentena permanente: existe, se abre, parece normal, y no cobra ni entra a la cartera. */
+  const internoEfectivo = e.adjuntar ? e.adjuntar.interno : e.interno;
+
   const cuerpo: Record<string, unknown> = {
     nombre: (e.adjuntar?.name ?? e.nombre).trim(),
-    pipeline: e.pipeline,
+    pipeline: e.adjuntar ? (e.adjuntar.pipeline ?? e.pipeline) : e.pipeline,
     /* ⚠ LA OTRA REGLA, y es de plata: al ADJUNTAR manda HubSpot, no la casilla.
        Ese camino no crea nada allá —`crearProjectRecord`, el ÚNICO escritor de `proyecto_interno`,
        solo corre cuando el alta arranca en `pendiente_crm`, y adjuntar arranca en
@@ -146,7 +159,7 @@ export function armarCuerpoDelAlta(e: EleccionesDelAlta): Record<string, unknown
        Se toma el valor del record en vez de forzar `false` porque además destraba el caso
        legítimo: adjuntar un proyecto que en HubSpot SÍ es interno deja de exigir trato ganado.
        Mismo criterio que el nombre, dos líneas arriba: lo que ya existe allá pisa a lo tipeado. */
-    interno: e.adjuntar ? e.adjuntar.interno : e.interno,
+    interno: internoEfectivo,
   };
 
   if (e.clientId) cuerpo.clientId = e.clientId;
@@ -161,7 +174,12 @@ export function armarCuerpoDelAlta(e: EleccionesDelAlta): Record<string, unknown
      al del hermano—. "Interno" ya apaga la cobranza, así que ahí se pisan; pero las otras dos
      seguirían aplicando, y quien marca "interno" no está pidiendo que su documento lo gobierne
      otro proyecto. Se limpia acá, en el único lugar por donde pasa el envío. */
-  if (e.hermanoHsId && !e.interno) cuerpo.hermanoHsId = e.hermanoHsId;
+  /* Y tampoco viaja al ADJUNTAR, por el mismo motivo que el tipo: la hermandad de un record que
+     ya existe es la que tenga en HubSpot. Declarar una desde el formulario no la crea allá —nada
+     en Nexus escribe esa asociación en este camino— así que el motor esperaría para siempre a que
+     se resuelva algo que nadie va a resolver. Se lee `internoEfectivo` y no la casilla cruda: al
+     adjuntar un record que SÍ es interno, la casilla dice false y la regla se saltaría. */
+  if (e.hermanoHsId && !internoEfectivo && !e.adjuntar) cuerpo.hermanoHsId = e.hermanoHsId;
 
   if (e.tratoId) cuerpo.dealId = e.tratoId;
   if (e.sinTratoMotivo?.trim()) cuerpo.sinTratoMotivo = e.sinTratoMotivo.trim();

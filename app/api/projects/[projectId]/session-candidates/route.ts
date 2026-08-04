@@ -160,7 +160,11 @@ export async function GET(
           date: { gte: PISO_REUNIONES_INTERNAS, lte: new Date() },
         },
         orderBy: { date: "desc" },
-        take: 200,
+        /* ⚠ SIN `take` acá. El tope tiene que ir DESPUÉS de filtrar por "puertas adentro", no
+           antes: de las ~4.900 sesiones sin dueño solo una fracción son reuniones del equipo, así
+           que cortar en crudo dejaba fuera de alcance todo lo que no fuera la cola más reciente —
+           y el buscador del modal filtra en el navegador, sobre lo que ya llegó, así que no había
+           segunda puerta. El caso de uso entero de este grupo es encontrar UNA reunión vieja. */
         select: {
           id: true,
           title: true,
@@ -177,7 +181,12 @@ export async function GET(
         await prisma.sessionCategory.findMany({ select: { domains: true, kind: true } }),
       )
     : new Set<string>();
-  const internas = huerfanas.filter((s) => esReunionDePuertasAdentro(s, dominiosPropios));
+  /* El tope va acá, ya filtrado. 300 es lo que una persona puede recorrer con el buscador sin
+     que la respuesta pese; si alguna vez no alcanza, el síntoma es "no la encuentro" y no un
+     documento mal armado. */
+  const internas = huerfanas
+    .filter((s) => esReunionDePuertasAdentro(s, dominiosPropios))
+    .slice(0, 300);
 
   const candidates = [...clientSessions, ...internas]
     .filter((s) => !feedingIds.has(s.id) && !excludedIds.has(s.id))
@@ -197,7 +206,10 @@ export async function GET(
         sinDuenio: internas.some((i) => i.id === s.id),
       };
     })
-    .sort((a, b) => Number(b.applies) - Number(a.applies)); // las que aplican, primero (date ya viene desc)
+    /* Las que aplican primero y, dentro de cada bloque, lo más reciente arriba. El `date desc` ya
+       no viene gratis: al concatenar el grupo interno se pierde, y en una lista de la que hay que
+       elegir a mano el orden es la mitad de la usabilidad. */
+    .sort((a, b) => Number(b.applies) - Number(a.applies) || b.date.getTime() - a.date.getTime());
 
   // Links de IA que ningún humano confirmó todavía (estado "revisado" DERIVADO:
   // curado ⇔ no existe link included+agent+reviewedAt=null). Alimenta el chip de

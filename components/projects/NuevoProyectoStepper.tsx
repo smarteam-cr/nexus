@@ -72,6 +72,8 @@ interface ProyectoDeLaEmpresa {
   nexusPipelineId: string | null;
   /** Lo que HubSpot dice sobre "interno". Se MUESTRA, no se elige (ver la rama de adjuntar). */
   interno: boolean;
+  /** El pipeline que el record tiene EN HUBSPOT. `null` = el record no declara ninguno. */
+  hubspotPipelineId: string | null;
 }
 
 type Paso = "empresa" | "proyecto" | "listo";
@@ -160,7 +162,13 @@ export default function NuevoProyectoStepper() {
       setBusqueda(data);
       setDominioBuscado(d);
       const ganados = data.deals.filter((x) => x.isWon);
-      if (ganados.length === 1) setTratoId(ganados[0].id);
+      /* ⚠ SIEMPRE se reescribe, aunque no haya un único ganado. Antes solo se pisaba con
+         exactamente uno, así que con 0 o con 2+ sobrevivía el trato de la empresa ANTERIOR — y no
+         es un campo cualquiera: el alta lo escribe en `hubspotDealId` y el creador lo manda dentro
+         de las ASOCIACIONES del POST, o sea que en HubSpot quedaba un proyecto de la empresa B
+         colgado del trato ganado de la empresa A. Sin error, sin aviso, y con la pantalla
+         mostrando el trato como no elegido. */
+      setTratoId(ganados.length === 1 ? ganados[0].id : "");
       setNombre(ganados[0]?.name ?? data.company.name);
       try {
         const pr = await fetch(
@@ -179,6 +187,7 @@ export default function NuevoProyectoStepper() {
          declarada, no un dato de la empresa. */
       setSeleccion("nuevo");
       setHermanoHsId("");
+      setSinTratoMotivo("");
       setPaso("proyecto");
     } catch {
       setError("Error de conexión.");
@@ -224,6 +233,14 @@ export default function NuevoProyectoStepper() {
   const adjuntado = adjuntando
     ? proyectosHs.find((p) => p.hubspotProjectId === seleccion)
     : undefined;
+  /* El tipo del record que se va a traer, en clave. `null` = HubSpot lo tiene en un pipeline que
+     Nexus no conoce; entonces el alta NO se puede terminar (el motor compara el tipo que vuelve
+     contra el declarado y nunca coincidirían), así que se dice acá en vez de dejar el proyecto en
+     cuarentena para siempre. */
+  const tipoDelAdjuntado = adjuntado
+    ? (resolvePipeline(adjuntado.hubspotPipelineId)?.key ?? null)
+    : null;
+  const adjuntadoSinTipoConocido = !!adjuntado && tipoDelAdjuntado === null;
 
   /* ADJUNTAR es solo para lo que TODAVÍA NO está en Nexus. Los que ya están se mostraban como
      opciones deshabilitadas y la primera persona que lo usó intentó elegirlas y se trabó: en una
@@ -266,6 +283,12 @@ export default function NuevoProyectoStepper() {
     !!busqueda?.company &&
     (adjuntando || nombre.trim().length > 0) &&
     tratoResuelto &&
+    /* ⚠ Se BLOQUEA, no se avisa. Si HubSpot tiene el proyecto en un pipeline que Nexus no conoce,
+       el alta no puede terminar: el motor compara el tipo que volvió del espejo contra el elegido
+       y, si no coinciden, deja el alta en «pendiente_espejo» PARA SIEMPRE. Y eso no se ve como un
+       error: el proyecto existe, se abre, se ve normal — y nunca entra a cobranza. Dejarlo crear
+       con un aviso sería fabricar ese estado a sabiendas. */
+    !adjuntadoSinTipoConocido &&
     !ocupado;
 
   const crear = async () => {
@@ -288,7 +311,7 @@ export default function NuevoProyectoStepper() {
         companyId: empresa.id,
         companyName: empresa.name,
         domain: empresa.domain,
-        adjuntar: adjuntado ?? null,
+        adjuntar: adjuntado ? { ...adjuntado, pipeline: tipoDelAdjuntado } : null,
       });
 
       const res = await fetch(RUTAS_DEL_ALTA.crear, {
@@ -577,10 +600,18 @@ export default function NuevoProyectoStepper() {
               /* Al ADJUNTAR, el tipo se MUESTRA, no se elige: el record ya existe en HubSpot
                  con su pipeline puesto, y moverlo de pipeline es otra operación. */
               <div className="space-y-2">
-                <p className="text-xs text-fg-muted leading-relaxed rounded-lg border border-line bg-surface-muted px-3 py-2">
-                  Se trae el proyecto tal como está en HubSpot, con su tipo y su etapa. Si hay que
-                  cambiarle el tipo, eso se hace allá.
-                </p>
+                {adjuntadoSinTipoConocido ? (
+                  <p className="text-xs leading-relaxed rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-danger">
+                    Este proyecto está en un pipeline de HubSpot que Nexus todavía no conoce, así que
+                    no se puede traer: el alta quedaría a medio hacer y el proyecto nunca entraría a
+                    cobranza. Movelo en HubSpot a Implementación, Desarrollo o Sitios web, y volvé.
+                  </p>
+                ) : (
+                  <p className="text-xs text-fg-muted leading-relaxed rounded-lg border border-line bg-surface-muted px-3 py-2">
+                    Se trae el proyecto tal como está en HubSpot, con su tipo y su etapa. Si hay que
+                    cambiarle el tipo, eso se hace allá.
+                  </p>
+                )}
                 {/* La casilla de interno, en gris. NO es editable a propósito: acá Nexus no crea
                     nada en HubSpot, así que marcarla no se aplicaría a nada — prometería algo que
                     no puede cumplir. Se muestra deshabilitada para que se vea qué va a pasar. */}

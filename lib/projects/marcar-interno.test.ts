@@ -65,6 +65,20 @@ describe("el interruptor escribe en HubSpot, NUNCA en Nexus", () => {
     expect(leer(RUTA)).toContain("espejarProyectoRecienCreado(");
   });
 
+  it("si el espejo falla, NO responde éxito", () => {
+    /* LA guarda de la divergencia. `espejarProyectoRecienCreado` no tira ante un 429 o un 5xx:
+       acumula el motivo en `errors` y vuelve normal. Sin mirar eso, el cambio queda escrito en
+       HubSpot y no en Nexus —HubSpot diciendo "interno", Nexus cobrando— y la respuesta es un 200
+       con el valor viejo que la pantalla celebra en verde. Nadie cierra esa brecha después: el
+       sync de un cliente solo corre cuando alguien abre su ficha.
+       El MISMO llamado, en `alta-runner.ts`, ya trata los errores como fatales. */
+    const src = leer(RUTA);
+    expect(src, "el resultado del espejo se descarta").toMatch(
+      /(const|let)\s+\w+\s*=\s*await\s+espejarProyectoRecienCreado\(/,
+    );
+    expect(src, "no se revisa si el espejo trajo errores").toMatch(/\.errors\.length\s*>\s*0/);
+  });
+
   it("sin registro en HubSpot, lo dice en vez de reventar", () => {
     const src = leer(RUTA);
     expect(src).toContain("hubspotServiceId");
