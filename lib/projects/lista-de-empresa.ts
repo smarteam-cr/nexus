@@ -22,6 +22,8 @@
  * del mismo problema — cuál es cuál — y porque comparte la fecha como dato.
  */
 
+import { buscarEtapa, resolvePipeline } from "./kind";
+
 /** Lo mínimo que necesita una fila para poder ordenarse y rotularse. */
 export interface ProyectoListable {
   /** Id del record en HubSpot. Desempata el orden: es único y estable. */
@@ -168,4 +170,33 @@ export function nombreYaUsado(
   const buscado = nombre.trim().toLowerCase();
   if (!buscado) return null;
   return existentes.find((p) => p.name.trim().toLowerCase() === buscado)?.name ?? null;
+}
+
+/**
+ * De qué TIPO y en qué ETAPA está, en HubSpot, un proyecto que todavía no está en Nexus.
+ *
+ * ── POR QUÉ ES UNA FUNCIÓN Y NO DOS LÍNEAS EN EL JSX ─────────────────────────
+ * La lista del alta pide elegir entre proyectos que solo se muestran por su nombre, y la mayoría
+ * de los adjuntables reales del portal está en «Finalizado» o «Bloqueado»: sin la etapa a la
+ * vista, la elección natural es traer un proyecto muerto. Y la degradación tiene tres casos
+ * distintos que conviene poder escribir en un test en vez de anidar ternarios en la pantalla.
+ *
+ * ⚠ Cuando el pipeline no resuelve NO se inventa etapa. Ese caso además **bloquea el alta**
+ * (el motor no puede cerrarla si el tipo del espejo no coincide con el elegido), así que el
+ * renglón tiene que anticiparlo, no disimularlo.
+ */
+export function rotuloDeHubspot(p: {
+  hubspotPipelineId?: string | null;
+  stage?: string | null;
+}): { texto: string; desconocido: boolean } {
+  const def = resolvePipeline(p.hubspotPipelineId);
+  if (!def) {
+    /* Ni el tipo se sabe. Decirlo entero acá evita que la persona llene el formulario y recién al
+       final se entere de que ese proyecto no se puede traer. */
+    return { texto: "Pipeline que Nexus no conoce — no se puede traer", desconocido: true };
+  }
+  const etapa = buscarEtapa(def, p.stage);
+  /* Sin etapa legible se muestra el tipo solo. Es honesto y sigue sirviendo: el tipo es la mitad
+     de la decisión, y no hay por qué esconderlo porque falte la otra mitad. */
+  return { texto: etapa ? `${def.label} · ${etapa.label}` : def.label, desconocido: false };
 }

@@ -18,6 +18,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Modal } from "@/components/ui";
 import { coincideConLaBusqueda } from "@/lib/sessions/candidatas-internas";
+import { resumirSala, textoDeSala } from "@/lib/sessions/participantes";
 import { ContextColumnList, ContextRow, CTX_ICONS } from "./context-column";
 
 interface FeedingSession {
@@ -45,12 +46,23 @@ interface CandidateSession {
   title: string;
   date: string;
   participants: string[];
+  organizerEmail?: string | null;
+  /** Minutos. Un no-show de 2' y una sesión de trabajo de 50' no se eligen igual. */
+  duration?: number | null;
   applies: boolean;
   /** Por qué (no) aplica la regla de relevancia — tooltip. */
   reason: string;
   linkedElsewhere: boolean;
   /** Reunión del equipo que todavía no es de ningún cliente. Agregarla también la asigna. */
   sinDuenio?: boolean;
+}
+
+function fmtDuracion(min: number | null | undefined): string | null {
+  /* Redondeado a minutos: el dato viene con decimales y "47,3 min" no ayuda a decidir nada.
+     Por debajo del minuto no se muestra — casi siempre es una reunión que no llegó a pasar. */
+  if (!min || min < 1) return null;
+  const m = Math.round(min);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60 ? `${m % 60} min` : ""}`.trim();
 }
 
 function fmtDate(d: string): string {
@@ -147,7 +159,9 @@ export default function SessionSelectionReview({
       open={showModal}
       onClose={() => { setShowModal(false); setSearch(""); }}
       title="Buscar sesiones"
-      size="md"
+      /* Era `md` (448px) y cada fila mostraba solo el título. Con quiénes estuvieron en la sala
+         adentro, ese ancho obliga a truncar justo lo que se vino a leer. */
+      size="xl"
     >
       <input
         type="text"
@@ -159,17 +173,28 @@ export default function SessionSelectionReview({
       {filtered.length === 0 ? (
         <p className="text-xs text-fg-muted py-2">No hay más sesiones.</p>
       ) : (
-        <ul className="space-y-1.5 max-h-80 overflow-y-auto">
-          {filtered.map((c) => (
+        // ⚠ El tope va en vh, no en un valor fijo: el cuerpo del Modal YA scrollea dentro de un
+        // panel de max-h-[85vh], así que el `max-h-80` (320px) que había acá creaba un scroll
+        // anidado — cuatro filas visibles y el resto de la pantalla desperdiciado.
+        <ul className="space-y-1.5 max-h-[60vh] overflow-y-auto">
+          {filtered.map((c) => {
+            /* Quiénes estuvieron en la sala es EL dato que decide, y hasta ahora no se mostraba:
+               una reunión con alguien de `lacav.cl` adentro es del proyecto de CAV aunque el
+               título no lo diga, y una donde estuvimos solos nosotros es del equipo por más que
+               el título nombre a un cliente. Los emails no se pintan enteros —son datos de gente
+               real en una pantalla que se comparte—: van los dominios y el conteo. */
+            const sala = textoDeSala(resumirSala(c.participants, c.organizerEmail));
+            const dur = fmtDuracion(c.duration);
+            return (
             <li
               key={c.sessionId}
-              title={c.reason ? (c.applies ? c.reason : `No aplica: ${c.reason}`) : undefined}
-              className={`flex items-center gap-2 rounded-lg border border-line px-3 py-2 ${c.applies ? "" : "opacity-60"}`}
+              className={`flex items-start gap-2 rounded-lg border border-line px-3 py-2 ${c.applies ? "" : "opacity-60"}`}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs text-fg truncate">{c.title || "Sin título"}</span>
                   <span className="text-[10px] text-fg-muted flex-shrink-0">{fmtDate(c.date)}</span>
+                  {dur && <span className="text-[10px] text-fg-muted flex-shrink-0">· {dur}</span>}
                   {c.applies && (
                     <span className="text-[9px] font-bold uppercase tracking-wider text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 flex-shrink-0">
                       aplica
@@ -186,6 +211,16 @@ export default function SessionSelectionReview({
                     </span>
                   )}
                 </div>
+                {(sala || c.reason) && (
+                  /* El motivo ("Ventas en la sala", "título de venta") YA llegaba y vivía
+                     escondido en el tooltip del <li> — o sea, invisible en móvil y en cualquier
+                     lectura rápida. Es justo la explicación de por qué la fila dice "aplica". */
+                  <div className="text-[10px] text-fg-muted mt-0.5 truncate">
+                    {sala}
+                    {sala && c.reason ? " — " : ""}
+                    {c.reason}
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => setFeeds(c.sessionId, true)}
@@ -198,7 +233,8 @@ export default function SessionSelectionReview({
                 {c.sinDuenio ? "Agregar y asignar" : "Agregar"}
               </button>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </Modal>

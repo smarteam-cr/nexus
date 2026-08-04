@@ -141,6 +141,7 @@ export async function GET(
       date: true,
       participants: true,
       organizerEmail: true,
+      duration: true,
       projects: { select: { projectId: true } },
     },
   });
@@ -171,6 +172,7 @@ export async function GET(
           date: true,
           participants: true,
           organizerEmail: true,
+          duration: true,
           projects: { select: { projectId: true } },
         },
       })
@@ -197,6 +199,12 @@ export async function GET(
         title: s.title,
         date: s.date,
         participants: s.participants,
+        /* El organizador venía leyéndose para clasificar y se tiraba antes de responder. Va: en
+           muchas reuniones no figura entre los participantes, y sin él una sesión que organizó
+           alguien de afuera se ve como si hubiéramos estado solos. */
+        organizerEmail: s.organizerEmail,
+        /* Separa una reunión de verdad de un no-show de dos minutos. Sale del mismo row. */
+        duration: s.duration,
         applies: cls.include,
         // Por qué (no) aplica la regla — tooltip del modal (antes era opaco).
         reason: cls.reason,

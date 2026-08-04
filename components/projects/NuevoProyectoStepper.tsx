@@ -36,7 +36,7 @@ import {
   resolvePipeline,
 } from "@/lib/projects/kind";
 import type { ProjectPipelineKey } from "@/lib/projects/kind";
-import { etiquetarAmbiguos, nombreYaUsado } from "@/lib/projects/lista-de-empresa";
+import { etiquetarAmbiguos, nombreYaUsado, rotuloDeHubspot } from "@/lib/projects/lista-de-empresa";
 import { armarCuerpoDelAlta } from "@/lib/projects/alta";
 import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
 
@@ -558,20 +558,35 @@ export default function NuevoProyectoStepper() {
                 <p className="text-2xs font-medium text-fg-muted uppercase tracking-wider">
                   Ya en HubSpot, todavía no en Nexus
                 </p>
-                {etiquetarAmbiguos(adjuntables).map((p) => (
-                  <label
-                    key={p.hubspotProjectId}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer"
-                  >
-                    <input
-                      type="radio"
-                      name="alta-proyecto"
-                      checked={seleccion === p.hubspotProjectId}
-                      onChange={() => setSeleccion(p.hubspotProjectId)}
-                    />
-                    <span className="text-sm text-fg flex-1 truncate">{p.etiqueta}</span>
-                  </label>
-                ))}
+                {etiquetarAmbiguos(adjuntables).map((p) => {
+                  /* El tipo y la etapa YA viajaban en la respuesta y no los pintaba nadie. Sin
+                     ellos, elegir es adivinar: la mayoría de los adjuntables reales del portal
+                     está en «Finalizado» o «Bloqueado», y traer uno muerto se ve igual que traer
+                     uno vivo hasta que alguien lo abre. */
+                  const rot = rotuloDeHubspot(p);
+                  return (
+                    <label
+                      key={p.hubspotProjectId}
+                      className="flex items-start gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer"
+                    >
+                      <input
+                        type="radio"
+                        className="mt-1"
+                        name="alta-proyecto"
+                        checked={seleccion === p.hubspotProjectId}
+                        onChange={() => setSeleccion(p.hubspotProjectId)}
+                      />
+                      <span className="flex-1 min-w-0">
+                        <span className="text-sm text-fg block truncate">{p.etiqueta}</span>
+                        <span
+                          className={`text-[11px] block truncate ${rot.desconocido ? "text-danger" : "text-fg-muted"}`}
+                        >
+                          {rot.texto}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
                 <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer">
                   <input
                     type="radio"
