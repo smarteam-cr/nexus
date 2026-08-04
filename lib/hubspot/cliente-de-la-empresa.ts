@@ -208,6 +208,6 @@ export async function reapuntarEnTx(
 export function anotarReapunte(r: Reapunte, nombre: string, bcs: number): string {
   return (
     `[fusion] "${nombre}" (${r.clientId}) reapuntado de la empresa fusionada ${r.lapida} ` +
-    `a la vigente ${r.vigente}${bcs > 0 ? ` · ${bcs} business case(s) movidos` : ""}`
+    `a la vigente ${r.vigente}${bcs > 0 ? ` · ${bcs} propuesta(s) movida(s)` : ""}`
   );
 }

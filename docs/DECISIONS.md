@@ -1602,3 +1602,27 @@ se vinculó el cliente. Si hubo fusión, los dos ids no coinciden, el cliente "n
 **Descartado — resolver por dominio (`emailDomains`)** en vez de por el historial de fusión: sería
 un arreglo de tres líneas y cero llamadas, pero solo **124 de 158** clientes tienen el dominio
 cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que afirma HubSpot.
+
+## El renombre: "Business Case" → "Propuesta comercial" (2026-08-03)
+
+- **Se renombró lo VISIBLE y NADA más.** El nombre en pantalla cambió en ~45 textos; la
+  IDENTIDAD sigue en inglés y se queda así: el modelo `BusinessCase`, el campo `businessCaseId`
+  (~50 archivos), la ruta `/business-cases` (36 carpetas) y el slug de pieza `business-case`.
+  Renombrar eso costaría una migración de datos y rompería los links ya pegados en chats, a
+  cambio de que nadie del equipo vea una sola diferencia. **Regla que queda: el nombre visible es
+  copy; la ruta y el modelo son identidad.**
+- **Salió gratis porque `lib/pieces/registry.ts` estaba diseñado para esto.** Ese registro separa
+  `slug` (identidad estable) de `label` (nombre visible) justamente para que un renombre sea una
+  línea, y traía el cambio anotado desde F1 (`// F4: → "Propuesta comercial"`). Todo lo que deriva
+  de `pieceLabel()` —el desplegable de canvases, el catálogo de agentes, la Documentación— se
+  actualizó solo. Es la primera vez que se ejerce la promesa del registro y se cumplió.
+- **Los prompts de los agentes NO se tocaron** (`canvas-agent.ts`, `agent.ts`, el `brief` del hero
+  en `business-case.defs.ts`). Cambiarlos obliga a re-sembrar el agente en producción y puede
+  mover la salida; el término no llega a pantalla y el modelo entiende el concepto igual. Queda
+  para cuando haya otra razón para re-sembrar.
+- **El cliente nunca vio el término**: se verificó `app/external/**`, `lib/external/**` y el
+  registro de impresión — "Business Case" solo aparecía en comentarios de código. Cero riesgo con
+  las propuestas ya publicadas y sus snapshots congelados.
+- **Lo que quedó a propósito sin cambiar**: `BUSINESS_CASE_CANVAS.name` en `canvas-defs.ts`, que
+  está declarado LEGACY en su propio comentario, nunca se persiste (el `name` de la fila es la
+  VERSIÓN — "Plantilla", "Caso de uso 2") y nunca se renderiza.

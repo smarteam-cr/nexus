@@ -44,7 +44,7 @@ export interface AssistSectionDef {
 }
 
 export interface DocumentAssistInput {
-  /** "perfil de puesto" | "kickoff" | "business case" | "requerimiento técnico"… */
+  /** "perfil de puesto" | "kickoff" | "propuesta comercial" | "requerimiento técnico"… */
   docLabel: string;
   /** systemPrompt del Agent (DB) + additionalInstructions — las reglas fijas van aparte. */
   systemPrompt: string;

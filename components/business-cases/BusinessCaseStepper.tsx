@@ -142,10 +142,10 @@ export default function BusinessCaseStepper() {
           caseSubtype: selectedType.subtypes?.length ? subtypeId || undefined : undefined,
         }),
       });
-      toast.success("Business case creado.");
+      toast.success("Propuesta creada.");
       router.push(`/business-cases/${data.businessCaseId}`);
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo crear el business case.");
+      toast.error(e instanceof ApiError ? e.message : "No se pudo crear la propuesta.");
       setBusy(false);
     }
   };
@@ -315,7 +315,7 @@ export default function BusinessCaseStepper() {
           </div>
 
           <div>
-            <label className="block text-2xs font-medium text-fg-muted uppercase tracking-wider mb-1.5">Nombre del business case</label>
+            <label className="block text-2xs font-medium text-fg-muted uppercase tracking-wider mb-1.5">Nombre de la propuesta</label>
             <input
               type="text"
               value={name}
@@ -330,7 +330,7 @@ export default function BusinessCaseStepper() {
               Atrás
             </button>
             <button onClick={create} disabled={busy} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
-              {busy ? "Creando…" : "Crear business case"}
+              {busy ? "Creando…" : "Crear propuesta"}
             </button>
           </div>
         </div>

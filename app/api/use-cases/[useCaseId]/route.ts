@@ -73,7 +73,7 @@ export async function DELETE(
   const refs = await prisma.businessCaseUseCase.count({ where: { useCaseId } });
   if (refs > 0) {
     return NextResponse.json(
-      { error: `Este caso de uso está seleccionado en ${refs} business case(s). Desactivalo en vez de borrarlo.` },
+      { error: `Este caso de uso está seleccionado en ${refs} propuesta(s). Desactivalo en vez de borrarlo.` },
       { status: 409 },
     );
   }

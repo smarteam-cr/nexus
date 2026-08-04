@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   const rawType = typeof body.caseType === "string" && body.caseType.trim() ? body.caseType.trim() : DEFAULT_BC_TYPE_ID;
   const typeDef = bcTypeOrNull(rawType);
   if (!typeDef) {
-    return NextResponse.json({ error: "Tipo de business case desconocido." }, { status: 400 });
+    return NextResponse.json({ error: "Tipo de propuesta desconocido." }, { status: 400 });
   }
   if (!typeDef.enabled) {
     return NextResponse.json({ error: `"${typeDef.label}" todavía no está disponible.` }, { status: 400 });

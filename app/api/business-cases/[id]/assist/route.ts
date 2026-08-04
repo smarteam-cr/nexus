@@ -103,14 +103,14 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       businessCaseId: id,
       clientId: canvas.businessCase.clientId,
       status: "RUNNING",
-      stepLabel: "Assist · Business Case",
+      stepLabel: "Assist · Propuesta comercial",
     },
     select: { id: true },
   });
 
   try {
     const result = await runDocumentAssist({
-      docLabel: "business case (propuesta comercial)",
+      docLabel: "propuesta comercial",
       systemPrompt: tpl.agentIntro ?? DEFAULT_AGENT_INTRO,
       sections,
       instruction,

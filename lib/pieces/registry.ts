@@ -75,10 +75,10 @@ export interface PieceDefinition {
 }
 
 /**
- * ⚠ Los `label` de acá son EXACTAMENTE los nombres vivos hoy en la base. F1 es un
- * refactor SIN cambio visible: solo cambia el mecanismo de identidad. El renombre
- * ("Desarrollo" → "Requerimientos técnicos", "Business Case" → "Propuestas
- * comerciales") llega en F4 y se hace acá, en una línea.
+ * ⚠ El `label` es el nombre VISIBLE y se cambia acá, en una línea, sin tocar nada más: la
+ * identidad de la pieza es el `slug`. Ya se ejerció una vez —"Business Case" → "Propuesta
+ * comercial" el 2026-08-03— y salió gratis, que era exactamente la promesa de este registro.
+ * Queda pendiente "Desarrollo" → "Requerimientos técnicos".
  */
 export const PIECES: PieceDefinition[] = [
   {
@@ -238,7 +238,7 @@ export const PIECES: PieceDefinition[] = [
   },
   {
     slug: "business-case",
-    label: "Business Case", // F4: → "Propuesta comercial"
+    label: "Propuesta comercial", // 2026-08-03: se llamaba "Business Case"
     // ⚠ Para esta pieza `ProjectCanvas.name` NO es la pieza sino la VERSIÓN
     // ("Plantilla", "Propuesta 1", "Caso de uso 2"). Por eso el backfill de slug
     // NO puede ir por nombre: se resuelve por `businessCaseId != null`.

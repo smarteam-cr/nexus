@@ -123,7 +123,7 @@ describe("el rastro del reapunte automático", () => {
     expect(m).toContain("52577965185");
     expect(m).toContain("57140844832");
     expect(m).toContain("Spectrum");
-    expect(m).toContain("2 business case");
+    expect(m).toContain("2 propuesta(s) movida(s)");
   });
 
   it("no habla de business cases cuando no movió ninguno", () => {

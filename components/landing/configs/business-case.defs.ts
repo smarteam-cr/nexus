@@ -67,7 +67,7 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
   {
     key: "hero",
     canvasLabel: "Encabezado",
-    label: "Cabecera del business case",
+    label: "Cabecera de la propuesta",
     theme: "dark",
     backdrop: true,
     selfTitled: true,

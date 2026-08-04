@@ -64,7 +64,7 @@ export async function POST(
     select: { id: true },
   });
   if (!bc) {
-    return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
+    return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
   }
 
   const contentType = req.headers.get("content-type") ?? "";

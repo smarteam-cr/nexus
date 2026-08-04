@@ -240,7 +240,7 @@ export default function UseCasesAdminClient() {
           if (id) await remove(id);
         }}
         title="¿Borrar este caso de uso?"
-        description="Solo se puede borrar si ningún business case lo tiene seleccionado (si no, desactivalo)."
+        description="Solo se puede borrar si ninguna propuesta lo tiene seleccionada (si no, desactivalo)."
         confirmLabel="Borrar"
       />
     </div>

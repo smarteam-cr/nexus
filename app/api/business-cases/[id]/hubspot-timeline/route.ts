@@ -25,7 +25,7 @@ export async function GET(
     select: { hubspotCompanyId: true },
   });
   if (!bc) {
-    return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
+    return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
   }
   if (!bc.hubspotCompanyId) {
     return NextResponse.json({ items: [] });

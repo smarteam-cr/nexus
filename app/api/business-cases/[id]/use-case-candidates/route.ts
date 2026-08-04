@@ -25,7 +25,7 @@ export async function GET(
     where: { id },
     select: { id: true, caseType: true, caseSubtype: true },
   });
-  if (!bc) return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
+  if (!bc) return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
 
   const v0 = await prisma.projectCanvas.findFirst({
     where: { businessCaseId: id, version: 0 },

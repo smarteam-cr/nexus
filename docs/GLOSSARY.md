@@ -17,6 +17,13 @@
   proyecto. Vive en `CanvasBlock`s del canvas "Handoff".
 - **Kickoff**: arranque del proyecto con el cliente (canvas "Kickoff"; tiene vista externa).
 - **Cronograma** (`ProjectTimeline`): plan del proyecto con fases/tareas/baselines/fechas reales/avances.
+- **Propuesta comercial** (modelo `BusinessCase`): lo que Ventas le arma a un prospecto —qué le
+  duele, qué le proponemos, qué gana y cuánto cuesta—. Vive FUERA del proyecto, porque todavía no
+  hay proyecto. **Se llamaba "Business Case" hasta el 2026-08-03**; el renombre fue solo del
+  nombre visible. La IDENTIDAD sigue en inglés a propósito y no se toca: el modelo `BusinessCase`,
+  el campo `businessCaseId`, la ruta `/business-cases` y el slug de pieza `business-case`.
+  Cambiar eso rompería links ya pegados y obligaría a migrar datos sin que nadie del equipo viera
+  la diferencia. Ver DECISIONS §El renombre.
 - **Exploración** (canvas "Exploración", `agent-exploracion-canvas`): guía **INTERNA** por
   proyecto para descubrir el negocio del cliente cuando el kickoff ya pasó — qué hay que
   entender, cómo preguntarlo, en qué orden y a quién del cliente involucrar en cada sesión.
@@ -70,7 +77,7 @@
   | "CSE" | "tu equipo de Smarteam" |
 
   Regla de voz: al cliente se le habla de **TÚ** (nunca voseo ni "ustedes"), en las 4 superficies
-  externas (verify → kickoff → cronograma → business case). La guía de registro más completa vive en
+  externas (verify → kickoff → cronograma → propuesta comercial). La guía de registro más completa vive en
   el `agentIntro` de `components/landing/configs/kickoff.defs.ts`.
 - **Procesos**: bloques de la sección `procesos` del canvas "Información del cliente".
 - **Proyecto sentinel `__strategy__`**: proyecto especial por cliente que aloja el canvas de
@@ -79,7 +86,7 @@
   HubSpot→Client en el cascade.
 - **`ClientKind`** (`Client.kind`): qué ES una empresa para el negocio, en un solo enum
   excluyente. **CLIENTE** = nos compró o nos está comprando (la cartera: entra a los listados,
-  al portafolio y a cobranza) · **PROSPECTO** = Ventas la creó para un business case, todavía no
+  al portafolio y a cobranza) · **PROSPECTO** = Ventas la creó para una propuesta comercial, todavía no
   compró · **ALIADO** = aliado comercial o partner con el que trabajamos (ej. 4am Saatchi), es
   una empresa pero no es cartera · **INTERNO** = Smarteam y sus entidades (no somos nuestro
   propio cliente). Se marca por interfaz en la ficha del cliente → Configuración y se navega por
@@ -277,7 +284,7 @@
   ve read-only, con `RoleDocView`) y cualquiera con el **link público** (sin login). Sin
   compartir, el documento responde 404. Cada rol es un PUESTO libre (título + área, no atado al
   enum `TeamRole` ni a una persona) que se renderiza y edita con el MISMO motor de landing
-  (`LandingView`) que el business case y el kickoff (`/roles/[id]`, con `RoleWorkspace` y su toggle
+  (`LandingView`) que la propuesta comercial y el kickoff (`/roles/[id]`, con `RoleWorkspace` y su toggle
   Editar). ~~Plantilla fija de **11** secciones~~ → la plantilla la elige el `docType`
   (**PERFIL** 11 secciones · **PROPUESTA** 10 — ver **tipo de documento**); las del PERFIL son
   perfil, responsabilidades (cards), el
@@ -293,7 +300,7 @@
   PROPUESTA todavía responde 409); gate de escritura hardcodeado fuera de la matriz de permisos
   (mismo criterio que Costos); RLS deny (tabla interna).
 - **assist de documento** (`lib/ai/assist.ts` → `runDocumentAssist`): el modo "mejorar por
-  instrucción" de un documento del motor de landing (Roles, kickoff, business case, desarrollo).
+  instrucción" de un documento del motor de landing (Roles, kickoff, propuesta comercial, desarrollo).
   One-shot: instrucción → la IA lee el documento ENTERO (y puede **investigar en línea** vía la
   server-tool web_search, a su criterio) → propuesta de cambios POR SECCIÓN → el humano revisa en
   `<AgentProposal>` (con checkboxes y "Fuentes consultadas") → aplica o descarta. Nunca escribe

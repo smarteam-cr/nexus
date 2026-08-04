@@ -369,7 +369,7 @@ export default function BusinessCaseWorkspace({
             <DocumentAssist
               url={`/api/business-cases/${bcId}/assist`}
               extraBody={{ canvasId }}
-              dialogTitle="Mejorar el business case con IA"
+              dialogTitle="Mejorar la propuesta con IA"
               chips={["Hazlo más orientado a valor de negocio", "Refuerza el ROI con datos del contexto", "Resume las secciones largas"]}
               placeholder='Ej: "haz los dolores más específicos de esta industria"'
               labelFor={(key) => hook.sections.find((s) => s.key === key)?.label ?? key}
