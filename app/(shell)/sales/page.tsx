@@ -2,6 +2,7 @@ import { requireConsultantSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import SalesClient from "./SalesClient";
+import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ const SALES_REPS = [
 ] as const;
 
 const SALES_EMAILS = SALES_REPS.map((r) => r.email);
-const INTERNAL_DOMAIN = "smarteamcr.com";
+const INTERNAL_DOMAIN = DOMINIO_PROPIO;
 
 export interface ProspectGroup {
   domain: string;

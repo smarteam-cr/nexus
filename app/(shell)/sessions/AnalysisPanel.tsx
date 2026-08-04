@@ -15,6 +15,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -96,7 +97,7 @@ const DATE_PRESETS = [
   { id: "all", label: "Sin límite", days: null },
 ] as const;
 
-const INTERNAL_DOMAIN = "smarteamcr.com";
+const INTERNAL_DOMAIN = DOMINIO_PROPIO;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

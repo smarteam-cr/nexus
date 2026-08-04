@@ -38,6 +38,7 @@ import {
 import type { ProjectPipelineKey } from "@/lib/projects/kind";
 import { etiquetarAmbiguos, nombreYaUsado } from "@/lib/projects/lista-de-empresa";
 import { armarCuerpoDelAlta } from "@/lib/projects/alta";
+import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
 
 /** Las rutas que este botón consume. Importadas por la guarda de paridad, no repetidas. */
 export const RUTAS_DEL_ALTA = {
@@ -170,6 +171,14 @@ export default function NuevoProyectoStepper() {
       } catch {
         setProyectosHs([]);
       }
+      /* ⚠ Soltar lo que era de la empresa ANTERIOR. `buscar()` no reseteaba `seleccion`, y con la
+         casilla de interno en el paso 1 eso deja de ser un borde raro y pasa a ser el camino
+         normal: elegir un proyecto para adjuntar de la empresa A, volver con "Atrás" y buscar la
+         empresa B dejaba la pantalla diciendo "Traer el proyecto" mientras CREABA uno nuevo,
+         porque el id elegido ya no está en la lista. `interno` sobrevive: es la intención
+         declarada, no un dato de la empresa. */
+      setSeleccion("nuevo");
+      setHermanoHsId("");
       setPaso("proyecto");
     } catch {
       setError("Error de conexión.");
@@ -464,6 +473,37 @@ export default function NuevoProyectoStepper() {
                 autoFocus
               />
             </div>
+            {/* Interno — vive ACÁ y no en el paso siguiente porque es lo PRIMERO que se sabe:
+                quien va a crear un proyecto interno no tiene por qué tipear el dominio de su
+                propia empresa para recién después catalogarlo. Marcarlo lo completa. */}
+            <label className="flex items-start gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={interno}
+                onChange={(e) => {
+                  const marcado = e.target.checked;
+                  setInterno(marcado);
+                  /* Se limpia al MARCAR: si no, desmarcar más tarde reviviría un hermano que la
+                     persona ya no está viendo desde hace rato. El envío lo descarta igual
+                     (`armarCuerpoDelAlta`), pero el estado no puede quedar mintiendo:
+                     `exigeTratoGanado` lo lee para decidir si pedir el trato. */
+                  if (marcado) setHermanoHsId("");
+                  /* Completa el dominio propio solo si el campo está VACÍO, y no lo borra al
+                     desmarcar: pisar o tirar algo que la persona escribió es peor que dejar un
+                     valor visible que puede corregir. El campo queda editable a propósito — un
+                     interno puede ser para otra empresa (el caso SmartAgro). */
+                  if (marcado && !dominio.trim()) setDominio(DOMINIO_PROPIO);
+                }}
+              />
+              <span className="flex-1 min-w-0">
+                <span className="text-sm text-fg block">Proyecto interno de Smarteam</span>
+                <span className="text-[11px] text-fg-muted leading-relaxed">
+                  No se factura, no es cartera de nadie y no se le publica nada al cliente. Se
+                  completa el dominio de Smarteam; si el proyecto es para otra empresa, cambialo.
+                </span>
+              </span>
+            </label>
             {ocupado ? (
               <p className="flex items-center gap-2 text-xs text-fg-muted">
                 <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -629,29 +669,6 @@ export default function NuevoProyectoStepper() {
                     </select>
                   </div>
                 )}
-
-                {/* Interno */}
-                <label className="flex items-start gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={interno}
-                    onChange={(e) => {
-                      setInterno(e.target.checked);
-                      /* Se limpia al MARCAR: si no, desmarcar más tarde reviviría un hermano
-                         que la persona ya no está viendo desde hace rato. El envío lo descarta
-                         igual (`armarCuerpoDelAlta`), pero el estado no puede quedar mintiendo:
-                         `exigeTratoGanado` lo lee para decidir si pedir el trato. */
-                      if (e.target.checked) setHermanoHsId("");
-                    }}
-                  />
-                  <span className="flex-1 min-w-0">
-                    <span className="text-sm text-fg block">Proyecto interno de Smarteam</span>
-                    <span className="text-[11px] text-fg-muted leading-relaxed">
-                      No se factura, no es cartera de nadie y no se le publica nada al cliente.
-                    </span>
-                  </span>
-                </label>
 
                 {/* Trato ganado — solo cuando el proyecto COBRA */}
                 {pideTrato && (
