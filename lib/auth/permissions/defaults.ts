@@ -139,7 +139,10 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     // porque el botón de alta vivía adentro del asistente de Ventas. Se resuelve con esta
     // celda y NO tocando `handoff.create` — son dos cosas distintas, y mezclarlas obligaría
     // a romper las tablas congeladas de roles.
-    proyectos: ["create", "deleteCanvas"],
+    /* `marcarInterno` va SOLO acá, junto a `deleteCanvas`, y no con los que pueden crear:
+       dar de alta es una decisión de arranque, pero sacar de cobranza un proyecto que ya está
+       andando cambia la plata de algo en marcha. Mismo peso que borrarle un canvas. */
+    proyectos: ["create", "deleteCanvas", "marcarInterno"],
     ventas: ["read", "write"],
     marketing: ["read", "write"],
     conocimientos: ["write"],
