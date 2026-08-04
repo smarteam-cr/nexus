@@ -24,7 +24,7 @@ export const CLIENT_KIND_META: Record<ClientKind, { label: string; plural: strin
   PROSPECTO: {
     label: "Prospecto",
     plural: "Prospectos",
-    help: "Ventas la creó para un business case. Todavía no compró.",
+    help: "Ventas la creó para una propuesta comercial. Todavía no compró.",
   },
   ALIADO: {
     label: "Aliado",

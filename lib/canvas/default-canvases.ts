@@ -169,7 +169,7 @@ export async function createHandoffCanvas(projectId: string, db: Db = prisma): P
   return canvas.id;
 }
 
-/** Crea un canvas "Business Case" (versionado) para un BusinessCase, con las
+/** Crea un canvas de propuesta comercial (versionado) para un BusinessCase, con las
  *  secciones del TEMPLATE indicado (default: hubspot_v1 = comportamiento legacy).
  *  Marca los canvases activos previos del caso como inactivos (cada "Generar" =
  *  una versión nueva). Devuelve el id del canvas. */

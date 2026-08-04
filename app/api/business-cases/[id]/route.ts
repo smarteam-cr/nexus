@@ -25,7 +25,7 @@ export async function GET(
 
   const businessCase = await getBusinessCase(id);
   if (!businessCase) {
-    return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
+    return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
   }
   return NextResponse.json({ businessCase });
 }
@@ -66,7 +66,7 @@ export async function DELETE(
 
   const businessCase = await getBusinessCase(id);
   if (!businessCase) {
-    return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
+    return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
   }
 
   await deleteBusinessCase(id);

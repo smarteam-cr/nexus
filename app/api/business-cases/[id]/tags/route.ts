@@ -26,7 +26,7 @@ export async function GET(
     where: { id },
     select: { tags: true, implementationType: true },
   });
-  if (!bc) return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
+  if (!bc) return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
   return NextResponse.json({ tags: sanitizeTags(bc.tags), implementationType: bc.implementationType });
 }
 
@@ -39,7 +39,7 @@ export async function PATCH(
   if (guard instanceof NextResponse) return guard;
 
   const bc = await prisma.businessCase.findUnique({ where: { id }, select: { id: true } });
-  if (!bc) return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
+  if (!bc) return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
 
   let raw: unknown;
   try {

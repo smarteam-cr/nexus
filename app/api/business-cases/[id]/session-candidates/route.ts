@@ -22,7 +22,7 @@ export async function GET(
   if (guard instanceof NextResponse) return guard;
 
   const result = await loadBcFeeding(id);
-  if (!result) return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
+  if (!result) return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
 
   return NextResponse.json({ included: result.included, candidates: result.candidates });
 }

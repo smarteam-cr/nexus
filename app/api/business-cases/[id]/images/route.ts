@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (guard instanceof NextResponse) return guard;
 
   const bc = await prisma.businessCase.findUnique({ where: { id }, select: { id: true } });
-  if (!bc) return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
+  if (!bc) return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
 
   if (!getStorageClient()) {
     return NextResponse.json({ error: "El almacenamiento no está configurado." }, { status: 503 });

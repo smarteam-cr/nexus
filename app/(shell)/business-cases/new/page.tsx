@@ -20,7 +20,7 @@ export default async function NewBusinessCasePage() {
       <Link href="/business-cases" className="text-xs text-fg-muted hover:text-fg">
         ← Ventas
       </Link>
-      <PageHeader title="Nuevo business case" description="Buscá la empresa en HubSpot para arrancar." />
+      <PageHeader title="Nueva propuesta" description="Buscá la empresa en HubSpot para arrancar." />
       <div className="mt-6">
         <BusinessCaseStepper />
       </div>

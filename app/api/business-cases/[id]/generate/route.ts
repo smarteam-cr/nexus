@@ -68,7 +68,7 @@ export async function POST(
     },
   });
   if (!bc) {
-    return NextResponse.json({ error: "Business case no existe" }, { status: 404 });
+    return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
   }
 
   // ── Contexto: transcripts manuales + transcripts de las sesiones que ALIMENTAN

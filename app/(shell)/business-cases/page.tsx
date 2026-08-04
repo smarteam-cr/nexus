@@ -38,7 +38,7 @@ export default async function BusinessCasesHubPage() {
   return (
     <div className={SHELL_DEFAULT}>
       <PageHeader
-        title="Ventas — Business Cases"
+        title="Ventas — Propuestas comerciales"
         description="Casos de negocio para prospectos y clientes."
         action={
           <div className="flex items-center gap-3">
@@ -49,7 +49,7 @@ export default async function BusinessCasesHubPage() {
               href="/business-cases/new"
               className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-primary-fg hover:opacity-90"
             >
-              Nuevo business case
+              Nueva propuesta
             </Link>
           </div>
         }
@@ -88,7 +88,7 @@ export default async function BusinessCasesHubPage() {
           </div>
         ))}
         {cases.length === 0 && (
-          <p className="text-sm text-fg-muted">No hay business cases todavía. Creá el primero.</p>
+          <p className="text-sm text-fg-muted">No hay propuestas todavía. Creá la primera.</p>
         )}
       </div>
     </div>

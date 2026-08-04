@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Botón "Eliminar business case" — ícono de basurero + ConfirmDialog + toast.
+ * Botón "Eliminar propuesta" — ícono de basurero + ConfirmDialog + toast.
  * Reusable en la lista (refresca tras borrar) y en el workspace (redirectTo="/business-cases").
  * El DELETE borra el caso y, por cascade, sus canvases/secciones/bloques/sesiones/transcripts/acceso.
  */
@@ -31,12 +31,12 @@ export default function DeleteBusinessCaseButton({
   const handleDelete = async () => {
     try {
       await fetchJson(`/api/business-cases/${bcId}`, { method: "DELETE" });
-      toast.success("Business case eliminado.");
+      toast.success("Propuesta eliminada.");
       setConfirming(false);
       if (redirectTo) router.push(redirectTo);
       else router.refresh();
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar el business case.");
+      toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar la propuesta.");
     }
   };
 
@@ -50,7 +50,7 @@ export default function DeleteBusinessCaseButton({
           e.stopPropagation();
           setConfirming(true);
         }}
-        title="Eliminar business case"
+        title="Eliminar propuesta"
         className={
           className ??
           "flex-shrink-0 p-1.5 rounded-md text-fg-muted hover:text-red-500 hover:bg-red-500/10 transition-colors"
@@ -65,7 +65,7 @@ export default function DeleteBusinessCaseButton({
         open={confirming}
         onConfirm={handleDelete}
         onCancel={() => setConfirming(false)}
-        title="¿Eliminar business case?"
+        title="¿Eliminar propuesta?"
         description={
           description ??
           "Se eliminará el caso junto con sus casos de uso (canvas), secciones y contenido. Esta acción no se puede deshacer."
