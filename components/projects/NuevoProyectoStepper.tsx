@@ -69,6 +69,8 @@ interface ProyectoDeLaEmpresa {
   hasHandoff: boolean;
   /** El tipo MATERIALIZADO en Nexus. `null` = todavía no está acá, o es anterior a la Tanda A. */
   nexusPipelineId: string | null;
+  /** Lo que HubSpot dice sobre "interno". Se MUESTRA, no se elige (ver la rama de adjuntar). */
+  interno: boolean;
 }
 
 type Paso = "empresa" | "proyecto" | "listo";
@@ -208,6 +210,11 @@ export default function NuevoProyectoStepper() {
 
   const def = pipelineByKey(tipo);
   const adjuntando = seleccion !== "nuevo";
+  /* El record elegido para adjuntar. Vive acá y no dentro del envío porque la pantalla también lo
+     necesita: al adjuntar, el tipo y la marca de interno se MUESTRAN con lo que dice HubSpot. */
+  const adjuntado = adjuntando
+    ? proyectosHs.find((p) => p.hubspotProjectId === seleccion)
+    : undefined;
 
   /* ADJUNTAR es solo para lo que TODAVÍA NO está en Nexus. Los que ya están se mostraban como
      opciones deshabilitadas y la primera persona que lo usó intentó elegirlas y se trabó: en una
@@ -258,9 +265,6 @@ export default function NuevoProyectoStepper() {
     setError(null);
     try {
       const empresa = busqueda.company;
-      const adjuntado = adjuntando
-        ? proyectosHs.find((p) => p.hubspotProjectId === seleccion)
-        : undefined;
 
       /* El cuerpo lo arma una función PURA. Acá vivía suelto, y ahí se escondía el bug del
          hermano fantasma: esconder un campo no es lo mismo que limpiarlo. */
@@ -532,10 +536,26 @@ export default function NuevoProyectoStepper() {
             {adjuntando ? (
               /* Al ADJUNTAR, el tipo se MUESTRA, no se elige: el record ya existe en HubSpot
                  con su pipeline puesto, y moverlo de pipeline es otra operación. */
-              <p className="text-xs text-fg-muted leading-relaxed rounded-lg border border-line bg-surface-muted px-3 py-2">
-                Se trae el proyecto tal como está en HubSpot, con su tipo y su etapa. Si hay que
-                cambiarle el tipo, eso se hace allá.
-              </p>
+              <div className="space-y-2">
+                <p className="text-xs text-fg-muted leading-relaxed rounded-lg border border-line bg-surface-muted px-3 py-2">
+                  Se trae el proyecto tal como está en HubSpot, con su tipo y su etapa. Si hay que
+                  cambiarle el tipo, eso se hace allá.
+                </p>
+                {/* La casilla de interno, en gris. NO es editable a propósito: acá Nexus no crea
+                    nada en HubSpot, así que marcarla no se aplicaría a nada — prometería algo que
+                    no puede cumplir. Se muestra deshabilitada para que se vea qué va a pasar. */}
+                <label className="flex items-start gap-2 px-3 py-2 rounded-lg border border-line bg-surface-muted opacity-70 cursor-not-allowed">
+                  <input type="checkbox" className="mt-1" checked={adjuntado?.interno ?? false} disabled readOnly />
+                  <span className="flex-1 min-w-0">
+                    <span className="text-sm text-fg block">Proyecto interno de Smarteam</span>
+                    <span className="text-[11px] text-fg-muted leading-relaxed">
+                      {adjuntado?.interno
+                        ? "Así está marcado en HubSpot: no se factura, no es cartera de nadie y no se le publica nada al cliente."
+                        : "En HubSpot no está marcado como interno. Para cambiarlo, se marca allá."}
+                    </span>
+                  </span>
+                </label>
+              </div>
             ) : (
               <>
                 {/* Tipo */}

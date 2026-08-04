@@ -52,31 +52,43 @@ describe("un proyecto interno no cuelga de nadie", () => {
   });
 });
 
-describe("al ADJUNTAR, «interno» no viaja — es de plata", () => {
+describe("al ADJUNTAR manda HubSpot, no la casilla — es de plata", () => {
   /* Adjuntar no crea nada en HubSpot, y `crearProjectRecord` es el ÚNICO escritor de
-     `proyecto_interno`. Si la casilla viajara, quedaría guardada como declaración, HubSpot no se
+     `proyecto_interno`. Si la casilla ganara, quedaría guardada como declaración, HubSpot no se
      enteraría, el espejo traería vacío y el proyecto **cobraría** creyendo la persona que es
      interno. El camino es alcanzable sin hacer nada raro: la casilla se desmonta al elegir un
      adjuntable, pero el estado sobrevive. */
-  const ADJUNTO = { hubspotProjectId: "hs-777", name: "Proyecto que ya existe" };
+  const REC = (interno: boolean) => ({
+    hubspotProjectId: "hs-777",
+    name: "Proyecto que ya existe",
+    interno,
+  });
 
-  it("marcar interno y DESPUÉS adjuntar → el cuerpo dice false", () => {
-    const c = armarCuerpoDelAlta({ ...BASE, interno: true, adjuntar: ADJUNTO });
+  it("HubSpot dice NO + casilla marcada → gana HubSpot", () => {
+    // El caso que facturaba: la persona creía haber creado un interno y el proyecto cobraba.
+    const c = armarCuerpoDelAlta({ ...BASE, interno: true, adjuntar: REC(false) });
     expect(c.interno).toBe(false);
   });
 
-  it("sin adjuntar, interno sigue viajando tal cual", () => {
+  it("HubSpot dice SÍ + casilla sin marcar → gana HubSpot", () => {
+    /* La dirección contraria, y no es simétrica de adorno: acá `interno: true` es lo que hace que
+       `exigeTratoGanado` NO pida el trato ganado. Sin esto, adjuntar un proyecto que en HubSpot sí
+       es interno devuelve un 400 pidiendo un trato que ese proyecto no tiene por qué tener. */
+    const c = armarCuerpoDelAlta({ ...BASE, interno: false, adjuntar: REC(true) });
+    expect(c.interno).toBe(true);
+  });
+
+  it("sin adjuntar, la casilla sigue mandando", () => {
     // La regla es del camino de adjuntar, no un apagón general.
     expect(armarCuerpoDelAlta({ ...BASE, interno: true }).interno).toBe(true);
     expect(armarCuerpoDelAlta({ ...BASE, interno: false }).interno).toBe(false);
   });
 
-  it("la clave viaja siempre, en false — no se omite", () => {
+  it("la clave viaja siempre — no se omite", () => {
     /* A diferencia del hermano: el endpoint lee `body.interno === true`, así que omitirla y
        mandarla en false dan lo mismo hoy. Se manda explícita para que el cuerpo diga la verdad
        completa y no dependa de cómo el servidor trata lo ausente. */
-    const c = armarCuerpoDelAlta({ ...BASE, interno: true, adjuntar: ADJUNTO });
-    expect("interno" in c).toBe(true);
+    expect("interno" in armarCuerpoDelAlta({ ...BASE, adjuntar: REC(false) })).toBe(true);
   });
 });
 
@@ -105,7 +117,7 @@ describe("el resto del cuerpo", () => {
     const c = armarCuerpoDelAlta({
       ...BASE,
       nombre: "Lo que escribí",
-      adjuntar: { hubspotProjectId: "hs-1", name: "Como se llama allá" },
+      adjuntar: { hubspotProjectId: "hs-1", name: "Como se llama allá", interno: false },
     });
     expect(c.nombre).toBe("Como se llama allá");
     expect(c.hubspotServiceId).toBe("hs-1");
@@ -179,5 +191,26 @@ describe("el índice de clientes deja UN solo botón", () => {
     const src = leer("components/projects/NuevoProyectoStepper.tsx");
     expect(src).toContain("!interno && def.canBeSiblingOf.length > 0");
     expect(src, "el cuerpo volvió a armarse a mano en el onClick").toContain("armarCuerpoDelAlta(");
+  });
+
+  it("el picker PIDE «proyecto_interno», o el dato llega vacío y nadie se entera", () => {
+    /* LA guarda del tramo, y la única que puede atajar esto: el nombre de la propiedad es un
+       string suelto adentro de un array. Si alguien lo saca, TypeScript no dice nada,
+       `parseCheckbox(undefined)` devuelve `false`, y TODOS los proyectos que se adjunten van a
+       parecer "no internos" — vuelve el 400 pidiendo trato ganado sobre proyectos que son
+       internos de verdad, y la casilla en gris pasa a mentir en silencio. */
+    const ruta = leer("app/api/handoffs/projects-of-company/route.ts");
+    expect(ruta, "el batch/read dejó de pedir la propiedad").toContain('"proyecto_interno"');
+    expect(ruta, "la propiedad se pide pero no viaja en el DTO").toContain("parseCheckbox(");
+  });
+
+  it("al adjuntar, la casilla es de solo lectura", () => {
+    /* Editable prometería algo que Nexus no puede cumplir: en ese camino no crea nada en HubSpot,
+       así que la marca no se aplicaría. Se muestra deshabilitada con lo que dice el record. */
+    const src = leer("components/projects/NuevoProyectoStepper.tsx");
+    expect(src).toContain("adjuntado?.interno");
+    const i = src.indexOf("adjuntado?.interno");
+    expect(src.slice(Math.max(0, i - 200), i + 200), "la casilla del adjuntar quedó editable")
+      .toContain("disabled");
   });
 });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardLecturaParaArrancar } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
+import { parseCheckbox } from "@/lib/hubspot/project-properties";
 import { resolveCompanyProjectIds } from "@/lib/hubspot/sync-projects";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { ordenarPorAntiguedad } from "@/lib/projects/lista-de-empresa";
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
       method: "POST",
       path: `/crm/v3/objects/${PROJECTS_OBJECT_TYPE}/batch/read`,
       body: {
-        properties: ["hs_name", "hs_pipeline_stage", "hs_createdate"],
+        properties: ["hs_name", "hs_pipeline_stage", "hs_createdate", "proyecto_interno"],
         inputs: ids.map((id) => ({ id })),
       },
     });
@@ -99,6 +100,12 @@ export async function GET(req: NextRequest) {
         hasHandoff: nexus?.hasHandoff ?? false,
         /** El tipo MATERIALIZADO en Nexus. `null` = el proyecto todavía no está acá. */
         nexusPipelineId: nexus?.nexusPipelineId ?? null,
+        /* Lo que HubSpot dice sobre "interno". Viaja para que el alta pueda MOSTRARLO en vez de
+           preguntarlo: al adjuntar, la casilla no se aplicaría a nada —el motor solo escribe
+           `proyecto_interno` cuando CREA el registro— así que ofrecerla editable prometería algo
+           que Nexus no puede cumplir. Mismo criterio que `nexusPipelineId`, que se lee y no se
+           escribe. */
+        interno: parseCheckbox(r.properties.proyecto_interno),
       };
     });
 

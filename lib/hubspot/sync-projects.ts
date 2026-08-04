@@ -1,5 +1,5 @@
 import { getHubspotClient, getSystemHubspotClient } from "./client";
-import { PROJECT_PROPERTIES } from "./project-properties";
+import { PROJECT_PROPERTIES, parseCheckbox } from "./project-properties";
 import { ESTADOS_DE_ALTA, altaTerminada } from "@/lib/projects/alta";
 import { prisma } from "@/lib/db/prisma";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
@@ -82,15 +82,6 @@ function logTransicion(o: {
       `etapa=${o.stageLabel ?? o.stageId ?? "(ninguna)"}  ` +
       `estadoCrudo=${o.rawStatus || "(vacío)"}  motivo=${o.motivo}`,
   );
-}
-
-/**
- * Un `booleancheckbox` de HubSpot. Sin marcar llega como `null`, como `""` o directamente
- * ausente de la respuesta — nunca como `"false"` hasta que alguien lo marca y lo desmarca.
- * Los tres casos son "no", que es el default de negocio.
- */
-function parseCheckbox(v: string | null | undefined): boolean {
-  return (v ?? "").trim().toLowerCase() === "true";
 }
 
 function inferServiceMapping(projectName: string | null): ServiceMapping {
