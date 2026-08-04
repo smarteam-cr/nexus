@@ -52,6 +52,34 @@ describe("un proyecto interno no cuelga de nadie", () => {
   });
 });
 
+describe("al ADJUNTAR, «interno» no viaja — es de plata", () => {
+  /* Adjuntar no crea nada en HubSpot, y `crearProjectRecord` es el ÚNICO escritor de
+     `proyecto_interno`. Si la casilla viajara, quedaría guardada como declaración, HubSpot no se
+     enteraría, el espejo traería vacío y el proyecto **cobraría** creyendo la persona que es
+     interno. El camino es alcanzable sin hacer nada raro: la casilla se desmonta al elegir un
+     adjuntable, pero el estado sobrevive. */
+  const ADJUNTO = { hubspotProjectId: "hs-777", name: "Proyecto que ya existe" };
+
+  it("marcar interno y DESPUÉS adjuntar → el cuerpo dice false", () => {
+    const c = armarCuerpoDelAlta({ ...BASE, interno: true, adjuntar: ADJUNTO });
+    expect(c.interno).toBe(false);
+  });
+
+  it("sin adjuntar, interno sigue viajando tal cual", () => {
+    // La regla es del camino de adjuntar, no un apagón general.
+    expect(armarCuerpoDelAlta({ ...BASE, interno: true }).interno).toBe(true);
+    expect(armarCuerpoDelAlta({ ...BASE, interno: false }).interno).toBe(false);
+  });
+
+  it("la clave viaja siempre, en false — no se omite", () => {
+    /* A diferencia del hermano: el endpoint lee `body.interno === true`, así que omitirla y
+       mandarla en false dan lo mismo hoy. Se manda explícita para que el cuerpo diga la verdad
+       completa y no dependa de cómo el servidor trata lo ausente. */
+    const c = armarCuerpoDelAlta({ ...BASE, interno: true, adjuntar: ADJUNTO });
+    expect("interno" in c).toBe(true);
+  });
+});
+
 describe("el resto del cuerpo", () => {
   it("cliente existente → clientId, y NADA de empresa", () => {
     const c = armarCuerpoDelAlta({ ...BASE, companyId: "hs-emp", companyName: "Acme" });

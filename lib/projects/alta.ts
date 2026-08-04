@@ -127,7 +127,16 @@ export function armarCuerpoDelAlta(e: EleccionesDelAlta): Record<string, unknown
   const cuerpo: Record<string, unknown> = {
     nombre: (e.adjuntar?.name ?? e.nombre).trim(),
     pipeline: e.pipeline,
-    interno: e.interno,
+    /* ⚠ LA OTRA REGLA, y es de plata: al ADJUNTAR, "interno" no viaja.
+       Ese camino no crea nada en HubSpot —`crearProjectRecord` solo corre cuando el alta arranca
+       en `pendiente_crm`, y adjuntar arranca en `pendiente_espejo`—, y `crearProjectRecord` es el
+       ÚNICO escritor de `proyecto_interno`. O sea que la casilla no se aplicaría a nada: quedaría
+       guardada en `altaInternoDeclarado`, HubSpot nunca se enteraría, el espejo traería vacío y el
+       proyecto **cobraría** creyendo la persona que es interno.
+       Y era alcanzable sin hacer nada raro: la casilla vive en la rama `!adjuntando`, así que
+       marcarla y DESPUÉS elegir un proyecto de HubSpot la desmontaba de la pantalla sin limpiar el
+       valor. El mismo defecto del hermano fantasma de abajo, en el campo que decide facturación. */
+    interno: e.adjuntar ? false : e.interno,
   };
 
   if (e.clientId) cuerpo.clientId = e.clientId;
