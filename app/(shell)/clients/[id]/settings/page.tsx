@@ -7,6 +7,7 @@ import ClientSharing from "@/components/clients/ClientSharing";
 import ClientClassification from "@/components/clients/ClientClassification";
 import type { ClientKind } from "@prisma/client";
 import DeleteProjectButton from "@/components/clients/DeleteProjectButton";
+import MarcarInternoToggle from "@/components/clients/MarcarInternoToggle";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 
 interface HubspotAccount {
@@ -31,6 +32,8 @@ interface Client {
 interface Me {
   role: string | null;
   capabilities: string[];
+  /** Matriz efectiva sección×acción. `marcarInterno` no tiene capacidad legacy que la cubra. */
+  permissions?: { sections?: Record<string, Record<string, boolean> | undefined> };
 }
 
 interface ProjectRow {
@@ -39,6 +42,8 @@ interface ProjectRow {
   status: string;
   serviceType: string | null;
   hubspotServiceId: string | null;
+  /** La verdad materializada del espejo, no lo que alguien declaró al crear. */
+  proyectoInterno: boolean;
 }
 
 export default function ClientSettingsPage() {
@@ -322,6 +327,46 @@ export default function ClientSettingsPage() {
 
       {/* Sección: Compartir cliente (solo roles con shareClients) */}
       {me?.capabilities.includes("shareClients") && <ClientSharing clientId={clientId} />}
+
+      {/* Sección: proyectos internos. Fuera de la Zona de peligro a propósito — es reversible y
+          se marca en HubSpot, así que no comparte el tono de lo que no se puede deshacer. */}
+      {me?.permissions?.sections?.proyectos?.marcarInterno === true && (
+        <section className="rounded-xl bg-surface border border-line p-5 space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold text-fg">Proyectos internos de Smarteam</h2>
+            <p className="text-xs text-fg-muted mt-1">
+              Un proyecto interno no se factura, no suma a la cartera de su CSE y no se le publica
+              nada al cliente. La marca vive en HubSpot: se cambia acá y se ve allá.
+            </p>
+          </div>
+          {projects.length === 0 ? (
+            <p className="text-xs text-fg-muted">Este cliente no tiene proyectos.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {projects.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center gap-3 rounded-lg bg-surface-muted border border-line px-3 py-2"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-fg truncate">{p.name}</p>
+                    <p className="text-[11px] text-fg-muted">
+                      {p.proyectoInterno ? "interno · no factura" : "de cliente · factura"}
+                    </p>
+                  </div>
+                  <MarcarInternoToggle
+                    projectId={p.id}
+                    projectName={p.name}
+                    interno={p.proyectoInterno}
+                    enHubspot={!!p.hubspotServiceId}
+                    onCambiado={fetchProjects}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {/* Sección: Zona de peligro (solo roles con deleteClients) */}
       {me?.capabilities.includes("deleteClients") && (

@@ -53,6 +53,46 @@ export function belongsToClient(
   return s.resolvedClientId === clientId || s.manualClientId === clientId;
 }
 
+/**
+ * Le da dueño a una sesión HUÉRFANA para que pueda alimentar un proyecto. Es la contracara de
+ * `belongsToClient`, y vive al lado porque hay que leerlas juntas.
+ *
+ * ── POR QUÉ HACE FALTA ───────────────────────────────────────────────────────
+ * Crear el vínculo NO alcanza. Los endpoints que escriben `SessionProject` dejan pasar una sesión
+ * sin dueño, pero después `getProjectMemberSessions` la DESCARTA al leer (abajo, con un
+ * `console.warn` que nadie mira). O sea: el botón "Agregar" parece funcionar, la fila queda
+ * escrita, y el handoff sigue vacío. Falla silenciosa.
+ *
+ * ── LOS DOS FRENOS, Y POR QUÉ ────────────────────────────────────────────────
+ * · **Solo si NO tiene dueño**, por las dos vías. Una sesión que ya es de alguien no se roba:
+ *   para eso está el rechazo cross-cliente de los endpoints, y romperlo sería mover contexto de
+ *   un cliente a otro sin que nadie lo pida.
+ * · **Sin reclasificación de IA.** El humano ACABA de elegir el proyecto; pagar el modelo para
+ *   que adivine lo mismo cuesta del orden de un dólar por click y encima puede proponer links a
+ *   otros proyectos del cliente que nadie pidió.
+ *
+ * ⚠ Es una escritura DURABLE de pertenencia: desde acá la sesión cuenta como del cliente en todas
+ * las lecturas, no solo en este proyecto. Se revierte desde /sessions quitando la asignación.
+ *
+ * Devuelve `true` si adoptó. `manualClientId` gana en el primer paso de la cascada, así que la
+ * resolución queda coherente y INV1 en verde por construcción.
+ */
+export async function adoptarSesionSinDuenio(
+  sessionId: string,
+  clientId: string,
+): Promise<boolean> {
+  const s = await prisma.firefliesSession.findUnique({
+    where: { id: sessionId },
+    select: { resolvedClientId: true, manualClientId: true },
+  });
+  if (!s || s.resolvedClientId !== null || s.manualClientId !== null) return false;
+
+  await prisma.firefliesSession.update({ where: { id: sessionId }, data: { manualClientId: clientId } });
+  const { reResolveSession } = await import("./resolve-client");
+  await reResolveSession(sessionId, undefined, { reclassify: false });
+  return true;
+}
+
 function foldOrganizer(participants: string[], organizerEmail: string | null): string[] {
   return organizerEmail ? [...new Set([...participants, organizerEmail])] : participants;
 }

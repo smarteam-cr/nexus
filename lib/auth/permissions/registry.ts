@@ -134,6 +134,15 @@ export const PERMISSION_SECTIONS = [
         label: "Eliminar un canvas del proyecto",
         enforced: true,
       },
+      {
+        /* Marcar o desmarcar "interno" DESPUÉS del alta. Celda propia y no `create` porque son
+           dos momentos distintos: dar de alta es una decisión de arranque; esto cambia si un
+           proyecto que ya está andando FACTURA o no. Quien puede crear no necesariamente debería
+           poder sacar de cobranza algo que ya está en marcha. */
+        key: "marcarInterno",
+        label: "Marcar un proyecto como interno",
+        enforced: true,
+      },
     ],
   },
   {

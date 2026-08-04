@@ -38,6 +38,7 @@ import {
 import type { ProjectPipelineKey } from "@/lib/projects/kind";
 import { etiquetarAmbiguos, nombreYaUsado } from "@/lib/projects/lista-de-empresa";
 import { armarCuerpoDelAlta } from "@/lib/projects/alta";
+import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
 
 /** Las rutas que este botón consume. Importadas por la guarda de paridad, no repetidas. */
 export const RUTAS_DEL_ALTA = {
@@ -69,6 +70,10 @@ interface ProyectoDeLaEmpresa {
   hasHandoff: boolean;
   /** El tipo MATERIALIZADO en Nexus. `null` = todavía no está acá, o es anterior a la Tanda A. */
   nexusPipelineId: string | null;
+  /** Lo que HubSpot dice sobre "interno". Se MUESTRA, no se elige (ver la rama de adjuntar). */
+  interno: boolean;
+  /** El pipeline que el record tiene EN HUBSPOT. `null` = el record no declara ninguno. */
+  hubspotPipelineId: string | null;
 }
 
 type Paso = "empresa" | "proyecto" | "listo";
@@ -157,7 +162,13 @@ export default function NuevoProyectoStepper() {
       setBusqueda(data);
       setDominioBuscado(d);
       const ganados = data.deals.filter((x) => x.isWon);
-      if (ganados.length === 1) setTratoId(ganados[0].id);
+      /* ⚠ SIEMPRE se reescribe, aunque no haya un único ganado. Antes solo se pisaba con
+         exactamente uno, así que con 0 o con 2+ sobrevivía el trato de la empresa ANTERIOR — y no
+         es un campo cualquiera: el alta lo escribe en `hubspotDealId` y el creador lo manda dentro
+         de las ASOCIACIONES del POST, o sea que en HubSpot quedaba un proyecto de la empresa B
+         colgado del trato ganado de la empresa A. Sin error, sin aviso, y con la pantalla
+         mostrando el trato como no elegido. */
+      setTratoId(ganados.length === 1 ? ganados[0].id : "");
       setNombre(ganados[0]?.name ?? data.company.name);
       try {
         const pr = await fetch(
@@ -168,6 +179,15 @@ export default function NuevoProyectoStepper() {
       } catch {
         setProyectosHs([]);
       }
+      /* ⚠ Soltar lo que era de la empresa ANTERIOR. `buscar()` no reseteaba `seleccion`, y con la
+         casilla de interno en el paso 1 eso deja de ser un borde raro y pasa a ser el camino
+         normal: elegir un proyecto para adjuntar de la empresa A, volver con "Atrás" y buscar la
+         empresa B dejaba la pantalla diciendo "Traer el proyecto" mientras CREABA uno nuevo,
+         porque el id elegido ya no está en la lista. `interno` sobrevive: es la intención
+         declarada, no un dato de la empresa. */
+      setSeleccion("nuevo");
+      setHermanoHsId("");
+      setSinTratoMotivo("");
       setPaso("proyecto");
     } catch {
       setError("Error de conexión.");
@@ -208,6 +228,19 @@ export default function NuevoProyectoStepper() {
 
   const def = pipelineByKey(tipo);
   const adjuntando = seleccion !== "nuevo";
+  /* El record elegido para adjuntar. Vive acá y no dentro del envío porque la pantalla también lo
+     necesita: al adjuntar, el tipo y la marca de interno se MUESTRAN con lo que dice HubSpot. */
+  const adjuntado = adjuntando
+    ? proyectosHs.find((p) => p.hubspotProjectId === seleccion)
+    : undefined;
+  /* El tipo del record que se va a traer, en clave. `null` = HubSpot lo tiene en un pipeline que
+     Nexus no conoce; entonces el alta NO se puede terminar (el motor compara el tipo que vuelve
+     contra el declarado y nunca coincidirían), así que se dice acá en vez de dejar el proyecto en
+     cuarentena para siempre. */
+  const tipoDelAdjuntado = adjuntado
+    ? (resolvePipeline(adjuntado.hubspotPipelineId)?.key ?? null)
+    : null;
+  const adjuntadoSinTipoConocido = !!adjuntado && tipoDelAdjuntado === null;
 
   /* ADJUNTAR es solo para lo que TODAVÍA NO está en Nexus. Los que ya están se mostraban como
      opciones deshabilitadas y la primera persona que lo usó intentó elegirlas y se trabó: en una
@@ -250,6 +283,12 @@ export default function NuevoProyectoStepper() {
     !!busqueda?.company &&
     (adjuntando || nombre.trim().length > 0) &&
     tratoResuelto &&
+    /* ⚠ Se BLOQUEA, no se avisa. Si HubSpot tiene el proyecto en un pipeline que Nexus no conoce,
+       el alta no puede terminar: el motor compara el tipo que volvió del espejo contra el elegido
+       y, si no coinciden, deja el alta en «pendiente_espejo» PARA SIEMPRE. Y eso no se ve como un
+       error: el proyecto existe, se abre, se ve normal — y nunca entra a cobranza. Dejarlo crear
+       con un aviso sería fabricar ese estado a sabiendas. */
+    !adjuntadoSinTipoConocido &&
     !ocupado;
 
   const crear = async () => {
@@ -258,9 +297,6 @@ export default function NuevoProyectoStepper() {
     setError(null);
     try {
       const empresa = busqueda.company;
-      const adjuntado = adjuntando
-        ? proyectosHs.find((p) => p.hubspotProjectId === seleccion)
-        : undefined;
 
       /* El cuerpo lo arma una función PURA. Acá vivía suelto, y ahí se escondía el bug del
          hermano fantasma: esconder un campo no es lo mismo que limpiarlo. */
@@ -275,7 +311,7 @@ export default function NuevoProyectoStepper() {
         companyId: empresa.id,
         companyName: empresa.name,
         domain: empresa.domain,
-        adjuntar: adjuntado ?? null,
+        adjuntar: adjuntado ? { ...adjuntado, pipeline: tipoDelAdjuntado } : null,
       });
 
       const res = await fetch(RUTAS_DEL_ALTA.crear, {
@@ -460,6 +496,37 @@ export default function NuevoProyectoStepper() {
                 autoFocus
               />
             </div>
+            {/* Interno — vive ACÁ y no en el paso siguiente porque es lo PRIMERO que se sabe:
+                quien va a crear un proyecto interno no tiene por qué tipear el dominio de su
+                propia empresa para recién después catalogarlo. Marcarlo lo completa. */}
+            <label className="flex items-start gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={interno}
+                onChange={(e) => {
+                  const marcado = e.target.checked;
+                  setInterno(marcado);
+                  /* Se limpia al MARCAR: si no, desmarcar más tarde reviviría un hermano que la
+                     persona ya no está viendo desde hace rato. El envío lo descarta igual
+                     (`armarCuerpoDelAlta`), pero el estado no puede quedar mintiendo:
+                     `exigeTratoGanado` lo lee para decidir si pedir el trato. */
+                  if (marcado) setHermanoHsId("");
+                  /* Completa el dominio propio solo si el campo está VACÍO, y no lo borra al
+                     desmarcar: pisar o tirar algo que la persona escribió es peor que dejar un
+                     valor visible que puede corregir. El campo queda editable a propósito — un
+                     interno puede ser para otra empresa (el caso SmartAgro). */
+                  if (marcado && !dominio.trim()) setDominio(DOMINIO_PROPIO);
+                }}
+              />
+              <span className="flex-1 min-w-0">
+                <span className="text-sm text-fg block">Proyecto interno de Smarteam</span>
+                <span className="text-[11px] text-fg-muted leading-relaxed">
+                  No se factura, no es cartera de nadie y no se le publica nada al cliente. Se
+                  completa el dominio de Smarteam; si el proyecto es para otra empresa, cambialo.
+                </span>
+              </span>
+            </label>
             {ocupado ? (
               <p className="flex items-center gap-2 text-xs text-fg-muted">
                 <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -532,10 +599,34 @@ export default function NuevoProyectoStepper() {
             {adjuntando ? (
               /* Al ADJUNTAR, el tipo se MUESTRA, no se elige: el record ya existe en HubSpot
                  con su pipeline puesto, y moverlo de pipeline es otra operación. */
-              <p className="text-xs text-fg-muted leading-relaxed rounded-lg border border-line bg-surface-muted px-3 py-2">
-                Se trae el proyecto tal como está en HubSpot, con su tipo y su etapa. Si hay que
-                cambiarle el tipo, eso se hace allá.
-              </p>
+              <div className="space-y-2">
+                {adjuntadoSinTipoConocido ? (
+                  <p className="text-xs leading-relaxed rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-danger">
+                    Este proyecto está en un pipeline de HubSpot que Nexus todavía no conoce, así que
+                    no se puede traer: el alta quedaría a medio hacer y el proyecto nunca entraría a
+                    cobranza. Movelo en HubSpot a Implementación, Desarrollo o Sitios web, y volvé.
+                  </p>
+                ) : (
+                  <p className="text-xs text-fg-muted leading-relaxed rounded-lg border border-line bg-surface-muted px-3 py-2">
+                    Se trae el proyecto tal como está en HubSpot, con su tipo y su etapa. Si hay que
+                    cambiarle el tipo, eso se hace allá.
+                  </p>
+                )}
+                {/* La casilla de interno, en gris. NO es editable a propósito: acá Nexus no crea
+                    nada en HubSpot, así que marcarla no se aplicaría a nada — prometería algo que
+                    no puede cumplir. Se muestra deshabilitada para que se vea qué va a pasar. */}
+                <label className="flex items-start gap-2 px-3 py-2 rounded-lg border border-line bg-surface-muted opacity-70 cursor-not-allowed">
+                  <input type="checkbox" className="mt-1" checked={adjuntado?.interno ?? false} disabled readOnly />
+                  <span className="flex-1 min-w-0">
+                    <span className="text-sm text-fg block">Proyecto interno de Smarteam</span>
+                    <span className="text-[11px] text-fg-muted leading-relaxed">
+                      {adjuntado?.interno
+                        ? "Así está marcado en HubSpot: no se factura, no es cartera de nadie y no se le publica nada al cliente."
+                        : "En HubSpot no está marcado como interno. Para cambiarlo, se marca allá."}
+                    </span>
+                  </span>
+                </label>
+              </div>
             ) : (
               <>
                 {/* Tipo */}
@@ -609,29 +700,6 @@ export default function NuevoProyectoStepper() {
                     </select>
                   </div>
                 )}
-
-                {/* Interno */}
-                <label className="flex items-start gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={interno}
-                    onChange={(e) => {
-                      setInterno(e.target.checked);
-                      /* Se limpia al MARCAR: si no, desmarcar más tarde reviviría un hermano
-                         que la persona ya no está viendo desde hace rato. El envío lo descarta
-                         igual (`armarCuerpoDelAlta`), pero el estado no puede quedar mintiendo:
-                         `exigeTratoGanado` lo lee para decidir si pedir el trato. */
-                      if (e.target.checked) setHermanoHsId("");
-                    }}
-                  />
-                  <span className="flex-1 min-w-0">
-                    <span className="text-sm text-fg block">Proyecto interno de Smarteam</span>
-                    <span className="text-[11px] text-fg-muted leading-relaxed">
-                      No se factura, no es cartera de nadie y no se le publica nada al cliente.
-                    </span>
-                  </span>
-                </label>
 
                 {/* Trato ganado — solo cuando el proyecto COBRA */}
                 {pideTrato && (

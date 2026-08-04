@@ -10,6 +10,19 @@
  * en prosa se vuelve mentira sin que nadie se entere. La doc lee ESTA constante.
  */
 
+/**
+ * Un `booleancheckbox` de HubSpot. Sin marcar llega como `null`, como `""` o directamente
+ * ausente de la respuesta — nunca como `"false"` hasta que alguien lo marca y lo desmarca.
+ * Los tres casos son "no", que es el default de negocio.
+ *
+ * Vive acá y no en el sync porque el espejo dejó de ser su único lector: el picker del alta
+ * también necesita saber si un proyecto que ya existe está marcado interno, y este módulo es el
+ * que puede importar cualquiera.
+ */
+export function parseCheckbox(v: string | null | undefined): boolean {
+  return (v ?? "").trim().toLowerCase() === "true";
+}
+
 export const PROJECT_PROPERTIES = [
   "hs_name",
   "hs_status",

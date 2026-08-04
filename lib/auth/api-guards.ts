@@ -141,6 +141,15 @@ export interface ProjectGuardExtras {
   capacidades: ProjectCapabilities;
   /** Por qué NO se le puede publicar al cliente. `null` = sí se puede. */
   motivoNoPublicable: string | null;
+  /**
+   * El hecho CRUDO de si es un proyecto interno de Smarteam, no una capacidad derivada.
+   *
+   * Viaja aparte porque `capacidades.cobranza === false` no alcanza para preguntarlo: también da
+   * false un hermano de CS y un alta a medio hacer. Y hay una decisión —a qué proyectos se les
+   * ofrecen las reuniones internas del equipo— que necesita el hecho, no la consecuencia. Sale
+   * del mismo row que ya se traía: cero queries nuevas.
+   */
+  interno: boolean;
 }
 
 export async function guardAccessToProject(
@@ -171,6 +180,7 @@ export async function guardAccessToProject(
     clientId: project.clientId,
     capacidades: projectCapabilities(facts),
     motivoNoPublicable: motivoNoPublicable(facts),
+    interno: facts.interno,
   };
 }
 
@@ -222,17 +232,22 @@ export async function guardHandoffAccess(
  */
 export async function guardProjectHandoffAccess(
   projectId: string,
-): Promise<(Awaited<ReturnType<typeof requireHandoffAccess>> & { clientId: string }) | NextResponse> {
+): Promise<
+  | (Awaited<ReturnType<typeof requireHandoffAccess>> & { clientId: string; interno: boolean })
+  | NextResponse
+> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { clientId: true },
+    /* `proyectoInterno` viaja en el mismo row: la puerta que recibe "Agregar una sesión" necesita
+       saber si el proyecto es interno para decidir si puede adoptar una reunión sin dueño. */
+    select: { clientId: true, proyectoInterno: true },
   });
   if (!project) {
     return NextResponse.json({ error: "Proyecto no existe" }, { status: 404 });
   }
   const guard = await guardHandoffAccess(project.clientId);
   if (guard instanceof NextResponse) return guard;
-  return { ...guard, clientId: project.clientId };
+  return { ...guard, clientId: project.clientId, interno: project.proyectoInterno };
 }
 
 /**

@@ -130,3 +130,37 @@ export async function crearProjectRecord(hs: HsClient, datos: RecordACrear): Pro
   }
   return creado.id;
 }
+
+/**
+ * Marca o desmarca "interno" en un proyecto que YA existe en HubSpot.
+ *
+ * ── POR QUÉ ESCRIBE ALLÁ Y NO ACÁ ────────────────────────────────────────────
+ * `Project.proyectoInterno` tiene UN solo escritor —el espejo (`sync-projects.ts`)— y una guarda
+ * que lo hace cumplir (`scope-coverage.test.ts`). Si Nexus escribiera esa columna, el sync la
+ * revertiría en diez minutos sobre un campo que decide FACTURACIÓN, y el síntoma sería un
+ * interruptor que "no guarda" sin ningún error. Por eso el interruptor manda el cambio a HubSpot
+ * y espera a que vuelva por el espejo: la fuente de verdad no se mueve de lugar.
+ *
+ * ── POR QUÉ SÍ SE ESCRIBE "false" ACÁ, Y AL CREAR NO ─────────────────────────
+ * Al crear, un checkbox sin marcar llega vacío y el espejo ya lo trata como "no interno", así que
+ * mandar "false" sería una distinción que no distingue. Acá es al revés: DESMARCAR es justamente
+ * la operación, y para eso hay que escribir el valor explícito — omitirlo dejaría el "true" viejo.
+ */
+export async function actualizarProyectoInterno(
+  hs: HsClient,
+  recordId: string,
+  interno: boolean,
+): Promise<void> {
+  const res = await hs.apiRequest({
+    method: "PATCH",
+    path: `/crm/v3/objects/${OBJETO_PROYECTOS}/${recordId}`,
+    body: { properties: { [PROP_INTERNO]: interno ? "true" : "false" } },
+  });
+  if (!res.ok) {
+    const cuerpo = await res.text().catch(() => "");
+    throw new Error(
+      `marcar el proyecto como ${interno ? "interno" : "no interno"} en HubSpot falló ` +
+        `(${res.status}): ${cuerpo.slice(0, 300)}`,
+    );
+  }
+}

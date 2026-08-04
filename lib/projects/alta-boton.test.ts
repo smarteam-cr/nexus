@@ -156,3 +156,87 @@ describe("el asistente viejo se esconde, no se borra", () => {
     expect(leer(VIEJO)).toContain("export default function HandoffStepper");
   });
 });
+
+describe("la casilla de interno vive en el PASO 1, y completa el dominio", () => {
+  /* Quien va a crear un proyecto interno no tiene por qué tipear el dominio de su propia empresa
+     para recién después catalogarlo: marcar la casilla es lo primero que se sabe, y el dominio
+     sale de ahí. Editable, porque un interno puede ser para otra empresa (el caso SmartAgro). */
+
+  it("está adentro del formulario del dominio, no del de tipo y nombre", () => {
+    /* Si vuelve al paso 2, el autocompletado deja de tener sentido (el dominio ya se tipeó) y el
+       cambio se apaga sin que ningún otro test se caiga. */
+    const src = leer(BOTON);
+    const form = src.indexOf('id="alta-dominio"');
+    const finDelForm = src.indexOf("</form>", form);
+    expect(form, "desapareció el formulario del paso 1").toBeGreaterThan(0);
+    const paso1 = src.slice(form, finDelForm);
+    expect(paso1, "la casilla de interno no está en el paso 1").toContain(
+      "Proyecto interno de Smarteam",
+    );
+  });
+
+  it("marcarla completa el dominio propio, y NO lo pisa si ya hay algo escrito", () => {
+    const src = leer(BOTON);
+    expect(src).toContain("setDominio(DOMINIO_PROPIO)");
+    /* La condición es la mitad del punto: pisar o borrar lo que alguien tipeó es peor que dejar
+       un valor visible que puede corregir. */
+    expect(src).toContain("if (marcado && !dominio.trim())");
+  });
+
+  it("el dominio propio NO está pegado en la pantalla", () => {
+    /* Un literal acá sobrevive a que se cambie el dominio en la categoría interna, y el síntoma
+       es "No existe esa empresa en HubSpot" sobre un dominio que sí existe. Mismo criterio que
+       los ids de pipeline, que tampoco pueden escribirse en una pantalla. */
+    expect(leer(BOTON), "el dominio se hardcodeó en vez de importarse").not.toContain(
+      '"smarteamcr.com"',
+    );
+  });
+
+  it("buscar() suelta la selección de la empresa anterior", () => {
+    /* Con la casilla en el paso 1, volver atrás y buscar otra empresa pasa a ser el camino normal.
+       Sin este reset, la pantalla dice "Traer el proyecto" y CREA uno nuevo, porque el id elegido
+       ya no está en la lista de la empresa nueva. */
+    const src = leer(BOTON);
+    const i = src.indexOf('setPaso("proyecto")');
+    expect(i).toBeGreaterThan(0);
+    expect(src.slice(Math.max(0, i - 500), i), "buscar() ya no resetea la selección").toContain(
+      'setSeleccion("nuevo")',
+    );
+  });
+});
+
+describe("«nosotros» se escribe en un solo lugar", () => {
+  /* Estaba en seis archivos con cuatro nombres distintos. Cada copia es una que se queda vieja
+     sin que nada avise. */
+  const EXENTOS = new Set([
+    "lib/sessions/dominio-propio.ts", // la fuente
+    // El gate de LOGIN va aparte a propósito: es seguridad, y un cambio pensado para sesiones o
+    // para el alta no puede abrir la puerta de entrada al sistema.
+    "app/auth/callback/route.ts",
+    "app/auth/google/route.ts",
+  ]);
+
+  it("ningún archivo de producción pega el literal", () => {
+    const encontrados: string[] = [];
+    const recorrer = (dir: string) => {
+      for (const e of fs.readdirSync(path.join(RAIZ, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`;
+        if (e.isDirectory()) {
+          recorrer(rel);
+          continue;
+        }
+        if (!/\.(ts|tsx)$/.test(e.name) || /\.test\.tsx?$/.test(e.name)) continue;
+        if (EXENTOS.has(rel)) continue;
+        const src = fs.readFileSync(path.join(RAIZ, rel), "utf8");
+        /* Solo entre comillas: un `@smarteamcr.com` dentro de un comentario o de un texto de
+           pantalla no es una fuente de verdad que se pueda quedar vieja. */
+        if (/["'`]smarteamcr\.com["'`]/.test(src)) encontrados.push(rel);
+      }
+    };
+    for (const raiz of ["lib", "app", "components"]) recorrer(raiz);
+    expect(
+      encontrados,
+      `Pegaron el dominio propio en vez de importar DOMINIO_PROPIO:\n${encontrados.join("\n")}`,
+    ).toEqual([]);
+  });
+});

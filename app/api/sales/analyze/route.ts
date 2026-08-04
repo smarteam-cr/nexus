@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
+import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
 
-const INTERNAL_DOMAIN = "smarteamcr.com";
+const INTERNAL_DOMAIN = DOMINIO_PROPIO;
 
 const SALES_SYSTEM_PROMPT = `Eres un analista de ventas experto. Analiza transcripciones de reuniones de ventas con prospectos y extrae inteligencia comercial estructurada.
 

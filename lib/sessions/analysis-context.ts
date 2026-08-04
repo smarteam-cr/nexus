@@ -10,8 +10,9 @@
  */
 
 import type { FirefliesSession, Client, TeamMember } from "@prisma/client";
+import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
 
-const INTERNAL_DOMAIN = "smarteamcr.com";
+const INTERNAL_DOMAIN = DOMINIO_PROPIO;
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 

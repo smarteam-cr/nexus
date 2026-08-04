@@ -35,11 +35,35 @@ const APPLY = resolverApply();
 const FUTURE_CUTOFF_DAYS = 2;
 const DELETE_CHUNK = 1000;
 
+/**
+ * `--desde AAAA-MM-DD` mueve el corte hacia adelante: se borra solo lo POSTERIOR a esa fecha.
+ *
+ * Existe porque el corte por defecto (pasado mañana) barre también la agenda ÚTIL. Medido el
+ * 2026-08-03: de las 6.090 futuras, 485 eran de los meses siguientes y le daban la "próxima
+ * reunión" a 3 clientes; las otras 5.605 eran la misma serie recurrente proyectada hasta 2051.
+ * Un corte de una fecha permite tirar la basura sin apagar la agenda.
+ *
+ * También es la herramienta del recorte periódico: correrlo cada fin de mes con `--desde` a
+ * seis meses vista mantiene la ventana acotada en vez de dejarla crecer sola.
+ */
+function corteDesdeBandera(): Date | null {
+  const i = process.argv.indexOf("--desde");
+  if (i < 0) return null;
+  const raw = process.argv[i + 1];
+  const d = raw ? new Date(`${raw}T00:00:00.000Z`) : new Date("");
+  if (isNaN(d.getTime())) {
+    console.error(`--desde necesita una fecha AAAA-MM-DD (recibí: ${raw ?? "nada"}).`);
+    process.exit(1);
+  }
+  return d;
+}
+
 async function main() {
   console.log(APPLY ? "=== APPLY (borra) ===" : "=== DRY-RUN (solo análisis) ===");
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() + FUTURE_CUTOFF_DAYS);
-  console.log(`Cutoff: date > ${cutoff.toISOString()}`);
+  const explicito = corteDesdeBandera();
+  const cutoff = explicito ?? new Date();
+  if (!explicito) cutoff.setDate(cutoff.getDate() + FUTURE_CUTOFF_DAYS);
+  console.log(`Cutoff: date > ${cutoff.toISOString()}${explicito ? "   (--desde)" : ""}`);
 
   const futureWhere = { date: { gt: cutoff } } as const;
 

@@ -50,24 +50,32 @@ export async function DELETE(
     return NextResponse.json({ error: "Proyecto no encontrado" }, { status: 404 });
   }
 
-  // Desasociar de HubSpot: suprimir el re-sync ANTES de borrar (el flag no puede vivir en el
-  // Project que se elimina). Solo si vino del sync (hubspotServiceId). Idempotente.
-  if (project.hubspotServiceId) {
-    // `push` es atómico: leer-modificar-escribir el array entero podía perder una supresión si
-    // se borran dos proyectos del mismo cliente a la vez. El `has` evita duplicar el id.
-    const client = await prisma.client.findUnique({
-      where: { id: clientId },
-      select: { ignoredHubspotServiceIds: true },
-    });
-    if (!client?.ignoredHubspotServiceIds.includes(project.hubspotServiceId)) {
-      await prisma.client.update({
+  /* Los DOS pasos —suprimir el re-sync y borrar— van en UNA transacción.
+     Antes eran dos `await` sueltos, y el orden importa: la supresión tiene que ir ANTES (el flag
+     no puede vivir en el Project que se elimina), así que si el `delete` fallaba después —pool
+     saturado, un EMAXCONNSESSION de los que este repo ya tiene historial— quedaba un proyecto
+     VIVO cuyo id el sync saltea para siempre. Ese estado no se ve: el proyecto se abre, se ve
+     normal, sigue contando para cobranza y para la cartera, y nunca más se le actualiza etapa,
+     estado ni dueño desde HubSpot. Un fantasma al revés, y el reintento del botón no lo arregla
+     porque el push es idempotente. Con la transacción, o pasan las dos cosas o no pasa ninguna. */
+  await prisma.$transaction(async (tx) => {
+    // Solo si vino del sync (hubspotServiceId). Idempotente.
+    if (project.hubspotServiceId) {
+      // `push` es atómico: leer-modificar-escribir el array entero podía perder una supresión si
+      // se borran dos proyectos del mismo cliente a la vez. El `includes` evita duplicar el id.
+      const client = await tx.client.findUnique({
         where: { id: clientId },
-        data: { ignoredHubspotServiceIds: { push: project.hubspotServiceId } },
+        select: { ignoredHubspotServiceIds: true },
       });
+      if (!client?.ignoredHubspotServiceIds.includes(project.hubspotServiceId)) {
+        await tx.client.update({
+          where: { id: clientId },
+          data: { ignoredHubspotServiceIds: { push: project.hubspotServiceId } },
+        });
+      }
     }
-  }
-
-  await prisma.project.delete({ where: { id: projectId } });
+    await tx.project.delete({ where: { id: projectId } });
+  });
 
   return NextResponse.json({ ok: true });
 }
