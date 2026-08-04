@@ -1,0 +1,154 @@
+import { describe, it, expect } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import {
+  PISO_REUNIONES_INTERNAS,
+  coincideConLaBusqueda,
+  esReunionDePuertasAdentro,
+} from "./candidatas-internas";
+
+/**
+ * lib/sessions/candidatas-internas.test.ts — QUÉ REUNIONES SE LE OFRECEN A UN PROYECTO INTERNO.
+ *
+ * La falla que ataca es de volumen, en las dos direcciones, y las dos son silenciosas:
+ *  · aflojar el criterio → un proyecto empieza a ofrecer las ~4.900 reuniones internas del equipo
+ *    para meterlas en un documento;
+ *  · apretarlo → la lista queda vacía y parece que "no anda", sin ningún error.
+ */
+
+const PROPIOS = new Set(["smarteamcr.com"]);
+const YO = "msalas@smarteamcr.com";
+const OTRO_NUESTRO = "bcenteno@smarteamcr.com";
+const DE_AFUERA = "heylin@agrosmartcr.com";
+
+describe("¿es una reunión de puertas adentro?", () => {
+  it("todos nuestros → sí", () => {
+    expect(esReunionDePuertasAdentro({ participants: [YO, OTRO_NUESTRO] }, PROPIOS)).toBe(true);
+  });
+
+  it("UNO de afuera alcanza para que no lo sea", () => {
+    /* No es un detalle: con alguien de afuera, la cascada normal ya sabe de quién es la reunión
+       por su dominio. Ofrecerla acá sería competir con la atribución que ya funciona. */
+    expect(esReunionDePuertasAdentro({ participants: [YO, DE_AFUERA] }, PROPIOS)).toBe(false);
+  });
+
+  it("el organizador cuenta como participante", () => {
+    /* Una reunión que ORGANIZÓ alguien de afuera no es interna aunque en la sala estemos solos
+       nosotros. El chokepoint de relevancia ya pliega el organizador; acá se hace igual. */
+    expect(
+      esReunionDePuertasAdentro({ participants: [YO], organizerEmail: DE_AFUERA }, PROPIOS),
+    ).toBe(false);
+    expect(
+      esReunionDePuertasAdentro({ participants: [YO], organizerEmail: OTRO_NUESTRO }, PROPIOS),
+    ).toBe(true);
+  });
+
+  it("sin participantes → NO", () => {
+    /* Una sesión sin nadie no es interna: es un dato incompleto. Ofrecerla llenaría la lista de
+       filas que nadie puede evaluar. */
+    expect(esReunionDePuertasAdentro({ participants: [] }, PROPIOS)).toBe(false);
+    expect(esReunionDePuertasAdentro({ participants: [], organizerEmail: null }, PROPIOS)).toBe(false);
+  });
+
+  it("los dominios se comparan sin importar mayúsculas ni espacios", () => {
+    expect(esReunionDePuertasAdentro({ participants: ["  M.Salas@SmarteamCR.com "] }, PROPIOS)).toBe(true);
+  });
+
+  it("con más de un dominio propio, todos cuentan", () => {
+    // La lista sale de las SessionCategory internas, que se editan en /sessions/categories.
+    const dos = new Set(["smarteamcr.com", "smarteam.mx"]);
+    expect(esReunionDePuertasAdentro({ participants: [YO, "a@smarteam.mx"] }, dos)).toBe(true);
+  });
+
+  it("una basura sin @ no cuenta como nuestra", () => {
+    expect(esReunionDePuertasAdentro({ participants: ["sin-arroba"] }, PROPIOS)).toBe(false);
+  });
+});
+
+describe("el piso de 2026", () => {
+  it("es 2026-01-01 en UTC, transcrito", () => {
+    /* Decisión de negocio: las internas se cuentan de 2026 en adelante. Sin el piso, un proyecto
+       interno nuevo se ofrece a sí mismo miles de reuniones viejas y la lista se vuelve inútil. */
+    expect(PISO_REUNIONES_INTERNAS.toISOString()).toBe("2026-01-01T00:00:00.000Z");
+  });
+});
+
+describe("el buscador del modal", () => {
+  const S = { title: "Sprint comercial", participants: [YO, DE_AFUERA] };
+
+  it("sin consulta, pasa todo", () => {
+    expect(coincideConLaBusqueda(S, "")).toBe(true);
+    expect(coincideConLaBusqueda(S, "   ")).toBe(true);
+  });
+
+  it("por título", () => {
+    expect(coincideConLaBusqueda(S, "sprint")).toBe(true);
+    expect(coincideConLaBusqueda(S, "kickoff")).toBe(false);
+  });
+
+  it("por PERSONA y por DOMINIO — el caso que lo motivó", () => {
+    /* "Esta reunión la tuvo Marco con alguien de tal empresa" no está en el título. Si el buscador
+       solo mirara el título, la reunión que se está buscando sería inencontrable. */
+    expect(coincideConLaBusqueda(S, "agrosmartcr.com")).toBe(true);
+    expect(coincideConLaBusqueda(S, "heylin")).toBe(true);
+    expect(coincideConLaBusqueda(S, "nadie@otra.com")).toBe(false);
+  });
+
+  it("una sesión sin título no explota", () => {
+    expect(coincideConLaBusqueda({ title: null, participants: [YO] }, "msalas")).toBe(true);
+  });
+});
+
+describe("está cableado, y con los frenos puestos", () => {
+  const RAIZ = process.cwd();
+  const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
+
+  it("LA guarda: agregar una sesión sin dueño le ASIGNA el dueño", () => {
+    /* Sin esto el botón "Agregar" parece funcionar —el vínculo se escribe— pero el chokepoint lo
+       descarta al leer con un console.warn que nadie mira, y el handoff sigue vacío. Es la misma
+       falla silenciosa que toda esta tanda vino a matar. */
+    expect(leer("app/api/projects/[projectId]/handoff-sessions/route.ts")).toContain(
+      "adoptarSesionSinDuenio(",
+    );
+  });
+
+  it("solo se adopta lo que NO tiene dueño, por las dos vías", () => {
+    /* Adoptar una sesión que ya es de alguien sería robársela a otro cliente sin que nadie lo
+       pida — y ni INV1 lo vería, porque quedaría coherente. */
+    const src = leer("lib/sessions/project-sources.ts");
+    const i = src.indexOf("export async function adoptarSesionSinDuenio");
+    expect(i).toBeGreaterThan(0);
+    const cuerpo = src.slice(i, i + 900);
+    expect(cuerpo).toContain("s.resolvedClientId !== null || s.manualClientId !== null");
+  });
+
+  it("adoptar NO paga el clasificador de IA", () => {
+    /* El humano acaba de elegir el proyecto. Correr el modelo para que adivine lo mismo cuesta del
+       orden de un dólar por click, y encima puede proponer links que nadie pidió. */
+    const src = leer("lib/sessions/project-sources.ts");
+    const i = src.indexOf("export async function adoptarSesionSinDuenio");
+    expect(src.slice(i, i + 900)).toContain("reclassify: false");
+  });
+
+  it("el grupo interno está gateado por proyecto INTERNO", () => {
+    /* Un proyecto normal ES publicable: ofrecerle una reunión de Smarteam con Smarteam para meter
+       en un documento que el cliente lee sería una fuga. Y sin el gate, TODO proyecto de TODO
+       cliente empezaría a ofrecer ~4.900 reuniones. */
+    const src = leer("app/api/projects/[projectId]/session-candidates/route.ts");
+    expect(src, "el gate de proyecto interno desapareció").toContain("guard.interno");
+    expect(src, "el piso de 2026 dejó de aplicarse").toContain("PISO_REUNIONES_INTERNAS");
+  });
+
+  it("el buscador del modal mira participantes, no solo el título", () => {
+    const src = leer("components/clients/SessionSelectionReview.tsx");
+    expect(src).toContain("coincideConLaBusqueda(");
+    expect(src, "el modal sigue prometiendo solo sesiones del cliente").not.toContain(
+      "Buscar sesiones del cliente",
+    );
+  });
+
+  it("el botón avisa que además asigna", () => {
+    // El texto es la mitad de la mitigación: el efecto no se ve desde el modal.
+    expect(leer("components/clients/SessionSelectionReview.tsx")).toContain("Agregar y asignar");
+  });
+});

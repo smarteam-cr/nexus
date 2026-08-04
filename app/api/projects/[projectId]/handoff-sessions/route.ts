@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { vetoSiElHandoffEsDeOtro } from "@/lib/handoff/duenio";
 import { prisma } from "@/lib/db/prisma";
-import { belongsToClient } from "@/lib/sessions/project-sources";
+import { adoptarSesionSinDuenio, belongsToClient } from "@/lib/sessions/project-sources";
 
 /**
  * POST /api/projects/[projectId]/handoff-sessions
@@ -61,6 +61,17 @@ export async function POST(
         { error: "La sesión pertenece a otro cliente — no se puede vincular a este proyecto." },
         { status: 400 },
       );
+    }
+
+    /* Sin dueño: vincular no alcanza. `getProjectMemberSessions` descarta al LEER lo que no
+       pertenece al cliente, así que el link quedaría escrito, el botón parecería haber
+       funcionado y el handoff seguiría vacío. Adoptarla la vuelve del cliente de verdad.
+
+       Solo en proyectos INTERNOS, que son los únicos a los que se les ofrecen estas reuniones
+       (ver session-candidates): en uno normal, una sesión huérfana que llegue acá es un intento
+       fuera del camino previsto y se trata como antes — se vincula y el chokepoint decide. */
+    if (guard.interno && session.resolvedClientId === null && session.manualClientId === null) {
+      await adoptarSesionSinDuenio(sessionId, guard.clientId);
     }
   }
 

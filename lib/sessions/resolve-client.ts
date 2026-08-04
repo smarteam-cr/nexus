@@ -96,6 +96,18 @@ export function resolveSessionClientId(
 export async function reResolveSession(
   sessionId: string,
   ctx?: CategorizeContext,
+  opts?: {
+    /**
+     * ¿Correr el clasificador de IA sobre el cliente que ganó la sesión? Default `true` —
+     * el comportamiento de siempre.
+     *
+     * Se apaga cuando el humano ACABA de elegir el proyecto a mano: pagar el modelo para que
+     * adivine lo mismo que alguien recién dijo es tirar plata (del orden de un dólar por
+     * corrida, hasta 30 sesiones), y encima puede proponer links a otros proyectos del cliente
+     * que nadie pidió.
+     */
+    reclassify?: boolean;
+  },
 ): Promise<void> {
   const session = await prisma.firefliesSession.findUnique({
     where: { id: sessionId },
@@ -114,7 +126,7 @@ export async function reResolveSession(
   });
   // Si cambió de dueño, re-clasificar el cliente nuevo para vincular esta sesión a sus
   // proyectos (cierra el hueco resolver≠clasificar). Fire-and-forget.
-  if (resolved && resolved !== session.resolvedClientId) {
+  if (resolved && resolved !== session.resolvedClientId && opts?.reclassify !== false) {
     void import("./reclassify")
       .then((m) => m.reclassifyClientSessions(resolved))
       .catch(() => {});

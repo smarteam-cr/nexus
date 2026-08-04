@@ -3,6 +3,11 @@ import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { classifyHandoffSession, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { salesPresenceEmails } from "@/lib/handoff/sales-presence";
+import {
+  PISO_REUNIONES_INTERNAS,
+  esReunionDePuertasAdentro,
+} from "@/lib/sessions/candidatas-internas";
+import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { belongsToClient } from "@/lib/sessions/project-sources";
 
 /**
@@ -140,7 +145,41 @@ export async function GET(
     },
   });
 
-  const candidates = clientSessions
+  /* ── El SEGUNDO grupo: las reuniones del equipo que nadie reclamó ────────────
+     Solo para proyectos INTERNOS, y es el gate correcto por una razón de fondo: un proyecto
+     normal ES publicable, así que meterle una reunión de Smarteam con Smarteam a un documento
+     que el cliente va a leer sería una fuga. Un interno tiene la publicación apagada por
+     `OVERLAY_INTERNO`, así que ese handoff no sale de casa ni por error.
+     Sin el gate, además, TODO proyecto de TODO cliente empezaría a ofrecer ~4.900 reuniones. */
+  const huerfanas = guard.interno
+    ? await prisma.firefliesSession.findMany({
+        where: {
+          // Sin dueño por las dos vías: si ya es de alguien, o aparece arriba o no es de acá.
+          resolvedClientId: null,
+          manualClientId: null,
+          date: { gte: PISO_REUNIONES_INTERNAS, lte: new Date() },
+        },
+        orderBy: { date: "desc" },
+        take: 200,
+        select: {
+          id: true,
+          title: true,
+          date: true,
+          participants: true,
+          organizerEmail: true,
+          projects: { select: { projectId: true } },
+        },
+      })
+    : [];
+
+  const dominiosPropios = guard.interno
+    ? buildInternalDomainsSet(
+        await prisma.sessionCategory.findMany({ select: { domains: true, kind: true } }),
+      )
+    : new Set<string>();
+  const internas = huerfanas.filter((s) => esReunionDePuertasAdentro(s, dominiosPropios));
+
+  const candidates = [...clientSessions, ...internas]
     .filter((s) => !feedingIds.has(s.id) && !excludedIds.has(s.id))
     .map((s) => {
       const cls = classifyHandoffSession(s.title, s.participants, s.organizerEmail, salesEmails);
@@ -153,6 +192,9 @@ export async function GET(
         // Por qué (no) aplica la regla — tooltip del modal (antes era opaco).
         reason: cls.reason,
         linkedElsewhere: s.projects.some((p) => p.projectId !== projectId),
+        /* Sin dueño: agregarla NO es solo vincularla, también la va a hacer de este cliente. El
+           botón lo dice, porque es un efecto que no se ve desde el modal. */
+        sinDuenio: internas.some((i) => i.id === s.id),
       };
     })
     .sort((a, b) => Number(b.applies) - Number(a.applies)); // las que aplican, primero (date ya viene desc)

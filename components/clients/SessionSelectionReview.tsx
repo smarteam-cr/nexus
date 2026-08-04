@@ -17,6 +17,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { Modal } from "@/components/ui";
+import { coincideConLaBusqueda } from "@/lib/sessions/candidatas-internas";
 import { ContextColumnList, ContextRow, CTX_ICONS } from "./context-column";
 
 interface FeedingSession {
@@ -48,6 +49,8 @@ interface CandidateSession {
   /** Por qué (no) aplica la regla de relevancia — tooltip. */
   reason: string;
   linkedElsewhere: boolean;
+  /** Reunión del equipo que todavía no es de ningún cliente. Agregarla también la asigna. */
+  sinDuenio?: boolean;
 }
 
 function fmtDate(d: string): string {
@@ -134,26 +137,27 @@ export default function SessionSelectionReview({
   }, [loading, data.feeding.length, data.excluded.length, onCount, onExcludedCount]);
 
   const { feeding, excluded, candidates } = data;
-  const q = search.trim().toLowerCase();
-  const filtered = q ? candidates.filter((c) => (c.title || "").toLowerCase().includes(q)) : candidates;
+  /* El filtro mira título Y participantes: el caso que lo motivó es "esta reunión la tuvo Marco
+     con alguien de tal empresa", y ese dato no está en el título. Escribir un dominio la encuentra. */
+  const filtered = candidates.filter((c) => coincideConLaBusqueda(c, search));
 
   // Modal de "buscar más sesiones" — compartido por el render normal y el de columna.
   const searchModal = (
     <Modal
       open={showModal}
       onClose={() => { setShowModal(false); setSearch(""); }}
-      title="Buscar sesiones del cliente"
+      title="Buscar sesiones"
       size="md"
     >
       <input
         type="text"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Buscar por título…"
+        placeholder="Buscar por título, persona o dominio…"
         className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand mb-3"
       />
       {filtered.length === 0 ? (
-        <p className="text-xs text-fg-muted py-2">No hay más sesiones del cliente.</p>
+        <p className="text-xs text-fg-muted py-2">No hay más sesiones.</p>
       ) : (
         <ul className="space-y-1.5 max-h-80 overflow-y-auto">
           {filtered.map((c) => (
@@ -176,14 +180,22 @@ export default function SessionSelectionReview({
                       en otro proyecto
                     </span>
                   )}
+                  {c.sinDuenio && (
+                    <span className="text-[9px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
+                      reunión del equipo
+                    </span>
+                  )}
                 </div>
               </div>
               <button
                 onClick={() => setFeeds(c.sessionId, true)}
                 disabled={busyId === c.sessionId}
+                /* El texto es la mitad de la mitigación: agregar una reunión sin dueño no solo la
+                   vincula, la vuelve del cliente en TODAS las lecturas. Eso no se ve desde acá. */
+                title={c.sinDuenio ? "No es de ningún cliente todavía: al agregarla queda como sesión de este cliente." : undefined}
                 className="text-[11px] font-semibold text-brand hover:text-brand-dark disabled:opacity-40 transition-colors flex-shrink-0"
               >
-                Agregar
+                {c.sinDuenio ? "Agregar y asignar" : "Agregar"}
               </button>
             </li>
           ))}

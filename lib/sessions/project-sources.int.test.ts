@@ -12,7 +12,12 @@
  */
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/prisma";
-import { getProjectMemberSessions, getClientSessions, belongsToClient } from "./project-sources";
+import {
+  adoptarSesionSinDuenio,
+  belongsToClient,
+  getClientSessions,
+  getProjectMemberSessions,
+} from "./project-sources";
 
 async function mundoMinimo() {
   const clienteA = await prisma.client.create({ data: { name: "Cliente A (test)" } });
@@ -93,6 +98,52 @@ describe("chokepoint de sesiones (invariante #1) — DB real", () => {
 
     const r = await getProjectMemberSessions(proyectoA.id);
     expect(r.sessions).toHaveLength(0);
+  });
+
+  it("adoptar una sesión HUÉRFANA la hace alimentar de verdad — no solo vincularla", async () => {
+    /* EL caso de la tanda D. Sin adoptar, el link se escribe pero `getProjectMemberSessions` lo
+       descarta al leer y el handoff sigue vacío: el botón "Agregar" parece funcionar y no hace
+       nada. Es exactamente la falla silenciosa que esto vino a matar, así que se prueba contra
+       una base real y no con un escaneo de texto. */
+    const { clienteA, proyectoA } = await mundoMinimo();
+    const huerfana = await prisma.firefliesSession.create({
+      data: {
+        id: "ses-huerfana",
+        title: "SPRINT COMERCIAL | SMARTEAM",
+        date: new Date("2026-06-01T15:00:00Z"),
+        participants: ["msalas@smarteamcr.com", "bcenteno@smarteamcr.com"],
+        // Sin dueño por las dos vías: es el estado de las ~4.900 reuniones internas.
+      },
+    });
+    await prisma.sessionProject.create({
+      data: { sessionId: huerfana.id, projectId: proyectoA.id, source: "manual", handoffOverride: true },
+    });
+
+    // Antes de adoptar: el link existe y NO alimenta.
+    const antes = await getProjectMemberSessions(proyectoA.id);
+    expect(antes.sessions.map((s) => s.id)).not.toContain(huerfana.id);
+    expect(antes.dropped).toHaveLength(1);
+
+    expect(await adoptarSesionSinDuenio(huerfana.id, clienteA.id)).toBe(true);
+
+    const despues = await getProjectMemberSessions(proyectoA.id);
+    expect(despues.sessions.map((s) => s.id)).toContain(huerfana.id);
+    expect(despues.dropped).toHaveLength(0);
+  });
+
+  it("adoptar NO le roba una sesión a otro cliente", async () => {
+    /* El freno que evita que esto se convierta en una fuga de contexto. Una sesión que ya es de
+       alguien no se toca, ni siquiera si el link se creó por error. */
+    const { clienteA, sesionDeB } = await mundoMinimo();
+
+    expect(await adoptarSesionSinDuenio(sesionDeB.id, clienteA.id)).toBe(false);
+
+    const sigueIgual = await prisma.firefliesSession.findUnique({
+      where: { id: sesionDeB.id },
+      select: { manualClientId: true, resolvedClientId: true },
+    });
+    expect(sigueIgual?.manualClientId).toBeNull();
+    expect(sigueIgual?.resolvedClientId).not.toBe(clienteA.id);
   });
 
   it("getClientSessions es client-wide y no cruza: B nunca ve lo de A", async () => {
