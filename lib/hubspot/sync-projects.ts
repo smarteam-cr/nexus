@@ -7,6 +7,7 @@ import { sanitizeTags, normalizeTag } from "@/lib/tags/catalog";
 import { cerradoPorEstadoCrudo, decidirCierre, resolvePipeline } from "@/lib/projects/kind";
 import type { Client } from "@hubspot/api-client";
 import { detectarFusion, explicarFusion } from "@/lib/hubspot/empresa-fusionada";
+import { OBJETO_PROYECTOS } from "@/lib/hubspot/asociaciones-proyecto";
 
 // ── Mapeo de nombre del proyecto → serviceType + projectType ─────────────────
 
@@ -112,6 +113,20 @@ const NAMED_PROJECT_SLUGS = ["projects", "PROJECT"];
 const FALLBACK_PROJECT_SLUGS = ["0-18", "0-49"];
 const ASSOCIATION_SLUGS = [...NAMED_PROJECT_SLUGS, ...FALLBACK_PROJECT_SLUGS]; // para mensajes
 const READ_SLUGS = ["projects", "PROJECT", "0-18", "0-49"];
+
+/**
+ * Slugs para VERIFICAR un proyecto por id antes de darlo de baja. Es una lista aparte de
+ * `READ_SLUGS` a propósito, y la diferencia es la que hace que el guardarraíl funcione:
+ *
+ * · **Sin los fallbacks numéricos.** Preguntarle por nuestro id a un objeto que NO es Proyectos
+ *   no informa nada. Un 404 de `0-49` es el 404 de "ese id no es de ESTE objeto" —ruido, no
+ *   evidencia— y un 200 sería peor: leeríamos las propiedades de un record ajeno y decidiríamos
+ *   con ellas si nuestro proyecto sigue vivo. El propio archivo ya declara arriba que en este
+ *   portal `0-49` devuelve 28 objetos que no son proyectos y que los fallbacks solo se usan
+ *   cuando no se pudo identificar el objeto de otra forma; acá SÍ se pudo.
+ * · **Con el tipo canónico.** `0-970` faltaba, y es el identificador que usa el creador.
+ */
+const VERIFY_SLUGS = [...NAMED_PROJECT_SLUGS, OBJETO_PROYECTOS];
 
 /**
  * Ids de los records "projects" (0-970) asociados a una company en HubSpot.
@@ -439,7 +454,11 @@ export interface SyncResult {
 async function verifyProjectInHubspot(hsClient: Client, objectId: string): Promise<"alive" | "closed" | "gone"> {
   let confirmedNotFound = false;
   let ambiguous = false;
-  for (const slug of READ_SLUGS) {
+  /* Slugs que ni siquiera pudimos preguntar (401/403). No es lo mismo que no saber: es que esa
+     puerta está cerrada de forma permanente, y contarla como duda apagaba el guardarraíl entero
+     (ver el comentario del `return`). */
+  const sinPermiso: string[] = [];
+  for (const slug of VERIFY_SLUGS) {
     try {
       const res = await hsClient.apiRequest({
         method: "GET",
@@ -450,6 +469,9 @@ async function verifyProjectInHubspot(hsClient: Client, objectId: string): Promi
         path: `/crm/v3/objects/${slug}/${objectId}?properties=hs_name,hs_status,nombre_del_proyecto,estatus_del_proyecto,hs_pipeline,hs_pipeline_stage`,
       });
       if (res.status === 404) { confirmedNotFound = true; continue; }
+      /* 401/403 = a este slug no lo podemos consultar, y eso no va a cambiar reintentando. No
+         es evidencia de nada NI es ambigüedad transitoria: se descarta el slug y se sigue. */
+      if (res.status === 401 || res.status === 403) { sinPermiso.push(slug); continue; }
       if (!res.ok) { ambiguous = true; continue; } // 429/5xx → no concluir nada
       const data = (await res.json()) as { id?: string; properties?: Record<string, string | null> };
       if (data?.id) {
@@ -465,11 +487,28 @@ async function verifyProjectInHubspot(hsClient: Client, objectId: string): Promi
     } catch (e) {
       const msg = String((e as Error)?.message ?? "");
       if (msg.includes("404") || /not found/i.test(msg)) confirmedNotFound = true;
+      else if (/(401|403)/.test(msg) || /scope/i.test(msg)) sinPermiso.push(slug);
       else ambiguous = true;
     }
   }
-  // No lo encontramos vivo por ningún slug. Solo confirmamos "gone" si hubo un 404
-  // claro y CERO errores ambiguos; sino, conservador: "alive" (no desactivar).
+  /* No lo encontramos vivo por ningún slug. Solo se concluye "gone" con un 404 claro y CERO
+     ambigüedad transitoria; si no, conservador: "alive" (no desactivar).
+
+     ⚠ LA LÍNEA QUE ESTABA APAGANDO ESTO. Antes un 403 caía en `ambiguous`, y como la lista
+     incluía un slug para el que la app NO tiene scope, SIEMPRE había un 403 → `ambiguous` era
+     true en cada llamada → esta función devolvía "alive" para todo, siempre. O sea: la
+     reconciliación no podía dar de baja NINGÚN proyecto de NINGÚN cliente. Se descubrió porque
+     dos proyectos archivados en HubSpot el 2026-07-29 seguían activos —y cobrando— después de
+     varios syncs. No fallaba: no hacía nada, que es peor porque no deja rastro.
+
+     Si TODOS los slugs vinieron sin permiso, `confirmedNotFound` queda en false y se devuelve
+     "alive": perder el scope no puede convertirse en dar de baja proyectos vivos. */
+  if (sinPermiso.length > 0) {
+    console.warn(
+      `[hubspot] verifyProjectInHubspot(${objectId}): sin permiso para ${sinPermiso.join(", ")}. ` +
+        `Si son TODOS los slugs, el guardarraíl queda inerte y ningún proyecto se da de baja solo.`,
+    );
+  }
   return confirmedNotFound && !ambiguous ? "gone" : "alive";
 }
 
