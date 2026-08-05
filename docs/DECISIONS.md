@@ -1117,7 +1117,9 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
 - **Tag `sitio_web` (grupo `scope`)**: faltaba forma de marcar que se vendió un sitio. Es
   `scope` y no `product` porque describe **qué se vendió**, como `custom_dev` y `crm_migration`;
   `content_hub` (ex CMS Hub) sigue siendo el producto y un proyecto web normalmente lleva los
-  dos. ⚠ **NO entra a `hasTechnicalScope()`**: esa función rutea al canvas Desarrollo y a la fase
+  dos. ⚠ **"Normalmente lleva los dos" describe el caso frecuente, NO habilita a sembrarlos
+  juntos** — esa lectura duró un día y se corrigió: ver §"Un tipo de propuesta siembra lo que
+  AFIRMA" (2026-08-04). ⚠ **NO entra a `hasTechnicalScope()`**: esa función rutea al canvas Desarrollo y a la fase
   técnica del cronograma, y un sitio en el CMS sin integraciones no lleva fase técnica. Si además
   hay desarrollo, el handoff pone `custom_dev` y ahí sí entra. Sin backfill: aplica de ahora en
   adelante y el CSE lo agrega con un clic en la tira de tags (adivinar "esto es web" desde texto
@@ -1626,3 +1628,33 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
 - **Lo que quedó a propósito sin cambiar**: `BUSINESS_CASE_CANVAS.name` en `canvas-defs.ts`, que
   está declarado LEGACY en su propio comentario, nunca se persiste (el `name` de la fila es la
   VERSIÓN — "Plantilla", "Caso de uso 2") y nunca se renderiza.
+
+## Un tipo de propuesta siembra lo que AFIRMA, no lo que sugiere (2026-08-04)
+
+> Disparador: Elías, sobre el cambio del día anterior — *"Uno de sitio web, puede sembrar o no lo
+> de Content Hub. Realmente puede ser WordPress o similar."* El tipo "Sitio web" sembraba
+> `sitio_web` **y** `content_hub`, o sea que afirmaba la plataforma sin que nadie la hubiera dicho.
+
+- **La regla: se siembra SOLO lo que elegir el tipo vuelve CIERTO.** "Sitio web" afirma que se
+  vendió un sitio (`sitio_web`, grupo `scope`); no afirma sobre qué se construye. La plataforma la
+  agrega el CSE en la tira de tags cuando ya la sabe. Aplica igual al subtipo: E-commerce dejó de
+  sembrar `commerce_hub` — un e-commerce puede ser Shopify o WooCommerce.
+- **Un tag de más NO es neutro, y por eso el default correcto es ninguno.** Los tags son
+  DISPARADORES: `EXPLORACION_TAG_LENSES` decide qué va a preguntar el agente de Exploración y
+  `hasTechnicalScope` rutea al canvas Desarrollo y a la fase técnica del cronograma. Un
+  `content_hub` falso manda a explorar la plataforma equivocada y queda registrado como si alguien
+  lo hubiera confirmado. Mismo criterio que `tamUsd` (null ≠ 0) y que "no se adivinan aliados ni
+  internos desde el nombre": **antes "sin definir" que adivinado**.
+- **No se tocó el SUBTIPO para meter ahí la plataforma.** Informativo/E-commerce es la CLASE de
+  sitio, se muestra en el encabezado y viaja al prompt de todos los agentes de la propuesta
+  (`generate`, `assist`, `publish`, `regenerate`, casos de uso). Reutilizarlo como selector de
+  plataforma costaría esa distinción. Si algún día se quiere elegir la plataforma al crear, va
+  como eje PROPIO — no encima de uno que ya significa otra cosa.
+- **La regla queda con guard, porque el catálogo va a crecer** (CRM, CDP, integraciones,
+  desarrollo a la medida, y lo que sigan agregando). `lib/business-cases/case-types.test.ts`:
+  todo tag sembrado tiene que existir en `TAG_CATALOG` (un slug con typo se guardaba igual y
+  quedaba invisible en la tira) y ningún tipo puede sembrar un tag del grupo `product` salvo los
+  de la allowlist `PUEDEN_SEMBRAR_PRODUCTO` — hoy solo "Implementación de Insider", que sí lleva
+  el producto en su identidad. Sumar uno obliga a tocar la allowlist y a leer por qué.
+- **`extraTags` del subtipo se queda en el tipo aunque hoy no lo use nadie**: es el mecanismo para
+  el subtipo que SÍ afirme un producto, y el test lo cubre igual.

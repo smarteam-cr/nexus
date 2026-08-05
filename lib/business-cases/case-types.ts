@@ -17,7 +17,20 @@ export interface BcTypeDef {
   shortLabel: string;   // badge en listados/header
   description: string;  // card del stepper
   templateId: string;   // → BC_TEMPLATES (components/landing/configs/templates.defs.ts)
-  defaultTags: string[]; // seeds editables después por el CSE (TagsStrip)
+  /**
+   * Tags que el TIPO AFIRMA, no los que sugiere. Editables después por el CSE (TagsStrip).
+   *
+   * ── LA REGLA (2026-08-04) ────────────────────────────────────────────────────
+   * Se siembra SOLO lo que elegir este tipo vuelve CIERTO. La plataforma NO se asume:
+   * "Sitio web" afirma que se vendió un sitio (`sitio_web`), pero no sobre qué se construye
+   * —puede ser Content Hub, WordPress u otra—, así que el producto lo agrega el CSE cuando
+   * lo sabe. Un tag de más no es neutro: los tags DIRIGEN al agente de Exploración
+   * (`EXPLORACION_TAG_LENSES`) y `custom_dev`/`insider_one` rutean al canvas Desarrollo y a la
+   * fase técnica del cronograma — un `content_hub` falso manda a explorar la plataforma
+   * equivocada. Mismo criterio que el resto del repo: antes "sin definir" que adivinado.
+   */
+  defaultTags: string[];
+  /** Igual que `defaultTags` pero por subtipo: solo lo que el subtipo AFIRMA. */
   subtypes?: { id: string; label: string; extraTags?: string[] }[];
   /** false = visible pero deshabilitado en el stepper ("próximamente"). */
   enabled: boolean;
@@ -53,15 +66,17 @@ export const BC_TYPE_CATALOG: BcTypeDef[] = [
     shortLabel: "Sitio web",
     description: "Propuesta de diseño y desarrollo de sitio web (Content Hub).",
     templateId: WEBSITE_TEMPLATE_ID,
-    /* DOS tags, y son ejes distintos: `sitio_web` (grupo `scope`) dice QUÉ SE VENDIÓ y
-       `content_hub` (grupo `product`) dice SOBRE QUÉ. Hasta el 2026-08-04 solo se sembraba el
-       producto, así que una propuesta creada explícitamente como "Sitio web" nacía sin el tag
-       que lo dice — y ese tag no es decorativo: dirige al agente de Exploración
-       (`EXPLORACION_TAG_LENSES`) hacia referencias, funcionalidad y assets. */
-    defaultTags: ["sitio_web", "content_hub"],
+    /* SOLO el alcance, nunca la plataforma. `sitio_web` (grupo `scope`) es cierto siempre que
+       se elija este tipo; `content_hub` (grupo `product`) NO — el sitio puede ir en WordPress
+       o en cualquier otra cosa, y hasta el 2026-08-04 se sembraba igual. El producto lo pone
+       el CSE en la tira de tags cuando ya sabe dónde se construye. */
+    defaultTags: ["sitio_web"],
+    /* El subtipo es la CLASE de sitio (alimenta el prompt del agente), no la plataforma:
+       un e-commerce puede ser Commerce Hub, Shopify o WooCommerce, así que tampoco siembra
+       producto. Si algún día un subtipo AFIRMA un producto, ahí sí lleva `extraTags`. */
     subtypes: [
       { id: "informativo", label: "Informativo" },
-      { id: "ecommerce", label: "E-commerce", extraTags: ["commerce_hub"] },
+      { id: "ecommerce", label: "E-commerce" },
     ],
     enabled: true,
   },
