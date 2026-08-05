@@ -53,7 +53,12 @@ export const BC_TYPE_CATALOG: BcTypeDef[] = [
     shortLabel: "Sitio web",
     description: "Propuesta de diseño y desarrollo de sitio web (Content Hub).",
     templateId: WEBSITE_TEMPLATE_ID,
-    defaultTags: ["content_hub"],
+    /* DOS tags, y son ejes distintos: `sitio_web` (grupo `scope`) dice QUÉ SE VENDIÓ y
+       `content_hub` (grupo `product`) dice SOBRE QUÉ. Hasta el 2026-08-04 solo se sembraba el
+       producto, así que una propuesta creada explícitamente como "Sitio web" nacía sin el tag
+       que lo dice — y ese tag no es decorativo: dirige al agente de Exploración
+       (`EXPLORACION_TAG_LENSES`) hacia referencias, funcionalidad y assets. */
+    defaultTags: ["sitio_web", "content_hub"],
     subtypes: [
       { id: "informativo", label: "Informativo" },
       { id: "ecommerce", label: "E-commerce", extraTags: ["commerce_hub"] },

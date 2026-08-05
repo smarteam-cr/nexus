@@ -80,13 +80,16 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
   {
     key: "dolores",
     canvasLabel: "Dolores y retos",
-    label: "El reto",
+    label: "Puntos de dolor",
     eyebrow: "Diagnóstico",
     theme: "light",
     empty: { items: [] },
-    agentHint: "3 a 6 dolores concretos del cliente, con su lenguaje.",
+    agentHint: "3 a 6 dolores concretos del cliente, con su lenguaje. UNA línea cada uno.",
+    /* ESCUETO por pedido de Elías (2026-08-04): la propuesta se presenta EN PANTALLA, en vivo, y
+       las cards salían con párrafos de 4-5 líneas que nadie lee proyectado. El brief anterior ya
+       pedía "1-2 líneas" y no alcanzó — sin un tope en PALABRAS el modelo se estira igual. */
     brief:
-      "Los puntos de dolor reales: 3 a 6 problemas específicos del cliente tal como surgieron en la conversación. No genéricos — con el lenguaje del prospecto. Cada item: nombre del dolor + descripción en 1-2 líneas (impacto medible si se mencionó: tiempo, dinero, fricción). Fuente: buscá quejas explícitas en el transcript — 'manual', 'no tenemos visibilidad', 'perdemos tiempo en', 'el equipo no sabe'.",
+      "Los puntos de dolor reales: 3 a 6 problemas específicos del cliente tal como surgieron en la conversación. No genéricos — con el lenguaje del prospecto.\n\nESCUETO, se presenta proyectado: `title` de 3 a 7 palabras, sin punto final (ej. 'Todo opera en Excel', 'Sin visibilidad del pipeline'). `detail` de UNA sola frase, MÁXIMO 25 palabras — el dolor y su consecuencia, nada más. Si el impacto es medible y se mencionó, va ahí (tiempo, dinero, fricción) porque un número vale más que una explicación.\n\nPROHIBIDO: más de una frase por `detail`, contexto de fondo, justificar por qué importa, repetir el título con otras palabras. Si dudás entre incluir o recortar, recortá.\n\nFuente: quejas explícitas en el transcript — 'manual', 'no tenemos visibilidad', 'perdemos tiempo en', 'el equipo no sabe'.",
     schema: { type: "object", properties: { items: arrayOf({ title: str, detail: str }, ["title", "detail"]) }, required: ["items"] },
   },
   {
