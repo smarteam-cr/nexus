@@ -227,6 +227,12 @@ export default function WorkspaceClient({
         created: data.created,
         updated: data.updated,
         errors: Array.isArray(data.errors) ? data.errors : [],
+        /* ⚠ Se copia CAMPO POR CAMPO, así que sumar uno al resultado del sync no alcanza: hay
+           que agregarlo también acá o el dato llega al navegador y se tira en esta línea. Pasó
+           con `suprimidos` el mismo día que se creó — el endpoint lo devolvía perfecto, el
+           cartel lo leía, y entre medio este objeto lo descartaba. El cartel seguía dando el
+           motivo genérico y mandando a revisar HubSpot por un problema que no existía. */
+        suprimidos: typeof data.suprimidos === "number" ? data.suprimidos : 0,
       });
       setSyncDone(true);
       if (data.created || data.updated) router.refresh();

@@ -106,6 +106,25 @@ describe("el cartel dice el motivo REAL", () => {
     expect(src, "se cuenta el salteo pero no la supresión").toContain("result.suprimidos++");
   });
 
+  it("LA guarda de la cadena: el dato SOBREVIVE la copia del resultado", () => {
+    /* La pantalla copia el resultado del sync CAMPO POR CAMPO, así que sumar uno al servidor no
+       alcanza: si no se agrega también en ese objeto, el dato llega al navegador y se tira en una
+       línea. Pasó con `suprimidos` el mismo día que se creó — el endpoint lo devolvía bien, el
+       cartel lo leía bien, y entre medio el `setSyncResult` lo descartaba. El cartel seguía
+       mandando a revisar HubSpot por un problema que no existía, y desde afuera se veía como si
+       el arreglo entero no hubiera funcionado.
+
+       Es el eslabón que ningún test de servidor ni de UI ve por separado: los dos extremos están
+       bien y la cadena está cortada en el medio. */
+    const src = leer("app/(shell)/clients/[id]/WorkspaceClient.tsx");
+    const i = src.indexOf("setSyncResult({");
+    expect(i, "se movió el ancla de la copia del resultado").toBeGreaterThan(0);
+    /* Sin comentarios: la prosa que explica ESTE bug vive justo adentro del bloque y nombra el
+       campo, así que un escaneo crudo pasa en verde con el campo ya borrado. Cazado rompiéndola. */
+    const copia = src.slice(i, src.indexOf("})", i)).replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(copia, "la copia del resultado volvió a tirar los suprimidos").toContain("suprimidos");
+  });
+
   it("y la pantalla lo usa: si no, el dato viaja y muere", () => {
     /* El pecado recurrente de este repo: el dato llega al navegador y no lo pinta nadie. Pasó con
        el motivo de relevancia (vivía en un tooltip) y con los descartes del chokepoint (morían en
