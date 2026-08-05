@@ -447,3 +447,64 @@ describe("Tinta de estado: cero clases que no pueden ser legibles en claro", () 
     ).toEqual([]);
   });
 });
+
+/**
+ * ── Clases de TOKEN que no corresponden a ningún token ───────────────────────
+ *
+ * ⚠ Cero absoluto. Cerró el 2026-08-05, después de encontrar cuatro en un solo archivo.
+ *
+ * LA FALLA QUE ATACA: Tailwind 4 genera la utilidad SOLO si existe el `--color-X` en el bloque
+ * `@theme`. Si escribís `text-danger` y el token se llama `--color-danger-ink`, Tailwind **no
+ * emite ninguna regla** — ni un warning, ni un error de build. El elemento simplemente hereda el
+ * color de su padre.
+ *
+ * O sea que el mensaje de error más importante de un formulario puede quedar del mismo gris que
+ * el texto normal, y nada avisa. Encontrado en el alta de proyectos: `text-danger` en cuatro
+ * lugares —los tres mensajes de error del formulario y el aviso de "no se puede traer"— todos
+ * pintándose sin color. Tres eran preexistentes y uno se había agregado ese mismo día.
+ *
+ * Es peor que un gris crudo: el gris crudo al menos se ve. Esto es una clase que parece correcta,
+ * pasa la revisión de código porque el nombre suena bien, y no hace nada.
+ */
+describe("Clases de token: ninguna nombra un token que no existe", () => {
+  it("toda clase con nombre de token corresponde a un --color-* declarado", () => {
+    const css = fs.readFileSync(path.join(RAIZ, "app/globals.css"), "utf8");
+    /* Los tokens declarados en el @theme — que es lo ÚNICO de lo que Tailwind 4 genera
+       utilidades. Los `--x` sueltos de :root no cuentan: son valores, no utilidades. */
+    const declarados = new Set(
+      [...css.matchAll(/--color-([a-z0-9-]+)\s*:/g)].map((m) => m[1]),
+    );
+    expect(declarados.size, "no se pudo leer el @theme; la guarda no mira nada").toBeGreaterThan(15);
+
+    /* Solo se miran los nombres que PARECEN token (la raíz coincide con un token declarado pero
+       el nombre completo no). Así el escaneo no se pelea con la paleta cruda de Tailwind, que
+       tiene su propia guarda, ni con clases arbitrarias. */
+    const raices = new Set([...declarados].map((d) => d.split("-")[0]));
+    /* ⚠ Literal, NO `new RegExp` con plantilla. La primera versión armaba el patrón interpolando
+       la lista de prefijos, y el `\b` de la plantilla se convertía en el carácter de RETROCESO
+       () en vez de un límite de palabra: la expresión no matcheaba absolutamente nada y la
+       guarda pasaba en verde con cuatro clases muertas en pantalla. Un regex escrito como literal
+       no tiene esa ambigüedad. */
+    const re = /\b(?:text|bg|border|ring|divide|from|via|to)-([a-z][a-z0-9-]*)\b/g;
+
+    const ofensores: string[] = [];
+    for (const archivo of archivosUi(EXENTOS_TOKENS)) {
+      const contenido = sinComentarios(fs.readFileSync(path.join(RAIZ, archivo), "utf8"));
+      contenido.split("\n").forEach((linea, i) => {
+        for (const m of linea.matchAll(re)) {
+          const nombre = m[1];
+          if (declarados.has(nombre)) continue;          // token válido
+          if (!raices.has(nombre.split("-")[0])) continue; // no pretende ser token
+          ofensores.push(`  ${archivo}:${i + 1} — ${m[0]} (no existe --color-${nombre})`);
+        }
+      });
+    }
+    expect(
+      ofensores,
+      `Clases que NOMBRAN un token inexistente. Tailwind 4 no emite regla para ellas y el ` +
+        `elemento hereda el color del padre — sin warning, sin error de build, sin nada visible ` +
+        `salvo que alguien mire la pantalla. Usá el token completo (p. ej. text-danger-ink, no ` +
+        `text-danger) o declaralo en el @theme de app/globals.css:\n${ofensores.join("\n")}`,
+    ).toEqual([]);
+  });
+});

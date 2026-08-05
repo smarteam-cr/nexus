@@ -533,7 +533,7 @@ export default function NuevoProyectoStepper() {
                 Buscando empresa en HubSpot…
               </p>
             ) : error ? (
-              <p className="text-xs text-danger">{error}</p>
+              <p className="text-xs text-danger-ink">{error}</p>
             ) : null}
           </form>
         )}
@@ -579,7 +579,7 @@ export default function NuevoProyectoStepper() {
                       <span className="flex-1 min-w-0">
                         <span className="text-sm text-fg block truncate">{p.etiqueta}</span>
                         <span
-                          className={`text-[11px] block truncate ${rot.desconocido ? "text-danger" : "text-fg-muted"}`}
+                          className={`text-[11px] block truncate ${rot.desconocido ? "text-danger-ink" : "text-fg-muted"}`}
                         >
                           {rot.texto}
                         </span>
@@ -616,7 +616,7 @@ export default function NuevoProyectoStepper() {
                  con su pipeline puesto, y moverlo de pipeline es otra operación. */
               <div className="space-y-2">
                 {adjuntadoSinTipoConocido ? (
-                  <p className="text-xs leading-relaxed rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-danger">
+                  <p className="text-xs leading-relaxed rounded-lg border border-danger-line bg-danger-surface px-3 py-2 text-danger-ink">
                     Este proyecto está en un pipeline de HubSpot que Nexus todavía no conoce, así que
                     no se puede traer: el alta quedaría a medio hacer y el proyecto nunca entraría a
                     cobranza. Movelo en HubSpot a Implementación, Desarrollo o Sitios web, y volvé.
@@ -769,7 +769,7 @@ export default function NuevoProyectoStepper() {
               </>
             )}
 
-            {error && <p className="text-xs text-danger">{error}</p>}
+            {error && <p className="text-xs text-danger-ink">{error}</p>}
           </div>
         )}
 
