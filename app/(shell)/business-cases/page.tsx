@@ -11,6 +11,7 @@ import { prisma } from "@/lib/db/prisma";
 import DeleteBusinessCaseButton from "@/components/business-cases/DeleteBusinessCaseButton";
 import { can } from "@/lib/auth/permissions/engine";
 import { resolveBcType } from "@/lib/business-cases/case-types";
+import { hubspotCompanyUrl } from "@/lib/hubspot/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -24,16 +25,29 @@ export default async function BusinessCasesHubPage() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !(await can(ctx.teamMember, "ventas", "read"))) redirect("/clients");
 
-  const cases = await prisma.businessCase.findMany({
-    orderBy: { updatedAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      caseType: true,
-      client: { select: { name: true, kind: true } },
-    },
-  });
+  /* Las propuestas viven ENTERAS en el portal del sistema (el CRM de Smarteam): tanto el alta
+     desde empresa como el lookup y la generación usan `getSystemHubspotClient`. Por eso el link
+     a la empresa se arma contra ese portal y no contra el que el cliente pudo haber conectado
+     (ese es el CRM del cliente, donde esta empresa no existe). Una sola query para toda la
+     lista — el id del portal es constante. */
+  const [cases, systemAccount] = await Promise.all([
+    prisma.businessCase.findMany({
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        caseType: true,
+        // La empresa del CASO manda sobre la del cliente: es la que se eligió al crearlo.
+        hubspotCompanyId: true,
+        client: { select: { name: true, kind: true, hubspotCompanyId: true } },
+      },
+    }),
+    prisma.hubspotAccount.findFirst({
+      where: { isSystem: true },
+      select: { hubspotPortalId: true },
+    }),
+  ]);
 
   return (
     <div className={SHELL_DEFAULT}>
@@ -56,7 +70,12 @@ export default async function BusinessCasesHubPage() {
       />
 
       <div className="space-y-2">
-        {cases.map((c) => (
+        {cases.map((c) => {
+          const empresaUrl = hubspotCompanyUrl(
+            systemAccount?.hubspotPortalId,
+            c.hubspotCompanyId ?? c.client.hubspotCompanyId,
+          );
+          return (
           <div
             key={c.id}
             className="flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-3 hover:border-brand/40 transition-colors"
@@ -81,12 +100,31 @@ export default async function BusinessCasesHubPage() {
                 </span>
               </span>
             </Link>
+            {/* HERMANO del <Link> de la fila, nunca adentro: un <a> dentro de otro <a> es HTML
+                inválido y el navegador parte el DOM. Sin empresa vinculada (o sin el portal del
+                sistema) no se pinta: un link a `/company/null` cae en un 404 de HubSpot que se
+                lee como problema de permisos. */}
+            {empresaUrl && (
+              <a
+                href={empresaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Ver empresa en HubSpot"
+                aria-label={`Ver ${c.client.name} en HubSpot`}
+                className="flex-shrink-0 p-1.5 rounded-md text-fg-muted hover:text-brand hover:bg-brand/10 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            )}
             <DeleteBusinessCaseButton
               bcId={c.id}
               description={`Se eliminará "${c.name}" (${c.client.name}) con todos sus casos de uso, secciones y contenido. Esta acción no se puede deshacer.`}
             />
           </div>
-        ))}
+          );
+        })}
         {cases.length === 0 && (
           <p className="text-sm text-fg-muted">No hay propuestas todavía. Creá la primera.</p>
         )}

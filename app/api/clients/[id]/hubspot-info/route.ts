@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
 import { Client } from "@hubspot/api-client";
 import { NextResponse } from "next/server";
+import { hubspotCompanyListUrl, hubspotCompanyUrl } from "@/lib/hubspot/urls";
 
 // ── Propiedades de empresa a obtener de HubSpot ──────────────────────────────
 
@@ -108,9 +109,7 @@ async function handleWithClientAccount(
       }
     }
 
-    const companyUrl = hubspotCompany
-      ? `https://app.hubspot.com/contacts/${hubspotAccount.hubspotPortalId}/company/${hubspotCompany.id}`
-      : null;
+    const companyUrl = hubspotCompanyUrl(hubspotAccount.hubspotPortalId, hubspotCompany?.id);
 
     return NextResponse.json({
       connected: true,
@@ -130,7 +129,7 @@ async function handleWithClientAccount(
       source: "client",
       hubName: hubspotAccount.hubName,
       hubspotPortalId: hubspotAccount.hubspotPortalId,
-      hubspotCompanyUrl: `https://app.hubspot.com/contacts/${hubspotAccount.hubspotPortalId}/companies/list`,
+      hubspotCompanyUrl: hubspotCompanyListUrl(hubspotAccount.hubspotPortalId),
     });
   }
 }
@@ -152,9 +151,7 @@ async function handleWithSystemAccount(
       ? await fetchCompanyById(hsClient, client.hubspotCompanyId)
       : null;
 
-    const companyUrl = hubspotCompany && systemAccount
-      ? `https://app.hubspot.com/contacts/${systemAccount.hubspotPortalId}/company/${hubspotCompany.id}`
-      : null;
+    const companyUrl = hubspotCompanyUrl(systemAccount?.hubspotPortalId, hubspotCompany?.id);
 
     return NextResponse.json({
       connected: true,
