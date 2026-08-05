@@ -183,6 +183,8 @@ function FilaEmpresa({
   resultado?: ResultadoFila;
   onTraer: (confirmoGemela: boolean) => void;
 }) {
+  const router = useRouter();
+  const [confirmando, setConfirmando] = useState(false);
   const proyecto = empresa.proyectos[0];
   const gemela = empresa.gemelas[0];
 
@@ -231,23 +233,53 @@ function FilaEmpresa({
       </div>
 
       {gemela && (
-        /* Una sola línea: el aviso y las dos salidas. Explicar POR QUÉ puede haber dos fichas no
-           cambia lo que hay que decidir. */
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-warn-line bg-warn-surface px-2.5 py-1.5">
-          <span className="text-xs text-warn-ink">⚠ Ya existe «{gemela.nombre}» en Nexus.</span>
-          <a
-            href={`/clients/${gemela.clientId}`}
-            className="text-xs font-medium px-2 py-0.5 rounded-lg border border-brand/30 bg-brand/15 text-brand hover:bg-brand/25"
-          >
-            Abrirla
-          </a>
-          <button
-            onClick={() => onTraer(true)}
-            disabled={ocupada}
-            className="text-xs text-fg-muted hover:text-fg-secondary disabled:opacity-50"
-          >
-            {ocupada ? "Trayendo…" : "Es otra → traer igual"}
-          </button>
+        /**
+         * ⚠ EL CAMINO IRREVERSIBLE PIDE DOS CLICS, Y LOS DOS SON BOTONES DE VERDAD.
+         *
+         * La primera versión ponía «Es otra → traer igual» como texto plano al lado de un botón:
+         * la opción que CREA UNA FICHA DUPLICADA era la que menos parecía un control, y se
+         * apretaba sin querer. Pasó en la primera prueba y dejó dos «kamalio» en producción.
+         *
+         * Ahora: los dos son botones, el seguro («Abrirla») es el sólido, y el que duplica abre
+         * una confirmación que NOMBRA a las dos empresas — no se puede contestar en automático,
+         * porque para decir que sí hay que haber leído cuál es cuál.
+         */
+        <div className="rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2">
+          {!confirmando ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-warn-ink flex-1 min-w-40">
+                ⚠ Ya existe «{gemela.nombre}» en Nexus.
+              </span>
+              <Button
+                variant="primary"
+                size="xs"
+                onClick={() => router.push(`/clients/${gemela.clientId}`)}
+              >
+                Es la misma → abrirla
+              </Button>
+              <Button variant="secondary" size="xs" onClick={() => setConfirmando(true)}>
+                Es otra empresa
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-warn-ink flex-1 min-w-40">
+                ¿«{empresa.rotulo}» es distinta de «{gemela.nombre}»? Se va a crear una ficha
+                aparte.
+              </span>
+              <Button
+                variant="destructive-solid"
+                size="xs"
+                loading={ocupada}
+                onClick={() => onTraer(true)}
+              >
+                Sí, es otra: traerla
+              </Button>
+              <Button variant="secondary" size="xs" onClick={() => setConfirmando(false)}>
+                Cancelar
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
