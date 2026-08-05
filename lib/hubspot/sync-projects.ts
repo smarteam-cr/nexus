@@ -425,6 +425,17 @@ export interface SyncResult {
   created: number;
   updated: number;
   skipped: number;
+  /**
+   * Cuántos se saltearon por estar en la lista de suprimidos del cliente — o sea, los que alguien
+   * borró desde Nexus a propósito.
+   *
+   * Va aparte de `skipped` porque es la ÚNICA razón de salteo que tiene una explicación para el
+   * usuario, y sin ella la pantalla no puede distinguirla del resto. El síntoma que arregla: un
+   * cliente al que le borraste su único proyecto queda vacío y el cartel dice "revisá en HubSpot
+   * que el proyecto esté asociado a la empresa" — mandándote a buscar un problema que no existe,
+   * porque está perfectamente asociado y Nexus lo ignora porque vos se lo pediste.
+   */
+  suprimidos: number;
   errors: string[];
   debug?: string[];
   /**
@@ -578,7 +589,7 @@ const enVueloPorCliente = new Map<string, CorridaViva>();
 
 /** Result en ceros con el motivo de por qué no se corrió. */
 function sinCorrer(motivo: NonNullable<SyncResult["omitido"]>, detalle: string): SyncResult {
-  return { found: 0, created: 0, updated: 0, skipped: 0, errors: [], debug: [detalle], omitido: motivo };
+  return { found: 0, created: 0, updated: 0, skipped: 0, suprimidos: 0, errors: [], debug: [detalle], omitido: motivo };
 }
 
 /** Los estados de alta que NO están en curso. Derivado de la tabla, no escrito a mano. */
@@ -675,7 +686,7 @@ export async function syncProjectsForClient(clientId: string, opts: SyncOpts = {
 }
 
 async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult> {
-  const result: SyncResult = { found: 0, created: 0, updated: 0, skipped: 0, errors: [], debug: [] };
+  const result: SyncResult = { found: 0, created: 0, updated: 0, skipped: 0, suprimidos: 0, errors: [], debug: [] };
   const dirigido = opts.soloRecord?.trim() || null;
 
   // 1. Obtener client + HubspotAccount (query directa para evitar quirks del relation lookup)
@@ -1059,6 +1070,7 @@ async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult>
     // Proyecto borrado a mano en Nexus → no recrear (antes del lookup: ni create ni reactivate).
     if (suppressed.has(project.id)) {
       result.skipped++;
+      result.suprimidos++;
       result.debug!.push(`Proyecto suprimido (borrado a mano en Nexus): ${project.id}`);
       continue;
     }

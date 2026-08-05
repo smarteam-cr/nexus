@@ -53,6 +53,8 @@ interface CandidateSession {
   /** Por qué (no) aplica la regla de relevancia — tooltip. */
   reason: string;
   linkedElsewhere: boolean;
+  /** La sacó un humano de ESTE proyecto. El botón dice "Reincluir", no "Agregar". */
+  excluidaAca?: boolean;
   /** Reunión del equipo que todavía no es de ningún cliente. Agregarla también la asigna. */
   sinDuenio?: boolean;
 }
@@ -210,6 +212,13 @@ export default function SessionSelectionReview({
                       reunión del equipo
                     </span>
                   )}
+                  {c.excluidaAca && (
+                    /* Sin esta marca, una excluida que vuelve al buscador se lee como una que
+                       nunca estuvo — y la persona no entiende por qué "reaparece". */
+                    <span className="text-[9px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
+                      la excluiste
+                    </span>
+                  )}
                 </div>
                 {(sala || c.reason) && (
                   /* El motivo ("Ventas en la sala", "título de venta") YA llegaba y vivía
@@ -230,7 +239,7 @@ export default function SessionSelectionReview({
                 title={c.sinDuenio ? "No es de ningún cliente todavía: al agregarla queda como sesión de este cliente." : undefined}
                 className="text-[11px] font-semibold text-brand hover:text-brand-dark disabled:opacity-40 transition-colors flex-shrink-0"
               >
-                {c.sinDuenio ? "Agregar y asignar" : "Agregar"}
+                {c.excluidaAca ? "Reincluir" : c.sinDuenio ? "Agregar y asignar" : "Agregar"}
               </button>
             </li>
             );

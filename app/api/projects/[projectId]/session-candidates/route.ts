@@ -191,7 +191,15 @@ export async function GET(
     .slice(0, 300);
 
   const candidates = [...clientSessions, ...internas]
-    .filter((s) => !feedingIds.has(s.id) && !excludedIds.has(s.id))
+    /* ⚠ Se saca `!excludedIds.has(s.id)` A PROPÓSITO, y volver a ponerlo parece la optimización
+       más obvia del archivo ("no muestres lo que ya está excluido"). Reconstruye el incidente: la
+       «X» sacaba la sesión de la lista **y del único buscador que podía traerla de vuelta**, así
+       que un click la borraba de la pantalla entera sin dejar rastro. La pantalla se veía
+       perfecta, con su lista y su buscador diciendo "No hay más sesiones".
+
+       REGLA DE ESTE ENDPOINT: **el buscador nunca esconde algo que un click sacó.** Las excluidas
+       vuelven con su marca y el botón dice "Reincluir" en vez de "Agregar". */
+    .filter((s) => !feedingIds.has(s.id))
     .map((s) => {
       const cls = classifyHandoffSession(s.title, s.participants, s.organizerEmail, salesEmails);
       return {
@@ -209,6 +217,10 @@ export async function GET(
         // Por qué (no) aplica la regla — tooltip del modal (antes era opaco).
         reason: cls.reason,
         linkedElsewhere: s.projects.some((p) => p.projectId !== projectId),
+        /* La sacó un humano de este proyecto. Viaja para que el botón diga "Reincluir" y la fila
+           lo muestre: una excluida que vuelve al buscador sin marca se lee como una que nunca
+           estuvo, y la persona no entiende por qué "reaparece". */
+        excluidaAca: excludedIds.has(s.id),
         /* Sin dueño: agregarla NO es solo vincularla, también la va a hacer de este cliente. El
            botón lo dice, porque es un efecto que no se ve desde el modal. */
         sinDuenio: internas.some((i) => i.id === s.id),

@@ -71,9 +71,13 @@ export async function PATCH(
   if (data.name !== undefined || data.company !== undefined) {
     revalidateClientsSidebar();
   }
-  // PERF #1: si cambió algo que afecta el match (name/company/emailDomains), re-resolver en background.
+  /* PERF #1: si cambió algo que afecta el match (name/company/emailDomains), re-resolver en
+     background. ⚠ El catch LOGUEA: renombrar un cliente cambia de quién son sus reuniones, así
+     que un refresco que falla en silencio deja la atribución vieja sin que nadie se entere. */
   if (data.name !== undefined || data.company !== undefined || data.emailDomains !== undefined) {
-    void resolveAllSessions().catch(() => {});
+    void resolveAllSessions().catch((e) => {
+      console.error(`[clients] re-resolver tras editar ${id} falló:`, e);
+    });
   }
 
   return NextResponse.json(client);
@@ -88,10 +92,39 @@ export async function DELETE(
   const guard = await guardCapability("deleteClients");
   if (guard instanceof NextResponse) return guard;
 
-  await prisma.client.delete({ where: { id } });
+  /* ⚠ SOLTAR LAS SESIONES ANTES DE BORRAR, Y DENTRO DE LA MISMA TRANSACCIÓN.
+     `manualClientId` y `resolvedClientId` NO son claves foráneas, así que la base no las limpia:
+     borrar el cliente las deja apuntando a un id muerto. Y ahí la sesión desaparece de todos lados
+     a la vez — no pertenece a ningún cliente vivo, pero tampoco cuenta como "sin dueño", así que
+     el buscador de reuniones internas (que exige las dos columnas en null) también la rechaza.
+     Invisible en la pantalla, invisible para INV1 y para INV2. Es lo que escondió una reunión en
+     un demo en vivo el 2026-08-04, y solo se pudo diagnosticar leyendo la base a mano.
+
+     El `resolveAllSessions()` de abajo NO alcanzaba: reescribe `resolvedClientId` y **nunca toca
+     `manualClientId`**. Por eso el override quedaba colgado para siempre.
+
+     Va sincrónico y transaccional porque es correctitud, no refresco: son dos `updateMany` sobre
+     columnas indexadas, milisegundos. Dejar las sesiones huérfanas un rato es estrictamente mejor
+     que dejarlas apuntando a una lápida — y es el estado honesto. */
+  await prisma.$transaction(async (tx) => {
+    await tx.firefliesSession.updateMany({
+      where: { manualClientId: id },
+      data: { manualClientId: null },
+    });
+    await tx.firefliesSession.updateMany({
+      where: { resolvedClientId: id },
+      data: { resolvedClientId: null },
+    });
+    await tx.client.delete({ where: { id } });
+  });
   revalidateClientsSidebar();
-  // PERF #1: sesiones resueltas al cliente borrado quedan colgadas → re-resolver en background.
-  void resolveAllSessions().catch(() => {});
+  /* El re-resolve queda en background porque es lo que es: un refresco que les vuelve a encontrar
+     dueño por dominio a las que lo tengan. Carga ~16k filas y pega a HubSpot, así que `await`earlo
+     acá sería un timeout esperando ocurrir. ⚠ El `catch` ahora LOGUEA: tragarse el error en
+     silencio fue cómplice de este bug durante meses. INV2 vigila que el refresco haya corrido. */
+  void resolveAllSessions().catch((e) => {
+    console.error(`[clients] re-resolver tras borrar ${id} falló:`, e);
+  });
 
   return NextResponse.json({ ok: true });
 }

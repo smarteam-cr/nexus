@@ -147,7 +147,13 @@ export default function WorkspaceClient({
   const activeSyncs = useRef(0);
   // Resultado del último sync de HubSpot → para no fallar en SILENCIO: si un cliente
   // con HubSpot queda sin proyectos visibles, mostramos un banner con el motivo + Reintentar.
-  const [syncResult, setSyncResult] = useState<{ created?: number; updated?: number; errors?: string[] } | null>(null);
+  const [syncResult, setSyncResult] = useState<{
+    created?: number;
+    updated?: number;
+    errors?: string[];
+    /** Los que el sync salteó porque alguien los borró desde Nexus — el motivo REAL del cartel. */
+    suprimidos?: number;
+  } | null>(null);
   const [syncDone, setSyncDone] = useState(false);
   const startSync = useCallback(() => { activeSyncs.current++; setSyncing(true); }, []);
   const endSync = useCallback(() => {
@@ -330,13 +336,22 @@ export default function WorkspaceClient({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
               </svg>
               <div className="flex-1 min-w-0">
+                {/* ⚠ El motivo tiene que ser el REAL, no el genérico. Cuando el cliente quedó
+                    vacío porque alguien borró su proyecto desde Nexus, el proyecto SÍ está
+                    asociado a la empresa en HubSpot: es Nexus el que lo ignora, a propósito y a
+                    pedido. Mandar a revisar HubSpot ahí no es solo inútil, hace perder tiempo
+                    buscando un problema que no existe. El dato ya lo trae el sync. */}
                 <p className="text-sm font-semibold text-amber-200">
-                  No se cargó ningún proyecto de HubSpot para este cliente.
+                  {(syncResult?.suprimidos ?? 0) > 0
+                    ? `${syncResult!.suprimidos} proyecto${syncResult!.suprimidos === 1 ? "" : "s"} de este cliente está${syncResult!.suprimidos === 1 ? "" : "n"} oculto${syncResult!.suprimidos === 1 ? "" : "s"}: se borró desde Nexus.`
+                    : "No se cargó ningún proyecto de HubSpot para este cliente."}
                 </p>
                 <p className="text-xs text-amber-200/80 mt-0.5">
-                  {syncResult?.errors && syncResult.errors.length > 0
-                    ? syncResult.errors[0]
-                    : "Revisá en HubSpot que el proyecto esté asociado a la empresa de este cliente, y reintentá."}
+                  {(syncResult?.suprimidos ?? 0) > 0
+                    ? "En HubSpot sigue existiendo y está bien asociado — Nexus lo ignora a pedido, para no recrearlo. Para volver a traerlo hay que sacarlo de la lista de ignorados."
+                    : syncResult?.errors && syncResult.errors.length > 0
+                      ? syncResult.errors[0]
+                      : "Revisá en HubSpot que el proyecto esté asociado a la empresa de este cliente, y reintentá."}
                 </p>
               </div>
               {/* ⚠ Llamaba `runHubspotSync()` SIN force, o sea que dentro del cooldown de 10 min
