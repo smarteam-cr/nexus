@@ -38,7 +38,11 @@ import {
   type ResumenAntiguedad,
 } from "@/lib/cobranza/antiguedad";
 import type { ColaCobroRow, RiesgoPagoItem } from "@/lib/cobranza";
-import { TIPO_SERVICIO_LABEL } from "@/lib/cobranza/schema";
+import {
+  TIPO_SERVICIO_LABEL,
+  TIPO_CUENTA_LABEL,
+  COBRANZA_TIPOS_CUENTA,
+} from "@/lib/cobranza/schema";
 import { fmtFecha, fmtMonto } from "./format";
 import BorradorCobroModal from "./BorradorCobroModal";
 import PromesaDialog from "./PromesaDialog";
@@ -72,6 +76,17 @@ const ES_VENCIDO: Record<Grupo, boolean> = {
   quincena: false,
   adelante: false,
 };
+
+/**
+ * ¿Este cobro tiene una promesa de pago que vence dentro de la semana?
+ *
+ * Vive suelto y no inline porque lo consumen DOS cosas: el número de la tarjeta azul y
+ * el filtro que esa misma tarjeta enciende. Con dos copias, el día que alguien mueva la
+ * ventana en una, la tarjeta diría "4" y la lista mostraría 3.
+ */
+function esPromesaDeLaSemana(r: ColaCobroRow, todayISO: string, finSemanaISO: string): boolean {
+  return !!r.promesaPago && r.promesaPago >= todayISO && r.promesaPago < finSemanaISO;
+}
 
 /** Total por moneda de un set de filas — SIEMPRE separados (regla dura). */
 function totalesPorMoneda(rows: ColaCobroRow[]): { CRC: number; USD: number } {
@@ -198,6 +213,13 @@ export default function ColaCobros({
   const toast = useToast();
   const [q, setQ] = useState("");
   const [fMoneda, setFMoneda] = useState<FiltroMoneda>("all");
+  /* Nacional / Internacional: la plataforma de facturación depende de esto (Odoo lo
+     nacional, Mercury lo internacional), así que procesarlos juntos obliga a saltear
+     filas a ojo. Mismo control y mismo vocabulario que la pestaña Clientes. */
+  const [fTipo, setFTipo] = useState<string>("all");
+  /* Filtro de promesas: lo enciende la tarjeta azul, no un control aparte — ver el
+     comentario de la tarjeta. */
+  const [soloPromesas, setSoloPromesas] = useState(false);
   const [verAdelante, setVerAdelante] = useState(false);
   const [promesaCobro, setPromesaCobro] = useState<ColaCobroRow | null>(null);
   const [borradorCobro, setBorradorCobro] = useState<ColaCobroRow | null>(null);
@@ -242,7 +264,7 @@ export default function ColaCobros({
       nQuincena: grupos.quincena.length,
       sinFacturar: totalesPorMoneda(grupos.sinFacturar),
       nSinFacturar: grupos.sinFacturar.length,
-      promesas: rows.filter((r) => r.promesaPago && r.promesaPago >= todayISO && r.promesaPago < finSemana).length,
+      promesas: rows.filter((r) => esPromesaDeLaSemana(r, todayISO, finSemana)).length,
     }),
     [grupos, vencidos, rows, todayISO, finSemana],
   );
@@ -252,12 +274,16 @@ export default function ColaCobros({
     const needle = q.trim().toLowerCase();
     if (needle) out = out.filter((r) => r.clienteNombre.toLowerCase().includes(needle));
     if (fMoneda !== "all") out = out.filter((r) => r.moneda === fMoneda);
+    if (fTipo !== "all") out = out.filter((r) => r.tipoCuenta === fTipo);
+    // El MISMO predicado que cuenta la tarjeta: si divergieran, el número diría 4 y
+    // la lista mostraría 3, que es peor que no tener el filtro.
+    if (soloPromesas) out = out.filter((r) => esPromesaDeLaSemana(r, todayISO, finSemana));
     return out;
   };
   const visibles = Object.fromEntries(
     GRUPOS_ORDEN.map((g) => [g, filtra(grupos[g])]),
   ) as Record<Grupo, ColaCobroRow[]>;
-  const hayFiltros = q.trim() !== "" || fMoneda !== "all";
+  const hayFiltros = q.trim() !== "" || fMoneda !== "all" || fTipo !== "all" || soloPromesas;
   const totalVisible = GRUPOS_ORDEN.reduce((n, g) => n + visibles[g].length, 0);
 
   // Promesa desde la cola: PATCH optimista sobre las filas (patrón applyPromesa).
@@ -373,7 +399,21 @@ export default function ColaCobros({
               : "atrasado por facturar — no es mora del cliente"}
           </p>
         </div>
-        <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 px-4 py-3">
+        {/* La ÚNICA tarjeta que además filtra, y es a propósito: su número es una lista de
+            trabajo concreta ("a estos cuatro les toca hoy"), no un total de plata. Antes
+            obligaba a bajar leyendo la cola entera buscando los chips de promesa.
+            El conteo sigue saliendo de la cola COMPLETA — la doctrina no se mueve. */}
+        <button
+          type="button"
+          onClick={() => setSoloPromesas((v) => !v)}
+          disabled={cards.promesas === 0}
+          aria-pressed={soloPromesas}
+          className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+            soloPromesas
+              ? "border-sky-500 bg-sky-500/10 ring-1 ring-sky-500/40"
+              : "border-sky-500/30 bg-sky-500/5"
+          } ${cards.promesas === 0 ? "cursor-default opacity-70" : "hover:bg-sky-500/10"}`}
+        >
           <p className="text-[11px] font-semibold text-sky-600 uppercase tracking-wide">
             Promesas esta semana
           </p>
@@ -381,9 +421,13 @@ export default function ColaCobros({
             {cards.promesas}
           </p>
           <p className="text-[11px] text-fg-muted">
-            {cards.promesas === 0 ? "sin promesas por vencer" : "cliente(s) que prometieron pagar"}
+            {cards.promesas === 0
+              ? "sin promesas por vencer"
+              : soloPromesas
+                ? "mostrando solo estas — clic para ver todo"
+                : "clic para ver solo estos cobros"}
           </p>
-        </div>
+        </button>
       </div>
 
       {/* ── Filtros (solo estrechan la lista) ── */}
@@ -411,17 +455,42 @@ export default function ColaCobros({
             </button>
           ))}
         </div>
+        {/* Nacional / Internacional — mismo control y mismas etiquetas que la pestaña
+            Clientes, para que el vocabulario no cambie entre pestañas. Separa la pasada
+            de facturación de Odoo (nacional) de la de Mercury (internacional). */}
+        <select
+          value={fTipo}
+          onChange={(e) => setFTipo(e.target.value)}
+          aria-label="Tipo de cuenta"
+          className="text-[11px] border border-line rounded-md px-2 py-1.5 bg-surface text-fg focus:outline-none focus:border-brand"
+        >
+          <option value="all">Nacional e internacional</option>
+          {COBRANZA_TIPOS_CUENTA.map((t) => (
+            <option key={t} value={t}>
+              {TIPO_CUENTA_LABEL[t] ?? t}
+            </option>
+          ))}
+        </select>
         <span className="text-[11px] text-fg-muted">
           {totalVisible} cobro{totalVisible !== 1 ? "s" : ""} pendiente{totalVisible !== 1 ? "s" : ""}
         </span>
+        {soloPromesas && (
+          <button
+            type="button"
+            onClick={() => setSoloPromesas(false)}
+            className="text-[11px] font-medium text-brand hover:opacity-80"
+          >
+            Quitar filtro de promesas
+          </button>
+        )}
       </div>
 
       {/* ── Grupos ── */}
       {hayFiltros && totalVisible === 0 ? (
         <EmptyState
           variant="dashed"
-          title="Nada matchea esa búsqueda"
-          description="Ajustá la búsqueda o el filtro de moneda."
+          title="Nada matchea esos filtros"
+          description="Ajustá la búsqueda, la moneda, el tipo de cuenta o quitá el filtro de promesas."
         />
       ) : (
         GRUPOS_ORDEN.map((g) => {
@@ -443,7 +512,10 @@ export default function ColaCobros({
           }
           // Un cubo de antigüedad vacío no aporta nada: se omite (con filtros
           // activos también, para no llenar la pantalla de encabezados en cero).
-          if (list.length === 0 && (ES_VENCIDO[g] || g === "sinFacturar")) return null;
+          // Y CON filtros puestos se omite cualquier grupo vacío, no solo los de
+          // vencido: filtrar por promesas dejaba "Esta quincena · 0" en pantalla,
+          // que es justo el ruido que el filtro venía a sacar.
+          if (list.length === 0 && (hayFiltros || ES_VENCIDO[g] || g === "sinFacturar")) return null;
           const totales = totalesPorMoneda(list);
           return (
             <div key={g}>

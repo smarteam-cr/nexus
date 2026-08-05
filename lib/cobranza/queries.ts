@@ -743,6 +743,13 @@ export interface ColaCobroRow {
    *  para que el recálculo cliente-side del semáforo (ColaCobros.tsx) sea
    *  consistente con el servidor sin tener que importar el default. */
   creditoDias: number;
+  /**
+   * NACIONAL | INTERNACIONAL — de qué lado se factura la cuenta. Viaja en la fila
+   * porque la plataforma de facturación depende de él (Odoo lo nacional, Mercury lo
+   * internacional) y la cola es donde se decide qué se procesa en cada pasada; sin
+   * esto hay que abrir cuenta por cuenta para saberlo.
+   */
+  tipoCuenta: string;
 }
 
 /**
@@ -768,7 +775,9 @@ export async function loadColaCobros(todayISO: string): Promise<ColaCobroRow[]> 
       promesaPago: true,
       fechaEmision: true,
       servicio: { select: { tipoServicio: true, descripcion: true } },
-      cuenta: { select: { clientId: true, creditoDias: true, client: { select: { name: true } } } },
+      cuenta: {
+        select: { clientId: true, creditoDias: true, tipo: true, client: { select: { name: true } } },
+      },
     },
     orderBy: { fechaProgramada: "asc" },
   });
@@ -793,6 +802,7 @@ export async function loadColaCobros(todayISO: string): Promise<ColaCobroRow[]> 
       promesaPago: isoDay(c.promesaPago),
       fechaEmision: isoDay(c.fechaEmision),
       creditoDias: c.cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS,
+      tipoCuenta: c.cuenta.tipo,
     };
   });
 }

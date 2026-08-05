@@ -228,7 +228,7 @@ export default function CuentaDrawer({
         onClose={closeDrawer}
         size="xl"
         title={cuenta ? cuenta.clienteNombre : "Cuenta financiera"}
-        description="Datos de cobro, servicios contratados y bitácora."
+        description="Servicios contratados, datos de cobro y bitácora."
       >
         {!cuenta || !form ? (
           <div className="flex items-center justify-center py-16">
@@ -236,7 +236,77 @@ export default function CuentaDrawer({
           </div>
         ) : (
           <div className="space-y-8">
-            {/* ── (a) Datos de la cuenta ── */}
+            {/* ── Servicios contratados y sus facturas ──
+                 VA PRIMERO desde el 2026-08-04: es lo que se consulta todos los días
+                 (qué hay que facturar, cómo va cada cuota). Los datos de la cuenta se
+                 configuran una vez al dar de alta y estaban ocupando el tope. */}
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className={SECTION_TITLE_CLS}>Servicios contratados</h3>
+                {!adding && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdding(true);
+                      setEditingId(null);
+                    }}
+                    className="text-[11px] font-medium text-brand hover:opacity-80"
+                  >
+                    + Agregar servicio
+                  </button>
+                )}
+              </div>
+
+              {cuenta.servicios.length === 0 && !adding && (
+                <p className="text-xs text-fg-muted rounded-lg border border-dashed border-line px-3 py-4 text-center">
+                  Sin servicios todavía. Agregá el primero para armar el plan de pago.
+                </p>
+              )}
+
+              {cuenta.servicios.map((s) => (
+                <ServicioCard
+                  key={s.id}
+                  servicio={s}
+                  todayISO={todayISO}
+                  expanded={expandedId === s.id}
+                  onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)}
+                  editing={editingId === s.id}
+                  onEdit={() => {
+                    setEditingId(s.id);
+                    setAdding(false);
+                    setExpandedId(s.id);
+                  }}
+                  onCancelEdit={() => setEditingId(null)}
+                  onSaved={async () => {
+                    setEditingId(null);
+                    await load(false);
+                  }}
+                  onGenerar={() => generarCobros(s.id)}
+                  generando={generando === s.id}
+                  onRefresh={() => load(false)}
+                  cuenta={cuenta}
+                />
+              ))}
+
+              {adding && (
+                <div className="rounded-xl border border-brand/30 bg-surface p-3">
+                  <p className="text-xs font-semibold text-fg mb-2">Nuevo servicio</p>
+                  <ServicioForm
+                    cuentaId={cuenta.id}
+                    servicio={null}
+                    proyectos={cuenta.proyectos}
+                    monedaCuenta={cuenta.moneda}
+                    onSaved={async () => {
+                      setAdding(false);
+                      await load(false);
+                    }}
+                    onCancel={() => setAdding(false)}
+                  />
+                </div>
+              )}
+            </section>
+
+            {/* ── Datos de la cuenta (configuración: se toca al dar de alta) ── */}
             <section className="space-y-3">
               <h3 className={SECTION_TITLE_CLS}>Datos de la cuenta</h3>
               <div className="grid grid-cols-2 gap-3">
@@ -397,73 +467,6 @@ export default function CuentaDrawer({
                   {saving ? "Guardando…" : "Guardar cambios"}
                 </button>
               </div>
-            </section>
-
-            {/* ── (b) Servicios contratados ── */}
-            <section className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className={SECTION_TITLE_CLS}>Servicios contratados</h3>
-                {!adding && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAdding(true);
-                      setEditingId(null);
-                    }}
-                    className="text-[11px] font-medium text-brand hover:opacity-80"
-                  >
-                    + Agregar servicio
-                  </button>
-                )}
-              </div>
-
-              {cuenta.servicios.length === 0 && !adding && (
-                <p className="text-xs text-fg-muted rounded-lg border border-dashed border-line px-3 py-4 text-center">
-                  Sin servicios todavía. Agregá el primero para armar el plan de pago.
-                </p>
-              )}
-
-              {cuenta.servicios.map((s) => (
-                <ServicioCard
-                  key={s.id}
-                  servicio={s}
-                  todayISO={todayISO}
-                  expanded={expandedId === s.id}
-                  onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)}
-                  editing={editingId === s.id}
-                  onEdit={() => {
-                    setEditingId(s.id);
-                    setAdding(false);
-                    setExpandedId(s.id);
-                  }}
-                  onCancelEdit={() => setEditingId(null)}
-                  onSaved={async () => {
-                    setEditingId(null);
-                    await load(false);
-                  }}
-                  onGenerar={() => generarCobros(s.id)}
-                  generando={generando === s.id}
-                  onRefresh={() => load(false)}
-                  cuenta={cuenta}
-                />
-              ))}
-
-              {adding && (
-                <div className="rounded-xl border border-brand/30 bg-surface p-3">
-                  <p className="text-xs font-semibold text-fg mb-2">Nuevo servicio</p>
-                  <ServicioForm
-                    cuentaId={cuenta.id}
-                    servicio={null}
-                    proyectos={cuenta.proyectos}
-                    monedaCuenta={cuenta.moneda}
-                    onSaved={async () => {
-                      setAdding(false);
-                      await load(false);
-                    }}
-                    onCancel={() => setAdding(false)}
-                  />
-                </div>
-              )}
             </section>
 
             {/* ── (d) Bitácora ── */}
