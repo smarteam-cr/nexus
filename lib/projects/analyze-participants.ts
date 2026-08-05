@@ -12,6 +12,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { classifySessionToProjects } from "@/lib/sessions/classify-session-project";
+import { whereBelongsToClient } from "@/lib/sessions/project-sources";
 
 const AGENT_ID_PARTICIPANTS_ANALYZER = "agent-participants-analyzer";
 const MAX_SESSIONS_TO_ANALYZE = 8;
@@ -225,7 +226,7 @@ export async function autoClassifyOrphanSessions(clientId: string): Promise<numb
       select: { sessionId: true },
     }),
     prisma.firefliesSession.findMany({
-      where: { OR: [{ resolvedClientId: clientId }, { manualClientId: clientId }] },
+      where: { ...whereBelongsToClient(clientId), },
       select: { id: true },
       orderBy: { date: "desc" },
     }),

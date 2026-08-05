@@ -22,6 +22,7 @@ import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { buildAnalysisContext, type AnalysisFilters } from "@/lib/sessions/analysis-context";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
+import { whereBelongsToClient } from "@/lib/sessions/project-sources";
 
 // Slugs estables — mismos del seed scripts/seed-analysis-agents.ts
 const AGENT_SLUG_TO_ID: Record<string, string> = {
@@ -70,7 +71,7 @@ export const POST = withAuth(async (req) => {
     prisma.firefliesSession.findMany({
       where: {
         date: { lt: new Date() },
-        OR: [{ resolvedClientId: clientId }, { manualClientId: clientId }],
+        ...whereBelongsToClient(clientId),
       },
       select: {
         id: true, title: true, date: true, participants: true,

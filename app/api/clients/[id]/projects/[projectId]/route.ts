@@ -74,6 +74,17 @@ export async function DELETE(
         });
       }
     }
+    /* ⚠ ESTO ES PLATA. `hermanoCsProjectId` no es clave foránea, así que borrar la implementación
+       deja al desarrollo que colgaba de ella apuntando a un fantasma — y el criterio de cobranza
+       (`NO_ES_HERMANO_DE_CS`, lib/projects/scope.ts) exige que ese campo esté VACÍO para facturar.
+       Un puntero muerto no está vacío: el proyecto hijo **deja de facturar en silencio**, se sigue
+       viendo normal, y solo se sana cuando `resolverHermanos()` corra en el próximo sync del
+       cliente. Nulearlo acá cierra esa ventana, y va DENTRO de la transacción por lo mismo que el
+       bloque de arriba: o pasan las dos cosas o no pasa ninguna. */
+    await tx.project.updateMany({
+      where: { hermanoCsProjectId: projectId },
+      data: { hermanoCsProjectId: null },
+    });
     await tx.project.delete({ where: { id: projectId } });
   });
 

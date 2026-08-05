@@ -54,6 +54,26 @@ export function belongsToClient(
 }
 
 /**
+ * El MISMO criterio, en forma de `where` de Prisma. Es el gemelo de `belongsToClient` y vive
+ * pegado a él a propósito: son una sola regla y tienen que poder leerse juntas.
+ *
+ * ── POR QUÉ EXISTE ──────────────────────────────────────────────────────────
+ * El `OR` se escribía a mano en ocho consultas, y una de ellas —el widget del GPS— lo escribía
+ * DISTINTO: `manualClientId === c` O (`manualClientId === null` Y `resolvedClientId === c`), o
+ * sea "el override manda". Suena más correcto y es una trampa: esa forma solo funciona si
+ * `manualClientId` garantiza apuntar a un cliente vivo, y **no lo garantiza nadie** —no es clave
+ * foránea, así que borrar un cliente lo deja colgando—. Con un override colgado, la sesión falla
+ * las DOS ramas y el widget dice "Sin agendar" con la reunión agendada. Es el síntoma exacto del
+ * incidente del 2026-08-04, y estaba en producción.
+ *
+ * Escribir la regla una vez y llamarla ocho veces vuelve imposible tener dos criterios de
+ * pertenencia — que es el mismo motivo por el que `componerCon` existe en `lib/projects/scope.ts`.
+ */
+export function whereBelongsToClient(clientId: string) {
+  return { OR: [{ resolvedClientId: clientId }, { manualClientId: clientId }] };
+}
+
+/**
  * Le da dueño a una sesión HUÉRFANA para que pueda alimentar un proyecto. Es la contracara de
  * `belongsToClient`, y vive al lado porque hay que leerlas juntas.
  *
@@ -185,7 +205,7 @@ export async function getClientSessions(
 ): Promise<ProjectSourceSession[]> {
   const rows = await prisma.firefliesSession.findMany({
     where: {
-      OR: [{ resolvedClientId: clientId }, { manualClientId: clientId }],
+      ...whereBelongsToClient(clientId),
       ...(opts.before ? { date: { lte: opts.before } } : {}),
     },
     orderBy: { date: "desc" },

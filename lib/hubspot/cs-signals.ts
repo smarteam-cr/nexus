@@ -20,6 +20,7 @@ import { fetchCompanyDeals, type AvailableDeal } from "./deals";
 import { fetchCompanyTimelineItems } from "./company-timeline";
 import { fetchCompanyTickets } from "./tickets";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
+import { whereBelongsToClient } from "@/lib/sessions/project-sources";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RENEWAL_WINDOW_DAYS = 90; // renovaciones "próximas" = closedate dentro de esta ventana
@@ -100,7 +101,7 @@ export async function computeClientSignals(clientId: string): Promise<ClientSign
   try {
     const lastSession = await prisma.firefliesSession.findFirst({
       where: {
-        OR: [{ resolvedClientId: clientId }, { manualClientId: clientId }],
+        ...whereBelongsToClient(clientId),
         date: { lte: new Date(now) },
       },
       orderBy: { date: "desc" },

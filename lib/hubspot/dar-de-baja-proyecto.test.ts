@@ -136,6 +136,26 @@ describe("borrar un proyecto: las dos escrituras, o ninguna", () => {
     expect(tx).toContain("tx.project.delete");
   });
 
+  it("LA guarda de plata: el hermano se libera dentro de la transacción", () => {
+    /* `hermanoCsProjectId` no es clave foránea. Borrar una implementación deja al desarrollo que
+       colgaba de ella apuntando a un fantasma — y el criterio de cobranza exige que ese campo esté
+       VACÍO para facturar. Un puntero muerto no está vacío: el proyecto hijo **deja de facturar en
+       silencio** hasta que el próximo sync corra `resolverHermanos()`.
+
+       Es la única regresión de esta tanda cuyo síntoma es plata que no se cobra, y cuyo único
+       indicio sería un número más chico en un reporte. Nada falla, nada avisa. */
+    const tx = cuerpoDeFuncion(src, "prisma.$transaction");
+    expect(tx, "el hermano dejó de liberarse: el hijo deja de facturar en silencio").toContain(
+      "hermanoCsProjectId: null",
+    );
+    expect(tx, "se liberó con el prisma global, o sea fuera de la transacción").toContain(
+      "tx.project.updateMany",
+    );
+    const iHermano = tx.indexOf("hermanoCsProjectId: null");
+    const iDelete = tx.indexOf("tx.project.delete");
+    expect(iHermano, "el delete quedó antes de liberar al hermano").toBeLessThan(iDelete);
+  });
+
   it("la supresión sigue yendo ANTES del delete", () => {
     const tx = cuerpoDeFuncion(src, "prisma.$transaction");
     const iSupresion = tx.indexOf("ignoredHubspotServiceIds");

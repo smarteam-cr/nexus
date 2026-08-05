@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { belongsToClient } from "@/lib/sessions/project-sources";
+import { belongsToClient, whereBelongsToClient } from "@/lib/sessions/project-sources";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 
 /**
@@ -86,7 +86,7 @@ export async function GET(
 
   const clientSessions = await prisma.firefliesSession.findMany({
     where: {
-      OR: [{ resolvedClientId: clientId }, { manualClientId: clientId }],
+      ...whereBelongsToClient(clientId),
       date: { lte: new Date() },
     },
     orderBy: { date: "desc" },

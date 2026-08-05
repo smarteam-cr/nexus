@@ -63,6 +63,15 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   },
 
   // ── Los exentos, cada uno con su motivo ────────────────────────────────────
+  "app/api/clients/[id]/projects/[projectId]/route.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: busca a los que apuntan al que se está borrando " +
+      "para soltarles el vínculo de hermano antes de que quede colgando. Acotarlo con un " +
+      "criterio de alcance sería el bug: un hermano INACTIVO —o uno que el criterio esconda por " +
+      "cualquier motivo— quedaría igual apuntando a una fila muerta, que es exactamente lo que " +
+      "este barrido viene a impedir. La búsqueda es por referencia, no por alcance.",
+  },
   "lib/projects/alta-runner.ts": {
     modo: "exento",
     razon:

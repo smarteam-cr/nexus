@@ -334,8 +334,14 @@ model Project {
   hubspotRelatedProjectIds String[] @default([])
   // La RESOLUCIÓN de lo anterior: el Project.id del hermano de Customer Success, si lo
   // hay. Recalculado en cada sync (mismo patrón que hubspotPipelineStageLabel). Escalar
-  // sin FK a propósito: un id huérfano degrada a "proyecto aparte", que es la respuesta
-  // correcta, y no rompe un borrado.
+  // sin FK a propósito: no rompe un borrado.
+  //
+  // ⚠ CORRECCIÓN 2026-08-04. Acá decía que "un id huérfano degrada a «proyecto aparte», que es la
+  // respuesta correcta". Es FALSO donde más importa: el criterio de cobranza `NO_ES_HERMANO_DE_CS`
+  // (lib/projects/scope.ts) se cumple con `hermanoCsProjectId === null`, y un puntero muerto NO es
+  // null. Un desarrollo cuyo hermano se borró **deja de facturar en silencio** hasta que
+  // `resolverHermanos()` vuelva a correr. Por eso el DELETE de proyecto ahora lo nulea dentro de su
+  // transacción, e INV14 vigila que ninguno quede colgado.
   hermanoCsProjectId String?
 
   // ── En qué punto quedó el ALTA de este proyecto (Tanda C — lib/projects/alta.ts) ──

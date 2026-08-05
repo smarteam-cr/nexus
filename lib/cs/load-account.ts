@@ -14,6 +14,7 @@ import type { Prisma } from "@prisma/client";
 import { loadPortfolio, type PortfolioRow } from "@/lib/portfolio/load";
 import { serializeAlert, type CsAlertRow } from "@/lib/cs/load-panel";
 import { resolvePartnerState, type PartnerState } from "@/lib/cs/partner-state";
+import { whereBelongsToClient } from "@/lib/sessions/project-sources";
 
 export interface AccountMinute {
   sessionId: string;
@@ -134,7 +135,7 @@ export async function loadCsAccount(
       : Promise.resolve(null),
     prisma.firefliesSession.findMany({
       where: {
-        OR: [{ resolvedClientId: clientId }, { manualClientId: clientId }],
+        ...whereBelongsToClient(clientId),
         date: { lte: new Date() },
         minute: { isNot: null },
       },

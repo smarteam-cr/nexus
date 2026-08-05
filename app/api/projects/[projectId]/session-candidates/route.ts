@@ -8,7 +8,7 @@ import {
   esReunionDePuertasAdentro,
 } from "@/lib/sessions/candidatas-internas";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
-import { belongsToClient } from "@/lib/sessions/project-sources";
+import { belongsToClient, whereBelongsToClient } from "@/lib/sessions/project-sources";
 
 /**
  * GET /api/projects/[projectId]/session-candidates
@@ -130,7 +130,7 @@ export async function GET(
   // y una sesión asignada a mano desaparecía de la columna Y del modal.
   const clientSessions = await prisma.firefliesSession.findMany({
     where: {
-      OR: [{ resolvedClientId: clientId }, { manualClientId: clientId }],
+      ...whereBelongsToClient(clientId),
       date: { lte: new Date() },
     },
     orderBy: { date: "desc" },

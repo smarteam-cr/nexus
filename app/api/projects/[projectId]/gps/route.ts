@@ -13,6 +13,7 @@ import { etapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { buildCanvasChips } from "@/lib/flow/canvas-chips";
 import { frentesDeProyecto, hechosDeProyecto, type EquipoDeFrente } from "@/lib/projects/kind";
+import { whereBelongsToClient } from "@/lib/sessions/project-sources";
 
 // Sesiones del cliente (Google Meet + Fireflies legacy) → próxima futura y última
 // pasada, a nivel proyecto y POR FRENTE (Ventas / CSE).
@@ -22,8 +23,14 @@ import { frentesDeProyecto, hechosDeProyecto, type EquipoDeFrente } from "@/lib/
 // HubSpot EN VIVO) en cada render del widget: ~6s y el peor consumidor del pool.
 // Ahora consulta por `resolvedClientId` — el matching YA materializado (con índice
 // `[resolvedClientId, date desc]`, mantenido por resolve-sessions), el MISMO dato
-// del que depende /clients para "última actividad". El override manual conserva su
-// precedencia: manualClientId apunta acá O (sin override) la resolución automática.
+// del que depende /clients para "última actividad".
+//
+// ⚠ La pertenencia se pregunta con `whereBelongsToClient`, igual que el resto del repo. Acá vivía
+// la forma "el override manda" (`manualClientId` apunta acá O —sin override— la automática), que
+// suena más correcta y es una trampa: solo funciona si `manualClientId` apunta siempre a un
+// cliente vivo, y no lo garantiza nadie —no es clave foránea, así que borrar un cliente lo deja
+// colgando—. Con un override colgado la sesión falla las DOS ramas y el widget dice "Sin agendar"
+// con la reunión agendada. Es el síntoma del incidente del 2026-08-04, y estaba en producción.
 async function getClientSessionBookends(
   clientId: string,
   /** A quién mira el frente de ENTREGA de este proyecto (lib/projects/kind.ts). */
@@ -32,12 +39,7 @@ async function getClientSessionBookends(
   const [team, sessions] = await Promise.all([
     prisma.teamMember.findMany({ select: { email: true, area: true, roleEnum: true } }),
     prisma.firefliesSession.findMany({
-      where: {
-        OR: [
-          { manualClientId: clientId },
-          { manualClientId: null, resolvedClientId: clientId },
-        ],
-      },
+      where: whereBelongsToClient(clientId),
       select: {
         id: true,
         title: true,

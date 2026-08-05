@@ -23,6 +23,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { classifySessionToProjects } from "@/lib/sessions/classify-session-project";
 import { isLockedLink } from "@/lib/sessions/session-project-locks";
+import { whereBelongsToClient } from "./project-sources";
 
 const DEFAULT_SINCE_DAYS = 90;
 const DEFAULT_MAX_SESSIONS = 30;
@@ -52,7 +53,7 @@ export async function reclassifyClientSessions(
   // date <= now: excluye las sesiones con fecha corrupta 2037+ (anomalía conocida del sync).
   const sessions = await prisma.firefliesSession.findMany({
     where: {
-      OR: [{ resolvedClientId: clientId }, { manualClientId: clientId }],
+      ...whereBelongsToClient(clientId),
       date: { gte: since, lte: now },
     },
     orderBy: { date: "desc" },

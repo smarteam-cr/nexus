@@ -279,6 +279,16 @@ const ESCRITORES_AUTORIZADOS: Array<{ archivo: string; porque: string }> = [
     archivo: "scripts/backfill-project-pipeline.ts",
     porque: "completa de una vez lo que el tramo SQL de la migración no pudo resolver",
   },
+  {
+    archivo: "app/api/clients/[id]/projects/[projectId]/route.ts",
+    porque:
+      "NO declara la clase de nada: SUELTA el vínculo de hermano de los proyectos que apuntaban " +
+      "al que se está borrando, en la misma transacción del borrado, y solo puede escribir null. " +
+      "Sin eso el puntero queda apuntando a una fila muerta y el criterio de cobranza —que exige " +
+      "el campo VACÍO para facturar— saca al proyecto hijo de la facturación en silencio hasta " +
+      "el próximo sync. El espejo sigue siendo el único que DECIDE quién es hermano de quién: " +
+      "acá solo se limpia una referencia rota, y `resolverHermanos` la recalcula igual",
+  },
 ];
 
 /**
@@ -333,8 +343,13 @@ function asignaciones(rel: string): string[] {
 describe("escritor único — solo el espejo de HubSpot declara la clase de un proyecto", () => {
   const autorizados = new Set(ESCRITORES_AUTORIZADOS.map((e) => e.archivo));
 
-  it("los autorizados son exactamente dos, y cada uno dice por qué", () => {
-    expect(ESCRITORES_AUTORIZADOS.length).toBe(2);
+  it("los autorizados son exactamente tres, y cada uno dice por qué", () => {
+    /* El número está congelado a propósito: sumar un escritor tiene que ser una decisión que se
+       ve en el diff, no algo que se cuela. El tercero (2026-08-04) es el DELETE de proyecto, y es
+       de otra especie — no decide una clase, suelta una referencia rota y solo puede escribir
+       null. Se aceptó porque el candado no puede distinguir "declarar" de "limpiar", y dejar el
+       puntero colgando saca al proyecto hermano de la facturación en silencio. */
+    expect(ESCRITORES_AUTORIZADOS.length).toBe(3);
     for (const e of ESCRITORES_AUTORIZADOS) {
       expect(e.porque.length, e.archivo).toBeGreaterThan(30);
       expect(fs.existsSync(path.join(RAIZ, e.archivo)), `${e.archivo} no existe`).toBe(true);
