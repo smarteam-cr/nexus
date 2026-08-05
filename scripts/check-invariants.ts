@@ -320,8 +320,12 @@ async function main(): Promise<number> {
       }))?.clientId ??
       null;
     if (clienteDelOtro === null) {
-      // Apunta a un proyecto que ya no existe: degrada a "aparte" (se factura), que es el
-      // lado seguro, pero el dato quedó sucio y hay que verlo.
+      /* ⚠ Apunta a un proyecto que ya no existe. Acá decía que eso "degrada a aparte (se
+         factura), que es el lado seguro" — y es FALSO, corregido el 2026-08-05: el criterio de
+         cobranza `NO_ES_HERMANO_DE_CS` exige `hermanoCsProjectId === null`, y un puntero muerto
+         NO es null. O sea que el proyecto **deja de facturar en silencio** hasta que el próximo
+         sync recalcule los hermanos. Es lo contrario del lado seguro, y el operador que leía este
+         mensaje se quedaba tranquilo. */
       hermanosCruzados.push(`${p.client.name} · "${p.name}" → apunta a un proyecto BORRADO`);
     } else if (clienteDelOtro !== p.clientId) {
       hermanosCruzados.push(`${p.client.name} · "${p.name}" → hermano de OTRO cliente`);

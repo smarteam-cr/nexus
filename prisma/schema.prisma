@@ -341,7 +341,7 @@ model Project {
   // (lib/projects/scope.ts) se cumple con `hermanoCsProjectId === null`, y un puntero muerto NO es
   // null. Un desarrollo cuyo hermano se borró **deja de facturar en silencio** hasta que
   // `resolverHermanos()` vuelva a correr. Por eso el DELETE de proyecto ahora lo nulea dentro de su
-  // transacción, e INV14 vigila que ninguno quede colgado.
+  // transacción, e INV8 lo detecta si igual quedara alguno colgado.
   hermanoCsProjectId String?
 
   // ── En qué punto quedó el ALTA de este proyecto (Tanda C — lib/projects/alta.ts) ──
