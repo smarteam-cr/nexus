@@ -3,13 +3,16 @@
  *
  * ── EL PROBLEMA QUE RESUELVE ────────────────────────────────────────────────
  * El índice tenía cuatro pestañas que parecían filtros y filtraban por una sola cosa: qué ES
- * la empresa (`Client.kind`). Una de las cuatro —«Internos»— decía 0 y no había forma de
- * llegar a lo que la persona buscaba: los clientes en los que hacemos trabajo de puertas
- * adentro. Eso NO es lo mismo: `kind = INTERNO` significa "la empresa somos nosotros"; el
- * trabajo interno lo marca cada PROYECTO. Dos ejes distintos con la misma palabra.
+ * la empresa (`Client.kind`). Y una de las cuatro decía 0 y no llevaba a ningún lado.
  *
- * Este archivo agrega el segundo eje: qué TIENE la empresa. No toca el primero, que es
- * load-bearing (`CS_CLIENT_WHERE` decide cartera, cobranza, vigilancia y acceso).
+ * Este archivo agrega el eje que faltaba: qué TIENE la empresa (proyectos abiertos, o
+ * ninguno). No toca el primero, que es load-bearing — `CS_CLIENT_WHERE` decide cartera,
+ * cobranza, vigilancia y acceso.
+ *
+ * ⚠ El trabajo interno NO vive acá. Empezó como un chip de este archivo y estaba mal: al lado
+ * de una pestaña llamada «Internos» eran dos controles con la misma palabra, y encima ninguno
+ * mostraba lo que la persona quería ver, que son los PROYECTOS. Tiene pestaña propia y su
+ * propia tabla: `lib/clients/proyectos-internos.ts`.
  *
  * ── LAS TRES REGLAS QUE VIVEN ACÁ Y NO EN EL COMPONENTE ─────────────────────
  * 1. **`contarVistas` LLAMA a `cumple`.** Un solo camino de código: el número de la píldora y
@@ -27,13 +30,9 @@
  */
 import type { ClientKind } from "@prisma/client";
 import { CLIENT_KIND_META } from "./kind";
-import {
-  estaEnEjecucion,
-  tieneTrabajoInterno,
-  type ResumenDeProyectos,
-} from "./resumen-proyectos";
+import { estaEnEjecucion, type ResumenDeProyectos } from "./resumen-proyectos";
 
-export type VistaDeCartera = "todos" | "con-proyecto" | "sin-proyecto" | "trabajo-interno";
+export type VistaDeCartera = "todos" | "con-proyecto" | "sin-proyecto";
 
 export const VISTA_POR_DEFECTO: VistaDeCartera = "todos";
 
@@ -78,15 +77,11 @@ export const VISTAS_DE_CARTERA: readonly VistaDef[] = [
     // de dar el total.
     cumple: (r) => !estaEnEjecucion(r),
   },
-  {
-    key: "trabajo-interno",
-    label: "Con trabajo interno",
-    ayuda:
-      "Tiene al menos un proyecto abierto marcado «Proyecto interno» en HubSpot. Es trabajo " +
-      "que hacemos para nosotros: no se factura ni suma a la cartera de nadie. Distinto de la " +
-      "pestaña «Somos Smarteam», que son las empresas que SOMOS nosotros.",
-    cumple: tieneTrabajoInterno,
-  },
+  // ⚠ NO hay chip «Con trabajo interno». Lo hubo, y era el error: al lado de una pestaña que
+  // decía «Internos» creaba dos controles con la misma palabra y números distintos, y ninguno
+  // de los dos llevaba a lo que la persona buscaba. El trabajo interno tiene ahora su propia
+  // pestaña, y muestra los PROYECTOS —que es lo que se va a ver— en vez de las empresas que
+  // los contienen. Ver lib/clients/proyectos-internos.ts.
 ] as const;
 
 export function vistaPorKey(key: VistaDeCartera): VistaDef {
@@ -163,27 +158,6 @@ export function vistasARenderizar(
   if (activa === "todos" || base.some((v) => v.key === activa)) return base;
   const act = vistaPorKey(activa);
   return base.length > 0 ? [...base, act] : [vistaPorKey("todos"), act];
-}
-
-/**
- * Cuánto trabajo interno hay en TODO el universo accesible, no en la pestaña abierta.
- *
- * Lo consume el puente del estado vacío: la persona está parada en una categoría que tiene 0
- * y hay que decirle dónde está lo que buscaba. Contarlo dentro de esa categoría daría 0
- * siempre, que es justo el mensaje inútil que este puente vino a reemplazar.
- */
-export function trabajoInternoDe(
-  filas: readonly FilaFiltrable[],
-): { empresas: number; proyectos: number } {
-  let empresas = 0;
-  let proyectos = 0;
-  for (const f of filas) {
-    if (f.resumen.internos > 0) {
-      empresas++;
-      proyectos += f.resumen.internos;
-    }
-  }
-  return { empresas, proyectos };
 }
 
 // ── La línea de verdad ────────────────────────────────────────────────────────
@@ -283,7 +257,6 @@ export function explicarListaVacia(a: {
   pertenencia: Pertenencia | null;
   vista: VistaDeCartera;
   busqueda: string;
-  trabajoInterno: { empresas: number; proyectos: number };
 }): ListaVacia {
   const meta = CLIENT_KIND_META[a.kind];
   const q = a.busqueda.trim();
@@ -293,33 +266,6 @@ export function explicarListaVacia(a: {
     // El puente que da nombre a toda esta tanda: la persona entró a «Somos Smarteam»
     // buscando el trabajo de puertas adentro, que es OTRA cosa y sí existe. Sin este
     // enlace, la pantalla la deja exactamente donde estaba: mirando un cero.
-    if (a.kind === "INTERNO") {
-      const { empresas, proyectos } = a.trabajoInterno;
-      const hayInterno = empresas > 0;
-      return {
-        titulo: "Ninguna empresa está marcada como nuestra",
-        detalle: hayInterno
-          ? `«${meta.plural}» son las empresas que SOMOS nosotros, y se marca en la ficha de ` +
-            `la empresa, en Configuración → Clasificación y potencial. El trabajo que hacemos ` +
-            `para nosotros lo marca cada proyecto: ${contarConPlural(empresas, CLIENT_KIND_META.CLIENTE.contable)} ` +
-            `${empresas === 1 ? "tiene" : "tienen"} ${contarConPlural(proyectos, { uno: "proyecto", varios: "proyectos" })} ` +
-            `internos.`
-          : `«${meta.plural}» son las empresas que SOMOS nosotros, y se marca en la ficha de ` +
-            `la empresa, en Configuración → Clasificación y potencial. Hoy ningún proyecto ` +
-            `está marcado como interno.`,
-        // Sin trabajo interno no se ofrece el botón: prometería una lista que no existe.
-        acciones: hayInterno
-          ? [
-              {
-                tipo: "ir",
-                label: `Ver ${contarConPlural(empresas, CLIENT_KIND_META.CLIENTE.contable)} con trabajo interno`,
-                kind: "CLIENTE",
-                vista: "trabajo-interno",
-              },
-            ]
-          : [],
-      };
-    }
     return {
       titulo: `Sin ${meta.plural.toLowerCase()} aún`,
       detalle: `${meta.help} Se marca desde la ficha de la empresa, en Configuración.`,

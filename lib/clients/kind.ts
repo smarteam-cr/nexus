@@ -45,22 +45,24 @@ export const CLIENT_KIND_META: Record<
     help: "Aliado comercial o partner con el que trabajamos (ej. una agencia con la que se co-vende). No es cartera.",
   },
   /**
-   * ⚠ Se llamaba «Interno / Internos», y ése era el nombre equivocado. A 40px de la barra de
-   * filtros vive «Con trabajo interno», que es OTRA cosa: esto es una propiedad de la EMPRESA
-   * (la empresa somos nosotros) y aquello una propiedad de sus PROYECTOS (trabajo que hacemos
-   * de puertas adentro, para un cliente real). Con la misma raíz y contadores distintos —0 y
-   * 2— los dos controles se leían como un contador roto, y la lectura natural («Internos son
-   * los clientes con proyectos internos») era justo la incorrecta. Lo confirmó el usuario
-   * leyéndolo así. El nombre nuevo no se parece a nada del otro eje: ésa es toda su gracia.
+   * ⚠ Se llamaba «Internos» y ése era el nombre equivocado, porque en el índice hay una
+   * pestaña **«Proyectos internos»** que es OTRA cosa: esto es una propiedad de la EMPRESA
+   * (la empresa somos nosotros) y aquello son los PROYECTOS que hacemos de puertas adentro.
+   * Con la misma palabra y contadores distintos, la lectura natural —«Internos son los
+   * clientes con proyectos internos»— era la incorrecta, y así se leyó.
+   *
+   * Hoy no hay ninguna empresa marcada así, y por eso el índice **no pinta esta pestaña
+   * mientras esté en cero**: una pestaña vacía que además se confunde con otra no ayuda a
+   * nadie. La clasificación sigue disponible en la ficha de la empresa.
    */
   INTERNO: {
-    label: "Somos Smarteam",
-    plural: "Somos Smarteam",
+    label: "Empresa nuestra",
+    plural: "Nuestras empresas",
     contable: { uno: "empresa nuestra", varios: "empresas nuestras" },
     help:
-      "Empresas que SOMOS nosotros: Smarteam y sus entidades. No somos nuestro propio " +
-      "cliente. No es lo mismo que un proyecto interno — eso lo marca cada proyecto y se " +
-      "filtra con «Con trabajo interno».",
+      "La empresa SOMOS nosotros: Smarteam y sus entidades. No somos nuestro propio " +
+      "cliente. No es lo mismo que un proyecto interno — eso lo marca cada proyecto, y esos " +
+      "proyectos tienen su propia pestaña en el índice de clientes.",
   },
 };
 

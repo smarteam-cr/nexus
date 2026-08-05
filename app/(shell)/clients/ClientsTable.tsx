@@ -3,6 +3,11 @@ import { getTeamMembers } from "@/lib/cache/team";
 import { computeLastMeetingDates } from "@/lib/clients/meeting-dates";
 import { computeClientActivityMap } from "@/lib/clients/last-interaction";
 import { resumirProyectos } from "@/lib/clients/resumen-proyectos";
+import {
+  proyectosInternosDe,
+  ordenarProyectosInternos,
+  type ProyectoInternoRow,
+} from "@/lib/clients/proyectos-internos";
 import type { requireUser } from "@/lib/auth/supabase";
 import { Skeleton, SkeletonTabs, TableSkeleton } from "@/components/ui";
 import ClientsGrid, { type ClientRow, type ActiveCse } from "./ClientsGrid";
@@ -65,6 +70,11 @@ export async function ClientsTable({
             proyectoInterno: true,
             hermanoCsProjectId: true,
             altaEstado: true,
+            // Solo para las filas de la pestaña «Proyectos internos», que muestra proyectos y
+            // no empresas. Son 3 campos más sobre una relación que ya se cargaba.
+            id: true,
+            name: true,
+            hubspotPipelineStageLabel: true,
           },
         },
       },
@@ -130,6 +140,20 @@ export async function ClientsTable({
     };
   });
 
+  /**
+   * Las filas de la pestaña «Proyectos internos» — un PROYECTO por fila, no una empresa.
+   *
+   * Se arma acá y no en el browser porque sale del mismo array de proyectos que ya vino para
+   * el resumen: cero queries nuevas. Y va aplanada, así el cliente no recibe los proyectos de
+   * las 165 empresas para quedarse con tres.
+   *
+   * ⚠ El orden se fija ACÁ. El que devuelve la base no es estable entre llamadas, y una lista
+   * que se reordena sola ya nos hizo colgar un proyecto del hermano equivocado (C11).
+   */
+  const proyectosInternos: ProyectoInternoRow[] = ordenarProyectosInternos(
+    clients.flatMap((c) => proyectosInternosDe(c, c.projects)),
+  );
+
   // Ordenar por última actividad PASADA DESC. Los clientes sin actividad pasada
   // van al final (ordenados entre sí por createdAt DESC).
   rows.sort((a, b) => {
@@ -139,7 +163,9 @@ export async function ClientsTable({
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
-  return <ClientsGrid clients={rows} activeCse={activeCse} />;
+  return (
+    <ClientsGrid clients={rows} activeCse={activeCse} proyectosInternos={proyectosInternos} />
+  );
 }
 
 /**

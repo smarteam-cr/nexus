@@ -132,11 +132,13 @@ describe("el contador de una píldora ES la cantidad de filas", () => {
   });
 
   it("el trabajo interno también cuenta como proyecto abierto", () => {
-    const c = contarVistas(POBLACION);
-    expect(c["trabajo-interno"]).toBe(2); // Smarteam y SmartAgro
-    // SmartAgro tiene SOLO trabajo interno: si «Con proyecto abierto» lo excluyera, caería en
-    // «Sin proyecto abierto» y el usuario no lo encontraría por ningún lado.
+    /* SmartAgro tiene SOLO trabajo interno. Si «Con proyecto abierto» lo excluyera caería en
+       «Sin proyecto abierto», que es la mentira exacta que hay que evitar: es trabajo que
+       estamos haciendo. */
     expect(aplicarVista(POBLACION, "con-proyecto").map((f) => (f as Fila).nombre)).toContain(
+      "SmartAgro",
+    );
+    expect(aplicarVista(POBLACION, "sin-proyecto").map((f) => (f as Fila).nombre)).not.toContain(
       "SmartAgro",
     );
   });
@@ -239,15 +241,15 @@ describe("la línea de verdad", () => {
         ...base,
         visibles: 1,
         pertenencia: "mine",
-        vista: "trabajo-interno",
+        vista: "sin-proyecto",
         busqueda: "agro",
       })?.texto,
-    ).toBe("Mostrando 1 de 155 clientes · Mis clientes · Con trabajo interno · «agro»");
+    ).toBe("Mostrando 1 de 155 clientes · Mis clientes · Sin proyecto abierto · «agro»");
   });
 
   it("«Todos» de pertenencia no se nombra: no filtra nada", () => {
-    expect(describirVista({ ...base, visibles: 2, pertenencia: "all", vista: "trabajo-interno" })
-      ?.texto).toBe("Mostrando 2 de 155 clientes · Con trabajo interno");
+    expect(describirVista({ ...base, visibles: 2, pertenencia: "all", vista: "sin-proyecto" })
+      ?.texto).toBe("Mostrando 2 de 155 clientes · Sin proyecto abierto");
   });
 
   it("dice la verdad aunque el resultado sea cero", () => {
@@ -257,9 +259,9 @@ describe("la línea de verdad", () => {
         visibles: 0,
         totalDeCategoria: 9,
         contableDeCategoria: CLIENT_KIND_META.PROSPECTO.contable,
-        vista: "trabajo-interno",
+        vista: "sin-proyecto",
       })?.texto,
-    ).toBe("Mostrando 0 de 9 prospectos · Con trabajo interno");
+    ).toBe("Mostrando 0 de 9 prospectos · Sin proyecto abierto");
   });
 
   it("nunca dice «1 clientes»", () => {
@@ -280,43 +282,7 @@ describe("el vacío explica y ofrece salida", () => {
     pertenencia: null,
     vista: "todos" as VistaDeCartera,
     busqueda: "",
-    trabajoInterno: { empresas: 2, proyectos: 3 },
   };
-
-  /**
-   * ── EL PUENTE, que es el motivo de toda la tanda ───────────────────────────
-   * La persona entró a la pestaña de empresas-que-somos-nosotros buscando el trabajo de
-   * puertas adentro, que es OTRA cosa y sí existe. Sin este enlace la pantalla la deja
-   * exactamente donde estaba: mirando un cero.
-   *
-   * Se afirma sobre la ESTRUCTURA de la acción, no sobre el texto: si alguien "generaliza"
-   * el vacío al genérico de las demás categorías, el usuario vuelve al punto de partida y
-   * nada más lo detectaría. La edición que la pone en rojo es exactamente esa.
-   */
-  it("LA guarda: la pestaña de los internos enlaza al filtro de trabajo interno", () => {
-    const v = explicarListaVacia({ ...base, kind: "INTERNO", enCategoria: 0, enPertenencia: 0, enVista: 0 });
-    expect(v.acciones[0], "el puente al trabajo interno desapareció del estado vacío").toEqual({
-      tipo: "ir",
-      label: expect.any(String),
-      kind: "CLIENTE",
-      vista: "trabajo-interno",
-    });
-    expect(v.detalle).toContain("2 clientes");
-    expect(v.detalle).toContain("3 proyectos");
-  });
-
-  it("y NO promete una lista que no existe", () => {
-    const v = explicarListaVacia({
-      ...base,
-      kind: "INTERNO",
-      enCategoria: 0,
-      enPertenencia: 0,
-      enVista: 0,
-      trabajoInterno: { empresas: 0, proyectos: 0 },
-    });
-    expect(v.acciones).toEqual([]);
-    expect(v.detalle).toContain("ningún proyecto está marcado como interno");
-  });
 
   it("gana la PRIMERA etapa de la cascada que vació la lista", () => {
     /* Si ganara la última, el mensaje culparía a la búsqueda con la categoría ya en cero, y
@@ -327,7 +293,7 @@ describe("el vacío explica y ofrece salida", () => {
       enCategoria: 0,
       enPertenencia: 0,
       enVista: 0,
-      vista: "trabajo-interno",
+      vista: "sin-proyecto",
       busqueda: "agro",
     });
     expect(categoriaVacia.titulo).toBe("Sin aliados aún");
@@ -350,9 +316,9 @@ describe("el vacío explica y ofrece salida", () => {
       kind: "CLIENTE",
       enPertenencia: 12,
       enVista: 0,
-      vista: "trabajo-interno",
+      vista: "sin-proyecto",
     });
-    expect(v.titulo).toBe("Ningún cliente pasa el filtro «Con trabajo interno»");
+    expect(v.titulo).toBe("Ningún cliente pasa el filtro «Sin proyecto abierto»");
     expect(v.acciones).toEqual([{ tipo: "quitar-filtro", label: "Quitar filtro" }]);
   });
 
@@ -362,11 +328,11 @@ describe("el vacío explica y ofrece salida", () => {
       ...base,
       kind: "CLIENTE",
       enVista: 2,
-      vista: "trabajo-interno",
+      vista: "sin-proyecto",
       busqueda: "agro",
     });
     expect(v.titulo).toBe("Sin resultados para «agro»");
-    expect(v.detalle).toBe("Ninguno de los 2 clientes con el filtro «Con trabajo interno» coincide.");
+    expect(v.detalle).toBe("Ninguno de los 2 clientes con el filtro «Sin proyecto abierto» coincide.");
     expect(v.acciones[0]).toEqual({ tipo: "buscar-sin-filtro", label: "Buscar «agro» sin el filtro" });
   });
 });
@@ -382,7 +348,7 @@ describe("las dos etiquetas no vuelven a colisionar", () => {
   it("LA guarda: la pestaña de categoría no se llama como el filtro", () => {
     expect(
       CLIENT_KIND_META.INTERNO.plural.toLowerCase(),
-      "la pestaña volvió a llamarse «Internos» y colisiona con el filtro «Con trabajo interno»",
+      "la pestaña volvió a llamarse «Internos» y colisiona con el filtro «Sin proyecto abierto»",
     ).not.toMatch(/intern/);
   });
 

@@ -55,7 +55,7 @@ export function resumirProyectos(
 
     if (esProyectoClasificable(p)) {
       abiertos++;
-      if (p.proyectoInterno) internos++;
+      if (esTrabajoInterno(p)) internos++;
     } else {
       cerrados++;
     }
@@ -67,6 +67,18 @@ export function resumirProyectos(
 export const estaEnEjecucion = (r: ResumenDeProyectos): boolean => r.abiertos > 0;
 
 export const tieneTrabajoInterno = (r: ResumenDeProyectos): boolean => r.internos > 0;
+
+/**
+ * ¿Este proyecto es trabajo de puertas adentro?
+ *
+ * Un solo criterio para las dos cosas que lo preguntan: el contador `internos` del resumen y
+ * la pestaña «Proyectos internos» del índice. Si se escribieran aparte, el día que difieran la
+ * pestaña mostraría N filas y el tooltip de la fila diría otro número.
+ *
+ * La fuente es `proyectoInterno`, que llega de HubSpot y tiene escritor único (el espejo).
+ */
+export const esTrabajoInterno = (p: ProyectoParaFiltro): boolean =>
+  esProyectoClasificable(p) && p.proyectoInterno;
 
 /** El `title` de la columna "Proyectos". Dice lo que el número NO muestra. */
 export function tituloDeProyectos(r: ResumenDeProyectos): string {
