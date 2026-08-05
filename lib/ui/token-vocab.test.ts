@@ -81,7 +81,7 @@ const DEUDA_TOKENS: Record<string, number> = {
   "app/(shell)/error.tsx": 1,
   "app/(shell)/implementation/[id]/layout.tsx": 14,
   "app/(shell)/integrations/GoogleMeetCard.tsx": 29,
-  "app/(shell)/integrations/HubspotSystemCard.tsx": 23,
+  "app/(shell)/integrations/HubspotSystemCard.tsx": 21,
   "app/(shell)/knowledge/KnowledgeClient.tsx": 47,
   "app/(shell)/marketing/contenido/ContentClient.tsx": 6,
   "app/(shell)/marketing/fuentes/SourcesClient.tsx": 2,

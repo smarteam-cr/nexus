@@ -76,15 +76,36 @@ export async function POST(req: NextRequest) {
   const interno = body.interno === true;
   const hermanoHsId = body.hermanoHsId?.trim() || null;
   const dealId = body.dealId?.trim() || null;
-  const sinTratoMotivo = body.sinTratoMotivo?.trim() || null;
+  let sinTratoMotivo = body.sinTratoMotivo?.trim() || null;
+
+  /**
+   * ADJUNTAR = traer a Nexus un proyecto que YA existe en HubSpot. Se lee acá arriba, antes de
+   * las validaciones, porque cambia cuáles aplican.
+   */
+  const adjuntar = body.hubspotServiceId?.trim() || null;
 
   /* La regla del trato se DERIVA de si el proyecto cobra, no se declara. Así la excepción del
      interno y la del hermano caen solas de la tabla de decisiones: el día que una fila cambie de
-     `cobranza`, esta regla la sigue sin que nadie se acuerde de tocarla acá. */
-  if (exigeTratoGanado({ pipeline, interno, tieneHermano: !!hermanoHsId })) {
+     `cobranza`, esta regla la sigue sin que nadie se acuerde de tocarla acá.
+
+     ⚠ NO aplica al ADJUNTAR, y ésa es la diferencia que faltaba. La regla protege al proyecto
+     que se CREA facturable sin ancla comercial; traer uno que ya existe en HubSpot no crea nada
+     que cobre allá. Peor: la pantalla ya apaga el bloque del trato cuando se adjunta, así que
+     con 0 o con 2+ tratos ganados —el cliente recurrente, justo el que uno viene a buscar— el
+     servidor devolvía «elegí el trato ganado» y NO HABÍA NINGÚN CAMPO en pantalla para
+     contestarlo. Callejón sin salida, y el síntoma no se parece a una validación del servidor. */
+  if (!adjuntar && exigeTratoGanado({ pipeline, interno, tieneHermano: !!hermanoHsId })) {
     if (!dealId && !sinTratoMotivo) {
       return malo("Este proyecto se le cobra al cliente: elegí el trato ganado o explicá por qué va sin trato.");
     }
+  }
+
+  /* La excepción deja rastro. Sin esto, un proyecto facturable sin trato es indistinguible de
+     uno al que alguien decidió no ponerle: Cobranza le va a auto-asignar el trato ganado más
+     reciente de la empresa, que para un cliente recurrente puede ser el equivocado. Al menos el
+     caso queda auditable con una query. */
+  if (adjuntar && !dealId && !sinTratoMotivo) {
+    sinTratoMotivo = "Traído de HubSpot sin trato elegido";
   }
 
   // ── El cliente ──────────────────────────────────────────────────────────────
@@ -162,7 +183,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── ADJUNTAR: el record elegido no puede estar borrado a propósito ni tomado ──
-  const adjuntar = body.hubspotServiceId?.trim() || null;
+  // (`adjuntar` se calcula arriba, junto a las precondiciones: decide si la regla del trato aplica)
   if (adjuntar) {
     if (client.ignoredHubspotServiceIds.includes(adjuntar)) {
       return NextResponse.json(
@@ -176,11 +197,19 @@ export async function POST(req: NextRequest) {
     }
     const tomado = await prisma.project.findUnique({
       where: { hubspotServiceId: adjuntar },
-      select: { id: true, name: true },
+      select: { id: true, name: true, clientId: true },
     });
     if (tomado) {
+      /* Van los DOS ids. La pantalla ofrece "abrir el que ya existe" solo si tiene los dos
+         (la URL del proyecto los necesita), así que mandando uno solo esa rama era código
+         muerto y la persona veía un error crudo en vez de un lugar adonde ir. Invisible para
+         `tsc` y para el build: los dos extremos compilan, la cadena está cortada en el medio. */
       return NextResponse.json(
-        { error: `Ese proyecto ya existe en Nexus como «${tomado.name}».`, projectId: tomado.id },
+        {
+          error: `Ese proyecto ya existe en Nexus como «${tomado.name}».`,
+          projectId: tomado.id,
+          clientId: tomado.clientId,
+        },
         { status: 409 },
       );
     }

@@ -430,14 +430,25 @@ export default function NuevoProyectoStepper() {
 
   return (
     <>
-      <Button variant="primary" size="md" className="bg-brand hover:bg-brand-dark" onClick={() => setAbierto(true)}>
+      {/* «Agregar» y no «Nuevo»: este botón hace las DOS cosas —crear uno en HubSpot, o traer
+          uno que allá ya existe— y con «Nuevo» la mitad de su trabajo quedaba escondida. El
+          `title` contesta la única pregunta que frena a la gente antes de apretar («¿esto me va
+          a duplicar el proyecto que ya tengo en el CRM?»), que hasta ahora solo se respondía
+          adentro del modal, o sea después del clic que ese mismo miedo impedía dar. */}
+      <Button
+        variant="primary"
+        size="md"
+        className="bg-brand hover:bg-brand-dark"
+        title="Creá uno nuevo, o traé uno que ya existe en HubSpot."
+        onClick={() => setAbierto(true)}
+      >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
-        Nuevo proyecto
+        Agregar proyecto
       </Button>
 
-      <Modal open={abierto} onClose={limpiar} title="Nuevo proyecto" size="md" footer={pie}>
+      <Modal open={abierto} onClose={limpiar} title="Agregar un proyecto" size="md" footer={pie}>
         <div className="flex items-center gap-2 mb-4">
           {PASOS.map((s, i) => {
             const activo = i === idxPaso;
@@ -482,7 +493,9 @@ export default function NuevoProyectoStepper() {
             className="space-y-3"
           >
             <p className="text-xs text-fg-muted leading-relaxed">
-              Pegá el dominio de la empresa. La buscamos en HubSpot apenas se vea completo.
+              Pegá el dominio de la empresa. La buscamos en HubSpot apenas se vea completo. Si
+              el proyecto ya existe en HubSpot, en el paso siguiente lo traés en vez de crear
+              uno nuevo.
             </p>
             <div>
               <label className="block text-2xs font-medium text-fg-muted uppercase tracking-wider mb-1">
@@ -786,11 +799,18 @@ export default function NuevoProyectoStepper() {
                   " Su empresa se había fusionado en HubSpot y quedó apuntando a la ficha vigente."}
               </p>
             )}
+            {/* ⚠ El texto depende de si se CREÓ o se TRAJO. Decía «Proyecto creado / falta
+                terminarlo en HubSpot» en los dos casos, y al traer eso es falso: allá no hay
+                nada que terminar — el record ya existe, lo que falta es leerlo. */}
             {creado.termino ? (
               <div className="rounded-lg border border-line bg-surface-muted px-3 py-2">
-                <p className="text-sm font-semibold text-fg">Proyecto creado</p>
+                <p className="text-sm font-semibold text-fg">
+                  {adjuntando ? "Proyecto traído de HubSpot" : "Proyecto creado"}
+                </p>
                 <p className="text-xs text-fg-muted">
-                  Ya está en Nexus y en HubSpot. Revisá las sesiones que lo van a armar.
+                  {adjuntando
+                    ? "Ya está en Nexus, tal como está en HubSpot, con su tipo y su etapa. Revisá las sesiones que lo van a armar."
+                    : "Ya está en Nexus y en HubSpot. Revisá las sesiones que lo van a armar."}
                 </p>
               </div>
             ) : (
@@ -798,11 +818,13 @@ export default function NuevoProyectoStepper() {
                  Se dice acá y el cartel de adentro trae el botón de retomar. */
               <div className="rounded-xl border border-warn-line bg-warn-surface px-3 py-2">
                 <p className="text-sm font-semibold text-warn-ink">
-                  El proyecto quedó a medio crear
+                  {adjuntando ? "El proyecto quedó a medio traer" : "El proyecto quedó a medio crear"}
                 </p>
                 <p className="text-xs text-warn-ink/80 leading-relaxed">
-                  Existe en Nexus y se puede abrir, pero falta terminarlo en HubSpot. Mientras
-                  tanto no se factura ni entra en la cartera. Entrá al proyecto y apretá
+                  {adjuntando
+                    ? "Existe en Nexus y se puede abrir, pero todavía no leímos de HubSpot su tipo ni de qué cuelga. "
+                    : "Existe en Nexus y se puede abrir, pero falta terminarlo en HubSpot. "}
+                  Mientras tanto no se factura ni entra en la cartera. Entrá al proyecto y apretá
                   «Reintentar».
                 </p>
               </div>
