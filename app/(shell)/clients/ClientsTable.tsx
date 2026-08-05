@@ -2,8 +2,9 @@ import { prisma } from "@/lib/db/prisma";
 import { getTeamMembers } from "@/lib/cache/team";
 import { computeLastMeetingDates } from "@/lib/clients/meeting-dates";
 import { computeClientActivityMap } from "@/lib/clients/last-interaction";
+import { resumirProyectos } from "@/lib/clients/resumen-proyectos";
 import type { requireUser } from "@/lib/auth/supabase";
-import { SkeletonTabs, TableSkeleton } from "@/components/ui";
+import { Skeleton, SkeletonTabs, TableSkeleton } from "@/components/ui";
 import ClientsGrid, { type ClientRow, type ActiveCse } from "./ClientsGrid";
 
 /**
@@ -44,8 +45,28 @@ export async function ClientsTable({
         createdAt: true,
         kind: true,
         tamUsd: true,
-        projects: { select: { hubspotOwnerName: true, hubspotOwnerEmail: true } },
-        _count: { select: { projects: true } },
+        /**
+         * ⚠ SIN `where`. La barra de filtros del índice se calcula sobre ESTE array: acotarlo
+         * "para aliviar el payload" haría que las cuatro píldoras cuenten sobre un subconjunto
+         * y mientan las cuatro a la vez, sin romper tipos ni pintar nada raro. Hay guarda.
+         *
+         * Los 7 campos nuevos son los que exige `ProyectoParaFiltro` — cero queries nuevas: la
+         * relación ya se cargaba para resolver los owners. Al browser NO viaja este array,
+         * viaja el resumen de 3 escalares.
+         */
+        projects: {
+          select: {
+            hubspotOwnerName: true,
+            hubspotOwnerEmail: true,
+            status: true,
+            serviceType: true,
+            hubspotServiceId: true,
+            hubspotPipelineId: true,
+            proyectoInterno: true,
+            hermanoCsProjectId: true,
+            altaEstado: true,
+          },
+        },
       },
     }),
     getTeamMembers(),
@@ -98,7 +119,13 @@ export async function ClientsTable({
       // Próxima reunión agendada (futura)
       nextMeetingAt: activity?.nextMeeting?.date.toISOString() ?? null,
       nextMeetingLabel: activity?.nextMeeting?.label ?? null,
-      projectCount: c._count.projects,
+      /**
+       * Reemplaza a `_count.projects`, que contaba los contenedores «Información del cliente»:
+       * había fichas mostrando "1 proyecto" con cero. Con la barra de filtros nueva eso pasaba
+       * de ser un detalle a una contradicción visible — la píldora diría «Sin proyecto abierto»
+       * y la columna de esa misma fila mostraría 1.
+       */
+      resumen: resumirProyectos(c.projects),
       isShared: sharedIds.has(c.id),
     };
   });
@@ -124,11 +151,21 @@ export async function ClientsTable({
 export function ClientsTableZoneSkeleton({ showPills }: { showPills: boolean }) {
   return (
     <div className="space-y-3">
-      {/* Pestañas de CATEGORÍA (Clientes · Prospectos · Aliados · Internos) — las ve todo rol */}
+      {/* Eje 1 — categoría (Clientes · Prospectos · Aliados · Somos Smarteam): la ve todo rol */}
       <SkeletonTabs count={4} variant="pill" className="gap-1.5 flex-wrap" />
+      {/* Eje 2 — pertenencia: solo CSE */}
       {showPills && <SkeletonTabs count={3} variant="pill" className="gap-1.5 flex-wrap" />}
+      {/* Eje 3 — el toolbar, que ahora lo monta ClientsGrid y ya NO <Table>: por eso el
+          TableSkeleton pierde su `toolbar`. Si quedara, se pintarían dos buscadores en la
+          carga y uno solo después — que es el salto de 32px que este archivo documenta arriba.
+          La línea de verdad NO va acá: en la primera pintura nada filtra, así que no existe. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Skeleton className="h-9 w-full sm:w-72 rounded-lg" />
+        <SkeletonTabs count={4} variant="pill" className="gap-2 flex-wrap" />
+        <Skeleton className="h-9 w-36 rounded-lg ml-auto" />
+      </div>
       {/* Cliente · Última actividad · Próxima reunión · CSE · Reunión ventas · Sesión CSE · TAM · Proyectos · acciones */}
-      <TableSkeleton columns={9} rows={9} toolbar toolbarActions={2} />
+      <TableSkeleton columns={9} rows={9} />
     </div>
   );
 }

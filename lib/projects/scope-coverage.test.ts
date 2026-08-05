@@ -80,7 +80,29 @@ const FUENTES = [...archivosFuente("lib"), ...archivosFuente("app"), ...archivos
  */
 const CONSULTA_MULTIPLE = /(?:prisma|tx|db)\.project\.(?:findMany|count|groupBy|findFirst|updateMany|aggregate)\b/;
 
-const CONSULTAN_PROYECTOS = FUENTES.filter((rel) => CONSULTA_MULTIPLE.test(codigoDe(rel)));
+/**
+ * LA PUERTA DE ATRÁS: filtrar proyectos EN MEMORIA, sobre un array que llegó por un `select`
+ * anidado adentro de `prisma.client.findMany`. Nunca aparece un `prisma.project.*`, así que el
+ * detector de arriba no lo ve — y sin embargo es exactamente la misma pregunta ("¿qué
+ * proyectos cuentan?") con exactamente las mismas consecuencias.
+ *
+ * Se cazó con la barra de filtros del índice de clientes: el archivo que la alimenta decide el
+ * alcance de cuatro contadores y no tenía que declarar nada.
+ *
+ * ⚠ Si esto se pone en rojo con un archivo nuevo: **declararlo**, no debilitar el detector.
+ * Importar un criterio de alcance ES preguntar por el alcance, venga de donde venga el array.
+ */
+const USA_CRITERIO_EN_MEMORIA =
+  /\b(?:esProyecto(?:Navegable|DeCartera|Facturable|Clasificable)|proyecto(?:Navegable|DeCartera|Facturable|Clasificable)Where|PROYECTO_(?:NAVEGABLE|DE_CARTERA|FACTURABLE|CLASIFICABLE)_WHERE)\b/;
+
+/** El archivo que DEFINE los criterios, obviamente, no es un consumidor de sí mismo. */
+const DEFINICION = "lib/projects/scope.ts";
+
+const CONSULTAN_PROYECTOS = FUENTES.filter(
+  (rel) =>
+    rel !== DEFINICION &&
+    (CONSULTA_MULTIPLE.test(codigoDe(rel)) || USA_CRITERIO_EN_MEMORIA.test(codigoDe(rel))),
+);
 
 // ── 1 · COBERTURA OBLIGATORIA ────────────────────────────────────────────────
 

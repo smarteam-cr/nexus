@@ -64,20 +64,25 @@ export default async function ClientsPage() {
     sharedClientIdsFor(user),
   ]);
 
-  // Count barato para la descripción del header (la lista completa llega por streaming).
-  // Cuenta SOLO clientes de verdad: el header dice "N clientes", no "N empresas".
-  const clientCount = await prisma.client.count({
-    where: { AND: [clientWhere ?? {}, { ...CS_CLIENT_WHERE }] },
-  });
+  // Counts baratos para la descripción del header (la lista completa llega por streaming).
+  //
+  // Van los DOS: el header decía "155 clientes" mientras las pestañas de abajo sumaban 165, y
+  // nada explicaba los 10 de diferencia (prospectos, aliados y las empresas que somos
+  // nosotros). Con los dos números el salto queda dicho en vez de quedar como un misterio.
+  const [empresaCount, clientCount] = await Promise.all([
+    prisma.client.count({ where: clientWhere ?? {} }),
+    prisma.client.count({ where: { AND: [clientWhere ?? {}, { ...CS_CLIENT_WHERE }] } }),
+  ]);
 
   return (
     <div className={SHELL_DEFAULT}>
       <PageHeader
         title="Clientes"
         description={
-          clientCount === 0
-            ? "Sin clientes aún"
-            : `${clientCount} cliente${clientCount !== 1 ? "s" : ""}`
+          empresaCount === 0
+            ? "Sin empresas aún"
+            : `${empresaCount} empresa${empresaCount !== 1 ? "s" : ""} · ` +
+              `${clientCount} cliente${clientCount !== 1 ? "s" : ""}`
         }
         action={
           canSeeSales ? (

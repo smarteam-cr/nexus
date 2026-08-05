@@ -14,27 +14,53 @@ import type { ClientKind } from "@prisma/client";
 
 export const CLIENT_KINDS = ["CLIENTE", "PROSPECTO", "ALIADO", "INTERNO"] as const;
 
-/** Label + ayuda para la UI (selector de la ficha y pestañas del listado). */
-export const CLIENT_KIND_META: Record<ClientKind, { label: string; plural: string; help: string }> = {
+/**
+ * Label + ayuda para la UI (selector de la ficha y pestañas del listado).
+ *
+ * ⚠ `contable` no es redundante con `label`/`plural`: esos son el ROTULO del control, y
+ * «Somos Smarteam» no se puede contar («0 de 0 somos smarteam»). Derivar el singular
+ * quitándole la "s" al plural funciona con tres de los cuatro y falla justo con el que esta
+ * tanda vino a arreglar — o sea, el generador de mentiras silenciosas de siempre. Se escribe.
+ */
+export const CLIENT_KIND_META: Record<
+  ClientKind,
+  { label: string; plural: string; help: string; contable: { uno: string; varios: string } }
+> = {
   CLIENTE: {
     label: "Cliente",
     plural: "Clientes",
+    contable: { uno: "cliente", varios: "clientes" },
     help: "Nos compró o nos está comprando. Es la cartera: entra a los listados, al portafolio y a cobranza.",
   },
   PROSPECTO: {
     label: "Prospecto",
     plural: "Prospectos",
+    contable: { uno: "prospecto", varios: "prospectos" },
     help: "Ventas la creó para una propuesta comercial. Todavía no compró.",
   },
   ALIADO: {
     label: "Aliado",
     plural: "Aliados",
+    contable: { uno: "aliado", varios: "aliados" },
     help: "Aliado comercial o partner con el que trabajamos (ej. una agencia con la que se co-vende). No es cartera.",
   },
+  /**
+   * ⚠ Se llamaba «Interno / Internos», y ése era el nombre equivocado. A 40px de la barra de
+   * filtros vive «Con trabajo interno», que es OTRA cosa: esto es una propiedad de la EMPRESA
+   * (la empresa somos nosotros) y aquello una propiedad de sus PROYECTOS (trabajo que hacemos
+   * de puertas adentro, para un cliente real). Con la misma raíz y contadores distintos —0 y
+   * 2— los dos controles se leían como un contador roto, y la lectura natural («Internos son
+   * los clientes con proyectos internos») era justo la incorrecta. Lo confirmó el usuario
+   * leyéndolo así. El nombre nuevo no se parece a nada del otro eje: ésa es toda su gracia.
+   */
   INTERNO: {
-    label: "Interno",
-    plural: "Internos",
-    help: "Smarteam y sus entidades. No somos nuestro propio cliente.",
+    label: "Somos Smarteam",
+    plural: "Somos Smarteam",
+    contable: { uno: "empresa nuestra", varios: "empresas nuestras" },
+    help:
+      "Empresas que SOMOS nosotros: Smarteam y sus entidades. No somos nuestro propio " +
+      "cliente. No es lo mismo que un proyecto interno — eso lo marca cada proyecto y se " +
+      "filtra con «Con trabajo interno».",
   },
 };
 

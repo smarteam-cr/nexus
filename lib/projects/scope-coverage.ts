@@ -46,6 +46,14 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "app/api/projects/[projectId]/project-sessions/route.ts": { modo: "criterio", criterio: "clasificable" },
   "app/api/clients/[id]/analyze/route.ts": { modo: "criterio", criterio: "clasificable" },
   "lib/sessions/classify-session-project.ts": { modo: "criterio", criterio: "clasificable" },
+  /**
+   * No hace ninguna consulta: recibe el array que el `select` anidado de `ClientsTable` ya
+   * trajo y lo resume para la barra de filtros del índice. Entra igual —y el detector nuevo
+   * lo obliga— porque decide el alcance de cuatro contadores que la pantalla afirma en voz
+   * alta. ⚠ Usa `clasificable` A PROPÓSITO: `cartera` excluye el trabajo interno, y con ese
+   * criterio la píldora «Con trabajo interno» daría 0 por construcción.
+   */
+  "lib/clients/resumen-proyectos.ts": { modo: "criterio", criterio: "clasificable" },
 
   // ── Los que buscan el centinela ────────────────────────────────────────────
   "lib/canvas/strategy-project.ts": { modo: "sentinel" },
