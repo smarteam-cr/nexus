@@ -80,44 +80,43 @@ export default async function BusinessCasesHubPage() {
             key={c.id}
             className="flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-3 hover:border-brand/40 transition-colors"
           >
-            <Link
-              href={`/business-cases/${c.id}`}
-              className="flex flex-1 items-center justify-between gap-3 min-w-0"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-fg truncate">{c.name}</p>
-                <p className="text-xs text-fg-muted truncate">
-                  {c.client.name}
-                  {c.client.kind === "PROSPECTO" ? " (prospecto)" : ""}
-                </p>
-              </div>
-              <span className="flex-shrink-0 flex items-center gap-1.5">
+            <Link href={`/business-cases/${c.id}`} className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-fg truncate">{c.name}</p>
+              <p className="text-xs text-fg-muted truncate">
+                {c.client.name}
+                {c.client.kind === "PROSPECTO" ? " (prospecto)" : ""}
+              </p>
+            </Link>
+            {/* Las píldoras viven FUERA del <Link> de la fila: la del tipo lleva adentro el link a
+                HubSpot, y un <a> dentro de otro <a> es HTML inválido — el navegador parte el DOM.
+                El área clickeable de la fila no se achica: el Link sigue siendo `flex-1`. */}
+            <span className="flex-shrink-0 flex items-center gap-1.5">
+              {empresaUrl ? (
+                <a
+                  href={empresaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Ver empresa en HubSpot"
+                  aria-label={`Ver ${c.client.name} en HubSpot`}
+                  className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-line text-fg-muted hover:text-brand hover:border-brand/40 hover:bg-brand/5 transition-colors"
+                >
+                  {resolveBcType(c.caseType).shortLabel}
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              ) : (
+                /* Sin empresa vinculada (o sin el portal del sistema) la píldora es texto, no un
+                   link muerto: `/company/undefined` da un 404 en HubSpot que se lee como falta
+                   de permisos. */
                 <span className="text-[11px] px-2 py-1 rounded border border-line text-fg-muted">
                   {resolveBcType(c.caseType).shortLabel}
                 </span>
-                <span className="text-xs px-2 py-1 rounded bg-surface-muted text-fg-muted">
-                  {STATUS_LABEL[c.status] ?? c.status}
-                </span>
+              )}
+              <span className="text-xs px-2 py-1 rounded bg-surface-muted text-fg-muted">
+                {STATUS_LABEL[c.status] ?? c.status}
               </span>
-            </Link>
-            {/* HERMANO del <Link> de la fila, nunca adentro: un <a> dentro de otro <a> es HTML
-                inválido y el navegador parte el DOM. Sin empresa vinculada (o sin el portal del
-                sistema) no se pinta: un link a `/company/null` cae en un 404 de HubSpot que se
-                lee como problema de permisos. */}
-            {empresaUrl && (
-              <a
-                href={empresaUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Ver empresa en HubSpot"
-                aria-label={`Ver ${c.client.name} en HubSpot`}
-                className="flex-shrink-0 p-1.5 rounded-md text-fg-muted hover:text-brand hover:bg-brand/10 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
-            )}
+            </span>
             <DeleteBusinessCaseButton
               bcId={c.id}
               description={`Se eliminará "${c.name}" (${c.client.name}) con todos sus casos de uso, secciones y contenido. Esta acción no se puede deshacer.`}
