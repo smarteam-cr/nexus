@@ -191,3 +191,68 @@ describe("está cableado, y con los frenos puestos", () => {
     expect(leer("components/clients/SessionSelectionReview.tsx")).toContain("Agregar y asignar");
   });
 });
+
+describe("el buscador no ofrece humo", () => {
+  const RUTA = "app/api/projects/[projectId]/session-candidates/route.ts";
+  const MODAL = "components/clients/SessionSelectionReview.tsx";
+  const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+  const sinComentarios = (s: string) =>
+    s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/gm, "$1 ");
+
+  it("LA guarda: los DOS grupos excluyen las reuniones que no ocurrieron", () => {
+    /* Una reunión agendada para la semana que viene no tiene nada adentro: ofrecerla para
+       alimentar un handoff es ofrecer humo. El filtro es una sola condición por grupo y sacarla
+       no rompe nada visible — la lista simplemente se llena de futuro. */
+    const src = sinComentarios(leer(RUTA));
+    const topes = src.split("lte: new Date()").length - 1;
+    expect(
+      topes,
+      "algún grupo de candidatas dejó de cortar en hoy: el buscador vuelve a ofrecer reuniones que no ocurrieron",
+    ).toBeGreaterThanOrEqual(2);
+  });
+
+  it("las vacías se MARCAN, no se esconden", () => {
+    /* Medido el 2026-08-05: 3.289 de 6.435 reuniones pasadas (51%) no tienen transcript, ni
+       resumen, ni minuta. Esconderlas sería otra desaparición silenciosa —el pecado de esta
+       tanda—; se muestran con su marca y la persona decide. */
+    const src = sinComentarios(leer(RUTA));
+    expect(src, "el DTO dejó de decir cuáles no tienen nada adentro").toContain("sinContenido");
+    /* ⚠ El `[^)]*` de la primera versión frenaba en el primer paréntesis —que está dentro de
+       `has(s.id)`— así que nunca alcanzaba a ver el `sinContenido` del final. Se mira el `.filter`
+       de candidatas completo, acotado a su línea. */
+    const filtroCandidatas =
+      src.split(/\r?\n/).find((l) => l.includes(".filter((s) => !feedingIds")) ?? "";
+    expect(filtroCandidatas.length, "se movió el filtro de candidatas; revisar esta guarda").toBeGreaterThan(20);
+    expect(filtroCandidatas, "volvió a filtrarlas en vez de marcarlas").not.toContain("sinContenido");
+    /* Se exige el CHIP, no una mención cualquiera: `c.sinContenido` también aparece atenuando la
+       fila, así que un `toContain` suelto pasaba en verde con el chip ya borrado. */
+    const ui = sinComentarios(leer(MODAL));
+    const i = ui.indexOf("sin información");
+    expect(i, "desapareció el chip que dice que no hay nada adentro").toBeGreaterThan(0);
+    expect(
+      ui.slice(Math.max(0, i - 400), i),
+      "el chip quedó suelto: ya no depende de si la sesión tiene contenido",
+    ).toContain("c.sinContenido");
+  });
+
+  it("no se traen los blobs para saber si están vacías", () => {
+    /* `transcript` es un TEXT largo y `summary` un JSON: pedírselos a Prisma para después mirar
+       si están vacíos sería traer megabytes al servidor para tirarlos. Va un booleano por sesión.
+       Si alguien "simplifica" esto a un select normal, la ruta se vuelve lentísima sin que ningún
+       test lo note. */
+    const src = sinComentarios(leer(RUTA));
+    expect(src, "se dejó de calcular el contenido en SQL").toContain("$queryRaw");
+    expect(src, "se están trayendo los blobs al servidor").not.toMatch(/^\s*transcript: true,/m);
+    expect(src, "se está trayendo el resumen entero").not.toMatch(/^\s*summary: true,/m);
+  });
+
+  it("una futura que YA alimenta se avisa en el panel", () => {
+    /* Los grupos de candidatas cortan en hoy, pero `feeding` nunca tuvo ese filtro: una reunión
+       vinculada antes puede estar alimentando el handoff sin haber ocurrido. Medido: 30 vínculos
+       así. No se saca sola —sería quitarle contenido a un documento en silencio— se dice. */
+    expect(sinComentarios(leer(RUTA)), "el DTO de feeding dejó de marcar las futuras").toContain(
+      "futura:",
+    );
+    expect(sinComentarios(leer(MODAL)), "el panel dejó de avisarlo").toContain("todavía no ocurrió");
+  });
+});

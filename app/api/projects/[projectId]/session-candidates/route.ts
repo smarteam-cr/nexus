@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { Prisma } from "@prisma/client";
 import { classifyHandoffSession, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { salesPresenceEmails } from "@/lib/handoff/sales-presence";
 import {
@@ -106,6 +107,13 @@ export async function GET(
       alsoIn: alsoInBySession.get(r.session.id) ?? [],
       // Por qué alimenta (con la política nueva no hay otro caso): la UI lo muestra en la fila.
       origin: r.handoffOverride === true ? "forzada a mano" : r.isPrimary ? "primaria" : "confianza alta",
+      /* ⚠ Los dos grupos de CANDIDATAS excluyen las futuras (`date: { lte: new Date() }`), pero
+         `feeding` nunca tuvo ese filtro: una reunión que todavía no ocurrió puede estar
+         alimentando un handoff y ser invisible en todas las listas. Medido: 30 vínculos así hoy.
+
+         No se filtra acá —sacarla en silencio sería quitarle contenido a un documento sin
+         decirlo, que es el pecado que esta tanda vino a matar— se MARCA, y quien la puso decide. */
+      futura: r.session.date.getTime() > Date.now(),
     }));
   const feedingIds = new Set(feeding.map((f) => f.sessionId));
 
@@ -190,6 +198,35 @@ export async function GET(
     .filter((s) => esReunionDePuertasAdentro(s, dominiosPropios))
     .slice(0, 300);
 
+  /* ── ¿De cuáles hay ALGO que leer? ──────────────────────────────────────────
+     Medido el 2026-08-05: de las 6.435 reuniones ya ocurridas, **3.289 (el 51%) no tienen
+     transcript, ni resumen, ni minuta**. Son reuniones que pasaron y de las que no quedó nada.
+     Agregarlas a un handoff no aporta un solo dato, pero se ven idénticas a las que sí sirven —
+     y el documento sale flaco sin que nadie entienda por qué.
+
+     ⚠ Se pregunta en SQL crudo A PROPÓSITO. `transcript` es un TEXT largo y `summary` un blob
+     JSON: pedírselos a Prisma para después mirar si están vacíos significaría traer megabytes al
+     servidor para tirarlos. Acá viaja un booleano por sesión.
+
+     El criterio es "hay ALGO", no "está completa": transcript con texto, o resumen, o una minuta
+     escrita a mano. Con cualquiera de los tres la reunión tiene sustancia. */
+  const idsVisibles = [...clientSessions, ...internas].map((s) => s.id);
+  const conContenido = new Set<string>(
+    idsVisibles.length === 0
+      ? []
+      : (
+          await prisma.$queryRaw<{ id: string }[]>`
+            SELECT s."id"
+            FROM "FirefliesSession" s
+            WHERE s."id" IN (${Prisma.join(idsVisibles)})
+              AND (
+                coalesce(length(s."transcript"), 0) > 0
+                OR s."summary" IS NOT NULL
+                OR EXISTS (SELECT 1 FROM "SessionMinute" m WHERE m."sessionId" = s."id")
+              )`
+        ).map((r) => r.id),
+  );
+
   const candidates = [...clientSessions, ...internas]
     /* ⚠ Se saca `!excludedIds.has(s.id)` A PROPÓSITO, y volver a ponerlo parece la optimización
        más obvia del archivo ("no muestres lo que ya está excluido"). Reconstruye el incidente: la
@@ -221,6 +258,10 @@ export async function GET(
            lo muestre: una excluida que vuelve al buscador sin marca se lee como una que nunca
            estuvo, y la persona no entiende por qué "reaparece". */
         excluidaAca: excludedIds.has(s.id),
+        /* No hay transcript, ni resumen, ni minuta: la reunión ocurrió y no quedó nada. Se
+           MUESTRA igual —esconderla sería otra desaparición silenciosa— pero marcada, porque
+           agregarla no le suma un dato al documento. */
+        sinContenido: !conContenido.has(s.id),
         /* Sin dueño: agregarla NO es solo vincularla, también la va a hacer de este cliente. El
            botón lo dice, porque es un efecto que no se ve desde el modal. */
         sinDuenio: internas.some((i) => i.id === s.id),
