@@ -90,6 +90,21 @@
   --color-warn-surface: var(--warn-surface);
   --color-warn-line:    var(--warn-line);
   --color-warn-ink:     var(--warn-ink);
+  /* Los otros tres paneles suaves, con la MISMA forma. Existía solo `warn`, así que todo cartel
+     de error/éxito/info se pintaba con colores crudos — y ahí empieza el problema: el tema claro
+     de los colores crudos es una lista de clases remapeadas a mano, y cualquier combinación que
+     no esté en la lista (una opacidad, un tono distinto) cae al valor original y desaparece.
+     Con el token no hay combinación que inventar: `text-danger-ink` es legible o no lo es, y se
+     decide una sola vez acá. */
+  --color-danger-surface:  var(--danger-surface);
+  --color-danger-line:     var(--danger-line);
+  --color-danger-ink:      var(--danger-ink);
+  --color-success-surface: var(--success-surface);
+  --color-success-line:    var(--success-line);
+  --color-success-ink:     var(--success-ink);
+  --color-info-surface:    var(--info-surface);
+  --color-info-line:       var(--info-line);
+  --color-info-ink:        var(--info-ink);
 
   /* ── Tokens de INTENCIÓN (mismo valor en ambos modos — no flipean) ───────────
    *  Vivían en :root, donde Tailwind v4 NO genera utilidades (estuvieron muertos
@@ -145,6 +160,18 @@ html {
   --warn-surface: #78350f26;  /* amber-900 @ 15% — tint sobre fondo oscuro */
   --warn-line:    #b4530a80;  /* amber-700 @ 50% */
   --warn-ink:     #fcd34d;    /* amber-300 — legible sobre el tint oscuro */
+
+  /* Los otros tres, con la misma receta (surface = tono 900 @15% · line = tono 700 @50% ·
+     ink = tono 300). El contraste de cada uno está medido, no estimado. */
+  --danger-surface:  #7f1d1d26;  /* red-900 @ 15% */
+  --danger-line:     #b91c1c80;  /* red-700 @ 50% */
+  --danger-ink:      #fca5a5;    /* red-300 — 8,98:1 sobre el tint */
+  --success-surface: #064e3b26;  /* emerald-900 @ 15% */
+  --success-line:    #04785780;  /* emerald-700 @ 50% */
+  --success-ink:     #6ee7b7;    /* emerald-300 — 10,93:1 */
+  --info-surface:    #1e3a8a26;  /* blue-900 @ 15% */
+  --info-line:       #1d4ed880;  /* blue-700 @ 50% */
+  --info-ink:        #93c5fd;    /* blue-300 — 9,27:1 */
 
   /* Scrollbars temáticos (valores OSCUROS) — html.light los redefine */
   --scrollbar-thumb:       #374151;  /* gray-700 */
@@ -220,7 +247,20 @@ html.light {
   /* Superficie de advertencia — valores CLAROS (tint suave + texto oscuro) */
   --warn-surface: #fffbeb;  /* amber-50 */
   --warn-line:    #fde68a;  /* amber-200 */
-  --warn-ink:     #92400e;  /* amber-800 — AA sobre amber-50 */
+  --warn-ink:     #92400e;  /* amber-800 — 6,84:1 sobre amber-50 */
+
+  /* Misma receta en claro (surface = tono 50 · line = tono 200 · ink = tono 800). Los cuatro
+     tripletes pasan AA holgado en los DOS temas: es la única forma de que un cartel no dependa
+     de qué tema tenga puesto quien lo mira. */
+  --danger-surface:  #fef2f2;  /* red-50 */
+  --danger-line:     #fecaca;  /* red-200 */
+  --danger-ink:      #991b1b;  /* red-800 — 7,60:1 */
+  --success-surface: #ecfdf5;  /* emerald-50 */
+  --success-line:    #a7f3d0;  /* emerald-200 */
+  --success-ink:     #065f46;  /* emerald-800 — 7,29:1 */
+  --info-surface:    #eff6ff;  /* blue-50 */
+  --info-line:       #bfdbfe;  /* blue-200 */
+  --info-ink:        #1e40af;  /* blue-800 — 8,01:1 */
 
   /* Scrollbars temáticos — valores CLAROS */
   --scrollbar-thumb:       #cbd5e1;  /* slate-300 */

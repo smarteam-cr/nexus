@@ -5,6 +5,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
 import { useToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/Button";
+import { Alert } from "@/components/ui/Alert";
 import { invalidateGps } from "@/lib/clients/gps-cache";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
@@ -330,42 +331,40 @@ export default function WorkspaceClient({
             tras sincronizar → banner con el motivo + Reintentar (antes era un cliente
             vacío y mudo, imposible de diagnosticar). */}
         {hasHubspot && projects.length === 0 && syncDone && !syncing && (
-          <div className="mx-6 mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
-            <div className="flex items-start gap-3">
-              <svg className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-              </svg>
-              <div className="flex-1 min-w-0">
-                {/* ⚠ El motivo tiene que ser el REAL, no el genérico. Cuando el cliente quedó
-                    vacío porque alguien borró su proyecto desde Nexus, el proyecto SÍ está
-                    asociado a la empresa en HubSpot: es Nexus el que lo ignora, a propósito y a
-                    pedido. Mandar a revisar HubSpot ahí no es solo inútil, hace perder tiempo
-                    buscando un problema que no existe. El dato ya lo trae el sync. */}
-                <p className="text-sm font-semibold text-amber-200">
-                  {(syncResult?.suprimidos ?? 0) > 0
-                    ? `${syncResult!.suprimidos} proyecto${syncResult!.suprimidos === 1 ? "" : "s"} de este cliente está${syncResult!.suprimidos === 1 ? "" : "n"} oculto${syncResult!.suprimidos === 1 ? "" : "s"}: se borró desde Nexus.`
-                    : "No se cargó ningún proyecto de HubSpot para este cliente."}
-                </p>
-                <p className="text-xs text-amber-200/80 mt-0.5">
-                  {(syncResult?.suprimidos ?? 0) > 0
-                    ? "En HubSpot sigue existiendo y está bien asociado — Nexus lo ignora a pedido, para no recrearlo. Para volver a traerlo hay que sacarlo de la lista de ignorados."
-                    : syncResult?.errors && syncResult.errors.length > 0
-                      ? syncResult.errors[0]
-                      : "Revisá en HubSpot que el proyecto esté asociado a la empresa de este cliente, y reintentá."}
-                </p>
-              </div>
-              {/* ⚠ Llamaba `runHubspotSync()` SIN force, o sea que dentro del cooldown de 10 min
-                  no hacía absolutamente nada — y el cooldown YA estaba reclamado por la auto-sync
-                  del montaje, así que ése era el caso NORMAL. Un botón que dice "Reintentar" y no
-                  reintenta. (Los comentarios de tres archivos daban por hecho que sí forzaba.) */}
-              <button
-                onClick={() => void runHubspotSync(true, true)}
-                disabled={syncing}
-                className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-100 transition-colors disabled:opacity-50"
-              >
-                Reintentar
-              </button>
-            </div>
+          /* ⚠ Escrito a mano con colores crudos hasta el 2026-08-05, y era ILEGIBLE en tema
+             claro: la descripción daba 1,16:1 y el botón 1,00:1 —el mismo color que su fondo,
+             literalmente invisible—. El título sí se leía, lo que lo hacía más confuso todavía.
+             La causa no era este archivo sino el método: el tema claro de los colores crudos es
+             una lista de clases remapeadas a mano, y `text-amber-200/80` (una opacidad sobre una
+             clase que SÍ estaba en la lista) nunca entró. Ahora usa la primitiva, que pinta con
+             tokens medidos en los dos temas. */
+          <div className="mx-6 mt-4">
+            <Alert
+              variant="warning"
+              title={
+                (syncResult?.suprimidos ?? 0) > 0
+                  ? `${syncResult!.suprimidos} proyecto${syncResult!.suprimidos === 1 ? "" : "s"} de este cliente está${syncResult!.suprimidos === 1 ? "" : "n"} oculto${syncResult!.suprimidos === 1 ? "" : "s"}: se borró desde Nexus.`
+                  : "No se cargó ningún proyecto de HubSpot para este cliente."
+              }
+              action={
+                /* ⚠ Llamaba `runHubspotSync()` SIN force, o sea que dentro del cooldown de 10 min
+                   no hacía absolutamente nada — y el cooldown YA estaba reclamado por la auto-sync
+                   del montaje, así que ése era el caso NORMAL. Un botón que dice "Reintentar" y no
+                   reintenta. (Los comentarios de tres archivos daban por hecho que sí forzaba.) */
+                <Button size="xs" variant="secondary" onClick={() => void runHubspotSync(true, true)} disabled={syncing}>
+                  Reintentar
+                </Button>
+              }
+            >
+              {/* El motivo tiene que ser el REAL, no el genérico: si el proyecto se borró desde
+                  Nexus, en HubSpot está perfectamente asociado y mandar a revisarlo allá hace
+                  perder tiempo buscando un problema que no existe. */}
+              {(syncResult?.suprimidos ?? 0) > 0
+                ? "En HubSpot sigue existiendo y está bien asociado — Nexus lo ignora a pedido, para no recrearlo. Para volver a traerlo hay que sacarlo de la lista de ignorados."
+                : syncResult?.errors && syncResult.errors.length > 0
+                  ? syncResult.errors[0]
+                  : "Revisá en HubSpot que el proyecto esté asociado a la empresa de este cliente, y reintentá."}
+            </Alert>
           </div>
         )}
         <ProjectSection

@@ -379,3 +379,71 @@ describe("Ratchet de tokens: la deuda de grises crudos solo ENCOGE", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * ── Tinta de estado que NUNCA puede leerse en tema claro ─────────────────────
+ *
+ * ⚠ NO es un ratchet: es cero absoluto, y hoy está en cero. Cerró el 2026-08-05.
+ *
+ * LA FALLA QUE ATACA, medida sobre el cartel que la destapó:
+ * el tema claro de los colores CRUDOS de estado no sale de una fórmula — es una lista de ~158
+ * clases remapeadas a mano en `app/globals.css` (líneas 371-489). Si tu clase exacta está en la
+ * lista, se ve; si le agregás una opacidad o usás un tono que nadie listó, cae al valor original
+ * de Tailwind —pensado para fondo oscuro— y **desaparece sobre el fondo claro**.
+ *
+ * En el cartel de WorkspaceClient convivían las dos cosas: el título `text-amber-200` daba 8,75:1
+ * (estaba en la lista) y la descripción `text-amber-200/80`, la MISMA familia con opacidad, daba
+ * 1,16:1. El botón, `text-amber-100`, daba 1,00:1 — el mismo color que su fondo, literalmente
+ * invisible. Ese contraste entre un título legible y el resto borrado es lo que hace el bug tan
+ * difícil de ver: parece un problema de la pantalla, no del color.
+ *
+ * Los dos patrones de abajo son exactamente los que NO pueden estar remapeados:
+ *   · tinta clara (100-300) CON opacidad → la clase con `/NN` es otra clase, y nadie la lista;
+ *   · tinta 100 a secas → demasiado clara para leerse sobre cualquier tint claro, con o sin lista.
+ *
+ * El remedio no es agregarlas a la lista: es usar los tokens (`text-warn-ink`, `text-danger-ink`,
+ * `text-success-ink`, `text-info-ink`), que están medidos en los DOS temas — o directamente
+ * `<Alert variant="…">`, que ya los usa.
+ *
+ * Por qué el ratchet de grises no lo cazaba: su patrón solo conoce `gray`, `white` y `black`.
+ * Ninguna familia de color de estado. Este bloque es el que le faltaba.
+ */
+const TINTA_ILEGIBLE_RE =
+  /\b(?:text|border)-(?:amber|red|green|emerald|blue|yellow|orange|violet|indigo|sky|teal|rose|lime|cyan)-(?:100\/|200\/|300\/|100\b)/;
+
+/**
+ * Vacía los COMENTARIOS conservando los saltos de línea, para que el número de línea del reporte
+ * siga siendo el real.
+ *
+ * ⚠ Hace falta y se cazó escribiendo esta guarda: la prosa que explica por qué estas clases no se
+ * pueden usar las NOMBRA, así que un escaneo crudo se cae con el código correcto — y una guarda
+ * que falla con el código bien es una guarda que alguien borra por molesta. Filtrar por "la línea
+ * arranca con //" no alcanza: las líneas de continuación de un comentario de bloque no arrancan
+ * con nada.
+ */
+function sinComentarios(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (m, p1) => p1 + " ".repeat(m.length - p1.length));
+}
+
+describe("Tinta de estado: cero clases que no pueden ser legibles en claro", () => {
+  it("ningún archivo de UI usa tinta clara de estado con opacidad ni tono 100", () => {
+    const ofensores: string[] = [];
+    for (const archivo of archivosUi(EXENTOS_TOKENS)) {
+      const contenido = fs.readFileSync(path.join(RAIZ, archivo), "utf8");
+      sinComentarios(contenido).split("\n").forEach((linea, i) => {
+        if (TINTA_ILEGIBLE_RE.test(linea)) ofensores.push(`  ${archivo}:${i + 1} — ${linea.trim().slice(0, 110)}`);
+      });
+    }
+    expect(
+      ofensores,
+      `Tinta de estado que NO puede leerse en tema claro (medido: 1,00:1 y 1,16:1 en el caso que ` +
+        `lo destapó). El tema claro de los colores crudos es una lista de clases remapeadas a mano; ` +
+        `una opacidad o un tono no listado cae al valor de Tailwind y desaparece.\n` +
+        `Usá los tokens —text-warn-ink · text-danger-ink · text-success-ink · text-info-ink— o ` +
+        `directamente <Alert variant="warning|danger|success|info">, que ya los usa:\n` +
+        ofensores.join("\n"),
+    ).toEqual([]);
+  });
+});
