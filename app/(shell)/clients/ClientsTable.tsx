@@ -177,7 +177,7 @@ export async function ClientsTable({
 export function ClientsTableZoneSkeleton({ showPills }: { showPills: boolean }) {
   return (
     <div className="space-y-3">
-      {/* Eje 1 — categoría (Clientes · Prospectos · Aliados · Somos Smarteam): la ve todo rol */}
+      {/* Eje 1 — Clientes · Prospectos · Aliados · Proyectos internos: la ve todo rol */}
       <SkeletonTabs count={4} variant="pill" className="gap-1.5 flex-wrap" />
       {/* Eje 2 — pertenencia: solo CSE */}
       {showPills && <SkeletonTabs count={3} variant="pill" className="gap-1.5 flex-wrap" />}
@@ -185,9 +185,9 @@ export function ClientsTableZoneSkeleton({ showPills }: { showPills: boolean }) 
           TableSkeleton pierde su `toolbar`. Si quedara, se pintarían dos buscadores en la
           carga y uno solo después — que es el salto de 32px que este archivo documenta arriba.
           La línea de verdad NO va acá: en la primera pintura nada filtra, así que no existe. */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 pb-3">
         <Skeleton className="h-9 w-full sm:w-72 rounded-lg" />
-        <SkeletonTabs count={4} variant="pill" className="gap-2 flex-wrap" />
+        <SkeletonTabs count={3} variant="pill" className="gap-2 flex-wrap sm:ml-3" />
         <Skeleton className="h-9 w-36 rounded-lg ml-auto" />
       </div>
       {/* Cliente · Última actividad · Próxima reunión · CSE · Reunión ventas · Sesión CSE · TAM · Proyectos · acciones */}

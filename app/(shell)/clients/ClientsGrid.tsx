@@ -573,7 +573,13 @@ export default function ClientsGrid({
       {/* El toolbar lo monta ESTE componente y no `<Table>`: la primitiva devuelve su estado
           vacío ANTES de pintar el toolbar (Table.tsx:121), así que un filtro que deja la lista
           en cero se llevaba puestos el buscador, las píldoras y "Nuevo proyecto" — o sea el
-          control que hacía falta para deshacerlo. Acá la salida existe siempre. */}
+          control que hacía falta para deshacerlo. Acá la salida existe siempre.
+
+          ⚠ El toolbar y su línea de verdad van en UN bloque con `pb-2`: la línea describe lo
+          que el toolbar hizo, así que tiene que leerse pegada a él y despegada de la tabla. Sin
+          esto, el `space-y-3` del contenedor los separa igual de todo y el buscador queda
+          pisando el encabezado de la tabla. */}
+      <div className="space-y-2 pb-3">
       <SearchFilterBar
         className="mb-0"
         search={{
@@ -604,6 +610,7 @@ export default function ClientsGrid({
         {!enInternos && vistas.length > 0 && (
           <Tabs
             aria-label="Qué tiene la empresa"
+            className="sm:ml-3"
             variant="pill"
             size="sm"
             value={vista}
@@ -644,6 +651,7 @@ export default function ClientsGrid({
           )}
         </div>
       )}
+      </div>
 
       {enInternos ? (
         /* Un PROYECTO por fila. La fila lleva al proyecto, no a la empresa: llegar a la
