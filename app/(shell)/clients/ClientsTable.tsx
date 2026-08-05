@@ -8,6 +8,7 @@ import {
   ordenarProyectosInternos,
   type ProyectoInternoRow,
 } from "@/lib/clients/proyectos-internos";
+import { listarEmpresasTraibles } from "@/lib/hubspot/empresas-con-proyecto";
 import type { requireUser } from "@/lib/auth/supabase";
 import { Skeleton, SkeletonTabs, TableSkeleton } from "@/components/ui";
 import ClientsGrid, { type ClientRow, type ActiveCse } from "./ClientsGrid";
@@ -83,6 +84,12 @@ export async function ClientsTable({
   ]);
 
   const clientIds = clients.map((c) => c.id);
+
+  /* Cuántas empresas con proyecto le faltan a Nexus. Va acá y no en `page.tsx` porque son 5
+     llamadas a HubSpot (~3 s): el header ya se pintó y esto llega por streaming con el resto.
+     `null` = HubSpot no contestó, y entonces el botón NO se pinta: ofrecer traer sin saber qué
+     hay es peor que no ofrecer. */
+  const universo = await listarEmpresasTraibles().catch(() => null);
 
   // Fechas de última reunión ventas/CSE + actividad (pasado/futuro) por cliente.
   // Ambos usan el match materializado FirefliesSession.resolvedClientId — queries
@@ -164,7 +171,12 @@ export async function ClientsTable({
   });
 
   return (
-    <ClientsGrid clients={rows} activeCse={activeCse} proyectosInternos={proyectosInternos} />
+    <ClientsGrid
+      clients={rows}
+      activeCse={activeCse}
+      proyectosInternos={proyectosInternos}
+      empresasTraibles={universo?.traibles.length ?? 0}
+    />
   );
 }
 

@@ -11,6 +11,7 @@ import {
   type TableColumn,
 } from "@/components/ui";
 import DeleteClientButton from "./DeleteClientButton";
+import TraerDeHubspot from "./TraerDeHubspot";
 import NuevoProyectoStepper from "@/components/projects/NuevoProyectoStepper";
 import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 import { CLIENT_KINDS, CLIENT_KIND_META, formatTamUsd } from "@/lib/clients/kind";
@@ -168,10 +169,13 @@ export default function ClientsGrid({
   clients,
   activeCse,
   proyectosInternos,
+  empresasTraibles,
 }: {
   clients: ClientRow[];
   activeCse: ActiveCse | null;
   proyectosInternos: ProyectoInternoRow[];
+  /** Empresas que HubSpot tiene con un proyecto que Nexus todavía no. 0 = el botón no existe. */
+  empresasTraibles: number;
 }) {
   const router = useRouter();
 
@@ -600,6 +604,9 @@ export default function ClientsGrid({
                 empresa, 6 de ellos con CERO proyectos — fichas que no pueden tener un proyecto,
                 ni handoff, ni cronograma. No se pierde ninguna capacidad sacándolo; lo que
                 permitía hacer es exactamente lo que después no servía. */}
+            {/* Sale primero y en secundario: traer es menos frecuente que crear, y su botón
+                desaparece solo cuando no queda nada que traer. */}
+            <TraerDeHubspot cuantas={empresasTraibles} />
             <NuevoProyectoStepper />
           </div>
         }

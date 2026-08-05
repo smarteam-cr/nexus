@@ -80,6 +80,16 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "cualquier motivo— quedaría igual apuntando a una fila muerta, que es exactamente lo que " +
       "este barrido viene a impedir. La búsqueda es por referencia, no por alcance.",
   },
+  "lib/hubspot/empresas-con-proyecto.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: pregunta qué `hubspotServiceId` YA existe en " +
+      "Nexus —el que sea, activo o no, de cualquier cliente— para no volver a ofrecer traer un " +
+      "proyecto que ya está. Acotarlo con un criterio de alcance es el bug: un proyecto " +
+      "inactivo, o de un cliente que el criterio esconda, se vería como faltante y el botón " +
+      "ofrecería traerlo otra vez creando una ficha de empresa duplicada. La búsqueda es por " +
+      "existencia, no por alcance — mismo caso que `alta-runner`.",
+  },
   "lib/projects/alta-runner.ts": {
     modo: "exento",
     razon:
