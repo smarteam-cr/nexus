@@ -80,6 +80,11 @@ interface Cuerpo {
   hubspotServiceId?: string;
   /** La persona vio la ficha parecida y dijo que es otra empresa. */
   confirmoGemela?: boolean;
+  /**
+   * «Es la misma»: en vez de crear una ficha, el proyecto se cuelga del cliente que YA existe.
+   * Tiene que ser una de las gemelas que calculó el servidor — mismo candado que `companyId`.
+   */
+  adoptarEnClientId?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -113,6 +118,81 @@ export async function POST(req: NextRequest) {
       { error: "Esa empresa ya está en Nexus, o su proyecto ya se trajo." },
       { status: 409 },
     );
+  }
+
+  /**
+   * ── «ES LA MISMA»: adoptar el proyecto en la ficha que ya existe ────────────
+   *
+   * Antes este camino solo NAVEGABA a la ficha, y por eso la fila volvía siempre: la
+   * condición que la produce —HubSpot tiene un proyecto que Nexus no tiene— seguía siendo
+   * cierta. Un botón en una lista de pendientes que no resuelve el pendiente es peor que no
+   * tenerlo: enseña que la lista no se puede vaciar.
+   *
+   * Ahora el proyecto se cuelga del cliente existente. No se crea ficha, no se toca el
+   * `hubspotCompanyId` del cliente (que puede apuntar a la OTRA ficha de HubSpot — el caso
+   * real: la misma empresa duplicada allá), y la fila desaparece sola porque el proyecto ya
+   * no le falta a Nexus.
+   *
+   * ⚠ Que el proyecto venga de una empresa distinta a la que el cliente tiene enganchada NO
+   * lo pone en riesgo: la reconciliación del espejo verifica cada proyecto directamente en
+   * HubSpot y solo desactiva los que están confirmados gone/closed (sync-projects.ts:1409).
+   * Uno vivo bajo otra empresa se conserva.
+   */
+  const adoptarEn = cuerpo.adoptarEnClientId?.trim();
+  if (adoptarEn) {
+    // Mismo candado que el `companyId`: tiene que ser una de las gemelas que armó el servidor.
+    if (!empresa.gemelas.some((g) => g.clientId === adoptarEn)) {
+      return NextResponse.json(
+        { error: "Esa ficha no es una de las parecidas a esta empresa." },
+        { status: 409 },
+      );
+    }
+    /* `hubspotServiceId` es único en toda la tabla: dos clics simultáneos —o uno acá y otro por
+       el camino de crear— dan un P2002, no dos proyectos del mismo record. El segundo se queda
+       con el que ganó. */
+    let p: { id: string };
+    try {
+      p = await prisma.project.create({
+        data: {
+          clientId: adoptarEn,
+          name: proyecto.nombre,
+          status: "active",
+          hubspotServiceId: proyecto.hubspotServiceId,
+          altaEstado: "pendiente_espejo",
+          altaIniciadaAt: new Date(),
+          altaActorEmail: guard.user.email,
+        },
+        select: { id: true },
+      });
+    } catch (e) {
+      const yaEsta = await prisma.project.findFirst({
+        where: { hubspotServiceId: proyecto.hubspotServiceId },
+        select: { id: true, clientId: true },
+      });
+      if (yaEsta) {
+        return NextResponse.json({
+          clientId: yaEsta.clientId,
+          projectId: yaEsta.id,
+          adoptado: true,
+          yaEstaba: true,
+        });
+      }
+      console.error("[traer-de-hubspot] no se pudo adoptar", { companyId, adoptarEn }, e);
+      return NextResponse.json({ error: "No se pudo traer el proyecto." }, { status: 500 });
+    }
+    await createDefaultCanvases(p.id, null, undefined);
+    const alta = await avanzarAlta(p.id);
+    console.info(
+      `[traer-de-hubspot] ${guard.user.email} adoptó «${empresa.rotulo}» (${companyId}) en el ` +
+        `cliente ${adoptarEn} → proyecto ${p.id}`,
+    );
+    revalidateClientsSidebar();
+    return NextResponse.json({
+      clientId: adoptarEn,
+      projectId: p.id,
+      adoptado: true,
+      termino: alta.termino,
+    });
   }
 
   /* Las gemelas se recalculan ACÁ. Leerlas del body sería dejar que el navegador decida si hay

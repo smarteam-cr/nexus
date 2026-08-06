@@ -53,7 +53,10 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
     }
   }
 
-  async function traer(empresa: EmpresaTraible, confirmoGemela: boolean) {
+  async function traer(
+    empresa: EmpresaTraible,
+    opts: { confirmoGemela?: boolean; adoptarEnClientId?: string },
+  ) {
     setTrayendo(empresa.companyId);
     try {
       const res = await fetch("/api/clients/traer-de-hubspot", {
@@ -62,7 +65,7 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
         body: JSON.stringify({
           companyId: empresa.companyId,
           hubspotServiceId: empresa.proyectos[0]?.hubspotServiceId,
-          confirmoGemela,
+          ...opts,
         }),
       });
       const data = await res.json();
@@ -135,7 +138,7 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
               empresa={e}
               ocupada={trayendo === e.companyId}
               resultado={resultados[e.companyId]}
-              onTraer={(confirmo) => traer(e, confirmo)}
+              onTraer={(opts) => traer(e, opts)}
             />
           ))}
 
@@ -170,6 +173,8 @@ interface ResultadoFila {
   encargadoNombre?: string | null;
   loVasAVer?: boolean;
   sinEncargado?: boolean;
+  /** Se colgó de una ficha que ya existía, en vez de crear una nueva. */
+  adoptado?: boolean;
 }
 
 function FilaEmpresa({
@@ -181,9 +186,8 @@ function FilaEmpresa({
   empresa: EmpresaTraible;
   ocupada: boolean;
   resultado?: ResultadoFila;
-  onTraer: (confirmoGemela: boolean) => void;
+  onTraer: (opts: { confirmoGemela?: boolean; adoptarEnClientId?: string }) => void;
 }) {
-  const router = useRouter();
   const [confirmando, setConfirmando] = useState(false);
   const proyecto = empresa.proyectos[0];
   const gemela = empresa.gemelas[0];
@@ -192,13 +196,17 @@ function FilaEmpresa({
     return (
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-success-line bg-success-surface px-3 py-2">
         <span className="text-sm font-medium text-success-ink">
-          «{empresa.rotulo}» ya está en Nexus.
+          {resultado.adoptado
+            ? `El proyecto quedó en «${empresa.gemelas[0]?.nombre ?? "la ficha que ya existía"}».`
+            : `«${empresa.rotulo}» ya está en Nexus.`}
         </span>
         {/* Los TRES desenlaces, uno por frase corta. Sin el tercero, quien trae un proyecto sin
             encargado lee «es de otro», culpa a la regla de visibilidad y se va creyendo que
             funcionó. */}
         <span className="text-xs text-success-ink/80">
-          {resultado.sinEncargado
+          {resultado.adoptado
+            ? "No se creó otra ficha."
+            : resultado.sinEncargado
             ? "No le aparece a nadie: el proyecto no tiene encargado en HubSpot."
             : resultado.loVasAVer
               ? "Te aparece en tu lista."
@@ -226,7 +234,7 @@ function FilaEmpresa({
           </p>
         </div>
         {!gemela && (
-          <Button variant="secondary" size="xs" loading={ocupada} onClick={() => onTraer(false)}>
+          <Button variant="secondary" size="xs" loading={ocupada} onClick={() => onTraer({})}>
             Traer
           </Button>
         )}
@@ -250,12 +258,15 @@ function FilaEmpresa({
               <span className="text-xs text-warn-ink flex-1 min-w-40">
                 ⚠ Ya existe «{gemela.nombre}» en Nexus.
               </span>
+              {/* ⚠ RESUELVE, no navega. Antes solo abría la ficha, y la fila volvía en cada
+                  carga porque la condición que la produce seguía siendo cierta. */}
               <Button
                 variant="primary"
                 size="xs"
-                onClick={() => router.push(`/clients/${gemela.clientId}`)}
+                loading={ocupada}
+                onClick={() => onTraer({ adoptarEnClientId: gemela.clientId })}
               >
-                Es la misma → abrirla
+                Es la misma → traer el proyecto acá
               </Button>
               <Button variant="secondary" size="xs" onClick={() => setConfirmando(true)}>
                 Es otra empresa
@@ -271,7 +282,7 @@ function FilaEmpresa({
                 variant="destructive-solid"
                 size="xs"
                 loading={ocupada}
-                onClick={() => onTraer(true)}
+                onClick={() => onTraer({ confirmoGemela: true })}
               >
                 Sí, es otra: traerla
               </Button>

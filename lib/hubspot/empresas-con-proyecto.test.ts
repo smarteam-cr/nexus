@@ -171,6 +171,53 @@ describe("el permiso es la forma del endpoint", () => {
   });
 });
 
+describe("«Es la misma» resuelve, no navega", () => {
+  /**
+   * ── LA GUARDA DE ESTE ARREGLO ──────────────────────────────────────────────
+   * La primera versión de ese botón hacía `router.push` a la ficha existente. Se probó en vivo
+   * y el reporte fue exacto: «le doy varias veces a "es la misma", y refresco, pero sigue
+   * apareciendo ese msj». Claro: navegar no cambia el mundo, y la condición que produce la
+   * fila —HubSpot tiene un proyecto que Nexus no tiene— seguía siendo cierta. Un botón que no
+   * vacía el pendiente le enseña a la gente que la lista no se puede vaciar, y el único camino
+   * que SÍ la vaciaba era el que crea el duplicado.
+   *
+   * La edición que la pone en rojo: volver a poner `router.push(...)` en esa fila.
+   */
+  it("LA guarda: el botón de la fila gemela adopta el proyecto en vez de navegar", () => {
+    const src = fuente("app/(shell)/clients/TraerDeHubspot.tsx");
+    const i = src.lastIndexOf("function FilaEmpresa");
+    expect(i, "se movió FilaEmpresa; revisar esta guarda").toBeGreaterThan(0);
+    const fila = src.slice(i);
+    expect(fila.length, "la guarda no está mirando nada").toBeGreaterThan(800);
+    expect(
+      fila,
+      "«Es la misma» volvió a ser un enlace: la fila reaparece para siempre y el único camino que la vacía es el que duplica",
+    ).toContain("adoptarEnClientId: gemela.clientId");
+    expect(
+      fila,
+      "la fila volvió a navegar en vez de resolver",
+    ).not.toContain("router.push");
+  });
+
+  it("y el servidor solo adopta en una gemela que él mismo calculó", () => {
+    /* Mismo candado que el `companyId`: sin esto, `adoptarEnClientId` es entrada libre y
+       cualquiera cuelga un proyecto de cualquier cliente del sistema. */
+    const post = fuente(RUTA).slice(fuente(RUTA).indexOf("export async function POST"));
+    const i = post.indexOf("cuerpo.adoptarEnClientId");
+    expect(i, "desapareció el camino de adopción").toBeGreaterThan(0);
+    const rama = post.slice(i, post.indexOf("if (empresa.gemelas.length > 0"));
+    expect(rama.length, "la guarda no está mirando nada").toBeGreaterThan(300);
+    expect(
+      rama,
+      "el clientId a adoptar dejó de validarse contra las gemelas del servidor",
+    ).toContain("empresa.gemelas.some");
+    expect(
+      rama,
+      "la adopción volvió a crear un Client: es exactamente el duplicado que este camino evita",
+    ).not.toContain("client.create");
+  });
+});
+
 describe("el botón no existe cuando no hay nada que traer", () => {
   /* Es la regla que este mismo directorio escribe dos veces (la píldora que no parte el
      universo, la pestaña de categoría vacía). Y acá importa más que en ningún lado: el universo
