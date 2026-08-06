@@ -21,6 +21,12 @@ export function normalizarTexto(s: string): string {
 }
 
 /** ¿El texto contiene la consulta? Una consulta en blanco matchea todo. */
+/**
+ * ⚠ Hoy la usa solo `filtrarPorBusqueda` (y su test). Es a propósito: el que compara UNA fila
+ * contra el término es el átomo, y el que recorre la lista se apoya en él. Separarlos permite
+ * que una pantalla filtre sobre un texto compuesto a mano —el caso de la pestaña de proyectos
+ * internos, que busca por nombre + empresa + tipo— sin re-escribir la normalización de acentos.
+ */
 export function coincideBusqueda(texto: string, consulta: string): boolean {
   const q = normalizarTexto(consulta);
   if (!q) return true;

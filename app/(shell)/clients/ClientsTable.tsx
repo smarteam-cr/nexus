@@ -55,8 +55,9 @@ export async function ClientsTable({
         tamUsd: true,
         /**
          * ⚠ SIN `where`. La barra de filtros del índice se calcula sobre ESTE array: acotarlo
-         * "para aliviar el payload" haría que las cuatro píldoras cuenten sobre un subconjunto
-         * y mientan las cuatro a la vez, sin romper tipos ni pintar nada raro. Hay guarda.
+         * "para aliviar el payload" haría que TODAS las píldoras —las de categoría y las de
+         * vista— cuenten sobre un subconjunto y mientan todas a la vez, sin romper tipos ni
+         * pintar nada raro. Hay guarda.
          *
          * Los 7 campos nuevos son los que exige `ProyectoParaFiltro` — cero queries nuevas: la
          * relación ya se cargaba para resolver los owners. Al browser NO viaja este array,

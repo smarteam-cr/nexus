@@ -49,9 +49,9 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   /**
    * No hace ninguna consulta: recibe el array que el `select` anidado de `ClientsTable` ya
    * trajo y lo resume para la barra de filtros del índice. Entra igual —y el detector nuevo
-   * lo obliga— porque decide el alcance de cuatro contadores que la pantalla afirma en voz
-   * alta. ⚠ Usa `clasificable` A PROPÓSITO: `cartera` excluye el trabajo interno, y con ese
-   * criterio la píldora «Con trabajo interno» daría 0 por construcción.
+   * lo obliga— porque decide el alcance de los contadores que la pantalla afirma en voz alta.
+   * ⚠ Usa `clasificable` A PROPÓSITO: `cartera` excluye el trabajo interno, y con ese criterio
+   * el contador `internos` —y con él la pestaña «Proyectos internos»— darían 0 por construcción.
    */
   "lib/clients/resumen-proyectos.ts": { modo: "criterio", criterio: "clasificable" },
 

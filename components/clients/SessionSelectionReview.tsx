@@ -345,8 +345,13 @@ export default function SessionSelectionReview({
               </svg>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-fg truncate">{s.title || "Sin título"}</p>
+                {/* ⚠ MISMO `meetMeta` que la columna: incluye el «aún no ocurrió». Sin eso, una
+                    sesión con fecha futura se lista acá como si ya hubiera pasado — y ésta es
+                    justo la pantalla que aparece después de crear o traer un proyecto, o sea el
+                    momento en que alguien decide con qué se arma el documento. */}
                 <p className="text-[11px] text-fg-muted truncate">
-                  {fmtDate(s.date)} · {s.origin ?? (s.forced ? "agregada a mano" : "primaria")}
+                  {meetMeta(s.date, s.alsoIn, s.futura)} ·{" "}
+                  {s.origin ?? (s.forced ? "agregada a mano" : "primaria")}
                 </p>
               </div>
               {!readOnly && (

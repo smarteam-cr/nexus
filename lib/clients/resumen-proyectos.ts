@@ -14,10 +14,15 @@
  *    de esta pantalla ya cruza ~16 campos por cada una de las 165 filas.
  *
  * ── POR QUÉ *CLASIFICABLE* Y NO *DE CARTERA* ─────────────────────────────────
- * `DE_CARTERA` aplica `NO_ES_INTERNO`. Con ese criterio, el filtro «Con trabajo interno»
- * —el que motivó todo esto— daría **0 por construcción**, y las dos únicas empresas que
- * tienen trabajo interno caerían en «Sin proyecto abierto». `CLASIFICABLE` es el criterio
- * correcto porque un proyecto interno ES trabajo que estamos haciendo, aunque no se facture.
+ * `DE_CARTERA` aplica `NO_ES_INTERNO`. Con ese criterio el contador `internos` daría **0 por
+ * construcción** —y con él la pestaña «Proyectos internos», que sale de acá— y las empresas
+ * con trabajo de puertas adentro caerían en «Sin proyecto abierto». `CLASIFICABLE` es el
+ * criterio correcto porque un proyecto interno ES trabajo que estamos haciendo, aunque no se
+ * facture.
+ *
+ * ⚠ El chip «Con trabajo interno» que motivó esto ya no existe: se retiró cuando la pestaña
+ * «Proyectos internos» pasó a listar los proyectos, que es lo que la persona venía a buscar.
+ * El criterio se queda igual porque el contador sigue alimentando esa pestaña.
  *
  * ⚠ El precio, declarado: esta pantalla va a decir 43 donde Éxito del cliente muestra 40 y
  * Cobranza otro número. Los tres son correctos y responden preguntas distintas — por eso el
@@ -66,6 +71,14 @@ export function resumirProyectos(
 
 export const estaEnEjecucion = (r: ResumenDeProyectos): boolean => r.abiertos > 0;
 
+/**
+ * ⚠ SIN CONSUMIDOR EN PRODUCCIÓN, a propósito. Su chip —«Con trabajo interno»— se retiró
+ * cuando la pestaña «Proyectos internos» pasó a listar los proyectos, que es lo que la persona
+ * venía a buscar. Se conserva porque es el predicado que da nombre al contador `internos` y su
+ * test lo congela: si vuelve a hacer falta un filtro por trabajo interno, la regla ya está
+ * escrita una sola vez y no se va a re-derivar a mano en la pantalla, que es como nacieron las
+ * cuatro copias que este módulo vino a borrar.
+ */
 export const tieneTrabajoInterno = (r: ResumenDeProyectos): boolean => r.internos > 0;
 
 /**

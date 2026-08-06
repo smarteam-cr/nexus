@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardInternalUser } from "@/lib/auth/api-guards";
+import { guardInternalUser, guardAccessToClient } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { listarEmpresasTraibles } from "@/lib/hubspot/empresas-con-proyecto";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
@@ -143,6 +143,35 @@ export async function POST(req: NextRequest) {
   }
 
   /**
+   * ── EL TOPE DIARIO, ARRIBA DE LOS DOS CAMINOS ──────────────────────────────
+   * Se cuenta por PROYECTO y no por cliente, y se chequea ANTES de la rama de adopción. Con el
+   * chequeo abajo, «Es la misma» —que crea un proyecto igual, solo que sin ficha nueva— pasaba
+   * sin límite justo por el camino que más se va a usar cuando la empresa ya existe acá.
+   *
+   * El número es `MAX_PROJECTS_PER_SWEEP` del vigilante: pasado ése, los proyectos nuevos se
+   * comen el barrido diario entero y el resto de la cartera «entra en el próximo», reportado en
+   * un log que nadie mira. Se cuenta en la BASE para que sobreviva a un reinicio del proceso.
+   */
+  const desdeHoy = new Date();
+  desdeHoy.setHours(0, 0, 0, 0);
+  const traidosHoy = await prisma.project.count({
+    // TODA alta empezada hoy, venga del botón o del alta única: al vigilante le da igual cómo
+    // llegó el proyecto, compite por el mismo barrido de 10.
+    where: { altaIniciadaAt: { gte: desdeHoy } },
+  });
+  if (traidosHoy >= TOPE_DIARIO) {
+    return NextResponse.json(
+      {
+        error:
+          `Hoy ya se trajeron ${TOPE_DIARIO} proyectos. Mañana se pueden traer más. ` +
+          "El vigilante de Éxito del cliente revisa 10 proyectos por día: traer más de golpe " +
+          "hace que los proyectos en riesgo dejen de revisarse en silencio.",
+      },
+      { status: 429 },
+    );
+  }
+
+  /**
    * ── «ES LA MISMA»: adoptar el proyecto en la ficha que ya existe ────────────
    *
    * Antes este camino solo NAVEGABA a la ficha, y por eso la fila volvía siempre: la
@@ -162,13 +191,24 @@ export async function POST(req: NextRequest) {
    */
   const adoptarEn = cuerpo.adoptarEnClientId?.trim();
   if (adoptarEn) {
-    // Mismo candado que el `companyId`: tiene que ser una de las gemelas que armó el servidor.
+    /**
+     * ── DOS CANDADOS, Y NO SON EL MISMO ────────────────────────────────────────
+     * (1) Tiene que ser una de las gemelas que armó el servidor. Necesario, NO suficiente:
+     *     `detectarGemelas` es fuzzy y deliberadamente LAXO (prefijo de 5 caracteres, escrito
+     *     para sobre-incluir porque es un AVISO, no un permiso). Usarlo como única puerta
+     *     convierte «se parecen los nombres» en «podés escribir ahí».
+     * (2) Y la persona tiene que tener acceso a ESE cliente. Sin esto, cualquiera que pueda
+     *     apretar el botón le cuelga un proyecto a un cliente que no es suyo — y como el espejo
+     *     escribe el dueño del record desde HubSpot, eso además le abre la ficha entera.
+     */
     if (!empresa.gemelas.some((g) => g.clientId === adoptarEn)) {
       return NextResponse.json(
         { error: "Esa ficha no es una de las parecidas a esta empresa." },
         { status: 409 },
       );
     }
+    const acceso = await guardAccessToClient(adoptarEn);
+    if (acceso instanceof NextResponse) return acceso;
     /* `hubspotServiceId` es único en toda la tabla: dos clics simultáneos —o uno acá y otro por
        el camino de crear— dan un P2002, no dos proyectos del mismo record. El segundo se queda
        con el que ganó. */
@@ -193,11 +233,21 @@ export async function POST(req: NextRequest) {
         select: { id: true, clientId: true },
       });
       if (yaEsta) {
+        /* ⚠ `termino` va SIEMPRE. El panel pinta verde cuando el alta terminó y ámbar cuando
+           no, y su criterio es `termino !== true`: una respuesta sin el campo se leía como
+           «no terminó», que es lo correcto — pero decirlo explícito es lo que impide que el
+           próximo rescate lo vuelva a olvidar. */
+        const estado = await prisma.project.findUnique({
+          where: { id: yaEsta.id },
+          select: { altaEstado: true },
+        });
         return NextResponse.json({
           clientId: yaEsta.clientId,
           projectId: yaEsta.id,
           adoptado: true,
+          adoptadoEn: empresa.gemelas.find((g) => g.clientId === yaEsta.clientId)?.nombre,
           yaEstaba: true,
+          termino: estado?.altaEstado === "listo",
         });
       }
       console.error("[traer-de-hubspot] no se pudo adoptar", { companyId, adoptarEn }, e);
@@ -214,6 +264,9 @@ export async function POST(req: NextRequest) {
       clientId: adoptarEn,
       projectId: p.id,
       adoptado: true,
+      // El nombre de la ficha que la persona ELIGIÓ. Sin esto el panel lo adivinaba con
+      // `gemelas[0]`, o sea afirmaba la ficha equivocada en cuanto había más de una.
+      adoptadoEn: empresa.gemelas.find((g) => g.clientId === adoptarEn)?.nombre,
       termino: alta.termino,
     });
   }
@@ -227,23 +280,6 @@ export async function POST(req: NextRequest) {
         gemelas: empresa.gemelas,
       },
       { status: 409 },
-    );
-  }
-
-  const desdeHoy = new Date();
-  desdeHoy.setHours(0, 0, 0, 0);
-  const traidasHoy = await prisma.client.count({
-    where: { source: FUENTE, createdAt: { gte: desdeHoy } },
-  });
-  if (traidasHoy >= TOPE_DIARIO) {
-    return NextResponse.json(
-      {
-        error:
-          `Hoy ya se trajeron ${TOPE_DIARIO} empresas. Mañana se pueden traer más. ` +
-          "El vigilante de Éxito del cliente revisa 10 proyectos por día: traer más de golpe " +
-          "hace que los proyectos en riesgo dejen de revisarse en silencio.",
-      },
-      { status: 429 },
     );
   }
 
@@ -295,7 +331,8 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     });
     if (yaEsta) {
-      return NextResponse.json({ clientId: yaEsta.id, projectId: null, yaEstaba: true });
+      // Sin `termino: false` el panel pinta verde sobre un alta que no sabe si terminó.
+      return NextResponse.json({ clientId: yaEsta.id, projectId: null, yaEstaba: true, termino: false });
     }
     console.error("[traer-de-hubspot] no se pudo crear", { companyId, hubspotServiceId }, e);
     return NextResponse.json({ error: "No se pudo traer la empresa." }, { status: 500 });

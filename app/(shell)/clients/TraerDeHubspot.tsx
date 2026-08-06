@@ -34,13 +34,21 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
     (UniversoTraible & { enganchadaDe?: { actor: string; hace: number } | null }) | null
   >(null);
   const [error, setError] = useState<string | null>(null);
-  const [trayendo, setTrayendo] = useState<string | null>(null);
+  /* Un CONJUNTO y no un id: con dos filas apretadas seguidas, la primera en volver le apagaba
+     el spinner a la segunda —que seguía en vuelo— y su botón quedaba habilitado otra vez. La
+     fila que MÁS estaba trabajando era la que se veía inactiva, y el segundo click mandaba un
+     POST duplicado. */
+  const [trayendo, setTrayendo] = useState<ReadonlySet<string>>(() => new Set());
   const [resultados, setResultados] = useState<Record<string, ResultadoFila>>({});
 
   async function abrir() {
     setAbierto(true);
     setCargando(true);
     setError(null);
+    /* Sin esto, la segunda apertura pinta la lista VIEJA —accionable, con sus botones y sus
+       contadores— debajo de «Buscando en HubSpot…», y si el fetch falla queda el banner rojo
+       encima de una lista que se lee como si estuviera viva. */
+    setUniverso(null);
     try {
       const res = await fetch("/api/clients/traer-de-hubspot");
       const data = await res.json();
@@ -57,7 +65,7 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
     empresa: EmpresaTraible,
     opts: { confirmoGemela?: boolean; adoptarEnClientId?: string },
   ) {
-    setTrayendo(empresa.companyId);
+    setTrayendo((s) => new Set(s).add(empresa.companyId));
     try {
       const res = await fetch("/api/clients/traer-de-hubspot", {
         method: "POST",
@@ -86,11 +94,22 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
         [empresa.companyId]: { tipo: "error", mensaje: "No se pudo traer." },
       }));
     } finally {
-      setTrayendo(null);
+      setTrayendo((s) => {
+        const next = new Set(s);
+        next.delete(empresa.companyId);
+        return next;
+      });
     }
   }
 
-  if (cuantas <= 0) return null;
+  /**
+   * ⚠ `&& !abierto`: traer una empresa hace `router.refresh()`, el servidor recalcula `cuantas`
+   * y —si era la última— pasa a 0. Sin esa condición el componente se DESMONTA con el panel
+   * abierto y se lleva puesto el desenlace que la persona todavía no leyó: el cartel ámbar del
+   * alta trabada, el «le aparece a X», el enlace «Abrir». El modal se cierra solo y parece que
+   * todo salió bien. Es el mismo incidente que esta tanda vino a cerrar, reabierto por la UI.
+   */
+  if (cuantas <= 0 && !abierto) return null;
 
   return (
     <>
@@ -118,9 +137,19 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
           ) : universo ? (
             /* El denominador va PEGADO al número, no en un párrafo aparte: sin él, «2 empresas»
                no dice si son 2 de 3 o 2 de 300; en un párrafo, nadie lo lee. */
+            /* Dos hechos, separados. `traibles` NO son «las que no están»: son las que no
+               están Y tienen un proyecto que falta traer Y sobrevivieron a los descartes. */
             <p className="text-sm text-fg-secondary">
-              {universo.traibles.length} de {universo.totalConProyecto} empresas con proyecto en
-              HubSpot no están acá.
+              {universo.traibles.length} empresa{universo.traibles.length !== 1 ? "s" : ""} con un
+              proyecto que falta traer.{" "}
+              <span className="text-fg-muted">
+                HubSpot tiene {universo.totalConProyecto} con proyecto; {universo.yaEnNexus} ya
+                están acá
+                {universo.yaTraidoBajoOtraFicha > 0
+                  ? ` y ${universo.yaTraidoBajoOtraFicha} tienen su trabajo bajo otra ficha`
+                  : ""}
+                .
+              </span>
             </p>
           ) : null}
 
@@ -136,7 +165,7 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
             <FilaEmpresa
               key={e.companyId}
               empresa={e}
-              ocupada={trayendo === e.companyId}
+              ocupada={trayendo.has(e.companyId)}
               resultado={resultados[e.companyId]}
               onTraer={(opts) => traer(e, opts)}
             />
@@ -172,14 +201,15 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
           {universo && universo.tipoDesconocido > 0 && (
             <p className="text-xs text-warn-ink">
               {universo.tipoDesconocido} proyecto{universo.tipoDesconocido !== 1 ? "s" : ""} en un
-              pipeline que Nexus no conoce. Moveelo{universo.tipoDesconocido !== 1 ? "s" : ""} a uno
-              de los tres tipos en HubSpot y volvé.
+              pipeline que Nexus no conoce. Move{universo.tipoDesconocido !== 1 ? "los" : "lo"} a
+              uno de los tres tipos en HubSpot y volvé.
             </p>
           )}
           {universo && universo.suprimidos > 0 && (
             <p className="text-xs text-fg-muted">
-              {universo.suprimidos} se {universo.suprimidos !== 1 ? "borraron" : "borró"} a
-              propósito desde Nexus. No vuelven solos.
+              {universo.suprimidos} proyecto{universo.suprimidos !== 1 ? "s" : ""} se{" "}
+              {universo.suprimidos !== 1 ? "borraron" : "borró"} a propósito desde Nexus. No
+              vuelven solos.
             </p>
           )}
         </div>
@@ -197,6 +227,10 @@ interface ResultadoFila {
   sinEncargado?: boolean;
   /** Se colgó de una ficha que ya existía, en vez de crear una nueva. */
   adoptado?: boolean;
+  /** El nombre de la ficha en la que se adoptó — la que la persona ELIGIÓ, no `gemelas[0]`. */
+  adoptadoEn?: string;
+  /** Otra persona ganó la carrera. */
+  yaEstaba?: boolean;
   /**
    * ⚠ Si el alta TERMINÓ. El endpoint devuelve 200 aunque el alta quede a medio hacer —
    * `avanzarAlta` no tira, deja el error en la fila— así que mirar `res.ok` y pintar verde es
@@ -219,13 +253,16 @@ function FilaEmpresa({
 }) {
   const [confirmando, setConfirmando] = useState(false);
   const proyecto = empresa.proyectos[0];
-  const gemela = empresa.gemelas[0];
+  const gemelas = empresa.gemelas;
 
   if (resultado?.tipo === "listo") {
     /* El desenlace a medias tiene su propio color. Verde con un alta trabada adentro es la
        versión visual de «no hay más sesiones»: una frase verdadera sobre la respuesta HTTP y
        falsa sobre el mundo. */
-    const aMedias = resultado.termino === false;
+    /* ⚠ `!== true` y no `=== false`: los dos rescates por carrera devuelven 200 SIN `termino`,
+       y `undefined === false` es falso — o sea que el hueco quedaba justo donde este archivo
+       dice que no puede estar. Ausencia de confirmación NO es confirmación. */
+    const aMedias = resultado.termino !== true;
     return (
       <div
         className={
@@ -236,7 +273,7 @@ function FilaEmpresa({
       >
         <span className={aMedias ? "text-sm font-medium text-warn-ink" : "text-sm font-medium text-success-ink"}>
           {resultado.adoptado
-            ? `El proyecto quedó en «${empresa.gemelas[0]?.nombre ?? "la ficha que ya existía"}».`
+            ? `El proyecto quedó en «${resultado.adoptadoEn ?? "la ficha que ya existía"}».`
             : `«${empresa.rotulo}» ya está en Nexus.`}
         </span>
         {/* Los TRES desenlaces, uno por frase corta. Sin el tercero, quien trae un proyecto sin
@@ -249,9 +286,13 @@ function FilaEmpresa({
             ? "No se creó otra ficha."
             : resultado.sinEncargado
             ? "No le aparece a nadie: el proyecto no tiene encargado en HubSpot."
+            : resultado.yaEstaba
+            ? "La trajo otra persona recién."
             : resultado.loVasAVer
               ? "Te aparece en tu lista."
-              : `Le aparece a ${resultado.encargadoNombre ?? "su encargado"}, no a vos.`}
+              : resultado.encargadoNombre
+                ? `Le aparece a ${resultado.encargadoNombre}, no a vos.`
+                : "Abrila para ver a quién le aparece."}
         </span>
         {resultado.clientId && (
           <a href={`/clients/${resultado.clientId}`} className="text-xs text-brand hover:underline">
@@ -274,14 +315,14 @@ function FilaEmpresa({
             «{proyecto?.nombre}»{proyecto?.encargadoNombre && ` · ${proyecto.encargadoNombre}`}
           </p>
         </div>
-        {!gemela && (
+        {gemelas.length === 0 && (
           <Button variant="secondary" size="xs" loading={ocupada} onClick={() => onTraer({})}>
             Traer
           </Button>
         )}
       </div>
 
-      {gemela && (
+      {gemelas.length > 0 && (
         /**
          * ⚠ EL CAMINO IRREVERSIBLE PIDE DOS CLICS, Y LOS DOS SON BOTONES DE VERDAD.
          *
@@ -295,20 +336,41 @@ function FilaEmpresa({
          */
         <div className="rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2">
           {!confirmando ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-warn-ink flex-1 min-w-40">
-                ⚠ Ya existe «{gemela.nombre}» en Nexus.
+            <div className="space-y-1.5">
+              <span className="text-xs text-warn-ink block">
+                ⚠ Ya {gemelas.length === 1 ? "existe una ficha parecida" : `existen ${gemelas.length} fichas parecidas`} en Nexus.
               </span>
-              {/* ⚠ RESUELVE, no navega. Antes solo abría la ficha, y la fila volvía en cada
-                  carga porque la condición que la produce seguía siendo cierta. */}
-              <Button
-                variant="primary"
-                size="xs"
-                loading={ocupada}
-                onClick={() => onTraer({ adoptarEnClientId: gemela.clientId })}
-              >
-                Es la misma → traer el proyecto acá
-              </Button>
+              {/**
+               * ⚠ SE PINTAN TODAS, no `gemelas[0]`.
+               *
+               * `detectarGemelas` es deliberadamente LAXO —prefijo de 5 caracteres— porque su
+               * contrato es «devuelve todas las que se parecen, no la mejor: la persona decide,
+               * y para eso necesita ver las candidatas». Mostrando una sola, con dos fichas
+               * parecidas la persona adopta en la equivocada sin enterarse de que existía otra,
+               * y el proyecto —con su cobranza— queda colgado del cliente que no es.
+               *
+               * Y RESUELVE, no navega: antes el botón solo abría la ficha, y la fila volvía en
+               * cada carga porque la condición que la produce seguía siendo cierta.
+               */}
+              {gemelas.map((g) => (
+                <div key={g.clientId} className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-warn-ink flex-1 min-w-40">
+                    «{g.nombre}»
+                    <span className="text-warn-ink/70">
+                      {" · "}
+                      {g.motivo === "dominio" ? "mismo dominio" : "nombre parecido"}
+                    </span>
+                  </span>
+                  <Button
+                    variant="primary"
+                    size="xs"
+                    loading={ocupada}
+                    onClick={() => onTraer({ adoptarEnClientId: g.clientId })}
+                  >
+                    Es la misma → traer el proyecto acá
+                  </Button>
+                </div>
+              ))}
               <Button variant="secondary" size="xs" onClick={() => setConfirmando(true)}>
                 Es otra empresa
               </Button>
@@ -316,7 +378,8 @@ function FilaEmpresa({
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-warn-ink flex-1 min-w-40">
-                ¿«{empresa.rotulo}» es distinta de «{gemela.nombre}»? Se va a crear una ficha
+                ¿«{empresa.rotulo}» es distinta de{" "}
+                {gemelas.map((g) => `«${g.nombre}»`).join(" y ")}? Se va a crear una ficha
                 aparte.
               </span>
               <Button

@@ -226,8 +226,7 @@ export type AccionDeVacio =
   | { tipo: "ver-todos"; label: string }
   | { tipo: "quitar-filtro"; label: string }
   | { tipo: "buscar-sin-filtro"; label: string }
-  | { tipo: "limpiar-todo"; label: string }
-  | { tipo: "ir"; label: string; kind: ClientKind; vista: VistaDeCartera };
+  | { tipo: "limpiar-todo"; label: string };
 
 export interface ListaVacia {
   titulo: string;
@@ -263,9 +262,11 @@ export function explicarListaVacia(a: {
 
   // E1 — la categoría entera está vacía.
   if (a.enCategoria === 0) {
-    // El puente que da nombre a toda esta tanda: la persona entró a «Somos Smarteam»
-    // buscando el trabajo de puertas adentro, que es OTRA cosa y sí existe. Sin este
-    // enlace, la pantalla la deja exactamente donde estaba: mirando un cero.
+    /* Sin acciones A PROPÓSITO: no hay filtro que quitar ni búsqueda que borrar — la
+       categoría está vacía y punto. El puente a lo que la persona probablemente venía a
+       buscar lo da el `help` del propio kind, que para INTERNO dice que el trabajo de puertas
+       adentro tiene su propia pestaña. Un botón acá sería un tercer camino a la misma
+       pestaña que ya está arriba, a un click. */
     return {
       titulo: `Sin ${meta.plural.toLowerCase()} aún`,
       detalle: `${meta.help} Se marca desde la ficha de la empresa, en Configuración.`,
@@ -285,8 +286,16 @@ export function explicarListaVacia(a: {
     };
   }
 
-  // E3 — la vista vació la lista (y la búsqueda no llegó ni a correr).
-  if (a.vista !== "todos" && !q) {
+  /**
+   * E3 — la vista vació la lista.
+   *
+   * ⚠ La condición es `enVista === 0` y NO `!q`. Con un término escrito, `!q` saltaba esta
+   * etapa entera y el mensaje culpaba a la búsqueda: «ningún cliente coincide con "agro"»
+   * sobre una vista que ya estaba en cero antes de escribir nada. La persona borra el término
+   * y no pasa nada — que es exactamente el modo de falla que el docstring de esta función
+   * promete evitar («gana la PRIMERA etapa de la cascada que la vació»).
+   */
+  if (a.vista !== "todos" && a.enVista === 0) {
     const def = vistaPorKey(a.vista);
     return {
       titulo: `Ningún cliente pasa el filtro «${def.label}»`,

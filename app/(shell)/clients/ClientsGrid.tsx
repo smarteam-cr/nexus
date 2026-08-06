@@ -287,11 +287,6 @@ export default function ClientsGrid({
       case "limpiar-todo":
         limpiarTodo();
         break;
-      case "ir":
-        setPestana(a.kind);
-        setVista(a.vista);
-        setBusqueda("");
-        break;
     }
   }
 
@@ -628,6 +623,9 @@ export default function ClientsGrid({
             items={vistas.map((v) => ({
               key: v.key,
               label: v.label,
+              // La `ayuda` explica por qué el número puede no cuadrar con Éxito del cliente ni
+              // con Cobranza. Es LO ÚNICO que evita que ese descuadre se lea como un bug.
+              title: v.ayuda,
               count: contadores[v.key],
               // Una vista sin resultados no se puede elegir… salvo que sea la que está puesta:
               // deshabilitar la activa dejaría un filtro aplicado sin forma de sacarlo.

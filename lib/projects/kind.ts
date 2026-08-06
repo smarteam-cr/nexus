@@ -721,6 +721,32 @@ export function cerradoPorEstadoCrudo(rawStatus: string | null | undefined): boo
  * Reactivar un proyecto está explícitamente fuera de alcance: hay proyectos ocultados a
  * propósito y no queremos que vuelvan solos.
  */
+/**
+ * El `rawStatus` que consume `decidirCierre`, armado desde las propiedades crudas de HubSpot.
+ *
+ * ── POR QUÉ ES UNA FUNCIÓN Y NO UNA LÍNEA EN CADA LLAMADOR ──────────────────
+ * Son DOS propiedades que dicen lo mismo —`hs_status` (el enum de HubSpot) y
+ * `estatus_del_proyecto` (el campo en español que llenan las personas)— y el orden entre ellas
+ * DECIDE. Con las dos puestas y discrepando, quien pregunta primero por una obtiene un veredicto
+ * distinto de quien pregunta primero por la otra.
+ *
+ * Eso ya pasó: el descarte de proyectos cerrados de `empresas-con-proyecto.ts` nació con el
+ * orden invertido, así que podía ofrecer para traer un proyecto que el espejo —mirando el mismo
+ * record— iba a cerrar. Y traer un proyecto que el espejo cierra es una cuarentena sin salida:
+ * el espejo lo pone en `inactive` y hace `continue` ANTES de escribir el pipeline, el alta nunca
+ * confirma, y el proyecto queda fuera de NAVEGABLE — o sea que el cartel «Reintentar» ni se
+ * puede alcanzar.
+ *
+ * ⚠ `||` y no `??`: el caso real es el string VACÍO, no el `null`. HubSpot devuelve `""` para
+ * una propiedad sin llenar, y `??` no cae con `""`.
+ */
+export function estadoCrudoDeHubspot(props: {
+  hs_status?: string | null;
+  estatus_del_proyecto?: string | null;
+}): string {
+  return props.hs_status || props.estatus_del_proyecto || "";
+}
+
 export function decidirCierre(input: {
   hubspotPipelineId: string | null | undefined;
   stageId: string | null | undefined;

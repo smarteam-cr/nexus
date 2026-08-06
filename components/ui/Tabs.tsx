@@ -29,6 +29,12 @@ export interface TabItem<K extends string = string> {
   label: React.ReactNode;
   /** Badge numérico a la derecha del label (patrón cobranza/clients). */
   count?: number;
+  /**
+   * Tooltip del botón. Existe porque las vistas de /clients traen una `ayuda` que explica por
+   * qué su número puede no coincidir con Éxito del cliente ni con Cobranza — el descuadre que
+   * después nadie sabe explicar. Sin superficie donde pintarla, ese texto era inalcanzable.
+   */
+  title?: string;
   disabled?: boolean;
   /** Si TODOS los items lo traen, el componente entra en modo navegación. */
   href?: string;
@@ -154,6 +160,7 @@ export function Tabs<K extends string = string>({
             aria-selected={active}
             tabIndex={active ? 0 : -1}
             disabled={it.disabled}
+            title={it.title}
             onClick={() => onChange?.(it.key)}
             className={tabClass(variant, size, active, it.disabled)}
           >

@@ -38,6 +38,8 @@ export interface AltaTrabadaProps {
   altaUltimoIntentoAt?: string | null;
   /** `Project.altaIntentos`. Se muestra recién a partir del segundo: uno solo no dice nada. */
   altaIntentos?: number | null;
+  /** `Project.altaActorEmail` — quién empezó el alta. Ver `habilitado`. */
+  altaActorEmail?: string | null;
   /**
    * ¿Esta persona puede dar de alta? Sin la celda, ve el cartel pero no el botón.
    *
@@ -69,6 +71,7 @@ export default function AltaTrabada({
   altaError,
   altaUltimoIntentoAt,
   altaIntentos,
+  altaActorEmail,
   puedeReintentar,
   onTermino,
   variante = "completo",
@@ -83,11 +86,33 @@ export default function AltaTrabada({
 
   /* Las DOS instancias del cartel comparten el estado de «está corriendo». Sin esto, deshabilitar
      el botón del rail dejaba clickeable el del widget. Ver el comentario de `enVuelo`. */
-  useEffect(() => suscribir(projectId, () => setCorriendo(enVuelo.has(projectId))), [projectId]);
+  useEffect(() => {
+    /* ⚠ Se RE-SINCRONIZA, no solo se suscribe: en el rail del cliente el cartel no lleva `key` y
+       `projectId` cambia al saltar de pestaña de proyecto SIN remontar. Sin este reset, el
+       «Último error» del proyecto anterior queda pintado sobre el nuevo, y el botón puede
+       aparecer deshabilitado por una corrida que es de otro proyecto. */
+    setCorriendo(enVuelo.has(projectId));
+    setFallo(null);
+    setCorrio(false);
+    return suscribir(projectId, () => setCorriendo(enVuelo.has(projectId)));
+  }, [projectId]);
 
-  /* El default es el permiso, no `true`. SUPER_ADMIN da true en todo, así que no cambia nada
-     para quien administra; lo que cambia es que el CSE deja de ver un botón que le va a fallar. */
-  const habilitado = puedeReintentar ?? me?.permissions.sections.proyectos?.create === true;
+  /**
+   * ── QUIÉN VE EL BOTÓN, Y POR QUÉ NO ES SOLO EL PERMISO ──────────────────────
+   * El default es el permiso y no `true`: con `true`, el CSE —el rol que más fichas de clientes
+   * abre— veía un botón que le devuelve 403 y el texto crudo del permiso se pintaba en el lugar
+   * donde va el motivo del alta trabada.
+   *
+   * ⚠ Pero el permiso solo tampoco alcanza: `POST /api/clients/traer-de-hubspot` lo puede
+   * apretar cualquier miembro del equipo, así que quien trae una empresa puede no tener la
+   * celda. Si el espejo falla justo ahí, esa persona se queda mirando un cartel sin salida
+   * sobre algo que ella misma creó. El servidor ya deja terminar a quien empezó
+   * (`alta/retry/route.ts`); esta línea es la misma regla, dicha en la pantalla.
+   */
+  const laEmpezoEstaPersona =
+    !!altaActorEmail && !!me?.email && altaActorEmail.toLowerCase() === me.email.toLowerCase();
+  const habilitado =
+    puedeReintentar ?? (me?.permissions.sections.proyectos?.create === true || laEmpezoEstaPersona);
 
   /* El estado llega como string suelto (viaja por JSON y por props de server component), así
      que se valida contra la tabla en vez de castearse: un valor que nadie declaró tiene que

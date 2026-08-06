@@ -94,11 +94,14 @@ async function main() {
       console.log(`  → sellaría altaPipelineElegido=${f.hubspotPipelineId} y correría el motor`);
       continue;
     }
+    /* ⚠ NO se limpia `altaError`, y el comentario que decía lo contrario estaba al revés: el
+       reclamo del motor concede la fila justamente cuando `altaError` NO es null (= la corrida
+       anterior terminó y dejó su motivo escrito). Borrarlo acá le sacaría al `avanzarAlta` de
+       abajo la única condición que lo deja pasar dentro de los 90 s del reclamo. El motor lo
+       limpia solo, al empezar. */
     await prisma.project.update({
       where: { id: f.id },
-      // El motor toma el reclamo de la fila mirando `altaError`; se limpia para que el
-      // `avanzarAlta` de acá abajo no choque con su propio guardia de concurrencia.
-      data: { altaPipelineElegido: f.hubspotPipelineId, altaError: null },
+      data: { altaPipelineElegido: f.hubspotPipelineId },
     });
     const r = await avanzarAlta(f.id);
     console.log(`  ✓ ${r.termino ? "ALTA TERMINADA" : `sigue en ${r.estado}: ${r.error ?? "sin motivo"}`}`);

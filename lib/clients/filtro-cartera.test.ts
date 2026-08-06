@@ -165,15 +165,21 @@ describe("la pantalla cuenta DESPUÉS de la búsqueda", () => {
     ).toContain("contarVistas(buscados)");
   });
 
-  it("y el buscador vive en la pantalla, no adentro de <Table>", () => {
-    /* Con el término encerrado en la primitiva, el padre no puede saber cuántas filas se ven y
-       la línea de verdad se vuelve imposible de escribir. Además `Table.tsx:121` devuelve su
-       estado vacío ANTES del toolbar: un filtro que deja la lista en cero se llevaría puestos
-       el buscador y las píldoras, o sea el control para deshacerlo. */
-    const src = sinComentarios(PANTALLA);
-    const tabla = bloqueDesde(src, "<Table");
-    expect(src, "el toolbar volvió adentro de <Table>").toContain("<SearchFilterBar");
-    expect(tabla, "<Table> volvió a ser dueño del buscador").not.toContain("search=");
+  it("y <Table> ya NO es dueño del buscador", () => {
+    /**
+     * ⚠ NO con `bloqueDesde`: `indexOf("<Table")` engancha `<Table.IdentityCell`, que aparece
+     * mucho antes que el `<Table>` real, y el balanceo de llaves terminaba evaluando 53
+     * caracteres de un `leading={<Avatar …/>}`. La guarda no podía fallar.
+     *
+     * El regex `(?!\.)` salta los sub-componentes y mira los primeros 600 caracteres del
+     * elemento, que es donde van sus props.
+     */
+    const src = sinComentarios("app/(shell)/clients/ClientsGrid.tsx");
+    expect(src, "ya no se renderiza ninguna <Table>; revisar esta guarda").toMatch(/<Table\b(?!\.)/);
+    expect(
+      src,
+      "<Table> volvió a ser dueño del buscador: el toolbar desaparece con la lista vacía",
+    ).not.toMatch(/<Table\b(?!\.)[\s\S]{0,600}?\bsearch=/);
   });
 });
 

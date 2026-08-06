@@ -129,6 +129,8 @@ interface GPSData {
     error?: string | null;
     ultimoIntentoAt?: string | null;
     intentos?: number | null;
+    /** Quién empezó el alta: puede terminarla aunque no tenga la celda. */
+    actorEmail?: string | null;
   } | null;
 }
 
@@ -542,6 +544,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             altaError={data.alta.error}
             altaUltimoIntentoAt={data.alta.ultimoIntentoAt}
             altaIntentos={data.alta.intentos}
+            altaActorEmail={data.alta.actorEmail}
             /* El widget guarda su respuesta en caché. Sin invalidar, recargar volvería a
                pintar el cartel sobre un alta que ya terminó — y el botón parecería no haber
                hecho nada. */

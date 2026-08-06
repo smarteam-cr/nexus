@@ -163,11 +163,21 @@ describe("el permiso es la forma del endpoint", () => {
     );
   });
 
-  it("y hay tope diario, contado en la base", () => {
-    /* En memoria no sobrevive a un reinicio del proceso. */
+  it("y hay tope diario, contado en la base y por PROYECTO", () => {
+    /* En memoria no sobrevive a un reinicio del proceso. Y se cuenta por proyecto, no por
+       cliente: la rama de adopción crea un proyecto SIN crear ficha, así que un contador de
+       clientes la deja pasar sin límite justo por el camino que más se usa. */
     const src = fuente(RUTA);
     expect(src).toContain("TOPE_DIARIO");
-    expect(src, "el tope dejó de contarse contra la base").toContain("prisma.client.count");
+    expect(src, "el tope dejó de contarse contra la base").toContain("prisma.project.count");
+    // Y arriba de la rama de adopción, o el camino que más se usa no lo ve nunca.
+    const iTope = src.indexOf("TOPE_DIARIO)");
+    const iAdopcion = src.indexOf("cuerpo.adoptarEnClientId");
+    expect(iTope, "desapareció el chequeo del tope").toBeGreaterThan(0);
+    expect(iAdopcion, "desapareció la rama de adopción").toBeGreaterThan(0);
+    expect(iTope, "el tope volvió a quedar DEBAJO de la adopción, que retorna antes").toBeLessThan(
+      iAdopcion,
+    );
   });
 });
 
@@ -192,7 +202,22 @@ describe("«Es la misma» resuelve, no navega", () => {
     expect(
       fila,
       "«Es la misma» volvió a ser un enlace: la fila reaparece para siempre y el único camino que la vacía es el que duplica",
-    ).toContain("adoptarEnClientId: gemela.clientId");
+    ).toMatch(/adoptarEnClientId:\s*\w+\.clientId/);
+    /**
+     * Y se pintan TODAS: con una sola, la persona adopta en la ficha equivocada sin enterarse
+     * de que existía otra. `detectarGemelas` es laxo A PROPÓSITO —su contrato dice «devuelve
+     * todas las que se parecen, no la mejor»— así que recortar acá rompe el contrato.
+     *
+     * ⚠ La afirmación es que NO SE RECORTA, no que exista un `.map`: hay dos `gemelas.map(` en
+     * el archivo (el de las filas y el de la frase de confirmación), así que buscar el símbolo
+     * pasaba en verde con el recorte puesto.
+     */
+    expect(fila, "el panel volvió a mostrar un subconjunto de las gemelas").not.toMatch(
+      /gemelas(\[|\.slice\(|\.at\()/,
+    );
+    expect(fila, "cada gemela dejó de tener su propio botón").toMatch(
+      /gemelas\.map\([\s\S]{0,900}?adoptarEnClientId: g\.clientId/,
+    );
     expect(
       fila,
       "la fila volvió a navegar en vez de resolver",
@@ -227,7 +252,7 @@ describe("el botón no existe cuando no hay nada que traer", () => {
     expect(
       src,
       "el botón se pinta siempre: queda un control muerto en el toolbar que se acaba de despejar",
-    ).toContain("if (cuantas <= 0) return null;");
+    ).toContain("if (cuantas <= 0 && !abierto) return null;");
   });
 
   it("y si HubSpot no contestó tampoco se pinta", () => {

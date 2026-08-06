@@ -79,15 +79,28 @@ const fakePrisma = {
       if ("altaEstado" in where && f.altaEstado !== where.altaEstado) return { count: 0 };
       const or = where.OR as Array<Record<string, unknown>> | undefined;
       if (or) {
+        /* ⚠ El doble EVALÚA el operador recibido y REVIENTA con uno que no modela. La versión
+           anterior asumía `not: null` y `lt` sin mirarlos, así que cambiar la condición del
+           reclamo por su opuesta —`{ equals: null }`, `{ gt }`— dejaba el test en verde con el
+           mutex apagado. Un doble que confirma lo que uno ya cree no prueba nada. */
         const cumple = or.some((c) => {
-          if ("altaError" in c) return f.altaError !== null && f.altaError !== undefined;
+          if ("altaError" in c) {
+            const cond = c.altaError as { not?: null } | null;
+            if (cond === null) return f.altaError === null || f.altaError === undefined;
+            if (cond && "not" in cond && cond.not === null) {
+              return f.altaError !== null && f.altaError !== undefined;
+            }
+            throw new Error("operador no modelado en altaError: " + JSON.stringify(cond));
+          }
           if ("altaUltimoIntentoAt" in c) {
-            const cond = c.altaUltimoIntentoAt as { lt?: Date } | null;
+            const cond = c.altaUltimoIntentoAt as { lt?: Date; gt?: Date } | null;
             const val = f.altaUltimoIntentoAt as Date | null | undefined;
             if (cond === null) return val === null || val === undefined;
-            return !!(cond?.lt && val && val.getTime() < cond.lt.getTime());
+            if (cond.lt) return !!(val && val.getTime() < cond.lt.getTime());
+            if (cond.gt) return !!(val && val.getTime() > cond.gt.getTime());
+            throw new Error("operador no modelado en altaUltimoIntentoAt: " + JSON.stringify(cond));
           }
-          return false;
+          throw new Error("rama del OR no modelada: " + JSON.stringify(c));
         });
         if (!cumple) return { count: 0 };
       }

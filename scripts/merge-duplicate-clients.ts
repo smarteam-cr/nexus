@@ -118,11 +118,19 @@ async function dupCensus(dupId: string) {
     prisma.client.findUnique({
       where: { id: dupId },
       select: {
+        // Las 1:1 que también cascadean. `_count` no las cubre: no son listas.
+        cuentaFinanciera: { select: { id: true } },
+        csSignals: { select: { id: true } },
+        partnerSnapshot: { select: { id: true } },
+        accountBrief: { select: { id: true } },
         _count: {
           select: {
             projects: true, agentRuns: true, contextCards: true, canvasSuggestions: true,
             actionItems: true, audits: true, implementations: true, knowledge: true,
             documents: true, stageNotes: true, assignments: true, appUsers: true, handoffs: true,
+            /* ⚠ ESTAS NO SE REASIGNAN: cascadean con el `delete` del duplicado. Se cuentan para
+               poder ABORTAR, no para reportar. Ver `LO_QUE_CASCADEA`. */
+            businessCases: true, csAlerts: true,
           },
         },
       },
@@ -132,7 +140,14 @@ async function dupCensus(dupId: string) {
       where: { resolvedClientId: dupId }, select: { title: true }, take: 6, orderBy: { date: "desc" },
     }),
   ]);
-  return { resolvedSessions, manualSessions, k: c!._count, hubspotAccount, sampleTitles: dupSessionTitles.map((s) => s.title) };
+  return {
+    resolvedSessions, manualSessions, k: c!._count, hubspotAccount,
+    sampleTitles: dupSessionTitles.map((s) => s.title),
+    cuentaFinanciera: c!.cuentaFinanciera,
+    csSignals: c!.csSignals,
+    partnerSnapshot: c!.partnerSnapshot,
+    accountBrief: c!.accountBrief,
+  };
 }
 
 /** Plan de fold del canónico a partir del dup. */
@@ -162,6 +177,30 @@ function computeFold(canon: ClientFull, dup: ClientFull) {
     fillIfEmpty.canvasConfidence = dup.canvasConfidence as Prisma.InputJsonValue;
 
   return { addDomains, mergedDomains, hubspotCompanyId, hubspotConflict, fillIfEmpty };
+}
+
+/**
+ * ── LO QUE EL MERGE **NO** REASIGNA Y EL `delete` SE LLEVA EN CASCADA ─────────
+ *
+ * El script reasigna las relaciones del trabajo (proyectos, handoffs, conocimiento, sesiones…),
+ * pero `client.delete` cascadea a varias más que NADIE mueve — y una de ellas es PLATA:
+ * `CuentaFinanciera` arrastra `ServicioContratado` → `PlanDePago`/`CuotaPlan`, `Cobro`,
+ * `AlertaCobro` y `BitacoraCobro`. La cobranza 2026 son 53 servicios y 202 cobros cargados a
+ * mano: si el duplicado tiene cuenta, el merge la borra sin decir una palabra y no hay vuelta.
+ *
+ * Por eso el script ABORTA en vez de decidir. Reasignar una cuenta financiera 1:1 no es
+ * mecánico —hay que resolver planes, cuotas y cobros que pueden solaparse— y esa es una
+ * decisión de negocio, no de un script de limpieza.
+ */
+function loQueSeBorraria(census: Awaited<ReturnType<typeof dupCensus>>): string[] {
+  const out: string[] = [];
+  if (census.cuentaFinanciera) out.push("cuenta financiera (con sus servicios, planes y cobros) ⚠ PLATA");
+  if (census.k.businessCases > 0) out.push(`${census.k.businessCases} business case(s) con sus bloques`);
+  if (census.k.csAlerts > 0) out.push(`${census.k.csAlerts} alerta(s) de Éxito del cliente`);
+  if (census.csSignals) out.push("señales de CS");
+  if (census.partnerSnapshot) out.push("snapshot de CS360");
+  if (census.accountBrief) out.push("brief de la cuenta");
+  return out;
 }
 
 async function processPair(p: (typeof PAIRS)[number]) {
@@ -202,6 +241,16 @@ async function processPair(p: (typeof PAIRS)[number]) {
     console.log(`    hubspotCompanyId: canónico adopta ${fold.hubspotCompanyId} (estaba vacío)`);
   const fillKeys = Object.keys(fold.fillIfEmpty);
   if (fillKeys.length) console.log(`    rellena-si-vacío: ${fillKeys.join(", ")}`);
+  /* ⚠ EL FRENO. Se dice SIEMPRE (también en dry-run) y aborta EL PAR, no la corrida entera:
+     con varios pares, que uno tenga plata no es motivo para no mergear los otros. */
+  const seBorraria = loQueSeBorraria(census);
+  if (seBorraria.length > 0) {
+    console.error(`\n  ⛔ NO SE MERGEA "${dup.name}": el borrado se llevaría en cascada`);
+    for (const x of seBorraria) console.error(`     · ${x}`);
+    console.error("     Nada de eso lo reasigna este script. Resolvelo a mano y volvé.");
+    return { applied: false };
+  }
+
   console.log(`\n  → BORRA dup "${dup.name}" (${dup.id})`);
 
   if (!APPLY) return { applied: false };

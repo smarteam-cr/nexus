@@ -44,6 +44,8 @@ interface ProjectSummary {
   altaError?: string | null;
   altaUltimoIntentoAt?: Date | string | null;
   altaIntentos?: number | null;
+  /** Quién empezó el alta: puede terminarla aunque no tenga la celda. */
+  altaActorEmail?: string | null;
 }
 
 /**
@@ -568,6 +570,7 @@ function ProjectSection({
               : null
           }
           altaIntentos={activeProject.altaIntentos}
+          altaActorEmail={activeProject.altaActorEmail}
           onTermino={() => {
             invalidateGps(activeProject.id);
             window.location.reload();

@@ -99,7 +99,9 @@ describe("qué entra a la pestaña", () => {
     /* Se mira el CÓDIGO sin comentarios: la prosa de arriba nombra `proyectoInterno` para
        explicar el bug, así que un escaneo crudo pasa en verde con la copia ya puesta. */
     const src = sinComentarios("lib/clients/proyectos-internos.ts");
-    expect(src, "el criterio se dejó de importar").toContain("esTrabajoInterno");
+    /* ⚠ Sobre la LLAMADA y no sobre el nombre: `toContain("esTrabajoInterno")` lo satisface la
+       línea del import, aunque nadie invoque la función. */
+    expect(src, "el criterio se dejó de aplicar").toMatch(/\.filter\(\s*esTrabajoInterno\s*\)/);
     expect(
       src,
       "se escribió una segunda copia del criterio en vez de usar esTrabajoInterno",

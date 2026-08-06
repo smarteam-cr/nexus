@@ -127,6 +127,42 @@ describe("no se ofrece lo que no se puede traer", () => {
     );
   });
 
+  it("el estado crudo sale del HELPER, y no a mano", () => {
+    /**
+     * ⚠ Son DOS propiedades que dicen lo mismo —`hs_status` y `estatus_del_proyecto`— y el
+     * ORDEN entre ellas DECIDE. Esta línea nació invertida respecto de las otras dos del repo,
+     * así que con las dos puestas y discrepando este módulo podía ofrecer para traer un
+     * proyecto que el espejo —mirando el MISMO record— iba a cerrar. Y traer uno que el espejo
+     * cierra es cuarentena sin salida: queda `inactive`, o sea fuera de NAVEGABLE, o sea con el
+     * cartel «Reintentar» inalcanzable.
+     *
+     * La edición que la pone en rojo: volver a armar el `rawStatus` a mano.
+     */
+    const src = fuente(UNIVERSO);
+    expect(src, "el estado crudo se volvió a armar a mano: hay tres implementaciones otra vez").toContain(
+      "rawStatus: estadoCrudoDeHubspot(",
+    );
+    const kind = fuente("lib/projects/kind.ts");
+    expect(kind, "el helper dejó de preferir hs_status").toContain(
+      "props.hs_status || props.estatus_del_proyecto",
+    );
+  });
+
+  it("y los descartes solo cuentan lo que podría haber sido candidato", () => {
+    /* Sin el corte por empresa-ya-en-Nexus, los tres Set se llenan con proyectos de clientes
+       que existen desde hace un año —el espejo nunca crea uno cerrado ni uno suprimido, así que
+       sus ids no entran jamás a `idsDeNexus`— y el panel afirma «12 proyectos ya finalizados»
+       sobre una lista de 2 filas. Un número que no baja nunca y no explica nada. */
+    const src = fuente(UNIVERSO);
+    const i = src.lastIndexOf("const cerrados = new Set");
+    const bucle = src.slice(i, src.indexOf("const candidatas", i));
+    expect(bucle.length, "la guarda no está mirando nada").toBeGreaterThan(300);
+    const iCorte = bucle.indexOf("empresasDeNexus.has(empresa)");
+    const iPrimerDescarte = bucle.indexOf("suprimidosDeNexus.has");
+    expect(iCorte, "los descartes volvieron a contar empresas que ya son clientes").toBeGreaterThan(0);
+    expect(iCorte, "el corte quedó DEBAJO de los descartes").toBeLessThan(iPrimerDescarte);
+  });
+
   it("y NINGUNO se descarta en silencio", () => {
     /**
      * ── LA OTRA GUARDA QUE IMPORTA, Y NO ES DEL BACKEND ────────────────────────
@@ -238,14 +274,28 @@ describe("el modal no celebra un alta a medio hacer", () => {
      *
      * La edición que la pone en rojo: borrar `const aMedias = resultado.termino === false`.
      */
+    /**
+     * ⚠ `!== true` y no `=== false`: los dos rescates por carrera devuelven 200 SIN `termino`,
+     * y `undefined === false` es falso — o sea que con `=== false` el hueco quedaba justo donde
+     * este archivo dice que no puede estar. Ausencia de confirmación NO es confirmación.
+     */
     const src = fuente(MODAL);
     expect(src, "el modal volvió a celebrar mirando solo el status HTTP").toContain(
-      "resultado.termino === false",
+      "resultado.termino !== true",
     );
+    /* ⚠ El fin del tramo se VALIDA antes de cortar: la versión anterior de esta guarda pasaba
+       un `indexOf` que devolvía -1, así que `slice(i, -1)` agarraba casi el archivo entero
+       —incluida la propia declaración que buscaba— y no podía fallar nunca. */
     const i = src.indexOf("resultado?.tipo === \"listo\"");
-    const bloque = src.slice(i, src.indexOf("return (", src.indexOf("rounded-lg border border-line", i)));
+    expect(i, "se movió el desenlace listo; revisar esta guarda").toBeGreaterThan(0);
+    const fin = src.indexOf("resultado.clientId &&", i);
+    expect(fin, "se movió el enlace «Abrir»; revisar esta guarda").toBeGreaterThan(i);
+    const bloque = src.slice(i, fin);
     expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(400);
-    expect(bloque, "el desenlace a medias perdió su color propio").toContain("aMedias");
+    /* Sobre el USO y no sobre el nombre: que la variable exista no prueba que decida el color. */
+    expect(bloque, "el desenlace a medias perdió su color propio").toMatch(
+      /aMedias[\s\S]{0,120}warn-surface/,
+    );
   });
 
   it("y el endpoint sigue devolviendo si terminó", () => {

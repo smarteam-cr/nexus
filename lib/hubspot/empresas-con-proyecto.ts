@@ -27,7 +27,7 @@ import { getSystemHubspotClient } from "./client";
 import { OBJETO_PROYECTOS } from "./asociaciones-proyecto";
 import { prisma } from "@/lib/db/prisma";
 import { detectarGemelas, type ClienteComparable, type Gemela } from "@/lib/clients/gemelas";
-import { resolvePipeline, decidirCierre } from "@/lib/projects/kind";
+import { resolvePipeline, decidirCierre, estadoCrudoDeHubspot } from "@/lib/projects/kind";
 
 /** Un proyecto de HubSpot que Nexus todavía no tiene. */
 export interface ProyectoFaltante {
@@ -67,9 +67,9 @@ export interface UniversoTraible {
   traibles: EmpresaTraible[];
   /** Empresas de HubSpot con al menos un proyecto. El denominador honesto. */
   totalConProyecto: number;
-  /** …de ésas, cuántas ya son Client de Nexus. */
+  /** …de ésas, cuántas ya son Client de Nexus. Es el numerador que el panel PINTA. */
   yaEnNexus: number;
-  /** …y cuántas quedaron fuera porque su proyecto YA está traído bajo otra ficha. */
+  /** …y cuántas quedaron fuera porque TODOS sus proyectos ya están traídos bajo otra ficha. */
   yaTraidoBajoOtraFicha: number;
   /** Proyectos de HubSpot sin ninguna empresa asociada: invisibles para este camino. */
   sinEmpresaAsociada: number;
@@ -155,7 +155,10 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
         nombre: (r.properties.hs_name ?? "").trim() || `Proyecto ${r.id}`,
         pipelineId: r.properties.hs_pipeline ?? null,
         stageId: (r.properties.hs_pipeline_stage ?? "").trim() || null,
-        rawStatus: r.properties.estatus_del_proyecto ?? r.properties.hs_status ?? null,
+        /* ⚠ Por el HELPER y no a mano: son dos propiedades que dicen lo mismo y el ORDEN entre
+           ellas decide. Esta línea nació invertida y podía ofrecer un proyecto que el espejo
+           —mirando el mismo record— iba a cerrar. Ver `estadoCrudoDeHubspot`. */
+        rawStatus: estadoCrudoDeHubspot(r.properties),
         ownerId: r.properties.hubspot_owner_id ?? null,
         cslEncargado: r.properties.csl_encargado ?? null,
       });
@@ -258,12 +261,26 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
   const cerrados = new Set<string>();
   const suprimidos = new Set<string>();
   const tipoDesconocido = new Set<string>();
+  /** Todos los proyectos legibles de cada empresa — el denominador de `traidoBajoOtraFicha`. */
+  const empresasDeOtroProyecto = new Map<string, string[]>();
   for (const p of proyectos) {
     if (ilegibles.has(p.id)) continue;
     const empresas = empresasDe.get(p.id);
     if (!empresas) continue;
     for (const empresa of empresas) {
       empresasConProyecto.add(empresa);
+      empresasDeOtroProyecto.set(empresa, [...(empresasDeOtroProyecto.get(empresa) ?? []), p.id]);
+      /**
+       * ⚠ LOS DESCARTES SE CUENTAN SOLO SOBRE EMPRESAS QUE PODRÍAN SER CANDIDATAS.
+       *
+       * Sin esta línea los tres Set se llenan ANTES de saber si la empresa ya es cliente, y
+       * como el espejo nunca crea un proyecto cerrado ni uno suprimido, sus ids no entran nunca
+       * a `idsDeNexus`: se cuentan para siempre, aunque su empresa sea cliente desde hace un
+       * año. Con 57 de 61 empresas ya en Nexus, el panel terminaba diciendo «12 proyectos ya
+       * finalizados» sobre una lista de 2 filas — un número que no explica nada de lo que la
+       * persona está mirando y que no baja nunca.
+       */
+      if (empresasDeNexus.has(empresa)) continue;
       if (idsDeNexus.has(p.id)) continue;
       if (suprimidosDeNexus.has(p.id)) {
         suprimidos.add(p.id);
@@ -290,13 +307,27 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
 
   const candidatas = [...faltantesPorEmpresa.keys()].filter((id) => !empresasDeNexus.has(id));
   const yaEnNexus = [...empresasConProyecto].filter((id) => empresasDeNexus.has(id)).length;
+  /**
+   * Empresas que NO están en Nexus y a las que igual no les falta nada: TODOS sus proyectos ya
+   * vinieron bajo otra ficha.
+   *
+   * ⚠ Se cuenta, no se resta. La versión por resta —`total - yaEnNexus - candidatas`— absorbía
+   * en silencio todo lo que este módulo poda por otros motivos (los tres descartes, las fichas
+   * que HubSpot no devolvió, las absorbidas por una fusión), así que su nombre afirmaba una
+   * causa que en general era falsa.
+   */
+  const traidoBajoOtraFicha = new Set<string>();
+  for (const [empresa, ps] of empresasDeOtroProyecto) {
+    if (empresasDeNexus.has(empresa)) continue;
+    if (faltantesPorEmpresa.has(empresa)) continue;
+    if (ps.every((id) => idsDeNexus.has(id))) traidoBajoOtraFicha.add(empresa);
+  }
   const base = {
     totalConProyecto: empresasConProyecto.size,
     yaEnNexus,
     // Empresas que NO están en Nexus y a las que igual no les falta nada: su proyecto ya vino
     // bajo otra ficha. Son falsos positivos del criterio ingenuo, y se descuentan gratis.
-    yaTraidoBajoOtraFicha:
-      empresasConProyecto.size - yaEnNexus - candidatas.length,
+    yaTraidoBajoOtraFicha: traidoBajoOtraFicha.size,
     sinEmpresaAsociada,
     ilegibles: ilegibles.size,
     cerrados: cerrados.size,
@@ -396,5 +427,5 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
   // del hermano equivocado (C11).
   traibles.sort((a, b) => a.rotulo.localeCompare(b.rotulo, "es"));
 
-  return { ...base, traibles, yaTraidoBajoOtraFicha: base.yaTraidoBajoOtraFicha };
+  return { ...base, traibles };
 }
