@@ -46,6 +46,14 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "app/api/projects/[projectId]/project-sessions/route.ts": { modo: "criterio", criterio: "clasificable" },
   "app/api/clients/[id]/analyze/route.ts": { modo: "criterio", criterio: "clasificable" },
   "lib/sessions/classify-session-project.ts": { modo: "criterio", criterio: "clasificable" },
+  /**
+   * No hace ninguna consulta: recibe el array que el `select` anidado de `ClientsTable` ya
+   * trajo y lo resume para la barra de filtros del índice. Entra igual —y el detector nuevo
+   * lo obliga— porque decide el alcance de los contadores que la pantalla afirma en voz alta.
+   * ⚠ Usa `clasificable` A PROPÓSITO: `cartera` excluye el trabajo interno, y con ese criterio
+   * el contador `internos` —y con él la pestaña «Proyectos internos»— darían 0 por construcción.
+   */
+  "lib/clients/resumen-proyectos.ts": { modo: "criterio", criterio: "clasificable" },
 
   // ── Los que buscan el centinela ────────────────────────────────────────────
   "lib/canvas/strategy-project.ts": { modo: "sentinel" },
@@ -71,6 +79,26 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "criterio de alcance sería el bug: un hermano INACTIVO —o uno que el criterio esconda por " +
       "cualquier motivo— quedaría igual apuntando a una fila muerta, que es exactamente lo que " +
       "este barrido viene a impedir. La búsqueda es por referencia, no por alcance.",
+  },
+  "lib/hubspot/empresas-con-proyecto.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: pregunta qué `hubspotServiceId` YA existe en " +
+      "Nexus —el que sea, activo o no, de cualquier cliente— para no volver a ofrecer traer un " +
+      "proyecto que ya está. Acotarlo con un criterio de alcance es el bug: un proyecto " +
+      "inactivo, o de un cliente que el criterio esconda, se vería como faltante y el botón " +
+      "ofrecería traerlo otra vez creando una ficha de empresa duplicada. La búsqueda es por " +
+      "existencia, no por alcance — mismo caso que `alta-runner`.",
+  },
+  "app/api/clients/traer-de-hubspot/route.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: cuando dos clics simultáneos chocan contra el " +
+      "único de `hubspotServiceId`, busca QUIÉN ganó la carrera para adoptarlo en vez de " +
+      "devolver un error crudo. Acotarlo con un criterio de alcance es el bug: el proyecto que " +
+      "ganó puede estar en cuarentena —de hecho SIEMPRE lo está, porque el alta acaba de " +
+      "empezar— y ningún criterio lo deja pasar, así que el segundo clic crearía el duplicado " +
+      "que este rescate viene a evitar. La búsqueda es por existencia, no por alcance.",
   },
   "lib/projects/alta-runner.ts": {
     modo: "exento",

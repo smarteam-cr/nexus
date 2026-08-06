@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { normalizarTexto } from "@/lib/ui/text-search";
 import { SearchFilterBar } from "./SearchFilterBar";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
@@ -24,7 +25,8 @@ export interface TableColumn<T> {
 
 export interface TableProps<T> {
   columns: TableColumn<T>[];
-  rows: T[];
+  /** `readonly` para que un padre pueda pasar el resultado de sus propios filtros sin copiar. */
+  rows: readonly T[];
   rowKey: (row: T) => string;
   /** Si se define, la fila completa es clickeable (hover + cursor + teclado). */
   onRowClick?: (row: T) => void;
@@ -52,10 +54,10 @@ const ALIGN: Record<string, string> = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-/** Normaliza para búsqueda: quita acentos, minúsculas, trim. */
-function normalize(s: string): string {
-  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
-}
+// `normalize` vivía acá. Se mudó a lib/ui/text-search.ts (`normalizarTexto`) sin cambiarle
+// una línea: mientras la única implementación estuviera encerrada en este archivo, un padre
+// que quisiera filtrar por su cuenta —para poder decir "mostrando N de M"— tenía que
+// escribir la segunda.
 
 /** Comparador estable; null/undefined siempre al final sin importar `dir`. */
 function compareValues(a: SortValue, b: SortValue, dir: "asc" | "desc"): number {
@@ -133,8 +135,8 @@ export function Table<T>({
   // Pipeline: filtrar por búsqueda → ordenar. Nunca muta `rows`.
   let displayed = rows;
   if (search && query.trim()) {
-    const q = normalize(query);
-    displayed = displayed.filter((r) => normalize(search.getText(r)).includes(q));
+    const q = normalizarTexto(query);
+    displayed = displayed.filter((r) => normalizarTexto(search.getText(r)).includes(q));
   }
   if (sort) {
     const col = columns.find((c) => c.key === sort.key);

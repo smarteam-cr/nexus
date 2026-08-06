@@ -7,6 +7,7 @@ import { resolveAllSessions } from "@/lib/sessions/resolve-client";
 import { buscarEtapa, resolvePipeline } from "@/lib/projects/kind";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { detectarFusionesEnLote } from "@/lib/hubspot/empresa-fusionada";
+import { ESTADOS_DE_ALTA, altaEnCurso } from "@/lib/projects/alta";
 
 /**
  * scripts/check-invariants.ts — BLINDAJE DURO de los invariantes medulares de Nexus.
@@ -320,8 +321,12 @@ async function main(): Promise<number> {
       }))?.clientId ??
       null;
     if (clienteDelOtro === null) {
-      // Apunta a un proyecto que ya no existe: degrada a "aparte" (se factura), que es el
-      // lado seguro, pero el dato quedó sucio y hay que verlo.
+      /* ⚠ Apunta a un proyecto que ya no existe. Acá decía que eso "degrada a aparte (se
+         factura), que es el lado seguro" — y es FALSO, corregido el 2026-08-05: el criterio de
+         cobranza `NO_ES_HERMANO_DE_CS` exige `hermanoCsProjectId === null`, y un puntero muerto
+         NO es null. O sea que el proyecto **deja de facturar en silencio** hasta que el próximo
+         sync recalcule los hermanos. Es lo contrario del lado seguro, y el operador que leía este
+         mensaje se quedaba tranquilo. */
       hermanosCruzados.push(`${p.client.name} · "${p.name}" → apunta a un proyecto BORRADO`);
     } else if (clienteDelOtro !== p.clientId) {
       hermanosCruzados.push(`${p.client.name} · "${p.name}" → hermano de OTRO cliente`);
@@ -676,6 +681,71 @@ async function main(): Promise<number> {
     }
   } catch (e) {
     console.error("⚠ INV13 no verificable (¿HubSpot caído o sin cuenta del sistema?):", e instanceof Error ? e.message : e);
+  }
+
+  // ── Inv 14: ningún alta lleva días a medio hacer ──
+  /**
+   * ── POR QUÉ ESTE INVARIANTE, Y QUÉ LO HIZO NECESARIO ────────────────────────
+   * Un alta a medio hacer pone al proyecto en cuarentena: existe, se abre, se ve normal — y no
+   * cobra, no suma a la cartera de nadie, no le nace el handoff y no se le publica nada al
+   * cliente. Es el estado más caro del sistema y el más silencioso.
+   *
+   * La cuarentena está bien: un alta a mitad de camino NO tiene que facturar. Lo que estaba mal
+   * es que nadie mide CUÁNTO HACE que está así. El 2026-08-05/06 dos proyectos entraron en
+   * cuarentena permanente por una comparación insatisfacible, y los trece invariantes anteriores
+   * dieron verde: INV9 compara SQL contra memoria y los dos coinciden en excluirlos; INV10 busca
+   * proyectos sin pipeline y los dos SÍ lo tenían; INV11 mira etapas declaradas y la suya lo
+   * estaba. Ninguno pregunta lo único que importa acá: hace cuánto.
+   *
+   * Sin esto, un bug de un minuto se convierte en una pérdida permanente. El molde es el de
+   * INV8c —«un vínculo declarado hace más de 7 días»—, que ya existe para los hermanos.
+   *
+   * ⚠ El umbral es de HORAS y no de días a propósito: el camino feliz termina el alta EN LÍNEA,
+   * dentro del mismo request. Un alta que sigue viva a la mañana siguiente no está tardando:
+   * está trabada.
+   */
+  const HORAS_DE_GRACIA = 12;
+  const limiteAlta = new Date(Date.now() - HORAS_DE_GRACIA * 3600_000);
+  /**
+   * ⚠ `altaEstado != null` NO es «el alta está en curso»: `listo` es un estado y se PERSISTE.
+   * Con ese filtro el invariante marcaba en rojo todos los proyectos que alguna vez pasaron por
+   * el alta —los cuatro que hay— incluidos los que terminaron bien hace días. Se derivan de la
+   * tabla, que es la que sabe cuáles significan «a medio hacer».
+   */
+  const EN_CURSO = ESTADOS_DE_ALTA.filter(altaEnCurso);
+  const altasViejas = await prisma.project.findMany({
+    where: { altaEstado: { in: [...EN_CURSO] }, altaIniciadaAt: { lt: limiteAlta } },
+    select: {
+      id: true, name: true, altaEstado: true, altaError: true, altaIntentos: true,
+      altaIniciadaAt: true, altaPipelineElegido: true, hubspotPipelineId: true,
+      client: { select: { name: true } },
+    },
+    orderBy: { altaIniciadaAt: "asc" },
+  });
+  if (altasViejas.length > 0) {
+    violations++;
+    console.error(
+      `✗ INV14 VIOLADO: ${altasViejas.length} alta(s) llevan más de ${HORAS_DE_GRACIA} h sin terminar ` +
+        `(esos proyectos NO cobran, no suman a la cartera y no se pueden publicar).`,
+    );
+    for (const a of altasViejas.slice(0, 10)) {
+      const dias = Math.floor((Date.now() - a.altaIniciadaAt!.getTime()) / 86_400_000);
+      console.error(
+        `    - ${a.client.name} / ${a.name}: ${a.altaEstado} hace ${dias} d, ${a.altaIntentos} intento(s)`,
+      );
+      console.error(`      ${a.altaError ?? "(sin motivo escrito)"}`);
+      /* El caso concreto que originó el invariante lleva su propio remedio: sin el pipeline
+         sellado la comparación del motor es insatisfacible y «Reintentar» no puede ganar. */
+      if (!a.altaPipelineElegido && a.hubspotPipelineId) {
+        console.error(
+          `      ⚠ sin pipeline elegido y HubSpot dice ${a.hubspotPipelineId}: ` +
+            `corré npx tsx scripts/sellar-pipeline-del-alta.ts --apply`,
+        );
+      }
+    }
+    if (altasViejas.length > 10) console.error(`    … y ${altasViejas.length - 10} más`);
+  } else {
+    console.log(`✓ INV14: ningún alta lleva más de ${HORAS_DE_GRACIA} h a medio hacer.`);
   }
 
   return violations;

@@ -14,27 +14,55 @@ import type { ClientKind } from "@prisma/client";
 
 export const CLIENT_KINDS = ["CLIENTE", "PROSPECTO", "ALIADO", "INTERNO"] as const;
 
-/** Label + ayuda para la UI (selector de la ficha y pestañas del listado). */
-export const CLIENT_KIND_META: Record<ClientKind, { label: string; plural: string; help: string }> = {
+/**
+ * Label + ayuda para la UI (selector de la ficha y pestañas del listado).
+ *
+ * ⚠ `contable` no es redundante con `label`/`plural`: esos son el ROTULO del control, y
+ * «Somos Smarteam» no se puede contar («0 de 0 somos smarteam»). Derivar el singular
+ * quitándole la "s" al plural funciona con tres de los cuatro y falla justo con el que esta
+ * tanda vino a arreglar — o sea, el generador de mentiras silenciosas de siempre. Se escribe.
+ */
+export const CLIENT_KIND_META: Record<
+  ClientKind,
+  { label: string; plural: string; help: string; contable: { uno: string; varios: string } }
+> = {
   CLIENTE: {
     label: "Cliente",
     plural: "Clientes",
+    contable: { uno: "cliente", varios: "clientes" },
     help: "Nos compró o nos está comprando. Es la cartera: entra a los listados, al portafolio y a cobranza.",
   },
   PROSPECTO: {
     label: "Prospecto",
     plural: "Prospectos",
+    contable: { uno: "prospecto", varios: "prospectos" },
     help: "Ventas la creó para una propuesta comercial. Todavía no compró.",
   },
   ALIADO: {
     label: "Aliado",
     plural: "Aliados",
+    contable: { uno: "aliado", varios: "aliados" },
     help: "Aliado comercial o partner con el que trabajamos (ej. una agencia con la que se co-vende). No es cartera.",
   },
+  /**
+   * ⚠ Se llamaba «Internos» y ése era el nombre equivocado, porque en el índice hay una
+   * pestaña **«Proyectos internos»** que es OTRA cosa: esto es una propiedad de la EMPRESA
+   * (la empresa somos nosotros) y aquello son los PROYECTOS que hacemos de puertas adentro.
+   * Con la misma palabra y contadores distintos, la lectura natural —«Internos son los
+   * clientes con proyectos internos»— era la incorrecta, y así se leyó.
+   *
+   * Hoy no hay ninguna empresa marcada así, y por eso el índice **no pinta esta pestaña
+   * mientras esté en cero**: una pestaña vacía que además se confunde con otra no ayuda a
+   * nadie. La clasificación sigue disponible en la ficha de la empresa.
+   */
   INTERNO: {
-    label: "Interno",
-    plural: "Internos",
-    help: "Smarteam y sus entidades. No somos nuestro propio cliente.",
+    label: "Empresa nuestra",
+    plural: "Nuestras empresas",
+    contable: { uno: "empresa nuestra", varios: "empresas nuestras" },
+    help:
+      "La empresa SOMOS nosotros: Smarteam y sus entidades. No somos nuestro propio " +
+      "cliente. No es lo mismo que un proyecto interno — eso lo marca cada proyecto, y esos " +
+      "proyectos tienen su propia pestaña en el índice de clientes.",
   },
 };
 

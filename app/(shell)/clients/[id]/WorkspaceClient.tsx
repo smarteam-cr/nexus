@@ -44,6 +44,8 @@ interface ProjectSummary {
   altaError?: string | null;
   altaUltimoIntentoAt?: Date | string | null;
   altaIntentos?: number | null;
+  /** Quién empezó el alta: puede terminarla aunque no tenga la celda. */
+  altaActorEmail?: string | null;
 }
 
 /**
@@ -535,9 +537,13 @@ function ProjectSection({
           className="ml-3 shrink-0"
           loading={sincronizando}
           onClick={onSync}
-          title="Traer de HubSpot los proyectos de este cliente"
+          title="Trae los proyectos que esta empresa tenga en HubSpot y todavía no estén acá. No borra nada."
         >
-          {sincronizando ? "Actualizando…" : "Actualizar"}
+          {/* ⚠ Se llamaba «Actualizar», y ése era el problema: es LA puerta por la que un CSE
+              puede traerse un proyecto de HubSpot —su gate es solo tener acceso al cliente, sin
+              permiso especial— y nadie la encontraba porque el nombre no dice lo que hace.
+              «Actualizar» suena a refrescar la pantalla. */}
+          {sincronizando ? "Trayendo…" : "Traer de HubSpot"}
         </Button>
       )}
       </div>
@@ -564,6 +570,7 @@ function ProjectSection({
               : null
           }
           altaIntentos={activeProject.altaIntentos}
+          altaActorEmail={activeProject.altaActorEmail}
           onTermino={() => {
             invalidateGps(activeProject.id);
             window.location.reload();

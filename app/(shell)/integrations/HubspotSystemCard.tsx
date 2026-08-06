@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useMe } from "@/hooks/useMe";
 
 interface HubspotStatus {
   connected: boolean;
@@ -12,7 +13,6 @@ interface HubspotStatus {
 interface ImportResult {
   total: number;
   created: number;
-  updated: number;
 }
 
 export default function HubspotSystemCard({
@@ -22,6 +22,14 @@ export default function HubspotSystemCard({
   status: HubspotStatus;
   justConnected: boolean;
 }) {
+  /* Gate COSMÉTICO, y hace falta: la página entra con `configuracion.read` pero el endpoint
+     exige `configuracion.manage`, así que CSL y MARKETING veían el botón y comían un 403. Con el
+     nombre viejo la jerga («Nexus = true») funcionaba de barrera accidental —"esto no es para
+     mí"—; con un nombre amable, un control muerto se vuelve una trampa. La regla del repo para
+     puntos de entrada es ocultar, no deshabilitar con excusa. */
+  const me = useMe();
+  const puedeImportar = me?.permissions.sections.configuracion?.manage === true;
+
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -34,7 +42,7 @@ export default function HubspotSystemCard({
       const res = await fetch("/api/system/hubspot/import", { method: "POST" });
       const data = await res.json() as { ok?: boolean; total?: number; created?: number; updated?: number; error?: string };
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Error al importar");
-      setImportResult({ total: data.total ?? 0, created: data.created ?? 0, updated: data.updated ?? 0 });
+      setImportResult({ total: data.total ?? 0, created: data.created ?? 0 });
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -71,8 +79,9 @@ export default function HubspotSystemCard({
           </div>
 
           <p className="text-xs text-gray-400 leading-relaxed mb-4">
-            Conecta el portal principal de HubSpot para importar clientes automáticamente
-            a partir de la propiedad <code className="text-gray-300 bg-gray-800 px-1 py-0.5 rounded text-2xs">Nexus = true</code>.
+            Portal principal de HubSpot. Desde acá se traen a Nexus las empresas que allá tengan
+            marcada la casilla «Nexus»: se marca a mano en la ficha de la empresa, y Nexus la
+            marca sola cuando se genera un traspaso. Nunca borra ni desmarca nada.
           </p>
 
           {/* Banner: recién conectado */}
@@ -109,13 +118,16 @@ export default function HubspotSystemCard({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <div>
-                    <p className="text-white font-medium">Importación completada</p>
+                    <p className="text-white font-medium">Búsqueda terminada</p>
+                    {/* Se dejó de contar "actualizadas": esa cifra contaba filas donde no cambió
+                        nada, así que la pantalla celebraba trabajo que no ocurrió. Lo que importa
+                        es cuántas son NUEVAS. */}
                     <p className="text-gray-400 mt-0.5">
-                      {importResult.total} empresa{importResult.total !== 1 ? "s" : ""} encontrada{importResult.total !== 1 ? "s" : ""} —{" "}
-                      <span className="text-green-400">{importResult.created} creada{importResult.created !== 1 ? "s" : ""}</span>
-                      {importResult.updated > 0 && (
-                        <>, <span className="text-blue-400">{importResult.updated} actualizada{importResult.updated !== 1 ? "s" : ""}</span></>
-                      )}
+                      {importResult.total === 0
+                        ? "Ninguna empresa tiene marcada la casilla «Nexus» en HubSpot. Si acabás de marcar una, esperá un momento y volvé a buscar."
+                        : importResult.total === 1
+                          ? `1 empresa marcada en HubSpot: ${importResult.created === 1 ? "es nueva en Nexus" : "ya estaba en Nexus"}.`
+                          : `${importResult.total} empresas marcadas en HubSpot: ${importResult.created} nuevas en Nexus, ${importResult.total - importResult.created} ya estaban.`}
                     </p>
                   </div>
                 </div>
@@ -127,6 +139,7 @@ export default function HubspotSystemCard({
 
               {/* Acciones */}
               <div className="flex items-center gap-3 flex-wrap">
+                {puedeImportar && (
                 <button
                   onClick={handleImport}
                   disabled={importing}
@@ -135,17 +148,18 @@ export default function HubspotSystemCard({
                   {importing ? (
                     <>
                       <div className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
-                      Importando...
+                      Buscando…
                     </>
                   ) : (
                     <>
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                       </svg>
-                      Importar clientes (Nexus = true)
+                      Buscar empresas nuevas en HubSpot
                     </>
                   )}
                 </button>
+                )}
 
                 <a
                   href="/api/auth/hubspot?system=1"

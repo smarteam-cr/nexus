@@ -2,8 +2,17 @@ import { prisma } from "@/lib/db/prisma";
 import { getTeamMembers } from "@/lib/cache/team";
 import { computeLastMeetingDates } from "@/lib/clients/meeting-dates";
 import { computeClientActivityMap } from "@/lib/clients/last-interaction";
+import { resumirProyectos } from "@/lib/clients/resumen-proyectos";
+import {
+  proyectosInternosDe,
+  ordenarProyectosInternos,
+  type ProyectoInternoRow,
+} from "@/lib/clients/proyectos-internos";
+import { listarEmpresasTraibles } from "@/lib/hubspot/empresas-con-proyecto";
+import TraerDeHubspot from "./TraerDeHubspot";
+import { Suspense } from "react";
 import type { requireUser } from "@/lib/auth/supabase";
-import { SkeletonTabs, TableSkeleton } from "@/components/ui";
+import { Skeleton, SkeletonTabs, TableSkeleton } from "@/components/ui";
 import ClientsGrid, { type ClientRow, type ActiveCse } from "./ClientsGrid";
 
 /**
@@ -44,8 +53,34 @@ export async function ClientsTable({
         createdAt: true,
         kind: true,
         tamUsd: true,
-        projects: { select: { hubspotOwnerName: true, hubspotOwnerEmail: true } },
-        _count: { select: { projects: true } },
+        /**
+         * ⚠ SIN `where`. La barra de filtros del índice se calcula sobre ESTE array: acotarlo
+         * "para aliviar el payload" haría que TODAS las píldoras —las de categoría y las de
+         * vista— cuenten sobre un subconjunto y mientan todas a la vez, sin romper tipos ni
+         * pintar nada raro. Hay guarda.
+         *
+         * Los 7 campos nuevos son los que exige `ProyectoParaFiltro` — cero queries nuevas: la
+         * relación ya se cargaba para resolver los owners. Al browser NO viaja este array,
+         * viaja el resumen de 3 escalares.
+         */
+        projects: {
+          select: {
+            hubspotOwnerName: true,
+            hubspotOwnerEmail: true,
+            status: true,
+            serviceType: true,
+            hubspotServiceId: true,
+            hubspotPipelineId: true,
+            proyectoInterno: true,
+            hermanoCsProjectId: true,
+            altaEstado: true,
+            // Solo para las filas de la pestaña «Proyectos internos», que muestra proyectos y
+            // no empresas. Son 3 campos más sobre una relación que ya se cargaba.
+            id: true,
+            name: true,
+            hubspotPipelineStageLabel: true,
+          },
+        },
       },
     }),
     getTeamMembers(),
@@ -98,10 +133,30 @@ export async function ClientsTable({
       // Próxima reunión agendada (futura)
       nextMeetingAt: activity?.nextMeeting?.date.toISOString() ?? null,
       nextMeetingLabel: activity?.nextMeeting?.label ?? null,
-      projectCount: c._count.projects,
+      /**
+       * Reemplaza a `_count.projects`, que contaba los contenedores «Información del cliente»:
+       * había fichas mostrando "1 proyecto" con cero. Con la barra de filtros nueva eso pasaba
+       * de ser un detalle a una contradicción visible — la píldora diría «Sin proyecto abierto»
+       * y la columna de esa misma fila mostraría 1.
+       */
+      resumen: resumirProyectos(c.projects),
       isShared: sharedIds.has(c.id),
     };
   });
+
+  /**
+   * Las filas de la pestaña «Proyectos internos» — un PROYECTO por fila, no una empresa.
+   *
+   * Se arma acá y no en el browser porque sale del mismo array de proyectos que ya vino para
+   * el resumen: cero queries nuevas. Y va aplanada, así el cliente no recibe los proyectos de
+   * las 165 empresas para quedarse con tres.
+   *
+   * ⚠ El orden se fija ACÁ. El que devuelve la base no es estable entre llamadas, y una lista
+   * que se reordena sola ya nos hizo colgar un proyecto del hermano equivocado (C11).
+   */
+  const proyectosInternos: ProyectoInternoRow[] = ordenarProyectosInternos(
+    clients.flatMap((c) => proyectosInternosDe(c, c.projects)),
+  );
 
   // Ordenar por última actividad PASADA DESC. Los clientes sin actividad pasada
   // van al final (ordenados entre sí por createdAt DESC).
@@ -112,7 +167,38 @@ export async function ClientsTable({
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
-  return <ClientsGrid clients={rows} activeCse={activeCse} />;
+  return (
+    <ClientsGrid
+      clients={rows}
+      activeCse={activeCse}
+      proyectosInternos={proyectosInternos}
+      /* En su PROPIO Suspense. Ver el comentario de SlotTraerDeHubspot: contar las empresas
+         cuesta ~2,4 s de HubSpot, y la lista de clientes no puede esperar por un botón. */
+      slotTraer={
+        <Suspense fallback={null}>
+          <SlotTraerDeHubspot />
+        </Suspense>
+      }
+    />
+  );
+}
+
+/**
+ * Cuántas empresas con proyecto le faltan a Nexus — el contador del botón «Traer de HubSpot».
+ *
+ * ⚠ VIVE EN SU PROPIO `<Suspense>`, y no es un detalle. Contarlas cuesta 5 llamadas a HubSpot
+ * (~2,4 s medidos). Awaitearlo junto al resto hacía que **la tabla de clientes entera esperara
+ * a HubSpot**: el trabajo de la pantalla —ver los clientes— quedaba detrás de un botón
+ * accesorio, y un día lento de la API se sentía como que Nexus está caído.
+ *
+ * Con su propia frontera, la tabla llega cuando está lista y el botón aparece después.
+ *
+ * `null` = HubSpot no contestó → el botón no se pinta. Ofrecer traer sin saber qué hay es peor
+ * que no ofrecer.
+ */
+async function SlotTraerDeHubspot() {
+  const universo = await listarEmpresasTraibles().catch(() => null);
+  return <TraerDeHubspot cuantas={universo?.traibles.length ?? 0} />;
 }
 
 /**
@@ -124,11 +210,21 @@ export async function ClientsTable({
 export function ClientsTableZoneSkeleton({ showPills }: { showPills: boolean }) {
   return (
     <div className="space-y-3">
-      {/* Pestañas de CATEGORÍA (Clientes · Prospectos · Aliados · Internos) — las ve todo rol */}
+      {/* Eje 1 — Clientes · Prospectos · Aliados · Proyectos internos: la ve todo rol */}
       <SkeletonTabs count={4} variant="pill" className="gap-1.5 flex-wrap" />
+      {/* Eje 2 — pertenencia: solo CSE */}
       {showPills && <SkeletonTabs count={3} variant="pill" className="gap-1.5 flex-wrap" />}
+      {/* Eje 3 — el toolbar, que ahora lo monta ClientsGrid y ya NO <Table>: por eso el
+          TableSkeleton pierde su `toolbar`. Si quedara, se pintarían dos buscadores en la
+          carga y uno solo después — que es el salto de 32px que este archivo documenta arriba.
+          La línea de verdad NO va acá: en la primera pintura nada filtra, así que no existe. */}
+      <div className="flex flex-wrap items-center gap-2 pb-3">
+        <Skeleton className="h-9 w-full sm:w-72 rounded-lg" />
+        <SkeletonTabs count={3} variant="pill" className="gap-2 flex-wrap sm:ml-3" />
+        <Skeleton className="h-9 w-36 rounded-lg ml-auto" />
+      </div>
       {/* Cliente · Última actividad · Próxima reunión · CSE · Reunión ventas · Sesión CSE · TAM · Proyectos · acciones */}
-      <TableSkeleton columns={9} rows={9} toolbar toolbarActions={2} />
+      <TableSkeleton columns={9} rows={9} />
     </div>
   );
 }

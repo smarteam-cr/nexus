@@ -2,11 +2,41 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Table, Avatar, Badge, EmptyState, type TableColumn } from "@/components/ui";
+import {
+  Table,
+  Tabs,
+  Avatar,
+  EmptyState,
+  SearchFilterBar,
+  type TableColumn,
+} from "@/components/ui";
 import DeleteClientButton from "./DeleteClientButton";
 import NuevoProyectoStepper from "@/components/projects/NuevoProyectoStepper";
 import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 import { CLIENT_KINDS, CLIENT_KIND_META, formatTamUsd } from "@/lib/clients/kind";
+import { filtrarPorBusqueda } from "@/lib/ui/text-search";
+import {
+  tituloDeProyectos,
+  type ResumenDeProyectos,
+} from "@/lib/clients/resumen-proyectos";
+import {
+  VISTA_POR_DEFECTO,
+  aplicarVista,
+  contarConPlural,
+  contarVistas,
+  describirVista,
+  explicarListaVacia,
+  resumirPotencial,
+  vistasARenderizar,
+  type AccionDeVacio,
+  type Pertenencia,
+  type VistaDeCartera,
+} from "@/lib/clients/filtro-cartera";
+import {
+  COPY_PROYECTOS_INTERNOS,
+  textoBuscableDe,
+  type ProyectoInternoRow,
+} from "@/lib/clients/proyectos-internos";
 import type { ClientKind } from "@prisma/client";
 // Shape mínimo del usuario activo para el filtro "Mis clientes".
 // Antes venía del tipo ActiveCse de lib/auth (basado en cookie nexus_cse);
@@ -36,7 +66,8 @@ export interface ClientRow {
   // Próxima reunión FUTURA agendada (columna separada)
   nextMeetingAt: string | null;
   nextMeetingLabel: string | null;
-  projectCount: number;
+  /** Qué TIENE la empresa: 3 escalares. Alimenta la barra de filtros y la columna Proyectos. */
+  resumen: ResumenDeProyectos;
   isShared: boolean;            // compartido con el usuario actual (GRANT a él o a su rol)
   kind: ClientKind;             // qué ES la empresa (cliente/prospecto/aliado/interno)
   tamUsd: number | null;        // techo anual estimado en USD; null = Ventas no lo estimó
@@ -44,7 +75,7 @@ export interface ClientRow {
 
 /** Formatea una fecha pasada en forma relativa (hoy/ayer/hace N días/sem/fecha). */
 function PastDateCell({ iso }: { iso: string | null }) {
-  if (!iso) return <span className="text-gray-600">—</span>;
+  if (!iso) return <span className="text-fg-muted">—</span>;
   const d = new Date(iso);
   const ago = Math.max(0, -calendarDaysFromToday(d));
   const rel =
@@ -55,7 +86,7 @@ function PastDateCell({ iso }: { iso: string | null }) {
     d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
   return (
     <span
-      className="text-gray-400 whitespace-nowrap"
+      className="text-fg-muted whitespace-nowrap"
       title={d.toLocaleString("es-ES")}
     >
       {rel}
@@ -72,7 +103,7 @@ const ACTIVITY_SOURCE_LABEL: Record<NonNullable<ClientRow["lastActivitySource"]>
 /** Celda "Última actividad" — solo pasado. Formatea como "hoy/ayer/hace N días/hace N sem/fecha". */
 function LastActivityCell({ row }: { row: ClientRow }) {
   if (!row.lastActivityAt || !row.lastActivitySource) {
-    return <span className="text-gray-600">—</span>;
+    return <span className="text-fg-muted">—</span>;
   }
   const d = new Date(row.lastActivityAt);
   const ago = Math.max(0, -calendarDaysFromToday(d));
@@ -89,7 +120,7 @@ function LastActivityCell({ row }: { row: ClientRow }) {
 
   return (
     <span
-      className="whitespace-nowrap text-gray-300"
+      className="whitespace-nowrap text-fg-secondary"
       title={`${sourceText} · ${d.toLocaleString("es-ES")}`}
     >
       {rel}
@@ -100,7 +131,7 @@ function LastActivityCell({ row }: { row: ClientRow }) {
 /** Celda "Próxima reunión" — solo futuro. Formatea como "hoy/mañana/en N días/fecha". */
 function NextMeetingCell({ row }: { row: ClientRow }) {
   if (!row.nextMeetingAt) {
-    return <span className="text-gray-600">—</span>;
+    return <span className="text-fg-muted">—</span>;
   }
   const d = new Date(row.nextMeetingAt);
   const days = Math.max(0, calendarDaysFromToday(d));
@@ -116,7 +147,7 @@ function NextMeetingCell({ row }: { row: ClientRow }) {
 
   return (
     <span
-      className="whitespace-nowrap text-emerald-400"
+      className="whitespace-nowrap text-success-ink"
       title={`${labelText} · ${d.toLocaleString("es-ES")}`}
     >
       {rel}
@@ -124,12 +155,30 @@ function NextMeetingCell({ row }: { row: ClientRow }) {
   );
 }
 
+/**
+ * La pestaña abierta. Las tres primeras son categorías de EMPRESA (`ClientKind`); la cuarta es
+ * un atajo a los PROYECTOS internos, que no es una categoría de empresa y por eso no suma al
+ * censo. Romper la simetría es a propósito: ver la lista de empresas que contienen trabajo
+ * interno obliga a entrar a cada una para descubrir CUÁL de sus proyectos lo es.
+ */
+type Pestana = ClientKind | typeof PESTANA_INTERNOS;
+const PESTANA_INTERNOS = "PROYECTOS_INTERNOS";
+
 export default function ClientsGrid({
   clients,
   activeCse,
+  proyectosInternos,
+  slotTraer,
 }: {
   clients: ClientRow[];
   activeCse: ActiveCse | null;
+  proyectosInternos: ProyectoInternoRow[];
+  /**
+   * El botón «Traer de HubSpot», ya envuelto en su propio `<Suspense>` por el server component.
+   * Llega como nodo y no como número para que contar las empresas —5 llamadas a HubSpot— no
+   * bloquee la tabla de clientes.
+   */
+  slotTraer: React.ReactNode;
 }) {
   const router = useRouter();
 
@@ -137,7 +186,10 @@ export default function ClientsGrid({
   // Abre SIEMPRE en "Clientes": la cartera es el caso de uso del 99% de las visitas.
   // Las otras existen para que un aliado o una entidad interna mal marcada se pueda
   // encontrar y corregir — no para navegarlas a diario.
-  const [kindTab, setKindTab] = useState<ClientKind>("CLIENTE");
+  const [pestana, setPestana] = useState<Pestana>("CLIENTE");
+  const enInternos = pestana === PESTANA_INTERNOS;
+  // Fuera de la pestaña de proyectos, la de empresas abierta. Es lo que leen los ejes 2 y 3.
+  const kindTab: ClientKind = enInternos ? "CLIENTE" : pestana;
   const countByKind = useMemo(() => {
     const acc = Object.fromEntries(CLIENT_KINDS.map((k) => [k, 0])) as Record<ClientKind, number>;
     for (const c of clients) acc[c.kind] = (acc[c.kind] ?? 0) + 1;
@@ -169,11 +221,11 @@ export default function ClientsGrid({
   // Roles "ven todo" abren el índice en "Todos" (su caso normal es la cartera completa).
   // CSE abre SIEMPRE en "Mis clientes" (aunque esté vacía), no en "Compartido".
   const canSeeAll = !!activeCse?.canSeeAll;
-  const [tab, setTab] = useState<"mine" | "shared" | "all">(() =>
+  const [tab, setTab] = useState<Pertenencia>(() =>
     !canFilter ? "all" : canSeeAll ? "all" : "mine",
   );
 
-  const displayedClients = !canFilter
+  const enPertenencia = !canFilter
     ? kindClients
     : tab === "mine"
       ? mineClients
@@ -181,11 +233,89 @@ export default function ClientsGrid({
         ? sharedClients
         : kindClients;
 
+  // ── Eje 2: qué TIENE la empresa ──────────────────────────────────────────────
+  // Las pestañas de arriba responden "qué ES". Esto responde "qué tiene", que es lo que
+  // alguien viene a preguntar de verdad cuando abre esta pantalla. Los dos ejes se
+  // COMPONEN (categoría × pertenencia × vista × búsqueda), no compiten.
+  const [vista, setVista] = useState<VistaDeCartera>(VISTA_POR_DEFECTO);
+
+  // ── La búsqueda vive ACÁ, no adentro de <Table> ──────────────────────────────
+  // Mientras el término estaba encerrado en la primitiva, esta pantalla no tenía forma de
+  // saber cuántas filas se ven, y los contadores contaban el censo mientras la tabla mostraba
+  // otra cosa. Con el término acá, el número de cada píldora es exactamente la cantidad de
+  // filas que verías al clickearla — también mientras escribís.
+  const [busqueda, setBusqueda] = useState("");
+
+  const buscados = useMemo(
+    () => filtrarPorBusqueda(enPertenencia, (c) => `${c.name} ${c.company ?? ""}`, busqueda),
+    [enPertenencia, busqueda],
+  );
+  const contadores = useMemo(() => contarVistas(buscados), [buscados]);
+  const displayedClients = useMemo(() => aplicarVista(buscados, vista), [buscados, vista]);
+
+  // Qué píldoras se pintan. Se mide contra la CATEGORÍA entera y no contra lo buscado: si no,
+  // los controles aparecerían y desaparecerían mientras se teclea.
+  const vistas = useMemo(() => vistasARenderizar(kindClients, vista), [kindClients, vista]);
+
   // Potencial estimado de lo que se está viendo: la suma de los TAM cargados. Los "sin
   // estimar" se cuentan APARTE y nunca como 0 — si se sumaran como cero, el total diría
   // que la cartera vale menos de lo que vale y nadie sabría cuánto falta por estimar.
-  const tamTotal = displayedClients.reduce((acc, c) => acc + (c.tamUsd ?? 0), 0);
-  const sinTam = displayedClients.filter((c) => c.tamUsd === null).length;
+  // Y sin NINGÚN TAM cargado no dice "$0": dice que no hay dato. Hoy es el 100% de los casos.
+  const potencial = useMemo(
+    () => resumirPotencial(displayedClients.map((c) => c.tamUsd)),
+    [displayedClients],
+  );
+
+  const limpiarTodo = () => {
+    setVista(VISTA_POR_DEFECTO);
+    setBusqueda("");
+  };
+
+  /** Las salidas de un estado vacío. Cada una deshace exactamente lo que lo causó. */
+  function ejecutar(a: AccionDeVacio) {
+    switch (a.tipo) {
+      case "ver-todos":
+        setTab("all");
+        break;
+      case "quitar-filtro":
+        setVista(VISTA_POR_DEFECTO);
+        break;
+      case "buscar-sin-filtro":
+        // Conserva el TÉRMINO y saca el filtro: es lo que se quiere el 90% de las veces.
+        setVista(VISTA_POR_DEFECTO);
+        break;
+      case "limpiar-todo":
+        limpiarTodo();
+        break;
+    }
+  }
+
+  const linea = describirVista({
+    visibles: displayedClients.length,
+    totalDeCategoria: kindClients.length,
+    contableDeCategoria: CLIENT_KIND_META[kindTab].contable,
+    pertenencia: canFilter ? tab : null,
+    vista,
+    busqueda,
+  });
+
+  const vacio = explicarListaVacia({
+    kind: kindTab,
+    enCategoria: kindClients.length,
+    enPertenencia: enPertenencia.length,
+    enVista: aplicarVista(enPertenencia, vista).length,
+    pertenencia: canFilter ? tab : null,
+    vista,
+    busqueda,
+  });
+
+  // ── La pestaña de PROYECTOS internos ─────────────────────────────────────────
+  // Comparte el buscador con el resto de la pantalla (es el mismo campo), pero busca sobre
+  // otra cosa: nombre del proyecto, empresa y tipo.
+  const internosBuscados = useMemo(
+    () => filtrarPorBusqueda(proyectosInternos, textoBuscableDe, busqueda),
+    [proyectosInternos, busqueda],
+  );
 
   const columns: TableColumn<ClientRow>[] = [
     {
@@ -225,12 +355,12 @@ export default function ClientsGrid({
       hideOnMobile: true,
       render: (c) =>
         c.cseNames.length === 0 ? (
-          <span className="text-gray-600">—</span>
+          <span className="text-fg-muted">—</span>
         ) : (
-          <span className="text-gray-300 truncate block">
+          <span className="text-fg-secondary truncate block">
             {c.cseNames[0]}
             {c.cseNames.length > 1 && (
-              <span className="text-gray-600"> +{c.cseNames.length - 1}</span>
+              <span className="text-fg-muted"> +{c.cseNames.length - 1}</span>
             )}
           </span>
         ),
@@ -272,9 +402,20 @@ export default function ClientsGrid({
     {
       key: "projects",
       header: "Proyectos",
-      sortValue: (c) => c.projectCount,
+      // Proyectos ABIERTOS y de verdad, no `_count`: ése contaba los contenedores
+      // "Información del cliente" y había fichas mostrando 1 con cero proyectos. Con la barra
+      // de filtros al lado eso dejaba de ser un detalle: la píldora diría «Sin proyecto
+      // abierto» y esta misma fila mostraría 1.
+      sortValue: (c) => c.resumen.abiertos,
       width: "w-20",
-      render: (c) => <span className="tabular-nums text-gray-400">{c.projectCount}</span>,
+      render: (c) => (
+        <span
+          className={c.resumen.abiertos === 0 ? "text-fg-muted" : "tabular-nums text-fg-secondary"}
+          title={tituloDeProyectos(c.resumen)}
+        >
+          {c.resumen.abiertos === 0 ? "—" : c.resumen.abiertos}
+        </span>
+      ),
     },
     // Columna "HubSpot" eliminada — todos los clientes están "En CRM" porque
     // están en el portal de Smarteam, así que la info era ruido. Si en algún
@@ -291,91 +432,165 @@ export default function ClientsGrid({
     },
   ];
 
+  /** La otra tabla: un PROYECTO por fila. */
+  const columnasInternos: TableColumn<ProyectoInternoRow>[] = [
+    {
+      key: "proyecto",
+      header: "Proyecto",
+      sortValue: (p) => p.nombre,
+      width: "w-56",
+      render: (p) => (
+        <Table.IdentityCell
+          leading={<Avatar name={p.nombre} colorSeed={p.id} size="sm" />}
+          primary={p.nombre}
+        />
+      ),
+    },
+    {
+      key: "empresa",
+      header: "Empresa",
+      sortValue: (p) => p.clienteNombre,
+      width: "w-44",
+      render: (p) => <span className="text-fg-secondary truncate block">{p.clienteNombre}</span>,
+    },
+    {
+      key: "tipo",
+      header: "Tipo",
+      sortValue: (p) => p.tipo,
+      width: "w-48",
+      hideOnMobile: true,
+      // `null` = HubSpot no declaró el pipeline. Se muestra como ausencia y no se degrada al
+      // legacy: en una tabla de tres filas, inventar el rótulo se nota y engaña.
+      render: (p) =>
+        p.tipo ? (
+          <span className="text-fg-secondary truncate block">{p.tipo}</span>
+        ) : (
+          <span className="text-fg-muted" title="HubSpot no declaró el pipeline de este proyecto">
+            —
+          </span>
+        ),
+    },
+    {
+      key: "etapa",
+      header: "Etapa",
+      sortValue: (p) => p.etapa,
+      width: "w-40",
+      hideOnMobile: true,
+      render: (p) =>
+        p.etapa ? (
+          <span className="text-fg-secondary truncate block">{p.etapa}</span>
+        ) : (
+          <span className="text-fg-muted">—</span>
+        ),
+    },
+    {
+      key: "encargado",
+      header: "Encargado",
+      sortValue: (p) => p.encargado,
+      width: "w-40",
+      hideOnMobile: true,
+      render: (p) =>
+        p.encargado ? (
+          <span className="text-fg-secondary truncate block">{p.encargado}</span>
+        ) : (
+          <span className="text-fg-muted">—</span>
+        ),
+    },
+  ];
+
   return (
     <div className="space-y-3">
-      {/* Pestañas de CATEGORÍA: separan la cartera de lo que NO es cliente (aliados
-          comerciales, nosotros mismos, prospectos de Ventas). Se ven siempre. */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {CLIENT_KINDS.map((k) => (
-          <button
-            key={k}
-            onClick={() => setKindTab(k)}
-            title={CLIENT_KIND_META[k].help}
-            className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-              kindTab === k
-                ? "bg-brand/15 text-brand border-brand/30"
-                : "bg-surface text-fg-muted border-line hover:border-fg-muted/40"
-            }`}
-          >
-            {CLIENT_KIND_META[k].plural}{" "}
-            <span className="tabular-nums opacity-70">{countByKind[k] ?? 0}</span>
-          </button>
-        ))}
-        {displayedClients.length > 0 && (
+      {/* Eje 1 — qué ES la empresa. Separa la cartera de lo que NO es cliente (aliados
+          comerciales, nosotros mismos, prospectos de Ventas). Se ve siempre.
+
+          ⚠ Estos contadores cuentan el CENSO, no las filas visibles, y es a propósito: esta
+          es la única pantalla del sistema que carga las cuatro categorías (`kinds: "all"`), o
+          sea el único lugar desde donde se caza una empresa mal clasificada. Si se
+          recalcularan bajo el filtro, esa capacidad se apagaría sin que nadie lo note. Lo que
+          reconcilia el censo con lo que hay en la tabla es la línea de verdad de más abajo. */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Tabs
+          aria-label="Qué se está viendo"
+          variant="pill"
+          size="sm"
+          value={pestana}
+          onChange={setPestana}
+          items={[
+            ...CLIENT_KINDS
+              // ⚠ La categoría «Nuestras empresas» solo se pinta si hay alguna. Hoy son 0, y
+              // una pestaña vacía cuyo nombre se parece al de la de al lado es exactamente lo
+              // que hizo que alguien la leyera como "los clientes con proyectos internos". La
+              // clasificación sigue disponible en la ficha de cada empresa.
+              .filter((k) => k !== "INTERNO" || (countByKind.INTERNO ?? 0) > 0)
+              .map((k) => ({
+                key: k as Pestana,
+                label: CLIENT_KIND_META[k].plural,
+                count: countByKind[k] ?? 0,
+              })),
+            {
+              key: PESTANA_INTERNOS as Pestana,
+              label: COPY_PROYECTOS_INTERNOS.titulo,
+              count: proyectosInternos.length,
+            },
+          ]}
+        />
+        {!enInternos && displayedClients.length > 0 && (
           <span className="ml-auto text-xs text-fg-muted">
             Potencial estimado{" "}
             <span className="tabular-nums text-fg-secondary font-medium">
-              {formatTamUsd(tamTotal)}
+              {potencial.total === null ? "sin datos" : formatTamUsd(potencial.total)}
             </span>
-            {sinTam > 0 && <span className="text-fg-muted"> · {sinTam} sin estimar</span>}
+            {potencial.sinEstimar > 0 && (
+              <span className="text-fg-muted"> · {potencial.sinEstimar} sin estimar</span>
+            )}
           </span>
         )}
       </div>
 
-      {/* Toolbar: pestañas Mis clientes / Compartidos conmigo / Todos (solo CSE) */}
-      {canFilter && (
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {(canSeeAll
-            ? [
-                { key: "all" as const, label: "Todos", count: kindClients.length },
-                { key: "mine" as const, label: "Mis clientes", count: mineClients.length },
-                { key: "shared" as const, label: "Compartido", count: sharedClients.length },
-              ]
-            : [
-                { key: "mine" as const, label: "Mis clientes", count: mineClients.length },
-                { key: "shared" as const, label: "Compartido", count: sharedClients.length },
-                { key: "all" as const, label: "Todos", count: kindClients.length },
-              ]
-          ).map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-                tab === t.key
-                  ? "bg-brand/15 text-brand border-brand/30"
-                  : "bg-gray-900 text-gray-400 border-gray-800 hover:border-gray-700"
-              }`}
-            >
-              {t.label} <span className="tabular-nums opacity-70">{t.count}</span>
-            </button>
-          ))}
-          {displayedClients.length === 0 && (
-            <span className="text-xs text-gray-500 ml-1">
-              {tab === "mine"
-                ? "No sos owner de ningún cliente."
-                : tab === "shared"
-                  ? "No tenés clientes compartidos."
-                  : "Sin clientes."}
-              {kindClients.length > 0 && tab !== "all" && (
-                <>
-                  {" · "}
-                  <button onClick={() => setTab("all")} className="text-brand hover:underline">
-                    ver todos
-                  </button>
-                </>
-              )}
-            </span>
-          )}
-        </div>
+      {/* Eje 2 — de quién es. Solo para un CSE: el Super Admin ve todo sin filtro. No aplica
+          a la pestaña de proyectos internos, que es trabajo nuestro y no tiene dueño de cartera. */}
+      {canFilter && !enInternos && (
+        <Tabs
+          aria-label="Pertenencia"
+          variant="pill"
+          size="sm"
+          value={tab}
+          onChange={setTab}
+          items={(canSeeAll
+            ? (["all", "mine", "shared"] as const)
+            : (["mine", "shared", "all"] as const)
+          ).map((key) => ({
+            key,
+            label: key === "all" ? "Todos" : key === "mine" ? "Mis clientes" : "Compartido",
+            count:
+              key === "all"
+                ? kindClients.length
+                : key === "mine"
+                  ? mineClients.length
+                  : sharedClients.length,
+          }))}
+        />
       )}
 
-      <Table
-        columns={columns}
-        rows={displayedClients}
-        rowKey={(c) => c.id}
-        onRowClick={(c) => router.push(`/clients/${c.id}`)}
-        search={{ placeholder: "Buscar por nombre o empresa…", getText: (c) => `${c.name} ${c.company ?? ""}` }}
-        initialSort={{ key: "lastInteraction", dir: "desc" }}
+      {/* El toolbar lo monta ESTE componente y no `<Table>`: la primitiva devuelve su estado
+          vacío ANTES de pintar el toolbar (Table.tsx:121), así que un filtro que deja la lista
+          en cero se llevaba puestos el buscador, las píldoras y "Nuevo proyecto" — o sea el
+          control que hacía falta para deshacerlo. Acá la salida existe siempre.
+
+          ⚠ El toolbar y su línea de verdad van en UN bloque con `pb-2`: la línea describe lo
+          que el toolbar hizo, así que tiene que leerse pegada a él y despegada de la tabla. Sin
+          esto, el `space-y-3` del contenedor los separa igual de todo y el buscador queda
+          pisando el encabezado de la tabla. */}
+      <div className="space-y-2 pb-3">
+      <SearchFilterBar
+        className="mb-0"
+        search={{
+          value: busqueda,
+          onChange: setBusqueda,
+          placeholder: enInternos
+            ? "Buscar por proyecto, empresa o tipo…"
+            : "Buscar por nombre o empresa…",
+        }}
         action={
           <div className="flex items-center gap-2">
             {/* UN SOLO BOTÓN. El asistente de handoff y `NewClientButton` siguen en sus archivos
@@ -387,21 +602,135 @@ export default function ClientsGrid({
                 empresa, 6 de ellos con CERO proyectos — fichas que no pueden tener un proyecto,
                 ni handoff, ni cronograma. No se pierde ninguna capacidad sacándolo; lo que
                 permitía hacer es exactamente lo que después no servía. */}
+            {/* Sale primero y en secundario: traer es menos frecuente que crear, y su botón
+                desaparece solo cuando no queda nada que traer. Llega por streaming aparte. */}
+            {slotTraer}
             <NuevoProyectoStepper />
           </div>
         }
-        empty={
-          <EmptyState
-            variant="dashed"
-            title={`Sin ${CLIENT_KIND_META[kindTab].plural.toLowerCase()} aún`}
-            description={
-              kindTab === "CLIENTE"
-                ? "Creá tu primer cliente con el botón “Nuevo cliente”."
-                : `${CLIENT_KIND_META[kindTab].help} Se marca desde la ficha de la empresa, en Configuración.`
-            }
+      >
+        {/* Eje 3 — qué TIENE la empresa. Solo se pintan las vistas que parten el universo:
+            una píldora que deja pasar a todos y una que no deja pasar a nadie se ven igual
+            que una que funciona, y las dos son un control muerto. */}
+        {!enInternos && vistas.length > 0 && (
+          <Tabs
+            aria-label="Qué tiene la empresa"
+            className="sm:ml-3"
+            variant="pill"
+            size="sm"
+            value={vista}
+            onChange={setVista}
+            items={vistas.map((v) => ({
+              key: v.key,
+              label: v.label,
+              // La `ayuda` explica por qué el número puede no cuadrar con Éxito del cliente ni
+              // con Cobranza. Es LO ÚNICO que evita que ese descuadre se lea como un bug.
+              title: v.ayuda,
+              count: contadores[v.key],
+              // Una vista sin resultados no se puede elegir… salvo que sea la que está puesta:
+              // deshabilitar la activa dejaría un filtro aplicado sin forma de sacarlo.
+              disabled: contadores[v.key] === 0 && vista !== v.key,
+            }))}
           />
-        }
-      />
+        )}
+      </SearchFilterBar>
+
+      {/* LA LÍNEA DE VERDAD — lo único en toda la pantalla que afirma cuántas filas se ven.
+          Sin nada filtrando no se pinta: un cartel que dice "155 de 155" es ruido. */}
+      {enInternos && busqueda.trim() && (
+        <div className="flex items-center gap-2 text-xs text-fg-muted">
+          <span>
+            Mostrando {internosBuscados.length} de{" "}
+            {contarConPlural(proyectosInternos.length, COPY_PROYECTOS_INTERNOS.contable)} ·{" "}
+            «{busqueda.trim()}»
+          </span>
+          <button onClick={() => setBusqueda("")} className="text-brand hover:underline">
+            Limpiar
+          </button>
+        </div>
+      )}
+      {!enInternos && linea && (
+        <div className="flex items-center gap-2 text-xs text-fg-muted">
+          <span>{linea.texto}</span>
+          {linea.hayQueLimpiar && (
+            <button onClick={limpiarTodo} className="text-brand hover:underline">
+              Limpiar
+            </button>
+          )}
+        </div>
+      )}
+      </div>
+
+      {enInternos ? (
+        /* Un PROYECTO por fila. La fila lleva al proyecto, no a la empresa: llegar a la
+           empresa y tener que adivinar cuál de sus tres proyectos es el interno era justamente
+           el motivo por el que esta pestaña muestra proyectos. */
+        <Table
+          columns={columnasInternos}
+          rows={internosBuscados}
+          rowKey={(p) => p.id}
+          onRowClick={(p) => router.push(`/clients/${p.clienteId}/projects/${p.id}`)}
+          initialSort={{ key: "empresa", dir: "asc" }}
+          empty={
+            <EmptyState
+              variant="dashed"
+              title={
+                busqueda.trim()
+                  ? `Sin resultados para «${busqueda.trim()}»`
+                  : COPY_PROYECTOS_INTERNOS.vacioTitulo
+              }
+              description={
+                busqueda.trim()
+                  ? `Ninguno de los ${contarConPlural(
+                      proyectosInternos.length,
+                      COPY_PROYECTOS_INTERNOS.contable,
+                    )} coincide.`
+                  : COPY_PROYECTOS_INTERNOS.vacioDetalle
+              }
+              action={
+                busqueda.trim() ? (
+                  <button
+                    onClick={() => setBusqueda("")}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 bg-brand/15 text-brand hover:bg-brand/25 transition-colors"
+                  >
+                    Limpiar búsqueda
+                  </button>
+                ) : undefined
+              }
+            />
+          }
+        />
+      ) : (
+        <Table
+          columns={columns}
+          rows={displayedClients}
+          rowKey={(c) => c.id}
+          onRowClick={(c) => router.push(`/clients/${c.id}`)}
+          initialSort={{ key: "lastActivity", dir: "desc" }}
+          empty={
+            <EmptyState
+              variant="dashed"
+              title={vacio.titulo}
+              description={vacio.detalle}
+              action={
+                vacio.acciones.length > 0 ? (
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    {vacio.acciones.map((a) => (
+                      <button
+                        key={a.tipo}
+                        onClick={() => ejecutar(a)}
+                        className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 bg-brand/15 text-brand hover:bg-brand/25 transition-colors"
+                      >
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : undefined
+              }
+            />
+          }
+        />
+      )}
     </div>
   );
 }

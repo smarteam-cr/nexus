@@ -240,3 +240,131 @@ describe("«nosotros» se escribe en un solo lugar", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * ── TRAER UN PROYECTO DE HUBSPOT ─────────────────────────────────────────────
+ *
+ * "Traer un proyecto que ya existe en HubSpot" es una capacidad que existe hace tiempo y que
+ * nadie encontraba, porque las tres puertas que llevan a ella se llamaban «Nuevo proyecto»,
+ * «Actualizar» e «Importar clientes (Nexus = true)». Estas guardas cuidan las dos mitades del
+ * arreglo: que el camino FUNCIONE (los dos bugs de servidor de abajo) y que se SIGA LLAMANDO
+ * como se llama ahora.
+ */
+
+/** El fuente sin comentarios: la prosa que explica cada bug nombra el símbolo vigilado. */
+function sinComentarios(rel: string): string {
+  return leer(rel)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split(/\r?\n/)
+    .filter((l) => !l.trimStart().startsWith("//"))
+    .join("\n");
+}
+
+describe("traer un proyecto de HubSpot no pide un trato ganado", () => {
+  const RUTA = "app/api/projects/route.ts";
+
+  /**
+   * LA guarda del tramo. La regla del trato protege al proyecto que se CREA facturable sin
+   * ancla comercial; traer uno que ya existe en HubSpot no crea nada que cobre allá. Y la
+   * pantalla YA apaga el bloque del trato cuando se adjunta, así que si el servidor la vuelve
+   * a exigir, con 0 o con 2+ tratos ganados —el cliente recurrente, justo el que uno viene a
+   * buscar— el alta muere en un 400 que **no tiene ningún campo en pantalla donde contestarse**.
+   *
+   * La edición que la pone en rojo: borrar `!adjuntar && ` de la condición, o devolver
+   * `const adjuntar = …` a su lugar viejo (después de la validación). Verificado rompiéndola.
+   */
+  it("LA guarda: la validación del trato se saltea al adjuntar", () => {
+    const src = sinComentarios(RUTA);
+    const i = src.indexOf("exigeTratoGanado({");
+    expect(i, "se movió la validación del trato; revisar esta guarda").toBeGreaterThan(0);
+    expect(
+      src.slice(Math.max(0, i - 120), i),
+      "volvió a exigirse el trato al traer un proyecto: la pantalla no tiene dónde contestarlo",
+    ).toContain("!adjuntar &&");
+    expect(
+      src.indexOf("const adjuntar ="),
+      "`adjuntar` se calcula DESPUÉS de la validación, así que la condición lee undefined",
+    ).toBeLessThan(i);
+  });
+
+  it("y la excepción deja rastro en vez de ser invisible", () => {
+    /* Un proyecto facturable sin trato es indistinguible de uno al que alguien decidió no
+       ponerle. Cobranza le auto-asigna el trato ganado más reciente de la empresa, que para un
+       cliente recurrente puede ser el equivocado. Al menos queda auditable. */
+    expect(sinComentarios(RUTA)).toContain("Traído de HubSpot sin trato elegido");
+  });
+});
+
+describe("el proyecto ya tomado dice adónde ir", () => {
+  /**
+   * La pantalla ofrece "abrir el que ya existe" solo si el 409 trae los DOS ids (la URL del
+   * proyecto los necesita). Mandando uno solo, esa rama es código muerto y la persona ve un
+   * error crudo en vez de un lugar adonde ir. Invisible para `tsc` y para el build: los dos
+   * extremos compilan y la cadena está cortada en el medio — el mismo modo de falla que ya nos
+   * comimos con el cartel de los proyectos suprimidos.
+   *
+   * La edición que la pone en rojo: sacar `clientId` del cuerpo del 409 o de su `select`.
+   */
+  it("LA guarda: el 409 trae projectId Y clientId, y la pantalla los usa", () => {
+    const src = sinComentarios("app/api/projects/route.ts");
+    const i = src.indexOf("ya existe en Nexus como");
+    expect(i, "se movió el 409 de proyecto tomado; revisar esta guarda").toBeGreaterThan(0);
+    expect(
+      src.slice(i, i + 220),
+      "el 409 dejó de decir de qué cliente es: la pantalla no puede ofrecer abrirlo",
+    ).toContain("clientId");
+    expect(
+      sinComentarios("components/projects/NuevoProyectoStepper.tsx"),
+      "la pantalla dejó de rescatar el caso «ese proyecto ya está en Nexus»",
+    ).toContain("res.status === 409 && data.projectId && data.clientId");
+  });
+});
+
+describe("las tres puertas dicen lo que hacen", () => {
+  /**
+   * El problema que este trabajo resuelve es de VOCABULARIO, y el vocabulario se degrada de a
+   * un botón por vez: son tres rótulos en tres archivos que nadie relaciona entre sí. Lo que se
+   * congela no es el estilo, es que ninguno vuelva a nombrar la plomería de HubSpot ni a decir
+   * «importar», que es la palabra que hacía que nadie entendiera cuál apretar.
+   */
+  const ROTULOS: Record<string, string> = {
+    "app/(shell)/integrations/HubspotSystemCard.tsx": "Buscar empresas nuevas en HubSpot",
+    "components/projects/NuevoProyectoStepper.tsx": "Agregar proyecto",
+    "app/(shell)/clients/[id]/WorkspaceClient.tsx": "Traer de HubSpot",
+  };
+
+  it("LA guarda: cada puerta conserva su rótulo, sin jerga de CRM", () => {
+    for (const [archivo, rotulo] of Object.entries(ROTULOS)) {
+      const src = leer(archivo);
+      expect(src, `${archivo} perdió su rótulo «${rotulo}»`).toContain(rotulo);
+      expect(
+        sinComentarios(archivo),
+        `${archivo} volvió a nombrar la propiedad de HubSpot en pantalla`,
+      ).not.toMatch(/Nexus\s*=\s*true/);
+      expect(
+        sinComentarios(archivo),
+        `${archivo} volvió a decir «importar», que es la palabra que nadie entendía`,
+      ).not.toMatch(/[Ii]mportar (clientes|proyectos|de HubSpot)/);
+    }
+  });
+
+  it("y el botón del índice explica que también sirve para traer", () => {
+    /* Sin esto, «Agregar proyecto» es más neutro que «Nuevo proyecto» pero igual de mudo: la
+       persona sigue sin saber, ANTES de apretar, si esto le va a duplicar el proyecto que ya
+       tiene en el CRM. La respuesta tiene que estar afuera del modal. */
+    expect(
+      sinComentarios("components/projects/NuevoProyectoStepper.tsx"),
+      "el botón dejó de decir que también trae uno que ya existe",
+    ).toContain("traé uno que ya existe en HubSpot");
+  });
+
+  it("y el importador masivo no se le ofrece a quien va a comer un 403", () => {
+    /* La página entra con `configuracion.read` pero el endpoint exige `manage`. Con el nombre
+       viejo la jerga funcionaba de barrera accidental; con uno amable, un control muerto se
+       vuelve una trampa. */
+    const src = sinComentarios("app/(shell)/integrations/HubspotSystemCard.tsx");
+    expect(src, "el botón de importar dejó de gatearse por permiso").toContain(
+      "configuracion?.manage",
+    );
+  });
+});

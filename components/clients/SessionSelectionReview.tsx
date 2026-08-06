@@ -34,6 +34,8 @@ interface FeedingSession {
   alsoIn?: string[];
   /** Por qué alimenta: "primaria" | "confianza alta" | "forzada a mano". */
   origin: string;
+  /** Todavía no ocurrió. Las CANDIDATAS ya excluyen las futuras; ésta se vinculó de antes. */
+  futura?: boolean;
 }
 interface ExcludedSession {
   sessionId: string;
@@ -55,6 +57,8 @@ interface CandidateSession {
   linkedElsewhere: boolean;
   /** La sacó un humano de ESTE proyecto. El botón dice "Reincluir", no "Agregar". */
   excluidaAca?: boolean;
+  /** Ocurrió y no quedó nada: ni transcript, ni resumen, ni minuta. Agregarla no aporta un dato. */
+  sinContenido?: boolean;
   /** Reunión del equipo que todavía no es de ningún cliente. Agregarla también la asigna. */
   sinDuenio?: boolean;
 }
@@ -190,7 +194,7 @@ export default function SessionSelectionReview({
             return (
             <li
               key={c.sessionId}
-              className={`flex items-start gap-2 rounded-lg border border-line px-3 py-2 ${c.applies ? "" : "opacity-60"}`}
+              className={`flex items-start gap-2 rounded-lg border border-line px-3 py-2 ${c.applies && !c.sinContenido ? "" : "opacity-60"}`}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -210,6 +214,13 @@ export default function SessionSelectionReview({
                   {c.sinDuenio && (
                     <span className="text-[9px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
                       reunión del equipo
+                    </span>
+                  )}
+                  {c.sinContenido && (
+                    /* Se muestra igual —esconderla sería otra desaparición silenciosa— pero
+                       marcada: la reunión pasó y no quedó nada de qué leer. */
+                    <span className="text-[9px] font-medium text-warn-ink bg-warn-surface border border-warn-line rounded-full px-1.5 py-0.5 flex-shrink-0">
+                      sin información
                     </span>
                   )}
                   {c.excluidaAca && (
@@ -249,9 +260,13 @@ export default function SessionSelectionReview({
     </Modal>
   );
 
-  // Meta line de una sesión: "Reunión · fecha[ · también en X]".
-  const meetMeta = (date: string, alsoIn?: string[]) =>
-    `Reunión · ${fmtDate(date)}${alsoIn && alsoIn.length ? ` · también en ${alsoIn.join(", ")}` : ""}`;
+  /* Meta line de una sesión: "Reunión · fecha[ · todavía no ocurrió][ · también en X]".
+     ⚠ Lo de "todavía no ocurrió" no es cosmético: los dos grupos de CANDIDATAS excluyen las
+     futuras, pero las que ya alimentan nunca pasaron por ese filtro. Una reunión agendada para la
+     semana que viene puede estar alimentando el handoff de hoy —medido: 30 vínculos así— y hasta
+     ahora se veía igual que una que ya pasó. No se saca sola: se dice, y quien la puso decide. */
+  const meetMeta = (date: string, alsoIn?: string[], futura?: boolean) =>
+    `Reunión · ${fmtDate(date)}${futura ? " · todavía no ocurrió" : ""}${alsoIn && alsoIn.length ? ` · también en ${alsoIn.join(", ")}` : ""}`;
 
   // Modo columna (Contexto): incluidas + excluidas con toggle, "buscar más" + el modal.
   if (columnMode) {
@@ -265,9 +280,9 @@ export default function SessionSelectionReview({
             <ContextRow
               key={s.sessionId}
               icon={CTX_ICONS.meet}
-              meta={meetMeta(s.date, s.alsoIn)}
+              meta={meetMeta(s.date, s.alsoIn, s.futura)}
               title={s.title || "Sin título"}
-              badge={{ label: "Incluida", tone: "green" }}
+              badge={s.futura ? { label: "Aún no ocurrió", tone: "amber" } : { label: "Incluida", tone: "green" }}
               onRemove={!readOnly ? () => setFeeds(s.sessionId, false) : undefined}
               removeTitle="Excluir del handoff (no la desvincula del proyecto)"
             />
@@ -330,8 +345,13 @@ export default function SessionSelectionReview({
               </svg>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-fg truncate">{s.title || "Sin título"}</p>
+                {/* ⚠ MISMO `meetMeta` que la columna: incluye el «aún no ocurrió». Sin eso, una
+                    sesión con fecha futura se lista acá como si ya hubiera pasado — y ésta es
+                    justo la pantalla que aparece después de crear o traer un proyecto, o sea el
+                    momento en que alguien decide con qué se arma el documento. */}
                 <p className="text-[11px] text-fg-muted truncate">
-                  {fmtDate(s.date)} · {s.origin ?? (s.forced ? "agregada a mano" : "primaria")}
+                  {meetMeta(s.date, s.alsoIn, s.futura)} ·{" "}
+                  {s.origin ?? (s.forced ? "agregada a mano" : "primaria")}
                 </p>
               </div>
               {!readOnly && (

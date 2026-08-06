@@ -4,7 +4,7 @@ import { ESTADOS_DE_ALTA, altaTerminada } from "@/lib/projects/alta";
 import { prisma } from "@/lib/db/prisma";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 import { sanitizeTags, normalizeTag } from "@/lib/tags/catalog";
-import { cerradoPorEstadoCrudo, decidirCierre, resolvePipeline } from "@/lib/projects/kind";
+import { cerradoPorEstadoCrudo, decidirCierre, estadoCrudoDeHubspot, resolvePipeline } from "@/lib/projects/kind";
 import type { Client } from "@hubspot/api-client";
 import { detectarFusion, explicarFusion } from "@/lib/hubspot/empresa-fusionada";
 import { OBJETO_PROYECTOS } from "@/lib/hubspot/asociaciones-proyecto";
@@ -490,7 +490,7 @@ async function verifyProjectInHubspot(hsClient: Client, objectId: string): Promi
         const cierre = decidirCierre({
           hubspotPipelineId: (p.hs_pipeline ?? "").trim() || null,
           stageId: (p.hs_pipeline_stage ?? "").trim() || null,
-          rawStatus: p.hs_status || p.estatus_del_proyecto || "",
+          rawStatus: estadoCrudoDeHubspot(p),
         });
         return cierre === "cerrado" ? "closed" : "alive";
       }
@@ -1078,7 +1078,7 @@ async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult>
     const realName = props.nombre_del_proyecto || props.hs_name || null;
     const projectName = realName ?? `Proyecto ${project.id}`;
 
-    const rawStatus = (props.hs_status || props.estatus_del_proyecto || "").toLowerCase().trim();
+    const rawStatus = estadoCrudoDeHubspot(props).toLowerCase().trim();
 
     // ── Proyectos sin propiedades legibles (fallback de último recurso) ────────
     // Si no hay nombre real ni estado, HubSpot no pudo devolver los datos.

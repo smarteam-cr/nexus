@@ -12,9 +12,12 @@ import { type ReactNode, Children } from "react";
 
 /** Tono del badge de estado de una fila de contexto (Incluida / Excluida / aviso). */
 export type RowTone = "green" | "amber" | "muted";
+/* Tokens, no colores crudos: los valores de antes (`text-green-700 bg-green-50 …`) eran los del
+   tema CLARO escritos a mano, así que en oscuro quedaban a contraluz. Los tripletes están medidos
+   en los dos temas. */
 const TONE_CLASS: Record<RowTone, string> = {
-  green: "text-green-700 bg-green-50 border-green-200",
-  amber: "text-amber-700 bg-amber-50 border-amber-200",
+  green: "text-success-ink bg-success-surface border-success-line",
+  amber: "text-warn-ink bg-warn-surface border-warn-line",
   muted: "text-fg-muted bg-surface border-line",
 };
 

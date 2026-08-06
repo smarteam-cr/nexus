@@ -88,6 +88,7 @@ export default async function ClientPage({
         altaEstado: true,
         altaError: true,
         altaUltimoIntentoAt: true,
+        altaActorEmail: true,
         altaIntentos: true,
       },
     }),

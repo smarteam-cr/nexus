@@ -119,6 +119,7 @@ export const GET = withProjectAccess(async (
       // El diagnóstico del alta trabada, para el cartel con "Reintentar" dentro del widget.
       altaError: true,
       altaUltimoIntentoAt: true,
+      altaActorEmail: true,
       altaIntentos: true,
       createdAt: true,
     },
@@ -392,6 +393,7 @@ export const GET = withProjectAccess(async (
       estado: project.altaEstado,
       error: project.altaError,
       ultimoIntentoAt: project.altaUltimoIntentoAt?.toISOString() ?? null,
+      actorEmail: project.altaActorEmail,
       intentos: project.altaIntentos,
     },
   });

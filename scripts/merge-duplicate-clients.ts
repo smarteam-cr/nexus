@@ -36,8 +36,24 @@ import type { Prisma } from "@prisma/client";
  *   npx tsx scripts/backfill-resolved-client.ts               # dry-run → changed=0 (fidelidad)
  *
  * Dry-run por default (NO escribe). Aplicar con --apply (PROD):
- *   npx tsx scripts/merge-duplicate-clients.ts            # plan (no escribe)
+ *   npx tsx scripts/merge-duplicate-clients.ts            # plan de los pares fijos
  *   npx tsx scripts/merge-duplicate-clients.ts --apply    # ejecuta (PROD)
+ *
+ * ── UN PAR SUELTO, POR LÍNEA DE COMANDOS ────────────────────────────────────
+ * Los pares de abajo son los del incidente de julio y quedan como registro. Para un par nuevo
+ * NO se agrega a esa lista: se pasa por argumento, y así el archivo no se vuelve un cementerio
+ * de casos resueltos que hay que leer para entender cuál corre hoy.
+ *
+ *   npx tsx scripts/merge-duplicate-clients.ts --canonico kamalio --dup kamalio.com
+ *   ALLOW_PROD_WRITE=1 npx tsx …  --canonico kamalio --dup kamalio.com --apply
+ *
+ * El nombre resuelve por coincidencia EXACTA primero y después por `contains`; si matchea más
+ * de uno, aborta en vez de elegir — con dos fichas de nombre parecido (que es exactamente el
+ * caso que este script atiende) adivinar sería fusionar la equivocada.
+ *
+ * ⚠ Si las dos fichas apuntan a empresas de HubSpot que se acaban de FUSIONAR, primero corré
+ * `scripts/reapuntar-empresa-fusionada.ts --apply`. Si no, el merge conserva el id del canónico
+ * —que puede ser el absorbido— y el proyecto queda colgando de una empresa que ya no existe.
  */
 const APPLY = resolverApply();
 
@@ -102,11 +118,19 @@ async function dupCensus(dupId: string) {
     prisma.client.findUnique({
       where: { id: dupId },
       select: {
+        // Las 1:1 que también cascadean. `_count` no las cubre: no son listas.
+        cuentaFinanciera: { select: { id: true } },
+        csSignals: { select: { id: true } },
+        partnerSnapshot: { select: { id: true } },
+        accountBrief: { select: { id: true } },
         _count: {
           select: {
             projects: true, agentRuns: true, contextCards: true, canvasSuggestions: true,
             actionItems: true, audits: true, implementations: true, knowledge: true,
             documents: true, stageNotes: true, assignments: true, appUsers: true, handoffs: true,
+            /* ⚠ ESTAS NO SE REASIGNAN: cascadean con el `delete` del duplicado. Se cuentan para
+               poder ABORTAR, no para reportar. Ver `LO_QUE_CASCADEA`. */
+            businessCases: true, csAlerts: true,
           },
         },
       },
@@ -116,7 +140,14 @@ async function dupCensus(dupId: string) {
       where: { resolvedClientId: dupId }, select: { title: true }, take: 6, orderBy: { date: "desc" },
     }),
   ]);
-  return { resolvedSessions, manualSessions, k: c!._count, hubspotAccount, sampleTitles: dupSessionTitles.map((s) => s.title) };
+  return {
+    resolvedSessions, manualSessions, k: c!._count, hubspotAccount,
+    sampleTitles: dupSessionTitles.map((s) => s.title),
+    cuentaFinanciera: c!.cuentaFinanciera,
+    csSignals: c!.csSignals,
+    partnerSnapshot: c!.partnerSnapshot,
+    accountBrief: c!.accountBrief,
+  };
 }
 
 /** Plan de fold del canónico a partir del dup. */
@@ -146,6 +177,30 @@ function computeFold(canon: ClientFull, dup: ClientFull) {
     fillIfEmpty.canvasConfidence = dup.canvasConfidence as Prisma.InputJsonValue;
 
   return { addDomains, mergedDomains, hubspotCompanyId, hubspotConflict, fillIfEmpty };
+}
+
+/**
+ * ── LO QUE EL MERGE **NO** REASIGNA Y EL `delete` SE LLEVA EN CASCADA ─────────
+ *
+ * El script reasigna las relaciones del trabajo (proyectos, handoffs, conocimiento, sesiones…),
+ * pero `client.delete` cascadea a varias más que NADIE mueve — y una de ellas es PLATA:
+ * `CuentaFinanciera` arrastra `ServicioContratado` → `PlanDePago`/`CuotaPlan`, `Cobro`,
+ * `AlertaCobro` y `BitacoraCobro`. La cobranza 2026 son 53 servicios y 202 cobros cargados a
+ * mano: si el duplicado tiene cuenta, el merge la borra sin decir una palabra y no hay vuelta.
+ *
+ * Por eso el script ABORTA en vez de decidir. Reasignar una cuenta financiera 1:1 no es
+ * mecánico —hay que resolver planes, cuotas y cobros que pueden solaparse— y esa es una
+ * decisión de negocio, no de un script de limpieza.
+ */
+function loQueSeBorraria(census: Awaited<ReturnType<typeof dupCensus>>): string[] {
+  const out: string[] = [];
+  if (census.cuentaFinanciera) out.push("cuenta financiera (con sus servicios, planes y cobros) ⚠ PLATA");
+  if (census.k.businessCases > 0) out.push(`${census.k.businessCases} business case(s) con sus bloques`);
+  if (census.k.csAlerts > 0) out.push(`${census.k.csAlerts} alerta(s) de Éxito del cliente`);
+  if (census.csSignals) out.push("señales de CS");
+  if (census.partnerSnapshot) out.push("snapshot de CS360");
+  if (census.accountBrief) out.push("brief de la cuenta");
+  return out;
 }
 
 async function processPair(p: (typeof PAIRS)[number]) {
@@ -186,6 +241,16 @@ async function processPair(p: (typeof PAIRS)[number]) {
     console.log(`    hubspotCompanyId: canónico adopta ${fold.hubspotCompanyId} (estaba vacío)`);
   const fillKeys = Object.keys(fold.fillIfEmpty);
   if (fillKeys.length) console.log(`    rellena-si-vacío: ${fillKeys.join(", ")}`);
+  /* ⚠ EL FRENO. Se dice SIEMPRE (también en dry-run) y aborta EL PAR, no la corrida entera:
+     con varios pares, que uno tenga plata no es motivo para no mergear los otros. */
+  const seBorraria = loQueSeBorraria(census);
+  if (seBorraria.length > 0) {
+    console.error(`\n  ⛔ NO SE MERGEA "${dup.name}": el borrado se llevaría en cascada`);
+    for (const x of seBorraria) console.error(`     · ${x}`);
+    console.error("     Nada de eso lo reasigna este script. Resolvelo a mano y volvé.");
+    return { applied: false };
+  }
+
   console.log(`\n  → BORRA dup "${dup.name}" (${dup.id})`);
 
   if (!APPLY) return { applied: false };
@@ -257,6 +322,32 @@ async function processPair(p: (typeof PAIRS)[number]) {
   return { applied: true };
 }
 
+function argValue(flag: string): string | null {
+  const i = process.argv.indexOf(flag);
+  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : null;
+}
+
+/** Resuelve una ficha por id o por nombre. Aborta ante la ambigüedad en vez de elegir. */
+async function resolverFicha(arg: string): Promise<{ id: string; name: string }> {
+  const porId = await prisma.client.findUnique({ where: { id: arg }, select: { id: true, name: true } });
+  if (porId) return porId;
+  const exactos = await prisma.client.findMany({
+    where: { name: { equals: arg, mode: "insensitive" } },
+    select: { id: true, name: true },
+  });
+  if (exactos.length === 1) return exactos[0];
+  if (exactos.length > 1) throw new Error(`"${arg}" matchea ${exactos.length} fichas con ese nombre exacto.`);
+  const parciales = await prisma.client.findMany({
+    where: { name: { contains: arg, mode: "insensitive" } },
+    select: { id: true, name: true },
+  });
+  if (parciales.length === 1) return parciales[0];
+  if (parciales.length === 0) throw new Error(`Ninguna ficha matchea "${arg}".`);
+  throw new Error(
+    `"${arg}" matchea ${parciales.length} fichas (${parciales.map((c) => c.name).join(", ")}). Pasá el id.`,
+  );
+}
+
 async function main() {
   console.log(
     APPLY
@@ -264,8 +355,20 @@ async function main() {
       : "DRY-RUN — merge de Clients duplicados (usá --apply para ejecutar)",
   );
 
+  const argCanon = argValue("--canonico");
+  const argDup = argValue("--dup");
+  if ((argCanon === null) !== (argDup === null)) {
+    throw new Error("--canonico y --dup van juntos.");
+  }
+  let pares = PAIRS;
+  if (argCanon && argDup) {
+    const [c, d] = await Promise.all([resolverFicha(argCanon), resolverFicha(argDup)]);
+    if (c.id === d.id) throw new Error("El canónico y el duplicado son la misma ficha.");
+    pares = [{ label: `${c.name} ← ${d.name}`, canonicalId: c.id, dupId: d.id }];
+  }
+
   let appliedCount = 0;
-  for (const p of PAIRS) {
+  for (const p of pares) {
     const r = await processPair(p);
     if (r.applied) appliedCount++;
   }
@@ -274,7 +377,7 @@ async function main() {
   if (!APPLY) {
     console.log("(DRY-RUN) Nada escrito. Revisá el plan y los ⚠, después --apply.");
   } else {
-    console.log(`✓ ${appliedCount}/${PAIRS.length} pares mergeados.`);
+    console.log(`✓ ${appliedCount}/${pares.length} pares mergeados.`);
     console.log("VERIFICAR ahora:");
     console.log("  npm run check:invariants                         # INV1+INV2 → exit 0");
     console.log("  npx tsx scripts/backfill-resolved-client.ts      # dry-run → changed=0 (fidelidad)");

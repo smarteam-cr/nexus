@@ -1,0 +1,404 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button, Alert, Modal } from "@/components/ui";
+import type { UniversoTraible, EmpresaTraible } from "@/lib/hubspot/empresas-con-proyecto";
+
+/**
+ * app/(shell)/clients/TraerDeHubspot.tsx — el botón que trae empresas que HubSpot ya tiene.
+ *
+ * ── LO QUE DECIDE SU FORMA ──────────────────────────────────────────────────
+ * Se trae **de a una**, no todas de golpe, y no es preferencia estética: de las 4 empresas que
+ * el criterio ofrecía al medir, **3 ya eran clientes de Nexus** creados por el importador de
+ * cobranza SIN `hubspotCompanyId` — invisibles para el cruce por id. Un botón de «traer todas»
+ * habría fabricado tres fichas gemelas de clientes que están facturando, el primer día, y partir
+ * un cliente en dos parte la plata (cuenta y cobros en una ficha) del trabajo (proyecto en la
+ * otra). Por eso cada fila muestra la ficha parecida ANTES de traer.
+ *
+ * ⚠ El botón NO se pinta cuando no hay nada que traer. Es la regla que este mismo directorio
+ * escribe dos veces (la píldora que no parte el universo, la pestaña de categoría vacía): un
+ * control que se contesta siempre igual es un control muerto. Este universo se agota solo.
+ *
+ * ── SOBRE EL COPY ───────────────────────────────────────────────────────────
+ * Se escribió largo y se recortó a pedido. Lo que sobrevive es lo que cambia una decisión: el
+ * denominador (pegado al número, no en un párrafo aparte), el aviso de ficha parecida, y a quién
+ * le va a aparecer. Lo que se explicaba —por qué puede haber dos fichas, qué es la cuarentena de
+ * cobranza— se cayó: nadie lee un párrafo para apretar un botón de dos opciones.
+ */
+export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
+  const router = useRouter();
+  const [abierto, setAbierto] = useState(false);
+  const [cargando, setCargando] = useState(false);
+  const [universo, setUniverso] = useState<
+    (UniversoTraible & { enganchadaDe?: { actor: string; hace: number } | null }) | null
+  >(null);
+  const [error, setError] = useState<string | null>(null);
+  /* Un CONJUNTO y no un id: con dos filas apretadas seguidas, la primera en volver le apagaba
+     el spinner a la segunda —que seguía en vuelo— y su botón quedaba habilitado otra vez. La
+     fila que MÁS estaba trabajando era la que se veía inactiva, y el segundo click mandaba un
+     POST duplicado. */
+  const [trayendo, setTrayendo] = useState<ReadonlySet<string>>(() => new Set());
+  const [resultados, setResultados] = useState<Record<string, ResultadoFila>>({});
+
+  async function abrir() {
+    setAbierto(true);
+    setCargando(true);
+    setError(null);
+    /* Sin esto, la segunda apertura pinta la lista VIEJA —accionable, con sus botones y sus
+       contadores— debajo de «Buscando en HubSpot…», y si el fetch falla queda el banner rojo
+       encima de una lista que se lee como si estuviera viva. */
+    setUniverso(null);
+    try {
+      const res = await fetch("/api/clients/traer-de-hubspot");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "No se pudo consultar HubSpot.");
+      setUniverso(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo consultar HubSpot.");
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  async function traer(
+    empresa: EmpresaTraible,
+    opts: { confirmoGemela?: boolean; adoptarEnClientId?: string },
+  ) {
+    setTrayendo((s) => new Set(s).add(empresa.companyId));
+    try {
+      const res = await fetch("/api/clients/traer-de-hubspot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId: empresa.companyId,
+          hubspotServiceId: empresa.proyectos[0]?.hubspotServiceId,
+          ...opts,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setResultados((r) => ({
+          ...r,
+          [empresa.companyId]: { tipo: "error", mensaje: data.error ?? "No se pudo traer." },
+        }));
+        return;
+      }
+      setResultados((r) => ({ ...r, [empresa.companyId]: { tipo: "listo", ...data } }));
+      /* La tabla la pinta el servidor: sin esto el panel afirma «listo» sobre una lista que
+         sigue mostrando lo de antes. */
+      router.refresh();
+    } catch {
+      setResultados((r) => ({
+        ...r,
+        [empresa.companyId]: { tipo: "error", mensaje: "No se pudo traer." },
+      }));
+    } finally {
+      setTrayendo((s) => {
+        const next = new Set(s);
+        next.delete(empresa.companyId);
+        return next;
+      });
+    }
+  }
+
+  /**
+   * ⚠ `&& !abierto`: traer una empresa hace `router.refresh()`, el servidor recalcula `cuantas`
+   * y —si era la última— pasa a 0. Sin esa condición el componente se DESMONTA con el panel
+   * abierto y se lleva puesto el desenlace que la persona todavía no leyó: el cartel ámbar del
+   * alta trabada, el «le aparece a X», el enlace «Abrir». El modal se cierra solo y parece que
+   * todo salió bien. Es el mismo incidente que esta tanda vino a cerrar, reabierto por la UI.
+   */
+  if (cuantas <= 0 && !abierto) return null;
+
+  return (
+    <>
+      <Button
+        variant="secondary"
+        size="md"
+        onClick={abrir}
+        title="Empresas que en HubSpot ya tienen un proyecto y todavía no están acá."
+      >
+        Traer {cuantas} empresa{cuantas !== 1 ? "s" : ""} de HubSpot
+      </Button>
+
+      {/* En Modal y no inline: el botón vive dentro del toolbar, que es un flex, así que un
+          panel ahí adentro se pinta AL LADO del buscador y parte la fila. El Modal además trae
+          Escape, foco atrapado y scroll bloqueado sin escribir nada. */}
+      <Modal
+        open={abierto}
+        onClose={() => setAbierto(false)}
+        title="Traer empresas de HubSpot"
+        size="lg"
+      >
+        <div className="space-y-2">
+          {cargando ? (
+            <p className="text-sm text-fg-muted">Buscando en HubSpot…</p>
+          ) : universo ? (
+            /* El denominador va PEGADO al número, no en un párrafo aparte: sin él, «2 empresas»
+               no dice si son 2 de 3 o 2 de 300; en un párrafo, nadie lo lee. */
+            /* Dos hechos, separados. `traibles` NO son «las que no están»: son las que no
+               están Y tienen un proyecto que falta traer Y sobrevivieron a los descartes. */
+            <p className="text-sm text-fg-secondary">
+              {universo.traibles.length} empresa{universo.traibles.length !== 1 ? "s" : ""} con un
+              proyecto que falta traer.{" "}
+              <span className="text-fg-muted">
+                HubSpot tiene {universo.totalConProyecto} con proyecto; {universo.yaEnNexus} ya
+                están acá
+                {universo.yaTraidoBajoOtraFicha > 0
+                  ? ` y ${universo.yaTraidoBajoOtraFicha} tienen su trabajo bajo otra ficha`
+                  : ""}
+                .
+              </span>
+            </p>
+          ) : null}
+
+          {error && <Alert variant="danger">{error}</Alert>}
+
+          {universo?.enganchadaDe && (
+            <p className="text-xs text-fg-muted">
+              Ya lo está trayendo {universo.enganchadaDe.actor}, hace {universo.enganchadaDe.hace} s.
+            </p>
+          )}
+
+          {universo?.traibles.map((e) => (
+            <FilaEmpresa
+              key={e.companyId}
+              empresa={e}
+              ocupada={trayendo.has(e.companyId)}
+              resultado={resultados[e.companyId]}
+              onTraer={(opts) => traer(e, opts)}
+            />
+          ))}
+
+          {universo && universo.traibles.length > 0 && (
+            /* La consecuencia se dice UNA vez, al pie, y no en cada fila. */
+            <p className="text-xs text-fg-muted border-t border-line pt-2">
+              Se crea la empresa con su proyecto. Entra a Cobranza sin cobro cargado.
+            </p>
+          )}
+          {universo && universo.sinEmpresaAsociada > 0 && (
+            <p className="text-xs text-fg-muted">
+              {universo.sinEmpresaAsociada} proyecto{universo.sinEmpresaAsociada !== 1 ? "s" : ""} sin
+              empresa asociada en HubSpot.
+            </p>
+          )}
+          {universo && universo.ilegibles > 0 && (
+            <p className="text-xs text-warn-ink">
+              HubSpot no contestó por {universo.ilegibles} proyecto
+              {universo.ilegibles !== 1 ? "s" : ""}. Volvé a abrir en un minuto.
+            </p>
+          )}
+          {/* ⚠ Los tres descartes se DICEN. Una lista que se acorta en silencio se lee como
+              «no hay nada más» — y acá dos de los tres motivos son cosas que la persona puede
+              arreglar en HubSpot, así que callarlos deja el problema sin dueño. */}
+          {universo && universo.cerrados > 0 && (
+            <p className="text-xs text-fg-muted">
+              {universo.cerrados} proyecto{universo.cerrados !== 1 ? "s" : ""} ya finalizado
+              {universo.cerrados !== 1 ? "s" : ""} en HubSpot. No se traen.
+            </p>
+          )}
+          {universo && universo.tipoDesconocido > 0 && (
+            <p className="text-xs text-warn-ink">
+              {universo.tipoDesconocido} proyecto{universo.tipoDesconocido !== 1 ? "s" : ""} en un
+              pipeline que Nexus no conoce. Move{universo.tipoDesconocido !== 1 ? "los" : "lo"} a
+              uno de los tres tipos en HubSpot y volvé.
+            </p>
+          )}
+          {universo && universo.suprimidos > 0 && (
+            <p className="text-xs text-fg-muted">
+              {universo.suprimidos} proyecto{universo.suprimidos !== 1 ? "s" : ""} se{" "}
+              {universo.suprimidos !== 1 ? "borraron" : "borró"} a propósito desde Nexus. No
+              vuelven solos.
+            </p>
+          )}
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+interface ResultadoFila {
+  tipo: "listo" | "error";
+  mensaje?: string;
+  clientId?: string;
+  encargadoNombre?: string | null;
+  loVasAVer?: boolean;
+  sinEncargado?: boolean;
+  /** Se colgó de una ficha que ya existía, en vez de crear una nueva. */
+  adoptado?: boolean;
+  /** El nombre de la ficha en la que se adoptó — la que la persona ELIGIÓ, no `gemelas[0]`. */
+  adoptadoEn?: string;
+  /** Otra persona ganó la carrera. */
+  yaEstaba?: boolean;
+  /**
+   * ⚠ Si el alta TERMINÓ. El endpoint devuelve 200 aunque el alta quede a medio hacer —
+   * `avanzarAlta` no tira, deja el error en la fila— así que mirar `res.ok` y pintar verde es
+   * afirmar que terminó algo que no terminó. Es lo que hizo que dos altas trabadas pasaran días
+   * sin diagnosticar: quien las trajo leyó «ya está en Nexus» y se fue.
+   */
+  termino?: boolean;
+}
+
+function FilaEmpresa({
+  empresa,
+  ocupada,
+  resultado,
+  onTraer,
+}: {
+  empresa: EmpresaTraible;
+  ocupada: boolean;
+  resultado?: ResultadoFila;
+  onTraer: (opts: { confirmoGemela?: boolean; adoptarEnClientId?: string }) => void;
+}) {
+  const [confirmando, setConfirmando] = useState(false);
+  const proyecto = empresa.proyectos[0];
+  const gemelas = empresa.gemelas;
+
+  if (resultado?.tipo === "listo") {
+    /* El desenlace a medias tiene su propio color. Verde con un alta trabada adentro es la
+       versión visual de «no hay más sesiones»: una frase verdadera sobre la respuesta HTTP y
+       falsa sobre el mundo. */
+    /* ⚠ `!== true` y no `=== false`: los dos rescates por carrera devuelven 200 SIN `termino`,
+       y `undefined === false` es falso — o sea que el hueco quedaba justo donde este archivo
+       dice que no puede estar. Ausencia de confirmación NO es confirmación. */
+    const aMedias = resultado.termino !== true;
+    return (
+      <div
+        className={
+          aMedias
+            ? "flex flex-wrap items-center gap-2 rounded-lg border border-warn-line bg-warn-surface px-3 py-2"
+            : "flex flex-wrap items-center gap-2 rounded-lg border border-success-line bg-success-surface px-3 py-2"
+        }
+      >
+        <span className={aMedias ? "text-sm font-medium text-warn-ink" : "text-sm font-medium text-success-ink"}>
+          {resultado.adoptado
+            ? `El proyecto quedó en «${resultado.adoptadoEn ?? "la ficha que ya existía"}».`
+            : `«${empresa.rotulo}» ya está en Nexus.`}
+        </span>
+        {/* Los TRES desenlaces, uno por frase corta. Sin el tercero, quien trae un proyecto sin
+            encargado lee «es de otro», culpa a la regla de visibilidad y se va creyendo que
+            funcionó. */}
+        <span className={aMedias ? "text-xs text-warn-ink" : "text-xs text-success-ink/80"}>
+          {aMedias
+            ? "Falta que Nexus lo lea de HubSpot: todavía no cobra ni se publica. Abrilo para reintentar."
+            : resultado.adoptado
+            ? "No se creó otra ficha."
+            : resultado.sinEncargado
+            ? "No le aparece a nadie: el proyecto no tiene encargado en HubSpot."
+            : resultado.yaEstaba
+            ? "La trajo otra persona recién."
+            : resultado.loVasAVer
+              ? "Te aparece en tu lista."
+              : resultado.encargadoNombre
+                ? `Le aparece a ${resultado.encargadoNombre}, no a vos.`
+                : "Abrila para ver a quién le aparece."}
+        </span>
+        {resultado.clientId && (
+          <a href={`/clients/${resultado.clientId}`} className="text-xs text-brand hover:underline">
+            Abrir
+          </a>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 space-y-1.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-fg truncate">{empresa.rotulo}</p>
+          {/* Se cayó el tipo de pipeline: es el mismo en casi todas y no cambia la decisión.
+              Queda el nombre del proyecto (para reconocerlo) y el encargado (que decide a quién
+              le va a aparecer). */}
+          <p className="text-xs text-fg-muted truncate">
+            «{proyecto?.nombre}»{proyecto?.encargadoNombre && ` · ${proyecto.encargadoNombre}`}
+          </p>
+        </div>
+        {gemelas.length === 0 && (
+          <Button variant="secondary" size="xs" loading={ocupada} onClick={() => onTraer({})}>
+            Traer
+          </Button>
+        )}
+      </div>
+
+      {gemelas.length > 0 && (
+        /**
+         * ⚠ EL CAMINO IRREVERSIBLE PIDE DOS CLICS, Y LOS DOS SON BOTONES DE VERDAD.
+         *
+         * La primera versión ponía «Es otra → traer igual» como texto plano al lado de un botón:
+         * la opción que CREA UNA FICHA DUPLICADA era la que menos parecía un control, y se
+         * apretaba sin querer. Pasó en la primera prueba y dejó dos «kamalio» en producción.
+         *
+         * Ahora: los dos son botones, el seguro («Abrirla») es el sólido, y el que duplica abre
+         * una confirmación que NOMBRA a las dos empresas — no se puede contestar en automático,
+         * porque para decir que sí hay que haber leído cuál es cuál.
+         */
+        <div className="rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2">
+          {!confirmando ? (
+            <div className="space-y-1.5">
+              <span className="text-xs text-warn-ink block">
+                ⚠ Ya {gemelas.length === 1 ? "existe una ficha parecida" : `existen ${gemelas.length} fichas parecidas`} en Nexus.
+              </span>
+              {/**
+               * ⚠ SE PINTAN TODAS, no `gemelas[0]`.
+               *
+               * `detectarGemelas` es deliberadamente LAXO —prefijo de 5 caracteres— porque su
+               * contrato es «devuelve todas las que se parecen, no la mejor: la persona decide,
+               * y para eso necesita ver las candidatas». Mostrando una sola, con dos fichas
+               * parecidas la persona adopta en la equivocada sin enterarse de que existía otra,
+               * y el proyecto —con su cobranza— queda colgado del cliente que no es.
+               *
+               * Y RESUELVE, no navega: antes el botón solo abría la ficha, y la fila volvía en
+               * cada carga porque la condición que la produce seguía siendo cierta.
+               */}
+              {gemelas.map((g) => (
+                <div key={g.clientId} className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-warn-ink flex-1 min-w-40">
+                    «{g.nombre}»
+                    <span className="text-warn-ink/70">
+                      {" · "}
+                      {g.motivo === "dominio" ? "mismo dominio" : "nombre parecido"}
+                    </span>
+                  </span>
+                  <Button
+                    variant="primary"
+                    size="xs"
+                    loading={ocupada}
+                    onClick={() => onTraer({ adoptarEnClientId: g.clientId })}
+                  >
+                    Es la misma → traer el proyecto acá
+                  </Button>
+                </div>
+              ))}
+              <Button variant="secondary" size="xs" onClick={() => setConfirmando(true)}>
+                Es otra empresa
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-warn-ink flex-1 min-w-40">
+                ¿«{empresa.rotulo}» es distinta de{" "}
+                {gemelas.map((g) => `«${g.nombre}»`).join(" y ")}? Se va a crear una ficha
+                aparte.
+              </span>
+              <Button
+                variant="destructive-solid"
+                size="xs"
+                loading={ocupada}
+                onClick={() => onTraer({ confirmoGemela: true })}
+              >
+                Sí, es otra: traerla
+              </Button>
+              <Button variant="secondary" size="xs" onClick={() => setConfirmando(false)}>
+                Cancelar
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {resultado?.tipo === "error" && <Alert variant="danger">{resultado.mensaje}</Alert>}
+    </div>
+  );
+}
