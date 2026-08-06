@@ -58,7 +58,45 @@ async function fallar(
   return { estado, termino: false, error, hubspotServiceId, adoptado: false };
 }
 
+/**
+ * Cuánto vale un reclamo antes de considerarse muerto. Solo importa cuando el proceso se cae a
+ * mitad de una corrida: en el camino normal el reclamo se libera solo, porque toda corrida
+ * terminada deja o un `altaError` escrito o el estado cambiado.
+ */
+const RECLAMO_MS = 90_000;
+
 export async function avanzarAlta(projectId: string): Promise<ResultadoDelAlta> {
+  try {
+    return await correrElAlta(projectId);
+  } catch (e) {
+    /**
+     * ⚠ SIN ESTE CATCH, UNA EXCEPCIÓN BORRA EL DIAGNÓSTICO.
+     *
+     * El primer acto del motor es limpiar `altaError` (es un intento nuevo). Si después algo
+     * revienta por excepción en vez de salir por `fallar()` —HubSpot 5xx, el token del sistema
+     * que no se puede refrescar, la base—, la fila queda con el alta en curso y `altaError` en
+     * NULL: el cartel sigue apareciendo pero SIN la línea «Último error», que es el único dato
+     * que sirve para avisarle a alguien. El reintento empeora el diagnóstico en vez de mejorarlo.
+     */
+    const motivo = e instanceof Error ? e.message : String(e);
+    console.error("[alta] excepción sin manejar", { projectId }, e);
+    await prisma.project
+      .update({ where: { id: projectId }, data: { altaError: `Falló sin llegar a explicar por qué: ${motivo}` } })
+      .catch(() => {});
+    const actual = await prisma.project
+      .findUnique({ where: { id: projectId }, select: { altaEstado: true, hubspotServiceId: true } })
+      .catch(() => null);
+    return {
+      estado: parseEstadoDeAlta(actual?.altaEstado),
+      termino: false,
+      error: motivo,
+      hubspotServiceId: actual?.hubspotServiceId ?? null,
+      adoptado: false,
+    };
+  }
+}
+
+async function correrElAlta(projectId: string): Promise<ResultadoDelAlta> {
   /* PASO 0 — releer SIEMPRE. Es el candado más barato del motor: entre que alguien apretó
      "Reintentar" y que esta función corre, otra corrida pudo haber avanzado el alta. Leer el
      estado de la base (y no confiar en lo que trajo el llamador) evita crear dos veces. */
@@ -79,12 +117,45 @@ export async function avanzarAlta(projectId: string): Promise<ResultadoDelAlta> 
   let estado = parseEstadoDeAlta(p.altaEstado);
   if (!altaEnCurso(estado)) return nadaQueHacer(estado, p.hubspotServiceId);
 
-  await prisma.project
-    .update({
-      where: { id: projectId },
-      data: { altaIntentos: { increment: 1 }, altaUltimoIntentoAt: new Date(), altaError: null },
-    })
-    .catch(() => {});
+  /**
+   * ── EL RECLAMO DE LA FILA — dos corridas a la vez crean DOS records en HubSpot ────────────
+   *
+   * El PASO 0 de arriba no alcanza: es un `findUnique` suelto, así que dos corridas simultáneas
+   * leen las dos `pendiente_crm`, las dos preguntan si hay un record previo, las dos reciben que
+   * no, y las dos crean. El caso es alcanzable con un solo par de manos: el cartel se monta DOS
+   * VECES en la misma pantalla —en el rail del cliente y dentro del widget del proyecto— cada
+   * uno con su propio botón.
+   *
+   * `updateMany` con condición ES atómico: el que pierde recibe `count: 0` y se va sin tocar
+   * HubSpot. La condición dice «está corriendo ahora mismo» sin una columna nueva: el reclamo
+   * pone `altaError: null` al empezar y toda corrida terminada deja o su motivo escrito
+   * (`fallar`) o el estado cambiado. O sea que «error en null + intento reciente» solo puede
+   * significar una corrida en vuelo.
+   *
+   * Por eso un reintento después de un fallo VISIBLE entra al toque: el fallo ya escribió su
+   * motivo. Lo único que espera los 90 s es el reintento sobre una corrida que murió sin hablar.
+   */
+  const reclamo = await prisma.project.updateMany({
+    where: {
+      id: projectId,
+      altaEstado: p.altaEstado,
+      OR: [
+        { altaError: { not: null } },
+        { altaUltimoIntentoAt: null },
+        { altaUltimoIntentoAt: { lt: new Date(Date.now() - RECLAMO_MS) } },
+      ],
+    },
+    data: { altaIntentos: { increment: 1 }, altaUltimoIntentoAt: new Date(), altaError: null },
+  });
+  if (reclamo.count === 0) {
+    return {
+      estado,
+      termino: false,
+      error: "Ya hay un intento corriendo. Esperá a que termine.",
+      hubspotServiceId: p.hubspotServiceId,
+      adoptado: false,
+    };
+  }
 
   let serviceId = p.hubspotServiceId;
   let adoptado = false;

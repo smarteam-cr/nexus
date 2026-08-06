@@ -29,6 +29,28 @@ import { resolveAllSessions } from "@/lib/sessions/resolve-client";
  * ── LO QUE NO PROTEGE ───────────────────────────────────────────────────────
  * El aviso de ficha gemela (`lib/clients/gemelas.ts`) es un AVISO: hay casos legítimos de dos
  * fichas distintas, así que no puede bloquear. Lo que sí hace es obligar a decir «es otra».
+ *
+ * ── ⚠ EL PROYECTO NACE CON SU PIPELINE SELLADO, Y NO ES DECORACIÓN ──────────
+ * Los dos `project.create` de este archivo escriben `altaPipelineElegido: proyecto.pipelineId`.
+ * Sin eso, el motor del alta queda en un estado que NO SE PUEDE SALIR:
+ *
+ *   alta-runner: `if (post.hubspotPipelineId !== p.altaPipelineElegido) → el alta espera`
+ *   por acá:      <el pipeline real> !== null  →  siempre verdadero  →  para siempre
+ *
+ * El proyecto queda en cuarentena permanente —no cobra, no suma a la cartera, no nace su
+ * handoff, no se le publica nada— con un botón «Reintentar» que no puede ganar. Pasó: dos
+ * proyectos en producción (2026-08-05/06), y el reporte que lo destapó fue de la persona
+ * mirando el cartel, no de un test.
+ *
+ * ⚠ El arreglo NO es relajar la comparación del motor. Esa comparación existe para atrapar que
+ * el record se mueva de pipeline entre que se listó y que se espejó, y es la única confirmación
+ * que impide que un proyecto termine en la fila por defecto —que COBRA—. El pipeline lo derivó
+ * el servidor al listar; guardarlo conserva la confirmación exacta en vez de apagarla.
+ *
+ * Por el mismo motivo `createDefaultCanvases` recibe el pipeline y no `null`: con `null` cae a
+ * las piezas por defecto —las de una implementación de CS— y un Desarrollo nacía con Kickoff y
+ * Exploración y SIN «Requerimientos técnicos», que es su pieza central. Los canvases solo se
+ * crean al nacer: nadie los revisa después.
  */
 
 /**
@@ -159,6 +181,7 @@ export async function POST(req: NextRequest) {
           status: "active",
           hubspotServiceId: proyecto.hubspotServiceId,
           altaEstado: "pendiente_espejo",
+          altaPipelineElegido: proyecto.pipelineId,
           altaIniciadaAt: new Date(),
           altaActorEmail: guard.user.email,
         },
@@ -180,7 +203,7 @@ export async function POST(req: NextRequest) {
       console.error("[traer-de-hubspot] no se pudo adoptar", { companyId, adoptarEn }, e);
       return NextResponse.json({ error: "No se pudo traer el proyecto." }, { status: 500 });
     }
-    await createDefaultCanvases(p.id, null, undefined);
+    await createDefaultCanvases(p.id, proyecto.pipelineId, undefined);
     const alta = await avanzarAlta(p.id);
     console.info(
       `[traer-de-hubspot] ${guard.user.email} adoptó «${empresa.rotulo}» (${companyId}) en el ` +
@@ -254,12 +277,13 @@ export async function POST(req: NextRequest) {
           // El record ya existe allá: arranca un paso más adelante, en cuarentena hasta que el
           // espejo confirme (no cobra, no suma a la cartera, no se publica).
           altaEstado: "pendiente_espejo",
+          altaPipelineElegido: proyecto.pipelineId,
           altaIniciadaAt: new Date(),
           altaActorEmail: guard.user.email,
         },
         select: { id: true },
       });
-      await createDefaultCanvases(p.id, null, tx);
+      await createDefaultCanvases(p.id, proyecto.pipelineId, tx);
       return { clientId: cliente.id, projectId: p.id };
     });
     clientId = creado.clientId;

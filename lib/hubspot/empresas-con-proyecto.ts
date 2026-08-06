@@ -27,12 +27,26 @@ import { getSystemHubspotClient } from "./client";
 import { OBJETO_PROYECTOS } from "./asociaciones-proyecto";
 import { prisma } from "@/lib/db/prisma";
 import { detectarGemelas, type ClienteComparable, type Gemela } from "@/lib/clients/gemelas";
-import { resolvePipeline } from "@/lib/projects/kind";
+import { resolvePipeline, decidirCierre } from "@/lib/projects/kind";
 
 /** Un proyecto de HubSpot que Nexus todavía no tiene. */
 export interface ProyectoFaltante {
   hubspotServiceId: string;
   nombre: string;
+  /**
+   * El id de pipeline que dijo HubSpot. Lo consume el alta para sellar `altaPipelineElegido`.
+   *
+   * ⚠ SE EXPONE A PROPÓSITO, y su ausencia costó dos proyectos en cuarentena permanente. Este
+   * módulo YA leía el pipeline —para armar `tipo`— y lo TIRABA. El alta que nacía por acá
+   * quedaba con `altaPipelineElegido = null`, y la confirmación del motor («el tipo que volvió
+   * tiene que ser el que se eligió», alta-runner.ts) comparaba el pipeline real contra null:
+   * insatisfacible PARA SIEMPRE. Los proyectos quedaban sin cobrar, sin cartera, sin handoff y
+   * sin poder publicarse, con un botón «Reintentar» que no podía ganar nunca.
+   *
+   * Lo deriva el SERVIDOR —no viaja en el cuerpo del pedido—, así que sigue siendo el mismo
+   * candado que el `companyId`.
+   */
+  pipelineId: string | null;
   /** Rótulo del pipeline, o `null` si HubSpot no lo declaró (no se degrada al legacy). */
   tipo: string | null;
   encargadoEmail: string | null;
@@ -61,6 +75,17 @@ export interface UniversoTraible {
   sinEmpresaAsociada: number;
   /** Proyectos cuyas asociaciones HubSpot no contestó. NO se ofrecen. */
   ilegibles: number;
+  /**
+   * ── LOS TRES DESCARTES, DICHOS EN VOZ ALTA ──────────────────────────────────
+   * Los tres sacan proyectos de la lista, y ninguno puede hacerlo en silencio: una lista que se
+   * acorta sin decirlo se lee como «no hay nada más», que es la peor frase del sistema.
+   */
+  /** En etapa terminal en HubSpot. */
+  cerrados: number;
+  /** Borrados a propósito desde Nexus (lista de supresión). No vuelven solos. */
+  suprimidos: number;
+  /** En un pipeline que Nexus no tiene declarado. Se bloquea en la puerta, igual que el alta. */
+  tipoDesconocido: number;
 }
 
 const VACIO: UniversoTraible = {
@@ -70,12 +95,18 @@ const VACIO: UniversoTraible = {
   yaTraidoBajoOtraFicha: 0,
   sinEmpresaAsociada: 0,
   ilegibles: 0,
+  cerrados: 0,
+  suprimidos: 0,
+  tipoDesconocido: 0,
 };
 
 interface RecordProyecto {
   id: string;
   nombre: string;
   pipelineId: string | null;
+  /** Los dos que consume `decidirCierre`: un proyecto terminado no se ofrece. */
+  stageId: string | null;
+  rawStatus: string | null;
   ownerId: string | null;
   cslEncargado: string | null;
 }
@@ -101,7 +132,12 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
   for (let pagina = 0; pagina < 10; pagina++) {
     const qs = new URLSearchParams({
       limit: "100",
-      properties: "hs_name,hs_pipeline,hubspot_owner_id,csl_encargado",
+      /* Las tres últimas son para `decidirCierre`. Viajan GRATIS en la llamada que igual se
+         paga —mismo criterio que `hs_merged_object_ids` en el paso 4— y sin ellas la lista
+         ofrece proyectos terminados, que es el caso que deja el alta sin salida. */
+      properties:
+        "hs_name,hs_pipeline,hubspot_owner_id,csl_encargado," +
+        "hs_pipeline_stage,hs_status,estatus_del_proyecto",
       ...(after ? { after } : {}),
     });
     const res = await hs.apiRequest({
@@ -118,6 +154,8 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
         id: r.id,
         nombre: (r.properties.hs_name ?? "").trim() || `Proyecto ${r.id}`,
         pipelineId: r.properties.hs_pipeline ?? null,
+        stageId: (r.properties.hs_pipeline_stage ?? "").trim() || null,
+        rawStatus: r.properties.estatus_del_proyecto ?? r.properties.hs_status ?? null,
         ownerId: r.properties.hubspot_owner_id ?? null,
         cslEncargado: r.properties.csl_encargado ?? null,
       });
@@ -174,7 +212,12 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
       select: { hubspotServiceId: true },
     }),
     prisma.client.findMany({
-      select: { id: true, name: true, company: true, emailDomains: true, hubspotCompanyId: true },
+      select: {
+        id: true, name: true, company: true, emailDomains: true, hubspotCompanyId: true,
+        // La lista de supresión: proyectos que alguien BORRÓ a propósito desde la Zona de
+        // peligro. Sin esto el botón los vuelve a ofrecer y reaparecen solos.
+        ignoredHubspotServiceIds: true,
+      },
     }),
   ]);
   const idsDeNexus = new Set(
@@ -184,9 +227,37 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
     clientesDeNexus.map((c) => c.hubspotCompanyId).filter((x): x is string => !!x),
   );
 
+  /**
+   * La lista de supresión, UNIDA sobre todos los clientes.
+   *
+   * Es a propósito que no se mire cliente por cliente: la empresa candidata todavía NO es un
+   * `Client`, así que no hay ficha de la cual leer su propia lista. Y el caso real que esto
+   * atrapa —el proyecto se borró desde el cliente A y reaparece bajo la empresa duplicada de
+   * HubSpot— es justamente el que un chequeo por-cliente no vería.
+   */
+  const suprimidosDeNexus = new Set(clientesDeNexus.flatMap((c) => c.ignoredHubspotServiceIds));
+
   // Los proyectos que le faltan a Nexus, agrupados por empresa.
   const faltantesPorEmpresa = new Map<string, RecordProyecto[]>();
   const empresasConProyecto = new Set<string>();
+  /**
+   * ── LOS TRES DESCARTES ──────────────────────────────────────────────────────
+   * Se cuentan por PROYECTO y con `Set`, no con `n++`: un proyecto asociado a dos empresas pasa
+   * dos veces por este bucle y un contador ingenuo lo contaría doble.
+   *
+   * Los tres están porque traer uno de ésos NO produce un proyecto usable:
+   *
+   *  · cerrado — el espejo dirigido lo pone en `inactive` y hace `continue` ANTES de escribir
+   *    el pipeline. Por el camino de adjuntar eso deja el alta trabada en una fila que ya no se
+   *    puede abrir (NAVEGABLE exige ACTIVO), o sea con el cartel «Reintentar» inalcanzable.
+   *  · suprimido — el espejo lo saltea por diseño. Reaparecería solo lo que alguien borró aposta.
+   *  · tipo desconocido — el alta única YA bloquea este caso en la puerta
+   *    (`NuevoProyectoStepper.tsx`), con el motivo escrito: dejarlo crear con un aviso sería
+   *    fabricar a sabiendas un proyecto que cae en la fila por defecto y COBRA.
+   */
+  const cerrados = new Set<string>();
+  const suprimidos = new Set<string>();
+  const tipoDesconocido = new Set<string>();
   for (const p of proyectos) {
     if (ilegibles.has(p.id)) continue;
     const empresas = empresasDe.get(p.id);
@@ -194,6 +265,23 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
     for (const empresa of empresas) {
       empresasConProyecto.add(empresa);
       if (idsDeNexus.has(p.id)) continue;
+      if (suprimidosDeNexus.has(p.id)) {
+        suprimidos.add(p.id);
+        continue;
+      }
+      const cierre = decidirCierre({
+        hubspotPipelineId: p.pipelineId,
+        stageId: p.stageId,
+        rawStatus: p.rawStatus,
+      });
+      if (cierre === "cerrado") {
+        cerrados.add(p.id);
+        continue;
+      }
+      if (!resolvePipeline(p.pipelineId)) {
+        tipoDesconocido.add(p.id);
+        continue;
+      }
       const acc = faltantesPorEmpresa.get(empresa) ?? [];
       acc.push(p);
       faltantesPorEmpresa.set(empresa, acc);
@@ -211,6 +299,9 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
       empresasConProyecto.size - yaEnNexus - candidatas.length,
     sinEmpresaAsociada,
     ilegibles: ilegibles.size,
+    cerrados: cerrados.size,
+    suprimidos: suprimidos.size,
+    tipoDesconocido: tipoDesconocido.size,
   };
   if (candidatas.length === 0) return { ...VACIO, ...base };
 
@@ -291,6 +382,7 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
         return {
           hubspotServiceId: p.id,
           nombre: p.nombre,
+          pipelineId: p.pipelineId,
           tipo: resolvePipeline(p.pipelineId)?.label ?? null,
           encargadoEmail: d?.email ?? null,
           encargadoNombre: d?.nombre ?? null,

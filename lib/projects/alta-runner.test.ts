@@ -34,6 +34,8 @@ interface FilaProyecto {
   altaIniciadaAt: Date | null;
   altaReclasificadoAt: Date | null;
   altaIntentos: number;
+  /** Lo lee el RECLAMO de la fila: junto con `altaError` en null significa «corriendo ahora». */
+  altaUltimoIntentoAt: Date | null;
   altaError: string | null;
   canvases: Array<{ id: string }>;
   handoff: { id: string } | null;
@@ -65,6 +67,32 @@ const fakePrisma = {
       if (!f) throw new Error("no existe");
       aplicar(f, data);
       return f;
+    },
+    /**
+     * El RECLAMO de la fila. Se implementa de verdad y no como stub porque su condición es lo
+     * único que impide que dos corridas simultáneas creen dos records en HubSpot: un doble que
+     * dijera «siempre count: 1» probaría exactamente lo contrario de lo que hay que probar.
+     */
+    updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+      const f = db.proyectos.get(where.id as string);
+      if (!f) return { count: 0 };
+      if ("altaEstado" in where && f.altaEstado !== where.altaEstado) return { count: 0 };
+      const or = where.OR as Array<Record<string, unknown>> | undefined;
+      if (or) {
+        const cumple = or.some((c) => {
+          if ("altaError" in c) return f.altaError !== null && f.altaError !== undefined;
+          if ("altaUltimoIntentoAt" in c) {
+            const cond = c.altaUltimoIntentoAt as { lt?: Date } | null;
+            const val = f.altaUltimoIntentoAt as Date | null | undefined;
+            if (cond === null) return val === null || val === undefined;
+            return !!(cond?.lt && val && val.getTime() < cond.lt.getTime());
+          }
+          return false;
+        });
+        if (!cumple) return { count: 0 };
+      }
+      aplicar(f, data);
+      return { count: 1 };
     },
   },
   handoff: { create: async ({ data }: { data: unknown }) => { db.handoffs.push(data); return data; } },
@@ -149,6 +177,7 @@ function sembrar(over: Partial<FilaProyecto> = {}): FilaProyecto {
     altaIniciadaAt: new Date("2026-07-31T10:00:00Z"),
     altaReclasificadoAt: null,
     altaIntentos: 0,
+    altaUltimoIntentoAt: null,
     altaError: null,
     canvases: [],
     handoff: null,
@@ -258,6 +287,56 @@ describe("solo termina cuando HubSpot confirmó qué es el proyecto", () => {
 });
 
 // ── LA TRANSICIÓN A LISTO ────────────────────────────────────────────────────
+
+describe("dos corridas a la vez no crean dos records", () => {
+  /**
+   * El cartel del alta trabada se monta DOS VECES en la misma pantalla —rail del cliente y
+   * widget del proyecto—, cada uno con su botón. Sin el reclamo de la fila, dos clics seguidos
+   * entran los dos por la rama que CREA en HubSpot y quedan dos records gemelos del mismo
+   * proyecto, que después hay que unir a mano allá.
+   */
+  it("la segunda corrida se va sin tocar HubSpot", async () => {
+    sembrar({ altaEstado: "pendiente_crm" });
+    const [a, b] = await Promise.all([avanzarAlta("p1"), avanzarAlta("p1")]);
+    expect(crearLlamadas.length, "se crearon DOS records para el mismo proyecto").toBe(1);
+    const perdedor = [a, b].find((r) => r.error?.includes("intento corriendo"));
+    expect(perdedor, "las dos corridas creyeron que ganaron").toBeTruthy();
+  });
+
+  it("pero un reintento después de un fallo VISIBLE entra al toque", async () => {
+    /* El reclamo lee «error en null + intento reciente» como «está corriendo». Una corrida que
+       terminó mal dejó su motivo escrito, así que no bloquea al siguiente intento: si lo
+       hiciera, el botón «Reintentar» quedaría inútil justo cuando más se lo necesita. */
+    sembrar({ altaEstado: "pendiente_espejo", altaError: "lo que sea", altaUltimoIntentoAt: new Date() });
+    const r = await avanzarAlta("p1");
+    expect(r.error, "el reintento chocó contra el reclamo de su propia corrida anterior").not.toContain(
+      "intento corriendo",
+    );
+  });
+});
+
+describe("la confirmación del tipo sigue viva", () => {
+  /**
+   * ── LA REGRESIÓN QUE ESTE CASO CONGELA (incidente del 2026-08-06) ────────────
+   * El camino «Traer de HubSpot» nacía sin `altaPipelineElegido`, y la confirmación comparaba
+   * el pipeline real contra `null`: insatisfacible para siempre. El arreglo fue SELLAR el
+   * pipeline al crear, no relajar la comparación — porque relajarla es lo que uno escribe
+   * primero, y deja pasar el caso que la confirmación existe para atrapar.
+   */
+  it("con el tipo elegido en null NO termina: el alta espera", async () => {
+    sembrar({ altaEstado: "pendiente_espejo", hubspotServiceId: "hs-1", altaPipelineElegido: null });
+    espejoEscribe = { hubspotPipelineId: CS };
+    const r = await avanzarAlta("p1");
+    expect(r.termino, "un alta sin tipo elegido se dio por buena: el proyecto cae en la fila por defecto y COBRA").toBe(false);
+  });
+
+  it("y con el tipo sellado igual al que trajo HubSpot, termina", async () => {
+    sembrar({ altaEstado: "pendiente_espejo", hubspotServiceId: "hs-1", altaPipelineElegido: CS });
+    espejoEscribe = { hubspotPipelineId: CS };
+    const r = await avanzarAlta("p1");
+    expect(r.termino).toBe(true);
+  });
+});
 
 describe("al terminar", () => {
   it("camino feliz: queda listo, con su documento y la reclasificación sellada", async () => {

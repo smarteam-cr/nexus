@@ -160,6 +160,28 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
               {universo.ilegibles !== 1 ? "s" : ""}. Volvé a abrir en un minuto.
             </p>
           )}
+          {/* ⚠ Los tres descartes se DICEN. Una lista que se acorta en silencio se lee como
+              «no hay nada más» — y acá dos de los tres motivos son cosas que la persona puede
+              arreglar en HubSpot, así que callarlos deja el problema sin dueño. */}
+          {universo && universo.cerrados > 0 && (
+            <p className="text-xs text-fg-muted">
+              {universo.cerrados} proyecto{universo.cerrados !== 1 ? "s" : ""} ya finalizado
+              {universo.cerrados !== 1 ? "s" : ""} en HubSpot. No se traen.
+            </p>
+          )}
+          {universo && universo.tipoDesconocido > 0 && (
+            <p className="text-xs text-warn-ink">
+              {universo.tipoDesconocido} proyecto{universo.tipoDesconocido !== 1 ? "s" : ""} en un
+              pipeline que Nexus no conoce. Moveelo{universo.tipoDesconocido !== 1 ? "s" : ""} a uno
+              de los tres tipos en HubSpot y volvé.
+            </p>
+          )}
+          {universo && universo.suprimidos > 0 && (
+            <p className="text-xs text-fg-muted">
+              {universo.suprimidos} se {universo.suprimidos !== 1 ? "borraron" : "borró"} a
+              propósito desde Nexus. No vuelven solos.
+            </p>
+          )}
         </div>
       </Modal>
     </>
@@ -175,6 +197,13 @@ interface ResultadoFila {
   sinEncargado?: boolean;
   /** Se colgó de una ficha que ya existía, en vez de crear una nueva. */
   adoptado?: boolean;
+  /**
+   * ⚠ Si el alta TERMINÓ. El endpoint devuelve 200 aunque el alta quede a medio hacer —
+   * `avanzarAlta` no tira, deja el error en la fila— así que mirar `res.ok` y pintar verde es
+   * afirmar que terminó algo que no terminó. Es lo que hizo que dos altas trabadas pasaran días
+   * sin diagnosticar: quien las trajo leyó «ya está en Nexus» y se fue.
+   */
+  termino?: boolean;
 }
 
 function FilaEmpresa({
@@ -193,9 +222,19 @@ function FilaEmpresa({
   const gemela = empresa.gemelas[0];
 
   if (resultado?.tipo === "listo") {
+    /* El desenlace a medias tiene su propio color. Verde con un alta trabada adentro es la
+       versión visual de «no hay más sesiones»: una frase verdadera sobre la respuesta HTTP y
+       falsa sobre el mundo. */
+    const aMedias = resultado.termino === false;
     return (
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-success-line bg-success-surface px-3 py-2">
-        <span className="text-sm font-medium text-success-ink">
+      <div
+        className={
+          aMedias
+            ? "flex flex-wrap items-center gap-2 rounded-lg border border-warn-line bg-warn-surface px-3 py-2"
+            : "flex flex-wrap items-center gap-2 rounded-lg border border-success-line bg-success-surface px-3 py-2"
+        }
+      >
+        <span className={aMedias ? "text-sm font-medium text-warn-ink" : "text-sm font-medium text-success-ink"}>
           {resultado.adoptado
             ? `El proyecto quedó en «${empresa.gemelas[0]?.nombre ?? "la ficha que ya existía"}».`
             : `«${empresa.rotulo}» ya está en Nexus.`}
@@ -203,8 +242,10 @@ function FilaEmpresa({
         {/* Los TRES desenlaces, uno por frase corta. Sin el tercero, quien trae un proyecto sin
             encargado lee «es de otro», culpa a la regla de visibilidad y se va creyendo que
             funcionó. */}
-        <span className="text-xs text-success-ink/80">
-          {resultado.adoptado
+        <span className={aMedias ? "text-xs text-warn-ink" : "text-xs text-success-ink/80"}>
+          {aMedias
+            ? "Falta que Nexus lo lea de HubSpot: todavía no cobra ni se publica. Abrilo para reintentar."
+            : resultado.adoptado
             ? "No se creó otra ficha."
             : resultado.sinEncargado
             ? "No le aparece a nadie: el proyecto no tiene encargado en HubSpot."

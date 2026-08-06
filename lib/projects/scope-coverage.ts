@@ -90,6 +90,16 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "ofrecería traerlo otra vez creando una ficha de empresa duplicada. La búsqueda es por " +
       "existencia, no por alcance — mismo caso que `alta-runner`.",
   },
+  "app/api/clients/traer-de-hubspot/route.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: cuando dos clics simultáneos chocan contra el " +
+      "único de `hubspotServiceId`, busca QUIÉN ganó la carrera para adoptarlo en vez de " +
+      "devolver un error crudo. Acotarlo con un criterio de alcance es el bug: el proyecto que " +
+      "ganó puede estar en cuarentena —de hecho SIEMPRE lo está, porque el alta acaba de " +
+      "empezar— y ningún criterio lo deja pasar, así que el segundo clic crearía el duplicado " +
+      "que este rescate viene a evitar. La búsqueda es por existencia, no por alcance.",
+  },
   "lib/projects/alta-runner.ts": {
     modo: "exento",
     razon:
