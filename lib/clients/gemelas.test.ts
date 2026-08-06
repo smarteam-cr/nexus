@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
   raizDeDominio,
   normalizarEtiqueta,
@@ -125,5 +127,47 @@ describe("los bordes que rompen un comparador ingenuo", () => {
   it("un cliente sin dominios no explota", () => {
     const sinNada: ClienteComparable[] = [{ id: "y", name: "", company: null, emailDomains: [] }];
     expect(detectarGemelas({ nombre: "Algo", dominio: "algo.com" }, sinNada)).toEqual([]);
+  });
+});
+
+describe("los dos scripts que arreglan una empresa partida en dos", () => {
+  /**
+   * ── POR QUÉ SE VIGILAN DOS SCRIPTS DESDE ACÁ ────────────────────────────────
+   * `detectarGemelas` AVISA de una empresa partida en dos; estos dos scripts son los que la
+   * arreglan, y cada uno tiene una línea cuyo borrado no rompe nada visible:
+   *
+   *  · el que suma un dominio a un cliente decide DE QUIÉN SON SUS REUNIONES. Sin la
+   *    simulación previa, un dominio demasiado amplio le roba reuniones a otro cliente y eso
+   *    no se ve mirando la ficha. Y sin esperar la re-resolución, el dominio queda escrito sin
+   *    efecto — que se ve exactamente igual que «no funcionó».
+   *  · el que fusiona dos fichas: su lista de pares es el registro de un incidente viejo, y un
+   *    par nuevo va por argumento. Si alguien vuelve a hardcodear, el archivo se convierte en
+   *    un cementerio y hay que leerlo entero para saber qué corre hoy.
+   */
+  const fuenteDe = (rel: string) =>
+    fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+
+  it("agregar un dominio SIMULA antes de escribir, y espera la re-resolución", () => {
+    const src = fuenteDe("scripts/agregar-dominio-a-cliente.ts");
+    expect(src, "el script dejó de medir a quién le saca reuniones").toContain("colaterales");
+    expect(src, "el script dejó de usar la función real que decide el dueño").toContain(
+      "categorizeSession(",
+    );
+    const tramo = src.slice(src.lastIndexOf("prisma.client.update"));
+    expect(tramo.length, "la guarda no está mirando nada").toBeGreaterThan(200);
+    expect(
+      tramo,
+      "el script ya no ESPERA la re-resolución: el dominio queda escrito sin efecto",
+    ).toContain("await resolveAllSessions()");
+  });
+
+  it("y fusionar dos fichas acepta el par por argumento", () => {
+    const src = fuenteDe("scripts/merge-duplicate-clients.ts");
+    expect(src, "el par volvió a ser solo hardcodeado").toContain('argValue("--canonico")');
+    /* Ante dos fichas de nombre parecido —el caso exacto que este script atiende— elegir una
+       sería fusionar la equivocada. */
+    expect(src, "la resolución por nombre volvió a elegir ante la ambigüedad").toContain(
+      "Pasá el id.",
+    );
   });
 });

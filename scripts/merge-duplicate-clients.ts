@@ -36,8 +36,24 @@ import type { Prisma } from "@prisma/client";
  *   npx tsx scripts/backfill-resolved-client.ts               # dry-run → changed=0 (fidelidad)
  *
  * Dry-run por default (NO escribe). Aplicar con --apply (PROD):
- *   npx tsx scripts/merge-duplicate-clients.ts            # plan (no escribe)
+ *   npx tsx scripts/merge-duplicate-clients.ts            # plan de los pares fijos
  *   npx tsx scripts/merge-duplicate-clients.ts --apply    # ejecuta (PROD)
+ *
+ * ── UN PAR SUELTO, POR LÍNEA DE COMANDOS ────────────────────────────────────
+ * Los pares de abajo son los del incidente de julio y quedan como registro. Para un par nuevo
+ * NO se agrega a esa lista: se pasa por argumento, y así el archivo no se vuelve un cementerio
+ * de casos resueltos que hay que leer para entender cuál corre hoy.
+ *
+ *   npx tsx scripts/merge-duplicate-clients.ts --canonico kamalio --dup kamalio.com
+ *   ALLOW_PROD_WRITE=1 npx tsx …  --canonico kamalio --dup kamalio.com --apply
+ *
+ * El nombre resuelve por coincidencia EXACTA primero y después por `contains`; si matchea más
+ * de uno, aborta en vez de elegir — con dos fichas de nombre parecido (que es exactamente el
+ * caso que este script atiende) adivinar sería fusionar la equivocada.
+ *
+ * ⚠ Si las dos fichas apuntan a empresas de HubSpot que se acaban de FUSIONAR, primero corré
+ * `scripts/reapuntar-empresa-fusionada.ts --apply`. Si no, el merge conserva el id del canónico
+ * —que puede ser el absorbido— y el proyecto queda colgando de una empresa que ya no existe.
  */
 const APPLY = resolverApply();
 
@@ -257,6 +273,32 @@ async function processPair(p: (typeof PAIRS)[number]) {
   return { applied: true };
 }
 
+function argValue(flag: string): string | null {
+  const i = process.argv.indexOf(flag);
+  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : null;
+}
+
+/** Resuelve una ficha por id o por nombre. Aborta ante la ambigüedad en vez de elegir. */
+async function resolverFicha(arg: string): Promise<{ id: string; name: string }> {
+  const porId = await prisma.client.findUnique({ where: { id: arg }, select: { id: true, name: true } });
+  if (porId) return porId;
+  const exactos = await prisma.client.findMany({
+    where: { name: { equals: arg, mode: "insensitive" } },
+    select: { id: true, name: true },
+  });
+  if (exactos.length === 1) return exactos[0];
+  if (exactos.length > 1) throw new Error(`"${arg}" matchea ${exactos.length} fichas con ese nombre exacto.`);
+  const parciales = await prisma.client.findMany({
+    where: { name: { contains: arg, mode: "insensitive" } },
+    select: { id: true, name: true },
+  });
+  if (parciales.length === 1) return parciales[0];
+  if (parciales.length === 0) throw new Error(`Ninguna ficha matchea "${arg}".`);
+  throw new Error(
+    `"${arg}" matchea ${parciales.length} fichas (${parciales.map((c) => c.name).join(", ")}). Pasá el id.`,
+  );
+}
+
 async function main() {
   console.log(
     APPLY
@@ -264,8 +306,20 @@ async function main() {
       : "DRY-RUN — merge de Clients duplicados (usá --apply para ejecutar)",
   );
 
+  const argCanon = argValue("--canonico");
+  const argDup = argValue("--dup");
+  if ((argCanon === null) !== (argDup === null)) {
+    throw new Error("--canonico y --dup van juntos.");
+  }
+  let pares = PAIRS;
+  if (argCanon && argDup) {
+    const [c, d] = await Promise.all([resolverFicha(argCanon), resolverFicha(argDup)]);
+    if (c.id === d.id) throw new Error("El canónico y el duplicado son la misma ficha.");
+    pares = [{ label: `${c.name} ← ${d.name}`, canonicalId: c.id, dupId: d.id }];
+  }
+
   let appliedCount = 0;
-  for (const p of PAIRS) {
+  for (const p of pares) {
     const r = await processPair(p);
     if (r.applied) appliedCount++;
   }
@@ -274,7 +328,7 @@ async function main() {
   if (!APPLY) {
     console.log("(DRY-RUN) Nada escrito. Revisá el plan y los ⚠, después --apply.");
   } else {
-    console.log(`✓ ${appliedCount}/${PAIRS.length} pares mergeados.`);
+    console.log(`✓ ${appliedCount}/${pares.length} pares mergeados.`);
     console.log("VERIFICAR ahora:");
     console.log("  npm run check:invariants                         # INV1+INV2 → exit 0");
     console.log("  npx tsx scripts/backfill-resolved-client.ts      # dry-run → changed=0 (fidelidad)");
