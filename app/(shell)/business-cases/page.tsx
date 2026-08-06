@@ -82,16 +82,24 @@ export default async function BusinessCasesHubPage() {
           >
             <Link href={`/business-cases/${c.id}`} className="flex-1 min-w-0">
               <p className="text-sm font-medium text-fg truncate">{c.name}</p>
+              {/* El TIPO de propuesta vive acá, con el cliente, y no como píldora. Estuvo un rato
+                  en la píldora que enlaza a HubSpot y confundía: una propuesta de tipo "Sitio web"
+                  mostraba «Sitio web ↗» y aun así abría la empresa en HubSpot. La píldora dice
+                  a dónde LLEVA; el tipo es descripción, y su lugar es la línea descriptiva. */}
               <p className="text-xs text-fg-muted truncate">
                 {c.client.name}
                 {c.client.kind === "PROSPECTO" ? " (prospecto)" : ""}
+                {" · "}
+                {resolveBcType(c.caseType).shortLabel}
               </p>
             </Link>
-            {/* Las píldoras viven FUERA del <Link> de la fila: la del tipo lleva adentro el link a
-                HubSpot, y un <a> dentro de otro <a> es HTML inválido — el navegador parte el DOM.
-                El área clickeable de la fila no se achica: el Link sigue siendo `flex-1`. */}
+            {/* Las píldoras viven FUERA del <Link> de la fila: la de HubSpot es un <a>, y un <a>
+                dentro de otro <a> es HTML inválido — el navegador parte el DOM. El área
+                clickeable de la fila no se achica: el Link sigue siendo `flex-1`. */}
             <span className="flex-shrink-0 flex items-center gap-1.5">
-              {empresaUrl ? (
+              {/* Sin empresa vinculada (o sin el portal del sistema) no se pinta nada: un
+                  `/company/undefined` da un 404 en HubSpot que se lee como falta de permisos. */}
+              {empresaUrl && (
                 <a
                   href={empresaUrl}
                   target="_blank"
@@ -100,18 +108,11 @@ export default async function BusinessCasesHubPage() {
                   aria-label={`Ver ${c.client.name} en HubSpot`}
                   className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-line text-fg-muted hover:text-brand hover:border-brand/40 hover:bg-brand/5 transition-colors"
                 >
-                  {resolveBcType(c.caseType).shortLabel}
+                  HubSpot
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
                 </a>
-              ) : (
-                /* Sin empresa vinculada (o sin el portal del sistema) la píldora es texto, no un
-                   link muerto: `/company/undefined` da un 404 en HubSpot que se lee como falta
-                   de permisos. */
-                <span className="text-[11px] px-2 py-1 rounded border border-line text-fg-muted">
-                  {resolveBcType(c.caseType).shortLabel}
-                </span>
               )}
               <span className="text-xs px-2 py-1 rounded bg-surface-muted text-fg-muted">
                 {STATUS_LABEL[c.status] ?? c.status}
