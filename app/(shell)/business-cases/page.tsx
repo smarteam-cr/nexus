@@ -82,23 +82,29 @@ export default async function BusinessCasesHubPage() {
           >
             <Link href={`/business-cases/${c.id}`} className="flex-1 min-w-0">
               <p className="text-sm font-medium text-fg truncate">{c.name}</p>
-              {/* El TIPO de propuesta vive acá, con el cliente, y no como píldora. Estuvo un rato
-                  en la píldora que enlaza a HubSpot y confundía: una propuesta de tipo "Sitio web"
-                  mostraba «Sitio web ↗» y aun así abría la empresa en HubSpot. La píldora dice
-                  a dónde LLEVA; el tipo es descripción, y su lugar es la línea descriptiva. */}
               <p className="text-xs text-fg-muted truncate">
                 {c.client.name}
                 {c.client.kind === "PROSPECTO" ? " (prospecto)" : ""}
-                {" · "}
-                {resolveBcType(c.caseType).shortLabel}
               </p>
             </Link>
-            {/* Las píldoras viven FUERA del <Link> de la fila: la de HubSpot es un <a>, y un <a>
-                dentro de otro <a> es HTML inválido — el navegador parte el DOM. El área
+            {/* COLUMNAS de ancho fijo, no píldoras que se empujan entre sí. Con anchos libres, el
+                tipo ("Integración" vs "HubSpot") corría el estado y el basurero fila por fila, y
+                la tira dejaba de leerse en vertical. El tipo es TAG —descripción de la propuesta—
+                y por eso NO enlaza: la píldora que enlaza es la de HubSpot y dice a dónde lleva.
+                Confundirlos ya pasó: una propuesta de tipo "Sitio web" mostraba «Sitio web ↗» y
+                abría la empresa en HubSpot. */}
+            <span className="flex-shrink-0 w-28 hidden sm:block">
+              <span className="text-[11px] px-2 py-1 rounded border border-line text-fg-muted">
+                {resolveBcType(c.caseType).shortLabel}
+              </span>
+            </span>
+            {/* Las píldoras que siguen viven FUERA del <Link> de la fila: la de HubSpot es un <a>,
+                y un <a> dentro de otro <a> es HTML inválido — el navegador parte el DOM. El área
                 clickeable de la fila no se achica: el Link sigue siendo `flex-1`. */}
-            <span className="flex-shrink-0 flex items-center gap-1.5">
-              {/* Sin empresa vinculada (o sin el portal del sistema) no se pinta nada: un
-                  `/company/undefined` da un 404 en HubSpot que se lee como falta de permisos. */}
+            <span className="flex-shrink-0 w-24 hidden sm:block">
+              {/* Sin empresa vinculada (o sin el portal del sistema) la celda queda VACÍA, no
+                  colapsada: un `/company/undefined` da un 404 en HubSpot que se lee como falta de
+                  permisos, y una celda que desaparece corre toda la fila. */}
               {empresaUrl && (
                 <a
                   href={empresaUrl}
@@ -114,6 +120,8 @@ export default async function BusinessCasesHubPage() {
                   </svg>
                 </a>
               )}
+            </span>
+            <span className="flex-shrink-0 w-24">
               <span className="text-xs px-2 py-1 rounded bg-surface-muted text-fg-muted">
                 {STATUS_LABEL[c.status] ?? c.status}
               </span>
