@@ -3,7 +3,7 @@
  * (prospectos y clientes) + "Nuevo". Gateado por el área de Ventas (VENTAS/DEV/CSL/SUPER_ADMIN).
  */
 import { redirect } from "next/navigation";
-import { PageHeader } from "@/components/ui";
+import { Badge, PageHeader } from "@/components/ui";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import Link from "next/link";
 import { requireInternalUser } from "@/lib/auth/supabase";
@@ -71,6 +71,7 @@ export default async function BusinessCasesHubPage() {
 
       <div className="space-y-2">
         {cases.map((c) => {
+          const tipo = resolveBcType(c.caseType);
           const empresaUrl = hubspotCompanyUrl(
             systemAccount?.hubspotPortalId,
             c.hubspotCompanyId ?? c.client.hubspotCompanyId,
@@ -94,9 +95,9 @@ export default async function BusinessCasesHubPage() {
                 Confundirlos ya pasó: una propuesta de tipo "Sitio web" mostraba «Sitio web ↗» y
                 abría la empresa en HubSpot. */}
             <span className="flex-shrink-0 w-28 hidden sm:block">
-              <span className="text-[11px] px-2 py-1 rounded border border-line text-fg-muted">
-                {resolveBcType(c.caseType).shortLabel}
-              </span>
+              <Badge variant={tipo.tone} size="xs">
+                {tipo.shortLabel}
+              </Badge>
             </span>
             {/* Las píldoras que siguen viven FUERA del <Link> de la fila: la de HubSpot es un <a>,
                 y un <a> dentro de otro <a> es HTML inválido — el navegador parte el DOM. El área

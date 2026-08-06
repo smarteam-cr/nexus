@@ -11,10 +11,23 @@
  * de HubSpot (todos los BCs legacy y el default del stepper).
  */
 
+/**
+ * Color del tag del tipo en los listados. Son nombres de variante de `components/ui/Badge`
+ * —no clases— para no meter Tailwind ni React en este archivo, que es server+client safe.
+ *
+ * `destructive` queda FUERA a propósito: el rojo significa peligro en toda la app y un tipo de
+ * propuesta no es un problema. Los tonos son CATEGÓRICOS (distinguir uno de otro), no de estado:
+ * que "Integración" sea verde no dice que esté bien.
+ */
+export type BcTypeTone = "warning" | "info" | "success" | "purple" | "primary";
+
 export interface BcTypeDef {
   id: string;
   label: string;
   shortLabel: string;   // badge en listados/header
+  /** Obligatorio: un tipo sin tono nace invisible entre los demás y el compilador lo frena.
+   *  Los tonos NO se repiten entre tipos — hay un test que lo congela. */
+  tone: BcTypeTone;
   description: string;  // card del stepper
   templateId: string;   // → BC_TEMPLATES (components/landing/configs/templates.defs.ts)
   /**
@@ -46,6 +59,7 @@ export const BC_TYPE_CATALOG: BcTypeDef[] = [
     id: "hubspot_implementation",
     label: "Implementación de HubSpot",
     shortLabel: "HubSpot",
+    tone: "warning", // ámbar — lo más cerca del naranja de HubSpot que hay en el vocabulario
     description: "Caso de negocio para una implementación de HubSpot (hubs, integraciones, onboarding).",
     templateId: HUBSPOT_TEMPLATE_ID,
     defaultTags: [], // idéntico a hoy: el flujo default no siembra tags
@@ -55,6 +69,7 @@ export const BC_TYPE_CATALOG: BcTypeDef[] = [
     id: "insider_implementation",
     label: "Implementación de Insider",
     shortLabel: "Insider",
+    tone: "purple",
     description: "Caso de negocio para una implementación de Insider (personalización y engagement).",
     templateId: HUBSPOT_TEMPLATE_ID, // gancho: template propio a futuro
     defaultTags: ["insider_one"],
@@ -64,6 +79,7 @@ export const BC_TYPE_CATALOG: BcTypeDef[] = [
     id: "website",
     label: "Sitio web",
     shortLabel: "Sitio web",
+    tone: "info",
     description: "Propuesta de diseño y desarrollo de sitio web (Content Hub).",
     templateId: WEBSITE_TEMPLATE_ID,
     /* SOLO el alcance, nunca la plataforma. `sitio_web` (grupo `scope`) es cierto siempre que
@@ -84,6 +100,7 @@ export const BC_TYPE_CATALOG: BcTypeDef[] = [
     id: "integration",
     label: "Integración",
     shortLabel: "Integración",
+    tone: "success",
     description: "Caso de negocio centrado en integrar sistemas (ERP, WhatsApp, plataformas existentes).",
     templateId: HUBSPOT_TEMPLATE_ID,
     defaultTags: ["custom_dev"],
@@ -93,6 +110,7 @@ export const BC_TYPE_CATALOG: BcTypeDef[] = [
     id: "custom_dev",
     label: "Desarrollo a la medida",
     shortLabel: "Desarrollo",
+    tone: "primary",
     description: "Caso de negocio para un desarrollo a la medida sobre o alrededor del CRM.",
     templateId: HUBSPOT_TEMPLATE_ID,
     defaultTags: ["custom_dev"],

@@ -85,6 +85,22 @@ describe("Tipos de propuesta · integridad del catálogo", () => {
     }
   });
 
+  it("no hay dos tipos del mismo color", () => {
+    /* El tag de color existe para distinguir un tipo de otro de un vistazo. Dos tipos del mismo
+       tono no solo no ayudan: hacen creer que son lo mismo. El compilador ya obliga a declarar
+       `tone` (es requerido en `BcTypeDef`); esto vigila lo que el tipo no puede — que el valor
+       elegido sea NUEVO. Si el catálogo crece más que la paleta, no repitas: agregá una variante
+       a `components/ui/Badge` y sumala a `BcTypeTone`. */
+    const porTono = new Map<string, string[]>();
+    for (const t of BC_TYPE_CATALOG) {
+      porTono.set(t.tone, [...(porTono.get(t.tone) ?? []), t.shortLabel]);
+    }
+    const repetidos = [...porTono.entries()]
+      .filter(([, tipos]) => tipos.length > 1)
+      .map(([tono, tipos]) => `${tono}: ${tipos.join(", ")}`);
+    expect(repetidos, `Tipos que comparten color:\n${repetidos.join("\n")}`).toEqual([]);
+  });
+
   it("el tipo por default existe y está habilitado", () => {
     // `resolveBcType` cae acá con null/desconocido: si estuviera deshabilitado o no existiera,
     // toda propuesta legacy resolvería a un tipo que el stepper no deja elegir.
