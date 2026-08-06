@@ -35,6 +35,7 @@ import "dotenv/config";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { resolvePipeline } from "@/lib/projects/kind";
+import { ESTADOS_DE_ALTA, altaEnCurso } from "@/lib/projects/alta";
 import { avanzarAlta } from "@/lib/projects/alta-runner";
 
 function argValue(flag: string): string | null {
@@ -45,9 +46,11 @@ const APPLY = resolverApply();
 const SOLO = argValue("--project");
 
 async function main() {
+  // ⚠ Solo las que están A MEDIO HACER: `listo` también es un estado y se persiste.
+  const EN_CURSO = [...ESTADOS_DE_ALTA.filter(altaEnCurso)];
   const filas = await prisma.project.findMany({
     where: {
-      altaEstado: { not: null },
+      altaEstado: { in: EN_CURSO },
       altaPipelineElegido: null,
       hubspotPipelineId: { not: null },
       ...(SOLO ? { id: SOLO } : {}),
@@ -67,7 +70,7 @@ async function main() {
 
   // Las que el espejo no llegó a materializar: se REPORTAN y no se tocan. Ver la cabecera.
   const sinEspejo = await prisma.project.count({
-    where: { altaEstado: { not: null }, altaPipelineElegido: null, hubspotPipelineId: null },
+    where: { altaEstado: { in: EN_CURSO }, altaPipelineElegido: null, hubspotPipelineId: null },
   });
 
   if (filas.length === 0) {

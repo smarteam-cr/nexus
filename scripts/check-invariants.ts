@@ -7,6 +7,7 @@ import { resolveAllSessions } from "@/lib/sessions/resolve-client";
 import { buscarEtapa, resolvePipeline } from "@/lib/projects/kind";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { detectarFusionesEnLote } from "@/lib/hubspot/empresa-fusionada";
+import { ESTADOS_DE_ALTA, altaEnCurso } from "@/lib/projects/alta";
 
 /**
  * scripts/check-invariants.ts — BLINDAJE DURO de los invariantes medulares de Nexus.
@@ -705,8 +706,15 @@ async function main(): Promise<number> {
    */
   const HORAS_DE_GRACIA = 12;
   const limiteAlta = new Date(Date.now() - HORAS_DE_GRACIA * 3600_000);
+  /**
+   * ⚠ `altaEstado != null` NO es «el alta está en curso»: `listo` es un estado y se PERSISTE.
+   * Con ese filtro el invariante marcaba en rojo todos los proyectos que alguna vez pasaron por
+   * el alta —los cuatro que hay— incluidos los que terminaron bien hace días. Se derivan de la
+   * tabla, que es la que sabe cuáles significan «a medio hacer».
+   */
+  const EN_CURSO = ESTADOS_DE_ALTA.filter(altaEnCurso);
   const altasViejas = await prisma.project.findMany({
-    where: { altaEstado: { not: null }, altaIniciadaAt: { lt: limiteAlta } },
+    where: { altaEstado: { in: [...EN_CURSO] }, altaIniciadaAt: { lt: limiteAlta } },
     select: {
       id: true, name: true, altaEstado: true, altaError: true, altaIntentos: true,
       altaIniciadaAt: true, altaPipelineElegido: true, hubspotPipelineId: true,
