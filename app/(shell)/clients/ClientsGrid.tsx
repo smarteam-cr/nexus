@@ -11,7 +11,6 @@ import {
   type TableColumn,
 } from "@/components/ui";
 import DeleteClientButton from "./DeleteClientButton";
-import TraerDeHubspot from "./TraerDeHubspot";
 import NuevoProyectoStepper from "@/components/projects/NuevoProyectoStepper";
 import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 import { CLIENT_KINDS, CLIENT_KIND_META, formatTamUsd } from "@/lib/clients/kind";
@@ -169,13 +168,17 @@ export default function ClientsGrid({
   clients,
   activeCse,
   proyectosInternos,
-  empresasTraibles,
+  slotTraer,
 }: {
   clients: ClientRow[];
   activeCse: ActiveCse | null;
   proyectosInternos: ProyectoInternoRow[];
-  /** Empresas que HubSpot tiene con un proyecto que Nexus todavía no. 0 = el botón no existe. */
-  empresasTraibles: number;
+  /**
+   * El botón «Traer de HubSpot», ya envuelto en su propio `<Suspense>` por el server component.
+   * Llega como nodo y no como número para que contar las empresas —5 llamadas a HubSpot— no
+   * bloquee la tabla de clientes.
+   */
+  slotTraer: React.ReactNode;
 }) {
   const router = useRouter();
 
@@ -605,8 +608,8 @@ export default function ClientsGrid({
                 ni handoff, ni cronograma. No se pierde ninguna capacidad sacándolo; lo que
                 permitía hacer es exactamente lo que después no servía. */}
             {/* Sale primero y en secundario: traer es menos frecuente que crear, y su botón
-                desaparece solo cuando no queda nada que traer. */}
-            <TraerDeHubspot cuantas={empresasTraibles} />
+                desaparece solo cuando no queda nada que traer. Llega por streaming aparte. */}
+            {slotTraer}
             <NuevoProyectoStepper />
           </div>
         }

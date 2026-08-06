@@ -9,6 +9,8 @@ import {
   type ProyectoInternoRow,
 } from "@/lib/clients/proyectos-internos";
 import { listarEmpresasTraibles } from "@/lib/hubspot/empresas-con-proyecto";
+import TraerDeHubspot from "./TraerDeHubspot";
+import { Suspense } from "react";
 import type { requireUser } from "@/lib/auth/supabase";
 import { Skeleton, SkeletonTabs, TableSkeleton } from "@/components/ui";
 import ClientsGrid, { type ClientRow, type ActiveCse } from "./ClientsGrid";
@@ -84,12 +86,6 @@ export async function ClientsTable({
   ]);
 
   const clientIds = clients.map((c) => c.id);
-
-  /* Cuántas empresas con proyecto le faltan a Nexus. Va acá y no en `page.tsx` porque son 5
-     llamadas a HubSpot (~3 s): el header ya se pintó y esto llega por streaming con el resto.
-     `null` = HubSpot no contestó, y entonces el botón NO se pinta: ofrecer traer sin saber qué
-     hay es peor que no ofrecer. */
-  const universo = await listarEmpresasTraibles().catch(() => null);
 
   // Fechas de última reunión ventas/CSE + actividad (pasado/futuro) por cliente.
   // Ambos usan el match materializado FirefliesSession.resolvedClientId — queries
@@ -175,9 +171,33 @@ export async function ClientsTable({
       clients={rows}
       activeCse={activeCse}
       proyectosInternos={proyectosInternos}
-      empresasTraibles={universo?.traibles.length ?? 0}
+      /* En su PROPIO Suspense. Ver el comentario de SlotTraerDeHubspot: contar las empresas
+         cuesta ~2,4 s de HubSpot, y la lista de clientes no puede esperar por un botón. */
+      slotTraer={
+        <Suspense fallback={null}>
+          <SlotTraerDeHubspot />
+        </Suspense>
+      }
     />
   );
+}
+
+/**
+ * Cuántas empresas con proyecto le faltan a Nexus — el contador del botón «Traer de HubSpot».
+ *
+ * ⚠ VIVE EN SU PROPIO `<Suspense>`, y no es un detalle. Contarlas cuesta 5 llamadas a HubSpot
+ * (~2,4 s medidos). Awaitearlo junto al resto hacía que **la tabla de clientes entera esperara
+ * a HubSpot**: el trabajo de la pantalla —ver los clientes— quedaba detrás de un botón
+ * accesorio, y un día lento de la API se sentía como que Nexus está caído.
+ *
+ * Con su propia frontera, la tabla llega cuando está lista y el botón aparece después.
+ *
+ * `null` = HubSpot no contestó → el botón no se pinta. Ofrecer traer sin saber qué hay es peor
+ * que no ofrecer.
+ */
+async function SlotTraerDeHubspot() {
+  const universo = await listarEmpresasTraibles().catch(() => null);
+  return <TraerDeHubspot cuantas={universo?.traibles.length ?? 0} />;
 }
 
 /**
