@@ -260,6 +260,10 @@ export async function loadHandoffContext(
   projectId: string,
   opts: { onlyConfirmed?: boolean; includeKeys?: readonly string[] } = {},
 ): Promise<string> {
+  /* ⚠ Desde la Tanda F (2026-08-07) `redirigido` es SIEMPRE falso —las tres filas de
+     PROJECT_PIPELINES dicen `handoffDelHermano: false`— así que esto lee el handoff PROPIO de
+     cada proyecto y el prefijo de abajo no se agrega nunca. Se conserva entero: si esa celda
+     vuelve a `true`, la procedencia tiene que seguir viajando adentro del texto. */
   const duenio = await resolverDuenioDelHandoff(projectId);
   const texto = await loadCanvasContext(duenio.ownerProjectId, "handoff", opts);
   if (!texto || !duenio.redirigido) return texto;
