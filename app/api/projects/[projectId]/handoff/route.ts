@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardProjectEditHandoff, guardProjectGenerateHandoff } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { computeHandoffReadiness } from "@/lib/handoff/feeding";
-import { resolverDuenioDelHandoff, vetoSiElHandoffEsDeOtro } from "@/lib/handoff/duenio";
+import {
+  resolverDuenioDelHandoff,
+  vetoSiElHandoffEsDeOtro,
+  contextExclusionesPorDefecto,
+  tieneOTuvoImplementacionHubSpot,
+} from "@/lib/handoff/duenio";
 import { createHandoffCanvas, reconcileHandoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { canvasOf } from "@/lib/pieces/canvas-query";
+import { elegirAgente, pipelineKeyDeProyecto, AGENTES_DEL_GRUPO } from "@/lib/agents/resolver";
 
 type Params = { params: Promise<{ projectId: string }> };
 
@@ -56,6 +62,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
     where: { id: projectId },
     select: {
       implementationType: true,
+      // Para resolver QUÉ agente de handoff le toca a este tipo de proyecto.
+      hubspotPipelineId: true,
       handoff: { select: { id: true, contextExclusions: true } },
       canvases: { where: canvasOf("handoff"), select: { id: true }, take: 1 },
     },
@@ -95,12 +103,24 @@ export async function GET(_req: NextRequest, { params }: Params) {
   // El front lo muestra antes de generar ("N sesiones alimentarán este handoff…").
   const handoffReadiness = await computeHandoffReadiness(projectId);
 
-  // Id del agente de handoff resuelto por grupo (no hardcodeado) — el front lo usa
-  // para disparar /analyze sin embeber el cuid.
-  const handoffAgent = await prisma.agent.findFirst({
-    where: { agentGroup: "handoff" },
-    select: { id: true },
+  /**
+   * Id del agente de handoff — el front lo usa para disparar /analyze sin embeber el cuid.
+   *
+   * ⚠ POR EL RESOLVER, Y NO POR UN `findFirst` SUELTO. La versión anterior era
+   * `findFirst({ where: { agentGroup: "handoff" } })` sin `orderBy` y sin filtrar `status`:
+   * determinista POR ACCIDENTE mientras hubiera UNA sola fila con ese grupo. Con dos, Postgres
+   * puede devolver cualquiera y una Implementación de HubSpot se generaría con el prompt de
+   * Sitios web — sin error y sin log, hasta que alguien lea el documento.
+   *
+   * El resolver prefiere el agente del tipo del proyecto y CAE al genérico (`pipelineKey: null`),
+   * que es el que existe hoy: por eso una Implementación sigue resolviendo exactamente la misma
+   * fila, con el mismo prompt.
+   */
+  const candidatos = await prisma.agent.findMany({
+    where: AGENTES_DEL_GRUPO("handoff"),
+    select: { id: true, pipelineKey: true },
   });
+  const handoffAgent = elegirAgente(candidatos, pipelineKeyDeProyecto(project.hubspotPipelineId));
 
   return NextResponse.json({
     duenio: { redirigido: false as const },
@@ -182,6 +202,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
     where: { id: projectId },
     select: {
       clientId: true,
+      hubspotPipelineId: true,
       handoff: { select: { id: true } },
       canvases: { where: canvasOf("handoff"), select: { id: true }, take: 1 },
     },
@@ -190,6 +211,15 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
   const canvasId = project.canvases[0]?.id ?? null;
   const handoffId = project.handoff?.id ?? null;
+
+  /* Solo se paga si de verdad se va a crear un Handoff nuevo: para el caso normal (ya existe)
+     es una consulta de más en el camino más transitado de la pantalla. */
+  const contextExclusions = handoffId
+    ? undefined
+    : contextExclusionesPorDefecto({
+        hubspotPipelineId: project.hubspotPipelineId,
+        tieneImplementacionHubSpot: await tieneOTuvoImplementacionHubSpot(project.clientId, projectId),
+      });
 
   // Ensure: canvas Handoff (creado fresco con la estructura actual si falta) o RECONCILIADO
   // a la estructura canónica si ya existe (crea secciones nuevas como "desarrollo", nunca borra
@@ -200,7 +230,14 @@ export async function POST(_req: NextRequest, { params }: Params) {
     const hId =
       handoffId ??
       (await tx.handoff.create({
-        data: { clientId: project.clientId, projectId, hubspotSyncStatus: "pending" },
+        data: {
+          clientId: project.clientId,
+          projectId,
+          hubspotSyncStatus: "pending",
+          // Desarrollo/Sitio cuya empresa tiene (o tuvo) una Implementación aparte: nace con la
+          // nota de que la IA no tiene que repetir el alcance de ESA. Ver `lib/handoff/duenio.ts`.
+          contextExclusions,
+        },
         select: { id: true },
       })).id;
     return { canvasId: cId, handoffId: hId };

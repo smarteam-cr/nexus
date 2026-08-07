@@ -109,6 +109,15 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "de alcance dejaría afuera justo al que hay que encontrar (un proyecto inactivo lo " +
       "reclama igual) y el alta se apropiaría de un record ajeno.",
   },
+  "lib/handoff/duenio.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: pregunta si la empresa tiene —o tuvo alguna vez, " +
+      "sin filtrar por activo— un proyecto en el pipeline de Implementación de HubSpot, para " +
+      "decidir el TEXTO por defecto de un Desarrollo/Sitio nuevo. Una implementación cerrada " +
+      "dejó reuniones en la misma línea de tiempo de la company igual que una activa, así que " +
+      "acotar por criterio de alcance escondería justo el caso que la nota tiene que cubrir.",
+  },
   "lib/canvas/load-canvas-context.ts": {
     modo: "exento",
     razon:

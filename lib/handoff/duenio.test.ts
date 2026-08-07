@@ -16,7 +16,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { duenioDelHandoff } from "./duenio";
+import { duenioDelHandoff, contextExclusionesPorDefecto, EXCLUSION_IMPLEMENTACION_HUBSPOT } from "./duenio";
 import { pipelineByKey } from "@/lib/projects/kind";
 
 const RAIZ = process.cwd();
@@ -95,6 +95,51 @@ describe("de quién es el handoff — la tabla, transcrita", () => {
   });
 });
 
+describe("la nota por defecto — pedida el 2026-08-06 para el caso que duenioDelHandoff NO cubre", () => {
+  /**
+   * Es un caso DISTINTO del de arriba: un Desarrollo/Sitio que SÍ tiene su propio handoff (no
+   * está formalmente colgado en HubSpot) pero cuya empresa comparte línea de tiempo con una
+   * Implementación aparte. Los 17 "Integración con X" del 2026-08-06 son el caso real.
+   */
+  it("Desarrollo + la empresa tiene implementación → la nota", () => {
+    expect(
+      contextExclusionesPorDefecto({ hubspotPipelineId: DEV, tieneImplementacionHubSpot: true }),
+    ).toBe(EXCLUSION_IMPLEMENTACION_HUBSPOT);
+  });
+
+  it("Sitios web + la empresa tiene implementación → la misma nota", () => {
+    expect(
+      contextExclusionesPorDefecto({ hubspotPipelineId: WEB, tieneImplementacionHubSpot: true }),
+    ).toBe(EXCLUSION_IMPLEMENTACION_HUBSPOT);
+  });
+
+  it("sin implementación en la empresa → sin nota, aunque el pipeline sí pueda ser hermano", () => {
+    expect(
+      contextExclusionesPorDefecto({ hubspotPipelineId: DEV, tieneImplementacionHubSpot: false }),
+    ).toBeNull();
+  });
+
+  it("una Implementación de HubSpot NUNCA se excluye a sí misma", () => {
+    /* Aunque por algún dato raro `tieneImplementacionHubSpot` diera true (una empresa con DOS
+       implementaciones), este pipeline no puede ser hermano de nada — `canBeSiblingOf` vacío. */
+    expect(
+      contextExclusionesPorDefecto({ hubspotPipelineId: CS, tieneImplementacionHubSpot: true }),
+    ).toBeNull();
+  });
+
+  it("pipeline desconocido o sin pipeline → sin nota", () => {
+    expect(
+      contextExclusionesPorDefecto({
+        hubspotPipelineId: "default-onboarding-pipeline",
+        tieneImplementacionHubSpot: true,
+      }),
+    ).toBeNull();
+    expect(
+      contextExclusionesPorDefecto({ hubspotPipelineId: null, tieneImplementacionHubSpot: true }),
+    ).toBeNull();
+  });
+});
+
 // ── Candados fs-scan ─────────────────────────────────────────────────────────
 
 /** El código sin las líneas de `import` — un assert que matchea el import no prueba nada. */
@@ -150,6 +195,53 @@ describe("candado: las escrituras del handoff pasan por el veto", () => {
       posVeto < posRun,
       "el veto tiene que correr ANTES de cualquier trabajo de la generación.",
     ).toBe(true);
+  });
+});
+
+describe("candado: los DOS sitios que crean un Handoff nuevo ponen la nota por defecto", () => {
+  /**
+   * ⚠ Sobre el fuente sin comentarios: la prosa que explica el porqué nombra el símbolo
+   * vigilado, así que un scan crudo pasa en verde con el import sin usarse.
+   */
+  const sinComentarios = (rel: string): string =>
+    fs
+      .readFileSync(path.join(RAIZ, rel), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split(/\r?\n/)
+      .filter((l) => !l.trimStart().startsWith("//") && !l.trimStart().startsWith("*"))
+      .join("\n");
+
+  it("el alta única: el create del handoff usa la función, no un literal a mano", () => {
+    const src = sinComentarios("lib/projects/alta-runner.ts");
+    const i = src.lastIndexOf("await tx.handoff.create({");
+    expect(i, "se movió el create del handoff; revisar esta guarda").toBeGreaterThan(0);
+    const bloque = src.slice(i, src.indexOf("});", i));
+    expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(80);
+    expect(
+      bloque,
+      "el handoff del alta única dejó de nacer con la nota por defecto",
+    ).toContain("contextExclusions");
+    expect(src, "dejó de calcular la nota con la función compartida").toContain(
+      "contextExclusionesPorDefecto(",
+    );
+    expect(src, "dejó de consultar si la empresa tiene implementación").toContain(
+      "tieneOTuvoImplementacionHubSpot(",
+    );
+  });
+
+  it("el «Generar» de la pantalla: el ensure del handoff también", () => {
+    const src = sinComentarios("app/api/projects/[projectId]/handoff/route.ts");
+    const i = src.lastIndexOf("await tx.handoff.create({");
+    expect(i, "se movió el create del handoff; revisar esta guarda").toBeGreaterThan(0);
+    const bloque = src.slice(i, src.indexOf("});", i));
+    expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(80);
+    expect(
+      bloque,
+      "el handoff que nace al apretar Generar dejó de traer la nota por defecto",
+    ).toContain("contextExclusions");
+    expect(src, "dejó de calcular la nota con la función compartida").toContain(
+      "contextExclusionesPorDefecto(",
+    );
   });
 });
 

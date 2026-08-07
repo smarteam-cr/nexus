@@ -20,7 +20,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { resolvePipeline } from "@/lib/projects/kind";
+import { resolvePipeline, pipelineByKey } from "@/lib/projects/kind";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 export interface HechosDelHandoff {
@@ -70,6 +70,61 @@ export function duenioDelHandoff(facts: HechosDelHandoff): DuenioDelHandoff {
   if (!def?.canBeSiblingOf.includes("customer-success")) return propio;
 
   return { ownerProjectId: facts.hermanoCsProjectId, redirigido: true };
+}
+
+/**
+ * ── LA NOTA POR DEFECTO PARA UN DESARROLLO/SITIO QUE VA SOLO ─────────────────
+ *
+ * `duenioDelHandoff` de arriba cubre el caso "cuelga de una implementación": ese handoff ni
+ * siquiera nace, se redirige. Éste es el caso DISTINTO que pidió Elías el 2026-08-06: un
+ * Desarrollo o Sitio web que SÍ tiene su propio handoff —no está formalmente colgado como
+ * hermano en HubSpot— pero cuya empresa tiene (o tuvo) una Implementación de HubSpot aparte.
+ * Los 17 proyectos "Integración con X" de ese día son el caso de uso: comparten cliente con
+ * una Implementación, así que sus reuniones se mezclan en la misma línea de tiempo de HubSpot,
+ * y sin esta nota la IA redacta de nuevo el alcance de la Implementación en cada uno.
+ *
+ * Es un VALOR POR DEFECTO, no una regla nueva: se escribe una vez al nacer el handoff y
+ * cualquier CSE la edita o la borra desde la pestaña Contexto como toda `contextExclusions`.
+ * No toca `duenioDelHandoff` ni el veto — ésos siguen siendo la única fuente de verdad sobre
+ * DE QUIÉN es el documento.
+ */
+export const EXCLUSION_IMPLEMENTACION_HUBSPOT = "Ignora todo lo relacionado a la implementación de HubSpot.";
+
+/**
+ * PURA. Solo aplica a lo que PUEDE ser hermano de una implementación (Desarrollo, Sitios web)
+ * — reusa `canBeSiblingOf`, la misma tabla que decide la redirección de arriba, para no
+ * duplicar "cuáles son los pipelines que acompañan a una Implementación" en un segundo lugar.
+ * Una Implementación de HubSpot nunca se excluye a sí misma.
+ */
+export function contextExclusionesPorDefecto(input: {
+  hubspotPipelineId: string | null;
+  tieneImplementacionHubSpot: boolean;
+}): string | null {
+  if (!input.tieneImplementacionHubSpot) return null;
+  const def = resolvePipeline(input.hubspotPipelineId);
+  if (!def?.canBeSiblingOf.includes("customer-success")) return null;
+  return EXCLUSION_IMPLEMENTACION_HUBSPOT;
+}
+
+/**
+ * ¿La empresa tiene, o tuvo alguna vez, un proyecto en el pipeline de Implementación de
+ * HubSpot? "Tuvo" a propósito —sin filtrar por activo—: aunque esa implementación ya haya
+ * cerrado, sus reuniones viejas siguen en la misma línea de tiempo de la company y le siguen
+ * bajando línea a la IA si no se las excluye.
+ */
+export async function tieneOTuvoImplementacionHubSpot(
+  clientId: string,
+  excludeProjectId?: string,
+): Promise<boolean> {
+  const csPipelineId = pipelineByKey("customer-success").hubspotPipelineId;
+  const n = await prisma.project.count({
+    where: {
+      clientId,
+      hubspotPipelineId: csPipelineId,
+      ...(excludeProjectId ? { id: { not: excludeProjectId } } : {}),
+    },
+  });
+  return n > 0;
 }
 
 export interface DuenioResuelto extends DuenioDelHandoff {

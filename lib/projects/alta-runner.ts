@@ -4,7 +4,11 @@ import { crearProjectRecord, hasProjectsWriteScope } from "@/lib/hubspot/project
 import { espejarProyectoRecienCreado } from "@/lib/hubspot/sync-projects";
 import { createHandoffCanvas } from "@/lib/canvas/default-canvases";
 import { canvasOf } from "@/lib/pieces/canvas-query";
-import { duenioDelHandoff } from "@/lib/handoff/duenio";
+import {
+  duenioDelHandoff,
+  contextExclusionesPorDefecto,
+  tieneOTuvoImplementacionHubSpot,
+} from "@/lib/handoff/duenio";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { altaEnCurso, parseEstadoDeAlta, type EstadoDeAltaEnBase } from "@/lib/projects/alta";
 
@@ -315,6 +319,15 @@ async function terminarElAlta(
     tieneHandoffPropioConContenido: ctx.yaTieneHandoff,
   });
 
+  /* Fuera de la transacción: es una lectura, y su única consecuencia es un VALOR POR DEFECTO
+     que cualquier CSE puede editar después. No vale la pena pagar el candado de la tx por eso. */
+  const contextExclusions = duenio.redirigido
+    ? null
+    : contextExclusionesPorDefecto({
+        hubspotPipelineId: ctx.hubspotPipelineId,
+        tieneImplementacionHubSpot: await tieneOTuvoImplementacionHubSpot(ctx.clientId, projectId),
+      });
+
   await prisma.$transaction(async (tx) => {
     if (!duenio.redirigido && !ctx.yaTieneHandoff) {
       if (!ctx.yaTieneCanvasHandoff) await createHandoffCanvas(projectId, tx);
@@ -327,6 +340,9 @@ async function terminarElAlta(
              este handoff sincronice va a LINKEARSE a ese (caso A de `syncHandoffToHubspot`), no
              a crear un segundo. */
           hubspotSyncStatus: "pending",
+          // Desarrollo/Sitio cuya empresa tiene (o tuvo) una Implementación aparte: nace con la
+          // nota de que la IA no tiene que repetir el alcance de ESA. Ver `duenio.ts`.
+          contextExclusions,
         },
       });
     }

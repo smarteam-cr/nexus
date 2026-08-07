@@ -1233,6 +1233,10 @@ model Agent {
   // Agrupación por propósito (reemplaza stages/steps para la UI)
   agentGroup             String? // handoff | preparacion | diagnostico | planificacion | ejecucion | adopcion (ver lib/agent-groups.ts)
   groupOrder             Int             @default(0) // Orden DENTRO de su grupo (no del grupo). Para chaining: agentes con groupOrder menor se inyectan como contexto a los mayores del mismo grupo.
+  /// Tipo de proyecto al que aplica (key de PROJECT_PIPELINES: customer-success | development | web).
+  /// NULL = sirve para TODOS, y es el fallback: por eso el agente de handoff de hoy queda en NULL y
+  /// una Implementación sigue resolviendo exactamente la misma fila. Ver lib/agents/resolver.ts.
+  pipelineKey            String?
   // IDs de KnowledgeDocument inyectados sin truncar al prompt del agente (referencia principal)
   pinnedKnowledgeIds     String[]        @default([])
 
@@ -1242,6 +1246,8 @@ model Agent {
   runs AgentRun[]
 
   @@index([associatedStep])
+  // El resolver de `lib/agents/resolver.ts` consulta SIEMPRE por este par.
+  @@index([agentGroup, pipelineKey])
 }
 
 model AgentRun {

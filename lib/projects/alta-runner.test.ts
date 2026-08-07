@@ -62,6 +62,11 @@ const fakePrisma = {
       [...db.proyectos.values()].filter(
         (p) => p.hubspotServiceId && where.hubspotServiceId.in.includes(p.hubspotServiceId),
       ),
+    /* Para `tieneOTuvoImplementacionHubSpot` (nota por defecto del handoff). Ninguno de los
+       fixtures de este archivo declara otro proyecto en la misma empresa, así que siempre 0 —
+       lo que importa acá es que el doble responda, no que ejercite el caso "sí hay". Ese caso
+       lo cubre `lib/handoff/duenio.test.ts`, que prueba la función pura sin tocar la base. */
+    count: async () => 0,
     update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
       const f = db.proyectos.get(where.id);
       if (!f) throw new Error("no existe");
