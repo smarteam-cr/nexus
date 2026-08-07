@@ -2138,10 +2138,27 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
              Propuesta de ESTRUCTURA (handoff) → NO se swapea: el Gantt real sigue editable y
              los deltas se dibujan adentro (badges + filas fantasma). ── */}
       {phases.length === 0 ? (
+        /* ── EL POZO SIN SALIDA, TAPADO ─────────────────────────────────────────
+           Acá había la misma frase y NINGÚN botón. El botón "Generar cronograma" que está
+           arriba exige `phases.length > 0` —genera TAREAS dentro de fases que ya existen, no
+           las fases— así que un proyecto sin handoff quedaba mirando una instrucción sin ningún
+           gesto disponible: había que adivinar que el handoff vive en OTRA pestaña.
+           No es un caso de borde: era el estado permanente de los 2 hermanos menores (cuyo
+           handoff se redirigía al mayor, y por lo tanto sus fases aterrizaban allá) y es el
+           estado de cualquier Implementación a la que todavía no se le generó el handoff. */
         <div className="rounded-2xl border border-dashed border-gray-700 px-5 py-8 text-center text-gray-400 space-y-4">
           <p className="text-sm">
             Generá el <span className="font-medium text-gray-300">Handoff</span> para ver el cronograma inicial — las fases salen de ahí.
           </p>
+          <a
+            href={cronogramaUrl}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand text-primary-fg text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m4 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            Ir al Handoff del proyecto
+          </a>
         </div>
       ) : proposal && !structureOnlyProposal && proposalGantt ? (
         <TimelineGantt

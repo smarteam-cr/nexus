@@ -219,15 +219,26 @@ describe("el GET del handoff resuelve por el resolver", () => {
    * quedan sembradas sin que nadie las use jamás — el mismo trabajo muerto que INV15 persigue,
    * pero por el lado del código.
    */
-  it("el select del proyecto trae hubspotPipelineId", () => {
+  it("el agente se resuelve con el pipeline DEL PROYECTO, no con null", () => {
+    /**
+     * ⚠ La guarda mira el ARGUMENTO, no el `select`. Sacar `hubspotPipelineId` del select lo caza
+     * `tsc` solo (la propiedad deja de existir en el tipo). Lo que NINGUNA herramienta caza es
+     * pasar `null` acá: compila, tipa, no rompe ningún test — y manda TODOS los proyectos al
+     * agente genérico, con lo cual las variantes por tipo quedan sembradas sin que nadie las use
+     * jamás. Es el mismo trabajo muerto que persigue INV15, pero por el lado del código.
+     *
+     * La edición que la pone en rojo: `elegirAgente(candidatos, null)`.
+     */
+    /* ⚠ Y mira LA LLAMADA, no el archivo. La primera versión de esta guarda escaneaba el fuente
+       entero y salió VERDE con el bug puesto: `pipelineKeyDeProyecto(project.hubspotPipelineId)`
+       también aparece más abajo, en el payload que le manda el tipo a la pantalla. Se cazó
+       rompiéndola a propósito. */
     const src = fuente(RUTA_HANDOFF);
-    // El tramo exacto: la última lectura del proyecto ANTES de resolver el agente. La ruta tiene
-    // varias (el dueño del handoff, el POST), y mirar la primera dejaría la guarda decorativa.
-    const hastaElResolver = src.slice(0, src.indexOf("elegirAgente("));
-    const desdeLaLectura = hastaElResolver.lastIndexOf("prisma.project.findUnique");
-    expect(desdeLaLectura, "cambió la forma del GET; revisar esta guarda").toBeGreaterThan(-1);
-    const bloque = hastaElResolver.slice(desdeLaLectura);
-    expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(120);
-    expect(bloque).toContain("hubspotPipelineId");
+    const i = src.indexOf("elegirAgente(");
+    expect(i, "la ruta dejó de llamar al resolver").toBeGreaterThan(-1);
+    const llamada = src.slice(i, i + 120);
+    expect(llamada, "el resolver dejó de recibir el pipeline del proyecto").toContain(
+      "pipelineKeyDeProyecto(project.hubspotPipelineId)",
+    );
   });
 });

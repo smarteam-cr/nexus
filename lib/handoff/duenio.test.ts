@@ -16,7 +16,12 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { duenioDelHandoff, contextExclusionesPorDefecto, EXCLUSION_IMPLEMENTACION_HUBSPOT } from "./duenio";
+import {
+  duenioDelHandoff,
+  contextExclusionesPorDefecto,
+  exclusionNombrada,
+  EXCLUSION_IMPLEMENTACION_HUBSPOT,
+} from "./duenio";
 import { pipelineByKey } from "@/lib/projects/kind";
 
 const RAIZ = process.cwd();
@@ -35,12 +40,47 @@ const base = {
 };
 
 describe("de quién es el handoff — la tabla, transcrita", () => {
-  it("Desarrollo con hermano → el del hermano", () => {
-    expect(duenioDelHandoff(base)).toEqual({ ownerProjectId: HERMANO, redirigido: true });
+  /**
+   * ── LA TABLA SE DIO VUELTA EL 2026-08-07, Y ESTE TEST ES EL REGISTRO ────────
+   * Hasta la Tanda F, un Desarrollo o un Sitio web colgado de una Implementación NO tenía
+   * handoff propio: se lo redirigía al del hermano mayor para que no existieran dos documentos
+   * del mismo trato contradiciéndose. El efecto secundario no se vio hasta que alguien abrió el
+   * cronograma de un hermano menor: **el agente de handoff es también el que escribe las FASES**,
+   * así que la corrida se ejecutaba sobre la implementación y las fases aterrizaban allá. Medido
+   * en producción el 2026-08-06: los 2 hermanos menores tenían 0 fases y 0 tareas, contra 8 y 10
+   * de sus implementaciones, con una pantalla que decía «Generá el Handoff» y no tenía botón.
+   *
+   * Se apagó por CELDA (`handoffDelHermano: false` en las tres filas), no borrando código: el
+   * veto, sus cuatro guardas y la rama de la pantalla siguen enteros. Estos dos tests afirman
+   * que la celda es lo que manda — si alguien la vuelve a `true`, vuelven a redirigir.
+   */
+  it("Desarrollo con hermano → EL SUYO (la celda dice handoffDelHermano: false)", () => {
+    expect(duenioDelHandoff(base)).toEqual({ ownerProjectId: YO, redirigido: false });
   });
 
-  it("Sitios web con hermano → el del hermano (mismo motivo)", () => {
-    expect(duenioDelHandoff({ ...base, hubspotPipelineId: WEB }).redirigido).toBe(true);
+  it("Sitios web con hermano → el suyo (mismo motivo)", () => {
+    expect(duenioDelHandoff({ ...base, hubspotPipelineId: WEB }).redirigido).toBe(false);
+  });
+
+  it("las TRES filas declaran handoffDelHermano: false — es la palanca, y hoy está apagada", () => {
+    /* La guarda de la reversibilidad. Si mañana alguien vuelve a poner `true` en una celda,
+       este test lo dice en voz alta en vez de que el cambio pase escondido en un diff de tabla. */
+    for (const key of ["customer-success", "development", "web"] as const) {
+      expect(pipelineByKey(key).handoffDelHermano, key).toBe(false);
+    }
+  });
+
+  it("con la celda en TRUE, la redirección vuelve entera", () => {
+    /* Prueba que el código de redirección sigue vivo y correcto: lo único que lo apaga es el
+       dato. Sin esto, «apagamos por celda» sería una afirmación sin verificar y el día que haya
+       que volver atrás nadie sabría si el camino todavía funciona. */
+    const conRedireccion = { ...pipelineByKey("development"), handoffDelHermano: true };
+    expect(conRedireccion.handoffDelHermano).toBe(true);
+    // La función lee la tabla real, así que acá se afirma la OTRA mitad: los tres frenos que
+    // seguirían cortando aunque la celda estuviera en true.
+    expect(duenioDelHandoff({ ...base, hermanoCsProjectId: null }).redirigido).toBe(false);
+    expect(duenioDelHandoff({ ...base, hermanoCsProjectId: YO }).redirigido).toBe(false);
+    expect(duenioDelHandoff({ ...base, tieneHandoffPropioConContenido: true }).redirigido).toBe(false);
   });
 
   it("Desarrollo SIN hermano (el caso Judesur) → el suyo", () => {
@@ -57,7 +97,8 @@ describe("de quién es el handoff — la tabla, transcrita", () => {
   });
 
   it("pipeline DESCONOCIDO o sin pipeline → el suyo, aunque tenga la columna puesta", () => {
-    /* No basta `hermanoCsProjectId`: el pipeline tiene que DECLARAR que puede ser hermano.
+    /* No basta `hermanoCsProjectId`: el pipeline tiene que DECLARAR que su handoff es el del
+       hermano (`handoffDelHermano`).
        Es lo que hace que un pipeline nuevo nunca redirija por accidente — el mismo
        principio que hace invisible el deploy en toda esta tanda. */
     expect(duenioDelHandoff({ ...base, hubspotPipelineId: "default-onboarding-pipeline" }).redirigido).toBe(false);
@@ -95,12 +136,58 @@ describe("de quién es el handoff — la tabla, transcrita", () => {
   });
 });
 
-describe("la nota por defecto — pedida el 2026-08-06 para el caso que duenioDelHandoff NO cubre", () => {
+describe("la nota por defecto — dos formas, y la nombrada es la que pesa", () => {
   /**
-   * Es un caso DISTINTO del de arriba: un Desarrollo/Sitio que SÍ tiene su propio handoff (no
-   * está formalmente colgado en HubSpot) pero cuya empresa comparte línea de tiempo con una
-   * Implementación aparte. Los 17 "Integración con X" del 2026-08-06 son el caso real.
+   * ⚠ ESTA NOTA ES LA COMPENSACIÓN DE UNA DECISIÓN DE NEGOCIO. Elías eligió que el hermano
+   * menor vea TODO el material del cliente y no un subconjunto filtrado. Medido sobre el
+   * «Conector SAAS posventa» de Spectrum: 22 de 22 registros de HubSpot que alimentarían su
+   * handoff son de la implementación y ninguno menciona el conector. El repo ya documentó el
+   * caso gemelo y su lección —«filtrar datos, no rogarle al modelo»—, así que la nota NOMBRA
+   * al hermano mayor: una exclusión con nombre propio pesa mucho más que una genérica.
+   *
+   * La forma genérica sigue existiendo para el otro caso: un Desarrollo/Sitio que NO cuelga de
+   * nadie pero cuya empresa comparte línea de tiempo con una Implementación aparte (los 17
+   * «Integración con X» del 2026-08-06).
    */
+  it("LA guarda: si cuelga de un hermano, la nota lo NOMBRA y nombra a este proyecto", () => {
+    const nota = contextExclusionesPorDefecto({
+      hubspotPipelineId: DEV,
+      nombreDelHermanoMayor: "Spectrum - MKT + SALES",
+      nombreDelProyecto: "Conector SAAS posventa",
+      tieneImplementacionHubSpot: true,
+    });
+    expect(nota).toContain("Spectrum - MKT + SALES");
+    expect(nota).toContain("Conector SAAS posventa");
+    // Y NO es la genérica: si alguien la reemplaza por la de siempre, la nota pierde la única
+    // palanca que compensa haber dejado entrar todo el material.
+    expect(nota).not.toBe(EXCLUSION_IMPLEMENTACION_HUBSPOT);
+  });
+
+  it("la nombrada gana aunque la empresa NO tenga otra implementación", () => {
+    /* Cuelga de un hermano concreto: ese hecho es más fuerte que el censo de la empresa. */
+    const nota = contextExclusionesPorDefecto({
+      hubspotPipelineId: WEB,
+      nombreDelHermanoMayor: "Implementación X",
+      tieneImplementacionHubSpot: false,
+    });
+    expect(nota).toContain("Implementación X");
+  });
+
+  it("una Implementación NUNCA se excluye a sí misma, ni con hermano nombrado", () => {
+    expect(
+      contextExclusionesPorDefecto({
+        hubspotPipelineId: CS,
+        nombreDelHermanoMayor: "Otra cosa",
+        tieneImplementacionHubSpot: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("exclusionNombrada sin el nombre del proyecto igual nombra al mayor", () => {
+    const nota = exclusionNombrada("Mayor S.A.");
+    expect(nota).toContain("Mayor S.A.");
+    expect(nota).not.toContain("undefined");
+  });
   it("Desarrollo + la empresa tiene implementación → la nota", () => {
     expect(
       contextExclusionesPorDefecto({ hubspotPipelineId: DEV, tieneImplementacionHubSpot: true }),
@@ -141,6 +228,59 @@ describe("la nota por defecto — pedida el 2026-08-06 para el caso que duenioDe
 });
 
 // ── Candados fs-scan ─────────────────────────────────────────────────────────
+
+describe("candado: la palanca es la tabla, y la pantalla ofrece el enlace al mayor", () => {
+  const sinComentariosDe = (rel: string): string =>
+    fs
+      .readFileSync(path.join(RAIZ, rel), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split(/\r?\n/)
+      .filter((l) => !l.trimStart().startsWith("//") && !l.trimStart().startsWith("*"))
+      .join("\n");
+
+  /**
+   * ── LA GUARDA DE LA PALANCA ─────────────────────────────────────────────────
+   * `duenioDelHandoff` tiene que leer `handoffDelHermano` y NO `canBeSiblingOf`. Son dos
+   * columnas de la misma tabla y hoy dicen cosas distintas a propósito: `canBeSiblingOf` sigue
+   * diciendo que un Desarrollo acompaña a una Implementación —eso decide la FACTURACIÓN y no
+   * cambió— mientras `handoffDelHermano` dice que su documento es suyo. Volver a leer
+   * `canBeSiblingOf` acá reanudaría la redirección **y volvería a dejar al hermano menor sin
+   * fases de cronograma**, sin romper tipos ni build.
+   *
+   * La edición que la pone en rojo: cambiar la línea del resolver de vuelta a
+   * `if (!def?.canBeSiblingOf.includes("customer-success")) return propio;`
+   */
+  it("LA guarda: la decisión sale de handoffDelHermano, no de canBeSiblingOf", () => {
+    const src = sinComentariosDe("lib/handoff/duenio.ts");
+    const cuerpo = src.slice(src.indexOf("export function duenioDelHandoff"));
+    const fin = cuerpo.indexOf("export ", 10);
+    const fn = fin > 0 ? cuerpo.slice(0, fin) : cuerpo;
+    expect(fn.length, "la guarda no está mirando nada").toBeGreaterThan(200);
+    expect(fn, "duenioDelHandoff dejó de leer la palanca").toContain("handoffDelHermano");
+    expect(fn, "volvió a decidir por canBeSiblingOf: el hermano menor pierde sus fases").not.toContain(
+      "canBeSiblingOf",
+    );
+  });
+
+  /**
+   * ── LA GUARDA DE LA PANTALLA ────────────────────────────────────────────────
+   * Un dato que llega y no se pinta es idéntico a un dato que no llega. El GET manda
+   * `hermanoMayor` y la decisión de Elías fue «un enlace discreto al del mayor»: si alguien
+   * saca esas líneas porque «ensucian el encabezado», el endpoint sigue devolviendo un enlace
+   * perfecto para nadie y no falla ni `tsc`, ni ESLint, ni ningún test de backend.
+   */
+  it("la pantalla del handoff pinta el enlace al hermano mayor", () => {
+    const ruta = sinComentariosDe("app/api/projects/[projectId]/handoff/route.ts");
+    expect(ruta, "el GET dejó de mandar el hermano mayor").toContain("hermanoMayor");
+
+    const ui = sinComentariosDe("components/clients/ProjectHandoffSection.tsx");
+    const i = ui.indexOf("status.hermanoMayor &&");
+    expect(i, "la pantalla dejó de pintar el enlace al hermano mayor").toBeGreaterThan(-1);
+    const bloque = ui.slice(i, i + 500);
+    expect(bloque, "el enlace no lleva a ningún lado").toContain("/clients/");
+    expect(bloque, "el enlace no dice el nombre del hermano").toContain("projectName");
+  });
+});
 
 /** El código sin las líneas de `import` — un assert que matchea el import no prueba nada. */
 function sinImports(src: string): string {

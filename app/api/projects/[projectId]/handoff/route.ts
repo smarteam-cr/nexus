@@ -27,11 +27,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
-  /* ¿El handoff de este proyecto es el de OTRO? Un desarrollo que cuelga de una
-     implementación comparte con ella el alcance vendido (lib/handoff/duenio.ts). Se resuelve
-     PRIMERO: en ese caso no hay nada que generar acá, así que ni se calculan la disponibilidad
-     de material, el último run ni el agente — todo eso describe una generación que no va a
-     pasar en este proyecto. */
+  /* ¿El handoff de este proyecto es el de OTRO?
+     ⚠ DESDE LA TANDA F (2026-08-07) LA RESPUESTA ES SIEMPRE NO: las tres filas de
+     `PROJECT_PIPELINES` dicen `handoffDelHermano: false`, así que la rama de abajo es
+     inalcanzable. Se conserva entera a propósito y no se borra: apagar por celda es
+     reversible, borrar no lo es. Si dos documentos del mismo trato empiezan a contradecirse,
+     esa celda vuelve a `true` y esta rama vuelve a correr sin escribir una línea.
+     Lo que el hermano menor recibe en su lugar es su propio handoff + el enlace discreto de
+     abajo + la nota que nombra al mayor. */
   const duenio = await resolverDuenioDelHandoff(projectId);
   if (duenio.redirigido) {
     const owner = await prisma.project.findUnique({
@@ -66,9 +69,24 @@ export async function GET(_req: NextRequest, { params }: Params) {
       hubspotPipelineId: true,
       handoff: { select: { id: true, contextExclusions: true } },
       canvases: { where: canvasOf("handoff"), select: { id: true }, take: 1 },
+      /* De quién cuelga, si cuelga. ⚠ Es un PUNTERO BLANDO (String, sin clave foránea), así
+         que no se puede pedir por relación: se resuelve abajo con su propia lectura, tolerando
+         que apunte a un proyecto borrado. */
+      hermanoCsProjectId: true,
     },
   });
   if (!project) return NextResponse.json({ error: "not_found" }, { status: 404 });
+
+  /* El hermano mayor YA NO gobierna este documento —cada proyecto tiene el suyo desde la Tanda
+     F— pero la pantalla ofrece un enlace discreto al de él: el alcance vendido sigue estando
+     allá y quien lea éste probablemente quiera verlo. Un puntero a un proyecto borrado degrada
+     a `null` y la pantalla simplemente no muestra el enlace. */
+  const hermanoMayor = project.hermanoCsProjectId
+    ? await prisma.project.findUnique({
+        where: { id: project.hermanoCsProjectId },
+        select: { id: true, name: true, clientId: true },
+      })
+    : null;
 
   const canvasId = project.canvases[0]?.id ?? null;
   const blockCount = canvasId
@@ -124,6 +142,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   return NextResponse.json({
     duenio: { redirigido: false as const },
+    /* El enlace discreto, no una redirección: este proyecto tiene su handoff y además sabe de
+       quién cuelga. `null` cuando va solo. */
+    /* El TIPO del proyecto, para que la pantalla no titule "Handoff Sales→CS" sobre un
+       proyecto de Desarrollo. Viaja la key y no un rótulo armado en el servidor: `kind.ts` es
+       client-safe a propósito y la pantalla ya sabe traducirla. */
+    pipelineKey: pipelineKeyDeProyecto(project.hubspotPipelineId),
+    hermanoMayor: hermanoMayor
+      ? { projectId: hermanoMayor.id, projectName: hermanoMayor.name, clientId: hermanoMayor.clientId }
+      : null,
     handoffId: project.handoff?.id ?? null,
     agentId: handoffAgent?.id ?? null,
     canvasId,

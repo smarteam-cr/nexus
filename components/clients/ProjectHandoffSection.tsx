@@ -18,6 +18,7 @@ import { useMe } from "@/hooks/useMe";
 import ProjectContextSection from "./ProjectContextSection";
 import TagsStrip from "@/components/tags/TagsStrip";
 import type { ImplementationType } from "@prisma/client";
+import type { ProjectPipelineKey } from "@/lib/projects/kind";
 import { HandoffSectionSkeleton } from "./skeletons";
 import {
   readHandoffStatusCache,
@@ -26,10 +27,13 @@ import {
 } from "@/lib/clients/handoff-status-cache";
 
 /**
- * El handoff de este proyecto puede ser el de OTRO: un desarrollo que cuelga de una
- * implementación de Customer Success comparte con ella el alcance vendido (lib/handoff/
- * duenio.ts). En ese caso el GET devuelve un payload MÍNIMO —el documento del dueño y nada
- * más—, porque acá no hay generación que describir.
+ * El handoff de este proyecto PODRÍA ser el de OTRO — y hasta la Tanda F (2026-08-07) lo era
+ * para todo desarrollo colgado de una implementación. Hoy las tres filas de `PROJECT_PIPELINES`
+ * dicen `handoffDelHermano: false`, así que el servidor nunca manda `redirigido: true` y
+ * `HandoffDelHermano` no se pinta nunca. Se conserva entero: apagar por celda es reversible.
+ *
+ * Lo que el hermano menor ve en su lugar es su propio handoff, con un enlace discreto al del
+ * mayor (`hermanoMayor`) — decisión de Elías: el alcance vendido sigue estando allá.
  */
 type DuenioDTO =
   | { redirigido: false }
@@ -37,6 +41,10 @@ type DuenioDTO =
 
 interface HandoffStatus {
   duenio?: DuenioDTO;
+  /** De qué proyecto cuelga éste, si cuelga. NO redirige: es solo el enlace discreto. */
+  hermanoMayor?: { projectId: string; projectName: string; clientId: string } | null;
+  /** El tipo del proyecto — decide el título de la sección. `null` = pipeline sin declarar. */
+  pipelineKey?: ProjectPipelineKey | null;
   handoffId: string | null;
   /** Id del agente de handoff, resuelto por grupo en el GET (no hardcodeado). */
   agentId: string | null;
@@ -380,7 +388,16 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
         </svg>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-sm font-bold text-fg">Handoff Sales→CS</h3>
+            {/* ⚠ "Sales→CS" SOLO para una Implementación de HubSpot —y para un pipeline sin
+                declarar, que degrada al comportamiento de siempre—. Un proyecto de Desarrollo
+                o un Sitio web no se entrega de Ventas a CS: titularlo así era describir un
+                flujo que no ocurre. El requisito duro de la tanda es que la Implementación se
+                vea EXACTAMENTE como antes, y por eso el default es el rótulo viejo. */}
+            <h3 className="text-sm font-bold text-fg">
+              {status.pipelineKey === "development" || status.pipelineKey === "web"
+                ? "Handoff del proyecto"
+                : "Handoff Sales→CS"}
+            </h3>
             {badge}
           </div>
           <p className="text-xs text-fg-muted mt-0.5 truncate">
@@ -390,6 +407,23 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
               ? `${readiness.feedingCount} sesión${readiness.feedingCount === 1 ? "" : "es"} alimentarán este handoff (${readiness.withTranscript} con transcript${readiness.manualSources > 0 ? `, ${readiness.manualSources} fuente${readiness.manualSources === 1 ? "" : "s"} manual${readiness.manualSources === 1 ? "" : "es"}` : ""})`
               : "Ninguna sesión alimenta este handoff todavía — revisá el Contexto o pegá una fuente manual"}
           </p>
+          {/* ── EL ENLACE DISCRETO AL HERMANO MAYOR ──────────────────────────────────
+              Una línea, no un bloque: este proyecto TIENE su handoff y lo genera acá. Lo que
+              el enlace resuelve es que el alcance vendido vive en la implementación, y quien
+              lea éste probablemente quiera verlo. (Antes, en su lugar, se pintaba la sección
+              entera del hermano en SOLO LECTURA y no había forma de generar nada acá.) */}
+          {status.hermanoMayor && (
+            <p className="text-[11px] text-fg-muted mt-1">
+              Cuelga de{" "}
+              <a
+                href={`/clients/${status.hermanoMayor.clientId}?tab=${status.hermanoMayor.projectId}`}
+                className="text-brand hover:underline font-medium"
+              >
+                {status.hermanoMayor.projectName}
+              </a>
+              {" "}— ver su handoff
+            </p>
+          )}
           {noMaterial && !generated && (
             <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-1.5 inline-block">
               Las sesiones que alimentan este handoff aún no tienen transcripción — el handoff saldría vacío.

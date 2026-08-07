@@ -226,3 +226,38 @@ test("con una propuesta de ESTRUCTURA, el cronograma conserva sus acciones", () 
     "el ancla del CTA se perdió: el botón del encabezado quedaría llevando a ningún lado",
   ).toContain('id="cronograma-propuesta"');
 });
+
+/**
+ * ── EL POZO SIN SALIDA DEL CRONOGRAMA VACÍO (Tanda F, 2026-08-07) ────────────
+ *
+ * Con `phases.length === 0`, la pantalla decía «Generá el Handoff para ver el cronograma
+ * inicial» y **no tenía ningún botón**. El otro CTA de la pantalla —«Generar cronograma»—
+ * exige `phases.length > 0` porque genera TAREAS dentro de fases existentes, no las fases:
+ * o sea que en el único estado donde el mensaje aparece, no hay un solo gesto disponible.
+ *
+ * No era un borde. Era el estado PERMANENTE de los 2 hermanos menores de producción —su
+ * handoff se redirigía al hermano mayor, así que sus fases aterrizaban allá y ellos quedaban
+ * en cero— y es el estado de cualquier Implementación a la que todavía no se le generó el
+ * handoff. Instrucción sin gesto: había que adivinar que el handoff vive en otra pestaña.
+ *
+ * La edición que pone esta guarda en rojo: sacar el `<a href={cronogramaUrl}>` del bloque de
+ * `phases.length === 0`. No falla `tsc`, ni ESLint, ni ningún test de backend — la pantalla
+ * simplemente vuelve a ser un callejón.
+ */
+test("el cronograma sin fases ofrece una salida, no solo una instrucción", () => {
+  const src = fs.readFileSync(
+    path.join(process.cwd(), "components/canvas/CronogramaCanvas.tsx"),
+    "utf8",
+  );
+
+  const i = src.indexOf("{phases.length === 0 ? (");
+  expect(i, "cambió la forma del estado vacío; revisar esta guarda").toBeGreaterThan(-1);
+  const bloque = src.slice(i, src.indexOf(") : proposal", i));
+  expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(300);
+
+  expect(
+    bloque,
+    "el cronograma vacío volvió a ser un callejón: dice qué hacer y no da forma de hacerlo",
+  ).toContain("cronogramaUrl");
+  expect(bloque).toMatch(/Ir al Handoff/);
+});

@@ -369,16 +369,45 @@ describe("al terminar", () => {
     expect(f.altaReclasificadoAt).not.toBeNull();
   });
 
-  it("un proyecto que cuelga de otro NO nace con documento propio", async () => {
-    /* El motivo por el que el documento nace ACÁ y no en el alta: en el instante del alta el
-       tipo y el hermano valen null, así que la regla diría SIEMPRE "propio" y todo hermano
-       tendría un documento que contradice al de su hermana. */
+  /**
+   * ── SE DIO VUELTA EL 2026-08-07 (Tanda F) ──────────────────────────────────
+   * Este test afirmaba lo contrario: que un proyecto colgado de otro NO nacía con documento
+   * propio. Era correcto mientras el objetivo fuera «que no existan dos documentos del mismo
+   * trato»; dejó de serlo cuando se midió el precio. **El agente de handoff es también el que
+   * escribe las FASES del cronograma**, así que el hermano menor no perdía solo su documento:
+   * se quedaba con CERO fases, con una pantalla que decía «Generá el Handoff» y sin botón.
+   *
+   * Lo que reemplaza a la redirección es la NOTA que nombra al hermano mayor, y por eso este
+   * test la afirma: sin ella el hermano menor tiene documento propio pero escrito con el
+   * material de la implementación, que es el peor de los tres mundos.
+   */
+  it("LA guarda: un proyecto que cuelga de otro nace con SU documento y la nota que nombra al mayor", async () => {
+    // El hermano mayor existe en la base: es de donde sale el NOMBRE de la nota.
+    sembrar({ id: "proyecto-cs", name: "Spectrum - MKT + SALES" });
     sembrar({ altaHermanoHsId: "hs-hermano" });
     espejoEscribe = { hubspotPipelineId: DEV, hermanoCsProjectId: "proyecto-cs" };
+
     const r = await avanzarAlta("p1");
+
     expect(r.termino).toBe(true);
-    expect(db.handoffs, "el hermano nació con un documento que contradice al de su hermana").toHaveLength(0);
-    expect(canvasesCreados).toHaveLength(0);
+    expect(db.handoffs, "el hermano menor se quedó sin documento — y por lo tanto sin fases").toHaveLength(1);
+    expect(canvasesCreados).toEqual(["p1"]);
+    const nota = (db.handoffs[0] as { contextExclusions: string | null }).contextExclusions;
+    expect(nota, "la nota no nombra al hermano mayor: la IA va a repetir el alcance de la implementación").toContain(
+      "Spectrum - MKT + SALES",
+    );
+  });
+
+  it("si el hermano mayor apunta a un proyecto borrado, la nota degrada en vez de romper", async () => {
+    /* `hermanoCsProjectId` es un puntero BLANDO (sin clave foránea). Un id muerto no puede
+       tumbar un alta: se cae a la nota genérica —o a ninguna— y el proyecto termina igual. */
+    sembrar({ altaHermanoHsId: "hs-hermano" });
+    espejoEscribe = { hubspotPipelineId: DEV, hermanoCsProjectId: "proyecto-que-no-existe" };
+
+    const r = await avanzarAlta("p1");
+
+    expect(r.termino).toBe(true);
+    expect(db.handoffs).toHaveLength(1);
   });
 
   it("la reclasificación se paga UNA vez aunque se reintente", async () => {

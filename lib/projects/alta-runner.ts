@@ -274,6 +274,7 @@ async function correrElAlta(projectId: string): Promise<ResultadoDelAlta> {
     }
 
     await terminarElAlta(projectId, {
+      nombre: p.name,
       clientId: p.clientId,
       hubspotDealId: p.hubspotDealId,
       hubspotPipelineId: post.hubspotPipelineId,
@@ -292,17 +293,24 @@ async function correrElAlta(projectId: string): Promise<ResultadoDelAlta> {
  * La transición a LISTO. Acá nace el documento de handoff — no antes.
  *
  * ── POR QUÉ EL HANDOFF NACE ACÁ Y NO EN EL ALTA ──────────────────────────────
- * `duenioDelHandoff` decide con el tipo del proyecto y con su hermano. En el instante del alta
- * las dos cosas valen `null` —Nexus tiene prohibido escribirlas y el espejo todavía no corrió—,
- * así que la regla devolvería SIEMPRE "propio". O sea: todo desarrollo que cuelga de una
- * implementación nacería con un documento propio que contradice al de su hermana, y nadie se
- * enteraría hasta leerlos juntos.
+ * Las dos decisiones de esta función —de quién es el documento, y con qué nota de exclusión
+ * nace— se toman con el TIPO del proyecto y con su HERMANO. En el instante del alta las dos
+ * cosas valen `null`: Nexus tiene prohibido escribirlas y el espejo todavía no corrió. Acá ya
+ * están materializadas, así que se decide con la verdad y no con dos `null`.
  *
- * Acá los dos datos ya están materializados, así que la regla decide con la verdad.
+ * ⚠ Desde la Tanda F (2026-08-07) TODO proyecto nace con su handoff propio: las tres filas de
+ * `PROJECT_PIPELINES` dicen `handoffDelHermano: false`, así que `duenio.redirigido` es siempre
+ * falso y la rama de abajo corre siempre. Lo que el hermano menor recibe en vez de la
+ * redirección es la NOTA que nombra a su hermano mayor. La razón por la que esto importa no es
+ * documental: el agente de handoff es también el que crea las FASES del cronograma, y con la
+ * redirección prendida las fases aterrizaban en la implementación (medido: 0 fases en los 2
+ * hermanos menores de producción, contra 8 y 10 en sus implementaciones).
  */
 async function terminarElAlta(
   projectId: string,
   ctx: {
+    /** El nombre de ESTE proyecto — la nota de exclusión cierra nombrándolo. */
+    nombre: string;
     clientId: string;
     hubspotDealId: string | null;
     hubspotPipelineId: string | null;
@@ -319,12 +327,28 @@ async function terminarElAlta(
     tieneHandoffPropioConContenido: ctx.yaTieneHandoff,
   });
 
-  /* Fuera de la transacción: es una lectura, y su única consecuencia es un VALOR POR DEFECTO
-     que cualquier CSE puede editar después. No vale la pena pagar el candado de la tx por eso. */
+  /* Fuera de la transacción: son lecturas, y su única consecuencia es un VALOR POR DEFECTO que
+     cualquier CSE puede editar después. No vale la pena pagar el candado de la tx por eso.
+
+     ⚠ El nombre del hermano mayor es lo que vuelve NOMBRADA la nota, y una exclusión con nombre
+     propio pesa mucho más que una genérica — que es exactamente lo que este proyecto necesita,
+     porque ve todo el material del cliente (decisión de negocio del 2026-08-06). Si el hermano
+     apuntado no existe, se cae a la nota genérica en vez de romper. */
+  const hermanoMayor = ctx.hermanoCsProjectId
+    ? await prisma.project.findUnique({
+        where: { id: ctx.hermanoCsProjectId },
+        select: { name: true },
+      })
+    : null;
+  /* La rama `redirigido` es hoy inalcanzable —las tres filas dicen `handoffDelHermano: false`—
+     y se conserva a propósito: si esa celda vuelve a `true`, un proyecto redirigido no tiene
+     handoff propio donde escribir la nota. */
   const contextExclusions = duenio.redirigido
     ? null
     : contextExclusionesPorDefecto({
         hubspotPipelineId: ctx.hubspotPipelineId,
+        nombreDelHermanoMayor: hermanoMayor?.name ?? null,
+        nombreDelProyecto: ctx.nombre,
         tieneImplementacionHubSpot: await tieneOTuvoImplementacionHubSpot(ctx.clientId, projectId),
       });
 
@@ -340,8 +364,8 @@ async function terminarElAlta(
              este handoff sincronice va a LINKEARSE a ese (caso A de `syncHandoffToHubspot`), no
              a crear un segundo. */
           hubspotSyncStatus: "pending",
-          // Desarrollo/Sitio cuya empresa tiene (o tuvo) una Implementación aparte: nace con la
-          // nota de que la IA no tiene que repetir el alcance de ESA. Ver `duenio.ts`.
+          // Desarrollo/Sitio que cuelga de una Implementación —o cuya empresa tiene una aparte—:
+          // nace con la nota de que la IA no repita el alcance de ESA. Ver `duenio.ts`.
           contextExclusions,
         },
       });
