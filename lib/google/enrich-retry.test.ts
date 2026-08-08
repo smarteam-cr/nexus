@@ -241,9 +241,21 @@ describe("candados de la auditoría 2026-08-08", () => {
     );
     expect(tramo, "el release perdió el finally").toContain("finally");
     /* ⚠ Ciclo 3: el candado de FRESCURA vive adentro del mutex — sin él, la pasada reprocesa
-       desde su snapshot viejo una fila que el botón ya selló (la ventana «en cola»). */
-    expect(tramo, "el candado de frescura desapareció — el snapshot viejo reprocesa lo ya sellado").toContain(
-      "select: { enrichedAt: true }",
+       desde su snapshot viejo una fila que el botón ya selló (la ventana «en cola»).
+       ⚠ Ciclo 4: pinear el SELECT solo no alcanzaba — tres mutantes verdes: invertir !==
+       por === (apaga TODO el enriquecimiento en silencio y deja pasar la carrera),
+       simplificar a `enrichedAt !== null` (mata el re-enriquecer deliberado del botón), y
+       quitar el return dejando el log (candado muerto). Se fija la comparación EXACTA
+       (snapshot vs base, con getTime) y el corte adentro del sub-bloque. */
+    const iFrescura = tramo.indexOf("select: { enrichedAt: true }");
+    expect(iFrescura, "el candado de frescura desapareció — el snapshot viejo reprocesa lo ya sellado").toBeGreaterThan(-1);
+    const frescura = tramo.slice(iFrescura);
+    const iComparacion = frescura.indexOf(") !== (s.enrichedAt?.getTime()");
+    expect(iComparacion, "la comparación de frescura se invirtió o dejó de mirar el snapshot").toBeGreaterThan(-1);
+    /* El corte ancla DESPUÉS de la comparación — el `return` del `if (!fresca)` de más
+       arriba NO cuenta (ese fue el escape del mutante del ciclo 4). */
+    expect(frescura.slice(iComparacion, iComparacion + 300), "el candado imprime pero NO CORTA — la fila se reprocesa igual").toContain(
+      'return { estado: "skipped"',
     );
     /* ⚠ Ciclo 3: y los DOS corredores tienen que pasar POR el wrapper. La refactorización a
        wrapper dejó procesarSesionSinMutex como blanco directo: desviar enrichSingleSession o
