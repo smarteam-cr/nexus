@@ -230,6 +230,9 @@ export async function POST(_req: NextRequest, { params }: Params) {
     select: {
       clientId: true,
       hubspotPipelineId: true,
+      // Para la nota NOMBRADA: el nombre de este proyecto y de quién cuelga.
+      name: true,
+      hermanoCsProjectId: true,
       handoff: { select: { id: true } },
       canvases: { where: canvasOf("handoff"), select: { id: true }, take: 1 },
     },
@@ -240,13 +243,29 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const handoffId = project.handoff?.id ?? null;
 
   /* Solo se paga si de verdad se va a crear un Handoff nuevo: para el caso normal (ya existe)
-     es una consulta de más en el camino más transitado de la pantalla. */
-  const contextExclusions = handoffId
-    ? undefined
-    : contextExclusionesPorDefecto({
-        hubspotPipelineId: project.hubspotPipelineId,
-        tieneImplementacionHubSpot: await tieneOTuvoImplementacionHubSpot(project.clientId, projectId),
-      });
+     son consultas de más en el camino más transitado de la pantalla.
+
+     ⚠ CON EL NOMBRE DEL HERMANO MAYOR, igual que el alta (`alta-runner.ts`). Hasta la Tanda G
+     este camino pasaba solo el pipeline y la nota salía GENÉRICA — y este ensure es exactamente
+     por donde nace el handoff de un hermano cuyo alta corrió antes de la Tanda F (los dos
+     reales: Spectrum y Wherex). Una exclusión con nombre propio pesa mucho más, y es la única
+     compensación de la decisión «el hermano menor ve todo el material». Un puntero a un
+     proyecto borrado degrada a la genérica en vez de romper. */
+  let contextExclusions: string | null | undefined = undefined;
+  if (!handoffId) {
+    const hermanoMayor = project.hermanoCsProjectId
+      ? await prisma.project.findUnique({
+          where: { id: project.hermanoCsProjectId },
+          select: { name: true },
+        })
+      : null;
+    contextExclusions = contextExclusionesPorDefecto({
+      hubspotPipelineId: project.hubspotPipelineId,
+      nombreDelHermanoMayor: hermanoMayor?.name ?? null,
+      nombreDelProyecto: project.name,
+      tieneImplementacionHubSpot: await tieneOTuvoImplementacionHubSpot(project.clientId, projectId),
+    });
+  }
 
   // Ensure: canvas Handoff (creado fresco con la estructura actual si falta) o RECONCILIADO
   // a la estructura canónica si ya existe (crea secciones nuevas como "desarrollo", nunca borra

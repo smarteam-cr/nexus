@@ -275,6 +275,63 @@ export async function loadHandoffContext(
 }
 
 /**
+ * Allowlist: las secciones del handoff del MAYOR que pueden hablar del hermano menor.
+ *
+ * NO el documento completo, a propósito. El orden del canvas pone `fecha_inicio_kickoff` y
+ * compañía PRIMERO: un cap crudo gastaría el presupuesto en las fechas de kickoff del mayor y
+ * podría truncar `desarrollo`, que es exactamente donde el mayor documentó el trabajo del menor.
+ * Y las cinco secciones excluidas (fecha de inicio, stakeholders, dolor, motivación, en curso)
+ * son las homónimas que el agente más tienta copiar al documento del menor — el mismo contagio
+ * que la nota nombrada combate. «Filtrar datos, no rogarle al modelo.»
+ */
+export const HANDOFF_DEL_MAYOR_KEYS = [
+  "acuerdos_promesas",
+  "alcance_contratado",
+  "desarrollo",
+  "expectativas",
+  "riesgos_banderas",
+] as const;
+
+/**
+ * El handoff del HERMANO MAYOR como referencia para el ZOOM del menor (Tanda G, 2026-08-08 —
+ * decisión de Elías: el hermano menor SÍ lee el documento de la implementación, además de todo
+ * el material crudo, no en su lugar).
+ *
+ * Llama al loader genérico A PROPÓSITO (no a `loadHandoffContext`): acá se quiere explícitamente
+ * el documento DEL MAYOR, sin resolución de dueño. Vive en ESTE archivo porque es el único
+ * sancionado por el candado del embudo («nadie lee el handoff fuera del embudo») — y porque el
+ * rótulo tiene que viajar ADENTRO del texto: un caller que lo interpolara aparte podría dejarlo
+ * caer sin que nada falle.
+ *
+ * Devuelve "" si el mayor no existe, no tiene contenido, o —dato malo escrito por otra vía—
+ * no es del mismo cliente. Equivocarse hacia "" es el lado seguro.
+ */
+export async function loadHandoffDelHermanoMayorContext(
+  hermanoCsProjectId: string,
+  opts: { clientId?: string } = {},
+): Promise<string> {
+  const mayor = await prisma.project.findUnique({
+    where: { id: hermanoCsProjectId },
+    select: { name: true, clientId: true },
+  });
+  if (!mayor) return "";
+  // Cinturón cross-cliente: `resolverHermanos` arma el vínculo por-cliente por construcción,
+  // pero este helper no puede depender de que TODA escritura futura lo respete.
+  if (opts.clientId && mayor.clientId !== opts.clientId) return "";
+  const texto = await loadCanvasContext(hermanoCsProjectId, "handoff", {
+    onlyConfirmed: false,
+    includeKeys: HANDOFF_DEL_MAYOR_KEYS,
+  });
+  if (!texto) return "";
+  return (
+    `=== HANDOFF DEL PROYECTO PRINCIPAL «${mayor.name}» (REFERENCIA para el zoom) ===\n` +
+    `Su alcance de implementación cae bajo las EXCLUSIONES del CSE: usá SOLO lo que hable de ` +
+    `ESTE proyecto (integración, desarrollo o sitio web). NO copies sus fechas, fases ni ` +
+    `compromisos como propios.\n${texto.slice(0, 6000)}\n\n`
+  );
+}
+
+/**
  * Serializa el cronograma (ProjectTimeline + fases) a texto de solo-lectura.
  * Devuelve "" si no hay timeline o no tiene fases.
  *

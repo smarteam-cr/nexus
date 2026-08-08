@@ -27,9 +27,10 @@ import { runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
 import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
 import { runImplementacionGeneration } from "@/lib/canvas/implementacion-generate";
 import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
-import { loadCanvasContext, loadHandoffContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
+import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
 import { vetoSiElHandoffEsDeOtro } from "@/lib/handoff/duenio";
 import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
+import { debeAnteponerSemanaCero } from "@/lib/timeline/semana-cero";
 import { patchBaselinePhaseTasks } from "@/lib/timeline/baseline";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { KICKOFF_TEMPLATE, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
@@ -546,7 +547,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       }),
       // Buscar el deal asociado al proyecto (si hay projectId)
       bodyProjectId
-        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true, tags: true, implementationType: true, createdAt: true, hubspotCreatedAt: true } })
+        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true, tags: true, implementationType: true, createdAt: true, hubspotCreatedAt: true, hermanoCsProjectId: true } })
         : Promise.resolve(null),
     ]);
 
@@ -771,8 +772,22 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       // documentaba el conector DocuSign). Matching determinista por NOMBRE normalizado
       // (los Services de HubSpot nacen con el mismo nombre que su deal), mismo espíritu
       // que la ventana temporal del timeline: filtrar datos, no rogarle al modelo.
+      /* El deal del hermano MAYOR se resuelve por ID EXACTO (hermanoCsProjectId →
+         Project.hubspotDealId), no por nombre. Decisión de negocio del zoom (2026-08-08):
+         NO se filtra — el hermano menor ve todo el material — pero entra ETIQUETADO, porque
+         el repo ya midió que «el deal del vecino era un dato tan fuerte que ninguna
+         instrucción de exclusión podía contra él». findUnique directo y NO la lista de
+         activos: el mayor puede estar Finalizado y proyectoClasificableWhere lo dejaría
+         afuera. */
+      let hermanoMayorDelDeal: { name: string; hubspotDealId: string | null } | null = null;
       let isForeignProjectDeal: (dealName: string) => boolean = () => false;
       if (agent.agentGroup === "handoff" && bodyProjectId) {
+        if (dealProject?.hermanoCsProjectId) {
+          hermanoMayorDelDeal = await prisma.project.findUnique({
+            where: { id: dealProject.hermanoCsProjectId },
+            select: { name: true, hubspotDealId: true },
+          });
+        }
         const activeProjects = await prisma.project.findMany({
           where: proyectoClasificableWhere({ clientId }),
           select: { id: true, name: true },
@@ -797,12 +812,17 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         };
       }
 
+      const esDealDelMayor = (id: string) =>
+        !!hermanoMayorDelDeal?.hubspotDealId && id === hermanoMayorDelDeal.hubspotDealId;
+
       // Construir el bloque de deals
       const foreignDeals: string[] = [];
       const dealBlocks = dealsData
         .filter((d) => d.deal?.properties?.dealname)
         .filter((d) => {
           const name = d.deal!.properties!.dealname!;
+          // El id exacto gana al nombre: el deal del mayor entra SIEMPRE (etiquetado abajo).
+          if (esDealDelMayor(d.id)) return true;
           if (isForeignProjectDeal(name)) {
             foreignDeals.push(name);
             return false;
@@ -825,12 +845,24 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
           if (d.dealNotes.length > 0) {
             lines.push(`Notas del deal (${d.dealNotes.length}):\n${d.dealNotes.slice(0, 10).map((n) => `  • ${n}`).join("\n")}`);
           }
+          if (esDealDelMayor(d.id)) {
+            lines.unshift(
+              `⚠ ESTE NEGOCIO ES DEL PROYECTO PRINCIPAL «${hermanoMayorDelDeal!.name}» (la implementación de HubSpot): ` +
+                `usalo SOLO como contexto de fondo. El alcance de ESTE proyecto NO sale de acá, ` +
+                `salvo lo que hable de integración, desarrollo o sitio web.`,
+            );
+          }
           return lines.join("\n");
         });
 
       if (foreignDeals.length > 0) {
         console.log(
           `[analyze handoff] deals de OTROS proyectos excluidos del contexto: ${foreignDeals.join(" · ")}`,
+        );
+      }
+      if (hermanoMayorDelDeal?.hubspotDealId && dealsData.some((d) => esDealDelMayor(d.id))) {
+        console.log(
+          `[analyze handoff] deal del hermano mayor «${hermanoMayorDelDeal.name}» etiquetado (no filtrado).`,
         );
       }
       if (dealBlocks.length > 0) {
@@ -1517,6 +1549,22 @@ ${excl}
     }
   }
 
+  /* El DOCUMENTO de handoff del hermano MAYOR, como referencia para el zoom (Tanda G,
+     2026-08-08 — decisión de Elías: el hermano menor lo lee ADEMÁS de todo el material crudo).
+     El rótulo y la allowlist de secciones viven adentro del helper — es el único archivo
+     sancionado por el candado del embudo. Solo hermanos menores: para todo lo demás, "". */
+  let handoffDelMayorBlock = "";
+  if (isHandoffAgent && bodyProjectId && dealProject?.hermanoCsProjectId) {
+    handoffDelMayorBlock = await loadHandoffDelHermanoMayorContext(dealProject.hermanoCsProjectId, {
+      clientId,
+    });
+    if (handoffDelMayorBlock) {
+      console.log(
+        `[analyze handoff] handoff del hermano mayor inyectado como referencia (${handoffDelMayorBlock.length} chars)`,
+      );
+    }
+  }
+
   const baseUserMessage = `${cseExclusionsBlock}Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
 Notas base: ${client.notes ?? "Sin notas"}
@@ -1564,7 +1612,7 @@ ${[
     return `${tag} **${c.title}:**\n${c.content}`;
   }),
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
-].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, isHandoffAgent ? 12000 : CTX.salesBlockCap)}\n\n` : ""}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verificá que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omitilos.\n` : ""}
+].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${handoffDelMayorBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, isHandoffAgent ? 12000 : CTX.salesBlockCap)}\n\n` : ""}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verificá que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omitilos.\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 10b. Input del agente Kickoff ─────────────────────────────────────────────
@@ -2791,12 +2839,21 @@ async function persistTimelineFromAgentOutput(
       return;
     }
 
-    // KICKOFF SIEMPRE: la 1ra fase debe ser un Kick-off. Si el agente no lo puso, lo anteponemos
-    // (estimado → needsValidation). Garantiza el invariante "todo cronograma arranca con Kickoff".
-    const startsWithSemana0 = /semana\s*0|semana\s*cero|kick.?off|arranque/i.test(
-      validPhases[0]?.name ?? "",
+    /* KICKOFF para quien corresponde: en Customer Success (y pipeline legacy) la 1ra fase debe
+       ser un Kick-off y si el agente no lo puso se antepone (estimado → needsValidation). Los
+       pipelines con agente de handoff PROPIO (development, web) quedan AFUERA: sus prompts
+       prohíben la Semana 0 explícitamente, y anteponerla acá deshacía en la persistencia lo que
+       el prompt pidió en la generación — sin error y sin log. La decisión es una función PURA
+       (lib/timeline/semana-cero.ts) para que la tabla entera viva en un test. */
+    const proyectoDeLaCorrida = await prisma.project.findUnique({
+      where: { id: bodyProjectId },
+      select: { hubspotPipelineId: true },
+    });
+    const anteponerSemanaCero = debeAnteponerSemanaCero(
+      proyectoDeLaCorrida?.hubspotPipelineId ?? null,
+      validPhases[0]?.name,
     );
-    const phasesToCreate = startsWithSemana0
+    const phasesToCreate = !anteponerSemanaCero
       ? validPhases
       : [
           {

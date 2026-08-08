@@ -383,6 +383,145 @@ describe("candado: los DOS sitios que crean un Handoff nuevo ponen la nota por d
       "contextExclusionesPorDefecto(",
     );
   });
+
+  /**
+   * ── LA GUARDA DE F-B (Tanda G, 2026-08-08) ──────────────────────────────────
+   * Los DOS sitios tienen que pasar el NOMBRE del hermano mayor, no solo el pipeline. La
+   * asimetría existió: el alta pasaba el nombre y el ensure no — y el ensure es exactamente por
+   * donde nace el handoff de un hermano cuyo alta corrió ANTES de la Tanda F (los dos reales:
+   * Spectrum y Wherex). Con la nota genérica, la única compensación de «el hermano ve todo el
+   * material» pierde su palanca más fuerte, sin romper tipos ni build.
+   *
+   * La edición que la pone en rojo: volver cualquiera de los dos calls a la forma vieja
+   * (solo `hubspotPipelineId` + `tieneImplementacionHubSpot`).
+   */
+  it("LA guarda: los DOS sitios nombran al hermano mayor y al proyecto propio", () => {
+    for (const rel of [
+      "lib/projects/alta-runner.ts",
+      "app/api/projects/[projectId]/handoff/route.ts",
+    ]) {
+      const src = sinComentarios(rel);
+      const i = src.indexOf("contextExclusionesPorDefecto({");
+      expect(i, `${rel}: se movió el call; revisar esta guarda`).toBeGreaterThan(0);
+      const llamada = src.slice(i, src.indexOf("})", i));
+      expect(llamada.length, "la guarda no está mirando nada").toBeGreaterThan(100);
+      expect(llamada, `${rel}: la nota dejó de nombrar al hermano mayor`).toContain(
+        "nombreDelHermanoMayor",
+      );
+      expect(llamada, `${rel}: la nota dejó de cerrar con el foco en este proyecto`).toContain(
+        "nombreDelProyecto",
+      );
+      // Y el nombre sale del puntero real, no de un literal.
+      expect(src, `${rel}: dejó de resolver el hermano por su puntero`).toContain(
+        "hermanoCsProjectId",
+      );
+    }
+  });
+});
+
+describe("candado: el deal del mayor entra ETIQUETADO, no filtrado", () => {
+  /**
+   * ── F-C (Tanda G, 2026-08-08) ───────────────────────────────────────────────
+   * El repo ya midió que «el deal del vecino era un dato tan fuerte que ninguna instrucción de
+   * exclusión podía contra él» — y el filtro determinista de deals compara NOMBRES (mín. 10
+   * chars), no el puntero real. Decisión de negocio del zoom: el deal de la implementación NO
+   * se filtra (el hermano menor ve todo el material) pero entra con una etiqueta que dice de
+   * quién es, resuelta por ID EXACTO (`hermanoCsProjectId → hubspotDealId`).
+   *
+   * Dos ediciones lo matan sin romper nada: borrar el `lines.unshift` (el deal entra pelado) y
+   * mover el check por id DESPUÉS del check por nombre (el filtro por nombre se lo come antes
+   * de que la etiqueta exista).
+   */
+  const RUTA_ANALYZE = "app/api/clients/[id]/analyze/route.ts";
+
+  const sinComentariosDeAnalyze = (): string =>
+    fs
+      .readFileSync(path.join(RAIZ, RUTA_ANALYZE), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split(/\r?\n/)
+      .filter((l) => !l.trimStart().startsWith("//") && !l.trimStart().startsWith("*"))
+      .join("\n");
+
+  it("LA guarda: el deal del mayor se resuelve por id y lleva su etiqueta", () => {
+    const src = sinComentariosDeAnalyze();
+    expect(src, "desapareció el resolver por id exacto del deal del mayor").toContain(
+      "esDealDelMayor(",
+    );
+    expect(src, "el deal del mayor volvió a entrar SIN etiqueta").toContain(
+      "ESTE NEGOCIO ES DEL PROYECTO PRINCIPAL",
+    );
+    // El nombre del mayor sale del puntero real, no de una heurística de strings.
+    const resolver = src.slice(src.indexOf("hermanoMayorDelDeal ="));
+    expect(resolver.length, "la guarda no está mirando nada").toBeGreaterThan(100);
+    expect(resolver.slice(0, 400), "dejó de resolver por hermanoCsProjectId").toContain(
+      "hermanoCsProjectId",
+    );
+  });
+
+  it("el id exacto gana al filtro por nombre — el orden es la mitad del arreglo", () => {
+    const src = sinComentariosDeAnalyze();
+    const posId = src.indexOf("if (esDealDelMayor(d.id)) return true;");
+    const posNombre = src.indexOf("if (isForeignProjectDeal(name))");
+    expect(posId, "desapareció el check por id en el filter").toBeGreaterThan(-1);
+    expect(posNombre, "cambió el filtro por nombre; revisar esta guarda").toBeGreaterThan(-1);
+    expect(
+      posId < posNombre,
+      "el filtro por nombre corre ANTES que el check por id: el deal del mayor puede excluirse antes de etiquetarse",
+    ).toBe(true);
+  });
+});
+
+describe("candado: la rama handoff lee el documento del mayor, etiquetado", () => {
+  /**
+   * ── F-D (Tanda G, 2026-08-08 — decisión de Elías: «sí, que lo lea») ─────────
+   * El hermano menor lee el DOCUMENTO de handoff de la implementación como una fuente más —
+   * además de todo el material crudo, no en su lugar. Es el zoom directo: ese documento ya
+   * resume lo vendido, incluida la parte de integración/desarrollo/sitio.
+   *
+   * Tres piezas, y cada una muere distinto si se pierde:
+   *  · La llamada en analyze → el bloque no se arma y el zoom pierde su referencia, sin error.
+   *  · La interpolación en el template → el dato llega y NO se pinta al modelo: idéntico a no
+   *    llegar (el mismo modo de falla de los 49 descartados del console.warn).
+   *  · El rótulo/allowlist en el helper → el mayor entra sin marcar y el contagio que la nota
+   *    nombrada combate vuelve por la puerta de al lado.
+   */
+  const sinComentariosDe2 = (rel: string): string =>
+    fs
+      .readFileSync(path.join(RAIZ, rel), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split(/\r?\n/)
+      .filter((l) => !l.trimStart().startsWith("//") && !l.trimStart().startsWith("*"))
+      .join("\n");
+
+  it("LA guarda: analyze llama al helper gateado por el hermano, y lo interpola", () => {
+    const src = sinComentariosDe2("app/api/clients/[id]/analyze/route.ts");
+    const llamada = src.indexOf("loadHandoffDelHermanoMayorContext(");
+    expect(llamada, "la rama handoff dejó de leer el documento del mayor").toBeGreaterThan(-1);
+    // Gateado por el puntero real: sin hermano, ni una query de más.
+    const gate = src.lastIndexOf("hermanoCsProjectId", llamada);
+    expect(gate, "la llamada perdió su gate por hermanoCsProjectId").toBeGreaterThan(-1);
+    expect(llamada - gate, "el gate quedó lejos de la llamada; revisar esta guarda").toBeLessThan(400);
+    // Y el bloque LLEGA al modelo: un dato que llega y no se pinta es idéntico a uno que no llega.
+    expect(src, "el bloque del mayor ya no se interpola en el mensaje").toContain(
+      "${handoffDelMayorBlock}",
+    );
+  });
+
+  it("el helper rotula adentro, recorta por allowlist y no cruza clientes", () => {
+    const src = sinComentariosDe2("lib/canvas/load-canvas-context.ts");
+    const i = src.indexOf("export async function loadHandoffDelHermanoMayorContext");
+    expect(i, "desapareció el helper del documento del mayor").toBeGreaterThan(-1);
+    const fin = src.indexOf("export ", i + 10);
+    const cuerpo = fin > 0 ? src.slice(i, fin) : src.slice(i);
+    expect(cuerpo.length, "la guarda no está mirando nada").toBeGreaterThan(300);
+    expect(cuerpo, "el documento del mayor viaja SIN rótulo de procedencia").toContain(
+      "HANDOFF DEL PROYECTO PRINCIPAL",
+    );
+    expect(cuerpo, "se cayó la allowlist: el cap crudo trunca justo la sección desarrollo").toContain(
+      "HANDOFF_DEL_MAYOR_KEYS",
+    );
+    expect(cuerpo, "se cayó el cinturón cross-cliente").toContain("clientId");
+  });
 });
 
 describe("candado: nadie lee el handoff fuera del embudo", () => {
