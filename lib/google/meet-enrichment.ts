@@ -16,11 +16,10 @@ import { google } from "googleapis";
 import { prisma } from "@/lib/db/prisma";
 import { getImpersonatedAuth } from "@/lib/google/auth";
 import { summarizeTranscript } from "@/lib/ai/summarize-session";
+import { parseDocTabs, parseDocBody, MAX_TRANSCRIPT_CHARS, type DocTab } from "./doc-parse";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
-const MAX_TRANSCRIPT_CHARS = 150_000; // ~25 000 palabras — suficiente para reuniones largas
-const MAX_NOTES_CHARS      =  10_000; // resumen de Gemini Notes
 const DRIVE_SEARCH_WINDOW_DAYS = 3;   // buscar ±3 días alrededor de la reunión
 const DOC_BATCH  = 10;                // sesiones en paralelo para Pasada 1 (Google Docs)
 const DRIVE_BATCH = 5;                // sesiones en paralelo para Pasada 2 (Drive search)
@@ -40,34 +39,13 @@ interface DocContent {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ── HELPERS DE GOOGLE DOCS ────────────────────────────────────────────────────
+// ── LECTURA DE GOOGLE DOCS ────────────────────────────────────────────────────
+// La POLÍTICA de parseo (qué pestaña es el transcript, cuándo se promueve otra por
+// contenido, qué cuenta como plantilla vacía) vive en lib/google/doc-parse.ts — pura y
+// testeada como tabla. Acá queda SOLO el fetch. La trampa que motivó la separación: el
+// matcheo inline devolvía transcript=null cuando solo matcheaba la pestaña de notas, y un
+// transcript renombrado se perdía completo y en silencio (~464 sesiones medidas).
 // ─────────────────────────────────────────────────────────────────────────────
-
-interface DocTab {
-  tabProperties?: { title?: string | null };
-  documentTab?: {
-    body?: {
-      content?: Array<{
-        paragraph?: { elements?: Array<{ textRun?: { content?: string | null } }> };
-      }>;
-    };
-  };
-}
-
-function extractTabText(tab: DocTab): string {
-  return (tab.documentTab?.body?.content ?? [])
-    .flatMap((b) => b.paragraph?.elements ?? [])
-    .map((el) => el.textRun?.content ?? "")
-    .join("")
-    .trim();
-}
-
-function findTabByKeyword(tabs: DocTab[], ...keywords: string[]): DocTab | undefined {
-  return tabs.find((tab) => {
-    const title = (tab.tabProperties?.title ?? "").toLowerCase();
-    return keywords.some((kw) => title.includes(kw.toLowerCase()));
-  });
-}
 
 /** Lee un Google Doc por ID e intenta extraer transcript + resumen. */
 async function fetchDocContent(
@@ -97,47 +75,23 @@ async function fetchDocContent(
     const rawTabs = (doc as unknown as { tabs?: DocTab[] }).tabs;
 
     if (rawTabs && rawTabs.length > 0) {
-      // Log de diagnóstico — ayuda a detectar cuando los tab names no coinciden
-      const tabNames = rawTabs.map((t) => t.tabProperties?.title ?? "(sin título)");
-      console.log(`[google/enrich] Tabs encontrados en doc ${docId}: [${tabNames.join(", ")}]`);
-
-      const transcriptTab = findTabByKeyword(rawTabs, "transcripci", "transcript");
-      const notesTab     = findTabByKeyword(rawTabs, "notas", "gemini", "notes", "summary");
-
-      if (transcriptTab || notesTab) {
-        // Doc de Gemini Notes con tabs nombradas (caso habitual en Google Meet)
-        const transcript = transcriptTab
-          ? extractTabText(transcriptTab).slice(0, MAX_TRANSCRIPT_CHARS) || null
-          : null;
-
-        const notesText = notesTab ? extractTabText(notesTab) : null;
-        const summary   = notesText ? { overview: notesText.slice(0, MAX_NOTES_CHARS) } : null;
-
-        console.log(`[google/enrich] Doc ${docId}: transcript tab="${transcriptTab?.tabProperties?.title ?? "—"}" (${transcript?.length ?? 0} chars), notes tab="${notesTab?.tabProperties?.title ?? "—"}"`);
-        return { transcript, summary };
-      }
-
-      // Tabs sin nombre reconocible → unir todo el contenido como transcript
-      console.log(`[google/enrich] Doc ${docId}: ningún tab matcheó keywords — leyendo todo como transcript`);
-      const allText = rawTabs
-        .map(extractTabText)
-        .filter(Boolean)
-        .join("\n\n")
-        .trim();
-      return { transcript: allText.slice(0, MAX_TRANSCRIPT_CHARS) || null, summary: null };
+      const parsed = parseDocTabs(rawTabs);
+      console.log(
+        `[google/enrich] Doc ${docId}: tabs [${parsed.diagnostico.tabsVistos.join(", ")}] → ` +
+          `${parsed.diagnostico.motivo} (transcript ${parsed.transcript?.length ?? 0} chars)`,
+      );
+      return { transcript: parsed.transcript, summary: parsed.summary };
     }
-
-    console.log(`[google/enrich] Doc ${docId}: sin tabs — leyendo body completo`);
 
     // Sin tabs: leer body completo (fallback para docs sin tabs o si la API no devolvió tabs)
     const bodyText = (doc.body?.content ?? [])
       .flatMap((b) => b.paragraph?.elements ?? [])
       .map((el) => el.textRun?.content ?? "")
       .join("")
-      .trim()
-      .slice(0, MAX_TRANSCRIPT_CHARS);
-
-    return { transcript: bodyText || null, summary: null };
+      .trim();
+    const parsed = parseDocBody(bodyText);
+    console.log(`[google/enrich] Doc ${docId}: sin tabs → ${parsed.diagnostico.motivo}`);
+    return { transcript: parsed.transcript, summary: parsed.summary };
   } catch {
     return { transcript: null, summary: null };
   }
