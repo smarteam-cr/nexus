@@ -231,7 +231,7 @@ describe("candados de la auditoría 2026-08-08", () => {
        La edición que la pone en rojo: quitar el Set, o su add/delete. */
     const src = fuente("lib/google/meet-enrichment.ts");
     const fn = src.slice(src.indexOf("async function procesarSesion("));
-    const tramo = fn.slice(0, 700);
+    const tramo = fn.slice(0, 1400);
     expect(tramo, "procesarSesion dejó de chequear el mutex por sesión").toContain(
       "sesionesEnVuelo.has(s.id)",
     );
@@ -240,6 +240,23 @@ describe("candados de la auditoría 2026-08-08", () => {
       "sesionesEnVuelo.delete(s.id)",
     );
     expect(tramo, "el release perdió el finally").toContain("finally");
+    /* ⚠ Ciclo 3: el candado de FRESCURA vive adentro del mutex — sin él, la pasada reprocesa
+       desde su snapshot viejo una fila que el botón ya selló (la ventana «en cola»). */
+    expect(tramo, "el candado de frescura desapareció — el snapshot viejo reprocesa lo ya sellado").toContain(
+      "select: { enrichedAt: true }",
+    );
+    /* ⚠ Ciclo 3: y los DOS corredores tienen que pasar POR el wrapper. La refactorización a
+       wrapper dejó procesarSesionSinMutex como blanco directo: desviar enrichSingleSession o
+       correrLote a la versión sin mutex pasaba verde. Ocurrencias exactas: la definición y
+       la única llamada (adentro del wrapper). */
+    expect(
+      src.match(/procesarSesionSinMutex\(/g)?.length,
+      "alguien llama procesarSesionSinMutex por fuera del wrapper — el mutex quedó bypasseado",
+    ).toBe(2);
+    const lote = src.slice(src.indexOf("async function correrLote("), src.indexOf("async function correrLote(") + 600);
+    expect(lote, "la pasada dejó de pasar por el mutex por sesión").toContain("procesarSesion(s)");
+    const single = src.slice(src.indexOf("export async function enrichSingleSession("));
+    expect(single, "el botón por-sesión dejó de pasar por el mutex").toContain("await procesarSesion(");
   });
 
   it("el drenaje ordena por FECHA DE REUNIÓN, no por updatedAt (ciclo 2)", () => {
@@ -254,7 +271,10 @@ describe("candados de la auditoría 2026-08-08", () => {
     expect(tramo, "el drenaje volvió a ordenar por un campo que el sync pisa").not.toContain(
       "updatedAt",
     );
-    expect(tramo.match(/orderBy: \{ date: "asc" \}/g)?.length, "el orden estable desapareció").toBeGreaterThanOrEqual(1);
+    /* ⚠ Ciclo 3: exactamente DOS — el tramo tiene dos findMany (candidatas + hidratación) y
+       con >=1 invertir SOLO el de candidatas (el que decide QUÉ 20 drenan) pasaba verde
+       mientras el de hidratación cosmético mantenía el match. */
+    expect(tramo.match(/orderBy: \{ date: "asc" \}/g)?.length, "una de las DOS queries del drenaje perdió el orden estable").toBe(2);
     expect(tramo, "el select de candidatas volvió a traer las filas pesadas").toContain(
       'select: { id: true, enrichAttempts: true, enrichError: true }',
     );

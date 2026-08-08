@@ -75,6 +75,8 @@ interface SesionAEnriquecer {
   organizerEmail: string | null;
   participants: string[];
   enrichAttempts: number;
+  /** El sello AL MOMENTO DEL SNAPSHOT — el candado de frescura lo compara contra la base. */
+  enrichedAt: Date | null;
 }
 
 const SELECT_ENRIQUECER = {
@@ -85,6 +87,7 @@ const SELECT_ENRIQUECER = {
   organizerEmail: true,
   participants: true,
   enrichAttempts: true,
+  enrichedAt: true,
 } as const;
 
 /** El status HTTP de un error de googleapis, si lo trae. */
@@ -329,6 +332,21 @@ async function procesarSesion(s: SesionAEnriquecer): Promise<EstadoProceso> {
   }
   sesionesEnVuelo.add(s.id);
   try {
+    /* Candado de FRESCURA (ciclo 3 de revisión): el snapshot de una pasada tiene minutos de
+       vida — si OTRO corredor selló la fila desde entonces (el botón la enriqueció mientras
+       estaba EN COLA del snapshot), reprocesarla duplica lectura a Google, resumen de IA y
+       post-proceso. Regla: sello en la base ≠ sello del snapshot ⇒ otro ya la trabajó, skip.
+       El «re-enriquecer» deliberado del botón NO se ve afectado: su fetch es fresco, así que
+       base == snapshot y corre. */
+    const fresca = await prisma.firefliesSession.findUnique({
+      where: { id: s.id },
+      select: { enrichedAt: true },
+    });
+    if (!fresca) return { estado: "skipped", status: null };
+    if ((fresca.enrichedAt?.getTime() ?? null) !== (s.enrichedAt?.getTime() ?? null)) {
+      console.log(`[google/enrich] sesión ${s.id} sellada por otro corredor desde el snapshot — skip`);
+      return { estado: "skipped", status: null };
+    }
     return await procesarSesionSinMutex(s);
   } finally {
     sesionesEnVuelo.delete(s.id);

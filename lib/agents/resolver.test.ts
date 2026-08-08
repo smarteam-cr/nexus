@@ -308,9 +308,20 @@ describe("X2 — la variante del detalle del cronograma, por convención de id",
     const i = src.indexOf("const tipoExigido = tipoExigidoPorAgente(agent);");
     expect(i, "el cinturón dejó de derivar el tipo por la única fuente (columna + convención de id)").toBeGreaterThan(-1);
     const bloque = src.slice(i, i + 800);
+    /* ⚠ Ciclo 3: fijar también el IF y el CORTE. Sin el if, `if (agent.pipelineKey)` con el
+       const intacto compilaba y pasaba verde (reabre el agujero de las variantes); sin el
+       corte, reemplazar el return por un console.warn dejaba el cinturón decorativo — la
+       MISMA lección del gate de --deploy-confirmado, aplicada a su propia guarda. */
+    expect(bloque, "el gate dejó de decidir por tipoExigido — la columna sola no ve variantes").toContain(
+      "if (tipoExigido) {",
+    );
     expect(bloque, "el veto dejó de comparar contra el tipo del proyecto").toContain(
       "tipoDelProyecto !== tipoExigido",
     );
+    expect(bloque, "el veto imprime pero NO CORTA — el prompt tipado corre igual").toContain(
+      "return apiError(",
+    );
+    expect(bloque, "el veto perdió el 400").toContain("400,");
     // Y el inventario de la pantalla de etapa no lista agentes tipados.
     const gets = src.indexOf('agentType: "SECTION"');
     expect(gets, "cambió el GET de secciones; revisar esta guarda").toBeGreaterThan(-1);

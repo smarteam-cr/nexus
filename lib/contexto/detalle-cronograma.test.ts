@@ -200,9 +200,11 @@ describe("trinquete: el detalle del cronograma consume el contexto NOMBRADO", ()
     );
     /* ⚠ Ciclo 2: sin fijar el binding de las FUENTES, re-armarlas a mano en la ruta
        (fuentesDelDetalle con un loadHandoffContext SIN onlyConfirmed, por ejemplo) pasaba en
-       verde — el mutante exacto que el docstring de este trinquete narra. */
-    expect(tramo, "las fuentes dejaron de venir del cargador — alguien las re-armó a mano en la ruta").toContain(
-      "fuentes: contexto.fuentes",
+       verde — el mutante exacto que el docstring de este trinquete narra.
+       ⚠ Ciclo 3: CON la coma de cierre — el pin sin coma era matcheo por prefijo y
+       `contexto.fuentes.filter(...)` (una fuente suprimida en la ruta) pasaba verde. */
+    expect(tramo, "las fuentes dejaron de venir del cargador TAL CUAL — alguien las re-armó o decoró en la ruta").toContain(
+      "fuentes: contexto.fuentes,",
     );
   });
 
