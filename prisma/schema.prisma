@@ -1763,6 +1763,12 @@ model FirefliesSession {
   summary          Json?
   transcript       String?   @db.Text
   enrichedAt       DateTime? // cuándo se trajo transcript/summary (null = pendiente)
+  // Procedencia del enriquecimiento (2026-08-08). Un fallo de lectura YA NO sella la fila:
+  // attempts cuenta los fallos (0 = sano; 1-4 = en cola del job de reintento; 5 = sellado con
+  // procedencia) y error guarda el último {error,status,at} o el diagnóstico del parser
+  // ({tabsVistos,motivo}) cuando la lectura fue exitosa sin transcript.
+  enrichAttempts   Int       @default(0)
+  enrichError      String?
   syncedAt         DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   source           String    @default("google_meet") // "google_meet" (Fireflies eliminado; "fireflies" solo en filas históricas)

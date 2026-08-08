@@ -23,7 +23,9 @@ export const POST = withAuth(async (req) => {
     // Reset SOLO las sesiones sin transcript
     await prisma.firefliesSession.updateMany({
       where: { source: "google_meet", enrichedAt: { not: null }, transcript: null },
-      data: { enrichedAt: null },
+      // Reset completo: sin limpiar attempts/error, una fila sellada por tope quedaria
+      // invisible para las pasadas (toman attempts: 0) y el force no forzaria nada.
+      data: { enrichedAt: null, enrichAttempts: 0, enrichError: null },
     });
   } else if (force === "all") {
     // Reset absoluto: limpia transcript y summary además de enrichedAt,
@@ -31,7 +33,7 @@ export const POST = withAuth(async (req) => {
     await prisma.firefliesSession.updateMany({
       where: { source: "google_meet", enrichedAt: { not: null } },
       // summary es Json nullable → NULL de SQL requiere el sentinel DbNull.
-      data: { enrichedAt: null, transcript: null, summary: Prisma.DbNull },
+      data: { enrichedAt: null, transcript: null, summary: Prisma.DbNull, enrichAttempts: 0, enrichError: null },
     });
   }
 
