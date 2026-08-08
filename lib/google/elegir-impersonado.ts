@@ -30,19 +30,39 @@ export function esRecursoDeCalendario(email: string): boolean {
 }
 
 /**
- * PURA. `null` = no hay a quién impersonar (reunión 100% externa) — el llamador lo registra
- * como fallo CON procedencia, no lo sella como «sin contenido».
+ * PURA. TODOS los candidatos impersonables, en orden determinista: el organizador (si es
+ * nuestro) primero, después los participantes internos por orden alfabético, sin repetidos.
+ *
+ * ── POR QUÉ UNA LISTA Y NO SOLO EL PRIMERO (auditoría 2026-08-08) ────────────
+ * `esDeNuestroEquipo` es un check de DOMINIO: un ex-empleado @smarteamcr.com con la cuenta
+ * borrada sigue contando como «impersonable». Si es el primero de la lista, la impersonación
+ * falla con invalid_grant en TODOS los intentos —es determinista— y la fila se sella por tope
+ * aunque otro invitado interno ACTIVO podía leer el mismo doc. El llamador itera la lista
+ * ante un fallo de auth; el orden fijo conserva la idempotencia.
  */
-export function elegirImpersonado(
+export function candidatosImpersonables(
   organizerEmail: string | null,
   participants: readonly string[],
-): string | null {
+): string[] {
+  const out: string[] = [];
   const org = organizerEmail?.trim().toLowerCase() || null;
-  if (org && esDeNuestroEquipo(org) && !esRecursoDeCalendario(org)) return org;
+  if (org && esDeNuestroEquipo(org) && !esRecursoDeCalendario(org)) out.push(org);
 
   const internos = participants
     .map((p) => p.trim().toLowerCase())
     .filter((p) => p && esDeNuestroEquipo(p) && !esRecursoDeCalendario(p))
     .sort();
-  return internos[0] ?? null;
+  for (const p of internos) if (!out.includes(p)) out.push(p);
+  return out;
+}
+
+/**
+ * PURA. El primer candidato, o `null` = no hay a quién impersonar (reunión 100% externa) —
+ * el llamador lo registra como fallo definitivo CON procedencia, no como «sin contenido».
+ */
+export function elegirImpersonado(
+  organizerEmail: string | null,
+  participants: readonly string[],
+): string | null {
+  return candidatosImpersonables(organizerEmail, participants)[0] ?? null;
 }

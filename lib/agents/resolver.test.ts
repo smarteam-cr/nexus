@@ -282,4 +282,36 @@ describe("X2 — la variante del detalle del cronograma, por convención de id",
     // el input genérico de cards y su corrida se persiste mal).
     expect(src, "isTimelineDetailAgent dejó de aceptar variantes").toContain("esAgenteDeDetalle(agent.id)");
   });
+
+  it("el artifact-gate del cronograma también va por la convención (auditoría)", () => {
+    /* El swap corre ANTES del gate, y el gate comparaba el id EXACTO: una variante caía al
+       `return null` y corría SIN celda de permiso. La edición que la pone en rojo: volver a
+       `agent.id !== "agent-timeline-detail"` en el case cronograma. */
+    const gate = fuente("lib/auth/permissions/artifact-gate.ts");
+    const i = gate.indexOf('case "cronograma"');
+    expect(i, "cambió el case del cronograma; revisar esta guarda").toBeGreaterThan(-1);
+    expect(gate.slice(i, i + 400), "una variante del detalle correría sin celda de permiso").toContain(
+      "esAgenteDeDetalle(",
+    );
+  });
+
+  it("el cinturón del tipo: un agente tipado no corre sobre un proyecto de otro tipo", () => {
+    /* El despacho por id no pasaba por ningún resolver: un click en la pantalla de etapa (o
+       un curl) corría el prompt de Desarrollo sobre una Implementación. La edición que la
+       pone en rojo: borrar el veto del POST. */
+    const src = fuente("app/api/clients/[id]/analyze/route.ts");
+    const i = src.indexOf("if (agent.pipelineKey) {");
+    expect(i, "desapareció el cinturón del tipo en analyze").toBeGreaterThan(-1);
+    const bloque = src.slice(i, i + 700);
+    expect(bloque, "el veto dejó de comparar contra el tipo del proyecto").toContain(
+      "tipoDelProyecto !== agent.pipelineKey",
+    );
+    // Y el inventario de la pantalla de etapa no lista agentes tipados.
+    const gets = src.indexOf('agentType: "SECTION"');
+    expect(gets, "cambió el GET de secciones; revisar esta guarda").toBeGreaterThan(-1);
+    expect(
+      src.slice(gets, gets + 300),
+      "los agentes tipados volvieron al inventario de la pantalla de etapa",
+    ).toContain("pipelineKey: null");
+  });
 });

@@ -225,6 +225,25 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     return () => { vivo = false; };
   }, [projectId]);
 
+  /* Paso 0 de toda corrida del detalle (auditoría 2026-08-08): si el CSE tipeó
+     instrucciones y apretó Regenerar sin Guardar, el draft sucio se PATCHea antes de
+     disparar — el mismo arreglo «visto en RC» de las exclusiones del handoff. Best-effort:
+     si el PATCH falla, la corrida sigue (sin la regla nueva, como antes). */
+  const flushDocBrief = useCallback(async () => {
+    if (!briefDirty || docBrief.trim() === (briefGuardado ?? "")) return;
+    try {
+      const r = await fetch(`/api/projects/${projectId}/doc-brief`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: "timeline", brief: docBrief.trim() || null }),
+      });
+      if (r.ok) {
+        setBriefGuardado(docBrief.trim() || null);
+        setBriefDirty(false);
+      }
+    } catch { /* best-effort */ }
+  }, [projectId, briefDirty, docBrief, briefGuardado]);
+
   const saveDocBrief = useCallback(async () => {
     setSavingBrief(true);
     try {
@@ -919,6 +938,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Se dispara AUTOMÁTICAMENTE al abrir si hay fases sin tareas (auto=true →
   // silencioso si ya existe). También lo invoca "Regenerar detalle".
   const generateDetail = async (opts?: { auto?: boolean }) => {
+    await flushDocBrief();
     const auto = opts?.auto ?? false;
     if (!auto) maybeRequestPermission(); // solo en la generación que el usuario disparó
     setGenerating(true);
@@ -991,6 +1011,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Regen POR FASE → modal de curación (D.1). Paso 1 PREVIEW: el agente de detalle genera la propuesta
   // (con el handoff + el canvas Desarrollo) SIN persistir; abre el modal viejo↔nuevo.
   const startRegenPreview = async (phase: GanttPhase) => {
+    await flushDocBrief();
     if (!phase.id) return;
     setRegenPhase(phase);
     setRegenPreview(null);

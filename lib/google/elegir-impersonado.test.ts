@@ -51,6 +51,31 @@ describe("elegirImpersonado — la tabla", () => {
   });
 });
 
+describe("candidatosImpersonables — la lista para el fallback de auth", () => {
+  it("organizador nuestro primero, después internos alfabéticos, sin repetidos", async () => {
+    const { candidatosImpersonables } = await import("./elegir-impersonado");
+    expect(candidatosImpersonables(INTERNO_B, [INTERNO_A, INTERNO_B, CLIENTE])).toEqual([
+      INTERNO_B,
+      INTERNO_A,
+    ]);
+    expect(candidatosImpersonables(CLIENTE, [INTERNO_B, INTERNO_A])).toEqual([INTERNO_A, INTERNO_B]);
+    expect(candidatosImpersonables(CLIENTE, [CLIENTE])).toEqual([]);
+  });
+
+  it("elegirImpersonado ES el primero de la lista — una sola fuente de orden", async () => {
+    /* Si divergieran, el criterio de rescate y el pipeline elegirían distinta cuenta para la
+       misma sesión y la idempotencia se rompe. */
+    const { candidatosImpersonables } = await import("./elegir-impersonado");
+    for (const [org, parts] of [
+      [INTERNO_A, [CLIENTE, INTERNO_B]],
+      [CLIENTE, [INTERNO_B, INTERNO_A]],
+      [null, []],
+    ] as const) {
+      expect(elegirImpersonado(org, parts)).toBe(candidatosImpersonables(org, parts)[0] ?? null);
+    }
+  });
+});
+
 describe("esRecursoDeCalendario", () => {
   it("reconoce los dos sabores de recurso", () => {
     expect(esRecursoDeCalendario("c_abc@group.calendar.google.com")).toBe(true);

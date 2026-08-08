@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardAccessToProject, guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { pieceBySlug } from "@/lib/pieces/registry";
@@ -50,7 +50,11 @@ export async function GET(req: NextRequest, { params }: { params: Params }) {
 
 export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   const { projectId } = await params;
-  const guard = await guardAccessToProject(projectId);
+  /* ⚠ La MISMA celda que edita el cronograma (auditoría 2026-08-08): la caja de la UI se
+     pinta con `editTimeline`, y un endpoint gateado solo por acceso dejaba que un rol de
+     solo-lectura escribiera reglas duras del prompt por curl. Leer (GET) sigue siendo por
+     acceso — mirar instrucciones no edita nada. */
+  const guard = await guardTimelineEdit(projectId);
   if (guard instanceof NextResponse) return guard;
 
   const body = (await req.json().catch(() => ({}))) as { slug?: string; brief?: string | null };

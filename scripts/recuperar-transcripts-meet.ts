@@ -12,9 +12,13 @@
  * del 17-may.
  *
  * ── PRERREQUISITO DURO: CORRE DESPUÉS DEL DEPLOY ────────────────────────────
- * Aborta si las columnas de R2 no existen en la base. Y aunque existan: correrlo con el
- * CÓDIGO viejo aún deployado repetiría la quema byte a byte (catch mudo + sellado
- * incondicional + batch de 10 sin backoff). El orden es: deploy de R1+R2+R3 → este script.
+ * Aborta si las columnas de R2 no existen en la base. ⚠ PERO LAS COLUMNAS YA ESTÁN EN PROD
+ * (la migración se aplica antes del deploy), así que ese check NO detecta el peligro real:
+ * correr el rescate con el CÓDIGO viejo aún deployado — el auto-sync de prod tomaría lo
+ * reseteado y lo re-quemaría byte a byte (catch mudo + sellado incondicional + batch de 10
+ * sin backoff). Como el script no puede leer qué código corre el VPS, `--apply` exige
+ * ADEMÁS `--deploy-confirmado`: la persona afirma que verificó el deploy (curl
+ * https://<host>/api/health → el sha tiene que ser el de esta tanda, no "dev" ni uno viejo).
  *
  * ── IDEMPOTENTE POR CONSTRUCCIÓN ────────────────────────────────────────────
  * Una fila ya reseteada (enrichedAt null, transcript null) no cae en ningún bucket, así que
@@ -22,7 +26,7 @@
  *
  * Uso:
  *   npx tsx scripts/recuperar-transcripts-meet.ts                     # dry-run con conteos
- *   ALLOW_PROD_WRITE=1 npx tsx scripts/recuperar-transcripts-meet.ts --apply --limit 50
+ *   ALLOW_PROD_WRITE=1 npx tsx scripts/recuperar-transcripts-meet.ts --apply --deploy-confirmado --limit 50
  *
  * Conteos del dry-run REAL (2026-08-08, contra producción): 1.494 en A (todas las selladas
  * sin transcript con doc — superset de las corridas quemadas del 17-may/7-jul y de las
@@ -36,6 +40,7 @@ import { prisma } from "@/lib/db/prisma";
 import { bucketDe, datosDeReset, type BucketDeRescate } from "@/lib/google/recuperacion-criterio";
 
 const APPLY = resolverApply();
+const DEPLOY_CONFIRMADO = process.argv.includes("--deploy-confirmado");
 const LIMIT = (() => {
   const i = process.argv.indexOf("--limit");
   const n = i >= 0 ? parseInt(process.argv[i + 1] ?? "", 10) : 50;
@@ -92,6 +97,18 @@ async function main() {
   }
   if (porBucket.size === 0) {
     console.log("\nNada que rescatar. (Idempotencia: si ya corriste --apply, esto es lo esperado.)");
+    return;
+  }
+
+  if (APPLY && !DEPLOY_CONFIRMADO) {
+    console.error(
+      "✗ ABORTADO: --apply exige --deploy-confirmado.\n" +
+        "  Las columnas ya están en prod ANTES del deploy, así que este script no puede saber\n" +
+        "  qué código corre el VPS. Verificá el deploy (curl /api/health → sha de esta tanda)\n" +
+        "  y volvé a correr con --deploy-confirmado. Resetear con el código viejo deployado\n" +
+        "  re-quema todo: el auto-sync viejo sella en fallo y sin backoff.",
+    );
+    process.exitCode = 1;
     return;
   }
 

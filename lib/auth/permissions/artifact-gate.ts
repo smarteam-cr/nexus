@@ -19,6 +19,7 @@
  * Sin projectId (corridas legacy a nivel cliente) no hay señal → "generate".
  */
 import { prisma } from "@/lib/db/prisma";
+import { esAgenteDeDetalle } from "@/lib/agents/resolver";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
@@ -120,8 +121,11 @@ export async function resolveArtifactGate(
       return { section: "implementacion", action: aiBlocks > 0 ? "regenerate" : "generate" };
     }
     case "cronograma": {
-      // agent-timeline-detail ESCRIBE tareas; agent-timeline-progress solo propone → sin gate.
-      if (agent.id !== "agent-timeline-detail") return null;
+      /* El detalle ESCRIBE tareas (base O variante por tipo `agent-timeline-detail--<t>`);
+         agent-timeline-progress solo propone → sin gate. ⚠ Por la convención y no por el id
+         exacto: con `!== "agent-timeline-detail"` una variante de X2 caía al return null y
+         corría SIN celda de permiso (auditoría 2026-08-08). */
+      if (!esAgenteDeDetalle(agent.id)) return null;
       return {
         section: "cronograma",
         action: (await hasAiTimelineDetail(projectId)) ? "regenerate" : "generate",

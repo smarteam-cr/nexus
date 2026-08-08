@@ -55,7 +55,12 @@ export function datosDeEscritura(
   now: Date,
 ): DatosDeEscritura {
   if (!lectura.ok) {
-    const attempts = attemptsPrevios + 1;
+    /* Un fallo DETERMINÍSTICO no se reintenta: reintentar 5 veces algo que no puede cambiar
+       solo (una reunión 100% externa sin interno que impersonar) infla la cola del job y
+       produce head-of-line blocking sobre los fallos que SÍ valen la pena (auditoría
+       2026-08-08). Se sella al primer intento, con su procedencia. */
+    const definitivo = lectura.error === "sin_interno_para_impersonar";
+    const attempts = definitivo ? MAX_ENRICH_ATTEMPTS : attemptsPrevios + 1;
     const procedencia = JSON.stringify({
       error: lectura.error.slice(0, 500),
       status: lectura.status,

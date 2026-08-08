@@ -29,7 +29,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getImpersonatedAuth } from "@/lib/google/auth";
 import { summarizeTranscript } from "@/lib/ai/summarize-session";
 import { parseDocTabs, parseDocBody, MAX_TRANSCRIPT_CHARS, MIN_TRANSCRIPT_CHARS, type DocTab } from "./doc-parse";
-import { elegirImpersonado } from "./elegir-impersonado";
+import { candidatosImpersonables } from "./elegir-impersonado";
 import {
   datosDeEscritura,
   esReintentable,
@@ -48,6 +48,15 @@ const DOC_BATCH = 3;
 const DRIVE_BATCH = 3;
 /** No enriquecer reuniones que todavía no ocurrieron (o están ocurriendo). */
 const GRACIA_MS = 3_600_000;
+/* Tope POR PASADA (auditoría 2026-08-08): sin `take`, el primer auto-sync después del
+   rescate procesaría las ~2.300 filas reseteadas de UNA — el «50 por corrida» del script
+   era ilusorio. Con tope, el drenaje se auto-regula con el cooldown de 20 min. */
+const TOPE_PASADA = 120;
+/* El post-proceso (minuta + acciones + propuesta de avance) fue diseñado para reuniones
+   FRESCAS: correrlo sobre lo rescatado de hace meses llenaría los tableros de ActionItems
+   viejos en PENDING y propondría avances «as of» sesiones de mayo. El transcript y el
+   summary quedan igual; las minutas viejas se piden a demanda desde la sesión. */
+const POST_PROCESO_RECIENTE_MS = 14 * 24 * 3_600_000;
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -278,15 +287,30 @@ async function searchDriveForTranscript(
 // tener TRES escritores fue lo que dejó divergir el sellado en primer lugar.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** ¿El fallo es de la CUENTA impersonada (borrada/offboardeada), no del documento? */
+function esFalloDeCuenta(l: LecturaDoc): boolean {
+  return !l.ok && (l.status === 401 || /invalid_grant|unauthorized_client/i.test(l.error));
+}
+
 async function leerSesion(s: SesionAEnriquecer): Promise<LecturaDoc> {
-  const impersonado = elegirImpersonado(s.organizerEmail, s.participants);
-  if (!impersonado) {
-    // Reunión 100% externa: no hay cuenta nuestra con la que leer. Es un fallo CON
-    // procedencia (con el tope se sella solo), no un «sin contenido».
+  const candidatos = candidatosImpersonables(s.organizerEmail, s.participants);
+  if (candidatos.length === 0) {
+    // Reunión 100% externa: no hay cuenta nuestra con la que leer. Fallo DEFINITIVO con
+    // procedencia (datosDeEscritura lo sella al primer intento), no un «sin contenido».
     return { ok: false, error: "sin_interno_para_impersonar", status: null };
   }
-  if (s.googleDocId) return fetchDocContent(impersonado, s.googleDocId);
-  return searchDriveForTranscript(impersonado, s.title, s.date);
+  /* Se itera ante un fallo de CUENTA (auditoría 2026-08-08): un ex-empleado sigue pasando
+     el check de dominio, y clavarse en él sellaba la fila por tope aunque otro invitado
+     interno ACTIVO podía leer el mismo doc. Tope de 3 cuentas: más es señal de otro problema. */
+  let ultimo: LecturaDoc = { ok: false, error: "sin_candidatos", status: null };
+  for (const impersonado of candidatos.slice(0, 3)) {
+    ultimo = s.googleDocId
+      ? await fetchDocContent(impersonado, s.googleDocId)
+      : await searchDriveForTranscript(impersonado, s.title, s.date);
+    if (ultimo.ok || !esFalloDeCuenta(ultimo)) return ultimo;
+    console.log(`[google/enrich] cuenta ${impersonado} no impersonable — probando la siguiente`);
+  }
+  return ultimo;
 }
 
 type EstadoProceso = { estado: "enriched" | "skipped" | "error"; status: number | null };
@@ -321,9 +345,11 @@ async function procesarSesion(s: SesionAEnriquecer): Promise<EstadoProceso> {
     data: datosDeEscritura(lectura, finalSummary ?? null, s.enrichAttempts, new Date()),
   });
 
-  // Auto-trigger del Análisis post-sesión: con transcript real, generar minuta DRAFT +
-  // acciones en background. Idempotente (no reemplaza si ya existe minuta).
-  if (lectura.transcript && lectura.transcript.trim().length >= MIN_TRANSCRIPT_CHARS) {
+  // Auto-trigger del Análisis post-sesión: con transcript real Y RECIENTE, generar minuta
+  // DRAFT + acciones en background. Idempotente (no reemplaza si ya existe minuta). El corte
+  // de antigüedad protege al rescate: ver POST_PROCESO_RECIENTE_MS.
+  const esReciente = Date.now() - s.date.getTime() <= POST_PROCESO_RECIENTE_MS;
+  if (esReciente && lectura.transcript && lectura.transcript.trim().length >= MIN_TRANSCRIPT_CHARS) {
     const { postProcessSession } = await import("@/lib/sessions/post-process");
     postProcessSession(s.id).catch((err) => {
       console.log(`[google/enrich] post-process falló para ${s.id}:`, mensajeDe(err));
@@ -383,8 +409,28 @@ async function correrLote(sesiones: SesionAEnriquecer[], batchSize: number, resu
  * Solo toma filas SANAS (`enrichAttempts: 0`) y de reuniones que YA ocurrieron. Lo
  * fallido lo drena `drenarReintentos` con espera exponencial.
  */
+/* Mutex de proceso (auditoría 2026-08-08): el botón «Enriquecer» llama esta función DIRECTO,
+   sin el claim del auto-sync — dos pasadas concurrentes leen el MISMO snapshot de filas y
+   duplican lecturas a Google, resúmenes de IA y post-procesos (ActionItems duplicados: el
+   dedupe pierde la carrera). Nexus corre en UN contenedor, así que el flag de módulo alcanza
+   y cubre a TODOS los llamadores — que es lo que el flag del auto-sync no hacía. */
+let pasadaEnVuelo = false;
+
 export async function enrichGoogleMeetSessions(): Promise<EnrichResult> {
   const resultado: EnrichResult = { enriched: 0, skipped: 0, errors: 0 };
+  if (pasadaEnVuelo) {
+    console.log("[google/enrich] pasada ya en vuelo — skip (mutex de proceso)");
+    return resultado;
+  }
+  pasadaEnVuelo = true;
+  try {
+    return await correrPasadas(resultado);
+  } finally {
+    pasadaEnVuelo = false;
+  }
+}
+
+async function correrPasadas(resultado: EnrichResult): Promise<EnrichResult> {
   const yaOcurrio = new Date(Date.now() - GRACIA_MS);
 
   // ── PASADA 1: Sesiones con Google Doc adjunto ────────────────────────────────
@@ -397,9 +443,11 @@ export async function enrichGoogleMeetSessions(): Promise<EnrichResult> {
       date: { lt: yaOcurrio },
     },
     select: SELECT_ENRIQUECER,
+    orderBy: { date: "desc" },
+    take: TOPE_PASADA,
   });
 
-  console.log(`[google/enrich] Pasada 1: ${withDoc.length} sesiones con doc adjunto (batches de ${DOC_BATCH})`);
+  console.log(`[google/enrich] Pasada 1: ${withDoc.length} sesiones con doc adjunto (tope ${TOPE_PASADA}, batches de ${DOC_BATCH})`);
   await correrLote(withDoc, DOC_BATCH, resultado);
 
   // ── PASADA 2: Sesiones sin doc adjunto → buscar en Drive ─────────────────────
@@ -413,6 +461,7 @@ export async function enrichGoogleMeetSessions(): Promise<EnrichResult> {
     },
     select: SELECT_ENRIQUECER,
     orderBy: { date: "desc" },
+    take: TOPE_PASADA,
   });
 
   console.log(`[google/enrich] Pasada 2: ${withoutDoc.length} sesiones sin doc — buscando en Drive`);
@@ -437,6 +486,11 @@ export async function drenarReintentos(limit = 20): Promise<EnrichResult> {
   const resultado: EnrichResult = { enriched: 0, skipped: 0, errors: 0 };
   const ahora = new Date();
 
+  /* TODAS las candidatas, sin ventana (auditoría 2026-08-08): con `take: limit*3` por fecha
+     de reunión, las filas en backoff OCUPABAN la ventana y las más viejas ya LISTAS quedaban
+     invisibles detrás — el job ocioso con trabajo pendiente. El conjunto es chico por
+     definición (attempts 1-4) y el select es liviano. `updatedAt asc` = la que hace más
+     tiempo que nadie toca, primero. */
   const candidatas = await prisma.firefliesSession.findMany({
     where: {
       source: "google_meet",
@@ -445,8 +499,7 @@ export async function drenarReintentos(limit = 20): Promise<EnrichResult> {
       date: { lt: new Date(ahora.getTime() - GRACIA_MS) },
     },
     select: { ...SELECT_ENRIQUECER, enrichError: true },
-    orderBy: { date: "desc" },
-    take: limit * 3,
+    orderBy: { updatedAt: "asc" },
   });
 
   const listas = candidatas
@@ -475,6 +528,12 @@ export async function enrichSingleSession(sessionId: string): Promise<boolean> {
     select: SELECT_ENRIQUECER,
   });
   if (!session) return false;
+  if (session.date.getTime() > Date.now() - GRACIA_MS) {
+    // El botón manual tampoco enriquece lo que no ocurrió: sellaría una reunión futura
+    // (INV16(a)) y el material ni siquiera existe todavía.
+    console.log(`[google/enrich] "${session.title}" todavía no ocurrió — skip`);
+    return false;
+  }
 
   // El pedido manual arranca de cero: es la persona diciendo «intentá de nuevo YA».
   const r = await procesarSesion({ ...session, enrichAttempts: 0 });

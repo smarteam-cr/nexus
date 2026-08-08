@@ -648,10 +648,25 @@ describe("candado: el zoom también filtra datos, no solo pide", () => {
       const q = tramo.indexOf(`prisma.${tabla}.findMany`);
       expect(q, `cambió la query de ${tabla}; revisar esta guarda`).toBeGreaterThan(-1);
       expect(
-        tramo.slice(q, q + 260),
+        tramo.slice(q, q + 600),
         `${tabla} volvió a traer al cliente ENTERO al handoff del hermano menor`,
       ).toContain("soloDeEsteProyecto");
     }
+
+    /* ⚠ LA GUARDA DE VERDAD para clientDocument (auditoría 2026-08-08): la versión de arriba
+       salió VERDE con el filtro MUERTO — la query spreadeaba soloDeEsteProyecto y después
+       declaraba su propio `OR:` literal, y en JS la key posterior PISA a la del spread. El
+       filtro tiene que entrar por AND explícito, y el spread pegado a un OR literal queda
+       prohibido en esa query. La edición que la pone en rojo: volver al spread. */
+    const qDoc = tramo.indexOf("prisma.clientDocument.findMany");
+    const docTramo = tramo.slice(qDoc, qDoc + 700);
+    expect(docTramo, "clientDocument dejó de componer con AND — el OR literal pisa al filtro").toContain(
+      "AND: [",
+    );
+    expect(
+      docTramo,
+      "volvió el spread de soloDeEsteProyecto junto a un OR literal: la key posterior lo pisa",
+    ).not.toContain("...soloDeEsteProyecto");
   });
 
   it("el historial de HubSpot entra ETIQUETADO cuando hay hermano mayor", () => {

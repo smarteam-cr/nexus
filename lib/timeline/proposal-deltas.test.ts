@@ -300,6 +300,18 @@ test("analyze inyecta el bloque en el userMessage del detalle", () => {
   );
 });
 
+test("las instrucciones tipeadas viajan al generar: el flush del paso 0 (auditoría)", () => {
+  /* El CSE tipea y aprieta «Regenerar detalle» sin Guardar: sin el flush, la corrida salía
+     SIN la regla y en silencio — el mismo bug «visto en RC» de las exclusiones del handoff.
+     La edición que la pone en rojo: sacar el await flushDocBrief() de cualquiera de las dos. */
+  const src = fs.readFileSync(
+    path.join(process.cwd(), "components/canvas/CronogramaCanvas.tsx"),
+    "utf8",
+  );
+  expect(src, "desapareció el flush del brief").toContain("flushDocBrief");
+  expect(src.match(/await flushDocBrief\(\);/g)?.length, "una de las dos corridas del detalle perdió el flush").toBe(2);
+});
+
 test("la caja de instrucciones se pinta y solo guarda lo que una persona tipeó", () => {
   const src = fs.readFileSync(
     path.join(process.cwd(), "components/canvas/CronogramaCanvas.tsx"),

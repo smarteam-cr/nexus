@@ -76,6 +76,20 @@ describe("datosDeEscritura — la tabla", () => {
     expect(err.diagnostico.tabsVistos).toContain("Notas de Gemini");
   });
 
+  it("un fallo DETERMINÍSTICO se sella al PRIMER intento, con procedencia", () => {
+    /* Reintentar 5 veces una reunión 100% externa —que no puede cambiar sola— inflaba la
+       cola del job y bloqueaba a los fallos que sí valían la pena (auditoría 2026-08-08). */
+    const d = datosDeEscritura(
+      { ok: false, error: "sin_interno_para_impersonar", status: null },
+      null,
+      0,
+      AHORA,
+    );
+    expect(d.enrichedAt, "el fallo determinístico volvió a la cola de reintentos").toEqual(AHORA);
+    expect(d.enrichAttempts).toBe(MAX_ENRICH_ATTEMPTS);
+    expect(JSON.parse(d.enrichError!).selladoPorTope).toBe(true);
+  });
+
   it("un fallo nunca toca transcript ni summary existentes", () => {
     const d = datosDeEscritura(FALLO, null, 1, AHORA);
     expect("transcript" in d && d.transcript !== undefined).toBe(false);
@@ -183,6 +197,50 @@ describe("candado: el pipeline no puede volver a tragar ni sellar", () => {
   });
 });
 
+describe("candados de la auditoría 2026-08-08", () => {
+  it("la pasada tiene mutex de proceso — el botón manual no puede duplicarla", () => {
+    /* Dos pasadas concurrentes (auto-sync + botón «Enriquecer») leen el MISMO snapshot y
+       duplican lecturas a Google, resúmenes de IA y ActionItems (el dedupe pierde la
+       carrera). La edición que la pone en rojo: sacar el flag pasadaEnVuelo. */
+    const src = fuente("lib/google/meet-enrichment.ts");
+    expect(src, "desapareció el mutex de la pasada").toContain("pasadaEnVuelo");
+    const fn = src.slice(src.indexOf("export async function enrichGoogleMeetSessions"));
+    expect(fn.slice(0, 600), "la pasada dejó de chequear el mutex antes de correr").toContain(
+      "if (pasadaEnVuelo)",
+    );
+  });
+
+  it("las pasadas tienen TOPE — el drenaje del rescate no puede correr de una", () => {
+    /* Sin take, el primer auto-sync tras el rescate procesaría ~2.300 filas en una pasada:
+       el «50 por corrida» del script era ilusorio. */
+    const src = fuente("lib/google/meet-enrichment.ts");
+    expect(src.match(/take: TOPE_PASADA/g)?.length, "una pasada perdió su tope").toBe(2);
+  });
+
+  it("meet-sync resetea COMPLETO cuando aparece el doc", () => {
+    /* Con solo enrichedAt:null, una fila sellada por tope (attempts=5) a la que después le
+       aparece el doc quedaba en limbo permanente: invisible para pasadas, job, rescate y
+       force. La edición que la pone en rojo: volver al reset de una sola columna. */
+    const src = fuente("lib/google/meet-sync.ts");
+    const i = src.indexOf("shouldResetEnrichment\n");
+    const bloque = src.slice(src.indexOf("...(shouldResetEnrichment"), src.indexOf("...(shouldResetEnrichment") + 260);
+    expect(bloque.length, "cambió el reset de meet-sync; revisar esta guarda").toBeGreaterThan(50);
+    expect(bloque, "el reset dejó de limpiar attempts — la fila sellada por tope queda en limbo").toContain(
+      "enrichAttempts: 0",
+    );
+    expect(bloque).toContain("enrichError: null");
+    void i;
+  });
+
+  it("el rescate exige --deploy-confirmado además de --apply", () => {
+    /* Las columnas ya están en prod ANTES del deploy: el check de columnas no detecta el
+       peligro real (resetear con el CÓDIGO viejo deployado re-quema todo). */
+    const src = fuente("scripts/recuperar-transcripts-meet.ts");
+    expect(src, "el rescate perdió la confirmación del deploy").toContain("--deploy-confirmado");
+    expect(src, "el gate dejó de cortar el apply").toContain("APPLY && !DEPLOY_CONFIRMADO");
+  });
+});
+
 describe("candado: toda impersonación pasa por el chokepoint", () => {
   /**
    * ── R3 ──────────────────────────────────────────────────────────────────────
@@ -193,7 +251,8 @@ describe("candado: toda impersonación pasa por el chokepoint", () => {
    */
   it("LA guarda: nadie lee con organizerEmail directo", () => {
     const src = fuente("lib/google/meet-enrichment.ts");
-    expect(src, "el núcleo dejó de elegir al impersonado").toContain("elegirImpersonado(");
+    // Desde la auditoría, el núcleo itera la LISTA (fallback ante cuentas offboardeadas).
+    expect(src, "el núcleo dejó de elegir por el chokepoint").toContain("candidatosImpersonables(");
     expect(src, "volvió la impersonación directa del organizador").not.toMatch(
       /fetchDocContent\(\s*s\.organizerEmail/,
     );

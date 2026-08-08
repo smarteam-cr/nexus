@@ -103,6 +103,12 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
       where: {
         status: "ACTIVE",
         agentType: "SECTION", // Solo agentes de sección, no canvas transversales
+        /* Los agentes TIPADOS (pipelineKey) nunca entran al inventario de la pantalla de
+           etapa: se despachan por sus propios resolvers (GET /handoff, el carril del
+           detalle). Sin este filtro, la etapa 1 de una Implementación mostraba TRES bloques
+           de handoff y un clic corría el prompt de Desarrollo sobre ella (auditoría
+           2026-08-08 — ya estaba vivo en prod por los seeds). */
+        pipelineKey: null,
         outputType: { in: ["CARDS", "FLOWCHART", "CARDS_AND_FLOWCHARTS"] },
         OR: [
           { associatedStages: { isEmpty: true } },
@@ -271,6 +277,27 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       { agent: null, cards: [], run: null, error: "NO_AGENT_CONFIGURED" },
       { status: 200 }
     );
+  }
+
+  /* ── EL CINTURÓN DEL TIPO (auditoría 2026-08-08) ────────────────────────────
+     Un agente con `pipelineKey` es DE un tipo de proyecto. El despacho por id no pasaba por
+     ningún resolver, así que un click (o un curl) podía correr el prompt de Desarrollo sobre
+     una Implementación — sin error y sin log, el accidente exacto que el resolver mata en el
+     GET. Espejo de esa regla acá, en la única puerta de ejecución. */
+  if (agent.pipelineKey) {
+    const proyectoDelAgente = bodyProjectId
+      ? await prisma.project.findUnique({
+          where: { id: bodyProjectId },
+          select: { hubspotPipelineId: true },
+        })
+      : null;
+    const tipoDelProyecto = pipelineKeyDeProyecto(proyectoDelAgente?.hubspotPipelineId ?? null);
+    if (tipoDelProyecto !== agent.pipelineKey) {
+      return apiError(
+        `Este agente es de proyectos de tipo "${agent.pipelineKey}" y este proyecto no lo es.`,
+        400,
+      );
+    }
   }
 
   /* ── X2: la VARIANTE POR TIPO del detalle del cronograma ────────────────────
@@ -578,12 +605,22 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         select: { stage: true, step: true, content: true },
       }),
       prisma.clientDocument.findMany({
+        /* ⚠ AND EXPLÍCITO, NO SPREAD (auditoría 2026-08-08): esta query ya tiene su propio
+           OR (contenido|FILE), y en JS la key posterior PISA a la del spread — el filtro por
+           proyecto se descartaba en silencio al construir el objeto, sin error de tsc y con
+           la guarda en verde. El bloque de 12.000 chars de la propuesta comercial de la
+           implementación —EL caso que la Tanda H vino a arreglar— seguía entrando entero.
+           `AND: [{}]` es un no-op válido de Prisma para los agentes no-handoff. */
         where: {
           clientId,
-          ...soloDeEsteProyecto,
-          OR: [
-            { content: { not: null } }, // Docs with text content
-            { type: "FILE" },            // All FILE docs (even without extracted text)
+          AND: [
+            soloDeEsteProyecto,
+            {
+              OR: [
+                { content: { not: null } }, // Docs with text content
+                { type: "FILE" },            // All FILE docs (even without extracted text)
+              ],
+            },
           ],
         },
         select: { stage: true, step: true, title: true, content: true, type: true, fileName: true, fileSize: true, mimeType: true },
