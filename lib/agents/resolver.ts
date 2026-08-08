@@ -48,6 +48,36 @@ import { resolvePipeline } from "@/lib/projects/kind";
  */
 export const GRUPOS_RESUELTOS_POR_TIPO: readonly string[] = ["handoff"];
 
+/**
+ * ── LA VARIANTE POR TIPO DEL DETALLE DEL CRONOGRAMA: POR CONVENCIÓN DE ID ────
+ * (X2, 2026-08-08.) El detalle del cronograma también quiere voz por tipo de proyecto, pero
+ * NO puede usar el mecanismo del handoff, por dos trampas verificadas:
+ *
+ *  · Un `agentGroup` nuevo («cronograma-detalle») es la trampa de los 11 mapas que documenta
+ *    la migración de `pipelineKey`: el agente escribiría en NINGÚN canvas y correría SIN
+ *    celda de permiso (el switch del artifact-gate cae a null).
+ *  · Resolver el grupo `cronograma` entero tampoco: tiene DOS agentes ACTIVE a propósito
+ *    (Avance + Detalle, despachados por id), y meterlo en `GRUPOS_RESUELTOS_POR_TIPO` pondría
+ *    INV15 en rojo sobre datos sanos.
+ *
+ * La salida: la variante se nombra por CONVENCIÓN DE ID — `agent-timeline-detail--<tipo>` —
+ * con el MISMO `agentGroup: "cronograma"` (canvas y permisos intactos) y SIN `pipelineKey`
+ * (el id ya lo dice; INV15 ni se entera). El swap vive en analyze: si la variante existe y
+ * está ACTIVE, reemplaza al genérico; si no, el genérico corre como siempre — cero cambio
+ * hasta que alguien SIEMBRE una variante (que hoy, a propósito, no se siembra: sin una
+ * divergencia real de prompt sería trabajo muerto).
+ */
+export const DETALLE_CRONOGRAMA_ID = "agent-timeline-detail";
+
+export function idDeVarianteDetalle(pipelineKey: ProjectPipelineKey | null): string | null {
+  return pipelineKey ? `${DETALLE_CRONOGRAMA_ID}--${pipelineKey}` : null;
+}
+
+/** ¿Este id es el agente de detalle del cronograma (el base o una variante por tipo)? */
+export function esAgenteDeDetalle(agentId: string): boolean {
+  return agentId === DETALLE_CRONOGRAMA_ID || agentId.startsWith(`${DETALLE_CRONOGRAMA_ID}--`);
+}
+
 /** Lo mínimo que el resolver necesita de una fila de `Agent`. */
 export interface AgenteCandidato {
   id: string;

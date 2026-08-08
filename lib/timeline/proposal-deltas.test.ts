@@ -261,3 +261,59 @@ test("el cronograma sin fases ofrece una salida, no solo una instrucción", () =
   ).toContain("cronogramaUrl");
   expect(bloque).toMatch(/Ir al Handoff/);
 });
+
+/**
+ * ── X1: LAS INSTRUCCIONES DEL CSE POR DOCUMENTO (2026-08-08) ─────────────────
+ * La entry reservada `__doc` del canvas del cronograma llega al agente de detalle como
+ * regla dura, y la caja de la pantalla la edita. Tres muertes silenciosas posibles: el
+ * bloque deja de inyectarse (la instrucción existe y nadie la lee), la caja deja de
+ * pintarse (el CSE re-escribe a mano en cada regeneración), o el PATCH deja de salir
+ * solo con lo tipeado (el bug de «Regenerar» del handoff, reproducido acá).
+ */
+import { bloqueDeInstruccionesDeDoc, docBriefFrom, DOC_BRIEF_KEY } from "@/lib/business-cases/section-briefs";
+
+test("el brief del documento: pura, y '' sin brief (el golden por construcción)", () => {
+  // Sin brief, el bloque es la string VACÍA: el userMessage de un proyecto sin
+  // instrucciones queda byte-idéntico al de antes de X1.
+  expect(bloqueDeInstruccionesDeDoc(null)).toBe("");
+  expect(bloqueDeInstruccionesDeDoc("   ")).toBe("");
+  const b = bloqueDeInstruccionesDeDoc("Las tareas de QA van al final.");
+  expect(b).toContain("INSTRUCCIONES DEL CSE PARA ESTA PIEZA");
+  expect(b).toContain("Las tareas de QA van al final.");
+  // Y la lectura tolera basura, ignora entries ajenas y encuentra la reservada.
+  expect(docBriefFrom(null)).toBeNull();
+  expect(docBriefFrom([{ key: "otra", brief: "x" }])).toBeNull();
+  expect(docBriefFrom([{ key: DOC_BRIEF_KEY, brief: " hola " }])).toBe("hola");
+});
+
+test("analyze inyecta el bloque en el userMessage del detalle", () => {
+  const src = fs.readFileSync(
+    path.join(process.cwd(), "app/api/clients/[id]/analyze/route.ts"),
+    "utf8",
+  );
+  const rama = src.slice(src.indexOf("if (isTimelineDetailAgent && bodyProjectId) {"));
+  const tramo = rama.slice(0, rama.indexOf("=== CRONOGRAMA A DETALLAR"));
+  expect(tramo.length, "cambió la rama del detalle; revisar esta guarda").toBeGreaterThan(300);
+  expect(tramo, "el detalle dejó de leer el brief del canvas").toContain("docBriefFrom(");
+  expect(tramo, "el bloque dejó de interpolarse — la instrucción existe y nadie la lee").toContain(
+    "${instruccionesDoc}",
+  );
+});
+
+test("la caja de instrucciones se pinta y solo guarda lo que una persona tipeó", () => {
+  const src = fs.readFileSync(
+    path.join(process.cwd(), "components/canvas/CronogramaCanvas.tsx"),
+    "utf8",
+  );
+  expect(src, "desapareció la caja de instrucciones del cronograma").toContain(
+    "Instrucciones para la IA de este documento",
+  );
+  // El flag dirty es la lección del bug de «Regenerar» del handoff: sin él, un draft que
+  // nunca se re-sembró se ve igual que uno que alguien vació a mano.
+  expect(src, "el PATCH del brief dejó de exigir que una persona haya tipeado").toContain(
+    "setBriefDirty(true)",
+  );
+  expect(src, "el guardado dejó de estar gateado por el dirty").toMatch(
+    /disabled=\{savingBrief \|\| !briefDirty/,
+  );
+});

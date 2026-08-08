@@ -185,6 +185,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Destino del click en la notificación: la pestaña del proyecto (donde vive el
   // cronograma), no la home del cliente.
   const cronogramaUrl = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}`;
+
   const [phases, setPhases] = useState<Phase[]>([]);
   const [anchor, setAnchor] = useState<string>(""); // yyyy-mm-dd o ""
   const [kickoffDate, setKickoffDate] = useState<string>(""); // yyyy-mm-dd de la sesión de kickoff (sugerencia)
@@ -198,6 +199,52 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [generating, setGenerating] = useState(false);
   const [chainingProgress, setChainingProgress] = useState(false); // F — fase "evaluando avance" del encadenado
   const [dirty, setDirty] = useState(false);
+  /* Instrucciones del CSE para ESTE documento (X1, 2026-08-08): la entry `__doc` del canvas.
+     El flag `briefDirty` copia la lección del bug de «Regenerar» del handoff: el draft se
+     re-siembra desde el servidor mientras NADIE haya tipeado, y solo se guarda lo que una
+     persona escribió — comparar contra el status era lo que borraba notas. */
+  const [docBrief, setDocBrief] = useState("");
+  const [briefDirty, setBriefDirty] = useState(false);
+  const [briefGuardado, setBriefGuardado] = useState<string | null>(null);
+  const [showBrief, setShowBrief] = useState(false);
+  const [savingBrief, setSavingBrief] = useState(false);
+
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/projects/${projectId}/doc-brief?slug=timeline`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { brief: string | null } | null) => {
+        if (!vivo || !d) return;
+        setBriefGuardado(d.brief);
+        setBriefDirty((sucio) => {
+          if (!sucio) setDocBrief(d.brief ?? "");
+          return sucio;
+        });
+      })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, [projectId]);
+
+  const saveDocBrief = useCallback(async () => {
+    setSavingBrief(true);
+    try {
+      const r = await fetch(`/api/projects/${projectId}/doc-brief`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: "timeline", brief: docBrief.trim() || null }),
+      });
+      if (r.ok) {
+        const d = (await r.json()) as { brief: string | null };
+        setBriefGuardado(d.brief);
+        setBriefDirty(false);
+      } else {
+        setError("No se pudieron guardar las instrucciones.");
+      }
+    } catch {
+      setError("Error de conexión al guardar las instrucciones.");
+    }
+    setSavingBrief(false);
+  }, [projectId, docBrief]);
   const [error, setError] = useState<string | null>(null);
   // ── Publicación al cliente (in-canvas) ──
   const [publishedAt, setPublishedAt] = useState<string | null>(null);
@@ -2137,6 +2184,59 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       {/* ── EL cronograma. Propuesta del ASSIST (con tareas) → preview read-only swapeada.
              Propuesta de ESTRUCTURA (handoff) → NO se swapea: el Gantt real sigue editable y
              los deltas se dibujan adentro (badges + filas fantasma). ── */}
+      {/* ── INSTRUCCIONES DEL CSE PARA ESTE DOCUMENTO (X1) ─────────────────────
+          Texto libre que el agente de detalle recibe como regla dura al generar/regenerar
+          las tareas («las fases de QA van al final», «sin capacitaciones»). Vive en la entry
+          `__doc` del canvas — no en una columna — y se pinta acá porque una instrucción que
+          existe y no se ve termina re-escrita a mano en cada regeneración. */}
+      {canEdit && (
+        <div className="rounded-xl border border-line bg-surface px-4 py-2.5">
+          <button
+            onClick={() => setShowBrief((v) => !v)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-fg hover:text-brand transition-colors"
+          >
+            <svg className={`w-3 h-3 transition-transform ${showBrief ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            Instrucciones para la IA de este documento
+            {briefDirty && docBrief.trim() !== (briefGuardado ?? "") ? (
+              <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
+                sin guardar
+              </span>
+            ) : briefGuardado ? (
+              <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">
+                activas
+              </span>
+            ) : null}
+          </button>
+          {showBrief && (
+            <div className="mt-2 space-y-2">
+              <p className="text-[11px] text-fg-muted leading-relaxed">
+                El agente las cumple al detallar o regenerar el cronograma (ej. &quot;las tareas de QA
+                van en la última semana de cada fase&quot;, &quot;no incluyas capacitaciones&quot;).
+              </p>
+              <textarea
+                value={docBrief}
+                onChange={(e) => { setDocBrief(e.target.value); setBriefDirty(true); }}
+                rows={3}
+                maxLength={5000}
+                placeholder='Ej.: "El pase a producción siempre es la última tarea de la fase de Entrega."'
+                className="w-full px-3 py-2 text-xs bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand resize-y"
+              />
+              <div className="flex justify-end">
+                <button
+                  onClick={saveDocBrief}
+                  disabled={savingBrief || !briefDirty || docBrief.trim() === (briefGuardado ?? "")}
+                  className="text-xs font-semibold text-primary-fg bg-brand hover:opacity-90 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-opacity"
+                >
+                  {savingBrief ? "Guardando…" : "Guardar instrucciones"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {phases.length === 0 ? (
         /* ── EL POZO SIN SALIDA, TAPADO ─────────────────────────────────────────
            Acá había la misma frase y NINGÚN botón. El botón "Generar cronograma" que está

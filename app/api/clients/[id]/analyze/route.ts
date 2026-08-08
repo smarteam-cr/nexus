@@ -29,6 +29,7 @@ import { runImplementacionGeneration } from "@/lib/canvas/implementacion-generat
 import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
 import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
 import { vetoSiElHandoffEsDeOtro, componerExclusiones, exclusionDelSistema } from "@/lib/handoff/duenio";
+import { DETALLE_CRONOGRAMA_ID, idDeVarianteDetalle, esAgenteDeDetalle, pipelineKeyDeProyecto } from "@/lib/agents/resolver";
 import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
 import { debeAnteponerSemanaCero } from "@/lib/timeline/semana-cero";
 import { patchBaselinePhaseTasks } from "@/lib/timeline/baseline";
@@ -46,6 +47,7 @@ import { getProjectHandoffSessions, getClientSessions } from "@/lib/sessions/pro
 import { fetchCompanyTimeline, fetchCompanyTimelineSplit, serializeTimeline, projectEraSince } from "@/lib/hubspot/company-timeline";
 import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT, RECURRENTE_TAG, hasTechnicalScope } from "@/lib/tags/catalog";
 import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
+import { docBriefFrom, bloqueDeInstruccionesDeDoc } from "@/lib/business-cases/section-briefs";
 import { pieceByAgentGroup } from "@/lib/pieces/registry";
 import { piezaAplica, pieceReadiness } from "@/lib/flow/piece-readiness";
 
@@ -271,6 +273,27 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     );
   }
 
+  /* ── X2: la VARIANTE POR TIPO del detalle del cronograma ────────────────────
+     Si existe `agent-timeline-detail--<tipo>` ACTIVE para el pipeline de este proyecto, corre
+     ELLA; si no, el genérico de siempre — cero cambio hasta sembrar una variante. Por
+     convención de id y no por agentGroup, a propósito: ver lib/agents/resolver.ts. */
+  if (agent.id === DETALLE_CRONOGRAMA_ID && bodyProjectId) {
+    const proyectoDelDetalle = await prisma.project.findUnique({
+      where: { id: bodyProjectId },
+      select: { hubspotPipelineId: true },
+    });
+    const varianteId = idDeVarianteDetalle(
+      pipelineKeyDeProyecto(proyectoDelDetalle?.hubspotPipelineId ?? null),
+    );
+    if (varianteId) {
+      const variante = await prisma.agent.findFirst({ where: { id: varianteId, status: "ACTIVE" } });
+      if (variante) {
+        console.log(`[analyze] detalle del cronograma: corre la variante ${variante.id}`);
+        agent = variante;
+      }
+    }
+  }
+
   // RBAC por SECCIÓN de artefacto (PERM-F5): los agentes que ESCRIBEN un artefacto
   // (handoff / kickoff / procesos / cronograma) exigen el permiso `generate` (si el
   // artefacto no existe) o `regenerate` (si ya existe) de su sección — matriz
@@ -317,7 +340,8 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // Este agente DETALLA un esqueleto existente (fases con ids). Sin proyecto o
   // sin timeline con fases no hay nada que detallar — se corta acá, antes de
   // recolectar fuentes o llamar a Claude.
-  const isTimelineDetailAgent = agent.id === "agent-timeline-detail";
+  // Por convención de id: el base O una variante por tipo (agent-timeline-detail--<tipo>).
+  const isTimelineDetailAgent = esAgenteDeDetalle(agent.id);
   if (isTimelineDetailAgent) {
     if (!bodyProjectId) {
       return NextResponse.json(
@@ -1724,6 +1748,17 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // contexto: el agente no las calcula.
   if (isTimelineDetailAgent && bodyProjectId) {
     const handoffCtx = await loadHandoffContext(bodyProjectId, { onlyConfirmed: true });
+    /* Las INSTRUCCIONES DEL CSE para este documento (X1, 2026-08-08): la entry reservada
+       `__doc` del canvas del cronograma. `bloqueDeInstruccionesDeDoc` devuelve "" sin brief,
+       así que un proyecto sin instrucciones produce un userMessage byte-idéntico al de antes
+       — el golden lo afirma. */
+    const canvasCronograma = await prisma.projectCanvas.findFirst({
+      where: { projectId: bodyProjectId, ...canvasOf("timeline") },
+      select: { sections: true },
+    });
+    const instruccionesDoc = bloqueDeInstruccionesDeDoc(
+      canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
+    );
     const timelineCtx = await loadTimelineContext(bodyProjectId, { includeIds: true });
     // Canvas "Desarrollo" (requerimiento técnico) si existe → objetos de HubSpot, llaves de dedup y
     // conexiones reales; ancla las tareas por objeto de la fase técnica en el alcance vendido. "" si no hay.
@@ -1741,7 +1776,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
       ? `\n- DESARROLLO/INTEGRACIÓN (#7): el proyecto lleva desarrollo a medida o Insider One. Las tareas técnicas (integraciones, desarrollo, APIs) marcalas con responsable "DEV" y, si existe una fase de "Desarrollo / Integración", ubicalas SOLO ahí (no las mezcles con las tareas funcionales de otras fases).`
       : "";
 
-    userMessage = `Empresa: ${companyName}
+    userMessage = `${instruccionesDoc}Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
 ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}${classificationLabel ? `Clasificación del proyecto: ${classificationLabel}\n` : ""}
 === CRONOGRAMA A DETALLAR (fases EXISTENTES — no cambies nombres, duraciones ni orden) ===

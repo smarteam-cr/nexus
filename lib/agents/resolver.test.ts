@@ -242,3 +242,44 @@ describe("el GET del handoff resuelve por el resolver", () => {
     );
   });
 });
+
+describe("X2 — la variante del detalle del cronograma, por convención de id", () => {
+  /**
+   * NO por agentGroup nuevo (la trampa de los 11 mapas: escribiría en ningún canvas y
+   * correría sin celda de permiso) ni resolviendo el grupo `cronograma` (dos ACTIVE a
+   * propósito → INV15 rojo sobre datos sanos). El id ES la declaración de tipo.
+   */
+  it("la convención: base, variantes y ajenos", async () => {
+    const { idDeVarianteDetalle, esAgenteDeDetalle, DETALLE_CRONOGRAMA_ID } = await import("./resolver");
+    expect(idDeVarianteDetalle("development")).toBe("agent-timeline-detail--development");
+    expect(idDeVarianteDetalle("web")).toBe("agent-timeline-detail--web");
+    expect(idDeVarianteDetalle(null)).toBeNull();
+    expect(esAgenteDeDetalle(DETALLE_CRONOGRAMA_ID)).toBe(true);
+    expect(esAgenteDeDetalle("agent-timeline-detail--development")).toBe(true);
+    // El de AVANCE no es el detalle: si esto matcheara, el gate de solo-proponer se caería.
+    expect(esAgenteDeDetalle("agent-timeline-progress")).toBe(false);
+    expect(esAgenteDeDetalle("agent-kickoff-canvas")).toBe(false);
+  });
+
+  /**
+   * ── LA GUARDA DEL CARRIL ────────────────────────────────────────────────────
+   * El swap tiene que estar en analyze Y gateado por ACTIVE: una variante en DRAFT elegida
+   * acá correría un prompt a medio escribir sobre un cronograma real. Y el golden de que
+   * SIN variante sembrada no cambia nada lo dan los tests existentes del detalle (el swap
+   * solo reemplaza si findFirst devuelve fila).
+   * La edición que la pone en rojo: borrar el bloque del swap, o sacarle el status.
+   */
+  it("LA guarda: analyze hace el swap, gateado por ACTIVE", () => {
+    const src = fuente("app/api/clients/[id]/analyze/route.ts");
+    const i = src.indexOf("idDeVarianteDetalle(");
+    expect(i, "el carril de la variante desapareció de analyze").toBeGreaterThan(-1);
+    const bloque = src.slice(src.lastIndexOf("if (agent.id === DETALLE_CRONOGRAMA_ID", i), i + 400);
+    expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(200);
+    expect(bloque, "el swap dejó de exigir ACTIVE: un DRAFT a medio escribir correría").toContain(
+      'status: "ACTIVE"',
+    );
+    // Y el discriminador del detalle acepta las variantes (sin esto, la variante corre con
+    // el input genérico de cards y su corrida se persiste mal).
+    expect(src, "isTimelineDetailAgent dejó de aceptar variantes").toContain("esAgenteDeDetalle(agent.id)");
+  });
+});
