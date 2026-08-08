@@ -287,16 +287,23 @@ test("el brief del documento: pura, y '' sin brief (el golden por construcción)
 });
 
 test("analyze inyecta el bloque en el userMessage del detalle", () => {
+  /* Desde la migración al contexto NOMBRADO (2026-08-08) el brief ya no se lee inline: lo
+     lee lib/contexto/cargar.ts y viaja como `contexto.instrucciones` hasta el render. Esta
+     guarda sigue vigilando la MISMA muerte silenciosa (la instrucción existe y nadie la
+     lee), ahora sobre el eslabón nuevo; el template y su golden viven en
+     lib/contexto/detalle-cronograma.test.ts. */
   const src = fs.readFileSync(
     path.join(process.cwd(), "app/api/clients/[id]/analyze/route.ts"),
     "utf8",
   );
   const rama = src.slice(src.indexOf("if (isTimelineDetailAgent && bodyProjectId) {"));
-  const tramo = rama.slice(0, rama.indexOf("=== CRONOGRAMA A DETALLAR"));
-  expect(tramo.length, "cambió la rama del detalle; revisar esta guarda").toBeGreaterThan(300);
-  expect(tramo, "el detalle dejó de leer el brief del canvas").toContain("docBriefFrom(");
-  expect(tramo, "el bloque dejó de interpolarse — la instrucción existe y nadie la lee").toContain(
-    "${instruccionesDoc}",
+  const tramo = rama.slice(0, rama.indexOf("\n  }"));
+  expect(tramo.length, "cambió la rama del detalle; revisar esta guarda").toBeGreaterThan(200);
+  expect(tramo, "la rama dejó de cargar el contexto nombrado (ahí vive el brief)").toContain(
+    "cargarContextoDelDetalle(",
+  );
+  expect(tramo, "las instrucciones dejaron de fluir al render — existen y nadie las lee").toContain(
+    "instrucciones: contexto.instrucciones",
   );
 });
 

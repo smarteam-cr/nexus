@@ -10,7 +10,7 @@ import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
 import { extractTitleTerms } from "@/lib/utils/matching";
 import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
-import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
+import { SENTINEL_SERVICE_TYPE, type ProjectPipelineKey } from "@/lib/projects/kind";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { updateCanvasAsync } from "@/lib/canvas/update-agent";
@@ -26,8 +26,9 @@ import { runExploracionGeneration } from "@/lib/canvas/exploracion-generate";
 import { runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
 import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
 import { runImplementacionGeneration } from "@/lib/canvas/implementacion-generate";
-import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
 import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
+import { cargarContextoDelDetalle } from "@/lib/contexto/cargar";
+import { renderDetalleDeCronograma, clasificacionDeTags } from "@/lib/contexto/detalle-cronograma";
 import { vetoSiElHandoffEsDeOtro, componerExclusiones, exclusionDelSistema } from "@/lib/handoff/duenio";
 import { DETALLE_CRONOGRAMA_ID, idDeVarianteDetalle, esAgenteDeDetalle, pipelineKeyDeProyecto } from "@/lib/agents/resolver";
 import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
@@ -47,7 +48,6 @@ import { getProjectHandoffSessions, getClientSessions } from "@/lib/sessions/pro
 import { fetchCompanyTimeline, fetchCompanyTimelineSplit, serializeTimeline, projectEraSince } from "@/lib/hubspot/company-timeline";
 import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT, RECURRENTE_TAG, hasTechnicalScope } from "@/lib/tags/catalog";
 import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
-import { docBriefFrom, bloqueDeInstruccionesDeDoc } from "@/lib/business-cases/section-briefs";
 import { pieceByAgentGroup } from "@/lib/pieces/registry";
 import { piezaAplica, pieceReadiness } from "@/lib/flow/piece-readiness";
 
@@ -1783,55 +1783,33 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // EXISTENTE (fases con ids — debe referenciarlas, no crearlas) + el handoff
   // curado para que las tareas sean del proyecto real. Sin fechas en el
   // contexto: el agente no las calcula.
+  //
+  // CTX (2026-08-08): primera pieza migrada al contexto NOMBRADO (lib/contexto). Las
+  // fuentes (cronograma-actual / handoff-curado / requerimiento-tecnico), el brief `__doc`
+  // (X1) y el template viven allá; esta rama solo carga y renderiza. La migración es
+  // byte-idéntica — el golden de lib/contexto/detalle-cronograma.test.ts lo afirma.
   if (isTimelineDetailAgent && bodyProjectId) {
-    const handoffCtx = await loadHandoffContext(bodyProjectId, { onlyConfirmed: true });
-    /* Las INSTRUCCIONES DEL CSE para este documento (X1, 2026-08-08): la entry reservada
-       `__doc` del canvas del cronograma. `bloqueDeInstruccionesDeDoc` devuelve "" sin brief,
-       así que un proyecto sin instrucciones produce un userMessage byte-idéntico al de antes
-       — el golden lo afirma. */
-    const canvasCronograma = await prisma.projectCanvas.findFirst({
-      where: { projectId: bodyProjectId, ...canvasOf("timeline") },
-      select: { sections: true },
-    });
-    const instruccionesDoc = bloqueDeInstruccionesDeDoc(
-      canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
+    // El pipelineKey del agente ES el tipo del proyecto cuando corre una variante: el
+    // cinturón del despacho (arriba) vetó con 400 cualquier des-coincidencia.
+    const contexto = await cargarContextoDelDetalle(
+      bodyProjectId,
+      (agent.pipelineKey as ProjectPipelineKey | null) ?? null,
     );
-    const timelineCtx = await loadTimelineContext(bodyProjectId, { includeIds: true });
-    // Canvas "Desarrollo" (requerimiento técnico) si existe → objetos de HubSpot, llaves de dedup y
-    // conexiones reales; ancla las tareas por objeto de la fase técnica en el alcance vendido. "" si no hay.
-    const desarrolloCtx = await loadDesarrolloContext(bodyProjectId);
-
-    // Reglas #6 (tarea de BD) y #7 (tareas técnicas) derivadas de la clasificación del proyecto.
-    const projTagSlugs = sanitizeTags(dealProject?.tags ?? []);
-    const isReimpl = dealProject?.implementationType === "REIMPLEMENTATION";
-    const hasMigration = projTagSlugs.includes("crm_migration");
-    const hasTechnical = projTagSlugs.includes("custom_dev") || projTagSlugs.includes("insider_one");
-    const dbTaskRule = isReimpl && !hasMigration
-      ? `- BASE DE DATOS (#6): es una RE-IMPLEMENTACIÓN sobre un HubSpot que el cliente YA usa, SIN migración desde otro CRM. NO incluyas una tarea de "cargar/crear la base de datos"; en su lugar, en la primera fase, incluí una tarea de REVISIÓN DE ESTRUCTURA Y LIMPIEZA de la base existente (propiedades, duplicados, datos sucios).`
-      : `- BASE DE DATOS (#6): ${isReimpl ? "es una re-implementación pero CON migración desde otro CRM" : "es una implementación desde cero"}, así que SÍ incluí en la primera fase una tarea de CARGAR/ESTRUCTURAR LA BASE DE DATOS (importar y modelar los datos en HubSpot).`;
-    const techRule = hasTechnical
-      ? `\n- DESARROLLO/INTEGRACIÓN (#7): el proyecto lleva desarrollo a medida o Insider One. Las tareas técnicas (integraciones, desarrollo, APIs) marcalas con responsable "DEV" y, si existe una fase de "Desarrollo / Integración", ubicalas SOLO ahí (no las mezcles con las tareas funcionales de otras fases).`
-      : "";
-
-    userMessage = `${instruccionesDoc}Empresa: ${companyName}
-Industria: ${client.industry ?? "No especificada"}
-${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}${classificationLabel ? `Clasificación del proyecto: ${classificationLabel}\n` : ""}
-=== CRONOGRAMA A DETALLAR (fases EXISTENTES — no cambies nombres, duraciones ni orden) ===
-${timelineCtx}
-
-=== HANDOFF CURADO (bloques confirmados por el CSE) ===
-${handoffCtx || '(Sin handoff confirmado. Generá las tareas típicas del tipo de cada fase y marcá CADA una con "porValidar": true. Títulos limpios, sin marcadores.)'}
-${desarrolloCtx ? `\n=== REQUERIMIENTO TÉCNICO (canvas Desarrollo — objetos, llaves y conexiones) ===\n${desarrolloCtx}\n` : ""}
-=== REGLAS SEGÚN LA CLASIFICACIÓN ===
-${dbTaskRule}${techRule}
-
-Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a cada fase y proponé las tareas por semana (weekIndex relativo a la fase, < durationWeeks). Usá los ids EXACTOS del input.`;
-
-    // Regen por fase: acotá la salida a la fase target (las demás van con tasks:[]) — baja el
-    // costo/latencia y el riesgo de truncación. La persistencia igual filtra por onlyPhaseId.
-    if (regeneratePhaseId) {
-      userMessage += `\n\n=== ALCANCE: REGENERAR UNA SOLA FASE ===\nDetallá ÚNICAMENTE las tareas de la fase id="${regeneratePhaseId}". Para TODAS las demás fases del input, incluilas en el JSON con su id EXACTO pero con "tasks": [] — no las toques. Concentrá todo el detalle en la fase indicada.`;
-    }
+    userMessage = renderDetalleDeCronograma({
+      instrucciones: contexto.instrucciones,
+      fuentes: contexto.fuentes,
+      encabezado: {
+        companyName,
+        industry: client.industry ?? null,
+        serviceTypeLabel: serviceTypeLabel || null,
+        classificationLabel: classificationLabel || null,
+      },
+      clasificacion: clasificacionDeTags(
+        sanitizeTags(dealProject?.tags ?? []),
+        dealProject?.implementationType ?? null,
+      ),
+      regenerarFaseId: regeneratePhaseId ?? null,
+    });
   }
 
   // ── 10c. Marco breve de relación previa (solo agente Handoff) ────────────────
