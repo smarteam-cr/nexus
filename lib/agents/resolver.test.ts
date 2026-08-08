@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   elegirAgente,
   pipelineKeyDeProyecto,
+  tipoExigidoPorAgente,
   AGENTES_DEL_GRUPO,
   GRUPOS_RESUELTOS_POR_TIPO,
 } from "./resolver";
@@ -297,14 +298,18 @@ describe("X2 — la variante del detalle del cronograma, por convención de id",
 
   it("el cinturón del tipo: un agente tipado no corre sobre un proyecto de otro tipo", () => {
     /* El despacho por id no pasaba por ningún resolver: un click en la pantalla de etapa (o
-       un curl) corría el prompt de Desarrollo sobre una Implementación. La edición que la
-       pone en rojo: borrar el veto del POST. */
+       un curl) corría el prompt de Desarrollo sobre una Implementación.
+       ⚠ Ampliada en el ciclo 2: gatear por `agent.pipelineKey` a secas dejaba pasar a las
+       variantes X2, que van SIN columna por convención (el tipo viaja en el ID) — la primera
+       siembra de una variante reabría el agujero. El cinturón consume tipoExigidoPorAgente,
+       la única fuente de «qué tipo exige este agente». La edición que la pone en rojo:
+       borrar el veto, o volver a gatear por la columna sola. */
     const src = fuente("app/api/clients/[id]/analyze/route.ts");
-    const i = src.indexOf("if (agent.pipelineKey) {");
-    expect(i, "desapareció el cinturón del tipo en analyze").toBeGreaterThan(-1);
-    const bloque = src.slice(i, i + 700);
+    const i = src.indexOf("const tipoExigido = tipoExigidoPorAgente(agent);");
+    expect(i, "el cinturón dejó de derivar el tipo por la única fuente (columna + convención de id)").toBeGreaterThan(-1);
+    const bloque = src.slice(i, i + 800);
     expect(bloque, "el veto dejó de comparar contra el tipo del proyecto").toContain(
-      "tipoDelProyecto !== agent.pipelineKey",
+      "tipoDelProyecto !== tipoExigido",
     );
     // Y el inventario de la pantalla de etapa no lista agentes tipados.
     const gets = src.indexOf('agentType: "SECTION"');
@@ -313,5 +318,17 @@ describe("X2 — la variante del detalle del cronograma, por convención de id",
       src.slice(gets, gets + 300),
       "los agentes tipados volvieron al inventario de la pantalla de etapa",
     ).toContain("pipelineKey: null");
+  });
+
+  it("tipoExigidoPorAgente: la tabla (columna + convención de id de las variantes)", () => {
+    /* Ciclo 2. La columna gana si existe; si no, el sufijo de una variante del detalle;
+       un agente sin ninguna de las dos no exige nada (genérico). */
+    expect(tipoExigidoPorAgente({ id: "agent-handoff-development", pipelineKey: "development" })).toBe("development");
+    expect(tipoExigidoPorAgente({ id: "agent-timeline-detail--development", pipelineKey: null })).toBe("development");
+    expect(tipoExigidoPorAgente({ id: "agent-timeline-detail--web", pipelineKey: null })).toBe("web");
+    expect(tipoExigidoPorAgente({ id: "agent-timeline-detail", pipelineKey: null })).toBeNull();
+    expect(tipoExigidoPorAgente({ id: "agent-kickoff", pipelineKey: null })).toBeNull();
+    // El borde degenerado: sufijo vacío no exige tipo (no fabrica un veto imposible).
+    expect(tipoExigidoPorAgente({ id: "agent-timeline-detail--", pipelineKey: null })).toBeNull();
   });
 });

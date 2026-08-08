@@ -305,6 +305,9 @@ test("analyze inyecta el bloque en el userMessage del detalle", () => {
   expect(tramo, "las instrucciones dejaron de fluir al render — existen y nadie las lee").toContain(
     "instrucciones: contexto.instrucciones",
   );
+  // Ciclo 2: fijar también las fuentes — sin esto, re-armarlas a mano en la ruta (con otro
+  // onlyConfirmed) pasaba en verde mientras el cargador seguía llamándose solo por el brief.
+  expect(tramo, "las fuentes dejaron de venir del cargador").toContain("fuentes: contexto.fuentes");
 });
 
 test("las instrucciones tipeadas viajan al generar: el flush del paso 0 (auditoría)", () => {

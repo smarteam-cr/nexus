@@ -201,12 +201,62 @@ describe("candados de la auditoría 2026-08-08", () => {
   it("la pasada tiene mutex de proceso — el botón manual no puede duplicarla", () => {
     /* Dos pasadas concurrentes (auto-sync + botón «Enriquecer») leen el MISMO snapshot y
        duplican lecturas a Google, resúmenes de IA y ActionItems (el dedupe pierde la
-       carrera). La edición que la pone en rojo: sacar el flag pasadaEnVuelo. */
+       carrera). ⚠ Endurecida en el ciclo 2: la versión anterior solo exigía que la string
+       existiera y el `if` — borrar el ENGAGE (`= true`) o el RELEASE (`= false`) quedaba
+       verde, y cada mutación revive un incidente distinto (sin engage: pasadas duplicadas;
+       sin release: tras la primera pasada TODAS se saltean para siempre en silencio).
+       La edición que la pone en rojo: sacar cualquiera de las tres patas. */
     const src = fuente("lib/google/meet-enrichment.ts");
-    expect(src, "desapareció el mutex de la pasada").toContain("pasadaEnVuelo");
     const fn = src.slice(src.indexOf("export async function enrichGoogleMeetSessions"));
-    expect(fn.slice(0, 600), "la pasada dejó de chequear el mutex antes de correr").toContain(
+    const tramo = fn.slice(0, 600);
+    expect(tramo, "la pasada dejó de chequear el mutex antes de correr").toContain(
       "if (pasadaEnVuelo)",
+    );
+    expect(tramo, "el mutex nunca se ACTIVA — dos pasadas vuelven a correr juntas").toContain(
+      "pasadaEnVuelo = true;",
+    );
+    expect(tramo, "el mutex nunca se LIBERA — tras la primera pasada, skip eterno").toContain(
+      "pasadaEnVuelo = false;",
+    );
+    expect(tramo, "el release perdió el finally — un throw deja el mutex tomado").toContain(
+      "finally",
+    );
+  });
+
+  it("procesarSesion tiene mutex POR SESIÓN — el botón por-sesión no duplica contra una pasada en vuelo (ciclo 2)", () => {
+    /* El mutex de pasada NO cubre a enrichSingleSession (a propósito: el botón por-sesión
+       no debe esperar a una pasada entera). Sin el Set por sesión, apretar «re-enriquecer»
+       sobre una fila que está en el snapshot de una pasada en vuelo duplica lectura, resumen
+       y post-proceso: ActionItems sin unique en la base = duplicados.
+       La edición que la pone en rojo: quitar el Set, o su add/delete. */
+    const src = fuente("lib/google/meet-enrichment.ts");
+    const fn = src.slice(src.indexOf("async function procesarSesion("));
+    const tramo = fn.slice(0, 700);
+    expect(tramo, "procesarSesion dejó de chequear el mutex por sesión").toContain(
+      "sesionesEnVuelo.has(s.id)",
+    );
+    expect(tramo, "la sesión nunca se marca en vuelo").toContain("sesionesEnVuelo.add(s.id)");
+    expect(tramo, "la sesión nunca se libera — quedaría vetada para siempre").toContain(
+      "sesionesEnVuelo.delete(s.id)",
+    );
+    expect(tramo, "el release perdió el finally").toContain("finally");
+  });
+
+  it("el drenaje ordena por FECHA DE REUNIÓN, no por updatedAt (ciclo 2)", () => {
+    /* `updatedAt asc` parecía «la que nadie toca hace más tiempo», pero el sync bumpea
+       updatedAt de TODAS las filas cada ~20 min (update incondicional sobre lo existente):
+       el orden real era el orden de iteración del sync. `date` no lo pisa nadie. Y el
+       select de candidatas va liviano: tras el rescate pueden ser miles de filas. */
+    const src = fuente("lib/google/meet-enrichment.ts");
+    const fn = src.slice(src.indexOf("export async function drenarReintentos"));
+    const tramo = fn.slice(0, fn.indexOf("correrLote("));
+    expect(tramo.length, "cambió drenarReintentos; revisar esta guarda").toBeGreaterThan(300);
+    expect(tramo, "el drenaje volvió a ordenar por un campo que el sync pisa").not.toContain(
+      "updatedAt",
+    );
+    expect(tramo.match(/orderBy: \{ date: "asc" \}/g)?.length, "el orden estable desapareció").toBeGreaterThanOrEqual(1);
+    expect(tramo, "el select de candidatas volvió a traer las filas pesadas").toContain(
+      'select: { id: true, enrichAttempts: true, enrichError: true }',
     );
   });
 
@@ -220,24 +270,39 @@ describe("candados de la auditoría 2026-08-08", () => {
   it("meet-sync resetea COMPLETO cuando aparece el doc", () => {
     /* Con solo enrichedAt:null, una fila sellada por tope (attempts=5) a la que después le
        aparece el doc quedaba en limbo permanente: invisible para pasadas, job, rescate y
-       force. La edición que la pone en rojo: volver al reset de una sola columna. */
+       force. ⚠ Endurecida en el ciclo 2: la versión anterior fijaba el PAYLOAD pero no el
+       DISPARADOR — reducir la condición a solo `docChanged` dejaba todo verde y devolvía al
+       limbo el caso principal (el Gemini Notes que APARECE post-reunión). La edición que la
+       pone en rojo: tocar el payload O la condición. */
     const src = fuente("lib/google/meet-sync.ts");
-    const i = src.indexOf("shouldResetEnrichment\n");
-    const bloque = src.slice(src.indexOf("...(shouldResetEnrichment"), src.indexOf("...(shouldResetEnrichment") + 260);
-    expect(bloque.length, "cambió el reset de meet-sync; revisar esta guarda").toBeGreaterThan(50);
-    expect(bloque, "el reset dejó de limpiar attempts — la fila sellada por tope queda en limbo").toContain(
-      "enrichAttempts: 0",
+    const iDef = src.indexOf("const shouldResetEnrichment");
+    expect(iDef, "desapareció shouldResetEnrichment de meet-sync").toBeGreaterThan(-1);
+    const condicion = src.slice(iDef, iDef + 200);
+    expect(condicion, "el disparador perdió el caso «el doc APARECE» — la fila sellada por tope queda en limbo").toContain(
+      "docJustAppeared",
     );
+    const iUso = src.indexOf("...(shouldResetEnrichment");
+    expect(iUso, "el reset condicional desapareció del update").toBeGreaterThan(-1);
+    const bloque = src.slice(iUso, iUso + 260);
+    expect(bloque, "el reset dejó de limpiar attempts").toContain("enrichAttempts: 0");
     expect(bloque).toContain("enrichError: null");
-    void i;
   });
 
   it("el rescate exige --deploy-confirmado además de --apply", () => {
     /* Las columnas ya están en prod ANTES del deploy: el check de columnas no detecta el
-       peligro real (resetear con el CÓDIGO viejo deployado re-quema todo). */
+       peligro real (resetear con el CÓDIGO viejo deployado re-quema todo).
+       ⚠ Endurecida en el ciclo 2: la versión anterior fijaba la CONDICIÓN pero no el CORTE —
+       quitar el `return` dejaba el script imprimiendo «ABORTADO» y reseteando igual. */
     const src = fuente("scripts/recuperar-transcripts-meet.ts");
     expect(src, "el rescate perdió la confirmación del deploy").toContain("--deploy-confirmado");
-    expect(src, "el gate dejó de cortar el apply").toContain("APPLY && !DEPLOY_CONFIRMADO");
+    const iGate = src.indexOf("APPLY && !DEPLOY_CONFIRMADO");
+    expect(iGate, "el gate dejó de existir").toBeGreaterThan(-1);
+    /* El tramo del if: de la condición al próximo cierre de bloque a columna 2. */
+    const gate = src.slice(iGate, src.indexOf("\n  }", iGate));
+    expect(gate, "el gate imprime pero NO CORTA — el apply sigue de largo").toContain("return;");
+    expect(gate, "el abort perdió el exit code — un wrapper lo daría por exitoso").toContain(
+      "process.exitCode = 1",
+    );
   });
 });
 

@@ -315,7 +315,27 @@ async function leerSesion(s: SesionAEnriquecer): Promise<LecturaDoc> {
 
 type EstadoProceso = { estado: "enriched" | "skipped" | "error"; status: number | null };
 
+/* El mutex de pasada serializa PASADAS; esto serializa SESIONES (ciclo 2 de revisión,
+   2026-08-08): el botón por-sesión llama `procesarSesion` sin pasar por aquel mutex, y si
+   la sesión estaba en el snapshot de una pasada en vuelo (hasta 240 filas, minutos de
+   duración) se duplicaba la lectura a Google, el resumen de IA y el post-proceso — los
+   ActionItems no tienen unique en la base y su dedupe pierde esa carrera. */
+const sesionesEnVuelo = new Set<string>();
+
 async function procesarSesion(s: SesionAEnriquecer): Promise<EstadoProceso> {
+  if (sesionesEnVuelo.has(s.id)) {
+    console.log(`[google/enrich] sesión ${s.id} ya en vuelo — skip (mutex por sesión)`);
+    return { estado: "skipped", status: null };
+  }
+  sesionesEnVuelo.add(s.id);
+  try {
+    return await procesarSesionSinMutex(s);
+  } finally {
+    sesionesEnVuelo.delete(s.id);
+  }
+}
+
+async function procesarSesionSinMutex(s: SesionAEnriquecer): Promise<EstadoProceso> {
   const lectura = await leerSesion(s);
 
   if (!lectura.ok) {
@@ -413,7 +433,8 @@ async function correrLote(sesiones: SesionAEnriquecer[], batchSize: number, resu
    sin el claim del auto-sync — dos pasadas concurrentes leen el MISMO snapshot de filas y
    duplican lecturas a Google, resúmenes de IA y post-procesos (ActionItems duplicados: el
    dedupe pierde la carrera). Nexus corre en UN contenedor, así que el flag de módulo alcanza
-   y cubre a TODOS los llamadores — que es lo que el flag del auto-sync no hacía. */
+   para serializar las PASADAS entre sí. El botón POR-SESIÓN no pasa por acá a propósito
+   (no debe esperar a una pasada entera): su carrera la cubre `sesionesEnVuelo`. */
 let pasadaEnVuelo = false;
 
 export async function enrichGoogleMeetSessions(): Promise<EnrichResult> {
@@ -488,9 +509,13 @@ export async function drenarReintentos(limit = 20): Promise<EnrichResult> {
 
   /* TODAS las candidatas, sin ventana (auditoría 2026-08-08): con `take: limit*3` por fecha
      de reunión, las filas en backoff OCUPABAN la ventana y las más viejas ya LISTAS quedaban
-     invisibles detrás — el job ocioso con trabajo pendiente. El conjunto es chico por
-     definición (attempts 1-4) y el select es liviano. `updatedAt asc` = la que hace más
-     tiempo que nadie toca, primero. */
+     invisibles detrás — el job ocioso con trabajo pendiente.
+     Orden por FECHA DE REUNIÓN, no por updatedAt (ciclo 2 de revisión): `updatedAt` parecía
+     «la que nadie toca hace más tiempo», pero el sync hace un update INCONDICIONAL sobre
+     cada fila existente cada ~20 min — ese orden era en realidad el orden de iteración del
+     sync. `date` no lo pisa nadie: la reunión más vieja primero, siempre.
+     Y este select va LIVIANO (sin participants ni títulos): tras el rescate las candidatas
+     pueden ser miles; lo pesado se trae solo para las `limit` elegidas. */
   const candidatas = await prisma.firefliesSession.findMany({
     where: {
       source: "google_meet",
@@ -498,14 +523,21 @@ export async function drenarReintentos(limit = 20): Promise<EnrichResult> {
       enrichAttempts: { gte: 1, lt: MAX_ENRICH_ATTEMPTS },
       date: { lt: new Date(ahora.getTime() - GRACIA_MS) },
     },
-    select: { ...SELECT_ENRIQUECER, enrichError: true },
-    orderBy: { updatedAt: "asc" },
+    select: { id: true, enrichAttempts: true, enrichError: true },
+    orderBy: { date: "asc" },
   });
 
-  const listas = candidatas
+  const idsListos = candidatas
     .filter((c) => esReintentable(c.enrichAttempts, c.enrichError, ahora))
-    .slice(0, limit);
-  if (listas.length === 0) return resultado;
+    .slice(0, limit)
+    .map((c) => c.id);
+  if (idsListos.length === 0) return resultado;
+
+  const listas = await prisma.firefliesSession.findMany({
+    where: { id: { in: idsListos } },
+    select: SELECT_ENRIQUECER,
+    orderBy: { date: "asc" },
+  });
 
   console.log(`[google/enrich] Reintentos: ${listas.length} de ${candidatas.length} candidatas`);
   await correrLote(listas, DOC_BATCH, resultado);

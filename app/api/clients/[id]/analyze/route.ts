@@ -10,7 +10,7 @@ import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
 import { extractTitleTerms } from "@/lib/utils/matching";
 import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
-import { SENTINEL_SERVICE_TYPE, type ProjectPipelineKey } from "@/lib/projects/kind";
+import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { updateCanvasAsync } from "@/lib/canvas/update-agent";
@@ -30,7 +30,7 @@ import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContex
 import { cargarContextoDelDetalle } from "@/lib/contexto/cargar";
 import { renderDetalleDeCronograma, clasificacionDeTags } from "@/lib/contexto/detalle-cronograma";
 import { vetoSiElHandoffEsDeOtro, componerExclusiones, exclusionDelSistema } from "@/lib/handoff/duenio";
-import { DETALLE_CRONOGRAMA_ID, idDeVarianteDetalle, esAgenteDeDetalle, pipelineKeyDeProyecto } from "@/lib/agents/resolver";
+import { DETALLE_CRONOGRAMA_ID, idDeVarianteDetalle, esAgenteDeDetalle, pipelineKeyDeProyecto, tipoExigidoPorAgente } from "@/lib/agents/resolver";
 import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
 import { debeAnteponerSemanaCero } from "@/lib/timeline/semana-cero";
 import { patchBaselinePhaseTasks } from "@/lib/timeline/baseline";
@@ -279,12 +279,16 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     );
   }
 
-  /* ── EL CINTURÓN DEL TIPO (auditoría 2026-08-08) ────────────────────────────
-     Un agente con `pipelineKey` es DE un tipo de proyecto. El despacho por id no pasaba por
-     ningún resolver, así que un click (o un curl) podía correr el prompt de Desarrollo sobre
-     una Implementación — sin error y sin log, el accidente exacto que el resolver mata en el
-     GET. Espejo de esa regla acá, en la única puerta de ejecución. */
-  if (agent.pipelineKey) {
+  /* ── EL CINTURÓN DEL TIPO (auditoría 2026-08-08; ampliado ciclo 2) ──────────
+     Un agente tipado es DE un tipo de proyecto. El despacho por id no pasaba por ningún
+     resolver, así que un click (o un curl) podía correr el prompt de Desarrollo sobre una
+     Implementación — sin error y sin log, el accidente exacto que el resolver mata en el GET.
+     Espejo de esa regla acá, en la única puerta de ejecución.
+     ⚠ El tipo NO vive solo en la columna: las variantes X2 lo llevan en el ID (van sin
+     `pipelineKey` por convención). Gatear solo por la columna dejaba pasar el despacho
+     directo de una variante — por eso `tipoExigidoPorAgente` es la única fuente. */
+  const tipoExigido = tipoExigidoPorAgente(agent);
+  if (tipoExigido) {
     const proyectoDelAgente = bodyProjectId
       ? await prisma.project.findUnique({
           where: { id: bodyProjectId },
@@ -292,9 +296,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         })
       : null;
     const tipoDelProyecto = pipelineKeyDeProyecto(proyectoDelAgente?.hubspotPipelineId ?? null);
-    if (tipoDelProyecto !== agent.pipelineKey) {
+    if (tipoDelProyecto !== tipoExigido) {
       return apiError(
-        `Este agente es de proyectos de tipo "${agent.pipelineKey}" y este proyecto no lo es.`,
+        `Este agente es de proyectos de tipo "${tipoExigido}" y este proyecto no lo es.`,
         400,
       );
     }
@@ -1789,11 +1793,16 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // (X1) y el template viven allá; esta rama solo carga y renderiza. La migración es
   // byte-idéntica — el golden de lib/contexto/detalle-cronograma.test.ts lo afirma.
   if (isTimelineDetailAgent && bodyProjectId) {
-    // El pipelineKey del agente ES el tipo del proyecto cuando corre una variante: el
-    // cinturón del despacho (arriba) vetó con 400 cualquier des-coincidencia.
+    // El pipelineKey del contexto sale del PROYECTO, no del agente: la columna del agente
+    // es NULL por convención en las variantes X2 (el tipo viaja en su id), así que leerla
+    // acá mentiría exactamente en las corridas tipadas (ciclo 2 de revisión, 2026-08-08).
+    const proyectoDelContexto = await prisma.project.findUnique({
+      where: { id: bodyProjectId },
+      select: { hubspotPipelineId: true },
+    });
     const contexto = await cargarContextoDelDetalle(
       bodyProjectId,
-      (agent.pipelineKey as ProjectPipelineKey | null) ?? null,
+      pipelineKeyDeProyecto(proyectoDelContexto?.hubspotPipelineId ?? null),
     );
     userMessage = renderDetalleDeCronograma({
       instrucciones: contexto.instrucciones,

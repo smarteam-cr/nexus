@@ -78,6 +78,27 @@ export function esAgenteDeDetalle(agentId: string): boolean {
   return agentId === DETALLE_CRONOGRAMA_ID || agentId.startsWith(`${DETALLE_CRONOGRAMA_ID}--`);
 }
 
+/**
+ * El tipo de proyecto que un agente EXIGE, venga de donde venga: la columna `pipelineKey`
+ * (mecanismo del handoff) o la CONVENCIÓN DE ID de las variantes del detalle
+ * (`agent-timeline-detail--<tipo>`, que van SIN columna a propósito — ver arriba).
+ *
+ * (Ciclo 2 de revisión, 2026-08-08.) El cinturón de analyze gateaba SOLO por la columna, así
+ * que una variante X2 despachada por id directo pasaba de largo: el tipo viajaba en el id y
+ * nadie lo comparaba contra el proyecto — la primera siembra de una variante reabría el
+ * agujero exacto que la auditoría declaró cerrado. Este helper es la única fuente de «qué
+ * tipo exige este agente»; el cinturón lo consume.
+ */
+export function tipoExigidoPorAgente(agente: {
+  id: string;
+  pipelineKey: string | null;
+}): string | null {
+  if (agente.pipelineKey) return agente.pipelineKey;
+  const prefijo = `${DETALLE_CRONOGRAMA_ID}--`;
+  if (agente.id.startsWith(prefijo)) return agente.id.slice(prefijo.length) || null;
+  return null;
+}
+
 /** Lo mínimo que el resolver necesita de una fila de `Agent`. */
 export interface AgenteCandidato {
   id: string;
