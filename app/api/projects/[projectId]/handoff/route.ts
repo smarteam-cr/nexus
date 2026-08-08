@@ -5,8 +5,7 @@ import { computeHandoffReadiness } from "@/lib/handoff/feeding";
 import {
   resolverDuenioDelHandoff,
   vetoSiElHandoffEsDeOtro,
-  contextExclusionesPorDefecto,
-  tieneOTuvoImplementacionHubSpot,
+  exclusionDelSistema,
 } from "@/lib/handoff/duenio";
 import { createHandoffCanvas, reconcileHandoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { canvasOf } from "@/lib/pieces/canvas-query";
@@ -162,6 +161,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
     projectSessionCount,
     handoffReadiness,
     contextExclusions: project.handoff?.contextExclusions ?? null,
+    /* La exclusión que pone LA APP, calculada en vivo — no vive en ninguna columna. La pantalla
+       la pinta en gris sobre el textarea del CSE: si no se mostrara, el encargado creería que
+       este proyecto no tiene ninguna exclusión y escribiría de nuevo lo que la app ya dice. */
+    exclusionAutomatica: await exclusionDelSistema(projectId),
     implementationType: project.implementationType,
   });
 }
@@ -242,31 +245,6 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const canvasId = project.canvases[0]?.id ?? null;
   const handoffId = project.handoff?.id ?? null;
 
-  /* Solo se paga si de verdad se va a crear un Handoff nuevo: para el caso normal (ya existe)
-     son consultas de más en el camino más transitado de la pantalla.
-
-     ⚠ CON EL NOMBRE DEL HERMANO MAYOR, igual que el alta (`alta-runner.ts`). Hasta la Tanda G
-     este camino pasaba solo el pipeline y la nota salía GENÉRICA — y este ensure es exactamente
-     por donde nace el handoff de un hermano cuyo alta corrió antes de la Tanda F (los dos
-     reales: Spectrum y Wherex). Una exclusión con nombre propio pesa mucho más, y es la única
-     compensación de la decisión «el hermano menor ve todo el material». Un puntero a un
-     proyecto borrado degrada a la genérica en vez de romper. */
-  let contextExclusions: string | null | undefined = undefined;
-  if (!handoffId) {
-    const hermanoMayor = project.hermanoCsProjectId
-      ? await prisma.project.findUnique({
-          where: { id: project.hermanoCsProjectId },
-          select: { name: true },
-        })
-      : null;
-    contextExclusions = contextExclusionesPorDefecto({
-      hubspotPipelineId: project.hubspotPipelineId,
-      nombreDelHermanoMayor: hermanoMayor?.name ?? null,
-      nombreDelProyecto: project.name,
-      tieneImplementacionHubSpot: await tieneOTuvoImplementacionHubSpot(project.clientId, projectId),
-    });
-  }
-
   // Ensure: canvas Handoff (creado fresco con la estructura actual si falta) o RECONCILIADO
   // a la estructura canónica si ya existe (crea secciones nuevas como "desarrollo", nunca borra
   // bloques) — así el agente no descarta secciones que el canvas viejo no tenía. + entidad Handoff.
@@ -280,9 +258,12 @@ export async function POST(_req: NextRequest, { params }: Params) {
           clientId: project.clientId,
           projectId,
           hubspotSyncStatus: "pending",
-          // Desarrollo/Sitio cuya empresa tiene (o tuvo) una Implementación aparte: nace con la
-          // nota de que la IA no tiene que repetir el alcance de ESA. Ver `lib/handoff/duenio.ts`.
-          contextExclusions,
+          /* ⚠ NACE SIN NOTA, Y ESO ES EL ARREGLO (2026-08-08). La exclusión del sistema ya NO se
+             persiste: se RECALCULA en cada generación (`exclusionDelSistema` +
+             `componerExclusiones`). Persistirla acá la volvía perdible: «Regenerar» la borraba,
+             tres de las cinco puertas que crean un Handoff nunca la escribían, y un handoff viejo
+             se quedaba sin ella para siempre. Esta columna ahora significa UNA sola cosa: lo que
+             escribió el CSE a mano. */
         },
         select: { id: true },
       })).id;

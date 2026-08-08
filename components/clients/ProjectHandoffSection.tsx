@@ -57,8 +57,10 @@ interface HandoffStatus {
   projectSessionCount: number;
   /** Qué alimentaría el handoff HOY (política de link + regla) y si hay material real. */
   handoffReadiness: { feedingCount: number; withTranscript: number; manualSources: number };
-  /** Exclusiones de contexto del CSE (texto libre → reglas duras del prompt). */
+  /** Exclusiones que escribió EL CSE a mano (texto libre → reglas duras del prompt). */
   contextExclusions: string | null;
+  /** La exclusión que pone LA APP, calculada en vivo. No se guarda y no se puede borrar. */
+  exclusionAutomatica?: string | null;
   implementationType: "IMPLEMENTATION" | "REIMPLEMENTATION" | null;
 }
 
@@ -196,10 +198,20 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     ? handoffPerms?.regenerate === true
     : handoffPerms?.generate === true;
 
-  // Exclusiones de contexto del CSE (textarea colapsable). El draft vive aparte del
-  // status para no pisar lo tipeado en cada refetch; se sincroniza al cargar.
+  /* Exclusiones del CSE (textarea colapsable). El draft vive aparte del status para no pisar lo
+     tipeado en cada refetch.
+
+     ── EL BUG QUE `exclusionsDirty` ARREGLA (2026-08-08) ─────────────────────
+     Antes esto era un `exclusionsLoaded` que sembraba el textarea UNA sola vez — y esa vez era
+     ANTES de que el handoff existiera, o sea con "". Después de generar, el refetch traía la
+     nota guardada y el textarea seguía vacío. Al apretar **Regenerar**, el paso 0 comparaba
+     "vacío ≠ la nota guardada", lo leía como «el CSE la borró» y mandaba un PATCH a null: la
+     segunda corrida —justo la que uno hace porque el documento no le gustó— salía SIN
+     exclusiones, y la nota quedaba destruida.
+     Con un flag de "lo tocó una persona": el draft se re-siembra en cada refetch mientras nadie
+     haya escrito, y el PATCH del paso 0 solo sale si de verdad alguien escribió. */
   const [exclusions, setExclusions] = useState("");
-  const [exclusionsLoaded, setExclusionsLoaded] = useState(false);
+  const [exclusionsDirty, setExclusionsDirty] = useState(false);
   const [savingExcl, setSavingExcl] = useState(false);
   const [showExcl, setShowExcl] = useState(false);
 
@@ -210,9 +222,11 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
         const d = (await r.json()) as HandoffStatus;
         writeHandoffStatusCache(projectId, d); // revisitas pintan sin skeleton
         setStatus(d);
-        setExclusionsLoaded((loaded) => {
-          if (!loaded) setExclusions(d.contextExclusions ?? "");
-          return true;
+        // Se re-siembra SIEMPRE que nadie haya tipeado — no una sola vez. Ver el comentario
+        // de `exclusionsDirty`: sembrar una vez sola es lo que hacía que "Regenerar" borrara.
+        setExclusionsDirty((sucio) => {
+          if (!sucio) setExclusions(d.contextExclusions ?? "");
+          return sucio;
         });
       }
     } catch { /* ignore */ }
@@ -268,7 +282,11 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
         body: JSON.stringify({ contextExclusions: exclusions.trim() || null }),
       });
       if (!r.ok) setError("No se pudieron guardar las exclusiones.");
-      else fetchStatus();
+      else {
+        // Guardado = el draft y el servidor coinciden: el refetch puede volver a sembrar.
+        setExclusionsDirty(false);
+        fetchStatus();
+      }
     } catch {
       setError("Error de conexión al guardar las exclusiones.");
     }
@@ -289,7 +307,9 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
       //    (sin apretar "Guardar") perdía el texto en silencio y el prompt corría sin
       //    la regla (visto en RC). Best-effort: si falla, la generación sigue igual.
       const pendingExcl = exclusions.trim() || null;
-      if (pendingExcl !== (status?.contextExclusions ?? null)) {
+      /* ⚠ SOLO SI UNA PERSONA ESCRIBIÓ. Comparar contra el status era el bug: un textarea que
+         nunca se re-sembró se ve igual que uno que alguien vació a mano. */
+      if (exclusionsDirty && pendingExcl !== (status?.contextExclusions ?? null)) {
         await fetch(`/api/projects/${projectId}/handoff`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -345,7 +365,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     } finally {
       setGenerating(false);
     }
-  }, [projectId, clientId, track, fetchStatus, fetchTags, status?.agentId, status?.contextExclusions, exclusions, bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh]);
+  }, [projectId, clientId, track, fetchStatus, fetchTags, status?.agentId, status?.contextExclusions, exclusions, exclusionsDirty, bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh]);
 
   // Gate CONJUNTO status+me: si la sección se pintara apenas llega el status pero antes
   // de /api/me, el bloque de contexto de editores se INSERTARÍA después (canEdit pasa a
@@ -516,11 +536,11 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
             Exclusiones para el handoff
-            {exclusions.trim() !== (status.contextExclusions ?? "") ? (
+            {exclusionsDirty && exclusions.trim() !== (status.contextExclusions ?? "") ? (
               <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
                 sin guardar — se guardan al regenerar
               </span>
-            ) : status.contextExclusions ? (
+            ) : status.contextExclusions || status.exclusionAutomatica ? (
               <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">
                 activas
               </span>
@@ -528,14 +548,36 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
           </button>
           {showExcl && (
             <div className="mt-2 space-y-2">
+              {/* ── LA EXCLUSIÓN QUE PONE LA APP ─────────────────────────────────
+                  Se calcula en cada generación y no se guarda en ningún lado: no se puede
+                  borrar ni por accidente ni a propósito (decisión de Elías, 2026-08-08).
+                  Se PINTA porque si no, el encargado abriría este panel, vería el campo vacío,
+                  creería que el proyecto no tiene ninguna exclusión, y escribiría a mano lo que
+                  la app ya está diciendo. */}
+              {status.exclusionAutomatica && (
+                <div className="rounded-lg border border-line bg-surface-muted px-3 py-2">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <svg className="w-3 h-3 text-fg-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-fg-muted">
+                      La pone la app · siempre activa
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-fg-secondary leading-relaxed">
+                    {status.exclusionAutomatica}
+                  </p>
+                </div>
+              )}
               <p className="text-[11px] text-fg-muted leading-relaxed">
-                Temas que el agente debe IGNORAR al generar — útil cuando el cliente tiene varios
-                proyectos (ej. &quot;ignorá el proyecto DocuSign&quot;, &quot;no hables de contratos&quot;).
+                {status.exclusionAutomatica ? "Sumá acá otros t" : "T"}emas que el agente debe
+                IGNORAR al generar — útil cuando el cliente tiene varios proyectos (ej.
+                &quot;ignorá el proyecto DocuSign&quot;, &quot;no hables de contratos&quot;).
                 Si las cambiás, regenerá el handoff (y después el kickoff).
               </p>
               <textarea
                 value={exclusions}
-                onChange={(e) => setExclusions(e.target.value)}
+                onChange={(e) => { setExclusions(e.target.value); setExclusionsDirty(true); }}
                 rows={3}
                 maxLength={5000}
                 placeholder='Ej.: "Ignorá todo lo relativo al proyecto de contratos en DocuSign."'
@@ -544,7 +586,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
               <div className="flex justify-end">
                 <button
                   onClick={saveExclusions}
-                  disabled={savingExcl || exclusions.trim() === (status.contextExclusions ?? "")}
+                  disabled={savingExcl || !exclusionsDirty || exclusions.trim() === (status.contextExclusions ?? "")}
                   className="text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors"
                 >
                   {savingExcl ? "Guardando…" : "Guardar exclusiones"}

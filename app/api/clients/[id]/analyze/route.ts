@@ -28,7 +28,7 @@ import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate"
 import { runImplementacionGeneration } from "@/lib/canvas/implementacion-generate";
 import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
 import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
-import { vetoSiElHandoffEsDeOtro } from "@/lib/handoff/duenio";
+import { vetoSiElHandoffEsDeOtro, componerExclusiones, exclusionDelSistema } from "@/lib/handoff/duenio";
 import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
 import { debeAnteponerSemanaCero } from "@/lib/timeline/semana-cero";
 import { patchBaselinePhaseTasks } from "@/lib/timeline/baseline";
@@ -522,20 +522,41 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
 
   // ── 3. Cargar notas, documentos, cards y deal en paralelo ────────────────────
   setPhase("Leyendo el contexto del cliente…");
+
+  /**
+   * ── EL ZOOM, DEL LADO DE LOS DATOS (2026-08-08) ──────────────────────────────
+   * Los documentos del cliente, las notas del workspace y las tarjetas de contexto YA guardan de
+   * qué proyecto son (`projectId` en las tres tablas) y las tres queries lo ignoraban: traían
+   * TODO lo del cliente. Para un hermano menor eso significaba que la propuesta comercial de la
+   * implementación —el bloque más pesado del prompt, 12.000 caracteres— entraba sin marca justo
+   * cuando el agente tiene que escribir «¿qué vendimos?».
+   *
+   * ⚠ `projectId: null` SE INCLUYE a propósito: es material del cliente que nadie asignó a ningún
+   * proyecto (el caso mayoritario hoy), y excluirlo dejaría al handoff sin contexto en vez de
+   * enfocado. Lo que se saca es lo que pertenece EXPLÍCITAMENTE a otro proyecto.
+   *
+   * Solo aplica al handoff por-proyecto: los demás agentes siguen viendo al cliente entero.
+   */
+  const soloDeEsteProyecto =
+    agent.agentGroup === "handoff" && bodyProjectId
+      ? { OR: [{ projectId: bodyProjectId }, { projectId: null }] }
+      : {};
+
   const [existingCardsResult, stageNotesResult, clientDocumentsResult, dealProjectResult] =
     await Promise.allSettled([
       prisma.clientContextCard.findMany({
-        where: { clientId },
+        where: { clientId, ...soloDeEsteProyecto },
         orderBy: { order: "asc" },
         select: { title: true, content: true },
       }),
       prisma.stageNote.findMany({
-        where: { clientId },
+        where: { clientId, ...soloDeEsteProyecto },
         select: { stage: true, step: true, content: true },
       }),
       prisma.clientDocument.findMany({
         where: {
           clientId,
+          ...soloDeEsteProyecto,
           OR: [
             { content: { not: null } }, // Docs with text content
             { type: "FILE" },            // All FILE docs (even without extracted text)
@@ -560,6 +581,23 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   const stageNotes = stageNotesResult.status === "fulfilled" ? stageNotesResult.value : [];
   const clientDocuments = clientDocumentsResult.status === "fulfilled" ? clientDocumentsResult.value : [];
   const dealProject = dealProjectResult.status === "fulfilled" ? dealProjectResult.value : null;
+
+  /**
+   * ── EL HERMANO MAYOR, LEÍDO UNA SOLA VEZ ────────────────────────────────────
+   * De él salen las TRES etiquetas de procedencia que hacen posible el zoom: el caveat del
+   * historial de HubSpot, la marca del deal de la implementación, y el rótulo de su documento.
+   * Una sola lectura para que las tres digan exactamente el mismo nombre — si cada una
+   * resolviera por su cuenta, podrían divergir sin que nada avise.
+   * `null` para una Implementación o para un proyecto que va solo: ahí no hay nada que etiquetar
+   * y el prompt queda byte-idéntico al de siempre.
+   */
+  const hermanoMayor =
+    agent.agentGroup === "handoff" && bodyProjectId && dealProject?.hermanoCsProjectId
+      ? await prisma.project.findUnique({
+          where: { id: dealProject.hermanoCsProjectId },
+          select: { id: true, name: true, hubspotDealId: true, clientId: true },
+        })
+      : null;
 
   // ── 3b. Obtener line items del deal y datos de adquisición desde HubSpot ──────
   let dealContent = "";
@@ -779,15 +817,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
          instrucción de exclusión podía contra él». findUnique directo y NO la lista de
          activos: el mayor puede estar Finalizado y proyectoClasificableWhere lo dejaría
          afuera. */
-      let hermanoMayorDelDeal: { name: string; hubspotDealId: string | null } | null = null;
+      const hermanoMayorDelDeal = hermanoMayor;
       let isForeignProjectDeal: (dealName: string) => boolean = () => false;
       if (agent.agentGroup === "handoff" && bodyProjectId) {
-        if (dealProject?.hermanoCsProjectId) {
-          hermanoMayorDelDeal = await prisma.project.findUnique({
-            where: { id: dealProject.hermanoCsProjectId },
-            select: { name: true, hubspotDealId: true },
-          });
-        }
         const activeProjects = await prisma.project.findMany({
           where: proyectoClasificableWhere({ clientId }),
           select: { id: true, name: true },
@@ -1512,10 +1544,21 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       .map(({ title, content, source }) => ({ title, content, source }));
   }
 
-  // Bloque del timeline de HubSpot (notas + Zoom), inyectado junto a las fuentes crudas.
+  /* Bloque del timeline de HubSpot (notas + Zoom), inyectado junto a las fuentes crudas.
+     ⚠ ES EL BLOQUE MÁS PESADO DEL PROMPT Y ES POR EMPRESA, NO POR PROYECTO. Para un hermano
+     menor eso significa que las reuniones de la implementación —su kickoff, sus sesiones
+     semanales de Marketing y Sales— entran acá enteras. Medido sobre el «Conector SAAS posventa»
+     de Spectrum: 22 de 22 registros son de la implementación y ninguno menciona el conector.
+     No se filtran (decisión de negocio: el hermano menor ve todo el material) pero desde la
+     Tanda G se ETIQUETAN nombrando al hermano mayor, que es el mismo tratamiento que ya tenían
+     el HISTORIAL PREVIO de abajo, el deal del mayor y su documento. Sin la etiqueta, el modelo
+     no tiene NINGUNA forma de saber que esas reuniones no son de este proyecto. */
+  const caveatDelMayor = hermanoMayor?.name
+    ? `⚠ Este historial es de la EMPRESA, no de este proyecto: contiene las reuniones y notas de «${hermanoMayor!.name}» (la implementación de HubSpot de la que este proyecto cuelga). Usalo como contexto de fondo. NO tomes de acá el alcance, las promesas ni los pendientes de ESTE proyecto: solo lo que hable de integración, desarrollo o sitio web.\n`
+    : "";
   const hubspotTimelineBlock = companyTimelineContent.trim()
     ? `=== TIMELINE DE HUBSPOT (notas + llamadas/reuniones Zoom) ===
-${companyTimelineContent.slice(0, CTX.timelineCap)}
+${caveatDelMayor}${companyTimelineContent.slice(0, CTX.timelineCap)}
 
 `
     : "";
@@ -1539,7 +1582,16 @@ ${companyTimelinePrevContent.slice(0, 3000)}
       where: { projectId: bodyProjectId },
       select: { contextExclusions: true },
     });
-    const excl = h?.contextExclusions?.trim();
+    /* ⚠ LA EXCLUSIÓN DEL SISTEMA SE RECALCULA ACÁ, NO SE LEE DE LA FILA (decisión de Elías,
+       2026-08-08: «que la mantenga la app»). Antes se escribía una sola vez al nacer el handoff
+       y se podía perder de tres maneras: «Regenerar» la borraba (el textarea se sembraba vacío
+       una única vez y la pantalla interpretaba el vacío como «el CSE la borró»), tres de las
+       cinco puertas que crean un `Handoff` nunca la escribían, y un handoff viejo se quedaba sin
+       ella para siempre. Recalculada, no se puede perder por ninguna de las tres vías. */
+    const excl = componerExclusiones(
+      await exclusionDelSistema(bodyProjectId),
+      h?.contextExclusions,
+    )?.trim();
     if (excl) {
       cseExclusionsBlock = `=== EXCLUSIONES DEL CSE (reglas duras — cumplilas SIEMPRE, ganan sobre cualquier fuente) ===
 ${excl}
@@ -1554,10 +1606,8 @@ ${excl}
      El rótulo y la allowlist de secciones viven adentro del helper — es el único archivo
      sancionado por el candado del embudo. Solo hermanos menores: para todo lo demás, "". */
   let handoffDelMayorBlock = "";
-  if (isHandoffAgent && bodyProjectId && dealProject?.hermanoCsProjectId) {
-    handoffDelMayorBlock = await loadHandoffDelHermanoMayorContext(dealProject.hermanoCsProjectId, {
-      clientId,
-    });
+  if (isHandoffAgent && hermanoMayor) {
+    handoffDelMayorBlock = await loadHandoffDelHermanoMayorContext(hermanoMayor.id, { clientId });
     if (handoffDelMayorBlock) {
       console.log(
         `[analyze handoff] handoff del hermano mayor inyectado como referencia (${handoffDelMayorBlock.length} chars)`,

@@ -370,19 +370,22 @@ describe("al terminar", () => {
   });
 
   /**
-   * ── SE DIO VUELTA EL 2026-08-07 (Tanda F) ──────────────────────────────────
-   * Este test afirmaba lo contrario: que un proyecto colgado de otro NO nacía con documento
-   * propio. Era correcto mientras el objetivo fuera «que no existan dos documentos del mismo
-   * trato»; dejó de serlo cuando se midió el precio. **El agente de handoff es también el que
-   * escribe las FASES del cronograma**, así que el hermano menor no perdía solo su documento:
-   * se quedaba con CERO fases, con una pantalla que decía «Generá el Handoff» y sin botón.
+   * ── SE DIO VUELTA DOS VECES, Y ESTE TEST ES EL REGISTRO ────────────────────
+   * (Tanda F, 2026-08-07) Este test afirmaba que un proyecto colgado de otro NO nacía con
+   * documento propio. Era correcto mientras el objetivo fuera «que no existan dos documentos del
+   * mismo trato»; dejó de serlo cuando se midió el precio: **el agente de handoff es también el
+   * que escribe las FASES del cronograma**, así que el hermano menor se quedaba con CERO fases y
+   * una pantalla sin botón.
    *
-   * Lo que reemplaza a la redirección es la NOTA que nombra al hermano mayor, y por eso este
-   * test la afirma: sin ella el hermano menor tiene documento propio pero escrito con el
-   * material de la implementación, que es el peor de los tres mundos.
+   * (Tanda G, 2026-08-08) Después este test exigía que el handoff naciera CON la nota de
+   * exclusión nombrada. También dejó de ser correcto: persistir la nota la volvía perdible —
+   * «Regenerar» la borraba, tres de las cinco puertas que crean un `Handoff` nunca la escribían,
+   * y un handoff viejo se quedaba sin ella para siempre. Ahora la nota se RECALCULA en cada
+   * generación (`exclusionDelSistema` + `componerExclusiones`), así que el `create` no la lleva
+   * y eso es el arreglo, no un olvido.
    */
-  it("LA guarda: un proyecto que cuelga de otro nace con SU documento y la nota que nombra al mayor", async () => {
-    // El hermano mayor existe en la base: es de donde sale el NOMBRE de la nota.
+  it("LA guarda: un proyecto que cuelga de otro nace con SU documento, y SIN nota persistida", async () => {
+    // El hermano mayor existe en la base (de él sale el nombre de la nota, ya no al crear).
     sembrar({ id: "proyecto-cs", name: "Spectrum - MKT + SALES" });
     sembrar({ altaHermanoHsId: "hs-hermano" });
     espejoEscribe = { hubspotPipelineId: DEV, hermanoCsProjectId: "proyecto-cs" };
@@ -392,15 +395,16 @@ describe("al terminar", () => {
     expect(r.termino).toBe(true);
     expect(db.handoffs, "el hermano menor se quedó sin documento — y por lo tanto sin fases").toHaveLength(1);
     expect(canvasesCreados).toEqual(["p1"]);
-    const nota = (db.handoffs[0] as { contextExclusions: string | null }).contextExclusions;
-    expect(nota, "la nota no nombra al hermano mayor: la IA va a repetir el alcance de la implementación").toContain(
-      "Spectrum - MKT + SALES",
-    );
+    const nota = (db.handoffs[0] as { contextExclusions?: string | null }).contextExclusions;
+    expect(
+      nota ?? null,
+      "volvió a persistir la nota al crear: «Regenerar» puede borrarla otra vez",
+    ).toBeNull();
   });
 
-  it("si el hermano mayor apunta a un proyecto borrado, la nota degrada en vez de romper", async () => {
-    /* `hermanoCsProjectId` es un puntero BLANDO (sin clave foránea). Un id muerto no puede
-       tumbar un alta: se cae a la nota genérica —o a ninguna— y el proyecto termina igual. */
+  it("el alta no consulta al hermano mayor para crear el handoff", async () => {
+    /* Consecuencia directa de recalcular: el alta dejó de necesitar el nombre del mayor, así que
+       un puntero a un proyecto borrado no puede hacerla fallar por esa vía. */
     sembrar({ altaHermanoHsId: "hs-hermano" });
     espejoEscribe = { hubspotPipelineId: DEV, hermanoCsProjectId: "proyecto-que-no-existe" };
 

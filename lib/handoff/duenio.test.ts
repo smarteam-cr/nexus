@@ -19,6 +19,7 @@ import path from "node:path";
 import {
   duenioDelHandoff,
   contextExclusionesPorDefecto,
+  componerExclusiones,
   exclusionNombrada,
   EXCLUSION_IMPLEMENTACION_HUBSPOT,
 } from "./duenio";
@@ -338,10 +339,61 @@ describe("candado: las escrituras del handoff pasan por el veto", () => {
   });
 });
 
-describe("candado: los DOS sitios que crean un Handoff nuevo ponen la nota por defecto", () => {
+describe("componerExclusiones — la del sistema + la del CSE", () => {
+  const SIS = "Ignora todo lo relacionado a «Spectrum - MKT + SALES».";
+  const CSE = "No hables del proyecto de contratos.";
+
+  it("las junta, con la del sistema PRIMERO", () => {
+    const r = componerExclusiones(SIS, CSE);
+    expect(r).toContain(SIS);
+    expect(r).toContain(CSE);
+    expect(r!.indexOf(SIS)).toBeLessThan(r!.indexOf(CSE));
+  });
+
+  it("cualquiera de las dos sola vale por sí misma", () => {
+    expect(componerExclusiones(SIS, null)).toBe(SIS);
+    expect(componerExclusiones(null, CSE)).toBe(CSE);
+    expect(componerExclusiones(SIS, "   ")).toBe(SIS);
+    expect(componerExclusiones("", CSE)).toBe(CSE);
+  });
+
+  it("sin ninguna de las dos, null (y el prompt no lleva bloque)", () => {
+    expect(componerExclusiones(null, null)).toBeNull();
+    expect(componerExclusiones("  ", "")).toBeNull();
+  });
+
   /**
-   * ⚠ Sobre el fuente sin comentarios: la prosa que explica el porqué nombra el símbolo
-   * vigilado, así que un scan crudo pasa en verde con el import sin usarse.
+   * LA guarda de esta función. Hay handoffs con la nota YA persistida —los que nacieron entre la
+   * Tanda F y el 2026-08-08— y sin la deduplicación verían la misma frase DOS veces en el prompt,
+   * lo que además de ruido le sugiere al modelo que hay dos exclusiones distintas.
+   * La edición que la pone en rojo: borrar la línea del `includes`.
+   */
+  it("LA guarda: no duplica cuando el CSE ya tiene adentro la del sistema", () => {
+    const yaLaTiene = `${SIS}\nAdemás, ignorá los contratos.`;
+    const r = componerExclusiones(SIS, yaLaTiene);
+    expect(r).toBe(yaLaTiene);
+    expect(r!.split(SIS).length - 1, "la frase del sistema aparece dos veces").toBe(1);
+  });
+});
+
+describe("candado: la exclusion del sistema se RECALCULA, no se persiste", () => {
+  /**
+   * -- EL DISENO SE DIO VUELTA EL 2026-08-08, Y ESTE DESCRIBE ES EL REGISTRO ---
+   * Hasta hoy la nota del sistema se ESCRIBIA en la fila `Handoff`, una sola vez, en el instante
+   * en que nacia. Tres agujeros medidos:
+   *
+   *  1. **«Regenerar» la borraba.** El textarea de la pantalla se sembraba una unica vez -cuando
+   *     el handoff todavia no existia, o sea vacio- y no se re-sembraba nunca. Al regenerar, el
+   *     paso 0 veia «vacio != lo guardado», lo leia como «el CSE la borro» y mandaba un PATCH a
+   *     null. La segunda corrida -la que uno hace porque el documento no le gusto- salia SIN
+   *     exclusiones, y la nota quedaba destruida.
+   *  2. **Cinco puertas crean un `Handoff` y solo dos escribian la nota** (el asistente viejo, el
+   *     upsert del PATCH, el de excluir engagements, un script de migracion).
+   *  3. Un handoff nacido antes de todo esto se quedaba sin exclusion para siempre.
+   *
+   * Recalculada en cada generacion, los tres desaparecen: no se puede borrar, no depende de quien
+   * creo la fila, y un handoff viejo la recibe igual. `Handoff.contextExclusions` pasa a
+   * significar UNA sola cosa: lo que escribio el CSE a mano.
    */
   const sinComentarios = (rel: string): string =>
     fs
@@ -351,71 +403,96 @@ describe("candado: los DOS sitios que crean un Handoff nuevo ponen la nota por d
       .filter((l) => !l.trimStart().startsWith("//") && !l.trimStart().startsWith("*"))
       .join("\n");
 
-  it("el alta única: el create del handoff usa la función, no un literal a mano", () => {
-    const src = sinComentarios("lib/projects/alta-runner.ts");
-    const i = src.lastIndexOf("await tx.handoff.create({");
-    expect(i, "se movió el create del handoff; revisar esta guarda").toBeGreaterThan(0);
-    const bloque = src.slice(i, src.indexOf("});", i));
-    expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(80);
-    expect(
-      bloque,
-      "el handoff del alta única dejó de nacer con la nota por defecto",
-    ).toContain("contextExclusions");
-    expect(src, "dejó de calcular la nota con la función compartida").toContain(
-      "contextExclusionesPorDefecto(",
-    );
-    expect(src, "dejó de consultar si la empresa tiene implementación").toContain(
-      "tieneOTuvoImplementacionHubSpot(",
-    );
-  });
-
-  it("el «Generar» de la pantalla: el ensure del handoff también", () => {
-    const src = sinComentarios("app/api/projects/[projectId]/handoff/route.ts");
-    const i = src.lastIndexOf("await tx.handoff.create({");
-    expect(i, "se movió el create del handoff; revisar esta guarda").toBeGreaterThan(0);
-    const bloque = src.slice(i, src.indexOf("});", i));
-    expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(80);
-    expect(
-      bloque,
-      "el handoff que nace al apretar Generar dejó de traer la nota por defecto",
-    ).toContain("contextExclusions");
-    expect(src, "dejó de calcular la nota con la función compartida").toContain(
-      "contextExclusionesPorDefecto(",
-    );
-  });
-
   /**
-   * ── LA GUARDA DE F-B (Tanda G, 2026-08-08) ──────────────────────────────────
-   * Los DOS sitios tienen que pasar el NOMBRE del hermano mayor, no solo el pipeline. La
-   * asimetría existió: el alta pasaba el nombre y el ensure no — y el ensure es exactamente por
-   * donde nace el handoff de un hermano cuyo alta corrió ANTES de la Tanda F (los dos reales:
-   * Spectrum y Wherex). Con la nota genérica, la única compensación de «el hermano ve todo el
-   * material» pierde su palanca más fuerte, sin romper tipos ni build.
-   *
-   * La edición que la pone en rojo: volver cualquiera de los dos calls a la forma vieja
-   * (solo `hubspotPipelineId` + `tieneImplementacionHubSpot`).
+   * LA guarda. La edicion que la pone en rojo: volver a poner `contextExclusions` en cualquiera
+   * de los dos `handoff.create`. No rompe tipos ni build - solo hace que la nota vuelva a ser
+   * perdible, que es de lo que se acaba de salir.
    */
-  it("LA guarda: los DOS sitios nombran al hermano mayor y al proyecto propio", () => {
+  it("LA guarda: los dos sitios que crean un Handoff lo hacen SIN nota", () => {
     for (const rel of [
       "lib/projects/alta-runner.ts",
       "app/api/projects/[projectId]/handoff/route.ts",
     ]) {
       const src = sinComentarios(rel);
-      const i = src.indexOf("contextExclusionesPorDefecto({");
-      expect(i, `${rel}: se movió el call; revisar esta guarda`).toBeGreaterThan(0);
-      const llamada = src.slice(i, src.indexOf("})", i));
-      expect(llamada.length, "la guarda no está mirando nada").toBeGreaterThan(100);
-      expect(llamada, `${rel}: la nota dejó de nombrar al hermano mayor`).toContain(
-        "nombreDelHermanoMayor",
-      );
-      expect(llamada, `${rel}: la nota dejó de cerrar con el foco en este proyecto`).toContain(
-        "nombreDelProyecto",
-      );
-      // Y el nombre sale del puntero real, no de un literal.
-      expect(src, `${rel}: dejó de resolver el hermano por su puntero`).toContain(
-        "hermanoCsProjectId",
+      const i = src.lastIndexOf("handoff.create({");
+      expect(i, `${rel}: se movio el create del handoff; revisar esta guarda`).toBeGreaterThan(0);
+      const bloque = src.slice(i, src.indexOf("});", i));
+      expect(bloque.length, "la guarda no esta mirando nada").toBeGreaterThan(60);
+      expect(
+        bloque,
+        `${rel}: volvio a persistir la nota - «Regenerar» puede borrarla otra vez`,
+      ).not.toContain("contextExclusions");
+    }
+  });
+
+  it("ninguno de los dos calcula ya la nota por defecto", () => {
+    /* Si siguieran calculandola sin persistirla seria trabajo muerto; si la persistieran, es el
+       bug de arriba. En los dos casos el simbolo sobra. */
+    for (const rel of [
+      "lib/projects/alta-runner.ts",
+      "app/api/projects/[projectId]/handoff/route.ts",
+    ]) {
+      const src = sinComentarios(rel);
+      expect(src, `${rel}: quedo calculando la nota al crear`).not.toContain(
+        "contextExclusionesPorDefecto(",
       );
     }
+  });
+
+  it("LA guarda de la generacion: analyze recalcula y COMPONE con lo del CSE", () => {
+    /* Es la otra mitad: sin esta llamada, dejar de persistir habria dejado a TODOS los hermanos
+       menores sin ninguna exclusion. La edicion que la pone en rojo: volver a leer solo
+       `h.contextExclusions` en analyze. */
+    /* El TRAMO exacto: desde que se declara el bloque de exclusiones hasta que se arma el
+       mensaje. Afirmar sobre el archivo entero dejaría la guarda decorativa — los dos símbolos
+       podrían quedar importados y sin usar. */
+    const src = sinComentarios("app/api/clients/[id]/analyze/route.ts");
+    const i = src.indexOf('let cseExclusionsBlock = ""');
+    expect(i, "cambio la forma del bloque de exclusiones; revisar esta guarda").toBeGreaterThan(-1);
+    const tramo = src.slice(i, src.indexOf("const baseUserMessage", i));
+    expect(tramo.length, "la guarda no esta mirando nada").toBeGreaterThan(300);
+    expect(tramo, "la generacion dejo de componer la exclusion del sistema").toContain(
+      "componerExclusiones(",
+    );
+    expect(tramo, "la generacion dejo de recalcular la exclusion del sistema").toContain(
+      "exclusionDelSistema(",
+    );
+  });
+
+  it("la pantalla PINTA la exclusion que pone la app", () => {
+    /* Un dato que llega y no se pinta es identico a uno que no llega: el CSE abriria el panel,
+       veria el campo vacio y escribiria a mano lo que la app ya dice. */
+    const api = sinComentarios("app/api/projects/[projectId]/handoff/route.ts");
+    expect(api, "el GET dejo de mandar la exclusion automatica").toContain("exclusionAutomatica");
+
+    /* ⚠ SOBRE EL BLOQUE QUE LA PINTA, NO SOBRE EL ARCHIVO. La primera version de esta guarda
+       buscaba `status.exclusionAutomatica` a secas y salio VERDE con el bloque borrado: el
+       simbolo aparece una segunda vez, como simple condicion del texto de ayuda de abajo. Se
+       cazo rompiendola a proposito. El rotulo "La pone la app" solo existe en el bloque real. */
+    const ui = sinComentarios("components/clients/ProjectHandoffSection.tsx");
+    expect(ui, "la pantalla dejo de pintar la exclusion automatica").toContain("La pone la app");
+    expect(ui, "el bloque quedo sin el texto de la exclusion").toContain(
+      "{status.exclusionAutomatica}",
+    );
+  });
+
+  /**
+   * -- LA GUARDA DEL BUG DE «REGENERAR» ----------------------------------------
+   * El PATCH del paso 0 tiene que salir SOLO si una persona tipeo. Comparar contra el status era
+   * el bug: un textarea que nunca se re-sembro se ve igual que uno que alguien vacio a mano.
+   * La edicion que la pone en rojo: sacar `exclusionsDirty &&` de esa condicion.
+   */
+  it("LA guarda: «Regenerar» no puede borrar la nota", () => {
+    const ui = sinComentarios("components/clients/ProjectHandoffSection.tsx");
+    const i = ui.indexOf("const pendingExcl");
+    expect(i, "cambio el paso 0 de generar; revisar esta guarda").toBeGreaterThan(-1);
+    const bloque = ui.slice(i, i + 400);
+    expect(
+      bloque,
+      "el PATCH del paso 0 volvio a salir sin preguntar si una persona escribio",
+    ).toContain("exclusionsDirty &&");
+    // Y el draft se re-siembra en cada refetch mientras nadie haya tocado.
+    expect(ui, "el textarea volvio a sembrarse una sola vez").not.toContain("exclusionsLoaded");
   });
 });
 
@@ -451,7 +528,7 @@ describe("candado: el deal del mayor entra ETIQUETADO, no filtrado", () => {
       "ESTE NEGOCIO ES DEL PROYECTO PRINCIPAL",
     );
     // El nombre del mayor sale del puntero real, no de una heurística de strings.
-    const resolver = src.slice(src.indexOf("hermanoMayorDelDeal ="));
+    const resolver = src.slice(src.indexOf("const hermanoMayor ="));
     expect(resolver.length, "la guarda no está mirando nada").toBeGreaterThan(100);
     expect(resolver.slice(0, 400), "dejó de resolver por hermanoCsProjectId").toContain(
       "hermanoCsProjectId",
@@ -498,8 +575,8 @@ describe("candado: la rama handoff lee el documento del mayor, etiquetado", () =
     const llamada = src.indexOf("loadHandoffDelHermanoMayorContext(");
     expect(llamada, "la rama handoff dejó de leer el documento del mayor").toBeGreaterThan(-1);
     // Gateado por el puntero real: sin hermano, ni una query de más.
-    const gate = src.lastIndexOf("hermanoCsProjectId", llamada);
-    expect(gate, "la llamada perdió su gate por hermanoCsProjectId").toBeGreaterThan(-1);
+    const gate = src.lastIndexOf("isHandoffAgent && hermanoMayor", llamada);
+    expect(gate, "la llamada perdió su gate por el hermano mayor").toBeGreaterThan(-1);
     expect(llamada - gate, "el gate quedó lejos de la llamada; revisar esta guarda").toBeLessThan(400);
     // Y el bloque LLEGA al modelo: un dato que llega y no se pinta es idéntico a uno que no llega.
     expect(src, "el bloque del mayor ya no se interpola en el mensaje").toContain(
@@ -521,6 +598,79 @@ describe("candado: la rama handoff lee el documento del mayor, etiquetado", () =
       "HANDOFF_DEL_MAYOR_KEYS",
     );
     expect(cuerpo, "se cayó el cinturón cross-cliente").toContain("clientId");
+  });
+});
+
+describe("candado: el zoom también filtra datos, no solo pide", () => {
+  /**
+   * ── LA MITAD ESTRUCTURAL DEL ZOOM (2026-08-08) ──────────────────────────────
+   * El repo tiene escrita, tras un incidente, la lección «filtrar datos, no rogarle al modelo».
+   * Hasta hoy el zoom del hermano menor era todo ruego: la nota de exclusión es texto libre que
+   * no filtra nada, mientras tres queries traían al cliente ENTERO —documentos adjuntos (12.000
+   * caracteres, el bloque más pesado empatado con las transcripciones), notas del workspace y
+   * tarjetas de contexto—, sin decir de qué proyecto era cada cosa. Y las tres tablas YA guardan
+   * su `projectId`: el filtro estaba a un `where` de distancia y no se había puesto.
+   *
+   * ⚠ `projectId: null` se incluye a propósito — es material del cliente que nadie asignó, y
+   * sacarlo dejaría al handoff sin contexto en vez de enfocado.
+   *
+   * La edición que pone esto en rojo: borrar `soloDeEsteProyecto` de cualquiera de las tres
+   * queries. Nada falla: el prompt simplemente vuelve a llenarse de la implementación.
+   */
+  const src = (): string =>
+    fs
+      .readFileSync(path.join(RAIZ, "app/api/clients/[id]/analyze/route.ts"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split(/\r?\n/)
+      .filter((l) => !l.trimStart().startsWith("//") && !l.trimStart().startsWith("*"))
+      .join("\n");
+
+  it("LA guarda: las TRES fuentes por-cliente se acotan al proyecto en el handoff", () => {
+    const s = src();
+    const i = s.indexOf("const soloDeEsteProyecto");
+    expect(i, "desapareció el filtro por proyecto del handoff").toBeGreaterThan(-1);
+
+    // El filtro tolera lo no asignado: sacarlo dejaría al handoff sin contexto, no enfocado.
+    const def = s.slice(i, i + 300);
+    expect(def, "el filtro dejó de tolerar el material sin proyecto asignado").toContain(
+      "projectId: null",
+    );
+
+    /* Y se aplica en las TRES queries, no en una. El tramo arranca en la primera de ellas y no
+       en la definición del filtro: entre medio está el destructuring del `Promise.allSettled`,
+       que hacía que el corte cayera antes de las queries y la guarda mirara 231 caracteres de
+       nada (cazado al romperla). */
+    const desde = s.indexOf("prisma.clientContextCard.findMany", i);
+    expect(desde, "cambió el bloque de lecturas del cliente; revisar esta guarda").toBeGreaterThan(-1);
+    const tramo = s.slice(desde, s.indexOf("bodyProjectId", desde));
+    expect(tramo.length, "la guarda no está mirando nada").toBeGreaterThan(300);
+    for (const tabla of ["clientContextCard", "stageNote", "clientDocument"]) {
+      const q = tramo.indexOf(`prisma.${tabla}.findMany`);
+      expect(q, `cambió la query de ${tabla}; revisar esta guarda`).toBeGreaterThan(-1);
+      expect(
+        tramo.slice(q, q + 260),
+        `${tabla} volvió a traer al cliente ENTERO al handoff del hermano menor`,
+      ).toContain("soloDeEsteProyecto");
+    }
+  });
+
+  it("el historial de HubSpot entra ETIQUETADO cuando hay hermano mayor", () => {
+    /* Es el bloque más pesado del prompt y es POR EMPRESA: sobre el Conector de Spectrum, 22 de
+       22 registros son de la implementación. No se filtra (el hermano menor ve todo el material)
+       pero sin la etiqueta el modelo no tiene NINGUNA forma de saber que no son de este proyecto.
+       La edición que la pone en rojo: sacar `${caveatDelMayor}` del bloque. */
+    const s = src();
+    const i = s.indexOf("const caveatDelMayor");
+    expect(i, "desapareció el caveat del historial de HubSpot").toBeGreaterThan(-1);
+    expect(s.slice(i, i + 700), "el caveat dejó de nombrar al hermano mayor").toContain(
+      "hermanoMayor",
+    );
+    const bloque = s.indexOf("=== TIMELINE DE HUBSPOT");
+    expect(bloque, "cambió el bloque del timeline; revisar esta guarda").toBeGreaterThan(-1);
+    expect(
+      s.slice(bloque, bloque + 200),
+      "el historial volvió a entrar sin decir que puede ser de la implementación",
+    ).toContain("${caveatDelMayor}");
   });
 });
 

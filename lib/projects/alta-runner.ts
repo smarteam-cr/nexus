@@ -4,11 +4,7 @@ import { crearProjectRecord, hasProjectsWriteScope } from "@/lib/hubspot/project
 import { espejarProyectoRecienCreado } from "@/lib/hubspot/sync-projects";
 import { createHandoffCanvas } from "@/lib/canvas/default-canvases";
 import { canvasOf } from "@/lib/pieces/canvas-query";
-import {
-  duenioDelHandoff,
-  contextExclusionesPorDefecto,
-  tieneOTuvoImplementacionHubSpot,
-} from "@/lib/handoff/duenio";
+import { duenioDelHandoff } from "@/lib/handoff/duenio";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { altaEnCurso, parseEstadoDeAlta, type EstadoDeAltaEnBase } from "@/lib/projects/alta";
 
@@ -327,31 +323,6 @@ async function terminarElAlta(
     tieneHandoffPropioConContenido: ctx.yaTieneHandoff,
   });
 
-  /* Fuera de la transacción: son lecturas, y su única consecuencia es un VALOR POR DEFECTO que
-     cualquier CSE puede editar después. No vale la pena pagar el candado de la tx por eso.
-
-     ⚠ El nombre del hermano mayor es lo que vuelve NOMBRADA la nota, y una exclusión con nombre
-     propio pesa mucho más que una genérica — que es exactamente lo que este proyecto necesita,
-     porque ve todo el material del cliente (decisión de negocio del 2026-08-06). Si el hermano
-     apuntado no existe, se cae a la nota genérica en vez de romper. */
-  const hermanoMayor = ctx.hermanoCsProjectId
-    ? await prisma.project.findUnique({
-        where: { id: ctx.hermanoCsProjectId },
-        select: { name: true },
-      })
-    : null;
-  /* La rama `redirigido` es hoy inalcanzable —las tres filas dicen `handoffDelHermano: false`—
-     y se conserva a propósito: si esa celda vuelve a `true`, un proyecto redirigido no tiene
-     handoff propio donde escribir la nota. */
-  const contextExclusions = duenio.redirigido
-    ? null
-    : contextExclusionesPorDefecto({
-        hubspotPipelineId: ctx.hubspotPipelineId,
-        nombreDelHermanoMayor: hermanoMayor?.name ?? null,
-        nombreDelProyecto: ctx.nombre,
-        tieneImplementacionHubSpot: await tieneOTuvoImplementacionHubSpot(ctx.clientId, projectId),
-      });
-
   await prisma.$transaction(async (tx) => {
     if (!duenio.redirigido && !ctx.yaTieneHandoff) {
       if (!ctx.yaTieneCanvasHandoff) await createHandoffCanvas(projectId, tx);
@@ -364,9 +335,13 @@ async function terminarElAlta(
              este handoff sincronice va a LINKEARSE a ese (caso A de `syncHandoffToHubspot`), no
              a crear un segundo. */
           hubspotSyncStatus: "pending",
-          // Desarrollo/Sitio que cuelga de una Implementación —o cuya empresa tiene una aparte—:
-          // nace con la nota de que la IA no repita el alcance de ESA. Ver `duenio.ts`.
-          contextExclusions,
+          /* ⚠ NACE SIN NOTA DE EXCLUSIÓN, Y ESO ES EL ARREGLO, NO UN OLVIDO (2026-08-08).
+             La nota del sistema («ignorá lo de la implementación X») ya NO se persiste: se
+             RECALCULA en cada generación (`exclusionDelSistema` + `componerExclusiones`, ver
+             lib/handoff/duenio.ts). Persistirla la volvía perdible de tres maneras —«Regenerar»
+             la borraba, tres de las cinco puertas que crean un Handoff nunca la escribían, y un
+             handoff viejo se quedaba sin ella para siempre—. Esta columna ahora significa UNA
+             sola cosa: lo que escribió el CSE a mano. */
         },
       });
     }

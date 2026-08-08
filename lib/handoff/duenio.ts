@@ -152,6 +152,43 @@ export function contextExclusionesPorDefecto(input: {
 }
 
 /**
+ * PURA. Junta la exclusión que pone LA APP con las que escribió el CSE.
+ *
+ * ── POR QUÉ SE COMPONE EN LECTURA Y NO SE GUARDA (decisión de Elías, 2026-08-08) ──
+ * Hasta hoy la nota del sistema se ESCRIBÍA una sola vez, en el instante en que nacía la entidad
+ * `Handoff`, y nunca más. Eso tenía tres agujeros que se descubrieron midiendo:
+ *
+ *  1. **«Regenerar» la borraba.** El textarea de la pantalla se sembraba una única vez —cuando el
+ *     handoff todavía no existía, o sea vacío— y no se volvía a sembrar nunca. Al regenerar, la
+ *     pantalla veía «vacío ≠ la nota guardada», lo interpretaba como «el CSE la borró» y mandaba
+ *     un PATCH a null. La segunda corrida —justo la que uno hace porque el documento no le gustó—
+ *     salía SIN exclusiones, y la nota quedaba destruida para siempre.
+ *  2. **Cinco puertas crean un `Handoff` y solo dos escribían la nota** (el asistente viejo, el
+ *     upsert del PATCH, el de excluir engagements, un script de migración).
+ *  3. Un handoff nacido antes de todo esto se quedaba sin exclusión **para siempre**: nada la
+ *     reponía.
+ *
+ * Componiendo en lectura, los tres desaparecen a la vez y sin migración: la exclusión del sistema
+ * se RECALCULA en cada corrida, así que no se puede borrar, no depende de quién creó la fila, y
+ * un handoff viejo la recibe igual. `Handoff.contextExclusions` pasa a significar una sola cosa:
+ * **lo que escribió el CSE**.
+ *
+ * ⚠ La deduplicación no es cosmética: hay handoffs con la nota YA persistida (los que nacieron
+ * entre la Tanda F y hoy). Sin el `includes`, esos verían la misma frase dos veces.
+ */
+export function componerExclusiones(
+  delSistema: string | null | undefined,
+  delCse: string | null | undefined,
+): string | null {
+  const sis = delSistema?.trim() || null;
+  const cse = delCse?.trim() || null;
+  if (!sis) return cse;
+  if (!cse) return sis;
+  if (cse.includes(sis)) return cse;
+  return `${sis}\n${cse}`;
+}
+
+/**
  * ¿La empresa tiene, o tuvo alguna vez, un proyecto en el pipeline de Implementación de
  * HubSpot? "Tuvo" a propósito —sin filtrar por activo—: aunque esa implementación ya haya
  * cerrado, sus reuniones viejas siguen en la misma línea de tiempo de la company y le siguen
@@ -170,6 +207,43 @@ export async function tieneOTuvoImplementacionHubSpot(
     },
   });
   return n > 0;
+}
+
+/**
+ * La exclusión que pone LA APP para este proyecto, resuelta contra la base. Un solo lugar, para
+ * que la generación y la pantalla no puedan mostrar cosas distintas.
+ *
+ * `null` cuando no corresponde (una Implementación de HubSpot, un pipeline sin declarar, o un
+ * Desarrollo/Sitio de una empresa que nunca tuvo implementación).
+ */
+export async function exclusionDelSistema(projectId: string): Promise<string | null> {
+  const p = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { name: true, clientId: true, hubspotPipelineId: true, hermanoCsProjectId: true },
+  });
+  if (!p) return null;
+
+  const def = resolvePipeline(p.hubspotPipelineId);
+  // Corte temprano: una Implementación nunca se excluye a sí misma, y sin este `return` la
+  // consulta de abajo se pagaría para los ~100 proyectos de Customer Success.
+  if (!def?.canBeSiblingOf.includes("customer-success")) return null;
+
+  const hermanoMayor = p.hermanoCsProjectId
+    ? await prisma.project.findUnique({
+        where: { id: p.hermanoCsProjectId },
+        select: { name: true },
+      })
+    : null;
+
+  return contextExclusionesPorDefecto({
+    hubspotPipelineId: p.hubspotPipelineId,
+    nombreDelHermanoMayor: hermanoMayor?.name ?? null,
+    nombreDelProyecto: p.name,
+    // Solo se paga si NO cuelga de nadie: con hermano, la nota nombrada ya está decidida.
+    tieneImplementacionHubSpot: hermanoMayor
+      ? true
+      : await tieneOTuvoImplementacionHubSpot(p.clientId, projectId),
+  });
 }
 
 export interface DuenioResuelto extends DuenioDelHandoff {
