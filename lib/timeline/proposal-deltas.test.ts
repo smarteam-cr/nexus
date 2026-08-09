@@ -5,13 +5,16 @@
  * fases sin `tasks` — eso JAMÁS puede leerse como "borrar tareas". Y una propuesta idéntica a lo
  * existente produce cero deltas (no-op → no molesta al CSE).
  */
-import { test, expect } from "vitest";
+import { describe, it, test, expect } from "vitest";
 import {
   computeProposalDeltas,
   describeChange,
   describeChanges,
   buildPhaseOrder,
+  anchorAfterDeltas,
+  phasesAfterDeltas,
 } from "./proposal-deltas";
+import { projectedEnd, endShiftDays } from "./weeks";
 
 const cur = (over: Partial<Parameters<typeof computeProposalDeltas>[0][number]> = {}) => ({
   id: "ph1",
@@ -147,6 +150,92 @@ test("buildPhaseOrder: dos fases nuevas consecutivas conservan su orden relativo
     { kind: "new", key: "add:1", phase: n1 },
     { kind: "new", key: "add:2", phase: n2 },
   ]);
+});
+
+/**
+ * ── LA PROYECCIÓN DEL CALENDARIO (Tanda J) ──────────────────────────────────
+ * `phasesAfterDeltas` + `anchorAfterDeltas` + `projectedEnd` es lo que permite decir «si
+ * aceptás esto, el cierre se corre 21 días» ANTES de aceptar. Lo que fija esta tabla: que la
+ * proyección respete el orden (que mueve fechas), el `startWeek` explícito (que puede NO
+ * moverlas) y la normalización `undefined → null` que hace el endpoint al escribir.
+ */
+describe("phasesAfterDeltas / anchorAfterDeltas", () => {
+  const ANCLA = "2026-06-01T00:00:00.000Z";
+  const a = cur({ id: "a", durationWeeks: 4, startWeek: null });
+  const b = cur({ id: "b", durationWeeks: 6, startWeek: null });
+  const corrimiento = (proposal: Parameters<typeof phasesAfterDeltas>[1], keys: string[]) =>
+    endShiftDays(
+      projectedEnd(ANCLA, [a, b]),
+      projectedEnd(
+        anchorAfterDeltas(ANCLA, proposal, new Set(keys)),
+        phasesAfterDeltas([a, b], proposal, new Set(keys)),
+      ),
+    );
+
+  it("aceptar nada no mueve el cierre", () => {
+    const proposal = { anchorStartDate: null, phases: [{ ...a, durationWeeks: 9 }, { ...b }] };
+    expect(corrimiento(proposal, [])).toBe(0);
+  });
+
+  it("aceptar un cambio de duración mueve el cierre exactamente esas semanas", () => {
+    const proposal = { anchorStartDate: null, phases: [{ ...a, durationWeeks: 7 }, { ...b }] };
+    expect(corrimiento(proposal, ["mod:a"])).toBe(21); // +3 semanas
+  });
+
+  it("aceptar SOLO el arranque mueve el cierre los días del ancla", () => {
+    const proposal = { anchorStartDate: "2026-06-08T00:00:00.000Z", phases: [{ ...a }, { ...b }] };
+    expect(corrimiento(proposal, ["anchor"])).toBe(7);
+    expect(anchorAfterDeltas(ANCLA, proposal, new Set())).toBe(ANCLA); // sin aceptar, no se mueve
+  });
+
+  it("una fase nueva CONTIGUA suma su duración al cierre", () => {
+    const nueva = { name: "QA", durationWeeks: 2, sessionCount: null, notes: null };
+    const proposal = { anchorStartDate: null, phases: [{ ...a }, nueva, { ...b }] };
+    expect(corrimiento(proposal, ["add:1"])).toBe(14);
+  });
+
+  it("⚠ una fase nueva EN PARALELO al FINAL, dentro del span, NO mueve el cierre", () => {
+    /* La fila que distingue una proyección de verdad de una suma de duraciones: arranca en la
+       semana 0 y dura 3, así que cabe adentro de las 10 que el proyecto ya ocupa y el cierre no
+       se toca. Con `totalWeeks` (esfuerzo) esto daría +21 días de promesa inventada.
+       La edición que la pone en rojo: que phasesAfterDeltas ignore el `startWeek` propuesto. */
+    const paralela = { name: "Prep", durationWeeks: 3, startWeek: 0, sessionCount: null, notes: null };
+    const proposal = { anchorStartDate: null, phases: [{ ...a }, { ...b }, paralela] };
+    expect(corrimiento(proposal, ["add:2"])).toBe(0);
+  });
+
+  it("⚠ la misma fase paralela EN EL MEDIO sí mueve el cierre — lo ADELANTA", () => {
+    /* Contraintuitivo y real: `computePhaseRanges` deja el cursor en el fin de la ÚLTIMA fase
+       procesada (weeks.ts), así que una paralela intercalada arrastra hacia atrás a todo lo que
+       sigue. El span pasa de 10 a 9 semanas. Se congela porque es exactamente la clase de
+       corrimiento que nadie espera y que el aviso tiene que poder anunciar. */
+    const paralela = { name: "Prep", durationWeeks: 3, startWeek: 0, sessionCount: null, notes: null };
+    const proposal = { anchorStartDate: null, phases: [{ ...a }, paralela, { ...b }] };
+    expect(corrimiento(proposal, ["add:1"])).toBe(-7);
+  });
+
+  it("el orden aceptado se refleja en la proyección (reorder + startWeek explícito)", () => {
+    const conInicio = cur({ id: "b", durationWeeks: 6, startWeek: 4 });
+    const proposal = { anchorStartDate: null, phases: [{ ...conInicio }, { ...a }] };
+    // Sin aceptar el reorder: a (0-4) y b explícita en 4 → span 10.
+    expect(phasesAfterDeltas([a, conInicio], proposal, new Set())).toEqual([
+      { durationWeeks: 4, startWeek: null },
+      { durationWeeks: 6, startWeek: 4 },
+    ]);
+    // Con el reorder aceptado, b va primero y a la sigue: el orden viaja a la proyección.
+    expect(phasesAfterDeltas([a, conInicio], proposal, new Set(["reorder"]))).toEqual([
+      { durationWeeks: 6, startWeek: 4 },
+      { durationWeeks: 4, startWeek: null },
+    ]);
+  });
+
+  it("normaliza undefined → null, igual que lo que escribe el endpoint", () => {
+    const sinInicio = { id: "a", name: "X", durationWeeks: 4, sessionCount: null, notes: null };
+    const proposal = { anchorStartDate: null, phases: [sinInicio] };
+    expect(phasesAfterDeltas([a], proposal, new Set(["mod:a"]))).toEqual([
+      { durationWeeks: 4, startWeek: null },
+    ]);
+  });
 });
 
 // ── describeChanges: qué se LEE en el badge del Gantt ──────────────────────────

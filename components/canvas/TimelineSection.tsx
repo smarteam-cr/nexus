@@ -37,6 +37,7 @@ import {
   absoluteWeek,
   overduePlannedEnd,
   isOverdueByDate,
+  projectedEnd,
 } from "@/lib/timeline/weeks";
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
@@ -176,7 +177,10 @@ export default function TimelineSection({
     : null;
   // Fecha de cierre proyectada: convierte un número de atraso en un compromiso. Sale de lo que ya
   // está en pantalla (anchor + span), sin datos nuevos ni cambios en lo que cruza al cliente.
-  const closingDate = anchor ? fmtFull(addWeeks(anchor, total).toISOString()) : null;
+  // Desde la Tanda J la fórmula tiene UN dueño (`projectedEnd`, lib/timeline/weeks.ts): acá se
+  // consume, no se recalcula, para que el cierre que ve el equipo y el que ve el cliente no puedan
+  // divergir. El resultado es idéntico al de antes — hay un test de equivalencia que lo afirma.
+  const closingDate = projectedEnd(anchor, sorted).label;
 
   const toggleExpand = (key: string) => {
     setExpanded((prev) => {

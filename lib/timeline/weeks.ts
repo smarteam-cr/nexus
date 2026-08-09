@@ -113,6 +113,121 @@ export function fmtPhaseRange(anchor: string | null | undefined, range: PhaseRan
   return `Semana ${range.start + 1}${range.end > range.start + 1 ? `–${range.end}` : ""}`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ── EL CIERRE PROYECTADO (Tanda J, 2026-08-08) ───────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ── POR QUÉ ESTE HELPER EXISTE ───────────────────────────────────────────────
+ * La fecha de fin del proyecto NO era un dato: la aritmética estaba (`timelineSpan` +
+ * `addWeeks`) pero UN SOLO archivo la convertía en fecha —`TimelineSection.tsx`, la vista del
+ * cliente— y solo la pintaba cuando ya había atraso. El CSE nunca veía un cierre, y ningún
+ * detector avisaba cuando se movía. Acá vive la fórmula única, por el mismo motivo que el
+ * encabezado de este archivo: que la vista interna y la del cliente nunca digan fechas
+ * distintas.
+ *
+ * ⚠ SPAN (calendario), NUNCA `totalWeeks` (esfuerzo). El fin es un hecho de calendario:
+ * `timelineSpan` = la última semana ocupada. `totalWeeks` suma duraciones y con fases en
+ * PARALELO sobrecuenta — un cierre calculado así saldría más tarde que el que promete el
+ * plan, y más tarde que el que el cliente ya ve. Son dos medidas para dos preguntas y el repo
+ * usa las dos a propósito: `lib/portfolio/summary.ts` mide ALCANCE contra la línea base con
+ * esfuerzo (su `weeksDelta`), y `lib/timeline/progress-model.ts` ya dejó escrito ese reparto.
+ * Unificarlas haría que el próximo consumidor tome el esfuerzo creyendo que pide calendario.
+ *
+ * ⚠ NUNCA es input de cobranza. La plata factura con `ServicioContratado.fechaInicioFacturacion`
+ * + `duracionMeses` (un número contractual). Un cierre PROYECTADO se mueve solo cada vez que
+ * alguien edita una duración: convertirlo en input de facturación volvería una suposición en
+ * una factura — exactamente lo que `lib/projects/exige-trato.test.ts` existe para impedir. La
+ * divergencia del ARRANQUE ya la reporta `ARRANQUE_CAMBIADO` (lib/cobranza/engine.ts) y no hay
+ * equivalente para el fin porque el fin no factura nada.
+ */
+
+/** Lo mínimo para derivar CALENDARIO: mismo shape que ya piden computePhaseRanges/timelineSpan. */
+export interface PhaseSpanLike {
+  durationWeeks: number;
+  startWeek?: number | null;
+}
+
+export interface ProjectedEnd {
+  /** Ancho de CALENDARIO en semanas (timelineSpan). 0 = no hay fases. */
+  spanWeeks: number;
+  /** Cierre proyectado = anchor + spanWeeks. null sin ancla o sin fases. */
+  date: Date | null;
+  /** "6 oct 2026" (UTC, vía fmtFull). null cuando `date` es null. */
+  label: string | null;
+}
+
+/**
+ * Cierre proyectado del cronograma. `phases` YA ordenadas por `order` (mismo contrato que
+ * `computePhaseRanges`).
+ *
+ * Sin ancla devuelve `date: null`, NUNCA una fecha de respaldo: es el mismo criterio que
+ * `overduePlannedEnd` y que `expectedPct` del modelo de avance — un valor inventado se leería
+ * como un hecho, y hoy la mitad de los cronogramas no tiene arranque. Sin fases devuelve
+ * `date: null` también: `anchor + 0` pintaría el cierre SOBRE el arranque, que se lee como
+ * «ya terminó».
+ *
+ * No recibe `now` a propósito: así es SSR-safe y no toca la excepción de zona horaria de
+ * arriba (todo lo derivado del ancla se lee en UTC).
+ */
+export function projectedEnd(
+  anchor: string | null | undefined,
+  phases: PhaseSpanLike[],
+): ProjectedEnd {
+  const spanWeeks = timelineSpan(phases);
+  if (!anchor || spanWeeks <= 0) return { spanWeeks, date: null, label: null };
+  const date = addWeeks(anchor, spanWeeks);
+  return { spanWeeks, date, label: fmtFull(date.toISOString()) };
+}
+
+/**
+ * Días de calendario que se movió el cierre (después − antes). Positivo = se alejó.
+ * `null` si a alguno de los dos lados le falta fecha: sin fecha no hay corrimiento que
+ * afirmar, y un 0 se leería como «no se movió».
+ */
+export function endShiftDays(before: ProjectedEnd, after: ProjectedEnd): number | null {
+  if (!before.date || !after.date) return null;
+  return Math.round((after.date.getTime() - before.date.getTime()) / 86_400_000);
+}
+
+/** "21 días" / "1 día" — siempre en positivo (el signo lo dice la frase que lo envuelve). */
+function diasLegibles(dias: number): string {
+  return plural(Math.abs(dias), "día", "días");
+}
+
+/**
+ * Fragmento en minúscula y sin punto, para unir con otros. Lo consume `suggestPublishReason`,
+ * que precarga el motivo de publicación — un texto que un CSE puede copiar a un mensaje al
+ * cliente. Por eso NO lleva la fecha absoluta: dice cuánto se movió, no a cuándo.
+ * `null` cuando no hay nada que decir.
+ */
+export function endShiftFragment(before: ProjectedEnd, after: ProjectedEnd): string | null {
+  if (!before.date && after.date) return "ahora hay fecha de cierre";
+  if (before.date && !after.date) return "el cronograma se quedó sin fecha de cierre";
+  const dias = endShiftDays(before, after);
+  if (dias === null || dias === 0) return null;
+  return dias > 0
+    ? `se corrió la fecha de cierre ${diasLegibles(dias)}`
+    : `se adelantó la fecha de cierre ${diasLegibles(dias)}`;
+}
+
+/**
+ * Frase completa para avisos INTERNOS (toast, banner de propuesta, razón de auditoría). Acá sí
+ * van las dos fechas: el destinatario es el equipo, que necesita saber a cuándo se movió.
+ * `null` cuando no hay nada que decir.
+ */
+export function describeEndShift(before: ProjectedEnd, after: ProjectedEnd): string | null {
+  if (!before.date && after.date) return `Ahora hay fecha de cierre: ${after.label}.`;
+  if (before.date && !after.date) {
+    return "El cronograma se quedó sin fecha de cierre (se borró el arranque).";
+  }
+  const dias = endShiftDays(before, after);
+  if (dias === null) return null;
+  if (dias === 0) return `La fecha de cierre no se mueve: sigue siendo el ${after.label}.`;
+  const verbo = dias > 0 ? "se corre" : "se adelanta";
+  return `El cierre ${verbo} ${diasLegibles(dias)}: ${before.label} → ${after.label}.`;
+}
+
 /**
  * Índice de la semana actual (0-indexed, absoluto al proyecto) según el anchor.
  * null si no hay anchor. Puede ser negativo (proyecto no arrancó) o >= total

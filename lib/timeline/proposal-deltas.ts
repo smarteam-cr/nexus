@@ -212,6 +212,62 @@ export function buildPhaseOrder(
 }
 
 /**
+ * ── LA PROYECCIÓN: CÓMO QUEDARÍA EL CALENDARIO SI ACEPTO ESTAS CLAVES ───────
+ * (Tanda J, 2026-08-08.) Hasta ahora se podía saber QUÉ cambia, pero no CUÁNDO terminaría el
+ * proyecto si se aceptara — así que el CSE aprobaba corrimientos de fecha sin verlos. Estas
+ * dos funciones simulan el resultado SIN escribir nada, y quien las consume las combina con
+ * `projectedEnd` de weeks.ts (la única fórmula del cierre).
+ *
+ * Devuelven solo lo que MUEVE EL CALENDARIO (orden + duración + inicio): nombres, notas y
+ * tipos no viajan porque no mueven ninguna fecha. No es un preview de contenido.
+ */
+
+/** El ancla resultante: la del `SET_ANCHOR` si se acepta, si no la actual. */
+export function anchorAfterDeltas(
+  currentAnchor: string | null,
+  proposal: ProposalLike,
+  acceptedKeys: Set<string>,
+): string | null {
+  if (!acceptedKeys.has("anchor")) return currentAnchor;
+  /* Mismo criterio que el delta: una propuesta con `anchorStartDate: null` NUNCA borra el
+     ancla (computeProposalDeltas ni siquiera emite el delta en ese caso). */
+  return proposal.anchorStartDate ?? currentAnchor;
+}
+
+/**
+ * Las fases resultantes, en su orden final, con las duraciones e inicios que quedarían.
+ *
+ * ⚠ Reusa `buildPhaseOrder` a propósito: el ORDEN mueve el fin cuando conviven fases
+ * contiguas y fases con `startWeek` explícito, así que recalcularlo a mano sería un segundo
+ * algoritmo de fechas — exactamente lo que este archivo y `weeks.ts` existen para no tener.
+ */
+export function phasesAfterDeltas(
+  current: CurrentPhaseLike[],
+  proposal: ProposalLike,
+  acceptedKeys: Set<string>,
+): Array<{ durationWeeks: number; startWeek?: number | null }> {
+  const actualesPorId = new Map(current.map((p) => [p.id, p]));
+  const propuestasPorId = new Map(
+    proposal.phases.filter((p): p is typeof p & { id: string } => !!p.id).map((p) => [p.id, p]),
+  );
+
+  return buildPhaseOrder(current, proposal, acceptedKeys).map((slot) => {
+    if (slot.kind === "new") {
+      return { durationWeeks: slot.phase.durationWeeks, startWeek: slot.phase.startWeek ?? null };
+    }
+    /* La fase existente conserva lo suyo salvo que su `mod:` esté aceptado. El `?? null` NO es
+       cosmético: computeProposalDeltas normaliza `undefined → null` (ver `val`) y el endpoint
+       escribe `null`, así que tomar el valor crudo daría un span distinto del que se aplicaría. */
+    const propuesta = acceptedKeys.has(`mod:${slot.id}`) ? propuestasPorId.get(slot.id) : undefined;
+    const fuente = propuesta ?? actualesPorId.get(slot.id);
+    return {
+      durationWeeks: fuente?.durationWeeks ?? 0,
+      startWeek: fuente?.startWeek ?? null,
+    };
+  });
+}
+
+/**
  * Prioridad de un cambio para MOSTRARLO: primero lo que mueve el calendario
  * (duración y semana de inicio corren fechas de todo lo que sigue), después lo
  * operativo, y al final el renombre, que es cosmético.

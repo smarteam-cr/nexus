@@ -8,6 +8,15 @@
  * arranque. Función PURA (sin Prisma), para precargar el textarea del modal (editable).
  */
 import type { ExternalTimelineData } from "@/lib/external/timeline-view-types";
+import { projectedEnd, endShiftFragment } from "./weeks";
+
+/** Día de calendario de un ISO, para comparar fechas sin que el instante meta ruido. */
+const dia = (iso: string | null | undefined): string | null => (iso ? iso.slice(0, 10) : null);
+
+/** Las fases ordenadas por `order` — `computePhaseRanges` lo exige y un snapshot viejo puede
+ *  no venir ordenado (el de hoy sí, pero ordenar es barato y evita un span mal en silencio). */
+const ordenadas = (data: ExternalTimelineData) =>
+  [...(data.phases ?? [])].sort((a, b) => a.order - b.order);
 
 // ── Claves de identidad para los diffs de conjunto ──────────────────────────────
 // Las tareas del snapshot externo NO tienen id → clave por (fase|título|semana).
@@ -82,10 +91,26 @@ export function suggestPublishReason(
   if (partsShown > 0) fragments.push(`se ${partsShown === 1 ? "hizo visible" : "hicieron visibles"} ${parts(partsShown)}`);
   if (partsHidden > 0) fragments.push(`se ${partsHidden === 1 ? "ocultó" : "ocultaron"} ${parts(partsHidden)}`);
 
-  // Fecha de arranque
-  if ((prev.anchorStartDate ?? null) !== (next.anchorStartDate ?? null)) {
+  // Fecha de arranque — comparada por DÍA DE CALENDARIO, no por instante (Tanda J).
+  // Antes se comparaban los ISO completos: dos strings distintos del MISMO día (por ejemplo
+  // "2026-06-01" vs "2026-06-01T00:00:00.000Z") producían un fragmento falso. Es el mismo
+  // criterio que ya usan proposal-deltas (`day()`) y reanchor.
+  if (dia(prev.anchorStartDate) !== dia(next.anchorStartDate)) {
     fragments.push("se movió la fecha de arranque");
   }
+
+  /* ── LA FECHA DE CIERRE (Tanda J) ─────────────────────────────────────────
+     El agujero que esto cierra: alargar una fase tres semanas NO generaba ningún fragmento
+     —no cambian los ids de fase, ni las claves de tarea, ni el arranque— así que el cliente
+     recibía la publicación con el plan corrido y sin una palabra de por qué. La duración vivía
+     fuera de todos los diffs de conjunto.
+     Se dice el CIERRE y no "se alargó una fase N semanas" porque con fases en paralelo lo
+     segundo es ortogonal al fin: dos señales para el mismo hecho es cómo se degrada un diff. */
+  const fin = endShiftFragment(
+    projectedEnd(prev.anchorStartDate, ordenadas(prev)),
+    projectedEnd(next.anchorStartDate, ordenadas(next)),
+  );
+  if (fin) fragments.push(fin);
 
   return joinSentence(fragments);
 }

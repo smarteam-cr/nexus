@@ -59,6 +59,7 @@ import {
   absoluteWeek,
   overduePlannedEnd,
   isOverdueByDate,
+  projectedEnd,
 } from "@/lib/timeline/weeks";
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
@@ -410,6 +411,9 @@ export default function TimelineGantt({
 
   const ranges = computePhaseRanges(phases);
   const total = timelineSpan(phases); // ancho de calendario (max end) — soporta fases en paralelo
+  // Cierre proyectado: `null` sin ancla o sin fases (ver projectedEnd). Deriva de las MISMAS
+  // fases que dibujan la grilla, así que la fecha cae exactamente en su borde derecho.
+  const cierre = projectedEnd(anchor, phases);
   // "Hoy" es hora de pared LOCAL del usuario (a diferencia de las fechas derivadas
   // del anchor, que son días de calendario en UTC — ver lib/timeline/weeks.ts).
   // Por eso NO puede calcularse en el servidor: `curInRange` gatea nodos y el
@@ -674,6 +678,20 @@ export default function TimelineGantt({
         {onSetAnchor && (
           <span id="cronograma-arranque" className="scroll-mt-24">
             <AnchorDatePicker value={anchor ?? ""} onChange={onSetAnchor} />
+          </span>
+        )}
+
+        {/* CIERRE PROYECTADO (Tanda J) — arranque + span, la misma fórmula que dibuja esta grilla
+            y que ve el cliente cuando hay atraso. Hasta ahora el CSE no veía NINGUNA fecha de fin:
+            el proyecto se medía en "Semana 6 de 14" y el compromiso quedaba en la cabeza de cada
+            uno. Va acá, pegado al selector de arranque, porque son las dos puntas del mismo dato.
+            ⚠ Chip NEUTRO a propósito: es un hecho, no una alarma. Y sin ancla no se pinta — el
+            AnchorDatePicker ya avisa en ámbar que falta la fecha, y un "Por definir" al lado sería
+            ruido. Como este componente también rinde la PREVIEW de una propuesta, el cierre
+            propuesto se muestra solo, sin cablear nada. */}
+        {cierre.label && (
+          <span className="text-xs font-semibold text-fg-secondary bg-surface-hover/60 border border-line/50 rounded-lg px-3 py-1.5">
+            Cierre proyectado: {cierre.label}
           </span>
         )}
 
