@@ -20,6 +20,8 @@ import TagsStrip from "@/components/tags/TagsStrip";
 import type { ImplementationType } from "@prisma/client";
 import type { ProjectPipelineKey } from "@/lib/projects/kind";
 import { HandoffSectionSkeleton } from "./skeletons";
+import HistorialHandoffModal from "./HistorialHandoffModal";
+import { debeVerHistorial } from "@/lib/agents/historial-corridas";
 import {
   readHandoffStatusCache,
   writeHandoffStatusCache,
@@ -53,6 +55,9 @@ interface HandoffStatus {
   blockCount: number;
   lastRunAt: string | null;
   lastRunStatus: string | null;
+  /** Cuántas corridas del agente de handoff existen — decide si se ofrece "Ver historial".
+   *  Opcional: una entrada del cache de módulo anterior al deploy no lo trae. */
+  handoffRunCount?: number;
   sourceSessions: { id: string; title: string; date: string }[];
   projectSessionCount: number;
   /** Qué alimentaría el handoff HOY (política de link + regla) y si hay material real. */
@@ -176,6 +181,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   const { phase, track } = useAgentRun(clientId);
   const [error, setError] = useState<string | null>(null);
   const [showDoc, setShowDoc] = useState(false);
+  const [showHistorial, setShowHistorial] = useState(false);
   const { bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh } = useWorkspace();
   // RBAC: solo VENTAS/CSL/MARKETING/SUPER_ADMIN editan el handoff (capacidad
   // handoffAnywhere). El CSE lo VE pero no lo genera ni edita.
@@ -197,6 +203,13 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   const canGenerateHandoff = status?.generated
     ? handoffPerms?.regenerate === true
     : handoffPerms?.generate === true;
+  /* Ver el historial no lleva celda de permiso, igual que ver el documento: se gobierna por
+     acceso al proyecto (el endpoint lo hace cumplir). Se ofrece con 2+ corridas, o con una
+     sola que FALLÓ — ahí el historial es el único lugar donde queda escrito el motivo. */
+  const puedeVerHistorial = debeVerHistorial({
+    corridas: status?.handoffRunCount,
+    ultimoEstado: status?.lastRunStatus,
+  });
 
   /* Exclusiones del CSE (textarea colapsable). El draft vive aparte del status para no pisar lo
      tipeado en cada refetch.
@@ -469,6 +482,19 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
               {showDoc ? "Ocultar" : "Ver documento"}
             </button>
           )}
+          {/* Regenerar BORRA los bloques de la corrida anterior, así que lo que el agente había
+              escrito antes sobrevive solo dentro del run — y no había forma de abrirlo. Estilo
+              de texto igual que "Ver documento" a propósito: los dos son el mismo gesto (abrir
+              algo para leer), y el botón brand sigue siendo el único enfatizado de la barra. */}
+          {puedeVerHistorial && (
+            <button
+              onClick={() => setShowHistorial(true)}
+              className="text-xs font-medium text-fg-muted hover:text-fg px-2 py-1.5 rounded-lg hover:bg-surface-hover transition-colors"
+              title="Corridas anteriores del agente de handoff (solo lectura)"
+            >
+              Ver historial
+            </button>
+          )}
           {/* El handoff no aparece en el desplegable de canvases, así que nunca pasó por el
               botón del panel: hasta ahora, a su PDF solo se llegaba escribiendo la URL a
               mano. Su contenido son bloques de canvas y la vista imprimible ya los rinde
@@ -601,6 +627,10 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
         <div className="border-t border-line px-4 py-4">
           <CanvasLinearView projectId={projectId} canvasId={status.canvasId} canEdit={canEdit} />
         </div>
+      )}
+
+      {showHistorial && (
+        <HistorialHandoffModal projectId={projectId} onClose={() => setShowHistorial(false)} />
       )}
     </section>
   );

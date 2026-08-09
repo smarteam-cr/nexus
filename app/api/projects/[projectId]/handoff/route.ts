@@ -10,6 +10,7 @@ import {
 import { createHandoffCanvas, reconcileHandoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { elegirAgente, pipelineKeyDeProyecto, AGENTES_DEL_GRUPO } from "@/lib/agents/resolver";
+import { whereCorridasDeDocumento } from "@/lib/agents/historial-corridas";
 
 type Params = { params: Promise<{ projectId: string }> };
 
@@ -92,11 +93,20 @@ export async function GET(_req: NextRequest, { params }: Params) {
     ? await prisma.canvasBlock.count({ where: { section: { canvasId } } })
     : 0;
 
-  const lastRun = await prisma.agentRun.findFirst({
-    where: { projectId, agent: { agentGroup: "handoff" } },
-    orderBy: { createdAt: "desc" },
-    select: { createdAt: true, status: true, sourceSessionIds: true },
-  });
+  /* El CONTADOR decide si se ofrece "Ver historial", y se resuelve acá —no en el endpoint del
+     historial— porque el botón se pinta ANTES del click: esta sección bloquea su render hasta
+     tener el estado, y un botón que aparece medio segundo después empujaría el layout.
+     ⚠ Mismo `where` que la lista, de una sola fuente: si divergieran, el botón aparecería y
+     abriría una lista que no coincide. */
+  const whereCorridas = whereCorridasDeDocumento(projectId, "handoff");
+  const [lastRun, handoffRunCount] = await Promise.all([
+    prisma.agentRun.findFirst({
+      where: whereCorridas,
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true, status: true, sourceSessionIds: true },
+    }),
+    prisma.agentRun.count({ where: whereCorridas }),
+  ]);
 
   let sourceSessions: { id: string; title: string; date: string }[] = [];
   if (lastRun?.sourceSessionIds?.length) {
@@ -157,6 +167,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
     blockCount,
     lastRunAt: lastRun?.createdAt ?? null,
     lastRunStatus: lastRun?.status ?? null,
+    /* Cuántas corridas hay: decide si se ofrece "Ver historial" (ver `debeVerHistorial`). */
+    handoffRunCount,
     sourceSessions,
     projectSessionCount,
     handoffReadiness,
