@@ -11,7 +11,7 @@ import { computeProjectSummary, type ProjectSummary } from "@/lib/portfolio/summ
 import { toSummaryLifecycle } from "@/lib/portfolio/load";
 import { getProjectLifecycle, type ProjectLifecycle } from "@/lib/lifecycle";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
-import { computePhaseRanges, addWeeks } from "@/lib/timeline/weeks";
+import { computePhaseRanges, addWeeks, projectedEnd } from "@/lib/timeline/weeks";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -274,6 +274,11 @@ export async function buildWatchdogContext(
     take: 20,
   });
 
+  // Cierre proyectado del plan VIVO — null sin ancla o sin fases (nunca una fecha inventada).
+  const cierreProyectado = tl
+    ? projectedEnd(tl.anchorStartDate?.toISOString() ?? null, tl.phases).label
+    : null;
+
   // ── Cronograma resumido (fases + conteos, no el árbol entero) ───────────────
   const timelineBlock = tl
     ? tl.phases
@@ -408,7 +413,12 @@ export async function buildWatchdogContext(
     summaryBlock,
     "",
     "=== CRONOGRAMA (resumen por fase) ===",
-    `Arranque: ${fmtDate(tl?.anchorStartDate)}${activeBaseline ? ` · baseline publicado el ${fmtDate(activeBaseline.capturedAt)}` : ""}`,
+    /* El cierre proyectado (Tanda J): el watchdog podía razonar sobre atrasos por tarea pero no
+       sobre CUÁNDO TERMINA el proyecto — el dato que más pesa en una conversación con el
+       cliente. Sale del plan vivo (ancla + span), igual que el chip del Gantt. */
+    `Arranque: ${fmtDate(tl?.anchorStartDate)}${
+      cierreProyectado ? ` · Cierre proyectado: ${cierreProyectado}` : ""
+    }${activeBaseline ? ` · baseline publicado el ${fmtDate(activeBaseline.capturedAt)}` : ""}`,
     timelineBlock,
     "",
     "=== CAMBIOS RECIENTES DEL CRONOGRAMA (eventos sin triage — el corazón de tu análisis) ===",
