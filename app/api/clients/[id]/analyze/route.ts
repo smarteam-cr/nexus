@@ -15,7 +15,7 @@ import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { updateCanvasAsync } from "@/lib/canvas/update-agent";
 import { getOutputFormatInstructions, getBlockOutputFormatInstructions } from "@/lib/canvas/agent-output-schema";
-import { DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN, type BlockType } from "@/lib/canvas/block-types";
+import { geometriaDeBloque } from "@/lib/canvas/agent-output-doc";
 import { postProcessCards } from "@/lib/canvas/post-process";
 import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
@@ -2253,25 +2253,19 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
       // born-CONFIRMED el delete borra TODOS los bloques del agente (no solo DRAFT), sino se
       // duplicarían al regenerar; lo editado a mano (MODIFIED, incl. IA por el PUT) y lo manual
       // (HUMAN) sobreviven. La tx evita dejar la sección vacía si el createMany falla entre medio.
+      /* La geometría (tipo + tamaño) vive en lib/canvas/agent-output-doc.ts desde la Tanda J:
+         el visor del historial la necesita para pintar una corrida vieja EXACTAMENTE como se vio
+         cuando se generó. Una segunda copia divergiría en silencio — mismos datos, otra pinta. */
       const blockData: Prisma.CanvasBlockCreateManyInput[] = section.blocks.map((block, i) => {
-        const bt = (block.type?.toLowerCase() ?? "text") as BlockType;
-        // Conservative rowSpan — user can resize if needed
-        const contentLen = (block.content ?? "").length;
-        const tableRows = (block.data as { rows?: unknown[] } | null)?.rows?.length ?? 0;
-        let rowSpan: number;
-        if (bt === "heading") rowSpan = 1;
-        else if (bt === "metric") rowSpan = 1;
-        else if (bt === "table") rowSpan = Math.max(2, Math.ceil((tableRows + 1) * 35 / 125));
-        else if (bt === "flowchart") rowSpan = 3;
-        else rowSpan = Math.max(1, Math.ceil(contentLen / 800));
+        const g = geometriaDeBloque(block);
         return {
           sectionId,
-          blockType: (bt.toUpperCase()) as "TEXT" | "HEADING" | "TABLE" | "METRIC" | "CALLOUT" | "CARD" | "FLOWCHART" | "CHART" | "IMAGE",
-          content: block.content ?? null,
-          data: block.data ?? undefined,
+          blockType: g.blockType as "TEXT" | "HEADING" | "TABLE" | "METRIC" | "CALLOUT" | "CARD" | "FLOWCHART" | "CHART" | "IMAGE",
+          content: g.content,
+          data: g.data as Prisma.InputJsonValue | undefined,
           order: i,
-          colSpan: DEFAULT_COL_SPAN[bt] ?? 4,
-          rowSpan,
+          colSpan: g.colSpan,
+          rowSpan: g.rowSpan,
           source: "AGENT" as const,
           status: bornConfirmed ? "CONFIRMED" : "DRAFT",
           agentRunId: run.id,
