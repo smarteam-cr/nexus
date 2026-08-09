@@ -46,7 +46,8 @@ import { useHydrated } from "@/lib/hooks/useHydrated";
 import { actionsFromSignals } from "@/lib/timeline/project-actions-input";
 import ProjectActionsLine from "./ProjectActionsLine";
 import ProposalGlobalStrip from "./ProposalGlobalStrip";
-import { computeProposalDeltas, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
+import { computeProposalDeltas, type ProposalDelta, type CurrentPhaseLike } from "@/lib/timeline/proposal-deltas";
+import { medirPropuesta, type MagnitudPropuesta } from "@/lib/timeline/magnitud-propuesta";
 import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
@@ -889,26 +890,39 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // descompone en deltas por ítem (fase nueva / cambio de fase / fecha de arranque) que el CSE
   // acepta o descarta uno por uno DENTRO del cronograma real.
   const structureOnlyProposal = !!proposal && proposal.phases.every((p) => p.tasks === undefined);
+  /* Las fases actuales en la forma que piden los helpers puros. Extraído del memo de deltas
+     (Tanda J) para que la MAGNITUD mida exactamente contra lo mismo que los deltas: si cada uno
+     armara su lista, el aviso podría hablar de un cronograma distinto del que se aplica. */
+  const fasesActualesParaDeltas: CurrentPhaseLike[] = useMemo(
+    () =>
+      phases
+        .filter((p): p is Phase & { id: string } => !!p.id)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          durationWeeks: p.durationWeeks,
+          startWeek: p.startWeek ?? null,
+          sessionCount: p.sessionCount ?? null,
+          notes: p.notes ?? null,
+          activityType: p.activityType ?? null,
+        })),
+    [phases],
+  );
   const proposalDeltas: ProposalDelta[] = useMemo(
     () =>
       structureOnlyProposal && proposal
-        ? computeProposalDeltas(
-            phases
-              .filter((p): p is Phase & { id: string } => !!p.id)
-              .map((p) => ({
-                id: p.id,
-                name: p.name,
-                durationWeeks: p.durationWeeks,
-                startWeek: p.startWeek ?? null,
-                sessionCount: p.sessionCount ?? null,
-                notes: p.notes ?? null,
-                activityType: p.activityType ?? null,
-              })),
-            proposal,
-            anchor || null,
-          )
+        ? computeProposalDeltas(fasesActualesParaDeltas, proposal, anchor || null)
         : [],
-    [structureOnlyProposal, proposal, phases, anchor],
+    [structureOnlyProposal, proposal, fasesActualesParaDeltas, anchor],
+  );
+  /* Cuán distinta es la propuesta y adónde caería el cierre si se aceptara entera. null cuando
+     no hay nada que medir — la franja no se pinta en ese caso. */
+  const magnitudPropuesta: MagnitudPropuesta | null = useMemo(
+    () =>
+      structureOnlyProposal && proposal && proposalDeltas.length > 0
+        ? medirPropuesta(fasesActualesParaDeltas, proposal, anchor || null)
+        : null,
+    [structureOnlyProposal, proposal, proposalDeltas.length, fasesActualesParaDeltas, anchor],
   );
 
   // Debounce: auto-guarda ~1.5 s después de la última edición. Se reinicia con cada
@@ -1811,7 +1825,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               title="La IA propuso cambios de estructura desde el handoff — se revisan uno por uno"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-              Revisar {proposalDeltas.length} {proposalDeltas.length === 1 ? "cambio" : "cambios"}
+              {/* Con un cambio masivo, "Revisar 11 cambios" subestima lo que hay abajo: no son
+                  once ajustes, es otro plan. El texto cambia; la CONDICIÓN del botón, no. */}
+              {magnitudPropuesta?.esCronogramaNuevo
+                ? "Revisar el cronograma nuevo"
+                : `Revisar ${proposalDeltas.length} ${proposalDeltas.length === 1 ? "cambio" : "cambios"}`}
             </button>
           )}
           {/* CTA bi-estado (#2): sin tareas (y nunca publicado) → "Generar cronograma" (crea las
@@ -2355,9 +2373,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               ) : undefined
             }
             proposalGlobalSlot={
-              structureOnlyProposal && proposalDeltas.length > 0 && canEdit ? (
+              structureOnlyProposal && proposalDeltas.length > 0 && magnitudPropuesta && canEdit ? (
                 <ProposalGlobalStrip
                   deltas={proposalDeltas}
+                  magnitud={magnitudPropuesta}
                   working={resolvingProposal}
                   onResolve={(accept, discard) => void resolveProposalItems(accept, discard)}
                 />
