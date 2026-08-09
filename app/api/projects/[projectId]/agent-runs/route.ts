@@ -26,9 +26,13 @@ export const GET = withProjectAccess(async (req: NextRequest, ctx) => {
   const { projectId } = await ctx.params;
   const grupo = new URL(req.url).searchParams.get("grupo") ?? "handoff";
   /* El whitelist es el MISMO mapa que usa el camino de escritura para saber en qué canvas
-     escribe cada agente: no puede divergir de la realidad. */
-  const slug = AGENT_GROUP_TO_CANVAS[grupo];
-  if (!slug) {
+     escribe cada agente: no puede divergir de la realidad.
+     ⚠ `Object.hasOwn` y no `mapa[clave]` (auditoría de la Tanda J): el mapa es un objeto
+     literal, así que `?grupo=constructor` (o toString, valueOf, __proto__…) devolvía algo
+     TRUTHY del prototipo, el 400 no cortaba, y Prisma reventaba con un slug que era una
+     función → 500 y ruido en Sentry. Un tipeo honesto daba 400; una clave heredada, un 500. */
+  const slug = Object.hasOwn(AGENT_GROUP_TO_CANVAS, grupo) ? AGENT_GROUP_TO_CANVAS[grupo] : null;
+  if (!slug || typeof slug !== "string") {
     return NextResponse.json({ error: `Grupo de agente desconocido: ${grupo}` }, { status: 400 });
   }
 

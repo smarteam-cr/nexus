@@ -2602,10 +2602,34 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
     },
   });
 
-  const markDone = (res: NextResponse) =>
-    prisma.agentRun
-      .update({ where: { id: pre.id }, data: { status: res.status >= 400 ? "ERROR" : "DONE" } })
+  /**
+   * ⚠ Un fallo que RETORNA (4xx/5xx) también deja su motivo escrito (auditoría de la Tanda J).
+   * Antes solo lo hacía `markError`, o sea cuando el handler TIRABA una excepción; los fallos
+   * normales —«el agente devolvió bloques inválidos», sin créditos, gate de permiso— pasaban
+   * por acá y dejaban la corrida en ERROR con el `output: "{}"` con el que nació. Resultado: el
+   * motivo moría al recargar la pestaña y el historial abría una corrida fallida sin poder
+   * decir qué había pasado. El body del error ya trae el mensaje humanizado; se guarda con el
+   * mismo contrato que lee `parseRunError`.
+   */
+  const markDone = async (res: NextResponse) => {
+    let output: string | undefined;
+    if (res.status >= 400) {
+      try {
+        const body = (await res.clone().json()) as { error?: unknown; message?: unknown };
+        const motivo = typeof body?.error === "string" ? body.error : body?.message;
+        if (typeof motivo === "string" && motivo.trim()) output = JSON.stringify({ error: motivo });
+      } catch {
+        /* respuesta sin JSON legible: queda el genérico de parseRunError */
+      }
+    }
+    await prisma.agentRun
+      .update({
+        where: { id: pre.id },
+        data: { status: res.status >= 400 ? "ERROR" : "DONE", ...(output ? { output } : {}) },
+      })
       .catch(() => {});
+    return res;
+  };
   const markError = (e: unknown) =>
     prisma.agentRun
       // Guardamos el mensaje YA humanizado en output → el GET [runId] lo expone y el

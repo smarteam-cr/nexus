@@ -187,7 +187,19 @@ export function projectedEnd(
  */
 export function endShiftDays(before: ProjectedEnd, after: ProjectedEnd): number | null {
   if (!before.date || !after.date) return null;
-  return Math.round((after.date.getTime() - before.date.getTime()) / 86_400_000);
+  /* ⚠ Por DÍA DE CALENDARIO UTC, no por diferencia de instantes (auditoría de la Tanda J).
+     El ancla no siempre es medianoche: cuando el cronograma nace del handoff se deriva de la
+     FECHA DE LA SESIÓN de kickoff, que trae la hora real de la reunión (media tarde en CR =
+     ~15:00-22:00Z). Contra un ancla puesta después con el calendario (00:00Z), restar instantes
+     daba 13 donde las fechas mostradas se movían 14 — la misma frase se contradecía a sí misma,
+     y esa frase precarga el motivo de publicación que ve el cliente. Mismo criterio que
+     `currentWeekIndex`. */
+  return Math.round((diaUTC(after.date) - diaUTC(before.date)) / 86_400_000);
+}
+
+/** El instante de la MEDIANOCHE UTC del día que representa esta fecha. */
+function diaUTC(d: Date): number {
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
 /** "21 días" / "1 día" — siempre en positivo (el signo lo dice la frase que lo envuelve). */

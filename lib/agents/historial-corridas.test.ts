@@ -40,16 +40,15 @@ describe("whereCorridasDeDocumento", () => {
     });
   });
 
-  it("el handoff rescata además las corridas HUÉRFANAS", () => {
-    /* `AgentRun.agentId` es onDelete:SetNull — borrar la fila del Agent dejaría corridas
-       invisibles al filtro por grupo. Para el handoff hay una premisa que el repo ya usa: solo
-       ese agente setea `sourceSessionIds`. Para los demás grupos no existe y no se inventa. */
+  it("⚠ NO hay rescate de huérfanas: el handoff filtra igual de estricto que los demás", () => {
+    /* La primera versión sumaba las corridas con `agentId: null` y `sourceSessionIds` no vacío,
+       sobre la premisa «solo el agente de handoff setea sourceSessionIds». La auditoría probó
+       que es FALSA (`lib/projects/analyze-participants.ts` también las setea), así que una
+       corrida de análisis de participantes huérfana se habría colado en el historial Y en el
+       `lastRun` del encabezado del handoff. La edición que la pone en rojo: reintroducir el OR. */
     expect(whereCorridasDeDocumento("p1", "handoff")).toEqual({
       projectId: "p1",
-      OR: [
-        { agent: { agentGroup: "handoff" } },
-        { agentId: null, sourceSessionIds: { isEmpty: false } },
-      ],
+      agent: { agentGroup: "handoff" },
     });
   });
 });
@@ -206,5 +205,41 @@ describe("guardas: el where es UNO, el detalle no es IDOR, y el output crudo no 
     const seccion = sinComentarios(leer("components/clients/ProjectHandoffSection.tsx"));
     expect(seccion, "el CTA dejó de usar la regla compartida").toContain("debeVerHistorial({");
     expect(seccion, "desapareció el botón del historial").toContain("Ver historial");
+  });
+
+  it("el grupo se valida con hasOwn: una clave heredada NO puede llegar a Prisma", () => {
+    /* `AGENT_GROUP_TO_CANVAS["constructor"]` devuelve algo TRUTHY del prototipo, así que el 400
+       no cortaba y el slug —una función— reventaba adentro de Prisma: 500 y ruido en Sentry con
+       un simple `?grupo=toString`. La edición que la pone en rojo: volver al acceso directo. */
+    const codigo = sinComentarios(leer(LISTA));
+    expect(codigo, "el whitelist volvió al acceso directo por índice").toContain(
+      "Object.hasOwn(AGENT_GROUP_TO_CANVAS, grupo)",
+    );
+    expect(codigo, "el guard de tipo del slug desapareció").toContain('typeof slug !== "string"');
+  });
+
+  it("el estado del detalle es POR CORRIDA, no global", () => {
+    /* Con un booleano y un string únicos: el error de A quedaba pegado sobre el documento de B,
+       y el `finally` de un fetch apagaba el spinner de otro que seguía en vuelo — el panel
+       quedaba en blanco. La edición que la pone en rojo: volver a `useState<boolean>`. */
+    const modal = sinComentarios(leer("components/clients/HistorialHandoffModal.tsx"));
+    expect(modal, "el cargando volvió a ser global").toContain("useState<Set<string>>");
+    expect(modal, "el error volvió a ser global").toContain("useState<Map<string, string>>");
+    expect(modal, "el error mostrado no se deriva de la corrida elegida").toContain(
+      "errores.get(seleccion)",
+    );
+    expect(modal, "el spinner no se deriva de la corrida elegida").toContain(
+      "cargando.has(seleccion)",
+    );
+  });
+
+  it("el aviso de lista truncada compara contra el TOPE, no por igualdad", () => {
+    /* Con `total === limite` mentía en las dos direcciones: callaba el corte con 25 corridas y
+       lo anunciaba con 20 exactas (donde no se cortó nada). */
+    const modal = sinComentarios(leer("components/clients/HistorialHandoffModal.tsx"));
+    expect(modal, "el aviso de truncado volvió a comparar por igualdad").not.toContain(
+      "lista.total === lista.limite",
+    );
+    expect(modal).toContain("lista.total > lista.limite");
   });
 });

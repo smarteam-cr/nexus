@@ -19,21 +19,20 @@ import { estaColgada } from "./run-colgada";
 export const LIMITE_HISTORIAL = 20;
 
 /**
- * De quién son las corridas de un documento.
+ * De quién son las corridas de un documento: las de ESTE proyecto cuyo agente es de ESE grupo.
  *
- * El rescate de HUÉRFANAS aplica solo al handoff: `AgentRun.agentId` es `onDelete: SetNull`,
- * así que borrar la fila del Agent deja corridas invisibles al filtro por grupo. Para el
- * handoff hay una premisa que el repo ya usa (scripts/heal-handoff-anchors.ts): SOLO ese agente
- * setea `sourceSessionIds`, así que una corrida con sesiones fuente no vacías ES de handoff.
- * Para los demás grupos no existe una señal equivalente y no se inventa una.
+ * ⚠ NO hay rescate de corridas huérfanas, y es deliberado (auditoría de la Tanda J). La primera
+ * versión sumaba, solo para el handoff, las corridas con `agentId: null` y `sourceSessionIds`
+ * no vacío, apoyándose en la premisa «solo el agente de handoff setea sourceSessionIds». Esa
+ * premisa es FALSA en este mismo repo: `lib/projects/analyze-participants.ts` también crea
+ * corridas con `projectId` y `sourceSessionIds`. Como `agentId` es `onDelete: SetNull` y borrar
+ * un agente es un camino vivo, una corrida de «Análisis de participantes» huérfana se habría
+ * colado en el historial —y, peor, en el `lastRun` del encabezado del handoff, que muestra «con
+ * N sesiones» y su fecha—. El rescate protegía de un borrado que nunca ocurrió; el daño era
+ * real y alcanzable. Se elige el filtro estricto.
  */
 export function whereCorridasDeDocumento(projectId: string, grupo: string): Prisma.AgentRunWhereInput {
-  const porAgente = { agent: { agentGroup: grupo } };
-  if (grupo !== "handoff") return { projectId, ...porAgente };
-  return {
-    projectId,
-    OR: [porAgente, { agentId: null, sourceSessionIds: { isEmpty: false } }],
-  };
+  return { projectId, agent: { agentGroup: grupo } };
 }
 
 export interface FilaDeCorrida {

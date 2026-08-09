@@ -308,9 +308,18 @@ describe("guardas: el corrimiento del cierre viaja por los cuatro caminos", () =
     const src = leer("app/api/projects/[projectId]/timeline/route.ts");
     const i = src.indexOf("if (skipAudit && anchorRealmenteCambio");
     expect(i, "desapareció la excepción del ancla en el autosave").toBeGreaterThan(-1);
-    const tramo = src.slice(i, i + 1200);
+    const tramo = src.slice(i, src.indexOf("\n  }", src.indexOf("timelineChange.create", i)));
+    expect(tramo.length, "la guarda no está mirando nada").toBeGreaterThan(400);
     expect(tramo, "la excepción dejó de escribir el cambio").toContain("timelineChange.create");
     expect(tramo, "la razón dejó de decir el corrimiento del cierre").toContain("describeEndShift(");
+    /* ⚠ La razón dice el ARRANQUE, no el cierre (auditoría de la Tanda J). `.label` de
+       `projectedEnd` es el CIERRE: rotularlo «Fecha de arranque» imprimía el mismo par de
+       fechas dos veces bajo dos nombres y el arranque real no aparecía en ninguna parte — y esa
+       línea es la que la cartera muestra como el porqué del proyecto. La edición que la pone en
+       rojo: volver a `${antes.label} → ${despues.label}` en el texto del arranque. */
+    expect(tramo, "la razón volvió a imprimir el CIERRE donde dice «Fecha de arranque»").toContain(
+      "${arranqueAntes} → ${arranqueDespues}",
+    );
     // Y el autosave NO puede empezar a auditar todo lo demás: sigue gateado por el flag.
     expect(src, "el autosave dejó de estar exento del audit general").toContain(
       "if (!skipAudit && timelineId",

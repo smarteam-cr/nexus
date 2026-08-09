@@ -15,7 +15,7 @@
 import { useState, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/Toast";
-import { plural } from "@/lib/timeline/weeks";
+import { plural, fmtFull } from "@/lib/timeline/weeks";
 import type { PortfolioRow } from "@/lib/portfolio/load";
 
 type Health = "SALUDABLE" | "EN_FRICCION" | "EN_RIESGO" | "PAUSADO";
@@ -455,6 +455,7 @@ function ActionCard({
             {r.projectName}
           </Link>
           <div className="text-[11px] text-fg-muted truncate">{r.cseName || "sin CSE"}</div>
+          <CierreProyectado r={r} />
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <ClientPortalLink clientId={r.clientId} />
@@ -498,6 +499,28 @@ function ActionCard({
   );
 }
 
+/**
+ * El cierre proyectado y cuánto se corrió desde que se prometió (Tanda J).
+ * Sale de `summary.closing`: el proyectado del plan vivo, el prometido del baseline congelado.
+ * Solo se pinta con fecha — sin ancla no hay calendario y no se inventa uno.
+ */
+function CierreProyectado({ r }: { r: PortfolioRow }) {
+  const c = r.summary.closing;
+  if (!c.projectedISO) return null;
+  const corrido = c.driftDays !== null && c.driftDays > 0;
+  return (
+    <span className="text-[11px] text-fg-muted whitespace-nowrap">
+      Cierre {fmtFull(c.projectedISO)}
+      {corrido && (
+        <span className="text-amber-600 font-medium">
+          {" "}
+          · {plural(c.driftDays as number, "día", "días")} después de lo prometido
+        </span>
+      )}
+    </span>
+  );
+}
+
 // ── Sección 2: alcance excedido ──
 function ScopeRow({ r }: { r: PortfolioRow }) {
   const s = r.summary.scope;
@@ -512,6 +535,7 @@ function ScopeRow({ r }: { r: PortfolioRow }) {
         <div className="min-w-0">
           <span className="text-sm font-medium text-fg">{r.projectName}</span>
           <span className="text-[11px] text-fg-muted"> · {r.cseName || "sin CSE"}</span>
+          <div><CierreProyectado r={r} /></div>
         </div>
         <span className="text-xs font-semibold text-amber-600 whitespace-nowrap">{parts} <span className="text-fg-muted font-normal">vs vendido</span></span>
       </Link>

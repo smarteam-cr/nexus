@@ -80,8 +80,12 @@ export default function HistorialHandoffModal({
   const [errorLista, setErrorLista] = useState<string | null>(null);
   const [seleccion, setSeleccion] = useState<string | null>(null);
   const [detalles, setDetalles] = useState<Map<string, DetalleResp>>(new Map());
-  const [cargandoDetalle, setCargandoDetalle] = useState(false);
-  const [errorDetalle, setErrorDetalle] = useState<string | null>(null);
+  /* ⚠ POR CORRIDA, no global (auditoría de la Tanda J): con un booleano y un string únicos, el
+     error de la corrida A quedaba pegado sobre el documento de B, y el `finally` de un fetch que
+     terminaba apagaba el spinner de OTRO que seguía en vuelo — el panel quedaba en blanco, sin
+     spinner, sin error y sin documento. */
+  const [cargando, setCargando] = useState<Set<string>>(new Set());
+  const [errores, setErrores] = useState<Map<string, string>>(new Map());
   // Una promesa en vuelo por corrida: evita el doble-fetch del click repetido.
   const enVuelo = useRef<Map<string, Promise<void>>>(new Map());
 
@@ -106,18 +110,29 @@ export default function HistorialHandoffModal({
     (runId: string) => {
       if (detalles.has(runId)) return;
       if (enVuelo.current.has(runId)) return;
-      setCargandoDetalle(true);
-      setErrorDetalle(null);
+      setCargando((prev) => new Set(prev).add(runId));
+      setErrores((prev) => {
+        if (!prev.has(runId)) return prev;
+        const next = new Map(prev);
+        next.delete(runId);
+        return next;
+      });
       const p = fetchJson<DetalleResp>(`/api/projects/${projectId}/agent-runs/${runId}`)
         .then((d) => {
           setDetalles((prev) => new Map(prev).set(runId, d));
         })
         .catch((e: unknown) => {
-          setErrorDetalle(e instanceof Error ? e.message : "No se pudo abrir esta corrida.");
+          setErrores((prev) =>
+            new Map(prev).set(runId, e instanceof Error ? e.message : "No se pudo abrir esta corrida."),
+          );
         })
         .finally(() => {
           enVuelo.current.delete(runId);
-          setCargandoDetalle(false);
+          setCargando((prev) => {
+            const next = new Set(prev);
+            next.delete(runId);
+            return next;
+          });
         });
       enVuelo.current.set(runId, p);
     },
@@ -129,6 +144,8 @@ export default function HistorialHandoffModal({
   }, [seleccion, cargarDetalle]);
 
   const detalle = seleccion ? detalles.get(seleccion) : undefined;
+  const errorDetalle = seleccion ? (errores.get(seleccion) ?? null) : null;
+  const cargandoDetalle = seleccion ? cargando.has(seleccion) : false;
   const resumen = lista?.runs.find((r) => r.id === seleccion);
 
   return (
@@ -154,8 +171,13 @@ export default function HistorialHandoffModal({
         <div className="w-60 flex-shrink-0 sticky top-0 self-start space-y-1.5">
           <div className="flex items-baseline justify-between">
             <p className="text-[10px] font-bold uppercase tracking-wider text-fg-muted">Corridas</p>
-            {lista && lista.total === lista.limite && (
-              <span className="text-[10px] text-fg-muted">{lista.limite} más recientes</span>
+            {/* `total` es el conteo COMPLETO y `runs` viene cortado en `limite`: el aviso va
+                cuando de verdad hay más de las que se ven. Con `===` mentía en las dos
+                direcciones — callaba el corte con 25 y lo anunciaba con 20 exactas. */}
+            {lista && lista.total > lista.limite && (
+              <span className="text-[10px] text-fg-muted">
+                {lista.limite} de {lista.total}
+              </span>
             )}
           </div>
 
@@ -232,7 +254,11 @@ export default function HistorialHandoffModal({
                   action={
                     <BotonReintentar
                       onClick={() => {
-                        setErrorDetalle(null);
+                        setErrores((prev) => {
+                          const next = new Map(prev);
+                          next.delete(seleccion);
+                          return next;
+                        });
                         cargarDetalle(seleccion);
                       }}
                     />

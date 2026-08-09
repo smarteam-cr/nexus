@@ -55,7 +55,7 @@ import { partitionByValidation } from "@/lib/timeline/particularidad-state";
 // mientras camina su propio diff y los emite DESPUÉS de la tx (best-effort):
 // la tx ya sufrió P2028 contra el pooler — no se engorda con más writes.
 import { emitTimelineEventsSafe, diffFields, type DraftEvent } from "@/lib/cs/timeline-events";
-import { projectedEnd, describeEndShift } from "@/lib/timeline/weeks";
+import { projectedEnd, describeEndShift, fmtFull } from "@/lib/timeline/weeks";
 import { loadProjectSummary } from "@/lib/portfolio/load";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 
@@ -842,11 +842,20 @@ export async function PUT(
       const antes = projectedEnd(anchorPrevioISO, fases);
       const despues = projectedEnd(updated.anchorStartDate ?? null, fases);
       const corrimiento = describeEndShift(antes, despues);
+      /* ⚠ Las fechas del ARRANQUE salen del ancla, NO de `projectedEnd` (auditoría de la Tanda
+         J): `.label` es el CIERRE proyectado, así que rotularlo «Fecha de arranque» imprimía el
+         mismo par de fechas dos veces bajo dos nombres distintos y el arranque real no aparecía
+         en ninguna parte. Esta razón es el único rastro legible del cambio y la cartera la pinta
+         como el porqué del proyecto. */
+      const arranqueAntes = anchorPrevioISO ? fmtFull(anchorPrevioISO) : "sin fecha";
+      const arranqueDespues = updated.anchorStartDate
+        ? fmtFull(new Date(updated.anchorStartDate).toISOString())
+        : "sin fecha";
       await prisma.timelineChange.create({
         data: {
           timelineId,
           reason:
-            `Fecha de arranque cambiada en el Gantt: ${antes.label ?? "sin fecha"} → ${despues.label ?? "sin fecha"}.` +
+            `Fecha de arranque cambiada en el Gantt: ${arranqueAntes} → ${arranqueDespues}.` +
             (corrimiento ? ` ${corrimiento}` : ""),
           kind: "MANUAL",
           instruction: null,

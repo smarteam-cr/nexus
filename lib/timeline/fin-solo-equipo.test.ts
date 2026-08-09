@@ -115,4 +115,17 @@ describe("el cierre SÍ llega a las superficies internas", () => {
       expect(sinComentarios(leer(archivo)), `${archivo} dejó de exponer el cierre`).toContain(marca);
     });
   }
+
+  it("⚠ y la cartera lo PINTA: calcularlo sin mostrarlo es tirarlo", () => {
+    /* La auditoría de la Tanda J encontró que `summary.closing` se computaba para cada proyecto
+       en cada carga de cartera y no lo leía NADIE — y el assert de arriba daba verde igual,
+       porque solo miraba que el campo existiera en el motor. Un dato que se calcula y no se
+       pinta es idéntico a un dato que no existe. */
+    const grid = sinComentarios(leer("components/dashboard/PortfolioGrid.tsx"));
+    expect(grid, "la cartera dejó de leer el cierre proyectado").toContain("summary.closing");
+    expect(grid, "la cartera dejó de pintar el cierre").toContain("Cierre {fmtFull(");
+    expect(grid, "desapareció el «cuánto se corrió desde lo prometido»").toContain(
+      "después de lo prometido",
+    );
+  });
 });

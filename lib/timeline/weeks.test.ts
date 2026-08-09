@@ -212,6 +212,23 @@ describe("endShiftDays / endShiftFragment / describeEndShift", () => {
     );
   });
 
+  it("⚠ cuenta DÍAS DE CALENDARIO, no diferencia de instantes", () => {
+    /* El ancla no siempre es medianoche: cuando el cronograma nace del handoff se deriva de la
+       FECHA DE LA SESIÓN de kickoff, que trae la hora real de la reunión. Contra un ancla puesta
+       después con el calendario (00:00Z), restar instantes daba 13 donde las fechas mostradas se
+       movían 14 — la MISMA frase se contradecía. La edición que la pone en rojo: volver a
+       `(after - before) / 86_400_000` sobre los instantes crudos. */
+    const desdeReunion = projectedEnd("2026-06-01T15:00:00.000Z", [{ durationWeeks: 5 }]);
+    const desdeCalendario = projectedEnd("2026-06-15T00:00:00.000Z", [{ durationWeeks: 5 }]);
+    expect(desdeReunion.label).toBe("6 jul 2026");
+    expect(desdeCalendario.label).toBe("20 jul 2026");
+    // 6 jul → 20 jul son 14 días de calendario, y eso es lo que la frase tiene que decir.
+    expect(endShiftDays(desdeReunion, desdeCalendario)).toBe(14);
+    expect(describeEndShift(desdeReunion, desdeCalendario)).toBe(
+      "El cierre se corre 14 días: 6 jul 2026 → 20 jul 2026.",
+    );
+  });
+
   it("un solo día se dice en singular", () => {
     const unDia = { spanWeeks: 1, date: new Date("2026-06-09T00:00:00.000Z"), label: "9 jun 2026" };
     const cero = { spanWeeks: 1, date: new Date("2026-06-08T00:00:00.000Z"), label: "8 jun 2026" };
