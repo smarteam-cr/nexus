@@ -55,6 +55,7 @@ import { partitionByValidation } from "@/lib/timeline/particularidad-state";
 // mientras camina su propio diff y los emite DESPUÉS de la tx (best-effort):
 // la tx ya sufrió P2028 contra el pooler — no se engorda con más writes.
 import { emitTimelineEventsSafe, diffFields, type DraftEvent } from "@/lib/cs/timeline-events";
+import { projectedEnd, describeEndShift } from "@/lib/timeline/weeks";
 import { loadProjectSummary } from "@/lib/portfolio/load";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 
@@ -430,6 +431,9 @@ export async function PUT(
   const anchorDate = anchorStartDate ? new Date(anchorStartDate) : null;
   let timelineId = ""; // #4 — capturado dentro de la tx para registrar el cambio después
   const draftEvents: DraftEvent[] = []; // eventos crudos del watchdog (se emiten post-tx)
+  /* La fecha de arranque es el ÚNICO campo que un auto-guardado audita (ver el bloque #6). */
+  let anchorRealmenteCambio = false;
+  let anchorPrevioISO: string | null = null;
 
   // Transacción: upsert del timeline + diff de phases + diff de tasks por phase
   try {
@@ -464,6 +468,8 @@ export async function PUT(
 
       // ANCHOR_CHANGED: solo si el timeline ya existía y la fecha de arranque cambió.
       if (prevTl && (prevTl.anchorStartDate?.getTime() ?? null) !== (anchorDate?.getTime() ?? null)) {
+        anchorRealmenteCambio = true;
+        anchorPrevioISO = prevTl.anchorStartDate?.toISOString() ?? null;
         draftEvents.push({
           entityType: "TIMELINE",
           entityId: tl.id,
@@ -817,6 +823,41 @@ export async function PUT(
 
   // 5. Re-cargar el estado final
   const updated = await loadTimeline(projectId);
+
+  /* ── LA EXCEPCIÓN ANGOSTA DEL AUTOSAVE (Tanda J) ────────────────────────────
+     El autosave NO audita, y está bien: decenas de filas con razón genérica que nadie lee son
+     peores que ninguna. Pero la fecha de arranque no es una tecla — es un clic en un
+     calendario, y es el único campo que (i) redefine TODAS las fechas del proyecto, (ii) se
+     copia a la fecha de facturación del servicio y dispara ARRANQUE_CAMBIADO en cobranza, y
+     (iii) es el input del cierre proyectado. Son un puñado de filas por vida de proyecto y sin
+     ellas el movimiento más consecuente del cronograma no deja rastro.
+     Sin riesgo de duplicar: el reintento del autosave manda el mismo ancla y la condición de
+     arriba solo dispara cuando cambió de verdad. */
+  if (skipAudit && anchorRealmenteCambio && timelineId && "exists" in updated && updated.exists) {
+    try {
+      const fases = updated.phases.map((p) => ({
+        durationWeeks: p.durationWeeks,
+        startWeek: p.startWeek,
+      }));
+      const antes = projectedEnd(anchorPrevioISO, fases);
+      const despues = projectedEnd(updated.anchorStartDate ?? null, fases);
+      const corrimiento = describeEndShift(antes, despues);
+      await prisma.timelineChange.create({
+        data: {
+          timelineId,
+          reason:
+            `Fecha de arranque cambiada en el Gantt: ${antes.label ?? "sin fecha"} → ${despues.label ?? "sin fecha"}.` +
+            (corrimiento ? ` ${corrimiento}` : ""),
+          kind: "MANUAL",
+          instruction: null,
+          changedByEmail: guard.user.email ?? null,
+          snapshot: { anchorStartDate: updated.anchorStartDate } as Prisma.InputJsonValue,
+        },
+      });
+    } catch (e) {
+      console.error("[timeline PUT] audit del ancla (autosave) falló:", e instanceof Error ? e.message : e);
+    }
+  }
 
   // 6. #4 — registrar el cambio con su razón + snapshot del estado resultante.
   // El snapshot (estado canónico tras aplicar) deja a D.3 comparar lo "vendido"

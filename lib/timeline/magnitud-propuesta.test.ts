@@ -256,3 +256,64 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
     expect(src, "el caso chico perdió su camino directo").toContain(': aceptarTodo()');
   });
 });
+
+/**
+ * ── LOS AVISOS DE CORRIMIENTO EN LOS DEMÁS CAMINOS ──────────────────────────
+ * «Todos los cambios que propongan los agentes deben avisar que la fecha de finalización se
+ * movió» (Elías). Son cuatro caminos y cada uno puede perder el aviso por su cuenta, sin que
+ * nada falle: el assist, el cambio manual del ancla, y los dos que escribían el arranque sin
+ * dejar rastro legible.
+ */
+describe("guardas: el corrimiento del cierre viaja por los cuatro caminos", () => {
+  const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+
+  it("el banner del assist dice cuánto se mueve el cierre", () => {
+    const src = leer("components/canvas/CronogramaCanvas.tsx");
+    const i = src.indexOf("const diffSummary = (() => {");
+    expect(i, "cambió diffSummary; revisar esta guarda").toBeGreaterThan(-1);
+    const tramo = src.slice(i, src.indexOf("})();", i));
+    expect(tramo.length, "la guarda no está mirando nada").toBeGreaterThan(500);
+    expect(tramo, "diffSummary dejó de calcular el corrimiento").toContain("endShiftFragment(");
+    expect(tramo, "el corrimiento no llega al retorno del diff").toContain("anchorChanged, endShift }");
+    expect(src, "el banner del assist dejó de pintar el corrimiento").toContain("diffSummary.endShift");
+  });
+
+  it("cambiar la fecha de arranque a mano avisa el corrimiento", () => {
+    const src = leer("components/canvas/CronogramaCanvas.tsx");
+    const i = src.indexOf("const setAnchorFromGantt");
+    expect(i, "desapareció el handler del arranque").toBeGreaterThan(-1);
+    const tramo = src.slice(i, i + 900);
+    expect(tramo, "el cambio de arranque dejó de avisar adónde se mueve el cierre").toContain(
+      "describeEndShift(",
+    );
+    expect(tramo, "el aviso se calcula pero no se muestra").toContain("toast.info(aviso)");
+  });
+
+  it("apply-items despierta al watchdog cuando acepta un cambio de arranque", () => {
+    /* Este camino movía TODAS las fechas del proyecto sin emitir ANCHOR_CHANGED: el watchdog
+       —único escritor de CsAlert— no se enteraba nunca. La edición que la pone en rojo: borrar
+       la llamada a emitTimelineEventsSafe. */
+    const src = leer("app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts");
+    const i = src.indexOf("if (anchorAceptado");
+    expect(i, "desapareció el gate del evento de arranque").toBeGreaterThan(-1);
+    const tramo = src.slice(i, i + 1400);
+    expect(tramo, "el evento del watchdog no se emite").toContain("emitTimelineEventsSafe(");
+    expect(tramo, "el evento perdió su acción").toContain('action: "ANCHOR_CHANGED"');
+    expect(src, "la razón de auditoría dejó de decir el corrimiento").toContain("describeEndShift(");
+  });
+
+  it("el autosave audita el arranque aunque no audite nada más", () => {
+    /* Excepción angosta: el autosave no escribe TimelineChange (y está bien), pero el arranque
+       redefine todas las fechas, se copia a la facturación y es el input del cierre. */
+    const src = leer("app/api/projects/[projectId]/timeline/route.ts");
+    const i = src.indexOf("if (skipAudit && anchorRealmenteCambio");
+    expect(i, "desapareció la excepción del ancla en el autosave").toBeGreaterThan(-1);
+    const tramo = src.slice(i, i + 1200);
+    expect(tramo, "la excepción dejó de escribir el cambio").toContain("timelineChange.create");
+    expect(tramo, "la razón dejó de decir el corrimiento del cierre").toContain("describeEndShift(");
+    // Y el autosave NO puede empezar a auditar todo lo demás: sigue gateado por el flag.
+    expect(src, "el autosave dejó de estar exento del audit general").toContain(
+      "if (!skipAudit && timelineId",
+    );
+  });
+});

@@ -25,6 +25,8 @@ import {
   type ProposalDelta,
 } from "@/lib/timeline/proposal-deltas";
 import { ACTIVITY_TYPES } from "@/lib/timeline/validate";
+import { projectedEnd, describeEndShift } from "@/lib/timeline/weeks";
+import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
 
 /**
  * `activityType` es un ENUM de Prisma y la propuesta es JSON sin tipar: un valor basura
@@ -123,6 +125,11 @@ export async function POST(
 
   const now = new Date();
   const acceptedKeySet = new Set(accepted.map((d) => d.key));
+  /* La foto de ANTES, tomada fuera de la transacción: después de aplicar ya no se puede saber
+     dónde caía el cierre, y sin las dos puntas no hay corrimiento que reportar (Tanda J). */
+  const anchorAntes = tl.anchorStartDate?.toISOString() ?? null;
+  const fasesAntes = tl.phases.map((p) => ({ durationWeeks: p.durationWeeks, startWeek: p.startWeek }));
+  const anchorAceptado = accepted.some((d) => d.kind === "SET_ANCHOR");
 
   await prisma.$transaction(async (tx) => {
     // 1) Aplicar los ACEPTADOS (solo esos; nada se aplica solo).
@@ -267,19 +274,64 @@ export async function POST(
         where: { id: tl.id },
         select: { anchorStartDate: true },
       });
+      /* El corrimiento del cierre entra en la RAZÓN (Tanda J): la línea de auditoría decía
+         cuántas sugerencias se aceptaron, no qué consecuencia tuvieron. Quien la lea después
+         —o el watchdog— necesita saber si el proyecto se corrió. */
+      const anchorDespues = tlRow?.anchorStartDate?.toISOString() ?? null;
+      const corrimiento = describeEndShift(
+        projectedEnd(anchorAntes, fasesAntes),
+        projectedEnd(anchorDespues, snapPhases),
+      );
       await prisma.timelineChange.create({
         data: {
           timelineId: tl.id,
-          reason: `Sugerencias del handoff aceptadas por ítem (${accepted.length} aceptadas, ${discardKeys.size} descartadas).`,
+          reason:
+            `Sugerencias del handoff aceptadas por ítem (${accepted.length} aceptadas, ${discardKeys.size} descartadas).` +
+            (corrimiento ? ` ${corrimiento}` : ""),
           kind: "AI_ASSIST",
           instruction: null,
           changedByEmail: guard.user.email ?? null,
           snapshot: {
-            anchorStartDate: tlRow?.anchorStartDate?.toISOString() ?? null,
+            anchorStartDate: anchorDespues,
             phases: snapPhases,
           } as unknown as Prisma.InputJsonValue,
         },
       });
+
+      /* ── EL HUECO QUE ESTO CIERRA (Tanda J) ─────────────────────────────────
+         Aceptar un `SET_ANCHOR` acá movía TODAS las fechas del proyecto sin emitir
+         `ANCHOR_CHANGED`. El PUT del cronograma sí lo emite; este camino no, así que el
+         watchdog —el único escritor de CsAlert— no se enteraba nunca de que el arranque se
+         había movido por una sugerencia del handoff. El cierre viaja en before/after (son
+         Json, no hace falta ningún enum nuevo). */
+      if (anchorAceptado && (anchorAntes ?? null) !== (anchorDespues ?? null)) {
+        const proj = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { clientId: true },
+        });
+        if (proj) {
+          await emitTimelineEventsSafe(
+            prisma,
+            {
+              projectId,
+              clientId: proj.clientId,
+              timelineId: tl.id,
+              actorEmail: guard.user.email ?? null,
+              source: "AI_ASSIST_APPLY",
+            },
+            [
+              {
+                entityType: "TIMELINE",
+                entityId: tl.id,
+                label: "Fecha de arranque (sugerencia del handoff aceptada)",
+                action: "ANCHOR_CHANGED",
+                before: { anchorStartDate: anchorAntes, projectedEnd: projectedEnd(anchorAntes, fasesAntes).label },
+                after: { anchorStartDate: anchorDespues, projectedEnd: projectedEnd(anchorDespues, snapPhases).label },
+              },
+            ],
+          );
+        }
+      }
     } catch (e) {
       console.error("[proposal/apply-items] audit best-effort falló:", e instanceof Error ? e.message : e);
     }

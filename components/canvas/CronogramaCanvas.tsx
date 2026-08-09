@@ -27,7 +27,14 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { plural, computePhaseRanges, currentWeekIndex } from "@/lib/timeline/weeks";
+import {
+  plural,
+  computePhaseRanges,
+  currentWeekIndex,
+  projectedEnd,
+  describeEndShift,
+  endShiftFragment,
+} from "@/lib/timeline/weeks";
 import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
@@ -942,9 +949,19 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Fijar/cambiar la fecha de arranque desde el Gantt: actualiza el preview (fechas
   // reales) y marca dirty — se PERSISTE con "Guardar cronograma", no al instante.
   const setAnchorFromGantt = (ymd: string) => {
+    /* Mover el arranque corre TODAS las fechas del proyecto, y la que importa afuera es la de
+       cierre. El chip del encabezado ya la muestra actualizada, pero el toast dice el DELTA —
+       que es lo que uno quiere saber justo después de tocar el calendario (Tanda J).
+       Solo para el ancla: la duración se edita tecleando y un toast por tecla es ruido que
+       enseña a ignorar los toasts. Para eso está el chip, que es continuo. */
+    const aviso = describeEndShift(
+      projectedEnd(anchor || null, phases),
+      projectedEnd(ymd || null, phases),
+    );
     pushTimelineUndo("Fecha de inicio cambiada", `${undoScope}|anchor`);
     setAnchor(ymd);
     markDirty();
+    if (aviso) toast.info(aviso);
   };
 
 
@@ -1745,7 +1762,15 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     const anchorChanged =
       (proposal.anchorStartDate ? proposal.anchorStartDate.slice(0, 10) : "") !== anchor;
 
-    return { added, removed, edited, phasesAdded, phasesRemoved, phasesChanged, anchorChanged };
+    /* La consecuencia que ninguno de los contadores de arriba muestra (Tanda J): con cuántas
+       tareas o fases se toque, lo que el cliente pregunta es CUÁNDO TERMINA. La propuesta del
+       assist es un reemplazo completo, así que se proyecta directo — sin pasar por deltas. */
+    const endShift = endShiftFragment(
+      projectedEnd(anchor || null, phases),
+      projectedEnd(proposal.anchorStartDate ?? anchor ?? null, proposal.phases),
+    );
+
+    return { added, removed, edited, phasesAdded, phasesRemoved, phasesChanged, anchorChanged, endShift };
   })();
 
   // ¿Hay cambios guardados sin subir? Hay cronograma y: nunca se subió, O se editó
@@ -1942,6 +1967,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 diffSummary.phasesRemoved > 0 && `−${plural(diffSummary.phasesRemoved, "fase", "fases")}`,
                 diffSummary.phasesChanged > 0 && `${plural(diffSummary.phasesChanged, "fase modificada", "fases modificadas")}`,
                 diffSummary.anchorChanged && "fecha de arranque modificada",
+                // Lo que ninguno de los contadores anteriores dice: cuándo termina el proyecto.
+                diffSummary.endShift,
               ]
                 .filter(Boolean)
                 .join(" · ") || "sin cambios detectados"}
