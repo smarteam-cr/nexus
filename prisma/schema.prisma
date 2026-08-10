@@ -611,6 +611,11 @@ model ProjectTimeline {
   projectId                   String    @unique
   project                     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   anchorStartDate             DateTime? // null hasta que el CSE la fije; cuando exista, define la conversión semanas → fechas
+  // Tanda K — cierre FIJADO A MANO por el CSE, mismo criterio que el arranque: null = usar el
+  // proyectado (projectedEnd, derivado de anchor+fases). Con valor, GANA sobre el derivado — y
+  // si el derivado se recalcula distinto (nueva propuesta, edición de duración), la UI pregunta
+  // en vez de pisarlo en silencio (ver lib/timeline/weeks.ts: displayedEnd/closeDateDiverges).
+  closeDateOverride           DateTime?
   lastEditedByHuman           DateTime? // se actualiza en cada PUT que toca fases (no en el create del agente)
   // D.3 staging — el cliente ve SOLO este SNAPSHOT (shape client-safe de readClientTimeline)
   // congelado al "Subir". La vista externa NUNCA lee en vivo: si está publicado y el snapshot

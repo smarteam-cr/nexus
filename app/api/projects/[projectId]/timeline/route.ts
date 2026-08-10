@@ -133,6 +133,9 @@ interface TimelineResponse {
    *  no podía consumirlas y el CSE armaba el estado del proyecto de memoria. */
   summary: ProjectSummary | null;
   anchorStartDate: string | null;
+  /** Tanda K — cierre fijado a mano por el CSE. null = seguir el proyectado (derivado en el
+   *  cliente vía `displayedEnd`; este endpoint solo persiste/devuelve el override crudo). */
+  closeDateOverride: string | null;
   lastEditedByHuman: string | null;
   generatedByAgentRunId: string | null;
   detailConfirmedAt: string | null;
@@ -234,6 +237,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     where: { projectId },
     select: {
       anchorStartDate: true,
+      closeDateOverride: true,
       lastEditedByHuman: true,
       generatedByAgentRunId: true,
       detailConfirmedAt: true,
@@ -325,6 +329,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     exists: true,
     summary,
     anchorStartDate: tl.anchorStartDate?.toISOString() ?? null,
+    closeDateOverride: tl.closeDateOverride?.toISOString() ?? null,
     lastEditedByHuman: tl.lastEditedByHuman?.toISOString() ?? null,
     generatedByAgentRunId: tl.generatedByAgentRunId,
     detailConfirmedAt: tl.detailConfirmedAt?.toISOString() ?? null,
@@ -405,7 +410,7 @@ export async function PUT(
       { status: 400 },
     );
   }
-  const { anchorStartDate, phases: incomingPhases } = validation.parsed;
+  const { anchorStartDate, closeDateOverride, phases: incomingPhases } = validation.parsed;
 
   // #4 — razón del cambio, con un snapshot del estado resultante (TimelineChange) para
   // que D.3 compare lo vendido contra lo real. Los AUTO-GUARDADOS del cronograma mandan
@@ -429,6 +434,12 @@ export async function PUT(
 
   const now = new Date();
   const anchorDate = anchorStartDate ? new Date(anchorStartDate) : null;
+  /* Tanda K — closeDateOverride SÍ distingue "no vino" (undefined → no tocar la columna) de
+     "vino explícito" (incl. null → volver al proyectado). El Gantt del CSE siempre lo declara
+     (ver buildPutBody en CronogramaCanvas), así que en el uso normal esto nunca queda undefined;
+     la rama existe para que un caller futuro que no conozca el campo no lo borre por omisión. */
+  const closeOverrideProvided = closeDateOverride !== undefined;
+  const closeOverrideDate = closeDateOverride ? new Date(closeDateOverride) : null;
   let timelineId = ""; // #4 — capturado dentro de la tx para registrar el cambio después
   const draftEvents: DraftEvent[] = []; // eventos crudos del watchdog (se emiten post-tx)
   /* La fecha de arranque es el ÚNICO campo que un auto-guardado audita (ver el bloque #6). */
@@ -449,11 +460,13 @@ export async function PUT(
         create: {
           projectId,
           anchorStartDate: anchorDate,
+          closeDateOverride: closeOverrideDate,
           lastEditedByHuman: now,
           // generatedByAgentRunId queda null — cronograma creado a mano sin agente
         },
         update: {
           anchorStartDate: anchorDate,
+          ...(closeOverrideProvided ? { closeDateOverride: closeOverrideDate } : {}),
           lastEditedByHuman: now,
           // Un guardado DELIBERADO (con razón: aplicar la propuesta del assist, crear la 1ra
           // fase) invalida la propuesta pendiente — ya quedó reflejada o el humano decidió otra

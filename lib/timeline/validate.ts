@@ -50,6 +50,11 @@ export interface PhaseInput {
 
 export interface PutBody {
   anchorStartDate?: string | null;
+  /** Tanda K — cierre fijado a mano. undefined = no tocar (compat con payloads viejos); null = volver
+   *  al proyectado (derivado); string ISO = fijar. A diferencia de `anchorStartDate` (siempre viaja),
+   *  este SÍ distingue "no tocar" de "borrar": el Gantt lo manda en cada autosave, pero el editor de
+   *  fases (formularios que no conocen el cierre) no debe poder vaciarlo por omisión. */
+  closeDateOverride?: string | null;
   phases: PhaseInput[];
 }
 
@@ -77,6 +82,23 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
         errors.push("anchorStartDate no es una fecha ISO válida");
       } else {
         anchorStartDate = body.anchorStartDate;
+      }
+    }
+  }
+
+  // closeDateOverride (opcional — undefined = no tocar; null = volver al proyectado; string = fijar)
+  let closeDateOverride: string | null | undefined = undefined;
+  if (body.closeDateOverride !== undefined) {
+    if (body.closeDateOverride === null) {
+      closeDateOverride = null;
+    } else if (typeof body.closeDateOverride !== "string") {
+      errors.push("closeDateOverride debe ser string ISO o null");
+    } else {
+      const d = new Date(body.closeDateOverride);
+      if (isNaN(d.getTime())) {
+        errors.push("closeDateOverride no es una fecha ISO válida");
+      } else {
+        closeDateOverride = body.closeDateOverride;
       }
     }
   }
@@ -285,5 +307,5 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
   });
 
   if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, parsed: { anchorStartDate, phases: parsedPhases } };
+  return { valid: true, parsed: { anchorStartDate, closeDateOverride, phases: parsedPhases } };
 }

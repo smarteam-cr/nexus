@@ -60,6 +60,8 @@ import {
   overduePlannedEnd,
   isOverdueByDate,
   projectedEnd,
+  displayedEnd,
+  closeDateDiverges,
 } from "@/lib/timeline/weeks";
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
@@ -70,6 +72,7 @@ import { describeChanges, type ProposalDelta } from "@/lib/timeline/proposal-del
 import { clientStatusLine } from "@/lib/timeline/client-status";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
+import DatePickerField from "@/components/ui/DatePickerField";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
 
@@ -128,6 +131,11 @@ interface Props {
   onAddTask?: (phaseKey: string, weekIndex: number) => void;
   // Nota: el borrado de tarea se hace desde el TaskDetailDrawer, no desde la fila del Gantt.
   onSetAnchor?: (isoDate: string) => void; // yyyy-mm-dd — fijar arranque desde el Gantt
+  // Tanda K — cierre fijado a mano. `closeOverride` en yyyy-mm-dd ("" = sin fijar, seguir el
+  // proyectado). `onSetCloseOverride` presente = editable (mismo gate que `onSetAnchor`: la
+  // preview de propuesta NO lo pasa, así que ahí el chip queda de solo lectura como siempre).
+  closeOverride?: string | null;
+  onSetCloseOverride?: (isoDate: string) => void;
   onAssistPhase?: (phase: GanttPhase) => void; // abrir el dialog de IA scopeado a esta fase
   onRegeneratePhase?: (phase: GanttPhase) => void; // regenerar (borrar+rehacer) las tareas IA de esta fase
   kickoffDate?: string | null; // yyyy-mm-dd de la sesión de kickoff — sugerencia del anchor
@@ -382,6 +390,8 @@ export default function TimelineGantt({
   onUpdateTask,
   onAddTask,
   onSetAnchor,
+  closeOverride,
+  onSetCloseOverride,
   onAssistPhase,
   onRegeneratePhase,
   kickoffDate,
@@ -408,12 +418,19 @@ export default function TimelineGantt({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // #3 — renombrar inline: el título es TEXTO; al hacer clic se vuelve input (solo esa tarea).
   const [editingTitleKey, setEditingTitleKey] = useState<string | null>(null);
+  // Tanda K — "Mantener la mía" silencia el aviso de divergencia hasta la PRÓXIMA sugerencia
+  // distinta (guarda el ISO de la sugerida que se descartó; no persiste — vuelve a avisar si
+  // se recarga la página, a propósito: es un recordatorio, no una decisión escrita en la base).
+  const [dismissedSuggestionIso, setDismissedSuggestionIso] = useState<string | null>(null);
 
   const ranges = computePhaseRanges(phases);
   const total = timelineSpan(phases); // ancho de calendario (max end) — soporta fases en paralelo
   // Cierre proyectado: `null` sin ancla o sin fases (ver projectedEnd). Deriva de las MISMAS
   // fases que dibujan la grilla, así que la fecha cae exactamente en su borde derecho.
   const cierre = projectedEnd(anchor, phases);
+  // Tanda K — lo que se PINTA (override si existe) y si hay que preguntar (diverge del vivo).
+  const cierreVisible = displayedEnd(closeOverride, cierre);
+  const cierreDiverge = closeDateDiverges(closeOverride, cierre);
   // "Hoy" es hora de pared LOCAL del usuario (a diferencia de las fechas derivadas
   // del anchor, que son días de calendario en UTC — ver lib/timeline/weeks.ts).
   // Por eso NO puede calcularse en el servidor: `curInRange` gatea nodos y el
@@ -681,18 +698,53 @@ export default function TimelineGantt({
           </span>
         )}
 
-        {/* CIERRE PROYECTADO (Tanda J) — arranque + span, la misma fórmula que dibuja esta grilla
-            y que ve el cliente cuando hay atraso. Hasta ahora el CSE no veía NINGUNA fecha de fin:
-            el proyecto se medía en "Semana 6 de 14" y el compromiso quedaba en la cabeza de cada
-            uno. Va acá, pegado al selector de arranque, porque son las dos puntas del mismo dato.
-            ⚠ Chip NEUTRO a propósito: es un hecho, no una alarma. Y sin ancla no se pinta — el
-            AnchorDatePicker ya avisa en ámbar que falta la fecha, y un "Por definir" al lado sería
-            ruido. Como este componente también rinde la PREVIEW de una propuesta, el cierre
-            propuesto se muestra solo, sin cablear nada. */}
-        {cierre.label && (
-          <span className="text-xs font-semibold text-fg-secondary bg-surface-hover/60 border border-line/50 rounded-lg px-3 py-1.5">
-            Cierre proyectado: {cierre.label}
-          </span>
+        {/* CIERRE PROYECTADO / FIJADO (Tanda J + K) — arranque + span, la misma fórmula que dibuja
+            esta grilla y que ve el cliente cuando hay atraso. Hasta la Tanda J el CSE no veía
+            NINGUNA fecha de fin; la Tanda K deja fijarla a mano (mismo gesto que el arranque) y
+            persistir esa elección — con override, GANA sobre lo derivado.
+            ⚠ Editable SOLO cuando `onSetCloseOverride` viene (mismo gate que `onSetAnchor`): la
+            PREVIEW de una propuesta no lo pasa, así que ahí sigue siendo un chip de solo lectura.
+            Si diverge de lo recién calculado (nueva propuesta aceptada, duración editada), no se
+            pisa el override en silencio — se pregunta con el banner de abajo. */}
+        {onSetCloseOverride ? (
+          <div className="relative">
+            <DatePickerField
+              value={closeOverride ?? ""}
+              onChange={onSetCloseOverride}
+              placeholder={cierre.label ? `Cierre proyectado: ${cierre.label}` : "Fijar fecha de cierre"}
+              manual={cierreVisible.isOverride}
+            />
+            {cierreDiverge && dismissedSuggestionIso !== (cierre.date?.toISOString() ?? null) && (
+              <div className="absolute left-0 top-full mt-1.5 z-40 w-72 rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-[11px] text-warn-ink leading-relaxed shadow-lg">
+                El sistema ahora sugiere el cierre el <strong>{cierre.label}</strong> — vos tenés fijado el {cierreVisible.label}.
+                <div className="flex items-center gap-3 mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSetCloseOverride("");
+                      setDismissedSuggestionIso(null);
+                    }}
+                    className="font-semibold underline underline-offset-2 hover:opacity-80"
+                  >
+                    Usar la sugerida
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDismissedSuggestionIso(cierre.date?.toISOString() ?? null)}
+                    className="text-fg-muted hover:text-warn-ink transition-colors"
+                  >
+                    Mantener la mía
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          cierreVisible.label && (
+            <span className="text-xs font-semibold text-fg-secondary bg-surface-hover/60 border border-line/50 rounded-lg px-3 py-1.5">
+              Cierre proyectado: {cierreVisible.label}
+            </span>
+          )
         )}
 
         {/* Sugerencia: fecha de la sesión de kickoff. Aparece si difiere del anchor

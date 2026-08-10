@@ -196,6 +196,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
 
   const [phases, setPhases] = useState<Phase[]>([]);
   const [anchor, setAnchor] = useState<string>(""); // yyyy-mm-dd o ""
+  const [closeOverride, setCloseOverride] = useState<string>(""); // Tanda K — cierre fijado a mano, yyyy-mm-dd o ""
   const [kickoffDate, setKickoffDate] = useState<string>(""); // yyyy-mm-dd de la sesión de kickoff (sugerencia)
   const [loading, setLoading] = useState(true);
   // `loading` = primera carga (pinta el skeleton). `refreshing` = refetch tras una acción
@@ -478,6 +479,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       if (data.exists) {
         setPhases(mapServerPhases(data.phases ?? []));
         setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
+        setCloseOverride(data.closeDateOverride ? String(data.closeDateOverride).slice(0, 10) : "");
         setKickoffDate(data.kickoffSessionDate ? String(data.kickoffSessionDate).slice(0, 10) : "");
         setPublishedAt(data.timelinePublishedAt ?? null);
         setHasPublishedOnce(!!data.hasPublishedOnce);
@@ -784,8 +786,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   };
 
   // ── Guardar (PUT bulk — fases + tareas; anchorOverride para fijar desde el Gantt) ──
-  const buildPutBody = (phasesToSave: Phase[], anchorYmd: string) => ({
+  const buildPutBody = (phasesToSave: Phase[], anchorYmd: string, closeOverrideYmd: string) => ({
     anchorStartDate: anchorYmd ? new Date(anchorYmd).toISOString() : null,
+    // Tanda K — siempre se declara (nunca undefined) para que el autosave del CSE haga round-trip
+    // exacto del override: "" → null (volver al proyectado), fecha → fijar.
+    closeDateOverride: closeOverrideYmd ? new Date(closeOverrideYmd).toISOString() : null,
     phases: phasesToSave.map((p, i) => {
       const perWeek = new Map<number, number>();
       // Las tareas con título VACÍO son borradores locales (recién agregadas, sin titular aún):
@@ -851,7 +856,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...buildPutBody(phases, anchor),
+          ...buildPutBody(phases, anchor, closeOverride),
           // Auto-guardado interno: persiste sin escribir TimelineChange (el audit va en "Subir").
           skipAudit: true,
         }),
@@ -875,6 +880,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             hasBlankDrafts ? mergeServerIds(cur, data.phases ?? []) : mapServerPhases(data.phases ?? []),
           );
           setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
+          setCloseOverride(data.closeDateOverride ? String(data.closeDateOverride).slice(0, 10) : "");
         }
         setDirty(false);
       } else if (data.exists) {
@@ -962,6 +968,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     setAnchor(ymd);
     markDirty();
     if (aviso) toast.info(aviso);
+  };
+
+  // Fijar/soltar el cierre a mano desde el Gantt (Tanda K): "" vuelve a seguir el proyectado.
+  // Igual que el arranque, se PERSISTE con el autosave, no al instante — el picker solo marca dirty.
+  const setCloseOverrideFromGantt = (ymd: string) => {
+    pushTimelineUndo(ymd ? "Cierre fijado a mano" : "Cierre vuelto a automático", `${undoScope}|closeOverride`);
+    setCloseOverride(ymd);
+    markDirty();
   };
 
 
@@ -2367,6 +2381,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             onMoveTask={moveTask}
             onReorderPhases={reorderPhases}
             onSetAnchor={setAnchorFromGantt}
+            closeOverride={closeOverride}
+            onSetCloseOverride={setCloseOverrideFromGantt}
             onAssistPhase={
               (hasAiDetail ? canRegenerateTimeline : canGenerateTimeline)
                 ? (phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }

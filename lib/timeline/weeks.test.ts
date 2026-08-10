@@ -24,6 +24,8 @@ import {
   endShiftDays,
   endShiftFragment,
   describeEndShift,
+  displayedEnd,
+  closeDateDiverges,
   fmtFull,
   type PhaseSpanLike,
 } from "./weeks";
@@ -233,6 +235,42 @@ describe("endShiftDays / endShiftFragment / describeEndShift", () => {
     const unDia = { spanWeeks: 1, date: new Date("2026-06-09T00:00:00.000Z"), label: "9 jun 2026" };
     const cero = { spanWeeks: 1, date: new Date("2026-06-08T00:00:00.000Z"), label: "8 jun 2026" };
     expect(endShiftFragment(cero, unDia)).toBe("se corrió la fecha de cierre 1 día");
+  });
+});
+
+describe("displayedEnd / closeDateDiverges (Tanda K — el cierre fijado a mano)", () => {
+  const sugerido = projectedEnd(ANCHOR, [{ durationWeeks: 5 }]); // 6 jul 2026
+
+  it("sin override: se muestra el proyectado, isOverride=false", () => {
+    expect(displayedEnd(null, sugerido)).toEqual({ ...sugerido, isOverride: false });
+    expect(displayedEnd(undefined, sugerido).isOverride).toBe(false);
+  });
+
+  it("con override: GANA sobre el proyectado, aunque no haya anchor/fases", () => {
+    const sinSugerencia: ReturnType<typeof projectedEnd> = { spanWeeks: 0, date: null, label: null };
+    const r = displayedEnd("2026-08-01T00:00:00.000Z", sinSugerencia);
+    expect(r.isOverride).toBe(true);
+    expect(r.label).toBe("1 ago 2026");
+    expect(r.spanWeeks).toBe(0); // el span sigue siendo el de las fases reales, no un invento
+  });
+
+  it("closeDateDiverges: false si coinciden, true si el proyectado ya no cae el mismo día", () => {
+    expect(closeDateDiverges(sugerido.date!.toISOString(), sugerido)).toBe(false);
+    const otraFecha = projectedEnd(ANCHOR, [{ durationWeeks: 8 }]); // 27 jul 2026
+    expect(closeDateDiverges(sugerido.date!.toISOString(), otraFecha)).toBe(true);
+  });
+
+  it("closeDateDiverges: false sin override, o sin fecha sugerida (nada que reconciliar)", () => {
+    expect(closeDateDiverges(null, sugerido)).toBe(false);
+    expect(closeDateDiverges(sugerido.date!.toISOString(), { spanWeeks: 0, date: null, label: null })).toBe(false);
+  });
+
+  it("⚠ compara por DÍA de calendario UTC, no por instante (mismo criterio que endShiftDays)", () => {
+    // Override puesto por date picker (medianoche UTC) vs. proyectado que arrastra una hora
+    // real de sesión de kickoff — mismo día de calendario, NO debe divergir.
+    const conHoraDeReunion = projectedEnd("2026-06-01T15:00:00.000Z", [{ durationWeeks: 5 }]); // 6 jul, hora real
+    expect(conHoraDeReunion.label).toBe("6 jul 2026");
+    expect(closeDateDiverges("2026-07-06T00:00:00.000Z", conHoraDeReunion)).toBe(false);
   });
 });
 

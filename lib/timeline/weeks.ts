@@ -241,6 +241,43 @@ export function describeEndShift(before: ProjectedEnd, after: ProjectedEnd): str
 }
 
 /**
+ * ── EL CIERRE FIJADO A MANO (Tanda K, 2026-08-09) ────────────────────────────
+ *
+ * `projectedEnd` es y sigue siendo 100% derivado (anchor + span) — eso no cambia, lo sigue
+ * consumiendo la vista del cliente y `lib/portfolio/summary.ts` para medir atraso real. Lo que
+ * agrega esta tanda es una capa ENCIMA para la vista interna: el CSE puede fijar el cierre a
+ * mano (mismo gesto que `AnchorDatePicker`), y ese valor persiste en
+ * `ProjectTimeline.closeDateOverride`. `displayedEnd` decide qué mostrar; `closeDateDiverges`
+ * decide cuándo el chip tiene que dejar de mostrar el override solo y ofrecer actualizarlo —
+ * NUNCA lo pisa en silencio, mismo criterio que "Reemplazar todo" de la Tanda J.
+ */
+
+/** Lo que se pinta en el chip: el override si existe, si no el proyectado (`isOverride` distingue). */
+export function displayedEnd(
+  overrideIso: string | null | undefined,
+  suggested: ProjectedEnd,
+): ProjectedEnd & { isOverride: boolean } {
+  if (!overrideIso) return { ...suggested, isOverride: false };
+  const date = new Date(overrideIso);
+  return { spanWeeks: suggested.spanWeeks, date, label: fmtFull(date.toISOString()), isOverride: true };
+}
+
+/**
+ * true cuando hay un cierre fijado a mano Y el proyectado recién calculado (con las fases/anchor
+ * de AHORA) ya no cae el mismo día de calendario — es la señal de "hay que preguntar". Por DÍA
+ * UTC, no por instante (mismo criterio que `endShiftDays`: el override nace de un date picker a
+ * medianoche UTC, pero `suggested.date` puede arrastrar la hora real de una sesión de kickoff).
+ * Sin override, o sin fecha sugerida (sin anchor/fases), no hay nada que reconciliar → false.
+ */
+export function closeDateDiverges(
+  overrideIso: string | null | undefined,
+  suggested: ProjectedEnd,
+): boolean {
+  if (!overrideIso || !suggested.date) return false;
+  return diaUTC(new Date(overrideIso)) !== diaUTC(suggested.date);
+}
+
+/**
  * Índice de la semana actual (0-indexed, absoluto al proyecto) según el anchor.
  * null si no hay anchor. Puede ser negativo (proyecto no arrancó) o >= total
  * (proyecto terminado) — el render decide cómo tratarlo.
