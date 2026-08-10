@@ -29,6 +29,11 @@ export interface PolledRun {
   sectionCount?: number;
   /** Razón real del fallo (la expone el GET [runId] cuando status=ERROR). F2. */
   error?: string;
+  /** Tanda M — igual que `error`, pero para un fallo PARCIAL: el run terminó DONE (el
+   *  documento/cards se guardaron bien) y el cronograma no se pudo sincronizar. Sin esto,
+   *  "el handoff se regeneró bien" y "el cronograma no se enteró" podían coexistir sin
+   *  que el CSE lo supiera. */
+  timelineSyncError?: string;
   /** Fase en curso ("Analizando sesiones…") — la expone el GET cuando RUNNING. F3. */
   currentPhase?: string | null;
 }

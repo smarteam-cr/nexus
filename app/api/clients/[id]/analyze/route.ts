@@ -7,6 +7,7 @@ import { resolveArtifactGate, artifactGateMessage } from "@/lib/auth/permissions
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { classifyHandoffSession, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { planHandoffSessionBudget, type HandoffSessionBlock } from "@/lib/handoff/session-budget";
+import { reconcileAgentProposal } from "@/lib/timeline/reconcile-proposal";
 import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
 import { extractTitleTerms } from "@/lib/utils/matching";
@@ -2343,7 +2344,17 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
     console.log(`[analyze blocks] Saved ${totalBlocks} blocks across ${outputSections.length} sections`);
 
     // Persistir el cronograma si el agente lo devolvió (mismo helper que el path de cards)
-    await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent);
+    const timelineSync = await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent);
+    // Tanda M — el handoff SIEMPRE corre detached (runDetached): esta respuesta se descarta y
+    // solo `markDone` persiste `AgentRun.output`, que en éxito NO se toca (línea ~2130/2146 ya
+    // guardó el analysisJson real — no pisarlo). Si hubo error de timeline, se MERGEA acá (no se
+    // reemplaza) para que el poller (GET [runId]) pueda leerlo sin perder el contenido real.
+    if (timelineSync.timelineSyncError) {
+      const base = typeof analysisJson === "object" && analysisJson !== null ? analysisJson : {};
+      await prisma.agentRun
+        .update({ where: { id: run.id }, data: { output: JSON.stringify({ ...base, timelineSyncError: timelineSync.timelineSyncError }) } })
+        .catch(() => {});
+    }
 
     const savedBlocks = await prisma.canvasBlock.findMany({
       where: { agentRunId: run.id },
@@ -2354,6 +2365,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
       blocks: savedBlocks,
       format: "blocks",
       run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
+      timelineSyncError: timelineSync.timelineSyncError,
     });
   }
 
@@ -2610,7 +2622,15 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
 
   // ── 14c. Persistir cronograma sugerido por el agente (Fase 2 módulo externo) ─
   // Se llama desde ambos paths (cards y block format) — ver función helper abajo.
-  await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent);
+  const timelineSync = await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent);
+  // Tanda M — mismo motivo que el otro path (block format): mergear, no pisar, y solo cuando
+  // hubo error (el éxito ya está guardado en AgentRun.output desde antes).
+  if (timelineSync.timelineSyncError) {
+    const base = typeof analysisJson === "object" && analysisJson !== null ? analysisJson : {};
+    await prisma.agentRun
+      .update({ where: { id: run.id }, data: { output: JSON.stringify({ ...base, timelineSyncError: timelineSync.timelineSyncError }) } })
+      .catch(() => {});
+  }
 
   // ── 15. Retornar las cards recién creadas + metadata del run ─────────────────
   const runCards = await prisma.clientContextCard.findMany({
@@ -2629,6 +2649,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
       stepLabel: run.stepLabel,
       agent:     { name: agent.name },
     },
+    timelineSyncError: timelineSync.timelineSyncError,
   });
   }; // ← fin de runAnalysisWork
 
@@ -2718,8 +2739,11 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
 /**
  * Persiste el cronograma estructurado (ProjectTimeline + TimelinePhase) si el
  * agente lo devolvió en su output JSON. Conservador: si ya existe un timeline
- * para el proyecto, NO pisa (la propuesta nueva queda solo en AgentRun.output
- * para trazabilidad — el CSE puede borrar manualmente para regenerar).
+ * para el proyecto (aunque tenga 0 fases), NO pisa — reconcilia la propuesta
+ * contra las fases actuales (por nombre normalizado o posición) y la guarda
+ * en `ProjectTimeline.pendingProposal`, que el canvas muestra como vista
+ * previa aplicable ("Revisar N cambios"). Solo si NUNCA existió un
+ * ProjectTimeline para el proyecto se crean fases DIRECTO, sin propuesta.
  *
  * Se llama desde DOS paths del POST handler:
  *   - branch de block format (canvases custom como Handoff Sales→CS)
@@ -2727,13 +2751,20 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
  *
  * El cronograma vive a nivel proyecto, independiente del tipo de output del
  * agente — por eso se factoriza acá.
+ *
+ * Tanda M (2026-08-10) — el catch YA NO se traga la excepción en silencio:
+ * el handoff principal (cards/blocks) sigue sin fallar por esto, pero el
+ * motivo de un fallo de persistencia viaja en `timelineSyncError` para que
+ * el caller lo sume a la respuesta del run — sin eso, "el handoff se
+ * regeneró bien" y "el cronograma no se enteró" podían coexistir sin que el
+ * CSE se enterara de lo segundo.
  */
 async function persistTimelineFromAgentOutput(
   bodyProjectId: string | null,
   analysisJson: unknown,
   agentRunId: string,
   isHandoff: boolean,
-): Promise<void> {
+): Promise<{ timelineSyncError: string | null }> {
   try {
     // Implementación vs re-implementación: el agente lo infiere; el CSE puede corregir luego.
     // Se persiste a nivel Project ANTES del early-return del timeline (vale aunque no haya fases).
@@ -2857,7 +2888,7 @@ async function persistTimelineFromAgentOutput(
 
     const timelineRaw = (analysisJson as { timeline?: { phases?: unknown } } | null)
       ?.timeline?.phases;
-    if (!bodyProjectId || !Array.isArray(timelineRaw) || timelineRaw.length === 0) return;
+    if (!bodyProjectId || !Array.isArray(timelineRaw) || timelineRaw.length === 0) return { timelineSyncError: null };
 
     // Validador inline (sin Zod, consistente con el resto del codebase)
     const validPhases = timelineRaw
@@ -2886,7 +2917,7 @@ async function persistTimelineFromAgentOutput(
         source: "AGENT" as const,
       }));
 
-    if (validPhases.length === 0) return;
+    if (validPhases.length === 0) return { timelineSyncError: null };
 
     // Si YA existe un cronograma NO se pisa (protege ediciones + progreso de tareas).
     // En vez de descartar la propuesta nueva, se reconcilia contra las fases actuales y
@@ -2907,114 +2938,45 @@ async function persistTimelineFromAgentOutput(
       },
     });
     if (existing) {
-      const norm = (s: string) => s.trim().toLowerCase();
-      const byName = new Map<string, (typeof existing.phases)[number]>();
-      for (const ph of existing.phases) if (!byName.has(norm(ph.name))) byName.set(norm(ph.name), ph);
-      const consumed = new Set<string>();
-
-      type ProposalPhase = {
-        id?: string;
-        name: string;
-        order: number;
-        durationWeeks: number;
-        startWeek?: number | null;
-        sessionCount: number | null;
-        notes: string | null;
-        activityType?: string | null;
-      };
-      const proposedPhases: ProposalPhase[] = [];
-
-      // 1) Fases propuestas por el agente (en su orden), matcheadas a existentes por
-      //    nombre normalizado y, si no, por posición. Las matcheadas llevan su id +
-      //    el activityType existente (mejora el preview; no-op al aplicar).
-      validPhases.forEach((p, i) => {
-        let match: (typeof existing.phases)[number] | undefined = byName.get(norm(p.name));
-        if (match && consumed.has(match.id)) match = undefined;
-        if (!match) {
-          const positional = existing.phases[i];
-          if (positional && !consumed.has(positional.id)) match = positional;
-        }
-        if (match) {
-          consumed.add(match.id);
-          proposedPhases.push({
-            id: match.id,
-            name: p.name,
-            order: i,
-            durationWeeks: p.durationWeeks,
-            startWeek: p.startWeek,
-            sessionCount: p.sessionCount,
-            notes: p.notes,
-            activityType: match.activityType,
-          });
-        } else {
-          proposedPhases.push({
-            name: p.name,
-            order: i,
-            durationWeeks: p.durationWeeks,
-            startWeek: p.startWeek,
-            sessionCount: p.sessionCount,
-            notes: p.notes,
-          });
-        }
-      });
-
-      // 2) Fases existentes NO matcheadas → re-emitir idénticas (nunca borrar).
-      let nextOrder = proposedPhases.length;
-      for (const ph of existing.phases) {
-        if (consumed.has(ph.id)) continue;
-        proposedPhases.push({
-          id: ph.id,
-          name: ph.name,
-          order: nextOrder++,
-          durationWeeks: ph.durationWeeks,
-          startWeek: ph.startWeek,
-          sessionCount: ph.sessionCount,
-          notes: ph.notes,
-          activityType: ph.activityType,
-        });
-      }
-
       // Si el anchor sigue vacío, derivarlo de la sesión de kickoff (la propuesta lo
       // lleva → al aplicarla, el PUT lo persiste). Si ya está, se conserva (no se pisa).
-      const pendingProposal = {
-        anchorStartDate:
-          existing.anchorStartDate?.toISOString() ??
-          (await getKickoffSessionDate(bodyProjectId))?.toISOString() ??
-          null,
-        phases: proposedPhases,
-      };
+      // Este fallback SÍ pega a la base (getKickoffSessionDate) — por eso vive acá y no
+      // dentro de reconcileAgentProposal, que es pura.
+      const existingAnchorISO = existing.anchorStartDate?.toISOString() ?? null;
+      const resolvedAnchorISO =
+        existingAnchorISO ?? (await getKickoffSessionDate(bodyProjectId))?.toISOString() ?? null;
 
-      // ¿La propuesta es un NO-OP? (mismos ids en el mismo orden, mismos campos que el PUT
-      // escribiría, mismo anchor). Regenerar el handoff para refrescar CONTEXTO no debe generar
-      // ruido en el cronograma: antes TODA regeneración dejaba una "propuesta pendiente" aunque
-      // fuera idéntica a lo existente, y el CSE tenía que descartarla a mano.
-      const phaseFp = (p: {
-        id?: string | null; name: string; durationWeeks: number; startWeek?: number | null;
-        sessionCount: number | null; notes: string | null; activityType?: string | null;
-      }) =>
-        JSON.stringify([p.id ?? null, p.name, p.durationWeeks, p.startWeek ?? null, p.sessionCount ?? null, p.notes ?? null, p.activityType ?? null]);
-      const isNoOp =
-        pendingProposal.anchorStartDate === (existing.anchorStartDate?.toISOString() ?? null) &&
-        proposedPhases.length === existing.phases.length &&
-        proposedPhases.every((p, i) => phaseFp(p) === phaseFp(existing.phases[i]));
-      if (isNoOp) {
+      const reconciled = reconcileAgentProposal(
+        validPhases.map((p) => ({
+          name: p.name, durationWeeks: p.durationWeeks, startWeek: p.startWeek,
+          sessionCount: p.sessionCount, notes: p.notes,
+        })),
+        existing.phases,
+        existingAnchorISO,
+        resolvedAnchorISO,
+      );
+
+      // Regenerar el handoff para refrescar CONTEXTO no debe generar ruido en el cronograma:
+      // antes TODA regeneración dejaba una "propuesta pendiente" aunque fuera idéntica a lo
+      // existente, y el CSE tenía que descartarla a mano.
+      if (reconciled.isNoOp) {
         console.log(
           `[analyze] propuesta de cronograma idéntica a lo existente — no se guarda (project ${bodyProjectId}, run ${agentRunId}).`,
         );
-        return;
+        return { timelineSyncError: null };
       }
 
       await prisma.projectTimeline.update({
         where: { projectId: bodyProjectId },
         data: {
-          pendingProposal: pendingProposal as Prisma.InputJsonValue,
+          pendingProposal: { anchorStartDate: reconciled.anchorStartDate, phases: reconciled.phases } as unknown as Prisma.InputJsonValue,
           pendingProposalRunId: agentRunId,
         },
       });
       console.log(
-        `[analyze] ✓ pendingProposal guardada (${proposedPhases.length} fases; ${validPhases.length} propuestas por el agente) para project ${bodyProjectId} (run ${agentRunId}).`,
+        `[analyze] ✓ pendingProposal guardada (${reconciled.phases.length} fases; ${validPhases.length} propuestas por el agente) para project ${bodyProjectId} (run ${agentRunId}).`,
       );
-      return;
+      return { timelineSyncError: null };
     }
 
     /* KICKOFF para quien corresponde: en Customer Success (y pipeline legacy) la 1ra fase debe
@@ -3070,9 +3032,14 @@ async function persistTimelineFromAgentOutput(
       `[analyze] ✓ ProjectTimeline creado con ${phasesToCreate.length} fases (AgentRun ${agentRunId})` +
         (kickoffDate ? ` · anchor=${kickoffDate.toISOString().slice(0, 10)} (kickoff)` : " · sin anchor (sin kickoff)"),
     );
+    return { timelineSyncError: null };
   } catch (e) {
+    // Tanda M — ya NO se traga del todo: el handoff principal (cards/blocks) sigue sin fallar
+    // por esto, pero el motivo viaja de vuelta para que el caller lo sume a la respuesta del
+    // run y el CSE se entere (toast), aunque nunca abra la pestaña Cronograma.
+    const message = `No se pudo actualizar el cronograma: ${e instanceof Error ? e.message : "error desconocido"}`;
     console.error("[analyze] Timeline persist error:", e);
-    // No fallar la respuesta — el handoff principal (cards/blocks) ya quedó persistido.
+    return { timelineSyncError: message };
   }
 }
 

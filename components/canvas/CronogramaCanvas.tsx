@@ -1180,12 +1180,17 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     setApplying(false);
   };
 
-  const discardProposal = async () => {
+  const discardProposal = async (reason?: string) => {
     // Si la propuesta vino del agente (re-run), está persistida en pendingProposal →
     // limpiarla en el server para que no reaparezca al recargar. La de assist es solo en
     // memoria (el DELETE es no-op inofensivo). El estado local se limpia pase lo que pase.
     try {
-      await fetch(`/api/projects/${projectId}/timeline/proposal`, { method: "DELETE" });
+      await fetch(`/api/projects/${projectId}/timeline/proposal`, {
+        method: "DELETE",
+        // Tanda M — `reason` es opcional: solo el auto-descarte silencioso lo manda, para
+        // dejar un log server-side con la corrida que se evaporó (ver la ruta).
+        ...(reason ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) } : {}),
+      });
     } catch {
       /* limpiar local igual */
     }
@@ -1233,7 +1238,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     // guardar que casualmente coincida con la sugerencia la hacía desaparecer del server — y al
     // deshacer ya no volvía. Con cambios sin guardar no se descarta nada.
     if (structureOnlyProposal && proposalDeltas.length === 0 && !resolvingProposal && !loading && !dirty && !saving) {
-      void discardProposal();
+      void discardProposal("auto-zero-deltas");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [structureOnlyProposal, proposalDeltas.length, loading, dirty, saving]);
@@ -1996,7 +2001,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 {applying ? "Aplicando…" : "Aplicar cambios"}
               </button>
               <button
-                onClick={discardProposal}
+                onClick={() => void discardProposal()}
                 disabled={applying}
                 className="text-xs font-medium text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
               >

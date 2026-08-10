@@ -122,6 +122,8 @@ export const GET = withProjectAccess(async (
       altaActorEmail: true,
       altaIntentos: true,
       createdAt: true,
+      // Tanda M — si el handoff dejó una propuesta de cronograma sin revisar.
+      timeline: { select: { pendingProposal: true } },
     },
   });
 
@@ -396,6 +398,7 @@ export const GET = withProjectAccess(async (
       actorEmail: project.altaActorEmail,
       intentos: project.altaIntentos,
     },
+    timelineProposalPending: project.timeline?.pendingProposal != null,
   });
 }));
 

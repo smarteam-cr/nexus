@@ -12,6 +12,7 @@
 import { useState, useEffect, useCallback } from "react";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import { useAgentRun } from "@/hooks/useAgentRun";
+import { useToast } from "@/components/ui/Toast";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 import { useWorkspace } from "./WorkspaceContext";
 import { useMe } from "@/hooks/useMe";
@@ -183,6 +184,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   const [showDoc, setShowDoc] = useState(false);
   const [showHistorial, setShowHistorial] = useState(false);
   const { bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh } = useWorkspace();
+  const toast = useToast();
   // RBAC: solo VENTAS/CSL/MARKETING/SUPER_ADMIN editan el handoff (capacidad
   // handoffAnywhere). El CSE lo VE pero no lo genera ni edita.
   const me = useMe();
@@ -357,6 +359,16 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
           return;
         }
         if (result.status === "TIMEOUT") { setError("La generación está tardando más de lo normal. Revisá en unos minutos."); return; }
+        // Tanda M — el handoff (documento) puede haber terminado DONE mientras el cronograma
+        // no se pudo sincronizar (ej. reconciliación fallida, error de base). Sin esto, el CSE
+        // solo se enteraba si por casualidad abría la pestaña Cronograma. Sticky (con acción)
+        // para que no se pierda entre los demás toasts.
+        if (result.timelineSyncError) {
+          toast.error(
+            `El handoff se generó, pero el cronograma no se actualizó: ${result.timelineSyncError}`,
+            { action: { label: "Entendido", onClick: () => {} } },
+          );
+        }
       }
       // 3. Sync a HubSpot (best-effort; reconciliable)
       if (handoffId) {

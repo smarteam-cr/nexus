@@ -31,6 +31,18 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
 
   const outputType = run.agent?.outputType ?? "CARDS";
 
+  // Tanda M — el cronograma pudo haber fallado al sincronizarse aunque el run terminó DONE
+  // (el handoff principal se guarda igual). `persistTimelineFromAgentOutput` mergea el motivo
+  // en el MISMO `output` que ya tenía el contenido real — se lee acá una sola vez, para los 4
+  // shapes de respuesta de abajo, sin asumir la forma del resto del output.
+  let timelineSyncError: string | undefined;
+  try {
+    const parsed = JSON.parse(run.output ?? "{}") as { timelineSyncError?: unknown };
+    if (typeof parsed?.timelineSyncError === "string" && parsed.timelineSyncError.trim()) {
+      timelineSyncError = parsed.timelineSyncError;
+    }
+  } catch { /* output malformado — sin timelineSyncError, no es motivo para fallar el polling */ }
+
   // ── FLOWCHART: leer desde output JSON ────────────────────────────────────────
   if (outputType === "FLOWCHART") {
     let flowchart = null;
@@ -41,7 +53,7 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
       id: run.id, status: run.status, createdAt: run.createdAt,
       stepLabel: run.stepLabel, serviceType: run.serviceType, currentPhase: run.currentPhase,
       agentName: run.agent?.name ?? null, outputType,
-      flowchart,
+      flowchart, timelineSyncError,
     });
   }
 
@@ -57,7 +69,7 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
       stepLabel: run.stepLabel, serviceType: run.serviceType, currentPhase: run.currentPhase,
       agentName: run.agent?.name ?? null, outputType,
       cards: run.cards,
-      flowcharts,
+      flowcharts, timelineSyncError,
     });
   }
 
@@ -67,7 +79,7 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
       id: run.id, status: run.status, createdAt: run.createdAt,
       stepLabel: run.stepLabel, serviceType: run.serviceType, currentPhase: run.currentPhase,
       agentName: run.agent?.name ?? null, outputType,
-      cards: run.cards, // incluye cardType TEXT y CHART (con chartConfig)
+      cards: run.cards, timelineSyncError, // incluye cardType TEXT y CHART (con chartConfig)
     });
   }
 
@@ -101,7 +113,7 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
     id: run.id, status: run.status, createdAt: run.createdAt,
     stepLabel: run.stepLabel, serviceType: run.serviceType, currentPhase: run.currentPhase,
     agentName: run.agent?.name ?? null, outputType,
-    cards, sectionCount, blockCount,
+    cards, sectionCount, blockCount, timelineSyncError,
   });
 });
 

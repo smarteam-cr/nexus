@@ -13,6 +13,7 @@ import type { ChipDeCanvas } from "@/lib/flow/canvas-chips";
 import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import StageBadge from "@/components/lifecycle/StageBadge";
 import AltaTrabada from "@/components/projects/AltaTrabada";
+import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
 
 
 export interface PendingItem {
@@ -132,6 +133,9 @@ interface GPSData {
     /** Quién empezó el alta: puede terminarla aunque no tenga la celda. */
     actorEmail?: string | null;
   } | null;
+  /** Tanda M — `ProjectTimeline.pendingProposal != null`: el handoff dejó cambios de
+   *  cronograma sin revisar. Ausente en respuestas cacheadas viejas = no se pinta. */
+  timelineProposalPending?: boolean;
 }
 
 /** La RANURA de almacenamiento del frente, no su rótulo — ver `FrenteKey` en kind.ts. */
@@ -552,6 +556,19 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
               invalidateGps(projectId);
               window.location.reload();
             }}
+          />
+        </div>
+      )}
+
+      {/* Tanda M — mismo criterio que el alta: completo acá porque el widget es donde se
+          averigua por qué el cronograma no se movió. */}
+      {data.timelineProposalPending && (
+        <div className="p-4 pb-0">
+          <TimelineProposalPendiente
+            variante="completo"
+            projectId={projectId}
+            clientId={clientId}
+            pending
           />
         </div>
       )}

@@ -90,6 +90,9 @@ export default async function ClientPage({
         altaUltimoIntentoAt: true,
         altaActorEmail: true,
         altaIntentos: true,
+        // Tanda M — si el handoff dejó una propuesta de cronograma sin revisar. Mismo
+        // criterio que el alta: va en el mismo row para no pagar una query por proyecto.
+        timeline: { select: { pendingProposal: true } },
       },
     }),
     prisma.hubspotAccount.findFirst({
@@ -109,7 +112,9 @@ export default async function ClientPage({
     hubspotCompanyId: client.hubspotCompanyId,
     tieneHubspotAccount: !!hubspotAccount,
   };
-  const visibleProjects = projects.filter((p) => esProyectoNavegable(p, paraFiltro));
+  const visibleProjects = projects
+    .filter((p) => esProyectoNavegable(p, paraFiltro))
+    .map(({ timeline, ...p }) => ({ ...p, timelineProposalPending: timeline?.pendingProposal != null }));
 
   // Garantizar que el proyecto de estrategia existe (se crea al primer acceso)
   const strategyRef = await ensureStrategyProject(id);
