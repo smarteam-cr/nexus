@@ -22,6 +22,8 @@ import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
 import { normalizeFingerprint } from "@/lib/timeline/particularidad-identity";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { resolvePipeline } from "@/lib/projects/kind";
+import { canvasOf } from "@/lib/pieces/canvas-query";
+import { bloqueDeInstruccionesDeDoc, docBriefFrom } from "@/lib/business-cases/section-briefs";
 
 const AGENT_ID_PROGRESS = "agent-timeline-progress";
 
@@ -90,6 +92,49 @@ export interface PendingParticularidadDraft {
    *  en vez de crear (evita que 26 corridas del agente carguen 26 veces el mismo atraso). */
   fingerprint: string;
   phaseId: string | null;
+}
+
+export interface ProgressMessageInputs {
+  /** Bloque de bloqueDeInstruccionesDeDoc — "" sin brief, o el bloque con su \n\n de cierre. */
+  instrucciones: string;
+  companyName: string;
+  industry: string | null;
+  serviceType: string | null;
+  stageLabel: string | null;
+  sessionsBlock: string;
+  handoffCtx: string;
+  timelineCtx: string;
+}
+
+/**
+ * Arma el userMessage del agente de avance. PURO — testeable sin DB/Claude.
+ * Las instrucciones del CSE (entry `__doc` del canvas "timeline", Tanda N) van PEGADAS
+ * al primer renglón — el bloque YA trae su \n\n de cierre; si fuera un ítem MÁS del
+ * array, el .join("\n") sumaría una línea en blanco de más. Mismo criterio que
+ * renderDetalleDeCronograma (lib/contexto/detalle-cronograma.ts).
+ */
+export function buildProgressUserMessage(i: ProgressMessageInputs): string {
+  return [
+    `${i.instrucciones}Empresa: ${i.companyName}`,
+    i.industry ? `Industria: ${i.industry}` : null,
+    i.serviceType ? `Servicio: ${i.serviceType}` : null,
+    "",
+    "=== ETAPA ACTUAL EN HUBSPOT (ANCLA #1 — manda la posición) ===",
+    i.stageLabel ? i.stageLabel : "(sin etapa de HubSpot disponible — inferí el avance solo desde las sesiones y el handoff)",
+    "",
+    "=== SESIONES PASADAS DEL PROYECTO (detallan qué se hizo) ===",
+    i.sessionsBlock || "(sin sesiones pasadas registradas)",
+    "",
+    "=== HANDOFF CURADO (alcance del proyecto) ===",
+    i.handoffCtx || "(sin handoff confirmado)",
+    "",
+    i.timelineCtx,
+    "",
+    "Detectá el avance real siguiendo tus instrucciones: ubicá el currentPhaseId, marcá las fases completadas y las tareas hechas. Usá ids EXACTOS. No re-propongas lo que ya está DONE. Sé conservador.",
+    "Además, si el transcript RESPALDA una DESVIACIÓN FECHADA del plan (una fecha se corrió = ATRASO con weeksImpact obligatorio; o se comprometió una fecha nueva = COMPROMISO), proponela en `particularidades` con su party, occurredAt (fecha ISO de la sesión) y sourceQuote (fragmento de respaldo). NO son particularidades los pendientes/insumos del cliente ('se necesita X', 'pendiente entrega de Y') — esos son tareas party=CLIENTE, no los emitas acá. Si no hay una desviación fechada clara, dejá el array vacío.",
+  ]
+    .filter((x) => x !== null)
+    .join("\n");
 }
 
 /**
@@ -164,12 +209,20 @@ export async function regenerateTimelineProgress(
     const pipelineDelProyecto = resolvePipeline(project.hubspotPipelineId);
     if (pipelineDelProyecto && pipelineDelProyecto.key !== "customer-success") stageLabel = null;
 
-    // 3. Contexto: sesiones pasadas + handoff + cronograma con avance confirmado.
-    const [pastSessions, handoffCtx, timelineCtx] = await Promise.all([
+    // 3. Contexto: sesiones pasadas + handoff + cronograma con avance confirmado + las
+    //    instrucciones del CSE (mismo canvas "timeline" que ya lee el detalle — Tanda N).
+    const [pastSessions, handoffCtx, timelineCtx, canvasCronograma] = await Promise.all([
       getPastSessionsForProject(projectId),
       loadHandoffContext(projectId, { onlyConfirmed: true }),
       loadTimelineContext(projectId, { includeProgress: true }),
+      prisma.projectCanvas.findFirst({
+        where: { projectId, ...canvasOf("timeline") },
+        select: { sections: true },
+      }),
     ]);
+    const instrucciones = bloqueDeInstruccionesDeDoc(
+      canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
+    );
     const sessionsBlock = pastSessions
       .map((s) => `[${s.date.toISOString().slice(0, 10)}] ${s.content ?? `Sesión "${s.title}" (sin transcript disponible)`}`)
       .join("\n\n---\n\n");
@@ -198,27 +251,16 @@ export async function regenerateTimelineProgress(
     });
     if (!agent) return { status: "skipped", reason: "agent_not_seeded", projectId };
 
-    const userMessage = [
-      `Empresa: ${project.client.name}`,
-      project.client.industry ? `Industria: ${project.client.industry}` : null,
-      project.serviceType ? `Servicio: ${project.serviceType}` : null,
-      "",
-      "=== ETAPA ACTUAL EN HUBSPOT (ANCLA #1 — manda la posición) ===",
-      stageLabel ? stageLabel : "(sin etapa de HubSpot disponible — inferí el avance solo desde las sesiones y el handoff)",
-      "",
-      "=== SESIONES PASADAS DEL PROYECTO (detallan qué se hizo) ===",
-      sessionsBlock || "(sin sesiones pasadas registradas)",
-      "",
-      "=== HANDOFF CURADO (alcance del proyecto) ===",
-      handoffCtx || "(sin handoff confirmado)",
-      "",
+    const userMessage = buildProgressUserMessage({
+      instrucciones,
+      companyName: project.client.name,
+      industry: project.client.industry,
+      serviceType: project.serviceType,
+      stageLabel,
+      sessionsBlock,
+      handoffCtx,
       timelineCtx,
-      "",
-      "Detectá el avance real siguiendo tus instrucciones: ubicá el currentPhaseId, marcá las fases completadas y las tareas hechas. Usá ids EXACTOS. No re-propongas lo que ya está DONE. Sé conservador.",
-      "Además, si el transcript RESPALDA una DESVIACIÓN FECHADA del plan (una fecha se corrió = ATRASO con weeksImpact obligatorio; o se comprometió una fecha nueva = COMPROMISO), proponela en `particularidades` con su party, occurredAt (fecha ISO de la sesión) y sourceQuote (fragmento de respaldo). NO son particularidades los pendientes/insumos del cliente ('se necesita X', 'pendiente entrega de Y') — esos son tareas party=CLIENTE, no los emitas acá. Si no hay una desviación fechada clara, dejá el array vacío.",
-    ]
-      .filter((x) => x !== null)
-      .join("\n");
+    });
 
     // 5. Claude
     let rawText: string;

@@ -59,6 +59,7 @@ import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
 import { PhaseRegenModal, type RegenProposedTask, type RegenCurrentTask, type FinalTask } from "./PhaseRegenModal";
+import { AllPhasesRegenModal, type AllPhasesRegenPhase } from "./AllPhasesRegenModal";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 import { CronogramaSkeleton } from "@/components/clients/skeletons";
 import { Spinner } from "@/components/ui";
@@ -308,6 +309,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [regenPreview, setRegenPreview] = useState<RegenProposedTask[] | null>(null);
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenApplying, setRegenApplying] = useState(false);
+  // Regenerar TODO el cronograma (Tanda N) — mismo patrón que el regen por fase, generalizado.
+  const [allRegenPreview, setAllRegenPreview] = useState<Array<{ phaseId: string; tasks: RegenProposedTask[] }> | null>(null);
+  const [allRegenLoading, setAllRegenLoading] = useState(false);
+  const [allRegenApplying, setAllRegenApplying] = useState(false);
   // Pedido del panel "Qué hacer acá" de abrir un grupo de la lista. El nonce hace que re-clickear
   // el mismo CTA lo vuelva a abrir aunque el CSE lo haya cerrado a mano.
   const [focusGroup, setFocusGroup] = useState<{ key: string; nonce: number } | null>(null);
@@ -1112,6 +1117,70 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     setRegenApplying(false);
   };
 
+  // Regenerar TODO el cronograma (Tanda N) — misma mecánica que el regen por fase, sin
+  // regeneratePhaseId: el prompt ya pide "todas las fases" por default. Paso 1 PREVIEW.
+  const startAllRegenPreview = async () => {
+    await flushDocBrief();
+    setAllRegenPreview(null);
+    setAllRegenLoading(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage: 1, step: 0, stepLabel: "Regenerar cronograma completo", sectionLabel: "Regenerar cronograma completo",
+          agentId: "agent-timeline-detail", projectId, preview: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.message ?? data?.error ?? "No se pudo generar la propuesta.");
+      } else {
+        setAllRegenPreview(Array.isArray(data?.previewPhases) ? data.previewPhases : []);
+      }
+    } catch {
+      toast.error("Error de conexión al generar la propuesta.");
+    }
+    setAllRegenLoading(false);
+  };
+
+  // Paso 2 APLICAR: una entrada por fase, TODAS en una sola transacción del server
+  // (/timeline/detail/apply-all). Al terminar, encadena "Re-chequear avance" (best-effort,
+  // mismo patrón que generateDetail) — con las instrucciones del CSE recién aplicadas, el
+  // avance las respeta desde el primer chequeo.
+  const applyAllRegen = async (payload: Array<{ phaseId: string; tasks: FinalTask[] }>) => {
+    setAllRegenApplying(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/detail/apply-all`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phases: payload, reason: "Regeneración completa del cronograma (curada)" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error ?? data?.message ?? "No se pudo aplicar el cronograma.");
+      } else {
+        await load();
+        clearScope(undoScope);
+        setAllRegenPreview(null);
+        toast.success(`Cronograma actualizado — ${data?.phasesApplied ?? payload.length} fases.`);
+        setChainingProgress(true);
+        try {
+          const pres = await fetch(`/api/projects/${projectId}/timeline/progress`, { method: "POST" });
+          const pdata = await pres.json().catch(() => ({}));
+          if (pres.ok && pdata?.status === "ok") {
+            await load();
+            toast.success("Avance re-evaluado con el cronograma nuevo — confirmá abajo.");
+          }
+        } catch { /* best-effort, mismo criterio que generateDetail */ }
+        setChainingProgress(false);
+      }
+    } catch {
+      toast.error("Error de conexión al aplicar el cronograma.");
+    }
+    setAllRegenApplying(false);
+  };
+
   // El detalle (tareas) ya NO se auto-genera en silencio: lo crea el CTA explícito
   // "Generar cronograma" (#2). Ver el portal de acciones más abajo.
 
@@ -1910,6 +1979,20 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               Pedir cambio con IA
             </button>
           )}
+          {/* Tanda N — "Regenerar todo el cronograma": mismo gate que "Regenerar" por fase
+              (hasAiDetail && canRegenerateTimeline). Preview de TODAS las fases → curación
+              fase por fase en acordeón → aplicar todo en una transacción. */}
+          {canEdit && phases.length > 0 && !proposal && hasAiDetail && canRegenerateTimeline && (
+            <button
+              onClick={() => void startAllRegenPreview()}
+              disabled={allRegenLoading || allRegenApplying}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-surface-muted border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-60"
+              title="Propone refrescar TODAS las fases con lo que se sabe hoy — revisás y aceptás/descartás antes de aplicar, fase por fase"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              {allRegenLoading ? "Generando propuesta…" : "Regenerar todo el cronograma"}
+            </button>
+          )}
           {/* PT-0b — "Confirmar detalle" desacoplado de "Subir al cliente": habilita el gate
               detailConfirmedAt (las tareas por semana pueden cruzar al cliente) SIN publicar.
               Visible cuando hay tareas IA (source AGENT/MODIFIED) y el detalle aún no se confirmó.
@@ -2533,6 +2616,41 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             applying={regenApplying}
             onCancel={() => { setRegenPhase(null); setRegenPreview(null); }}
             onApply={applyPhaseRegen}
+          />
+        );
+      })()}
+
+      {/* Tanda N — "Regenerar todo el cronograma": mismo patrón de dos pasos, generalizado. */}
+      {allRegenLoading && (
+        <Modal open onClose={() => {}} size="sm" closeOnBackdrop={false} closeOnEscape={false}>
+          <div className="flex items-center gap-3 py-1">
+            <span className="w-4 h-4 border-2 border-brand/30 border-t-brand rounded-full animate-spin flex-shrink-0" />
+            <p className="text-sm text-fg">Generando la propuesta para todo el cronograma…</p>
+          </div>
+        </Modal>
+      )}
+      {allRegenPreview && (() => {
+        const merged: AllPhasesRegenPhase[] = allRegenPreview
+          .map((pv) => {
+            const src = phases.find((p) => p.id === pv.phaseId);
+            if (!src) return null;
+            const current: RegenCurrentTask[] = (src.tasks ?? [])
+              .filter((t) => t.id)
+              .map((t) => ({
+                id: t.id as string, title: t.title, weekIndex: t.weekIndex,
+                party: t.party ?? null, type: t.type ?? null, status: t.status,
+                source: t.source ?? null, notes: t.notes ?? null,
+              }));
+            return { phaseId: pv.phaseId, phaseName: src.name, durationWeeks: src.durationWeeks, current, proposed: pv.tasks };
+          })
+          .filter((x): x is AllPhasesRegenPhase => x !== null);
+        return (
+          <AllPhasesRegenModal
+            open
+            phases={merged}
+            applying={allRegenApplying}
+            onCancel={() => setAllRegenPreview(null)}
+            onApply={applyAllRegen}
           />
         );
       })()}

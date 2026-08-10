@@ -33,9 +33,9 @@ import { cargarContextoDelDetalle } from "@/lib/contexto/cargar";
 import { renderDetalleDeCronograma, clasificacionDeTags } from "@/lib/contexto/detalle-cronograma";
 import { vetoSiElHandoffEsDeOtro, componerExclusiones, exclusionDelSistema } from "@/lib/handoff/duenio";
 import { DETALLE_CRONOGRAMA_ID, idDeVarianteDetalle, esAgenteDeDetalle, pipelineKeyDeProyecto, tipoExigidoPorAgente } from "@/lib/agents/resolver";
-import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
 import { debeAnteponerSemanaCero } from "@/lib/timeline/semana-cero";
 import { patchBaselinePhaseTasks } from "@/lib/timeline/baseline";
+import { computeDetailTasksForPhase, type ComputedDetailTask } from "@/lib/timeline/compute-detail-tasks";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { KICKOFF_TEMPLATE, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
 import { syncHorariosSessionsFromHubs } from "@/lib/canvas/kickoff-hubs";
@@ -2183,12 +2183,21 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // ProjectTimeline/TimelineTask y se responde acá — no debe pasar por
   // updateCanvasAsync ni por el path de cards.
   if (isTimelineDetailAgent) {
-    // Modal de curación (regen por fase con preview): computamos la propuesta y la devolvemos SIN
-    // escribir. El CSE la cura en el modal y aplica por /timeline/phases/[phaseId]/apply.
-    if (previewOnly && regeneratePhaseId && bodyProjectId) {
-      const previewTasks = await computeTimelineDetailPreview(bodyProjectId, analysisJson, regeneratePhaseId);
+    // Modal de curación (regen con preview): computamos la propuesta y la devolvemos SIN escribir.
+    // Con regeneratePhaseId → preview de UNA fase (/timeline/phases/[phaseId]/apply). Sin él (Tanda N,
+    // "Regenerar todo el cronograma") → preview de TODAS las fases (/timeline/detail/apply-all). El
+    // prompt ya pide "todas las fases" por default cuando no hay regeneratePhaseId — no cambia.
+    if (previewOnly && bodyProjectId) {
+      if (regeneratePhaseId) {
+        const previewTasks = await computeTimelineDetailPreview(bodyProjectId, analysisJson, regeneratePhaseId);
+        return NextResponse.json({
+          previewTasks,
+          run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
+        });
+      }
+      const previewPhases = await computeTimelineDetailPreviewAllPhases(bodyProjectId, analysisJson);
       return NextResponse.json({
-        previewTasks,
+        previewPhases,
         run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
       });
     }
@@ -3054,81 +3063,6 @@ const DETAIL_ACTIVITY_TYPES = [
 ] as const;
 
 /**
- * La marca "por validar" vive SOLO en la columna needsValidation: si el modelo
- * desobedece y mete el marcador en el título, se limpia acá — el título cruza
- * al cliente tal cual cuando el CSE confirma el detalle.
- */
-function sanitizeTaskTitle(raw: string): string {
-  const cleaned = raw
-    .replace(/^\s*(?:⚠️?\s*)*(?:\[?\s*por\s+validar\s*\]?\s*[:—–-]?\s*)/i, "")
-    .trim();
-  return cleaned || raw.trim();
-}
-
-interface ComputedDetailTask {
-  title: string;
-  weekIndex: number;
-  order: number;
-  notes: string | null;
-  needsValidation: boolean;
-  party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV";
-  type: "SESSION" | "TASK";
-}
-
-/**
- * Computa las tareas de UNA fase desde el JSON crudo del agente de detalle: clamp de weekIndex,
- * order incremental por semana, party validado (con gate DEV para la fase técnica) o fallback por
- * activityType, type validado, título saneado. Puro (sin DB) → reusado por la persistencia y por el
- * PREVIEW (regen por fase que devuelve la propuesta sin escribir). `skipTitles` deduplica por título
- * normalizado (modo "keep"). El party nunca es null (último fallback SMARTEAM).
- */
-function computeDetailTasksForPhase(
-  phaseName: string,
-  durationWeeks: number,
-  effectiveActivity: string | null,
-  tasksRaw: unknown[],
-  skipTitles?: Set<string> | null,
-): ComputedDetailTask[] {
-  const isTechPhase = isDevIntegrationPhaseName(phaseName);
-  const perWeekCount = new Map<number, number>();
-  const out: ComputedDetailTask[] = [];
-  for (const tRaw of tasksRaw) {
-    if (!tRaw || typeof tRaw !== "object") continue;
-    const t = tRaw as Record<string, unknown>;
-    const titleRaw = typeof t.title === "string" ? t.title.trim() : "";
-    if (!titleRaw) continue;
-    if (skipTitles && skipTitles.has(titleRaw.toLowerCase())) continue;
-    const wRaw = typeof t.weekIndex === "number" && Number.isInteger(t.weekIndex) ? t.weekIndex : 0;
-    const weekIndex = Math.min(Math.max(wRaw, 0), Math.max(durationWeeks - 1, 0));
-    const order = perWeekCount.get(weekIndex) ?? 0;
-    perWeekCount.set(weekIndex, order + 1);
-    const partyRaw = typeof t.party === "string" ? t.party.toUpperCase() : "";
-    const party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" =
-      partyRaw === "DEV" && isTechPhase
-        ? "DEV"
-        : partyRaw === "CLIENTE" || partyRaw === "SMARTEAM" || partyRaw === "AMBOS"
-          ? partyRaw
-          : effectiveActivity === "CONFIGURACION"
-            ? "SMARTEAM"
-            : effectiveActivity
-              ? "AMBOS"
-              : "SMARTEAM";
-    const typeRaw = typeof t.type === "string" ? t.type.toUpperCase() : "";
-    const type: "SESSION" | "TASK" = typeRaw === "SESSION" ? "SESSION" : "TASK";
-    out.push({
-      title: sanitizeTaskTitle(titleRaw),
-      weekIndex,
-      order,
-      notes: typeof t.notes === "string" && t.notes.trim() ? t.notes.trim() : null,
-      needsValidation: t.porValidar === true,
-      party,
-      type,
-    });
-  }
-  return out;
-}
-
-/**
  * PREVIEW del detalle por fase: computa las tareas propuestas para UNA fase (mismo criterio que la
  * persistencia) SIN escribir nada. Lo usa el modal de curación (regen con preview:true). Devuelve []
  * si la fase no existe o el agente no propuso tareas para ella.
@@ -3154,6 +3088,43 @@ async function computeTimelineDetailPreview(
       ? (raw!.activityType as string)
       : null;
   return computeDetailTasksForPhase(phase.name, phase.durationWeeks, phase.activityType ?? atFromModel, tasksRaw);
+}
+
+/**
+ * PREVIEW del detalle para TODAS las fases del timeline (Tanda N — "Regenerar todo el
+ * cronograma"): una entrada por fase EXISTENTE (orden real del timeline, no el del JSON del
+ * agente) — las fases sin propuesta del agente vuelven con tasks:[] para que el CSE también
+ * las vea en el acordeón ("sin cambios"). SIN escribir nada. Mismo criterio que
+ * computeTimelineDetailPreview, generalizado a todas las fases en vez de una sola.
+ */
+async function computeTimelineDetailPreviewAllPhases(
+  projectId: string,
+  analysisJson: unknown,
+): Promise<Array<{ phaseId: string; tasks: ComputedDetailTask[] }>> {
+  const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)?.timelineDetail?.phases;
+  const detailArr = Array.isArray(detailRaw) ? detailRaw : [];
+  const byId = new Map(
+    detailArr
+      .filter((r): r is Record<string, unknown> => !!r && typeof r === "object")
+      .map((r) => [r.id as string, r]),
+  );
+  const phases = await prisma.timelinePhase.findMany({
+    where: { timeline: { projectId } },
+    orderBy: { order: "asc" },
+    select: { id: true, name: true, durationWeeks: true, activityType: true },
+  });
+  return phases.map((phase) => {
+    const raw = byId.get(phase.id);
+    const tasksRaw = Array.isArray(raw?.tasks) ? (raw!.tasks as unknown[]) : [];
+    const atFromModel =
+      typeof raw?.activityType === "string" && (DETAIL_ACTIVITY_TYPES as readonly string[]).includes(raw!.activityType as string)
+        ? (raw!.activityType as string)
+        : null;
+    return {
+      phaseId: phase.id,
+      tasks: computeDetailTasksForPhase(phase.name, phase.durationWeeks, phase.activityType ?? atFromModel, tasksRaw),
+    };
+  });
 }
 
 interface TimelineDetailResult {

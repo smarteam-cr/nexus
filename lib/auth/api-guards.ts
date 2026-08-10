@@ -344,6 +344,26 @@ export async function guardTimelineDelete(
 }
 
 /**
+ * Aplicar la regeneración de TODO el cronograma (Tanda N, apply-all): a diferencia de
+ * guardTimelineEdit (`editTimeline`, la tiene el CSE), exige `regenerateTimeline` — el MISMO
+ * gate que ya protege GENERAR la propuesta (resolveArtifactGate, vía hasAiTimelineDetail).
+ * Deliberado y más estricto que el apply por-fase: aplicar TODO el cronograma de una sola vez
+ * tiene mucho más blast radius que una fase — no tiene sentido heredar la asimetría de
+ * guardTimelineEdit (hoy inofensiva porque la UI nunca deja generar el preview a quien no
+ * tiene `regenerateTimeline`; un endpoint nuevo que aplica TODO no debe depender de que la UI
+ * nunca se equivoque).
+ */
+export async function guardTimelineFullRegen(
+  projectId: string,
+): Promise<(Awaited<ReturnType<typeof requireCapability>> & { clientId: string }) | NextResponse> {
+  const access = await guardAccessToProject(projectId);
+  if (access instanceof NextResponse) return access;
+  const guard = await guardCapability("regenerateTimeline");
+  if (guard instanceof NextResponse) return guard;
+  return { ...guard, clientId: access.clientId };
+}
+
+/**
  * BORRAR un canvas del proyecto: acceso al CLIENTE + celda `proyectos.deleteCanvas`
  * (solo CSL y SUPER_ADMIN por default).
  *

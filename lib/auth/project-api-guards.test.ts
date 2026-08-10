@@ -105,6 +105,7 @@ const GUARDAS = [
   "guardProjectCanvasDelete(",
   "guardTimelineEdit(",
   "guardTimelineDelete(",
+  "guardTimelineFullRegen(",
   "withProjectAccess",
   'guardCapability("seeAllClients")',
 ];
