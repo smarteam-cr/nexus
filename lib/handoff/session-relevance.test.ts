@@ -55,9 +55,13 @@ test("classifyHandoffSession — EXCLUDE por título gana aunque haya Ventas en 
   expect(r.include).toBe(false);
 });
 
-test("classifyHandoffSession — insensible a acentos ('Revisión' matchea 'revision')", () => {
-  const r = classifyHandoffSession("Revisión de auditoría", [], null, SALES);
-  expect(r.include).toBe(false);
+test("classifyHandoffSession — 'revisión' en el título ya NO excluye por sí sola (fix Wherex, Tanda L)", () => {
+  // Antes: "revision" era EXCLUDE_TITLE_KEYWORD y mataba por substring sin mirar la sala —
+  // así se perdió "Revisión Integraciones Wherex", que traía el contexto de la integración
+  // Circle. Ahora vive en TITLE_RULES con handoff:null (sigue tipificando "avance" para
+  // session-type), así que el feeding del handoff cae a la regla de Ventas en la sala.
+  expect(classifyHandoffSession("Revisión de auditoría", ["msalas@smarteamcr.com"], null, SALES).include).toBe(true);
+  expect(classifyHandoffSession("Revisión de auditoría", [], null, SALES).include).toBe(false);
 });
 
 test("classifyHandoffSession — kickoff INCLUYE por título (sin Ventas en sala)", () => {

@@ -437,7 +437,10 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
             {generated
               ? `Armado con ${status.sourceSessions.length} sesión${status.sourceSessions.length === 1 ? "" : "es"} del proyecto${status.lastRunAt ? ` · ${fmtDate(status.lastRunAt)}` : ""}`
               : readiness.feedingCount > 0 || readiness.manualSources > 0
-              ? `${readiness.feedingCount} sesión${readiness.feedingCount === 1 ? "" : "es"} alimentarán este handoff (${readiness.withTranscript} con transcript${readiness.manualSources > 0 ? `, ${readiness.manualSources} fuente${readiness.manualSources === 1 ? "" : "s"} manual${readiness.manualSources === 1 ? "" : "es"}` : ""})`
+              ? // Tanda L: ya no es un cupo fijo — "cumplen la regla" en vez de "alimentarán", porque
+                // cuáles entran de verdad al documento depende del presupuesto de contexto (antes/
+                // después del cierre del trato), no solo de esta cuenta.
+                `${readiness.feedingCount} sesión${readiness.feedingCount === 1 ? "" : "es"} cumplen la regla (${readiness.withTranscript} con transcript${readiness.manualSources > 0 ? `, ${readiness.manualSources} fuente${readiness.manualSources === 1 ? "" : "s"} manual${readiness.manualSources === 1 ? "" : "es"}` : ""}) — las que entran al documento final dependen del espacio disponible`
               : "Ninguna sesión alimenta este handoff todavía — revisá el Contexto o pegá una fuente manual"}
           </p>
           {/* ── EL ENLACE DISCRETO AL HERMANO MAYOR ──────────────────────────────────

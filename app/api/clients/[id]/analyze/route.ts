@@ -5,7 +5,8 @@ import { withClientAccess, apiError } from "@/lib/api";
 import { guardPermission } from "@/lib/auth/api-guards";
 import { resolveArtifactGate, artifactGateMessage } from "@/lib/auth/permissions/artifact-gate";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
-import { HANDOFF_EXCLUDE_TITLE_KEYWORDS, HANDOFF_INCLUDE_TITLE_KEYWORDS, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
+import { classifyHandoffSession, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
+import { planHandoffSessionBudget, type HandoffSessionBlock } from "@/lib/handoff/session-budget";
 import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
 import { extractTitleTerms } from "@/lib/utils/matching";
@@ -671,6 +672,10 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // Historial de engagements ANTERIOR a la era del proyecto (solo handoff por-proyecto):
   // trasfondo comprimido de implementaciones pasadas — se inyecta en un bloque aparte.
   let companyTimelinePrevContent = "";
+  // Tanda L — fecha de cierre (epoch ms) del deal DE ESTE PROYECTO, si resuelve y está
+  // Ganado. null = sin ancla (deal sin cerrar, sin hubspotDealId, o el try de abajo falló) →
+  // el helper de presupuesto de sesiones cae a un solo bloque por recencia.
+  let dealProjectCloseDate: number | null = null;
   try {
     const { getSystemHubspotClient, getHubspotClient } = await import("@/lib/hubspot/client");
     // Buscar la cuenta HubSpot del cliente (o la del sistema)
@@ -863,6 +868,20 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         })
       );
 
+      // Tanda L — la fecha de cierre DEL DEAL DE ESTE PROYECTO (por id exacto, mismo patrón
+      // que esDealDelMayor más abajo), para partir las sesiones de venta del handoff en
+      // "antes"/"después" del cierre (lib/handoff/session-budget.ts). Solo confía en
+      // `hs_is_closed_won === "true"`: `closedate` puede existir en un deal todavía ABIERTO
+      // (fecha estimada de la cuenta de HubSpot), y ahí no es un cierre real.
+      if (agent.agentGroup === "handoff" && bodyProjectId && dealProject?.hubspotDealId) {
+        const dpDeal = dealsData.find((d) => d.id === dealProject.hubspotDealId);
+        const p = dpDeal?.deal?.properties;
+        if (p?.hs_is_closed_won === "true" && p.closedate) {
+          const t = new Date(p.closedate).getTime();
+          if (!isNaN(t)) dealProjectCloseDate = t;
+        }
+      }
+
       // Fetch notas de la empresa (en paralelo con todo lo anterior)
       const companyNotes = client.hubspotCompanyId
         ? await fetchHubspotNotes("companies", client.hubspotCompanyId)
@@ -1049,7 +1068,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // ── Filtro especial para el agente Handoff Sales→CS ─────────────────────────
   // Fuente ÚNICA de la política: lib/handoff/session-relevance.ts. Dos capas:
   //
-  //   1. RELEVANCIA de la sesión (classifyForHandoff, con las listas importadas):
+  //   1. RELEVANCIA de la sesión (classifyHandoffSession, con las listas importadas):
   //      EXCLUDE por título gana ("implementación", "adopción", "review", weekly…);
   //      luego INCLUDE por título ("hand off", "traspaso", "kickoff" — el kickoff SÍ
   //      alimenta el handoff); título neutro → "Ventas en la sala".
@@ -1075,27 +1094,11 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     ? { maxSales: 7, maxCS: 8, perSessionChars: 9000, salesBlockCap: 60000, csBlockCap: 60000, timelineCap: 12000, manualCap: 20000 }
     : { maxSales: 6, maxCS: 6, perSessionChars: Infinity, salesBlockCap: 4000, csBlockCap: 5000, timelineCap: 8000, manualCap: 12000 };
 
-  // Las listas de keywords y el clasificador de relevancia para handoff viven en
-  // lib/handoff/session-relevance.ts (importadas arriba; compartidas con la revisión A2).
-  function normalizeTitle(t: string): string {
-    // NFD descompone "ó" en "o" + diacrítico combinante. El regex remueve el
-    // rango U+0300–U+036F (Combining Diacritical Marks) para que el matching
-    // sea insensitive a acentos: "Implementación" → "implementacion".
-    return t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  }
-
-  type HandoffClassification = { include: boolean; reason: string };
-
-  function classifyForHandoff(s: RawTranscript): HandoffClassification {
-    const title = normalizeTitle(s.title || "");
-    const excludeHit = HANDOFF_EXCLUDE_TITLE_KEYWORDS.find((kw) => title.includes(kw));
-    if (excludeHit) return { include: false, reason: `título contiene "${excludeHit}"` };
-    const includeHit = HANDOFF_INCLUDE_TITLE_KEYWORDS.find((kw) => title.includes(kw));
-    if (includeHit) return { include: true, reason: `título contiene "${includeHit}"` };
-    const hasSales = s.participants.some((p) => salesEmails.has(p.toLowerCase()));
-    if (hasSales) return { include: true, reason: "título neutro + al menos un Sales en participantes" };
-    return { include: false, reason: "título neutro + sin Sales en participantes" };
-  }
+  // El clasificador de relevancia para handoff vive en lib/handoff/session-relevance.ts
+  // (importado arriba, compartido con la revisión A2 — Tanda L saca la copia inline que
+  // tenía esta ruta, era una duplicación confirmada de classifyHandoffSession).
+  const classifyForHandoff = (s: RawTranscript) =>
+    classifyHandoffSession(s.title, s.participants, null, salesEmails);
 
   // Helper: si una sesión NO tiene transcript, devolver al menos su metadata
   // (título, fecha, participantes) para que el agente sepa que la reunión
@@ -1116,15 +1119,19 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     ].join("\n");
   };
 
-  // Wrapper: intenta transcript real, si es null devuelve fallback con metadata
-  const fetchOrFallback = async (s: RawTranscript): Promise<string> => {
-    const content = await fetchTranscriptContent(s.id, s.title);
+  // Wrapper: intenta transcript real, si es null devuelve fallback con metadata.
+  // `opts.maxChars` (Tanda L) — cota del presupuesto de sesiones; no aplica al fallback
+  // (ya es corto por construcción).
+  const fetchOrFallback = async (s: RawTranscript, opts?: { maxChars?: number }): Promise<string> => {
+    const content = await fetchTranscriptContent(s.id, s.title, opts);
     if (content?.trim()) return content;
     return buildFallbackMetadata(s);
   };
 
   let firefliesContent = "";
   let salesFirefliesContent = "";
+  let salesBeforeCloseContent = ""; // Tanda L — solo con dealProjectCloseDate resuelto
+  let salesAfterCloseContent = ""; // Tanda L — solo con dealProjectCloseDate resuelto
   let manualSourcesContent = ""; // #handoff-manual — bloque de fuentes manuales (solo handoff)
   let handoffSourceSessionIds: string[] = []; // ids de sesiones de ventas usadas (handoff)
 
@@ -1212,16 +1219,46 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       firefliesContent = contents.filter(Boolean).map(capSession).join("\n\n---\n\n");
     }
 
-    // Transcripciones de ventas (cap por perfil).
+    // Transcripciones de ventas.
     // Si no hay transcript, se inyecta metadata (título, fecha, participantes)
     // para que el agente sepa al menos que la reunión existió.
-    // El handoff puede traer hasta 10 sesiones de venta; el resto según su perfil.
-    const topSales = salesSessions.sort((a, b) => b.date - a.date).slice(0, isHandoffAgent ? 10 : CTX.maxSales);
-    if (topSales.length > 0) {
-      const contents = await Promise.all(topSales.map((s) => fetchOrFallback(s)));
-      salesFirefliesContent = contents.filter(Boolean).map(capSession).join("\n\n---\n\n");
+    //
+    // Tanda L (2026-08-09) — HANDOFF: ya no es un cupo fijo de 10 por fecha (en Wherex dejaba
+    // afuera el 64% de las sesiones calificadas). `planHandoffSessionBudget` arma un
+    // presupuesto de caracteres; con `dealProjectCloseDate` resuelto, separa "antes"/"después"
+    // del cierre del deal — cada bloque con su propio presupuesto, así ninguno le gana espacio
+    // al otro por pura cantidad de reuniones. Sin fecha de cierre, un solo bloque por recencia
+    // (mismo criterio de hoy, ventana mucho más ancha). El resto de agentes conserva el cap
+    // fijo por perfil de siempre.
+    let topSales: RawTranscript[];
+    if (isHandoffAgent) {
+      const byId = new Map(salesSessions.map((s) => [s.id, s]));
+      const plan = planHandoffSessionBudget(
+        salesSessions.map((s) => ({ id: s.id, title: s.title, date: s.date })),
+        dealProjectCloseDate,
+      );
+      topSales = plan.flatMap((p) => (byId.has(p.id) ? [byId.get(p.id)!] : []));
+      const renderBlock = async (block: HandoffSessionBlock) => {
+        const items = plan.filter((p) => p.block === block);
+        const contents = await Promise.all(
+          items.map((p) => fetchOrFallback(byId.get(p.id)!, { maxChars: p.maxChars })),
+        );
+        return contents.filter(Boolean).join("\n\n---\n\n");
+      };
+      if (dealProjectCloseDate !== null) {
+        salesBeforeCloseContent = await renderBlock("antes_cierre");
+        salesAfterCloseContent = await renderBlock("despues_cierre");
+      } else {
+        salesFirefliesContent = await renderBlock("sin_ancla");
+      }
+      handoffSourceSessionIds = topSales.map((s) => s.id);
+    } else {
+      topSales = salesSessions.sort((a, b) => b.date - a.date).slice(0, CTX.maxSales);
+      if (topSales.length > 0) {
+        const contents = await Promise.all(topSales.map((s) => fetchOrFallback(s)));
+        salesFirefliesContent = contents.filter(Boolean).map(capSession).join("\n\n---\n\n");
+      }
     }
-    if (isHandoffAgent) handoffSourceSessionIds = topSales.map((s) => s.id);
 
     // #handoff-manual — fuentes MANUALES pegadas (reuniones que NO entraron por el sync).
     // Persistidas en HandoffSource → re-leídas en CADA corrida (sobreviven regeneración).
@@ -1276,7 +1313,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         const inSales = salesSessions.some((sl) => sl.id === s.id);
         const link = bodyProjectId ? linkById.get(s.id) : undefined;
         const reason = inSales
-          ? `no usada (cap de ${isHandoffAgent ? 10 : CTX.maxSales})`
+          ? isHandoffAgent
+            ? "no usada (fuera del presupuesto de sesiones)"
+            : `no usada (cap de ${CTX.maxSales})`
           : bodyProjectId
           ? link?.handoffOverride === false
             ? "excluida a mano (la X del panel)"
@@ -1637,6 +1676,18 @@ ${companyTimelinePrevContent.slice(0, 3000)}
 `
     : "";
 
+  /* Tanda L — el bloque de sesiones de VENTAS. Con dealProjectCloseDate resuelto, dos
+     narrativas separadas (antes/después del cierre del deal), cada una con su propia
+     instrucción — igual que hubspotTimelineBlock/hubspotPrevTimelineBlock ya hacen con la
+     era del proyecto. Sin fecha de cierre (o para el resto de agentes, que no usan el split),
+     un solo bloque — mismo copy de siempre. */
+  const salesSessionsBlock =
+    salesBeforeCloseContent.trim() || salesAfterCloseContent.trim()
+      ? `${salesBeforeCloseContent.trim() ? `=== TRANSCRIPCIONES DE VENTAS — ANTES DEL CIERRE DEL TRATO (lo que se prometió/vendió) ===\nLlamadas comerciales previas a que el cliente firmara. Contienen qué se prometió, por qué compró, dolores, objeciones y acuerdos verbales.\n${salesBeforeCloseContent}\n\n` : ""}${salesAfterCloseContent.trim() ? `=== TRANSCRIPCIONES DE VENTAS — DESPUÉS DEL CIERRE DEL TRATO (la evolución real) ===\nReuniones donde participó Ventas YA con el trato cerrado — contexto de la transición a CS, no promesas de venta.\n${salesAfterCloseContent}\n\n` : ""}`
+      : salesFirefliesContent
+      ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${isHandoffAgent ? salesFirefliesContent : salesFirefliesContent.slice(0, CTX.salesBlockCap)}\n\n`
+      : "";
+
   // Exclusiones del CSE (reglas duras) — solo handoff por-proyecto; persistidas en
   // Handoff.contextExclusions vía PATCH /api/projects/[projectId]/handoff. El kickoff
   // NO las re-inyecta: consume el canvas Handoff ya curado (si cambian, regenerar el
@@ -1727,7 +1778,7 @@ ${[
     return `${tag} **${c.title}:**\n${c.content}`;
   }),
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
-].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${handoffDelMayorBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, isHandoffAgent ? 12000 : CTX.salesBlockCap)}\n\n` : ""}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verificá que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omitilos.\n` : ""}
+].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${handoffDelMayorBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesSessionsBlock}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verificá que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omitilos.\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 10b. Input del agente Kickoff ─────────────────────────────────────────────
