@@ -1287,26 +1287,23 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // ── Resolver POR ÍTEM la propuesta de ESTRUCTURA (la del handoff) ──
   // Aceptar aplica SOLO ese cambio (fase nueva vacía / ajuste de fase / fecha de arranque);
   // descartar solo lo saca de la propuesta. "Aceptar/Descartar todo" pasa todas las claves.
-  // `merge` (Tanda O) — un ADD_PHASE con hint de fusión se resuelve como UPDATE de la huérfana
-  // candidata, no como creación; ver el contrato en apply-items/route.ts.
   const [resolvingProposal, setResolvingProposal] = useState(false);
-  const resolveProposalItems = async (accept: string[], discard: string[], merge: string[] = []) => {
+  const resolveProposalItems = async (accept: string[], discard: string[]) => {
     if (resolvingProposal) return;
     setResolvingProposal(true);
     try {
       const res = await fetch(`/api/projects/${projectId}/timeline/proposal/apply-items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accept, discard, merge }),
+        body: JSON.stringify({ accept, discard }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         toast.error(d?.error ?? "No se pudo resolver la sugerencia.");
         return;
       }
-      const d = (await res.json()) as { applied: number; discarded: number; merged?: number };
-      if (d.merged) toast.success(d.merged === 1 ? "Fase fusionada." : `${d.merged} fases fusionadas.`);
-      else if (d.applied > 0) toast.success(`${plural(d.applied, "sugerencia aplicada", "sugerencias aplicadas")}.`);
+      const d = (await res.json()) as { applied: number; discarded: number };
+      if (d.applied > 0) toast.success(`${plural(d.applied, "sugerencia aplicada", "sugerencias aplicadas")}.`);
       else if (d.discarded > 0) toast.success(d.discarded === 1 ? "Sugerencia descartada." : "Sugerencias descartadas.");
       // Recargar todo (fases nuevas/cambiadas + propuesta reescrita). El load setea proposal
       // con `prev ?? …`, así que hay que vaciarla ANTES para que tome la fresca del server.
@@ -2517,7 +2514,6 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 ? (key, accept) => void resolveProposalItems(accept ? [key] : [], accept ? [] : [key])
                 : undefined
             }
-            onMergeProposalDelta={canEdit ? (key) => void resolveProposalItems([], [], [key]) : undefined}
             sugerenciasSlot={
               // El componente se auto-oculta si no hay ninguna. Solo para quien puede editar el
               // cronograma: aprobar una sugerencia ES escribir.

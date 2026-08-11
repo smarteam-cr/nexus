@@ -25,13 +25,14 @@ import { guardTimelineEdit, guardCapability, guardPermission } from "@/lib/auth/
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
-import { isKept } from "@/lib/timeline/regen-columnas";
+import { rescatarProgreso } from "@/lib/timeline/rescate-progreso";
 
 const SYSTEM_PROMPT = `ROL: Eres el editor del cronograma de un proyecto de implementación de HubSpot (consultora Smarteam). Recibes el cronograma ACTUAL (JSON con ids) y UNA instrucción del consultor. Aplicas SOLO lo pedido (y sus consecuencias directas mínimas) y devuelves el cronograma COMPLETO resultante.
 
 REGLAS DURAS:
 - Conserva los ids EXACTOS de las fases y tareas que siguen existiendo (las edites o no). Elementos NUEVOS van sin id. Para BORRAR algo, simplemente omítelo del resultado.
 - Si mueves una tarea a OTRA fase: en la fase destino va SIN id (es nueva ahí) y en la fase origen desaparece.
+- Cada tarea trae "status" y "source". Las que NO están en PENDING (DONE, IN_PROGRESS, SUSPENDED) o tienen source HUMAN ya tienen trabajo real encima: consérvalas SIEMPRE con su id, aunque la instrucción reorganice la fase. NO las omitas: omitir es borrar. Si la instrucción pide explícitamente quitar una de ellas, quítala igual — el servidor avisa.
 - weekIndex es 0-indexed y RELATIVO a su fase; siempre < durationWeeks de esa fase. order: reasigna secuencial (0,1,2…) dentro de cada semana.
 - Puedes cambiar duraciones, nombres, orden de fases, tipos y la fecha de arranque SOLO si la instrucción lo pide o es consecuencia necesaria (p.ej. agregar una semana de tareas a una fase de 1 semana → durationWeeks 2).
 - activityType ∈ EXPLORACION|PLANIFICACION|CONFIGURACION|ADOPCION|SEGUIMIENTO o null.
@@ -90,14 +91,16 @@ export async function POST(
           name: true,
           order: true,
           durationWeeks: true,
+          startWeek: true,
           sessionCount: true,
           notes: true,
           activityType: true,
           tasks: {
             orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
-            /* `status` y `source` NO viajan al modelo (ver el userMessage): son para que el
-               servidor sepa qué NO puede perderse si la IA omite una tarea. Ver el rescate
-               más abajo. */
+            /* ⚠ Estos DOS campos sí llegan al prompt: `currentJson` serializa `tl.phases`
+               entero. Están acá para que el SERVIDOR sepa qué no puede perderse (ver el rescate
+               al final), y de paso el modelo los ve — por eso el SYSTEM_PROMPT le dice
+               explícitamente qué significan y que no las borre por omisión. */
             select: { id: true, title: true, weekIndex: true, order: true, notes: true, status: true, source: true },
           },
         },
@@ -224,61 +227,12 @@ export async function POST(
     }),
   };
 
-  /* ── RESCATE DE LO QUE TIENE PROGRESO (2026-08-11) ──────────────────────────
-     Este flujo es "reemplazo completo": `tasks` siempre viaja definido, así que el PUT borra
-     por OMISIÓN todo lo que la propuesta no incluya. Y hasta hoy el modelo recibía las tareas
-     sin `status` ni `source` — o sea que ni siquiera podía saber cuáles estaban hechas.
-     Resultado: bastaba con que se olvidara de una tarea DONE para perderla, sin aviso.
-
-     Acá se repone lo protegido por `isKept` (hecha / en curso / suspendida / cargada a mano)
-     que la propuesta dejó afuera, con su `id` para que el PUT la actualice en vez de borrarla.
-     Se avisa siempre: la propuesta que el CSE ve en pantalla tiene que coincidir con lo que se
-     va a aplicar. Misma regla y mismo helper que el apply curado — una sola definición de
-     "esto no se toca", en lib/timeline/regen-columnas.ts. */
-  const fasesPropuestasPorId = new Map(
-    proposal.phases.filter((p) => p.id).map((p) => [p.id as string, p]),
-  );
-  for (const real of tl.phases) {
-    const protegidas = real.tasks.filter(isKept);
-    if (protegidas.length === 0) continue;
-    const propuesta = fasesPropuestasPorId.get(real.id);
-
-    if (!propuesta) {
-      /* La IA sacó la fase entera. El PUT la borraría con sus tareas por cascade, así que
-         vuelve — SOLO con lo que tiene progreso. Mismo criterio aditivo que ya rige la
-         reconciliación del handoff: una fase con trabajo real no se borra sin que lo pida
-         una persona (para eso está el gesto de borrar fase, que exige `deleteTimeline`). */
-      proposal.phases.push({
-        id: real.id,
-        name: real.name,
-        order: proposal.phases.length,
-        durationWeeks: real.durationWeeks,
-        sessionCount: real.sessionCount,
-        notes: real.notes,
-        activityType: real.activityType,
-        tasks: protegidas.map((t) => ({
-          id: t.id, title: t.title, weekIndex: t.weekIndex, order: t.order, notes: t.notes,
-        })),
-      });
-      warnings.push(
-        `La fase "${real.name}" tiene ${protegidas.length} tarea(s) con progreso: se conserva en vez de borrarse.`,
-      );
-      continue;
-    }
-
-    const enLaPropuesta = new Set((propuesta.tasks ?? []).map((t) => t.id).filter(Boolean));
-    const rescatadas = protegidas.filter((t) => !enLaPropuesta.has(t.id));
-    if (rescatadas.length === 0) continue;
-    propuesta.tasks = [
-      ...(propuesta.tasks ?? []),
-      ...rescatadas.map((t) => ({
-        id: t.id, title: t.title, weekIndex: t.weekIndex, order: t.order, notes: t.notes,
-      })),
-    ];
-    warnings.push(
-      `En "${real.name}" se conservaron ${rescatadas.length} tarea(s) con progreso que la propuesta no incluía.`,
-    );
-  }
+  /* ── RESCATE DE LO QUE TIENE PROGRESO ─────────────────────────────────────
+     La regla y sus tres trampas viven en lib/timeline/rescate-progreso.ts (puro y testeado):
+     acá solo se le pasan las fases reales y la propuesta ya saneada. */
+  const rescate = rescatarProgreso(tl.phases, proposal.phases);
+  proposal.phases = rescate.phases;
+  warnings.push(...rescate.warnings);
 
   return NextResponse.json({ proposal, warnings });
 }

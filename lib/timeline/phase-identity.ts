@@ -1,17 +1,26 @@
 /**
  * lib/timeline/phase-identity.ts
  *
- * ¿ESTA FASE PROPUESTA ES, EN REALIDAD, ESTA FASE EXISTENTE HUÉRFANA CON OTRO NOMBRE?
- * Pura, sin Prisma. La usa `reconcileAgentProposal` para el caso en que el nombre exacto
- * normalizado no matchea Y la posición tampoco — ahí es donde el modo aditivo genera
- * duplicados reales si nadie avisa (confirmado en Wherex, 2026-08: "Integraciones" y
- * "Desarrollo / Integración" coexistiendo como dos fases, mismo trabajo real).
+ * ¿ESTAS DOS FASES DEL CRONOGRAMA SON, EN REALIDAD, EL MISMO TRABAJO CON OTRO NOMBRE?
+ * Pura, sin Prisma. Es un AVISO sobre las fases que YA EXISTEN — nunca fusiona nada.
  *
- * NO fusiona nada acá: devuelve la MEJOR huérfana candidata para que reconcileAgentProposal la
- * cuelgue como `mergeCandidateId` — un AVISO que el CSE confirma con el botón "Fusionar" en el
- * canvas. Mismo principio que lib/clients/gemelas.ts: un aviso de más cuesta un segundo de
- * lectura; una fase duplicada no vista queda para siempre. Fusionar en silencio sería PEOR que
- * el duplicado: pisaría una fase real con datos de otra.
+ * ── EL CASO REAL (Wherex, 2026-08) ───────────────────────────────────────────
+ * "Integraciones" y "Desarrollo / Integración" conviviendo como dos fases, mismo trabajo real;
+ * lo mismo con "Service Hub" / "Capacitación y cierre Service" y "Marketing Hub" /
+ * "Configuración Marketing Hub". Se armaron regenerando el cronograma varias veces con nombres
+ * distintos. El avance del proyecto las cuenta a las dos. Con 11 fases nadie lo ve a ojo.
+ *
+ * ⛔ NO se usa al reconciliar una propuesta. Se intentó (Tanda O) y salió al revés: reservar la
+ * huérfana "parecida" antes del match posicional convertía un renombre limpio en un duplicado
+ * nuevo — el porqué completo está en lib/timeline/reconcile-proposal.ts. Ahí el renombre en el
+ * lugar ya hace lo correcto. Este detector vive donde el problema es real: las fases que ya
+ * están en la base.
+ *
+ * Fusionar de verdad (mover tareas, re-apuntar particularidades, borrar la fase) es una decisión
+ * humana y va por `scripts/fusionar-fases-cronograma.ts`, con dry-run. Mismo principio que
+ * lib/clients/gemelas.ts: un aviso de más cuesta un segundo de lectura; una fase duplicada no
+ * vista queda para siempre — y fusionar en silencio sería PEOR, pisaría una fase real con datos
+ * de otra.
  *
  * Mismo idioma que lib/timeline/particularidad-identity.ts (token-overlap) combinado con el
  * umbral de lib/clients/gemelas.ts (prefijo con piso de longitud) — no hay Levenshtein en todo
@@ -58,29 +67,31 @@ export function phaseNamesLikelySameWork(a: string, b: string): boolean {
   return overlapScore(tokens(a), tokens(b)) >= 1;
 }
 
-export interface OrphanPhase {
+export interface FaseParaComparar {
   id: string;
   name: string;
 }
 
+
 /**
- * La mejor huérfana para `proposedName`, o null si ninguna llega al umbral. Determinístico:
- * ante empate de puntaje, gana la primera en el orden de `orphans` (el orden real de fases).
+ * De una lista de fases REALES, qué fase parece repetida de cuál. `Map<phaseId, nombre de la
+ * otra>` — se emite para las DOS de cada par, así el aviso sale en las dos filas y el CSE no
+ * tiene que buscar la pareja.
+ *
+ * Solo se compara cada fase contra las ANTERIORES (i < j): así el par se detecta una vez y el
+ * costo es n²/2 sobre listas de 5-15 fases. Ante varias coincidencias, cada fase apunta a la
+ * primera con la que empareja — es un aviso, no un reporte exhaustivo.
  */
-export function findBestOrphanMatch(
-  proposedName: string,
-  orphans: readonly OrphanPhase[],
-): OrphanPhase | null {
-  const pTokens = tokens(proposedName);
-  if (pTokens.length === 0) return null;
-  let best: OrphanPhase | null = null;
-  let bestScore = 0;
-  for (const o of orphans) {
-    const score = overlapScore(pTokens, tokens(o.name));
-    if (score > bestScore) {
-      best = o;
-      bestScore = score;
+export function fasesProbablementeRepetidas(
+  phases: readonly FaseParaComparar[],
+): Map<string, string> {
+  const aviso = new Map<string, string>();
+  for (let j = 1; j < phases.length; j++) {
+    for (let i = 0; i < j; i++) {
+      if (!phaseNamesLikelySameWork(phases[i].name, phases[j].name)) continue;
+      if (!aviso.has(phases[j].id)) aviso.set(phases[j].id, phases[i].name);
+      if (!aviso.has(phases[i].id)) aviso.set(phases[i].id, phases[j].name);
     }
   }
-  return bestScore >= 1 ? best : null;
+  return aviso;
 }

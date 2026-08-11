@@ -2,7 +2,7 @@
  * POST /api/projects/[projectId]/timeline/proposal/apply-items
  *
  * Resuelve POR ÍTEM la propuesta de cronograma pendiente (la que deja regenerar el handoff):
- *   { accept: string[], discard: string[], merge: string[] }   ← claves de delta de
+ *   { accept: string[], discard: string[] }   ← claves de delta de
  *   lib/timeline/proposal-deltas
  *
  * El modelo "diff EN el Gantt real": la propuesta ya no se aplica todo-o-nada con un PUT del
@@ -15,11 +15,12 @@
  * Deltas con clave desconocida/stale (el cronograma cambió desde que el cliente pintó) se
  * ignoran y se reportan. Guarded con guardTimelineEdit (interno/CSE).
  *
- * `merge` (Tanda O) — un ADD_PHASE con `mergeCandidateId` (el aviso de "esta fase nueva puede
- * ser esta huérfana con otro nombre", ver reconcile-proposal.ts) se resuelve como FUSIÓN en vez
- * de creación: la huérfana se actualiza campo por campo con el contenido propuesto (nunca sus
- * `tasks`, nunca su posición — ya ocupa su lugar en el cronograma real). `merge` gana sobre
- * `accept`/`discard` si una clave viene repetida en más de un array.
+ * ⛔ Hubo un tercer array `merge` (Tanda O, retirado el 2026-08-11): fusionaba un ADD_PHASE con
+ * la huérfana "parecida" que la reconciliación marcaba como candidata. Se retiró junto con el
+ * aviso que lo alimentaba — ver el porqué completo en lib/timeline/reconcile-proposal.ts. En
+ * resumen: reservar la huérfana rompía el match posicional, y romper el match posicional es lo
+ * que CREA los duplicados que la fusión venía a resolver. Con el posicional intacto, un renombre
+ * conserva id, tareas y progreso en su lugar — que es lo que "Fusionar" hacía.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardTimelineEdit } from "@/lib/auth/api-guards";
@@ -72,16 +73,14 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
-  const body = (raw ?? {}) as { accept?: unknown; discard?: unknown; merge?: unknown };
+  const body = (raw ?? {}) as { accept?: unknown; discard?: unknown };
   const keys = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((k): k is string => typeof k === "string" && !!k) : [];
   const acceptKeys = new Set(keys(body.accept));
   const discardKeys = new Set(keys(body.discard));
-  const mergeKeys = new Set(keys(body.merge));
   for (const k of acceptKeys) discardKeys.delete(k); // aceptar gana si viene en ambas
-  for (const k of mergeKeys) { acceptKeys.delete(k); discardKeys.delete(k); } // fusionar gana sobre las dos
-  if (acceptKeys.size === 0 && discardKeys.size === 0 && mergeKeys.size === 0) {
-    return NextResponse.json({ error: "Nada que resolver (accept/discard/merge vacíos)" }, { status: 400 });
+  if (acceptKeys.size === 0 && discardKeys.size === 0) {
+    return NextResponse.json({ error: "Nada que resolver (accept/discard vacíos)" }, { status: 400 });
   }
 
   const tl = await prisma.projectTimeline.findUnique({
@@ -114,29 +113,11 @@ export async function POST(
   }
   for (const k of discardKeys) if (!byKey.has(k)) staleKeys.push(k);
 
-  // Fusionar: solo válido para un ADD_PHASE que trae mergeCandidateId (el botón "Fusionar" del
-  // Gantt no se pinta sin uno). Clave desconocida, delta que no es ADD_PHASE, o candidata que ya
-  // no existe (`computeProposalDeltas` la resuelve a null si la huérfana se borró entre la
-  // propuesta y ahora) → stale, mismo trato que un accept/discard fuera de fecha.
-  const merged: Array<{ delta: Extract<ProposalDelta, { kind: "ADD_PHASE" }>; targetId: string }> = [];
-  for (const k of mergeKeys) {
-    const d = byKey.get(k);
-    if (d && d.kind === "ADD_PHASE" && d.mergeCandidateId) merged.push({ delta: d, targetId: d.mergeCandidateId });
-    else staleKeys.push(k);
-  }
-  const mergedTargetIds = new Set(merged.map((m) => m.targetId));
-
-  // OJO: acá va `merged` (los que de verdad van a mutar algo), NO `mergeKeys` crudo — una
-  // clave de merge que resultó stale (candidata borrada, delta que no es ADD_PHASE) no puede
-  // marcarse "resuelta": haría desaparecer una sugerencia genuina del pendingProposal sin
-  // haberla creado NI descartado.
-  const resolvedKeys = new Set(
-    [...acceptKeys, ...discardKeys, ...merged.map((m) => m.delta.key)].filter((k) => byKey.has(k)),
-  );
+  const resolvedKeys = new Set([...acceptKeys, ...discardKeys].filter((k) => byKey.has(k)));
 
   // Validar ANTES de abrir la transacción: un enum inválido debe salir como 400 legible, no
   // como un error de Prisma a mitad de la escritura.
-  for (const d of [...accepted, ...merged.map((m) => m.delta)]) {
+  for (const d of accepted) {
     const raw =
       d.kind === "ADD_PHASE"
         ? d.phase.activityType
@@ -183,24 +164,6 @@ export async function POST(
           data: { anchorStartDate: new Date(d.to) },
         });
       }
-    }
-
-    // 1a-merge) FUSIONAR: la huérfana candidata (elegida a mano por el CSE con "Fusionar", nunca
-    //     automático) se actualiza campo por campo con el contenido de la fase propuesta — nunca
-    //     `tasks`, nunca `order`: ya ocupa su lugar en el cronograma real, no se crea ningún slot
-    //     nuevo (por eso `merged` no entra a `acceptedKeySet` / `buildPhaseOrder` de abajo).
-    for (const { delta, targetId } of merged) {
-      await tx.timelinePhase.update({
-        where: { id: targetId },
-        data: {
-          name: delta.phase.name,
-          durationWeeks: delta.phase.durationWeeks,
-          startWeek: delta.phase.startWeek ?? null,
-          sessionCount: delta.phase.sessionCount ?? null,
-          notes: delta.phase.notes ?? null,
-          activityType: parseActivityType(delta.phase.activityType) ?? null,
-        },
-      });
     }
 
     // 1b) ORDEN FINAL (helper puro): las fases nuevas aceptadas caen EN SU LUGAR (después de su
@@ -255,13 +218,7 @@ export async function POST(
     const keptNewByAnchor = new Map<string | null, (typeof proposal.phases)[number][]>();
     proposal.phases.forEach((p, i) => {
       if (p.id) {
-        // La trampa del snapshot viejo (Tanda O): la huérfana fusionada tiene una entrada acá
-        // con SU id, pero nunca tuvo un delta `mod:<id>` (antes de la fusión su contenido era
-        // idéntico al real — cero delta). Sin este `mergedTargetIds.has`, el `!resolvedKeys.has`
-        // de abajo la trataría como "sin resolver" y reescribiría encima el snapshot de ANTES
-        // de fusionar (nombre viejo) — deshaciendo visualmente la fusión que la transacción
-        // recién aplicó, un paso más arriba.
-        if (!resolvedKeys.has(`mod:${p.id}`) && !mergedTargetIds.has(p.id)) pendingModByPhase.set(p.id, p);
+        if (!resolvedKeys.has(`mod:${p.id}`)) pendingModByPhase.set(p.id, p);
         return;
       }
       if (resolvedKeys.has(`add:${i}`)) return;
@@ -303,14 +260,14 @@ export async function POST(
           : { pendingProposal: rewritten as unknown as Prisma.InputJsonValue }),
         // Aceptar Y fusionar cambian el cronograma real → marca "cambios sin subir". Un
         // descarte puro no (nada se escribió).
-        ...(accepted.length > 0 || merged.length > 0 ? { lastEditedByHuman: now } : {}),
+        ...(accepted.length > 0 ? { lastEditedByHuman: now } : {}),
       },
     });
   }, { maxWait: 10000, timeout: 30000 });
 
   // Audit best-effort POST-tx (mismo patrón que phases/[phaseId]/apply): solo si se aplicó algo
   // (aceptar O fusionar — las dos mutan el cronograma real).
-  if (accepted.length > 0 || merged.length > 0) {
+  if (accepted.length > 0) {
     try {
       const snapPhases = await prisma.timelinePhase.findMany({
         where: { timelineId: tl.id },
@@ -340,9 +297,7 @@ export async function POST(
         data: {
           timelineId: tl.id,
           reason:
-            `Sugerencias del handoff aceptadas por ítem (${accepted.length} aceptadas, ${discardKeys.size} descartadas` +
-            (merged.length > 0 ? `, ${merged.length} fusionadas` : "") +
-            `).` +
+            `Sugerencias del handoff aceptadas por ítem (${accepted.length} aceptadas, ${discardKeys.size} descartadas).` +
             (corrimiento ? ` ${corrimiento}` : ""),
           kind: "AI_ASSIST",
           instruction: null,
@@ -396,7 +351,6 @@ export async function POST(
   return NextResponse.json({
     applied: accepted.length,
     discarded: [...discardKeys].filter((k) => byKey.has(k)).length,
-    merged: merged.length,
     stale: staleKeys,
   });
 }

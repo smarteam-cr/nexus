@@ -14,19 +14,31 @@
  * pega a la base; acá solo se compara el resultado ya resuelto contra el
  * existente para decidir `isNoOp`.
  *
- * Tanda O (2026-08-10) — cuando ni el nombre ni la posición matchean, la fase
- * propuesta sale como nueva y la existente huérfana queda sin tocar (ver el
- * paso 2 más abajo). Repetido varias veces con nombres distintos para el MISMO
- * trabajo, esto produce duplicados reales (confirmado en Wherex: "Integraciones"
- * y "Desarrollo / Integración" conviviendo). Se agrega una tercera pasada que
- * busca, con `lib/timeline/phase-identity.ts` (token-overlap + prefijo, sin
- * Levenshtein), la mejor huérfana candidata para cada fase sin match, y la
- * cuelga como `mergeCandidateId` — un AVISO, nunca una fusión automática (fusionar
- * mal pisaría una fase real con datos de otra, más caro que el duplicado que
- * esto evita). El CSE confirma con el botón "Fusionar" en el canvas.
+ * Tanda O (2026-08-10) — el fallback posicional comparaba contra `existingPhases[i]` (el índice
+ * CRUDO del array original), no contra "la próxima existente sin consumir". Con una inserción o
+ * un renombre en el medio de la lista propuesta, eso podía hacer que una fase le robara el id a
+ * OTRA que sí matcheaba por nombre más adelante — pisando en silencio una fase con tareas y
+ * progreso reales. Arreglado abajo, separando en dos pasadas: nombre exacto primero, posición
+ * después, contra "la próxima sin consumir".
+ *
+ * ⛔ REVERTIDO (2026-08-11) el aviso de fusión (`mergeCandidateId`) que esa misma tanda agregó
+ * como tercera pasada. Reservaba la huérfana parecida ANTES del posicional, así que el posicional
+ * ya no podía matchearla: una fase que se venía renombrando LIMPIA en su lugar pasaba a salir como
+ * fase NUEVA + la huérfana re-emitida — el duplicado que la tanda venía a evitar, y por el camino
+ * más usado (el botón "Aceptar todo" nunca manda fusiones). Medido: existing=["Integraciones"] +
+ * proposed=["Desarrollo / Integración"] daba DOS fases; con nombres SIN nada en común daba UNA.
+ * Cuanto más se parecían los nombres, peor el resultado.
+ *
+ * Y el aviso era además REDUNDANTE: cuando el posicional matchea, la fase existente se renombra en
+ * su lugar conservando id, tareas y progreso — que es exactamente lo que hacía "Fusionar".
+ * Matemáticamente tampoco tenía dónde vivir: tras un posicional greedy, o quedan propuestas sin
+ * match o quedan huérfanas sin consumir, nunca las dos cosas a la vez.
+ *
+ * ⚠ El caso real de Wherex (dos fases duplicadas conviviendo HOY en la base) no lo resuelve esto:
+ * ya están aplicadas, no son una propuesta. Para ésas están `scripts/fusionar-fases-cronograma.ts`
+ * y el aviso de fases repetidas sobre las EXISTENTES (`lib/timeline/phase-identity.ts`).
  */
 
-import { findBestOrphanMatch, type OrphanPhase } from "./phase-identity";
 
 export interface ExistingPhaseForReconcile {
   id: string;
@@ -55,10 +67,6 @@ export interface ReconciledPhase {
   sessionCount: number | null;
   notes: string | null;
   activityType?: string | null;
-  /** Solo en fases SIN `id` (no matchearon por nombre ni posición): el id de la existente
-   *  huérfana que probablemente es esta misma fase con otro nombre (Tanda O). Un AVISO, no una
-   *  decisión — el CSE confirma la fusión a mano en el canvas. */
-  mergeCandidateId?: string | null;
 }
 
 export interface ReconcileResult {
@@ -101,37 +109,13 @@ export function reconcileAgentProposal(
     }
   });
 
-  // 1b) SEGUNDA pasada — candidato a FUSIÓN: ANTES del fallback posicional a propósito. El
-  //     posicional es ciego (le da a cualquier propuesta sin nombre la próxima existente que
-  //     encuentre, sin mirar si se parecen) y greedy — si corriera primero, se comería TODAS las
-  //     huérfanas disponibles para lo que sea que venga en orden, sin dejarle nada a una fase que
-  //     sí se parece a una huérfana puntual (matemáticamente: con matching exhaustivo, o el
-  //     posicional deja propuestas sin match, o deja huérfanas sin consumir — nunca las dos cosas
-  //     a la vez, así que corriendo después del posicional este paso jamás encuentra con qué
-  //     trabajar). Acá se RESERVA la huérfana (entra a `claimed`, que el paso 1c respeta) sin
-  //     asignarle id a la propuesta — es un AVISO (`mergeCandidateId`), no una fusión: la huérfana
-  //     se re-emite igual en el paso 2 de abajo, nadie la toca hasta que el CSE apriete "Fusionar".
-  //     Greedy en orden de propuesta si dos compiten por la misma huérfana — es solo un hint
-  //     descartable, el CSE ve ambas y decide.
-  const claimed = new Set<string>();
-  const mergeCandidateByIndex = new Map<number, string>();
+  // 1b) SEGUNDA pasada: posición, contra "la próxima existente TODAVÍA SIN CONSUMIR" — no el
+  //     índice crudo del array original. Así una inserción o un renombre en el medio no desalinea
+  //     el resto. Es lo que hace que un renombre (por parecido que sea el nombre nuevo) conserve
+  //     el id, las tareas y el progreso de la fase que ya estaba, en vez de duplicarla.
   proposedPhases.forEach((p, i) => {
     if (matchByIndex.has(i)) return;
-    const orphansSoFar: OrphanPhase[] = existingPhases.filter((e) => !consumed.has(e.id) && !claimed.has(e.id));
-    const best = findBestOrphanMatch(p.name, orphansSoFar);
-    if (best) {
-      mergeCandidateByIndex.set(i, best.id);
-      claimed.add(best.id);
-    }
-  });
-
-  // 1c) TERCERA pasada: posición, contra "la próxima existente TODAVÍA sin consumir NI reservada
-  //     por 1b" (no el índice crudo del array original) — así una inserción/renombre en el medio
-  //     no desalinea el resto, y una huérfana ya ofrecida como candidata a fusión no se la roba
-  //     una propuesta sin ninguna relación con ella.
-  proposedPhases.forEach((p, i) => {
-    if (matchByIndex.has(i) || mergeCandidateByIndex.has(i)) return;
-    const positional = existingPhases.find((e) => !consumed.has(e.id) && !claimed.has(e.id));
+    const positional = existingPhases.find((e) => !consumed.has(e.id));
     if (positional) {
       matchByIndex.set(i, positional);
       consumed.add(positional.id);
@@ -156,7 +140,6 @@ export function reconcileAgentProposal(
         activityType: match.activityType,
       });
     } else {
-      const mergeCandidateId = mergeCandidateByIndex.get(i);
       phases.push({
         name: p.name,
         order: i,
@@ -164,7 +147,6 @@ export function reconcileAgentProposal(
         startWeek: p.startWeek,
         sessionCount: p.sessionCount,
         notes: p.notes,
-        ...(mergeCandidateId ? { mergeCandidateId } : {}),
       });
     }
   });

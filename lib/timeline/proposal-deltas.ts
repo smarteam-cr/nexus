@@ -45,11 +45,6 @@ export interface ProposalPhaseLike {
   activityType?: string | null;
   /** La propuesta del handoff nunca las trae; se ignoran siempre (phase-level only). */
   tasks?: unknown;
-  /** Solo en fases sin `id` (Tanda O) — ver `reconcileAgentProposal`. El id de la huérfana
-   *  candidata a ser esta misma fase con otro nombre. Se persiste porque no hay forma barata de
-   *  re-derivar "cuál era" después; el NOMBRE, en cambio, se resuelve fresco en cada delta (ver
-   *  abajo), nunca se guarda una copia que pueda quedar vieja. */
-  mergeCandidateId?: string | null;
 }
 
 export interface ProposalLike {
@@ -74,11 +69,6 @@ export type ProposalDelta =
       /** Fase existente tras la cual va (null = al principio). Solo para mostrar el destino. */
       afterPhaseId: string | null;
       afterPhaseName: string | null;
-      /** Huérfana candidata a ser esta misma fase con otro nombre (Tanda O) — null si no hay
-       *  candidata, o si la huérfana ya no existe (un humano la borró entre la propuesta y ahora:
-       *  mismo criterio de obsolescencia que `byId.has` ya aplica al resto del archivo). */
-      mergeCandidateId: string | null;
-      mergeCandidateName: string | null;
     }
   | { key: string; kind: "MODIFY_PHASE"; phaseId: string; name: string; changes: PhaseFieldChange[] }
   | { key: "reorder"; kind: "REORDER_PHASES"; ids: string[]; names: string[] }
@@ -123,7 +113,6 @@ export function computeProposalDeltas(
           break;
         }
       }
-      const mergeCandidate = p.mergeCandidateId ? byId.get(p.mergeCandidateId) : undefined;
       out.push({
         key: `add:${i}`,
         kind: "ADD_PHASE",
@@ -131,8 +120,6 @@ export function computeProposalDeltas(
         phase: p,
         afterPhaseId: afterId,
         afterPhaseName: afterId ? (byId.get(afterId)?.name ?? null) : null,
-        mergeCandidateId: mergeCandidate ? mergeCandidate.id : null,
-        mergeCandidateName: mergeCandidate ? mergeCandidate.name : null,
       });
       return;
     }

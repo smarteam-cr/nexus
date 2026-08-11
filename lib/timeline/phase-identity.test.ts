@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { phaseNamesLikelySameWork, findBestOrphanMatch } from "./phase-identity";
+import { phaseNamesLikelySameWork, fasesProbablementeRepetidas } from "./phase-identity";
 
 describe("phaseNamesLikelySameWork", () => {
   // Los 3 pares reales de Wherex (2026-08) — el problema que esto existe para resolver.
@@ -29,36 +29,34 @@ describe("phaseNamesLikelySameWork", () => {
   });
 });
 
-describe("findBestOrphanMatch", () => {
-  it("sin huérfanas → null", () => {
-    expect(findBestOrphanMatch("Integraciones", [])).toBeNull();
+describe("fasesProbablementeRepetidas — el aviso sobre las fases QUE YA EXISTEN", () => {
+  const f = (id: string, name: string) => ({ id, name });
+
+  it("los tres pares reales de Wherex se marcan, en las DOS filas de cada par", () => {
+    const aviso = fasesProbablementeRepetidas([
+      f("a", "Integraciones"),
+      f("b", "Desarrollo / Integración"),
+    ]);
+    expect(aviso.get("a")).toBe("Desarrollo / Integración");
+    expect(aviso.get("b")).toBe("Integraciones");
   });
 
-  it("una huérfana que matchea → la devuelve", () => {
-    const orphans = [{ id: "e1", name: "Desarrollo / Integración" }];
-    expect(findBestOrphanMatch("Integraciones", orphans)).toEqual(orphans[0]);
+  it("Sales Hub y Service Hub NO se marcan (el falso positivo que volvería ruido el aviso)", () => {
+    const aviso = fasesProbablementeRepetidas([f("a", "Sales Hub"), f("b", "Service Hub")]);
+    expect(aviso.size).toBe(0);
   });
 
-  it("ninguna huérfana matchea → null", () => {
-    const orphans = [{ id: "e1", name: "Sales Hub" }];
-    expect(findBestOrphanMatch("Service Hub", orphans)).toBeNull();
+  it("una lista sin repetidas no marca nada", () => {
+    const aviso = fasesProbablementeRepetidas([
+      f("a", "Kickoff"),
+      f("b", "Relevamiento"),
+      f("c", "Capacitación"),
+    ]);
+    expect(aviso.size).toBe(0);
   });
 
-  it("empate de puntaje → gana la primera del array (determinístico)", () => {
-    // "Revisión Circle" comparte exactamente 1 token con cada huérfana (ambas vía "circle") —
-    // empate genuino, ninguna gana por mayor puntaje.
-    const tied = [
-      { id: "a", name: "Circle Integración" },
-      { id: "b", name: "Otra sesión de Circle" },
-    ];
-    expect(findBestOrphanMatch("Revisión Circle", tied)).toEqual(tied[0]);
-  });
-
-  it("mayor puntaje gana sobre un match parcial", () => {
-    const orphans = [
-      { id: "e1", name: "Marketing Hub" },
-      { id: "e2", name: "Configuración Marketing" },
-    ];
-    expect(findBestOrphanMatch("Configuración Marketing Hub", orphans)).toEqual(orphans[1]);
+  it("cero y una fase no revientan", () => {
+    expect(fasesProbablementeRepetidas([]).size).toBe(0);
+    expect(fasesProbablementeRepetidas([f("a", "Integraciones")]).size).toBe(0);
   });
 });

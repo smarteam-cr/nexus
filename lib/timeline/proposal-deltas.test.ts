@@ -90,55 +90,6 @@ test("una fase nueva sabe DÓNDE va (después de la fase previa de la propuesta)
   expect(d).toMatchObject({ kind: "ADD_PHASE", afterPhaseId: "a", afterPhaseName: "Sales Hub" });
 });
 
-// ── Tanda O: el ADD_PHASE lleva el hint de fusión (mergeCandidateId) ────────────────────────
-// Mismo fixture Sales Hub/Service Hub/Integraciones que ya usa el archivo (el trío real de
-// Wherex). El nombre de la candidata se resuelve FRESCO contra `current` en cada delta — nunca
-// se guarda una copia que pueda quedar vieja (ver el docblock de `ProposalPhaseLike`).
-
-test("ADD_PHASE con mergeCandidateId resuelve el nombre fresco contra la fase actual", () => {
-  const a = cur({ id: "a", name: "Sales Hub" });
-  const b = cur({ id: "b", name: "Service Hub" });
-  // "b" es la huérfana: no viaja en la propuesta (el reconciliador real la re-emitiría aparte,
-  // sin delta — acá alcanza con que esté en `current`, que es contra lo que se resuelve el
-  // nombre fresco).
-  const proposal = {
-    anchorStartDate: null,
-    phases: [
-      { ...a },
-      { name: "Integraciones", durationWeeks: 2, sessionCount: null, notes: null, mergeCandidateId: "b" },
-    ],
-  };
-  const [d] = computeProposalDeltas([a, b], proposal, null);
-  expect(d).toMatchObject({
-    kind: "ADD_PHASE",
-    mergeCandidateId: "b",
-    mergeCandidateName: "Service Hub",
-  });
-});
-
-test("ADD_PHASE sin mergeCandidateId → ambos campos en null (regresión: no inventa una candidata)", () => {
-  const a = cur({ id: "a", name: "Sales Hub" });
-  const proposal = {
-    anchorStartDate: null,
-    phases: [{ ...a }, { name: "Integraciones", durationWeeks: 2, sessionCount: null, notes: null }],
-  };
-  const [d] = computeProposalDeltas([a], proposal, null);
-  expect(d).toMatchObject({ kind: "ADD_PHASE", mergeCandidateId: null, mergeCandidateName: null });
-});
-
-test("ADD_PHASE con mergeCandidateId que ya no existe (un humano la borró) → se ignora, no revienta", () => {
-  const a = cur({ id: "a", name: "Sales Hub" });
-  const proposal = {
-    anchorStartDate: null,
-    phases: [
-      { ...a },
-      { name: "Integraciones", durationWeeks: 2, sessionCount: null, notes: null, mergeCandidateId: "borrada" },
-    ],
-  };
-  const [d] = computeProposalDeltas([a], proposal, null);
-  expect(d).toMatchObject({ kind: "ADD_PHASE", mergeCandidateId: null, mergeCandidateName: null });
-});
-
 test("una fase nueva AL PRINCIPIO no tiene ancla previa", () => {
   const a = cur({ id: "a" });
   const proposal = {

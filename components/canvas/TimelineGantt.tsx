@@ -29,7 +29,7 @@
  * es la barrera. La marca en sí nunca cruza (columna excluida del mapper externo).
  */
 
-import { useState, useRef, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
+import { useState, useRef, useMemo, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
 import {
   DndContext,
   closestCorners,
@@ -66,6 +66,7 @@ import {
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
 import { findDuplicateGroups } from "@/lib/timeline/particularidad-identity";
+import { fasesProbablementeRepetidas } from "@/lib/timeline/phase-identity";
 import { buildPhaseSignal, type SignalTone } from "@/lib/timeline/phase-signal";
 import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
 import { describeChange, sortChangesByImpact, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
@@ -73,7 +74,6 @@ import { clientStatusLine } from "@/lib/timeline/client-status";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 import DatePickerField from "@/components/ui/DatePickerField";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { AcceptButton, RejectButton, IconCheck, IconX } from "@/components/ui/AcceptReject";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
@@ -173,10 +173,6 @@ interface Props {
   // nueva — y el CSE las resuelve una por una. El Gantt nunca se reemplaza por la propuesta.
   proposalDeltas?: ProposalDelta[];
   onResolveProposalDelta?: (key: string, accept: boolean) => void;
-  // Tanda O — fusionar una fase propuesta (ADD_PHASE con mergeCandidateId) CON la huérfana que
-  // reconcileAgentProposal sospecha que es esta misma fase con otro nombre. Sin esto, el hint
-  // se ve pero no hay acción: la fila fantasma solo ofrece Aceptar/Descartar.
-  onMergeProposalDelta?: (key: string, targetId: string) => void;
   // Convertir una particularidad en TAREA del cronograma (dueño + fecha). Sin esto el botón no sale.
   onConvertParticularidad?: (id: string) => void;
   // Abrir el drawer de la tarea que ya persigue este hecho (chip "→ tarea").
@@ -417,7 +413,6 @@ export default function TimelineGantt({
   onAddParticularidad,
   proposalDeltas,
   onResolveProposalDelta,
-  onMergeProposalDelta,
   sugerenciasSlot,
   proposalGlobalSlot,
   onConvertParticularidad,
@@ -432,11 +427,16 @@ export default function TimelineGantt({
   // distinta (guarda el ISO de la sugerida que se descartó; no persiste — vuelve a avisar si
   // se recarga la página, a propósito: es un recordatorio, no una decisión escrita en la base).
   const [dismissedSuggestionIso, setDismissedSuggestionIso] = useState<string | null>(null);
-  // Tanda O — el "¿seguro?" de Fusionar: pisa el CONTENIDO de una fase real (con tareas y
-  // progreso), así que merece confirmación explícita, igual criterio que "Confirmar detalle".
-  const [confirmingMerge, setConfirmingMerge] = useState<{ key: string; targetId: string; targetName: string; newName: string } | null>(null);
-
   const ranges = computePhaseRanges(phases);
+  /* ¿Hay dos fases que son el mismo trabajo con otro nombre? Es un AVISO sobre las fases que YA
+     existen —el caso real de Wherex, tres pares conviviendo sobre 11 fases—, no una acción: el
+     avance del proyecto las cuenta dos veces y con esa cantidad de filas nadie lo ve a ojo.
+     Fusionarlas de verdad (mover tareas, re-apuntar particularidades, borrar la fase) va por
+     scripts/fusionar-fases-cronograma.ts, con dry-run: es una decisión humana. */
+  const repetidas = useMemo(
+    () => fasesProbablementeRepetidas(phases.filter((p) => p.id).map((p) => ({ id: p.id!, name: p.name }))),
+    [phases],
+  );
   const total = timelineSpan(phases); // ancho de calendario (max end) — soporta fases en paralelo
   // Cierre proyectado: `null` sin ancla o sin fases (ver projectedEnd). Deriva de las MISMAS
   // fases que dibujan la grilla, así que la fecha cae exactamente en su borde derecho.
@@ -902,6 +902,14 @@ export default function TimelineGantt({
                         ) : (
                           <span className="flex-1 min-w-[12rem] break-words">{p.name}</span>
                         )}
+                        {p.id && repetidas.has(p.id) && (
+                          <span
+                            className="flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-warn-surface text-warn-ink border border-warn-line"
+                            title={`Parece el mismo trabajo que «${repetidas.get(p.id)}». Si están repetidas, el avance del proyecto las cuenta dos veces — revisalo y unificalas a mano.`}
+                          >
+                            ¿repetida?
+                          </span>
+                        )}
                         {(onAssistPhase || onRegeneratePhase || (editable && canDelete && onRemovePhase)) && (
                           <span className="ml-auto flex items-center gap-1 flex-shrink-0">
                             {onAssistPhase && (
@@ -1299,31 +1307,6 @@ export default function TimelineGantt({
                       </button>
                     </span>
                   </div>
-                  {/* Tanda O — el hint de fusión: reconcileAgentProposal sospecha que esta fase
-                      "nueva" es en realidad una huérfana existente con otro nombre. Es un AVISO,
-                      no una decisión tomada: la huérfana sigue ahí, intacta, hasta que el CSE
-                      confirma. Solo aparece si onMergeProposalDelta está cableado. */}
-                  {onMergeProposalDelta && d.mergeCandidateId && d.mergeCandidateName && (
-                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-warn-line bg-warn-surface px-2 py-1.5">
-                      <span className="text-[11px] text-warn-ink min-w-0">
-                        ¿Es la misma fase que «{d.mergeCandidateName}», que quedó sin match?
-                      </span>
-                      <button
-                        onClick={() =>
-                          setConfirmingMerge({
-                            key: d.key,
-                            targetId: d.mergeCandidateId!,
-                            targetName: d.mergeCandidateName!,
-                            newName: d.phase.name,
-                          })
-                        }
-                        title={`Fusionar: actualiza «${d.mergeCandidateName}» con esta propuesta, sin tocar sus tareas`}
-                        className="ml-auto text-[11px] font-semibold text-warn-ink hover:opacity-80 transition-opacity flex-shrink-0"
-                      >
-                        🔗 Fusionar
-                      </button>
-                    </div>
-                  )}
                 </div>
               ))}
             {editable && onAddPhase && (
@@ -1532,35 +1515,6 @@ export default function TimelineGantt({
         );
       })()}
 
-      {/* Tanda O — confirmar la fusión: pisa el contenido de una fase real con tareas y
-          progreso, así que el clic solo del botón no alcanza (mismo criterio que "Confirmar
-          detalle"). Variant "default", no "destructive": fusionar no borra nada, solo actualiza
-          nombre/duración/tipo — las tareas de la huérfana quedan intactas. */}
-      <ConfirmDialog
-        open={!!confirmingMerge}
-        variant="default"
-        title="Fusionar con la fase existente"
-        description={
-          confirmingMerge && (
-            <>
-              «{confirmingMerge.targetName}» va a actualizarse con lo que propone el handoff
-              {confirmingMerge.newName !== confirmingMerge.targetName ? (
-                <> — pasa a llamarse «{confirmingMerge.newName}»</>
-              ) : null}
-              . Sus tareas y su progreso quedan intactos: la fusión solo toca nombre, duración,
-              tipo e inicio.
-            </>
-          )
-        }
-        confirmLabel="Fusionar"
-        cancelLabel="Cancelar"
-        onCancel={() => setConfirmingMerge(null)}
-        onConfirm={() => {
-          if (!confirmingMerge || !onMergeProposalDelta) return;
-          onMergeProposalDelta(confirmingMerge.key, confirmingMerge.targetId);
-          setConfirmingMerge(null);
-        }}
-      />
     </div>
   );
 }
