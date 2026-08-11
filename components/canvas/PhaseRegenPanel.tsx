@@ -26,6 +26,7 @@ import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy, s
 import { CSS } from "@dnd-kit/utilities";
 import { StatusCircle, PARTY_META, type GanttTaskStatus } from "./TimelineGantt";
 import { repartoInicial } from "@/lib/timeline/regen-columnas";
+import type { AvisoRepetida } from "@/lib/timeline/tarea-repetida";
 
 const PARTIES = ["CLIENTE", "SMARTEAM", "AMBOS", "DEV"] as const;
 type Party = (typeof PARTIES)[number];
@@ -86,9 +87,12 @@ export interface PhaseRegenPanelProps {
   current: RegenCurrentTask[];
   proposed: RegenProposedTask[];
   onChange: (finals: FinalTask[]) => void;
+  /** ¿Este título ya existe en OTRA fase? El caller resuelve la consulta (es el único que ve
+   *  todas las fases); acá solo se pinta. Sin este prop, el panel se comporta como antes. */
+  avisoRepetida?: (titulo: string) => AvisoRepetida | null;
 }
 
-export function PhaseRegenPanel({ durationWeeks, current, proposed, onChange }: PhaseRegenPanelProps) {
+export function PhaseRegenPanel({ durationWeeks, current, proposed, onChange, avisoRepetida }: PhaseRegenPanelProps) {
   // Estado inicial calculado UNA vez al montar (lazy) — mismo criterio que el PhaseRegenModal
   // original: current/proposed cambian de referencia si el padre re-renderiza y NO deben
   // re-sembrar la curación a mitad de camino. El reparto (qué se descarta vs qué se preserva,
@@ -168,17 +172,20 @@ export function PhaseRegenPanel({ durationWeeks, current, proposed, onChange }: 
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
       <div className="grid grid-cols-2 gap-3 mt-4">
         <Column id="left" title="Tareas actuales" subtitle="Pendientes reemplazables — arrastrá para conservar"
-          items={left} durationWeeks={durationWeeks} onPatch={(k, p) => patch("left", k, p)} onRemove={(k) => remove("left", k)} />
+          items={left} durationWeeks={durationWeeks} onPatch={(k, p) => patch("left", k, p)} onRemove={(k) => remove("left", k)}
+          avisoRepetida={avisoRepetida} />
         <Column id="right" title="Cómo quedará la fase" subtitle="Resultado final (se aplica al aceptar)"
-          items={right} durationWeeks={durationWeeks} onPatch={(k, p) => patch("right", k, p)} onRemove={(k) => remove("right", k)} highlight />
+          items={right} durationWeeks={durationWeeks} onPatch={(k, p) => patch("right", k, p)} onRemove={(k) => remove("right", k)}
+          avisoRepetida={avisoRepetida} highlight />
       </div>
     </DndContext>
   );
 }
 
-function Column({ id, title, subtitle, items, durationWeeks, onPatch, onRemove, highlight }: {
+function Column({ id, title, subtitle, items, durationWeeks, onPatch, onRemove, avisoRepetida, highlight }: {
   id: Col; title: string; subtitle: string; items: Item[]; durationWeeks: number;
-  onPatch: (key: string, p: Partial<Item>) => void; onRemove: (key: string) => void; highlight?: boolean;
+  onPatch: (key: string, p: Partial<Item>) => void; onRemove: (key: string) => void;
+  avisoRepetida?: (titulo: string) => AvisoRepetida | null; highlight?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
@@ -193,7 +200,8 @@ function Column({ id, title, subtitle, items, durationWeeks, onPatch, onRemove, 
         }`}>
         <SortableContext items={items.map((i) => i._key)} strategy={verticalListSortingStrategy}>
           {items.map((i) => (
-            <TaskCard key={i._key} item={i} durationWeeks={durationWeeks} onPatch={(p) => onPatch(i._key, p)} onRemove={() => onRemove(i._key)} />
+            <TaskCard key={i._key} item={i} durationWeeks={durationWeeks} onPatch={(p) => onPatch(i._key, p)} onRemove={() => onRemove(i._key)}
+              aviso={i.isNew ? (avisoRepetida?.(i.title) ?? null) : null} />
           ))}
         </SortableContext>
         {items.length === 0 && <p className="text-[10px] text-fg-muted italic px-1 py-6 text-center">Sin tareas — arrastrá acá.</p>}
@@ -202,8 +210,9 @@ function Column({ id, title, subtitle, items, durationWeeks, onPatch, onRemove, 
   );
 }
 
-function TaskCard({ item, durationWeeks, onPatch, onRemove }: {
+function TaskCard({ item, durationWeeks, onPatch, onRemove, aviso }: {
   item: Item; durationWeeks: number; onPatch: (p: Partial<Item>) => void; onRemove: () => void;
+  aviso?: AvisoRepetida | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item._key });
   const style = { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
@@ -243,6 +252,26 @@ function TaskCard({ item, durationWeeks, onPatch, onRemove }: {
             ))}
           </select>
           {item.isNew && <span className="text-[9px] text-brand-light font-medium">nueva</span>}
+          {/* Esta tarea propuesta YA existe en otra fase. Ámbar cuando allá está hecha o en
+              curso —el caso caro: se re-propone trabajo ya avanzado y el avance lo cuenta dos
+              veces—; neutro si allá también está pendiente. Avisa, no bloquea: puede haber
+              tareas legítimamente homónimas en dos fases, y decidirlo es del CSE. */}
+          {aviso && (
+            <span
+              className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${
+                aviso.yaAvanzada
+                  ? "text-warn-ink bg-warn-surface border-warn-line"
+                  : "text-fg-muted bg-surface-muted border-line"
+              }`}
+              title={
+                aviso.yaAvanzada
+                  ? `Esta tarea ya existe en «${aviso.fase}» y allá está ${aviso.status === "DONE" ? "HECHA" : "en curso"}. Si la dejás acá, el avance del proyecto la cuenta dos veces.`
+                  : `Esta tarea ya existe en «${aviso.fase}», también pendiente.`
+              }
+            >
+              {aviso.yaAvanzada ? `⚠ ya está en «${aviso.fase}»` : `también en «${aviso.fase}»`}
+            </span>
+          )}
         </div>
       </div>
       <button onClick={onRemove} className="mt-0.5 text-fg-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="Quitar">

@@ -17,6 +17,7 @@ import { useMemo, useRef, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { PhaseRegenPanel, phaseHasChanges, type RegenCurrentTask, type RegenProposedTask, type FinalTask } from "./PhaseRegenPanel";
+import { indexarTareasPorTitulo, avisoDeRepetida } from "@/lib/timeline/tarea-repetida";
 
 export interface AllPhasesRegenPhase {
   phaseId: string;
@@ -43,6 +44,10 @@ export function AllPhasesRegenModal({ open, phases, applying, onCancel, onApply 
     () => phases.filter((p) => phaseHasChanges(p.proposed.length)).length,
     [phases],
   );
+  /* El índice de "qué tareas YA existen y dónde". Este componente es el ÚNICO punto del
+     sistema donde la vista cross-fase ya está materializada (recibe todas las fases con sus
+     tareas reales), así que el aviso se resuelve acá sin pedirle nada más al servidor. */
+  const indice = useMemo(() => indexarTareasPorTitulo(phases), [phases]);
 
   const toggle = (phaseId: string) =>
     setOpenIds((s) => {
@@ -97,6 +102,7 @@ export function AllPhasesRegenModal({ open, phases, applying, onCancel, onApply 
                   durationWeeks={p.durationWeeks}
                   current={p.current}
                   proposed={p.proposed}
+                  avisoRepetida={(titulo) => avisoDeRepetida(titulo, p.phaseId, indice)}
                   onChange={(finals) => { finalsByPhase.current[p.phaseId] = finals; }}
                 />
               </div>

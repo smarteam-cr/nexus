@@ -60,6 +60,7 @@ import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
 import { PhaseRegenModal, type RegenProposedTask, type RegenCurrentTask, type FinalTask } from "./PhaseRegenModal";
+import { indexarTareasPorTitulo, avisoDeRepetida } from "@/lib/timeline/tarea-repetida";
 import { AllPhasesRegenModal, type AllPhasesRegenPhase } from "./AllPhasesRegenModal";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 import { CronogramaSkeleton } from "@/components/clients/skeletons";
@@ -2627,6 +2628,16 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             party: t.party ?? null, type: t.type ?? null, status: t.status,
             source: t.source ?? null, notes: t.notes ?? null,
           }));
+        /* El regen POR FASE solo conoce su fase, así que el índice cross-fase se arma acá —
+           es el único punto con todas las fases a la vista. Sin esto, el aviso de "esta tarea
+           ya existe en otra fase" andaría en "Regenerar todo" y no acá. */
+        const indice = indexarTareasPorTitulo(
+          phases.filter((p) => p.id).map((p) => ({
+            phaseId: p.id as string,
+            phaseName: p.name,
+            current: (p.tasks ?? []).filter((t) => t.id).map((t) => ({ title: t.title, status: t.status })),
+          })),
+        );
         return (
           <PhaseRegenModal
             open
@@ -2635,6 +2646,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             current={current}
             proposed={regenPreview}
             applying={regenApplying}
+            avisoRepetida={(titulo) => avisoDeRepetida(titulo, regenPhase.id ?? "", indice)}
             onCancel={() => { setRegenPhase(null); setRegenPreview(null); }}
             onApply={applyPhaseRegen}
           />

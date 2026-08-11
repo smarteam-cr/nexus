@@ -11,6 +11,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { PhaseRegenPanel, type RegenCurrentTask, type RegenProposedTask, type FinalTask } from "./PhaseRegenPanel";
+import type { AvisoRepetida } from "@/lib/timeline/tarea-repetida";
 
 export type { RegenCurrentTask, RegenProposedTask, FinalTask };
 
@@ -21,11 +22,14 @@ export interface PhaseRegenModalProps {
   current: RegenCurrentTask[];
   proposed: RegenProposedTask[];
   applying: boolean;
+  /** ¿Este título ya existe en otra fase del cronograma? Lo resuelve el caller (es el que ve
+   *  todas las fases); acá solo se pasa al panel. */
+  avisoRepetida?: (titulo: string) => AvisoRepetida | null;
   onCancel: () => void;
   onApply: (finalTasks: FinalTask[]) => void;
 }
 
-export function PhaseRegenModal({ open, phaseName, durationWeeks, current, proposed, applying, onCancel, onApply }: PhaseRegenModalProps) {
+export function PhaseRegenModal({ open, phaseName, durationWeeks, current, proposed, applying, avisoRepetida, onCancel, onApply }: PhaseRegenModalProps) {
   const [finals, setFinals] = useState<FinalTask[]>([]);
 
   return (
@@ -38,7 +42,7 @@ export function PhaseRegenModal({ open, phaseName, durationWeeks, current, propo
         </p>
       </div>
 
-      <PhaseRegenPanel durationWeeks={durationWeeks} current={current} proposed={proposed} onChange={setFinals} />
+      <PhaseRegenPanel durationWeeks={durationWeeks} current={current} proposed={proposed} avisoRepetida={avisoRepetida} onChange={setFinals} />
 
       <div className="flex gap-2 mt-5">
         <Button variant="primary" size="md" className="flex-1" loading={applying} onClick={() => onApply(finals)}>
