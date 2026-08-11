@@ -98,6 +98,9 @@ interface Phase {
   /** Sesiones de entrega reales (CSE/dev + cliente) calculadas por el server.
    *  Solo-lectura, derivado; NO se envía en el PUT. null = fase futura o sin anchor. */
   actualSessionCount?: number | null;
+  /** Fases que comparten semanas con ésta (derivado del server) — el contador de sesiones
+   *  cuenta las mismas reuniones en todas ellas. Solo-lectura, no viaja en el PUT. */
+  solapaCon?: string[];
   notes: string | null;
   activityType: string | null;
   source?: string;
@@ -157,6 +160,7 @@ interface ServerPhase {
   startWeek?: number | null;
   sessionCount: number | null;
   actualSessionCount?: number | null;
+  solapaCon?: string[];
   notes: string | null;
   activityType: string | null;
   source: string;
@@ -439,6 +443,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       startWeek: p.startWeek,
       sessionCount: p.sessionCount,
       actualSessionCount: p.actualSessionCount,
+      solapaCon: p.solapaCon,
       notes: p.notes,
       activityType: p.activityType,
       source: p.source,
@@ -1648,6 +1653,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     startWeek: p.startWeek ?? null,
     sessionCount: p.sessionCount,
     actualSessionCount: p.actualSessionCount ?? null,
+    solapaCon: p.solapaCon ?? [],
     activityType: p.activityType,
     status: p.status,
     needsValidation: p.needsValidation,

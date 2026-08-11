@@ -36,7 +36,7 @@ import { guardAccessToProject, guardTimelineEdit, guardTimelineDelete } from "@/
 import { prisma } from "@/lib/db/prisma";
 import { withDbRetry } from "@/lib/db/retry";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
-import { countDeliverySessionsByPhase } from "@/lib/timeline/delivery-sessions";
+import { countDeliverySessionsByPhase, nombresDeFasesSolapadas } from "@/lib/timeline/delivery-sessions";
 import { Prisma } from "@prisma/client";
 import type {
   TimelinePhaseSource,
@@ -199,6 +199,10 @@ interface TimelineResponse {
      *  Calculado en lectura (no persistido). number en fases ya iniciadas; null en
      *  futuras o si no hay anchorStartDate → la UI cae al estimado `sessionCount`. */
     actualSessionCount: number | null;
+    /** Nombres de las fases con las que ésta comparte semanas. Vacío = ventana propia.
+     *  Con solape, `actualSessionCount` cuenta las MISMAS reuniones en las dos —
+     *  correcto por fase, engañoso si alguien las suma. La UI lo dice en el tooltip. */
+    solapaCon: string[];
     notes: string | null;
     activityType: TimelineActivityType | null;
     source: TimelinePhaseSource;
@@ -321,9 +325,11 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     anchorStartDate: tl.anchorStartDate,
     phases: tl.phases.map((p) => ({ id: p.id, durationWeeks: p.durationWeeks, startWeek: p.startWeek })),
   });
+  const solapes = nombresDeFasesSolapadas(tl.phases);
   const phases = tl.phases.map((p) => ({
     ...p,
     actualSessionCount: deliveryByPhase?.get(p.id) ?? null,
+    solapaCon: solapes.get(p.id) ?? [],
   }));
   return {
     exists: true,

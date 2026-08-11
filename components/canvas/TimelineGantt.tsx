@@ -115,6 +115,9 @@ export interface GanttPhase {
   /** Sesiones de entrega reales (CSE/dev + cliente) ejecutadas en la ventana de la fase.
    *  Solo-lectura, calculado por el server. number en fases iniciadas; null → usa el estimado. */
   actualSessionCount?: number | null;
+  /** Fases que comparten semanas con ésta. Con solape, `actualSessionCount` cuenta las MISMAS
+   *  reuniones en todas — cierto por fase, engañoso si alguien las suma. Se dice en el tooltip. */
+  solapaCon?: string[];
   activityType: string | null;
   /** D.2 — avance a nivel fase: DONE = completada, IN_PROGRESS = el "hoy". */
   status?: GanttTaskStatus;
@@ -936,8 +939,20 @@ export default function TimelineGantt({
                             <span>sem</span>
                             <span className="text-fg-muted">·</span>
                             {p.actualSessionCount != null ? (
-                              <span className="text-fg-muted font-medium" title="Sesiones de entrega ejecutadas (CSE/Dev + cliente) en la ventana de la fase — calculado">
-                                {p.actualSessionCount} ses
+                              /* Con fases pisadas, este número cuenta las MISMAS reuniones en todas
+                                 ellas. Es cierto por fase ("esto pasó mientras corría") pero no se
+                                 puede sumar — y sin decirlo parece un error de cálculo. El asterisco
+                                 marca cuándo el número es compartido y con quién. */
+                              <span
+                                className="text-fg-muted font-medium"
+                                title={
+                                  "Sesiones de entrega ejecutadas (CSE/Dev + cliente) en la ventana de la fase — calculado" +
+                                  ((p.solapaCon?.length ?? 0) > 0
+                                    ? `.\n\n⚠ Esta fase se pisa con ${p.solapaCon!.map((n) => `«${n}»`).join(", ")}: esas reuniones se cuentan también ahí. No sumes los contadores de las fases.`
+                                    : "")
+                                }
+                              >
+                                {p.actualSessionCount} ses{(p.solapaCon?.length ?? 0) > 0 ? "*" : ""}
                               </span>
                             ) : (
                               <>
