@@ -15,7 +15,9 @@
  *   down       lo apaga
  *   status     ¿está corriendo?
  *   bootstrap  aplica el schema COMPLETO a nexus_local y nexus_test:
- *              0_init (migrate deploy) → after.sql → policies.sql
+ *              0_init (migrate deploy) → after.sql → policies.sql → los scripts/sql
+ *              posteriores al baseline (si no, la local queda vieja: ver el docblock
+ *              de aplicarSqlPosterioresAlBaseline)
  *   seed       puebla nexus_local: catálogo (agentes/prompts/config/equipo
  *              ficticio) + el fixture fx- (scripts/seed-fixture.ts). F3.
  *   acceso     copia el ROSTER INTERNO real de prod → nexus_local, para poder
@@ -30,7 +32,7 @@
  * El guard anti-prod NO exige ALLOW_PROD_WRITE acá: localhost no es prod (a propósito).
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
 import "dotenv/config";
@@ -126,6 +128,49 @@ async function aplicarSql(db: string, rutaRelativa: string): Promise<void> {
   }
 }
 
+/**
+ * ── POR QUÉ EL BOOTSTRAP NO ALCANZABA (2026-08-11) ───────────────────────────
+ * `migrate deploy` aplica el baseline `prisma/migrations/0_init`, que se regeneró el
+ * 2026-08-01 y quedó congelado ahí. Todo el DDL posterior vive suelto en `scripts/sql/` y se
+ * aplica a mano a producción (invariante #3: nada de `db push`), así que la base LOCAL se
+ * quedaba vieja calladamente: bootstrap y `reset` la dejaban igual de desactualizada.
+ *
+ * El síntoma no señalaba la causa — `npm run test:int` fallaba con *"The column enrichAttempts
+ * does not exist"*, que parece un bug del código y es una base tres migraciones atrás. Estuvo
+ * roto sin que nadie lo notara porque los tests de integración se corren poco.
+ *
+ * Acá se aplican, después del baseline, los `.sql` cuyo nombre empieza con una fecha POSTERIOR
+ * a la del baseline. Se corren en orden y deben ser IDEMPOTENTES (`IF NOT EXISTS`, `ADD VALUE
+ * IF NOT EXISTS`, etc.), porque el mismo archivo puede reaplicarse en cada bootstrap.
+ * ⚠ Si uno falla, esto ABORTA en vez de seguir: una base local a medio migrar produce fallos
+ * que parecen bugs del código, que es exactamente el rato perdido que esto viene a evitar.
+ * El arreglo es hacer idempotente el `.sql`, no saltearlo.
+ *
+ * Solo toca bases LOCALES (`aplicarSql` va contra `urlDe(db)`, y `up()` levanta el Postgres
+ * embebido en localhost:5433). Producción sigue siendo a mano, con ALLOW_PROD_WRITE.
+ */
+const FECHA_DEL_BASELINE = "2026-08-01";
+
+async function aplicarSqlPosterioresAlBaseline(db: string): Promise<string> {
+  const dir = join(RAIZ, "scripts/sql");
+  if (!existsSync(dir)) return "sin scripts/sql";
+  const pendientes = readdirSync(dir)
+    .filter((f) => f.endsWith(".sql") && /^\d{4}-\d{2}-\d{2}/.test(f) && f.slice(0, 10) > FECHA_DEL_BASELINE)
+    .sort();
+  for (const f of pendientes) {
+    try {
+      await aplicarSql(db, `scripts/sql/${f}`);
+    } catch (e) {
+      throw new Error(
+        `scripts/sql/${f} falló sobre ${db}: ${e instanceof Error ? e.message : e}\n` +
+          `El bootstrap lo reaplica en cada corrida, así que tiene que ser idempotente ` +
+          `(ADD COLUMN IF NOT EXISTS / ADD VALUE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS).`,
+      );
+    }
+  }
+  return pendientes.length > 0 ? pendientes.join(", ") : "ninguno pendiente";
+}
+
 async function bootstrap(): Promise<void> {
   if (!estaCorriendo()) up();
   await ensureDatabases();
@@ -151,6 +196,8 @@ async function bootstrap(): Promise<void> {
     console.log("· after.sql ✓ (CHECK logoScale; pgvector omitido si no está)");
     await aplicarSql(db, "prisma/policies.sql");
     console.log("· policies.sql ✓ (RLS + policies)");
+    const n = await aplicarSqlPosterioresAlBaseline(db);
+    console.log(`· scripts/sql posteriores al baseline ✓ (${n})`);
   }
   console.log("\n✓ bootstrap completo. URLs:");
   for (const db of BASES) console.log(`  ${db}: ${urlDe(db)}`);
