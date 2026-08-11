@@ -41,6 +41,7 @@ import {
   LifecycleChangeNode,
   LeadStatusNode,
 } from "./pipeline-nodes";
+import { IconX } from "@/components/ui/AcceptReject";
 import { SystemNode } from "./integration-nodes";
 import { DataFlowEdge, SelectableSmoothStepEdge } from "./integration-edges";
 
@@ -1764,7 +1765,7 @@ function FlowchartInner({
               className="px-2 py-1 text-xs border border-gray-200 rounded-lg focus:border-blue-400 focus:outline-none w-36"
             />
             <button type="submit" className="px-2 py-1 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600">OK</button>
-            <button type="button" onClick={() => setEdgeEditId(null)} className="px-2 py-1 text-xs text-gray-400 hover:text-gray-600">✕</button>
+            <button type="button" aria-label="Cancelar la edición de la etiqueta" onClick={() => setEdgeEditId(null)} className="inline-flex items-center justify-center px-2 py-1 text-xs text-gray-400 hover:text-gray-600"><IconX className="w-3 h-3" /></button>
           </form>
         </div>
       )}
@@ -1910,8 +1911,8 @@ function FlowchartInner({
             <span className="text-[11px] font-semibold text-slate-800">
               {typeof selectedEdge.label === "string" && selectedEdge.label ? selectedEdge.label : "Flujo de datos"}
             </span>
-            <button onClick={() => setSelectedEdgeId(null)} className="text-slate-400 hover:text-slate-600 text-xs leading-none" title="Cerrar">
-              ✕
+            <button onClick={() => setSelectedEdgeId(null)} aria-label="Cerrar el detalle del conector" className="inline-flex items-center justify-center text-slate-400 hover:text-slate-600 text-xs leading-none" title="Cerrar">
+              <IconX className="w-3 h-3" />
             </button>
           </div>
           {selEdgeMeta.pending && (
@@ -1941,8 +1942,8 @@ function FlowchartInner({
         <div className="absolute bottom-14 right-3 z-10 bg-slate-50 border border-slate-200 rounded-xl shadow-lg p-3 w-64">
           <div className="flex items-start justify-between gap-2 mb-1.5">
             <span className="text-[11px] font-semibold text-slate-800">{selNodeData.label || "Nodo"}</span>
-            <button onClick={() => setSelectedNodeId(null)} className="text-slate-400 hover:text-slate-600 text-xs leading-none" title="Cerrar">
-              ✕
+            <button onClick={() => setSelectedNodeId(null)} aria-label="Cerrar el detalle del nodo" className="inline-flex items-center justify-center text-slate-400 hover:text-slate-600 text-xs leading-none" title="Cerrar">
+              <IconX className="w-3 h-3" />
             </button>
           </div>
           <div className="space-y-1">
@@ -1958,8 +1959,8 @@ function FlowchartInner({
         <div className="absolute bottom-14 right-3 z-10 bg-slate-50 border border-slate-200 rounded-xl shadow-lg p-2 w-64">
           <div className="flex items-center justify-between gap-2 mb-1">
             <span className="text-[10px] text-slate-600 font-semibold">{selNodeData.label || "Nodo"}</span>
-            <button onClick={() => setSelectedNodeId(null)} className="text-slate-400 hover:text-slate-600 text-xs leading-none" title="Cerrar">
-              ✕
+            <button onClick={() => setSelectedNodeId(null)} aria-label="Cerrar el panel del nodo" className="inline-flex items-center justify-center text-slate-400 hover:text-slate-600 text-xs leading-none" title="Cerrar">
+              <IconX className="w-3 h-3" />
             </button>
           </div>
           <MetaTextInput

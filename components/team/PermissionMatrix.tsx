@@ -13,6 +13,7 @@
  * RoleTemplatesPanel (bi-estado plantilla vs default).
  */
 import { PERMISSION_SECTIONS } from "@/lib/auth/permissions/registry";
+import { IconCheck, IconX } from "@/components/ui";
 
 export interface MatrixCellState {
   checked: boolean;
@@ -80,7 +81,7 @@ export default function PermissionMatrix({
                       interactive ? "cursor-pointer hover:border-fg-muted/50" : "cursor-default",
                     ].join(" ")}
                   >
-                    <span aria-hidden="true">{cell.checked ? "✓" : "✕"}</span>
+                    {cell.checked ? <IconCheck className="w-3 h-3" /> : <IconX className="w-3 h-3" />}
                     {action.label}
                     {cell.pinned && (
                       <span

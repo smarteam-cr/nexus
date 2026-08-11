@@ -15,7 +15,7 @@
  * Reuniones del proyecto para acceso rápido.
  */
 import { useState } from "react";
-import { BackLink } from "@/components/ui";
+import { BackLink, IconCheck } from "@/components/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -225,7 +225,7 @@ export default function SessionView({ data }: { data: SessionViewData }) {
         {/* Resumen rápido de cuántas cosas viven en el proyecto, sin tabs */}
         <div className="ml-auto flex items-center gap-4 px-2 text-xs text-gray-500">
           {minute && <span>📝 minuta {minute.status.toLowerCase()}</span>}
-          {actionItems.length > 0 && <span>✓ {actionItems.length} acciones</span>}
+          {actionItems.length > 0 && <span className="inline-flex items-center gap-1"><IconCheck className="w-3 h-3" />{actionItems.length} acciones</span>}
         </div>
       </div>
 

@@ -24,7 +24,7 @@
  */
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useToast } from "@/components/ui/Toast";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, IconCheck } from "@/components/ui";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { addDaysISO } from "@/lib/cobranza/engine";
 import {
@@ -118,7 +118,7 @@ function KpiVencido30({ resumen }: { resumen: ResumenAntiguedad }) {
         Vencido +{KPI_CREDITO_DIAS} días · {nTotal}
       </p>
       {lineas.length === 0 ? (
-        <p className="mt-1.5 text-lg font-semibold text-emerald-600 leading-tight">✓ Nada</p>
+        <p className="mt-1.5 flex items-center gap-1.5 text-lg font-semibold text-emerald-600 leading-tight"><IconCheck className="w-4 h-4" />Nada</p>
       ) : (
         <div className="mt-1.5 space-y-0.5">
           {lineas.map((l) => (
@@ -544,7 +544,7 @@ export default function ColaCobros({
                 <p className="mt-0.5 text-[11px] text-fg-muted">{GRUPO_HINT[g]}</p>
               )}
               {g === "quincena" && list.length === 0 && !hayFiltros ? (
-                <p className="mt-1.5 text-xs text-emerald-600">✓ Nada pendiente en este período</p>
+                <p className="mt-1.5 flex items-center gap-1 text-xs text-emerald-600"><IconCheck className="w-3 h-3" />Nada pendiente en este período</p>
               ) : (
                 <ListaGrupo grupo={g} list={list} />
               )}

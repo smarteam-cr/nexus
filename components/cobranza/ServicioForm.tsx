@@ -10,6 +10,7 @@
  * servicio + PUT del plan. "Generar cobros" es explícito y aparte.
  */
 import { useMemo, useState } from "react";
+import { IconCheck } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import DatePickerField from "@/components/ui/DatePickerField";
@@ -492,7 +493,7 @@ export default function ServicioForm({
             Suma del plan: {sumaPlan.toLocaleString("es-CR")} de {totalNum.toLocaleString("es-CR")}
             {descuadre
               ? ` — descuadre de ${(Math.round((sumaPlan - totalNum) * 100) / 100).toLocaleString("es-CR")} (el corte lo va a marcar como alerta)`
-              : " ✓"}
+              : <IconCheck className="w-3 h-3 ml-1 align-middle" />}
           </p>
         )}
 

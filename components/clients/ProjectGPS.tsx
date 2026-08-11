@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { IconCheck } from "@/components/ui";
 import MinuteDialog from "./MinuteDialog";
 import ActionItemsDialog from "./ActionItemsDialog";
 import { useWorkspace } from "./WorkspaceContext";
@@ -167,13 +168,13 @@ type SetupSignals = {
 };
 
 // Pill de un canvas generado, en el tema CLARO del widget (no reusa el SetupPill del panel).
-function SetupChip({ state, label }: { state: "done" | "draft" | "missing"; label: string }) {
+function SetupChip({ state, label }: { state: "done" | "draft" | "missing"; label: ReactNode }) {
   const cls = {
     done: "text-emerald-700 bg-emerald-50 border-emerald-200",
     draft: "text-amber-700 bg-amber-50 border-amber-200",
     missing: "text-red-600 bg-red-50 border-red-200",
   }[state];
-  return <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${cls}`}>{label}</span>;
+  return <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${cls}`}>{label}</span>;
 }
 
 export default function ProjectGPS({ projectId, clientId }: { projectId: string; clientId: string }) {
@@ -681,7 +682,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
                     state={c.estado === "generada" ? "done" : c.estado === "borrador" ? "draft" : "missing"}
                     label={
                       c.estado === "generada"
-                        ? `✓ ${c.label}`
+                        ? <><IconCheck className="w-3 h-3" />{c.label}</>
                         : c.estado === "borrador"
                           ? `${c.label} sin subir`
                           : c.label

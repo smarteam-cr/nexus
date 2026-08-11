@@ -30,6 +30,7 @@ import { CtaEditor, CtaButton } from "@/components/landing/sections";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
 import type { SectionProps } from "@/components/landing/types";
 import { Prose, InlineMD } from "@/components/landing/prose";
+import { IconCheck } from "@/components/ui/AcceptReject";
 import { DiagramStatic } from "@/components/landing/diagram-static";
 import TimelineSection from "@/components/canvas/TimelineSection";
 import { timelineSpan, fmtFull } from "@/lib/timeline/weeks";
@@ -373,13 +374,14 @@ function ProcesoStatusBar({ status, onConfirm }: { status: string; onConfirm?: (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
       <span
         style={{
+          display: "inline-flex", alignItems: "center", gap: 5,
           fontSize: 11, fontWeight: 700, lineHeight: 1, padding: "4px 10px", borderRadius: 999,
           ...(confirmed
             ? { color: "#047857", background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.4)" }
             : { color: "#b45309", background: "rgba(245,158,11,0.14)", border: "1px solid rgba(245,158,11,0.5)" }),
         }}
       >
-        {confirmed ? "✓ Visible para el cliente" : "Borrador — el cliente no lo ve"}
+        {confirmed ? <><IconCheck className="w-3 h-3" />Visible para el cliente</> : "Borrador — el cliente no lo ve"}
       </span>
       {onConfirm &&
         (confirmed ? (

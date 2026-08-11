@@ -22,6 +22,7 @@ import type { ProposalDelta } from "@/lib/timeline/proposal-deltas";
 import { plural, describeEndShift } from "@/lib/timeline/weeks";
 import { redactarResumenDeCambios, type MagnitudPropuesta } from "@/lib/timeline/magnitud-propuesta";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { AcceptButton, RejectButton } from "@/components/ui/AcceptReject";
 import { cn } from "@/lib/cn";
 
 export default function ProposalGlobalStrip({
@@ -131,22 +132,24 @@ export default function ProposalGlobalStrip({
               </>
             )}
           </span>
-          <button
-            onClick={() => onResolve([d.key], [])}
-            disabled={working}
-            className="text-emerald-400 hover:text-emerald-300 font-bold disabled:opacity-50"
-            title="Aceptar esta sugerencia"
-          >
-            ✓
-          </button>
-          <button
-            onClick={() => onResolve([], [d.key])}
-            disabled={working}
-            className="text-red-400 hover:text-red-300 font-bold disabled:opacity-50"
-            title="Descartar esta sugerencia"
-          >
-            ✗
-          </button>
+          {/* El área de click de un `✓` de texto era el ancho del carácter (~8px): abajo del
+              mínimo táctil y sin nombre accesible. Los botones traen su propia caja. */}
+          <span className="flex items-center gap-1 flex-shrink-0">
+            <AcceptButton
+              size="xs"
+              aria-label={d.kind === "SET_ANCHOR" ? "Aceptar la fecha de arranque sugerida" : "Aceptar el reordenamiento de fases"}
+              title="Aceptar esta sugerencia"
+              disabled={working}
+              onClick={() => onResolve([d.key], [])}
+            />
+            <RejectButton
+              size="xs"
+              aria-label={d.kind === "SET_ANCHOR" ? "Descartar la fecha de arranque sugerida" : "Descartar el reordenamiento de fases"}
+              title="Descartar esta sugerencia"
+              disabled={working}
+              onClick={() => onResolve([], [d.key])}
+            />
+          </span>
         </div>
       ))}
 

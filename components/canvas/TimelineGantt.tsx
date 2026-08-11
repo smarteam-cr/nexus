@@ -68,12 +68,13 @@ import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/p
 import { findDuplicateGroups } from "@/lib/timeline/particularidad-identity";
 import { buildPhaseSignal, type SignalTone } from "@/lib/timeline/phase-signal";
 import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
-import { describeChanges, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
+import { describeChange, sortChangesByImpact, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
 import { clientStatusLine } from "@/lib/timeline/client-status";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 import DatePickerField from "@/components/ui/DatePickerField";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { AcceptButton, RejectButton, IconCheck, IconX } from "@/components/ui/AcceptReject";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
 
@@ -972,40 +973,6 @@ export default function TimelineGantt({
                         )}
                         {/* Etiquetas a la derecha: estado + tipo de actividad + estimada + atraso */}
                         <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
-                          {/* Sugerencia de la IA (propuesta del handoff) sobre ESTA fase — se
-                              acepta/descarta acá mismo; nada se aplica solo. */}
-                          {(() => {
-                            const d = p.id ? proposalModByPhase.get(p.id) : undefined;
-                            if (!d || readOnly || !onResolveProposalDelta) return null;
-                            return (
-                              <span
-                                className="flex items-center gap-1 flex-shrink-0"
-                                title={`Sugerencia de la IA (del último handoff): ${describeChanges(d.changes)}`}
-                              >
-                                {/* TODOS los cambios, ordenados por impacto: antes se mostraba
-                                    changes[0] y el resto quedaba en un "+N" — y lo escondido
-                                    solía ser lo que MUEVE el cronograma (duración, semana de
-                                    inicio), mientras el renombre cosmético ocupaba el lugar. */}
-                                <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border text-blue-300 bg-blue-900/30 border-blue-700/40">
-                                  Sugerencia: {describeChanges(d.changes)}
-                                </span>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, true); }}
-                                  title="Aceptar la sugerencia (aplica solo este cambio)"
-                                  className="text-emerald-400 hover:text-emerald-300 text-[11px] font-bold px-0.5"
-                                >
-                                  ✓
-                                </button>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, false); }}
-                                  title="Descartar la sugerencia"
-                                  className="text-red-400 hover:text-red-300 text-[11px] font-bold px-0.5"
-                                >
-                                  ✗
-                                </button>
-                              </span>
-                            );
-                          })()}
                           {/* UN indicador en lugar de cuatro cajitas de solo lectura (estado, tipo,
                               "estimada" y un punto rojo). El cuadrado lleva el color del tipo de
                               actividad — el mismo de su barra— porque la palabra ya vive en la
@@ -1023,6 +990,58 @@ export default function TimelineGantt({
                           </span>
                         </span>
                       </div>
+
+                      {/* ── SUGERENCIA DE LA IA SOBRE ESTA FASE (propuesta del handoff) ──────
+                          Vive en su PROPIA fila, a lo ancho de la columna, y no dentro de la
+                          hilera de chips de arriba. Ahí estaba antes y se rompía: el chip iba
+                          en un `ml-auto` (alineado a la derecha) con un solo string largo
+                          —«3 → 2 SEMANAS · 4 → 3 SESIONES · NOTAS ACTUALIZADAS»— que no entra
+                          en una columna de ~300px, así que desbordaba HACIA LA IZQUIERDA y
+                          quedaba cortado por el borde, ilegible.
+                          Ahora: `min-w-0` (sin esto un flex hijo se niega a achicarse por
+                          debajo de su contenido y vuelve a desbordar) y UN CHIP POR CAMBIO en
+                          vez de una frase — envuelven solos y cada uno se lee entero.
+                          Los cambios siguen ordenados por impacto: lo que MUEVE el cronograma
+                          (duración, semana de inicio) va primero y el renombre cosmético al
+                          final. Nada se aplica solo: se acepta o descarta acá mismo. */}
+                      {(() => {
+                        const d = p.id ? proposalModByPhase.get(p.id) : undefined;
+                        if (!d || readOnly || !onResolveProposalDelta) return null;
+                        return (
+                          <div
+                            className="ml-[18px] mt-1.5 flex items-start gap-2 rounded-md border border-blue-700/40 bg-blue-900/20 px-2 py-1.5 min-w-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex flex-wrap items-center gap-1 min-w-0 flex-1">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-blue-300 flex-shrink-0">
+                                Sugerencia
+                              </span>
+                              {sortChangesByImpact(d.changes).map((c) => (
+                                <span
+                                  key={c.field}
+                                  className="text-[10px] text-fg-secondary bg-surface/70 border border-line rounded px-1.5 py-0.5 max-w-full break-words"
+                                >
+                                  {describeChange(c)}
+                                </span>
+                              ))}
+                            </div>
+                            <span className="flex items-center gap-1 flex-shrink-0">
+                              <AcceptButton
+                                size="xs"
+                                aria-label={`Aceptar la sugerencia para «${p.name}»`}
+                                title="Aceptar: aplica solo este cambio"
+                                onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, true); }}
+                              />
+                              <RejectButton
+                                size="xs"
+                                aria-label={`Descartar la sugerencia para «${p.name}»`}
+                                title="Descartar la sugerencia"
+                                onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, false); }}
+                              />
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Celdas de semanas */}
@@ -1227,20 +1246,20 @@ export default function TimelineGantt({
                       {/* Dónde va a quedar al aceptarla — antes caía al final sin avisar. */}
                       {d.afterPhaseName ? ` · va después de «${d.afterPhaseName}»` : " · va al principio"}
                     </span>
-                    <span className="ml-auto flex items-center gap-2.5 flex-shrink-0">
+                    <span className="ml-auto flex items-center gap-2 flex-shrink-0">
                       <button
                         onClick={() => onResolveProposalDelta(d.key, true)}
                         title="Crear la fase (vacía; las tareas se detallan después)"
-                        className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-emerald-600/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/60 hover:text-emerald-300 transition-colors"
                       >
-                        ✓ Aceptar
+                        <IconCheck className="w-3 h-3" /> Aceptar
                       </button>
                       <button
                         onClick={() => onResolveProposalDelta(d.key, false)}
                         title="Descartar esta fase propuesta"
-                        className="text-[11px] font-semibold text-fg-muted hover:text-red-400 transition-colors"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface-hover px-2 py-1 text-[11px] font-semibold text-fg-muted hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-400 transition-colors"
                       >
-                        ✗ Descartar
+                        <IconX className="w-3 h-3" /> Descartar
                       </button>
                     </span>
                   </div>

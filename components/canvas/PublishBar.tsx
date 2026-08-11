@@ -18,6 +18,8 @@
  * claro del kickoff y el panel oscuro del cronograma, sin depender del tema.
  */
 
+import { IconCheck } from "@/components/ui/AcceptReject";
+
 interface PublishBarProps {
   /** Auto-guardado en curso → "Guardando…". Máxima prioridad. */
   saving?: boolean;
@@ -127,7 +129,7 @@ export default function PublishBar({
   if (view === "clean") {
     return (
       <div style={container}>
-        <span style={CHIP}>✓ Al día</span>
+        <span style={CHIP}><IconCheck className="w-3 h-3" />Al día</span>
         <span style={{ flex: 1 }}>{cleanMessage}</span>
       </div>
     );
@@ -136,7 +138,7 @@ export default function PublishBar({
   // unpublished
   return (
     <div style={container}>
-      <span style={CHIP}>✓ Guardado</span>
+      <span style={CHIP}><IconCheck className="w-3 h-3" />Guardado</span>
       <span style={{ flex: 1 }}>{savedMessage}</span>
       <button
         onClick={onPublish}

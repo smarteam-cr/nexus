@@ -14,6 +14,7 @@
  * de estado permitidos (emerald/amber/sky/red — patrón AlertasCobranza).
  */
 import { useCallback, useEffect, useState } from "react";
+import { IconCheck } from "@/components/ui";
 import Link from "next/link";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
@@ -945,7 +946,7 @@ function PasoAplicar({
   if (aplicado && resumen) {
     return (
       <div className="rounded-2xl border border-line bg-surface p-6 space-y-4">
-        <p className="text-sm font-semibold text-emerald-600">Importación aplicada ✓</p>
+        <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600">Importación aplicada<IconCheck /></p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <Stat label="Empresas creadas" value={resumen.clientsCreados} />
           <Stat label="Cuentas creadas" value={resumen.cuentasCreadas} />

@@ -9,6 +9,7 @@
  * Mismo patrón visual que ClientHeaderPopovers (drawer fixed right, w-[480px]).
  */
 import Link from "next/link";
+import { IconCheck } from "@/components/ui";
 
 interface HistoryItem {
   sessionId: string;
@@ -111,7 +112,7 @@ export default function SessionHistoryDrawer({
                       <span className="text-[10px] text-amber-400">📝 Borrador</span>
                     )}
                     {(h.minuteStatus === "REVIEWED" || h.minuteStatus === "EDITED") && (
-                      <span className="text-[10px] text-emerald-400">✓ Minuta</span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400"><IconCheck className="w-3 h-3" />Minuta</span>
                     )}
                     {!h.minuteStatus && h.hasTranscript && (
                       <span className="text-[10px] text-gray-500">Sin minuta</span>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { IconCheck } from "@/components/ui";
 
 interface ProjectDocument {
   id: string;
@@ -246,7 +247,7 @@ export default function DocumentUpload({ projectId }: { projectId: string }) {
                   ) : null}
                   {doc.fileSize && <span>{formatSize(doc.fileSize)}</span>}
                   {doc.hasContent ? (
-                    <span className="text-green-500">✓ Texto extraído</span>
+                    <span className="inline-flex items-center gap-1 text-green-500"><IconCheck className="w-3 h-3" />Texto extraído</span>
                   ) : doc.type === "URL" ? (
                     <span className="text-amber-500">sin texto</span>
                   ) : null}
