@@ -88,6 +88,32 @@ describe("reconcileAgentProposal", () => {
     expect(r.phases[1].id).toBe("p2");
   });
 
+  test("⚠ el bug mecánico que arregla la Tanda O: una inserción intermedia no debe robarle el id a una fase que matcheaba por nombre más adelante", () => {
+    // Con el fallback posicional VIEJO (contra el índice crudo del array), "Prototipado" (una
+    // fase nueva genuina, en la posición 2) caía por posición a existingPhases[2] = "Diseño" —
+    // que YA iba a matchear por nombre en la posición 3 — y se la robaba. "Diseño" quedaba sin
+    // match (su match ya estaba consumido) y salía como fase NUEVA (duplicado), mientras la
+    // fase real (con sus tareas y progreso) quedaba renombrada a "Prototipado". Es peor que un
+    // duplicado: pisa en silencio una fase existente con el nombre equivocado.
+    const existing = [
+      ph({ id: "p1", name: "Kickoff" }),
+      ph({ id: "p2", name: "Relevamiento" }),
+      ph({ id: "p3", name: "Diseño" }),
+    ];
+    const proposed = [
+      prop({ name: "Descubrimiento inicial" }), // sin nombre en común → posición
+      prop({ name: "Análisis" }),                // sin nombre en común → posición
+      prop({ name: "Prototipado" }),             // fase NUEVA genuina — no debe robarle el id a Diseño
+      prop({ name: "Diseño" }),                  // match EXACTO por nombre — debe ganar
+    ];
+    const r = reconcileAgentProposal(proposed, existing, null, null);
+
+    expect(r.phases[0].id, "Descubrimiento inicial → p1 por posición").toBe("p1");
+    expect(r.phases[1].id, "Análisis → p2 por posición").toBe("p2");
+    expect(r.phases[2].id, "Prototipado es fase nueva genuina, no debe tener id").toBeUndefined();
+    expect(r.phases[3].id, "Diseño matchea por nombre exacto — conserva SU id, p3").toBe("p3");
+  });
+
   test("cambia el ancla resuelto vs. el existente → isNoOp=false aunque las fases sean iguales", () => {
     const existing = [ph({ id: "p1", name: "Relevamiento" })];
     const r = reconcileAgentProposal([prop({ name: "Relevamiento" })], existing, null, "2026-07-01T00:00:00.000Z");
@@ -103,6 +129,53 @@ describe("reconcileAgentProposal", () => {
     const r = reconcileAgentProposal([prop({ name: "Relevamiento" })], existing, null, null);
     expect(r.phases.map((p) => p.id)).toEqual(["p1", "p2"]);
     expect(r.isNoOp).toBe(true);
+  });
+
+  describe("mergeCandidateId — el aviso de fusión (Tanda O)", () => {
+    test("fase sin match por nombre/posición, con una huérfana parecida → mergeCandidateId apunta a ella", () => {
+      const existing = [ph({ id: "e1", name: "Desarrollo / Integración" })];
+      const r = reconcileAgentProposal([prop({ name: "Integraciones" })], existing, null, null);
+      expect(r.phases[0].id).toBeUndefined();
+      expect(r.phases[0].mergeCandidateId).toBe("e1");
+    });
+
+    test("sin huérfana parecida → mergeCandidateId ausente (no debe sugerir de más)", () => {
+      // Con 1 existente y 1 propuesta el fallback posicional SIEMPRE las empareja (es el
+      // comportamiento ya protegido por "match por posición cuando el nombre no coincide con
+      // nada" — 1:1 nunca deja nada sin resolver), así que para ver de verdad "hay una huérfana
+      // pero no se parece" hace falta un desborde: "Sales Hub" consume la única existente por
+      // nombre EXACTO, y "Service Hub" (sin ninguna relación) se queda sin ninguna huérfana —
+      // ni real (posición) ni de mentira (mergeCandidateId).
+      const existing = [ph({ id: "e1", name: "Sales Hub" })];
+      const r = reconcileAgentProposal(
+        [prop({ name: "Sales Hub" }), prop({ name: "Service Hub" })],
+        existing,
+        null,
+        null,
+      );
+      expect(r.phases[0].id, "Sales Hub matchea por nombre exacto").toBe("e1");
+      expect(r.phases[1].id, "Service Hub no tiene huérfana disponible").toBeUndefined();
+      expect(r.phases[1].mergeCandidateId).toBeUndefined();
+    });
+
+    test("dos fases nuevas compiten por la misma huérfana → solo la primera en orden de propuesta se la queda", () => {
+      const existing = [ph({ id: "e1", name: "Marketing Hub" })];
+      const r = reconcileAgentProposal(
+        [prop({ name: "Configuración Marketing" }), prop({ name: "Marketing Config" })],
+        existing,
+        null,
+        null,
+      );
+      expect(r.phases[0].mergeCandidateId).toBe("e1");
+      expect(r.phases[1].mergeCandidateId).toBeUndefined();
+    });
+
+    test("una fase que SÍ matchea por nombre/posición nunca lleva mergeCandidateId", () => {
+      const existing = [ph({ id: "p1", name: "Relevamiento" })];
+      const r = reconcileAgentProposal([prop({ name: "Relevamiento" })], existing, null, null);
+      expect(r.phases[0].id).toBe("p1");
+      expect(r.phases[0].mergeCandidateId).toBeUndefined();
+    });
   });
 
   // ── El test que cierra el hueco de verdad: todo caso NO-op según reconcileAgentProposal

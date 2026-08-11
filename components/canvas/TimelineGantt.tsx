@@ -73,6 +73,7 @@ import { clientStatusLine } from "@/lib/timeline/client-status";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 import DatePickerField from "@/components/ui/DatePickerField";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
 
@@ -168,6 +169,10 @@ interface Props {
   // nueva — y el CSE las resuelve una por una. El Gantt nunca se reemplaza por la propuesta.
   proposalDeltas?: ProposalDelta[];
   onResolveProposalDelta?: (key: string, accept: boolean) => void;
+  // Tanda O — fusionar una fase propuesta (ADD_PHASE con mergeCandidateId) CON la huérfana que
+  // reconcileAgentProposal sospecha que es esta misma fase con otro nombre. Sin esto, el hint
+  // se ve pero no hay acción: la fila fantasma solo ofrece Aceptar/Descartar.
+  onMergeProposalDelta?: (key: string, targetId: string) => void;
   // Convertir una particularidad en TAREA del cronograma (dueño + fecha). Sin esto el botón no sale.
   onConvertParticularidad?: (id: string) => void;
   // Abrir el drawer de la tarea que ya persigue este hecho (chip "→ tarea").
@@ -408,6 +413,7 @@ export default function TimelineGantt({
   onAddParticularidad,
   proposalDeltas,
   onResolveProposalDelta,
+  onMergeProposalDelta,
   sugerenciasSlot,
   proposalGlobalSlot,
   onConvertParticularidad,
@@ -422,6 +428,9 @@ export default function TimelineGantt({
   // distinta (guarda el ISO de la sugerida que se descartó; no persiste — vuelve a avisar si
   // se recarga la página, a propósito: es un recordatorio, no una decisión escrita en la base).
   const [dismissedSuggestionIso, setDismissedSuggestionIso] = useState<string | null>(null);
+  // Tanda O — el "¿seguro?" de Fusionar: pisa el CONTENIDO de una fase real (con tareas y
+  // progreso), así que merece confirmación explícita, igual criterio que "Confirmar detalle".
+  const [confirmingMerge, setConfirmingMerge] = useState<{ key: string; targetId: string; targetName: string; newName: string } | null>(null);
 
   const ranges = computePhaseRanges(phases);
   const total = timelineSpan(phases); // ancho de calendario (max end) — soporta fases en paralelo
@@ -1205,34 +1214,61 @@ export default function TimelineGantt({
               proposalAdds.map((d) => (
                 <div
                   key={d.key}
-                  className="mt-1 flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-blue-700/50 bg-blue-900/10 px-2.5 py-2"
+                  className="mt-1 flex flex-col gap-1.5 rounded-lg border border-dashed border-blue-700/50 bg-blue-900/10 px-2.5 py-2"
                 >
-                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border text-blue-300 bg-blue-900/30 border-blue-700/40 flex-shrink-0">
-                    Fase propuesta
-                  </span>
-                  <span className="text-sm text-fg min-w-0 truncate">{d.phase.name}</span>
-                  <span className="text-[10px] text-fg-muted flex-shrink-0">
-                    {plural(d.phase.durationWeeks, "semana", "semanas")}
-                    {d.phase.sessionCount != null ? ` · ${plural(d.phase.sessionCount, "sesión", "sesiones")}` : ""}
-                    {/* Dónde va a quedar al aceptarla — antes caía al final sin avisar. */}
-                    {d.afterPhaseName ? ` · va después de «${d.afterPhaseName}»` : " · va al principio"}
-                  </span>
-                  <span className="ml-auto flex items-center gap-2.5 flex-shrink-0">
-                    <button
-                      onClick={() => onResolveProposalDelta(d.key, true)}
-                      title="Crear la fase (vacía; las tareas se detallan después)"
-                      className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors"
-                    >
-                      ✓ Aceptar
-                    </button>
-                    <button
-                      onClick={() => onResolveProposalDelta(d.key, false)}
-                      title="Descartar esta fase propuesta"
-                      className="text-[11px] font-semibold text-fg-muted hover:text-red-400 transition-colors"
-                    >
-                      ✗ Descartar
-                    </button>
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border text-blue-300 bg-blue-900/30 border-blue-700/40 flex-shrink-0">
+                      Fase propuesta
+                    </span>
+                    <span className="text-sm text-fg min-w-0 truncate">{d.phase.name}</span>
+                    <span className="text-[10px] text-fg-muted flex-shrink-0">
+                      {plural(d.phase.durationWeeks, "semana", "semanas")}
+                      {d.phase.sessionCount != null ? ` · ${plural(d.phase.sessionCount, "sesión", "sesiones")}` : ""}
+                      {/* Dónde va a quedar al aceptarla — antes caía al final sin avisar. */}
+                      {d.afterPhaseName ? ` · va después de «${d.afterPhaseName}»` : " · va al principio"}
+                    </span>
+                    <span className="ml-auto flex items-center gap-2.5 flex-shrink-0">
+                      <button
+                        onClick={() => onResolveProposalDelta(d.key, true)}
+                        title="Crear la fase (vacía; las tareas se detallan después)"
+                        className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors"
+                      >
+                        ✓ Aceptar
+                      </button>
+                      <button
+                        onClick={() => onResolveProposalDelta(d.key, false)}
+                        title="Descartar esta fase propuesta"
+                        className="text-[11px] font-semibold text-fg-muted hover:text-red-400 transition-colors"
+                      >
+                        ✗ Descartar
+                      </button>
+                    </span>
+                  </div>
+                  {/* Tanda O — el hint de fusión: reconcileAgentProposal sospecha que esta fase
+                      "nueva" es en realidad una huérfana existente con otro nombre. Es un AVISO,
+                      no una decisión tomada: la huérfana sigue ahí, intacta, hasta que el CSE
+                      confirma. Solo aparece si onMergeProposalDelta está cableado. */}
+                  {onMergeProposalDelta && d.mergeCandidateId && d.mergeCandidateName && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-warn-line bg-warn-surface px-2 py-1.5">
+                      <span className="text-[11px] text-warn-ink min-w-0">
+                        ¿Es la misma fase que «{d.mergeCandidateName}», que quedó sin match?
+                      </span>
+                      <button
+                        onClick={() =>
+                          setConfirmingMerge({
+                            key: d.key,
+                            targetId: d.mergeCandidateId!,
+                            targetName: d.mergeCandidateName!,
+                            newName: d.phase.name,
+                          })
+                        }
+                        title={`Fusionar: actualiza «${d.mergeCandidateName}» con esta propuesta, sin tocar sus tareas`}
+                        className="ml-auto text-[11px] font-semibold text-warn-ink hover:opacity-80 transition-opacity flex-shrink-0"
+                      >
+                        🔗 Fusionar
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             {editable && onAddPhase && (
@@ -1440,6 +1476,36 @@ export default function TimelineGantt({
           </div>
         );
       })()}
+
+      {/* Tanda O — confirmar la fusión: pisa el contenido de una fase real con tareas y
+          progreso, así que el clic solo del botón no alcanza (mismo criterio que "Confirmar
+          detalle"). Variant "default", no "destructive": fusionar no borra nada, solo actualiza
+          nombre/duración/tipo — las tareas de la huérfana quedan intactas. */}
+      <ConfirmDialog
+        open={!!confirmingMerge}
+        variant="default"
+        title="Fusionar con la fase existente"
+        description={
+          confirmingMerge && (
+            <>
+              «{confirmingMerge.targetName}» va a actualizarse con lo que propone el handoff
+              {confirmingMerge.newName !== confirmingMerge.targetName ? (
+                <> — pasa a llamarse «{confirmingMerge.newName}»</>
+              ) : null}
+              . Sus tareas y su progreso quedan intactos: la fusión solo toca nombre, duración,
+              tipo e inicio.
+            </>
+          )
+        }
+        confirmLabel="Fusionar"
+        cancelLabel="Cancelar"
+        onCancel={() => setConfirmingMerge(null)}
+        onConfirm={() => {
+          if (!confirmingMerge || !onMergeProposalDelta) return;
+          onMergeProposalDelta(confirmingMerge.key, confirmingMerge.targetId);
+          setConfirmingMerge(null);
+        }}
+      />
     </div>
   );
 }
