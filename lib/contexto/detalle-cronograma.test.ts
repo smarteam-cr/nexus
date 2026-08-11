@@ -58,6 +58,9 @@ ${i.desarrolloCtx ? `\n=== REQUERIMIENTO TÉCNICO (canvas Desarrollo — objetos
 ${dbTaskRule}${techRule}
 
 Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a cada fase y proponé las tareas por semana (weekIndex relativo a la fase, < durationWeeks). Usá los ids EXACTOS del input.`;
+  if (i.instruccionesDoc) {
+    userMessage += `\n\n=== FASES QUE LAS INSTRUCCIONES DAN POR RESUELTAS ===\nSi las instrucciones del CSE de arriba dicen que una fase concreta ya está terminada, resuelta o que no requirió trabajo, NO le propongas tareas: incluila en el JSON con su id EXACTO y "tasks": [] — se deja como está. Vale AUNQUE esa fase venga tarde en el orden del cronograma: el orden es la expectativa inicial del plan, no el orden real en que se hizo el trabajo. Concentrá el detalle en las fases donde todavía hay trabajo por delante.`;
+  }
   if (i.regeneratePhaseId) {
     userMessage += `\n\n=== ALCANCE: REGENERAR UNA SOLA FASE ===\nDetallá ÚNICAMENTE las tareas de la fase id="${i.regeneratePhaseId}". Para TODAS las demás fases del input, incluilas en el JSON con su id EXACTO pero con "tasks": [] — no las toques. Concentrá todo el detalle en la fase indicada.`;
   }
@@ -168,6 +171,22 @@ describe("las piezas puras", () => {
   it("las instrucciones del CSE van PRIMERO en el mensaje (regla dura antes que el material)", () => {
     const msg = nuevoTemplate({ ...BASE, instruccionesDoc: "REGLA-DURA-DEL-CSE\n\n" });
     expect(msg.startsWith("REGLA-DURA-DEL-CSE")).toBe(true);
+  });
+
+  it("con brief: se le pide dejar en paz las fases que las instrucciones dan por resueltas", () => {
+    /* El caso Wherex: las instrucciones decían "Service prácticamente finalizado" y el agente
+       igual le re-propuso sus 9 tareas de siempre. `tasks: []` es el "no la toques" que el modal
+       ya sabe leer (lib/timeline/regen-columnas: sin propuesta NUNCA se descarta nada). */
+    const conBrief = nuevoTemplate({ ...BASE, instruccionesDoc: "Service ya está terminado.\n\n" });
+    expect(conBrief).toContain("=== FASES QUE LAS INSTRUCCIONES DAN POR RESUELTAS ===");
+    expect(conBrief).toContain('"tasks": []');
+    expect(conBrief, "el orden del plan no puede vetar una instrucción explícita").toContain(
+      "AUNQUE esa fase venga tarde en el orden del cronograma",
+    );
+  });
+
+  it("sin brief: el bloque de fases resueltas NO aparece (sería ruido)", () => {
+    expect(nuevoTemplate({ ...BASE, instruccionesDoc: "" })).not.toContain("DAN POR RESUELTAS");
   });
 });
 

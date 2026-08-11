@@ -130,6 +130,17 @@ ${reglasDeClasificacion(i.clasificacion)}
 
 Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a cada fase y proponé las tareas por semana (weekIndex relativo a la fase, < durationWeeks). Usá los ids EXACTOS del input.`;
 
+  /* Con instrucciones del CSE puede haber fases YA resueltas en la vida real, fuera del orden
+     que supuso el plan. Sin esto el agente les re-proponía sus tareas estándar: visto en Wherex
+     — las instrucciones decían "Service prácticamente finalizado, no requirió capacitaciones" y
+     la corrida devolvió igual las 9 tareas de siempre para esa fase. `tasks: []` es el "no la
+     toques" que el modal ya sabe leer: preserva las tareas actuales enteras (el reparto vive en
+     lib/timeline/regen-columnas.ts, donde `sin propuesta` NUNCA descarta nada).
+     Solo se emite con brief presente — sin instrucciones el bloque sería ruido. */
+  if (i.instrucciones) {
+    msg += `\n\n=== FASES QUE LAS INSTRUCCIONES DAN POR RESUELTAS ===\nSi las instrucciones del CSE de arriba dicen que una fase concreta ya está terminada, resuelta o que no requirió trabajo, NO le propongas tareas: incluila en el JSON con su id EXACTO y "tasks": [] — se deja como está. Vale AUNQUE esa fase venga tarde en el orden del cronograma: el orden es la expectativa inicial del plan, no el orden real en que se hizo el trabajo. Concentrá el detalle en las fases donde todavía hay trabajo por delante.`;
+  }
+
   // Regen por fase: acotá la salida a la fase target (las demás van con tasks:[]) — baja el
   // costo/latencia y el riesgo de truncación. La persistencia igual filtra por onlyPhaseId.
   if (i.regenerarFaseId) {

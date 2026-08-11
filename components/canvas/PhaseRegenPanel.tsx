@@ -25,6 +25,7 @@ import {
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { StatusCircle, PARTY_META, type GanttTaskStatus } from "./TimelineGantt";
+import { repartoInicial } from "@/lib/timeline/regen-columnas";
 
 const PARTIES = ["CLIENTE", "SMARTEAM", "AMBOS", "DEV"] as const;
 type Party = (typeof PARTIES)[number];
@@ -75,13 +76,10 @@ type Col = "left" | "right";
 let keySeq = 0;
 const nextKey = () => `pr-${keySeq++}`;
 
-/** Preservada automáticamente: iniciada/hecha/suspendida (no PENDING) o manual (HUMAN). */
-export const isKept = (t: RegenCurrentTask) => t.status !== "PENDING" || t.source === "HUMAN";
-
-/** ¿Esta fase tiene algo que revisar? Con esto el acordeón decide expand-por-defecto. */
-export function phaseHasChanges(current: RegenCurrentTask[], proposed: RegenProposedTask[]): boolean {
-  return proposed.length > 0 || current.some((t) => !isKept(t));
-}
+/* El reparto de las dos columnas vive en lib/timeline/regen-columnas.ts (puro y testeado:
+   el project `unit` de vitest solo corre `lib/**`). Se re-exporta acá para que los dos
+   modales sigan importando de un solo lugar. */
+export { isKept, phaseHasChanges } from "@/lib/timeline/regen-columnas";
 
 export interface PhaseRegenPanelProps {
   durationWeeks: number;
@@ -93,18 +91,16 @@ export interface PhaseRegenPanelProps {
 export function PhaseRegenPanel({ durationWeeks, current, proposed, onChange }: PhaseRegenPanelProps) {
   // Estado inicial calculado UNA vez al montar (lazy) — mismo criterio que el PhaseRegenModal
   // original: current/proposed cambian de referencia si el padre re-renderiza y NO deben
-  // re-sembrar la curación a mitad de camino.
-  const [left, setLeft] = useState<Item[]>(() =>
-    current.filter((t) => !isKept(t)).map((t) => ({
-      _key: nextKey(), id: t.id, title: t.title, weekIndex: t.weekIndex,
-      party: t.party ?? null, type: t.type ?? null, status: t.status, notes: t.notes ?? null, isNew: false,
-    })),
-  );
+  // re-sembrar la curación a mitad de camino. El reparto (qué se descarta vs qué se preserva,
+  // incluido el caso "sin propuesta = no tocar la fase") vive puro en lib/timeline/regen-columnas.
+  const reparto = repartoInicial(current, proposed.length);
+  const toItem = (t: RegenCurrentTask): Item => ({
+    _key: nextKey(), id: t.id, title: t.title, weekIndex: t.weekIndex,
+    party: t.party ?? null, type: t.type ?? null, status: t.status, notes: t.notes ?? null, isNew: false,
+  });
+  const [left, setLeft] = useState<Item[]>(() => reparto.descartables.map(toItem));
   const [right, setRight] = useState<Item[]>(() => [
-    ...current.filter(isKept).map((t) => ({
-      _key: nextKey(), id: t.id, title: t.title, weekIndex: t.weekIndex,
-      party: t.party ?? null, type: t.type ?? null, status: t.status, notes: t.notes ?? null, isNew: false,
-    })),
+    ...reparto.preservadas.map(toItem),
     ...proposed.map((t) => ({
       _key: nextKey(), title: t.title, weekIndex: t.weekIndex, party: t.party, type: t.type,
       status: "PENDING" as GanttTaskStatus, notes: t.notes, isNew: true,

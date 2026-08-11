@@ -36,11 +36,11 @@ export interface AllPhasesRegenModalProps {
 
 export function AllPhasesRegenModal({ open, phases, applying, onCancel, onApply }: AllPhasesRegenModalProps) {
   const [openIds, setOpenIds] = useState<Set<string>>(
-    () => new Set(phases.filter((p) => phaseHasChanges(p.current, p.proposed)).map((p) => p.phaseId)),
+    () => new Set(phases.filter((p) => phaseHasChanges(p.proposed.length)).map((p) => p.phaseId)),
   );
   const finalsByPhase = useRef<Record<string, FinalTask[]>>({});
   const totalConCambios = useMemo(
-    () => phases.filter((p) => phaseHasChanges(p.current, p.proposed)).length,
+    () => phases.filter((p) => phaseHasChanges(p.proposed.length)).length,
     [phases],
   );
 
@@ -60,11 +60,20 @@ export function AllPhasesRegenModal({ open, phases, applying, onCancel, onApply 
           {totalConCambios} de {phases.length} fases tienen cambios propuestos. Revisá fase por fase — arrastrá,
           editá o marcá hechas antes de aplicar; lo que no toques queda como está.
         </p>
+        {/* La frontera que confundía: este agente arma la LISTA de tareas, no dice qué ya se
+            hizo. El status lo escribe el humano (invariante D.1/D.2) o lo propone el agente de
+            avance — sin este aviso, el CSE espera ver marcado lo que sus instrucciones dan por
+            terminado y no entiende por qué sale todo pendiente. */}
+        <p className="text-xs text-fg-muted mt-2 leading-relaxed">
+          Esto define <strong className="text-fg-secondary font-medium">qué tareas</strong> debería tener el plan —
+          no marca nada como hecho. Para eso está <strong className="text-fg-secondary font-medium">Re-chequear
+          avance</strong>, que propone qué ya se completó y vos confirmás.
+        </p>
       </div>
 
       <div className="mt-4 space-y-2 max-h-[65vh] overflow-y-auto">
         {phases.map((p) => {
-          const hasChanges = phaseHasChanges(p.current, p.proposed);
+          const hasChanges = phaseHasChanges(p.proposed.length);
           const isOpen = openIds.has(p.phaseId);
           return (
             <div key={p.phaseId} className="rounded-lg border border-line">
@@ -79,7 +88,7 @@ export function AllPhasesRegenModal({ open, phases, applying, onCancel, onApply 
                     hasChanges ? "bg-brand/15 text-brand-light" : "text-fg-muted"
                   }`}
                 >
-                  {hasChanges ? `${p.proposed.length} nuevas` : "sin cambios"}
+                  {hasChanges ? `${p.proposed.length} nuevas` : "queda como está"}
                 </span>
               </button>
               {/* Montado SIEMPRE — el colapso es display:none, no unmount (ver docblock arriba). */}
