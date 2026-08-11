@@ -15,6 +15,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
+import { Badge } from "@/components/ui";
 import { BC_TYPE_CATALOG, DEFAULT_BC_TYPE_ID, resolveBcType } from "@/lib/business-cases/case-types";
 
 type Deal = {
@@ -315,17 +316,25 @@ export default function BusinessCaseStepper() {
               <label key={d.id} className="flex items-start gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer">
                 <input type="radio" name="bc-deal" className="mt-1" checked={dealId === d.id} onChange={() => selectDeal(d)} />
                 <span className="flex-1 min-w-0">
-                  <span className="text-sm text-fg block">
-                    {d.name}
-                    {d.isWon && <span className="ml-2 text-[10px] text-emerald-600">ganado</span>}
+                  {/* Etapa y "ganado" van AL LADO DEL NOMBRE, como badges — es lo que un CSE
+                      necesita ver primero para elegir el deal correcto. El pipeline (menos
+                      informativo: acá solo hay 2-3) queda abajo, chico y gris. Antes la etapa
+                      vivía pegada al pipeline en texto gris y quedaba invisible al lado de
+                      "ganado", que sí tenía color — la misma jerarquía visual para dos datos
+                      de importancia distinta. */}
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-sm text-fg">{d.name}</span>
+                    {d.stage ? (
+                      <Badge variant={d.isWon ? "success" : "default"} size="xs">
+                        {d.stage}
+                      </Badge>
+                    ) : (
+                      // Fallback defensivo: si HubSpot no resolvió el label de la etapa pero el
+                      // deal SÍ está ganado, ese hecho no puede quedar sin marcar.
+                      d.isWon && <Badge variant="success" size="xs">ganado</Badge>
+                    )}
                   </span>
-                  {(d.pipeline || d.stage) && (
-                    <span className="text-[11px] text-fg-muted">
-                      {d.pipeline}
-                      {d.pipeline && d.stage ? " · " : ""}
-                      {d.stage}
-                    </span>
-                  )}
+                  {d.pipeline && <span className="block text-[11px] text-fg-muted mt-0.5">{d.pipeline}</span>}
                 </span>
                 {d.closedate && <span className="text-xs text-fg-muted flex-shrink-0 mt-0.5">{fmtDate(d.closedate)}</span>}
               </label>
