@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface Props {
   connected: boolean;
@@ -17,6 +18,7 @@ export default function GoogleMeetCard({ connected, adminEmail, sessionCount }: 
   const [syncError, setSyncError] = useState(false);
   const [enrichError, setEnrichError] = useState(false);
   const [count, setCount] = useState(sessionCount);
+  const [confirmandoTodo, setConfirmandoTodo] = useState(false);
 
   async function handleSync() {
     setSyncing(true);
@@ -107,13 +109,44 @@ export default function GoogleMeetCard({ connected, adminEmail, sessionCount }: 
               onSync={handleSync}
               onEnrich={() => handleEnrich("normal")}
               onReEnrich={() => handleEnrich("force")}
-              onReEnrichAll={() => handleEnrich("all")}
+              onReEnrichAll={() => setConfirmandoTodo(true)}
             />
           ) : (
             <DisconnectedState />
           )}
         </div>
       </div>
+
+      {/* ⚠ «Re-enriquecer todo» BORRA contenido: resetea transcript y summary de TODAS las
+          sesiones de Google Meet y las vuelve a leer. Lo que no se pueda releer (el documento se
+          borró, el organizador salió de la empresa, Drive devuelve 403) queda vacío PARA SIEMPRE
+          — es exactamente cómo se quemaron las corridas del 17-may (528/1100) y del 7-jul (47/73).
+          Hasta hoy era un botón rojo con un `title=` y nada más: un clic de más y no hay vuelta
+          atrás. El color no es la confirmación. */}
+      <ConfirmDialog
+        open={confirmandoTodo}
+        variant="destructive"
+        title="Re-leer TODAS las reuniones de Google Meet"
+        description={
+          <>
+            Se borra la transcripción y el resumen de las {count} sesiones de Google Meet y se
+            vuelven a leer desde Drive. Las que ya no se puedan leer —documento borrado, permisos
+            perdidos, organizador fuera de la empresa—{" "}
+            <strong>quedan vacías y no se recuperan</strong>.
+            <br />
+            <br />
+            Las minutas y los action items ya generados no se tocan. Si solo querés completar las
+            que están sin transcripción, usá «Re-enriquecer sin transcript».
+          </>
+        }
+        confirmLabel="Sí, re-leer todas"
+        cancelLabel="Cancelar"
+        onCancel={() => setConfirmandoTodo(false)}
+        onConfirm={() => {
+          setConfirmandoTodo(false);
+          void handleEnrich("all");
+        }}
+      />
     </div>
   );
 }

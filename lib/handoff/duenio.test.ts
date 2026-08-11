@@ -636,6 +636,20 @@ describe("candado: el zoom también filtra datos, no solo pide", () => {
       "projectId: null",
     );
 
+    /* ⚠ Y LA CONDICIÓN, no solo el contenido (auditoría 2026-08-11). Las asserts de acá abajo
+       fijan los literales del filtro y que las tres queries lo nombren — pero NINGUNA miraba el
+       gate. Cambiar la línea 627 a cualquier condición que no se cumpla (un typo en el string, o
+       acotarla a `&& !!dealProject?.hermanoCsProjectId` «porque el zoom es solo para hermanos
+       menores») dejaba `soloDeEsteProyecto = {}` para TODAS las corridas: los cuatro literales
+       seguían textualmente en su lugar, la guarda verde, tsc mudo, y el bloque de 12.000 chars
+       de documentos del cliente volvía a entrar entero. La misma clase de falla que el spread
+       pisado, un renglón más arriba. */
+    const lineaDelGate = def.split("\n")[1]?.trim().replace(/\r$/, "");
+    expect(
+      lineaDelGate,
+      "el filtro cambió de gate: ya no se enciende para TODO handoff con proyecto",
+    ).toBe('agent.agentGroup === "handoff" && bodyProjectId');
+
     /* Y se aplica en las TRES queries, no en una. El tramo arranca en la primera de ellas y no
        en la definición del filtro: entre medio está el destructuring del `Promise.allSettled`,
        que hacía que el corte cayera antes de las queries y la guarda mirara 231 caracteres de

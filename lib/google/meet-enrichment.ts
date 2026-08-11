@@ -271,7 +271,12 @@ async function searchDriveForTranscript(
         fallo = leido;
         continue;
       }
-      if (leido.text && leido.text.length > 100) {
+      /* ⚠ Este umbral tiene que ser EL MISMO que el del post-proceso (auditoría 2026-08-11).
+         Era `> 100` contra un `MIN_TRANSCRIPT_CHARS = 200`: un archivo de entre 101 y 199 chars
+         se aceptaba y se guardaba como transcript, pero INV16(c) —"ningún transcript no-nulo por
+         debajo del mínimo"— lo cuenta como basura y el rescate lo vuelve a encolar. La fila
+         entraba en un ciclo que no converge nunca: se re-lee, se re-acepta, se re-marca. */
+      if (leido.text && leido.text.trim().length >= MIN_TRANSCRIPT_CHARS) {
         console.log(`[google/enrich] Drive: leyendo "${file.name}" para "${title}"`);
         return { ok: true, transcript: leido.text, summary: null, diagnostico: null };
       }

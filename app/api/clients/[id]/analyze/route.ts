@@ -32,7 +32,7 @@ import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContex
 import { cargarContextoDelDetalle } from "@/lib/contexto/cargar";
 import { renderDetalleDeCronograma, clasificacionDeTags } from "@/lib/contexto/detalle-cronograma";
 import { vetoSiElHandoffEsDeOtro, componerExclusiones, exclusionDelSistema } from "@/lib/handoff/duenio";
-import { DETALLE_CRONOGRAMA_ID, idDeVarianteDetalle, esAgenteDeDetalle, pipelineKeyDeProyecto, tipoExigidoPorAgente } from "@/lib/agents/resolver";
+import { DETALLE_CRONOGRAMA_ID, idDeVarianteDetalle, esAgenteDeDetalle, pipelineKeyDeProyecto, tipoExigidoPorAgente, elegirAgente, GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
 import { debeAnteponerSemanaCero } from "@/lib/timeline/semana-cero";
 import { patchBaselinePhaseTasks } from "@/lib/timeline/baseline";
 import { computeDetailTasksForPhase, type ComputedDetailTask } from "@/lib/timeline/compute-detail-tasks";
@@ -290,17 +290,46 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
      `pipelineKey` por convención). Gatear solo por la columna dejaba pasar el despacho
      directo de una variante — por eso `tipoExigidoPorAgente` es la única fuente. */
   const tipoExigido = tipoExigidoPorAgente(agent);
-  if (tipoExigido) {
-    const proyectoDelAgente = bodyProjectId
-      ? await prisma.project.findUnique({
-          where: { id: bodyProjectId },
-          select: { hubspotPipelineId: true },
-        })
-      : null;
-    const tipoDelProyecto = pipelineKeyDeProyecto(proyectoDelAgente?.hubspotPipelineId ?? null);
-    if (tipoDelProyecto !== tipoExigido) {
+  const necesitaTipoDelProyecto =
+    !!tipoExigido || (!!agent.agentGroup && GRUPOS_RESUELTOS_POR_TIPO.includes(agent.agentGroup));
+  let tipoDelProyecto: ReturnType<typeof pipelineKeyDeProyecto> = null;
+  if (necesitaTipoDelProyecto && bodyProjectId) {
+    const proyectoDelAgente = await prisma.project.findUnique({
+      where: { id: bodyProjectId },
+      select: { hubspotPipelineId: true },
+    });
+    tipoDelProyecto = pipelineKeyDeProyecto(proyectoDelAgente?.hubspotPipelineId ?? null);
+  }
+  if (tipoExigido && tipoDelProyecto !== tipoExigido) {
+    return apiError(
+      `Este agente es de proyectos de tipo "${tipoExigido}" y este proyecto no lo es.`,
+      400,
+    );
+  }
+
+  /* ── LA DIRECCIÓN CONTRARIA DEL MISMO CINTURÓN (auditoría 2026-08-11) ───────
+     Lo de arriba tapa "agente tipado sobre el proyecto equivocado". Faltaba el reverso, y es
+     el que estaba VIVO: el agente GENÉRICO de handoff sobre un proyecto de Desarrollo o Sitio
+     web. `tipoExigidoPorAgente` devuelve null para el genérico, así que no había veto.
+
+     El inventario de secciones de la pantalla de etapa (el GET de arriba) no recibe projectId
+     —no puede saber de qué tipo es el proyecto— y filtra `pipelineKey: null`, así que en la
+     etapa 1 / paso 0 de un Desarrollo el ÚNICO handoff que lista es el genérico «Sales→CS».
+     Un clic en «Analizar» corría el prompt de Customer Success sobre ese proyecto:
+     `persistTimelineFromAgentOutput` escribe `implementationType`, PISA `tags` (incluido el
+     bidireccional `recurrente`), sella `handoffGeneratedAt` y re-propone las fases — encima del
+     handoff tipado. Sin error, sin log.
+
+     La regla, y es la MISMA que ya aplica el GET /handoff: el handoff de un proyecto lo corre
+     el agente que su tipo RESUELVE, y ningún otro. Se compara contra `elegirAgente` sobre los
+     candidatos ACTIVE, no contra una tabla aparte — con los 2 agentes tipados en DRAFT (el
+     estado de hoy en producción) el resolver devuelve el genérico y esto no cambia nada. */
+  if (agent.agentGroup && GRUPOS_RESUELTOS_POR_TIPO.includes(agent.agentGroup) && bodyProjectId) {
+    const delGrupo = agentCandidates.filter((a) => a.agentGroup === agent!.agentGroup);
+    const elQueCorresponde = elegirAgente(delGrupo, tipoDelProyecto);
+    if (elQueCorresponde && elQueCorresponde.id !== agent.id) {
       return apiError(
-        `Este agente es de proyectos de tipo "${tipoExigido}" y este proyecto no lo es.`,
+        "Este proyecto tiene su propio agente de handoff según su tipo: generalo desde la pestaña Handoff del proyecto, no desde la pantalla de etapa.",
         400,
       );
     }

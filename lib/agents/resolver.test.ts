@@ -312,11 +312,8 @@ describe("X2 — la variante del detalle del cronograma, por convención de id",
        const intacto compilaba y pasaba verde (reabre el agujero de las variantes); sin el
        corte, reemplazar el return por un console.warn dejaba el cinturón decorativo — la
        MISMA lección del gate de --deploy-confirmado, aplicada a su propia guarda. */
-    expect(bloque, "el gate dejó de decidir por tipoExigido — la columna sola no ve variantes").toContain(
-      "if (tipoExigido) {",
-    );
     expect(bloque, "el veto dejó de comparar contra el tipo del proyecto").toContain(
-      "tipoDelProyecto !== tipoExigido",
+      "if (tipoExigido && tipoDelProyecto !== tipoExigido) {",
     );
     expect(bloque, "el veto imprime pero NO CORTA — el prompt tipado corre igual").toContain(
       "return apiError(",
@@ -329,6 +326,36 @@ describe("X2 — la variante del detalle del cronograma, por convención de id",
       src.slice(gets, gets + 300),
       "los agentes tipados volvieron al inventario de la pantalla de etapa",
     ).toContain("pipelineKey: null");
+  });
+
+  it("el cinturón AL REVÉS: el agente genérico de handoff no corre sobre un proyecto tipado", () => {
+    /* El agujero que la auditoría del 2026-08-11 encontró VIVO, y es el complemento exacto del
+       de arriba. `tipoExigidoPorAgente` devuelve null para el genérico, así que no lo vetaba
+       nada — y el inventario de la pantalla de etapa (que no recibe projectId y filtra
+       `pipelineKey: null`) ofrece justamente ése en la etapa 1 de un Desarrollo. Un clic corría
+       el prompt de Customer Success encima: pisa `tags`, escribe `implementationType`, sella
+       `handoffGeneratedAt` y re-propone las fases. Sin error y sin log.
+
+       La comparación va contra `elegirAgente` sobre los candidatos ACTIVE —el MISMO resolver
+       que usa el GET /handoff—, no contra una tabla aparte: con los 2 agentes tipados en DRAFT
+       (el estado de hoy en prod) el resolver devuelve el genérico y no cambia nada.
+
+       Ediciones que la ponen en rojo: borrar el bloque, comparar contra una lista propia en vez
+       del resolver, o cambiar el `return apiError` por un log. */
+    const src = fuente("app/api/clients/[id]/analyze/route.ts");
+    const i = src.indexOf("GRUPOS_RESUELTOS_POR_TIPO.includes(agent.agentGroup) && bodyProjectId");
+    expect(i, "se fue el veto del genérico sobre un proyecto con agente propio").toBeGreaterThan(-1);
+    const bloque = src.slice(i, i + 600);
+    expect(bloque, "el veto dejó de preguntarle al resolver cuál corresponde").toContain(
+      "elegirAgente(delGrupo, tipoDelProyecto)",
+    );
+    expect(bloque, "el veto no compara el resuelto contra el pedido").toContain(
+      "elQueCorresponde.id !== agent.id",
+    );
+    expect(bloque, "el veto avisa pero NO CORTA — el prompt equivocado corre igual").toContain(
+      "return apiError(",
+    );
+    expect(bloque, "el veto perdió el 400").toContain("400,");
   });
 
   it("tipoExigidoPorAgente: la tabla (columna + convención de id de las variantes)", () => {
