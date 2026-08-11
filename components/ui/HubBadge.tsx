@@ -1,10 +1,14 @@
+// Keyeado por el LABEL vigente del catálogo (lib/tags/catalog.ts). Los nombres que HubSpot
+// retiró —"CMS Hub", "Operations Hub", "Commerce Hub"— quedaban acá cayendo al color default
+// mientras el catálogo ya servía el nuevo: el badge se veía gris sin que nada fallara.
 const HUB_COLORS: Record<string, string> = {
   "Marketing Hub": "bg-orange-50 text-orange-700 border-orange-200",
   "Sales Hub":     "bg-blue-50 text-blue-700 border-blue-200",
   "Service Hub":   "bg-green-50 text-green-700 border-green-200",
-  "CMS Hub":       "bg-purple-50 text-purple-700 border-purple-200",
-  "Operations Hub":"bg-surface-hover text-fg-secondary border-line",
-  "Commerce Hub":  "bg-pink-50 text-pink-700 border-pink-200",
+  "Content Hub":   "bg-purple-50 text-purple-700 border-purple-200", // ex "CMS Hub"
+  "Data Hub":      "bg-cyan-50 text-cyan-700 border-cyan-200",       // ex "Operations Hub"
+  "Revenue Hub":   "bg-pink-50 text-pink-700 border-pink-200",       // ex "Commerce Hub"
+  "Insider One":   "bg-surface-hover text-fg-secondary border-line",
 };
 
 const DEFAULT_COLOR = "bg-surface-muted text-fg-muted border-line";

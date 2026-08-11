@@ -68,20 +68,22 @@ export const EXPLORACION_TAG_LENSES: Record<string, string> = {
     "qué contenido ya tienen y en qué estado; cómo miden si un contenido sirvió; " +
     "quién mantiene el sitio hoy y qué tan autónomo quiere ser el cliente después; " +
     "y qué pasó la última vez que quisieron publicar algo rápido.",
-  operations_hub:
-    "Operaciones aparece cuando algo ya se rompió en silencio. Buscá: qué se arregla hoy a mano y cada cuánto; " +
-    "qué datos no coinciden entre sistemas y quién los concilia; qué automatización existente nadie se anima a tocar; " +
-    "qué pasa cuando un registro entra mal (¿alguien se entera?); y a quién le explota el problema cuando explota.",
-  commerce_hub:
+  // Data Hub absorbió a Operations Hub cuando HubSpot los unificó (era el mismo producto con
+  // dos nombres). Las dos lentes eran buenas y distintas —una mira los ACUERDOS sobre el dato,
+  // la otra el trabajo manual que tapa el problema— así que se funden en vez de descartar una.
+  data_hub:
+    "Datos es un proyecto de ACUERDOS antes que de tecnología, y el síntoma aparece cuando algo ya se rompió en silencio. " +
+    "Buscá: qué dato es la fuente de verdad de qué, y quién lo decidió; " +
+    "qué métrica calcula distinto cada área y cuál es la versión que se lleva a dirección; " +
+    "qué se arregla hoy a mano y cada cuánto; qué datos no coinciden entre sistemas y quién los concilia; " +
+    "qué automatización existente nadie se anima a tocar; qué pasa cuando un registro entra mal (¿alguien se entera?); " +
+    "quién es dueño de la calidad; y qué decisión concreta quieren tomar con estos datos que hoy no pueden tomar.",
+  revenue_hub:
     "Cobrar toca finanzas, y finanzas no suele estar en la sala del handoff. Buscá: cómo cobran hoy y con qué herramienta; " +
-    "qué pasa cuando un pago falla o llega tarde; quién concilia contra contabilidad y con qué frecuencia; " +
+    "qué pasa cuando un pago falla o llega tarde; cómo manejan suscripciones y renovaciones si las tienen; " +
+    "quién concilia contra contabilidad y con qué frecuencia; " +
     "qué necesita el equipo fiscal/contable que el sistema tiene que emitir sí o sí; " +
     "y quién de finanzas tiene que estar de acuerdo para que esto salga.",
-  data_hub:
-    "Datos es un proyecto de ACUERDOS antes que de tecnología. Buscá: qué dato es la fuente de verdad de qué, y quién lo decidió; " +
-    "qué métrica calcula distinto cada área y cuál es la versión que se lleva a dirección; " +
-    "qué tan sucios están los datos de origen; quién es dueño de la calidad; " +
-    "y qué decisión concreta quieren tomar con estos datos que hoy no pueden tomar.",
   insider_one:
     "Insider One es producto propio: el supuesto es que el cliente sabe qué esperar y casi nunca es así. Buscá: qué entendió el cliente que hace la app y qué NO hace; " +
     "cómo encaja en el flujo de trabajo que ya tienen; quién la va a usar todos los días y qué usa hoy en su lugar; " +
