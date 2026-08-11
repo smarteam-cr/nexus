@@ -24,6 +24,7 @@ type Deal = {
   closedate: string | null;
   isWon: boolean;
   pipeline: string | null;
+  stage: string | null;
 };
 type Lookup = {
   company: { id: string; name: string; domain: string | null } | null;
@@ -123,6 +124,17 @@ export default function BusinessCaseStepper() {
       setName(suggestion);
     }
     setStep("config");
+  };
+
+  /** Elegir un deal (o "Sin deal") re-sugiere el nombre con el del deal — pero SOLO si el
+   *  usuario no tocó el campo a mano. Mismo criterio que `continueFromType`: la sugerencia
+   *  automática se puede pisar en cualquier momento; lo escrito a mano nunca se pisa solo. */
+  const selectDeal = (d: Deal | null) => {
+    setDealId(d?.id ?? "");
+    if (!lookup || name !== suggestedNameRef.current) return;
+    const suggestion = d ? d.name : suggestName(lookup, caseTypeId);
+    suggestedNameRef.current = suggestion;
+    setName(suggestion);
   };
 
   const create = async () => {
@@ -296,18 +308,24 @@ export default function BusinessCaseStepper() {
           <div className="space-y-1.5">
             <p className="text-2xs font-medium text-fg-muted uppercase tracking-wider">Deal de HubSpot (opcional)</p>
             <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer">
-              <input type="radio" name="bc-deal" checked={dealId === ""} onChange={() => setDealId("")} />
+              <input type="radio" name="bc-deal" checked={dealId === ""} onChange={() => selectDeal(null)} />
               <span className="text-sm text-fg">Sin deal</span>
             </label>
             {lookup.deals.map((d) => (
               <label key={d.id} className="flex items-start gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer">
-                <input type="radio" name="bc-deal" className="mt-1" checked={dealId === d.id} onChange={() => setDealId(d.id)} />
+                <input type="radio" name="bc-deal" className="mt-1" checked={dealId === d.id} onChange={() => selectDeal(d)} />
                 <span className="flex-1 min-w-0">
                   <span className="text-sm text-fg block">
                     {d.name}
                     {d.isWon && <span className="ml-2 text-[10px] text-emerald-600">ganado</span>}
                   </span>
-                  {d.pipeline && <span className="text-[11px] text-fg-muted">{d.pipeline}</span>}
+                  {(d.pipeline || d.stage) && (
+                    <span className="text-[11px] text-fg-muted">
+                      {d.pipeline}
+                      {d.pipeline && d.stage ? " · " : ""}
+                      {d.stage}
+                    </span>
+                  )}
                 </span>
                 {d.closedate && <span className="text-xs text-fg-muted flex-shrink-0 mt-0.5">{fmtDate(d.closedate)}</span>}
               </label>
