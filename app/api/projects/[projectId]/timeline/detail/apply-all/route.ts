@@ -3,9 +3,13 @@
  *
  * Aplica el set CURADO de TODAS las fases del cronograma de una sola vez ("Regenerar todo el
  * cronograma", Tanda N) — la generalización de .../timeline/phases/[phaseId]/apply a N fases
- * en UNA transacción. Cada fase se aplica con applyCuratedPhaseTasks (mismas protecciones que
- * el apply por-fase: preserva DONE/iniciadas/manuales); al final, UNA sola invalidación de
- * pendingProgress + marca de edición humana.
+ * en UNA transacción. Cada fase se aplica con applyCuratedPhaseTasks; al final, UNA sola
+ * invalidación de pendingProgress + marca de edición humana.
+ *
+ * ⚠ Esta línea decía "preserva DONE/iniciadas/manuales" y era FALSA hasta 2026-08-11: la regla
+ * vivía solo en el cliente y el servidor borraba todo lo que no viniera en el payload. Ahora sí
+ * es cierta, y la sostiene `repartoDeBorrado` (lib/timeline/apply-curated-phase.ts). Lo que se
+ * conservó pese a venir omitido viaja en la respuesta como `preservadas`.
  *
  * Gate MÁS ESTRICTO que el apply por-fase (guardTimelineFullRegen, no guardTimelineEdit): ver
  * el docblock de guardTimelineFullRegen en lib/auth/api-guards.ts.
@@ -73,14 +77,18 @@ export async function POST(
   }
 
   const now = new Date();
+  /* Tareas que el payload omitió pero el servidor conservó por tener progreso encima. En el
+     camino feliz es 0 — si no lo es, algo llegó incompleto y vale decirlo en vez de tragarlo. */
+  let preservadas = 0;
   await prisma.$transaction(async (tx) => {
     for (const { phase, rawTasks } of entries) {
       const existingIds = new Set(phase.tasks.map((t) => t.id));
       const curated = normalizeCuratedTasks(rawTasks, phase.durationWeeks, existingIds);
-      await applyCuratedPhaseTasks(tx, {
+      const r = await applyCuratedPhaseTasks(tx, {
         phaseId: phase.id, timelineId: tl.id, existingTasks: phase.tasks, curated, now,
         actorEmail: guard.user.email ?? null,
       });
+      preservadas += r.preservadasPorProgreso;
     }
     // UNA sola invalidación de avance + marca de edición humana, tras aplicar TODAS las fases.
     await tx.projectTimeline.update({
@@ -106,7 +114,9 @@ export async function POST(
         timelineId: tl.id,
         reason,
         kind: "AI_ASSIST",
-        instruction: `Regeneración completa del cronograma (curada, ${entries.length} fases)`,
+        instruction:
+          `Regeneración completa del cronograma (curada, ${entries.length} fases)` +
+          (preservadas > 0 ? ` · ${preservadas} tarea(s) con progreso se conservaron pese a venir omitidas` : ""),
         changedByEmail: guard.user.email ?? null,
         snapshot: {
           anchorStartDate: tlRow?.anchorStartDate?.toISOString() ?? null,
@@ -118,5 +128,5 @@ export async function POST(
     console.error("[timeline/detail/apply-all] audit best-effort falló:", e instanceof Error ? e.message : e);
   }
 
-  return NextResponse.json({ ok: true, phasesApplied: entries.length });
+  return NextResponse.json({ ok: true, phasesApplied: entries.length, preservadas });
 }

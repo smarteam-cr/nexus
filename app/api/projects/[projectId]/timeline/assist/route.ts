@@ -25,6 +25,7 @@ import { guardTimelineEdit, guardCapability, guardPermission } from "@/lib/auth/
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
+import { isKept } from "@/lib/timeline/regen-columnas";
 
 const SYSTEM_PROMPT = `ROL: Eres el editor del cronograma de un proyecto de implementación de HubSpot (consultora Smarteam). Recibes el cronograma ACTUAL (JSON con ids) y UNA instrucción del consultor. Aplicas SOLO lo pedido (y sus consecuencias directas mínimas) y devuelves el cronograma COMPLETO resultante.
 
@@ -94,7 +95,10 @@ export async function POST(
           activityType: true,
           tasks: {
             orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
-            select: { id: true, title: true, weekIndex: true, order: true, notes: true },
+            /* `status` y `source` NO viajan al modelo (ver el userMessage): son para que el
+               servidor sepa qué NO puede perderse si la IA omite una tarea. Ver el rescate
+               más abajo. */
+            select: { id: true, title: true, weekIndex: true, order: true, notes: true, status: true, source: true },
           },
         },
       },
@@ -219,6 +223,62 @@ export async function POST(
       return { ...p, id: phaseId, tasks };
     }),
   };
+
+  /* ── RESCATE DE LO QUE TIENE PROGRESO (2026-08-11) ──────────────────────────
+     Este flujo es "reemplazo completo": `tasks` siempre viaja definido, así que el PUT borra
+     por OMISIÓN todo lo que la propuesta no incluya. Y hasta hoy el modelo recibía las tareas
+     sin `status` ni `source` — o sea que ni siquiera podía saber cuáles estaban hechas.
+     Resultado: bastaba con que se olvidara de una tarea DONE para perderla, sin aviso.
+
+     Acá se repone lo protegido por `isKept` (hecha / en curso / suspendida / cargada a mano)
+     que la propuesta dejó afuera, con su `id` para que el PUT la actualice en vez de borrarla.
+     Se avisa siempre: la propuesta que el CSE ve en pantalla tiene que coincidir con lo que se
+     va a aplicar. Misma regla y mismo helper que el apply curado — una sola definición de
+     "esto no se toca", en lib/timeline/regen-columnas.ts. */
+  const fasesPropuestasPorId = new Map(
+    proposal.phases.filter((p) => p.id).map((p) => [p.id as string, p]),
+  );
+  for (const real of tl.phases) {
+    const protegidas = real.tasks.filter(isKept);
+    if (protegidas.length === 0) continue;
+    const propuesta = fasesPropuestasPorId.get(real.id);
+
+    if (!propuesta) {
+      /* La IA sacó la fase entera. El PUT la borraría con sus tareas por cascade, así que
+         vuelve — SOLO con lo que tiene progreso. Mismo criterio aditivo que ya rige la
+         reconciliación del handoff: una fase con trabajo real no se borra sin que lo pida
+         una persona (para eso está el gesto de borrar fase, que exige `deleteTimeline`). */
+      proposal.phases.push({
+        id: real.id,
+        name: real.name,
+        order: proposal.phases.length,
+        durationWeeks: real.durationWeeks,
+        sessionCount: real.sessionCount,
+        notes: real.notes,
+        activityType: real.activityType,
+        tasks: protegidas.map((t) => ({
+          id: t.id, title: t.title, weekIndex: t.weekIndex, order: t.order, notes: t.notes,
+        })),
+      });
+      warnings.push(
+        `La fase "${real.name}" tiene ${protegidas.length} tarea(s) con progreso: se conserva en vez de borrarse.`,
+      );
+      continue;
+    }
+
+    const enLaPropuesta = new Set((propuesta.tasks ?? []).map((t) => t.id).filter(Boolean));
+    const rescatadas = protegidas.filter((t) => !enLaPropuesta.has(t.id));
+    if (rescatadas.length === 0) continue;
+    propuesta.tasks = [
+      ...(propuesta.tasks ?? []),
+      ...rescatadas.map((t) => ({
+        id: t.id, title: t.title, weekIndex: t.weekIndex, order: t.order, notes: t.notes,
+      })),
+    ];
+    warnings.push(
+      `En "${real.name}" se conservaron ${rescatadas.length} tarea(s) con progreso que la propuesta no incluía.`,
+    );
+  }
 
   return NextResponse.json({ proposal, warnings });
 }

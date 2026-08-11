@@ -20,8 +20,9 @@
  *
  * Generación inicial del detalle: agente "agent-timeline-detail" vía
  * POST /api/clients/[clientId]/analyze. Confirmación (gate de la vista
- * cliente): POST/DELETE /timeline/confirm-detail. Regeneración: DELETE
- * /timeline/detail (borra solo tareas) + re-correr.
+ * cliente): POST/DELETE /timeline/confirm-detail. Regeneración: el modal de
+ * curación (por fase o "Regenerar todo el cronograma") — nunca un borrado previo:
+ * el apply preserva las tareas con progreso, incluso si el payload las omite.
  *
  * Render INTERNO (tema oscuro del panel de canvas), no el design system del Kickoff.
  */
@@ -1169,6 +1170,16 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         clearScope(undoScope);
         setAllRegenPreview(null);
         toast.success(`Cronograma actualizado — ${data?.phasesApplied ?? payload.length} fases.`);
+        /* El servidor conservó tareas con progreso que el payload no traía. En el camino feliz
+           esto nunca aparece; si aparece, algo llegó incompleto y el CSE tiene que saber que
+           el cronograma no quedó exactamente como lo curó (no se perdió nada — se rescató). */
+        if (typeof data?.preservadas === "number" && data.preservadas > 0) {
+          toast.info(
+            `${plural(data.preservadas, "tarea con progreso se conservó", "tareas con progreso se conservaron")} ` +
+              `pese a no venir en lo aplicado. Revisá el cronograma.`,
+            { duration: 12000 },
+          );
+        }
         setChainingProgress(true);
         try {
           const pres = await fetch(`/api/projects/${projectId}/timeline/progress`, { method: "POST" });

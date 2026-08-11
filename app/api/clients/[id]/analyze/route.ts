@@ -3145,8 +3145,9 @@ interface TimelineDetailResult {
  *  - Corre DENTRO de una transacción: el check de idempotencia y los writes son
  *    atómicos (un doble click no duplica tareas).
  *  - Idempotencia espejo de la del esqueleto: si el timeline YA tiene alguna
- *    tarea → skip total; la propuesta queda en AgentRun.output. Regenerar =
- *    DELETE /timeline/detail + re-correr.
+ *    tarea → skip total; la propuesta queda en AgentRun.output. Regenerar va por
+ *    el modal de curación (regen por fase o "Regenerar todo el cronograma"), que
+ *    preserva lo hecho — no por un borrado previo.
  *
  * Reglas: ids de fase validados contra el set real (alucinados se descartan y
  * loguean); activityType solo se setea si la fase lo tiene en null (no pisa lo

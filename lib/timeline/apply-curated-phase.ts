@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { TimelineTaskStatus, TaskParty, TimelineTaskType } from "@prisma/client";
 import { actualDatesPatch } from "./actual-dates";
 import { patchBaselinePhaseTasks } from "./baseline";
+import { isKept } from "./regen-columnas";
 import { PARTY_VALUES, TASK_TYPE_VALUES } from "./validate";
 
 /**
@@ -11,6 +12,20 @@ import { PARTY_VALUES, TASK_TYPE_VALUES } from "./validate";
  * para poder aplicar el set curado de MÁS DE UNA fase en una sola transacción ("Regenerar
  * todo el cronograma") sin duplicar la lógica. El endpoint por-fase pasa a llamar estos mismos
  * helpers — comportamiento externo idéntico, cero cambio de conducta.
+ *
+ * ── LA PROMESA QUE NO SE CUMPLÍA (2026-08-11) ────────────────────────────────
+ * El docblock del apply-all decía —y la pantalla da a entender— que regenerar "nunca borra
+ * tareas con progreso o cargadas a mano". Era cierto en el CLIENTE: `isKept` pre-siembra esas
+ * tareas en la columna que se conserva (`regen-columnas.ts`), así que el payload normalmente
+ * las trae. Pero acá, en el servidor, el borrado era `todo lo que no vino en el payload` — sin
+ * mirar `status`, `actualStart` ni `source`. O sea que la única barrera era que la UI se
+ * portara bien.
+ *
+ * Alcanza con que el payload llegue incompleto para perder trabajo real e irrecuperable: una
+ * sección del acordeón que no montó, un request viejo reenviado, una corrida a medias, o
+ * cualquier caller que no sea ese modal. La regla ahora vive DEL LADO QUE ESCRIBE: una tarea
+ * protegida por `isKept` no se borra aunque el payload la omita (ver `repartoDeBorrado`).
+ * El cliente sigue haciendo su parte — pasa a ser la segunda red, no la única.
  */
 
 const STATUSES = ["PENDING", "IN_PROGRESS", "DONE", "SUSPENDED"] as const;
@@ -83,6 +98,31 @@ export interface ExistingTaskRow {
 }
 
 /**
+ * Qué se borra de verdad cuando el payload curado omite tareas. PURA — es la decisión que antes
+ * estaba inline y sin red (`existingTasks.filter(t => !keptIds.has(t.id))` a secas).
+ *
+ * Una tarea omitida se borra SOLO si es material reemplazable: pendiente y de la IA. Si tiene
+ * progreso humano encima —iniciada, hecha, suspendida o cargada a mano— se PRESERVA aunque no
+ * venga en el payload, y se reporta. Misma regla `isKept` que usa el modal de curación para
+ * decidir qué pre-acepta: una sola definición de "esto no se toca", en `regen-columnas.ts`.
+ *
+ * Las preservadas conservan su `weekIndex`/`order` actuales: la renumeración por semana solo
+ * corre sobre el set curado, así que quedan ordenadas después de las curadas de su semana. Es
+ * la conducta correcta para un camino de excepción — si el payload omitió una tarea protegida,
+ * algo salió mal aguas arriba y lo que importa es no perderla, no dónde queda ubicada.
+ */
+export function repartoDeBorrado(
+  existingTasks: readonly ExistingTaskRow[],
+  keptIds: ReadonlySet<string>,
+): { aBorrar: string[]; preservadas: ExistingTaskRow[] } {
+  const omitidas = existingTasks.filter((t) => !keptIds.has(t.id));
+  return {
+    aBorrar: omitidas.filter((t) => !isKept(t)).map((t) => t.id),
+    preservadas: omitidas.filter(isKept),
+  };
+}
+
+/**
  * Aplica el set curado de UNA fase dentro de una $transaction abierta por el caller: delete lo
  * que quedó fuera del set, update lo que cambió (flip AGENT→MODIFIED si cambió el contenido;
  * status vía actualDatesPatch si cambió), create lo nuevo, patch del baseline si el proyecto está
@@ -101,14 +141,14 @@ export async function applyCuratedPhaseTasks(
     now: Date;
     actorEmail: string | null;
   },
-): Promise<void> {
+): Promise<{ preservadasPorProgreso: number }> {
   const { phaseId, timelineId, existingTasks, curated, now, actorEmail } = params;
   const existingById = new Map(existingTasks.map((t) => [t.id, t]));
   const keptIds = new Set(curated.filter((c) => c.id).map((c) => c.id as string));
 
-  const toDelete = existingTasks.filter((t) => !keptIds.has(t.id)).map((t) => t.id);
-  if (toDelete.length > 0) {
-    await tx.timelineTask.deleteMany({ where: { id: { in: toDelete } } });
+  const { aBorrar, preservadas } = repartoDeBorrado(existingTasks, keptIds);
+  if (aBorrar.length > 0) {
+    await tx.timelineTask.deleteMany({ where: { id: { in: aBorrar } } });
   }
 
   const toCreate: Prisma.TimelineTaskCreateManyInput[] = [];
@@ -185,4 +225,6 @@ export async function applyCuratedPhaseTasks(
       await tx.timelinePhase.update({ where: { id: phaseId }, data: { status: "IN_PROGRESS", ...meta } });
     }
   }
+
+  return { preservadasPorProgreso: preservadas.length };
 }

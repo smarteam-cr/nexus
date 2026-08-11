@@ -2,15 +2,20 @@
  * POST /api/projects/[projectId]/timeline/tasks
  *
  * Agrega UNA tarea al cronograma. Endpoint dedicado (no por el PUT bulk) para el
- * gesto "+ tarea" del Gantt. Gateado por `guardAccessToProject` (acceso al cliente);
- * agregar/editar/mover/poner fechas lo puede TODO interno —incluido el CSE— vía
- * `editTimeline`. Lo único reservado a no-CSE es BORRAR (`deleteTimeline`).
+ * gesto "+ tarea" del Gantt. Gateado por `guardTimelineEdit`: agregar/editar/mover/
+ * poner fechas lo puede TODO interno —incluido el CSE— vía `editTimeline`. Lo único
+ * reservado a no-CSE es BORRAR (`deleteTimeline`).
+ *
+ * ⚠ Hasta 2026-08-11 usaba `guardAccessToProject` —solo acceso al cliente, sin
+ * `editTimeline`—, contradiciendo este mismo docblock: era el único endpoint que
+ * MUTA el cronograma con un gate de lectura. Cualquiera con acceso al cliente podía
+ * escribirle tareas al plan.
  *
  * La tarea nace `source=HUMAN`, `status=PENDING`. El `order` se calcula al final
  * de su semana. La edición/estado posteriores van por PUT/PATCH (guardTimelineEdit).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import type { TaskParty, TimelineTaskType } from "@prisma/client";
 import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
@@ -23,7 +28,7 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardAccessToProject(projectId);
+  const guard = await guardTimelineEdit(projectId);
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;

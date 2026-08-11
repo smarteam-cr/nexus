@@ -1,5 +1,66 @@
 import { describe, it, expect } from "vitest";
-import { normalizeCuratedTasks } from "./apply-curated-phase";
+import { normalizeCuratedTasks, repartoDeBorrado, type ExistingTaskRow } from "./apply-curated-phase";
+
+/**
+ * ── LO QUE ESTE BLOQUE IMPIDE ────────────────────────────────────────────────
+ * Hasta 2026-08-11 el servidor borraba TODO lo que no viniera en el payload curado, sin mirar
+ * si tenía progreso. La promesa de "regenerar nunca borra lo hecho" la sostenía únicamente el
+ * cliente (`regen-columnas.ts` pre-siembra esas tareas en la columna que se conserva, así que
+ * normalmente viajan). Un payload incompleto —una sección del acordeón que no montó, un request
+ * viejo, cualquier caller que no fuera ese modal— borraba trabajo real sin dejar rastro.
+ */
+const fila = (over: Partial<ExistingTaskRow> & { id: string }): ExistingTaskRow => ({
+  title: "T", weekIndex: 0, order: 0, notes: null, party: null, type: null,
+  source: "AGENT", status: "PENDING", actualStart: null,
+  ...over,
+});
+
+describe("repartoDeBorrado", () => {
+  it("una tarea PENDING de la IA omitida del payload SÍ se borra (es material reemplazable)", () => {
+    const r = repartoDeBorrado([fila({ id: "a" })], new Set());
+    expect(r.aBorrar).toEqual(["a"]);
+    expect(r.preservadas).toEqual([]);
+  });
+
+  it("⛔ una tarea HECHA omitida del payload NO se borra", () => {
+    const r = repartoDeBorrado([fila({ id: "a", status: "DONE" })], new Set());
+    expect(r.aBorrar, "una tarea hecha jamás se borra por omisión").toEqual([]);
+    expect(r.preservadas.map((t) => t.id)).toEqual(["a"]);
+  });
+
+  it("⛔ tampoco se borran las iniciadas, las suspendidas ni las cargadas a mano", () => {
+    const filas = [
+      fila({ id: "curso", status: "IN_PROGRESS" }),
+      fila({ id: "susp", status: "SUSPENDED" }),
+      fila({ id: "mano", source: "HUMAN" }), // PENDING pero humana
+    ];
+    const r = repartoDeBorrado(filas, new Set());
+    expect(r.aBorrar).toEqual([]);
+    expect(r.preservadas.map((t) => t.id)).toEqual(["curso", "susp", "mano"]);
+  });
+
+  it("lo que SÍ viene en el payload no entra en ninguna de las dos listas (se actualiza aparte)", () => {
+    const r = repartoDeBorrado([fila({ id: "a" }), fila({ id: "b", status: "DONE" })], new Set(["a", "b"]));
+    expect(r.aBorrar).toEqual([]);
+    expect(r.preservadas).toEqual([]);
+  });
+
+  it("payload VACÍO sobre una fase mixta: se borra solo lo reemplazable", () => {
+    // El caso real: la sección del acordeón no montó y llegó `tasks: []` para esa fase.
+    const filas = [
+      fila({ id: "ia-pend" }),
+      fila({ id: "hecha", status: "DONE" }),
+      fila({ id: "humana", source: "HUMAN" }),
+    ];
+    const r = repartoDeBorrado(filas, new Set());
+    expect(r.aBorrar).toEqual(["ia-pend"]);
+    expect(r.preservadas.map((t) => t.id)).toEqual(["hecha", "humana"]);
+  });
+
+  it("sin tareas existentes no revienta", () => {
+    expect(repartoDeBorrado([], new Set())).toEqual({ aBorrar: [], preservadas: [] });
+  });
+});
 
 describe("normalizeCuratedTasks", () => {
   it("descarta entradas sin título", () => {
