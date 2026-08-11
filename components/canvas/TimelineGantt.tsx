@@ -816,6 +816,16 @@ export default function TimelineGantt({
             <SortableContext items={renderPhases.map((ph) => ph.key)} strategy={verticalListSortingStrategy}>
             {renderPhases.map((p, i) => {
               const range = ranges[i];
+              /* ── POR QUÉ ESTA FILA ARRANCA ANTES QUE LA DE ARRIBA ──────────────────
+                 Leyendo la columna de la izquierda, una fase con `startWeek` explícito
+                 puede aparecer bajo otra que empieza más tarde, y el plan parece
+                 desordenado. NO se reordena la lista para "arreglarlo": el orden ES el
+                 cronograma — una fase con inicio `auto` arranca donde terminó LA DE
+                 ARRIBA (ver computePhaseRanges), así que ordenar por fecha reprograma
+                 el proyecto solo. Medido sobre la cartera (2026-08-11): ordenaría mal
+                 13 de los 14 proyectos desordenados — a Almotec le corría el cierre de
+                 la S11 a la S17. Se explica el salto en vez de moverlo. */
+              const arrancaAntesQueLaDeArriba = i > 0 && range.start < ranges[i - 1].start;
               const meta = p.activityType ? ACTIVITY_META[p.activityType] : null;
               const isOpen = expanded.has(p.key);
               /* El punto rojo se ganaba con "alguna tarea suya venció", que en un proyecto real
@@ -984,6 +994,17 @@ export default function TimelineGantt({
                             {fmtPhaseRange(anchor, range)}
                             {p.actualSessionCount != null && ` · ${plural(p.actualSessionCount, "sesión", "sesiones")}`}
                             {p.tasks.length > 0 && ` · ${plural(p.tasks.length, "tarea", "tareas")}`}
+                          </span>
+                        )}
+                        {/* La fila arranca ANTES que la de arriba: sin decirlo, la lista se lee
+                            como si estuviera desordenada. Se explica, no se reordena (el orden
+                            define el arranque de las fases con inicio automático). */}
+                        {arrancaAntesQueLaDeArriba && (
+                          <span
+                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border text-fg-muted bg-surface-hover border-line flex-shrink-0"
+                            title={`Arranca antes que «${renderPhases[i - 1].name}», la fila de arriba — corre en paralelo o se solapa con ella.\n\nEl orden de la lista no es solo visual: una fase con inicio «auto» arranca donde termina la de arriba. Reordenar por fecha movería las fechas del proyecto.`}
+                          >
+                            ↑ arranca antes
                           </span>
                         )}
                         {/* Etiquetas a la derecha: estado + tipo de actividad + estimada + atraso */}

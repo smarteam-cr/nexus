@@ -125,6 +125,40 @@ describe("computePhaseRanges / timelineSpan / totalWeeks", () => {
     expect(timelineSpan(fases)).toBe(4);
   });
 
+  it("⛔ EL ORDEN DE LA LISTA ES EL CRONOGRAMA: reordenar mueve fechas", () => {
+    /* La trampa que este test existe para cerrar. Leyendo el Gantt, una fase con `startWeek`
+       explícito puede aparecer bajo otra que empieza más tarde, y la lista PARECE desordenada.
+       La reacción natural —"ordenémosla por fecha"— reprograma el proyecto en silencio: una
+       fase con inicio `auto` arranca donde termina LA DE ARRIBA, así que moverla de lugar le
+       cambia las fechas a ella y a todas las que la siguen.
+
+       Medido sobre la cartera real (2026-08-11): de los 14 proyectos activos con la lista
+       desordenada, ordenar por fecha habría movido fechas en 13. A Almotec le corría el cierre
+       de la S11 a la S17 — seis semanas que nadie pidió.
+
+       Por eso el Gantt EXPLICA el salto (chip "↑ arranca antes") en vez de reordenar. */
+    const original = [
+      { durationWeeks: 2 },                    // S0-S2  (auto)
+      { durationWeeks: 4, startWeek: 0 },      // S0-S4  (explícita, en paralelo)
+      { durationWeeks: 3 },                    // S4-S7  (auto: sigue a la explícita)
+    ];
+    expect(computePhaseRanges(original)).toEqual([
+      { start: 0, end: 2 },
+      { start: 0, end: 4 },
+      { start: 4, end: 7 },
+    ]);
+
+    // La misma lista, "ordenada" poniendo la explícita primero (empieza igual de temprano y
+    // dura más). Las AUTO se recalculan solas y el proyecto termina DOS semanas más tarde.
+    const ordenada = [original[1], original[0], original[2]];
+    expect(computePhaseRanges(ordenada)).toEqual([
+      { start: 0, end: 4 },
+      { start: 4, end: 6 }, // ⚠ era S0-S2
+      { start: 6, end: 9 }, // ⚠ era S4-S7
+    ]);
+    expect(timelineSpan(ordenada)).not.toBe(timelineSpan(original));
+  });
+
   it("duración 0 o ausente cuenta como 1 semana (una fase siempre ocupa lugar)", () => {
     expect(computePhaseRanges([{ durationWeeks: 0 }, { durationWeeks: 2 }])).toEqual([
       { start: 0, end: 1 },
