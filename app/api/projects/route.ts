@@ -264,17 +264,11 @@ export async function POST(req: NextRequest) {
     if (dealId) {
       const bc = await tx.businessCase.findFirst({
         where: { hubspotDealId: dealId, clientId },
-        select: { tags: true, implementationType: true },
+        select: { tags: true },
         orderBy: { createdAt: "desc" },
       });
-      if (bc && (bc.tags.length > 0 || bc.implementationType)) {
-        await tx.project.update({
-          where: { id: proyecto.id },
-          data: {
-            tags: sanitizeTags(bc.tags),
-            ...(bc.implementationType ? { implementationType: bc.implementationType } : {}),
-          },
-        });
+      if (bc && bc.tags.length > 0) {
+        await tx.project.update({ where: { id: proyecto.id }, data: { tags: sanitizeTags(bc.tags) } });
       }
     }
 

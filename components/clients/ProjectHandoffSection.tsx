@@ -18,7 +18,6 @@ import { useWorkspace } from "./WorkspaceContext";
 import { useMe } from "@/hooks/useMe";
 import ProjectContextSection from "./ProjectContextSection";
 import TagsStrip from "@/components/tags/TagsStrip";
-import type { ImplementationType } from "@prisma/client";
 import type { ProjectPipelineKey } from "@/lib/projects/kind";
 import { HandoffSectionSkeleton } from "./skeletons";
 import HistorialHandoffModal from "./HistorialHandoffModal";
@@ -67,7 +66,6 @@ interface HandoffStatus {
   contextExclusions: string | null;
   /** La exclusión que pone LA APP, calculada en vivo. No se guarda y no se puede borrar. */
   exclusionAutomatica?: string | null;
-  implementationType: "IMPLEMENTATION" | "REIMPLEMENTATION" | null;
 }
 
 function fmtDate(d: string): string {
@@ -272,22 +270,10 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     } catch { setError("Error de conexión al guardar los tags."); fetchTags(); }
   }, [projectId, fetchTags]);
 
-  // Modalidad (impl/re-impl) — override del CSE/editor; acepta null ("Sin definir"). Optimista.
-  const setModality = useCallback(async (value: ImplementationType | null) => {
-    setStatus((s) => (s ? { ...s, implementationType: value } : s));
-    try {
-      const r = await fetch(`/api/projects/${projectId}/implementation-type`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ implementationType: value }),
-      });
-      if (!r.ok) { setError("No se pudo guardar la modalidad."); fetchStatus(); }
-    } catch {
-      setError("Error de conexión al guardar la modalidad."); fetchStatus();
-    }
-  }, [projectId, fetchStatus]);
+  /* 2026-08-12: el tipo de implementación dejó de tener su propio `setModality` + su propio
+     endpoint `PATCH /implementation-type`. Es un tag como cualquier otro y viaja por `saveTags`. */
 
-  // Guardar exclusiones (mismo patrón que setModality: fetch + error visible + refetch).
+  // Guardar exclusiones (fetch + error visible + refetch).
   const saveExclusions = useCallback(async () => {
     setSavingExcl(true);
     try {
@@ -477,15 +463,9 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
               Las sesiones que alimentan este handoff aún no tienen transcripción — el handoff saldría vacío.
             </p>
           )}
-          {/* #5 — clasificación del proyecto (modalidad + productos/alcance), compartida con el BC. */}
+          {/* #5 — la clasificación del proyecto, compartida con el BC. UN solo eje de datos. */}
           <div className="mt-2">
-            <TagsStrip
-              tags={tags}
-              implementationType={status.implementationType}
-              canEdit={canManageContext}
-              onSetTags={saveTags}
-              onSetModality={setModality}
-            />
+            <TagsStrip tags={tags} canEdit={canManageContext} onSetTags={saveTags} />
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">

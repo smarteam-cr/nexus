@@ -2,8 +2,9 @@
  * GET/PUT /api/projects/[projectId]/tags
  *
  * Tags de PRODUCTO/ALCANCE del proyecto (slugs del catálogo `lib/tags/catalog.ts`).
- * La MODALIDAD (impl/re-impl) NO vive acá — es `Project.implementationType` (su propio
- * PATCH /implementation-type). GET auto-deriva un producto desde `serviceType` si está vacío.
+ * Desde el 2026-08-12 incluye TAMBIÉN el tipo de implementación, que hasta entonces tenía su
+ * propia columna y su propio PATCH: es un tag del catálogo como cualquier otro y `sanitizeTags`
+ * hace cumplir que sea uno solo. GET auto-deriva un producto desde `serviceType` si está vacío.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardProjectHandoffAccess } from "@/lib/auth/api-guards";

@@ -70,8 +70,13 @@ enum ProjectType {
   USE_CASE // Caso de uso — específico y profundo, resolución de un reto particular
 }
 
-// El agente de handoff lo infiere (¿el cliente ya usa HubSpot?); el CSE puede corregirlo.
-// Define qué plantilla de fases/tareas usa el cronograma (uso futuro). Interno.
+// ⛔ RETIRADO el 2026-08-12 — PASO 1 DE 2. La app ya NO lee ni escribe este enum: el tipo de
+// implementación es un TAG del catálogo (`implementacion` / `reimplementacion` en
+// lib/tags/catalog.ts, grupo excluyente `tipo_implementacion`), igual que el resto de la
+// clasificación. Se conserva —con las dos columnas y su dato— como red de seguridad hasta el
+// DROP, que es un cambio aparte con el sistema nuevo ya probado en uso.
+// ⚠ NO volver a usarlo: una guarda lo impide (lib/tags/catalog.test.ts, "la columna retirada
+// no vuelve"). Dos respuestas a la misma pregunta es el estado del que esta tanda salió.
 enum ImplementationType {
   IMPLEMENTATION // Nueva implementación — el cliente arranca con HubSpot por primera vez
   REIMPLEMENTATION // Re-implementación — ya usa HubSpot o viene de otro CRM
@@ -239,7 +244,7 @@ model Project {
   name               String
   status             String              @default("active") // active | paused | completed
   projectType        ProjectType         @default(USE_CASE) // Tipo de proyecto: implementación base o caso de uso
-  implementationType ImplementationType? // ¿nueva impl o re-impl? Lo infiere el handoff; el CSE corrige. Interno (no cruza al cliente).
+  implementationType ImplementationType? // ⛔ RETIRADA (2026-08-12) — vive en `tags`. Solo respaldo hasta el DROP; ver el enum.
   serviceType        String? // loop_marketing | loop_sales | loop_service | proyecto_temporal
   hubspotDealId      String? // ID del deal de HubSpot asociado a este proyecto
   hubspotServiceId   String?             @unique // ID del objeto Service en HubSpot (para sync)
@@ -1326,11 +1331,11 @@ model BusinessCase {
   // el fallback al __lang del hero (que sí tiene el idioma correcto) nunca se activaría.
   language String?
 
-  // Clasificación (tira de tags) — MISMO catálogo y modalidad que Project (lib/tags/catalog.ts).
-  // El agente del BC los detecta; el CSE corrige. Se PROPAGAN al Project al crear el handoff
-  // (match por hubspotDealId). tags = slugs de product+scope; implementationType = modalidad.
+  // Clasificación — MISMO catálogo que Project (lib/tags/catalog.ts): productos, alcance, tipo
+  // de implementación y modalidad, TODO en `tags`. El agente del BC los detecta; el CSE corrige.
+  // Se PROPAGAN al Project al crear el handoff (match por hubspotDealId).
   tags               String[]            @default([])
-  implementationType ImplementationType?
+  implementationType ImplementationType? // ⛔ RETIRADA (2026-08-12) — respaldo hasta el DROP; ver el enum.
 
   // Tipo de caso (slug del catálogo TS en lib/business-cases/case-types.ts) — determina
   // template de landing + tags seed. String? y NO enum (agregar tipos sin migración;

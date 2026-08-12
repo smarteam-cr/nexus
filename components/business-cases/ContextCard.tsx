@@ -6,7 +6,6 @@ import { useToast } from "@/components/ui/Toast";
 import { Modal } from "@/components/ui";
 import TagsStrip from "@/components/tags/TagsStrip";
 import { ContextColumn, ContextColumnList, ContextRow, CTX_ICONS } from "@/components/clients/context-column";
-import type { ImplementationType } from "@prisma/client";
 
 type SessionMeta = { sessionId: string; title: string; date: string; participants: string[]; applies: boolean; hasTranscript: boolean };
 type Transcript = {
@@ -81,7 +80,6 @@ export default function ContextCard({
   const [loadingHs, setLoadingHs] = useState(true);
   // Clasificación (tira de tags) — mismo catálogo que el proyecto; se PROPAGA al crear el handoff.
   const [tags, setTags] = useState<string[]>([]);
-  const [modality, setModalityState] = useState<ImplementationType | null>(null);
   // Checklist de casos de uso del catálogo — solo se monta si hay catálogo aplicable
   // (degradación elegante: sin catálogo, este BC funciona exactamente como siempre).
   const [useCases, setUseCases] = useState<UseCaseRow[]>([]);
@@ -124,9 +122,8 @@ export default function ContextCard({
   }, [bcId]);
   const loadTags = useCallback(async () => {
     try {
-      const d = await fetchJson<{ tags: string[]; implementationType: ImplementationType | null }>(`/api/business-cases/${bcId}/tags`);
+      const d = await fetchJson<{ tags: string[] }>(`/api/business-cases/${bcId}/tags`);
       setTags(d.tags);
-      setModalityState(d.implementationType);
     } catch {
       /* silencioso — la tira aparece vacía/editable */
     }
@@ -154,7 +151,7 @@ export default function ContextCard({
   useEffect(() => { loadSessions(); loadTranscripts(); loadHubspot(); loadTags(); loadUseCases(); }, [loadSessions, loadTranscripts, loadHubspot, loadTags, loadUseCases]);
 
   // Persistencia optimista de la clasificación (PATCH /tags).
-  const patchTags = useCallback(async (payload: { tags?: string[]; implementationType?: ImplementationType | null }) => {
+  const patchTags = useCallback(async (payload: { tags: string[] }) => {
     try {
       await fetchJson(`/api/business-cases/${bcId}/tags`, {
         method: "PATCH",
@@ -167,7 +164,6 @@ export default function ContextCard({
     }
   }, [bcId, toast, loadTags]);
   const saveTags = useCallback((slugs: string[]) => { setTags(slugs); patchTags({ tags: slugs }); }, [patchTags]);
-  const setModality = useCallback((m: ImplementationType | null) => { setModalityState(m); patchTags({ implementationType: m }); }, [patchTags]);
 
   const toggleSession = async (sessionId: string, include: boolean) => {
     setBusyId(sessionId);
@@ -331,7 +327,7 @@ export default function ContextCard({
 
       {/* Clasificación (tags + modalidad): siempre visible, se propaga al handoff. */}
       <div className="px-5 pb-2.5">
-        <TagsStrip tags={tags} implementationType={modality} canEdit onSetTags={saveTags} onSetModality={setModality} />
+        <TagsStrip tags={tags} canEdit onSetTags={saveTags} />
       </div>
 
       {/* Aviso proactivo: sin NINGUNA fuente con contenido no se puede generar con IA. */}
