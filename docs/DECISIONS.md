@@ -1708,9 +1708,21 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   en un PDF es contenido PERDIDO y nadie se entera. Mismo criterio que `DiagramSection` con su
   variante estática. Por lo mismo, **sin scrollers**: grid con wrap y `break-inside: avoid` —
   un carrusel horizontal imprimiría solo el primer viewport y saldría cortado en silencio.
-- **En edición se pintan TODAS las columnas, las apagadas atenuadas.** No es solo UX (el CSE
-  tiene que ver lo que apagó para devolverlo): con un SUBCONJUNTO en pantalla, reordenar habría
-  escrito ese subconjunto como la lista completa y las apagadas desaparecían.
+- ~~**En edición se pintan TODAS las columnas, las apagadas atenuadas.**~~ **SUPERSEDED el
+  mismo día:** una columna que NO está seleccionada **no se pinta, ni en el editor**. Con las
+  apagadas en pantalla —aunque fuera al 45 % de opacidad— la píldora no se leía como una
+  selección: la reacción de Elías al verlo fue *"no están apareciendo preseleccionadas
+  ningunas"*, con dos de seis efectivamente encendidas. Las seis columnas **existen** (el
+  agente las escribe todas) y se ven solo las encendidas; el cliente las abre con la píldora.
+  ⚠ Eso devuelve el peligro que la versión anterior evitaba: `visibles` es un SUBCONJUNTO, así
+  que **reordenar no puede escribirse como la lista completa** (borraría las apagadas). El
+  `onReorder` mapea las visibles de vuelta a las MISMAS posiciones que ocupaban en `columnas`.
+- **Cuántas columnas por fila lo decide el componente, no un `auto-fit`.** Hasta 3 van en una
+  fila; de 4 en adelante se parte en dos filas parejas (4 → 2 y 2 · 5 → 3 y 2 · 6 → 3 y 3).
+  Con `repeat(auto-fit, minmax(260px,1fr))` los seis Hubs entraban en una sola fila de tarjetas
+  ilegibles y cuatro quedaban 4+0 en vez de 2+2. Son tres clases (`--1`/`--2`/`--3`) y no una
+  variable CSS para que las media queries de pantalla angosta puedan pisar cada caso por
+  separado.
 - **`columnasActivas` recibe las columnas ya saneadas en vez de volver a sanearlas.**
   `hubColumnas` construye objetos nuevos: dos llamadas dan columnas idénticas en forma pero
   distintas en identidad, y con eso el `indexOf` del componente daba -1 — editar una columna

@@ -81,15 +81,14 @@ export const HubsClienteSection: FC<SectionProps<HubsClienteData>> = (props) => 
   const activasKeys = new Set(activas.map(columnaKey));
   // Lo que el lector tiene abierto: mientras no toque nada, exactamente lo vendido.
   const abiertas = abiertasOverride ?? activas.map(columnaKey);
-  // En edición se pintan TODAS —las apagadas, atenuadas—: el CSE tiene que ver lo que
-  // apagó para poder devolverlo, y así `visibles === columnas`, que es lo que vuelve
-  // seguro el reordenar (un reorder sobre un SUBCONJUNTO borraría las que no están).
-  // En el PDF, SOLO lo vendido: el documento formal no lista Hubs que nadie compró.
-  const visibles = editable
-    ? columnas
-    : ctx.pdfMode
-      ? activas
-      : columnas.filter((c) => abiertas.includes(columnaKey(c)));
+  // Una columna que NO está seleccionada no se pinta — ni en el editor. Las seis
+  // EXISTEN (el agente las escribe todas) pero solo se ven las encendidas: si no, la
+  // píldora no se lee como una selección, que fue justo lo que pasó con las apagadas
+  // atenuadas. En lectura el cliente las abre con la píldora; en el PDF salen solo las
+  // vendidas, porque el documento formal no lista lo que nadie compró.
+  const visibles = editable || ctx.pdfMode
+    ? activas
+    : columnas.filter((c) => abiertas.includes(columnaKey(c)));
 
   const toggle = (c: HubColumna) => {
     const key = columnaKey(c);
@@ -110,6 +109,22 @@ export const HubsClienteSection: FC<SectionProps<HubsClienteData>> = (props) => 
   };
 
   const setColumna = (i: number, next: HubColumna) => set({ columnas: replaceAt(columnas, i, next) });
+
+  // Reordenar toca SOLO las visibles, que son un subconjunto: escribirlas como la lista
+  // completa borraría las apagadas. Se devuelven a las MISMAS posiciones que ocupaban.
+  const reordenar = (next: HubColumna[]) => {
+    const slots = visibles.map((c) => columnas.indexOf(c));
+    const out = columnas.slice();
+    slots.forEach((slot, i) => { if (slot >= 0) out[slot] = next[i]; });
+    set({ columnas: out });
+  };
+
+  // Cuántas columnas por fila. Hasta 3 van todas en una fila; de 4 en adelante se parte
+  // en dos filas parejas (4 → 2 y 2 · 5 → 3 y 2 · 6 → 3 y 3). Una fila de 6 deja cada
+  // tarjeta demasiado angosta para leerse.
+  // El `max(1, …)` cubre el caso de cero visibles: sin él la clase sería `--0`, que no
+  // existe en el CSS y dejaría la grilla sin `grid-template-columns`.
+  const porFila = Math.max(1, Math.min(visibles.length <= 3 ? visibles.length : Math.ceil(visibles.length / 2), 3));
 
   return (
     <>
@@ -151,28 +166,26 @@ export const HubsClienteSection: FC<SectionProps<HubsClienteData>> = (props) => 
       <SortableItems
         items={visibles}
         disabled={!editable}
-        onReorder={(next) => set({ columnas: next })}
-        container={(nodes) => <div className="stl-hub-cols">{nodes}</div>}
+        onReorder={reordenar}
+        container={(nodes) => <div className={`stl-hub-cols stl-hub-cols--${porFila}`}>{nodes}</div>}
       >
         {(c, i, handle) => {
           const { colorVar, label } = hubVisual(c.hub);
-          // En lectura `visibles` es un subconjunto de `columnas`, así que el índice del
-          // sortable no sirve para escribir. En edición coinciden, pero se busca igual.
+          // `visibles` SIEMPRE es un subconjunto de `columnas` (las apagadas no se
+          // pintan), así que el índice del sortable no sirve para escribir.
           const real = columnas.indexOf(c);
           const items = c.items ?? [];
           const setItems = (next: HubCard[]) => setColumna(real, { ...c, items: next });
-          const apagada = editable && !activasKeys.has(columnaKey(c));
+          // Solo pasa en LECTURA: el cliente abrió un Hub que no se le vendió.
+          const noIncluida = !editable && !activasKeys.has(columnaKey(c));
           return (
-            <div
-              className={`stl-hub-col${apagada ? " is-off" : ""}`}
-              style={{ "--hub": `var(${colorVar})` } as CSSProperties}
-            >
+            <div className="stl-hub-col" style={{ "--hub": `var(${colorVar})` } as CSSProperties}>
               <div className="stl-hub-col-head">
                 {handle}
                 {editable && <RemoveBtn onClick={() => set({ columnas: removeAt(columnas, real) })} />}
                 {/* El cliente puede abrir un Hub que no compró: la columna tiene que
                     DECIRLO. Sin esto, explorar se leería como que ya está incluido. */}
-                {apagada && !editable && <div className="stl-hub-col-chip">No incluido</div>}
+                {noIncluida && <div className="stl-hub-col-chip">No incluido</div>}
                 <div className="stl-hub-col-eyebrow">{label ?? "A la medida"}</div>
                 <Editable
                   as="div"

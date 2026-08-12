@@ -1563,11 +1563,25 @@
 }
 .stl-hub-pill.is-on .stl-hub-pill-dot { background: rgba(255, 255, 255, 0.9); }
 
+/* El número de columnas por fila lo decide el COMPONENTE según cuántas hay encendidas
+   (hasta 3 en una fila; de 4 en adelante se parte en dos filas parejas), no un
+   `auto-fit`: con auto-fit, seis Hubs entraban en una sola fila de tarjetas ilegibles y
+   cuatro quedaban 4+0 en vez de 2+2. Son tres clases y no una variable para que las
+   media queries de pantalla angosta puedan pisar cada caso por separado. */
 .stl-hub-cols {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 18px;
   align-items: start;
+}
+.stl-hub-cols--1 { grid-template-columns: minmax(0, 1fr); }
+.stl-hub-cols--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.stl-hub-cols--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 980px) {
+  .stl-hub-cols--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .stl-hub-cols--2,
+  .stl-hub-cols--3 { grid-template-columns: minmax(0, 1fr); }
 }
 .stl-hub-col {
   border: 1px solid var(--border);
@@ -1575,8 +1589,6 @@
   overflow: hidden;
   background: var(--bg);
 }
-/* Una columna que el CSE APAGÓ. Solo existe en el editor: al cliente no le llega. */
-.stl-hub-col.is-off { opacity: 0.45; }
 .stl-hub-col-head {
   position: relative;
   background: var(--hub, var(--hub-neutro));
