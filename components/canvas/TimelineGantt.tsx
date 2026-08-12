@@ -1072,18 +1072,18 @@ export default function TimelineGantt({
                         const abierto = detalleAbierto === d.key;
                         return (
                           <div
-                            className="ml-[18px] mt-1.5 rounded-md border border-blue-700/40 bg-blue-900/20 px-2 py-1.5 min-w-0 space-y-1.5"
+                            className="ml-[18px] mt-1.5 rounded-lg border border-info-line bg-info-surface px-2.5 py-2 min-w-0 space-y-2"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <div className="flex items-start gap-2">
                               <div className="flex flex-wrap items-center gap-1 min-w-0 flex-1">
-                                <span className="text-[9px] font-bold uppercase tracking-wider text-blue-300 flex-shrink-0">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-info-ink flex-shrink-0">
                                   Sugerencia
                                 </span>
                                 {otros.map((c) => (
                                   <span
                                     key={c.field}
-                                    className="text-[10px] text-fg-secondary bg-surface/70 border border-line rounded px-1.5 py-0.5 max-w-full break-words"
+                                    className="text-xs text-fg-secondary bg-surface border border-line rounded px-2 py-0.5 max-w-full break-words"
                                   >
                                     {describeChange(c)}
                                   </span>
@@ -1111,7 +1111,7 @@ export default function TimelineGantt({
                                 Ámbar solo cuando de verdad se mueve — su ausencia significa "este
                                 cambio no toca fechas", que es información igual de útil. */}
                             {impacto?.mueve && impacto.chip && (
-                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[10px]">
+                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
                                 <span className="rounded border border-warn-line bg-warn-surface px-1.5 py-0.5 font-semibold text-warn-ink">
                                   Cierre: {impacto.chip}
                                 </span>
@@ -1120,7 +1120,7 @@ export default function TimelineGantt({
                             )}
 
                             {renombre && (
-                              <p className="text-[10px] leading-relaxed text-fg-secondary">
+                              <p className="text-xs leading-relaxed text-fg-secondary">
                                 Pasa a llamarse <span className="font-semibold text-fg">«{String(renombre.to)}»</span>
                                 {p.tasks.length > 0
                                   ? ` — conserva sus ${plural(p.tasks.length, "tarea actual", "tareas actuales")}.`
@@ -1135,7 +1135,7 @@ export default function TimelineGantt({
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); setDetalleAbierto(abierto ? null : d.key); }}
-                              className="text-[10px] font-semibold text-blue-300 hover:text-blue-200 transition-colors"
+                              className="text-xs font-semibold text-info-ink hover:opacity-75 transition-opacity"
                               aria-expanded={abierto}
                             >
                               {abierto ? "Ocultar detalle" : "Ver detalle"}
@@ -1143,12 +1143,12 @@ export default function TimelineGantt({
                             {abierto && (
                               <dl className="space-y-1 rounded border border-line bg-surface/50 px-2 py-1.5">
                                 {filasDeDetalle(d.changes).map((f) => (
-                                  <div key={f.campo} className="grid grid-cols-[5.5rem_1fr] gap-x-2 text-[10px]">
+                                  <div key={f.campo} className="grid grid-cols-[6rem_1fr] gap-x-3 text-xs">
                                     <dt className={`font-semibold ${f.mueveFechas ? "text-warn-ink" : "text-fg-muted"}`}>
                                       {f.etiqueta}
                                     </dt>
                                     <dd className="min-w-0 break-words text-fg-secondary">
-                                      <span className="opacity-60 line-through">{f.antes}</span>
+                                      <span className="text-fg-muted line-through">{f.antes}</span>
                                       <span className="mx-1 text-fg-muted">→</span>
                                       <span className="text-fg">{f.despues}</span>
                                     </dd>
@@ -1350,14 +1350,14 @@ export default function TimelineGantt({
               proposalAdds.map((d) => (
                 <div
                   key={d.key}
-                  className="mt-1 flex flex-col gap-1.5 rounded-lg border border-dashed border-blue-700/50 bg-blue-900/10 px-2.5 py-2"
+                  className="mt-1 flex flex-col gap-1.5 rounded-lg border border-dashed border-info-line bg-info-surface px-2.5 py-2"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border text-blue-300 bg-blue-900/30 border-blue-700/40 flex-shrink-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border text-info-ink bg-info-surface border-info-line flex-shrink-0">
                       Fase propuesta
                     </span>
                     <span className="text-sm text-fg min-w-0 truncate">{d.phase.name}</span>
-                    <span className="text-[10px] text-fg-muted flex-shrink-0">
+                    <span className="text-xs text-fg-muted flex-shrink-0">
                       {plural(d.phase.durationWeeks, "semana", "semanas")}
                       {d.phase.sessionCount != null ? ` · ${plural(d.phase.sessionCount, "sesión", "sesiones")}` : ""}
                       {/* Dónde va a quedar al aceptarla — antes caía al final sin avisar. */}
@@ -1370,7 +1370,7 @@ export default function TimelineGantt({
                       if (!impacto?.mueve || !impacto.chip) return null;
                       return (
                         <span
-                          className="rounded border border-warn-line bg-warn-surface px-1.5 py-0.5 text-[10px] font-semibold text-warn-ink flex-shrink-0"
+                          className="rounded border border-warn-line bg-warn-surface px-1.5 py-0.5 text-xs font-semibold text-warn-ink flex-shrink-0"
                           title={impacto.fechas ?? undefined}
                         >
                           Cierre: {impacto.chip}

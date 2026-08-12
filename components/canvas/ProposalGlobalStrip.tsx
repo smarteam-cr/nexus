@@ -79,21 +79,21 @@ export default function ProposalGlobalStrip({
         /* Ámbar = «esto merece tu atención», el mismo código de color que el resto del canvas.
            NUNCA rojo: el rojo dice «esto borra algo» y acá el modelo es aditivo — no se pierde
            ninguna fase ni ninguna tarea. */
-        otroCronograma ? "border-amber-700/50 bg-amber-900/15" : "border-blue-700/50 bg-blue-900/15",
+        otroCronograma ? "border-warn-line bg-warn-surface" : "border-info-line bg-info-surface",
       )}
     >
       <div className="flex flex-wrap items-center gap-2">
         <span
           className={cn(
-            "text-[11px] font-bold uppercase tracking-wider",
-            otroCronograma ? "text-amber-300" : "text-blue-300",
+            "text-xs font-bold uppercase tracking-wider",
+            otroCronograma ? "text-warn-ink" : "text-info-ink",
           )}
         >
           {otroCronograma
             ? `La IA propone otro cronograma — ${plural(deltas.length, "cambio", "cambios")}`
             : `La IA sugiere ${plural(deltas.length, "cambio de estructura", "cambios de estructura")}`}
         </span>
-        <span className="text-[11px] text-fg-muted">
+        <span className="text-xs text-fg-muted">
           del último handoff · las tareas y sus estados no se tocan
         </span>
         <div className="ml-auto flex items-center gap-2">
@@ -121,19 +121,19 @@ export default function ProposalGlobalStrip({
           había cambiado — ni cuánto se movía la fecha de fin. */}
       {otroCronograma && (
         <div className="space-y-1 pt-0.5">
-          <p className="text-[11px] text-fg-secondary leading-relaxed">
+          <p className="text-xs text-fg-secondary leading-relaxed">
             La diferencia es tanta que esto es prácticamente un cronograma nuevo: salió de un
             handoff con más contexto que el que armó el cronograma actual.
           </p>
-          <ul className="text-[11px] text-fg-secondary space-y-0.5">
+          <ul className="text-xs text-fg-secondary space-y-0.5">
             {magnitud.motivos.map((m) => (
               <li key={m}>· {m}</li>
             ))}
           </ul>
           {corrimiento && (
-            <p className="text-[11px] font-semibold text-amber-300">{corrimiento}</p>
+            <p className="text-xs font-semibold text-warn-ink">{corrimiento}</p>
           )}
-          <p className="text-[11px] text-fg-muted leading-relaxed">
+          <p className="text-xs text-fg-muted leading-relaxed">
             Aceptar no borra nada: las fases que la IA no volvió a nombrar quedan como están, y
             las tareas y sus estados no se tocan.
           </p>
@@ -144,7 +144,7 @@ export default function ProposalGlobalStrip({
           lee después del titular. */}
       {mueven.length > 0 && (
         <div className="space-y-0.5 border-t border-line/60 pt-1.5">
-          <p className="text-[11px] text-fg-secondary">
+          <p className="text-xs text-fg-secondary">
             <span className="font-semibold text-warn-ink">
               {mueven.length === 1 ? "1 cambio mueve el cierre" : `${mueven.length} cambios mueven el cierre`}
             </span>
@@ -156,7 +156,7 @@ export default function ProposalGlobalStrip({
             ))}
           </p>
           {noMueven > 0 && (
-            <p className="text-[11px] text-fg-muted">
+            <p className="text-xs text-fg-muted">
               {noMueven === 1 ? "El otro cambio es" : `Los otros ${noMueven} cambios son`} de contenido
               (nombres, notas, sesiones, tipo) y no tocan ninguna fecha.
             </p>
@@ -165,7 +165,7 @@ export default function ProposalGlobalStrip({
       )}
 
       {globales.map((d) => (
-        <div key={d.key} className="flex flex-wrap items-center gap-2 text-[11px] text-fg-secondary">
+        <div key={d.key} className="flex flex-wrap items-center gap-2 text-xs text-fg-secondary">
           <span className="min-w-0">
             {d.kind === "SET_ANCHOR" ? (
               <>
@@ -216,7 +216,7 @@ export default function ProposalGlobalStrip({
       {/* Solo si hay cambios que NO están en esta franja: si todo es global, mandar a mirar abajo
           sería mandar a ningún lado. */}
       {globales.length < deltas.length && (
-        <p className="text-[11px] text-fg-muted">
+        <p className="text-xs text-fg-muted">
           El resto se revisa en las filas de abajo — badges azules en las fases que cambian y filas
           «Fase propuesta» — y se acepta o descarta una por una. El cronograma sigue editable.
         </p>

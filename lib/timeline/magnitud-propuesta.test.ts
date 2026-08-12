@@ -250,9 +250,16 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
 
   it("un cambio CHICO no cambia nada de lo que ya existía", () => {
     /* El caso chico tiene que seguir viéndose exactamente igual que antes de la Tanda J: misma
-       etiqueta, borde azul, y "Aceptar todo" sin confirmación. */
+       etiqueta, tratamiento neutro (NO ámbar), y "Aceptar todo" sin confirmación.
+       ⚠ 2026-08-12: los literales eran `border-blue-700/50 bg-blue-900/15` — colores CRUDOS de
+       modo oscuro que en el tema claro se veían lavados e ilegibles. Ahora son los tokens
+       `info-*`, medidos en los dos modos (8:1 en claro). Lo que la guarda fija es lo mismo de
+       siempre: que el caso chico NO use el tratamiento de advertencia. */
     expect(src).toContain("La IA sugiere ${plural(deltas.length");
-    expect(src).toContain("border-blue-700/50 bg-blue-900/15");
+    expect(src).toContain("border-info-line bg-info-surface");
+    expect(src, "el caso chico pasó a pintarse como advertencia").toContain(
+      'otroCronograma ? "border-warn-line bg-warn-surface" : "border-info-line bg-info-surface"',
+    );
     expect(src, "el caso chico perdió su camino directo").toContain(': aceptarTodo()');
   });
 });
