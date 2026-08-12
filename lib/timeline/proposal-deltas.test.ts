@@ -106,7 +106,19 @@ test("reordenar las MISMAS fases produce un delta (antes se perdía en silencio)
   const proposal = { anchorStartDate: null, phases: [{ ...b }, { ...a }] };
   const deltas = computeProposalDeltas([a, b], proposal, null);
   expect(deltas).toEqual([
-    { key: "reorder", kind: "REORDER_PHASES", ids: ["b", "a"], names: ["B", "A"] },
+    {
+      key: "reorder",
+      kind: "REORDER_PHASES",
+      ids: ["b", "a"],
+      names: ["B", "A"],
+      /* `movimientos` = solo las que cambian de puesto, con posiciones absolutas 1-based. Es lo
+         que la franja pinta en vez de la cadena de N nombres, que mostraba el destino y obligaba
+         a diffear a ojo contra el Gantt. Acá se mueven las dos. */
+      movimientos: [
+        { id: "b", nombre: "B", de: 2, a: 1 },
+        { id: "a", nombre: "A", de: 1, a: 2 },
+      ],
+    },
   ]);
   expect(computeProposalDeltas([a, b], { anchorStartDate: null, phases: [{ ...a }, { ...b }] }, null)).toEqual([]);
 });

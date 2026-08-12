@@ -55,6 +55,7 @@ import { actionsFromSignals } from "@/lib/timeline/project-actions-input";
 import ProjectActionsLine from "./ProjectActionsLine";
 import ProposalGlobalStrip from "./ProposalGlobalStrip";
 import { computeProposalDeltas, type ProposalDelta, type CurrentPhaseLike } from "@/lib/timeline/proposal-deltas";
+import { impactoDeUnDelta, type ImpactoEnElCierre } from "@/lib/timeline/sugerencia-detalle";
 import { medirPropuesta, type MagnitudPropuesta } from "@/lib/timeline/magnitud-propuesta";
 import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -940,6 +941,17 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         : [],
     [structureOnlyProposal, proposal, fasesActualesParaDeltas, anchor],
   );
+  /* Cuánto movería el cierre CADA sugerencia por separado. Se calcula acá —donde ya viven las
+     fases actuales, la propuesta y el ancla— y baja al Gantt y a la franja: las dos pintan el
+     MISMO número, en vez de que cada una lo derive por su cuenta. */
+  const impactoPorDelta: Map<string, ImpactoEnElCierre> = useMemo(() => {
+    const m = new Map<string, ImpactoEnElCierre>();
+    if (!structureOnlyProposal || !proposal) return m;
+    for (const d of proposalDeltas) {
+      m.set(d.key, impactoDeUnDelta(fasesActualesParaDeltas, proposal, anchor || null, d.key));
+    }
+    return m;
+  }, [structureOnlyProposal, proposal, proposalDeltas, fasesActualesParaDeltas, anchor]);
   /* Cuán distinta es la propuesta y adónde caería el cierre si se aceptara entera. null cuando
      no hay nada que medir — la franja no se pinta en ese caso. */
   const magnitudPropuesta: MagnitudPropuesta | null = useMemo(
@@ -2509,6 +2521,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             onEditParticularidad={canEdit ? setEditingParticularidadId : undefined}
             onAddParticularidad={canEdit ? () => setCreatingParticularidad(true) : undefined}
             proposalDeltas={structureOnlyProposal && proposalDeltas.length > 0 ? proposalDeltas : undefined}
+            impactoPorDelta={impactoPorDelta}
             onResolveProposalDelta={
               canEdit
                 ? (key, accept) => void resolveProposalItems(accept ? [key] : [], accept ? [] : [key])
@@ -2524,6 +2537,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             proposalGlobalSlot={
               structureOnlyProposal && proposalDeltas.length > 0 && magnitudPropuesta && canEdit ? (
                 <ProposalGlobalStrip
+                  impactoPorDelta={impactoPorDelta}
                   deltas={proposalDeltas}
                   magnitud={magnitudPropuesta}
                   working={resolvingProposal}

@@ -70,6 +70,7 @@ import { fasesProbablementeRepetidas } from "@/lib/timeline/phase-identity";
 import { buildPhaseSignal, type SignalTone } from "@/lib/timeline/phase-signal";
 import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
 import { describeChange, sortChangesByImpact, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
+import { filasDeDetalle, type ImpactoEnElCierre } from "@/lib/timeline/sugerencia-detalle";
 import { clientStatusLine } from "@/lib/timeline/client-status";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
@@ -172,6 +173,10 @@ interface Props {
   // del Gantt real — badge "Sugerencia" en la fila de la fase afectada + fila fantasma por fase
   // nueva — y el CSE las resuelve una por una. El Gantt nunca se reemplaza por la propuesta.
   proposalDeltas?: ProposalDelta[];
+  /** Cuánto movería el cierre CADA sugerencia por separado (lib/timeline/sugerencia-detalle).
+   *  Sin esto la fila dice QUÉ cambia pero no qué le hace a la fecha de fin — que es lo que se
+   *  está decidiendo. Ausente = no se pinta el chip (p. ej. sin fecha de arranque). */
+  impactoPorDelta?: Map<string, ImpactoEnElCierre>;
   onResolveProposalDelta?: (key: string, accept: boolean) => void;
   // Convertir una particularidad en TAREA del cronograma (dueño + fecha). Sin esto el botón no sale.
   onConvertParticularidad?: (id: string) => void;
@@ -412,6 +417,7 @@ export default function TimelineGantt({
   onEditParticularidad,
   onAddParticularidad,
   proposalDeltas,
+  impactoPorDelta,
   onResolveProposalDelta,
   sugerenciasSlot,
   proposalGlobalSlot,
@@ -427,6 +433,9 @@ export default function TimelineGantt({
   // distinta (guarda el ISO de la sugerida que se descartó; no persiste — vuelve a avisar si
   // se recarga la página, a propósito: es un recordatorio, no una decisión escrita en la base).
   const [dismissedSuggestionIso, setDismissedSuggestionIso] = useState<string | null>(null);
+  /** Qué sugerencia tiene el antes/después abierto. Una sola a la vez: son filas contiguas y
+   *  varias desplegadas a la vez vuelven el Gantt ilegible. */
+  const [detalleAbierto, setDetalleAbierto] = useState<string | null>(null);
   const ranges = computePhaseRanges(phases);
   /* ¿Hay dos fases que son el mismo trabajo con otro nombre? Es un AVISO sobre las fases que YA
      existen —el caso real de Wherex, tres pares conviviendo sobre 11 fases—, no una acción: el
@@ -1051,38 +1060,102 @@ export default function TimelineGantt({
                       {(() => {
                         const d = p.id ? proposalModByPhase.get(p.id) : undefined;
                         if (!d || readOnly || !onResolveProposalDelta) return null;
+                        const impacto = impactoPorDelta?.get(d.key);
+                        /* El RENOMBRE sale de la hilera de chips y se cuenta aparte: es el cambio
+                           que más redefine la fase —y el que peor se leía—, escondido como último
+                           badge de una fila de cinco. Caso real de Wherex: «Revisión y limpieza
+                           base» pasaba a llamarse «Integraciones» conservando sus 15 tareas de
+                           limpieza de base; correcto por diseño (una fase con progreso se renombra,
+                           nunca se borra) pero ilegible sin decir que las tareas se quedan. */
+                        const renombre = d.changes.find((c) => c.field === "name");
+                        const otros = sortChangesByImpact(d.changes.filter((c) => c.field !== "name"));
+                        const abierto = detalleAbierto === d.key;
                         return (
                           <div
-                            className="ml-[18px] mt-1.5 flex items-start gap-2 rounded-md border border-blue-700/40 bg-blue-900/20 px-2 py-1.5 min-w-0"
+                            className="ml-[18px] mt-1.5 rounded-md border border-blue-700/40 bg-blue-900/20 px-2 py-1.5 min-w-0 space-y-1.5"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <div className="flex flex-wrap items-center gap-1 min-w-0 flex-1">
-                              <span className="text-[9px] font-bold uppercase tracking-wider text-blue-300 flex-shrink-0">
-                                Sugerencia
-                              </span>
-                              {sortChangesByImpact(d.changes).map((c) => (
-                                <span
-                                  key={c.field}
-                                  className="text-[10px] text-fg-secondary bg-surface/70 border border-line rounded px-1.5 py-0.5 max-w-full break-words"
-                                >
-                                  {describeChange(c)}
+                            <div className="flex items-start gap-2">
+                              <div className="flex flex-wrap items-center gap-1 min-w-0 flex-1">
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-blue-300 flex-shrink-0">
+                                  Sugerencia
                                 </span>
-                              ))}
+                                {otros.map((c) => (
+                                  <span
+                                    key={c.field}
+                                    className="text-[10px] text-fg-secondary bg-surface/70 border border-line rounded px-1.5 py-0.5 max-w-full break-words"
+                                  >
+                                    {describeChange(c)}
+                                  </span>
+                                ))}
+                              </div>
+                              <span className="flex items-center gap-1 flex-shrink-0">
+                                <AcceptButton
+                                  size="xs"
+                                  aria-label={`Aceptar la sugerencia para «${p.name}»`}
+                                  title="Aceptar: aplica solo este cambio"
+                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, true); }}
+                                />
+                                <RejectButton
+                                  size="xs"
+                                  aria-label={`Descartar la sugerencia para «${p.name}»`}
+                                  title="Descartar la sugerencia"
+                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, false); }}
+                                />
+                              </span>
                             </div>
-                            <span className="flex items-center gap-1 flex-shrink-0">
-                              <AcceptButton
-                                size="xs"
-                                aria-label={`Aceptar la sugerencia para «${p.name}»`}
-                                title="Aceptar: aplica solo este cambio"
-                                onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, true); }}
-                              />
-                              <RejectButton
-                                size="xs"
-                                aria-label={`Descartar la sugerencia para «${p.name}»`}
-                                title="Descartar la sugerencia"
-                                onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, false); }}
-                              />
-                            </span>
+
+                            {/* LO QUE LE HACE A LA FECHA DE FIN. Es el dato que se está decidiendo
+                                y hasta hoy no aparecía en ninguna parte: el encabezado mostraba el
+                                cierre y las filas cambiaban duraciones sin decir cuánto lo mueven.
+                                Ámbar solo cuando de verdad se mueve — su ausencia significa "este
+                                cambio no toca fechas", que es información igual de útil. */}
+                            {impacto?.mueve && impacto.chip && (
+                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[10px]">
+                                <span className="rounded border border-warn-line bg-warn-surface px-1.5 py-0.5 font-semibold text-warn-ink">
+                                  Cierre: {impacto.chip}
+                                </span>
+                                {impacto.fechas && <span className="text-fg-muted">{impacto.fechas}</span>}
+                              </div>
+                            )}
+
+                            {renombre && (
+                              <p className="text-[10px] leading-relaxed text-fg-secondary">
+                                Pasa a llamarse <span className="font-semibold text-fg">«{String(renombre.to)}»</span>
+                                {p.tasks.length > 0
+                                  ? ` — conserva sus ${plural(p.tasks.length, "tarea actual", "tareas actuales")}.`
+                                  : "."}
+                              </p>
+                            )}
+
+                            {/* El antes/después. Va detrás de un click y no de un hover: un tooltip
+                                no se puede comparar entre filas ni leer en touch, y acá hay texto
+                                largo (las notas). "notas actualizadas" era literalmente indecidible
+                                — no decía ni qué nota ni qué decía antes. */}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setDetalleAbierto(abierto ? null : d.key); }}
+                              className="text-[10px] font-semibold text-blue-300 hover:text-blue-200 transition-colors"
+                              aria-expanded={abierto}
+                            >
+                              {abierto ? "Ocultar detalle" : "Ver detalle"}
+                            </button>
+                            {abierto && (
+                              <dl className="space-y-1 rounded border border-line bg-surface/50 px-2 py-1.5">
+                                {filasDeDetalle(d.changes).map((f) => (
+                                  <div key={f.campo} className="grid grid-cols-[5.5rem_1fr] gap-x-2 text-[10px]">
+                                    <dt className={`font-semibold ${f.mueveFechas ? "text-warn-ink" : "text-fg-muted"}`}>
+                                      {f.etiqueta}
+                                    </dt>
+                                    <dd className="min-w-0 break-words text-fg-secondary">
+                                      <span className="opacity-60 line-through">{f.antes}</span>
+                                      <span className="mx-1 text-fg-muted">→</span>
+                                      <span className="text-fg">{f.despues}</span>
+                                    </dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            )}
                           </div>
                         );
                       })()}
@@ -1290,6 +1363,20 @@ export default function TimelineGantt({
                       {/* Dónde va a quedar al aceptarla — antes caía al final sin avisar. */}
                       {d.afterPhaseName ? ` · va después de «${d.afterPhaseName}»` : " · va al principio"}
                     </span>
+                    {/* Una fase nueva casi siempre alarga el proyecto — decirlo acá evita que el
+                        corrimiento aparezca recién después de aceptar. */}
+                    {(() => {
+                      const impacto = impactoPorDelta?.get(d.key);
+                      if (!impacto?.mueve || !impacto.chip) return null;
+                      return (
+                        <span
+                          className="rounded border border-warn-line bg-warn-surface px-1.5 py-0.5 text-[10px] font-semibold text-warn-ink flex-shrink-0"
+                          title={impacto.fechas ?? undefined}
+                        >
+                          Cierre: {impacto.chip}
+                        </span>
+                      );
+                    })()}
                     <span className="ml-auto flex items-center gap-2 flex-shrink-0">
                       <button
                         onClick={() => onResolveProposalDelta(d.key, true)}

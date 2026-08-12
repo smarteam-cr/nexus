@@ -60,6 +60,14 @@ export interface PhaseFieldChange {
   to: string | number | null;
 }
 
+/** Una fase que CAMBIA DE PUESTO en el reordenamiento. Posiciones 1-based y absolutas. */
+export interface MovimientoDeFase {
+  id: string;
+  nombre: string;
+  de: number;
+  a: number;
+}
+
 export type ProposalDelta =
   | {
       key: string;
@@ -71,7 +79,16 @@ export type ProposalDelta =
       afterPhaseName: string | null;
     }
   | { key: string; kind: "MODIFY_PHASE"; phaseId: string; name: string; changes: PhaseFieldChange[] }
-  | { key: "reorder"; kind: "REORDER_PHASES"; ids: string[]; names: string[] }
+  | {
+      key: "reorder";
+      kind: "REORDER_PHASES";
+      ids: string[];
+      names: string[];
+      /** SOLO las fases que cambian de puesto — lo que de verdad hay que leer. `names` es la
+       *  lista completa resultante y con 10 fases es ilegible: muestra el DESTINO, no el
+       *  movimiento, así que para saber qué se movió había que diffear a ojo contra el Gantt. */
+      movimientos: MovimientoDeFase[];
+    }
   | { key: "anchor"; kind: "SET_ANCHOR"; from: string | null; to: string };
 
 /** Un puesto en el orden final de fases: una existente, o una nueva por crear. */
@@ -144,11 +161,28 @@ export function computeProposalDeltas(
     .filter((id): id is string => !!id && byId.has(id));
   const currentSeq = current.map((p) => p.id).filter((id) => proposedSeq.includes(id));
   if (proposedSeq.length > 1 && proposedSeq.join("\u0000") !== currentSeq.join("\u0000")) {
+    /* El orden RESULTANTE, con el mismo criterio que `buildPhaseOrder` cuando el reorder se
+       acepta: primero las fases que la propuesta nombra, en su orden; despues las que no
+       nombro, conservando el suyo. Replicarlo aca es lo que permite dar posiciones ABSOLUTAS
+       (el "3o" que el CSE ve en pantalla) en vez de un "subio 2 puestos" relativo a un
+       subconjunto que nadie tiene en la cabeza. */
+    const resultante = [
+      ...proposedSeq,
+      ...current.map((p) => p.id).filter((id) => !proposedSeq.includes(id)),
+    ];
+    const puestoActual = new Map(current.map((p, i) => [p.id, i + 1]));
+    const movimientos: MovimientoDeFase[] = [];
+    resultante.forEach((id, i) => {
+      const de = puestoActual.get(id);
+      if (de === undefined || de === i + 1) return;
+      movimientos.push({ id, nombre: byId.get(id)?.name ?? id, de, a: i + 1 });
+    });
     out.push({
       key: "reorder",
       kind: "REORDER_PHASES",
       ids: proposedSeq,
       names: proposedSeq.map((id) => byId.get(id)?.name ?? id),
+      movimientos,
     });
   }
 

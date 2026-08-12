@@ -19,6 +19,11 @@
  */
 import { useState } from "react";
 import type { ProposalDelta } from "@/lib/timeline/proposal-deltas";
+import {
+  describeMovimiento,
+  movimientosPorSalto,
+  type ImpactoEnElCierre,
+} from "@/lib/timeline/sugerencia-detalle";
 import { plural, describeEndShift } from "@/lib/timeline/weeks";
 import { redactarResumenDeCambios, type MagnitudPropuesta } from "@/lib/timeline/magnitud-propuesta";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -28,6 +33,7 @@ import { cn } from "@/lib/cn";
 export default function ProposalGlobalStrip({
   deltas,
   magnitud,
+  impactoPorDelta,
   working,
   onResolve,
 }: {
@@ -36,6 +42,9 @@ export default function ProposalGlobalStrip({
   /** Cuán distinta es la propuesta y adónde caería el cierre — lib/timeline/magnitud-propuesta.
    *  Requerida y no-nullable a propósito: si alguien la saca, `tsc` frena. */
   magnitud: MagnitudPropuesta;
+  /** Cuánto mueve el cierre CADA sugerencia por separado. Es lo que permite decir de entrada
+   *  CUÁLES de las N hay que mirar con cuidado, en vez de dejar las 9 con el mismo peso. */
+  impactoPorDelta: Map<string, ImpactoEnElCierre>;
   working: boolean;
   onResolve: (accept: string[], discard: string[]) => void;
 }) {
@@ -45,6 +54,19 @@ export default function ProposalGlobalStrip({
   const otroCronograma = magnitud.esCronogramaNuevo;
   const corrimiento = describeEndShift(magnitud.finAntes, magnitud.finDespues);
   const aceptarTodo = () => onResolve(deltas.map((d) => d.key), []);
+
+  /* CUÁLES DE LAS N HAY QUE MIRAR CON CUIDADO. Sin esto, nueve sugerencias llegan con el mismo
+     peso visual —«notas actualizadas» igual que «4 → 2 semanas»— y el ojo no tiene por dónde
+     empezar. Acá se nombran las que corren la fecha de fin; el resto se cuenta y se despacha
+     en una línea. Las filas de abajo repiten el chip ámbar en su lugar. */
+  const nombreDeDelta = (d: ProposalDelta): string =>
+    d.kind === "MODIFY_PHASE" ? d.name
+      : d.kind === "ADD_PHASE" ? `${d.phase.name} (fase nueva)`
+      : d.kind === "REORDER_PHASES" ? "el reordenamiento"
+      : "la fecha de arranque";
+  const conImpacto = deltas.map((d) => ({ d, imp: impactoPorDelta.get(d.key) }));
+  const mueven = conImpacto.filter((x) => x.imp?.mueve && x.imp.chip);
+  const noMueven = conImpacto.length - mueven.length;
 
   return (
     /* El ancla del CTA azul del encabezado. Ese botón NO acepta: baja hasta acá, donde cada
@@ -118,6 +140,30 @@ export default function ProposalGlobalStrip({
         </div>
       )}
 
+      {/* EL ÍNDICE DE LO CONSECUENTE. Va antes de los globales para que sea lo primero que se
+          lee después del titular. */}
+      {mueven.length > 0 && (
+        <div className="space-y-0.5 border-t border-line/60 pt-1.5">
+          <p className="text-[11px] text-fg-secondary">
+            <span className="font-semibold text-warn-ink">
+              {mueven.length === 1 ? "1 cambio mueve el cierre" : `${mueven.length} cambios mueven el cierre`}
+            </span>
+            {mueven.map(({ d, imp }) => (
+              <span key={d.key}>
+                {" · "}
+                {nombreDeDelta(d)} <span className="text-fg-muted">({imp!.chip})</span>
+              </span>
+            ))}
+          </p>
+          {noMueven > 0 && (
+            <p className="text-[11px] text-fg-muted">
+              {noMueven === 1 ? "El otro cambio es" : `Los otros ${noMueven} cambios son`} de contenido
+              (nombres, notas, sesiones, tipo) y no tocan ninguna fecha.
+            </p>
+          )}
+        </div>
+      )}
+
       {globales.map((d) => (
         <div key={d.key} className="flex flex-wrap items-center gap-2 text-[11px] text-fg-secondary">
           <span className="min-w-0">
@@ -127,8 +173,22 @@ export default function ProposalGlobalStrip({
                 <span className="font-semibold">{d.to}</span>
               </>
             ) : (
+              /* QUÉ SE MUEVE, no la lista entera. `names.join(" → ")` con 10 fases era una
+                 cadena ilegible que mostraba el DESTINO: para saber qué se movió había que
+                 diffearla a ojo contra el Gantt de abajo. Ahora solo las que cambian de puesto,
+                 el salto más grande primero. */
               <>
-                Reordenar las fases: <span className="font-semibold">{d.names.join(" → ")}</span>
+                Reordenar las fases:{" "}
+                {d.movimientos.length === 0 ? (
+                  <span className="font-semibold">{d.names.join(" → ")}</span>
+                ) : (
+                  movimientosPorSalto(d.movimientos).map((m, i) => (
+                    <span key={m.id}>
+                      {i > 0 ? " · " : ""}
+                      <span className="font-semibold">{describeMovimiento(m)}</span>
+                    </span>
+                  ))
+                )}
               </>
             )}
           </span>
