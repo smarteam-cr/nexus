@@ -1658,3 +1658,63 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   el producto en su identidad. Sumar uno obliga a tocar la allowlist y a leer por qué.
 - **`extraTags` del subtipo se queda en el tipo aunque hoy no lo use nadie**: es el mecanismo para
   el subtipo que SÍ afirme un producto, y el test lo cubre igual.
+
+## "Qué se implementa" pasa a ser una columna por Hub (2026-08-12)
+
+> Elías, sobre la propuesta de implementación de HubSpot: *"quiero mejorar la sección de qué
+> se implementa. Que sea una sección interactiva… si uno da un clic en los botones de arriba
+> se agregan secciones explicativas"*. Eran cuatro campos de texto libre que el agente llenaba
+> con prosa: la sección que le dice al prospecto qué compra se leía como un párrafo.
+
+- **El renderer cambia SIN declarar un `sectionType` nuevo**, y la rama legacy es un
+  REQUISITO, no una cortesía. Una primera versión del plan afirmaba que lo ya publicado
+  seguiría con el componente viejo porque el snapshot congela el `sectionType`. **Es falso:**
+  `configForSnapshot` hace `const known = byKey.get(s.key); if (known) return known` — la
+  config VIVA gana por KEY, y el `sectionType` congelado es solo el fallback de una key
+  BORRADA del template. Como `solucion` sigue viva, toda propuesta publicada estrena el
+  componente nuevo. De ahí las dos consecuencias: la entrada del registry se reapunta (cero
+  churn en el snapshot de keys de `registry.test.ts`) y `HubsClienteSection` lleva adentro los
+  4 campos de la v1 como rama legacy — es lo único que sostiene lo que ya está en la calle.
+- **La curaduría del CSE (`activos`) va FUERA del schema y en el PRIMER nivel.** Fuera del
+  schema porque `coerceToSchema` descarta lo no declarado: así **el agente no puede decidir qué
+  le vendieron al cliente**, ni por error — la invariante la sostiene el tipo, no un pedido en
+  el brief (mismo criterio que la casilla `hecha` de Exploración). En el primer nivel porque
+  `preserveNonSchemaKeys` es SHALLOW y ahí es donde sobrevive a regenerar (patrón
+  `hero.coverImageUrl`). `activos` ausente = todas encendidas; un array vacío SÍ es una
+  decisión.
+- **El array nuevo se llama `columnas`, NO `hubs`.** Reusar la key vieja cambiaría el TIPO del
+  mismo campo: `coerceToSchema` con `{type:"array"}` sobre un string devuelve `[]`, y en el
+  canvas vivo de un caso viejo el componente leería un string donde espera un array. Las 4 keys
+  de la v1 quedan declaradas como legacy solo-lectura (patrón `WebScopeData.bloques`) y entran
+  a `LEGACY_CARRY_EXCLUDE`: sin eso, regenerar un caso viejo las arrastra como keys no-schema y
+  la rama legacy se prende sobre una generación NUEVA.
+- **En el PDF no se pintan píldoras y todo sale expandido.** Una píldora que esconde contenido
+  en un PDF es contenido PERDIDO y nadie se entera. Mismo criterio que `DiagramSection` con su
+  variante estática. Por lo mismo, **sin scrollers**: grid con wrap y `break-inside: avoid` —
+  un carrusel horizontal imprimiría solo el primer viewport y saldría cortado en silencio.
+- **En edición se pintan TODAS las columnas, las apagadas atenuadas.** No es solo UX (el CSE
+  tiene que ver lo que apagó para devolverlo): con un SUBCONJUNTO en pantalla, reordenar habría
+  escrito ese subconjunto como la lista completa y las apagadas desaparecían.
+- **`columnasActivas` recibe las columnas ya saneadas en vez de volver a sanearlas.**
+  `hubColumnas` construye objetos nuevos: dos llamadas dan columnas idénticas en forma pero
+  distintas en identidad, y con eso el `indexOf` del componente daba -1 — editar una columna
+  habría editado otra.
+- **Los nombres de Hub se resuelven por `normalizeTag`, no por un mapeo propio.** El agente
+  escribe el slug, el rótulo o el nombre viejo del producto, y hay casos guardados con
+  `operations_hub` / `commerce_hub`. Todo pasa por la doctrina de alias que el catálogo ya
+  declara — y por eso apagar un Hub sigue apagado aunque el agente lo re-escriba con otro de
+  sus nombres. Una columna cuyo `hub` no es del catálogo (Breeze, un agente a la medida) se
+  pinta con el color NEUTRO y conserva el título del agente: no se le impone un rótulo.
+- **Los seis colores viven en el CSS y el mapa slug→variable en TypeScript.** Al revés
+  (los hex en TS) `lib/ui/landing-brand-contrast.test.ts` —que lee del archivo— no podría
+  vigilarlos, y los seis se pintan como FONDO con texto blanco encima. Todos dan ≥5:1. **No se
+  usan los hex de marca de HubSpot**: `#FF7A59` con blanco da 2.3:1. Un Hub nuevo sin color
+  rompe `lib/landing/hubs-solucion.test.ts`, y sin par de contraste rompe el guard de marca.
+- **Los canales van como píldoras de TEXTO, no como logos.** Dibujar de memoria los SVG de
+  LinkedIn/Meta/Google en un documento que ve el cliente es un riesgo sin contrapartida: el
+  dato que importa es cuál es el canal. Y van como CSV en un campo string porque
+  `coerceToSchema` aplana toda hoja del schema: un `string[]` adentro de un ítem de array no
+  sobrevive.
+- **`empty` no declara `activos`**: un default de presentación volvería la sección
+  permanentemente no-vacía y haría mentir al botón "Limpiar" — la trampa que ya mordió con
+  `anchoRecurrente`, `logoScale` y `__lang`.
