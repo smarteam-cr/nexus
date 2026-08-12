@@ -14,24 +14,27 @@ que vas a ver después del deploy, así que lo que funcione acá funciona allá.
 
 ## 1 · El cronograma — lo más tocado del rango
 
-### 1.1 Regenerar todo el cronograma (Wherex)
+> ⚠ El estado real de Wherex cambia con cada regeneración de hoy, así que el ejemplo exacto de
+> abajo puede no reproducirse igual — lo que importa es el COMPORTAMIENTO, no el título literal.
+
+### 1.1 El aviso de tarea repetida (Sales Hub / Desarrollo)
 1. Abrí Wherex → pestaña **Cronograma**.
 2. **"Regenerar todo el cronograma"** → esperá la propuesta.
-3. En el acordeón, buscá **«Construir dashboards de ventas»** en *Sales Hub*.
-   - ✅ Tiene que salir un chip **ámbar** diciendo que ya está **hecha** en *Desarrollo / Integración*.
-   - ❌ Si no sale, avisame: es el aviso de tarea repetida y es el que evita contar el mismo
-     trabajo dos veces.
+3. Recorré el acordeón buscando **cualquier tarea con chip ámbar** ("ya está hecha en «X»").
+   - ✅ Si el agente propone una tarea cuyo TÍTULO EXACTO ya está hecha en otra fase, tiene que
+     avisar. Si ese día no hay ninguna coincidencia exacta, no sale ningún chip — es correcto,
+     no un fallo (la regla es conservadora a propósito: solo título idéntico, no "se parece").
 4. Mirá las tareas que ya estaban **hechas** en cualquier fase.
    - ✅ Tienen que aparecer **pre-sembradas a la derecha** (preservadas), no como algo a descartar.
 
 ### 1.2 Las fases repetidas se anuncian
 En el mismo Gantt de Wherex, mirá los nombres de las fases.
-- ✅ **«Integraciones»** y **«Desarrollo / Integración»** tienen que llevar cada una un chip
-  **«¿repetida?»**; el tooltip nombra a la otra.
-- Lo mismo con *Service Hub* / *Capacitación y cierre Service*, y *Marketing Hub* /
-  *Configuración Marketing Hub*.
-- ✅ **Ninguna otra fase** debe llevarlo. *Sales Hub* y *Service Hub* comparten "Hub" y NO son
-  repetidas — si a esas dos les sale el chip, el aviso está de más y hay que decírmelo.
+- ✅ *Service Hub* / *Capacitación y cierre Service* y *Marketing Hub* / *Configuración
+  Marketing Hub* tienen que llevar cada una un chip **«¿repetida?»**; el tooltip nombra a la otra.
+- ✅ **Ninguna otra fase** debe llevarlo — ni *Sales Hub* (comparte "Hub" con *Service Hub*, no
+  cuenta), ni *Migración Salesforce* con *Sales Hub*, ni *Cierre y entrega* con nada (son dos
+  falsos positivos que se encontraron y arreglaron probando contra los datos reales de hoy).
+  Si ves el chip en una fase que no es una de esas dos parejas, avisame.
 
 ### 1.3 Un renombre no duplica *(la regresión que se revirtió hoy)*
 1. En un proyecto con cronograma, regenerá el handoff.
