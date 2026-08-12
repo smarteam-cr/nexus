@@ -27,6 +27,20 @@ describe("phaseNamesLikelySameWork", () => {
   it("nombre sin tokens útiles (todo corto) no matchea nada", () => {
     expect(phaseNamesLikelySameWork("QA", "Sales Hub")).toBe(false);
   });
+
+  // Los 2 falsos positivos encontrados contra Wherex real (2026-08-11), corriendo el detector
+  // sobre las 10 fases del proyecto y no solo los 3 pares conocidos.
+  it("NO matchea por un prefijo corto que resulta ser raíz de una palabra no relacionada ('sales'/'salesforce')", () => {
+    expect(phaseNamesLikelySameWork("Migración Salesforce", "Sales Hub")).toBe(false);
+  });
+
+  it("NO matchea por una palabra de gestión de proyecto genérica ('cierre')", () => {
+    expect(phaseNamesLikelySameWork("Cierre y entrega", "Capacitación y cierre Service")).toBe(false);
+  });
+
+  it("el prefijo sigue cubriendo singular/plural real (diferencia chica de longitud)", () => {
+    expect(phaseNamesLikelySameWork("Integraciones", "Integración")).toBe(true);
+  });
 });
 
 describe("fasesProbablementeRepetidas — el aviso sobre las fases QUE YA EXISTEN", () => {

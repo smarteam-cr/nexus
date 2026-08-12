@@ -33,9 +33,35 @@
  * marquen como la misma fase — y, como efecto colateral aceptado, también evita que acrónimos
  * cortos ("SAP", "CRM") disparen un match por sí solos. No se puede tener las dos cosas con un
  * solo umbral de longitud; el caso que hay que evitar decide cuál sacrificar.
+ *
+ * ── DOS FALSOS POSITIVOS ENCONTRADOS CONTRA WHEREX REAL (2026-08-11) ──────────
+ * Corriendo el detector sobre las 10 fases reales del proyecto (no solo los 3 pares conocidos)
+ * salieron dos pares que NO son el mismo trabajo:
+ *
+ * 1. "Migración Salesforce" / "Sales Hub" — el prefijo sin tope hacía matchear "sales" (5
+ *    chars, el piso exacto) contra "salesforce" (10 chars): son la misma raíz por accidente,
+ *    no la misma fase. `tokensMatch` ahora exige que la diferencia de longitud sea ≤3 —
+ *    cubre singular/plural ("integracion"/"integraciones", diff 2) y bloquea un token corto
+ *    que resulta ser prefijo de una palabra bastante más larga y no relacionada.
+ * 2. "Cierre y entrega" / "Capacitación y cierre Service" — "cierre" (6 chars) es una palabra
+ *    de gestión de proyecto genérica: aparece en el cierre del PROYECTO entero y en el cierre
+ *    de UN hub puntual, sin ser el mismo trabajo. Los 3 pares reales nunca dependen de
+ *    "cierre" para su señal (matchean por "integracion"/"service"/"marketing", cada uno más
+ *    específico), así que sacarla del vocabulario no pierde ninguna detección real — ver
+ *    PALABRAS_GENERICAS.
  */
 
 const MIN_TOKEN_LEN = 5;
+
+/** Diferencia de longitud máxima para que un prefijo cuente como "la misma palabra". Cubre
+ *  singular/plural y variantes cortas de redacción; un token bastante más corto que el otro
+ *  es más probable que sea una coincidencia de raíz que la misma palabra (ver "sales" arriba). */
+const MAX_PREFIX_GAP = 3;
+
+/** Palabras de gestión de proyecto genéricas: por sí solas NO establecen identidad entre dos
+ *  fases — recurren en fases completamente distintas del mismo cronograma. Lista corta a
+ *  propósito, y crece solo si aparece otro caso medido contra datos reales (no por intuición). */
+const PALABRAS_GENERICAS = new Set(["cierre"]);
 
 const COMBINING_DIACRITICS = /[̀-ͯ]/g;
 
@@ -46,13 +72,16 @@ function tokens(name: string): string[] {
     .replace(COMBINING_DIACRITICS, "")
     .replace(/[^a-z0-9ñ\s]/gi, " ")
     .split(/\s+/)
-    .filter((w) => w.length >= MIN_TOKEN_LEN);
+    .filter((w) => w.length >= MIN_TOKEN_LEN && !PALABRAS_GENERICAS.has(w));
 }
 
 /** ¿Dos tokens son "la misma palabra" con redacción distinta? Igual, o uno prefijo largo del
- *  otro (cubre singular/plural: "integracion"/"integraciones"). */
+ *  otro con una diferencia de longitud chica (cubre singular/plural: "integracion"/
+ *  "integraciones", diff 2 — y bloquea "sales"/"salesforce", diff 5). */
 function tokensMatch(a: string, b: string): boolean {
-  return a === b || a.startsWith(b) || b.startsWith(a);
+  if (a === b) return true;
+  const [corto, largo] = a.length <= b.length ? [a, b] : [b, a];
+  return largo.startsWith(corto) && largo.length - corto.length <= MAX_PREFIX_GAP;
 }
 
 function overlapScore(a: string[], b: string[]): number {
