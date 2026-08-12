@@ -29,6 +29,14 @@ import {
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { fetchCompanyTimeline } from "@/lib/hubspot/company-timeline";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
+import { loadKnowledgeByTags } from "@/lib/knowledge/load-by-tags";
+import { HUBSPOT_HUB_SLUGS, sanitizeTags, tagLabels, type HubspotHubSlug } from "@/lib/tags/catalog";
+
+/** Tope del bloque de conocimiento por Hub. Los 6 documentos sembrados suman ~11k, así que
+ *  entran todos incluso vendiendo la suite completa; el margen deja lugar a que el equipo
+ *  los amplíe sin que el bloque se coma el presupuesto del transcript, que es el contexto
+ *  que de verdad no se puede reemplazar. */
+const HUBS_KNOWLEDGE_CAP = 12_000;
 
 // Timeout envolvente del LLM: el SDK de Anthropic tiene su propio timeout (10min)
 // + 2 reintentos — sin envoltura, un cuelgue de la API puede dejar esta request
@@ -64,7 +72,12 @@ export async function POST(
       hubspotCompanyId: true,
       caseType: true,
       caseSubtype: true,
-      client: { select: { notes: true } },
+      // Los tags del caso dicen QUÉ HUBS se vendieron: con ellos se trae el conocimiento
+      // por Hub y se le dice al agente cuáles cubrir. Hasta ahora no llegaban al prompt.
+      tags: true,
+      // `industry` es lo que convierte el material genérico de cada Hub en una propuesta
+      // que habla del negocio del cliente y no de HubSpot en abstracto.
+      client: { select: { notes: true, industry: true } },
     },
   });
   if (!bc) {
@@ -73,9 +86,15 @@ export async function POST(
 
   // ── Contexto: transcripts manuales + transcripts de las sesiones que ALIMENTAN
   //    el caso (regla de Ventas + overrides; mismo criterio que el panel) ─────────
+  // Hubs vendidos, según los tags del caso. `sanitizeTags` resuelve los nombres viejos
+  // de HubSpot (operations_hub → data_hub) antes de filtrar — ver lib/tags/catalog.ts.
+  const hubSlugs = sanitizeTags(bc.tags).filter((s): s is HubspotHubSlug =>
+    (HUBSPOT_HUB_SLUGS as readonly string[]).includes(s),
+  );
+
   const feeding = await loadBcFeeding(id);
   const feedingIds = feeding?.feedingIds ?? [];
-  const [transcripts, sessions] = await Promise.all([
+  const [transcripts, sessions, conocimientoHubs] = await Promise.all([
     prisma.businessCaseTranscript.findMany({
       where: { businessCaseId: id },
       select: { rawText: true, fileName: true },
@@ -86,6 +105,9 @@ export async function POST(
           select: { title: true, date: true, transcript: true },
         })
       : Promise.resolve([] as { title: string; date: Date; transcript: string | null }[]),
+    // Va en el MISMO Promise.all: es una query independiente y en serie sumaba latencia
+    // a un endpoint que ya espera minutos por el modelo. Solo lee documentos PUBLICADOS.
+    loadKnowledgeByTags(hubSlugs, HUBS_KNOWLEDGE_CAP),
   ]);
 
   const parts: string[] = [];
@@ -155,6 +177,35 @@ export async function POST(
           : ""
       }`,
     );
+  }
+  if (bc.client.industry?.trim()) {
+    preamble.push(`# Industria del cliente\n${bc.client.industry.trim()}`);
+  }
+  if (hubSlugs.length) {
+    preamble.push(
+      `# Hubs de HubSpot que se vendieron\n${tagLabels(hubSlugs).join(" · ")}\n` +
+        `Son los que el vendedor marcó en la propuesta. La sección "Qué se implementa" cubre ESTOS y ` +
+        `no otros: no agregues un Hub que nadie vendió ni omitas uno que sí.`,
+    );
+    // El conocimiento por Hub es material GENÉRICO de Smarteam: el valor está en que el
+    // agente lo aterrice, no en que lo copie. Y si no hay nada publicado se DICE, en vez
+    // de dejar que el modelo llene el hueco con lo que le suene (mismo criterio que el
+    // gate de Breeze en lib/canvas/implementacion-generate.ts).
+    if (conocimientoHubs.count > 0) {
+      preamble.push(
+        `# Qué hace cada Hub (base de conocimiento de Smarteam)\n` +
+          `Material de referencia INTERNO y genérico. NO lo copies: traducí cada capacidad al ` +
+          `negocio de esta industria y a lo que el cliente dijo en las fuentes. Si una capacidad ` +
+          `no se puede respaldar con el contexto, no la escribas — una propuesta con promesas que ` +
+          `nadie pidió se cae en la primera reunión.\n\n${conocimientoHubs.text}`,
+      );
+    } else {
+      preamble.push(
+        `# Sin base de conocimiento de Hubs\nNo hay documentos publicados sobre estos Hubs. ` +
+          `Derivá lo que se implementa SOLO de las fuentes del prospecto; no enumeres capacidades ` +
+          `de HubSpot de memoria.`,
+      );
+    }
   }
   if (selectedUseCases.length) {
     preamble.push(
