@@ -131,9 +131,12 @@ describe("está cableado, y con los frenos puestos", () => {
   });
 
   it("el grupo interno está gateado por proyecto INTERNO", () => {
-    /* Un proyecto normal ES publicable: ofrecerle una reunión de Smarteam con Smarteam para meter
-       en un documento que el cliente lee sería una fuga. Y sin el gate, TODO proyecto de TODO
-       cliente empezaría a ofrecer ~4.900 reuniones. */
+    /* Sin el gate, TODO proyecto de TODO cliente empezaría a ofrecer ~4.900 reuniones de
+       Smarteam con Smarteam para meter en documentos que el cliente lee — una fuga a escala.
+       ⚠ La otra mitad de este argumento murió el 2026-08-12: era "y un interno no se publica,
+       así que ese material no sale de casa". Ahora un interno SÍ se publica (enlace con
+       contraseña, para stakeholders), así que este gate quedó como lo ÚNICO que separa las
+       reuniones de puertas adentro del resto del sistema. */
     const src = leer("app/api/projects/[projectId]/session-candidates/route.ts");
     expect(src, "el gate de proyecto interno desapareció").toContain("guard.interno");
     expect(src, "el piso de 2026 dejó de aplicarse").toContain("PISO_REUNIONES_INTERNAS");

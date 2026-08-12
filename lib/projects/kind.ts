@@ -394,8 +394,8 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
  * leer, que es esto de acá.
  */
 export const OVERLAY_INTERNO = {
-  /** Un proyecto interno de Smarteam no se cobra, no es cartera de nadie y no se publica. */
-  apaga: { cobranza: false, carteraCs: false, publicable: false, vigilante: false },
+  /** Un proyecto interno de Smarteam no se cobra, no es cartera de nadie y no lo vigila nadie. */
+  apaga: { cobranza: false, carteraCs: false, vigilante: false },
   /**
    * Lo que SIGUE IGUAL, escrito porque es tan decisión como lo de arriba:
    *  · `pestana`         — el equipo tiene que poder entrar a su propio proyecto.
@@ -403,8 +403,19 @@ export const OVERLAY_INTERNO = {
    *                        "Validación de uso" va a quedar trabada (el puntaje viene de
    *                        HubSpot por cliente) y se marca a mano, que es un camino que
    *                        ya existe.
+   *  · `publicable`      — ⚠ ESTABA APAGADA hasta el 2026-08-12, sobre la premisa de que "no
+   *                        hay un cliente del otro lado a quien publicarle". La premisa era
+   *                        falsa: un interno igual tiene STAKEHOLDERS (dirección, el equipo del
+   *                        otro frente, un sponsor) a quienes mostrarles el cronograma, y la
+   *                        única salida era exportar el PDF a mano. El enlace externo lleva el
+   *                        MISMO token + contraseña que el de un cliente, así que destrabarlo
+   *                        no abre ninguna puerta nueva: reusa la que ya existe.
+   *                        ⚠ Consecuencia asumida a sabiendas: un interno es el único que puede
+   *                        reclamar reuniones de Smarteam con Smarteam (ver
+   *                        `session-candidates/route.ts`), así que ese material AHORA puede
+   *                        viajar en un documento publicado. Es la intención, no un descuido.
    */
-  respeta: ["pestana", "cicloOchoEtapas"],
+  respeta: ["pestana", "cicloOchoEtapas", "publicable"],
 } as const satisfies {
   apaga: Partial<ProjectCapabilities>;
   respeta: readonly (keyof ProjectCapabilities)[];
@@ -625,16 +636,23 @@ export function fuenteDelCiclo(facts: ProjectFacts): FuenteDelCiclo {
  * `publish-*`, el resolver de acceso externo y el panel del CSE tienen que decir lo MISMO,
  * y tres copias de una frase divergen a la primera edición.
  *
- * Hoy la única celda que lo apaga es el overlay de interno. Está escrito como una pregunta
- * a `projectCapabilities` y no como `if (interno)` para que el día que otra fila ponga
+ * Hoy la única celda que lo apaga es la CUARENTENA DEL ALTA. Está escrito como una pregunta
+ * a `projectCapabilities` y no como `if (altaEnCurso)` para que el día que otra fila ponga
  * `publicable: false`, el motivo salga solo.
+ *
+ * ⚠ Acá vivía la rama `if (facts.interno)` con el texto «no hay un cliente del otro lado a quien
+ * publicarle». Se retiró el 2026-08-12 junto con la celda que la producía (ver OVERLAY_INTERNO):
+ * un interno YA es publicable. Dejarla habría sido peor que borrarla — solo se alcanzaba con
+ * `interno && altaEnCurso`, o sea que habría culpado al hecho de ser interno cuando la causa real
+ * es el alta a medio terminar, y el CSE se iba a HubSpot a destildar una casilla que no arreglaba
+ * nada.
  */
 export function motivoNoPublicable(facts: ProjectFacts): string | null {
   if (projectCapabilities(facts).publicable) return null;
-  if (facts.interno) {
+  if (facts.altaEnCurso) {
     return (
-      "Es un proyecto interno de Smarteam: no hay un cliente del otro lado a quien " +
-      "publicarle. Si esto es un error, destildá «Proyecto interno» en HubSpot."
+      "El alta de este proyecto todavía no terminó: falta que HubSpot confirme sus datos. " +
+      "Terminá de crearlo y volvé a publicar."
     );
   }
   return "Este proyecto no admite publicación externa.";

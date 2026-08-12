@@ -8,6 +8,13 @@
  * cliente. Una capacidad que nadie lee es peor que no tenerla: se lee como un control que
  * existe.
  *
+ * ⚠ 2026-08-12: el caso que originó estos candados —el proyecto interno— YA NO apaga
+ * `publicable`; se decidió que un interno se comparte con stakeholders por el mismo enlace con
+ * contraseña que un cliente (ver `OVERLAY_INTERNO`). Los tres candados siguen valiendo enteros:
+ * lo que hacen cumplir es el MECANISMO (que el gate se llame, que solo dos archivos canjeen un
+ * token, que toda capacidad tenga lector), no ese caso puntual. Hoy quien apaga `publicable` es
+ * la cuarentena del alta sin terminar.
+ *
  * Tres candados:
  *  1. Descubrimiento por DIRECTORIO de los endpoints de publicación. Un cuarto endpoint
  *     agregado mañana rompe el test hasta que lo gateen — que es lo contrario de una lista
@@ -84,7 +91,8 @@ describe("candado 1 — todo endpoint de PUBLICACIÓN pide el gate", () => {
       expect(
         src.includes("guardPublicacionDeProyecto("),
         `${path.relative(RAIZ, ruta)} publica al cliente sin preguntar si el proyecto lo ` +
-          `admite. Un proyecto interno de Smarteam no tiene cliente del otro lado.`,
+          `admite. Hoy el caso que bloquea es el ALTA a medio terminar: publicar algo que ` +
+          `todavía no terminó de nacer.`,
       ).toBe(true);
     }
     expect(conPost, "no encontré ningún endpoint de publicación con POST").toBe(3);

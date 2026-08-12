@@ -155,11 +155,17 @@ export async function GET(
   });
 
   /* ── El SEGUNDO grupo: las reuniones del equipo que nadie reclamó ────────────
-     Solo para proyectos INTERNOS, y es el gate correcto por una razón de fondo: un proyecto
-     normal ES publicable, así que meterle una reunión de Smarteam con Smarteam a un documento
-     que el cliente va a leer sería una fuga. Un interno tiene la publicación apagada por
-     `OVERLAY_INTERNO`, así que ese handoff no sale de casa ni por error.
-     Sin el gate, además, TODO proyecto de TODO cliente empezaría a ofrecer ~4.900 reuniones. */
+     Solo para proyectos INTERNOS. Sin el gate, TODO proyecto de TODO cliente empezaría a ofrecer
+     ~4.900 reuniones de Smarteam con Smarteam para meter en documentos que el cliente lee — una
+     fuga a escala, y encima una lista inutilizable.
+
+     ⚠ La segunda razón que justificaba este gate MURIÓ el 2026-08-12: era "un interno tiene la
+     publicación apagada por OVERLAY_INTERNO, así que ese handoff no sale de casa ni por error".
+     Ya no: un interno SÍ es publicable (el enlace externo con token + contraseña, para mostrarle
+     el cronograma a stakeholders). O sea que este material ahora PUEDE viajar en un documento
+     publicado. Se decidió a sabiendas: el destinatario de un interno publicado es de casa, y el
+     enlace no es público. Si algún día eso deja de ser cierto, el lugar para atajarlo es acá —
+     este gate es lo único que separa las reuniones de puertas adentro del resto del sistema. */
   const huerfanas = guard.interno
     ? await prisma.firefliesSession.findMany({
         where: {
