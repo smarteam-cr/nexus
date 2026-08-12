@@ -90,6 +90,22 @@
   --dark-text-muted:     #7D90BE;
   --dark-border-strong:  rgba(255, 255, 255, 0.16);
 
+  /* Un color por Hub de HubSpot (sección "Qué se implementa"). Los hex viven ACÁ y no
+     en TypeScript para que lib/ui/landing-brand-contrast.test.ts los lea del archivo y
+     vigile el contraste real: los seis se pintan como fondo de píldora y de cabecera de
+     columna CON TEXTO BLANCO, así que todos tienen que dar ≥4.5:1. El mapa slug→variable
+     vive en lib/landing/hubs-solucion.ts, y un Hub nuevo sin color rompe su test.
+     NO se usan los hex de marca de HubSpot (#FF7A59 con blanco da 2.3:1) — el naranja
+     legal de la marca Smarteam para texto blanco es la familia #C2400F. */
+  --hub-marketing: #C2400F;
+  --hub-sales:     #0B58D3;
+  --hub-service:   #9D174D;
+  --hub-content:   #6D28D9;
+  --hub-data:      #051849;
+  --hub-revenue:   #15803D;
+  /* Una columna que NO es un Hub del catálogo (Breeze, un agente a la medida). */
+  --hub-neutro:    #3F3F46;
+
   font-size: 16px;
   background: var(--bg);
   color: var(--text);
@@ -1485,6 +1501,8 @@
 .stl-pdf-paged .stl-item,
 .stl-pdf-paged .stl-rung,
 .stl-pdf-paged .stl-q-row,
+.stl-pdf-paged .stl-hub-col,
+.stl-pdf-paged .stl-hub-card,
 .stl-pdf-paged table { break-inside: avoid; page-break-inside: avoid; }
 /* Un título nunca queda solo al pie de una página. */
 .stl-pdf-paged .stl-sec-head,
@@ -1496,3 +1514,94 @@
 .stl-pdf-paged p,
 .stl-pdf-paged .stl-prose,
 .stl-pdf-paged .stl-intro { orphans: 3; widows: 3; }
+
+/* ── "Qué se implementa": píldoras de Hub + columnas ──────────────────────────
+   Cada píldora y cada columna reciben su color por la variable INLINE `--hub`
+   (`var(--hub-sales)`…), que el componente resuelve desde el catálogo de tags. Sin
+   ella caen al neutro, así una columna que no es un Hub igual se pinta.
+
+   SIN SCROLLERS a propósito: un carrusel horizontal de columnas imprimiría solo el
+   primer viewport y el PDF saldría cortado en silencio. Grid con wrap. */
+.stl-hubs-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+.stl-hub-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.18s var(--ease), color 0.18s var(--ease), border-color 0.18s var(--ease);
+}
+.stl-hub-pill:hover { border-color: var(--hub, var(--hub-neutro)); color: var(--text); }
+.stl-hub-pill.is-on {
+  background: var(--hub, var(--hub-neutro));
+  border-color: var(--hub, var(--hub-neutro));
+  color: #fff;
+}
+.stl-hub-pill-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--hub, var(--hub-neutro));
+  flex: none;
+}
+.stl-hub-pill.is-on .stl-hub-pill-dot { background: rgba(255, 255, 255, 0.9); }
+
+.stl-hub-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.stl-hub-col {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--bg);
+}
+/* Una columna que el CSE APAGÓ. Solo existe en el editor: al cliente no le llega. */
+.stl-hub-col.is-off { opacity: 0.45; }
+.stl-hub-col-head {
+  position: relative;
+  background: var(--hub, var(--hub-neutro));
+  color: #fff;
+  padding: 14px 16px;
+}
+.stl-hub-col-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin-bottom: 3px;
+}
+.stl-hub-col-title { font-size: 16px; font-weight: 700; line-height: 1.35; }
+.stl-hub-card {
+  position: relative;
+  padding: 14px 16px;
+  border-top: 1px solid var(--border);
+}
+.stl-hub-card:first-of-type { border-top: 0; }
+.stl-hub-card-title { font-size: 14.5px; font-weight: 700; color: var(--text); line-height: 1.35; }
+.stl-hub-card-detail { font-size: 13.5px; color: var(--text-2); line-height: 1.55; margin-top: 3px; }
+.stl-hub-canales { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.stl-hub-canal {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-soft);
+  color: var(--text-muted);
+}

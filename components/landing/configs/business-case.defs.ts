@@ -110,11 +110,34 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
     label: "Qué se implementa",
     eyebrow: "Solución propuesta",
     theme: "light",
-    empty: { hubs: "", integraciones: "", casosDeUso: "", usuarios: "" },
-    agentHint: "Hubs + integraciones + casos de uso + usuarios afectados.",
+    // `empty` NO declara `activos`: un default de presentación acá volvería la sección
+    // permanentemente no-vacía y haría mentir al botón "Limpiar" (la trampa que ya
+    // mordió con `anchoRecurrente`, `logoScale` y `__lang` — ver lib/landing/is-blank.ts).
+    empty: { intro: "", columnas: [] },
+    agentHint: "Una columna por Hub vendido, con lo que se implementa adentro de cada uno.",
     brief:
-      "Qué se implementa (no una lista de features — cómo conecta el proceso del cliente). `hubs`: Sales / Marketing / Service / Data Hub según el transcript. `integraciones`: ERP / WhatsApp / sistema existente mencionado. `casosDeUso`: pipeline comercial, seguimiento, automatización, reportería. `usuarios`: roles afectados (vendedores, gerencia, CS). Fuente: si se mencionó un sistema específico (SAP, Oracle, INCONCERT, Dynamics) → va en integraciones clave.",
-    schema: { type: "object", properties: { hubs: str, integraciones: str, casosDeUso: str, usuarios: str }, required: ["hubs"] },
+      "Qué se implementa, UNA COLUMNA POR HUB de los que dice el preámbulo que se vendieron — ni uno más ni uno menos. " +
+      "`hub`: el slug exacto (`marketing_hub`, `sales_hub`, `service_hub`, `content_hub`, `data_hub`, `revenue_hub`); si algo vendido no es un Hub (Breeze, un agente a la medida), escribí su nombre tal cual y va con color neutro. " +
+      "`titulo` de la columna: qué resuelve ESE Hub en este negocio, en 4-6 palabras y en el lenguaje del cliente — no el nombre del producto otra vez. " +
+      "`items`: 3 a 5 tarjetas de lo que se implementa ahí. `titulo` corto (qué se pone a funcionar) y `detalle` de una línea (qué cambia para el cliente cuando funciona). " +
+      "`canales`: solo si la tarjeta aterriza en canales concretos, separados por coma (\"LinkedIn, Meta, correo\"); si no aplica, vacío — un pipeline de ventas no tiene canal. " +
+      "`intro`: una frase que conecte las columnas con lo que el cliente dijo que le duele. " +
+      "Fuente / regla: el material de la base de conocimiento es GENÉRICO — traducilo a la industria y a lo que se dijo en las fuentes. Una capacidad que el contexto no respalda NO se escribe: una propuesta con promesas que nadie pidió se cae en la primera reunión.",
+    schema: {
+      type: "object",
+      properties: {
+        intro: str,
+        columnas: arrayOf(
+          {
+            hub: str,
+            titulo: str,
+            items: arrayOf({ titulo: str, detalle: str, canales: str }, ["titulo"]),
+          },
+          ["hub", "titulo", "items"],
+        ),
+      },
+      required: ["columnas"],
+    },
   },
   {
     key: "roi",

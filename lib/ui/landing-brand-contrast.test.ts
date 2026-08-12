@@ -101,6 +101,13 @@ describe("matriz de contraste de la marca (AA, contra el fondo REAL)", () => {
     ["positivo (#07429A) sobre crema", "#07429A", P.cream, 4.5],
     ["tinta sobre crema", P.text, P.cream, 4.5],
   ];
+  // Los 6 colores de Hub se pintan como FONDO de píldora encendida y de cabecera de
+  // columna, con texto blanco de 14-16px: texto normal, mínimo 4.5. Se leen del CSS
+  // (no de TypeScript) justamente para que este guard los vea. Un Hub nuevo entra acá
+  // o su color no está vigilado. Ver lib/landing/hubs-solucion.ts.
+  for (const hub of ["marketing", "sales", "service", "content", "data", "revenue", "neutro"]) {
+    casos.push([`blanco sobre el color del Hub ${hub}`, "#FFFFFF", token(ENGINE, `--hub-${hub}`), 4.5]);
+  }
   for (const [desc, fg, bg, min] of casos) {
     it(`${desc} ≥ ${min}:1`, () => {
       const r = ratio(fg, bg);

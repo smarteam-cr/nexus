@@ -310,7 +310,13 @@ export async function POST(
     // viene vacío en esta corrida (el LLM no lo llenó; el schema no valida "required"),
     // el fallback legacy de los componentes "resucitaría" contenido viejo en vez de
     // mostrar la sección tal como el agente la generó esta vez.
-    const LEGACY_CARRY_EXCLUDE = new Set(["nodos", "flujos", "porQuePlataforma", "bloques"]);
+    // Las 4 últimas son los campos de la versión v1 de `solucion`. Sin excluirlas, una
+    // regeneración las arrastra como keys no-schema y `esSolucionLegacy` prendería la
+    // rama vieja sobre una generación NUEVA — texto de hace meses tapando las columnas.
+    const LEGACY_CARRY_EXCLUDE = new Set([
+      "nodos", "flujos", "porQuePlataforma", "bloques",
+      "hubs", "integraciones", "casosDeUso", "usuarios",
+    ]);
     for (const gs of generated) {
       const prev = prevDataByKey.get(gs.key);
       const def = defsByKey[gs.key];

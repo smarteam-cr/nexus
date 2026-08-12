@@ -41,8 +41,43 @@ export interface PainData { items: PainItem[] }
 // 3) Antes vs. después — dos listas (Hoy / Con HubSpot + Smarteam).
 export interface BeforeAfterData { before: string[]; after: string[] }
 
-// 4) Solución — 4 campos rotulados (texto por campo).
+// 4) Solución — 4 campos rotulados (texto por campo). LEGACY: la sección `solucion` se
+//    pinta hoy con `HubsClienteData`; esto sobrevive para lo ya generado. Ver abajo.
 export interface SolutionData { hubs: string; integraciones: string; casosDeUso: string; usuarios: string }
+
+// 4') Qué se implementa — una columna por Hub de HubSpot, explorable con píldoras.
+/** Una tarjeta de lo que se implementa dentro de un Hub. */
+export interface HubCard {
+  titulo: string;
+  detalle: string;
+  /** Dónde aterriza, separado por comas ("LinkedIn, Meta, correo"). Vacío = no aplica:
+   *  un pipeline de ventas no tiene canal y forzarle uno sería inventarlo. */
+  canales: string;
+}
+/** Una columna de la sección: un Hub y lo que se implementa adentro. */
+export interface HubColumna {
+  /** Slug del catálogo (`marketing_hub`…) o texto libre para algo que no es un Hub
+   *  (Breeze, un agente a la medida): esas se pintan con el color neutro. */
+  hub: string;
+  titulo: string;
+  items: HubCard[];
+}
+export interface HubsClienteData {
+  intro: string;
+  columnas: HubColumna[];
+  /** Curaduría del CSE: qué columnas quedan encendidas. Va FUERA del schema a propósito
+   *  —el agente no decide qué le vendieron al cliente, y `coerceToSchema` lo descarta si
+   *  lo intenta— y en el PRIMER nivel, que es hasta donde llega `preserveNonSchemaKeys`:
+   *  así sobrevive a regenerar. Ausente = todas encendidas. */
+  activos?: string[];
+  /** Los 4 campos de la versión v1 de `solucion`. SOLO LECTURA: los pinta la rama legacy
+   *  del componente para lo ya generado y nunca se vuelven a escribir. Mismo patrón que
+   *  `WebScopeData.bloques` / `TechArchitectureData.nodos`. */
+  hubs?: string;
+  integraciones?: string;
+  casosDeUso?: string;
+  usuarios?: string;
+}
 
 // 5) ROI — 4 métricas (valor + qué mejora).
 export interface Metric { value: string; label: string }

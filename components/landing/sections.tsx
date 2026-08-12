@@ -20,7 +20,6 @@ import type {
   HeroData,
   PainData,
   BeforeAfterData,
-  SolutionData,
   RoiData,
   PlanData,
   InvestmentData,
@@ -184,19 +183,9 @@ export const BeforeAfterSection: FC<SectionProps<BeforeAfterData>> = ({ data, ct
   );
 };
 
-// ── 4) Solución — qué se implementa (4 campos) ───────────────────────────────
-export const SolutionSection: FC<SectionProps<SolutionData>> = ({ data, ctx, editable, onChange }) => {
-  const lang = landingLang(ctx.lang);
-  const set = (next: Partial<SolutionData>) => onChange?.({ ...data, ...next });
-  return (
-    <div className="stl-grid stl-grid-2">
-      <TextCard label={t(lang, "hubsIncluidos")} value={data.hubs} editable={editable} placeholder="Sales / Marketing / Service / Data Hub…" onCommit={(v) => set({ hubs: v })} />
-      <TextCard label={t(lang, "integracionesClave")} value={data.integraciones} editable={editable} placeholder="ERP / WhatsApp / sistema mencionado…" onCommit={(v) => set({ integraciones: v })} />
-      <TextCard label={t(lang, "casosDeUsoPrincipales")} value={data.casosDeUso} editable={editable} placeholder="Pipeline / seguimiento / automatización / reportería…" onCommit={(v) => set({ casosDeUso: v })} />
-      <TextCard label={t(lang, "usuariosAfectados")} value={data.usuarios} editable={editable} placeholder="Roles: vendedores, gerencia, CS…" onCommit={(v) => set({ usuarios: v })} />
-    </div>
-  );
-};
+// ── 4) Solución — se mudó a sections-hubs.tsx (`HubsClienteSection`), que es la que
+//    registra la key `solucion` y lleva adentro esta versión de 4 campos como rama
+//    legacy para lo ya generado.
 
 // ── 5) ROI — números que respaldan la decisión ───────────────────────────────
 export const RoiSection: FC<SectionProps<RoiData>> = ({ data, editable, onChange }) => {

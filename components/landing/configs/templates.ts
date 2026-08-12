@@ -15,7 +15,6 @@ import {
   HeroSection,
   PainSection,
   BeforeAfterSection,
-  SolutionSection,
   RoiSection,
   PlanSection,
   InvestmentSection,
@@ -24,6 +23,7 @@ import {
 } from "../sections";
 import { TechArchitectureSection, ProcessMappingSection, UseCasesSection } from "../sections-shared";
 import { DiagramSection } from "../sections-diagram";
+import { HubsClienteSection } from "../sections-hubs";
 import {
   WebDiagnosisSection,
   SiteArchitectureSection,
@@ -40,7 +40,11 @@ export const SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
   hero: HeroSection,
   dolores: PainSection,
   antes_despues: BeforeAfterSection,
-  solucion: SolutionSection,
+  // La sección "Qué se implementa" cambia de renderer SIN declarar un `sectionType`
+  // nuevo: la key `solucion` sigue viva, así que `configForSnapshot` la resuelve contra
+  // esta config y lo YA PUBLICADO estrena el componente nuevo. Por eso HubsClienteSection
+  // lleva adentro la rama legacy de los 4 campos. Cero churn en registry.test.
+  solucion: HubsClienteSection,
   roi: RoiSection,
   cronograma: PlanSection,
   inversion: InvestmentSection,
