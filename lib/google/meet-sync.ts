@@ -274,7 +274,14 @@ export async function syncGoogleMeetSessions(
                 // Si el Doc apareció (o cambió) post-sync inicial, resetear
                 // `enrichedAt: null` para forzar que el enrich lo procese
                 // en la próxima pasada y descargue transcript + summary.
-                ...(shouldResetEnrichment ? { enrichedAt: null } : {}),
+                /* Reset COMPLETO (auditoría 2026-08-08): con solo `enrichedAt: null`, una
+                   fila sellada por tope (attempts=5) a la que después le aparece el doc
+                   quedaba en limbo permanente — invisible para las pasadas (attempts:0),
+                   para el job (lt 5), para el rescate y para el force. Mismo reset que ya
+                   hace la ruta de force. */
+                ...(shouldResetEnrichment
+                  ? { enrichedAt: null, enrichAttempts: 0, enrichError: null }
+                  : {}),
               },
             });
 

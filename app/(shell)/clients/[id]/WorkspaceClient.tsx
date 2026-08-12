@@ -11,6 +11,7 @@ import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
 import AltaTrabada from "@/components/projects/AltaTrabada";
+import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
 import {
   SENTINEL_SERVICE_TYPE,
   hechosDeProyecto,
@@ -46,6 +47,9 @@ interface ProjectSummary {
   altaIntentos?: number | null;
   /** Quién empezó el alta: puede terminarla aunque no tenga la celda. */
   altaActorEmail?: string | null;
+  /** Tanda M — `ProjectTimeline.pendingProposal != null`: el handoff dejó cambios de
+   *  cronograma sin revisar. Alimenta TimelineProposalPendiente. */
+  timelineProposalPending?: boolean;
 }
 
 /**
@@ -575,6 +579,17 @@ function ProjectSection({
             invalidateGps(activeProject.id);
             window.location.reload();
           }}
+        />
+      )}
+
+      {/* Tanda M — igual criterio que AltaTrabada: se ve sin tener que entrar a la pestaña
+          Cronograma, que es justo donde este aviso vivía enterrado antes. */}
+      {activeProject && (
+        <TimelineProposalPendiente
+          variante="compacto"
+          projectId={activeProject.id}
+          clientId={clientId}
+          pending={activeProject.timelineProposalPending ?? false}
         />
       )}
 

@@ -145,7 +145,27 @@ const cobranzaQuincenal: JobDef = {
   },
 };
 
+// Drenaje de enriquecimientos FALLIDOS de Google Meet (2026-08-08). Antes un fallo de
+// lectura (429, 403, red) sellaba la fila como «lista» para siempre — así se quemaron las
+// corridas del 17-may (528/1100) y 7-jul (47/73). Ahora el fallo queda pendiente con su
+// error anotado, y este job lo reintenta con espera exponencial (2^intentos horas, tope 5,
+// política en lib/google/enrich-retry.ts). Corre cada tick: con cero candidatas es UNA
+// query barata, y el backoff por fila hace que el volumen real por tick sea chico.
+const googleEnrichRetry: JobDef = {
+  key: "google-enrich-retry",
+  shouldRun: () => !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY && !!process.env.GOOGLE_ADMIN_EMAIL,
+  run: async () => {
+    const { drenarReintentos } = await import("@/lib/google/meet-enrichment");
+    const r = await drenarReintentos(20);
+    if (r.enriched + r.skipped + r.errors > 0) {
+      console.log(
+        `[jobs/google-enrich-retry] ${r.enriched} recuperadas, ${r.skipped} sin contenido, ${r.errors} siguen fallando`,
+      );
+    }
+  },
+};
+
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry];
 }

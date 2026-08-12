@@ -14,6 +14,7 @@
  * Prisma) y NO del barrel lib/cobranza, que re-exporta módulos `server-only`.
  */
 import { useState } from "react";
+import { IconCheck } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { semaforoCobro } from "@/lib/cobranza/engine";
@@ -230,12 +231,14 @@ export default function CronogramaCobros({
               </div>
               {c.fechaEmision && c.facturadoPor && (
                 <p className="mt-1 text-[10px] text-sky-600">
-                  ✓ Facturado por {c.facturadoPor} · {fmtFecha(c.fechaEmision)}
+                  <IconCheck className="w-3 h-3 mr-1 align-middle" />
+                  Facturado por {c.facturadoPor} · {fmtFecha(c.fechaEmision)}
                 </p>
               )}
               {c.estado === "COBRADO" && c.confirmadoPor && (
                 <p className="mt-1 text-[10px] text-emerald-600">
-                  ✓ Confirmado por {c.confirmadoPor}
+                  <IconCheck className="w-3 h-3 mr-1 align-middle" />
+                  Confirmado por {c.confirmadoPor}
                   {c.referenciaExterna && (
                     <span className="text-fg-muted"> · ref. {c.referenciaExterna}</span>
                   )}

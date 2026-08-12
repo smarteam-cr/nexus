@@ -5,9 +5,30 @@
  * fuente de "¿esta tarea está atrasada?" que comparten el Gantt interno, la vista externa,
  * client-blockers y el panel de cartera (summary.ts). Criterio: por FECHA (fin planeado de
  * la semana < hoy) y ORTOGONAL al estado, excluyendo DONE/SUSPENDED (resueltas).
+ *
+ * ── Y LA ARITMÉTICA DEL CALENDARIO (Tanda J, 2026-08-08) ────────────────────
+ * `computePhaseRanges` / `timelineSpan` / `totalWeeks` no tenían NI UN test, y de ellas
+ * cuelgan el ancho del Gantt, las fechas planeadas del baseline, el % de avance esperado y
+ * —desde esta tanda— el cierre proyectado. Alguien podía "simplificar" el `startWeek` de
+ * `computePhaseRanges` y la suite entera quedaba verde mientras cuatro superficies se movían.
  */
-import { test, expect } from "vitest";
-import { overduePlannedEnd, isOverdueByDate, addWeeks } from "./weeks";
+import { describe, it, test, expect } from "vitest";
+import {
+  overduePlannedEnd,
+  isOverdueByDate,
+  addWeeks,
+  computePhaseRanges,
+  timelineSpan,
+  totalWeeks,
+  projectedEnd,
+  endShiftDays,
+  endShiftFragment,
+  describeEndShift,
+  displayedEnd,
+  closeDateDiverges,
+  fmtFull,
+  type PhaseSpanLike,
+} from "./weeks";
 
 // Anchor lunes 1 jun 2026 (UTC).
 const ANCHOR = "2026-06-01T00:00:00.000Z";
@@ -58,4 +79,254 @@ test("isOverdueByDate: borde de día — atrasada al pasar el instante de fin, n
   expect(isOverdueByDate(plannedEnd, new Date("2026-06-08T00:00:00.000Z"), "PENDING")).toBe(false);
   // Un instante DESPUÉS → atrasada.
   expect(isOverdueByDate(plannedEnd, new Date("2026-06-08T00:00:01.000Z"), "PENDING")).toBe(true);
+});
+
+/**
+ * ── LA ARITMÉTICA DEL CALENDARIO ────────────────────────────────────────────
+ * `timelineSpan` (ancho de CALENDARIO, max(end)) y `totalWeeks` (ESFUERZO, suma de
+ * duraciones) son DISTINTAS y lo son a propósito: con fases en paralelo el proyecto ocupa
+ * menos calendario que la suma de sus duraciones. El repo usa las dos, para preguntas
+ * distintas —`portfolio/summary.ts` mide alcance con esfuerzo; el Gantt, el baseline y el
+ * cierre proyectado miden calendario con span— y confundirlas mueve fechas en silencio.
+ */
+describe("computePhaseRanges / timelineSpan / totalWeeks", () => {
+  it("fases CONTIGUAS: cada una arranca donde terminó la anterior, y span == esfuerzo", () => {
+    const fases = [{ durationWeeks: 2 }, { durationWeeks: 3 }];
+    expect(computePhaseRanges(fases)).toEqual([
+      { start: 0, end: 2 },
+      { start: 2, end: 5 },
+    ]);
+    expect(timelineSpan(fases)).toBe(5);
+    expect(totalWeeks(fases)).toBe(5); // sin paralelo, las dos medidas coinciden
+  });
+
+  it("fases EN PARALELO: `startWeek` explícito solapa — y ahí span ≠ esfuerzo", () => {
+    /* ⚠ LA fila de esta tabla. Dos equipos trabajando a la vez: el proyecto dura 3 semanas de
+       calendario, aunque el esfuerzo sume 5. Un cierre calculado con `totalWeeks` prometería
+       dos semanas de más — y sería una fecha que el cliente nunca ve, porque su cronograma
+       (TimelineSection) dibuja con `timelineSpan`. */
+    const fases = [{ durationWeeks: 2 }, { durationWeeks: 3, startWeek: 0 }];
+    expect(computePhaseRanges(fases)).toEqual([
+      { start: 0, end: 2 },
+      { start: 0, end: 3 },
+    ]);
+    expect(timelineSpan(fases)).toBe(3);
+    expect(totalWeeks(fases)).toBe(5);
+    expect(timelineSpan(fases)).not.toBe(totalWeeks(fases));
+  });
+
+  it("la fase contigua que sigue a una explícita arranca al fin de ESA, no del acumulado", () => {
+    const fases = [{ durationWeeks: 2 }, { durationWeeks: 3, startWeek: 0 }, { durationWeeks: 1 }];
+    expect(computePhaseRanges(fases)).toEqual([
+      { start: 0, end: 2 },
+      { start: 0, end: 3 },
+      { start: 3, end: 4 }, // el cursor quedó en 3 (fin de la paralela), no en 5
+    ]);
+    expect(timelineSpan(fases)).toBe(4);
+  });
+
+  it("⛔ EL ORDEN DE LA LISTA ES EL CRONOGRAMA: reordenar mueve fechas", () => {
+    /* La trampa que este test existe para cerrar. Leyendo el Gantt, una fase con `startWeek`
+       explícito puede aparecer bajo otra que empieza más tarde, y la lista PARECE desordenada.
+       La reacción natural —"ordenémosla por fecha"— reprograma el proyecto en silencio: una
+       fase con inicio `auto` arranca donde termina LA DE ARRIBA, así que moverla de lugar le
+       cambia las fechas a ella y a todas las que la siguen.
+
+       Medido sobre la cartera real (2026-08-11): de los 14 proyectos activos con la lista
+       desordenada, ordenar por fecha habría movido fechas en 13. A Almotec le corría el cierre
+       de la S11 a la S17 — seis semanas que nadie pidió.
+
+       Por eso el Gantt EXPLICA el salto (chip "↑ arranca antes") en vez de reordenar. */
+    const original = [
+      { durationWeeks: 2 },                    // S0-S2  (auto)
+      { durationWeeks: 4, startWeek: 0 },      // S0-S4  (explícita, en paralelo)
+      { durationWeeks: 3 },                    // S4-S7  (auto: sigue a la explícita)
+    ];
+    expect(computePhaseRanges(original)).toEqual([
+      { start: 0, end: 2 },
+      { start: 0, end: 4 },
+      { start: 4, end: 7 },
+    ]);
+
+    // La misma lista, "ordenada" poniendo la explícita primero (empieza igual de temprano y
+    // dura más). Las AUTO se recalculan solas y el proyecto termina DOS semanas más tarde.
+    const ordenada = [original[1], original[0], original[2]];
+    expect(computePhaseRanges(ordenada)).toEqual([
+      { start: 0, end: 4 },
+      { start: 4, end: 6 }, // ⚠ era S0-S2
+      { start: 6, end: 9 }, // ⚠ era S4-S7
+    ]);
+    expect(timelineSpan(ordenada)).not.toBe(timelineSpan(original));
+  });
+
+  it("duración 0 o ausente cuenta como 1 semana (una fase siempre ocupa lugar)", () => {
+    expect(computePhaseRanges([{ durationWeeks: 0 }, { durationWeeks: 2 }])).toEqual([
+      { start: 0, end: 1 },
+      { start: 1, end: 3 },
+    ]);
+  });
+
+  it("sin fases: span 0 y esfuerzo 0 (no hay calendario que dibujar)", () => {
+    expect(computePhaseRanges([])).toEqual([]);
+    expect(timelineSpan([])).toBe(0);
+    expect(totalWeeks([])).toBe(0);
+  });
+});
+
+/**
+ * ── EL CIERRE PROYECTADO ────────────────────────────────────────────────────
+ * La fórmula única del fin. Lo que congela esta tabla: que use SPAN y no esfuerzo, que
+ * degrade a null en vez de inventar una fecha, y que imprima en UTC.
+ */
+describe("projectedEnd", () => {
+  const CONTIGUAS = [{ durationWeeks: 2 }, { durationWeeks: 3 }]; // span 5, esfuerzo 5
+  const PARALELAS = [{ durationWeeks: 2 }, { durationWeeks: 3, startWeek: 0 }]; // span 3, esfuerzo 5
+
+  it("ancla + span en semanas, formateado en UTC", () => {
+    const r = projectedEnd(ANCHOR, CONTIGUAS);
+    expect(r.spanWeeks).toBe(5);
+    expect(r.date?.toISOString()).toBe(addWeeks(ANCHOR, 5).toISOString());
+    expect(r.label).toBe("6 jul 2026"); // 1 jun + 5 semanas, día de calendario UTC
+  });
+
+  it("⚠ usa SPAN, no esfuerzo: con fases en paralelo el cierre NO se aleja", () => {
+    /* La edición que pone esto en rojo: cambiar `timelineSpan` por `totalWeeks` adentro de
+       projectedEnd. Daría 6 jul en vez de 22 jun — dos semanas de promesa de más, y una fecha
+       distinta de la que el cronograma del cliente ya dibuja. */
+    const r = projectedEnd(ANCHOR, PARALELAS);
+    expect(r.spanWeeks).toBe(3);
+    expect(r.date?.toISOString()).toBe(addWeeks(ANCHOR, 3).toISOString());
+    expect(r.label).toBe("22 jun 2026");
+    expect(r.label).not.toBe(projectedEnd(ANCHOR, CONTIGUAS).label);
+  });
+
+  it("sin ancla: span sí, fecha NO (nunca una fecha de respaldo)", () => {
+    expect(projectedEnd(null, CONTIGUAS)).toEqual({ spanWeeks: 5, date: null, label: null });
+    expect(projectedEnd(undefined, CONTIGUAS).label).toBeNull();
+  });
+
+  it("sin fases: tampoco hay fecha (anchor+0 se leería como «ya terminó»)", () => {
+    expect(projectedEnd(ANCHOR, [])).toEqual({ spanWeeks: 0, date: null, label: null });
+  });
+});
+
+describe("endShiftDays / endShiftFragment / describeEndShift", () => {
+  const antes = projectedEnd(ANCHOR, [{ durationWeeks: 10 }]); // 10 ago 2026
+  const despues = projectedEnd(ANCHOR, [{ durationWeeks: 13 }]); // 31 ago 2026
+  const sinFecha = projectedEnd(null, [{ durationWeeks: 10 }]);
+
+  it("los días de corrimiento, con signo", () => {
+    expect(endShiftDays(antes, despues)).toBe(21);
+    expect(endShiftDays(despues, antes)).toBe(-21);
+    expect(endShiftDays(antes, antes)).toBe(0);
+  });
+
+  it("falta una punta → null (sin fecha no hay corrimiento que afirmar)", () => {
+    expect(endShiftDays(sinFecha, despues)).toBeNull();
+    expect(endShiftDays(antes, sinFecha)).toBeNull();
+  });
+
+  it("el fragmento NO lleva fecha absoluta: precarga un motivo que puede viajar al cliente", () => {
+    expect(endShiftFragment(antes, despues)).toBe("se corrió la fecha de cierre 21 días");
+    expect(endShiftFragment(despues, antes)).toBe("se adelantó la fecha de cierre 21 días");
+    expect(endShiftFragment(antes, antes)).toBeNull(); // sin movimiento, sin fragmento
+    expect(endShiftFragment(sinFecha, despues)).toBe("ahora hay fecha de cierre");
+    expect(endShiftFragment(antes, sinFecha)).toBe("el cronograma se quedó sin fecha de cierre");
+    for (const f of [endShiftFragment(antes, despues), endShiftFragment(despues, antes)]) {
+      expect(f, "el fragmento filtró una fecha absoluta").not.toMatch(/\d{4}/);
+    }
+  });
+
+  it("la frase interna SÍ lleva las dos fechas, y nunca imprime un negativo", () => {
+    expect(describeEndShift(antes, despues)).toBe("El cierre se corre 21 días: 10 ago 2026 → 31 ago 2026.");
+    expect(describeEndShift(despues, antes)).toBe("El cierre se adelanta 21 días: 31 ago 2026 → 10 ago 2026.");
+    expect(describeEndShift(antes, despues)).not.toContain("-21");
+    expect(describeEndShift(antes, antes)).toBe("La fecha de cierre no se mueve: sigue siendo el 10 ago 2026.");
+    expect(describeEndShift(sinFecha, despues)).toBe("Ahora hay fecha de cierre: 31 ago 2026.");
+    expect(describeEndShift(antes, sinFecha)).toBe(
+      "El cronograma se quedó sin fecha de cierre (se borró el arranque).",
+    );
+  });
+
+  it("⚠ cuenta DÍAS DE CALENDARIO, no diferencia de instantes", () => {
+    /* El ancla no siempre es medianoche: cuando el cronograma nace del handoff se deriva de la
+       FECHA DE LA SESIÓN de kickoff, que trae la hora real de la reunión. Contra un ancla puesta
+       después con el calendario (00:00Z), restar instantes daba 13 donde las fechas mostradas se
+       movían 14 — la MISMA frase se contradecía. La edición que la pone en rojo: volver a
+       `(after - before) / 86_400_000` sobre los instantes crudos. */
+    const desdeReunion = projectedEnd("2026-06-01T15:00:00.000Z", [{ durationWeeks: 5 }]);
+    const desdeCalendario = projectedEnd("2026-06-15T00:00:00.000Z", [{ durationWeeks: 5 }]);
+    expect(desdeReunion.label).toBe("6 jul 2026");
+    expect(desdeCalendario.label).toBe("20 jul 2026");
+    // 6 jul → 20 jul son 14 días de calendario, y eso es lo que la frase tiene que decir.
+    expect(endShiftDays(desdeReunion, desdeCalendario)).toBe(14);
+    expect(describeEndShift(desdeReunion, desdeCalendario)).toBe(
+      "El cierre se corre 14 días: 6 jul 2026 → 20 jul 2026.",
+    );
+  });
+
+  it("un solo día se dice en singular", () => {
+    const unDia = { spanWeeks: 1, date: new Date("2026-06-09T00:00:00.000Z"), label: "9 jun 2026" };
+    const cero = { spanWeeks: 1, date: new Date("2026-06-08T00:00:00.000Z"), label: "8 jun 2026" };
+    expect(endShiftFragment(cero, unDia)).toBe("se corrió la fecha de cierre 1 día");
+  });
+});
+
+describe("displayedEnd / closeDateDiverges (Tanda K — el cierre fijado a mano)", () => {
+  const sugerido = projectedEnd(ANCHOR, [{ durationWeeks: 5 }]); // 6 jul 2026
+
+  it("sin override: se muestra el proyectado, isOverride=false", () => {
+    expect(displayedEnd(null, sugerido)).toEqual({ ...sugerido, isOverride: false });
+    expect(displayedEnd(undefined, sugerido).isOverride).toBe(false);
+  });
+
+  it("con override: GANA sobre el proyectado, aunque no haya anchor/fases", () => {
+    const sinSugerencia: ReturnType<typeof projectedEnd> = { spanWeeks: 0, date: null, label: null };
+    const r = displayedEnd("2026-08-01T00:00:00.000Z", sinSugerencia);
+    expect(r.isOverride).toBe(true);
+    expect(r.label).toBe("1 ago 2026");
+    expect(r.spanWeeks).toBe(0); // el span sigue siendo el de las fases reales, no un invento
+  });
+
+  it("closeDateDiverges: false si coinciden, true si el proyectado ya no cae el mismo día", () => {
+    expect(closeDateDiverges(sugerido.date!.toISOString(), sugerido)).toBe(false);
+    const otraFecha = projectedEnd(ANCHOR, [{ durationWeeks: 8 }]); // 27 jul 2026
+    expect(closeDateDiverges(sugerido.date!.toISOString(), otraFecha)).toBe(true);
+  });
+
+  it("closeDateDiverges: false sin override, o sin fecha sugerida (nada que reconciliar)", () => {
+    expect(closeDateDiverges(null, sugerido)).toBe(false);
+    expect(closeDateDiverges(sugerido.date!.toISOString(), { spanWeeks: 0, date: null, label: null })).toBe(false);
+  });
+
+  it("⚠ compara por DÍA de calendario UTC, no por instante (mismo criterio que endShiftDays)", () => {
+    // Override puesto por date picker (medianoche UTC) vs. proyectado que arrastra una hora
+    // real de sesión de kickoff — mismo día de calendario, NO debe divergir.
+    const conHoraDeReunion = projectedEnd("2026-06-01T15:00:00.000Z", [{ durationWeeks: 5 }]); // 6 jul, hora real
+    expect(conHoraDeReunion.label).toBe("6 jul 2026");
+    expect(closeDateDiverges("2026-07-06T00:00:00.000Z", conHoraDeReunion)).toBe(false);
+  });
+});
+
+/**
+ * ── EQUIVALENCIA CON LO QUE EL CLIENTE YA VE ────────────────────────────────
+ * `TimelineSection` (la vista del cliente) calculaba el cierre inline con
+ * `fmtFull(addWeeks(anchor, timelineSpan(sorted)))`. Al migrarla a `projectedEnd` el
+ * resultado tiene que ser IDÉNTICO: si alguna vez divergen, el equipo y el cliente estarían
+ * mirando dos fechas distintas del mismo proyecto — que es justo lo que el encabezado de
+ * weeks.ts existe para impedir. La edición que pone esto en rojo: cualquier cambio de fórmula
+ * o de formato adentro de `projectedEnd`.
+ */
+test("projectedEnd().label === la fórmula inline que tenía la vista del cliente", () => {
+  const FORMAS: PhaseSpanLike[][] = [
+    [{ durationWeeks: 2 }, { durationWeeks: 3 }],
+    [{ durationWeeks: 2 }, { durationWeeks: 3, startWeek: 0 }],
+    [{ durationWeeks: 1 }],
+    [{ durationWeeks: 4 }, { durationWeeks: 4, startWeek: 2 }, { durationWeeks: 1 }],
+    [{ durationWeeks: 52 }],
+  ];
+  for (const fases of FORMAS) {
+    const viejo = fmtFull(addWeeks(ANCHOR, timelineSpan(fases)).toISOString());
+    expect(projectedEnd(ANCHOR, fases).label).toBe(viejo);
+  }
 });

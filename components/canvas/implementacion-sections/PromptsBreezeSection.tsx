@@ -16,6 +16,7 @@
  * valida antes de pegar. Es la mitad visible del gate de conocimiento.
  */
 import { useState, type FC } from "react";
+import { IconCheck } from "@/components/ui/AcceptReject";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "@/components/landing/inline";
 import { SortableItems } from "@/components/landing/sortable";
 import type { SectionProps } from "@/components/landing/types";
@@ -57,6 +58,9 @@ function CopyButton({ text }: { text: string }) {
       }}
       style={{
         flexShrink: 0,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
         fontSize: 12,
         fontWeight: 600,
         padding: "4px 10px",
@@ -72,7 +76,7 @@ function CopyButton({ text }: { text: string }) {
           : "Copiar el prompt para pegarlo en Breeze"
       }
     >
-      {fallo ? "No se pudo" : copied ? "Copiado ✓" : "Copiar"}
+      {fallo ? "No se pudo" : copied ? <>Copiado<IconCheck className="w-3 h-3" /></> : "Copiar"}
     </button>
   );
 }

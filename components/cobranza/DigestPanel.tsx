@@ -15,7 +15,7 @@
  * de siempre).
  */
 import { useState } from "react";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, IconCheck } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { SnapshotDTO } from "@/lib/cobranza";
@@ -213,8 +213,8 @@ export default function DigestPanel({
       </div>
 
       {view.sinCambios ? (
-        <p className="text-sm text-emerald-600 bg-emerald-500/5 border border-emerald-500/20 rounded-xl px-4 py-3">
-          Sin cambios desde el último corte ✓
+        <p className="flex items-center gap-1.5 text-sm text-emerald-600 bg-emerald-500/5 border border-emerald-500/20 rounded-xl px-4 py-3">
+          Sin cambios desde el último corte<IconCheck />
         </p>
       ) : (
         <div className="space-y-4">
@@ -254,7 +254,7 @@ export default function DigestPanel({
                   <ul className="space-y-1.5">
                     {operativas.map((a, i) => (
                       <li key={i} className="flex items-start gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
-                        <span className="text-emerald-600 text-xs flex-shrink-0">✓</span>
+                        <IconCheck className="text-emerald-600 w-3 h-3 mt-0.5" />
                         <span className="text-xs text-fg-muted">{a.mensaje}</span>
                       </li>
                     ))}

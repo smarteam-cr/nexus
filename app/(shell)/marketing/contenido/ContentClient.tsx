@@ -13,7 +13,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog, EmptyState, Badge, Skeleton, ListSkeleton } from "@/components/ui";
+import { ConfirmDialog, EmptyState, Badge, Skeleton, ListSkeleton, IconCheck } from "@/components/ui";
 import { useMarketingEngine } from "@/components/marketing/useMarketingEngine";
 import { useMe } from "@/hooks/useMe";
 import {
@@ -540,7 +540,9 @@ function IdeaCard({
               {isPersona ? "Borrador adaptable" : "Justo ahora"} · 🌐
               {state === "seleccionada" && " · Aceptada"}
               {state === "aprobada" && " · Aprobada"}
-              {idea.hubspotDraftAt && " · ✓ Borrador en HubSpot"}
+              {idea.hubspotDraftAt && (
+                <> · <IconCheck className="w-2.5 h-2.5 align-middle" /> Borrador en HubSpot</>
+              )}
               {state === "descartada" && " · Descartada"}
             </p>
           </div>

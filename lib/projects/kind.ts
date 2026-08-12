@@ -138,6 +138,27 @@ export interface PipelineDef {
    */
   canBeSiblingOf: readonly ProjectPipelineKey[];
   /**
+   * ¿El handoff de un proyecto de este tipo, cuando cuelga de una Implementación, ES el del
+   * hermano mayor? `true` redirige el documento; `false` le da el suyo propio.
+   *
+   * ── POR QUÉ ES UN CAMPO Y NO SE DERIVA DE `canBeSiblingOf` ───────────────────
+   * Hasta el 2026-08-07 `duenioDelHandoff` leía `canBeSiblingOf` directamente, y por eso las
+   * dos cosas venían pegadas: colgar de una implementación apagaba la cobranza **y** te quitaba
+   * el documento. Son decisiones distintas y el negocio las separó — un desarrollo hermano
+   * sigue sin facturar aparte (eso no se toca) pero ahora sí necesita su propio handoff.
+   *
+   * ⚠ Y NO ERA UN DETALLE DE DOCUMENTOS: el agente de handoff es también el que crea las FASES
+   * del cronograma. Con la redirección prendida, la corrida del hermano menor se ejecutaba
+   * sobre la implementación y las fases aterrizaban allá. Medido el 2026-08-06: los 2 hermanos
+   * menores de producción tenían **0 fases y 0 tareas** mientras sus implementaciones tenían 8
+   * y 10. Su pantalla de cronograma decía «Generá el Handoff» y no tenía botón.
+   *
+   * ⚠ SE APAGA POR FILA, NO BORRANDO CÓDIGO. Con `false` en las tres, `vetoSiElHandoffEsDeOtro`
+   * y sus cuatro guardas fs-scan siguen existiendo enteros y simplemente no disparan nunca. La
+   * vuelta atrás —si dos documentos del mismo trato empiezan a contradecirse— es esta celda.
+   */
+  handoffDelHermano: boolean;
+  /**
    * Cómo se llama EN PANTALLA el equipo que entrega este tipo de trabajo. Es el rótulo del
    * segundo frente del widget de sesiones (ver `frentesDeProyecto`) — un desarrollo no
    * tiene "CSE", tiene equipo técnico.
@@ -281,6 +302,9 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     closedStageIds: ["1225193543"], // Finalizado
     initialStageId: "1225193551", // Handoff (se llamó "Nuevo proyecto" entre 2026-05 y 2026-07)
     canBeSiblingOf: [],
+    // No cuelga de nadie: nunca se le consulta. Declarada igual porque el tipo la exige y
+    // porque `false` es la respuesta correcta si algún día colgara de algo.
+    handoffDelHermano: false,
     frenteDeEntrega: "CSE",
     equipoDeEntrega: "entrega",
     /* SIN `implementation`: es `createdWithProject: false` en el registro de piezas a
@@ -313,6 +337,9 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     closedStageIds: ["1409932564", "1409897657"], // Finalizado, Cancelado
     initialStageId: "1409898886", // Handoff
     canBeSiblingOf: ["customer-success"],
+    // Handoff PROPIO aunque cuelgue (Tanda F, 2026-08-07): un desarrollo hermano no factura
+    // aparte, pero su alcance técnico y sus fases sí son suyos.
+    handoffDelHermano: false,
     // El único con frente técnico propio: mira SOLO a Desarrollo.
     frenteDeEntrega: "Desarrollo",
     equipoDeEntrega: "desarrollo",
@@ -344,6 +371,8 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     // sí se facturan; los que son hermanos no". Se sigue la regla y no la fila abreviada:
     // equivocarse hacia "factura igual" cobra dos veces el mismo trabajo.
     canBeSiblingOf: ["customer-success"],
+    // Handoff PROPIO aunque cuelgue (Tanda F, 2026-08-07). Ver la nota del campo.
+    handoffDelHermano: false,
     /* "CSE" y no "Web": un sitio es `publicable`, lleva kickoff y hoy lo acompaña un CSE.
        Cambiarlo sería una decisión de negocio que nadie pidió — y como el frente de entrega
        ya incluye a Desarrollo (`deliveryEmails = CSE ∪ Development`), las sesiones que se

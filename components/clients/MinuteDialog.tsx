@@ -14,6 +14,7 @@
  * el auto-trigger del post-process y se muestra un loader animado.
  */
 import { useState, useEffect, useCallback } from "react";
+import { IconCheck } from "@/components/ui";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import SessionHistoryDrawer from "./SessionHistoryDrawer";
@@ -375,7 +376,7 @@ function MinuteContent({
           <ul className="space-y-1.5">
             {agreements.map((a, i) => (
               <li key={i} className="text-sm text-gray-300 flex gap-2">
-                <span className="text-emerald-400">✓</span> {a.text}
+                <IconCheck className="text-emerald-400 mt-0.5" /> {a.text}
               </li>
             ))}
           </ul>
@@ -441,9 +442,10 @@ function MinuteContent({
               });
               onReload();
             }}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand text-white hover:bg-brand-dark transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand text-white hover:bg-brand-dark transition-colors"
           >
-            ✓ Aceptar minuta
+            <IconCheck className="w-3 h-3" />
+            Aceptar minuta
           </button>
           <button
             onClick={async () => {

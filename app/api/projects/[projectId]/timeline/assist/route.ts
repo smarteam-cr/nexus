@@ -25,12 +25,14 @@ import { guardTimelineEdit, guardCapability, guardPermission } from "@/lib/auth/
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
+import { rescatarProgreso } from "@/lib/timeline/rescate-progreso";
 
 const SYSTEM_PROMPT = `ROL: Eres el editor del cronograma de un proyecto de implementación de HubSpot (consultora Smarteam). Recibes el cronograma ACTUAL (JSON con ids) y UNA instrucción del consultor. Aplicas SOLO lo pedido (y sus consecuencias directas mínimas) y devuelves el cronograma COMPLETO resultante.
 
 REGLAS DURAS:
 - Conserva los ids EXACTOS de las fases y tareas que siguen existiendo (las edites o no). Elementos NUEVOS van sin id. Para BORRAR algo, simplemente omítelo del resultado.
 - Si mueves una tarea a OTRA fase: en la fase destino va SIN id (es nueva ahí) y en la fase origen desaparece.
+- Cada tarea trae "status" y "source". Las que NO están en PENDING (DONE, IN_PROGRESS, SUSPENDED) o tienen source HUMAN ya tienen trabajo real encima: consérvalas SIEMPRE con su id, aunque la instrucción reorganice la fase. NO las omitas: omitir es borrar. Si la instrucción pide explícitamente quitar una de ellas, quítala igual — el servidor avisa.
 - weekIndex es 0-indexed y RELATIVO a su fase; siempre < durationWeeks de esa fase. order: reasigna secuencial (0,1,2…) dentro de cada semana.
 - Puedes cambiar duraciones, nombres, orden de fases, tipos y la fecha de arranque SOLO si la instrucción lo pide o es consecuencia necesaria (p.ej. agregar una semana de tareas a una fase de 1 semana → durationWeeks 2).
 - activityType ∈ EXPLORACION|PLANIFICACION|CONFIGURACION|ADOPCION|SEGUIMIENTO o null.
@@ -89,12 +91,17 @@ export async function POST(
           name: true,
           order: true,
           durationWeeks: true,
+          startWeek: true,
           sessionCount: true,
           notes: true,
           activityType: true,
           tasks: {
             orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
-            select: { id: true, title: true, weekIndex: true, order: true, notes: true },
+            /* ⚠ Estos DOS campos sí llegan al prompt: `currentJson` serializa `tl.phases`
+               entero. Están acá para que el SERVIDOR sepa qué no puede perderse (ver el rescate
+               al final), y de paso el modelo los ve — por eso el SYSTEM_PROMPT le dice
+               explícitamente qué significan y que no las borre por omisión. */
+            select: { id: true, title: true, weekIndex: true, order: true, notes: true, status: true, source: true },
           },
         },
       },
@@ -219,6 +226,13 @@ export async function POST(
       return { ...p, id: phaseId, tasks };
     }),
   };
+
+  /* ── RESCATE DE LO QUE TIENE PROGRESO ─────────────────────────────────────
+     La regla y sus tres trampas viven en lib/timeline/rescate-progreso.ts (puro y testeado):
+     acá solo se le pasan las fases reales y la propuesta ya saneada. */
+  const rescate = rescatarProgreso(tl.phases, proposal.phases);
+  proposal.phases = rescate.phases;
+  warnings.push(...rescate.warnings);
 
   return NextResponse.json({ proposal, warnings });
 }

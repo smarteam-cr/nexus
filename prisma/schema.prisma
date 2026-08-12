@@ -611,6 +611,11 @@ model ProjectTimeline {
   projectId                   String    @unique
   project                     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   anchorStartDate             DateTime? // null hasta que el CSE la fije; cuando exista, define la conversión semanas → fechas
+  // Tanda K — cierre FIJADO A MANO por el CSE, mismo criterio que el arranque: null = usar el
+  // proyectado (projectedEnd, derivado de anchor+fases). Con valor, GANA sobre el derivado — y
+  // si el derivado se recalcula distinto (nueva propuesta, edición de duración), la UI pregunta
+  // en vez de pisarlo en silencio (ver lib/timeline/weeks.ts: displayedEnd/closeDateDiverges).
+  closeDateOverride           DateTime?
   lastEditedByHuman           DateTime? // se actualiza en cada PUT que toca fases (no en el create del agente)
   // D.3 staging — el cliente ve SOLO este SNAPSHOT (shape client-safe de readClientTimeline)
   // congelado al "Subir". La vista externa NUNCA lee en vivo: si está publicado y el snapshot
@@ -1233,6 +1238,10 @@ model Agent {
   // Agrupación por propósito (reemplaza stages/steps para la UI)
   agentGroup             String? // handoff | preparacion | diagnostico | planificacion | ejecucion | adopcion (ver lib/agent-groups.ts)
   groupOrder             Int             @default(0) // Orden DENTRO de su grupo (no del grupo). Para chaining: agentes con groupOrder menor se inyectan como contexto a los mayores del mismo grupo.
+  /// Tipo de proyecto al que aplica (key de PROJECT_PIPELINES: customer-success | development | web).
+  /// NULL = sirve para TODOS, y es el fallback: por eso el agente de handoff de hoy queda en NULL y
+  /// una Implementación sigue resolviendo exactamente la misma fila. Ver lib/agents/resolver.ts.
+  pipelineKey            String?
   // IDs de KnowledgeDocument inyectados sin truncar al prompt del agente (referencia principal)
   pinnedKnowledgeIds     String[]        @default([])
 
@@ -1242,6 +1251,8 @@ model Agent {
   runs AgentRun[]
 
   @@index([associatedStep])
+  // El resolver de `lib/agents/resolver.ts` consulta SIEMPRE por este par.
+  @@index([agentGroup, pipelineKey])
 }
 
 model AgentRun {
@@ -1757,6 +1768,12 @@ model FirefliesSession {
   summary          Json?
   transcript       String?   @db.Text
   enrichedAt       DateTime? // cuándo se trajo transcript/summary (null = pendiente)
+  // Procedencia del enriquecimiento (2026-08-08). Un fallo de lectura YA NO sella la fila:
+  // attempts cuenta los fallos (0 = sano; 1-4 = en cola del job de reintento; 5 = sellado con
+  // procedencia) y error guarda el último {error,status,at} o el diagnóstico del parser
+  // ({tabsVistos,motivo}) cuando la lectura fue exitosa sin transcript.
+  enrichAttempts   Int       @default(0)
+  enrichError      String?
   syncedAt         DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   source           String    @default("google_meet") // "google_meet" (Fireflies eliminado; "fireflies" solo en filas históricas)

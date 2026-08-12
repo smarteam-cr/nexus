@@ -2,7 +2,8 @@
  * POST /api/projects/[projectId]/timeline/proposal/apply-items
  *
  * Resuelve POR ÍTEM la propuesta de cronograma pendiente (la que deja regenerar el handoff):
- *   { accept: string[], discard: string[] }   ← claves de delta de lib/timeline/proposal-deltas
+ *   { accept: string[], discard: string[] }   ← claves de delta de
+ *   lib/timeline/proposal-deltas
  *
  * El modelo "diff EN el Gantt real": la propuesta ya no se aplica todo-o-nada con un PUT del
  * árbol completo — cada sugerencia (fase nueva / cambio de fase / fecha de arranque) se acepta o
@@ -13,6 +14,13 @@
  * "Aceptar todo" / "Descartar todo" del banner = este mismo endpoint con todas las claves.
  * Deltas con clave desconocida/stale (el cronograma cambió desde que el cliente pintó) se
  * ignoran y se reportan. Guarded con guardTimelineEdit (interno/CSE).
+ *
+ * ⛔ Hubo un tercer array `merge` (Tanda O, retirado el 2026-08-11): fusionaba un ADD_PHASE con
+ * la huérfana "parecida" que la reconciliación marcaba como candidata. Se retiró junto con el
+ * aviso que lo alimentaba — ver el porqué completo en lib/timeline/reconcile-proposal.ts. En
+ * resumen: reservar la huérfana rompía el match posicional, y romper el match posicional es lo
+ * que CREA los duplicados que la fusión venía a resolver. Con el posicional intacto, un renombre
+ * conserva id, tareas y progreso en su lugar — que es lo que "Fusionar" hacía.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardTimelineEdit } from "@/lib/auth/api-guards";
@@ -25,6 +33,8 @@ import {
   type ProposalDelta,
 } from "@/lib/timeline/proposal-deltas";
 import { ACTIVITY_TYPES } from "@/lib/timeline/validate";
+import { projectedEnd, describeEndShift } from "@/lib/timeline/weeks";
+import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
 
 /**
  * `activityType` es un ENUM de Prisma y la propuesta es JSON sin tipar: un valor basura
@@ -102,6 +112,7 @@ export async function POST(
     else staleKeys.push(k);
   }
   for (const k of discardKeys) if (!byKey.has(k)) staleKeys.push(k);
+
   const resolvedKeys = new Set([...acceptKeys, ...discardKeys].filter((k) => byKey.has(k)));
 
   // Validar ANTES de abrir la transacción: un enum inválido debe salir como 400 legible, no
@@ -123,6 +134,11 @@ export async function POST(
 
   const now = new Date();
   const acceptedKeySet = new Set(accepted.map((d) => d.key));
+  /* La foto de ANTES, tomada fuera de la transacción: después de aplicar ya no se puede saber
+     dónde caía el cierre, y sin las dos puntas no hay corrimiento que reportar (Tanda J). */
+  const anchorAntes = tl.anchorStartDate?.toISOString() ?? null;
+  const fasesAntes = tl.phases.map((p) => ({ durationWeeks: p.durationWeeks, startWeek: p.startWeek }));
+  const anchorAceptado = accepted.some((d) => d.kind === "SET_ANCHOR");
 
   await prisma.$transaction(async (tx) => {
     // 1) Aplicar los ACEPTADOS (solo esos; nada se aplica solo).
@@ -242,13 +258,15 @@ export async function POST(
         ...(remaining.length === 0
           ? { pendingProposal: Prisma.DbNull, pendingProposalRunId: null }
           : { pendingProposal: rewritten as unknown as Prisma.InputJsonValue }),
-        // Solo aceptar cambia el cronograma real → marca "cambios sin subir". Un descarte puro no.
+        // Aceptar Y fusionar cambian el cronograma real → marca "cambios sin subir". Un
+        // descarte puro no (nada se escribió).
         ...(accepted.length > 0 ? { lastEditedByHuman: now } : {}),
       },
     });
   }, { maxWait: 10000, timeout: 30000 });
 
-  // Audit best-effort POST-tx (mismo patrón que phases/[phaseId]/apply): solo si se aplicó algo.
+  // Audit best-effort POST-tx (mismo patrón que phases/[phaseId]/apply): solo si se aplicó algo
+  // (aceptar O fusionar — las dos mutan el cronograma real).
   if (accepted.length > 0) {
     try {
       const snapPhases = await prisma.timelinePhase.findMany({
@@ -267,19 +285,64 @@ export async function POST(
         where: { id: tl.id },
         select: { anchorStartDate: true },
       });
+      /* El corrimiento del cierre entra en la RAZÓN (Tanda J): la línea de auditoría decía
+         cuántas sugerencias se aceptaron, no qué consecuencia tuvieron. Quien la lea después
+         —o el watchdog— necesita saber si el proyecto se corrió. */
+      const anchorDespues = tlRow?.anchorStartDate?.toISOString() ?? null;
+      const corrimiento = describeEndShift(
+        projectedEnd(anchorAntes, fasesAntes),
+        projectedEnd(anchorDespues, snapPhases),
+      );
       await prisma.timelineChange.create({
         data: {
           timelineId: tl.id,
-          reason: `Sugerencias del handoff aceptadas por ítem (${accepted.length} aceptadas, ${discardKeys.size} descartadas).`,
+          reason:
+            `Sugerencias del handoff aceptadas por ítem (${accepted.length} aceptadas, ${discardKeys.size} descartadas).` +
+            (corrimiento ? ` ${corrimiento}` : ""),
           kind: "AI_ASSIST",
           instruction: null,
           changedByEmail: guard.user.email ?? null,
           snapshot: {
-            anchorStartDate: tlRow?.anchorStartDate?.toISOString() ?? null,
+            anchorStartDate: anchorDespues,
             phases: snapPhases,
           } as unknown as Prisma.InputJsonValue,
         },
       });
+
+      /* ── EL HUECO QUE ESTO CIERRA (Tanda J) ─────────────────────────────────
+         Aceptar un `SET_ANCHOR` acá movía TODAS las fechas del proyecto sin emitir
+         `ANCHOR_CHANGED`. El PUT del cronograma sí lo emite; este camino no, así que el
+         watchdog —el único escritor de CsAlert— no se enteraba nunca de que el arranque se
+         había movido por una sugerencia del handoff. El cierre viaja en before/after (son
+         Json, no hace falta ningún enum nuevo). */
+      if (anchorAceptado && (anchorAntes ?? null) !== (anchorDespues ?? null)) {
+        const proj = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { clientId: true },
+        });
+        if (proj) {
+          await emitTimelineEventsSafe(
+            prisma,
+            {
+              projectId,
+              clientId: proj.clientId,
+              timelineId: tl.id,
+              actorEmail: guard.user.email ?? null,
+              source: "AI_ASSIST_APPLY",
+            },
+            [
+              {
+                entityType: "TIMELINE",
+                entityId: tl.id,
+                label: "Fecha de arranque (sugerencia del handoff aceptada)",
+                action: "ANCHOR_CHANGED",
+                before: { anchorStartDate: anchorAntes, projectedEnd: projectedEnd(anchorAntes, fasesAntes).label },
+                after: { anchorStartDate: anchorDespues, projectedEnd: projectedEnd(anchorDespues, snapPhases).label },
+              },
+            ],
+          );
+        }
+      }
     } catch (e) {
       console.error("[proposal/apply-items] audit best-effort falló:", e instanceof Error ? e.message : e);
     }

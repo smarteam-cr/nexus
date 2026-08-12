@@ -22,7 +22,7 @@
  * en clientes multi-proyecto y abre este panel en un modal.
  */
 import { useState, useEffect, useCallback } from "react";
-import { Modal } from "@/components/ui";
+import { Modal, IconCheck } from "@/components/ui";
 
 interface MemberRow {
   sessionId: string;
@@ -174,10 +174,17 @@ export default function ProjectSessionsReview({
           <button
             onClick={confirmAll}
             disabled={confirming}
-            className="flex-shrink-0 text-[11px] font-semibold rounded-lg px-2.5 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            className="flex-shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold rounded-lg px-2.5 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
             title="Marca como revisados los vínculos propuestos por la IA que siguen en la lista"
           >
-            {confirming ? "Confirmando…" : `✓ Confirmar contexto (${data.unreviewedCount})`}
+            {confirming ? (
+              "Confirmando…"
+            ) : (
+              <>
+                <IconCheck className="w-3 h-3" />
+                Confirmar contexto ({data.unreviewedCount})
+              </>
+            )}
           </button>
         )}
       </div>
@@ -202,8 +209,9 @@ export default function ProjectSessionsReview({
                     </span>
                   )}
                   {m.reviewedAt && (
-                    <span className="text-[9px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5 flex-shrink-0">
-                      ✓ revisada
+                    <span className="inline-flex items-center gap-1 text-[9px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5 flex-shrink-0">
+                      <IconCheck className="w-2.5 h-2.5" />
+                      revisada
                     </span>
                   )}
                   {m.linkedElsewhere && (

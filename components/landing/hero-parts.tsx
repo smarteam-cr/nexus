@@ -23,6 +23,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
 import { ScaleSlider } from "@/components/ui/ScaleSlider";
+import { IconX } from "@/components/ui/AcceptReject";
 import { usePopoverDismiss } from "@/components/ui/usePopoverDismiss";
 import { LOGO_SCALE_MAX, LOGO_SCALE_MIN, LOGO_SCALE_STEP, logoScaleStyle, resolveLogoScale } from "@/lib/ui/logo-scale";
 import type { LandingContext } from "./types";
@@ -67,7 +68,7 @@ export function CoverButton({
       </button>
       {coverImageUrl && (
         <button type="button" style={{ ...PILL, background: "transparent" }} disabled={busy} onClick={() => onSet(null)}>
-          ✕ Quitar
+          <IconX className="w-3 h-3" />Quitar
         </button>
       )}
     </div>

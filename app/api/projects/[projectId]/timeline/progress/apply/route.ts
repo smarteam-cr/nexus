@@ -8,6 +8,10 @@
  * Body = subconjunto ACEPTADO por el CSE (puede haber destildado ítems):
  *   { phaseIds: string[], taskIds: string[], suspendedTaskIds: string[], currentPhaseId: string | null }
  *
+ * ⚠ El body se RECORTA contra `pendingProgress` (lib/timeline/confirmar-avance.ts). Confirmar es
+ * confirmar el borrador: lo que la IA no propuso no puede quedar firmado `AI_CONFIRMED`. Las
+ * suspensiones son la excepción declarada — nunca vienen del borrador y se firman `HUMAN`.
+ *
  * E — regla de cierre: una fase de phaseIds solo cierra si TODAS sus tareas quedan resueltas
  * (DONE vía taskIds, o SUSPENDED vía suspendedTaskIds, o ya lo estaban); si no → 400. Las
  * suspendidas se marcan SUSPENDED SIN actualEnd (no se ejecutaron).
@@ -31,6 +35,7 @@ import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
+import { acotarAlBorrador, type BorradorDeAvance } from "@/lib/timeline/confirmar-avance";
 
 type ProgressRow = { id: string; status: string; actualStart: Date | null; actualEnd: Date | null };
 
@@ -56,16 +61,41 @@ export async function POST(
   };
   const asIds = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.length > 0) : [];
-  const phaseIds = asIds(body.phaseIds);
-  const taskIds = asIds(body.taskIds);
-  const suspendedTaskIds = asIds(body.suspendedTaskIds);
-  const currentPhaseId = typeof body.currentPhaseId === "string" ? body.currentPhaseId : null;
 
   const tl = await prisma.projectTimeline.findUnique({
     where: { projectId },
-    select: { id: true, project: { select: { clientId: true } } },
+    select: { id: true, pendingProgress: true, project: { select: { clientId: true } } },
   });
   if (!tl) return NextResponse.json({ error: "No hay cronograma" }, { status: 404 });
+
+  /* ── Confirmar es confirmar EL BORRADOR, no lo que diga el body ──────────────
+     Este endpoint firma lo que escribe como `AI_CONFIRMED` ("lo detectó la IA, un humano lo
+     confirmó"). Hasta 2026-08-11 nunca leía `pendingProgress`: los ids salían del body y solo
+     se validaba que fueran del proyecto, así que se podían marcar hechas tareas que el agente
+     jamás propuso —o sin borrador alguno— con esa firma. La regla vive pura y testeada en
+     lib/timeline/confirmar-avance.ts; acá solo se aplica. */
+  const acotado = acotarAlBorrador(
+    {
+      phaseIds: asIds(body.phaseIds),
+      taskIds: asIds(body.taskIds),
+      suspendedTaskIds: asIds(body.suspendedTaskIds),
+      currentPhaseId: typeof body.currentPhaseId === "string" ? body.currentPhaseId : null,
+    },
+    (tl.pendingProgress as BorradorDeAvance | null) ?? null,
+  );
+  const { phaseIds, taskIds, suspendedTaskIds, currentPhaseId, ignorados } = acotado;
+  if (ignorados.length > 0) {
+    console.warn(
+      `[progress/apply] ${ignorados.length} id(s) del body no estaban en el borrador de ${projectId} — ignorados:`,
+      ignorados,
+    );
+  }
+  if (phaseIds.length === 0 && taskIds.length === 0 && suspendedTaskIds.length === 0 && !currentPhaseId) {
+    return NextResponse.json(
+      { error: "No hay un borrador de avance vigente para confirmar. Volvé a correr «Re-chequear avance».", ignorados },
+      { status: 400 },
+    );
+  }
 
   // E — regla de cierre: una fase solo cierra si TODAS sus tareas quedan resueltas (DONE o
   // SUSPENDED), contando lo aceptado en esta tanda. Si queda alguna activa (PENDING/IN_PROGRESS)
@@ -153,9 +183,14 @@ export async function POST(
         validSuspendedIds = valid.map((t) => t.id);
         if (validSuspendedIds.length > 0) {
           // Defense-in-depth simétrica: el avance no pisa un DONE humano con SUSPENDED.
+          /* ⚠ Procedencia HUMAN, no AI_CONFIRMED: el borrador NUNCA propone suspensiones (el
+             selector arranca vacío en el banner), así que suspender es siempre una decisión que
+             tomó el CSE mirando la pantalla. Firmarla como "detectada por la IA" era decir algo
+             falso justo en el campo que la fundación D.3 y el watchdog usan para distinguir el
+             avance detectado del cargado a mano. */
           const r = await tx.timelineTask.updateMany({
             where: { id: { in: validSuspendedIds }, status: { not: "DONE" } },
-            data: { status: "SUSPENDED", ...statusMeta },
+            data: { status: "SUSPENDED", statusSource: "HUMAN", statusChangedByEmail: guard.user.email ?? null, statusChangedAt: now },
           });
           tasksSuspended = r.count;
         }

@@ -15,7 +15,8 @@
 import { useState, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/Toast";
-import { plural } from "@/lib/timeline/weeks";
+import { IconCheck } from "@/components/ui/AcceptReject";
+import { plural, fmtFull } from "@/lib/timeline/weeks";
 import type { PortfolioRow } from "@/lib/portfolio/load";
 
 type Health = "SALUDABLE" | "EN_FRICCION" | "EN_RIESGO" | "PAUSADO";
@@ -301,7 +302,7 @@ export default function PortfolioGrid({
                 key={`h-${g.clientId}`}
                 g={g}
                 chips={renderClientChips?.(g.clientId)}
-                right={<SetupPill state={g.items[0].setup.procesos ? "done" : "missing"} label={g.items[0].setup.procesos ? "✓ Procesos" : "Sin procesos"} />}
+                right={<SetupPill state={g.items[0].setup.procesos ? "done" : "missing"} label={g.items[0].setup.procesos ? <><IconCheck className="w-3 h-3" />Procesos</> : "Sin procesos"} />}
               />,
               ...g.items.map((r) => <NodataRow key={r.projectId} r={r} />),
             ])}
@@ -397,13 +398,13 @@ function ClientHeaderRow({ g, right, chips }: { g: ClientGroup; right?: ReactNod
 }
 
 // Pill de un paso del setup: done (verde) / draft (ámbar) / missing (rojo).
-function SetupPill({ state, label }: { state: "done" | "draft" | "missing"; label: string }) {
+function SetupPill({ state, label }: { state: "done" | "draft" | "missing"; label: ReactNode }) {
   const cls = {
     done: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20",
     draft: "text-amber-600 bg-amber-500/10 border-amber-500/30",
     missing: "text-red-600 bg-red-500/10 border-red-500/25",
   }[state];
-  return <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${cls}`}>{label}</span>;
+  return <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${cls}`}>{label}</span>;
 }
 
 // Deep-link al panel del cliente con el tab del proyecto seleccionado (?tab=), NO a la página
@@ -455,6 +456,7 @@ function ActionCard({
             {r.projectName}
           </Link>
           <div className="text-[11px] text-fg-muted truncate">{r.cseName || "sin CSE"}</div>
+          <CierreProyectado r={r} />
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <ClientPortalLink clientId={r.clientId} />
@@ -487,14 +489,36 @@ function ActionCard({
       {/* Canvas generados (#4) — mismas pills que el checklist de "Sin datos". Procesos es a
           nivel CLIENTE → va en el encabezado del grupo, no se duplica en la card. */}
       <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-        <SetupPill state={r.setup.handoff ? "done" : "missing"} label={r.setup.handoff ? "✓ Handoff" : "Sin handoff"} />
-        <SetupPill state={r.setup.kickoff ? "done" : "missing"} label={r.setup.kickoff ? "✓ Kickoff" : "Sin kickoff"} />
+        <SetupPill state={r.setup.handoff ? "done" : "missing"} label={r.setup.handoff ? <><IconCheck className="w-3 h-3" />Handoff</> : "Sin handoff"} />
+        <SetupPill state={r.setup.kickoff ? "done" : "missing"} label={r.setup.kickoff ? <><IconCheck className="w-3 h-3" />Kickoff</> : "Sin kickoff"} />
         <SetupPill
           state={r.setup.cronograma === "publicado" ? "done" : r.setup.cronograma === "borrador" ? "draft" : "missing"}
-          label={r.setup.cronograma === "publicado" ? "✓ Cronograma" : r.setup.cronograma === "borrador" ? "Cronograma sin subir" : "Sin cronograma"}
+          label={r.setup.cronograma === "publicado" ? <><IconCheck className="w-3 h-3" />Cronograma</> : r.setup.cronograma === "borrador" ? "Cronograma sin subir" : "Sin cronograma"}
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * El cierre proyectado y cuánto se corrió desde que se prometió (Tanda J).
+ * Sale de `summary.closing`: el proyectado del plan vivo, el prometido del baseline congelado.
+ * Solo se pinta con fecha — sin ancla no hay calendario y no se inventa uno.
+ */
+function CierreProyectado({ r }: { r: PortfolioRow }) {
+  const c = r.summary.closing;
+  if (!c.projectedISO) return null;
+  const corrido = c.driftDays !== null && c.driftDays > 0;
+  return (
+    <span className="text-[11px] text-fg-muted whitespace-nowrap">
+      Cierre {fmtFull(c.projectedISO)}
+      {corrido && (
+        <span className="text-amber-600 font-medium">
+          {" "}
+          · {plural(c.driftDays as number, "día", "días")} después de lo prometido
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -512,6 +536,7 @@ function ScopeRow({ r }: { r: PortfolioRow }) {
         <div className="min-w-0">
           <span className="text-sm font-medium text-fg">{r.projectName}</span>
           <span className="text-[11px] text-fg-muted"> · {r.cseName || "sin CSE"}</span>
+          <div><CierreProyectado r={r} /></div>
         </div>
         <span className="text-xs font-semibold text-amber-600 whitespace-nowrap">{parts} <span className="text-fg-muted font-normal">vs vendido</span></span>
       </Link>
@@ -548,11 +573,11 @@ function NodataRow({ r }: { r: PortfolioRow }) {
           <span className="text-[11px] text-fg-muted"> · {r.cseName || "sin CSE"}</span>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
-          <SetupPill state={s.handoff ? "done" : "missing"} label={s.handoff ? "✓ Handoff" : "Sin handoff"} />
-          <SetupPill state={s.kickoff ? "done" : "missing"} label={s.kickoff ? "✓ Kickoff" : "Sin kickoff"} />
+          <SetupPill state={s.handoff ? "done" : "missing"} label={s.handoff ? <><IconCheck className="w-3 h-3" />Handoff</> : "Sin handoff"} />
+          <SetupPill state={s.kickoff ? "done" : "missing"} label={s.kickoff ? <><IconCheck className="w-3 h-3" />Kickoff</> : "Sin kickoff"} />
           <SetupPill
             state={s.cronograma === "publicado" ? "done" : s.cronograma === "borrador" ? "draft" : "missing"}
-            label={s.cronograma === "publicado" ? "✓ Cronograma" : s.cronograma === "borrador" ? "Cronograma sin subir" : "Sin cronograma"}
+            label={s.cronograma === "publicado" ? <><IconCheck className="w-3 h-3" />Cronograma</> : s.cronograma === "borrador" ? "Cronograma sin subir" : "Sin cronograma"}
           />
         </div>
       </Link>

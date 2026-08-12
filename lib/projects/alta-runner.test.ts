@@ -62,6 +62,11 @@ const fakePrisma = {
       [...db.proyectos.values()].filter(
         (p) => p.hubspotServiceId && where.hubspotServiceId.in.includes(p.hubspotServiceId),
       ),
+    /* Para `tieneOTuvoImplementacionHubSpot` (nota por defecto del handoff). Ninguno de los
+       fixtures de este archivo declara otro proyecto en la misma empresa, así que siempre 0 —
+       lo que importa acá es que el doble responda, no que ejercite el caso "sí hay". Ese caso
+       lo cubre `lib/handoff/duenio.test.ts`, que prueba la función pura sin tocar la base. */
+    count: async () => 0,
     update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
       const f = db.proyectos.get(where.id);
       if (!f) throw new Error("no existe");
@@ -364,16 +369,49 @@ describe("al terminar", () => {
     expect(f.altaReclasificadoAt).not.toBeNull();
   });
 
-  it("un proyecto que cuelga de otro NO nace con documento propio", async () => {
-    /* El motivo por el que el documento nace ACÁ y no en el alta: en el instante del alta el
-       tipo y el hermano valen null, así que la regla diría SIEMPRE "propio" y todo hermano
-       tendría un documento que contradice al de su hermana. */
+  /**
+   * ── SE DIO VUELTA DOS VECES, Y ESTE TEST ES EL REGISTRO ────────────────────
+   * (Tanda F, 2026-08-07) Este test afirmaba que un proyecto colgado de otro NO nacía con
+   * documento propio. Era correcto mientras el objetivo fuera «que no existan dos documentos del
+   * mismo trato»; dejó de serlo cuando se midió el precio: **el agente de handoff es también el
+   * que escribe las FASES del cronograma**, así que el hermano menor se quedaba con CERO fases y
+   * una pantalla sin botón.
+   *
+   * (Tanda G, 2026-08-08) Después este test exigía que el handoff naciera CON la nota de
+   * exclusión nombrada. También dejó de ser correcto: persistir la nota la volvía perdible —
+   * «Regenerar» la borraba, tres de las cinco puertas que crean un `Handoff` nunca la escribían,
+   * y un handoff viejo se quedaba sin ella para siempre. Ahora la nota se RECALCULA en cada
+   * generación (`exclusionDelSistema` + `componerExclusiones`), así que el `create` no la lleva
+   * y eso es el arreglo, no un olvido.
+   */
+  it("LA guarda: un proyecto que cuelga de otro nace con SU documento, y SIN nota persistida", async () => {
+    // El hermano mayor existe en la base (de él sale el nombre de la nota, ya no al crear).
+    sembrar({ id: "proyecto-cs", name: "Spectrum - MKT + SALES" });
     sembrar({ altaHermanoHsId: "hs-hermano" });
     espejoEscribe = { hubspotPipelineId: DEV, hermanoCsProjectId: "proyecto-cs" };
+
     const r = await avanzarAlta("p1");
+
     expect(r.termino).toBe(true);
-    expect(db.handoffs, "el hermano nació con un documento que contradice al de su hermana").toHaveLength(0);
-    expect(canvasesCreados).toHaveLength(0);
+    expect(db.handoffs, "el hermano menor se quedó sin documento — y por lo tanto sin fases").toHaveLength(1);
+    expect(canvasesCreados).toEqual(["p1"]);
+    const nota = (db.handoffs[0] as { contextExclusions?: string | null }).contextExclusions;
+    expect(
+      nota ?? null,
+      "volvió a persistir la nota al crear: «Regenerar» puede borrarla otra vez",
+    ).toBeNull();
+  });
+
+  it("el alta no consulta al hermano mayor para crear el handoff", async () => {
+    /* Consecuencia directa de recalcular: el alta dejó de necesitar el nombre del mayor, así que
+       un puntero a un proyecto borrado no puede hacerla fallar por esa vía. */
+    sembrar({ altaHermanoHsId: "hs-hermano" });
+    espejoEscribe = { hubspotPipelineId: DEV, hermanoCsProjectId: "proyecto-que-no-existe" };
+
+    const r = await avanzarAlta("p1");
+
+    expect(r.termino).toBe(true);
+    expect(db.handoffs).toHaveLength(1);
   });
 
   it("la reclasificación se paga UNA vez aunque se reintente", async () => {

@@ -14,7 +14,7 @@ import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 // Import DIRECTO del motor puro (no de lib/lifecycle/index): el index re-exporta el
 // loader con Prisma y este módulo debe quedar puro (unit-testeable) — ver nota en el index.
 import { stageAtOrAfter, STAGE_LABEL_ES } from "@/lib/lifecycle/stage-engine";
-import { computePhaseRanges, addWeeks, isOverdueByDate } from "@/lib/timeline/weeks";
+import { computePhaseRanges, addWeeks, isOverdueByDate, projectedEnd } from "@/lib/timeline/weeks";
 
 export const STALL_DAYS = 14; // "sin avance" por defecto (configurable después)
 /** Días de gracia de la alarma temprana de cronograma sin consensuar. */
@@ -112,6 +112,20 @@ export interface ProjectSummary {
     weeksDelta: number;
     attenuated: boolean; // baseline WEAK → probablemente detalle, no extra real
     exceeded: boolean;
+  };
+  /**
+   * ── EL CIERRE, PROYECTADO Y PROMETIDO (Tanda J) ──────────────────────────
+   * `projected` sale del plan VIVO (ancla + span). `promised` es el máximo `plannedEnd` del
+   * baseline activo — la promesa ya congelada al publicar, sin ningún campo nuevo. `driftDays`
+   * es «cuánto se movió el fin desde que se lo prometimos al cliente»: determinístico, sin IA,
+   * y la pregunta que la cartera no podía responder.
+   * ⚠ Solo lectura y solo del cronograma: NUNCA input de cobranza (ver el docblock de
+   * `projectedEnd` en lib/timeline/weeks.ts).
+   */
+  closing: {
+    projectedISO: string | null; // null sin ancla o sin fases
+    promisedISO: string | null; // null sin baseline
+    driftDays: number | null; // >0 = se corrió DESPUÉS de prometerlo
   };
   health: {
     derived: ProjectHealth;
@@ -254,10 +268,35 @@ export function computeProjectSummary(input: SummaryInput): ProjectSummary {
     const baseTaskIds = new Set(basePhases.flatMap((p) => (Array.isArray(p.tasks) ? p.tasks.map((t) => t.id) : [])));
     const addedPhases = phases.filter((p) => !basePhaseIds.has(p.id)).length;
     const addedTasks = allTasks.filter((t) => !baseTaskIds.has(t.id)).length;
+    /* ⚠ `totalWeeks` (ESFUERZO) a propósito, y NO `timelineSpan`: acá se mide ALCANCE —cuánto
+       más trabajo que lo vendido— no calendario. El cierre proyectado de abajo sí usa span.
+       Son dos preguntas distintas; unificarlas haría que una de las dos mienta. */
     const weeksDelta = totalWeeks(phases) - totalWeeks(basePhases);
     const exceeded = addedPhases > 0 || addedTasks > 0 || weeksDelta > 0;
     scope = { measurable: true, addedPhases, addedTasks, weeksDelta, attenuated: weakBaseline, exceeded };
   }
+
+  /* ── El cierre proyectado vs. el prometido ──────────────────────────────────
+     `promisedISO` no necesita ningún campo nuevo: el baseline YA congela `plannedEnd` absoluto
+     por fase al publicar, así que el máximo ES la promesa. */
+  const closingProjected = projectedEnd(
+    input.anchorStartDate?.toISOString() ?? null,
+    [...phases].sort((a, b) => a.order - b.order),
+  );
+  const basePlannedEnds = Array.isArray(input.baseline?.snapshot?.phases)
+    ? input.baseline.snapshot.phases
+        .map((p) => (p.plannedEnd ? new Date(p.plannedEnd).getTime() : null))
+        .filter((t): t is number => t !== null)
+    : [];
+  const promisedMs = basePlannedEnds.length > 0 ? Math.max(...basePlannedEnds) : null;
+  const closing: ProjectSummary["closing"] = {
+    projectedISO: closingProjected.date?.toISOString() ?? null,
+    promisedISO: promisedMs !== null ? new Date(promisedMs).toISOString() : null,
+    driftDays:
+      closingProjected.date && promisedMs !== null
+        ? Math.round((closingProjected.date.getTime() - promisedMs) / 86_400_000)
+        : null,
+  };
 
   // ── Ciclo de vida: ¿las alarmas de cronograma aplican en esta etapa? ──
   // Sin handoff generado (lc.defined === false) NO hay juicios de ciclo de vida: ni etapa,
@@ -365,6 +404,7 @@ export function computeProjectSummary(input: SummaryInput): ProjectSummary {
     weakBaseline,
     hasBaseline,
     scope,
+    closing,
     health: { derived, override, resolved, source: override ? "override" : "derived" },
     scheduleAlarmsActive,
     stage,

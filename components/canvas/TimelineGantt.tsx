@@ -29,7 +29,7 @@
  * es la barrera. La marca en sí nunca cruza (columna excluida del mapper externo).
  */
 
-import { useState, useRef, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
+import { useState, useRef, useMemo, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
 import {
   DndContext,
   closestCorners,
@@ -59,16 +59,23 @@ import {
   absoluteWeek,
   overduePlannedEnd,
   isOverdueByDate,
+  projectedEnd,
+  displayedEnd,
+  closeDateDiverges,
 } from "@/lib/timeline/weeks";
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
 import { findDuplicateGroups } from "@/lib/timeline/particularidad-identity";
+import { fasesProbablementeRepetidas } from "@/lib/timeline/phase-identity";
 import { buildPhaseSignal, type SignalTone } from "@/lib/timeline/phase-signal";
 import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
-import { describeChanges, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
+import { describeChange, sortChangesByImpact, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
+import { filasDeDetalle, type ImpactoEnElCierre } from "@/lib/timeline/sugerencia-detalle";
 import { clientStatusLine } from "@/lib/timeline/client-status";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
+import DatePickerField from "@/components/ui/DatePickerField";
+import { AcceptButton, RejectButton, IconCheck, IconX } from "@/components/ui/AcceptReject";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
 
@@ -109,6 +116,9 @@ export interface GanttPhase {
   /** Sesiones de entrega reales (CSE/dev + cliente) ejecutadas en la ventana de la fase.
    *  Solo-lectura, calculado por el server. number en fases iniciadas; null → usa el estimado. */
   actualSessionCount?: number | null;
+  /** Fases que comparten semanas con ésta. Con solape, `actualSessionCount` cuenta las MISMAS
+   *  reuniones en todas — cierto por fase, engañoso si alguien las suma. Se dice en el tooltip. */
+  solapaCon?: string[];
   activityType: string | null;
   /** D.2 — avance a nivel fase: DONE = completada, IN_PROGRESS = el "hoy". */
   status?: GanttTaskStatus;
@@ -127,6 +137,11 @@ interface Props {
   onAddTask?: (phaseKey: string, weekIndex: number) => void;
   // Nota: el borrado de tarea se hace desde el TaskDetailDrawer, no desde la fila del Gantt.
   onSetAnchor?: (isoDate: string) => void; // yyyy-mm-dd — fijar arranque desde el Gantt
+  // Tanda K — cierre fijado a mano. `closeOverride` en yyyy-mm-dd ("" = sin fijar, seguir el
+  // proyectado). `onSetCloseOverride` presente = editable (mismo gate que `onSetAnchor`: la
+  // preview de propuesta NO lo pasa, así que ahí el chip queda de solo lectura como siempre).
+  closeOverride?: string | null;
+  onSetCloseOverride?: (isoDate: string) => void;
   onAssistPhase?: (phase: GanttPhase) => void; // abrir el dialog de IA scopeado a esta fase
   onRegeneratePhase?: (phase: GanttPhase) => void; // regenerar (borrar+rehacer) las tareas IA de esta fase
   kickoffDate?: string | null; // yyyy-mm-dd de la sesión de kickoff — sugerencia del anchor
@@ -158,6 +173,10 @@ interface Props {
   // del Gantt real — badge "Sugerencia" en la fila de la fase afectada + fila fantasma por fase
   // nueva — y el CSE las resuelve una por una. El Gantt nunca se reemplaza por la propuesta.
   proposalDeltas?: ProposalDelta[];
+  /** Cuánto movería el cierre CADA sugerencia por separado (lib/timeline/sugerencia-detalle).
+   *  Sin esto la fila dice QUÉ cambia pero no qué le hace a la fecha de fin — que es lo que se
+   *  está decidiendo. Ausente = no se pinta el chip (p. ej. sin fecha de arranque). */
+  impactoPorDelta?: Map<string, ImpactoEnElCierre>;
   onResolveProposalDelta?: (key: string, accept: boolean) => void;
   // Convertir una particularidad en TAREA del cronograma (dueño + fecha). Sin esto el botón no sale.
   onConvertParticularidad?: (id: string) => void;
@@ -381,6 +400,8 @@ export default function TimelineGantt({
   onUpdateTask,
   onAddTask,
   onSetAnchor,
+  closeOverride,
+  onSetCloseOverride,
   onAssistPhase,
   onRegeneratePhase,
   kickoffDate,
@@ -396,6 +417,7 @@ export default function TimelineGantt({
   onEditParticularidad,
   onAddParticularidad,
   proposalDeltas,
+  impactoPorDelta,
   onResolveProposalDelta,
   sugerenciasSlot,
   proposalGlobalSlot,
@@ -407,9 +429,30 @@ export default function TimelineGantt({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // #3 — renombrar inline: el título es TEXTO; al hacer clic se vuelve input (solo esa tarea).
   const [editingTitleKey, setEditingTitleKey] = useState<string | null>(null);
-
+  // Tanda K — "Mantener la mía" silencia el aviso de divergencia hasta la PRÓXIMA sugerencia
+  // distinta (guarda el ISO de la sugerida que se descartó; no persiste — vuelve a avisar si
+  // se recarga la página, a propósito: es un recordatorio, no una decisión escrita en la base).
+  const [dismissedSuggestionIso, setDismissedSuggestionIso] = useState<string | null>(null);
+  /** Qué sugerencia tiene el antes/después abierto. Una sola a la vez: son filas contiguas y
+   *  varias desplegadas a la vez vuelven el Gantt ilegible. */
+  const [detalleAbierto, setDetalleAbierto] = useState<string | null>(null);
   const ranges = computePhaseRanges(phases);
+  /* ¿Hay dos fases que son el mismo trabajo con otro nombre? Es un AVISO sobre las fases que YA
+     existen —el caso real de Wherex, tres pares conviviendo sobre 11 fases—, no una acción: el
+     avance del proyecto las cuenta dos veces y con esa cantidad de filas nadie lo ve a ojo.
+     Fusionarlas de verdad (mover tareas, re-apuntar particularidades, borrar la fase) va por
+     scripts/fusionar-fases-cronograma.ts, con dry-run: es una decisión humana. */
+  const repetidas = useMemo(
+    () => fasesProbablementeRepetidas(phases.filter((p) => p.id).map((p) => ({ id: p.id!, name: p.name }))),
+    [phases],
+  );
   const total = timelineSpan(phases); // ancho de calendario (max end) — soporta fases en paralelo
+  // Cierre proyectado: `null` sin ancla o sin fases (ver projectedEnd). Deriva de las MISMAS
+  // fases que dibujan la grilla, así que la fecha cae exactamente en su borde derecho.
+  const cierre = projectedEnd(anchor, phases);
+  // Tanda K — lo que se PINTA (override si existe) y si hay que preguntar (diverge del vivo).
+  const cierreVisible = displayedEnd(closeOverride, cierre);
+  const cierreDiverge = closeDateDiverges(closeOverride, cierre);
   // "Hoy" es hora de pared LOCAL del usuario (a diferencia de las fechas derivadas
   // del anchor, que son días de calendario en UTC — ver lib/timeline/weeks.ts).
   // Por eso NO puede calcularse en el servidor: `curInRange` gatea nodos y el
@@ -677,6 +720,55 @@ export default function TimelineGantt({
           </span>
         )}
 
+        {/* CIERRE PROYECTADO / FIJADO (Tanda J + K) — arranque + span, la misma fórmula que dibuja
+            esta grilla y que ve el cliente cuando hay atraso. Hasta la Tanda J el CSE no veía
+            NINGUNA fecha de fin; la Tanda K deja fijarla a mano (mismo gesto que el arranque) y
+            persistir esa elección — con override, GANA sobre lo derivado.
+            ⚠ Editable SOLO cuando `onSetCloseOverride` viene (mismo gate que `onSetAnchor`): la
+            PREVIEW de una propuesta no lo pasa, así que ahí sigue siendo un chip de solo lectura.
+            Si diverge de lo recién calculado (nueva propuesta aceptada, duración editada), no se
+            pisa el override en silencio — se pregunta con el banner de abajo. */}
+        {onSetCloseOverride ? (
+          <div className="relative">
+            <DatePickerField
+              value={closeOverride ?? ""}
+              onChange={onSetCloseOverride}
+              placeholder={cierre.label ? `Cierre proyectado: ${cierre.label}` : "Fijar fecha de cierre"}
+              manual={cierreVisible.isOverride}
+            />
+            {cierreDiverge && dismissedSuggestionIso !== (cierre.date?.toISOString() ?? null) && (
+              <div className="absolute left-0 top-full mt-1.5 z-40 w-72 rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-[11px] text-warn-ink leading-relaxed shadow-lg">
+                El sistema ahora sugiere el cierre el <strong>{cierre.label}</strong> — vos tenés fijado el {cierreVisible.label}.
+                <div className="flex items-center gap-3 mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSetCloseOverride("");
+                      setDismissedSuggestionIso(null);
+                    }}
+                    className="font-semibold underline underline-offset-2 hover:opacity-80"
+                  >
+                    Usar la sugerida
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDismissedSuggestionIso(cierre.date?.toISOString() ?? null)}
+                    className="text-fg-muted hover:text-warn-ink transition-colors"
+                  >
+                    Mantener la mía
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          cierreVisible.label && (
+            <span className="text-xs font-semibold text-fg-secondary bg-surface-hover/60 border border-line/50 rounded-lg px-3 py-1.5">
+              Cierre proyectado: {cierreVisible.label}
+            </span>
+          )
+        )}
+
         {/* Sugerencia: fecha de la sesión de kickoff. Aparece si difiere del anchor
             actual (incl. cuando está vacío). Un click la fija; se guarda con «Guardar». */}
         {onSetAnchor && kickoffDate && kickoffDate !== anchor && (
@@ -733,6 +825,16 @@ export default function TimelineGantt({
             <SortableContext items={renderPhases.map((ph) => ph.key)} strategy={verticalListSortingStrategy}>
             {renderPhases.map((p, i) => {
               const range = ranges[i];
+              /* ── POR QUÉ ESTA FILA ARRANCA ANTES QUE LA DE ARRIBA ──────────────────
+                 Leyendo la columna de la izquierda, una fase con `startWeek` explícito
+                 puede aparecer bajo otra que empieza más tarde, y el plan parece
+                 desordenado. NO se reordena la lista para "arreglarlo": el orden ES el
+                 cronograma — una fase con inicio `auto` arranca donde terminó LA DE
+                 ARRIBA (ver computePhaseRanges), así que ordenar por fecha reprograma
+                 el proyecto solo. Medido sobre la cartera (2026-08-11): ordenaría mal
+                 13 de los 14 proyectos desordenados — a Almotec le corría el cierre de
+                 la S11 a la S17. Se explica el salto en vez de moverlo. */
+              const arrancaAntesQueLaDeArriba = i > 0 && range.start < ranges[i - 1].start;
               const meta = p.activityType ? ACTIVITY_META[p.activityType] : null;
               const isOpen = expanded.has(p.key);
               /* El punto rojo se ganaba con "alguna tarea suya venció", que en un proyecto real
@@ -809,6 +911,14 @@ export default function TimelineGantt({
                         ) : (
                           <span className="flex-1 min-w-[12rem] break-words">{p.name}</span>
                         )}
+                        {p.id && repetidas.has(p.id) && (
+                          <span
+                            className="flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-warn-surface text-warn-ink border border-warn-line"
+                            title={`Parece el mismo trabajo que «${repetidas.get(p.id)}». Si están repetidas, el avance del proyecto las cuenta dos veces — revisalo y unificalas a mano.`}
+                          >
+                            ¿repetida?
+                          </span>
+                        )}
                         {(onAssistPhase || onRegeneratePhase || (editable && canDelete && onRemovePhase)) && (
                           <span className="ml-auto flex items-center gap-1 flex-shrink-0">
                             {onAssistPhase && (
@@ -856,8 +966,20 @@ export default function TimelineGantt({
                             <span>sem</span>
                             <span className="text-fg-muted">·</span>
                             {p.actualSessionCount != null ? (
-                              <span className="text-fg-muted font-medium" title="Sesiones de entrega ejecutadas (CSE/Dev + cliente) en la ventana de la fase — calculado">
-                                {p.actualSessionCount} ses
+                              /* Con fases pisadas, este número cuenta las MISMAS reuniones en todas
+                                 ellas. Es cierto por fase ("esto pasó mientras corría") pero no se
+                                 puede sumar — y sin decirlo parece un error de cálculo. El asterisco
+                                 marca cuándo el número es compartido y con quién. */
+                              <span
+                                className="text-fg-muted font-medium"
+                                title={
+                                  "Sesiones de entrega ejecutadas (CSE/Dev + cliente) en la ventana de la fase — calculado" +
+                                  ((p.solapaCon?.length ?? 0) > 0
+                                    ? `.\n\n⚠ Esta fase se pisa con ${p.solapaCon!.map((n) => `«${n}»`).join(", ")}: esas reuniones se cuentan también ahí. No sumes los contadores de las fases.`
+                                    : "")
+                                }
+                              >
+                                {p.actualSessionCount} ses{(p.solapaCon?.length ?? 0) > 0 ? "*" : ""}
                               </span>
                             ) : (
                               <>
@@ -891,42 +1013,19 @@ export default function TimelineGantt({
                             {p.tasks.length > 0 && ` · ${plural(p.tasks.length, "tarea", "tareas")}`}
                           </span>
                         )}
+                        {/* La fila arranca ANTES que la de arriba: sin decirlo, la lista se lee
+                            como si estuviera desordenada. Se explica, no se reordena (el orden
+                            define el arranque de las fases con inicio automático). */}
+                        {arrancaAntesQueLaDeArriba && (
+                          <span
+                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border text-fg-muted bg-surface-hover border-line flex-shrink-0"
+                            title={`Arranca antes que «${renderPhases[i - 1].name}», la fila de arriba — corre en paralelo o se solapa con ella.\n\nEl orden de la lista no es solo visual: una fase con inicio «auto» arranca donde termina la de arriba. Reordenar por fecha movería las fechas del proyecto.`}
+                          >
+                            ↑ arranca antes
+                          </span>
+                        )}
                         {/* Etiquetas a la derecha: estado + tipo de actividad + estimada + atraso */}
                         <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
-                          {/* Sugerencia de la IA (propuesta del handoff) sobre ESTA fase — se
-                              acepta/descarta acá mismo; nada se aplica solo. */}
-                          {(() => {
-                            const d = p.id ? proposalModByPhase.get(p.id) : undefined;
-                            if (!d || readOnly || !onResolveProposalDelta) return null;
-                            return (
-                              <span
-                                className="flex items-center gap-1 flex-shrink-0"
-                                title={`Sugerencia de la IA (del último handoff): ${describeChanges(d.changes)}`}
-                              >
-                                {/* TODOS los cambios, ordenados por impacto: antes se mostraba
-                                    changes[0] y el resto quedaba en un "+N" — y lo escondido
-                                    solía ser lo que MUEVE el cronograma (duración, semana de
-                                    inicio), mientras el renombre cosmético ocupaba el lugar. */}
-                                <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border text-blue-300 bg-blue-900/30 border-blue-700/40">
-                                  Sugerencia: {describeChanges(d.changes)}
-                                </span>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, true); }}
-                                  title="Aceptar la sugerencia (aplica solo este cambio)"
-                                  className="text-emerald-400 hover:text-emerald-300 text-[11px] font-bold px-0.5"
-                                >
-                                  ✓
-                                </button>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, false); }}
-                                  title="Descartar la sugerencia"
-                                  className="text-red-400 hover:text-red-300 text-[11px] font-bold px-0.5"
-                                >
-                                  ✗
-                                </button>
-                              </span>
-                            );
-                          })()}
                           {/* UN indicador en lugar de cuatro cajitas de solo lectura (estado, tipo,
                               "estimada" y un punto rojo). El cuadrado lleva el color del tipo de
                               actividad — el mismo de su barra— porque la palabra ya vive en la
@@ -944,6 +1043,122 @@ export default function TimelineGantt({
                           </span>
                         </span>
                       </div>
+
+                      {/* ── SUGERENCIA DE LA IA SOBRE ESTA FASE (propuesta del handoff) ──────
+                          Vive en su PROPIA fila, a lo ancho de la columna, y no dentro de la
+                          hilera de chips de arriba. Ahí estaba antes y se rompía: el chip iba
+                          en un `ml-auto` (alineado a la derecha) con un solo string largo
+                          —«3 → 2 SEMANAS · 4 → 3 SESIONES · NOTAS ACTUALIZADAS»— que no entra
+                          en una columna de ~300px, así que desbordaba HACIA LA IZQUIERDA y
+                          quedaba cortado por el borde, ilegible.
+                          Ahora: `min-w-0` (sin esto un flex hijo se niega a achicarse por
+                          debajo de su contenido y vuelve a desbordar) y UN CHIP POR CAMBIO en
+                          vez de una frase — envuelven solos y cada uno se lee entero.
+                          Los cambios siguen ordenados por impacto: lo que MUEVE el cronograma
+                          (duración, semana de inicio) va primero y el renombre cosmético al
+                          final. Nada se aplica solo: se acepta o descarta acá mismo. */}
+                      {(() => {
+                        const d = p.id ? proposalModByPhase.get(p.id) : undefined;
+                        if (!d || readOnly || !onResolveProposalDelta) return null;
+                        const impacto = impactoPorDelta?.get(d.key);
+                        /* El RENOMBRE sale de la hilera de chips y se cuenta aparte: es el cambio
+                           que más redefine la fase —y el que peor se leía—, escondido como último
+                           badge de una fila de cinco. Caso real de Wherex: «Revisión y limpieza
+                           base» pasaba a llamarse «Integraciones» conservando sus 15 tareas de
+                           limpieza de base; correcto por diseño (una fase con progreso se renombra,
+                           nunca se borra) pero ilegible sin decir que las tareas se quedan. */
+                        const renombre = d.changes.find((c) => c.field === "name");
+                        const otros = sortChangesByImpact(d.changes.filter((c) => c.field !== "name"));
+                        const abierto = detalleAbierto === d.key;
+                        return (
+                          <div
+                            className="ml-[18px] mt-1.5 rounded-lg border border-info-line bg-info-surface px-2.5 py-2 min-w-0 space-y-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-start gap-2">
+                              <div className="flex flex-wrap items-center gap-1 min-w-0 flex-1">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-info-ink flex-shrink-0">
+                                  Sugerencia
+                                </span>
+                                {otros.map((c) => (
+                                  <span
+                                    key={c.field}
+                                    className="text-xs text-fg-secondary bg-surface border border-line rounded px-2 py-0.5 max-w-full break-words"
+                                  >
+                                    {describeChange(c)}
+                                  </span>
+                                ))}
+                              </div>
+                              <span className="flex items-center gap-1 flex-shrink-0">
+                                <AcceptButton
+                                  size="xs"
+                                  aria-label={`Aceptar la sugerencia para «${p.name}»`}
+                                  title="Aceptar: aplica solo este cambio"
+                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, true); }}
+                                />
+                                <RejectButton
+                                  size="xs"
+                                  aria-label={`Descartar la sugerencia para «${p.name}»`}
+                                  title="Descartar la sugerencia"
+                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, false); }}
+                                />
+                              </span>
+                            </div>
+
+                            {/* LO QUE LE HACE A LA FECHA DE FIN. Es el dato que se está decidiendo
+                                y hasta hoy no aparecía en ninguna parte: el encabezado mostraba el
+                                cierre y las filas cambiaban duraciones sin decir cuánto lo mueven.
+                                Ámbar solo cuando de verdad se mueve — su ausencia significa "este
+                                cambio no toca fechas", que es información igual de útil. */}
+                            {impacto?.mueve && impacto.chip && (
+                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+                                <span className="rounded border border-warn-line bg-warn-surface px-1.5 py-0.5 font-semibold text-warn-ink">
+                                  Cierre: {impacto.chip}
+                                </span>
+                                {impacto.fechas && <span className="text-fg-muted">{impacto.fechas}</span>}
+                              </div>
+                            )}
+
+                            {renombre && (
+                              <p className="text-xs leading-relaxed text-fg-secondary">
+                                Pasa a llamarse <span className="font-semibold text-fg">«{String(renombre.to)}»</span>
+                                {p.tasks.length > 0
+                                  ? ` — conserva sus ${plural(p.tasks.length, "tarea actual", "tareas actuales")}.`
+                                  : "."}
+                              </p>
+                            )}
+
+                            {/* El antes/después. Va detrás de un click y no de un hover: un tooltip
+                                no se puede comparar entre filas ni leer en touch, y acá hay texto
+                                largo (las notas). "notas actualizadas" era literalmente indecidible
+                                — no decía ni qué nota ni qué decía antes. */}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setDetalleAbierto(abierto ? null : d.key); }}
+                              className="text-xs font-semibold text-info-ink hover:opacity-75 transition-opacity"
+                              aria-expanded={abierto}
+                            >
+                              {abierto ? "Ocultar detalle" : "Ver detalle"}
+                            </button>
+                            {abierto && (
+                              <dl className="space-y-1 rounded border border-line bg-surface/50 px-2 py-1.5">
+                                {filasDeDetalle(d.changes).map((f) => (
+                                  <div key={f.campo} className="grid grid-cols-[6rem_1fr] gap-x-3 text-xs">
+                                    <dt className={`font-semibold ${f.mueveFechas ? "text-warn-ink" : "text-fg-muted"}`}>
+                                      {f.etiqueta}
+                                    </dt>
+                                    <dd className="min-w-0 break-words text-fg-secondary">
+                                      <span className="text-fg-muted line-through">{f.antes}</span>
+                                      <span className="mx-1 text-fg-muted">→</span>
+                                      <span className="text-fg">{f.despues}</span>
+                                    </dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Celdas de semanas */}
@@ -1135,34 +1350,50 @@ export default function TimelineGantt({
               proposalAdds.map((d) => (
                 <div
                   key={d.key}
-                  className="mt-1 flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-blue-700/50 bg-blue-900/10 px-2.5 py-2"
+                  className="mt-1 flex flex-col gap-1.5 rounded-lg border border-dashed border-info-line bg-info-surface px-2.5 py-2"
                 >
-                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border text-blue-300 bg-blue-900/30 border-blue-700/40 flex-shrink-0">
-                    Fase propuesta
-                  </span>
-                  <span className="text-sm text-fg min-w-0 truncate">{d.phase.name}</span>
-                  <span className="text-[10px] text-fg-muted flex-shrink-0">
-                    {plural(d.phase.durationWeeks, "semana", "semanas")}
-                    {d.phase.sessionCount != null ? ` · ${plural(d.phase.sessionCount, "sesión", "sesiones")}` : ""}
-                    {/* Dónde va a quedar al aceptarla — antes caía al final sin avisar. */}
-                    {d.afterPhaseName ? ` · va después de «${d.afterPhaseName}»` : " · va al principio"}
-                  </span>
-                  <span className="ml-auto flex items-center gap-2.5 flex-shrink-0">
-                    <button
-                      onClick={() => onResolveProposalDelta(d.key, true)}
-                      title="Crear la fase (vacía; las tareas se detallan después)"
-                      className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors"
-                    >
-                      ✓ Aceptar
-                    </button>
-                    <button
-                      onClick={() => onResolveProposalDelta(d.key, false)}
-                      title="Descartar esta fase propuesta"
-                      className="text-[11px] font-semibold text-fg-muted hover:text-red-400 transition-colors"
-                    >
-                      ✗ Descartar
-                    </button>
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border text-info-ink bg-info-surface border-info-line flex-shrink-0">
+                      Fase propuesta
+                    </span>
+                    <span className="text-sm text-fg min-w-0 truncate">{d.phase.name}</span>
+                    <span className="text-xs text-fg-muted flex-shrink-0">
+                      {plural(d.phase.durationWeeks, "semana", "semanas")}
+                      {d.phase.sessionCount != null ? ` · ${plural(d.phase.sessionCount, "sesión", "sesiones")}` : ""}
+                      {/* Dónde va a quedar al aceptarla — antes caía al final sin avisar. */}
+                      {d.afterPhaseName ? ` · va después de «${d.afterPhaseName}»` : " · va al principio"}
+                    </span>
+                    {/* Una fase nueva casi siempre alarga el proyecto — decirlo acá evita que el
+                        corrimiento aparezca recién después de aceptar. */}
+                    {(() => {
+                      const impacto = impactoPorDelta?.get(d.key);
+                      if (!impacto?.mueve || !impacto.chip) return null;
+                      return (
+                        <span
+                          className="rounded border border-warn-line bg-warn-surface px-1.5 py-0.5 text-xs font-semibold text-warn-ink flex-shrink-0"
+                          title={impacto.fechas ?? undefined}
+                        >
+                          Cierre: {impacto.chip}
+                        </span>
+                      );
+                    })()}
+                    <span className="ml-auto flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => onResolveProposalDelta(d.key, true)}
+                        title="Crear la fase (vacía; las tareas se detallan después)"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-emerald-600/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/60 hover:text-emerald-300 transition-colors"
+                      >
+                        <IconCheck className="w-3 h-3" /> Aceptar
+                      </button>
+                      <button
+                        onClick={() => onResolveProposalDelta(d.key, false)}
+                        title="Descartar esta fase propuesta"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface-hover px-2 py-1 text-[11px] font-semibold text-fg-muted hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-400 transition-colors"
+                      >
+                        <IconX className="w-3 h-3" /> Descartar
+                      </button>
+                    </span>
+                  </div>
                 </div>
               ))}
             {editable && onAddPhase && (
@@ -1370,6 +1601,7 @@ export default function TimelineGantt({
           </div>
         );
       })()}
+
     </div>
   );
 }

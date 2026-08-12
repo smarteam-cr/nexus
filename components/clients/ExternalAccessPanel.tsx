@@ -24,6 +24,7 @@
  * Endpoint backend: app/api/projects/[projectId]/external-access/route.ts
  */
 import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { IconCheck } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 
 interface AccessState {
@@ -347,8 +348,9 @@ function ManageView({
       </div>
 
       {justGenerated && !isRevoked && (
-        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs text-emerald-700">
-          ✓ Acceso generado. Podés cambiar la contraseña antes de entregarla.
+        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs text-emerald-700 flex items-center gap-1.5">
+          <IconCheck className="w-3 h-3" />
+          Acceso generado. Podés cambiar la contraseña antes de entregarla.
         </div>
       )}
 
@@ -494,9 +496,9 @@ function PasswordEditor({
         <button
           onClick={copy}
           disabled={!input}
-          className="px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-surface-hover border border-line text-fg-secondary hover:bg-surface-muted transition-colors flex-shrink-0 disabled:opacity-40"
+          className="px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-surface-hover border border-line text-fg-secondary hover:bg-surface-muted transition-colors flex-shrink-0 disabled:opacity-40 inline-flex items-center justify-center"
         >
-          {copied ? "✓" : "Copiar"}
+          {copied ? <IconCheck className="w-3 h-3" /> : "Copiar"}
         </button>
       </div>
 
@@ -511,7 +513,7 @@ function PasswordEditor({
           Generar otra
         </button>
         <div className="flex-1" />
-        {savedOk && <span className="text-[11px] text-emerald-600">Guardada ✓</span>}
+        {savedOk && <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600">Guardada<IconCheck className="w-3 h-3" /></span>}
         <button
           onClick={save}
           disabled={!dirty || !validLen || saving}
@@ -601,9 +603,9 @@ function LinkRow({
         />
         <button
           onClick={copy}
-          className="px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-surface-hover border border-line text-fg-secondary hover:bg-surface-muted transition-colors flex-shrink-0"
+          className="px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-surface-hover border border-line text-fg-secondary hover:bg-surface-muted transition-colors flex-shrink-0 inline-flex items-center justify-center"
         >
-          {copied ? "✓" : "Copiar"}
+          {copied ? <IconCheck className="w-3 h-3" /> : "Copiar"}
         </button>
       </div>
       {!published &&

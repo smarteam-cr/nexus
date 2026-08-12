@@ -15,9 +15,8 @@
  *      clasificador o forzada a mano. Evita que los handoffs de dos proyectos del
  *      mismo cliente repitan las mismas sesiones vía links secundarios.
  *
- * Fuente ÚNICA de keywords y política — la usan la generación (analyze, vía su
- * classifyForHandoff inline), la revisión de sesiones (A2 · session-candidates) y
- * el readiness del handoff (lib/handoff/feeding.ts).
+ * Fuente ÚNICA de keywords y política — la usan la generación (analyze), la revisión de
+ * sesiones (A2 · session-candidates) y el readiness del handoff (lib/handoff/feeding.ts).
  */
 
 // Las dos listas viven ahora en el vocabulario único de tipos de reunión

@@ -12,6 +12,7 @@
  * segmento; evidencia expandible. El estado vive en CobranzaClient.
  */
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { IconCheck } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { AlertaDTO } from "@/lib/cobranza";
@@ -182,10 +183,11 @@ export default function AlertasCobranza({
       </div>
 
       {visible.length === 0 && (
-        <p className="text-sm text-emerald-600 bg-emerald-500/5 border border-emerald-500/20 rounded-xl px-4 py-3">
+        <p className="flex items-center gap-1.5 text-sm text-emerald-600 bg-emerald-500/5 border border-emerald-500/20 rounded-xl px-4 py-3">
+          <IconCheck />
           {seg === "operativas"
-            ? "✓ Nada pendiente de gestión de cobro."
-            : "✓ Todas las cuentas tienen sus datos completos."}
+            ? "Nada pendiente de gestión de cobro."
+            : "Todas las cuentas tienen sus datos completos."}
         </p>
       )}
 

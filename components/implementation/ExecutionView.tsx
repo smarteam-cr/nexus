@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useState, useRef, useEffect } from "react";
+import { IconCheck, IconX } from "@/components/ui";
 
 interface ApiTask {
   id: string;
@@ -228,9 +229,9 @@ export default function ExecutionView({
             <div className="px-4 py-3 border-t border-gray-800 bg-gray-900/50">
               <p className="text-xs text-gray-400">{summary.message}</p>
               <div className="flex gap-3 mt-1">
-                <span className="text-xs text-green-400">✓ {summary.successCount} exitosas</span>
+                <span className="inline-flex items-center gap-1 text-xs text-green-400"><IconCheck className="w-3 h-3" />{summary.successCount} exitosas</span>
                 {(summary.failCount ?? 0) > 0 && (
-                  <span className="text-xs text-red-400">✗ {summary.failCount} fallidas</span>
+                  <span className="inline-flex items-center gap-1 text-xs text-red-400"><IconX className="w-3 h-3" />{summary.failCount} fallidas</span>
                 )}
               </div>
             </div>

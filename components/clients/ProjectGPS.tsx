@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { IconCheck } from "@/components/ui";
 import MinuteDialog from "./MinuteDialog";
 import ActionItemsDialog from "./ActionItemsDialog";
 import { useWorkspace } from "./WorkspaceContext";
@@ -13,6 +14,7 @@ import type { ChipDeCanvas } from "@/lib/flow/canvas-chips";
 import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import StageBadge from "@/components/lifecycle/StageBadge";
 import AltaTrabada from "@/components/projects/AltaTrabada";
+import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
 
 
 export interface PendingItem {
@@ -132,6 +134,9 @@ interface GPSData {
     /** Quién empezó el alta: puede terminarla aunque no tenga la celda. */
     actorEmail?: string | null;
   } | null;
+  /** Tanda M — `ProjectTimeline.pendingProposal != null`: el handoff dejó cambios de
+   *  cronograma sin revisar. Ausente en respuestas cacheadas viejas = no se pinta. */
+  timelineProposalPending?: boolean;
 }
 
 /** La RANURA de almacenamiento del frente, no su rótulo — ver `FrenteKey` en kind.ts. */
@@ -163,13 +168,13 @@ type SetupSignals = {
 };
 
 // Pill de un canvas generado, en el tema CLARO del widget (no reusa el SetupPill del panel).
-function SetupChip({ state, label }: { state: "done" | "draft" | "missing"; label: string }) {
+function SetupChip({ state, label }: { state: "done" | "draft" | "missing"; label: ReactNode }) {
   const cls = {
     done: "text-emerald-700 bg-emerald-50 border-emerald-200",
     draft: "text-amber-700 bg-amber-50 border-amber-200",
     missing: "text-red-600 bg-red-50 border-red-200",
   }[state];
-  return <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${cls}`}>{label}</span>;
+  return <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${cls}`}>{label}</span>;
 }
 
 export default function ProjectGPS({ projectId, clientId }: { projectId: string; clientId: string }) {
@@ -556,6 +561,19 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
         </div>
       )}
 
+      {/* Tanda M — mismo criterio que el alta: completo acá porque el widget es donde se
+          averigua por qué el cronograma no se movió. */}
+      {data.timelineProposalPending && (
+        <div className="p-4 pb-0">
+          <TimelineProposalPendiente
+            variante="completo"
+            projectId={projectId}
+            clientId={clientId}
+            pending
+          />
+        </div>
+      )}
+
       {/* Info bar del proyecto (desde HubSpot) */}
       {info && (info.name || info.pipelineName || info.cseEncargado || createdAtStr) && (
         <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-surface-muted border-b border-line text-xs">
@@ -664,7 +682,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
                     state={c.estado === "generada" ? "done" : c.estado === "borrador" ? "draft" : "missing"}
                     label={
                       c.estado === "generada"
-                        ? `✓ ${c.label}`
+                        ? <><IconCheck className="w-3 h-3" />{c.label}</>
                         : c.estado === "borrador"
                           ? `${c.label} sin subir`
                           : c.label

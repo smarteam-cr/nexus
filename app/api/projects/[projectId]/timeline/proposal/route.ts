@@ -16,7 +16,7 @@ import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
@@ -25,10 +25,22 @@ export async function DELETE(
 
   const existing = await prisma.projectTimeline.findUnique({
     where: { projectId },
-    select: { id: true },
+    select: { id: true, pendingProposalRunId: true },
   });
   if (!existing) {
     return NextResponse.json({ cleared: false, reason: "no_timeline" }, { status: 404 });
+  }
+
+  // Tanda M — el auto-descarte (0 deltas visibles tras reconciliar) es esperado en dos casos
+  // benignos (propuesta vieja de antes del guard de no-op, o el CSE ya igualó el cronograma a
+  // mano) — no amerita un toast. Pero antes no dejaba NINGÚN rastro de cuándo pasó ni de qué
+  // corrida: si algún día una propuesta con contenido real se evapora acá, esto es lo único
+  // que permite reconstruir cuál era.
+  const body = (await req.json().catch(() => null)) as { reason?: string } | null;
+  if (body?.reason === "auto-zero-deltas") {
+    console.log(
+      `[timeline] propuesta auto-descartada sin deltas visibles (project ${projectId}, run ${existing.pendingProposalRunId ?? "?"}).`,
+    );
   }
 
   await prisma.projectTimeline.update({

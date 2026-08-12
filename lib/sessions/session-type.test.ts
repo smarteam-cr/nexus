@@ -77,11 +77,13 @@ describe("el vocabulario está congelado", () => {
 describe("🔒 unificar las listas NO cambió el handoff", () => {
   // Las dos listas literales que vivían en lib/handoff/session-relevance.ts antes de
   // unificar. Son la referencia contra la que se congela el comportamiento.
+  // "revision" salió de acá en la Tanda L (2026-08-09) — pasó a `handoff: null` en
+  // TITLE_RULES (sigue tipificando "avance", deja de excluir del handoff).
   const EXCLUDE_ORIGINAL = [
     "implementacion", "implementation",
     "adopcion", "adoption",
     "capacitacion", "training",
-    "review", "revision",
+    "review",
     "retro", "retrospectiva",
     "sesion semanal", "weekly",
     "stand up", "standup",

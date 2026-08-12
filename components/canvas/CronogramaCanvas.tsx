@@ -20,14 +20,22 @@
  *
  * Generación inicial del detalle: agente "agent-timeline-detail" vía
  * POST /api/clients/[clientId]/analyze. Confirmación (gate de la vista
- * cliente): POST/DELETE /timeline/confirm-detail. Regeneración: DELETE
- * /timeline/detail (borra solo tareas) + re-correr.
+ * cliente): POST/DELETE /timeline/confirm-detail. Regeneración: el modal de
+ * curación (por fase o "Regenerar todo el cronograma") — nunca un borrado previo:
+ * el apply preserva las tareas con progreso, incluso si el payload las omite.
  *
  * Render INTERNO (tema oscuro del panel de canvas), no el design system del Kickoff.
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { plural, computePhaseRanges, currentWeekIndex } from "@/lib/timeline/weeks";
+import {
+  plural,
+  computePhaseRanges,
+  currentWeekIndex,
+  projectedEnd,
+  describeEndShift,
+  endShiftFragment,
+} from "@/lib/timeline/weeks";
 import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
@@ -46,11 +54,15 @@ import { useHydrated } from "@/lib/hooks/useHydrated";
 import { actionsFromSignals } from "@/lib/timeline/project-actions-input";
 import ProjectActionsLine from "./ProjectActionsLine";
 import ProposalGlobalStrip from "./ProposalGlobalStrip";
-import { computeProposalDeltas, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
+import { computeProposalDeltas, type ProposalDelta, type CurrentPhaseLike } from "@/lib/timeline/proposal-deltas";
+import { impactoDeUnDelta, type ImpactoEnElCierre } from "@/lib/timeline/sugerencia-detalle";
+import { medirPropuesta, type MagnitudPropuesta } from "@/lib/timeline/magnitud-propuesta";
 import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
 import { PhaseRegenModal, type RegenProposedTask, type RegenCurrentTask, type FinalTask } from "./PhaseRegenModal";
+import { indexarTareasPorTitulo, avisoDeRepetida } from "@/lib/timeline/tarea-repetida";
+import { AllPhasesRegenModal, type AllPhasesRegenPhase } from "./AllPhasesRegenModal";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 import { CronogramaSkeleton } from "@/components/clients/skeletons";
 import { Spinner } from "@/components/ui";
@@ -89,6 +101,9 @@ interface Phase {
   /** Sesiones de entrega reales (CSE/dev + cliente) calculadas por el server.
    *  Solo-lectura, derivado; NO se envía en el PUT. null = fase futura o sin anchor. */
   actualSessionCount?: number | null;
+  /** Fases que comparten semanas con ésta (derivado del server) — el contador de sesiones
+   *  cuenta las mismas reuniones en todas ellas. Solo-lectura, no viaja en el PUT. */
+  solapaCon?: string[];
   notes: string | null;
   activityType: string | null;
   source?: string;
@@ -148,6 +163,7 @@ interface ServerPhase {
   startWeek?: number | null;
   sessionCount: number | null;
   actualSessionCount?: number | null;
+  solapaCon?: string[];
   notes: string | null;
   activityType: string | null;
   source: string;
@@ -185,8 +201,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Destino del click en la notificación: la pestaña del proyecto (donde vive el
   // cronograma), no la home del cliente.
   const cronogramaUrl = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}`;
+
   const [phases, setPhases] = useState<Phase[]>([]);
   const [anchor, setAnchor] = useState<string>(""); // yyyy-mm-dd o ""
+  const [closeOverride, setCloseOverride] = useState<string>(""); // Tanda K — cierre fijado a mano, yyyy-mm-dd o ""
   const [kickoffDate, setKickoffDate] = useState<string>(""); // yyyy-mm-dd de la sesión de kickoff (sugerencia)
   const [loading, setLoading] = useState(true);
   // `loading` = primera carga (pinta el skeleton). `refreshing` = refetch tras una acción
@@ -198,6 +216,71 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [generating, setGenerating] = useState(false);
   const [chainingProgress, setChainingProgress] = useState(false); // F — fase "evaluando avance" del encadenado
   const [dirty, setDirty] = useState(false);
+  /* Instrucciones del CSE para ESTE documento (X1, 2026-08-08): la entry `__doc` del canvas.
+     El flag `briefDirty` copia la lección del bug de «Regenerar» del handoff: el draft se
+     re-siembra desde el servidor mientras NADIE haya tipeado, y solo se guarda lo que una
+     persona escribió — comparar contra el status era lo que borraba notas. */
+  const [docBrief, setDocBrief] = useState("");
+  const [briefDirty, setBriefDirty] = useState(false);
+  const [briefGuardado, setBriefGuardado] = useState<string | null>(null);
+  const [showBrief, setShowBrief] = useState(false);
+  const [savingBrief, setSavingBrief] = useState(false);
+
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/projects/${projectId}/doc-brief?slug=timeline`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { brief: string | null } | null) => {
+        if (!vivo || !d) return;
+        setBriefGuardado(d.brief);
+        setBriefDirty((sucio) => {
+          if (!sucio) setDocBrief(d.brief ?? "");
+          return sucio;
+        });
+      })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, [projectId]);
+
+  /* Paso 0 de toda corrida del detalle (auditoría 2026-08-08): si el CSE tipeó
+     instrucciones y apretó Regenerar sin Guardar, el draft sucio se PATCHea antes de
+     disparar — el mismo arreglo «visto en RC» de las exclusiones del handoff. Best-effort:
+     si el PATCH falla, la corrida sigue (sin la regla nueva, como antes). */
+  const flushDocBrief = useCallback(async () => {
+    if (!briefDirty || docBrief.trim() === (briefGuardado ?? "")) return;
+    try {
+      const r = await fetch(`/api/projects/${projectId}/doc-brief`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: "timeline", brief: docBrief.trim() || null }),
+      });
+      if (r.ok) {
+        setBriefGuardado(docBrief.trim() || null);
+        setBriefDirty(false);
+      }
+    } catch { /* best-effort */ }
+  }, [projectId, briefDirty, docBrief, briefGuardado]);
+
+  const saveDocBrief = useCallback(async () => {
+    setSavingBrief(true);
+    try {
+      const r = await fetch(`/api/projects/${projectId}/doc-brief`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: "timeline", brief: docBrief.trim() || null }),
+      });
+      if (r.ok) {
+        const d = (await r.json()) as { brief: string | null };
+        setBriefGuardado(d.brief);
+        setBriefDirty(false);
+      } else {
+        setError("No se pudieron guardar las instrucciones.");
+      }
+    } catch {
+      setError("Error de conexión al guardar las instrucciones.");
+    }
+    setSavingBrief(false);
+  }, [projectId, docBrief]);
   const [error, setError] = useState<string | null>(null);
   // ── Publicación al cliente (in-canvas) ──
   const [publishedAt, setPublishedAt] = useState<string | null>(null);
@@ -233,6 +316,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [regenPreview, setRegenPreview] = useState<RegenProposedTask[] | null>(null);
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenApplying, setRegenApplying] = useState(false);
+  // Regenerar TODO el cronograma (Tanda N) — mismo patrón que el regen por fase, generalizado.
+  const [allRegenPreview, setAllRegenPreview] = useState<Array<{ phaseId: string; tasks: RegenProposedTask[] }> | null>(null);
+  const [allRegenLoading, setAllRegenLoading] = useState(false);
+  const [allRegenApplying, setAllRegenApplying] = useState(false);
   // Pedido del panel "Qué hacer acá" de abrir un grupo de la lista. El nonce hace que re-clickear
   // el mismo CTA lo vuelva a abrir aunque el CSE lo haya cerrado a mano.
   const [focusGroup, setFocusGroup] = useState<{ key: string; nonce: number } | null>(null);
@@ -359,6 +446,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       startWeek: p.startWeek,
       sessionCount: p.sessionCount,
       actualSessionCount: p.actualSessionCount,
+      solapaCon: p.solapaCon,
       notes: p.notes,
       activityType: p.activityType,
       source: p.source,
@@ -404,6 +492,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       if (data.exists) {
         setPhases(mapServerPhases(data.phases ?? []));
         setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
+        setCloseOverride(data.closeDateOverride ? String(data.closeDateOverride).slice(0, 10) : "");
         setKickoffDate(data.kickoffSessionDate ? String(data.kickoffSessionDate).slice(0, 10) : "");
         setPublishedAt(data.timelinePublishedAt ?? null);
         setHasPublishedOnce(!!data.hasPublishedOnce);
@@ -710,8 +799,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   };
 
   // ── Guardar (PUT bulk — fases + tareas; anchorOverride para fijar desde el Gantt) ──
-  const buildPutBody = (phasesToSave: Phase[], anchorYmd: string) => ({
+  const buildPutBody = (phasesToSave: Phase[], anchorYmd: string, closeOverrideYmd: string) => ({
     anchorStartDate: anchorYmd ? new Date(anchorYmd).toISOString() : null,
+    // Tanda K — siempre se declara (nunca undefined) para que el autosave del CSE haga round-trip
+    // exacto del override: "" → null (volver al proyectado), fecha → fijar.
+    closeDateOverride: closeOverrideYmd ? new Date(closeOverrideYmd).toISOString() : null,
     phases: phasesToSave.map((p, i) => {
       const perWeek = new Map<number, number>();
       // Las tareas con título VACÍO son borradores locales (recién agregadas, sin titular aún):
@@ -777,7 +869,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...buildPutBody(phases, anchor),
+          ...buildPutBody(phases, anchor, closeOverride),
           // Auto-guardado interno: persiste sin escribir TimelineChange (el audit va en "Subir").
           skipAudit: true,
         }),
@@ -801,6 +893,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             hasBlankDrafts ? mergeServerIds(cur, data.phases ?? []) : mapServerPhases(data.phases ?? []),
           );
           setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
+          setCloseOverride(data.closeDateOverride ? String(data.closeDateOverride).slice(0, 10) : "");
         }
         setDirty(false);
       } else if (data.exists) {
@@ -823,26 +916,50 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // descompone en deltas por ítem (fase nueva / cambio de fase / fecha de arranque) que el CSE
   // acepta o descarta uno por uno DENTRO del cronograma real.
   const structureOnlyProposal = !!proposal && proposal.phases.every((p) => p.tasks === undefined);
+  /* Las fases actuales en la forma que piden los helpers puros. Extraído del memo de deltas
+     (Tanda J) para que la MAGNITUD mida exactamente contra lo mismo que los deltas: si cada uno
+     armara su lista, el aviso podría hablar de un cronograma distinto del que se aplica. */
+  const fasesActualesParaDeltas: CurrentPhaseLike[] = useMemo(
+    () =>
+      phases
+        .filter((p): p is Phase & { id: string } => !!p.id)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          durationWeeks: p.durationWeeks,
+          startWeek: p.startWeek ?? null,
+          sessionCount: p.sessionCount ?? null,
+          notes: p.notes ?? null,
+          activityType: p.activityType ?? null,
+        })),
+    [phases],
+  );
   const proposalDeltas: ProposalDelta[] = useMemo(
     () =>
       structureOnlyProposal && proposal
-        ? computeProposalDeltas(
-            phases
-              .filter((p): p is Phase & { id: string } => !!p.id)
-              .map((p) => ({
-                id: p.id,
-                name: p.name,
-                durationWeeks: p.durationWeeks,
-                startWeek: p.startWeek ?? null,
-                sessionCount: p.sessionCount ?? null,
-                notes: p.notes ?? null,
-                activityType: p.activityType ?? null,
-              })),
-            proposal,
-            anchor || null,
-          )
+        ? computeProposalDeltas(fasesActualesParaDeltas, proposal, anchor || null)
         : [],
-    [structureOnlyProposal, proposal, phases, anchor],
+    [structureOnlyProposal, proposal, fasesActualesParaDeltas, anchor],
+  );
+  /* Cuánto movería el cierre CADA sugerencia por separado. Se calcula acá —donde ya viven las
+     fases actuales, la propuesta y el ancla— y baja al Gantt y a la franja: las dos pintan el
+     MISMO número, en vez de que cada una lo derive por su cuenta. */
+  const impactoPorDelta: Map<string, ImpactoEnElCierre> = useMemo(() => {
+    const m = new Map<string, ImpactoEnElCierre>();
+    if (!structureOnlyProposal || !proposal) return m;
+    for (const d of proposalDeltas) {
+      m.set(d.key, impactoDeUnDelta(fasesActualesParaDeltas, proposal, anchor || null, d.key));
+    }
+    return m;
+  }, [structureOnlyProposal, proposal, proposalDeltas, fasesActualesParaDeltas, anchor]);
+  /* Cuán distinta es la propuesta y adónde caería el cierre si se aceptara entera. null cuando
+     no hay nada que medir — la franja no se pinta en ese caso. */
+  const magnitudPropuesta: MagnitudPropuesta | null = useMemo(
+    () =>
+      structureOnlyProposal && proposal && proposalDeltas.length > 0
+        ? medirPropuesta(fasesActualesParaDeltas, proposal, anchor || null)
+        : null,
+    [structureOnlyProposal, proposal, proposalDeltas.length, fasesActualesParaDeltas, anchor],
   );
 
   // Debounce: auto-guarda ~1.5 s después de la última edición. Se reinicia con cada
@@ -862,8 +979,26 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Fijar/cambiar la fecha de arranque desde el Gantt: actualiza el preview (fechas
   // reales) y marca dirty — se PERSISTE con "Guardar cronograma", no al instante.
   const setAnchorFromGantt = (ymd: string) => {
+    /* Mover el arranque corre TODAS las fechas del proyecto, y la que importa afuera es la de
+       cierre. El chip del encabezado ya la muestra actualizada, pero el toast dice el DELTA —
+       que es lo que uno quiere saber justo después de tocar el calendario (Tanda J).
+       Solo para el ancla: la duración se edita tecleando y un toast por tecla es ruido que
+       enseña a ignorar los toasts. Para eso está el chip, que es continuo. */
+    const aviso = describeEndShift(
+      projectedEnd(anchor || null, phases),
+      projectedEnd(ymd || null, phases),
+    );
     pushTimelineUndo("Fecha de inicio cambiada", `${undoScope}|anchor`);
     setAnchor(ymd);
+    markDirty();
+    if (aviso) toast.info(aviso);
+  };
+
+  // Fijar/soltar el cierre a mano desde el Gantt (Tanda K): "" vuelve a seguir el proyectado.
+  // Igual que el arranque, se PERSISTE con el autosave, no al instante — el picker solo marca dirty.
+  const setCloseOverrideFromGantt = (ymd: string) => {
+    pushTimelineUndo(ymd ? "Cierre fijado a mano" : "Cierre vuelto a automático", `${undoScope}|closeOverride`);
+    setCloseOverride(ymd);
     markDirty();
   };
 
@@ -872,6 +1007,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Se dispara AUTOMÁTICAMENTE al abrir si hay fases sin tareas (auto=true →
   // silencioso si ya existe). También lo invoca "Regenerar detalle".
   const generateDetail = async (opts?: { auto?: boolean }) => {
+    await flushDocBrief();
     const auto = opts?.auto ?? false;
     if (!auto) maybeRequestPermission(); // solo en la generación que el usuario disparó
     setGenerating(true);
@@ -944,6 +1080,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Regen POR FASE → modal de curación (D.1). Paso 1 PREVIEW: el agente de detalle genera la propuesta
   // (con el handoff + el canvas Desarrollo) SIN persistir; abre el modal viejo↔nuevo.
   const startRegenPreview = async (phase: GanttPhase) => {
+    await flushDocBrief();
     if (!phase.id) return;
     setRegenPhase(phase);
     setRegenPreview(null);
@@ -997,6 +1134,80 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       toast.error("Error de conexión al aplicar la fase.");
     }
     setRegenApplying(false);
+  };
+
+  // Regenerar TODO el cronograma (Tanda N) — misma mecánica que el regen por fase, sin
+  // regeneratePhaseId: el prompt ya pide "todas las fases" por default. Paso 1 PREVIEW.
+  const startAllRegenPreview = async () => {
+    await flushDocBrief();
+    setAllRegenPreview(null);
+    setAllRegenLoading(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage: 1, step: 0, stepLabel: "Regenerar cronograma completo", sectionLabel: "Regenerar cronograma completo",
+          agentId: "agent-timeline-detail", projectId, preview: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.message ?? data?.error ?? "No se pudo generar la propuesta.");
+      } else {
+        setAllRegenPreview(Array.isArray(data?.previewPhases) ? data.previewPhases : []);
+      }
+    } catch {
+      toast.error("Error de conexión al generar la propuesta.");
+    }
+    setAllRegenLoading(false);
+  };
+
+  // Paso 2 APLICAR: una entrada por fase, TODAS en una sola transacción del server
+  // (/timeline/detail/apply-all). Al terminar, encadena "Re-chequear avance" (best-effort,
+  // mismo patrón que generateDetail) — con las instrucciones del CSE recién aplicadas, el
+  // avance las respeta desde el primer chequeo.
+  const applyAllRegen = async (payload: Array<{ phaseId: string; tasks: FinalTask[] }>) => {
+    setAllRegenApplying(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/detail/apply-all`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phases: payload, reason: "Regeneración completa del cronograma (curada)" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error ?? data?.message ?? "No se pudo aplicar el cronograma.");
+      } else {
+        await load();
+        clearScope(undoScope);
+        setAllRegenPreview(null);
+        toast.success(`Cronograma actualizado — ${data?.phasesApplied ?? payload.length} fases.`);
+        /* El servidor conservó tareas con progreso que el payload no traía. En el camino feliz
+           esto nunca aparece; si aparece, algo llegó incompleto y el CSE tiene que saber que
+           el cronograma no quedó exactamente como lo curó (no se perdió nada — se rescató). */
+        if (typeof data?.preservadas === "number" && data.preservadas > 0) {
+          toast.info(
+            `${plural(data.preservadas, "tarea con progreso se conservó", "tareas con progreso se conservaron")} ` +
+              `pese a no venir en lo aplicado. Revisá el cronograma.`,
+            { duration: 12000 },
+          );
+        }
+        setChainingProgress(true);
+        try {
+          const pres = await fetch(`/api/projects/${projectId}/timeline/progress`, { method: "POST" });
+          const pdata = await pres.json().catch(() => ({}));
+          if (pres.ok && pdata?.status === "ok") {
+            await load();
+            toast.success("Avance re-evaluado con el cronograma nuevo — confirmá abajo.");
+          }
+        } catch { /* best-effort, mismo criterio que generateDetail */ }
+        setChainingProgress(false);
+      }
+    } catch {
+      toast.error("Error de conexión al aplicar el cronograma.");
+    }
+    setAllRegenApplying(false);
   };
 
   // El detalle (tareas) ya NO se auto-genera en silencio: lo crea el CTA explícito
@@ -1067,12 +1278,17 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     setApplying(false);
   };
 
-  const discardProposal = async () => {
+  const discardProposal = async (reason?: string) => {
     // Si la propuesta vino del agente (re-run), está persistida en pendingProposal →
     // limpiarla en el server para que no reaparezca al recargar. La de assist es solo en
     // memoria (el DELETE es no-op inofensivo). El estado local se limpia pase lo que pase.
     try {
-      await fetch(`/api/projects/${projectId}/timeline/proposal`, { method: "DELETE" });
+      await fetch(`/api/projects/${projectId}/timeline/proposal`, {
+        method: "DELETE",
+        // Tanda M — `reason` es opcional: solo el auto-descarte silencioso lo manda, para
+        // dejar un log server-side con la corrida que se evaporó (ver la ruta).
+        ...(reason ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) } : {}),
+      });
     } catch {
       /* limpiar local igual */
     }
@@ -1120,7 +1336,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     // guardar que casualmente coincida con la sugerencia la hacía desaparecer del server — y al
     // deshacer ya no volvía. Con cambios sin guardar no se descarta nada.
     if (structureOnlyProposal && proposalDeltas.length === 0 && !resolvingProposal && !loading && !dirty && !saving) {
-      void discardProposal();
+      void discardProposal("auto-zero-deltas");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [structureOnlyProposal, proposalDeltas.length, loading, dirty, saving]);
@@ -1458,6 +1674,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     startWeek: p.startWeek ?? null,
     sessionCount: p.sessionCount,
     actualSessionCount: p.actualSessionCount ?? null,
+    solapaCon: p.solapaCon ?? [],
     activityType: p.activityType,
     status: p.status,
     needsValidation: p.needsValidation,
@@ -1663,7 +1880,15 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     const anchorChanged =
       (proposal.anchorStartDate ? proposal.anchorStartDate.slice(0, 10) : "") !== anchor;
 
-    return { added, removed, edited, phasesAdded, phasesRemoved, phasesChanged, anchorChanged };
+    /* La consecuencia que ninguno de los contadores de arriba muestra (Tanda J): con cuántas
+       tareas o fases se toque, lo que el cliente pregunta es CUÁNDO TERMINA. La propuesta del
+       assist es un reemplazo completo, así que se proyecta directo — sin pasar por deltas. */
+    const endShift = endShiftFragment(
+      projectedEnd(anchor || null, phases),
+      projectedEnd(proposal.anchorStartDate ?? anchor ?? null, proposal.phases),
+    );
+
+    return { added, removed, edited, phasesAdded, phasesRemoved, phasesChanged, anchorChanged, endShift };
   })();
 
   // ¿Hay cambios guardados sin subir? Hay cronograma y: nunca se subió, O se editó
@@ -1743,7 +1968,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               title="La IA propuso cambios de estructura desde el handoff — se revisan uno por uno"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-              Revisar {proposalDeltas.length} {proposalDeltas.length === 1 ? "cambio" : "cambios"}
+              {/* Con un cambio masivo, "Revisar 11 cambios" subestima lo que hay abajo: no son
+                  once ajustes, es otro plan. El texto cambia; la CONDICIÓN del botón, no. */}
+              {magnitudPropuesta?.esCronogramaNuevo
+                ? "Revisar el cronograma nuevo"
+                : `Revisar ${proposalDeltas.length} ${proposalDeltas.length === 1 ? "cambio" : "cambios"}`}
             </button>
           )}
           {/* CTA bi-estado (#2): sin tareas (y nunca publicado) → "Generar cronograma" (crea las
@@ -1778,6 +2007,20 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
               Pedir cambio con IA
+            </button>
+          )}
+          {/* Tanda N — "Regenerar todo el cronograma": mismo gate que "Regenerar" por fase
+              (hasAiDetail && canRegenerateTimeline). Preview de TODAS las fases → curación
+              fase por fase en acordeón → aplicar todo en una transacción. */}
+          {canEdit && phases.length > 0 && !proposal && hasAiDetail && canRegenerateTimeline && (
+            <button
+              onClick={() => void startAllRegenPreview()}
+              disabled={allRegenLoading || allRegenApplying}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-surface-muted border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-60"
+              title="Propone refrescar TODAS las fases con lo que se sabe hoy — revisás y aceptás/descartás antes de aplicar, fase por fase"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              {allRegenLoading ? "Generando propuesta…" : "Regenerar todo el cronograma"}
             </button>
           )}
           {/* PT-0b — "Confirmar detalle" desacoplado de "Subir al cliente": habilita el gate
@@ -1856,6 +2099,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 diffSummary.phasesRemoved > 0 && `−${plural(diffSummary.phasesRemoved, "fase", "fases")}`,
                 diffSummary.phasesChanged > 0 && `${plural(diffSummary.phasesChanged, "fase modificada", "fases modificadas")}`,
                 diffSummary.anchorChanged && "fecha de arranque modificada",
+                // Lo que ninguno de los contadores anteriores dice: cuándo termina el proyecto.
+                diffSummary.endShift,
               ]
                 .filter(Boolean)
                 .join(" · ") || "sin cambios detectados"}
@@ -1869,7 +2114,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 {applying ? "Aplicando…" : "Aplicar cambios"}
               </button>
               <button
-                onClick={discardProposal}
+                onClick={() => void discardProposal()}
                 disabled={applying}
                 className="text-xs font-medium text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
               >
@@ -2137,11 +2382,81 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       {/* ── EL cronograma. Propuesta del ASSIST (con tareas) → preview read-only swapeada.
              Propuesta de ESTRUCTURA (handoff) → NO se swapea: el Gantt real sigue editable y
              los deltas se dibujan adentro (badges + filas fantasma). ── */}
+      {/* ── INSTRUCCIONES DEL CSE PARA ESTE DOCUMENTO (X1) ─────────────────────
+          Texto libre que el agente de detalle recibe como regla dura al generar/regenerar
+          las tareas («las fases de QA van al final», «sin capacitaciones»). Vive en la entry
+          `__doc` del canvas — no en una columna — y se pinta acá porque una instrucción que
+          existe y no se ve termina re-escrita a mano en cada regeneración. */}
+      {canEdit && (
+        <div className="rounded-xl border border-line bg-surface px-4 py-2.5">
+          <button
+            onClick={() => setShowBrief((v) => !v)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-fg hover:text-brand transition-colors"
+          >
+            <svg className={`w-3 h-3 transition-transform ${showBrief ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            Instrucciones para la IA de este documento
+            {briefDirty && docBrief.trim() !== (briefGuardado ?? "") ? (
+              <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
+                sin guardar
+              </span>
+            ) : briefGuardado ? (
+              <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">
+                activas
+              </span>
+            ) : null}
+          </button>
+          {showBrief && (
+            <div className="mt-2 space-y-2">
+              <p className="text-[11px] text-fg-muted leading-relaxed">
+                El agente las cumple al detallar o regenerar el cronograma (ej. &quot;las tareas de QA
+                van en la última semana de cada fase&quot;, &quot;no incluyas capacitaciones&quot;).
+              </p>
+              <textarea
+                value={docBrief}
+                onChange={(e) => { setDocBrief(e.target.value); setBriefDirty(true); }}
+                rows={3}
+                maxLength={5000}
+                placeholder='Ej.: "El pase a producción siempre es la última tarea de la fase de Entrega."'
+                className="w-full px-3 py-2 text-xs bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand resize-y"
+              />
+              <div className="flex justify-end">
+                <button
+                  onClick={saveDocBrief}
+                  disabled={savingBrief || !briefDirty || docBrief.trim() === (briefGuardado ?? "")}
+                  className="text-xs font-semibold text-primary-fg bg-brand hover:opacity-90 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-opacity"
+                >
+                  {savingBrief ? "Guardando…" : "Guardar instrucciones"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {phases.length === 0 ? (
+        /* ── EL POZO SIN SALIDA, TAPADO ─────────────────────────────────────────
+           Acá había la misma frase y NINGÚN botón. El botón "Generar cronograma" que está
+           arriba exige `phases.length > 0` —genera TAREAS dentro de fases que ya existen, no
+           las fases— así que un proyecto sin handoff quedaba mirando una instrucción sin ningún
+           gesto disponible: había que adivinar que el handoff vive en OTRA pestaña.
+           No es un caso de borde: era el estado permanente de los 2 hermanos menores (cuyo
+           handoff se redirigía al mayor, y por lo tanto sus fases aterrizaban allá) y es el
+           estado de cualquier Implementación a la que todavía no se le generó el handoff. */
         <div className="rounded-2xl border border-dashed border-gray-700 px-5 py-8 text-center text-gray-400 space-y-4">
           <p className="text-sm">
             Generá el <span className="font-medium text-gray-300">Handoff</span> para ver el cronograma inicial — las fases salen de ahí.
           </p>
+          <a
+            href={cronogramaUrl}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand text-primary-fg text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m4 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            Ir al Handoff del proyecto
+          </a>
         </div>
       ) : proposal && !structureOnlyProposal && proposalGantt ? (
         <TimelineGantt
@@ -2184,6 +2499,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             onMoveTask={moveTask}
             onReorderPhases={reorderPhases}
             onSetAnchor={setAnchorFromGantt}
+            closeOverride={closeOverride}
+            onSetCloseOverride={setCloseOverrideFromGantt}
             onAssistPhase={
               (hasAiDetail ? canRegenerateTimeline : canGenerateTimeline)
                 ? (phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }
@@ -2204,6 +2521,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             onEditParticularidad={canEdit ? setEditingParticularidadId : undefined}
             onAddParticularidad={canEdit ? () => setCreatingParticularidad(true) : undefined}
             proposalDeltas={structureOnlyProposal && proposalDeltas.length > 0 ? proposalDeltas : undefined}
+            impactoPorDelta={impactoPorDelta}
             onResolveProposalDelta={
               canEdit
                 ? (key, accept) => void resolveProposalItems(accept ? [key] : [], accept ? [] : [key])
@@ -2217,9 +2535,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               ) : undefined
             }
             proposalGlobalSlot={
-              structureOnlyProposal && proposalDeltas.length > 0 && canEdit ? (
+              structureOnlyProposal && proposalDeltas.length > 0 && magnitudPropuesta && canEdit ? (
                 <ProposalGlobalStrip
+                  impactoPorDelta={impactoPorDelta}
                   deltas={proposalDeltas}
+                  magnitud={magnitudPropuesta}
                   working={resolvingProposal}
                   onResolve={(accept, discard) => void resolveProposalItems(accept, discard)}
                 />
@@ -2318,6 +2638,16 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             party: t.party ?? null, type: t.type ?? null, status: t.status,
             source: t.source ?? null, notes: t.notes ?? null,
           }));
+        /* El regen POR FASE solo conoce su fase, así que el índice cross-fase se arma acá —
+           es el único punto con todas las fases a la vista. Sin esto, el aviso de "esta tarea
+           ya existe en otra fase" andaría en "Regenerar todo" y no acá. */
+        const indice = indexarTareasPorTitulo(
+          phases.filter((p) => p.id).map((p) => ({
+            phaseId: p.id as string,
+            phaseName: p.name,
+            current: (p.tasks ?? []).filter((t) => t.id).map((t) => ({ title: t.title, status: t.status })),
+          })),
+        );
         return (
           <PhaseRegenModal
             open
@@ -2326,8 +2656,44 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             current={current}
             proposed={regenPreview}
             applying={regenApplying}
+            avisoRepetida={(titulo) => avisoDeRepetida(titulo, regenPhase.id ?? "", indice)}
             onCancel={() => { setRegenPhase(null); setRegenPreview(null); }}
             onApply={applyPhaseRegen}
+          />
+        );
+      })()}
+
+      {/* Tanda N — "Regenerar todo el cronograma": mismo patrón de dos pasos, generalizado. */}
+      {allRegenLoading && (
+        <Modal open onClose={() => {}} size="sm" closeOnBackdrop={false} closeOnEscape={false}>
+          <div className="flex items-center gap-3 py-1">
+            <span className="w-4 h-4 border-2 border-brand/30 border-t-brand rounded-full animate-spin flex-shrink-0" />
+            <p className="text-sm text-fg">Generando la propuesta para todo el cronograma…</p>
+          </div>
+        </Modal>
+      )}
+      {allRegenPreview && (() => {
+        const merged: AllPhasesRegenPhase[] = allRegenPreview
+          .map((pv) => {
+            const src = phases.find((p) => p.id === pv.phaseId);
+            if (!src) return null;
+            const current: RegenCurrentTask[] = (src.tasks ?? [])
+              .filter((t) => t.id)
+              .map((t) => ({
+                id: t.id as string, title: t.title, weekIndex: t.weekIndex,
+                party: t.party ?? null, type: t.type ?? null, status: t.status,
+                source: t.source ?? null, notes: t.notes ?? null,
+              }));
+            return { phaseId: pv.phaseId, phaseName: src.name, durationWeeks: src.durationWeeks, current, proposed: pv.tasks };
+          })
+          .filter((x): x is AllPhasesRegenPhase => x !== null);
+        return (
+          <AllPhasesRegenModal
+            open
+            phases={merged}
+            applying={allRegenApplying}
+            onCancel={() => setAllRegenPreview(null)}
+            onApply={applyAllRegen}
           />
         );
       })()}

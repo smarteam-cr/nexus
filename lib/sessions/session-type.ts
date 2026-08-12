@@ -133,7 +133,10 @@ export const TITLE_RULES: TitleRule[] = [
   { type: "avance", kw: "adopcion", handoff: "exclude" },
   { type: "avance", kw: "adoption", handoff: "exclude" },
   { type: "avance", kw: "review", handoff: "exclude" },
-  { type: "avance", kw: "revision", handoff: "exclude" },
+  // "revision" (Tanda L, 2026-08-09): sigue tipificando "avance", pero deja de tocar el
+  // handoff — mataba por substring títulos reales sin mirar participantes/contenido (caso
+  // Wherex: "Revisión Integraciones Wherex" traía un Action Item de la integración Circle).
+  { type: "avance", kw: "revision", handoff: null },
   { type: "avance", kw: "retro", handoff: "exclude" },
   { type: "avance", kw: "retrospectiva", handoff: "exclude" },
   { type: "avance", kw: "sesion semanal", handoff: "exclude" },

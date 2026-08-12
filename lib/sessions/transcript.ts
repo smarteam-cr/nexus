@@ -11,7 +11,14 @@
  */
 import { prisma } from "@/lib/db/prisma";
 
-export async function fetchTranscriptContent(sessionId: string, title: string): Promise<string | null> {
+export async function fetchTranscriptContent(
+  sessionId: string,
+  title: string,
+  /** Tanda L — cota superior opcional (ej. el presupuesto de `lib/handoff/session-budget.ts`).
+   *  undefined = sin cota (comportamiento histórico). Se aplica al final, sobre el contenido
+   *  YA priorizado (resumen primero) — no cambia QUÉ se arma, solo cuánto de eso sobrevive. */
+  opts?: { maxChars?: number },
+): Promise<string | null> {
   // Intentar leer de la caché DB primero
   try {
     const cached = await prisma.firefliesSession.findUnique({
@@ -68,7 +75,10 @@ export async function fetchTranscriptContent(sessionId: string, title: string): 
       }
       // Fallback histórico: si NO había nada de summary y hay transcript, usarlo.
       if (parts.length === 1 && cached.transcript?.trim()) parts.push(cached.transcript.slice(0, 5000));
-      if (parts.length > 1) return parts.join("\n\n");
+      if (parts.length > 1) {
+        const joined = parts.join("\n\n");
+        return opts?.maxChars != null ? joined.slice(0, opts.maxChars) : joined;
+      }
     }
   } catch (dbErr) {
     // NO tragar la excepción en silencio: loggearla. Un bug de shape del summary

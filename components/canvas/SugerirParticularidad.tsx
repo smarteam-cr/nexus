@@ -17,6 +17,7 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Alert } from "@/components/ui/Alert";
+import { IconCheck } from "@/components/ui/AcceptReject";
 import { useMe } from "@/hooks/useMe";
 
 /** Los tres tipos que el equipo técnico realmente reporta, con el ejemplo que los explica. */
@@ -116,7 +117,7 @@ export default function SugerirParticularidad({ projectId }: { projectId: string
           border: "1px solid var(--border, #e5e7eb)",
         }}
       >
-        {ok ? "✓ Enviada al CSE" : "Sugerir al cronograma"}
+        {ok ? <><IconCheck className="w-3 h-3" />Enviada al CSE</> : "Sugerir al cronograma"}
       </button>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Sugerir una particularidad al cronograma">

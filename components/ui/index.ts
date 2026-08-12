@@ -18,6 +18,9 @@ export type { AlertProps, AlertVariant } from "./Alert";
 export { IconButton } from "./IconButton";
 export type { IconButtonProps } from "./IconButton";
 
+export { AcceptButton, RejectButton, IconCheck, IconX } from "./AcceptReject";
+export type { AccionProps } from "./AcceptReject";
+
 export { Tabs } from "./Tabs";
 export type { TabsProps, TabItem } from "./Tabs";
 

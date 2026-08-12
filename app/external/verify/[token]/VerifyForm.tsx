@@ -16,6 +16,7 @@
  * externos (analytics, error tracking de terceros, etc.). Solo React + Tailwind.
  */
 import { useState, FormEvent } from "react";
+import { IconCheck } from "@/components/ui/AcceptReject";
 
 type State =
   | { kind: "idle" }
@@ -84,7 +85,7 @@ export function VerifyForm({ token, next }: { token: string; next?: string }) {
       <div className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm">
         <div className="flex items-start gap-3">
           <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold">
-            ✓
+            <IconCheck className="w-4 h-4" />
           </div>
           <div>
             <h2 className="text-base font-semibold text-gray-900">

@@ -5,7 +5,9 @@ import { withClientAccess, apiError } from "@/lib/api";
 import { guardPermission } from "@/lib/auth/api-guards";
 import { resolveArtifactGate, artifactGateMessage } from "@/lib/auth/permissions/artifact-gate";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
-import { HANDOFF_EXCLUDE_TITLE_KEYWORDS, HANDOFF_INCLUDE_TITLE_KEYWORDS, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
+import { classifyHandoffSession, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
+import { planHandoffSessionBudget, type HandoffSessionBlock } from "@/lib/handoff/session-budget";
+import { reconcileAgentProposal } from "@/lib/timeline/reconcile-proposal";
 import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
 import { extractTitleTerms } from "@/lib/utils/matching";
@@ -15,7 +17,7 @@ import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { updateCanvasAsync } from "@/lib/canvas/update-agent";
 import { getOutputFormatInstructions, getBlockOutputFormatInstructions } from "@/lib/canvas/agent-output-schema";
-import { DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN, type BlockType } from "@/lib/canvas/block-types";
+import { geometriaDeBloque } from "@/lib/canvas/agent-output-doc";
 import { postProcessCards } from "@/lib/canvas/post-process";
 import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
@@ -26,11 +28,14 @@ import { runExploracionGeneration } from "@/lib/canvas/exploracion-generate";
 import { runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
 import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
 import { runImplementacionGeneration } from "@/lib/canvas/implementacion-generate";
-import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
-import { loadCanvasContext, loadHandoffContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
-import { vetoSiElHandoffEsDeOtro } from "@/lib/handoff/duenio";
-import { isDevIntegrationPhaseName } from "@/lib/timeline/phase-names";
+import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
+import { cargarContextoDelDetalle } from "@/lib/contexto/cargar";
+import { renderDetalleDeCronograma, clasificacionDeTags } from "@/lib/contexto/detalle-cronograma";
+import { vetoSiElHandoffEsDeOtro, componerExclusiones, exclusionDelSistema } from "@/lib/handoff/duenio";
+import { DETALLE_CRONOGRAMA_ID, idDeVarianteDetalle, esAgenteDeDetalle, pipelineKeyDeProyecto, tipoExigidoPorAgente, elegirAgente, GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
+import { debeAnteponerSemanaCero } from "@/lib/timeline/semana-cero";
 import { patchBaselinePhaseTasks } from "@/lib/timeline/baseline";
+import { computeDetailTasksForPhase, type ComputedDetailTask } from "@/lib/timeline/compute-detail-tasks";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { KICKOFF_TEMPLATE, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
 import { syncHorariosSessionsFromHubs } from "@/lib/canvas/kickoff-hubs";
@@ -100,6 +105,12 @@ export const GET = withClientAccess(async (_req: NextRequest, { params }: Params
       where: {
         status: "ACTIVE",
         agentType: "SECTION", // Solo agentes de sección, no canvas transversales
+        /* Los agentes TIPADOS (pipelineKey) nunca entran al inventario de la pantalla de
+           etapa: se despachan por sus propios resolvers (GET /handoff, el carril del
+           detalle). Sin este filtro, la etapa 1 de una Implementación mostraba TRES bloques
+           de handoff y un clic corría el prompt de Desarrollo sobre ella (auditoría
+           2026-08-08 — ya estaba vivo en prod por los seeds). */
+        pipelineKey: null,
         outputType: { in: ["CARDS", "FLOWCHART", "CARDS_AND_FLOWCHARTS"] },
         OR: [
           { associatedStages: { isEmpty: true } },
@@ -270,6 +281,81 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     );
   }
 
+  /* ── EL CINTURÓN DEL TIPO (auditoría 2026-08-08; ampliado ciclo 2) ──────────
+     Un agente tipado es DE un tipo de proyecto. El despacho por id no pasaba por ningún
+     resolver, así que un click (o un curl) podía correr el prompt de Desarrollo sobre una
+     Implementación — sin error y sin log, el accidente exacto que el resolver mata en el GET.
+     Espejo de esa regla acá, en la única puerta de ejecución.
+     ⚠ El tipo NO vive solo en la columna: las variantes X2 lo llevan en el ID (van sin
+     `pipelineKey` por convención). Gatear solo por la columna dejaba pasar el despacho
+     directo de una variante — por eso `tipoExigidoPorAgente` es la única fuente. */
+  const tipoExigido = tipoExigidoPorAgente(agent);
+  const necesitaTipoDelProyecto =
+    !!tipoExigido || (!!agent.agentGroup && GRUPOS_RESUELTOS_POR_TIPO.includes(agent.agentGroup));
+  let tipoDelProyecto: ReturnType<typeof pipelineKeyDeProyecto> = null;
+  if (necesitaTipoDelProyecto && bodyProjectId) {
+    const proyectoDelAgente = await prisma.project.findUnique({
+      where: { id: bodyProjectId },
+      select: { hubspotPipelineId: true },
+    });
+    tipoDelProyecto = pipelineKeyDeProyecto(proyectoDelAgente?.hubspotPipelineId ?? null);
+  }
+  if (tipoExigido && tipoDelProyecto !== tipoExigido) {
+    return apiError(
+      `Este agente es de proyectos de tipo "${tipoExigido}" y este proyecto no lo es.`,
+      400,
+    );
+  }
+
+  /* ── LA DIRECCIÓN CONTRARIA DEL MISMO CINTURÓN (auditoría 2026-08-11) ───────
+     Lo de arriba tapa "agente tipado sobre el proyecto equivocado". Faltaba el reverso, y es
+     el que estaba VIVO: el agente GENÉRICO de handoff sobre un proyecto de Desarrollo o Sitio
+     web. `tipoExigidoPorAgente` devuelve null para el genérico, así que no había veto.
+
+     El inventario de secciones de la pantalla de etapa (el GET de arriba) no recibe projectId
+     —no puede saber de qué tipo es el proyecto— y filtra `pipelineKey: null`, así que en la
+     etapa 1 / paso 0 de un Desarrollo el ÚNICO handoff que lista es el genérico «Sales→CS».
+     Un clic en «Analizar» corría el prompt de Customer Success sobre ese proyecto:
+     `persistTimelineFromAgentOutput` escribe `implementationType`, PISA `tags` (incluido el
+     bidireccional `recurrente`), sella `handoffGeneratedAt` y re-propone las fases — encima del
+     handoff tipado. Sin error, sin log.
+
+     La regla, y es la MISMA que ya aplica el GET /handoff: el handoff de un proyecto lo corre
+     el agente que su tipo RESUELVE, y ningún otro. Se compara contra `elegirAgente` sobre los
+     candidatos ACTIVE, no contra una tabla aparte — con los 2 agentes tipados en DRAFT (el
+     estado de hoy en producción) el resolver devuelve el genérico y esto no cambia nada. */
+  if (agent.agentGroup && GRUPOS_RESUELTOS_POR_TIPO.includes(agent.agentGroup) && bodyProjectId) {
+    const delGrupo = agentCandidates.filter((a) => a.agentGroup === agent!.agentGroup);
+    const elQueCorresponde = elegirAgente(delGrupo, tipoDelProyecto);
+    if (elQueCorresponde && elQueCorresponde.id !== agent.id) {
+      return apiError(
+        "Este proyecto tiene su propio agente de handoff según su tipo: generalo desde la pestaña Handoff del proyecto, no desde la pantalla de etapa.",
+        400,
+      );
+    }
+  }
+
+  /* ── X2: la VARIANTE POR TIPO del detalle del cronograma ────────────────────
+     Si existe `agent-timeline-detail--<tipo>` ACTIVE para el pipeline de este proyecto, corre
+     ELLA; si no, el genérico de siempre — cero cambio hasta sembrar una variante. Por
+     convención de id y no por agentGroup, a propósito: ver lib/agents/resolver.ts. */
+  if (agent.id === DETALLE_CRONOGRAMA_ID && bodyProjectId) {
+    const proyectoDelDetalle = await prisma.project.findUnique({
+      where: { id: bodyProjectId },
+      select: { hubspotPipelineId: true },
+    });
+    const varianteId = idDeVarianteDetalle(
+      pipelineKeyDeProyecto(proyectoDelDetalle?.hubspotPipelineId ?? null),
+    );
+    if (varianteId) {
+      const variante = await prisma.agent.findFirst({ where: { id: varianteId, status: "ACTIVE" } });
+      if (variante) {
+        console.log(`[analyze] detalle del cronograma: corre la variante ${variante.id}`);
+        agent = variante;
+      }
+    }
+  }
+
   // RBAC por SECCIÓN de artefacto (PERM-F5): los agentes que ESCRIBEN un artefacto
   // (handoff / kickoff / procesos / cronograma) exigen el permiso `generate` (si el
   // artefacto no existe) o `regenerate` (si ya existe) de su sección — matriz
@@ -316,7 +402,8 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // Este agente DETALLA un esqueleto existente (fases con ids). Sin proyecto o
   // sin timeline con fases no hay nada que detallar — se corta acá, antes de
   // recolectar fuentes o llamar a Claude.
-  const isTimelineDetailAgent = agent.id === "agent-timeline-detail";
+  // Por convención de id: el base O una variante por tipo (agent-timeline-detail--<tipo>).
+  const isTimelineDetailAgent = esAgenteDeDetalle(agent.id);
   if (isTimelineDetailAgent) {
     if (!bodyProjectId) {
       return NextResponse.json(
@@ -521,23 +608,54 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
 
   // ── 3. Cargar notas, documentos, cards y deal en paralelo ────────────────────
   setPhase("Leyendo el contexto del cliente…");
+
+  /**
+   * ── EL ZOOM, DEL LADO DE LOS DATOS (2026-08-08) ──────────────────────────────
+   * Los documentos del cliente, las notas del workspace y las tarjetas de contexto YA guardan de
+   * qué proyecto son (`projectId` en las tres tablas) y las tres queries lo ignoraban: traían
+   * TODO lo del cliente. Para un hermano menor eso significaba que la propuesta comercial de la
+   * implementación —el bloque más pesado del prompt, 12.000 caracteres— entraba sin marca justo
+   * cuando el agente tiene que escribir «¿qué vendimos?».
+   *
+   * ⚠ `projectId: null` SE INCLUYE a propósito: es material del cliente que nadie asignó a ningún
+   * proyecto (el caso mayoritario hoy), y excluirlo dejaría al handoff sin contexto en vez de
+   * enfocado. Lo que se saca es lo que pertenece EXPLÍCITAMENTE a otro proyecto.
+   *
+   * Solo aplica al handoff por-proyecto: los demás agentes siguen viendo al cliente entero.
+   */
+  const soloDeEsteProyecto =
+    agent.agentGroup === "handoff" && bodyProjectId
+      ? { OR: [{ projectId: bodyProjectId }, { projectId: null }] }
+      : {};
+
   const [existingCardsResult, stageNotesResult, clientDocumentsResult, dealProjectResult] =
     await Promise.allSettled([
       prisma.clientContextCard.findMany({
-        where: { clientId },
+        where: { clientId, ...soloDeEsteProyecto },
         orderBy: { order: "asc" },
         select: { title: true, content: true },
       }),
       prisma.stageNote.findMany({
-        where: { clientId },
+        where: { clientId, ...soloDeEsteProyecto },
         select: { stage: true, step: true, content: true },
       }),
       prisma.clientDocument.findMany({
+        /* ⚠ AND EXPLÍCITO, NO SPREAD (auditoría 2026-08-08): esta query ya tiene su propio
+           OR (contenido|FILE), y en JS la key posterior PISA a la del spread — el filtro por
+           proyecto se descartaba en silencio al construir el objeto, sin error de tsc y con
+           la guarda en verde. El bloque de 12.000 chars de la propuesta comercial de la
+           implementación —EL caso que la Tanda H vino a arreglar— seguía entrando entero.
+           `AND: [{}]` es un no-op válido de Prisma para los agentes no-handoff. */
         where: {
           clientId,
-          OR: [
-            { content: { not: null } }, // Docs with text content
-            { type: "FILE" },            // All FILE docs (even without extracted text)
+          AND: [
+            soloDeEsteProyecto,
+            {
+              OR: [
+                { content: { not: null } }, // Docs with text content
+                { type: "FILE" },            // All FILE docs (even without extracted text)
+              ],
+            },
           ],
         },
         select: { stage: true, step: true, title: true, content: true, type: true, fileName: true, fileSize: true, mimeType: true },
@@ -546,7 +664,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       }),
       // Buscar el deal asociado al proyecto (si hay projectId)
       bodyProjectId
-        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true, tags: true, implementationType: true, createdAt: true, hubspotCreatedAt: true } })
+        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true, tags: true, implementationType: true, createdAt: true, hubspotCreatedAt: true, hermanoCsProjectId: true } })
         : Promise.resolve(null),
     ]);
 
@@ -560,6 +678,23 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   const clientDocuments = clientDocumentsResult.status === "fulfilled" ? clientDocumentsResult.value : [];
   const dealProject = dealProjectResult.status === "fulfilled" ? dealProjectResult.value : null;
 
+  /**
+   * ── EL HERMANO MAYOR, LEÍDO UNA SOLA VEZ ────────────────────────────────────
+   * De él salen las TRES etiquetas de procedencia que hacen posible el zoom: el caveat del
+   * historial de HubSpot, la marca del deal de la implementación, y el rótulo de su documento.
+   * Una sola lectura para que las tres digan exactamente el mismo nombre — si cada una
+   * resolviera por su cuenta, podrían divergir sin que nada avise.
+   * `null` para una Implementación o para un proyecto que va solo: ahí no hay nada que etiquetar
+   * y el prompt queda byte-idéntico al de siempre.
+   */
+  const hermanoMayor =
+    agent.agentGroup === "handoff" && bodyProjectId && dealProject?.hermanoCsProjectId
+      ? await prisma.project.findUnique({
+          where: { id: dealProject.hermanoCsProjectId },
+          select: { id: true, name: true, hubspotDealId: true, clientId: true },
+        })
+      : null;
+
   // ── 3b. Obtener line items del deal y datos de adquisición desde HubSpot ──────
   let dealContent = "";
   let acquisitionContent = "";
@@ -567,6 +702,10 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // Historial de engagements ANTERIOR a la era del proyecto (solo handoff por-proyecto):
   // trasfondo comprimido de implementaciones pasadas — se inyecta en un bloque aparte.
   let companyTimelinePrevContent = "";
+  // Tanda L — fecha de cierre (epoch ms) del deal DE ESTE PROYECTO, si resuelve y está
+  // Ganado. null = sin ancla (deal sin cerrar, sin hubspotDealId, o el try de abajo falló) →
+  // el helper de presupuesto de sesiones cae a un solo bloque por recencia.
+  let dealProjectCloseDate: number | null = null;
   try {
     const { getSystemHubspotClient, getHubspotClient } = await import("@/lib/hubspot/client");
     // Buscar la cuenta HubSpot del cliente (o la del sistema)
@@ -759,6 +898,20 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         })
       );
 
+      // Tanda L — la fecha de cierre DEL DEAL DE ESTE PROYECTO (por id exacto, mismo patrón
+      // que esDealDelMayor más abajo), para partir las sesiones de venta del handoff en
+      // "antes"/"después" del cierre (lib/handoff/session-budget.ts). Solo confía en
+      // `hs_is_closed_won === "true"`: `closedate` puede existir en un deal todavía ABIERTO
+      // (fecha estimada de la cuenta de HubSpot), y ahí no es un cierre real.
+      if (agent.agentGroup === "handoff" && bodyProjectId && dealProject?.hubspotDealId) {
+        const dpDeal = dealsData.find((d) => d.id === dealProject.hubspotDealId);
+        const p = dpDeal?.deal?.properties;
+        if (p?.hs_is_closed_won === "true" && p.closedate) {
+          const t = new Date(p.closedate).getTime();
+          if (!isNaN(t)) dealProjectCloseDate = t;
+        }
+      }
+
       // Fetch notas de la empresa (en paralelo con todo lo anterior)
       const companyNotes = client.hubspotCompanyId
         ? await fetchHubspotNotes("companies", client.hubspotCompanyId)
@@ -771,6 +924,14 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       // documentaba el conector DocuSign). Matching determinista por NOMBRE normalizado
       // (los Services de HubSpot nacen con el mismo nombre que su deal), mismo espíritu
       // que la ventana temporal del timeline: filtrar datos, no rogarle al modelo.
+      /* El deal del hermano MAYOR se resuelve por ID EXACTO (hermanoCsProjectId →
+         Project.hubspotDealId), no por nombre. Decisión de negocio del zoom (2026-08-08):
+         NO se filtra — el hermano menor ve todo el material — pero entra ETIQUETADO, porque
+         el repo ya midió que «el deal del vecino era un dato tan fuerte que ninguna
+         instrucción de exclusión podía contra él». findUnique directo y NO la lista de
+         activos: el mayor puede estar Finalizado y proyectoClasificableWhere lo dejaría
+         afuera. */
+      const hermanoMayorDelDeal = hermanoMayor;
       let isForeignProjectDeal: (dealName: string) => boolean = () => false;
       if (agent.agentGroup === "handoff" && bodyProjectId) {
         const activeProjects = await prisma.project.findMany({
@@ -797,12 +958,17 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         };
       }
 
+      const esDealDelMayor = (id: string) =>
+        !!hermanoMayorDelDeal?.hubspotDealId && id === hermanoMayorDelDeal.hubspotDealId;
+
       // Construir el bloque de deals
       const foreignDeals: string[] = [];
       const dealBlocks = dealsData
         .filter((d) => d.deal?.properties?.dealname)
         .filter((d) => {
           const name = d.deal!.properties!.dealname!;
+          // El id exacto gana al nombre: el deal del mayor entra SIEMPRE (etiquetado abajo).
+          if (esDealDelMayor(d.id)) return true;
           if (isForeignProjectDeal(name)) {
             foreignDeals.push(name);
             return false;
@@ -825,12 +991,24 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
           if (d.dealNotes.length > 0) {
             lines.push(`Notas del deal (${d.dealNotes.length}):\n${d.dealNotes.slice(0, 10).map((n) => `  • ${n}`).join("\n")}`);
           }
+          if (esDealDelMayor(d.id)) {
+            lines.unshift(
+              `⚠ ESTE NEGOCIO ES DEL PROYECTO PRINCIPAL «${hermanoMayorDelDeal!.name}» (la implementación de HubSpot): ` +
+                `usalo SOLO como contexto de fondo. El alcance de ESTE proyecto NO sale de acá, ` +
+                `salvo lo que hable de integración, desarrollo o sitio web.`,
+            );
+          }
           return lines.join("\n");
         });
 
       if (foreignDeals.length > 0) {
         console.log(
           `[analyze handoff] deals de OTROS proyectos excluidos del contexto: ${foreignDeals.join(" · ")}`,
+        );
+      }
+      if (hermanoMayorDelDeal?.hubspotDealId && dealsData.some((d) => esDealDelMayor(d.id))) {
+        console.log(
+          `[analyze handoff] deal del hermano mayor «${hermanoMayorDelDeal.name}» etiquetado (no filtrado).`,
         );
       }
       if (dealBlocks.length > 0) {
@@ -920,7 +1098,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // ── Filtro especial para el agente Handoff Sales→CS ─────────────────────────
   // Fuente ÚNICA de la política: lib/handoff/session-relevance.ts. Dos capas:
   //
-  //   1. RELEVANCIA de la sesión (classifyForHandoff, con las listas importadas):
+  //   1. RELEVANCIA de la sesión (classifyHandoffSession, con las listas importadas):
   //      EXCLUDE por título gana ("implementación", "adopción", "review", weekly…);
   //      luego INCLUDE por título ("hand off", "traspaso", "kickoff" — el kickoff SÍ
   //      alimenta el handoff); título neutro → "Ventas en la sala".
@@ -946,27 +1124,11 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     ? { maxSales: 7, maxCS: 8, perSessionChars: 9000, salesBlockCap: 60000, csBlockCap: 60000, timelineCap: 12000, manualCap: 20000 }
     : { maxSales: 6, maxCS: 6, perSessionChars: Infinity, salesBlockCap: 4000, csBlockCap: 5000, timelineCap: 8000, manualCap: 12000 };
 
-  // Las listas de keywords y el clasificador de relevancia para handoff viven en
-  // lib/handoff/session-relevance.ts (importadas arriba; compartidas con la revisión A2).
-  function normalizeTitle(t: string): string {
-    // NFD descompone "ó" en "o" + diacrítico combinante. El regex remueve el
-    // rango U+0300–U+036F (Combining Diacritical Marks) para que el matching
-    // sea insensitive a acentos: "Implementación" → "implementacion".
-    return t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  }
-
-  type HandoffClassification = { include: boolean; reason: string };
-
-  function classifyForHandoff(s: RawTranscript): HandoffClassification {
-    const title = normalizeTitle(s.title || "");
-    const excludeHit = HANDOFF_EXCLUDE_TITLE_KEYWORDS.find((kw) => title.includes(kw));
-    if (excludeHit) return { include: false, reason: `título contiene "${excludeHit}"` };
-    const includeHit = HANDOFF_INCLUDE_TITLE_KEYWORDS.find((kw) => title.includes(kw));
-    if (includeHit) return { include: true, reason: `título contiene "${includeHit}"` };
-    const hasSales = s.participants.some((p) => salesEmails.has(p.toLowerCase()));
-    if (hasSales) return { include: true, reason: "título neutro + al menos un Sales en participantes" };
-    return { include: false, reason: "título neutro + sin Sales en participantes" };
-  }
+  // El clasificador de relevancia para handoff vive en lib/handoff/session-relevance.ts
+  // (importado arriba, compartido con la revisión A2 — Tanda L saca la copia inline que
+  // tenía esta ruta, era una duplicación confirmada de classifyHandoffSession).
+  const classifyForHandoff = (s: RawTranscript) =>
+    classifyHandoffSession(s.title, s.participants, null, salesEmails);
 
   // Helper: si una sesión NO tiene transcript, devolver al menos su metadata
   // (título, fecha, participantes) para que el agente sepa que la reunión
@@ -987,15 +1149,19 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     ].join("\n");
   };
 
-  // Wrapper: intenta transcript real, si es null devuelve fallback con metadata
-  const fetchOrFallback = async (s: RawTranscript): Promise<string> => {
-    const content = await fetchTranscriptContent(s.id, s.title);
+  // Wrapper: intenta transcript real, si es null devuelve fallback con metadata.
+  // `opts.maxChars` (Tanda L) — cota del presupuesto de sesiones; no aplica al fallback
+  // (ya es corto por construcción).
+  const fetchOrFallback = async (s: RawTranscript, opts?: { maxChars?: number }): Promise<string> => {
+    const content = await fetchTranscriptContent(s.id, s.title, opts);
     if (content?.trim()) return content;
     return buildFallbackMetadata(s);
   };
 
   let firefliesContent = "";
   let salesFirefliesContent = "";
+  let salesBeforeCloseContent = ""; // Tanda L — solo con dealProjectCloseDate resuelto
+  let salesAfterCloseContent = ""; // Tanda L — solo con dealProjectCloseDate resuelto
   let manualSourcesContent = ""; // #handoff-manual — bloque de fuentes manuales (solo handoff)
   let handoffSourceSessionIds: string[] = []; // ids de sesiones de ventas usadas (handoff)
 
@@ -1083,16 +1249,46 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       firefliesContent = contents.filter(Boolean).map(capSession).join("\n\n---\n\n");
     }
 
-    // Transcripciones de ventas (cap por perfil).
+    // Transcripciones de ventas.
     // Si no hay transcript, se inyecta metadata (título, fecha, participantes)
     // para que el agente sepa al menos que la reunión existió.
-    // El handoff puede traer hasta 10 sesiones de venta; el resto según su perfil.
-    const topSales = salesSessions.sort((a, b) => b.date - a.date).slice(0, isHandoffAgent ? 10 : CTX.maxSales);
-    if (topSales.length > 0) {
-      const contents = await Promise.all(topSales.map((s) => fetchOrFallback(s)));
-      salesFirefliesContent = contents.filter(Boolean).map(capSession).join("\n\n---\n\n");
+    //
+    // Tanda L (2026-08-09) — HANDOFF: ya no es un cupo fijo de 10 por fecha (en Wherex dejaba
+    // afuera el 64% de las sesiones calificadas). `planHandoffSessionBudget` arma un
+    // presupuesto de caracteres; con `dealProjectCloseDate` resuelto, separa "antes"/"después"
+    // del cierre del deal — cada bloque con su propio presupuesto, así ninguno le gana espacio
+    // al otro por pura cantidad de reuniones. Sin fecha de cierre, un solo bloque por recencia
+    // (mismo criterio de hoy, ventana mucho más ancha). El resto de agentes conserva el cap
+    // fijo por perfil de siempre.
+    let topSales: RawTranscript[];
+    if (isHandoffAgent) {
+      const byId = new Map(salesSessions.map((s) => [s.id, s]));
+      const plan = planHandoffSessionBudget(
+        salesSessions.map((s) => ({ id: s.id, title: s.title, date: s.date })),
+        dealProjectCloseDate,
+      );
+      topSales = plan.flatMap((p) => (byId.has(p.id) ? [byId.get(p.id)!] : []));
+      const renderBlock = async (block: HandoffSessionBlock) => {
+        const items = plan.filter((p) => p.block === block);
+        const contents = await Promise.all(
+          items.map((p) => fetchOrFallback(byId.get(p.id)!, { maxChars: p.maxChars })),
+        );
+        return contents.filter(Boolean).join("\n\n---\n\n");
+      };
+      if (dealProjectCloseDate !== null) {
+        salesBeforeCloseContent = await renderBlock("antes_cierre");
+        salesAfterCloseContent = await renderBlock("despues_cierre");
+      } else {
+        salesFirefliesContent = await renderBlock("sin_ancla");
+      }
+      handoffSourceSessionIds = topSales.map((s) => s.id);
+    } else {
+      topSales = salesSessions.sort((a, b) => b.date - a.date).slice(0, CTX.maxSales);
+      if (topSales.length > 0) {
+        const contents = await Promise.all(topSales.map((s) => fetchOrFallback(s)));
+        salesFirefliesContent = contents.filter(Boolean).map(capSession).join("\n\n---\n\n");
+      }
     }
-    if (isHandoffAgent) handoffSourceSessionIds = topSales.map((s) => s.id);
 
     // #handoff-manual — fuentes MANUALES pegadas (reuniones que NO entraron por el sync).
     // Persistidas en HandoffSource → re-leídas en CADA corrida (sobreviven regeneración).
@@ -1147,7 +1343,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         const inSales = salesSessions.some((sl) => sl.id === s.id);
         const link = bodyProjectId ? linkById.get(s.id) : undefined;
         const reason = inSales
-          ? `no usada (cap de ${isHandoffAgent ? 10 : CTX.maxSales})`
+          ? isHandoffAgent
+            ? "no usada (fuera del presupuesto de sesiones)"
+            : `no usada (cap de ${CTX.maxSales})`
           : bodyProjectId
           ? link?.handoffOverride === false
             ? "excluida a mano (la X del panel)"
@@ -1480,10 +1678,21 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       .map(({ title, content, source }) => ({ title, content, source }));
   }
 
-  // Bloque del timeline de HubSpot (notas + Zoom), inyectado junto a las fuentes crudas.
+  /* Bloque del timeline de HubSpot (notas + Zoom), inyectado junto a las fuentes crudas.
+     ⚠ ES EL BLOQUE MÁS PESADO DEL PROMPT Y ES POR EMPRESA, NO POR PROYECTO. Para un hermano
+     menor eso significa que las reuniones de la implementación —su kickoff, sus sesiones
+     semanales de Marketing y Sales— entran acá enteras. Medido sobre el «Conector SAAS posventa»
+     de Spectrum: 22 de 22 registros son de la implementación y ninguno menciona el conector.
+     No se filtran (decisión de negocio: el hermano menor ve todo el material) pero desde la
+     Tanda G se ETIQUETAN nombrando al hermano mayor, que es el mismo tratamiento que ya tenían
+     el HISTORIAL PREVIO de abajo, el deal del mayor y su documento. Sin la etiqueta, el modelo
+     no tiene NINGUNA forma de saber que esas reuniones no son de este proyecto. */
+  const caveatDelMayor = hermanoMayor?.name
+    ? `⚠ Este historial es de la EMPRESA, no de este proyecto: contiene las reuniones y notas de «${hermanoMayor!.name}» (la implementación de HubSpot de la que este proyecto cuelga). Usalo como contexto de fondo. NO tomes de acá el alcance, las promesas ni los pendientes de ESTE proyecto: solo lo que hable de integración, desarrollo o sitio web.\n`
+    : "";
   const hubspotTimelineBlock = companyTimelineContent.trim()
     ? `=== TIMELINE DE HUBSPOT (notas + llamadas/reuniones Zoom) ===
-${companyTimelineContent.slice(0, CTX.timelineCap)}
+${caveatDelMayor}${companyTimelineContent.slice(0, CTX.timelineCap)}
 
 `
     : "";
@@ -1497,6 +1706,18 @@ ${companyTimelinePrevContent.slice(0, 3000)}
 `
     : "";
 
+  /* Tanda L — el bloque de sesiones de VENTAS. Con dealProjectCloseDate resuelto, dos
+     narrativas separadas (antes/después del cierre del deal), cada una con su propia
+     instrucción — igual que hubspotTimelineBlock/hubspotPrevTimelineBlock ya hacen con la
+     era del proyecto. Sin fecha de cierre (o para el resto de agentes, que no usan el split),
+     un solo bloque — mismo copy de siempre. */
+  const salesSessionsBlock =
+    salesBeforeCloseContent.trim() || salesAfterCloseContent.trim()
+      ? `${salesBeforeCloseContent.trim() ? `=== TRANSCRIPCIONES DE VENTAS — ANTES DEL CIERRE DEL TRATO (lo que se prometió/vendió) ===\nLlamadas comerciales previas a que el cliente firmara. Contienen qué se prometió, por qué compró, dolores, objeciones y acuerdos verbales.\n${salesBeforeCloseContent}\n\n` : ""}${salesAfterCloseContent.trim() ? `=== TRANSCRIPCIONES DE VENTAS — DESPUÉS DEL CIERRE DEL TRATO (la evolución real) ===\nReuniones donde participó Ventas YA con el trato cerrado — contexto de la transición a CS, no promesas de venta.\n${salesAfterCloseContent}\n\n` : ""}`
+      : salesFirefliesContent
+      ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${isHandoffAgent ? salesFirefliesContent : salesFirefliesContent.slice(0, CTX.salesBlockCap)}\n\n`
+      : "";
+
   // Exclusiones del CSE (reglas duras) — solo handoff por-proyecto; persistidas en
   // Handoff.contextExclusions vía PATCH /api/projects/[projectId]/handoff. El kickoff
   // NO las re-inyecta: consume el canvas Handoff ya curado (si cambian, regenerar el
@@ -1507,13 +1728,36 @@ ${companyTimelinePrevContent.slice(0, 3000)}
       where: { projectId: bodyProjectId },
       select: { contextExclusions: true },
     });
-    const excl = h?.contextExclusions?.trim();
+    /* ⚠ LA EXCLUSIÓN DEL SISTEMA SE RECALCULA ACÁ, NO SE LEE DE LA FILA (decisión de Elías,
+       2026-08-08: «que la mantenga la app»). Antes se escribía una sola vez al nacer el handoff
+       y se podía perder de tres maneras: «Regenerar» la borraba (el textarea se sembraba vacío
+       una única vez y la pantalla interpretaba el vacío como «el CSE la borró»), tres de las
+       cinco puertas que crean un `Handoff` nunca la escribían, y un handoff viejo se quedaba sin
+       ella para siempre. Recalculada, no se puede perder por ninguna de las tres vías. */
+    const excl = componerExclusiones(
+      await exclusionDelSistema(bodyProjectId),
+      h?.contextExclusions,
+    )?.trim();
     if (excl) {
       cseExclusionsBlock = `=== EXCLUSIONES DEL CSE (reglas duras — cumplilas SIEMPRE, ganan sobre cualquier fuente) ===
 ${excl}
 
 `;
       console.log(`[analyze handoff] exclusiones del CSE aplicadas (${excl.length} chars)`);
+    }
+  }
+
+  /* El DOCUMENTO de handoff del hermano MAYOR, como referencia para el zoom (Tanda G,
+     2026-08-08 — decisión de Elías: el hermano menor lo lee ADEMÁS de todo el material crudo).
+     El rótulo y la allowlist de secciones viven adentro del helper — es el único archivo
+     sancionado por el candado del embudo. Solo hermanos menores: para todo lo demás, "". */
+  let handoffDelMayorBlock = "";
+  if (isHandoffAgent && hermanoMayor) {
+    handoffDelMayorBlock = await loadHandoffDelHermanoMayorContext(hermanoMayor.id, { clientId });
+    if (handoffDelMayorBlock) {
+      console.log(
+        `[analyze handoff] handoff del hermano mayor inyectado como referencia (${handoffDelMayorBlock.length} chars)`,
+      );
     }
   }
 
@@ -1564,7 +1808,7 @@ ${[
     return `${tag} **${c.title}:**\n${c.content}`;
   }),
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
-].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesFirefliesContent ? `=== TRANSCRIPCIONES DE VENTAS (llamadas comerciales pre-venta) ===\nEstas son llamadas donde participó el equipo de ventas. Contienen información valiosa sobre: qué se prometió, por qué el cliente compró, dolores mencionados, objeciones, expectativas, y acuerdos verbales.\n${salesFirefliesContent.slice(0, isHandoffAgent ? 12000 : CTX.salesBlockCap)}\n\n` : ""}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verificá que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omitilos.\n` : ""}
+].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${handoffDelMayorBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesSessionsBlock}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verificá que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omitilos.\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 10b. Input del agente Kickoff ─────────────────────────────────────────────
@@ -1624,44 +1868,38 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // EXISTENTE (fases con ids — debe referenciarlas, no crearlas) + el handoff
   // curado para que las tareas sean del proyecto real. Sin fechas en el
   // contexto: el agente no las calcula.
+  //
+  // CTX (2026-08-08): primera pieza migrada al contexto NOMBRADO (lib/contexto). Las
+  // fuentes (cronograma-actual / handoff-curado / requerimiento-tecnico), el brief `__doc`
+  // (X1) y el template viven allá; esta rama solo carga y renderiza. La migración es
+  // byte-idéntica — el golden de lib/contexto/detalle-cronograma.test.ts lo afirma.
   if (isTimelineDetailAgent && bodyProjectId) {
-    const handoffCtx = await loadHandoffContext(bodyProjectId, { onlyConfirmed: true });
-    const timelineCtx = await loadTimelineContext(bodyProjectId, { includeIds: true });
-    // Canvas "Desarrollo" (requerimiento técnico) si existe → objetos de HubSpot, llaves de dedup y
-    // conexiones reales; ancla las tareas por objeto de la fase técnica en el alcance vendido. "" si no hay.
-    const desarrolloCtx = await loadDesarrolloContext(bodyProjectId);
-
-    // Reglas #6 (tarea de BD) y #7 (tareas técnicas) derivadas de la clasificación del proyecto.
-    const projTagSlugs = sanitizeTags(dealProject?.tags ?? []);
-    const isReimpl = dealProject?.implementationType === "REIMPLEMENTATION";
-    const hasMigration = projTagSlugs.includes("crm_migration");
-    const hasTechnical = projTagSlugs.includes("custom_dev") || projTagSlugs.includes("insider_one");
-    const dbTaskRule = isReimpl && !hasMigration
-      ? `- BASE DE DATOS (#6): es una RE-IMPLEMENTACIÓN sobre un HubSpot que el cliente YA usa, SIN migración desde otro CRM. NO incluyas una tarea de "cargar/crear la base de datos"; en su lugar, en la primera fase, incluí una tarea de REVISIÓN DE ESTRUCTURA Y LIMPIEZA de la base existente (propiedades, duplicados, datos sucios).`
-      : `- BASE DE DATOS (#6): ${isReimpl ? "es una re-implementación pero CON migración desde otro CRM" : "es una implementación desde cero"}, así que SÍ incluí en la primera fase una tarea de CARGAR/ESTRUCTURAR LA BASE DE DATOS (importar y modelar los datos en HubSpot).`;
-    const techRule = hasTechnical
-      ? `\n- DESARROLLO/INTEGRACIÓN (#7): el proyecto lleva desarrollo a medida o Insider One. Las tareas técnicas (integraciones, desarrollo, APIs) marcalas con responsable "DEV" y, si existe una fase de "Desarrollo / Integración", ubicalas SOLO ahí (no las mezcles con las tareas funcionales de otras fases).`
-      : "";
-
-    userMessage = `Empresa: ${companyName}
-Industria: ${client.industry ?? "No especificada"}
-${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}${classificationLabel ? `Clasificación del proyecto: ${classificationLabel}\n` : ""}
-=== CRONOGRAMA A DETALLAR (fases EXISTENTES — no cambies nombres, duraciones ni orden) ===
-${timelineCtx}
-
-=== HANDOFF CURADO (bloques confirmados por el CSE) ===
-${handoffCtx || '(Sin handoff confirmado. Generá las tareas típicas del tipo de cada fase y marcá CADA una con "porValidar": true. Títulos limpios, sin marcadores.)'}
-${desarrolloCtx ? `\n=== REQUERIMIENTO TÉCNICO (canvas Desarrollo — objetos, llaves y conexiones) ===\n${desarrolloCtx}\n` : ""}
-=== REGLAS SEGÚN LA CLASIFICACIÓN ===
-${dbTaskRule}${techRule}
-
-Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a cada fase y proponé las tareas por semana (weekIndex relativo a la fase, < durationWeeks). Usá los ids EXACTOS del input.`;
-
-    // Regen por fase: acotá la salida a la fase target (las demás van con tasks:[]) — baja el
-    // costo/latencia y el riesgo de truncación. La persistencia igual filtra por onlyPhaseId.
-    if (regeneratePhaseId) {
-      userMessage += `\n\n=== ALCANCE: REGENERAR UNA SOLA FASE ===\nDetallá ÚNICAMENTE las tareas de la fase id="${regeneratePhaseId}". Para TODAS las demás fases del input, incluilas en el JSON con su id EXACTO pero con "tasks": [] — no las toques. Concentrá todo el detalle en la fase indicada.`;
-    }
+    // El pipelineKey del contexto sale del PROYECTO, no del agente: la columna del agente
+    // es NULL por convención en las variantes X2 (el tipo viaja en su id), así que leerla
+    // acá mentiría exactamente en las corridas tipadas (ciclo 2 de revisión, 2026-08-08).
+    const proyectoDelContexto = await prisma.project.findUnique({
+      where: { id: bodyProjectId },
+      select: { hubspotPipelineId: true },
+    });
+    const contexto = await cargarContextoDelDetalle(
+      bodyProjectId,
+      pipelineKeyDeProyecto(proyectoDelContexto?.hubspotPipelineId ?? null),
+    );
+    userMessage = renderDetalleDeCronograma({
+      instrucciones: contexto.instrucciones,
+      fuentes: contexto.fuentes,
+      encabezado: {
+        companyName,
+        industry: client.industry ?? null,
+        serviceTypeLabel: serviceTypeLabel || null,
+        classificationLabel: classificationLabel || null,
+      },
+      clasificacion: clasificacionDeTags(
+        sanitizeTags(dealProject?.tags ?? []),
+        dealProject?.implementationType ?? null,
+      ),
+      regenerarFaseId: regeneratePhaseId ?? null,
+    });
   }
 
   // ── 10c. Marco breve de relación previa (solo agente Handoff) ────────────────
@@ -1974,12 +2212,21 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   // ProjectTimeline/TimelineTask y se responde acá — no debe pasar por
   // updateCanvasAsync ni por el path de cards.
   if (isTimelineDetailAgent) {
-    // Modal de curación (regen por fase con preview): computamos la propuesta y la devolvemos SIN
-    // escribir. El CSE la cura en el modal y aplica por /timeline/phases/[phaseId]/apply.
-    if (previewOnly && regeneratePhaseId && bodyProjectId) {
-      const previewTasks = await computeTimelineDetailPreview(bodyProjectId, analysisJson, regeneratePhaseId);
+    // Modal de curación (regen con preview): computamos la propuesta y la devolvemos SIN escribir.
+    // Con regeneratePhaseId → preview de UNA fase (/timeline/phases/[phaseId]/apply). Sin él (Tanda N,
+    // "Regenerar todo el cronograma") → preview de TODAS las fases (/timeline/detail/apply-all). El
+    // prompt ya pide "todas las fases" por default cuando no hay regeneratePhaseId — no cambia.
+    if (previewOnly && bodyProjectId) {
+      if (regeneratePhaseId) {
+        const previewTasks = await computeTimelineDetailPreview(bodyProjectId, analysisJson, regeneratePhaseId);
+        return NextResponse.json({
+          previewTasks,
+          run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
+        });
+      }
+      const previewPhases = await computeTimelineDetailPreviewAllPhases(bodyProjectId, analysisJson);
       return NextResponse.json({
-        previewTasks,
+        previewPhases,
         run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
       });
     }
@@ -2096,25 +2343,19 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
       // born-CONFIRMED el delete borra TODOS los bloques del agente (no solo DRAFT), sino se
       // duplicarían al regenerar; lo editado a mano (MODIFIED, incl. IA por el PUT) y lo manual
       // (HUMAN) sobreviven. La tx evita dejar la sección vacía si el createMany falla entre medio.
+      /* La geometría (tipo + tamaño) vive en lib/canvas/agent-output-doc.ts desde la Tanda J:
+         el visor del historial la necesita para pintar una corrida vieja EXACTAMENTE como se vio
+         cuando se generó. Una segunda copia divergiría en silencio — mismos datos, otra pinta. */
       const blockData: Prisma.CanvasBlockCreateManyInput[] = section.blocks.map((block, i) => {
-        const bt = (block.type?.toLowerCase() ?? "text") as BlockType;
-        // Conservative rowSpan — user can resize if needed
-        const contentLen = (block.content ?? "").length;
-        const tableRows = (block.data as { rows?: unknown[] } | null)?.rows?.length ?? 0;
-        let rowSpan: number;
-        if (bt === "heading") rowSpan = 1;
-        else if (bt === "metric") rowSpan = 1;
-        else if (bt === "table") rowSpan = Math.max(2, Math.ceil((tableRows + 1) * 35 / 125));
-        else if (bt === "flowchart") rowSpan = 3;
-        else rowSpan = Math.max(1, Math.ceil(contentLen / 800));
+        const g = geometriaDeBloque(block);
         return {
           sectionId,
-          blockType: (bt.toUpperCase()) as "TEXT" | "HEADING" | "TABLE" | "METRIC" | "CALLOUT" | "CARD" | "FLOWCHART" | "CHART" | "IMAGE",
-          content: block.content ?? null,
-          data: block.data ?? undefined,
+          blockType: g.blockType as "TEXT" | "HEADING" | "TABLE" | "METRIC" | "CALLOUT" | "CARD" | "FLOWCHART" | "CHART" | "IMAGE",
+          content: g.content,
+          data: g.data as Prisma.InputJsonValue | undefined,
           order: i,
-          colSpan: DEFAULT_COL_SPAN[bt] ?? 4,
-          rowSpan,
+          colSpan: g.colSpan,
+          rowSpan: g.rowSpan,
           source: "AGENT" as const,
           status: bornConfirmed ? "CONFIRMED" : "DRAFT",
           agentRunId: run.id,
@@ -2141,7 +2382,17 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
     console.log(`[analyze blocks] Saved ${totalBlocks} blocks across ${outputSections.length} sections`);
 
     // Persistir el cronograma si el agente lo devolvió (mismo helper que el path de cards)
-    await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent);
+    const timelineSync = await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent);
+    // Tanda M — el handoff SIEMPRE corre detached (runDetached): esta respuesta se descarta y
+    // solo `markDone` persiste `AgentRun.output`, que en éxito NO se toca (línea ~2130/2146 ya
+    // guardó el analysisJson real — no pisarlo). Si hubo error de timeline, se MERGEA acá (no se
+    // reemplaza) para que el poller (GET [runId]) pueda leerlo sin perder el contenido real.
+    if (timelineSync.timelineSyncError) {
+      const base = typeof analysisJson === "object" && analysisJson !== null ? analysisJson : {};
+      await prisma.agentRun
+        .update({ where: { id: run.id }, data: { output: JSON.stringify({ ...base, timelineSyncError: timelineSync.timelineSyncError }) } })
+        .catch(() => {});
+    }
 
     const savedBlocks = await prisma.canvasBlock.findMany({
       where: { agentRunId: run.id },
@@ -2152,6 +2403,7 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
       blocks: savedBlocks,
       format: "blocks",
       run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
+      timelineSyncError: timelineSync.timelineSyncError,
     });
   }
 
@@ -2408,7 +2660,15 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
 
   // ── 14c. Persistir cronograma sugerido por el agente (Fase 2 módulo externo) ─
   // Se llama desde ambos paths (cards y block format) — ver función helper abajo.
-  await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent);
+  const timelineSync = await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent);
+  // Tanda M — mismo motivo que el otro path (block format): mergear, no pisar, y solo cuando
+  // hubo error (el éxito ya está guardado en AgentRun.output desde antes).
+  if (timelineSync.timelineSyncError) {
+    const base = typeof analysisJson === "object" && analysisJson !== null ? analysisJson : {};
+    await prisma.agentRun
+      .update({ where: { id: run.id }, data: { output: JSON.stringify({ ...base, timelineSyncError: timelineSync.timelineSyncError }) } })
+      .catch(() => {});
+  }
 
   // ── 15. Retornar las cards recién creadas + metadata del run ─────────────────
   const runCards = await prisma.clientContextCard.findMany({
@@ -2427,6 +2687,7 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
       stepLabel: run.stepLabel,
       agent:     { name: agent.name },
     },
+    timelineSyncError: timelineSync.timelineSyncError,
   });
   }; // ← fin de runAnalysisWork
 
@@ -2451,10 +2712,34 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
     },
   });
 
-  const markDone = (res: NextResponse) =>
-    prisma.agentRun
-      .update({ where: { id: pre.id }, data: { status: res.status >= 400 ? "ERROR" : "DONE" } })
+  /**
+   * ⚠ Un fallo que RETORNA (4xx/5xx) también deja su motivo escrito (auditoría de la Tanda J).
+   * Antes solo lo hacía `markError`, o sea cuando el handler TIRABA una excepción; los fallos
+   * normales —«el agente devolvió bloques inválidos», sin créditos, gate de permiso— pasaban
+   * por acá y dejaban la corrida en ERROR con el `output: "{}"` con el que nació. Resultado: el
+   * motivo moría al recargar la pestaña y el historial abría una corrida fallida sin poder
+   * decir qué había pasado. El body del error ya trae el mensaje humanizado; se guarda con el
+   * mismo contrato que lee `parseRunError`.
+   */
+  const markDone = async (res: NextResponse) => {
+    let output: string | undefined;
+    if (res.status >= 400) {
+      try {
+        const body = (await res.clone().json()) as { error?: unknown; message?: unknown };
+        const motivo = typeof body?.error === "string" ? body.error : body?.message;
+        if (typeof motivo === "string" && motivo.trim()) output = JSON.stringify({ error: motivo });
+      } catch {
+        /* respuesta sin JSON legible: queda el genérico de parseRunError */
+      }
+    }
+    await prisma.agentRun
+      .update({
+        where: { id: pre.id },
+        data: { status: res.status >= 400 ? "ERROR" : "DONE", ...(output ? { output } : {}) },
+      })
       .catch(() => {});
+    return res;
+  };
   const markError = (e: unknown) =>
     prisma.agentRun
       // Guardamos el mensaje YA humanizado en output → el GET [runId] lo expone y el
@@ -2492,8 +2777,11 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
 /**
  * Persiste el cronograma estructurado (ProjectTimeline + TimelinePhase) si el
  * agente lo devolvió en su output JSON. Conservador: si ya existe un timeline
- * para el proyecto, NO pisa (la propuesta nueva queda solo en AgentRun.output
- * para trazabilidad — el CSE puede borrar manualmente para regenerar).
+ * para el proyecto (aunque tenga 0 fases), NO pisa — reconcilia la propuesta
+ * contra las fases actuales (por nombre normalizado o posición) y la guarda
+ * en `ProjectTimeline.pendingProposal`, que el canvas muestra como vista
+ * previa aplicable ("Revisar N cambios"). Solo si NUNCA existió un
+ * ProjectTimeline para el proyecto se crean fases DIRECTO, sin propuesta.
  *
  * Se llama desde DOS paths del POST handler:
  *   - branch de block format (canvases custom como Handoff Sales→CS)
@@ -2501,13 +2789,20 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
  *
  * El cronograma vive a nivel proyecto, independiente del tipo de output del
  * agente — por eso se factoriza acá.
+ *
+ * Tanda M (2026-08-10) — el catch YA NO se traga la excepción en silencio:
+ * el handoff principal (cards/blocks) sigue sin fallar por esto, pero el
+ * motivo de un fallo de persistencia viaja en `timelineSyncError` para que
+ * el caller lo sume a la respuesta del run — sin eso, "el handoff se
+ * regeneró bien" y "el cronograma no se enteró" podían coexistir sin que el
+ * CSE se enterara de lo segundo.
  */
 async function persistTimelineFromAgentOutput(
   bodyProjectId: string | null,
   analysisJson: unknown,
   agentRunId: string,
   isHandoff: boolean,
-): Promise<void> {
+): Promise<{ timelineSyncError: string | null }> {
   try {
     // Implementación vs re-implementación: el agente lo infiere; el CSE puede corregir luego.
     // Se persiste a nivel Project ANTES del early-return del timeline (vale aunque no haya fases).
@@ -2631,7 +2926,7 @@ async function persistTimelineFromAgentOutput(
 
     const timelineRaw = (analysisJson as { timeline?: { phases?: unknown } } | null)
       ?.timeline?.phases;
-    if (!bodyProjectId || !Array.isArray(timelineRaw) || timelineRaw.length === 0) return;
+    if (!bodyProjectId || !Array.isArray(timelineRaw) || timelineRaw.length === 0) return { timelineSyncError: null };
 
     // Validador inline (sin Zod, consistente con el resto del codebase)
     const validPhases = timelineRaw
@@ -2660,7 +2955,7 @@ async function persistTimelineFromAgentOutput(
         source: "AGENT" as const,
       }));
 
-    if (validPhases.length === 0) return;
+    if (validPhases.length === 0) return { timelineSyncError: null };
 
     // Si YA existe un cronograma NO se pisa (protege ediciones + progreso de tareas).
     // En vez de descartar la propuesta nueva, se reconcilia contra las fases actuales y
@@ -2681,122 +2976,62 @@ async function persistTimelineFromAgentOutput(
       },
     });
     if (existing) {
-      const norm = (s: string) => s.trim().toLowerCase();
-      const byName = new Map<string, (typeof existing.phases)[number]>();
-      for (const ph of existing.phases) if (!byName.has(norm(ph.name))) byName.set(norm(ph.name), ph);
-      const consumed = new Set<string>();
-
-      type ProposalPhase = {
-        id?: string;
-        name: string;
-        order: number;
-        durationWeeks: number;
-        startWeek?: number | null;
-        sessionCount: number | null;
-        notes: string | null;
-        activityType?: string | null;
-      };
-      const proposedPhases: ProposalPhase[] = [];
-
-      // 1) Fases propuestas por el agente (en su orden), matcheadas a existentes por
-      //    nombre normalizado y, si no, por posición. Las matcheadas llevan su id +
-      //    el activityType existente (mejora el preview; no-op al aplicar).
-      validPhases.forEach((p, i) => {
-        let match: (typeof existing.phases)[number] | undefined = byName.get(norm(p.name));
-        if (match && consumed.has(match.id)) match = undefined;
-        if (!match) {
-          const positional = existing.phases[i];
-          if (positional && !consumed.has(positional.id)) match = positional;
-        }
-        if (match) {
-          consumed.add(match.id);
-          proposedPhases.push({
-            id: match.id,
-            name: p.name,
-            order: i,
-            durationWeeks: p.durationWeeks,
-            startWeek: p.startWeek,
-            sessionCount: p.sessionCount,
-            notes: p.notes,
-            activityType: match.activityType,
-          });
-        } else {
-          proposedPhases.push({
-            name: p.name,
-            order: i,
-            durationWeeks: p.durationWeeks,
-            startWeek: p.startWeek,
-            sessionCount: p.sessionCount,
-            notes: p.notes,
-          });
-        }
-      });
-
-      // 2) Fases existentes NO matcheadas → re-emitir idénticas (nunca borrar).
-      let nextOrder = proposedPhases.length;
-      for (const ph of existing.phases) {
-        if (consumed.has(ph.id)) continue;
-        proposedPhases.push({
-          id: ph.id,
-          name: ph.name,
-          order: nextOrder++,
-          durationWeeks: ph.durationWeeks,
-          startWeek: ph.startWeek,
-          sessionCount: ph.sessionCount,
-          notes: ph.notes,
-          activityType: ph.activityType,
-        });
-      }
-
       // Si el anchor sigue vacío, derivarlo de la sesión de kickoff (la propuesta lo
       // lleva → al aplicarla, el PUT lo persiste). Si ya está, se conserva (no se pisa).
-      const pendingProposal = {
-        anchorStartDate:
-          existing.anchorStartDate?.toISOString() ??
-          (await getKickoffSessionDate(bodyProjectId))?.toISOString() ??
-          null,
-        phases: proposedPhases,
-      };
+      // Este fallback SÍ pega a la base (getKickoffSessionDate) — por eso vive acá y no
+      // dentro de reconcileAgentProposal, que es pura.
+      const existingAnchorISO = existing.anchorStartDate?.toISOString() ?? null;
+      const resolvedAnchorISO =
+        existingAnchorISO ?? (await getKickoffSessionDate(bodyProjectId))?.toISOString() ?? null;
 
-      // ¿La propuesta es un NO-OP? (mismos ids en el mismo orden, mismos campos que el PUT
-      // escribiría, mismo anchor). Regenerar el handoff para refrescar CONTEXTO no debe generar
-      // ruido en el cronograma: antes TODA regeneración dejaba una "propuesta pendiente" aunque
-      // fuera idéntica a lo existente, y el CSE tenía que descartarla a mano.
-      const phaseFp = (p: {
-        id?: string | null; name: string; durationWeeks: number; startWeek?: number | null;
-        sessionCount: number | null; notes: string | null; activityType?: string | null;
-      }) =>
-        JSON.stringify([p.id ?? null, p.name, p.durationWeeks, p.startWeek ?? null, p.sessionCount ?? null, p.notes ?? null, p.activityType ?? null]);
-      const isNoOp =
-        pendingProposal.anchorStartDate === (existing.anchorStartDate?.toISOString() ?? null) &&
-        proposedPhases.length === existing.phases.length &&
-        proposedPhases.every((p, i) => phaseFp(p) === phaseFp(existing.phases[i]));
-      if (isNoOp) {
+      const reconciled = reconcileAgentProposal(
+        validPhases.map((p) => ({
+          name: p.name, durationWeeks: p.durationWeeks, startWeek: p.startWeek,
+          sessionCount: p.sessionCount, notes: p.notes,
+        })),
+        existing.phases,
+        existingAnchorISO,
+        resolvedAnchorISO,
+      );
+
+      // Regenerar el handoff para refrescar CONTEXTO no debe generar ruido en el cronograma:
+      // antes TODA regeneración dejaba una "propuesta pendiente" aunque fuera idéntica a lo
+      // existente, y el CSE tenía que descartarla a mano.
+      if (reconciled.isNoOp) {
         console.log(
           `[analyze] propuesta de cronograma idéntica a lo existente — no se guarda (project ${bodyProjectId}, run ${agentRunId}).`,
         );
-        return;
+        return { timelineSyncError: null };
       }
 
       await prisma.projectTimeline.update({
         where: { projectId: bodyProjectId },
         data: {
-          pendingProposal: pendingProposal as Prisma.InputJsonValue,
+          pendingProposal: { anchorStartDate: reconciled.anchorStartDate, phases: reconciled.phases } as unknown as Prisma.InputJsonValue,
           pendingProposalRunId: agentRunId,
         },
       });
       console.log(
-        `[analyze] ✓ pendingProposal guardada (${proposedPhases.length} fases; ${validPhases.length} propuestas por el agente) para project ${bodyProjectId} (run ${agentRunId}).`,
+        `[analyze] ✓ pendingProposal guardada (${reconciled.phases.length} fases; ${validPhases.length} propuestas por el agente) para project ${bodyProjectId} (run ${agentRunId}).`,
       );
-      return;
+      return { timelineSyncError: null };
     }
 
-    // KICKOFF SIEMPRE: la 1ra fase debe ser un Kick-off. Si el agente no lo puso, lo anteponemos
-    // (estimado → needsValidation). Garantiza el invariante "todo cronograma arranca con Kickoff".
-    const startsWithSemana0 = /semana\s*0|semana\s*cero|kick.?off|arranque/i.test(
-      validPhases[0]?.name ?? "",
+    /* KICKOFF para quien corresponde: en Customer Success (y pipeline legacy) la 1ra fase debe
+       ser un Kick-off y si el agente no lo puso se antepone (estimado → needsValidation). Los
+       pipelines con agente de handoff PROPIO (development, web) quedan AFUERA: sus prompts
+       prohíben la Semana 0 explícitamente, y anteponerla acá deshacía en la persistencia lo que
+       el prompt pidió en la generación — sin error y sin log. La decisión es una función PURA
+       (lib/timeline/semana-cero.ts) para que la tabla entera viva en un test. */
+    const proyectoDeLaCorrida = await prisma.project.findUnique({
+      where: { id: bodyProjectId },
+      select: { hubspotPipelineId: true },
+    });
+    const anteponerSemanaCero = debeAnteponerSemanaCero(
+      proyectoDeLaCorrida?.hubspotPipelineId ?? null,
+      validPhases[0]?.name,
     );
-    const phasesToCreate = startsWithSemana0
+    const phasesToCreate = !anteponerSemanaCero
       ? validPhases
       : [
           {
@@ -2835,9 +3070,14 @@ async function persistTimelineFromAgentOutput(
       `[analyze] ✓ ProjectTimeline creado con ${phasesToCreate.length} fases (AgentRun ${agentRunId})` +
         (kickoffDate ? ` · anchor=${kickoffDate.toISOString().slice(0, 10)} (kickoff)` : " · sin anchor (sin kickoff)"),
     );
+    return { timelineSyncError: null };
   } catch (e) {
+    // Tanda M — ya NO se traga del todo: el handoff principal (cards/blocks) sigue sin fallar
+    // por esto, pero el motivo viaja de vuelta para que el caller lo sume a la respuesta del
+    // run y el CSE se entere (toast), aunque nunca abra la pestaña Cronograma.
+    const message = `No se pudo actualizar el cronograma: ${e instanceof Error ? e.message : "error desconocido"}`;
     console.error("[analyze] Timeline persist error:", e);
-    // No fallar la respuesta — el handoff principal (cards/blocks) ya quedó persistido.
+    return { timelineSyncError: message };
   }
 }
 
@@ -2850,81 +3090,6 @@ const DETAIL_ACTIVITY_TYPES = [
   "ADOPCION",
   "SEGUIMIENTO",
 ] as const;
-
-/**
- * La marca "por validar" vive SOLO en la columna needsValidation: si el modelo
- * desobedece y mete el marcador en el título, se limpia acá — el título cruza
- * al cliente tal cual cuando el CSE confirma el detalle.
- */
-function sanitizeTaskTitle(raw: string): string {
-  const cleaned = raw
-    .replace(/^\s*(?:⚠️?\s*)*(?:\[?\s*por\s+validar\s*\]?\s*[:—–-]?\s*)/i, "")
-    .trim();
-  return cleaned || raw.trim();
-}
-
-interface ComputedDetailTask {
-  title: string;
-  weekIndex: number;
-  order: number;
-  notes: string | null;
-  needsValidation: boolean;
-  party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV";
-  type: "SESSION" | "TASK";
-}
-
-/**
- * Computa las tareas de UNA fase desde el JSON crudo del agente de detalle: clamp de weekIndex,
- * order incremental por semana, party validado (con gate DEV para la fase técnica) o fallback por
- * activityType, type validado, título saneado. Puro (sin DB) → reusado por la persistencia y por el
- * PREVIEW (regen por fase que devuelve la propuesta sin escribir). `skipTitles` deduplica por título
- * normalizado (modo "keep"). El party nunca es null (último fallback SMARTEAM).
- */
-function computeDetailTasksForPhase(
-  phaseName: string,
-  durationWeeks: number,
-  effectiveActivity: string | null,
-  tasksRaw: unknown[],
-  skipTitles?: Set<string> | null,
-): ComputedDetailTask[] {
-  const isTechPhase = isDevIntegrationPhaseName(phaseName);
-  const perWeekCount = new Map<number, number>();
-  const out: ComputedDetailTask[] = [];
-  for (const tRaw of tasksRaw) {
-    if (!tRaw || typeof tRaw !== "object") continue;
-    const t = tRaw as Record<string, unknown>;
-    const titleRaw = typeof t.title === "string" ? t.title.trim() : "";
-    if (!titleRaw) continue;
-    if (skipTitles && skipTitles.has(titleRaw.toLowerCase())) continue;
-    const wRaw = typeof t.weekIndex === "number" && Number.isInteger(t.weekIndex) ? t.weekIndex : 0;
-    const weekIndex = Math.min(Math.max(wRaw, 0), Math.max(durationWeeks - 1, 0));
-    const order = perWeekCount.get(weekIndex) ?? 0;
-    perWeekCount.set(weekIndex, order + 1);
-    const partyRaw = typeof t.party === "string" ? t.party.toUpperCase() : "";
-    const party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" =
-      partyRaw === "DEV" && isTechPhase
-        ? "DEV"
-        : partyRaw === "CLIENTE" || partyRaw === "SMARTEAM" || partyRaw === "AMBOS"
-          ? partyRaw
-          : effectiveActivity === "CONFIGURACION"
-            ? "SMARTEAM"
-            : effectiveActivity
-              ? "AMBOS"
-              : "SMARTEAM";
-    const typeRaw = typeof t.type === "string" ? t.type.toUpperCase() : "";
-    const type: "SESSION" | "TASK" = typeRaw === "SESSION" ? "SESSION" : "TASK";
-    out.push({
-      title: sanitizeTaskTitle(titleRaw),
-      weekIndex,
-      order,
-      notes: typeof t.notes === "string" && t.notes.trim() ? t.notes.trim() : null,
-      needsValidation: t.porValidar === true,
-      party,
-      type,
-    });
-  }
-  return out;
-}
 
 /**
  * PREVIEW del detalle por fase: computa las tareas propuestas para UNA fase (mismo criterio que la
@@ -2954,6 +3119,43 @@ async function computeTimelineDetailPreview(
   return computeDetailTasksForPhase(phase.name, phase.durationWeeks, phase.activityType ?? atFromModel, tasksRaw);
 }
 
+/**
+ * PREVIEW del detalle para TODAS las fases del timeline (Tanda N — "Regenerar todo el
+ * cronograma"): una entrada por fase EXISTENTE (orden real del timeline, no el del JSON del
+ * agente) — las fases sin propuesta del agente vuelven con tasks:[] para que el CSE también
+ * las vea en el acordeón ("sin cambios"). SIN escribir nada. Mismo criterio que
+ * computeTimelineDetailPreview, generalizado a todas las fases en vez de una sola.
+ */
+async function computeTimelineDetailPreviewAllPhases(
+  projectId: string,
+  analysisJson: unknown,
+): Promise<Array<{ phaseId: string; tasks: ComputedDetailTask[] }>> {
+  const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)?.timelineDetail?.phases;
+  const detailArr = Array.isArray(detailRaw) ? detailRaw : [];
+  const byId = new Map(
+    detailArr
+      .filter((r): r is Record<string, unknown> => !!r && typeof r === "object")
+      .map((r) => [r.id as string, r]),
+  );
+  const phases = await prisma.timelinePhase.findMany({
+    where: { timeline: { projectId } },
+    orderBy: { order: "asc" },
+    select: { id: true, name: true, durationWeeks: true, activityType: true },
+  });
+  return phases.map((phase) => {
+    const raw = byId.get(phase.id);
+    const tasksRaw = Array.isArray(raw?.tasks) ? (raw!.tasks as unknown[]) : [];
+    const atFromModel =
+      typeof raw?.activityType === "string" && (DETAIL_ACTIVITY_TYPES as readonly string[]).includes(raw!.activityType as string)
+        ? (raw!.activityType as string)
+        : null;
+    return {
+      phaseId: phase.id,
+      tasks: computeDetailTasksForPhase(phase.name, phase.durationWeeks, phase.activityType ?? atFromModel, tasksRaw),
+    };
+  });
+}
+
 interface TimelineDetailResult {
   skipped: boolean;
   reason?: string;
@@ -2972,8 +3174,9 @@ interface TimelineDetailResult {
  *  - Corre DENTRO de una transacción: el check de idempotencia y los writes son
  *    atómicos (un doble click no duplica tareas).
  *  - Idempotencia espejo de la del esqueleto: si el timeline YA tiene alguna
- *    tarea → skip total; la propuesta queda en AgentRun.output. Regenerar =
- *    DELETE /timeline/detail + re-correr.
+ *    tarea → skip total; la propuesta queda en AgentRun.output. Regenerar va por
+ *    el modal de curación (regen por fase o "Regenerar todo el cronograma"), que
+ *    preserva lo hecho — no por un borrado previo.
  *
  * Reglas: ids de fase validados contra el set real (alucinados se descartan y
  * loguean); activityType solo se setea si la fase lo tiene en null (no pisa lo

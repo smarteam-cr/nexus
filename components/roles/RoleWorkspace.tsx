@@ -18,6 +18,7 @@
  * rol, así que lectura y edición conviven en un solo componente con el toggle.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { IconCheck } from "@/components/ui";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo } from "@/components/ui/UndoProvider";
@@ -275,8 +276,8 @@ export default function RoleWorkspace({ role }: { role: RoleInput }) {
         </p>
         <div className="flex items-center gap-3">
           {editing && (
-            <span className="text-xs text-fg-muted" aria-live="polite">
-              {saveState === "saving" ? "Guardando…" : saveState === "saved" ? "Guardado ✓" : ""}
+            <span className="inline-flex items-center gap-1 text-xs text-fg-muted" aria-live="polite">
+              {saveState === "saving" ? "Guardando…" : saveState === "saved" ? <>Guardado<IconCheck className="w-3 h-3" /></> : ""}
             </span>
           )}
           {asistible && (

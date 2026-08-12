@@ -5,6 +5,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { normalize, type SessionGroup } from "@/lib/sessions/categorize";
 import type { HubspotCompanyLite } from "@/lib/hubspot/companies";
 import AnalysisPanel from "./AnalysisPanel";
+import { IconCheck } from "@/components/ui";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -1325,7 +1326,12 @@ function SidebarSessionItem({ session, isActive, onClick }: {
   const minuteBadge = (() => {
     if (session.minuteStatus === "REVIEWED" || session.minuteStatus === "EDITED") {
       return {
-        label: "Minuta ✓",
+        label: (
+          <>
+            Minuta
+            <IconCheck className="w-2.5 h-2.5" />
+          </>
+        ),
         tooltip: "Minuta revisada por un CSE",
         className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
       };
@@ -1420,7 +1426,7 @@ function SidebarSessionItem({ session, isActive, onClick }: {
           {minuteBadge && (
             <span
               title={minuteBadge.tooltip}
-              className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${minuteBadge.className}`}
+              className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${minuteBadge.className}`}
             >
               {minuteBadge.label}
             </span>

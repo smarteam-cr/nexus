@@ -36,7 +36,7 @@ import { guardAccessToProject, guardTimelineEdit, guardTimelineDelete } from "@/
 import { prisma } from "@/lib/db/prisma";
 import { withDbRetry } from "@/lib/db/retry";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
-import { countDeliverySessionsByPhase } from "@/lib/timeline/delivery-sessions";
+import { countDeliverySessionsByPhase, nombresDeFasesSolapadas } from "@/lib/timeline/delivery-sessions";
 import { Prisma } from "@prisma/client";
 import type {
   TimelinePhaseSource,
@@ -55,6 +55,7 @@ import { partitionByValidation } from "@/lib/timeline/particularidad-state";
 // mientras camina su propio diff y los emite DESPUÉS de la tx (best-effort):
 // la tx ya sufrió P2028 contra el pooler — no se engorda con más writes.
 import { emitTimelineEventsSafe, diffFields, type DraftEvent } from "@/lib/cs/timeline-events";
+import { projectedEnd, describeEndShift, fmtFull } from "@/lib/timeline/weeks";
 import { loadProjectSummary } from "@/lib/portfolio/load";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 
@@ -132,6 +133,9 @@ interface TimelineResponse {
    *  no podía consumirlas y el CSE armaba el estado del proyecto de memoria. */
   summary: ProjectSummary | null;
   anchorStartDate: string | null;
+  /** Tanda K — cierre fijado a mano por el CSE. null = seguir el proyectado (derivado en el
+   *  cliente vía `displayedEnd`; este endpoint solo persiste/devuelve el override crudo). */
+  closeDateOverride: string | null;
   lastEditedByHuman: string | null;
   generatedByAgentRunId: string | null;
   detailConfirmedAt: string | null;
@@ -195,6 +199,10 @@ interface TimelineResponse {
      *  Calculado en lectura (no persistido). number en fases ya iniciadas; null en
      *  futuras o si no hay anchorStartDate → la UI cae al estimado `sessionCount`. */
     actualSessionCount: number | null;
+    /** Nombres de las fases con las que ésta comparte semanas. Vacío = ventana propia.
+     *  Con solape, `actualSessionCount` cuenta las MISMAS reuniones en las dos —
+     *  correcto por fase, engañoso si alguien las suma. La UI lo dice en el tooltip. */
+    solapaCon: string[];
     notes: string | null;
     activityType: TimelineActivityType | null;
     source: TimelinePhaseSource;
@@ -233,6 +241,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     where: { projectId },
     select: {
       anchorStartDate: true,
+      closeDateOverride: true,
       lastEditedByHuman: true,
       generatedByAgentRunId: true,
       detailConfirmedAt: true,
@@ -316,14 +325,17 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     anchorStartDate: tl.anchorStartDate,
     phases: tl.phases.map((p) => ({ id: p.id, durationWeeks: p.durationWeeks, startWeek: p.startWeek })),
   });
+  const solapes = nombresDeFasesSolapadas(tl.phases);
   const phases = tl.phases.map((p) => ({
     ...p,
     actualSessionCount: deliveryByPhase?.get(p.id) ?? null,
+    solapaCon: solapes.get(p.id) ?? [],
   }));
   return {
     exists: true,
     summary,
     anchorStartDate: tl.anchorStartDate?.toISOString() ?? null,
+    closeDateOverride: tl.closeDateOverride?.toISOString() ?? null,
     lastEditedByHuman: tl.lastEditedByHuman?.toISOString() ?? null,
     generatedByAgentRunId: tl.generatedByAgentRunId,
     detailConfirmedAt: tl.detailConfirmedAt?.toISOString() ?? null,
@@ -404,7 +416,7 @@ export async function PUT(
       { status: 400 },
     );
   }
-  const { anchorStartDate, phases: incomingPhases } = validation.parsed;
+  const { anchorStartDate, closeDateOverride, phases: incomingPhases } = validation.parsed;
 
   // #4 — razón del cambio, con un snapshot del estado resultante (TimelineChange) para
   // que D.3 compare lo vendido contra lo real. Los AUTO-GUARDADOS del cronograma mandan
@@ -428,8 +440,17 @@ export async function PUT(
 
   const now = new Date();
   const anchorDate = anchorStartDate ? new Date(anchorStartDate) : null;
+  /* Tanda K — closeDateOverride SÍ distingue "no vino" (undefined → no tocar la columna) de
+     "vino explícito" (incl. null → volver al proyectado). El Gantt del CSE siempre lo declara
+     (ver buildPutBody en CronogramaCanvas), así que en el uso normal esto nunca queda undefined;
+     la rama existe para que un caller futuro que no conozca el campo no lo borre por omisión. */
+  const closeOverrideProvided = closeDateOverride !== undefined;
+  const closeOverrideDate = closeDateOverride ? new Date(closeDateOverride) : null;
   let timelineId = ""; // #4 — capturado dentro de la tx para registrar el cambio después
   const draftEvents: DraftEvent[] = []; // eventos crudos del watchdog (se emiten post-tx)
+  /* La fecha de arranque es el ÚNICO campo que un auto-guardado audita (ver el bloque #6). */
+  let anchorRealmenteCambio = false;
+  let anchorPrevioISO: string | null = null;
 
   // Transacción: upsert del timeline + diff de phases + diff de tasks por phase
   try {
@@ -445,11 +466,13 @@ export async function PUT(
         create: {
           projectId,
           anchorStartDate: anchorDate,
+          closeDateOverride: closeOverrideDate,
           lastEditedByHuman: now,
           // generatedByAgentRunId queda null — cronograma creado a mano sin agente
         },
         update: {
           anchorStartDate: anchorDate,
+          ...(closeOverrideProvided ? { closeDateOverride: closeOverrideDate } : {}),
           lastEditedByHuman: now,
           // Un guardado DELIBERADO (con razón: aplicar la propuesta del assist, crear la 1ra
           // fase) invalida la propuesta pendiente — ya quedó reflejada o el humano decidió otra
@@ -464,6 +487,8 @@ export async function PUT(
 
       // ANCHOR_CHANGED: solo si el timeline ya existía y la fecha de arranque cambió.
       if (prevTl && (prevTl.anchorStartDate?.getTime() ?? null) !== (anchorDate?.getTime() ?? null)) {
+        anchorRealmenteCambio = true;
+        anchorPrevioISO = prevTl.anchorStartDate?.toISOString() ?? null;
         draftEvents.push({
           entityType: "TIMELINE",
           entityId: tl.id,
@@ -817,6 +842,50 @@ export async function PUT(
 
   // 5. Re-cargar el estado final
   const updated = await loadTimeline(projectId);
+
+  /* ── LA EXCEPCIÓN ANGOSTA DEL AUTOSAVE (Tanda J) ────────────────────────────
+     El autosave NO audita, y está bien: decenas de filas con razón genérica que nadie lee son
+     peores que ninguna. Pero la fecha de arranque no es una tecla — es un clic en un
+     calendario, y es el único campo que (i) redefine TODAS las fechas del proyecto, (ii) se
+     copia a la fecha de facturación del servicio y dispara ARRANQUE_CAMBIADO en cobranza, y
+     (iii) es el input del cierre proyectado. Son un puñado de filas por vida de proyecto y sin
+     ellas el movimiento más consecuente del cronograma no deja rastro.
+     Sin riesgo de duplicar: el reintento del autosave manda el mismo ancla y la condición de
+     arriba solo dispara cuando cambió de verdad. */
+  if (skipAudit && anchorRealmenteCambio && timelineId && "exists" in updated && updated.exists) {
+    try {
+      const fases = updated.phases.map((p) => ({
+        durationWeeks: p.durationWeeks,
+        startWeek: p.startWeek,
+      }));
+      const antes = projectedEnd(anchorPrevioISO, fases);
+      const despues = projectedEnd(updated.anchorStartDate ?? null, fases);
+      const corrimiento = describeEndShift(antes, despues);
+      /* ⚠ Las fechas del ARRANQUE salen del ancla, NO de `projectedEnd` (auditoría de la Tanda
+         J): `.label` es el CIERRE proyectado, así que rotularlo «Fecha de arranque» imprimía el
+         mismo par de fechas dos veces bajo dos nombres distintos y el arranque real no aparecía
+         en ninguna parte. Esta razón es el único rastro legible del cambio y la cartera la pinta
+         como el porqué del proyecto. */
+      const arranqueAntes = anchorPrevioISO ? fmtFull(anchorPrevioISO) : "sin fecha";
+      const arranqueDespues = updated.anchorStartDate
+        ? fmtFull(new Date(updated.anchorStartDate).toISOString())
+        : "sin fecha";
+      await prisma.timelineChange.create({
+        data: {
+          timelineId,
+          reason:
+            `Fecha de arranque cambiada en el Gantt: ${arranqueAntes} → ${arranqueDespues}.` +
+            (corrimiento ? ` ${corrimiento}` : ""),
+          kind: "MANUAL",
+          instruction: null,
+          changedByEmail: guard.user.email ?? null,
+          snapshot: { anchorStartDate: updated.anchorStartDate } as Prisma.InputJsonValue,
+        },
+      });
+    } catch (e) {
+      console.error("[timeline PUT] audit del ancla (autosave) falló:", e instanceof Error ? e.message : e);
+    }
+  }
 
   // 6. #4 — registrar el cambio con su razón + snapshot del estado resultante.
   // El snapshot (estado canónico tras aplicar) deja a D.3 comparar lo "vendido"

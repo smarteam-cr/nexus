@@ -4,10 +4,11 @@ import { join } from "node:path";
 import { $Enums } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
-import { buscarEtapa, resolvePipeline } from "@/lib/projects/kind";
+import { buscarEtapa, resolvePipeline, PROJECT_PIPELINES } from "@/lib/projects/kind";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { detectarFusionesEnLote } from "@/lib/hubspot/empresa-fusionada";
 import { ESTADOS_DE_ALTA, altaEnCurso } from "@/lib/projects/alta";
+import { GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
 
 /**
  * scripts/check-invariants.ts — BLINDAJE DURO de los invariantes medulares de Nexus.
@@ -66,6 +67,16 @@ import { ESTADOS_DE_ALTA, altaEnCurso } from "@/lib/projects/alta";
  *      proyecto en HubSpot y no aparece", con una causa que no se parece en nada al efecto.
  *      Es lo que convierte "correr un --apply por reflejo" en una decisión explícita
  *      (ALLOW_PROD_WRITE=1) contra la base que es PRODUCCIÓN.
+ *  14. Ningún alta de proyecto lleva días a medio hacer. Un alta trabada es un proyecto que
+ *      existe, se abre y se ve normal, pero NO cobra y no suma a la cartera de nadie.
+ *  15. Cada (agentGroup, pipelineKey) resuelve a UN SOLO agente, en los grupos que se eligen por
+ *      grupo (`GRUPOS_RESUELTOS_POR_TIPO`, hoy solo `handoff`). Con dos filas iguales, cuál corre
+ *      lo decide el orden que devuelva Postgres: una Implementación de HubSpot se generaría con
+ *      el prompt de Sitios web, sin error y sin log. Y un `pipelineKey` inválido —o puesto en un
+ *      grupo que nadie resuelve por grupo— es un prompt que no usa nadie.
+ *  16. El enriquecimiento de Meet no miente: ninguna sesión enriquecida antes de ocurrir,
+ *      ningún transcript basura (<200 chars) contando como éxito, y ningún reintento muerto
+ *      hace más de 7 días. (a) y (c) nacen en rojo a propósito hasta que el rescate drene.
  */
 async function main(): Promise<number> {
   let violations = 0;
@@ -746,6 +757,166 @@ async function main(): Promise<number> {
     if (altasViejas.length > 10) console.error(`    … y ${altasViejas.length - 10} más`);
   } else {
     console.log(`✓ INV14: ningún alta lleva más de ${HORAS_DE_GRACIA} h a medio hacer.`);
+  }
+
+  // ── Inv 15: un solo agente por (grupo, tipo de proyecto) ──
+  /**
+   * ── POR QUÉ, Y QUÉ ACCIDENTE IMPIDE ─────────────────────────────────────────
+   * Un `agentGroup` puede tener varias filas: una genérica (`pipelineKey: null`) y una por tipo
+   * de proyecto. `elegirAgente` (lib/agents/resolver.ts) prefiere la específica y CAE a la
+   * genérica — y ese fallback es lo que garantiza que una Implementación de HubSpot siga
+   * resolviendo exactamente el mismo agente de siempre.
+   *
+   * Ese diseño se rompe en silencio de tres maneras, y las tres las caza este invariante:
+   *
+   *  · DOS filas con el MISMO (grupo, pipelineKey) → cuál gana depende del orden que devuelva
+   *    Postgres. Es el accidente exacto que el resolver vino a matar: antes había un
+   *    `findFirst` sin `orderBy` que era determinista solo porque existía UNA fila.
+   *  · Un `pipelineKey` que NO es una key declarada en `PROJECT_PIPELINES` (un typo, un pipeline
+   *    que se renombró) → el resolver lo ignora y ese agente NUNCA se usa. No falla, no loguea:
+   *    simplemente el trabajo de escribir su prompt no sirve para nada.
+   *  · Un `pipelineKey` en un grupo que NADIE resuelve por grupo → mismo desenlace: el prompt
+   *    existe, alguien lo escribió, y el navegador sigue disparando el agente por su id.
+   *
+   * ⚠ EL ALCANCE ES UNA LISTA (`GRUPOS_RESUELTOS_POR_TIPO`), NO «TODOS LOS GRUPOS», Y ES LO QUE
+   * HACE QUE ESTE INVARIANTE SIRVA. Medido el 2026-08-07: `cobranza`, `cronograma`, `cs-watchdog`,
+   * `diagnostico` y `preparacion` tienen 2 o 3 agentes ACTIVE **correctos** —el navegador los
+   * dispara por id, no por grupo—. Un invariante que exigiera «uno por grupo» habría nacido rojo
+   * sobre datos sanos, y un invariante que nace rojo se apaga.
+   *
+   * ⚠ NO se exige que exista la fila genérica de cada grupo: un grupo con un solo agente específico
+   * es válido. Lo que no puede haber es ambigüedad.
+   */
+  const agentesConGrupo = await prisma.agent.findMany({
+    where: { agentGroup: { not: null }, status: "ACTIVE" },
+    select: { id: true, name: true, agentGroup: true, pipelineKey: true },
+    orderBy: [{ agentGroup: "asc" }, { name: "asc" }],
+  });
+  const KEYS_VALIDAS = new Set<string>(PROJECT_PIPELINES.map((p) => p.key));
+  const RESUELTOS = new Set<string>(GRUPOS_RESUELTOS_POR_TIPO);
+  const ambiguos = new Map<string, typeof agentesConGrupo>();
+  const keysInvalidas: typeof agentesConGrupo = [];
+  const tipoEnGrupoQueNadieResuelve: typeof agentesConGrupo = [];
+  for (const a of agentesConGrupo) {
+    if (a.pipelineKey !== null && !KEYS_VALIDAS.has(a.pipelineKey)) keysInvalidas.push(a);
+    if (a.pipelineKey !== null && !RESUELTOS.has(a.agentGroup!)) tipoEnGrupoQueNadieResuelve.push(a);
+    if (!RESUELTOS.has(a.agentGroup!)) continue;
+    const par = `${a.agentGroup} / ${a.pipelineKey ?? "(todos)"}`;
+    ambiguos.set(par, [...(ambiguos.get(par) ?? []), a]);
+  }
+  const duplicados = [...ambiguos.entries()].filter(([, xs]) => xs.length > 1);
+
+  if (duplicados.length > 0 || keysInvalidas.length > 0 || tipoEnGrupoQueNadieResuelve.length > 0) {
+    violations++;
+    if (duplicados.length > 0) {
+      console.error(
+        `✗ INV15 VIOLADO: ${duplicados.length} par(es) (grupo, tipo) con MÁS DE UN agente activo. ` +
+          `Cuál corre depende del orden que devuelva Postgres.`,
+      );
+      for (const [par, xs] of duplicados.slice(0, 10)) {
+        console.error(`    - ${par}: ${xs.map((x) => `"${x.name}"`).join(" · ")}`);
+      }
+    }
+    if (keysInvalidas.length > 0) {
+      console.error(
+        `✗ INV15 VIOLADO: ${keysInvalidas.length} agente(s) con un pipelineKey que no existe en ` +
+          `PROJECT_PIPELINES. El resolver los ignora: su prompt no lo usa nadie.`,
+      );
+      for (const a of keysInvalidas.slice(0, 10)) {
+        console.error(`    - "${a.name}" (${a.agentGroup}): pipelineKey="${a.pipelineKey}"`);
+      }
+      console.error(`  Válidas: ${[...KEYS_VALIDAS].join(" · ")} o NULL (sirve para todos).`);
+    }
+    if (tipoEnGrupoQueNadieResuelve.length > 0) {
+      console.error(
+        `✗ INV15 VIOLADO: ${tipoEnGrupoQueNadieResuelve.length} agente(s) con pipelineKey en un ` +
+          `grupo que NADIE resuelve por grupo. Ese prompt es trabajo muerto.`,
+      );
+      for (const a of tipoEnGrupoQueNadieResuelve.slice(0, 10)) {
+        console.error(`    - "${a.name}" (${a.agentGroup}): pipelineKey="${a.pipelineKey}"`);
+      }
+      console.error(
+        `  Grupos resueltos por tipo: ${GRUPOS_RESUELTOS_POR_TIPO.join(" · ")} ` +
+          `(lib/agents/resolver.ts). Si el grupo se cableó al resolver, sumalo a esa lista.`,
+      );
+    }
+  } else {
+    const enAlcance = agentesConGrupo.filter((a) => RESUELTOS.has(a.agentGroup!));
+    const conTipo = enAlcance.filter((a) => a.pipelineKey !== null).length;
+    console.log(
+      `✓ INV15: cada (grupo, tipo) resuelve a un solo agente ` +
+        `(${enAlcance.length} activos en los ${RESUELTOS.size} grupo(s) resueltos por tipo, ` +
+        `${conTipo} con tipo propio; ${agentesConGrupo.length} activos con grupo en total).`,
+    );
+  }
+
+  // ── Inv 16: el enriquecimiento de Meet no miente ──
+  /**
+   * ── POR QUÉ, Y QUÉ INCIDENTE RECUERDA ───────────────────────────────────────
+   * El pipeline de Google Meet sellaba TODO como definitivo: un fallo de lectura se tragaba
+   * en un catch mudo y la fila quedaba `enrichedAt` para siempre (corridas quemadas del
+   * 17-may: 528/1100, y 7-jul: 47/73). Desde el 2026-08-08 el fallo queda pendiente con su
+   * error en `enrichError` y lo drena el job `google-enrich-retry`. Este invariante vigila
+   * las tres formas en que ese diseño se pudre:
+   *
+   *  (a) Una sesión enriquecida ANTES de ocurrir → el filtro de fecha se cayó (o es una fila
+   *      legacy que el rescate todavía no tocó).
+   *  (c) Un transcript no-nulo de menos de 200 chars → la plantilla vacía volvió a contar
+   *      como éxito.
+   *  (b) Un reintento con más de 7 días sin moverse → el job murió y nadie lo notó.
+   *
+   * ⚠ (a) y (c) NACEN EN ROJO A PROPÓSITO: cuentan la basura legacy que el script de rescate
+   * (`scripts/recuperar-transcripts-meet.ts`) va a drenar. Que se pongan en verde ES el
+   * marcador de que la recuperación terminó — no los silencies antes de eso.
+   */
+  const [antesDeOcurrir, transcriptsBasura] = await Promise.all([
+    prisma.firefliesSession.count({
+      where: { source: "google_meet", enrichedAt: { not: null }, date: { gt: new Date() } },
+    }),
+    prisma.$queryRaw<Array<{ n: bigint }>>`
+      SELECT COUNT(*)::bigint AS n FROM "FirefliesSession"
+      WHERE transcript IS NOT NULL AND length(transcript) < 200
+    `.then((r) => Number(r[0]?.n ?? 0)),
+  ]);
+  const reintentos = await prisma.firefliesSession.findMany({
+    where: { enrichedAt: null, enrichAttempts: { gte: 1 } },
+    select: { id: true, enrichAttempts: true, enrichError: true },
+  });
+  const SIETE_DIAS_MS = 7 * 24 * 3_600_000;
+  const reintentosMuertos = reintentos.filter((r) => {
+    try {
+      const at = Date.parse((JSON.parse(r.enrichError ?? "{}") as { at?: string }).at ?? "");
+      return Number.isNaN(at) || Date.now() - at > SIETE_DIAS_MS;
+    } catch {
+      return true;
+    }
+  });
+
+  if (antesDeOcurrir > 0 || transcriptsBasura > 0 || reintentosMuertos.length > 0) {
+    violations++;
+    if (antesDeOcurrir > 0) {
+      console.error(
+        `✗ INV16(a) VIOLADO: ${antesDeOcurrir} sesión(es) de Meet enriquecidas ANTES de ocurrir. ` +
+          `Legacy → scripts/recuperar-transcripts-meet.ts; nuevas → se cayó el filtro de fecha.`,
+      );
+    }
+    if (transcriptsBasura > 0) {
+      console.error(
+        `✗ INV16(c) VIOLADO: ${transcriptsBasura} transcript(s) de menos de 200 chars — plantilla ` +
+          `contando como éxito. Rojo esperado hasta drenar el bucket C del rescate.`,
+      );
+    }
+    if (reintentosMuertos.length > 0) {
+      console.error(
+        `✗ INV16(b) VIOLADO: ${reintentosMuertos.length} reintento(s) sin moverse hace más de 7 días ` +
+          `(de ${reintentos.length} en cola) — ¿el job google-enrich-retry está corriendo?`,
+      );
+    }
+  } else {
+    console.log(
+      `✓ INV16: enriquecimiento de Meet sano (0 antes de ocurrir, 0 transcripts basura, ` +
+        `${reintentos.length} en cola de reintento, ninguno muerto).`,
+    );
   }
 
   return violations;

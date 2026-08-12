@@ -24,6 +24,39 @@ export interface CanvasSectionEntry {
   hidden?: boolean;
 }
 
+/**
+ * ── KEY RESERVADA: "__doc" — las instrucciones del CSE para el DOCUMENTO entero ──
+ * (Tanda X1, 2026-08-08.) Además de los briefs por sección, un canvas puede llevar UNA entry
+ * con `key: "__doc"`: la instrucción libre del CSE para la IA de esa pieza («las fases de QA
+ * van al final», «no menciones el módulo X»). Nació para el cronograma y es extensible gratis
+ * a cualquier pieza, porque toda pieza tiene canvas.
+ *
+ * Vive en este Json y NO en una columna a propósito — el mismo motivo del header: sobrevive
+ * cualquier `db push` del setup two-PC. ⚠ El doble guion bajo es el contrato de «no soy una
+ * sección»: ninguna UI debe listarla como sección ni ningún generador tratarla como key de
+ * canvas (las keys reales nunca empiezan con "__").
+ */
+export const DOC_BRIEF_KEY = "__doc";
+
+/** El brief del DOCUMENTO (entry `__doc`), o null. Tolerante a basura como todo acá. */
+export function docBriefFrom(sections: unknown): string | null {
+  const e = parseSectionEntries(sections).find((x) => x.key === DOC_BRIEF_KEY);
+  const brief = typeof e?.brief === "string" ? e.brief.trim() : "";
+  return brief || null;
+}
+
+/**
+ * El bloque de prompt de las instrucciones del documento. "" si no hay — así el golden
+ * «proyecto sin brief ⇒ userMessage byte-idéntico» se sostiene por construcción.
+ * El rótulo viaja ADENTRO (principio del repo: la procedencia no se puede perder por
+ * descuido en un call site).
+ */
+export function bloqueDeInstruccionesDeDoc(brief: string | null): string {
+  const b = brief?.trim();
+  if (!b) return "";
+  return `=== INSTRUCCIONES DEL CSE PARA ESTA PIEZA (reglas duras — cumplilas SIEMPRE) ===\n${b}\n\n`;
+}
+
 /** Lee el array de secciones del Json de un ProjectCanvas, tolerante a basura/forma vieja. */
 export function parseSectionEntries(sections: unknown): CanvasSectionEntry[] {
   if (!Array.isArray(sections)) return [];
