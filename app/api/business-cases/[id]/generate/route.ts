@@ -105,9 +105,13 @@ export async function POST(
           select: { title: true, date: true, transcript: true },
         })
       : Promise.resolve([] as { title: string; date: Date; transcript: string | null }[]),
+    // Se carga el conocimiento de los SEIS Hubs, no solo de los vendidos: la sección
+    // escribe una columna por cada uno (lo vendido arranca encendido, el resto queda
+    // para que el cliente explore), así que el agente los necesita todos. Los 6
+    // documentos suman ~11,2k contra el cap de 12k — entran completos.
     // Va en el MISMO Promise.all: es una query independiente y en serie sumaba latencia
     // a un endpoint que ya espera minutos por el modelo. Solo lee documentos PUBLICADOS.
-    loadKnowledgeByTags(hubSlugs, HUBS_KNOWLEDGE_CAP),
+    loadKnowledgeByTags([...HUBSPOT_HUB_SLUGS], HUBS_KNOWLEDGE_CAP),
   ]);
 
   const parts: string[] = [];
@@ -181,12 +185,22 @@ export async function POST(
   if (bc.client.industry?.trim()) {
     preamble.push(`# Industria del cliente\n${bc.client.industry.trim()}`);
   }
-  if (hubSlugs.length) {
-    preamble.push(
-      `# Hubs de HubSpot que se vendieron\n${tagLabels(hubSlugs).join(" · ")}\n` +
-        `Son los que el vendedor marcó en la propuesta. La sección "Qué se implementa" cubre ESTOS y ` +
-        `no otros: no agregues un Hub que nadie vendió ni omitas uno que sí.`,
-    );
+  // La sección "Qué se implementa" lleva una columna por CADA Hub, no solo por los
+  // vendidos: lo vendido arranca encendido y el resto queda para que el cliente explore
+  // qué más hay. Por eso el agente necesita saber las DOS cosas — cuáles son todos y
+  // cuáles se vendieron — y escribirlos con voz distinta.
+  preamble.push(
+    `# Los Hubs de HubSpot\nTodos: ${tagLabels([...HUBSPOT_HUB_SLUGS]).join(" · ")}.\n` +
+      (hubSlugs.length
+        ? `VENDIDOS en esta propuesta: ${tagLabels(hubSlugs).join(" · ")}. Los demás NO se vendieron.\n` +
+          `La sección "Qué se implementa" lleva una columna por CADA Hub de la lista completa, en ese ` +
+          `orden pero con los VENDIDOS primero. Los vendidos se escriben como lo que se va a ` +
+          `implementar; los NO vendidos, como lo que ese Hub sumaría — el cliente los ve marcados ` +
+          `"No incluido", así que NUNCA los presentes como parte del alcance ni les pongas precio.`
+        : `La propuesta no declara qué Hubs se vendieron. Escribí igual una columna por cada uno, ` +
+          `todas en el mismo tono, y no afirmes que alguno está incluido.`),
+  );
+  {
     // El conocimiento por Hub es material GENÉRICO de Smarteam: el valor está en que el
     // agente lo aterrice, no en que lo copie. Y si no hay nada publicado se DICE, en vez
     // de dejar que el modelo llene el hueco con lo que le suene (mismo criterio que el
@@ -201,7 +215,7 @@ export async function POST(
       );
     } else {
       preamble.push(
-        `# Sin base de conocimiento de Hubs\nNo hay documentos publicados sobre estos Hubs. ` +
+        `# Sin base de conocimiento de Hubs\nNo hay documentos publicados sobre los Hubs. ` +
           `Derivá lo que se implementa SOLO de las fuentes del prospecto; no enumeres capacidades ` +
           `de HubSpot de memoria.`,
       );
@@ -347,6 +361,20 @@ export async function POST(
       const heroData = heroGen.data as Record<string, unknown>;
       if (gen.lang) heroData.__lang = gen.lang;
       else delete heroData.__lang;
+    }
+
+    // Qué Hubs quedan ENCENDIDOS en "Qué se implementa" (`activos`, key no-schema). Sale
+    // de los TAGS y se re-escribe en cada generación COMPLETA, igual que `__lang`: los
+    // tags son la declaración del vendedor de qué se vendió, así que agregar uno y
+    // regenerar tiene que encenderlo. El ajuste fino con las píldoras del editor sí
+    // sobrevive a la regeneración POR SECCIÓN (ahí manda `preserveNonSchemaKeys`).
+    // Sin tags no se siembra: ausente = todas encendidas, que es la degradación honesta
+    // — no sabemos qué se vendió, así que no apagamos nada.
+    if (hubSlugs.length) {
+      const solucionGen = generated.find((g) => g.key === "solucion");
+      if (solucionGen && solucionGen.data && typeof solucionGen.data === "object") {
+        (solucionGen.data as Record<string, unknown>).activos = hubSlugs;
+      }
     }
 
     // Cada "Generar" crea un CASO NUEVO (v1, v2, …). La Plantilla (v0) nunca se llena.

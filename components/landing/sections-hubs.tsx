@@ -67,9 +67,10 @@ function TextCard({
 export const HubsClienteSection: FC<SectionProps<HubsClienteData>> = (props) => {
   const { data, ctx, editable, onChange } = props;
 
-  // Qué columnas ve el CLIENTE con la sección abierta. Solo aplica en lectura: en el
-  // editor se muestran todas las activas para poder editarlas, y en PDF no hay clics.
-  const [cerradas, setCerradas] = useState<string[]>([]);
+  // Qué columnas tiene ABIERTAS el lector. `null` = todavía no tocó nada → mandan las
+  // vendidas. Solo aplica en lectura: en el editor se muestran todas para poder
+  // editarlas, y en el PDF no hay clics.
+  const [abiertasOverride, setAbiertasOverride] = useState<string[] | null>(null);
 
   if (esSolucionLegacy(data)) return <SolucionLegacy {...props} />;
 
@@ -78,14 +79,17 @@ export const HubsClienteSection: FC<SectionProps<HubsClienteData>> = (props) => 
   const set = (next: Partial<HubsClienteData>) => onChange?.({ ...data, columnas, ...next });
 
   const activasKeys = new Set(activas.map(columnaKey));
+  // Lo que el lector tiene abierto: mientras no toque nada, exactamente lo vendido.
+  const abiertas = abiertasOverride ?? activas.map(columnaKey);
   // En edición se pintan TODAS —las apagadas, atenuadas—: el CSE tiene que ver lo que
   // apagó para poder devolverlo, y así `visibles === columnas`, que es lo que vuelve
   // seguro el reordenar (un reorder sobre un SUBCONJUNTO borraría las que no están).
+  // En el PDF, SOLO lo vendido: el documento formal no lista Hubs que nadie compró.
   const visibles = editable
     ? columnas
     : ctx.pdfMode
       ? activas
-      : activas.filter((c) => !cerradas.includes(columnaKey(c)));
+      : columnas.filter((c) => abiertas.includes(columnaKey(c)));
 
   const toggle = (c: HubColumna) => {
     const key = columnaKey(c);
@@ -97,7 +101,12 @@ export const HubsClienteSection: FC<SectionProps<HubsClienteData>> = (props) => 
       set({ activos: base.includes(key) ? base.filter((k) => k !== key) : [...base, key] });
       return;
     }
-    setCerradas((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+    // En lectura la píldora no cambia lo vendido: abre y cierra. Un Hub que NO se vendió
+    // también se puede abrir —para eso está— y su columna lo declara con un chip.
+    setAbiertasOverride((prev) => {
+      const base = prev ?? activas.map(columnaKey);
+      return base.includes(key) ? base.filter((k) => k !== key) : [...base, key];
+    });
   };
 
   const setColumna = (i: number, next: HubColumna) => set({ columnas: replaceAt(columnas, i, next) });
@@ -115,10 +124,13 @@ export const HubsClienteSection: FC<SectionProps<HubsClienteData>> = (props) => 
 
       {!ctx.pdfMode && columnas.length > 0 && (
         <div className="stl-hubs-pills">
-          {(editable ? columnas : activas).map((c) => {
+          {/* SIEMPRE todas: en el editor para poder prender cualquier Hub sin volver a
+              la tira de tags, y en la propuesta para que el cliente explore lo que no
+              compró. Lo vendido es lo que arranca encendido, no lo único que existe. */}
+          {columnas.map((c) => {
             const key = columnaKey(c);
             const { colorVar, label } = hubVisual(c.hub);
-            const on = editable ? activasKeys.has(key) : !cerradas.includes(key);
+            const on = editable ? activasKeys.has(key) : abiertas.includes(key);
             return (
               <button
                 key={key || c.titulo}
@@ -158,6 +170,9 @@ export const HubsClienteSection: FC<SectionProps<HubsClienteData>> = (props) => 
               <div className="stl-hub-col-head">
                 {handle}
                 {editable && <RemoveBtn onClick={() => set({ columnas: removeAt(columnas, real) })} />}
+                {/* El cliente puede abrir un Hub que no compró: la columna tiene que
+                    DECIRLO. Sin esto, explorar se leería como que ya está incluido. */}
+                {apagada && !editable && <div className="stl-hub-col-chip">No incluido</div>}
                 <div className="stl-hub-col-eyebrow">{label ?? "A la medida"}</div>
                 <Editable
                   as="div"

@@ -1526,7 +1526,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 28px;
+  /* El margen de ARRIBA lo pide el ojo: la tira queda pegada al párrafo de intro y se
+     lee como parte de él, cuando es un control. Va un poco más chico que el de abajo
+     (la tira pertenece a las columnas, no al párrafo). */
+  margin-top: 26px;
+  margin-bottom: 30px;
 }
 .stl-hub-pill {
   display: inline-flex;
@@ -1588,6 +1592,22 @@
   margin-bottom: 3px;
 }
 .stl-hub-col-title { font-size: 16px; font-weight: 700; line-height: 1.35; }
+/* "No incluido" sobre la cabecera de un Hub que el cliente puede explorar pero no
+   compró. Va con el par INVERSO (fondo blanco, tinta del Hub) y no con un blanco
+   translúcido: sobre el naranja, un translúcido baja el contraste a ~3.4:1 y esto es
+   texto chico. Invertido es el MISMO par que ya vigila el guard de marca. */
+.stl-hub-col-chip {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--hub, var(--hub-neutro));
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .stl-hub-card {
   position: relative;
   padding: 14px 16px;

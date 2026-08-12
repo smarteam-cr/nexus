@@ -1675,6 +1675,22 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   componente nuevo. De ahí las dos consecuencias: la entrada del registry se reapunta (cero
   churn en el snapshot de keys de `registry.test.ts`) y `HubsClienteSection` lleva adentro los
   4 campos de la v1 como rama legacy — es lo único que sostiene lo que ya está en la calle.
+- **Hay una columna por CADA Hub, no solo por los vendidos** *(2026-08-12, mismo día:
+  corrige la primera versión)*. Con la sección mostrando solo lo vendido, una propuesta con
+  dos Hubs pintaba dos píldoras y no había nada que explorar — que era justamente el pedido
+  original ("si uno da un clic en los botones de arriba se agregan secciones explicativas").
+  Ahora el agente escribe las seis, los vendidos primero y en modo "esto se implementa", el
+  resto en condicional. El cliente los ve y puede abrirlos; la columna que no se vendió lo
+  DECLARA con un chip **"No incluido"** — sin eso, explorar se leería como que ya está
+  incluido, que es la única forma en que esta sección podría mentirle a un prospecto. En el
+  **PDF salen solo los vendidos**: el documento formal no lista lo que nadie compró.
+- **`activos` se SIEMBRA desde los tags en cada generación completa** (`generate/route.ts`,
+  junto a `__lang`). Los tags son la declaración del vendedor de qué se vendió, así que
+  agregar uno y regenerar tiene que encenderlo; el ajuste fino con las píldoras del editor
+  sobrevive a la regeneración POR SECCIÓN, donde manda `preserveNonSchemaKeys`. Sin tags no
+  se siembra —ausente = todas encendidas—: no sabemos qué se vendió, así que no se apaga
+  nada. Y el conocimiento que se le carga al agente pasó a ser el de los SEIS Hubs (los 6
+  documentos suman ~11,2k contra el cap de 12k: entran completos).
 - **La curaduría del CSE (`activos`) va FUERA del schema y en el PRIMER nivel.** Fuera del
   schema porque `coerceToSchema` descarta lo no declarado: así **el agente no puede decidir qué
   le vendieron al cliente**, ni por error — la invariante la sostiene el tipo, no un pedido en

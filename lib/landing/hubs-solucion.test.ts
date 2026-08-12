@@ -108,6 +108,22 @@ describe("la curaduría del CSE", () => {
   it("una columna sin hub se identifica por su título", () => {
     expect(columnaKey({ hub: "", titulo: "Breeze", items: [] })).toBe("Breeze");
   });
+
+  // El caso NORMAL desde que la sección lleva una columna por cada Hub: las seis
+  // existen y `activos` —sembrado desde los tags en `generate`— dice cuáles se
+  // vendieron. Las otras cuatro siguen ahí para que el cliente las explore.
+  it("con las seis columnas, solo las vendidas quedan activas", () => {
+    const data: HubsClienteData = {
+      ...conColumnas([...HUBSPOT_HUB_SLUGS]),
+      activos: ["marketing_hub", "sales_hub"],
+    };
+    const columnas = hubColumnas(data);
+    expect(columnas).toHaveLength(6);
+    expect(columnasActivas(columnas, data.activos).map((c) => c.hub)).toEqual([
+      "marketing_hub",
+      "sales_hub",
+    ]);
+  });
 });
 
 describe("canales", () => {

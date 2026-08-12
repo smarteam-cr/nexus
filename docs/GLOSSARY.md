@@ -346,12 +346,15 @@
   `project-action-targets.ts`) y un test falla si un documento del registro se queda sin la suya:
   un documento sin ancla es un documento que no se puede mandar por chat.
 - **Hubs del cliente** (sección `solucion` de la propuesta de HubSpot, rótulo visible "Qué se
-  implementa"): una **columna por Hub vendido**, cada una con su color y con 3-5 tarjetas de
-  lo que se pone a funcionar ahí. Arriba, una **píldora por Hub**. Reemplazó a los cuatro
-  campos de texto libre (`hubs` / `integraciones` / `casosDeUso` / `usuarios`), que sobreviven
-  como rama LEGACY para lo ya generado. Las píldoras sirven a los dos lados: en el editor el
-  CSE elige qué Hubs van (escribe `activos`) y en la propuesta publicada el cliente las usa
-  para explorar; en el PDF **no se pintan** y todo sale expandido. Ver DECISIONS §"Qué se
+  implementa"): una **columna por CADA Hub de HubSpot** —los seis, no solo los vendidos—,
+  cada una con su color y con 3-5 tarjetas de lo que se pone a funcionar ahí. Arriba, una
+  **píldora por Hub**. Reemplazó a los cuatro campos de texto libre (`hubs` /
+  `integraciones` / `casosDeUso` / `usuarios`), que sobreviven como rama LEGACY para lo ya
+  generado. Los VENDIDOS (los `activos`) arrancan encendidos y se escriben como lo que se va
+  a implementar; los demás quedan para que el cliente los explore y llevan un chip **"No
+  incluido"**. Las píldoras sirven a los dos lados: en el editor el CSE elige qué Hubs van
+  (escribe `activos`) y en la propuesta publicada el cliente abre y cierra columnas; en el
+  **PDF no se pintan y salen solo los vendidos**, expandidos. Ver DECISIONS §"Qué se
   implementa".
 - **`activos`** (curaduría de la sección de Hubs): la lista de columnas encendidas. Vive FUERA
   del schema del agente —`coerceToSchema` la descartaría, así que **el agente no puede decidir

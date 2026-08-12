@@ -114,9 +114,13 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
     // permanentemente no-vacía y haría mentir al botón "Limpiar" (la trampa que ya
     // mordió con `anchoRecurrente`, `logoScale` y `__lang` — ver lib/landing/is-blank.ts).
     empty: { intro: "", columnas: [] },
-    agentHint: "Una columna por Hub vendido, con lo que se implementa adentro de cada uno.",
+    agentHint: "Una columna por CADA Hub de HubSpot (los vendidos primero), con lo que se implementa adentro.",
     brief:
-      "Qué se implementa, UNA COLUMNA POR HUB de los que dice el preámbulo que se vendieron — ni uno más ni uno menos. " +
+      "Qué se implementa, UNA COLUMNA POR CADA UNO de los seis Hubs de HubSpot — no solo los vendidos. " +
+      "Los VENDIDOS (los dice el preámbulo) van PRIMERO y se escriben como lo que se va a implementar; " +
+      "los demás van después y se escriben como lo que ese Hub SUMARÍA, en condicional: el cliente los ve " +
+      "marcados «No incluido» y puede abrirlos para explorar, así que nunca los presentes como parte del " +
+      "alcance ni les pongas precio. " +
       "`hub`: el slug exacto (`marketing_hub`, `sales_hub`, `service_hub`, `content_hub`, `data_hub`, `revenue_hub`); si algo vendido no es un Hub (Breeze, un agente a la medida), escribí su nombre tal cual y va con color neutro. " +
       "`titulo` de la columna: qué resuelve ESE Hub en este negocio, en 4-6 palabras y en el lenguaje del cliente — no el nombre del producto otra vez. " +
       "`items`: 3 a 5 tarjetas de lo que se implementa ahí. `titulo` corto (qué se pone a funcionar) y `detalle` de una línea (qué cambia para el cliente cuando funciona). " +
