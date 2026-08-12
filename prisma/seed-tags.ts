@@ -61,10 +61,14 @@ const initialTags = [
   { category: "HUBSPOT_AREA", value: "sequences",           label: "Sequences" },
   { category: "HUBSPOT_AREA", value: "integrations",        label: "Integraciones" },
   { category: "HUBSPOT_AREA", value: "hubcode",             label: "HubCode" },
+  // Un value POR HUB, con el MISMO slug que lib/tags/catalog.ts: así el conocimiento
+  // por hub se recupera con `loadKnowledgeByTags(hubSlugs)` sin traducir nada en el medio.
   { category: "HUBSPOT_AREA", value: "content_hub",         label: "Content Hub" },
   { category: "HUBSPOT_AREA", value: "service_hub",         label: "Service Hub" },
   { category: "HUBSPOT_AREA", value: "sales_hub",           label: "Sales Hub" },
   { category: "HUBSPOT_AREA", value: "marketing_hub",       label: "Marketing Hub" },
+  { category: "HUBSPOT_AREA", value: "data_hub",            label: "Data Hub" },
+  { category: "HUBSPOT_AREA", value: "revenue_hub",         label: "Revenue Hub" },
   // TOPIC
   { category: "TOPIC", value: "gestion_cambio",      label: "Gestión del cambio" },
   { category: "TOPIC", value: "liderazgo_rutinas",   label: "Rutinas de liderazgo" },
