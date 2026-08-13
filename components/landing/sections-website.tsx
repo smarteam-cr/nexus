@@ -392,33 +392,41 @@ function GrupoTabla({
                 {handle}
                 {editable && <RemoveBtn onClick={() => set(removeAt(lineas, i))} />}
 
-                {/* El check. En el EDITOR persiste (`activa`): es la curaduría de Ventas. En la
-                    propuesta publicada es EFÍMERO — existe para la reunión, donde se apagan
-                    productos y el total baja en vivo; al recargar vuelve a la oferta. En el PDF
-                    no se pinta: un documento formal no lleva controles. */}
-                {!pdf && onToggle && (
-                  <input
-                    type="checkbox"
-                    className="stl-inv-check"
-                    checked={activa}
-                    onChange={(e) => onToggle(i, e.currentTarget.checked)}
-                    aria-label={`Incluir ${l.concepto || "esta línea"}`}
-                  />
-                )}
 
-                <div className={`stl-inv-row-main${icon ? " stl-inv-row-main--hub" : ""}`}>
-                  {icon && (
+                {/* ⚠ El check y el ícono van DENTRO de un adorno único, no sueltos en la fila.
+                    `.stl-inv-row` es una rejilla DECLARADA de dos columnas (concepto | monto)
+                    que comparten el encabezado y los totales: un hijo más se lleva una celda y
+                    el monto se cae a la fila siguiente — que es exactamente lo que se vio. */}
+                <div className={`stl-inv-row-main${icon || (!pdf && onToggle) ? " stl-inv-row-main--adorno" : ""}`}>
+                  {(icon || (!pdf && onToggle)) && (
+                    <span className="stl-inv-adorno">
+                      {/* El check. En el EDITOR persiste (`activa`): es la curaduría de Ventas.
+                          En la propuesta publicada es EFÍMERO — existe para la reunión, donde
+                          se apagan productos y el total baja en vivo; al recargar vuelve a la
+                          oferta. En el PDF no se pinta: un documento formal no lleva controles. */}
+                      {!pdf && onToggle && (
+                        <input
+                          type="checkbox"
+                          className="stl-inv-check"
+                          checked={activa}
+                          onChange={(e) => onToggle(i, e.currentTarget.checked)}
+                          aria-label={`Incluir ${l.concepto || "esta línea"}`}
+                        />
+                      )}
+                      {icon && (
                     /* MÁSCARA CSS, la misma técnica de `.stl-hub-pill-icon`: el SVG oficial de
                        public/hubs queda intacto y el color lo pone `--hub-accent`. DECORATIVO
                        (`aria-hidden`): el nombre del Hub está escrito al lado, así que el ícono
                        no carga significado propio — mismo criterio que la píldora de "Qué se
                        implementa". Es HERMANO del `Editable`, jamás un hijo suyo: adentro, el
                        commit por `textContent` lo borraría al primer blur. */
-                    <span
-                      className="stl-inv-ico"
-                      aria-hidden="true"
-                      style={{ "--hub-icon": `url("${icon}")` } as CSSProperties}
-                    />
+                        <span
+                          className="stl-inv-ico"
+                          aria-hidden="true"
+                          style={{ "--hub-icon": `url("${icon}")` } as CSSProperties}
+                        />
+                      )}
+                    </span>
                   )}
                   <Editable as="span" className="stl-inv-concept" editable={editable} value={l.concepto}
                     placeholder="Concepto…" onCommit={(v) => set(replaceAt(lineas, i, { ...l, concepto: v }))} />

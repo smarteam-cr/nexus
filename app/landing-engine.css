@@ -639,15 +639,23 @@
    servicios y TODO lo ya publicado se siguen maquetando con el flujo de bloques de siempre y
    no cambian un pixel — que es lo que deja intactas las propuestas que están en la calle. El
    ícono es HERMANO del concepto (sin wrapper nuevo), así que lo coloca el grid. */
-.stl .stl-inv-row-main--hub {
+.stl .stl-inv-row-main--adorno {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   column-gap: 10px;
   align-items: start;
 }
-.stl .stl-inv-row-main--hub > .stl-inv-concept,
-.stl .stl-inv-row-main--hub > .stl-inv-detail,
-.stl .stl-inv-row-main--hub > .stl-inv-aviso { grid-column: 2; }
+.stl .stl-inv-row-main--adorno > .stl-inv-concept,
+.stl .stl-inv-row-main--adorno > .stl-inv-detail,
+.stl .stl-inv-row-main--adorno > .stl-inv-calc,
+.stl .stl-inv-row-main--adorno > .stl-inv-aviso { grid-column: 2; }
+/* El adorno (check + ícono) es UN solo hijo de la rejilla: así el número de controles no
+   cambia cuántas celdas ocupa la fila. */
+.stl .stl-inv-adorno {
+  grid-row: 1; grid-column: 1;
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 2px;
+}
 .stl .stl-inv-ico {
   grid-row: 1;
   grid-column: 1;
@@ -679,9 +687,8 @@
    (se apaga un producto y el total baja). Por eso son discretos —el documento manda— pero
    con área de clic real y foco visible: se manejan con el cliente mirando la pantalla. */
 .stl .stl-inv-check {
-  grid-row: 1;
   width: 15px; height: 15px;
-  margin: 4px 10px 0 0;
+  margin: 0;
   accent-color: var(--blue);
   cursor: pointer;
   flex: none;
