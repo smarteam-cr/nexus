@@ -1733,11 +1733,16 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   declara — y por eso apagar un Hub sigue apagado aunque el agente lo re-escriba con otro de
   sus nombres. Una columna cuyo `hub` no es del catálogo (Breeze, un agente a la medida) se
   pinta con el color NEUTRO y conserva el título del agente: no se le impone un rótulo.
-- **Los seis colores viven en el CSS y el mapa slug→variable en TypeScript.** Al revés
-  (los hex en TS) `lib/ui/landing-brand-contrast.test.ts` —que lee del archivo— no podría
-  vigilarlos, y los seis se pintan como FONDO con texto blanco encima. Todos dan ≥5:1. **No se
-  usan los hex de marca de HubSpot**: `#FF7A59` con blanco da 2.3:1. Un Hub nuevo sin color
-  rompe `lib/landing/hubs-solucion.test.ts`, y sin par de contraste rompe el guard de marca.
+- ~~**Los seis colores viven en el CSS y el mapa slug→variable en TypeScript.**~~
+  **SUPERSEDED el mismo día: la sección es BLANCO Y GRIS, con el naranja de HubSpot
+  (`#FF4800`) como único acento, y solo en los íconos.** Un color por Hub daba seis acentos
+  fuertes en una sola sección: competía con el resto de la propuesta y la píldora encendida
+  se leía como una etiqueta de categoría, no como una selección. Ahora el estado se lee por
+  RELLENO (blanco → gris) y peso de tinta. Quedan tres tokens neutros (`--hub-soft`,
+  `--hub-line`, `--hub-line-on`) más `--hub-accent`.
+  ⚠ **`--hub-soft` no se puede oscurecer**: el naranja encima da 3.14:1 y el mínimo de WCAG
+  1.4.11 para un ícono es 3. Ese par está en el guard de contraste justamente porque el
+  margen es chico y nadie lo notaría a ojo.
 - **El ícono de producto de cada Hub va como MÁSCARA CSS, no como `<img>`** (2026-08-12).
   Los SVG oficiales de HubSpot viven sin tocar en `public/hubs/`, con el **slug como nombre
   de archivo** (`sales_hub.svg`) para que la URL se derive y no haga falta un mapa; un

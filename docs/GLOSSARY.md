@@ -347,7 +347,7 @@
   un documento sin ancla es un documento que no se puede mandar por chat.
 - **Hubs del cliente** (sección `solucion` de la propuesta de HubSpot, rótulo visible "Qué se
   implementa"): una **columna por CADA Hub de HubSpot** —los seis, no solo los vendidos—,
-  cada una con su color y con 3-5 tarjetas de lo que se pone a funcionar ahí. Arriba, una
+  cada una con 3-5 tarjetas de lo que se pone a funcionar ahí y el ícono del Hub. Arriba, una
   **píldora por Hub**. Reemplazó a los cuatro campos de texto libre (`hubs` /
   `integraciones` / `casosDeUso` / `usuarios`), que sobreviven como rama LEGACY para lo ya
   generado. Los VENDIDOS (los `activos`) arrancan encendidos y se escriben como lo que se va
@@ -361,9 +361,10 @@
   qué le vendieron al cliente**— y en el primer nivel del `data`, que es hasta donde llega
   `preserveNonSchemaKeys`: por eso sobrevive a regenerar. Ausente = todas encendidas; vacío =
   el CSE las apagó todas.
-- **color de Hub** (`--hub-marketing`, `--hub-sales`, `--hub-service`, `--hub-content`,
-  `--hub-data`, `--hub-revenue`, `--hub-neutro`): el color con el que se pinta la píldora y la
-  cabecera de columna de cada Hub. Los hex viven en `app/landing-engine.css` y el mapa
-  slug→variable en `lib/landing/hubs-solucion.ts`, para que el guard de contraste los lea del
-  archivo. No son los hex de marca de HubSpot (ilegales con texto blanco). `--hub-neutro` es
-  para una columna que no es un Hub del catálogo (Breeze, un agente a la medida).
+- **ícono de Hub** (`public/hubs/<slug>.svg`): el ícono de producto oficial de HubSpot, uno
+  por Hub, con el **slug como nombre de archivo** para que la URL se derive
+  (`hubIconUrl`). Se pinta como MÁSCARA CSS con `--hub-accent` (`#FF4800`), así que los
+  archivos quedan sin tocar. Es el ÚNICO color de la sección: lo demás es blanco y gris
+  (`--hub-soft` / `--hub-line` / `--hub-line-on`) y la píldora encendida se distingue por el
+  relleno, no por el matiz. Va chico en la píldora (16px) y grande en la cabecera de la
+  columna (30px). Una columna que no es un Hub del catálogo no tiene ícono.

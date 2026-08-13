@@ -25,21 +25,6 @@ import type { HubColumna, HubsClienteData } from "@/components/landing/types";
  *  `LEGACY_CARRY_EXCLUDE` (generate/route.ts) tiene que excluir exactamente estas. */
 export const SOLUCION_LEGACY_KEYS = ["hubs", "integraciones", "casosDeUso", "usuarios"] as const;
 
-/** El color de cada Hub, por nombre de variable CSS (declaradas en app/landing-engine.css).
- *  El valor vive en el CSS y no acá para que `lib/ui/landing-brand-contrast.test.ts`
- *  —que lee hex del archivo— pueda vigilar el contraste real contra el blanco. */
-export const HUB_COLOR_VAR: Record<HubspotHubSlug, string> = {
-  marketing_hub: "--hub-marketing",
-  sales_hub: "--hub-sales",
-  service_hub: "--hub-service",
-  content_hub: "--hub-content",
-  data_hub: "--hub-data",
-  revenue_hub: "--hub-revenue",
-};
-
-/** Para una columna que NO es un Hub del catálogo (Breeze, un agente a la medida). */
-export const HUB_NEUTRAL_VAR = "--hub-neutro";
-
 function esHubDelCatalogo(slug: string | null): slug is HubspotHubSlug {
   return slug != null && (HUBSPOT_HUB_SLUGS as readonly string[]).includes(slug);
 }
@@ -48,23 +33,22 @@ function esHubDelCatalogo(slug: string | null): slug is HubspotHubSlug {
  *  slug (`public/hubs/sales_hub.svg`), así que no hace falta un mapa: agregar un Hub al
  *  catálogo es dejar su SVG con ese nombre, y el test lo verifica contra el disco.
  *
- *  Se usan como MÁSCARA, no como imagen: los archivos vienen en el naranja de HubSpot
- *  (#ff4800) y sobre una píldora encendida —navy, royal, verde— ese naranja es
- *  justamente el par que el doc de marca prohíbe, y sobre la píldora de Marketing sería
- *  naranja sobre naranja. Enmascarados toman el color del Hub (o blanco al encenderse)
- *  y los archivos quedan intactos, tal como los entrega HubSpot. */
+ *  Se usan como MÁSCARA y no como imagen: así se pintan con `--hub-accent` (el naranja
+ *  de HubSpot) desde el CSS y los archivos quedan intactos, tal como los entrega
+ *  HubSpot. En una sección que por lo demás es blanco y gris, ese naranja es el único
+ *  acento — la píldora encendida se distingue por el relleno, no por el color. */
 export function hubIconUrl(slug: HubspotHubSlug): string {
   return `/hubs/${slug}.svg`;
 }
 
-/** Color, rótulo e ícono de una columna. `label` e `icon` son null cuando el hub no es
- *  del catálogo (Breeze, un agente a la medida): ahí manda el título que escribió el
- *  agente, no un rótulo inventado, y no hay ícono de producto que ponerle. */
-export function hubVisual(hub: string): { colorVar: string; label: string | null; icon: string | null } {
+/** Rótulo e ícono de una columna. Los dos son null cuando el hub no es del catálogo
+ *  (Breeze, un agente a la medida): ahí manda el título que escribió el agente, no un
+ *  rótulo inventado, y no hay ícono de producto que ponerle. */
+export function hubVisual(hub: string): { label: string | null; icon: string | null } {
   const slug = normalizeTag(hub ?? "");
   return esHubDelCatalogo(slug)
-    ? { colorVar: HUB_COLOR_VAR[slug], label: labelForTag(slug), icon: hubIconUrl(slug) }
-    : { colorVar: HUB_NEUTRAL_VAR, label: null, icon: null };
+    ? { label: labelForTag(slug), icon: hubIconUrl(slug) }
+    : { label: null, icon: null };
 }
 
 /** Con qué identifica el CSE a una columna en `activos`. Va normalizada para que apagar

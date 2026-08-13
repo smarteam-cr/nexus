@@ -144,17 +144,14 @@ export const HubsClienteSection: FC<SectionProps<HubsClienteData>> = (props) => 
               compró. Lo vendido es lo que arranca encendido, no lo único que existe. */}
           {columnas.map((c) => {
             const key = columnaKey(c);
-            const { colorVar, label, icon } = hubVisual(c.hub);
+            const { label, icon } = hubVisual(c.hub);
             const on = editable ? activasKeys.has(key) : abiertas.includes(key);
             return (
               <button
                 key={key || c.titulo}
                 type="button"
                 className={`stl-hub-pill${on ? " is-on" : ""}`}
-                style={{
-                  "--hub": `var(${colorVar})`,
-                  ...(icon ? { "--hub-icon": `url("${icon}")` } : {}),
-                } as CSSProperties}
+                style={(icon ? { "--hub-icon": `url("${icon}")` } : {}) as CSSProperties}
                 aria-pressed={on}
                 onClick={() => toggle(c)}
               >
@@ -176,7 +173,7 @@ export const HubsClienteSection: FC<SectionProps<HubsClienteData>> = (props) => 
         container={(nodes) => <div className={`stl-hub-cols stl-hub-cols--${porFila}`}>{nodes}</div>}
       >
         {(c, i, handle) => {
-          const { colorVar, label } = hubVisual(c.hub);
+          const { label, icon } = hubVisual(c.hub);
           // `visibles` SIEMPRE es un subconjunto de `columnas` (las apagadas no se
           // pintan), así que el índice del sortable no sirve para escribir.
           const real = columnas.indexOf(c);
@@ -185,13 +182,17 @@ export const HubsClienteSection: FC<SectionProps<HubsClienteData>> = (props) => 
           // Solo pasa en LECTURA: el cliente abrió un Hub que no se le vendió.
           const noIncluida = !editable && !activasKeys.has(columnaKey(c));
           return (
-            <div className="stl-hub-col" style={{ "--hub": `var(${colorVar})` } as CSSProperties}>
+            <div
+              className="stl-hub-col"
+              style={(icon ? { "--hub-icon": `url("${icon}")` } : {}) as CSSProperties}
+            >
               <div className="stl-hub-col-head">
                 {handle}
                 {editable && <RemoveBtn onClick={() => set({ columnas: removeAt(columnas, real) })} />}
                 {/* El cliente puede abrir un Hub que no compró: la columna tiene que
                     DECIRLO. Sin esto, explorar se leería como que ya está incluido. */}
                 {noIncluida && <div className="stl-hub-col-chip">No incluido</div>}
+                {icon && <div className="stl-hub-col-icon" />}
                 <div className="stl-hub-col-eyebrow">{label ?? "A la medida"}</div>
                 <Editable
                   as="div"

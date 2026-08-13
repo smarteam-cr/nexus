@@ -90,21 +90,16 @@
   --dark-text-muted:     #7D90BE;
   --dark-border-strong:  rgba(255, 255, 255, 0.16);
 
-  /* Un color por Hub de HubSpot (sección "Qué se implementa"). Los hex viven ACÁ y no
-     en TypeScript para que lib/ui/landing-brand-contrast.test.ts los lea del archivo y
-     vigile el contraste real: los seis se pintan como fondo de píldora y de cabecera de
-     columna CON TEXTO BLANCO, así que todos tienen que dar ≥4.5:1. El mapa slug→variable
-     vive en lib/landing/hubs-solucion.ts, y un Hub nuevo sin color rompe su test.
-     NO se usan los hex de marca de HubSpot (#FF7A59 con blanco da 2.3:1) — el naranja
-     legal de la marca Smarteam para texto blanco es la familia #C2400F. */
-  --hub-marketing: #C2400F;
-  --hub-sales:     #0B58D3;
-  --hub-service:   #9D174D;
-  --hub-content:   #6D28D9;
-  --hub-data:      #051849;
-  --hub-revenue:   #15803D;
-  /* Una columna que NO es un Hub del catálogo (Breeze, un agente a la medida). */
-  --hub-neutro:    #3F3F46;
+  /* Sección "Qué se implementa": paleta NEUTRA con un solo acento. Los seis Hubs tenían
+     un color cada uno y se retiró — con seis colores fuertes la sección competía con el
+     resto de la propuesta y la píldora encendida se leía como una etiqueta, no como una
+     selección. Ahora el único color es el naranja de los íconos.
+     ⚠ `--hub-soft` no puede oscurecerse: el naranja encima da 3.14:1 y el mínimo de WCAG
+     para un ícono es 3. El guard de contraste lo vigila. */
+  --hub-accent:  #FF4800;  /* naranja de HubSpot — SOLO los íconos de producto */
+  --hub-soft:    #F5F6F8;  /* gris de la píldora encendida y de la cabecera de columna */
+  --hub-line:    #E4E6EA;  /* borde neutro */
+  --hub-line-on: #C9CDD4;  /* borde de la píldora encendida */
 
   font-size: 16px;
   background: var(--bg);
@@ -1516,9 +1511,8 @@
 .stl-pdf-paged .stl-intro { orphans: 3; widows: 3; }
 
 /* ── "Qué se implementa": píldoras de Hub + columnas ──────────────────────────
-   Cada píldora y cada columna reciben su color por la variable INLINE `--hub`
-   (`var(--hub-sales)`…), que el componente resuelve desde el catálogo de tags. Sin
-   ella caen al neutro, así una columna que no es un Hub igual se pinta.
+   Blanco y gris, con el naranja de los íconos como ÚNICO acento. El ícono de producto
+   llega por la variable inline `--hub-icon` (la URL del SVG de public/hubs).
 
    SIN SCROLLERS a propósito: un carrusel horizontal de columnas imprimiría solo el
    primer viewport y el PDF saldría cortado en silencio. Grid con wrap. */
@@ -1538,7 +1532,7 @@
   gap: 9px;
   padding: 9px 16px;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--hub-line);
   background: var(--bg);
   color: var(--text-2);
   font: inherit;
@@ -1548,31 +1542,30 @@
   cursor: pointer;
   transition: background 0.18s var(--ease), color 0.18s var(--ease), border-color 0.18s var(--ease);
 }
-.stl-hub-pill:hover { border-color: var(--hub, var(--hub-neutro)); color: var(--text); }
+.stl-hub-pill:hover { border-color: var(--hub-line-on); color: var(--text); }
+/* Encendida = gris + tinta plena + borde más marcado. Sin color: el estado se lee por
+   relleno y peso, no por matiz — que es lo que deja al naranja del ícono como el único
+   acento de la sección. */
 .stl-hub-pill.is-on {
-  background: var(--hub, var(--hub-neutro));
-  border-color: var(--hub, var(--hub-neutro));
-  color: #fff;
+  background: var(--hub-soft);
+  border-color: var(--hub-line-on);
+  color: var(--text);
 }
 .stl-hub-pill-dot {
   width: 9px;
   height: 9px;
   border-radius: 999px;
-  background: var(--hub, var(--hub-neutro));
+  background: var(--text-muted);
   flex: none;
 }
-.stl-hub-pill.is-on .stl-hub-pill-dot { background: rgba(255, 255, 255, 0.9); }
 
-/* El ícono de producto de HubSpot va como MÁSCARA y no como <img>: el archivo viene en
-   el naranja de HubSpot y sobre una píldora encendida (navy, royal, verde) ese naranja
-   es el par que el doc de marca prohíbe — y sobre la de Marketing sería naranja sobre
-   naranja. Enmascarado toma el color del Hub, y blanco al encenderse, con los archivos
-   de public/hubs intactos tal como los entrega HubSpot. */
-.stl-hub-pill-icon {
-  width: 15px;
-  height: 15px;
+/* El ícono de producto de HubSpot va como MÁSCARA y no como <img>: así se pinta con
+   `--hub-accent` sin tocar los archivos de public/hubs, que quedan tal como los entrega
+   HubSpot. (También lo usa la cabecera de la columna, más grande.) */
+.stl-hub-pill-icon,
+.stl-hub-col-icon {
   flex: none;
-  background-color: var(--hub, var(--hub-neutro));
+  background-color: var(--hub-accent);
   -webkit-mask-image: var(--hub-icon);
   mask-image: var(--hub-icon);
   -webkit-mask-repeat: no-repeat;
@@ -1582,7 +1575,8 @@
   -webkit-mask-size: contain;
   mask-size: contain;
 }
-.stl-hub-pill.is-on .stl-hub-pill-icon { background-color: #fff; }
+.stl-hub-pill-icon { width: 16px; height: 16px; }
+.stl-hub-col-icon { width: 30px; height: 30px; margin-bottom: 12px; }
 
 /* El número de columnas por fila lo decide el COMPONENTE según cuántas hay encendidas
    (hasta 3 en una fila; de 4 en adelante se parte en dos filas parejas), no un
@@ -1605,37 +1599,36 @@
   .stl-hub-cols--3 { grid-template-columns: minmax(0, 1fr); }
 }
 .stl-hub-col {
-  border: 1px solid var(--border);
+  border: 1px solid var(--hub-line);
   border-radius: 14px;
   overflow: hidden;
   background: var(--bg);
 }
 .stl-hub-col-head {
   position: relative;
-  background: var(--hub, var(--hub-neutro));
-  color: #fff;
-  padding: 14px 16px;
+  background: var(--hub-soft);
+  border-bottom: 1px solid var(--hub-line);
+  color: var(--text);
+  padding: 18px 16px 16px;
 }
 .stl-hub-col-eyebrow {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  opacity: 0.85;
+  color: var(--text-muted);
   margin-bottom: 3px;
 }
 .stl-hub-col-title { font-size: 16px; font-weight: 700; line-height: 1.35; }
-/* "No incluido" sobre la cabecera de un Hub que el cliente puede explorar pero no
-   compró. Va con el par INVERSO (fondo blanco, tinta del Hub) y no con un blanco
-   translúcido: sobre el naranja, un translúcido baja el contraste a ~3.4:1 y esto es
-   texto chico. Invertido es el MISMO par que ya vigila el guard de marca. */
+/* "No incluido" en la cabecera de un Hub que el cliente puede explorar pero no compró. */
 .stl-hub-col-chip {
   display: inline-block;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #fff;
-  color: var(--hub, var(--hub-neutro));
+  border: 1px solid var(--hub-line-on);
+  background: var(--bg);
+  color: var(--text-muted);
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -1644,7 +1637,7 @@
 .stl-hub-card {
   position: relative;
   padding: 14px 16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--hub-line);
 }
 .stl-hub-card:first-of-type { border-top: 0; }
 .stl-hub-card-title { font-size: 14.5px; font-weight: 700; color: var(--text); line-height: 1.35; }
@@ -1655,6 +1648,6 @@
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--bg-soft);
+  background: var(--hub-soft);
   color: var(--text-muted);
 }

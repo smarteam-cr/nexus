@@ -7,8 +7,6 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  HUB_COLOR_VAR,
-  HUB_NEUTRAL_VAR,
   SOLUCION_LEGACY_KEYS,
   columnaKey,
   columnasActivas,
@@ -59,33 +57,19 @@ describe("hubColumnas sanea sin reventar", () => {
 });
 
 describe("los nombres viejos de HubSpot resuelven al Hub vigente", () => {
-  it("operations_hub y commerce_hub caen en su color actual", () => {
-    expect(hubVisual("operations_hub").colorVar).toBe(HUB_COLOR_VAR.data_hub);
-    expect(hubVisual("commerce_hub").colorVar).toBe(HUB_COLOR_VAR.revenue_hub);
-    expect(hubVisual("CMS Hub").colorVar).toBe(HUB_COLOR_VAR.content_hub);
+  it("operations_hub y commerce_hub caen en el ícono del Hub actual", () => {
+    expect(hubVisual("operations_hub").icon).toBe(hubIconUrl("data_hub"));
+    expect(hubVisual("commerce_hub").icon).toBe(hubIconUrl("revenue_hub"));
+    expect(hubVisual("CMS Hub").icon).toBe(hubIconUrl("content_hub"));
   });
 
   it("el rótulo lo escribe el catálogo, no el agente", () => {
     expect(hubVisual("Sales Hub").label).toBe("Sales Hub");
   });
 
-  it("una columna que no es un Hub va al neutro y sin rótulo impuesto", () => {
-    expect(hubVisual("Custom Agent WhatsApp")).toEqual({ colorVar: HUB_NEUTRAL_VAR, label: null, icon: null });
-    expect(hubVisual("")).toEqual({ colorVar: HUB_NEUTRAL_VAR, label: null, icon: null });
-  });
-
-  it("todo Hub del catálogo tiene color; ninguno de más", () => {
-    expect(Object.keys(HUB_COLOR_VAR).sort()).toEqual([...HUBSPOT_HUB_SLUGS].sort());
-  });
-
-  // El mapa vive en TS y los hex en el CSS: sin este escaneo, un Hub nuevo podría
-  // declarar una variable que nadie definió y la columna saldría sin color, en silencio.
-  // (Que el color SEA legible lo vigila lib/ui/landing-brand-contrast.test.ts.)
-  it("cada variable de color está declarada en app/landing-engine.css", () => {
-    const css = fs.readFileSync(path.join(process.cwd(), "app", "landing-engine.css"), "utf8");
-    for (const v of [...Object.values(HUB_COLOR_VAR), HUB_NEUTRAL_VAR]) {
-      expect(css, `${v} no está declarada en app/landing-engine.css`).toContain(`${v}:`);
-    }
+  it("una columna que no es un Hub no impone rótulo ni ícono", () => {
+    expect(hubVisual("Custom Agent WhatsApp")).toEqual({ label: null, icon: null });
+    expect(hubVisual("")).toEqual({ label: null, icon: null });
   });
 
   // La URL del ícono se DERIVA del slug, así que un Hub nuevo sin su SVG no rompe nada

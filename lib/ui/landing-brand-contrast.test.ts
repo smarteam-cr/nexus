@@ -101,13 +101,19 @@ describe("matriz de contraste de la marca (AA, contra el fondo REAL)", () => {
     ["positivo (#07429A) sobre crema", "#07429A", P.cream, 4.5],
     ["tinta sobre crema", P.text, P.cream, 4.5],
   ];
-  // Los 6 colores de Hub se pintan como FONDO de píldora encendida y de cabecera de
-  // columna, con texto blanco de 14-16px: texto normal, mínimo 4.5. Se leen del CSS
-  // (no de TypeScript) justamente para que este guard los vea. Un Hub nuevo entra acá
-  // o su color no está vigilado. Ver lib/landing/hubs-solucion.ts.
-  for (const hub of ["marketing", "sales", "service", "content", "data", "revenue", "neutro"]) {
-    casos.push([`blanco sobre el color del Hub ${hub}`, "#FFFFFF", token(ENGINE, `--hub-${hub}`), 4.5]);
-  }
+  // Sección "Qué se implementa": blanco y gris con el naranja de HubSpot SOLO en los
+  // íconos. El naranja va sobre blanco y sobre `--hub-soft`, y como es un ícono —no
+  // texto— el mínimo es el 3:1 de WCAG 1.4.11. El margen es CHICO (3.14 sobre el gris),
+  // así que este par es el que impide oscurecer el gris sin darse cuenta.
+  const hubAccent = token(ENGINE, "--hub-accent");
+  const hubSoft = token(ENGINE, "--hub-soft");
+  casos.push(
+    ["ícono naranja de Hub sobre paper", hubAccent, P.bg, 3],
+    ["ícono naranja de Hub sobre el gris de la sección", hubAccent, hubSoft, 3],
+    ["tinta sobre el gris de la sección", P.text, hubSoft, 4.5],
+    ["secundario sobre el gris de la sección", P.text2, hubSoft, 4.5],
+    ["muted sobre el gris de la sección", P.muted, hubSoft, 4.5],
+  );
   for (const [desc, fg, bg, min] of casos) {
     it(`${desc} ≥ ${min}:1`, () => {
       const r = ratio(fg, bg);
