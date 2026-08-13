@@ -383,13 +383,22 @@
   sandboxeados mal), así que el PDF nunca lo monta. Si Ventas no lo escribió, sale una línea
   genérica — nunca un hueco mudo.
 - **Inversión** (sección `inversion`, una sola para las dos plantillas desde 2026-08-12): lo que
-  cuesta la propuesta, en dos grupos — **servicios** de Smarteam (`lineas`) y **licencias** de
-  terceros (`licencias`, HubSpot/Insider/herramientas) — cada uno con su subtotal, más el **gran
-  total**. Los montos los escribe **Ventas a mano**: el agente no la genera (`agentGenerated:false`)
-  y tiene prohibido poner precios en cualquier otro texto. `extras` (opcionales) y `recurrentes`
-  (mensuales) se muestran pero NO suman. Un monto con texto adentro ("A definir", "13%") queda
-  fuera del total y se cuenta como **pendiente**. Las propuestas de HubSpot viejas siguen viendo
-  las **dos tarjetas** históricas (rama legacy) hasta que alguien aprieta "Pasar a la tabla nueva".
+  cuesta la propuesta, leído como **line items de factura** — dos grupos, **servicios** de
+  Smarteam (`lineas`) y **licencias** de terceros (`licencias`, HubSpot/Insider/herramientas),
+  cada uno con encabezado, columna de monto alineada a la derecha y su subtotal, más el **gran
+  total** (que aparece SOLO con los dos grupos sumables; con uno, ese subtotal ES el total y
+  lleva la píldora). Los montos los escribe **Ventas a mano**: el agente no la genera
+  (`agentGenerated:false`) y tiene prohibido poner precios en cualquier otro texto. `extras`
+  (opcionales) y `recurrentes` (mensuales) se muestran pero NO suman. Un monto con texto adentro
+  ("A definir", "13%") queda fuera del total y se cuenta como **pendiente**. El shape viejo de
+  HubSpot (dos tarjetas) ya no existe como vista: se **proyecta** a la tabla al renderizar y se
+  persiste con la primera edición. Ver DECISIONS §Secciones personalizadas.
+- **proyección del shape viejo** (`adoptarShapeNuevo`): la conversión al vuelo de las dos
+  tarjetas históricas de HubSpot en dos líneas de factura ("Implementación Smarteam" y
+  "Licencias HubSpot / año"). Corre en el RENDER, no persiste sola, y se fija con el primer
+  guardado humano. Es segura para lo publicado porque esos montos son texto libre y no suman —
+  garantía que depende de los datos y se re-verifica con
+  `scripts/verificar-inversion-publicada.ts` antes de cada deploy.
 - **pendiente** (inversión): una línea con algo escrito en el monto que no se pudo sumar. Se
   excluye del total y se anuncia al lado ("· +2 a definir"), porque un total incompleto que se lee
   como completo es peor que no mostrarlo. El ⚠ por línea existe solo en el editor.

@@ -21,7 +21,7 @@ const legacyReal: InversionData = {
   nota: "",
 };
 
-describe("esInversionLegacy: qué propuestas siguen viendo las dos tarjetas", () => {
+describe("esInversionLegacy: qué propuestas se PROYECTAN a la tabla", () => {
   it("el shape viejo con contenido → rama legacy", () => {
     expect(esInversionLegacy(legacyReal)).toBe(true);
     // Con solo el detalle escrito ya cuenta: el monto puede estar por definirse.
@@ -44,7 +44,7 @@ describe("esInversionLegacy: qué propuestas siguen viendo las dos tarjetas", ()
   });
 });
 
-describe("adoptarShapeNuevo: la conversión que aprieta una persona, nunca un script", () => {
+describe("adoptarShapeNuevo: la proyección del shape viejo al de factura", () => {
   it("mapea las dos tarjetas a una línea de cada grupo", () => {
     const out = adoptarShapeNuevo(legacyReal);
     expect(out.lineas).toEqual([
@@ -128,5 +128,80 @@ describe("gruposDeInversion: cuántos totales se pintan", () => {
     });
     expect(g.servicios.total).toEqual({ min: 1000, max: 1000 });
     expect(g.granTotal).toBeNull();
+  });
+});
+
+describe("la conversión es segura para lo que el cliente YA vio", () => {
+  /* ⚠ EL test de esta tanda. Los 3 BusinessCase publicados con shape legacy (CLARK, Color
+     Solution, Areya) tienen exactamente estos montos. Proyectarlos a la tabla NO puede hacer
+     aparecer un total que el prospecto no haya visto — con el parser estricto ninguno suma. */
+  it("los montos reales de las 3 publicadas NO ganan ningún total", () => {
+    const reales = [
+      "A definir en propuesta formal",
+      "A confirmar con descuento negociado por Smarteam ante HubSpot",
+      "~$2,000/mes (precio de lista referencial)",
+      "To be defined in formal proposal",
+    ];
+    for (const monto of reales) {
+      const g = gruposDeInversion(
+        adoptarShapeNuevo({ implementacion: { monto }, licenciasHubspot: { monto } }),
+      );
+      expect(g.gruposConMonto, monto).toBe(0);
+      expect(g.servicios.total, monto).toBeNull();
+      expect(g.licencias.total, monto).toBeNull();
+      expect(g.granTotal, monto).toBeNull();
+    }
+  });
+
+  it("los rótulos se pueden traducir sin perder el calificador anual", () => {
+    const out = adoptarShapeNuevo(legacyReal, {
+      servicios: "Smarteam implementation",
+      licencias: "HubSpot licenses / year",
+    });
+    expect(out.lineas?.[0].concepto).toBe("Smarteam implementation");
+    // El "/ año" del rótulo histórico es lo ÚNICO que decía que ese precio es anual, en una
+    // sección que ahora lo suma con un CapEx único.
+    expect(out.licencias?.[0].concepto).toBe("HubSpot licenses / year");
+  });
+
+  /* El render proyecta en CADA pasada. Sin idempotencia, una segunda aplicación borraría las
+     líneas ya convertidas. */
+  it("es IDEMPOTENTE y no deja keys legacy", () => {
+    const una = adoptarShapeNuevo(legacyReal);
+    expect(adoptarShapeNuevo(una)).toEqual(una);
+    expect(una.licenciasHubspot).toBeUndefined();
+    expect(una.implementacion).toBeUndefined();
+  });
+});
+
+describe("moneda efectiva: la guarda anti-mezcla también sin moneda de sección", () => {
+  it("sin moneda declarada, la deducen las líneas", () => {
+    const g = gruposDeInversion({ lineas: [{ monto: "₡1.500.000" }] });
+    expect(g.moneda).toBe("CRC");
+    expect(g.servicios.total).toEqual({ min: 1500000, max: 1500000 });
+  });
+
+  /* ⚠ Sin esto se sumaban colones con dólares (1.500.000 + 7.500 = 1.507.500), porque la
+     guarda de `parseMonto` vive dentro de `if (codigoSeccion)` y NINGUNA sección vieja de
+     HubSpot declara moneda. Es el único error de la sección que inventa un número. */
+  it("monedas contradictorias sin moneda de sección: NO se suman", () => {
+    const g = gruposDeInversion({
+      lineas: [{ monto: "USD $7.500" }],
+      licencias: [{ monto: "₡1.500.000" }],
+    });
+    expect(g.moneda).toBe("");
+    expect(g.servicios.total).toBeNull();
+    expect(g.licencias.total).toBeNull();
+    expect(g.granTotal).toBeNull();
+    expect(g.pendientesTotales).toBe(2);
+  });
+
+  it("la moneda DECLARADA gana sobre la deducida", () => {
+    expect(gruposDeInversion({ moneda: "USD", lineas: [{ monto: "₡500" }] }).moneda).toBe("USD");
+  });
+
+  it("los casos normales conservan la moneda de siempre", () => {
+    expect(gruposDeInversion({ moneda: "USD", lineas: [{ monto: "$1,000" }] }).moneda).toBe("USD");
+    expect(gruposDeInversion({ lineas: [{ monto: "1000" }] }).moneda).toBe("");
   });
 });

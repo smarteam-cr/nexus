@@ -1811,17 +1811,46 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   `createBusinessCaseCanvas` siembra el `empty` en cada sección y `generate` solo re-escribe las
   keys que el agente devolvió; sin el carry-forward, marcar una sección como curada hace que
   cada "Generar" borre lo que se escribió a mano. Mismo mecanismo para las personalizadas.
-- **La inversión es UNA sección para los dos templates, con rama legacy para HubSpot.**
+- **La inversión es UNA sección para los dos templates y se lee como LINE ITEMS DE FACTURA.**
   *Por qué:* convivían dos secciones distintas bajo la misma key `inversion` (la de HubSpot sin
   total). `licencias` es la ÚNICA key nueva → lo publicado de sitio web no necesita rama legacy.
-  La de HubSpot sí, y **nunca conversión automática**: sus montos son texto libre ("A definir en
-  propuesta formal"), y convertirlos haría correr la máquina de totales sobre una propuesta ya
-  publicada — al cliente le aparecería un número que jamás vio. La adopción es un botón que
-  aprieta una persona sobre el canvas vivo.
+  **Corregido el 2026-08-12 (decisión de Elías):** la rama de dos tarjetas de HubSpot también se
+  retiró. El shape viejo se PROYECTA al nuevo en el render (`adoptarShapeNuevo`, patrón
+  `DiagramSection`) y se persiste con la primera edición humana. Lo que la versión anterior de
+  esta decisión protegía —que a un cliente no le aparezca un número que nunca vio— lo sostiene
+  ahora el parser: esos montos son texto libre ("A definir en propuesta formal") ⇒ `parseMonto`
+  los da "sucio" ⇒ no suman. ⚠ Es una garantía **dependiente de los datos**, así que se
+  re-verifica antes de cada deploy con `scripts/verificar-inversion-publicada.ts` (corrido el
+  2026-08-12: 5 publicadas, 3 proyectadas, **cero** con total nuevo).
+- **La proyección tiene que partir de `d` y no de `data` en TODOS los escritores.** *Por qué:*
+  si `set` partiera de la data cruda, el guardado dejaría un HÍBRIDO (keys legacy + `lineas`) y
+  borrar una fila sería imposible — `esInversionLegacy` volvería a dar `true` y la resucitaría
+  en el render siguiente. El PUT de bloques REEMPLAZA `data` y `JSON.stringify` descarta los
+  `undefined`, así que partiendo de `d` las keys viejas mueren en el primer guardado.
 - **Con UN grupo con montos se pinta UN total (la píldora de siempre); el gran total aparece
   recién con DOS.** *Por qué:* `configForSnapshot` resuelve por key contra la config viva, así
   que toda propuesta publicada estrena el renderer nuevo. Esta regla es lo único que hace que
   las de sitio web se sigan viendo idénticas.
+- **La fila y los totales comparten UNA rejilla de dos columnas declarada, no `flex` con
+  `space-between`.** *Por qué:* con `space-between` la posición del número se DERIVA de cuántos
+  hijos tenga la fila — cuando el bloque de total ganó un tercer hijo ("+1 a definir"), la
+  píldora naranja quedó flotando en el medio. Con la columna declarada por grid y el marcador
+  de pendientes DENTRO de la celda del rótulo, no puede volver a pasar aunque se agregue un dato.
+- **El monto se NORMALIZA al formato de la moneda, solo en LECTURA y solo si parsea.**
+  *Por qué:* si el renglón dice "12000" y el pie dice "$34,250", el lector no puede verificar de
+  un vistazo la suma que le cobran, que es lo único que una factura tiene que permitir. El valor
+  mostrado ES el que se sumó ⇒ formatearlo no cambia el número, lo hace auditable. Lo que NO
+  parsea sale palabra por palabra y en registro de nota — no se inventa un número donde Ventas
+  escribió una condición. ⚠ En modo EDICIÓN el campo muestra siempre el texto CRUDO: `Editable`
+  comitea su propio `textContent` al blur y al desmontarse, así que un valor derivado adentro se
+  auto-persistiría y le reescribiría el monto a Ventas.
+- **Sin moneda de sección, la deducen las líneas; si se contradicen, no hay total.** *Por qué:*
+  la guarda anti-mezcla de `parseMonto` vive DENTRO de `if (codigoSeccion)` — sin moneda está
+  apagada, y ninguna sección vieja de HubSpot declara moneda. Sin esto `₡1.500.000` + `USD $7.500`
+  daban 1.507.500: el único error de esta sección que produce un número inventado. La moneda
+  deducida gobierna la aritmética y el formato, **nunca el rótulo**: "Montos en X" sigue
+  mostrando solo lo que la sección DECLARA — afirmarle al cliente una moneda inferida sería
+  fabricación.
 - **Los montos los escribe VENTAS: la sección es `agentGenerated:false` en los dos templates**,
   y el preámbulo del generate le PROHÍBE al agente escribir precios en cualquier texto. *Por qué:*
   al sacarle su sección natural, el modelo teje los montos del contexto en la prosa del hero o

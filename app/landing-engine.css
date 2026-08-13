@@ -566,41 +566,183 @@
 .stl .stl-chain-arrow { align-self: center; color: var(--teal-dark); font-size: 18px; font-weight: 700; flex-shrink: 0; }
 @media (max-width: 720px) { .stl .stl-chain { flex-direction: column; } .stl .stl-chain-arrow { transform: rotate(90deg); } }
 
-/* ── Inversión (website): nota + tabla fase 1 + total + extras + mensual ──── */
-.stl .stl-inv-currency { font-size: 13px; color: var(--text-2); font-weight: 500; }
+/* ── Inversión: line items de factura ─────────────────────────────────────────
+ *
+ * La sección se lee como un documento de cobro: el encabezado, cada línea y cada bloque de
+ * total comparten UNA rejilla de dos columnas DECLARADA (`--inv-cols`), y el número va pegado
+ * al borde derecho.
+ *
+ * ⚠ EL BUG QUE ESTO CIERRA — `justify-content: space-between` CON TRES HIJOS.
+ *   `.stl-inv-total` era `display:flex; justify-content:space-between` y la fila pasó a tener
+ *   TRES hijos (rótulo · píldora · "+1 a definir"), así que el sobrante se repartió ENTRE
+ *   ellos y LA PÍLDORA NARANJA QUEDÓ FLOTANDO EN EL MEDIO. El problema de fondo no era el
+ *   gap: con `space-between` la posición del número se DERIVA de cuántos hijos tenga la fila,
+ *   o sea que el próximo dato que alguien ponga al lado lo vuelve a mover. Ahora (a) la
+ *   columna está DECLARADA por grid y (b) el marcador de pendientes bajó ADENTRO de la celda
+ *   del rótulo. La píldora no puede volver a flotar aunque la fila gane un hijo.
+ *
+ * La alineación es por BORDE DERECHO y no por ancho fijo: un ancho fijo no aguanta los montos
+ * reales del corpus viejo, que son ORACIONES de hasta 61 caracteres ("A confirmar con
+ * descuento negociado por Smarteam ante HubSpot", CLARK v4, publicada).
+ * ────────────────────────────────────────────────────────────────────────────── */
+.stl .stl-inv {
+  --inv-cols: minmax(0, 1fr) minmax(0, auto);
+  --inv-gap: clamp(14px, 4vw, 28px);
+  --inv-pad: 2px; /* el MISMO respiro lateral para encabezado, filas y totales */
+}
+
+/* Barra de moneda (antes era un `style` inline en el TSX). */
+.stl .stl-inv-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 0 var(--inv-pad); margin-bottom: 18px;
+}
+.stl .stl-inv-currency { font-size: 13px; color: var(--text-2); font-weight: 600; }
 .stl .stl-inv-currency--edit { display: inline-flex; align-items: center; gap: 8px; }
 .stl .stl-inv-currency--edit select {
   padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border);
   background: #fff; color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer;
 }
-.stl .stl-inv-note-badge {
-  display: inline-flex; align-items: center; gap: 7px; padding: 5px 14px; border-radius: 999px;
-  background: rgba(245, 158, 11, 0.10); border: 1px solid rgba(245, 158, 11, 0.35);
-  color: #92400E; font-size: 12px; font-weight: 600;
+
+/* ── La rejilla compartida ─────────────────────────────────────────────────── */
+.stl .stl-inv-grupo + .stl-inv-grupo { margin-top: 34px; }
+.stl .stl-inv-head,
+.stl .stl-inv-row,
+.stl .stl-inv-sum {
+  display: grid;
+  grid-template-columns: var(--inv-cols);
+  gap: 4px var(--inv-gap);
+  align-items: baseline;
 }
-.stl .stl-inv-note-dot { width: 7px; height: 7px; border-radius: 50%; background: #F59E0B; flex-shrink: 0; }
+
+/* Encabezado: el chip rotula la columna izquierda, "MONTO" abre la derecha, y la regla de 2px
+   es la línea que abre la factura. */
+.stl .stl-inv-head { padding: 0 var(--inv-pad) 10px; border-bottom: 2px solid var(--text); }
+/* `justify-self:start` NO es cosmético: un ítem de grid se blockifica, así que sin esto el
+   `inline-flex` del chip se estiraría a todo el ancho de la columna. */
 .stl .stl-inv-chip {
+  justify-self: start;
   display: inline-flex; padding: 5px 16px; border-radius: 999px; background: var(--blue);
   color: #fff; font-family: var(--font-jakarta), system-ui, sans-serif;
   font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
 }
-.stl .stl-inv-table { margin-top: 14px; border-top: 2px solid var(--text); }
-.stl .stl-inv-row {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 18px;
-  padding: 16px 2px; border-bottom: 1px solid var(--border);
+.stl .stl-inv-col {
+  text-align: right; font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--text-muted);
 }
+
+.stl .stl-inv-table { margin-top: 0; }
+.stl .stl-inv-row { padding: 14px var(--inv-pad); border-bottom: 1px solid var(--border); }
 .stl .stl-inv-row-main { min-width: 0; }
-.stl .stl-inv-concept { font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 700; font-size: 15px; color: var(--text); }
-.stl .stl-inv-detail { font-size: 13px; color: var(--text-muted); }
-.stl .stl-inv-amount { font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 700; font-size: 16px; color: var(--text); white-space: nowrap; flex-shrink: 0; }
-.stl .stl-inv-total { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px 2px 4px; }
-.stl .stl-inv-total-label { font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 700; font-size: 15px; color: var(--text); }
+.stl .stl-inv-concept {
+  display: block; overflow-wrap: anywhere;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-weight: 700; font-size: 15px; line-height: 1.35; color: var(--text);
+}
+/* El detalle BAJA de renglón (antes iba inline tras un espacio). Dos motivos: una cotización
+   pone la descripción debajo del ítem, y los detalles REALES del corpus viejo miden 150-360
+   caracteres — como prosa a continuación del concepto borraban el límite entre "qué es" y
+   "qué incluye". */
+.stl .stl-inv-detail {
+  display: block; margin-top: 3px; max-width: 68ch; overflow-wrap: anywhere;
+  font-size: 12.5px; line-height: 1.5; color: var(--text-muted);
+}
+
+/* LA columna. Apila monto + eco + aviso sin que ninguno empuje al número fuera de eje. */
+.stl .stl-inv-cell {
+  min-width: 0; display: flex; flex-direction: column; align-items: flex-end;
+  gap: 2px; text-align: right;
+}
+.stl .stl-inv-amount {
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-weight: 700; font-size: 16px; line-height: 1.3; color: var(--text);
+  font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "lnum" 1;
+  overflow-wrap: anywhere;
+}
+/* Monto que NO es un número ("Included", "A confirmar con descuento negociado…"): sale palabra
+   por palabra —jamás se normaliza lo que no se pudo leer— pero con peso de NOTA y no de cifra:
+   en una columna de factura una frase en negrita de 16px miente sobre su propia naturaleza y
+   el ojo la suma. El tope en `min()` evita que una condición larga se coma el concepto, sin
+   una sola media query. */
+.stl .stl-inv-amount--libre {
+  font-family: inherit; font-weight: 500; font-size: 13px; line-height: 1.45;
+  color: var(--text-2); max-width: min(28ch, 46vw); text-align: right;
+  font-variant-numeric: normal; font-feature-settings: normal; text-wrap: pretty;
+}
+/* Línea sin monto: guion, no vacío — una celda que desaparece rompe la columna. */
+.stl .stl-inv-amount--vacio { color: var(--border-strong); font-weight: 500; }
+/* Solo-editor: "así lo va a ver el cliente" / "esta línea no suma". NUNCA en lectura. */
+.stl .stl-inv-eco {
+  font-size: 11.5px; font-weight: 600; color: var(--blue);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.stl .stl-inv-warn { font-size: 11.5px; font-weight: 600; color: #B45309; cursor: help; }
+
+/* ── El cierre ────────────────────────────────────────────────────────────────
+   `margin-top:-1px` se come el borde de la última fila para que la separación sea UNA línea y
+   no 1px + 2px de dos colores pegados (la factura pide una regla, y dos juntas se leen como
+   un error de imprenta). */
+.stl .stl-inv-sum {
+  margin-top: -1px; padding: 14px var(--inv-pad) 0;
+  border-top: 1px solid var(--border-strong);
+}
+.stl .stl-inv-sum-label {
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-weight: 700; font-size: 13px; line-height: 1.35; color: var(--text);
+}
+/* "+2 a definir · no entran en el total": va DEBAJO del rótulo y no al lado del número — como
+   tercer hijo de la fila era justamente lo que descentraba la píldora, y un total incompleto
+   que se lee como completo es peor que no mostrar total. */
+.stl .stl-inv-sum-note {
+  display: block; margin-top: 3px;
+  font-family: inherit; font-weight: 600; font-size: 12px; color: var(--text-muted);
+}
+.stl .stl-inv-sum-amount {
+  text-align: right;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-weight: 700; font-size: 17px; line-height: 1.3; color: var(--text);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+/* EL total de la sección: regla gruesa y la única mancha saturada del documento. La píldora
+   queda reservada para él — si los subtotales también la llevaran, el ojo no sabría cuál es el
+   número que importa. */
+.stl .stl-inv-sum--total {
+  padding-top: 16px; border-top: 2px solid var(--text); align-items: center;
+}
+.stl .stl-inv-sum--total .stl-inv-sum-label { font-size: 15px; }
+/* El gran total vive FUERA de una tabla: no hay hairline que comerse y sí aire que ganar. */
+.stl .stl-inv-sum--gran { margin-top: 24px; }
 .stl .stl-inv-total-pill {
-  display: inline-flex; padding: 10px 22px; border-radius: 100px; background: #E8481C;
-  color: #fff; font-family: var(--font-jakarta), system-ui, sans-serif;
-  font-weight: 700; font-size: 20px;
+  display: inline-flex; align-items: center; padding: 10px 22px; border-radius: 100px;
+  background: #E8481C; color: #fff;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-weight: 700; font-size: 20px; line-height: 1.2; white-space: nowrap;
+  font-variant-numeric: tabular-nums lining-nums;
   box-shadow: 0 8px 26px -10px rgba(232, 72, 28, 0.55);
 }
+
+/* La letra chica, al pie y como BLOQUE: las notas reales miden 153-365 caracteres y una
+   píldora `inline-flex` de 12px con radio 999px no es un contenedor para eso. */
+.stl .stl-inv-nota {
+  margin: 22px 0 0; padding: 12px 16px; border-radius: 12px;
+  background: rgba(245, 158, 11, 0.10); border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #92400E; font-size: 12.5px; line-height: 1.55; font-weight: 500; max-width: 78ch;
+}
+.stl .stl-inv-nota-k { font-weight: 700; letter-spacing: 0.06em; margin-right: 6px; }
+.stl .stl-inv-nota-k::before {
+  content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: #F59E0B; margin-right: 7px; vertical-align: middle;
+}
+
+/* Chrome de edición de una FILA: el ⠿ y el × NO pueden quedarse en la esquina superior derecha
+   (`.stl-remove { right: 6px }`) — ahí está EL MONTO, el pixel más importante de la sección, y
+   lo taparían justo al ir a editarlo. Van a la izquierda, centrados y superpuestos (son
+   opacos). Sigue sin RESERVAR espacio, que es la doctrina 2026-07-23: sin hover, la vista de
+   edición es idéntica a la del cliente. */
+.stl .stl-inv-row .stl-drag-item { top: 50%; left: -2px; transform: translateY(-50%); }
+.stl .stl-inv-row .stl-remove { top: 50%; right: auto; left: 32px; transform: translateY(-50%); }
+
+/* ── Extras (cards claras) + recurrente mensual (card oscura) ────────────────── */
 .stl .stl-inv-below { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 28px; align-items: stretch; }
 .stl .stl-inv-extra {
   background: var(--blue-soft); border: 1px solid rgba(11, 88, 211, 0.22);
@@ -615,16 +757,15 @@
 .stl .stl-inv-extra-head strong { font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 700; font-size: 14px; color: var(--text); }
 .stl .stl-inv-extra-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--blue); }
 .stl .stl-inv-extra-detail { font-size: 12px; color: var(--text-2); line-height: 1.5; margin: 8px 0 0; }
-.stl .stl-inv-extra-amount { font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 700; font-size: 15px; color: var(--blue); margin-top: 10px; }
+.stl .stl-inv-extra-amount { font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 700; font-size: 15px; color: var(--blue); margin-top: 10px; font-variant-numeric: tabular-nums lining-nums; }
 .stl .stl-inv-monthly { background: var(--dark-bg); border-radius: 22px; padding: 18px 20px; color: var(--dark-text); }
-/* anchoRecurrente: "ancho" — la card ocupa 2 columnas del grid .stl-inv-below
-   (auto-fit minmax(240px,1fr)) cuando hay espacio disponible en la fila. */
+/* anchoRecurrente: "ancho" — la card ocupa 2 columnas del grid .stl-inv-below. */
 .stl .stl-inv-monthly--wide { grid-column: span 2; }
 .stl .stl-inv-monthly-title { font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 700; font-size: 14px; color: var(--teal); margin-bottom: 10px; }
 .stl .stl-inv-monthly-row { font-size: 13px; line-height: 1.6; color: var(--dark-text-2); }
-.stl .stl-inv-monthly-row strong { color: #fff; }
-/* Panel OSCURO: .stl-remove/.stl-drag-item (fondo #fff fijo) chocarían — mismo
-   tratamiento translúcido que .stl-diag-panel. */
+.stl .stl-inv-monthly-row strong { color: #fff; font-variant-numeric: tabular-nums lining-nums; }
+/* Panel OSCURO: .stl-remove/.stl-drag-item (fondo #fff fijo) chocarían — mismo tratamiento
+   translúcido que .stl-diag-panel. */
 .stl .stl-inv-monthly .stl-remove,
 .stl .stl-inv-monthly .stl-drag-item {
   background: rgba(255, 255, 255, 0.10); border-color: rgba(255, 255, 255, 0.22); color: var(--dark-text-2);
@@ -632,6 +773,17 @@
 .stl .stl-inv-monthly .stl-remove:hover { color: #FCA5A5; border-color: #FCA5A5; }
 .stl .stl-inv-monthly .stl-drag-item:hover { color: var(--teal); border-color: var(--teal); }
 .stl .stl-inv-monthly-detail { font-size: 12px; opacity: 0.8; }
+
+/* ── Angosto: la columna se disuelve y el monto baja bajo su concepto ───────── */
+@media (max-width: 560px) {
+  .stl .stl-inv { --inv-cols: minmax(0, 1fr); --inv-gap: 0px; }
+  .stl .stl-inv-col { display: none; }
+  .stl .stl-inv-cell { align-items: flex-start; text-align: left; margin-top: 6px; }
+  .stl .stl-inv-amount--libre { max-width: none; text-align: left; }
+  .stl .stl-inv-sum-amount { margin-top: 6px; }
+  .stl .stl-inv-total-pill { font-size: 18px; padding: 8px 18px; }
+  .stl .stl-inv-row .stl-remove { left: auto; right: 4px; }
+}
 
 /* ── Arquitectura del sitio: diagrama Home + fases con cards (sección DARK) ── */
 .stl .stl-map-root { display: flex; flex-direction: column; align-items: center; margin-top: 26px; }
@@ -1508,10 +1660,18 @@
 .stl-pdf-paged .stl-hub-col,
 .stl-pdf-paged .stl-hub-card,
 .stl-pdf-paged table { break-inside: avoid; page-break-inside: avoid; }
+/* El bloque de totales de la Inversión NO es un `.stl-item`: sin esto puede quedar huérfano
+   en la página siguiente, separado de las líneas que suma — que en una factura es el peor
+   corte posible. */
+.stl-pdf-paged .stl-inv-sum {
+  break-inside: avoid; page-break-inside: avoid;
+  break-before: avoid; page-break-before: avoid;
+}
 /* Un título nunca queda solo al pie de una página. */
 .stl-pdf-paged .stl-sec-head,
 .stl-pdf-paged .stl-title,
 .stl-pdf-paged .stl-eyebrow,
+.stl-pdf-paged .stl-inv-head,
 .stl-pdf-paged h2,
 .stl-pdf-paged h3 { break-after: avoid; page-break-after: avoid; }
 /* Ni una línea suelta de un párrafo al principio o al final de una página. */
@@ -1753,40 +1913,3 @@
 @media (max-width: 640px) {
   .stl-embed-row { grid-template-columns: 1fr; }
 }
-
-/* ── Inversión: subtotal por grupo, marcador de pendientes y adopción del shape ──
- *
- * El subtotal de un grupo es PLANO (sin píldora): la píldora naranja queda reservada
- * para EL total de la sección — el único con un grupo, el gran total con dos. Si los
- * subtotales también la llevaran, el ojo no sabría cuál es el número que importa.
- */
-.stl-inv-subtotal {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 12px 18px 4px;
-}
-.stl-inv-subtotal-amount { font-size: 16px; font-weight: 700; color: var(--text); }
-.stl-inv-grupo { margin-top: 26px; }
-.stl-inv-total--gran { margin-top: 22px; }
-
-/* "+2 a definir": lo que NO entró en la suma. Sin esto, un total incompleto se lee como
-   completo — que es peor que no mostrarlo. Va al lado del número, en tinta apagada. */
-.stl-inv-pending { font-size: 12.5px; font-weight: 600; color: var(--text-muted); }
-
-/* ⚠ del editor: esta línea no suma. NUNCA se pinta en lectura — el cliente ve el monto
-   tal cual lo escribió Ventas, no nuestra opinión sobre él. */
-.stl-inv-warn { font-size: 13px; color: #B45309; cursor: help; margin-right: 6px; }
-
-.stl-inv-migrar {
-  margin-top: 16px;
-  padding: 8px 14px;
-  border: 1px dashed var(--border);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-2);
-  font-size: 13px;
-  cursor: pointer;
-}
-.stl-inv-migrar:hover { border-color: #0B58D3; color: #0B58D3; }

@@ -154,6 +154,60 @@ export function sumaRangos(a: Rango | null, b: Rango | null): Rango | null {
 }
 
 /**
+ * El código ISO que el TEXTO del monto declara POR SÍ MISMO, o null. Solo símbolos
+ * INEQUÍVOCOS (`$` no está: lo usan USD, MXN, COP, CLP…) y códigos ISO escritos.
+ *
+ * Existe porque la guarda anti-mezcla de `parseMonto` vive DENTRO de `if (codigoSeccion)`:
+ * sin moneda de sección está apagada, y ninguna de las secciones viejas de HubSpot declara
+ * moneda. `gruposDeInversion` la usa para no sumar colones con dólares — el único error de
+ * esta sección que produce un número inventado.
+ */
+export function monedaDeTexto(monto: string | null | undefined): string | null {
+  const raw = (monto ?? "").trim();
+  if (!raw) return null;
+  for (const [simbolo, codigo] of MONEDA_POR_SIMBOLO) if (raw.includes(simbolo)) return codigo;
+  return CODIGOS.find((c) => new RegExp(`\\b${c}\\b`, "i").test(raw)) ?? null;
+}
+
+/** Un monto listo para PINTAR. `libre` = no es un número sumable (es texto de Ventas). */
+export interface MontoLectura {
+  texto: string;
+  libre: boolean;
+}
+
+/**
+ * El monto de una línea TAL COMO SE MUESTRA — nunca como se guarda.
+ *
+ * Normaliza SOLO lo que `parseMonto` pudo leer, y al MISMO formato con el que ya se pinta el
+ * total. Si el total dice "$34,250" y el renglón de arriba dice "12000", el lector no puede
+ * verificar de un vistazo la suma que le están cobrando, que es la única cosa que una factura
+ * tiene que permitir. El valor mostrado es, por definición, el que se sumó ⇒ formatearlo no
+ * cambia el número: lo hace auditable.
+ *
+ * ⚠ Cuatro cosas que NUNCA se tocan:
+ *  · lo que no parsea ("A definir en propuesta formal", "Included") sale palabra por palabra:
+ *    no se inventa un número donde Ventas escribió una condición contractual;
+ *  · `~` y `+` son CALIFICADORES ("aprox.", "desde"). `parseMonto` los descarta para poder
+ *    sumar; borrarlos en pantalla convertiría una estimación en un precio firme;
+ *  · un símbolo de otra moneda sin moneda de sección: `formatMonto("")` caería al `$`
+ *    histórico y una línea en colones saldría en dólares;
+ *  · nada de esto corre en modo EDICIÓN — ver el comentario de `GrupoTabla`.
+ */
+export function montoParaLectura(
+  monto: string | null | undefined,
+  moneda?: string | null,
+): MontoLectura {
+  const raw = (monto ?? "").trim();
+  if (!raw) return { texto: "", libre: false };
+  const r = parseMonto(raw, moneda);
+  if (r === "sucio") return { texto: raw, libre: true };
+  if (r === null) return { texto: raw, libre: false }; // era solo el símbolo, sin cifra
+  if (/[~+]/.test(raw)) return { texto: raw, libre: false }; // calificador
+  if (!(moneda ?? "").trim() && monedaDeTexto(raw)) return { texto: raw, libre: false };
+  return { texto: formatRango(r, moneda), libre: false };
+}
+
+/**
  * ⚠ Agrupación en `en-US` (1,800) y no en `es-CR` (1.800) A PROPÓSITO, aunque el documento
  * esté en español: el parser trata la coma como separador de miles y Ventas escribe "$5,600".
  * Formatear el total con puntos contradiría el renglón de arriba en la misma tabla. La

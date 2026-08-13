@@ -5,7 +5,15 @@
  * en pantalla —y que el prospecto compara contra el contrato— no era el que la tabla decía.
  */
 import { describe, it, expect } from "vitest";
-import { parseMonto, sumaLineas, sumaRangos, formatMonto, formatRango } from "./money";
+import {
+  parseMonto,
+  sumaLineas,
+  sumaRangos,
+  formatMonto,
+  formatRango,
+  monedaDeTexto,
+  montoParaLectura,
+} from "./money";
 
 const L = (...montos: string[]) => montos.map((monto) => ({ monto }));
 
@@ -129,5 +137,63 @@ describe("formato", () => {
   it("un rango lleva el símbolo solo en el extremo bajo, como se hacía", () => {
     expect(formatRango({ min: 5600, max: 6650 }, "USD")).toBe("$5,600–6,650");
     expect(formatRango({ min: 4215, max: 4215 }, "USD")).toBe("$4,215");
+  });
+});
+
+describe("monedaDeTexto: qué moneda declara el propio texto", () => {
+  it("símbolo inequívoco y código ISO escrito", () => {
+    expect(monedaDeTexto("₡1.500.000")).toBe("CRC");
+    expect(monedaDeTexto("USD $7.500")).toBe("USD");
+    expect(monedaDeTexto("COP 30.000.000")).toBe("COP");
+  });
+
+  /* El `$` no delata nada: lo usan USD, MXN, COP, CLP… Si lo tratara como USD, la moneda
+     "deducida" de una propuesta mexicana sería dólares. */
+  it("`$` solo NO declara nada", () => {
+    expect(monedaDeTexto("$5600")).toBeNull();
+    expect(monedaDeTexto("12000")).toBeNull();
+    expect(monedaDeTexto("")).toBeNull();
+  });
+});
+
+describe("montoParaLectura: qué se normaliza y qué sale verbatim", () => {
+  /* La columna de una factura tiene que ser verificable de un vistazo: si el renglón dice
+     "12000" y el pie dice "$34,250", el lector no puede comprobar la suma que le cobran. El
+     valor mostrado ES el que se sumó ⇒ formatearlo no cambia el número, lo hace auditable. */
+  it("lo que parsea se formatea con la moneda de la sección", () => {
+    expect(montoParaLectura("$5600", "USD")).toEqual({ texto: "$5,600", libre: false });
+    expect(montoParaLectura("12000", "USD")).toEqual({ texto: "$12,000", libre: false });
+    expect(montoParaLectura("4500", "")).toEqual({ texto: "$4,500", libre: false });
+    expect(montoParaLectura("1.500.000", "CRC")).toEqual({ texto: "₡1,500,000", libre: false });
+    expect(montoParaLectura("5600-6650", "USD")).toEqual({ texto: "$5,600–6,650", libre: false });
+  });
+
+  it("lo que NO parsea sale PALABRA POR PALABRA y marcado libre", () => {
+    expect(montoParaLectura("Included", "USD")).toEqual({ texto: "Included", libre: true });
+    expect(montoParaLectura("A definir en propuesta formal")).toEqual({
+      texto: "A definir en propuesta formal",
+      libre: true,
+    });
+    expect(montoParaLectura("~$2,000/mes (precio de lista referencial)")).toEqual({
+      texto: "~$2,000/mes (precio de lista referencial)",
+      libre: true,
+    });
+  });
+
+  /* ⚠ `~` y `+` son CALIFICADORES ("aprox.", "desde"). `parseMonto` los descarta para poder
+     sumar; borrarlos en pantalla convertiría una estimación en un precio firme. */
+  it("`~` y `+` no se borran", () => {
+    expect(montoParaLectura("~2000", "USD").texto).toBe("~2000");
+    expect(montoParaLectura("12000+", "USD").texto).toBe("12000+");
+  });
+
+  /* ⚠ `formatMonto("")` cae al `$` histórico: una línea en colones saldría en dólares. */
+  it("símbolo ajeno sin moneda de sección: NO se reescribe a `$`", () => {
+    expect(montoParaLectura("₡500", "").texto).toBe("₡500");
+  });
+
+  it("vacío es vacío (la celda pinta el guion, no un monto)", () => {
+    expect(montoParaLectura("", "USD")).toEqual({ texto: "", libre: false });
+    expect(montoParaLectura(null)).toEqual({ texto: "", libre: false });
   });
 });

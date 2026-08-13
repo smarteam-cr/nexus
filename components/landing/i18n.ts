@@ -45,6 +45,8 @@ const STRINGS = {
   totalLicencias: { es: "Total licencias", en: "Licenses total" },
   inversionTotal: { es: "Inversión total", en: "Total investment" },
   montoPorDefinir: { es: "a definir", en: "to be defined" },
+  montoCol: { es: "Monto", en: "Amount" },
+  noSuman: { es: "no entran en el total", en: "not included in the total" },
   extrasOpcionales: { es: "Extras opcionales", en: "Optional add-ons" },
   opcional: { es: "Opcional", en: "Optional" },
   recurrenteMensual: { es: "Recurrente mensual", en: "Monthly recurring" },
