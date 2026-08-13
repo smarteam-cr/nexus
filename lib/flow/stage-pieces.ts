@@ -30,9 +30,15 @@
  * comparten). Cada una tiene su propia casa en el producto.
  *
  * ── ETAPAS SIN PIEZA ─────────────────────────────────────────────────────────
- * Adopción, Validación de uso, Entrega y Finalizado son HITOS: se marcan, no se abren.
+ * Adopción, Validación de uso y Finalizado son HITOS: se marcan, no se abren.
  * `pieces: []` no es un hueco a llenar — es la decisión de que ahí no hay documento
  * (negocio, 2026-07-25). Lo mismo para OPERACION_CONTINUA del ciclo corto.
+ *
+ * ⚠ ENMIENDA (negocio, 2026-08-12): ENTREGA deja de ser hito y estrena la pieza `delivery`.
+ * La decisión de julio decía «ahí no hay documento» y era cierta MIENTRAS la entrega fuera
+ * una casilla que alguien marcaba. Hoy la entrega es un entregable: el cierre que el cliente
+ * archiva y cita. La etapa se sigue cerrando con `ENTREGA_REALIZADA` —el documento la
+ * acompaña, no la reemplaza—, y `pieces: []` sigue significando lo mismo para las otras tres.
  */
 import type { ProjectLifecycleStage, ProjectStageGateKey } from "@prisma/client";
 import type { LifecycleCycle } from "@/lib/lifecycle/stage-engine";
@@ -97,7 +103,7 @@ export const STAGE_FLOW: StageFlow[] = [
   { stage: "ADOPCION", pieces: [], primary: null, gate: "CLIENTE_OPERANDO", cycles: ["full"] },
   { stage: "OPERACION_CONTINUA", pieces: [], primary: null, gate: null, cycles: ["short"] },
   { stage: "VALIDACION_USO", pieces: [], primary: null, gate: "USO_VALIDADO", cycles: ["full"] },
-  { stage: "ENTREGA", pieces: [], primary: null, gate: "ENTREGA_REALIZADA", cycles: AMBOS },
+  { stage: "ENTREGA", pieces: ["delivery"], primary: "delivery", gate: "ENTREGA_REALIZADA", cycles: AMBOS },
   { stage: "FINALIZADO", pieces: [], primary: null, gate: null, cycles: AMBOS },
 ];
 

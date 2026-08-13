@@ -373,6 +373,34 @@
 .stl .stl-metric-label { font-size: 14px; font-weight: 600; color: var(--text); margin-top: 10px; }
 .stl .stl-dark .stl-metric-label { color: var(--dark-text); }
 .stl .stl-metric-note { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+/* ── Entrega · «Lo que nos contaron» ─────────────────────────────────────────
+   Un número que dijo el cliente NO es una medición nuestra, y la pantalla tiene que
+   decirlo. La atribución va debajo del número, en el cuerpo del texto — no en gris chico
+   al pie de la sección, donde nadie la lee. Solo tokens existentes: el guard de contraste
+   (lib/ui/landing-brand-contrast.test.ts) escanea el archivo entero buscando hex nuevos. */
+.stl .stl-kpi-fuente { font-size: 12px; color: var(--text-2); margin-top: 8px; font-style: italic; }
+.stl .stl-dark .stl-kpi-fuente { color: var(--dark-text-2); }
+
+/* Las propuestas del agente: SOLO en edición. El cliente nunca ve este bloque. */
+.stl .stl-kpi-propuestas { margin-top: 28px; padding: 16px; border: 1px dashed var(--border-strong, var(--border)); border-radius: 12px; background: var(--bg-soft); }
+.stl .stl-kpi-propuestas-titulo { font-size: 13px; font-weight: 600; color: var(--text-2); margin: 0 0 12px; }
+.stl .stl-kpi-propuesta { padding: 12px 0; border-top: 1px solid var(--border); }
+.stl .stl-kpi-propuesta:first-of-type { border-top: none; padding-top: 0; }
+.stl .stl-kpi-propuesta-dato { font-size: 15px; color: var(--text); }
+.stl .stl-kpi-propuesta-cita { margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--border-strong, var(--border)); font-size: 14px; color: var(--text-2); font-style: italic; }
+.stl .stl-kpi-propuesta-fuente { font-size: 12px; color: var(--text-muted); }
+.stl .stl-kpi-propuesta-acciones { display: flex; gap: 8px; margin-top: 10px; }
+.stl .stl-kpi-aceptar,
+.stl .stl-kpi-descartar {
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-size: 12px; font-weight: 700; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  transition: opacity 0.15s var(--ease);
+}
+.stl .stl-kpi-aceptar { background: var(--blue); color: #ffffff; border: 1px solid var(--blue); }
+.stl .stl-kpi-descartar { background: transparent; color: var(--text-2); border: 1px solid var(--border-strong, var(--border)); }
+.stl .stl-kpi-aceptar:hover,
+.stl .stl-kpi-descartar:hover { opacity: 0.82; }
 .stl .stl-dark .stl-metric-note { color: var(--dark-text-2); }
 
 /* Comparación Antes / Después (filas: aspecto + par Hoy/Con Smarteam) */

@@ -44,6 +44,9 @@ describe("qué chips se listan", () => {
       "timeline",
       "planning",
       "implementation",
+      // Decidido al agregarla (2026-08-12): la Entrega ENTRA al widget. El widget responde
+      // "¿qué documentos tiene este proyecto?", y el de cierre es uno de ellos.
+      "delivery",
       "procesos",
     ]);
   });

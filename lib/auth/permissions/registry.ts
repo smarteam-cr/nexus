@@ -78,6 +78,11 @@ export const PERMISSION_SECTIONS = [
     actions: [GENERATE, { key: "regenerate", label: "Regenerar con IA", enforced: true }],
   },
   {
+    key: "entrega",
+    label: "Entrega (documento de cierre)",
+    actions: [GENERATE, { key: "regenerate", label: "Regenerar con IA", enforced: true }],
+  },
+  {
     key: "planificacion",
     label: "Planificación",
     actions: [GENERATE, { key: "regenerate", label: "Regenerar con IA", enforced: true }],

@@ -24,7 +24,7 @@ import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
 export type ArtifactGate = {
-  section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo" | "exploracion" | "diagnostico" | "planificacion" | "implementacion";
+  section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo" | "exploracion" | "diagnostico" | "planificacion" | "implementacion" | "entrega";
   action: "generate" | "regenerate";
 };
 
@@ -120,6 +120,17 @@ export async function resolveArtifactGate(
       });
       return { section: "implementacion", action: aiBlocks > 0 ? "regenerate" : "generate" };
     }
+    case "entrega": {
+      /* Canvas "Entrega" (documento de cierre, se le comparte al cliente). Mismo criterio
+         que las demás piezas: primera vez `generate`, con contenido de IA `regenerate`.
+         ⚠ Sin este `case` el grupo cae al `default` y el agente CORRE SIN CELDA DE PERMISO
+         — el incidente que ya ocurrió con una variante del detalle de cronograma. */
+      if (!projectId) return { section: "entrega", action: "generate" };
+      const aiBlocks = await prisma.canvasBlock.count({
+        where: { source: "AGENT", section: { canvas: canvasOfNested("delivery", { projectId }) } },
+      });
+      return { section: "entrega", action: aiBlocks > 0 ? "regenerate" : "generate" };
+    }
     case "cronograma": {
       /* El detalle ESCRIBE tareas (base O variante por tipo `agent-timeline-detail--<t>`);
          agent-timeline-progress solo propone → sin gate. ⚠ Por la convención y no por el id
@@ -173,6 +184,7 @@ export function artifactGateMessage(gate: ArtifactGate): string {
     diagnostico: "el diagnóstico",
     planificacion: "la planificación",
     implementacion: "la guía de implementación",
+    entrega: "el documento de entrega",
   };
   return gate.action === "regenerate"
     ? `Tu rol no puede regenerar ${label[gate.section]} con IA (ya está generado). Pedile a un CSL o Super Admin, o ajustalo a mano.`

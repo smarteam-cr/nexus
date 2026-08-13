@@ -221,6 +221,26 @@ export const PIECES: PieceDefinition[] = [
     clientFacing: false, // es la guía de trabajo del CSE, no un entregable
   },
   {
+    slug: "delivery",
+    label: "Entrega",
+    // Pieza NUEVA (2026-08-12): nunca vivió con otro nombre en ProjectCanvas.name, así que
+    // `canvasOf("delivery")` degrada a un lookup por slug puro. No agregar nombres acá.
+    legacyNames: [],
+    scope: "project",
+    agentGroup: "entrega",
+    permissionSection: "entrega",
+    /* ON-DEMAND, y es la línea que evita repetir un error caro: una pieza que nace con el
+       proyecto se crea en los 163 de una. El documento de cierre no tiene sentido en un
+       proyecto que arranca — lo activa el CSE cuando el proyecto llega a la entrega. */
+    createdWithProject: false,
+    isDefaultCanvas: false,
+    optional: true,
+    // Ningún tag la implica: TODO proyecto se entrega, con o sin desarrollo a la medida.
+    enabledByTags: [],
+    ownRenderer: true, // EntregaWorkspace (motor de landings)
+    clientFacing: true, // se comparte al cliente, como el kickoff
+  },
+  {
     slug: "client-info",
     label: "Información del cliente",
     legacyNames: ["Información del cliente"],

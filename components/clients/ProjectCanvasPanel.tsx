@@ -15,7 +15,8 @@ import DesarrolloWorkspace from "@/components/canvas/DesarrolloWorkspace";
 import ExploracionWorkspace from "@/components/canvas/ExploracionWorkspace";
 import DiagnosticoWorkspace from "@/components/canvas/DiagnosticoWorkspace";
 import PlanificacionWorkspace from "@/components/canvas/PlanificacionWorkspace";
-import ImplementacionWorkspace from "@/components/canvas/ImplementacionWorkspace";
+import ImplementacionWorkspace from "@/components/canvas/ImplementacionWorkspace";
+import EntregaWorkspace from "@/components/canvas/EntregaWorkspace";
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import CanvasBoundary from "./CanvasBoundary";
@@ -851,6 +852,15 @@ export default function ProjectCanvasPanel({
         <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
           <CanvasBoundary label="la implementación">
             <ImplementacionWorkspace key={`implementacion-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+          </CanvasBoundary>
+        </div>
+      )}
+
+      {/* Entrega: el documento de cierre (motor de landings, paleta de MARCA — lo ve el cliente). */}
+      {!isResumenCanvas && activeSlug === "delivery" && activeCanvasId && (
+        <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
+          <CanvasBoundary label="la entrega">
+            <EntregaWorkspace key={`entrega-${activeCanvasId}-${agentNonce}`} projectId={projectId} clientId={clientId} canvasId={activeCanvasId} />
           </CanvasBoundary>
         </div>
       )}

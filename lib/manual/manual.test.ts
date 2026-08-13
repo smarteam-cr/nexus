@@ -127,10 +127,11 @@ describe("Documentación · el recorrido sale del motor de etapas", () => {
   });
 
   it("las etapas sin documento se declaran como hito, no como hueco", () => {
-    // Adopción, Validación de uso, Entrega y Finalizado no tienen documento A PROPÓSITO
-    // (decisión de negocio 2026-07-25). Si dejaran de ser hitos, la doc tiene que enterarse.
+    /* Adopción, Validación de uso y Finalizado no tienen documento A PROPÓSITO (decisión de
+       negocio 2026-07-25). Si dejaran de ser hitos, la doc tiene que enterarse.
+       ⚠ ENTREGA salió de la lista el 2026-08-12: estrenó el documento de cierre. */
     const hitos = armarRecorrido().filter((e) => e.esHito).map((e) => e.clave);
-    expect(hitos).toEqual(["ADOPCION", "VALIDACION_USO", "ENTREGA", "FINALIZADO"]);
+    expect(hitos).toEqual(["ADOPCION", "VALIDACION_USO", "FINALIZADO"]);
   });
 
   it("el documento que cierra una etapa es el primario del mapa etapa↔pieza", () => {

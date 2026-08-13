@@ -25,6 +25,7 @@ describe("el desplegable muestra el FLUJO, no solo lo que existe", () => {
       "planning",
       "tech-requirements",
       "implementation",
+      "delivery",
     ]);
     expect(rows.every((r) => r.state === "por_activar")).toBe(true);
     expect(rows.every((r) => r.canvasId === null)).toBe(true);

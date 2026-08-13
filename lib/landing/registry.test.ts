@@ -29,7 +29,9 @@ import { EXPLORACION_SECTION_DEFS } from "@/components/landing/configs/exploraci
 import { EXPLORACION_SECTION_COMPONENTS, landingConfigForExploracion } from "@/components/landing/configs/exploracion";
 import { DIAGNOSTICO_SECTION_DEFS, DIAGNOSTICO_DEF_BY_KEY } from "@/components/landing/configs/diagnostico.defs";
 import { DIAGNOSTICO_SECTION_COMPONENTS, landingConfigForDiagnostico } from "@/components/landing/configs/diagnostico";
-import { DIAGNOSTICO_CANVAS, PLANIFICACION_CANVAS, IMPLEMENTACION_CANVAS } from "@/lib/canvas/canvas-defs";
+import { DIAGNOSTICO_CANVAS, PLANIFICACION_CANVAS, IMPLEMENTACION_CANVAS, ENTREGA_CANVAS } from "@/lib/canvas/canvas-defs";
+import { ENTREGA_SECTION_DEFS, ENTREGA_DEF_BY_KEY } from "@/components/landing/configs/entrega.defs";
+import { ENTREGA_SECTION_COMPONENTS, landingConfigForEntrega } from "@/components/landing/configs/entrega";
 import { IMPLEMENTACION_SECTION_DEFS } from "@/components/landing/configs/implementacion.defs";
 import { IMPLEMENTACION_SECTION_COMPONENTS, landingConfigForImplementacion } from "@/components/landing/configs/implementacion";
 import { PLANIFICACION_SECTION_DEFS, PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
@@ -386,6 +388,90 @@ describe("Implementación: registry completo + keys congeladas", () => {
       expect(canvasKeys.has(d.key), `la def "${d.key}" no existe como sección del canvas`).toBe(true);
     }
     expect(IMPLEMENTACION_CANVAS.sections.length).toBe(IMPLEMENTACION_SECTION_DEFS.length);
+  });
+});
+
+describe("Cronograma: registry completo + keys congeladas", () => {
+  it("cada def resuelve componente y la config no dropea ninguna", () => {
+    const faltantes = CRONOGRAMA_SECTION_DEFS.filter(
+      (d) => !CRONOGRAMA_SECTION_COMPONENTS[d.sectionType ?? d.key],
+    );
+    expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
+    expect(landingConfigForCronograma().sections.map((s) => s.key)).toEqual(
+      CRONOGRAMA_SECTION_DEFS.map((d) => d.key),
+    );
+  });
+
+  it("snapshot de keys: portada y Gantt, y nada más", () => {
+    /* Es el documento más chico de los nueve, y tiene que seguir siéndolo: todo lo demás del
+       cronograma (avisos, propuestas, publicación) es del EDITOR, no del documento. */
+    expect(CRONOGRAMA_SECTION_DEFS.map((d) => d.key)).toEqual(["portada", "cronograma"]);
+  });
+
+  it("sin componentes huérfanos en CRONOGRAMA_SECTION_COMPONENTS", () => {
+    const usados = new Set(CRONOGRAMA_SECTION_DEFS.map((d) => d.sectionType ?? d.key));
+    expect(Object.keys(CRONOGRAMA_SECTION_COMPONENTS).filter((t) => !usados.has(t))).toEqual([]);
+  });
+
+  it("ninguna de sus secciones la escribe un agente", () => {
+    /* Las dos salen de `ctx` o del proyecto. Si alguna se marcara `agentGenerated`, el
+       catálogo de agentes le ofrecería al CSE generar un texto que nadie va a leer —
+       el motor las pinta desde ProjectTimeline igual. */
+    expect(CRONOGRAMA_SECTION_DEFS.filter((d) => d.agentGenerated).map((d) => d.key)).toEqual([]);
+  });
+});
+
+describe("Entrega: registry completo + keys congeladas", () => {
+  it("cada def resuelve componente y la config no dropea ninguna", () => {
+    const faltantes = ENTREGA_SECTION_DEFS.filter((d) => !ENTREGA_SECTION_COMPONENTS[d.sectionType ?? d.key]);
+    expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
+    expect(landingConfigForEntrega().sections.map((s) => s.key)).toEqual(
+      ENTREGA_SECTION_DEFS.map((d) => d.key),
+    );
+  });
+
+  it("snapshot de keys: el ORDEN es la narrativa del cierre", () => {
+    /* Primero QUÉ se construyó, después CÓMO se cumplió, al final QUÉ FALTA. Al revés el
+       documento arranca justificándose, que es lo último que uno quiere leer en una entrega. */
+    const keys = ENTREGA_SECTION_DEFS.map((d) => d.key);
+    expect(keys).toEqual([
+      "portada", "resumen", "alcance", "logros",
+      "cumplimiento", "impacto", "pendientes", "continuidad", "cierre",
+    ]);
+    expect(keys.indexOf("pendientes")).toBeGreaterThan(keys.indexOf("logros"));
+  });
+
+  it("⚠ LOS NÚMEROS NO LOS ESCRIBE EL AGENTE", () => {
+    /* La única promesa de honestidad del documento. `cumplimiento` y `pendientes` son cifras
+       sobre el proyecto del cliente y las calcula el runner desde el cronograma; el agente ni
+       las ve. Poner `agentGenerated: true` en cualquiera de las dos deja al modelo escribiendo
+       «se completó el 100% del plan» sin que nada lo contradiga — y este es el documento que
+       el cliente archiva y cita. */
+    expect(ENTREGA_DEF_BY_KEY["cumplimiento"].agentGenerated).toBe(false);
+    expect(ENTREGA_DEF_BY_KEY["pendientes"].agentGenerated).toBe(false);
+    // Y el template que se le manda al modelo NO puede incluirlas.
+    const alModelo = ENTREGA_SECTION_DEFS.filter((d) => d.agentGenerated !== false).map((d) => d.key);
+    expect(alModelo).not.toContain("cumplimiento");
+    expect(alModelo).not.toContain("pendientes");
+  });
+
+  it("la portada y el cierre no se ocultan ni se mueven", () => {
+    /* Elías pidió que las secciones se puedan ocultar y mover — las SIETE del medio lo son.
+       Estas dos no: publicar una entrega sin portada no es libertad, es un agujero. */
+    for (const k of ["portada", "cierre"]) {
+      expect(ENTREGA_DEF_BY_KEY[k].pinned, `${k} debería estar fijada`).toBe(true);
+      expect(ENTREGA_DEF_BY_KEY[k].noHide, `${k} no debería poder ocultarse`).toBe(true);
+    }
+    const ocultables = ENTREGA_SECTION_DEFS.filter((d) => !d.noHide).map((d) => d.key);
+    expect(ocultables).toHaveLength(7);
+  });
+
+  it("las keys 1:1 con las secciones del canvas", () => {
+    const canvasKeys = new Set(ENTREGA_CANVAS.sections.map((s) => s.key));
+    for (const d of ENTREGA_SECTION_DEFS) {
+      expect(canvasKeys.has(d.key), `la def "${d.key}" no existe como sección del canvas`).toBe(true);
+    }
+    expect(ENTREGA_CANVAS.sections.length).toBe(ENTREGA_SECTION_DEFS.length);
   });
 });
 
