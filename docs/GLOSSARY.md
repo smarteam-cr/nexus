@@ -377,6 +377,14 @@
   regenerar** con su HTML y su posición. Tope de 10 por propuesta y 200k caracteres por sección.
   En el PDF no se imprime el contenido interactivo: sale el **texto de reemplazo** que escribe
   Ventas. Ver DECISIONS §Secciones personalizadas.
+- **instrucciones para tu IA** (`lib/landing/consejos-embed.ts`, botón del editor de una
+  **sección personalizada**): el brief técnico que Nexus le pasa al agente de código con el que
+  Ventas está armando el HTML APARTE. Dice en qué caja va a correr —iframe sin red, con alto
+  fijo y origen opaco—, qué falla en silencio (fetch, localStorage, YouTube, formularios,
+  enlaces de salida), la geometría con números, la paleta de marca y un esqueleto de arranque
+  listo para copiar. La CSP y los topes se interpolan de las constantes reales, así que el texto
+  no puede quedar viejo; el resto lo ata un guard contra el componente y el CSS. Ver DECISIONS
+  §"Copiar instrucciones para tu IA".
 - **texto de reemplazo** (`notaPdf` de una sección personalizada): lo que se imprime en el PDF en
   lugar del embebido. Un iframe muere en el PDF por cuatro vías distintas (la señal de "listo" no
   ve adentro, la medición de alto lo recorta, la animación se congela, Chrome imprime frames

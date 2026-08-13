@@ -130,6 +130,74 @@ function Embed({ html, alto, titulo }: { html: string; alto: number; titulo: str
   );
 }
 
+/**
+ * "Copiar instrucciones para tu IA" — el brief que Nexus le pasa al agente de código con el
+ * que Ventas está armando el HTML aparte. Sin esto, el agente no tiene forma de saber que va
+ * a correr en un iframe sin red, con alto fijo y origen opaco: escribe un `fetch`, un
+ * `localStorage` o un embed de YouTube, y el vendedor vuelve diciendo "no funciona" sin un
+ * error que mostrar (casi todo lo que este entorno bloquea falla EN SILENCIO).
+ *
+ * ── DOS DECISIONES QUE NO SON DE ESTILO ──────────────────────────────────────
+ * 1. El texto se carga con `import()` DINÁMICO adentro del handler. `HtmlEmbedSection` la
+ *    importa estáticamente el registry del motor, así que una constante de ~10 KB de módulo
+ *    viajaría en el bundle que descarga el PROSPECTO al abrir la propuesta publicada — donde
+ *    este botón ni existe.
+ * 2. El estado "falló" NO se auto-limpia. Es el único camino para copiar a mano (revela el
+ *    texto en un textarea), así que un timeout que lo esconda a los 2 segundos borra la
+ *    salida justo cuando hace falta. Solo el "copiado" se apaga solo.
+ */
+function CopiarConsejos() {
+  const [estado, setEstado] = useState<"idle" | "copiado" | "fallo">("idle");
+  const [texto, setTexto] = useState("");
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  async function copiar() {
+    const { CONSEJOS_EMBED } = await import("@/lib/landing/consejos-embed");
+    try {
+      await navigator.clipboard.writeText(CONSEJOS_EMBED);
+      setEstado("copiado");
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => setEstado("idle"), 1800);
+    } catch {
+      /* El portapapeles falla de verdad: sin permiso, sin contexto seguro o con la pestaña
+         en segundo plano. Un "no se pudo" mudo haría que el vendedor pegue en su IA lo que
+         tuviera copiado de antes, así que acá se muestra el texto para copiarlo a mano. */
+      setTexto(CONSEJOS_EMBED);
+      setEstado("fallo");
+    }
+  }
+
+  return (
+    <div className="stl-embed-cta">
+      <div className="stl-embed-cta-fila">
+        <button type="button" className="stl-embed-cta-btn" onClick={copiar}>
+          {estado === "copiado" ? "Copiado" : "Copiar instrucciones para tu IA"}
+        </button>
+        <span className="stl-embed-help">
+          Pégaselas a tu Claude Code antes de pedirle el HTML: le dicen en qué caja va a correr
+          (sin red, alto fijo, sin acceso a la página) para que no falle en silencio. Reemplaza
+          lo que tengas copiado.
+        </span>
+      </div>
+      {estado === "fallo" && (
+        <>
+          <span className="stl-embed-cta-fallo">
+            No se pudo copiar. Selecciona el texto de abajo y cópialo a mano.
+          </span>
+          <textarea
+            className="stl-embed-input stl-embed-input--mono"
+            aria-label="Instrucciones para el agente de código"
+            readOnly
+            rows={10}
+            value={texto}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
 export const HtmlEmbedSection: FC<SectionProps<HtmlEmbedData>> = ({
   data,
   ctx,
@@ -171,6 +239,9 @@ export const HtmlEmbedSection: FC<SectionProps<HtmlEmbedData>> = ({
 
   return (
     <div className="stl-embed-edit">
+      {/* Va PRIMERO y no al pie: el orden de lectura del formulario arranca en "pegá acá el
+          HTML", y para cuando alguien llega al final ya fue a pedirle la pieza a su IA. */}
+      <CopiarConsejos />
       <label className="stl-embed-field">
         <span className="stl-embed-label">
           HTML de la sección

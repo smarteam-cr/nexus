@@ -1961,3 +1961,48 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   pasa a TUTEO (nació en voseo el día anterior) y la ayuda del campo HTML deja de mentir por
   omisión: la CSP inyectada bloquea `fetch` y los iframes anidados, así que un video de YouTube
   embebido no funciona y eso hay que decirlo ANTES de que alguien lo pegue.
+
+## "Copiar instrucciones para tu IA": Nexus le habla al Claude Code de Ventas (2026-08-13)
+
+> Elías: *"Agrega un CTA que diga copiar consejos. Que contenga consejos que Nexus le pase a
+> Claude Code del usuario que está haciendo el módulo personalizado aparte y que va a
+> incrustar. Esto es para disminuir los errores o la fricción que tengan esos HTMLs con Nexus."*
+
+- **El problema es que TODO falla en silencio.** Medido contra la CSP y el sandbox reales: un
+  `fetch` no tira error visible, un `localStorage` mata el script en esa línea, un embed de
+  YouTube deja un rectángulo vacío, un `<a href>` sin target reemplaza la sección entera por el
+  sitio externo, y `confirm()` devuelve siempre `false` sin lanzar. El agente que escribe el
+  HTML no tiene forma de saberlo, y el vendedor vuelve diciendo "no funciona" sin nada que
+  mostrar. El brief existe para que esas reglas lleguen ANTES de escribir el código.
+- **Lo que no puede desincronizarse NO se escribe a mano.** La CSP entera y los topes (alto
+  520/200/2000, 200.000 caracteres) se INTERPOLAN de las constantes reales dentro del template.
+  El día que alguien toque `EMBED_CSP`, el brief cambia solo. Lo que sí está escrito —el
+  sandbox, la geometría del marco, el ancho útil— lo ata `consejos-embed.test.ts` contra el JSX
+  del componente y contra el CSS del motor: si se ensancha la página, el número del brief se
+  pone rojo.
+- **Las prohibiciones grandes están atadas a la directiva que las produce.** `connect-src
+  'none'` ↔ "sin red", `form-action 'none'` ↔ "sin formularios", `frame-src 'none'` ↔ "YouTube
+  no carga". Aflojar la política sin reescribir el brief rompe el test — y al revés: si se
+  recortara `script-src https:`, el esqueleto de arranque que el brief entrega quedaría muerto,
+  así que también se verifica que lo permitido siga permitido.
+- **El texto se carga con `import()` dinámico.** `HtmlEmbedSection` la importa estáticamente el
+  registry del motor: una constante de 12 KB de módulo viajaría en el bundle que descarga el
+  PROSPECTO al abrir la propuesta publicada, donde este botón ni existe.
+- **El estado "no se pudo copiar" NO se auto-limpia.** Es el único camino para copiar a mano
+  (revela el texto en un textarea), así que el timeout que esconde el "Copiado" a los 1,8 s
+  habría borrado la salida justo cuando hace falta.
+- **El brief lleva un ESQUELETO de arranque de ~20 líneas**, y es lo que más segundas
+  iteraciones evita: doctype, viewport, el `<link>` de Plus Jakarta Sans, el reset con
+  `height: 100%` (sin eso, el centrado que el propio brief pide no funciona),
+  `prefers-reduced-motion` y un objeto `CONFIG` al principio del script — ahí van los números
+  que el vendedor va a querer cambiar por prospecto, en vez de repartidos por el JS.
+- **El alto es UNO SOLO para todos los anchos** y el brief lo dice con esa letra: el iframe no
+  cambia de alto en celular, así que el número se calcula con el layout de 360 px, que casi
+  siempre es el más alto. Era el defecto que más iba a doler y no estaba en la primera versión.
+- **Tres verificaciones adversariales refutaron el primer borrador** y de ahí salieron las
+  correcciones que importan: `window.parent` NO lanza (lanzan sus propiedades cross-origin); el
+  embebido SÍ tiene scroll interno propio (lo que no llega es el scroll de la página); el ancho
+  mínimo real es 270 px y el máximo 1232; el tope de 200.000 no lo aplica nadie (solo pinta el
+  contador en rojo); un alto vacío o inválido cae al default 520 y no al mínimo; `<header>` es
+  seguro pese a contener "<head"; y Nexus ya le hace un fade-in de 800 ms a la sección completa
+  en la propuesta publicada, así que una animación de entrada propia tiene que esperarlo.
