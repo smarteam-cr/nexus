@@ -1743,15 +1743,20 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   ⚠ **`--hub-soft` no se puede oscurecer**: el naranja encima da 3.14:1 y el mínimo de WCAG
   1.4.11 para un ícono es 3. Ese par está en el guard de contraste justamente porque el
   margen es chico y nadie lo notaría a ojo.
-- **Lo "seleccionada" lo carga el BORDE y la tinta, no el relleno** — porque el relleno tiene
-  ese techo. La primera versión neutra casi no se distinguía (*"que se note un poco más los
-  hubs seleccionados"*): eran gris muy claro + borde `#C9CDD4` (1.59:1 contra el paper, o sea
-  invisible en una tira de seis). Ahora son TRES cosas juntas, ninguna alcanza sola: borde
-  `#8B93A1` (3.09:1 — cumple el 3:1 de 1.4.11 para el borde de un control, y está en el
-  guard), un **ring** `inset 0 0 0 1px` que lo hace leer con doble peso **sin mover el
-  layout** (un `border: 2px` correría la píldora un pixel y la tira entera bailaría al hacer
-  clic), y tinta plena en negrita — mientras la apagada baja a `--text-muted`, que aporta la
-  otra mitad de la diferencia.
+- **La diferencia entre encendida y apagada la hace la APAGADA: no tiene caja.** Fondo y
+  borde transparentes, texto `--text-muted` e ícono al 55 %; la encendida es la única con
+  relleno gris, borde `#8B93A1` de 1px y tinta plena en negrita. Se llegó acá en dos pasadas
+  —primero *"que se note un poco más los hubs seleccionados"* (borde `#C9CDD4` = 1.59:1
+  contra el paper, invisible en una tira de seis), después *"que los que no estén
+  seleccionados se noten menos"*— y la segunda hizo innecesario el refuerzo de la primera:
+  con la apagada sin caja, **1px alcanza** y el ring `inset` se retiró. Notas:
+  el relleno nunca pudo hacer este trabajo (techo del ícono); el borde de la encendida da
+  3.09:1, que es el 3:1 que WCAG 1.4.11 pide para el borde de un control, y está en el guard;
+  el borde de la apagada se declara `transparent` y no ausente para que encenderla no corra
+  el layout un pixel; y el texto NO se atenúa con `opacity` —sigue en un token con 5.27:1—
+  porque la píldora es un control con etiqueta, no algo deshabilitado. El ícono sí puede
+  bajar del 3:1: al lado tiene el nombre del Hub escrito, así que no es él quien lleva el
+  significado.
 - **El ícono de producto de cada Hub va como MÁSCARA CSS, no como `<img>`** (2026-08-12).
   Los SVG oficiales de HubSpot viven sin tocar en `public/hubs/`, con el **slug como nombre
   de archivo** (`sales_hub.svg`) para que la URL se derive y no haga falta un mapa; un

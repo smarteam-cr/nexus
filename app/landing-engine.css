@@ -1536,8 +1536,12 @@
   gap: 9px;
   padding: 9px 16px;
   border-radius: 999px;
-  border: 1px solid var(--hub-line);
-  background: var(--bg);
+  /* APAGADA = sin caja: fondo y borde transparentes. Es lo que la vuelve recesiva sin
+     tocar el texto, que sigue en `--text-muted` (5.27:1 sobre paper) porque la píldora
+     es un control con etiqueta, no algo deshabilitado. El borde se declara transparente
+     y no ausente para que encenderla no corra el layout un pixel. */
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-muted);
   font: inherit;
   font-size: 14px;
@@ -1546,18 +1550,22 @@
   cursor: pointer;
   transition: background 0.18s var(--ease), color 0.18s var(--ease), border-color 0.18s var(--ease);
 }
-.stl-hub-pill:hover { border-color: var(--hub-line-on); color: var(--text-2); }
-/* Encendida: gris + borde marcado + tinta PLENA y en negrita. Las tres cosas juntas
-   porque ninguna alcanza sola — el relleno tiene el techo del contraste del ícono, y un
-   solo borde más oscuro se pierde en una tira de seis. La apagada, en cambio, baja a
-   `--text-muted`: la mitad de la diferencia la hace ella. Sin matiz en ningún caso, que
-   es lo que deja al naranja del ícono como único acento de la sección. */
+/* El ícono apagado también se atenúa. Puede bajar del 3:1 de WCAG 1.4.11 porque no es
+   el que lleva el significado: al lado tiene el nombre del Hub escrito. */
+.stl-hub-pill .stl-hub-pill-icon { opacity: 0.55; transition: opacity 0.18s var(--ease); }
+.stl-hub-pill:hover {
+  border-color: var(--hub-line);
+  color: var(--text-2);
+}
+.stl-hub-pill:hover .stl-hub-pill-icon,
+.stl-hub-pill.is-on .stl-hub-pill-icon { opacity: 1; }
+/* ENCENDIDA: gris + borde de 1px + tinta plena en negrita. El borde alcanza con 1px
+   desde que la apagada no tiene ninguno — la diferencia ya no la tiene que hacer el
+   grosor. Sin matiz en ningún caso, que es lo que deja al naranja del ícono como único
+   acento de la sección. */
 .stl-hub-pill.is-on {
   background: var(--hub-soft);
   border-color: var(--hub-line-on);
-  /* El ring hace que el borde se lea con el doble de peso SIN mover el layout (un
-     border de 2px correría la píldora un pixel y la tira entera bailaría al hacer clic). */
-  box-shadow: inset 0 0 0 1px var(--hub-line-on);
   color: var(--text);
   font-weight: 700;
 }
