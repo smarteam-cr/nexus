@@ -12,8 +12,10 @@ import { type FC } from "react";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
 import { CtaButton, CtaEditor } from "./sections";
-import { landingLang, t } from "./i18n";
+import { landingLang, t, type LandingLang, type LandingStringKey } from "./i18n";
 import type {
+  InvestLabels,
+  InvestmentLine,
   SectionProps,
   WebDiagnosisData,
   SiteArchitectureData,
@@ -23,6 +25,13 @@ import type {
   WebInvestLine,
   WhyUsData,
 } from "./types";
+import { formatRango, parseMonto } from "@/lib/landing/money";
+import {
+  adoptarShapeNuevo,
+  esInversionLegacy,
+  gruposDeInversion,
+  type GrupoInversion,
+} from "@/lib/landing/inversion";
 
 /* ── 2) Dos columnas: una lista a la izquierda + un panel oscuro de consecuencias ──────
    Nació para la propuesta de sitio web —izquierda "Retos actuales", derecha "Por qué
@@ -276,47 +285,152 @@ export const WebMethodologySection: FC<SectionProps<WebMethodologyData>> = ({ da
   );
 };
 
-// ── 7) Inversión (web) — tabla fase 1 + TOTAL autocalculado + extras + mensual ──
+// ── 7) INVERSIÓN — una sola sección para los dos templates ───────────────────
+//
+// Antes convivían dos secciones distintas bajo la MISMA key `inversion`: la de HubSpot (dos
+// tarjetas fijas, sin total) y ésta (tabla + total autocalculado). Se unifican acá y las
+// dos entradas del registry —`inversion` y `web_investment`— apuntan al mismo componente,
+// así el snapshot de keys de `registry.test.ts` no cambia y los `sectionType` congelados de
+// lo ya publicado siguen resolviendo.
+//
+// LO QUE SOSTIENE LO YA PUBLICADO (`configForSnapshot` resuelve por KEY contra la config
+// VIVA, así que toda propuesta publicada estrena este renderer):
+//   · `esInversionLegacy` → las dos tarjetas históricas de HubSpot, intactas.
+//   · con UN solo grupo con montos se pinta UN total, con la píldora de siempre — que es
+//     exactamente el caso de las propuestas de sitio web que el cliente ya vio.
+// El gran total aparece recién con DOS grupos, o sea solo en lo que se llene de ahora en
+// adelante. Las reglas viven en `lib/landing/inversion.ts` (puras y testeadas); acá solo
+// está el markup.
 
 /** Monedas frecuentes del negocio (el select ofrece además "Otra…" con código libre). */
 const CURRENCIES = ["USD", "CRC", "MXN", "COP", "PEN", "CLP", "GTQ", "DOP", "EUR"];
 
-/** Extrae los números de un monto en texto ("$5,600–6,650" → {min:5600, max:6650}).
- *  Sin números parseables → null (la línea no entra al total). */
-function parseAmount(monto: string): { min: number; max: number } | null {
-  const nums = (monto.match(/\d[\d,.]*/g) ?? [])
-    .map((s) => parseFloat(s.replace(/,/g, "")))
-    .filter((n) => Number.isFinite(n) && n > 0);
-  if (!nums.length) return null;
-  return { min: Math.min(...nums), max: Math.max(...nums) };
+/** Rama LEGACY de HubSpot: el cuerpo histórico, mudado tal cual desde `sections.tsx`.
+ *  Editable, pero el código nunca vuelve a escribir estas keys. */
+function InvestCard({
+  label, line, editable, onChange, montoPh, detallePh,
+}: { label: string; line: InvestmentLine; editable?: boolean; onChange: (l: InvestmentLine) => void; montoPh: string; detallePh: string }) {
+  return (
+    <div className="stl-field-card">
+      <div className="stl-field-label">{label}</div>
+      <Editable as="div" className="stl-invest-amount" editable={editable} value={line?.monto ?? ""} placeholder={montoPh} onCommit={(v) => onChange({ ...line, monto: v })} />
+      <Editable as="div" className="stl-field-value" editable={editable} value={line?.detalle ?? ""} placeholder={detallePh} onCommit={(v) => onChange({ ...line, detalle: v })} />
+    </div>
+  );
 }
 
-/** Suma los montos parseables de las líneas → rango total, o null si ninguna parsea. */
-function totalOf(lines: WebInvestLine[]): { min: number; max: number } | null {
-  let min = 0;
-  let max = 0;
-  let any = false;
-  for (const l of lines) {
-    const a = parseAmount(l.monto ?? "");
-    if (!a) continue;
-    any = true;
-    min += a.min;
-    max += a.max;
-  }
-  return any ? { min, max } : null;
-}
-
-function fmtMoney(n: number): string {
-  return `$${n.toLocaleString("en-US")}`;
-}
-
-export const WebInvestmentSection: FC<SectionProps<WebInvestmentData>> = ({ data, ctx, editable, onChange }) => {
+const InversionLegacy: FC<SectionProps<WebInvestmentData>> = ({ data, ctx, editable, onChange }) => {
   const lang = landingLang(ctx.lang);
+  const lic = data.licenciasHubspot ?? { monto: "", detalle: "" };
+  const impl = data.implementacion ?? { monto: "", detalle: "" };
   const set = (next: Partial<WebInvestmentData>) => onChange?.({ ...data, ...next });
-  const lineas = data.lineas ?? [];
+  return (
+    <>
+      <div className="stl-grid stl-grid-2">
+        <InvestCard label={t(lang, "licenciasHubspot")} line={lic} editable={editable} montoPh="[Monto o rango]" detallePh="Hubs × usuarios × descuento si aplica" onChange={(v) => set({ licenciasHubspot: v })} />
+        <InvestCard label={t(lang, "implementacionSmarteam")} line={impl} editable={editable} montoPh="[Monto o rango]" detallePh="Set up + onboarding + integraciones" onChange={(v) => set({ implementacion: v })} />
+      </div>
+      <Editable as="p" className="stl-invest-note" editable={editable} value={data.nota ?? ""}
+        placeholder="Si no hay precio en el transcript → 'A definir en propuesta formal'…" onCommit={(v) => set({ nota: v })} />
+      {/* La adopción del shape nuevo la decide UNA PERSONA sobre el canvas vivo. Nunca un
+          script ni el render: convertir montos de texto libre ("A definir en propuesta
+          formal") hace correr la máquina de totales sobre una propuesta ya publicada, y al
+          cliente le aparece un número que jamás vio. */}
+      {editable && (
+        <button type="button" className="stl-inv-migrar" onClick={() => onChange?.(adoptarShapeNuevo(data))}>
+          Pasar a la tabla nueva (servicios + licencias con total)
+        </button>
+      )}
+    </>
+  );
+};
+
+/** Una tabla de líneas con su subtotal. La usan los DOS grupos — servicios y licencias. */
+function GrupoTabla({
+  grupo, lang, moneda, editable, chip, rotuloTotal, destacado, onSet,
+}: {
+  grupo: GrupoInversion;
+  lang: LandingLang;
+  moneda: string;
+  editable?: boolean;
+  chip: string;
+  rotuloTotal: string;
+  /** true = este subtotal ES el total de la sección (un solo grupo) → píldora de siempre. */
+  destacado: boolean;
+  onSet: (next: Partial<WebInvestmentData>) => void;
+}) {
+  const lineas = grupo.lineas as WebInvestLine[];
+  const set = (next: WebInvestLine[]) => onSet({ [grupo.clave]: next } as Partial<WebInvestmentData>);
+  const nueva = () => set(appendItem(lineas, { concepto: "", monto: "", detalle: "" }));
+  // Un grupo vacío no se pinta en lectura: el de licencias no existe en las propuestas
+  // viejas y no puede aparecer como un bloque en blanco.
+  if (!editable && !lineas.length) return null;
+
+  return (
+    <>
+      <span className="stl-inv-chip">{chip}</span>
+      <div className="stl-inv-table">
+        <SortableItems items={lineas} disabled={!editable} onReorder={(next) => set(next)}
+          container={(nodes) => <>{nodes}</>}>
+          {(l, i, handle) => {
+            const parsed = parseMonto(l.monto, moneda);
+            return (
+              <div className="stl-item stl-inv-row">
+                {handle}
+                {editable && <RemoveBtn onClick={() => set(removeAt(lineas, i))} />}
+                <div className="stl-inv-row-main">
+                  <Editable as="span" className="stl-inv-concept" editable={editable} value={l.concepto}
+                    placeholder="Concepto…" onCommit={(v) => set(replaceAt(lineas, i, { ...l, concepto: v }))} />{" "}
+                  <Editable as="span" className="stl-inv-detail" editable={editable} value={l.detalle}
+                    placeholder="qué incluye…" onCommit={(v) => set(replaceAt(lineas, i, { ...l, detalle: v }))} />
+                </div>
+                {/* El aviso de "no suma" es SOLO del editor: el cliente ve el monto tal cual
+                    lo escribió Ventas, no nuestra opinión sobre él. */}
+                {editable && parsed === "sucio" && (
+                  <span className="stl-inv-warn" title="Este monto no entra en el total: dejá solo el número o el rango.">⚠</span>
+                )}
+                <Editable as="span" className="stl-inv-amount" editable={editable} value={l.monto}
+                  placeholder="$0–0" onCommit={(v) => set(replaceAt(lineas, i, { ...l, monto: v }))} />
+              </div>
+            );
+          }}
+        </SortableItems>
+        {grupo.total && (
+          <div className={destacado ? "stl-inv-total" : "stl-inv-subtotal"}>
+            <span className="stl-inv-total-label">{rotuloTotal}</span>
+            <span className={destacado ? "stl-inv-total-pill" : "stl-inv-subtotal-amount"}>
+              {formatRango(grupo.total, moneda)}
+            </span>
+            {grupo.pendientes > 0 && (
+              <span className="stl-inv-pending">
+                {`· +${grupo.pendientes} ${t(lang, "montoPorDefinir")}`}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+      {editable && <AddBtn label="Agregar línea" onClick={nueva} />}
+    </>
+  );
+}
+
+export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) => {
+  const { data, ctx, editable, onChange, sectionInvest } = props;
+  const lang = landingLang(ctx.lang);
+
+  if (esInversionLegacy(data)) return <InversionLegacy {...props} />;
+
+  const set = (next: Partial<WebInvestmentData>) => onChange?.({ ...data, ...next });
+  const moneda = data.moneda ?? "";
+  const g = gruposDeInversion(data);
   const extras = data.extras ?? [];
   const recurrentes = data.recurrentes ?? [];
-  const total = totalOf(lineas);
+  // Con un solo grupo, ese subtotal ES el total y se pinta con la píldora de siempre.
+  const unSoloGrupo = g.gruposConMonto <= 1;
+  const rot = (k: keyof InvestLabels, fallback: LandingStringKey) => t(lang, sectionInvest?.[k] ?? fallback);
+  // El bloque de licencias solo aparece si tiene contenido o si estamos editando: en lo ya
+  // publicado `licencias` cae a [] y la sección se ve exactamente como se publicó.
+  const hayLicencias = (data.licencias ?? []).length > 0;
 
   return (
     <>
@@ -351,40 +465,39 @@ export const WebInvestmentSection: FC<SectionProps<WebInvestmentData>> = ({ data
         </div>
       )}
 
-      {/* Fase 1: chip + tabla + total autocalculado */}
-      <span className="stl-inv-chip">{t(lang, "inversionFase")}</span>
-      <div className="stl-inv-table">
-        <SortableItems items={lineas} disabled={!editable} onReorder={(next) => set({ lineas: next })}
-          container={(nodes) => <>{nodes}</>}>
-          {(l, i, handle) => (
-            <div className="stl-item stl-inv-row">
-              {handle}
-              {editable && <RemoveBtn onClick={() => set({ lineas: removeAt(lineas, i) })} />}
-              <div className="stl-inv-row-main">
-                <Editable as="span" className="stl-inv-concept" editable={editable} value={l.concepto}
-                  placeholder="Concepto…" onCommit={(v) => set({ lineas: replaceAt(lineas, i, { ...l, concepto: v }) })} />{" "}
-                <Editable as="span" className="stl-inv-detail" editable={editable} value={l.detalle}
-                  placeholder="qué incluye…" onCommit={(v) => set({ lineas: replaceAt(lineas, i, { ...l, detalle: v }) })} />
-              </div>
-              <Editable as="span" className="stl-inv-amount" editable={editable} value={l.monto}
-                placeholder="$0–0" onCommit={(v) => set({ lineas: replaceAt(lineas, i, { ...l, monto: v }) })} />
-            </div>
-          )}
-        </SortableItems>
-        {total && (
-          <div className="stl-inv-total">
-            <span className="stl-inv-total-label">{t(lang, "rangoFase")}</span>
-            <span className="stl-inv-total-pill">
-              {total.min === total.max
-                ? fmtMoney(total.min)
-                : `${fmtMoney(total.min)}–${total.max.toLocaleString("en-US")}`}
-            </span>
-          </div>
-        )}
-      </div>
-      {editable && <AddBtn label="Agregar línea" onClick={() => set({ lineas: appendItem(lineas, { concepto: "", monto: "", detalle: "" }) })} />}
+      <GrupoTabla
+        grupo={g.servicios} lang={lang} moneda={moneda} editable={editable}
+        chip={rot("servicios", "inversionServicios")}
+        rotuloTotal={rot("totalServicios", "totalServicios")}
+        destacado={unSoloGrupo} onSet={set}
+      />
 
-      {/* Extras opcionales (cards claras) + recurrente mensual (card oscura) */}
+      {(hayLicencias || editable) && (
+        <div className="stl-inv-grupo">
+          <GrupoTabla
+            grupo={g.licencias} lang={lang} moneda={moneda} editable={editable}
+            chip={rot("licencias", "inversionLicencias")}
+            rotuloTotal={rot("totalLicencias", "totalLicencias")}
+            destacado={false} onSet={set}
+          />
+        </div>
+      )}
+
+      {/* Gran total: SOLO con los dos grupos sumables (ver el header). ⚠ El rótulo tiene que
+          declarar qué cubre — mezcla un CapEx de implementación con licencias que suelen ser
+          anuales, así que el número solo es honesto con su etiqueta y con la `nota`. */}
+      {g.granTotal && (
+        <div className="stl-inv-total stl-inv-total--gran">
+          <span className="stl-inv-total-label">{rot("granTotal", "inversionTotal")}</span>
+          <span className="stl-inv-total-pill">{formatRango(g.granTotal, moneda)}</span>
+          {g.pendientesTotales > 0 && (
+            <span className="stl-inv-pending">{`· +${g.pendientesTotales} ${t(lang, "montoPorDefinir")}`}</span>
+          )}
+        </div>
+      )}
+
+      {/* Extras opcionales (cards claras) + recurrente mensual (card oscura). NINGUNO suma:
+          un opcional no está comprado y un mensual no es una inversión única. */}
       {(extras.length > 0 || recurrentes.length > 0 || editable) && (
         <div className="stl-inv-below">
           <SortableItems items={extras} disabled={!editable} onReorder={(next) => set({ extras: next })}

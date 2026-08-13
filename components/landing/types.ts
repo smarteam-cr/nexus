@@ -11,6 +11,7 @@
  */
 import type { FC } from "react";
 import type { KickoffTimelineData, KickoffProceso } from "@/lib/external/kickoff-view-types";
+import type { LandingStringKey } from "./i18n";
 
 // ── Datos estructurados por sección (lo que llena el agente) ─────────────────
 
@@ -201,14 +202,27 @@ export interface WebMethodologyData { fases: Phase[]; cotizaAparte: string }
 // 7) Inversión (web) — tabla fase 1 con TOTAL autocalculado + extras opcionales +
 //    recurrentes separados (card oscura) + nota de exclusiones + moneda configurable.
 export interface WebInvestLine { concepto: string; monto: string; detalle: string }
+/**
+ * La sección de INVERSIÓN, una sola para los dos templates (antes convivían dos shapes
+ * distintos bajo la misma key). Las reglas de forma —qué es legacy, cuántos totales se
+ * pintan— viven en `lib/landing/inversion.ts`; la aritmética en `lib/landing/money.ts`.
+ */
 export interface WebInvestmentData {
   moneda: string; // "USD", "CRC"… (editable; el total y el intro la muestran)
+  /** Servicios de Smarteam → subtotal 1. Conserva el nombre histórico a propósito. */
   lineas: WebInvestLine[];
+  /** Licencias de TERCEROS (HubSpot, Insider…) → subtotal 2. Única key nueva del shape
+   *  unificado: cae a `[]` en lo ya publicado, que por eso no necesita rama legacy. */
+  licencias?: WebInvestLine[];
   extras: WebInvestLine[];
   recurrentes: WebInvestLine[];
   nota: string; // exclusiones ("impuestos no contemplados") — badge arriba
   /** Ancho de la card de recurrente mensual — "ancho" ocupa 2 columnas del grid. */
   anchoRecurrente?: "normal" | "ancho";
+  // ── Shape v1 de HubSpot: se LEE para la rama legacy y nunca se escribe (patrón
+  //    `HubsClienteData.hubs`). Ver `esInversionLegacy`.
+  licenciasHubspot?: InvestmentLine;
+  implementacion?: InvestmentLine;
 }
 
 // 8) Por qué Smarteam — cards + siguiente paso. `buttonUrl`/`buttonTarget`: ver CtaData.
@@ -364,6 +378,27 @@ export interface SectionProps<T> {
    * los correctos. El resto de las secciones lo ignora.
    */
   sectionChips?: { retos?: string; panel?: string };
+  /** Rótulos de los bloques de la sección de INVERSIÓN, por documento. Ver `SectionDef.invest`. */
+  sectionInvest?: InvestLabels;
+}
+
+/**
+ * Rótulos de la sección de inversión declarados POR DOCUMENTO — hermano de `chips`, con una
+ * corrección al patrón: los valores son CLAVES DE i18n, no literales.
+ *
+ * `chips` usa literales y por eso es monolingüe. Este documento se publica al cliente y se
+ * traduce por `__lang`, así que un literal en español saldría tal cual en una propuesta en
+ * inglés. Tipar contra `LandingStringKey` obliga a que cada rótulo nuevo exista en `i18n.ts`
+ * con `es` **y** `en` — el compilador lo hace cumplir, no la disciplina.
+ */
+export interface InvestLabels {
+  /** Chip del bloque de servicios. Default: "Servicios Smarteam". */
+  servicios?: LandingStringKey;
+  /** Chip del bloque de licencias de terceros. Default: "Licencias y plataforma". */
+  licencias?: LandingStringKey;
+  totalServicios?: LandingStringKey;
+  totalLicencias?: LandingStringKey;
+  granTotal?: LandingStringKey;
 }
 
 /** Definición de una sección dentro de un LandingConfig. No genérico (cada sección
@@ -387,6 +422,10 @@ export interface SectionDef {
                                // en el editor; el agente la lee al generar (override por sección la gana)
   /** Rótulos de los chips de columna de `web_diagnosis`, por documento. Ver `SectionProps.sectionChips`. */
   chips?: { retos?: string; panel?: string };
+  /** Rótulos de los bloques de la sección de INVERSIÓN, por documento. Mismo principio que
+   *  `chips` —el rótulo entra por la DEFINICIÓN, nunca por un campo de `data`— con los
+   *  valores tipados contra i18n para que un template nuevo no pueda quedar monolingüe. */
+  invest?: InvestLabels;
   empty: unknown;              // data inicial (template vacío)
   /** La sección se alimenta de `ctx` (no de `data`): NO se omite en read por `isBlank`
    *  (el Component decide si devuelve null). Ej. kickoff: cronograma/procesos/cierre. */

@@ -12,7 +12,7 @@
  * el registry es la fuente de composición; BC_SECTION_DEFS/BC_DEF_BY_KEY se mantienen
  * exportados por compatibilidad.
  */
-import type { LandingContext } from "../types";
+import type { InvestLabels, LandingContext } from "../types";
 
 export interface BCSectionDef {
   key: string;
@@ -38,6 +38,11 @@ export interface BCSectionDef {
    *  componente lo comparten cuatro documentos y en tres de ellos las columnas ya no son
    *  "retos" ni un "por qué" de una plataforma. Ver `SectionProps.sectionChips`. */
   chips?: { retos?: string; panel?: string };
+  /** Rótulos de los bloques de la sección de INVERSIÓN, por documento. Hermano de `chips`
+   *  —el rótulo entra por la DEFINICIÓN, nunca por un campo de `data`— con los valores
+   *  tipados contra i18n para que un template nuevo no pueda quedar monolingüe.
+   *  Ver `SectionProps.sectionInvest`. */
+  invest?: InvestLabels;
   /** La sección nace OCULTA: createBusinessCaseCanvas siembra `hidden:true` en el Json
    *  del canvas (publish filtra por ese Json, no por la config). El CSE la muestra cuando aplica. */
   defaultHidden?: boolean;
@@ -58,7 +63,6 @@ export interface BCSectionDef {
 
 const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
-const investLine = { type: "object", properties: { monto: str, detalle: str } } as const;
 function arrayOf(props: Record<string, unknown>, required: string[]) {
   return { type: "array", items: { type: "object", properties: props, required } } as const;
 }
@@ -170,14 +174,23 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
   {
     key: "inversion",
     canvasLabel: "Inversión",
-    label: "Qué incluye",
+    label: "Inversión",
     eyebrow: "Inversión",
     theme: "soft",
-    empty: { licenciasHubspot: { monto: "", detalle: "" }, implementacion: { monto: "", detalle: "" }, nota: "" },
-    agentHint: "Separar licencias HubSpot de servicios Smarteam; sin inventar precios.",
+    // `agentGenerated:false`: los montos los escribe VENTAS a mano. El agente los saltea,
+    // la píldora ✨IA no se ofrece, regenerar responde 400 y el assist la excluye. Y el
+    // carry-forward de `generate/route.ts` los arrastra a cada versión nueva — sin eso,
+    // marcar la sección como curada haría que cada "Generar" borre lo escrito.
+    agentGenerated: false,
+    tip: "La escribe Ventas: el agente no toca los montos. El total se calcula solo.",
+    empty: { moneda: "", lineas: [], licencias: [], extras: [], recurrentes: [], nota: "", anchoRecurrente: "normal" },
+    // Sin `invest`: usa los rótulos genéricos ("Servicios Smarteam" / "Licencias y
+    // plataforma"). Esta plantilla la comparten HubSpot, Integración, Desarrollo a la medida
+    // e Insider, y no todas venden licencias de HubSpot.
+    agentHint: "(No la genera el agente: los montos los escribe Ventas.)",
     brief:
-      "Inversión: separá SIEMPRE `licenciasHubspot` (Hubs × usuarios × descuento si aplica) de `implementacion` Smarteam (set up + onboarding + integraciones detectadas). Cada una: `monto` (o rango) + `detalle`. Fuente / regla: solo incluí montos si hay precio discutido en el transcript o se puede calcular del alcance; si no → poné 'A definir en propuesta formal' en `monto`, nunca números inventados.",
-    schema: { type: "object", properties: { licenciasHubspot: investLine, implementacion: investLine, nota: str }, required: ["licenciasHubspot", "implementacion"] },
+      "Inversión — la escribe VENTAS a mano, el agente NO la genera. `lineas`: los servicios de Smarteam (implementación, integraciones, onboarding), una por concepto. `licencias`: lo que se le paga a un tercero (HubSpot, Insider…), aparte. En las dos, el `monto` es SOLO el número o el rango ('$1,800', '$5,600–6,650'): el sistema los suma y muestra los subtotales y el total general, así que un monto con texto adentro ('$1,800 por página', 'A definir') NO entra en la suma y aparece marcado como pendiente. Sin precio todavía → dejá el monto vacío. `extras` (opcionales) y `recurrentes` (mensuales) se muestran pero NO suman. Impuestos y condiciones van en `nota`.",
+    schema: { type: "object", properties: {} },
   },
   {
     key: "partner",

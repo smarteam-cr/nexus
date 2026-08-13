@@ -22,8 +22,6 @@ import type {
   BeforeAfterData,
   RoiData,
   PlanData,
-  InvestmentData,
-  InvestmentLine,
   PartnerData,
   CtaData,
 } from "./types";
@@ -240,34 +238,11 @@ export const PlanSection: FC<SectionProps<PlanData>> = ({ data, editable, onChan
   );
 };
 
-// ── 7) Inversión — licencias + servicios (2 cards) ───────────────────────────
-function InvestCard({
-  label, line, editable, onChange, montoPh, detallePh,
-}: { label: string; line: InvestmentLine; editable?: boolean; onChange: (l: InvestmentLine) => void; montoPh: string; detallePh: string }) {
-  return (
-    <div className="stl-field-card">
-      <div className="stl-field-label">{label}</div>
-      <Editable as="div" className="stl-invest-amount" editable={editable} value={line?.monto ?? ""} placeholder={montoPh} onCommit={(v) => onChange({ ...line, monto: v })} />
-      <Editable as="div" className="stl-field-value" editable={editable} value={line?.detalle ?? ""} placeholder={detallePh} onCommit={(v) => onChange({ ...line, detalle: v })} />
-    </div>
-  );
-}
-export const InvestmentSection: FC<SectionProps<InvestmentData>> = ({ data, ctx, editable, onChange }) => {
-  const lang = landingLang(ctx.lang);
-  const lic = data.licenciasHubspot ?? { monto: "", detalle: "" };
-  const impl = data.implementacion ?? { monto: "", detalle: "" };
-  const set = (next: Partial<InvestmentData>) => onChange?.({ ...data, ...next });
-  return (
-    <>
-      <div className="stl-grid stl-grid-2">
-        <InvestCard label={t(lang, "licenciasHubspot")} line={lic} editable={editable} montoPh="[Monto o rango]" detallePh="Hubs × usuarios × descuento si aplica" onChange={(v) => set({ licenciasHubspot: v })} />
-        <InvestCard label={t(lang, "implementacionSmarteam")} line={impl} editable={editable} montoPh="[Monto o rango]" detallePh="Set up + onboarding + integraciones" onChange={(v) => set({ implementacion: v })} />
-      </div>
-      <Editable as="p" className="stl-invest-note" editable={editable} value={data.nota ?? ""}
-        placeholder="Si no hay precio en el transcript → 'A definir en propuesta formal'…" onCommit={(v) => set({ nota: v })} />
-    </>
-  );
-};
+/* ── 7) Inversión ────────────────────────────────────────────────────────────
+   Ya NO vive acá. Las dos secciones de inversión que convivían bajo la misma key —las 2
+   tarjetas fijas de HubSpot y la tabla con total de sitio web— se unificaron en
+   `InvestmentSection` (sections-website.tsx), que lleva adentro la rama legacy con estas
+   mismas tarjetas para que lo ya publicado se siga viendo igual. */
 
 // ── 8) Partner — por qué Smarteam (4 campos) ─────────────────────────────────
 export const PartnerSection: FC<SectionProps<PartnerData>> = ({ data, ctx, editable, onChange }) => {

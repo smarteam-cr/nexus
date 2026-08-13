@@ -229,6 +229,14 @@ export async function POST(
         .join("\n")}`,
     );
   }
+  /* Los precios NO son del agente. Desde que la sección de Inversión pasó a
+     `agentGenerated:false` (2026-08-12), el modelo ya no la escribe — y ése es justo el
+     riesgo: se queda sin el destino natural de los montos que vienen en el contexto y los
+     teje en la prosa del hero o de la solución, donde nadie los revisa antes de que la
+     propuesta salga. La prohibición explícita cierra eso. */
+  preamble.push(
+    "# Precios: NO los escribís vos\nLos montos y precios viven SOLO en las secciones de Casos de uso e Inversión, y ninguna de las dos la generás vos (las llena el vendedor a mano o el catálogo). NO pongas montos, precios, rangos de inversión ni condiciones comerciales en NINGÚN texto que generes — ni en el titular, ni en la solución, ni en el ROI, ni en el cierre.",
+  );
   const contextForAgent = preamble.length ? `${preamble.join("\n\n")}\n\n---\n\n${context}` : context;
 
   // Guard anti-doble-generación: si ya hay una corrida en curso para este BC (otra

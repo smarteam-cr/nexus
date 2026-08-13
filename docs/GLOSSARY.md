@@ -369,3 +369,27 @@
   relleno, no por el matiz. Va chico en la píldora (16px) y grande en la cabecera de la
   columna (28px), ahí en la MISMA línea que el nombre del Hub. Una columna que no es un Hub
   del catálogo no tiene ícono.
+- **sección personalizada** (`CanvasSection.key` con prefijo `custom:`): una sección que crea el
+  VENDEDOR en el canvas de una propuesta comercial, no la plantilla. Le pone un nombre y pega
+  adentro un HTML que armó aparte (una animación, unos tabs, una explicación interactiva), que se
+  muestra dentro de un iframe aislado. Se mueve, se oculta, se renombra y se borra como cualquier
+  otra —borrar existe SOLO para éstas: las 12 de la plantilla se ocultan— y **sobrevive al
+  regenerar** con su HTML y su posición. Tope de 10 por propuesta y 200k caracteres por sección.
+  En el PDF no se imprime el contenido interactivo: sale el **texto de reemplazo** que escribe
+  Ventas. Ver DECISIONS §Secciones personalizadas.
+- **texto de reemplazo** (`notaPdf` de una sección personalizada): lo que se imprime en el PDF en
+  lugar del embebido. Un iframe muere en el PDF por cuatro vías distintas (la señal de "listo" no
+  ve adentro, la medición de alto lo recorta, la animación se congela, Chrome imprime frames
+  sandboxeados mal), así que el PDF nunca lo monta. Si Ventas no lo escribió, sale una línea
+  genérica — nunca un hueco mudo.
+- **Inversión** (sección `inversion`, una sola para las dos plantillas desde 2026-08-12): lo que
+  cuesta la propuesta, en dos grupos — **servicios** de Smarteam (`lineas`) y **licencias** de
+  terceros (`licencias`, HubSpot/Insider/herramientas) — cada uno con su subtotal, más el **gran
+  total**. Los montos los escribe **Ventas a mano**: el agente no la genera (`agentGenerated:false`)
+  y tiene prohibido poner precios en cualquier otro texto. `extras` (opcionales) y `recurrentes`
+  (mensuales) se muestran pero NO suman. Un monto con texto adentro ("A definir", "13%") queda
+  fuera del total y se cuenta como **pendiente**. Las propuestas de HubSpot viejas siguen viendo
+  las **dos tarjetas** históricas (rama legacy) hasta que alguien aprieta "Pasar a la tabla nueva".
+- **pendiente** (inversión): una línea con algo escrito en el monto que no se pudo sumar. Se
+  excluye del total y se anuncia al lado ("· +2 a definir"), porque un total incompleto que se lee
+  como completo es peor que no mostrarlo. El ⚠ por línea existe solo en el editor.

@@ -19,7 +19,6 @@ import {
   BeforeAfterSection,
   RoiSection,
   PlanSection,
-  InvestmentSection,
   PartnerSection,
   CtaSection,
 } from "../sections";
@@ -31,7 +30,7 @@ import {
   SiteArchitectureSection,
   WebScopeSection,
   WebMethodologySection,
-  WebInvestmentSection,
+  InvestmentSection,
   WhyUsSection,
 } from "../sections-website";
 
@@ -49,6 +48,11 @@ export const SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
   solucion: HubsClienteSection,
   roi: RoiSection,
   cronograma: PlanSection,
+  // ⚠ `inversion` y `web_investment` son EL MISMO componente desde la unificación
+  // (2026-08-12): antes eran dos secciones distintas bajo la misma key `inversion`, y la de
+  // HubSpot no tenía total. Apuntar los dos types acá —en vez de renombrar una key— deja el
+  // snapshot de `registry.test.ts` intacto y hace que los `sectionType` congelados de
+  // cualquier snapshot viejo sigan resolviendo. La rama legacy de HubSpot vive adentro.
   inversion: InvestmentSection,
   partner: PartnerSection,
   cta: CtaSection,
@@ -65,7 +69,7 @@ export const SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
   site_architecture: SiteArchitectureSection,
   web_scope: WebScopeSection,
   web_methodology: WebMethodologySection,
-  web_investment: WebInvestmentSection,
+  web_investment: InvestmentSection,
   why_us: WhyUsSection,
   // Sección personalizada: NINGÚN template la declara — la crea el vendedor en runtime y
   // el resolver la sintetiza desde la key (`custom:*`). Por eso `registry.test.ts` la
@@ -99,6 +103,7 @@ export function toSectionDef(
     agentHint: d.agentHint,
     brief: d.brief,
     chips: d.chips,
+    invest: d.invest,
     empty: d.empty,
     Component,
   };

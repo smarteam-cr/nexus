@@ -14,20 +14,19 @@ import { ensureAccess } from "@/lib/business-cases";
 import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { defsForCanvas } from "@/components/landing/configs/templates.defs";
+import { isBlank } from "@/lib/landing/is-blank";
 
 function buildVerifyUrl(req: NextRequest, token: string): string {
   const base = process.env.APP_URL || new URL(req.url).origin;
   return `${base}/external/business-case/verify/${token}`;
 }
 
-/** Un `data` estructurado está "en blanco" si todos sus strings/arrays lo están. */
-function dataIsBlank(v: unknown): boolean {
-  if (v == null) return true;
-  if (typeof v === "string") return v.trim() === "";
-  if (Array.isArray(v)) return v.every(dataIsBlank);
-  if (typeof v === "object") return Object.values(v as Record<string, unknown>).every(dataIsBlank);
-  return false;
-}
+/* El predicado de "sección en blanco" es `lib/landing/is-blank.ts`, el MISMO que usa el
+   render. Acá vivía una copia sin `NO_CONTENIDO`, y esa divergencia hacía que una sección
+   con solo una clave de PRESENTACIÓN escrita —la moneda de la inversión, el ancho de una
+   card— pasara este filtro y se publicara, mientras el render la omitía: el cliente abría
+   la propuesta y ahí no había nada. Un solo predicado, una sola respuesta. */
+const dataIsBlank = isBlank;
 
 export async function POST(
   req: NextRequest,

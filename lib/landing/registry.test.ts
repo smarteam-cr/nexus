@@ -234,6 +234,54 @@ describe("web_diagnosis: los rótulos son `chips` de la def, no texto que escrib
   });
 });
 
+/**
+ * La sección de INVERSIÓN es UNA sola desde 2026-08-12, pero sigue declarada por los DOS
+ * templates bajo la misma key. `findDefAcrossTemplates` devuelve la PRIMERA que encuentre,
+ * así que cualquier cosa load-bearing que difiera entre las dos produce un comportamiento
+ * que depende del orden de un objeto — lo peor de depurar.
+ */
+describe("Inversión: una sola sección, dos defs que no pueden divergir", () => {
+  const defs = Object.entries(BC_TEMPLATES).map(
+    ([id, tpl]) => [id, tpl.sections.find((d) => d.key === "inversion")] as const,
+  );
+
+  it("los dos templates la declaran", () => {
+    for (const [id, def] of defs) expect(def, `${id} sin sección inversion`).toBeTruthy();
+  });
+
+  it("los dos sectionType apuntan al MISMO componente", () => {
+    expect(SECTION_COMPONENTS.inversion).toBe(SECTION_COMPONENTS.web_investment);
+  });
+
+  it("las dos son `agentGenerated:false` — el flag decide 4 gates a la vez", () => {
+    // generableSections, la píldora ✨IA, el 400 de regenerate y el contrato del assist.
+    for (const [id, def] of defs) expect(def?.agentGenerated, `${id}`).toBe(false);
+  });
+
+  it("las dos tienen el MISMO schema vacío: el agente no escribe montos por ninguna vía", () => {
+    for (const [id, def] of defs) {
+      const props = (def?.schema as { properties?: Record<string, unknown> })?.properties;
+      expect(props, `${id} declara propiedades: el agente podría escribir precios`).toEqual({});
+    }
+  });
+
+  it("ningún brief le pide montos al agente", () => {
+    for (const [id, def] of defs) {
+      expect(def?.brief.includes("la escribe VENTAS"), `${id}`).toBe(true);
+    }
+  });
+
+  /* ⚠ Congelado porque hay propuestas de sitio web PUBLICADAS que dicen "Inversión única —
+     Fase 1" / "Rango Fase 1", y `configForSnapshot` resuelve por key contra la config viva
+     → estrenan el renderer nuevo. Sin esta declaración heredarían los rótulos genéricos y
+     al cliente le cambiaría el documento que ya tiene. */
+  it("sitio web conserva sus rótulos históricos; HubSpot usa los genéricos", () => {
+    const web = BC_TEMPLATES.website_v1.sections.find((d) => d.key === "inversion");
+    expect(web?.invest).toEqual({ servicios: "inversionFase", totalServicios: "rangoFase" });
+    expect(BC_TEMPLATES.hubspot_v1.sections.find((d) => d.key === "inversion")?.invest).toBeUndefined();
+  });
+});
+
 describe("Diagnóstico: registry completo + keys congeladas", () => {
   it("cada def resuelve componente y la config no dropea ninguna", () => {
     const faltantes = DIAGNOSTICO_SECTION_DEFS.filter((d) => !DIAGNOSTICO_SECTION_COMPONENTS[d.sectionType ?? d.key]);

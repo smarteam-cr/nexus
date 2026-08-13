@@ -30,11 +30,21 @@ const STRINGS = {
   hoy: { es: "Hoy", en: "Today" },
   conImplementacion: { es: "Con la implementación", en: "With the implementation" },
   conHubspotSmarteam: { es: "Con HubSpot + Smarteam", en: "With HubSpot + Smarteam" },
-  // Inversión (website)
+  // Inversión
   montosEn: { es: "Montos en", en: "Amounts in" },
   nota: { es: "Nota", en: "Note" },
+  // ⚠ `inversionFase`/`rangoFase` YA NO son el default de la sección: son lo que la
+  // propuesta de sitio web DECLARA en su def (`invest`). Se quedan acá porque borrarlas
+  // le movería el rótulo a las propuestas de Prodex que el cliente ya vio.
   inversionFase: { es: "Inversión única — Fase 1", en: "One-time investment — Phase 1" },
   rangoFase: { es: "Rango Fase 1", en: "Phase 1 range" },
+  // Rótulos genéricos de la sección unificada (los usa HubSpot y cualquier template nuevo).
+  inversionServicios: { es: "Servicios Smarteam", en: "Smarteam services" },
+  totalServicios: { es: "Total servicios", en: "Services total" },
+  inversionLicencias: { es: "Licencias y plataforma", en: "Licenses and platform" },
+  totalLicencias: { es: "Total licencias", en: "Licenses total" },
+  inversionTotal: { es: "Inversión total", en: "Total investment" },
+  montoPorDefinir: { es: "a definir", en: "to be defined" },
   extrasOpcionales: { es: "Extras opcionales", en: "Optional add-ons" },
   opcional: { es: "Opcional", en: "Optional" },
   recurrenteMensual: { es: "Recurrente mensual", en: "Monthly recurring" },

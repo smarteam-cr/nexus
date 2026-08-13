@@ -1780,3 +1780,62 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
 - **`empty` no declara `activos`**: un default de presentación volvería la sección
   permanentemente no-vacía y haría mentir al botón "Limpiar" — la trampa que ya mordió con
   `anchoRecurrente`, `logoScale` y `__lang`.
+
+## Secciones personalizadas y la inversión unificada (2026-08-12)
+
+- **La identidad de una sección personalizada es un PREFIJO en `CanvasSection.key`
+  (`custom:<uuid>`), no una columna.** *Por qué:* `key` es String libre con
+  `@@unique([canvasId,key])`, así que la base ya acepta una key fuera de la plantilla y ya
+  garantiza unicidad. Una columna `sectionType` costaría una migración COORDINADA entre las 2
+  PCs que comparten esta base, y mientras la otra no tenga el schema cualquier `select` de esa
+  columna le revienta en runtime — todo para guardar un dato que la key codifica sola. El `:`
+  es imposible en una key de plantilla (todas son snake_case) → colisión estructuralmente
+  imposible, congelada por `lib/landing/custom-sections.test.ts`.
+- **Un solo resolver (`configForCanvas` / `defsForCanvas`), no un parche por consumidor.**
+  *Por qué:* los recortes de secciones estaban escritos dos veces (editor e impresión, con el
+  segundo documentando que era copia del primero) y los dos fallan igual: la sección que no
+  matchea se cae del `filter` sin error, sin log y sin poner roja la suite. Con parches sueltos,
+  el que se olvide produce "se ve en el editor y falta en el PDF que ya se mandó".
+- **`sandbox="allow-scripts"` SIN `allow-same-origin`, y las dos juntas jamás.** *Por qué:*
+  juntas se anulan — el frame sería same-origin y ejecutaría scripts, o sea que podría quitarse
+  el sandbox solo. Verificado con Chrome real: el script corre y anima su propio DOM, pero
+  cookie/localStorage/parent.document/top.location dan SecurityError, `window.origin` es "null"
+  y `frameElement` es null. Sin `allow-forms`/`allow-popups`/`allow-top-navigation`/`allow-modals`.
+  Como en el repo NO hay CSP en ninguna capa que sirva de red debajo, se inyecta una en el
+  propio `srcDoc` (`connect-src 'none'`, `form-action 'none'`) dejando los CDN vivos.
+- **El HTML se pega en un `<textarea>`, nunca en el `Editable` del motor.** *Por qué:* ese lee
+  y escribe con `textContent`: el markup se ve hasta el blur y se guarda APLANADO sin un solo
+  aviso. No es ergonomía, es la frontera — pegar en un contentEditable además inserta DOM real
+  dentro del origen de Nexus.
+- **Toda sección `agentGenerated:false` se ARRASTRA al regenerar.** *Por qué:*
+  `createBusinessCaseCanvas` siembra el `empty` en cada sección y `generate` solo re-escribe las
+  keys que el agente devolvió; sin el carry-forward, marcar una sección como curada hace que
+  cada "Generar" borre lo que se escribió a mano. Mismo mecanismo para las personalizadas.
+- **La inversión es UNA sección para los dos templates, con rama legacy para HubSpot.**
+  *Por qué:* convivían dos secciones distintas bajo la misma key `inversion` (la de HubSpot sin
+  total). `licencias` es la ÚNICA key nueva → lo publicado de sitio web no necesita rama legacy.
+  La de HubSpot sí, y **nunca conversión automática**: sus montos son texto libre ("A definir en
+  propuesta formal"), y convertirlos haría correr la máquina de totales sobre una propuesta ya
+  publicada — al cliente le aparecería un número que jamás vio. La adopción es un botón que
+  aprieta una persona sobre el canvas vivo.
+- **Con UN grupo con montos se pinta UN total (la píldora de siempre); el gran total aparece
+  recién con DOS.** *Por qué:* `configForSnapshot` resuelve por key contra la config viva, así
+  que toda propuesta publicada estrena el renderer nuevo. Esta regla es lo único que hace que
+  las de sitio web se sigan viendo idénticas.
+- **Los montos los escribe VENTAS: la sección es `agentGenerated:false` en los dos templates**,
+  y el preámbulo del generate le PROHÍBE al agente escribir precios en cualquier texto. *Por qué:*
+  al sacarle su sección natural, el modelo teje los montos del contexto en la prosa del hero o
+  de la solución, donde nadie los revisa antes de que la propuesta salga.
+- **Una línea que no parsea se EXCLUYE del total y se cuenta como pendiente ("+2 a definir").**
+  *Por qué:* antes se salteaba en silencio, y un total de $12,000 conviviendo con una línea
+  "A definir" es una mentira barata: quien lo lee cree estar viendo el precio completo. El ⚠ por
+  línea es SOLO del editor — el cliente ve el monto tal cual lo escribió Ventas.
+- **`SectionDef.invest` lleva CLAVES DE i18n, no literales** (a diferencia de `chips`).
+  *Por qué:* el documento se publica al cliente y se traduce por `__lang`; un literal en español
+  saldría tal cual en una propuesta en inglés. Tipar contra `LandingStringKey` hace que el
+  compilador lo impida, no la disciplina. `website_v1` declara sus rótulos HISTÓRICOS ("Fase 1")
+  justamente para no moverle el texto a lo ya publicado.
+- **`publish` importa `isBlank` en vez de su copia.** *Por qué:* la copia no tenía
+  `NO_CONTENIDO`, así que una sección con solo una clave de presentación escrita (la moneda, el
+  ancho de una card) pasaba el filtro de publicación mientras el render la omitía: el cliente
+  abría la propuesta y ahí no había nada.

@@ -139,22 +139,20 @@ export const WEBSITE_SECTION_DEFS: BCSectionDef[] = [
     eyebrow: "Inversión",
     theme: "soft",
     sectionType: "web_investment",
-    empty: { moneda: "", lineas: [], extras: [], recurrentes: [], nota: "", anchoRecurrente: "normal" },
-    agentHint: "Moneda + líneas fase 1 (montos numéricos: el total se suma solo) + extras + recurrente mensual + nota de exclusiones.",
+    // Ver el gemelo de business-case.defs.ts: los montos los escribe Ventas a mano.
+    agentGenerated: false,
+    tip: "La escribe Ventas: el agente no toca los montos. El total se calcula solo.",
+    empty: { moneda: "", lineas: [], licencias: [], extras: [], recurrentes: [], nota: "", anchoRecurrente: "normal" },
+    /* ⚠ Rótulos HISTÓRICOS declarados a propósito: hay propuestas de sitio web PUBLICADAS
+       que dicen "Inversión única — Fase 1" y "Rango Fase 1", y `configForSnapshot` resuelve
+       por key contra la config viva → estrenan este renderer. Sin esta declaración
+       heredarían los genéricos y al cliente le cambiaría el rótulo del documento que ya
+       tiene. Los valores son claves de i18n, no literales: el documento se traduce. */
+    invest: { servicios: "inversionFase", totalServicios: "rangoFase" },
+    agentHint: "(No la genera el agente: los montos los escribe Ventas.)",
     brief:
-      "Inversión: `moneda` = código de la moneda discutida (ej. 'USD'; si no se mencionó, 'USD'). `lineas` de la fase 1 con `concepto` corto, `detalle` de una línea y `monto` NUMÉRICO limpio con formato '$1,800' o rango '$5,600–6,650' — el sistema SUMA los montos automáticamente para el total, así que NO agregues texto dentro del monto (nada de 'por página' ni 'aprox'); si no hay precio discutido ni derivable, dejá el monto como string vacío \"\". `extras`: opcionales cotizados aparte (mismo formato de monto, con '+' opcional). `recurrentes`: costos mensuales (licencias, mantenimiento) SIEMPRE separados de la inversión única. `nota`: exclusiones o condiciones en pocas palabras (ej. 'impuestos no contemplados'). `anchoRecurrente`: 'normal' (default) o 'ancho' — poné 'ancho' SOLO si te lo piden explícitamente (ej. 'hacé la card de recurrente mensual más ancha'), para que ocupe más espacio visual. Fuente / regla: SOLO montos discutidos en el contexto o derivables del alcance — NUNCA números inventados.",
-    schema: {
-      type: "object",
-      properties: {
-        moneda: str,
-        lineas: arrayOf({ concepto: str, monto: str, detalle: str }, ["concepto"]),
-        extras: arrayOf({ concepto: str, monto: str, detalle: str }, ["concepto"]),
-        recurrentes: arrayOf({ concepto: str, monto: str, detalle: str }, ["concepto"]),
-        nota: str,
-        anchoRecurrente: str,
-      },
-      required: ["lineas"],
-    },
+      "Inversión — la escribe VENTAS a mano, el agente NO la genera. `moneda`: el código de la moneda ('USD'). `lineas`: los servicios de Smarteam (diseño, desarrollo, migración, QA), una por concepto. `licencias`: lo que se le paga a un tercero (licencia del Content Hub, herramientas), aparte. En las dos, el `monto` es SOLO el número o el rango ('$1,800', '$5,600–6,650'): el sistema los suma y muestra los subtotales y el total general, así que un monto con texto adentro ('$1,800 por página', 'Incluido') NO entra en la suma y aparece marcado como pendiente. Sin precio todavía → dejá el monto vacío. `extras` (opcionales) y `recurrentes` (mensuales) se muestran pero NO suman. Impuestos y condiciones van en `nota`. `anchoRecurrente`: 'ancho' hace la card mensual más grande.",
+    schema: { type: "object", properties: {} },
   },
   // 8) Por qué Smarteam
   {

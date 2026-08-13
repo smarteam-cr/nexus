@@ -347,6 +347,7 @@ export default function LandingView({
         sectionTitle={effTitle}
         sectionEyebrow={effEyebrow}
         sectionChips={def.chips}
+        sectionInvest={def.invest}
         editable={editable}
         onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
       />
@@ -406,6 +407,7 @@ export default function LandingView({
           sectionTitle={effTitle}
           sectionEyebrow={effEyebrow}
           sectionChips={def.chips}
+          sectionInvest={def.invest}
           editable={editable}
           onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
         />
