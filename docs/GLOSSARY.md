@@ -367,4 +367,5 @@
   archivos quedan sin tocar. Es el ÚNICO color de la sección: lo demás es blanco y gris
   (`--hub-soft` / `--hub-line` / `--hub-line-on`) y la píldora encendida se distingue por el
   relleno, no por el matiz. Va chico en la píldora (16px) y grande en la cabecera de la
-  columna (30px). Una columna que no es un Hub del catálogo no tiene ícono.
+  columna (28px), ahí en la MISMA línea que el nombre del Hub. Una columna que no es un Hub
+  del catálogo no tiene ícono.

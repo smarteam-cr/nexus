@@ -1744,7 +1744,7 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   1.4.11 para un ícono es 3. Ese par está en el guard de contraste justamente porque el
   margen es chico y nadie lo notaría a ojo.
 - **La diferencia entre encendida y apagada la hace la APAGADA: no tiene caja.** Fondo y
-  borde transparentes, texto `--text-muted` e ícono al 55 %; la encendida es la única con
+  borde transparentes, texto `--hub-off` e ícono al 38 %; la encendida es la única con
   relleno gris, borde `#8B93A1` de 1px y tinta plena en negrita. Se llegó acá en dos pasadas
   —primero *"que se note un poco más los hubs seleccionados"* (borde `#C9CDD4` = 1.59:1
   contra el paper, invisible en una tira de seis), después *"que los que no estén
@@ -1753,10 +1753,16 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   el relleno nunca pudo hacer este trabajo (techo del ícono); el borde de la encendida da
   3.09:1, que es el 3:1 que WCAG 1.4.11 pide para el borde de un control, y está en el guard;
   el borde de la apagada se declara `transparent` y no ausente para que encenderla no corra
-  el layout un pixel; y el texto NO se atenúa con `opacity` —sigue en un token con 5.27:1—
-  porque la píldora es un control con etiqueta, no algo deshabilitado. El ícono sí puede
-  bajar del 3:1: al lado tiene el nombre del Hub escrito, así que no es él quien lleva el
-  significado.
+  el layout un pixel; y el texto NO se atenúa con `opacity` —tiene su propio token
+  `--hub-off` con **4.80:1**, que es lo más claro posible sobre el piso AA de 4.5 para la
+  etiqueta de un control, no algo deshabilitado—. **El grueso de la atenuación lo hace el
+  ícono**, que sí puede bajar del 3:1 de 1.4.11: al lado tiene el nombre del Hub escrito,
+  así que no es él quien lleva el significado.
+- **En la cabecera de la columna, el ícono y el nombre del Hub van en UNA línea.** Apilados,
+  el ícono quedaba como un adorno suelto arriba de todo; juntos son la firma del producto.
+  El nombre sube a 14px (de 11) para emparejar con el ícono de 28 y le baja el tracking —el
+  de un eyebrow, a ese tamaño, lo estiraba—, pero se queda por debajo del título descriptivo
+  (16px, tinta plena), que es el que tiene que ganar la lectura.
 - **El ícono de producto de cada Hub va como MÁSCARA CSS, no como `<img>`** (2026-08-12).
   Los SVG oficiales de HubSpot viven sin tocar en `public/hubs/`, con el **slug como nombre
   de archivo** (`sales_hub.svg`) para que la URL se derive y no haga falta un mapa; un

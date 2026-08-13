@@ -192,8 +192,10 @@ export const HubsClienteSection: FC<SectionProps<HubsClienteData>> = (props) => 
                 {/* El cliente puede abrir un Hub que no compró: la columna tiene que
                     DECIRLO. Sin esto, explorar se leería como que ya está incluido. */}
                 {noIncluida && <div className="stl-hub-col-chip">No incluido</div>}
-                {icon && <div className="stl-hub-col-icon" />}
-                <div className="stl-hub-col-eyebrow">{label ?? "A la medida"}</div>
+                <div className="stl-hub-col-brand">
+                  {icon && <div className="stl-hub-col-icon" />}
+                  <div className="stl-hub-col-eyebrow">{label ?? "A la medida"}</div>
+                </div>
                 <Editable
                   as="div"
                   className="stl-hub-col-title"

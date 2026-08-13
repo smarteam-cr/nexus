@@ -99,6 +99,11 @@
   --hub-accent:  #FF4800;  /* naranja de HubSpot — SOLO los íconos de producto */
   --hub-soft:    #F5F6F8;  /* gris de la píldora encendida y de la cabecera de columna */
   --hub-line:    #E4E6EA;  /* borde neutro */
+  /* Texto de la píldora APAGADA. Es lo más claro que se puede: da 4.80:1 sobre paper y el
+     piso AA para la etiqueta de un control es 4.5 (`--text-muted`, el token general, da
+     5.27 y se veía demasiado presente). Más claro que esto ya no es "transparente", es
+     ilegible — de ahí en adelante la atenuación la tiene que hacer el ícono. */
+  --hub-off:     #657199;
   /* Borde de la píldora ENCENDIDA. Es lo que carga casi todo el peso de "seleccionada":
      el relleno no puede oscurecerse más porque el naranja del ícono encima ya está en
      3.14:1 y el mínimo es 3. Da 3.09:1 contra el paper, así que además de verse, cumple
@@ -1542,7 +1547,7 @@
      y no ausente para que encenderla no corra el layout un pixel. */
   border: 1px solid transparent;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--hub-off);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -1550,9 +1555,10 @@
   cursor: pointer;
   transition: background 0.18s var(--ease), color 0.18s var(--ease), border-color 0.18s var(--ease);
 }
-/* El ícono apagado también se atenúa. Puede bajar del 3:1 de WCAG 1.4.11 porque no es
-   el que lleva el significado: al lado tiene el nombre del Hub escrito. */
-.stl-hub-pill .stl-hub-pill-icon { opacity: 0.55; transition: opacity 0.18s var(--ease); }
+/* El ícono apagado se atenúa MÁS que el texto, y es el que carga el grueso del efecto:
+   puede bajar del 3:1 de WCAG 1.4.11 porque no es el que lleva el significado —al lado
+   tiene el nombre del Hub escrito—, mientras que el texto tiene el piso de AA. */
+.stl-hub-pill .stl-hub-pill-icon { opacity: 0.38; transition: opacity 0.18s var(--ease); }
 .stl-hub-pill:hover {
   border-color: var(--hub-line);
   color: var(--text-2);
@@ -1594,7 +1600,15 @@
   mask-size: contain;
 }
 .stl-hub-pill-icon { width: 16px; height: 16px; }
-.stl-hub-col-icon { width: 30px; height: 30px; margin-bottom: 12px; }
+.stl-hub-col-icon { width: 28px; height: 28px; }
+/* El ícono y el nombre del Hub van en UNA línea: juntos son la firma del producto, y
+   apilados el ícono quedaba como un adorno suelto arriba de todo. */
+.stl-hub-col-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
 
 /* El número de columnas por fila lo decide el COMPONENTE según cuántas hay encendidas
    (hasta 3 en una fila; de 4 en adelante se parte en dos filas parejas), no un
@@ -1629,13 +1643,17 @@
   color: var(--text);
   padding: 18px 16px 16px;
 }
+/* El nombre del Hub. Sube de 11 a 14px para emparejar con el ícono de 28 en la misma
+   línea; el letter-spacing baja porque a ese tamaño el tracking de eyebrow lo estiraba
+   demasiado. Se queda por debajo del título descriptivo (16px, tinta plena), que es el
+   que tiene que ganar la lectura. */
 .stl-hub-col-eyebrow {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 3px;
+  color: var(--text-2);
+  line-height: 1.2;
 }
 .stl-hub-col-title { font-size: 16px; font-weight: 700; line-height: 1.35; }
 /* "No incluido" en la cabecera de un Hub que el cliente puede explorar pero no compró. */
