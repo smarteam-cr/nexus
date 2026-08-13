@@ -63,6 +63,7 @@ const CANVAS_FLOW_IDS = new Set<string>([
   // "Sin disparador" pese a tener su CTA en el desplegable y en el encabezado del canvas.
   // La fuente de verdad de qué agente genera cada pieza es CANVAS_PRIMARY_AGENT.
   "agent-implementacion-canvas",
+  "agent-entrega-canvas",
   "agent-exploracion-canvas",
   "agent-mapeo-inicial",
   "agent-timeline-detail",

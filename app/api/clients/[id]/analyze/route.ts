@@ -28,6 +28,7 @@ import { runExploracionGeneration } from "@/lib/canvas/exploracion-generate";
 import { runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
 import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
 import { runImplementacionGeneration } from "@/lib/canvas/implementacion-generate";
+import { runEntregaGeneration } from "@/lib/canvas/entrega-generate";
 import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
 import { cargarContextoDelDetalle } from "@/lib/contexto/cargar";
 import { renderDetalleDeCronograma, clasificacionDeTags } from "@/lib/contexto/detalle-cronograma";
@@ -410,6 +411,11 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // Ídem Implementación (guía de construcción + prompts de Breeze).
   const isImplementacionAgent = agent.id === "agent-implementacion-canvas";
 
+  /* Ídem Entrega (el documento de cierre). Su runner hace algo que ningún otro hace: además
+     de generar la prosa, ESCRIBE ÉL las dos secciones con cifras desde el cronograma, y esas
+     keys ni siquiera viajan al modelo. Ver lib/canvas/entrega-generate.ts. */
+  const isEntregaAgent = agent.id === "agent-entrega-canvas";
+
   // ── D.1: fail-fast del agente de detalle de cronograma ──────────────────────
   // Este agente DETALLA un esqueleto existente (fases con ids). Sin proyecto o
   // sin timeline con fases no hay nada que detallar — se corta acá, antes de
@@ -615,6 +621,14 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     setPhase("Derivando la construcción…");
     return finishRunnerShortCircuit(
       await runImplementacionGeneration({ projectId: bodyProjectId, agentRunId: existingRunId }),
+    );
+  }
+
+  // ── Entrega: short-circuit al runner self-contained ───────────────────────────
+  if (isEntregaAgent && bodyProjectId) {
+    setPhase("Armando el cierre…");
+    return finishRunnerShortCircuit(
+      await runEntregaGeneration({ projectId: bodyProjectId, agentRunId: existingRunId }),
     );
   }
 
