@@ -15,6 +15,7 @@ import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { defsForCanvas } from "@/components/landing/configs/templates.defs";
 import { isBlank } from "@/lib/landing/is-blank";
+import { INVERSION_SECTION_KEY, licenciasDeHubSinMonto } from "@/lib/landing/inversion";
 
 function buildVerifyUrl(req: NextRequest, token: string): string {
   const base = process.env.APP_URL || new URL(req.url).origin;
@@ -107,6 +108,23 @@ export async function POST(
   if (filled.length === 0) {
     return NextResponse.json(
       { error: "Generá o escribí contenido antes de subir al cliente." },
+      { status: 400 },
+    );
+  }
+
+  /* Preflight de las licencias sembradas: la siembra pone el RENGLÓN y deja el monto a Ventas,
+     pero una línea con `hub` y sin monto ya vuelve la sección no-blank ⇒ sin este freno la
+     propuesta sale con "Marketing Hub —" y sin total, que es lo único de esta feature que el
+     cliente ve si nadie mira. NO se filtra en el render: una celda que desaparece rompe la
+     columna (es lo que el CSS declara a propósito) y el vendedor tiene que ver exactamente lo
+     que ve el cliente. */
+  const inv = filled.find((s) => s.key === INVERSION_SECTION_KEY);
+  const sinMonto = licenciasDeHubSinMonto(inv?.blocks[0]?.data);
+  if (sinMonto.length) {
+    return NextResponse.json(
+      {
+        error: `Falta el monto de ${sinMonto.length === 1 ? "una licencia" : `${sinMonto.length} licencias`}: ${sinMonto.join(" · ")}. Poné el monto o borrá la línea antes de subir.`,
+      },
       { status: 400 },
     );
   }

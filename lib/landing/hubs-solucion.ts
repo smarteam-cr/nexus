@@ -102,3 +102,31 @@ export function parseCanales(canales: string | undefined | null): string[] {
   if (typeof canales !== "string") return [];
   return canales.split(",").map((s) => s.trim()).filter(Boolean);
 }
+
+/** La key de la sección "Qué se implementa". Solo la declara `hubspot_v1`. */
+export const SOLUCION_SECTION_KEY = "solucion";
+
+/**
+ * Los Hubs que la sección `solucion` declara VENDIDOS (`activos`), resueltos a slug del
+ * catálogo. Lo consumen la siembra de licencias del `generate` y el asistente del editor.
+ *
+ * Lee `activos` DIRECTO y no lo intersecta con las columnas existentes: derivarlo de las
+ * columnas lo deja vacío en la mayoría del corpus (la mitad de las secciones `solucion`
+ * siguen en shape v1, sin `columnas`) y, peor, haría que un `hub` escrito sucio por el
+ * agente borre de la lista a un Hub que la misma corrida acaba de sembrar.
+ *
+ * ⚠ Con `activos` AUSENTE devuelve VACÍO, no las seis. Adentro de `columnasActivas`, ausente
+ * significa "todas encendidas" — la degradación correcta para PINTAR, y la contraria para
+ * PROPONER: ausente solo pasa cuando nadie declaró qué se vendió, y proponer seis líneas de
+ * licencia a partir de eso sería adivinar. Antes "sin definir" que adivinado.
+ */
+export function hubsVendidosDe(data: unknown): HubspotHubSlug[] {
+  const activos = (data as { activos?: unknown } | null | undefined)?.activos;
+  if (!Array.isArray(activos)) return [];
+  const out: HubspotHubSlug[] = [];
+  for (const a of activos) {
+    const slug = normalizeTag(String(a ?? "").trim());
+    if (esHubDelCatalogo(slug) && !out.includes(slug)) out.push(slug);
+  }
+  return out;
+}

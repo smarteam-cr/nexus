@@ -8,7 +8,7 @@
  * y la "Arquitectura de conexión" reusa TechArchitectureSection (sections-shared.tsx).
  * Acá viven las 6 restantes. Mismo contrato inline-editable que sections.tsx.
  */
-import { type FC } from "react";
+import { type CSSProperties, type FC, type ReactNode } from "react";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
 import { CtaButton, CtaEditor } from "./sections";
@@ -25,10 +25,14 @@ import type {
   WhyUsData,
 } from "./types";
 import { formatRango, montoParaLectura } from "@/lib/landing/money";
+import { hubVisual } from "@/lib/landing/hubs-solucion";
+import { labelForTag, normalizeTag } from "@/lib/tags/catalog";
 import {
   adoptarShapeNuevo,
+  conciliarLicenciasHub,
   esInversionLegacy,
   gruposDeInversion,
+  lineasDeLicenciaPorHub,
   type GrupoInversion,
 } from "@/lib/landing/inversion";
 
@@ -309,7 +313,7 @@ const CURRENCIES = ["USD", "CRC", "MXN", "COP", "PEN", "CLP", "GTQ", "DOP", "EUR
 
 /** Una tabla de líneas con su cierre. La usan los DOS grupos — servicios y licencias. */
 function GrupoTabla({
-  grupo, lang, moneda, editable, chip, rotuloTotal, destacado, pendientes, onSet,
+  grupo, lang, moneda, editable, chip, rotuloTotal, destacado, pendientes, asistente, avisoLinea, onSet,
 }: {
   grupo: GrupoInversion;
   lang: LandingLang;
@@ -325,6 +329,10 @@ function GrupoTabla({
    *  total, no se pintaba en NINGÚN lado — y un total que excluye líneas sin decirlo es
    *  exactamente la mentira que `money.ts` existe para no cometer. */
   pendientes: number;
+  /** Chrome de EDICIÓN propio del grupo (el asistente de licencias). Nunca en lectura. */
+  asistente?: ReactNode;
+  /** Aviso por línea, SOLO en edición. Devuelve null cuando no hay nada que decir. */
+  avisoLinea?: (l: WebInvestLine) => string | null;
   onSet: (next: Partial<WebInvestmentData>) => void;
 }) {
   const lineas = grupo.lineas as WebInvestLine[];
@@ -353,16 +361,39 @@ function GrupoTabla({
                valor DERIVADO adentro se auto-persiste y le reescribe el monto a Ventas. Es
                literalmente el bug de la portada documentado en ese archivo. */
             const eco = !m.libre && m.texto && m.texto !== (l.monto ?? "").trim() ? m.texto : "";
+            /* IDENTIDAD, NO DERIVACIÓN: el ícono sale del slug que escribió la siembra, no de
+               adivinar el `concepto`. Ventas puede renombrar la línea sin perderlo, una
+               licencia de un tercero no lo gana por parecerse a un Hub, y una línea SIN `hub`
+               —todas las de las propuestas publicadas— cae en `{icon:null}` y renderiza
+               EXACTAMENTE el mismo DOM que antes de este cambio. */
+            const { icon } = hubVisual(l.hub ?? "");
+            const aviso = editable ? avisoLinea?.(l) ?? "" : "";
             return (
               <div className="stl-item stl-inv-row">
                 {handle}
                 {editable && <RemoveBtn onClick={() => set(removeAt(lineas, i))} />}
 
-                <div className="stl-inv-row-main">
+                <div className={`stl-inv-row-main${icon ? " stl-inv-row-main--hub" : ""}`}>
+                  {icon && (
+                    /* MÁSCARA CSS, la misma técnica de `.stl-hub-pill-icon`: el SVG oficial de
+                       public/hubs queda intacto y el color lo pone `--hub-accent`. DECORATIVO
+                       (`aria-hidden`): el nombre del Hub está escrito al lado, así que el ícono
+                       no carga significado propio — mismo criterio que la píldora de "Qué se
+                       implementa". Es HERMANO del `Editable`, jamás un hijo suyo: adentro, el
+                       commit por `textContent` lo borraría al primer blur. */
+                    <span
+                      className="stl-inv-ico"
+                      aria-hidden="true"
+                      style={{ "--hub-icon": `url("${icon}")` } as CSSProperties}
+                    />
+                  )}
                   <Editable as="span" className="stl-inv-concept" editable={editable} value={l.concepto}
                     placeholder="Concepto…" onCommit={(v) => set(replaceAt(lineas, i, { ...l, concepto: v }))} />
                   <Editable as="span" className="stl-inv-detail" editable={editable} value={l.detalle}
                     placeholder="qué incluye…" onCommit={(v) => set(replaceAt(lineas, i, { ...l, detalle: v }))} />
+                  {/* Solo-editor, igual que "⚠ no suma": el cliente ve la línea tal cual la
+                      dejó Ventas, no nuestra opinión sobre ella. */}
+                  {aviso && <span className="stl-inv-aviso">⚠ {aviso}</span>}
                 </div>
 
                 <div className="stl-inv-cell">
@@ -410,6 +441,7 @@ function GrupoTabla({
           </div>
         )}
       </div>
+      {editable && asistente}
       {editable && <AddBtn label="Agregar línea" onClick={nueva} />}
     </div>
   );
@@ -440,6 +472,47 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
   const unSoloGrupo = g.gruposConMonto <= 1;
   const rot = (k: keyof InvestLabels, fallback: LandingStringKey) => t(lang, sectionInvest?.[k] ?? fallback);
   const hayLicencias = (d.licencias ?? []).length > 0;
+
+  /* Los Hubs vendidos llegan por el canal del documento y SOLO existen en el editor
+     (`BusinessCaseWorkspace` los arma leyendo la sección `solucion` del mismo canvas). En las
+     otras 3 superficies el array es vacío ⇒ nada de esto se pinta ni se calcula: no es un flag
+     apagado, es un camino que no existe. El ÍCONO no depende de esto — sale de `linea.hub`,
+     que viaja adentro del data y por eso llega a las cuatro. */
+  const vendidos = ctx.propuesta?.hubsVendidos ?? [];
+  const rec = conciliarLicenciasHub(d.licencias, vendidos);
+  const sobran = new Set(rec.sobran);
+  /* Una línea de licencia SIN `hub`: la genérica proyectada ("Licencias HubSpot / año") o una
+     de un tercero. El asistente NO la toca —no puede saber si su monto ya cubre lo que se va a
+     agregar— pero lo DICE, que es lo único honesto que puede hacer con ella. */
+  const hayGenerica = (d.licencias ?? []).some((l) => !(l.hub ?? "").trim());
+
+  const asistenteLicencias =
+    editable && vendidos.length > 0 ? (
+      <div className="stl-inv-asist">
+        {rec.faltan.length > 0 ? (
+          <>
+            <span>{`Sin línea propia: ${rec.faltan.map(labelForTag).join(" · ")}.`}</span>
+            <button
+              type="button"
+              className="stl-add"
+              onClick={() =>
+                set({ licencias: [...(d.licencias ?? []), ...lineasDeLicenciaPorHub(rec.faltan)] })
+              }
+            >
+              {rec.faltan.length === 1 ? "Agregar la licencia" : `Agregar las ${rec.faltan.length} licencias`}
+            </button>
+            {hayGenerica && (
+              <span className="stl-inv-asist-warn">Revisá la línea general: su monto puede quedar duplicado.</span>
+            )}
+          </>
+        ) : (
+          <span>{`Las ${vendidos.length} licencias de «Qué se implementa» están listadas.`}</span>
+        )}
+        {rec.sinMonto > 0 && (
+          <span className="stl-inv-asist-warn">{`${rec.sinMonto} sin monto: el cliente vería "—" y no vas a poder subir la propuesta.`}</span>
+        )}
+      </div>
+    ) : null;
 
   return (
     <div className="stl-inv">
@@ -481,6 +554,20 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
           rotuloTotal={rot("totalLicencias", "totalLicencias")}
           destacado={unSoloGrupo}
           pendientes={unSoloGrupo ? g.pendientesTotales : g.licencias.pendientes}
+          asistente={asistenteLicencias}
+          /* ⚠ Gateado por `vendidos.length`, con la MISMA condición que el asistente. Sin eso,
+             un documento sin `activos` —la mayoría de los canvases vivos hoy— da
+             `sobran = todos` y marcaría las líneas con "ya no está en «Qué se implementa»"
+             mientras el cliente ve las seis columnas como incluidas: el documento
+             contradiciéndose solo. */
+          avisoLinea={
+            vendidos.length
+              ? (l) =>
+                  l.hub && sobran.has(normalizeTag(l.hub) ?? l.hub.trim())
+                    ? "ya no está en «Qué se implementa»"
+                    : null
+              : undefined
+          }
           onSet={set}
         />
       )}

@@ -1868,3 +1868,47 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   `NO_CONTENIDO`, así que una sección con solo una clave de presentación escrita (la moneda, el
   ancho de una card) pasaba el filtro de publicación mientras el render la omitía: el cliente
   abría la propuesta y ahí no había nada.
+
+## Las licencias de la Inversión salen de los Hubs vendidos (2026-08-12)
+
+> Elías, con la sección de inversión ya leyéndose como factura: *"En el módulo de inversión,
+> deben estar las licencias seleccionadas arriba, una por línea. Cada una con su ícono y valor."*
+> "Arriba" es la sección «Qué se implementa», que en `hubspot_v1` va justo antes de Inversión.
+
+- **La identidad del Hub es EXPLÍCITA (`LineaInversion.hub = "sales_hub"`), no un match de
+  texto sobre el concepto.** *Por qué:* (a) ninguna línea existente trae la key ⇒ `hubVisual("")`
+  devuelve `{icon:null}` y **toda propuesta publicada renderiza el MISMO DOM** —el riesgo de esta
+  familia de cambios es que `configForSnapshot` resuelve por key contra la config viva, así que
+  lo publicado estrena el renderer igual—; (b) Ventas puede renombrar la línea ("Sales Hub
+  Professional · 5 usuarios") sin perder el ícono; (c) una licencia de un tercero que se llame
+  parecido no se lleva el ícono de HubSpot; y (d) evita una CUARTA implementación de
+  texto→slug al lado de `normalizeTag`.
+- **La siembra sale de `activos`, no de los tags.** `activos` es la curaduría del vendedor sobre
+  qué Hubs se implementan; los tags son la declaración de qué se vendió, y no coinciden: medido
+  sobre las 9 propuestas de la base, **las 9 tienen `tags = []`** y solo 1 tiene `activos`. La
+  siembra usa `hubsVendidosDe(solucion)` con los tags como fallback del generate — pero la
+  sección de arriba manda, porque es lo que el cliente está leyendo.
+- **`hubsVendidosDe` con `activos` AUSENTE devuelve VACÍO — al revés que `columnasActivas`.**
+  Adentro de la sección, ausente significa "todas encendidas" (la degradación correcta para
+  PINTAR). Acá significa "nadie declaró qué se vendió", y proponer seis líneas de licencia a
+  partir de eso sería adivinar montos que el cliente va a leer. Es la asimetría más fácil de
+  romper de esta tanda y por eso tiene su propio test.
+- **Sembrar NO puede mover un centavo.** La línea nace con `monto: ""`, que `parseMonto` da
+  `null` ⇒ no suma, no cuenta como pendiente y no enciende el gran total. Los tres frenos de
+  `sembrarLicenciasIniciales` (no toca el shape legacy, no toca un grupo con algo escrito, no
+  corre sin vendidos) son lo que hace que "Generar" sobre una propuesta viva sea inocuo.
+- **Lo que ya no está vendido se AVISA, no se borra.** `conciliarLicenciasHub` devuelve
+  `faltan`/`sobran`/`sinMonto` y el editor pinta un ⚠ por línea y un asistente con "Agregar las
+  que faltan". Borrar sola una línea de dinero que un humano escribió es la única acción de esta
+  sección que no tiene deshacer.
+- **El publish FRENA con 400 si una línea de Hub quedó sin monto.** La siembra pone el RENGLÓN y
+  deja el monto a Ventas, pero una línea con `hub` ya vuelve la sección no-blank ⇒ sin el freno
+  la propuesta sale con "Marketing Hub —" y sin total, que es exactamente lo único de esta
+  feature que el cliente ve si nadie mira. NO se filtra en el render: la celda que desaparece
+  rompe la columna declarada, y el vendedor tiene que ver lo mismo que el cliente.
+- **El ícono es la MISMA máscara CSS de la sección de Hubs** (`--hub-accent` sobre
+  `public/hubs/<slug>.svg`), 18px, hermano del concepto dentro de una rejilla que estrena SOLO
+  la línea con `hub`. El par naranja-sobre-`--bg-soft` (3.05:1, el tinte de Inversión) entró al
+  guard de contraste: es el más ajustado de la familia contra el 3:1 de WCAG 1.4.11.
+- ⚠ **Consecuencia a ojos abiertos:** 8 de las 9 propuestas de la base tienen `solucion` en shape
+  legacy (sin `activos`), así que la feature no se enciende ahí hasta regenerar esa sección.

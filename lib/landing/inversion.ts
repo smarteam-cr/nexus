@@ -19,6 +19,7 @@
  * ahora en adelante.
  */
 import { monedaDeTexto, sumaLineas, sumaRangos, type Rango } from "./money";
+import { labelForTag, normalizeTag } from "@/lib/tags/catalog";
 
 /** Las keys del shape VIEJO de HubSpot. Se LEEN para decidir la rama legacy y nunca se
  *  escriben. Están acá y no sueltas en el componente por el mismo motivo que
@@ -29,6 +30,20 @@ export interface LineaInversion {
   concepto?: string;
   monto?: string;
   detalle?: string;
+  /** Slug del Hub de HubSpot que esta línea factura ("sales_hub"), cuando la línea ES un Hub.
+   *  La escribe la SIEMBRA (generate) o el asistente del editor, NUNCA el agente: la sección
+   *  es `agentGenerated:false` y su `schema.properties` está vacío, así que `coerceToSchema`
+   *  ni la ve.
+   *
+   *  ⚠ IDENTIDAD, no derivación del texto. El ícono sale de acá y no de adivinar el
+   *  `concepto` por tres motivos: Ventas renombra la línea ("Marketing Hub Pro · 5 usuarios")
+   *  y el ícono tiene que sobrevivir; una licencia de un tercero no puede ganar un ícono por
+   *  parecerse a un Hub; y una línea SIN esta key —todas las de lo ya publicado— renderiza
+   *  exactamente el mismo DOM que antes de existir esta feature.
+   *
+   *  Ausente = licencia de un tercero o línea libre: sin ícono, fuera del alcance de la
+   *  siembra y del aviso de desajuste. */
+  hub?: string;
 }
 
 /** El shape unificado. `licencias` es la ÚNICA key nueva — por eso las propuestas de sitio
@@ -175,4 +190,100 @@ export function gruposDeInversion(data: InversionData | null | undefined): Inver
     // moneda que nadie eligió sería fabricación.
     moneda,
   };
+}
+
+// ── Las licencias por Hub ────────────────────────────────────────────────────
+//
+// Lo que la propuesta dice que IMPLEMENTA arriba ("Qué se implementa") es lo que tiene que
+// COBRAR abajo: una línea por Hub vendido, con su ícono y su monto. La regla vive acá y no
+// en el componente porque decide qué se escribe en el documento de un cliente.
+
+/** La key de la sección en los dos templates. Existe por el mismo motivo que
+ *  `USE_CASES_SECTION_KEY`: un literal suelto en una route es un typo que no falla — solo
+ *  deja de sembrar, en silencio. */
+export const INVERSION_SECTION_KEY = "inversion";
+
+const slugDeLinea = (l: LineaInversion | undefined) => {
+  const h = (l?.hub ?? "").trim();
+  return h ? normalizeTag(h) ?? h : "";
+};
+
+/**
+ * Una línea de licencia por Hub. `monto` y `detalle` SIEMPRE vacíos: sembrar no puede
+ * inventar un precio (los escribe Ventas) ni afirmar una periodicidad que nadie declaró — un
+ * "Licencia anual" sembrado es fabricación, y encima quedaría congelado en el idioma de la
+ * corrida. El concepto es el rótulo del producto (`labelForTag`), que no se traduce: la línea
+ * nace correcta en español y en inglés, y el chip del grupo ya dice "Licencias y plataforma".
+ *
+ * Una línea sin monto es INERTE para la aritmética (`parseMonto("")` es null): no suma, no
+ * cuenta como pendiente, no enciende el gran total. Sembrar no mueve un centavo.
+ */
+export function lineasDeLicenciaPorHub(
+  slugs: readonly string[],
+): Array<{ concepto: string; monto: string; detalle: string; hub: string }> {
+  return slugs.map((hub) => ({ hub, concepto: labelForTag(hub), monto: "", detalle: "" }));
+}
+
+export interface ConciliacionLicencias {
+  /** Vendidos que todavía no tienen línea propia. */
+  faltan: string[];
+  /** Slugs con línea que ya NO están vendidos. La línea NO se toca: se avisa. */
+  sobran: string[];
+  /** Líneas CON `hub` y sin monto — el cliente vería un "—". */
+  sinMonto: number;
+}
+
+/** Qué le falta y qué le sobra al grupo de licencias respecto de lo vendido. PURA y sin
+ *  efectos: quien agrega o quita es la persona, con un clic explícito. */
+export function conciliarLicenciasHub(
+  licencias: LineaInversion[] | undefined,
+  vendidos: readonly string[],
+): ConciliacionLicencias {
+  const conHub = (licencias ?? []).filter((l) => !!slugDeLinea(l));
+  const yaEstan = new Set(conHub.map(slugDeLinea));
+  const venta = new Set(vendidos.map((v) => normalizeTag(v) ?? v));
+  return {
+    faltan: vendidos.filter((v) => !yaEstan.has(normalizeTag(v) ?? v)),
+    sobran: [...yaEstan].filter((s) => !venta.has(s)),
+    sinMonto: conHub.filter((l) => !(l.monto ?? "").trim()).length,
+  };
+}
+
+/**
+ * DEFAULT DE NACIMIENTO del grupo de licencias: una línea por Hub vendido, sin monto.
+ * Devuelve el MISMO objeto si no hay nada que sembrar (el llamador detecta el cambio por
+ * identidad). Tres frenos, cada uno cierra un modo de falla medido contra la base real:
+ *
+ *  1. SHAPE LEGACY → no se toca. Escribir en `licencias` vuelve `esInversionLegacy` false, y
+ *     entonces `InvestmentSection` DEJA de proyectar ⇒ `implementacion` y `licenciasHubspot`
+ *     quedan en el Json sin renderizarse en NINGUNA superficie, sin error y sin camino de UI
+ *     para recuperarlos. Son 7 canvases activos hoy (3 publicados): tronex perdería su
+ *     "USD $7.500" y CLARK y Color Solution sus condiciones de licencia. La conversión la
+ *     hace el EDITOR, donde `d` ya es la proyección y `set` parte de `d`. El server no
+ *     persiste proyecciones.
+ *  2. GRUPO CON ALGO ESCRITO → no se toca. `inversion` se arrastra verbatim en cada
+ *     "Generar" (es `agentGenerated:false`), así que "completar lo que falta" acá resucitaría
+ *     en cada corrida las líneas que Ventas borró a propósito. Lo incremental lo hace el
+ *     asistente del editor, con la línea genérica a la vista.
+ *  3. SIN VENDIDOS → no se toca. No se adivina qué se vendió.
+ */
+export function sembrarLicenciasIniciales<T extends InversionData>(
+  data: T,
+  vendidos: readonly string[],
+): T {
+  if (!vendidos.length) return data;
+  if (esInversionLegacy(data)) return data;
+  if (conContenido(data.licencias)) return data;
+  return { ...data, licencias: lineasDeLicenciaPorHub(vendidos) };
+}
+
+/** Los conceptos de las líneas de Hub que quedaron SIN monto. Lo consume el preflight de
+ *  `publish`: una línea sembrada que nadie coteó vuelve la sección no-blank ⇒ se publicaría
+ *  una tabla de guiones sin total. Se lee de un Json crudo, así que tolera basura. */
+export function licenciasDeHubSinMonto(data: unknown): string[] {
+  const ls = (data as InversionData | null)?.licencias;
+  if (!Array.isArray(ls)) return [];
+  return ls
+    .filter((l) => !!l && typeof l === "object" && !!slugDeLinea(l) && !(l.monto ?? "").trim())
+    .map((l) => (l.concepto ?? "").trim() || labelForTag(slugDeLinea(l)));
 }

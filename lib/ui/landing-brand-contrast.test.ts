@@ -117,6 +117,11 @@ describe("matriz de contraste de la marca (AA, contra el fondo REAL)", () => {
     // el techo del ícono—, así que es el borde de un control y le aplica el 3:1 de
     // WCAG 1.4.11. Aclararlo lo devuelve al estado en que no se notaba cuál estaba.
     ["borde de la píldora encendida sobre paper", token(ENGINE, "--hub-line-on"), P.bg, 3],
+    /* El MISMO ícono naranja identifica la línea de licencia en la sección de Inversión, que
+       en los dos templates es `theme: "soft"` ⇒ el fondo es `--bg-soft` y no el paper. Es el
+       par más ajustado de la familia (3.05:1 contra el 3:1 de WCAG 1.4.11 para un ícono), así
+       que aclarar el naranja o oscurecer el tinte se cae acá y no en la propuesta del cliente. */
+    ["ícono naranja de Hub sobre el tinte de Inversión", hubAccent, P.tint, 3],
   );
   for (const [desc, fg, bg, min] of casos) {
     it(`${desc} ≥ ${min}:1`, () => {

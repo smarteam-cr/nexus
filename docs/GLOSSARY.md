@@ -393,6 +393,15 @@
   ("A definir", "13%") queda fuera del total y se cuenta como **pendiente**. El shape viejo de
   HubSpot (dos tarjetas) ya no existe como vista: se **proyecta** a la tabla al renderizar y se
   persiste con la primera edición. Ver DECISIONS §Secciones personalizadas.
+- **línea de licencia por Hub** (`LineaInversion.hub`): una línea del grupo **licencias** de la
+  Inversión que está DECLARADA como un Hub de HubSpot — lleva su slug (`sales_hub`), su ícono
+  oficial y el monto que escribe Ventas. Se SIEMBRA al generar, una por cada Hub que la sección
+  «Qué se implementa» marca como vendido (`activos`), con el rótulo del catálogo y **sin monto**.
+  Una licencia de un tercero (Zapier, un conector) no lleva `hub` y se ve exactamente como
+  siempre. El editor avisa si falta la línea de un Hub vendido o si sobra la de uno que ya no lo
+  está —nunca la borra solo— y **"Subir al cliente" frena con 400** mientras alguna quede sin
+  monto: una línea con Hub ya cuenta como contenido, así que sin ese freno la propuesta saldría
+  con "Marketing Hub —" y sin total. Ver DECISIONS §Las licencias de la Inversión.
 - **proyección del shape viejo** (`adoptarShapeNuevo`): la conversión al vuelo de las dos
   tarjetas históricas de HubSpot en dos líneas de factura ("Implementación Smarteam" y
   "Licencias HubSpot / año"). Corre en el RENDER, no persiste sola, y se fija con el primer

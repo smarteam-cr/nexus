@@ -15,6 +15,7 @@ import {
   hubIconUrl,
   hubVisual,
   parseCanales,
+  hubsVendidosDe,
 } from "./hubs-solucion";
 import { HUBSPOT_HUB_SLUGS } from "@/lib/tags/catalog";
 import { BC_DEF_BY_KEY } from "@/components/landing/configs/business-case.defs";
@@ -145,5 +146,42 @@ describe("`activos` está FUERA del schema de la sección", () => {
 
   it("y las 4 keys legacy tampoco vuelven al schema", () => {
     for (const k of SOLUCION_LEGACY_KEYS) expect(Object.keys(props)).not.toContain(k);
+  });
+});
+
+describe("hubsVendidosDe: qué Hubs declara vendidos la sección", () => {
+  /* ⚠ Ausente devuelve VACÍO, no las seis. Adentro de `columnasActivas` ausente significa
+     "todas encendidas" —la degradación correcta para PINTAR— y la contraria para PROPONER:
+     ausente solo pasa cuando nadie declaró qué se vendió, y proponer seis líneas de licencia
+     a partir de eso sería adivinar. */
+  it("sin `activos` no adivina", () => {
+    expect(hubsVendidosDe({})).toEqual([]);
+    expect(hubsVendidosDe(null)).toEqual([]);
+    expect(hubsVendidosDe(undefined)).toEqual([]);
+    expect(hubsVendidosDe({ activos: "sales_hub" })).toEqual([]);
+  });
+
+  it("`activos` vacío es una decisión: nada vendido", () => {
+    expect(hubsVendidosDe({ activos: [] })).toEqual([]);
+  });
+
+  it("resuelve los slugs por el catálogo, con alias y dedupe", () => {
+    expect(hubsVendidosDe({ activos: ["sales_hub", "marketing_hub"] })).toEqual([
+      "sales_hub",
+      "marketing_hub",
+    ]);
+    // `operations_hub` es un slug histórico que sigue en filas guardadas.
+    expect(hubsVendidosDe({ activos: ["operations_hub"] })).toEqual(["data_hub"]);
+    expect(hubsVendidosDe({ activos: ["sales_hub", "Sales Hub"] })).toEqual(["sales_hub"]);
+  });
+
+  it("descarta lo que no es un Hub del catálogo", () => {
+    expect(hubsVendidosDe({ activos: ["breeze", "", null, "sales_hub"] })).toEqual(["sales_hub"]);
+  });
+
+  /* NO depende de `columnas`: derivar de ellas lo deja vacío en la mitad del corpus (las
+     secciones que siguen en shape v1 no tienen ninguna). */
+  it("no depende de que exista la columna", () => {
+    expect(hubsVendidosDe({ activos: ["service_hub"], columnas: [] })).toEqual(["service_hub"]);
   });
 });

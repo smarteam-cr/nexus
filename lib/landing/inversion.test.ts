@@ -11,7 +11,10 @@ import {
   adoptarShapeNuevo,
   esInversionLegacy,
   gruposDeInversion,
+  conciliarLicenciasHub,
   INVERSION_LEGACY_KEYS,
+  licenciasDeHubSinMonto,
+  sembrarLicenciasIniciales,
   type InversionData,
 } from "./inversion";
 
@@ -203,5 +206,106 @@ describe("moneda efectiva: la guarda anti-mezcla también sin moneda de sección
   it("los casos normales conservan la moneda de siempre", () => {
     expect(gruposDeInversion({ moneda: "USD", lineas: [{ monto: "$1,000" }] }).moneda).toBe("USD");
     expect(gruposDeInversion({ lineas: [{ monto: "1000" }] }).moneda).toBe("");
+  });
+});
+
+describe("licencias por Hub: una línea por lo que se vendió arriba", () => {
+  it("siembra una línea por Hub, con el rótulo del producto y SIN monto", () => {
+    const out = sembrarLicenciasIniciales({ licencias: [] }, ["marketing_hub", "sales_hub"]);
+    expect(out.licencias).toEqual([
+      { hub: "marketing_hub", concepto: "Marketing Hub", monto: "", detalle: "" },
+      { hub: "sales_hub", concepto: "Sales Hub", monto: "", detalle: "" },
+    ]);
+  });
+
+  /* ⚠ Sembrar no puede mover un centavo: `parseMonto("")` es null ⇒ la línea no suma, no
+     cuenta como pendiente y no enciende el gran total. */
+  it("sembrar NO mueve ningún total", () => {
+    const antes = { moneda: "USD", lineas: [{ monto: "$10,000" }], licencias: [] };
+    const despues = sembrarLicenciasIniciales(antes, ["marketing_hub", "sales_hub"]);
+    const a = gruposDeInversion(antes);
+    const b = gruposDeInversion(despues);
+    expect(b.granTotal).toEqual(a.granTotal);
+    expect(b.gruposConMonto).toBe(a.gruposConMonto);
+    expect(b.pendientesTotales).toBe(a.pendientesTotales);
+  });
+
+  /* Los tres frenos. Cada uno cierra un modo de falla medido contra la base real. */
+  it("NO toca el shape legacy (perdería los montos históricos, sin camino de recuperación)", () => {
+    const out = sembrarLicenciasIniciales(legacyReal, ["sales_hub"]);
+    expect(out).toBe(legacyReal);
+    expect(esInversionLegacy(out)).toBe(true);
+  });
+
+  it("NO toca un grupo que ya tiene algo escrito (resucitaría en cada Generar)", () => {
+    const data = { licencias: [{ concepto: "Licencias HubSpot / año", monto: "A definir" }] };
+    expect(sembrarLicenciasIniciales(data, ["sales_hub"])).toBe(data);
+  });
+
+  it("sin vendidos no adivina", () => {
+    const data = { licencias: [] };
+    expect(sembrarLicenciasIniciales(data, [])).toBe(data);
+  });
+
+  it("es idempotente: la segunda pasada devuelve el MISMO objeto", () => {
+    const una = sembrarLicenciasIniciales({ licencias: [] }, ["sales_hub"]);
+    expect(sembrarLicenciasIniciales(una, ["sales_hub"])).toBe(una);
+  });
+});
+
+describe("conciliarLicenciasHub: qué falta y qué sobra", () => {
+  const conLineas = {
+    licencias: [
+      { hub: "sales_hub", concepto: "Sales Hub", monto: "$3,600" },
+      { hub: "service_hub", concepto: "Service Hub", monto: "" },
+      { concepto: "Licencias HubSpot / año", monto: "A definir" }, // sin hub: de un tercero
+    ],
+  };
+
+  it("faltan los vendidos sin línea propia", () => {
+    expect(conciliarLicenciasHub(conLineas.licencias, ["sales_hub", "marketing_hub"]).faltan)
+      .toEqual(["marketing_hub"]);
+  });
+
+  it("sobran las que ya no están vendidas — pero la línea NO se toca, solo se avisa", () => {
+    expect(conciliarLicenciasHub(conLineas.licencias, ["sales_hub"]).sobran).toEqual(["service_hub"]);
+  });
+
+  it("cuenta las líneas de Hub sin monto e IGNORA las que no son un Hub", () => {
+    const r = conciliarLicenciasHub(conLineas.licencias, ["sales_hub", "service_hub"]);
+    expect(r.sinMonto).toBe(1); // service_hub; la genérica sin `hub` no cuenta
+    expect(r.faltan).toEqual([]);
+    expect(r.sobran).toEqual([]);
+  });
+
+  it("un alias muerto se resuelve por el catálogo", () => {
+    // `operations_hub` es un slug histórico que el catálogo mapea a `data_hub`.
+    const r = conciliarLicenciasHub([{ hub: "operations_hub" }], ["data_hub"]);
+    expect(r.faltan).toEqual([]);
+    expect(r.sobran).toEqual([]);
+  });
+});
+
+describe("licenciasDeHubSinMonto: el freno de publicación", () => {
+  it("detecta la línea sembrada que nadie coteó", () => {
+    expect(
+      licenciasDeHubSinMonto({ licencias: [{ hub: "sales_hub", concepto: "Sales Hub", monto: "" }] }),
+    ).toEqual(["Sales Hub"]);
+  });
+
+  it("ignora la de un tercero sin monto (no la sembramos nosotros)", () => {
+    expect(licenciasDeHubSinMonto({ licencias: [{ concepto: "Zapier", monto: "" }] })).toEqual([]);
+  });
+
+  it("con monto no molesta", () => {
+    expect(
+      licenciasDeHubSinMonto({ licencias: [{ hub: "sales_hub", concepto: "Sales Hub", monto: "$1" }] }),
+    ).toEqual([]);
+  });
+
+  it("cae al rótulo del catálogo si el concepto quedó vacío, y tolera basura", () => {
+    expect(licenciasDeHubSinMonto({ licencias: [{ hub: "data_hub", concepto: "" }] })).toEqual(["Data Hub"]);
+    expect(licenciasDeHubSinMonto(null)).toEqual([]);
+    expect(licenciasDeHubSinMonto({ licencias: "x" })).toEqual([]);
   });
 });

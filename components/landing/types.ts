@@ -201,7 +201,9 @@ export interface WebMethodologyData { fases: Phase[]; cotizaAparte: string }
 
 // 7) Inversión (web) — tabla fase 1 con TOTAL autocalculado + extras opcionales +
 //    recurrentes separados (card oscura) + nota de exclusiones + moneda configurable.
-export interface WebInvestLine { concepto: string; monto: string; detalle: string }
+/** Una línea de la sección de Inversión. `hub` (opcional) es el slug del Hub de HubSpot que
+ *  esa línea factura — de ahí sale su ícono. Ver `LineaInversion` en lib/landing/inversion.ts. */
+export interface WebInvestLine { concepto: string; monto: string; detalle: string; hub?: string }
 /**
  * La sección de INVERSIÓN, una sola para los dos templates (antes convivían dos shapes
  * distintos bajo la misma key). Las reglas de forma —qué es legacy, cuántos totales se
@@ -325,6 +327,21 @@ export interface LandingContext {
    */
   cronograma?: {
     timeline?: KickoffTimelineData | null;
+  };
+  /**
+   * Solo la PROPUESTA COMERCIAL: los Hubs que la sección `solucion` del MISMO documento
+   * declara vendidos (`activos`, ya resueltos a slug). Hermano de `ctx.desarrollo` y
+   * `ctx.cronograma`: un canal por DOCUMENTO, porque el motor no propaga data entre secciones
+   * (`LandingView` le pasa a cada componente solo su propia fila).
+   *
+   * SOLO lo arma el editor. La página externa y el PDF no lo pasan, y está bien: sus dos
+   * consumidores —el asistente que siembra las licencias y el aviso de desajuste— son
+   * `editable`-only, así que en lectura el camino NO EXISTE (no es un flag apagado). El ÍCONO
+   * no lo usa: sale de `linea.hub`, que viaja adentro del `data` y por eso llega solo a las
+   * cuatro superficies.
+   */
+  propuesta?: {
+    hubsVendidos?: string[];
   };
 }
 

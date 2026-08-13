@@ -41,6 +41,11 @@ export const NO_CONTENIDO = new Set([
   // que una sección donde SOLO eligió la moneda quedaría no-blank y se publicaría diciendo
   // "Montos en CRC" y nada más. Describe CÓMO se muestran los montos, no QUÉ dice.
   "moneda",
+  // Slug del Hub de una línea de licencia (sección de Inversión). Es IDENTIDAD de la línea
+  // —de dónde sale su ícono—, no algo que el cliente lea: una línea cuyo concepto, monto y
+  // detalle quedaron vacíos no puede mantener viva a la sección solo porque conserva su slug.
+  // Es la misma trampa de `anchoRecurrente`, con la que "Limpiar" mentía.
+  "hub",
   // Alto del iframe de una sección personalizada. Está acá porque el CSE puede ajustarlo
   // en una sección cuyo HTML nunca pegó (o después de "Limpiar"): sin esta entrada, esa
   // sección vacía se publicaría y el cliente vería un hueco con título.

@@ -69,7 +69,7 @@ describe("los campos de PRESENTACIÓN no cuentan como contenido", () => {
 describe("el vocabulario de lo que no es contenido", () => {
   it("está declarado y es corto — agregar una clave es una decisión, no un atajo", () => {
     expect([...NO_CONTENIDO].sort()).toEqual([
-      "__lang", "altoEmbed", "anchoRecurrente", "buttonTarget", "logoScale", "moneda",
+      "__lang", "altoEmbed", "anchoRecurrente", "buttonTarget", "hub", "logoScale", "moneda",
     ]);
   });
 

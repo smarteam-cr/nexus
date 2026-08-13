@@ -32,6 +32,12 @@ import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { loadKnowledgeByTags } from "@/lib/knowledge/load-by-tags";
 import { HUBSPOT_HUB_SLUGS, sanitizeTags, tagLabels, type HubspotHubSlug } from "@/lib/tags/catalog";
 import { esCustomKey } from "@/lib/landing/custom-sections";
+import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
+import {
+  INVERSION_SECTION_KEY,
+  sembrarLicenciasIniciales,
+  type InversionData,
+} from "@/lib/landing/inversion";
 
 /** Tope del bloque de conocimiento por Hub. Los 6 documentos sembrados suman ~11k, así que
  *  entran todos incluso vendiendo la suite completa; el margen deja lugar a que el equipo
@@ -404,6 +410,41 @@ export async function POST(
       const solucionGen = generated.find((g) => g.key === "solucion");
       if (solucionGen && solucionGen.data && typeof solucionGen.data === "object") {
         (solucionGen.data as Record<string, unknown>).activos = hubSlugs;
+      }
+    }
+
+    /* Una LÍNEA DE LICENCIA por Hub vendido en la sección de Inversión: lo que la propuesta
+       dice que implementa arriba es lo que tiene que cobrar abajo, una línea por Hub y con su
+       ícono. Determinística como `casos_de_uso`, JAMÁS del agente (`agentGenerated:false` + el
+       preámbulo le prohíbe escribir precios). Nace SIN MONTO: sembrar no puede inventar un
+       precio, y una línea sin monto es inerte para la aritmética.
+
+       LA FUENTE ES `activos`, NO LOS TAGS. Medido contra la base: ninguna propuesta de HubSpot
+       tiene tags de Hub, y la única que declara los suyos los declara en `activos`, puestos con
+       las píldoras del editor. Va DESPUÉS del bloque de arriba a propósito: cuando hay tags,
+       `activos` acaba de re-sembrarse desde ellos ⇒ las dos secciones dicen lo mismo; cuando no
+       hay, manda la curaduría del vendedor. El fallback a `hubSlugs` cubre el único borde que
+       queda (primer Generar con `solucion` oculta y sin canvas previo).
+
+       Gateado por la existencia de `solucion` en el TEMPLATE: `website_v1` no la declara, así
+       que las propuestas de sitio web publicadas no estrenan un grupo de licencias que su
+       cliente nunca vio. Y si la sección de Inversión está OCULTA tampoco se siembra: nadie
+       pidió contenido para algo que esta propuesta no muestra. */
+    if (defsByKey[SOLUCION_SECTION_KEY] && !skipKeys.has(INVERSION_SECTION_KEY)) {
+      const solucionData =
+        generated.find((g) => g.key === SOLUCION_SECTION_KEY)?.data ??
+        prevDataByKey.get(SOLUCION_SECTION_KEY);
+      const vendidos = hubsVendidosDe(solucionData);
+      const fuente: readonly string[] = vendidos.length ? vendidos : hubSlugs;
+      const invGen = generated.find((g) => g.key === INVERSION_SECTION_KEY);
+      const base =
+        invGen?.data ?? prevDataByKey.get(INVERSION_SECTION_KEY) ?? defsByKey[INVERSION_SECTION_KEY]?.empty;
+      if (base && typeof base === "object" && !Array.isArray(base)) {
+        const next = sembrarLicenciasIniciales(base as InversionData, fuente);
+        if (next !== base) {
+          if (invGen) invGen.data = next;
+          else generated.push({ key: INVERSION_SECTION_KEY, data: next });
+        }
       }
     }
 

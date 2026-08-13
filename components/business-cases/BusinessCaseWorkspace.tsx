@@ -24,6 +24,7 @@ import type { VersionMeta } from "@/components/business-cases/bc-workspace-share
 import PublishBar from "@/components/canvas/PublishBar";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import { configForCanvas } from "@/components/landing/configs/templates";
+import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 
@@ -118,6 +119,13 @@ export default function BusinessCaseWorkspace({
     language ??
     ((sectionByKey.get("hero")?.blocks[0]?.data as { __lang?: string } | null)?.__lang) ??
     null;
+
+  // Los Hubs que "Qué se implementa" declara VENDIDOS, para el asistente de licencias de la
+  // sección de Inversión. Entra por ctx porque el motor NO propaga data entre secciones:
+  // LandingView le pasa a cada componente solo su propia fila. Es la misma lectura
+  // cross-sección por key que este archivo ya hace para el idioma del hero y para los
+  // casos de uso.
+  const hubsVendidos = hubsVendidosDe(sectionByKey.get(SOLUCION_SECTION_KEY)?.blocks[0]?.data);
 
   // Config del template en el ORDEN del canvas (habilita el drag & drop), INTERSECADA
   // con sus secciones reales —un canvas viejo sembrado con menos secciones que el
@@ -393,6 +401,7 @@ export default function BusinessCaseWorkspace({
             ctx={{
               clientName,
               lang: proposalLang,
+              propuesta: { hubsVendidos },
               clientLogoUrl: clientLogo,
               clientLogoDarkUrl,
               clientLogoScale,
