@@ -956,7 +956,38 @@
 .stl .stl-editable:focus { background: rgba(11, 88, 211, 0.06); box-shadow: 0 0 0 2px rgba(11, 88, 211, 0.40); }
 .stl .stl-dark .stl-editable:hover { background: rgba(255, 255, 255, 0.05); }
 .stl .stl-dark .stl-editable:focus { background: rgba(30, 143, 246, 0.10); box-shadow: 0 0 0 2px rgba(30, 143, 246, 0.55); }
-.stl .stl-editable:empty::before { content: attr(data-placeholder); color: var(--text-muted); opacity: 0.7; }
+/* El placeholder de un campo vacío se pinta con ::before — y el motor YA decora ese MISMO
+   pseudo-elemento en algunas clases. La rayita de marca del eyebrow (línea ~260) es una caja
+   de 26×2px con fondo: como esta regla es más específica solo le gana `content`, el texto del
+   placeholder terminaba METIDO ADENTRO de esa caja de 26px, partido en columna
+   ("EY / EB / RO / W") y desbordando encima del título. Se veía en toda sección con el eyebrow
+   vacío —siempre en las personalizadas, que no declaran uno— y en el hero de /roles cuando el
+   área está sin llenar. Por eso acá no alcanza con poner el texto: hay que NEUTRALIZAR la caja
+   que puso la otra regla. Lo cubre `lib/ui/landing-placeholder.test.ts`. */
+.stl .stl-editable:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  opacity: 0.7;
+  /* RESET DE LA CAJA, por ENUMERACIÓN: lo que no esté acá se filtra desde la otra regla.
+     `flex-shrink` no es de más — el 0 del eyebrow SOBREVIVÍA al reset y hacía que un
+     placeholder más ancho que su contenedor desbordara en horizontal en vez de envolver;
+     `position` cubre las decoraciones ABSOLUTAS (las viñetas de `.stl-ba-li`/`.stl-plain-li`,
+     que hoy caen en un wrapper y no en el contentEditable, pero nada lo impide mañana).
+     `border-radius` se sacó a propósito: el 6px vive en el ELEMENTO (línea ~951) y no se
+     hereda al pseudo, así que resetearlo acá era un no-op escrito por intuición.
+     El guard verifica que este reset cubra TODA propiedad de caja que declaren las
+     decoraciones vivas del motor, no solo las tres que produjeron el bug. */
+  display: inline;
+  position: static;
+  width: auto;
+  height: auto;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  transform: none;
+  flex-shrink: 1;
+}
 .stl .stl-dark .stl-editable:empty::before { color: var(--dark-text-2); }
 
 /* Chrome de edición del ítem (handle ⠿ + × de quitar).

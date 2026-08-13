@@ -444,7 +444,7 @@ export default function LandingView({
             <header className="stl-sec-head">
               {editable ? (
                 <Editable as="span" className="stl-eyebrow" editable value={effEyebrow}
-                  placeholder="Eyebrow…" onCommit={(v) => onEyebrowChange?.(def.key, v)} />
+                  placeholder="Categoría de la sección…" onCommit={(v) => onEyebrowChange?.(def.key, v)} />
               ) : (
                 effEyebrow && <span className="stl-eyebrow">{effEyebrow}</span>
               )}

@@ -25,13 +25,18 @@
  *   3. inyectarle nosotros un script de resize → el mensaje llegaría con
  *      `event.origin === "null"` (origen opaco), así que no se puede autenticar:
  *      cualquier otro frame podría falsificar la altura.
- * El CSE ve el resultado en vivo mientras ajusta el número. Un handle de arrastre que
- * escriba `altoEmbed` sería una mejora posterior sin cambio de modelo.
+ * El número se aplica al SALIR del campo (mismo commit-en-blur que el resto del motor), y el
+ * campo se re-sincroniza con el valor ya saneado para que un 5000 no quede en pantalla
+ * mientras el iframe se pinta a 2000. Un handle de arrastre que escriba `altoEmbed` —o un
+ * preview que siga al número mientras se tipea— serían mejoras posteriores sin cambio de
+ * modelo.
  */
-import { useEffect, useRef, type FC } from "react";
+import { useEffect, useRef, useState, type FC } from "react";
 import type { SectionProps } from "./types";
 import {
   altoEmbedPx,
+  EMBED_ALTO_MAX,
+  EMBED_ALTO_MIN,
   MAX_EMBED_CHARS,
   type HtmlEmbedData,
 } from "@/lib/landing/custom-sections";
@@ -50,12 +55,16 @@ const PDF_FALLBACK = "Esta sección es interactiva: vela en la versión en líne
 function CodeArea({
   value,
   onCommit,
+  onLength,
   rows,
   placeholder,
   mono,
 }: {
   value: string;
   onCommit: (next: string) => void;
+  /** Largo EN VIVO mientras se tipea, sin comitear. Lo pide el contador: `value` es lo ya
+   *  guardado, así que mientras se pegan 200.000 caracteres seguía diciendo lo de antes. */
+  onLength?: (n: number) => void;
   rows: number;
   placeholder?: string;
   mono?: boolean;
@@ -89,7 +98,11 @@ function CodeArea({
       defaultValue={safe}
       rows={rows}
       placeholder={placeholder}
-      spellCheck={false}
+      /* Sin corrector en el HTML (subrayaría cada etiqueta), CON corrector en la prosa: el
+         texto de reemplazo sale IMPRESO en la propuesta que lee el cliente y es lo único
+         que ataja un dedazo ahí. `mono` ya distingue exactamente los dos campos. */
+      spellCheck={mono ? false : undefined}
+      onInput={onLength ? (e) => onLength(e.currentTarget.value.length) : undefined}
       onBlur={(e) => {
         if (e.currentTarget.value !== safe) onCommit(e.currentTarget.value);
       }}
@@ -129,6 +142,11 @@ export const HtmlEmbedSection: FC<SectionProps<HtmlEmbedData>> = ({
   const alto = altoEmbedPx(data);
   const set = (next: Partial<HtmlEmbedData>) => onChange?.({ ...data, ...next });
 
+  /* Largo mientras se tipea. `null` = nadie está tipeando → se deriva de lo guardado, que
+     es lo correcto cuando el valor cambia por afuera (regenerar, deshacer). Se vuelve a
+     `null` al comitear. Va ANTES de los returns tempranos: un hook no puede ser condicional. */
+  const [largoVivo, setLargoVivo] = useState<number | null>(null);
+
   /* PDF: el iframe NO se monta, y no es una preferencia estética — muere por cuatro vías
      distintas. `PdfReadySignal` enumera las `<img>` del documento de ARRIBA y no ve nada
      adentro del frame (la señal de "listo" se dispara con el embebido en blanco);
@@ -148,7 +166,8 @@ export const HtmlEmbedSection: FC<SectionProps<HtmlEmbedData>> = ({
     return <Embed html={html} alto={alto} titulo={sectionTitle ?? "Sección personalizada"} />;
   }
 
-  const exceso = (data.html ?? "").length > MAX_EMBED_CHARS;
+  const largo = largoVivo ?? (data.html ?? "").length;
+  const exceso = largo > MAX_EMBED_CHARS;
 
   return (
     <div className="stl-embed-edit">
@@ -156,19 +175,24 @@ export const HtmlEmbedSection: FC<SectionProps<HtmlEmbedData>> = ({
         <span className="stl-embed-label">
           HTML de la sección
           <span className={`stl-embed-count${exceso ? " stl-embed-count--over" : ""}`}>
-            {(data.html ?? "").length.toLocaleString("en-US")} / {MAX_EMBED_CHARS.toLocaleString("en-US")}
+            {largo.toLocaleString("en-US")} / {MAX_EMBED_CHARS.toLocaleString("en-US")}
           </span>
         </span>
         <CodeArea
           mono
           rows={10}
           value={data.html ?? ""}
-          placeholder="Pegá acá el HTML completo (puede traer <style> y <script>)…"
-          onCommit={(v) => set({ html: v })}
+          placeholder="Pega acá el HTML completo (puede traer <style> y <script>)…"
+          onLength={setLargoVivo}
+          onCommit={(v) => {
+            setLargoVivo(null);
+            set({ html: v });
+          }}
         />
         <span className="stl-embed-help">
-          Corre aislado: no puede leer ni tocar nada de Nexus, ni enviar formularios, ni salir
-          a otra página. Los CDN (Tailwind, GSAP) sí funcionan.
+          Corre aislado. Sí funcionan CSS, JavaScript y los CDN (Tailwind, GSAP). NO funcionan:
+          llamadas a APIs (fetch), videos embebidos de YouTube o Vimeo, formularios, ni enlaces
+          que abran otra página.
         </span>
       </label>
 
@@ -176,10 +200,15 @@ export const HtmlEmbedSection: FC<SectionProps<HtmlEmbedData>> = ({
         <label className="stl-embed-field stl-embed-field--alto">
           <span className="stl-embed-label">Alto (px)</span>
           <input
+            /* La `key` remonta el campo cuando cambia lo guardado: sin eso, escribir 5000
+               dejaba el 5000 en pantalla para siempre mientras el iframe se pintaba a 2000
+               (`altoEmbedPx` capa en silencio) — el número que se leía NO era el alto real.
+               Los topes salen de las constantes que hacen ese clamp, no escritos a mano. */
+            key={`${alto}|${(data.altoEmbed ?? "").trim()}`}
             className="stl-embed-input"
             type="number"
-            min={200}
-            max={2000}
+            min={EMBED_ALTO_MIN}
+            max={EMBED_ALTO_MAX}
             step={20}
             defaultValue={alto}
             onBlur={(e) => set({ altoEmbed: e.currentTarget.value.trim() })}
@@ -202,7 +231,9 @@ export const HtmlEmbedSection: FC<SectionProps<HtmlEmbedData>> = ({
       {html ? (
         <Embed html={html} alto={alto} titulo={sectionTitle ?? "Sección personalizada"} />
       ) : (
-        <div className="stl-embed-vacio">Pegá un HTML arriba y lo vas a ver acá mismo.</div>
+        <div className="stl-embed-vacio">
+          Pega un HTML arriba y, al salir del campo, lo vas a ver acá mismo.
+        </div>
       )}
     </div>
   );

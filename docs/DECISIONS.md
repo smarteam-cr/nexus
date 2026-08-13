@@ -1912,3 +1912,52 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   guard de contraste: es el más ajustado de la familia contra el 3:1 de WCAG 1.4.11.
 - ⚠ **Consecuencia a ojos abiertos:** 8 de las 9 propuestas de la base tienen `solucion` en shape
   legacy (sin `activos`), así que la feature no se enciende ahí hasta regenerar esa sección.
+
+## Un elemento tiene UN solo `::before`: el placeholder y la rayita se pisaban (2026-08-13)
+
+> Elías, con una captura de una sección personalizada en edición: *"Mira como se ve esa
+> sección"*. En el encabezado se leía «EY / EB / RO / W» apilado ENCIMA del título.
+
+- **El bug es de CASCADA, no de la sección personalizada.** El placeholder de un campo vacío se
+  pinta con `.stl .stl-editable:empty::before { content: attr(data-placeholder) }` (0,3,1), y la
+  rayita de marca del eyebrow con `.stl .stl-eyebrow::before` (0,2,1) — el MISMO pseudo-elemento.
+  La regla del placeholder solo gana `content`: `width:26px`, `height:2px`, `background` y
+  `flex-shrink:0` seguían siendo los de la rayita, así que el texto quedaba adentro de una caja
+  de 26 px, se partía de a dos letras y desbordaba sobre el `<h2>`. Verificado con estilos
+  computados en Chrome, no por lectura: `content:"Eyebrow…"` con `width:26px; height:2px`.
+- **El alcance era mayor al reportado.** Además de toda sección personalizada —`customDef` no
+  declara `eyebrow`, así que el campo está SIEMPRE vacío—, rompía el hero de **/roles** con el
+  área sin llenar y cualquier sección estándar a la que el CSE le BORRE el eyebrow
+  (`eyebrowOverride: ""` no cae al default de la config). Latente desde el retema de marca del
+  2026-07-20, que fue cuando nació la rayita.
+- **El arreglo es NEUTRALIZAR la caja, no tapar el caso.** El reset (`display · position ·
+  width · height · background · border · padding · margin · transform · flex-shrink`) cierra la
+  clase entera: cualquier `Editable` vacío sobre una clase con pseudo-elemento decorado. La
+  alternativa —`:not(:empty)` en la rayita— arreglaba el eyebrow y dejaba viva la próxima
+  colisión.
+- **Cero movimiento en lo que ve el cliente.** En modo lectura `Editable` no emite ni la clase
+  `stl-editable` ni `data-placeholder`, así que ni `:empty` ni el placeholder existen en
+  `/external` ni en el PDF. Verificado: con el eyebrow ESCRITO la rayita sigue midiendo 26×2 px
+  en `#C2400F`, idéntica.
+- **El guard mira VALORES, no nombres de propiedad** (`lib/ui/landing-placeholder.test.ts`).
+  Un reset que declare `width: 26px` es el bug escrito de nuevo y pasaría un test que solo
+  verifique que la propiedad está nombrada — se probó y pasaba. Y la lista de lo que NO hace
+  falta resetear es una DENY-list: con allowlist, un `display:none` en una decoración futura
+  —que deja el placeholder INVISIBLE— se salteaba en silencio. El guard barre
+  `components/landing` **y** `components/canvas/*-sections` (el mismo universo que
+  `pdf-mode-coverage`), acepta las clases BASE del motor (`eyebrow`, `cta-title`: son las que
+  más chance tienen de estrenar la misma rayita), excluye las reglas de impresión —en PDF la
+  colisión es imposible y bloquear una mejora de paginado sería mandar a investigar algo que no
+  existe— y verifica que captura TODOS los `<Editable>` del repo: un regex que se quede corto
+  vacía el barrido y deja todo en verde.
+- **`customDef` sigue SIN declarar `eyebrow`.** Un default sería INDELEBLE: los PATCH normalizan
+  `""` → `null` y con override null el render cae a `def.eyebrow`, así que el vendedor que lo
+  borra lo ve volver. Y el eyebrow SE PUBLICA: los de las otras secciones son categorías del
+  argumento comercial ("Diagnóstico", "Inversión") y ninguna palabra genérica sabe la categoría
+  de un HTML que armó Ventas — misma regla que §"Un tipo de propuesta siembra lo que AFIRMA".
+- **El placeholder pasa a decir «Categoría de la sección…»**: "Eyebrow…" era el único
+  anglicismo de jerga de maquetación entre los ~60 placeholders del motor, y quien lo lee es el
+  vendedor que acaba de crear su sección. De paso, el copy nuevo de la sección personalizada
+  pasa a TUTEO (nació en voseo el día anterior) y la ayuda del campo HTML deja de mentir por
+  omisión: la CSP inyectada bloquea `fetch` y los iframes anidados, así que un video de YouTube
+  embebido no funciona y eso hay que decirlo ANTES de que alguien lo pegue.
