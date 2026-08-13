@@ -17,6 +17,7 @@ import {
 import { templateById, templateDefsByKey } from "@/components/landing/configs/templates.defs";
 import { HUBSPOT_TEMPLATE_ID } from "@/lib/business-cases/case-types";
 import { buildTemplateMetaEntry } from "@/lib/business-cases/template-meta";
+import { customDef, esCustomKey } from "@/lib/landing/custom-sections";
 import { piecesCreatedWithProject } from "@/lib/pieces/registry";
 import { resolvePipeline } from "@/lib/projects/kind";
 
@@ -188,21 +189,38 @@ export async function createBusinessCaseCanvas(
     /** ORDEN de secciones del canvas previo (drag & drop del CSE): el caso nuevo lo
      *  respeta; keys nuevas del template van al final en su orden de template. */
     orderedKeys?: string[];
+    /** Secciones PERSONALIZADAS del canvas previo (`custom:*`). No están en el template,
+     *  así que sin esto un "Generar" las haría desaparecer: seguirían vivas en la versión
+     *  vieja del dropdown, pero el vendedor regenera y su demo interactiva ya no está.
+     *  La KEY se conserva → `hiddenByKey`, `orderedKeys` y el brief siguen matcheando. */
+    customSections?: Array<{
+      key: string;
+      label: string;
+      titleOverride?: string | null;
+      eyebrowOverride?: string | null;
+      data?: unknown;
+    }>;
   },
 ): Promise<string> {
   const tpl = templateById(templateId);
   const defsByKey = templateDefsByKey(templateId);
 
+  // Las personalizadas se tratan EXACTAMENTE como las del template de acá en adelante
+  // (orden, entry del Json, fila, bloque): la única diferencia es de dónde salió su def.
+  const customs = (meta?.customSections ?? []).filter((c) => esCustomKey(c.key));
+  const allSections = [...tpl.sections, ...customs.map((c) => customDef(c.key, c.label))];
+  const metaByKey = new Map(customs.map((c) => [c.key, c]));
+
   // Orden efectivo: el del canvas previo si existe; secciones sin posición previa
   // (nuevas en el template) al final, manteniendo su orden relativo del template.
   const prevIdx = new Map((meta?.orderedKeys ?? []).map((k, i) => [k, i]));
   const orderedSections = prevIdx.size
-    ? [...tpl.sections].sort((a, b) => {
-        const av = prevIdx.get(a.key) ?? 1000 + tpl.sections.findIndex((s) => s.key === a.key);
-        const bv = prevIdx.get(b.key) ?? 1000 + tpl.sections.findIndex((s) => s.key === b.key);
+    ? [...allSections].sort((a, b) => {
+        const av = prevIdx.get(a.key) ?? 1000 + allSections.findIndex((s) => s.key === a.key);
+        const bv = prevIdx.get(b.key) ?? 1000 + allSections.findIndex((s) => s.key === b.key);
         return av - bv;
       })
-    : tpl.sections;
+    : allSections;
 
   // Desactivar versiones anteriores (la nueva queda como la activa/editable).
   await db.projectCanvas.updateMany({
@@ -250,22 +268,33 @@ export async function createBusinessCaseCanvas(
       key: s.key,
       label: s.canvasLabel ?? s.label,
       order: i,
+      // Los títulos de cara al cliente solo se arrastran en las personalizadas: ahí el
+      // nombre ES el dato (lo escribió el vendedor) y además es el único canal que lo
+      // lleva a la impresión. Las del template se titulan por la config.
+      titleOverride: metaByKey.get(s.key)?.titleOverride ?? null,
+      eyebrowOverride: metaByKey.get(s.key)?.eyebrowOverride ?? null,
     })),
   });
 
   // Siembra 1 bloque ESTRUCTURADO VACÍO por sección (data = `empty` de la config) →
   // el workspace muestra el template editorial completo desde el primer momento, y
   // editar/generar/publicar siempre opera sobre un bloque existente (1 por sección).
+  // ⚠ Las personalizadas NO nacen vacías: llevan su `data` de la versión anterior (el
+  // HTML pegado), porque el agente nunca las va a rellenar después.
   const createdSections = await db.canvasSection.findMany({
     where: { canvasId: canvas.id },
     select: { id: true, key: true },
   });
+  const defsAll = Object.fromEntries(allSections.map((d) => [d.key, d]));
   await db.canvasBlock.createMany({
     data: createdSections.map((s) => ({
       sectionId: s.id,
       blockType: "CARD" as const, // neutro: el render se elige por section.key vía la config
       content: null,
-      data: (defsByKey[s.key]?.empty ?? {}) as Prisma.InputJsonValue,
+      data: (metaByKey.get(s.key)?.data ??
+        defsByKey[s.key]?.empty ??
+        defsAll[s.key]?.empty ??
+        {}) as Prisma.InputJsonValue,
       order: 0,
       source: "HUMAN" as const,
       status: "CONFIRMED" as const,

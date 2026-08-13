@@ -13,7 +13,7 @@ import { prisma } from "@/lib/db/prisma";
 import { ensureAccess } from "@/lib/business-cases";
 import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
-import { templateDefsByKey } from "@/components/landing/configs/templates.defs";
+import { defsForCanvas } from "@/components/landing/configs/templates.defs";
 
 function buildVerifyUrl(req: NextRequest, token: string): string {
   const base = process.env.APP_URL || new URL(req.url).origin;
@@ -116,7 +116,12 @@ export async function POST(
   // la PRESENTACIÓN por sección: el snapshot debe poder renderizarse fiel aunque el
   // template viva y cambie después (render sintetizado del external page).
   const resolved = resolveCaseTypeFor(bc, canvas.sections);
-  const defsByKey = templateDefsByKey(resolved.templateId);
+  /* `defsForCanvas` y no `templateDefsByKey`: una sección PERSONALIZADA no está en la
+     plantilla, así que sin la def sintetizada `sectionType` congelaría la key entera
+     (`custom:abc`), `configForSnapshot` no encontraría renderer para eso y la sección
+     desaparecería SOLO en la propuesta publicada — la superficie que abre el prospecto,
+     y la única donde nadie de Smarteam mira. */
+  const defsByKey = defsForCanvas(resolved.templateId, filled);
 
   const snapshot = {
     name: bc.name,

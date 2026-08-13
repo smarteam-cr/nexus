@@ -1,10 +1,9 @@
 /**
- * PATCH /api/business-cases/[id]/canvas-sections/[sectionId]
- *
- * Metadatos de cara al cliente de una sección (titleOverride / eyebrowOverride) con
- * undo de 1 nivel. Espejo del PATCH de projects, con guardSalesAccess + pertenencia
- * al caso y SIN gating de handoff. (El landing del BC se titula por la config, así
- * que hoy el workspace no lo usa, pero completa el contrato del hook.)
+ * /api/business-cases/[id]/canvas-sections/[sectionId]
+ *   PATCH  → metadatos de cara al cliente (titleOverride / eyebrowOverride) con undo de
+ *            1 nivel, el brief del agente y el flag `hidden`. Espejo del PATCH de
+ *            projects, con guardSalesAccess + pertenencia al caso y SIN gating de handoff.
+ *   DELETE → borra una sección PERSONALIZADA (solo esas — ver el guard del handler).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
@@ -12,6 +11,7 @@ import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { touchCanvasContent } from "@/lib/canvas/touch-content";
 import { parseSectionEntries, withBriefUpdated, patchSectionEntry } from "@/lib/business-cases/section-briefs";
+import { esCustomKey } from "@/lib/landing/custom-sections";
 
 type Params = Promise<{ id: string; sectionId: string }>;
 
@@ -110,4 +110,58 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   const updated = await prisma.canvasSection.update({ where: { id: sectionId }, data, select: RESP_SELECT });
   await touchCanvasContent(sectionId);
   return NextResponse.json({ ...updated, agentBriefOverride: curBrief });
+}
+
+/**
+ * DELETE — borra una sección PERSONALIZADA con su bloque y su entry del Json.
+ *
+ * Por qué existe (ocultar no alcanza): para las 12 de la plantilla el universo es cerrado
+ * y "ocultar" es la operación correcta; para las personalizadas el universo lo crea el
+ * vendedor, así que tres clics equivocados dejarían tres fantasmas colapsados para siempre
+ * en el editor — y encima se arrastrarían a cada versión nueva por el carry-forward.
+ *
+ * ⚠ Y por qué el guard `esCustomKey` es lo más importante del handler: un DELETE genérico
+ * sobre `canvas-sections` permitiría borrar `hero` o `inversion` de un canvas, y para el
+ * BC NO existe reconciliador (a diferencia del Handoff) — el documento quedaría mutilado
+ * sin más salida que regenerarlo entero.
+ *
+ * Sin undo: el front confirma. Atenuante honesto para el copy — esto borra la sección de
+ * ESTA versión del caso; las versiones anteriores del dropdown conservan la suya, y una
+ * propuesta ya publicada conserva la suya en el snapshot.
+ */
+export async function DELETE(_req: NextRequest, { params }: { params: Params }) {
+  const { id, sectionId } = await params;
+  const guard = await guardSalesAccess();
+  if (guard instanceof NextResponse) return guard;
+
+  const section = await prisma.canvasSection.findUnique({
+    where: { id: sectionId },
+    select: { key: true, canvasId: true, canvas: { select: { businessCaseId: true, sections: true } } },
+  });
+  if (!section || section.canvas.businessCaseId !== id) {
+    return NextResponse.json({ error: "section not found" }, { status: 404 });
+  }
+  if (!esCustomKey(section.key)) {
+    return NextResponse.json(
+      { error: "Solo se pueden borrar las secciones personalizadas. Las de la plantilla se ocultan." },
+      { status: 400 },
+    );
+  }
+
+  // El touch va ANTES del delete: lee la fila para dar con el canvas.
+  await touchCanvasContent(sectionId);
+  await prisma.$transaction([
+    // Los bloques caen por `onDelete: Cascade`.
+    prisma.canvasSection.delete({ where: { id: sectionId } }),
+    prisma.projectCanvas.update({
+      where: { id: section.canvasId },
+      data: {
+        sections: parseSectionEntries(section.canvas.sections).filter(
+          (e) => e.key !== section.key,
+        ) as unknown as Prisma.InputJsonValue,
+      },
+    }),
+  ]);
+
+  return NextResponse.json({ ok: true });
 }

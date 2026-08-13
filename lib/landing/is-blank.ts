@@ -37,6 +37,10 @@ export const NO_CONTENIDO = new Set([
   "anchoRecurrente", // ancho del bloque recurrente en la propuesta web
   "buttonTarget", // en qué pestaña abre el CTA
   "__lang", // idioma del documento
+  // Alto del iframe de una sección personalizada. Está acá porque el CSE puede ajustarlo
+  // en una sección cuyo HTML nunca pegó (o después de "Limpiar"): sin esta entrada, esa
+  // sección vacía se publicaría y el cliente vería un hueco con título.
+  "altoEmbed",
 ]);
 
 /** Una sección está "en blanco" si todos sus strings y arrays lo están. */

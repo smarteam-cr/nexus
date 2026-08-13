@@ -11,6 +11,8 @@ import type { LandingConfig, SectionDef, SectionProps } from "../types";
 import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
 import { BC_TEMPLATES, templateById } from "./templates.defs";
+import { customDef, esCustomKey, HTML_EMBED_TYPE } from "@/lib/landing/custom-sections";
+import { HtmlEmbedSection } from "../sections-custom";
 import {
   HeroSection,
   PainSection,
@@ -65,6 +67,10 @@ export const SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
   web_methodology: WebMethodologySection,
   web_investment: WebInvestmentSection,
   why_us: WhyUsSection,
+  // Sección personalizada: NINGÚN template la declara — la crea el vendedor en runtime y
+  // el resolver la sintetiza desde la key (`custom:*`). Por eso `registry.test.ts` la
+  // excluye del chequeo de huérfanos con un set aparte.
+  [HTML_EMBED_TYPE]: HtmlEmbedSection,
 };
 
 /** Convierte una def server-safe a SectionDef (con Component) usando un registro de
@@ -112,6 +118,33 @@ const LANDING_CONFIG_BY_TEMPLATE: Record<string, LandingConfig> = Object.fromEnt
 /** Config de landing por templateId, con fallback al template de HubSpot (legacy). */
 export function landingConfigFor(templateId?: string | null): LandingConfig {
   return LANDING_CONFIG_BY_TEMPLATE[templateById(templateId).id];
+}
+
+/**
+ * Config de UN canvas: la plantilla RECORTADA a las secciones que existen, EN SU ORDEN, y
+ * con las secciones personalizadas (`custom:*`) sintetizadas.
+ *
+ * El recorte estaba escrito dos veces —el editor y el render de impresión, con el segundo
+ * documentando que era copia del primero— y las dos copias fallaban igual: la sección que
+ * no matchea se cae del `filter` sin error, sin log y sin poner roja la suite. Con las
+ * personalizadas eso pasaría de una molestia a lo peor posible: el vendedor la ve en el
+ * editor y falta en el PDF que le mandó al prospecto.
+ *
+ * `rows` vacío devuelve la plantilla ENTERA, que es el comportamiento histórico de los dos:
+ * en la ventana de carga (y en un documento recién creado) mostrar una config vacía
+ * escondería la Plantilla completa.
+ */
+export function configForCanvas(
+  templateId: string | null | undefined,
+  rows: Array<{ key: string; label?: string | null }>,
+): LandingConfig {
+  const base = landingConfigFor(templateId);
+  if (!rows.length) return base;
+  const porKey = new Map(base.sections.map((d) => [d.key, d]));
+  const sections = rows
+    .map((r) => porKey.get(r.key) ?? (esCustomKey(r.key) ? toSectionDef(customDef(r.key, r.label)) : null))
+    .filter((d): d is SectionDef => d !== null);
+  return sections.length ? { ...base, sections } : base;
 }
 
 /** Sección del snapshot publicado con la presentación congelada (publish, F1+). */

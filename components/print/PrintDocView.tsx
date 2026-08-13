@@ -18,7 +18,7 @@ import { useMemo } from "react";
 import LandingView from "@/components/landing/LandingView";
 import type { LandingConfig } from "@/components/landing/types";
 import type { PrintDocPayload, PrintRow } from "@/lib/print/load-doc";
-import { landingConfigFor } from "@/components/landing/configs/templates";
+import { configForCanvas } from "@/components/landing/configs/templates";
 import { landingConfigForRoles } from "@/components/landing/configs/roles";
 import { landingConfigForCronograma } from "@/components/landing/configs/cronograma";
 import {
@@ -75,16 +75,15 @@ const ADAPTADOR_ROLES: Adaptador = {
  * filas: una sección que el vendedor ocultó no tenía fila, el motor caía a su `empty`, y como
  * el de «Sobre Smarteam» trae textos de fábrica ("HubSpot Partner Elite", "+200 proyectos")
  * se imprimía igual; y el orden que el vendedor arrastró se perdía a favor del de la
- * plantilla. Es el mismo recorte que hace el editor (BusinessCaseWorkspace.tsx:129).
+ * plantilla. Ese recorte era una COPIA del que hace el editor; hoy los dos llaman a
+ * `configForCanvas`, que además sintetiza las secciones personalizadas (`custom:*`).
+ *
+ * ⚠ Acá solo llegan las KEYS (`PrintRow` no lleva `label`), así que una sección
+ * personalizada toma el nombre de su `titleOverride` — que `LandingView` aplica sobre el
+ * `label` de la def. Por eso el POST que la crea escribe los dos campos.
  */
 const ADAPTADOR_BUSINESS_CASE: Adaptador = {
-  config: (keys, templateId) => {
-    const base = landingConfigFor(templateId);
-    const porKey = new Map(base.sections.map((d) => [d.key, d]));
-    const recortada = keys.map((k) => porKey.get(k)).filter((d): d is NonNullable<typeof d> => !!d);
-    // Sin filas (documento recién creado) se muestra la plantilla completa, igual que el editor.
-    return recortada.length ? { ...base, sections: recortada } : base;
-  },
+  config: (keys, templateId) => configForCanvas(templateId, keys.map((key) => ({ key }))),
   sections: (rows) => rows.map((r) => ({ key: r.key, data: r.blocks[0]?.data ?? null })),
 };
 

@@ -12,6 +12,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
+import { Button } from "@/components/ui/Button";
 import DeleteBusinessCaseButton from "@/components/business-cases/DeleteBusinessCaseButton";
 import CanvasDropdown from "@/components/business-cases/CanvasDropdown";
 import SectionTools from "@/components/business-cases/SectionTools";
@@ -22,7 +23,7 @@ import ContextCard from "@/components/business-cases/ContextCard";
 import type { VersionMeta } from "@/components/business-cases/bc-workspace-shared";
 import PublishBar from "@/components/canvas/PublishBar";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
-import { landingConfigFor } from "@/components/landing/configs/templates";
+import { configForCanvas } from "@/components/landing/configs/templates";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 
@@ -118,17 +119,14 @@ export default function BusinessCaseWorkspace({
     ((sectionByKey.get("hero")?.blocks[0]?.data as { __lang?: string } | null)?.__lang) ??
     null;
 
-  // Config del template en el ORDEN del canvas (habilita el drag & drop) e
-  // INTERSECADA con sus secciones reales: un canvas viejo sembrado con menos
-  // secciones que el template vigente no debe mostrar "secciones fantasma".
-  // SOLO cuando el hook ya cargó: con sections=[] (ventana de carga / cambio de
-  // canvas) quedaría una config VACÍA y la Plantilla no aparecería — en esa
-  // ventana mostramos el template completo (placeholders), como siempre.
-  const baseConfig = landingConfigFor(templateId);
-  const baseByKey = new Map(baseConfig.sections.map((d) => [d.key, d]));
-  const landingConfig = hook.sections.length
-    ? { ...baseConfig, sections: hook.sections.map((s) => baseByKey.get(s.key)).filter((d): d is NonNullable<typeof d> => !!d) }
-    : baseConfig;
+  // Config del template en el ORDEN del canvas (habilita el drag & drop), INTERSECADA
+  // con sus secciones reales —un canvas viejo sembrado con menos secciones que el
+  // template vigente no debe mostrar "secciones fantasma"— y con las personalizadas
+  // (`custom:*`) sintetizadas desde su key. El recorte vive en `configForCanvas` y no
+  // acá porque el render de impresión hace exactamente el mismo, y tenerlo dos veces
+  // garantizaba que una sección se viera en el editor y faltara en el PDF.
+  // Con sections=[] (ventana de carga / cambio de canvas) devuelve el template completo.
+  const landingConfig = configForCanvas(templateId, hook.sections);
 
   const onSectionChange = (key: string, data: unknown) => {
     const sec = sectionByKey.get(key);
@@ -433,7 +431,59 @@ export default function BusinessCaseWorkspace({
             )}
           />
         )}
+        {/* Agregar una sección propia va DEBAJO del documento y fuera de `LandingView`
+            (que se mantiene genérico para los seis tipos que lo montan). Al pie y no
+            arriba porque la sección nace al final: aparece donde el vendedor está
+            mirando, y de ahí la arrastra. En la Plantilla no se ofrece — ahí se editan
+            las guías del agente, no el contenido. */}
+        {hasCanvas && !hook.loading && !isTemplate && (
+          <AgregarSeccion onAdd={(label) => hook.addSection(label).then((ok) => { if (ok) setDirty(true); })} />
+        )}
       </div>
+    </div>
+  );
+}
+
+/** Barra de "agregar sección personalizada": un botón que se abre a un campo de nombre. */
+function AgregarSeccion({ onAdd }: { onAdd: (label: string) => void }) {
+  const [abierto, setAbierto] = useState(false);
+  const [nombre, setNombre] = useState("");
+
+  const enviar = () => {
+    const v = nombre.trim();
+    if (!v) return;
+    onAdd(v);
+    setNombre("");
+    setAbierto(false);
+  };
+
+  return (
+    <div className="px-6 pb-10 pt-2">
+      {abierto ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface p-3">
+          <input
+            autoFocus
+            value={nombre}
+            maxLength={60}
+            onChange={(e) => setNombre(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") enviar();
+              if (e.key === "Escape") setAbierto(false);
+            }}
+            placeholder="Nombre de la sección (ej. Demo de la automatización)"
+            className="min-w-64 flex-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-fg outline-none focus:border-brand"
+          />
+          <Button size="sm" onClick={enviar} disabled={!nombre.trim()}>Agregar</Button>
+          <Button size="sm" variant="ghost" onClick={() => setAbierto(false)}>Cancelar</Button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setAbierto(true)}
+          className="w-full rounded-xl border border-dashed border-line py-3 text-sm text-fg-muted transition-colors hover:border-brand hover:text-brand"
+        >
+          + Agregar sección personalizada
+        </button>
+      )}
     </div>
   );
 }

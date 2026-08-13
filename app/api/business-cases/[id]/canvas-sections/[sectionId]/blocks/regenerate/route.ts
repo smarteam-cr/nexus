@@ -14,7 +14,7 @@ import { parseRegenBody, regenerateTypedSection } from "@/lib/canvas/regenerate-
 import { specToDiagram, relacionToDiagram } from "@/lib/flowchart/spec-to-diagram";
 import { briefsByKeyFrom } from "@/lib/business-cases/section-briefs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
-import { templateDefsByKey, findDefAcrossTemplates } from "@/components/landing/configs/templates.defs";
+import { defForCanvasSection, findDefAcrossTemplates } from "@/components/landing/configs/templates.defs";
 
 type Params = Promise<{ id: string; sectionId: string }>;
 
@@ -64,13 +64,19 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const resolved = block.section.canvas.businessCase
     ? resolveCaseTypeFor(block.section.canvas.businessCase, template?.sections)
     : null;
-  // La def resuelta acá es la MISMA que regenerateSectionData resolvía adentro
-  // (templateDefsByKey ?? fallback cross-template, load-bearing para keys de
-  // canvases viejos). El gate de secciones determinísticas (agentGenerated:false,
-  // p.ej. casos_de_uso — reescribirlas alteraría precios del catálogo que se
-  // publican congelados) vive en el núcleo compartido, con el copy propio de BC.
+  /* La def resuelta acá es la MISMA que regenerateSectionData resolvía adentro
+     (templateDefsByKey ?? fallback cross-template, load-bearing para keys de canvases
+     viejos). El gate de secciones determinísticas (agentGenerated:false, p.ej.
+     casos_de_uso — reescribirlas alteraría precios del catálogo que se publican
+     congelados) vive en el núcleo compartido, con el copy propio de BC.
+
+     ⚠ `defForCanvasSection` NO es cosmético para las secciones personalizadas: sin la def
+     sintetizada, `regenerateTypedSection(undefined, …)` cae a su rama "key de un template
+     viejo" y devuelve `{ok:true, data:{}}` — y el front guarda eso, o sea que el HTML que
+     pegó Ventas se REEMPLAZA POR NADA. Con la def, el gate `agentGenerated:false` responde
+     400 y la píldora ✨IA ni siquiera se ofrece (SectionTools). */
   const def =
-    templateDefsByKey(resolved?.templateId)[block.section.key] ??
+    defForCanvasSection(resolved?.templateId, block.section.key) ??
     findDefAcrossTemplates(block.section.key);
   // Idioma de la propuesta: PRIMERO `businessCase.language` (fuente de verdad
   // persistente); si es null (casos viejos pre-migración a este campo), cae al

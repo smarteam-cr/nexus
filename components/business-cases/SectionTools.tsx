@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { templateDefsByKey } from "@/components/landing/configs/templates.defs";
+import { customDef, esCustomKey } from "@/lib/landing/custom-sections";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
 
 /** Defs mínimas que necesita el overlay: el `empty` para "Limpiar" y `agentGenerated`
@@ -37,9 +38,15 @@ export default function SectionTools({
   // En la Plantilla se editan las GUÍAS (no el contenido) → sin controles de sección.
   // Sin bloque (secciones ctxDriven: cronograma/procesos) → tampoco hay qué regenerar.
   if (isTemplate || !section || !block) return null;
-  // Secciones determinísticas (agentGenerated:false, p.ej. casos_de_uso, equipo): sin
-  // ✨ IA (el server igual devuelve 400) — se editan a mano.
-  const aiAllowed = defs[section.key]?.agentGenerated !== false;
+  /* La def de ESTA sección. Para una personalizada (`custom:*`) el mapa del template no
+     tiene nada, y los dos usos de abajo fallan al revés de como uno esperaría:
+     `agentGenerated` daría `undefined !== false` = TRUE (o sea, se ofrecería ✨IA sobre
+     una sección que el server rechaza), y "Limpiar" escribiría `{}` en vez del `empty`
+     real — dejando la sección con un shape que el componente no espera. */
+  const def = defs[section.key] ?? (esCustomKey(section.key) ? customDef(section.key, section.label) : undefined);
+  // Secciones determinísticas (agentGenerated:false, p.ej. casos_de_uso, equipo,
+  // personalizadas): sin ✨ IA (el server igual devuelve 400) — se editan a mano.
+  const aiAllowed = def?.agentGenerated !== false;
 
   const regen = async () => {
     if (!instr.trim() || busy) return;
@@ -57,9 +64,18 @@ export default function SectionTools({
     }
   };
 
+  // Borrar la sección personalizada. Sin undo (la fila desaparece, no hay `previousData`
+  // que restaurar), así que la confirmación explícita ES el mecanismo de seguridad.
+  const borrar = async () => {
+    const nombre = section.titleOverride?.trim() || section.label;
+    if (!confirm(`¿Borrar la sección "${nombre}"?\n\nSe va de ESTA versión de la propuesta. Las versiones anteriores y lo que ya subiste al cliente la conservan.`)) return;
+    const ok = await hook.removeSection(section.id);
+    if (ok) toast.success("Sección borrada.");
+  };
+
   // Vaciar la sección → vuelve al placeholder (no se ve en el cliente). Undo vía previousData.
   const clear = async () => {
-    const empty = (defs[section.key]?.empty ?? {}) as Record<string, unknown>;
+    const empty = (def?.empty ?? {}) as Record<string, unknown>;
     const ok = await hook.saveBlock(section.id, block.id, { data: empty });
     if (ok) toast.info("Sección vaciada (el cliente no la verá).");
   };
@@ -89,6 +105,19 @@ export default function SectionTools({
         <button style={{ ...pill, color: "#b91c1c" }} onClick={clear} title="Vaciar el contenido de esta sección" aria-label="Vaciar el contenido de esta sección">
           🗑 Limpiar
         </button>
+        {/* Borrar SOLO para las personalizadas: las de la plantilla se ocultan (el server
+            también lo rechaza). Sin undo → confirmación explícita, y el copy dice qué
+            alcance tiene: esta versión, no las anteriores ni lo ya publicado. */}
+        {esCustomKey(section.key) && (
+          <button
+            style={{ ...pill, color: "#b91c1c" }}
+            onClick={borrar}
+            title="Borrar esta sección personalizada"
+            aria-label="Borrar esta sección personalizada"
+          >
+            ✕ Borrar sección
+          </button>
+        )}
       </div>
       {open && (
         <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 6, display: "flex", gap: 6, background: "#fff", border: "1px solid rgba(15,23,42,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px -8px rgba(15,23,42,0.35)", width: 280, zIndex: 10 }}>

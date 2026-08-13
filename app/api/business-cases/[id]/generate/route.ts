@@ -31,6 +31,7 @@ import { fetchCompanyTimeline } from "@/lib/hubspot/company-timeline";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { loadKnowledgeByTags } from "@/lib/knowledge/load-by-tags";
 import { HUBSPOT_HUB_SLUGS, sanitizeTags, tagLabels, type HubspotHubSlug } from "@/lib/tags/catalog";
+import { esCustomKey } from "@/lib/landing/custom-sections";
 
 /** Tope del bloque de conocimiento por Hub. Los 6 documentos sembrados suman ~11k, así que
  *  entran todos incluso vendiendo la suite completa; el margen deja lugar a que el equipo
@@ -315,7 +316,14 @@ export async function POST(
     const prevBlocks = await prisma.canvasSection.findMany({
       where: { canvas: { businessCaseId: id, isActive: true } },
       orderBy: { order: "asc" }, // el ORDEN previo (drag & drop) también se hereda
-      select: { key: true, blocks: { orderBy: { order: "asc" }, take: 1, select: { data: true } } },
+      select: {
+        key: true,
+        // Solo las personalizadas usan estos tres (ver `customSections` más abajo).
+        label: true,
+        titleOverride: true,
+        eyebrowOverride: true,
+        blocks: { orderBy: { order: "asc" }, take: 1, select: { data: true } },
+      },
     });
     const prevDataByKey = new Map(prevBlocks.map((s) => [s.key, s.blocks[0]?.data]));
     const defsByKey = templateDefsByKey(resolved.templateId);
@@ -344,12 +352,26 @@ export async function POST(
       }
       gs.data = merged;
     }
-    // Secciones OCULTAS (skipKeys) no se regeneran (tokens/latencia) — pero "ocultar"
-    // no es "borrar": sin esto, el bloque quedaba reseteado al `empty` sembrado por
-    // createBusinessCaseCanvas y el CSE perdía el contenido al volver a mostrarlas.
-    // Se cargan tal cual (mismo objeto, sin pasar por el merge de arriba — no hay
-    // campo "nuevo" que resucitar contra, es el mismo dato de siempre).
-    for (const key of skipKeys) {
+    /* Carry-forward (b): secciones que el canvas nuevo NO va a recibir de nadie.
+       `createBusinessCaseCanvas` siembra el `empty` en cada sección, y abajo solo se
+       escriben las keys de `generated` — así que toda sección que el agente no generó
+       nace EN BLANCO salvo que se la arrastre acá. Son dos familias:
+
+        · las OCULTAS (`skipKeys`): no se regeneran para ahorrar tokens y latencia, pero
+          "ocultar" no es "borrar" — sin esto el CSE perdía el contenido al volver a
+          mostrarlas.
+        · las CURADAS (`agentGenerated:false`): las escribe una persona a mano, así que
+          el agente NUNCA las va a devolver. `casos_de_uso` es la excepción porque el
+          propio generate la reescribe determinísticamente desde el catálogo unas líneas
+          más abajo. ⚠ Sin esta rama, marcar una sección como curada hace que cada
+          "Generar" BORRE lo que se escribió a mano.
+
+       Se cargan tal cual (mismo objeto, sin pasar por el merge de arriba — no hay campo
+       "nuevo" que resucitar contra, es el mismo dato de siempre). */
+    const curadas = Object.values(defsByKey)
+      .filter((d) => d.agentGenerated === false && d.key !== USE_CASES_SECTION_KEY)
+      .map((d) => d.key);
+    for (const key of new Set([...skipKeys, ...curadas])) {
       if (generated.some((g) => g.key === key)) continue;
       const prev = prevDataByKey.get(key);
       if (prev != null) generated.push({ key, data: prev });
@@ -393,6 +415,17 @@ export async function POST(
         caseSubtype: resolved.caseSubtype,
         hiddenByKey: prevHiddenByKey,
         orderedKeys: prevBlocks.map((s) => s.key),
+        // Las secciones personalizadas no están en el template: si no viajan acá, el
+        // canvas nuevo nace sin ellas y el vendedor pierde su HTML al regenerar.
+        customSections: prevBlocks
+          .filter((s) => esCustomKey(s.key))
+          .map((s) => ({
+            key: s.key,
+            label: s.label,
+            titleOverride: s.titleOverride,
+            eyebrowOverride: s.eyebrowOverride,
+            data: s.blocks[0]?.data,
+          })),
       });
       // Idioma de esta corrida: fuente de verdad persistente en el caso — no atada
       // al hero (que puede perder `__lang` en una edición manual o regeneración parcial).

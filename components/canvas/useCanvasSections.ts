@@ -648,6 +648,63 @@ export function useCanvasSections(
     [basePath, canvasId, refetch, pushUndo, undoScope],
   );
 
+  /* Crear/borrar una sección PERSONALIZADA (solo propuesta comercial; el server rechaza
+     una key que no sea `custom:*`). NO son optimistas a propósito, al revés que
+     `setHidden`/`reorderSections`: la key la genera el SERVER, así que no hay fila que
+     pintar antes de la respuesta, y la sección nueva llega con su bloque sembrado —
+     inventarla acá sería adivinar el shape que el editor necesita para persistir. */
+  const addSection = useCallback(
+    async (label: string): Promise<boolean> => {
+      pendingWrites.current++;
+      try {
+        const res = await fetch(`${basePath}/canvas-sections`, {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ canvasId, label }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          setError(body?.error ?? "No se pudo agregar la sección. Reintentá.");
+          return false;
+        }
+        setError(null);
+        onContentChangeRef.current?.();
+        refetch();
+        return true;
+      } catch {
+        setError("Error de conexión al agregar la sección.");
+        return false;
+      } finally {
+        pendingWrites.current--;
+      }
+    },
+    [basePath, canvasId, refetch],
+  );
+
+  const removeSection = useCallback(
+    async (sectionId: string): Promise<boolean> => {
+      pendingWrites.current++;
+      try {
+        const res = await fetch(`${basePath}/canvas-sections/${sectionId}`, { method: "DELETE" });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          setError(body?.error ?? "No se pudo borrar la sección. Reintentá.");
+          return false;
+        }
+        setError(null);
+        onContentChangeRef.current?.();
+        refetch();
+        return true;
+      } catch {
+        setError("Error de conexión al borrar la sección.");
+        return false;
+      } finally {
+        pendingWrites.current--;
+      }
+    },
+    [basePath, refetch],
+  );
+
   const acceptAll = useCallback(async () => {
     const drafts = sections.flatMap((s) =>
       s.blocks.filter((b) => b.status === "DRAFT").map((b) => ({ sectionId: s.id, blockId: b.id })),
@@ -715,6 +772,8 @@ export function useCanvasSections(
     setBrief,
     setHidden,
     reorderSections,
+    addSection,
+    removeSection,
     undoSection,
     acceptAll,
     flushPending,

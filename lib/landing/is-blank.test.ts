@@ -68,7 +68,9 @@ describe("los campos de PRESENTACIÓN no cuentan como contenido", () => {
 
 describe("el vocabulario de lo que no es contenido", () => {
   it("está declarado y es corto — agregar una clave es una decisión, no un atajo", () => {
-    expect([...NO_CONTENIDO].sort()).toEqual(["__lang", "anchoRecurrente", "buttonTarget", "logoScale"]);
+    expect([...NO_CONTENIDO].sort()).toEqual([
+      "__lang", "altoEmbed", "anchoRecurrente", "buttonTarget", "logoScale",
+    ]);
   });
 
   it("ningún `empty` de las definiciones trae un default de TEXTO que impida omitir", () => {

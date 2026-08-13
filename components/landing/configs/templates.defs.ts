@@ -19,6 +19,7 @@ import { BC_SECTION_DEFS } from "./business-case.defs";
 import { makeDiagramArchitectureDef, makeProcessMappingDef, USE_CASES_DEF } from "./shared-sections.defs";
 import { WEBSITE_SECTION_DEFS } from "./website.defs";
 import { HUBSPOT_TEMPLATE_ID, WEBSITE_TEMPLATE_ID } from "@/lib/business-cases/case-types";
+import { customDef, esCustomKey } from "@/lib/landing/custom-sections";
 
 export interface BcTemplateDef {
   id: string;
@@ -88,6 +89,39 @@ export function templateById(id?: string | null): BcTemplateDef {
 /** Lookup key → def dentro de un template (con el mismo fallback). */
 export function templateDefsByKey(id?: string | null): Record<string, BCSectionDef> {
   return Object.fromEntries(templateById(id).sections.map((d) => [d.key, d]));
+}
+
+/**
+ * Lookup key → def para un CANVAS concreto: las de la plantilla MÁS una def sintetizada
+ * por cada sección personalizada que el vendedor creó (`custom:*`).
+ *
+ * Existe porque `templateDefsByKey` solo conoce la plantilla, y todos sus consumidores
+ * descartan en silencio la key que no encuentran (`filter(Boolean)`, `if (!Component)
+ * return null`). El modo de falla no es un error: la sección DESAPARECE, y encima
+ * desaparece en una superficie y no en la otra — se ve en el editor y falta en el PDF, o
+ * peor, falta justo en la propuesta que abre el prospecto. Un solo resolver deja un solo
+ * lugar donde arreglarlo y uno solo donde testearlo.
+ */
+export function defsForCanvas(
+  id: string | null | undefined,
+  rows: Array<{ key: string; label?: string | null }>,
+): Record<string, BCSectionDef> {
+  const defs = templateDefsByKey(id);
+  for (const r of rows) {
+    if (!defs[r.key] && esCustomKey(r.key)) defs[r.key] = customDef(r.key, r.label);
+  }
+  return defs;
+}
+
+/** La def de UNA sección del canvas: la de la plantilla o, si es personalizada, la
+ *  sintetizada. El fallback histórico a `findDefAcrossTemplates` lo agrega quien lo
+ *  necesite (regenerate) — acá no se asume. */
+export function defForCanvasSection(
+  id: string | null | undefined,
+  key: string,
+  label?: string | null,
+): BCSectionDef | undefined {
+  return templateDefsByKey(id)[key] ?? (esCustomKey(key) ? customDef(key, label) : undefined);
 }
 
 /** Busca una def por key EN CUALQUIER template (fallback legacy de regenerateSectionData:

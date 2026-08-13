@@ -34,6 +34,7 @@ import { IMPLEMENTACION_SECTION_DEFS } from "@/components/landing/configs/implem
 import { IMPLEMENTACION_SECTION_COMPONENTS, landingConfigForImplementacion } from "@/components/landing/configs/implementacion";
 import { PLANIFICACION_SECTION_DEFS, PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
 import { PLANIFICACION_SECTION_COMPONENTS, landingConfigForPlanificacion } from "@/components/landing/configs/planificacion";
+import { HTML_EMBED_TYPE } from "@/lib/landing/custom-sections";
 
 /** Renderers que ningún def VIVO usa pero que se conservan a PROPÓSITO: los
  *  snapshots publicados congelan `sectionType` y `configForSnapshot` los
@@ -41,6 +42,13 @@ import { PLANIFICACION_SECTION_COMPONENTS, landingConfigForPlanificacion } from 
  *  SOLO con esa justificación (ej. `tech_architecture`, reemplazado por
  *  `diagram` en el retema 2026-07 — ver shared-sections.defs). */
 const LEGACY_SNAPSHOT_TYPES = new Set(["tech_architecture"]);
+
+/** Renderers que NINGÚN template declara porque la sección no existe hasta que alguien la
+ *  CREA en runtime: el resolver la sintetiza desde la key (`custom:*` → `html_embed`, ver
+ *  lib/landing/custom-sections.ts). No son legacy —están vivos y son la única forma de
+ *  renderizar una sección personalizada—, así que van en su propio set: meterlos en
+ *  LEGACY_SNAPSHOT_TYPES diría lo contrario de lo que pasa. */
+const RUNTIME_SECTION_TYPES = new Set([HTML_EMBED_TYPE]);
 
 describe("BC_TEMPLATES: toda def resuelve renderer y las keys están congeladas", () => {
   it("cada sectionType de cada template tiene componente registrado", () => {
@@ -77,12 +85,12 @@ describe("BC_TEMPLATES: toda def resuelve renderer y las keys están congeladas"
     }
   });
 
-  it("sin componentes huérfanos en SECTION_COMPONENTS (salvo legacy de snapshots)", () => {
+  it("sin componentes huérfanos en SECTION_COMPONENTS (salvo legacy y dinámicos)", () => {
     const usados = new Set(
       Object.values(BC_TEMPLATES).flatMap((tpl) => tpl.sections.map((d) => d.sectionType ?? d.key)),
     );
     const huerfanos = Object.keys(SECTION_COMPONENTS).filter(
-      (t) => !usados.has(t) && !LEGACY_SNAPSHOT_TYPES.has(t),
+      (t) => !usados.has(t) && !LEGACY_SNAPSHOT_TYPES.has(t) && !RUNTIME_SECTION_TYPES.has(t),
     );
     expect(huerfanos).toEqual([]);
   });
