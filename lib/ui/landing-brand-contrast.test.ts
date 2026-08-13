@@ -113,6 +113,10 @@ describe("matriz de contraste de la marca (AA, contra el fondo REAL)", () => {
     ["tinta sobre el gris de la sección", P.text, hubSoft, 4.5],
     ["secundario sobre el gris de la sección", P.text2, hubSoft, 4.5],
     ["muted sobre el gris de la sección", P.muted, hubSoft, 4.5],
+    // El borde de la píldora ENCENDIDA es lo que dice "seleccionada" —el relleno tiene
+    // el techo del ícono—, así que es el borde de un control y le aplica el 3:1 de
+    // WCAG 1.4.11. Aclararlo lo devuelve al estado en que no se notaba cuál estaba.
+    ["borde de la píldora encendida sobre paper", token(ENGINE, "--hub-line-on"), P.bg, 3],
   );
   for (const [desc, fg, bg, min] of casos) {
     it(`${desc} ≥ ${min}:1`, () => {

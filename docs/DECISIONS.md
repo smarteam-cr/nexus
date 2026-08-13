@@ -1743,6 +1743,15 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   ⚠ **`--hub-soft` no se puede oscurecer**: el naranja encima da 3.14:1 y el mínimo de WCAG
   1.4.11 para un ícono es 3. Ese par está en el guard de contraste justamente porque el
   margen es chico y nadie lo notaría a ojo.
+- **Lo "seleccionada" lo carga el BORDE y la tinta, no el relleno** — porque el relleno tiene
+  ese techo. La primera versión neutra casi no se distinguía (*"que se note un poco más los
+  hubs seleccionados"*): eran gris muy claro + borde `#C9CDD4` (1.59:1 contra el paper, o sea
+  invisible en una tira de seis). Ahora son TRES cosas juntas, ninguna alcanza sola: borde
+  `#8B93A1` (3.09:1 — cumple el 3:1 de 1.4.11 para el borde de un control, y está en el
+  guard), un **ring** `inset 0 0 0 1px` que lo hace leer con doble peso **sin mover el
+  layout** (un `border: 2px` correría la píldora un pixel y la tira entera bailaría al hacer
+  clic), y tinta plena en negrita — mientras la apagada baja a `--text-muted`, que aporta la
+  otra mitad de la diferencia.
 - **El ícono de producto de cada Hub va como MÁSCARA CSS, no como `<img>`** (2026-08-12).
   Los SVG oficiales de HubSpot viven sin tocar en `public/hubs/`, con el **slug como nombre
   de archivo** (`sales_hub.svg`) para que la URL se derive y no haga falta un mapa; un

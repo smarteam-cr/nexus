@@ -99,7 +99,11 @@
   --hub-accent:  #FF4800;  /* naranja de HubSpot — SOLO los íconos de producto */
   --hub-soft:    #F5F6F8;  /* gris de la píldora encendida y de la cabecera de columna */
   --hub-line:    #E4E6EA;  /* borde neutro */
-  --hub-line-on: #C9CDD4;  /* borde de la píldora encendida */
+  /* Borde de la píldora ENCENDIDA. Es lo que carga casi todo el peso de "seleccionada":
+     el relleno no puede oscurecerse más porque el naranja del ícono encima ya está en
+     3.14:1 y el mínimo es 3. Da 3.09:1 contra el paper, así que además de verse, cumple
+     el 3:1 que WCAG 1.4.11 pide para el borde de un control. */
+  --hub-line-on: #8B93A1;
 
   font-size: 16px;
   background: var(--bg);
@@ -1534,7 +1538,7 @@
   border-radius: 999px;
   border: 1px solid var(--hub-line);
   background: var(--bg);
-  color: var(--text-2);
+  color: var(--text-muted);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -1542,14 +1546,20 @@
   cursor: pointer;
   transition: background 0.18s var(--ease), color 0.18s var(--ease), border-color 0.18s var(--ease);
 }
-.stl-hub-pill:hover { border-color: var(--hub-line-on); color: var(--text); }
-/* Encendida = gris + tinta plena + borde más marcado. Sin color: el estado se lee por
-   relleno y peso, no por matiz — que es lo que deja al naranja del ícono como el único
-   acento de la sección. */
+.stl-hub-pill:hover { border-color: var(--hub-line-on); color: var(--text-2); }
+/* Encendida: gris + borde marcado + tinta PLENA y en negrita. Las tres cosas juntas
+   porque ninguna alcanza sola — el relleno tiene el techo del contraste del ícono, y un
+   solo borde más oscuro se pierde en una tira de seis. La apagada, en cambio, baja a
+   `--text-muted`: la mitad de la diferencia la hace ella. Sin matiz en ningún caso, que
+   es lo que deja al naranja del ícono como único acento de la sección. */
 .stl-hub-pill.is-on {
   background: var(--hub-soft);
   border-color: var(--hub-line-on);
+  /* El ring hace que el borde se lea con el doble de peso SIN mover el layout (un
+     border de 2px correría la píldora un pixel y la tira entera bailaría al hacer clic). */
+  box-shadow: inset 0 0 0 1px var(--hub-line-on);
   color: var(--text);
+  font-weight: 700;
 }
 .stl-hub-pill-dot {
   width: 9px;
