@@ -69,6 +69,14 @@ const PATRONES: { nombre: string; re: RegExp }[] = [
   { nombre: "<canvas> (no entra en page.pdf)", re: /<canvas[\s>]/ },
   { nombre: "unidades de viewport (vh/dvh)", re: /\b\d+(vh|dvh|svh)\b/ },
   { nombre: "scroller (overflow auto)", re: /overflow(X|Y)?:\s*"auto"|overflow-(x|y)-auto/ },
+  /* Un iframe muere en el PDF por CUATRO vías independientes, y ninguna avisa:
+     `PdfReadySignal` enumera las `<img>` del documento de ARRIBA y no ve nada adentro, así
+     que la señal de "listo" se dispara con el frame en blanco; `pdf-runner` mide la página
+     con `scrollHeight` y un iframe solo aporta su caja declarada (recorte silencioso); lo
+     animado se congela en un frame arbitrario; y Chrome imprime frames sandboxeados de
+     forma poco confiable. Hasta 2026-08-12 el guard no lo detectaba y no había ningún
+     iframe en el repo — el patrón entró junto con el primero. */
+  { nombre: "<iframe> (Puppeteer no lo espera ni lo mide)", re: /<iframe[\s>]/ },
 ];
 
 /**
