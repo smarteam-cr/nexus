@@ -14,6 +14,7 @@ import {
   columnasActivas,
   esSolucionLegacy,
   hubColumnas,
+  hubIconUrl,
   hubVisual,
   parseCanales,
 } from "./hubs-solucion";
@@ -69,8 +70,8 @@ describe("los nombres viejos de HubSpot resuelven al Hub vigente", () => {
   });
 
   it("una columna que no es un Hub va al neutro y sin rótulo impuesto", () => {
-    expect(hubVisual("Custom Agent WhatsApp")).toEqual({ colorVar: HUB_NEUTRAL_VAR, label: null });
-    expect(hubVisual("")).toEqual({ colorVar: HUB_NEUTRAL_VAR, label: null });
+    expect(hubVisual("Custom Agent WhatsApp")).toEqual({ colorVar: HUB_NEUTRAL_VAR, label: null, icon: null });
+    expect(hubVisual("")).toEqual({ colorVar: HUB_NEUTRAL_VAR, label: null, icon: null });
   });
 
   it("todo Hub del catálogo tiene color; ninguno de más", () => {
@@ -85,6 +86,21 @@ describe("los nombres viejos de HubSpot resuelven al Hub vigente", () => {
     for (const v of [...Object.values(HUB_COLOR_VAR), HUB_NEUTRAL_VAR]) {
       expect(css, `${v} no está declarada en app/landing-engine.css`).toContain(`${v}:`);
     }
+  });
+
+  // La URL del ícono se DERIVA del slug, así que un Hub nuevo sin su SVG no rompe nada
+  // en tiempo de compilación: la píldora saldría con un hueco donde va el ícono, y solo
+  // en la propuesta que ve el cliente. Este escaneo lo convierte en un test rojo.
+  it("cada Hub tiene su ícono en public/hubs", () => {
+    for (const slug of HUBSPOT_HUB_SLUGS) {
+      const rel = hubIconUrl(slug);
+      const abs = path.join(process.cwd(), "public", ...rel.split("/").filter(Boolean));
+      expect(fs.existsSync(abs), `falta ${rel} (public${rel})`).toBe(true);
+    }
+  });
+
+  it("una columna que no es un Hub del catálogo no reclama ícono", () => {
+    expect(hubVisual("Breeze").icon).toBeNull();
   });
 });
 

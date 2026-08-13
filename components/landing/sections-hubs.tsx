@@ -144,18 +144,24 @@ export const HubsClienteSection: FC<SectionProps<HubsClienteData>> = (props) => 
               compró. Lo vendido es lo que arranca encendido, no lo único que existe. */}
           {columnas.map((c) => {
             const key = columnaKey(c);
-            const { colorVar, label } = hubVisual(c.hub);
+            const { colorVar, label, icon } = hubVisual(c.hub);
             const on = editable ? activasKeys.has(key) : abiertas.includes(key);
             return (
               <button
                 key={key || c.titulo}
                 type="button"
                 className={`stl-hub-pill${on ? " is-on" : ""}`}
-                style={{ "--hub": `var(${colorVar})` } as CSSProperties}
+                style={{
+                  "--hub": `var(${colorVar})`,
+                  ...(icon ? { "--hub-icon": `url("${icon}")` } : {}),
+                } as CSSProperties}
                 aria-pressed={on}
                 onClick={() => toggle(c)}
               >
-                <span className="stl-hub-pill-dot" />
+                {/* El ícono de producto REEMPLAZA al punto de color: dice lo mismo (de
+                    qué Hub es) y además cuál. Una columna que no es un Hub del catálogo
+                    no tiene ícono y se queda con el punto. */}
+                <span className={icon ? "stl-hub-pill-icon" : "stl-hub-pill-dot"} />
                 {label ?? (c.hub || c.titulo || "Sin nombre")}
               </button>
             );

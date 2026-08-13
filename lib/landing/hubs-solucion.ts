@@ -44,13 +44,27 @@ function esHubDelCatalogo(slug: string | null): slug is HubspotHubSlug {
   return slug != null && (HUBSPOT_HUB_SLUGS as readonly string[]).includes(slug);
 }
 
-/** Color y rótulo de una columna. `label` es null cuando el hub no es del catálogo:
- *  ahí manda el título que escribió el agente, no un rótulo inventado. */
-export function hubVisual(hub: string): { colorVar: string; label: string | null } {
+/** El ícono de producto de HubSpot de cada Hub. El archivo se llama EXACTAMENTE como el
+ *  slug (`public/hubs/sales_hub.svg`), así que no hace falta un mapa: agregar un Hub al
+ *  catálogo es dejar su SVG con ese nombre, y el test lo verifica contra el disco.
+ *
+ *  Se usan como MÁSCARA, no como imagen: los archivos vienen en el naranja de HubSpot
+ *  (#ff4800) y sobre una píldora encendida —navy, royal, verde— ese naranja es
+ *  justamente el par que el doc de marca prohíbe, y sobre la píldora de Marketing sería
+ *  naranja sobre naranja. Enmascarados toman el color del Hub (o blanco al encenderse)
+ *  y los archivos quedan intactos, tal como los entrega HubSpot. */
+export function hubIconUrl(slug: HubspotHubSlug): string {
+  return `/hubs/${slug}.svg`;
+}
+
+/** Color, rótulo e ícono de una columna. `label` e `icon` son null cuando el hub no es
+ *  del catálogo (Breeze, un agente a la medida): ahí manda el título que escribió el
+ *  agente, no un rótulo inventado, y no hay ícono de producto que ponerle. */
+export function hubVisual(hub: string): { colorVar: string; label: string | null; icon: string | null } {
   const slug = normalizeTag(hub ?? "");
   return esHubDelCatalogo(slug)
-    ? { colorVar: HUB_COLOR_VAR[slug], label: labelForTag(slug) }
-    : { colorVar: HUB_NEUTRAL_VAR, label: null };
+    ? { colorVar: HUB_COLOR_VAR[slug], label: labelForTag(slug), icon: hubIconUrl(slug) }
+    : { colorVar: HUB_NEUTRAL_VAR, label: null, icon: null };
 }
 
 /** Con qué identifica el CSE a una columna en `activos`. Va normalizada para que apagar

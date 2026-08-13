@@ -1738,6 +1738,15 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   vigilarlos, y los seis se pintan como FONDO con texto blanco encima. Todos dan ≥5:1. **No se
   usan los hex de marca de HubSpot**: `#FF7A59` con blanco da 2.3:1. Un Hub nuevo sin color
   rompe `lib/landing/hubs-solucion.test.ts`, y sin par de contraste rompe el guard de marca.
+- **El ícono de producto de cada Hub va como MÁSCARA CSS, no como `<img>`** (2026-08-12).
+  Los SVG oficiales de HubSpot viven sin tocar en `public/hubs/`, con el **slug como nombre
+  de archivo** (`sales_hub.svg`) para que la URL se derive y no haga falta un mapa; un
+  `lib/landing/hubs-solucion.test.ts` verifica contra el disco que ninguno falte. Vienen en
+  el naranja de HubSpot (`#ff4800`) y sobre una píldora encendida —navy, royal, verde— ese
+  naranja es justo el par que el doc de marca prohíbe; sobre la de Marketing sería naranja
+  sobre naranja. Enmascarados toman el color del Hub y blanco al encenderse, con el archivo
+  intacto. El ícono **reemplaza al punto de color**: dice lo mismo y además cuál. Una
+  columna que no es un Hub del catálogo no tiene ícono y conserva el punto.
 - **Los canales van como píldoras de TEXTO, no como logos.** Dibujar de memoria los SVG de
   LinkedIn/Meta/Google en un documento que ve el cliente es un riesgo sin contrapartida: el
   dato que importa es cuál es el canal. Y van como CSV en un campo string porque
